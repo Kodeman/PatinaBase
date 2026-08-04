@@ -14,8 +14,15 @@ import {
   type LayerProductLayer,
   type LayerProductRow,
 } from '@patina/supabase';
+import type {
+  ProductConfigurationComponentSelection,
+  ProductConfigurationMode,
+  ProductConfigurationSelection,
+  ProductConfigurationSummary,
+} from '@patina/types';
 import { useAuth } from '@/hooks/use-auth';
 import { Button, FilterPill, IconButton, Input, Select } from '@/components/ui/controls';
+import { PickerConfigureStep } from './picker-configure-step';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -26,10 +33,36 @@ export interface ProductPickerRoom {
 }
 
 /**
+ * One resolved specification carried out of the picker's configure step
+ * (P0-2). Deliberately light: the picker confirms a selection with the server
+ * but saves NO `product_configurations` row, so `savedConfigurationId` is null
+ * until a project placement writes one. `selections` / `components` use the ONE
+ * snapshot vocabulary shared by picker → decisions → spec → PO.
+ */
+export interface ProductPickConfigurationSelection {
+  savedConfigurationId: string | null;
+  variantId: string | null;
+  optionValueIds: string[];
+  selections: ProductConfigurationSelection[];
+  components: ProductConfigurationComponentSelection[];
+  /** Server-confirmed resolved prices — not the product's list price. */
+  retailPriceCents: number | null;
+  tradePriceCents: number | null;
+  leadTimeWeeks: number | null;
+  /** The raw server snapshot, for consumers that persist provenance. */
+  snapshot: Record<string, unknown> | null;
+  /** Human label for the resolution — "King · Walnut". '' when unnameable. */
+  label: string;
+}
+
+/**
  * Everything a caller needs to denormalize a picked product onto its own row
  * (a decision option, an FF&E line, …) without a follow-up fetch. The picking
  * tab already holds these fields, so we surface them rather than throwing them
  * away and re-querying by id.
+ *
+ * Every configuration key below is OPTIONAL and additive: none of the four call
+ * sites spread the pick into a DB insert, so an extra key is wire-safe.
  */
 export interface ProductPickResult {
   productId: string;
@@ -54,6 +87,20 @@ export interface ProductPickResult {
   captureId?: string;
   /** Room selected in the modal (or the default it opened with), null = Unassigned. */
   scopeRoomId: string | null;
+  /**
+   * The piece's denormalized configuration mode (00403). Absent on drafts,
+   * captures, and URL adds — all of which produce `standard` pieces.
+   */
+  configurationMode?: ProductConfigurationMode;
+  /** Denormalized option/variant counts + price range for the picked piece. */
+  configurationSummary?: ProductConfigurationSummary | null;
+  /** Present when the designer resolved a specification in the configure step. */
+  configurationSelection?: ProductPickConfigurationSelection;
+  /**
+   * True when an optioned piece was taken WITHOUT resolving a specification
+   * ("Decide later"). Warn, never block — the consuming surface shows the debt.
+   */
+  configurationSkipped?: boolean;
 }
 
 /** What an individual tab emits; the modal shell folds in `scopeRoomId`. */
@@ -85,6 +132,13 @@ export interface ProductPickerModalProps {
    *    per-layer browse + cross-layer search. Used by decisions ("library-first").
    */
   scope?: 'catalog' | 'library';
+  /**
+   * Stop on an optioned piece (variant/configured/custom) and resolve ONE
+   * specification before emitting. Default true — a family of SKUs is not
+   * orderable as "the product". Surfaces that only pin an image (the mood
+   * board) pass false and keep the one-click grammar.
+   */
+  configureStep?: boolean;
 }
 
 type Tab = 'browse' | 'captures' | 'draft';
@@ -97,6 +151,8 @@ interface CatalogProductRow {
   price_trade: number | null;
   vendor?: { name?: string | null } | null;
   images: string[];
+  configuration_mode?: ProductConfigurationMode | null;
+  configuration_summary?: ProductConfigurationSummary | null;
 }
 
 const LAYER_LABEL: Record<LayerProductLayer, string> = {
@@ -118,6 +174,9 @@ interface GridRow {
   /** Catalog rows carry a joined vendor; library rows only have `brand`. */
   vendorName?: string | null;
   layer?: LayerProductLayer;
+  /** Denormalized configuration mode (00403) — drives the configure step. */
+  configuration_mode?: ProductConfigurationMode | null;
+  configuration_summary?: ProductConfigurationSummary | null;
 }
 
 function LayerBadge({ layer }: { layer: LayerProductLayer }) {
@@ -161,6 +220,8 @@ function ProductResultGrid({
               priceTradeCents: p.price_trade ?? null,
               vendorName: p.vendorName ?? p.brand ?? null,
               layer: p.layer,
+              configurationMode: p.configuration_mode ?? undefined,
+              configurationSummary: p.configuration_summary ?? null,
             })
           }
           data-testid="product-picker-result"
@@ -262,6 +323,8 @@ function CatalogTab({
     images: p.images,
     vendorName: p.vendor?.name ?? null,
     layer: 'catalog',
+    configuration_mode: p.configuration_mode ?? null,
+    configuration_summary: p.configuration_summary ?? null,
   }));
 
   return (
@@ -328,6 +391,8 @@ function LibraryTab({ onPick }: { onPick: (pick: TabPick) => void }) {
       price_trade: r.price_trade,
       images: r.images,
       layer,
+      configuration_mode: r.configuration_mode,
+      configuration_summary: r.configuration_summary,
     }));
 
   return (
@@ -862,6 +927,12 @@ function CapturesTab({ onPick }: { onPick: (pick: TabPick) => void }) {
 
 // ─── Modal shell ─────────────────────────────────────────────────────────────
 
+/** Modes whose pieces cannot enter a project without a resolved selection. */
+function needsConfiguration(mode: ProductConfigurationMode | undefined): boolean {
+  return mode === 'variant' || mode === 'configured' || mode === 'custom';
+}
+
+
 export function ProductPickerModal({
   open,
   onClose,
@@ -871,15 +942,22 @@ export function ProductPickerModal({
   defaultScopeRoomId = null,
   allowDraftCreate = true,
   scope = 'catalog',
+  configureStep = true,
 }: ProductPickerModalProps) {
   const [tab, setTab] = useState<Tab>('browse');
   const [scopeRoomId, setScopeRoomId] = useState<string | null>(defaultScopeRoomId ?? null);
+  // Non-null while an optioned pick is being resolved — the configure pane
+  // replaces the grid instead of the modal closing behind the designer.
+  const [pendingConfigure, setPendingConfigure] = useState<ProductPickResult | null>(
+    null,
+  );
 
   // Reset to the browse tab and the default room whenever the modal opens.
   useEffect(() => {
     if (open) {
       setTab('browse');
       setScopeRoomId(defaultScopeRoomId ?? null);
+      setPendingConfigure(null);
     }
   }, [open, defaultScopeRoomId]);
 
@@ -895,9 +973,21 @@ export function ProductPickerModal({
 
   if (!open) return null;
 
-  const handlePick = (pick: TabPick) => {
-    onPick({ ...pick, scopeRoomId });
+  const emit = (result: ProductPickResult) => {
+    setPendingConfigure(null);
+    onPick(result);
     onClose();
+  };
+
+  const handlePick = (pick: TabPick) => {
+    const result: ProductPickResult = { ...pick, scopeRoomId };
+    // A family of SKUs (variant/configured) or a commission (custom) is not
+    // orderable as "the product" — stop and resolve one specification first.
+    if (configureStep && needsConfiguration(result.configurationMode)) {
+      setPendingConfigure(result);
+      return;
+    }
+    emit(result);
   };
 
   const browseLabel = scope === 'library' ? 'Library' : 'Catalog';
@@ -934,7 +1024,7 @@ export function ProductPickerModal({
       >
         <div className="mb-4 flex items-baseline justify-between">
           <h3 id="product-picker-title" className="type-section-head" style={{ fontSize: '1.2rem' }}>
-            Add a product
+            {pendingConfigure ? 'Choose the specification' : 'Add a product'}
           </h3>
           <IconButton
             label="Close"
@@ -946,46 +1036,60 @@ export function ProductPickerModal({
           </IconButton>
         </div>
 
-        {/* Room targeting */}
-        {rooms.length > 0 && (
-          <label className="mb-4 block">
-            <span className="type-meta mb-1 block">Add to room</span>
-            <Select
-              value={scopeRoomId ?? ''}
-              onChange={(e) => setScopeRoomId(e.target.value || null)}
-              data-testid="product-picker-room"
-            >
-              <option value="">Unassigned</option>
-              {rooms.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </Select>
-          </label>
+        {/* The configure step takes over the body: one specification is being
+            resolved, so the grid and its tabs would only invite a mis-click. */}
+        {pendingConfigure ? (
+          <PickerConfigureStep
+            pick={pendingConfigure}
+            pickerScope={scope}
+            onBack={() => setPendingConfigure(null)}
+            onConfirm={emit}
+            onSkip={emit}
+          />
+        ) : (
+        <>
+          {/* Room targeting */}
+          {rooms.length > 0 && (
+            <label className="mb-4 block">
+              <span className="type-meta mb-1 block">Add to room</span>
+              <Select
+                value={scopeRoomId ?? ''}
+                onChange={(e) => setScopeRoomId(e.target.value || null)}
+                data-testid="product-picker-room"
+              >
+                <option value="">Unassigned</option>
+                {rooms.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          )}
+
+          {/* Tabs */}
+          <div
+            role="tablist"
+            aria-label="Product picker"
+            className="mb-4 flex gap-1 border-b"
+            style={{ borderColor: 'var(--border-default)' }}
+          >
+            {tabButton('browse', browseLabel)}
+            {tabButton('captures', 'Captures')}
+            {allowDraftCreate && tabButton('draft', 'Quick-create draft')}
+          </div>
+
+          {/* Panels */}
+          {tab === 'browse' &&
+            (scope === 'library' ? (
+              <LibraryTab onPick={handlePick} />
+            ) : (
+              <CatalogTab defaultCategorySlug={defaultCategorySlug} onPick={handlePick} />
+            ))}
+          {tab === 'captures' && <CapturesTab onPick={handlePick} />}
+          {tab === 'draft' && allowDraftCreate && <DraftTab onPick={handlePick} />}
+        </>
         )}
-
-        {/* Tabs */}
-        <div
-          role="tablist"
-          aria-label="Product picker"
-          className="mb-4 flex gap-1 border-b"
-          style={{ borderColor: 'var(--border-default)' }}
-        >
-          {tabButton('browse', browseLabel)}
-          {tabButton('captures', 'Captures')}
-          {allowDraftCreate && tabButton('draft', 'Quick-create draft')}
-        </div>
-
-        {/* Panels */}
-        {tab === 'browse' &&
-          (scope === 'library' ? (
-            <LibraryTab onPick={handlePick} />
-          ) : (
-            <CatalogTab defaultCategorySlug={defaultCategorySlug} onPick={handlePick} />
-          ))}
-        {tab === 'captures' && <CapturesTab onPick={handlePick} />}
-        {tab === 'draft' && allowDraftCreate && <DraftTab onPick={handlePick} />}
       </div>
     </div>
   );

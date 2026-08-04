@@ -82,6 +82,10 @@ function orCalls(b: MockBuilder) {
   return b.__chain.filter((c) => c.method === 'or');
 }
 
+function selectCall(b: MockBuilder) {
+  return b.__chain.find((c) => c.method === 'select');
+}
+
 beforeEach(() => {
   productsBuilder = makeBuilder();
 });
@@ -127,6 +131,17 @@ describe('useCrossLayerSearch — extended filter + grouping', () => {
     expect(filter).toContain('brand.ilike.%oak%'); // maker
     expect(filter).toContain('sku.ilike.%oak%');
     expect(filter).toContain('category.ilike.%oak%');
+  });
+
+  // The row type this hook returns (LayerProductRow) declares
+  // configuration_mode / configuration_summary, so the projection must carry
+  // them — the picker reads the mode to decide whether a pick needs configuring.
+  it('selects the denormalized configuration mode and summary', async () => {
+    await queryFnFor({ query: 'oak' })();
+
+    const projection = selectCall(productsBuilder)?.args[0] as string;
+    expect(projection).toContain('configuration_mode');
+    expect(projection).toContain('configuration_summary');
   });
 
   it('honours an explicit narrower field set (SKU only)', async () => {

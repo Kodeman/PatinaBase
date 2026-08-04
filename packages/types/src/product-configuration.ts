@@ -138,6 +138,13 @@ export interface ProductConfigurationSummary {
   priceOnRequest: boolean;
 }
 
+/**
+ * One chosen option value, exactly as `evaluate_product_configuration` writes
+ * it into the snapshot (00403, extended by 00413). The delta keys are the
+ * value's own contribution — they are NOT the resolved price — and `allowsCom`
+ * marks the value as a COM/COL slot the designer may fill with their own
+ * fabric. This is the ONE selection vocabulary: picker → decisions → spec → PO.
+ */
 export interface ProductConfigurationSelection {
   optionGroupId: UUID;
   optionValueId: UUID;
@@ -145,6 +152,11 @@ export interface ProductConfigurationSelection {
   valueCode: string;
   groupName: string;
   valueLabel: string;
+  retailPriceDeltaCents: number;
+  tradePriceDeltaCents: number;
+  leadTimeDeltaWeeks: number;
+  /** 00413 — the value accepts customer's-own-material. */
+  allowsCom?: boolean;
 }
 
 export interface ProductConfigurationComponentSelection {
@@ -155,12 +167,34 @@ export interface ProductConfigurationComponentSelection {
   handedness?: 'left' | 'right' | null;
   retailPriceCents: number;
   tradePriceCents: number;
+  leadTimeWeeks?: number;
+  dimensions?: Record<string, unknown> | null;
+}
+
+/**
+ * The customer's-own-material fabric actually specified on a configuration
+ * version (00413 `product_configurations.com_details`). Merged into the
+ * snapshot BEFORE hashing, so it is part of the immutable commercial truth and
+ * reaches the vendor PO.
+ */
+export interface ProductConfigurationComDetails {
+  optionValueId?: UUID | null;
+  fabricName?: string | null;
+  mill?: string | null;
+  pattern?: string | null;
+  yardage?: number | string | null;
+  railroaded?: boolean | null;
+  shipTo?: string | null;
+  sidemark?: string | null;
+  secondLeadTimeWeeks?: number | null;
+  notes?: string | null;
 }
 
 export interface ProductConfigurationSnapshot {
   productId: UUID;
   productName: string;
   configurationMode: ProductConfigurationMode;
+  pricingStrategy: ProductConfigurationPricingStrategy;
   schemaRevision: number;
   variant: ProductVariantDefinition | null;
   selections: ProductConfigurationSelection[];
@@ -169,6 +203,8 @@ export interface ProductConfigurationSnapshot {
   tradePriceCents: number | null;
   leadTimeWeeks: number | null;
   dimensions: Record<string, unknown> | null;
+  /** Present only when COM was specified on the configuration (00413). */
+  comDetails?: ProductConfigurationComDetails | null;
   capturedAt: string;
 }
 
@@ -179,6 +215,11 @@ export interface ProductConfigurationEvaluation {
   warnings: string[];
   normalizedSelection: Record<string, string[]>;
   componentQuantities: Record<string, number>;
+  /** Per-component code → chosen quantity/handedness, keyed by component code. */
+  componentState: Record<
+    string,
+    { quantity: number; handedness: 'left' | 'right' | null }
+  >;
   matchedVariant: ProductVariantDefinition | null;
   retailPriceCents: number | null;
   tradePriceCents: number | null;

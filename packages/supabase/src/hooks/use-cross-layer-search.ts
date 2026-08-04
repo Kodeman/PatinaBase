@@ -6,8 +6,14 @@ import type { LayerProductLayer, LayerProductRow } from './use-layer-products';
 
 const getSupabase = () => createBrowserClient();
 
+/**
+ * Matches `LayerProductRow` exactly — including the denormalized
+ * `configuration_mode` / `configuration_summary` the row type declares (00403).
+ * Omitting them left both keys `undefined` at runtime while the type promised
+ * a mode, so every consumer read a configured piece as `standard`.
+ */
 const PRODUCT_FIELDS =
-  'id, name, brand, price_retail, price_trade, images, source_url, status, category, layer, owner_user_id, studio_id, created_at';
+  'id, name, brand, price_retail, price_trade, images, source_url, status, category, configuration_mode, configuration_summary, layer, owner_user_id, studio_id, created_at';
 
 /**
  * The columns field-grain search can match on (R88). `brand` IS the maker

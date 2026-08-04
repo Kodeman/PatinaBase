@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { createBrowserClient } from '../client';
+import type { ProductConfigurationSelection } from '@patina/types';
 // Track 5 coordination axis — type-only import (erased at compile time, so no
 // runtime cycle even though use-coordination imports ClientDecisionOption back).
 import type { CoordinationKind, Court } from './use-coordination';
@@ -64,6 +65,19 @@ export interface ClientDecisionOption {
   quantity: number;
   cost_delta_cents: number | null;
   lead_time_days_delta: number | null;
+  /** Client-side approval semantics: does picking this option approve the ask? */
+  approves: boolean;
+  /**
+   * Provenance for an option built from a saved product configuration (00413).
+   * Never required — a manual or plain-product option leaves it null.
+   */
+  configuration_id: string | null;
+  /**
+   * The chosen option values in the ONE snapshot vocabulary
+   * (`ProductConfigurationSelection[]`), carried so `apply_decision` can write
+   * the winner's finish/material through to the spec (00413).
+   */
+  selection_snapshot: ProductConfigurationSelection[] | null;
   created_at: string;
 }
 
@@ -129,6 +143,10 @@ export interface CreateDecisionInput {
     leadTimeDaysDelta?: number;
     /** Optional catalog/library product this option is built from (00172). */
     productId?: string;
+    /** Saved product configuration this option represents (00413). */
+    configurationId?: string;
+    /** The option's chosen values in the snapshot vocabulary (00413). */
+    selectionSnapshot?: ProductConfigurationSelection[];
   }[];
 }
 
@@ -159,6 +177,8 @@ export interface UpdateDecisionInput {
     costDeltaCents?: number;
     leadTimeDaysDelta?: number;
     productId?: string;
+    configurationId?: string;
+    selectionSnapshot?: ProductConfigurationSelection[];
   }[];
 }
 
@@ -454,6 +474,10 @@ export function useCreateDecision() {
           cost_delta_cents: opt.costDeltaCents ?? null,
           lead_time_days_delta: opt.leadTimeDaysDelta ?? null,
           product_id: opt.productId ?? null,
+          // 00413 — configuration provenance + the winner's selections, so
+          // apply_decision can carry the choice into the spec.
+          configuration_id: opt.configurationId ?? null,
+          selection_snapshot: opt.selectionSnapshot ?? null,
           sort_order: i,
         })),
         p_blocked_ffe_item_ids: input.blockedFfeItemIds ?? [],
@@ -585,6 +609,8 @@ export function useUpdateDecision(options?: { errorSurface?: 'inline' }) {
             cost_delta_cents: opt.costDeltaCents ?? null,
             lead_time_days_delta: opt.leadTimeDaysDelta ?? null,
             product_id: opt.productId || null,
+            configuration_id: opt.configurationId || null,
+            selection_snapshot: opt.selectionSnapshot ?? null,
             sort_order: i,
           }));
 

@@ -719,6 +719,7 @@ export function useAddProposalItem() {
       // Schedule & Boards Wave 1 — spec instrument
       docCode,
       leadTimeWeeks,
+      customFields,
     }: {
       proposalId: string;
       productId?: string;
@@ -738,6 +739,14 @@ export function useAddProposalItem() {
       ffeCategory?: string | null;
       docCode?: string | null;
       leadTimeWeeks?: number | null;
+      /**
+       * Free-form pre-sale intent kept on `proposal_items.custom_fields`.
+       * The picker's configure step writes `{ configuration: … }` here so a
+       * proposal line remembers WHICH specification was quoted; activation
+       * (00269) carries it forward. Never a substitute for the configuration
+       * record itself — `proposal_items` is pre-sale and has no FK to one.
+       */
+      customFields?: Record<string, unknown> | null;
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -789,6 +798,8 @@ export function useAddProposalItem() {
           // Schedule & Boards Wave 1 (00262 doc_code + existing lead_time_weeks).
           doc_code: docCode ?? null,
           lead_time_weeks: leadTimeWeeks ?? null,
+          // Omit rather than null the column — it is NOT NULL DEFAULT '{}'.
+          ...(customFields ? { custom_fields: customFields } : {}),
         })
         .select()
         .single();
