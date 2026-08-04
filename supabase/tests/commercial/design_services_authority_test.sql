@@ -24,13 +24,16 @@ INSERT INTO auth.users (
   ('d5000000-0000-4000-8000-000000000002', 'commercial-client@test.invalid', '', now(), now(), now(),
    '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
   ('d5000000-0000-4000-8000-000000000003', 'commercial-outsider@test.invalid', '', now(), now(), now(),
+   '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('d5000000-0000-4000-8000-000000000004', 'commercial-support@test.invalid', '', now(), now(), now(),
    '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
 
 INSERT INTO public.profiles (id, email, full_name, is_designer, created_at, updated_at)
 VALUES
   ('d5000000-0000-4000-8000-000000000001', 'commercial-designer@test.invalid', 'Commercial Designer', true, now(), now()),
   ('d5000000-0000-4000-8000-000000000002', 'commercial-client@test.invalid', 'Commercial Client', false, now(), now()),
-  ('d5000000-0000-4000-8000-000000000003', 'commercial-outsider@test.invalid', 'Commercial Outsider', false, now(), now())
+  ('d5000000-0000-4000-8000-000000000003', 'commercial-outsider@test.invalid', 'Commercial Outsider', false, now(), now()),
+  ('d5000000-0000-4000-8000-000000000004', 'commercial-support@test.invalid', 'Commercial Support', true, now(), now())
 ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, full_name = EXCLUDED.full_name;
 
 INSERT INTO public.organizations (id, type, name, slug, status)
@@ -90,10 +93,16 @@ BEGIN
       'terms', 'Actual hours, not to exceed the signed ceiling.',
       'currentRateVersion', 1
     ),
-    jsonb_build_array(jsonb_build_object(
-      'version', 1, 'roleName', 'Designer', 'hourlyRateCents', 12000,
-      'sortOrder', 0, 'effectiveAt', now()
-    ))
+    jsonb_build_array(
+      jsonb_build_object(
+        'version', 1, 'roleName', 'Designer', 'hourlyRateCents', 12000,
+        'sortOrder', 0, 'effectiveAt', now()
+      ),
+      jsonb_build_object(
+        'version', 1, 'roleName', 'Future Specialist', 'hourlyRateCents', 99000,
+        'sortOrder', 1, 'effectiveAt', now() + interval '1 day'
+      )
+    )
   );
   ASSERT v_save->>'documentKind' = 'design_services', 'draft save kind';
   v_snapshot := public.get_commercial_document_send_snapshot(
@@ -173,30 +182,32 @@ DO $$ BEGIN
     ASSERT false, 'historical rate update should fail';
   EXCEPTION WHEN check_violation THEN NULL;
   END;
+  ASSERT position(
+    'FOR UPDATE' in pg_get_functiondef(
+      'public.classify_project_time_entry_authority()'::regprocedure
+    )
+  ) > 0, 'time ceiling classifier must serialize on its authority row';
+  ASSERT pg_get_functiondef(
+    'public.countersign_design_services_agreement(uuid,text)'::regprocedure
+  ) ~ 'PERFORM 1 FROM public\.projects\s+WHERE id = v_project_id\s+FOR UPDATE',
+    'addendum countersign must serialize on the shared project row';
 END $$;
 
--- Cap classification: $60 authorized, next $120 captured pending.
+-- A required unpaid retainer keeps otherwise-rated time pending and out of the
+-- unbilled view. Paying the retainer and reclassifying opens invoiceability.
 INSERT INTO public.project_time_entries (
   id, project_id, user_id, started_at, duration_minutes, billable, activity
 ) SELECT
   'd5400000-0000-4000-8000-000000000001', p.id,
   'd5000000-0000-4000-8000-000000000001', now(), 30, true, 'design'
 FROM public.projects p WHERE p.proposal_id = 'd5300000-0000-4000-8000-000000000001';
-INSERT INTO public.project_time_entries (
-  id, project_id, user_id, started_at, duration_minutes, billable, activity
-) SELECT
-  'd5400000-0000-4000-8000-000000000002', p.id,
-  'd5000000-0000-4000-8000-000000000001', now(), 60, true, 'sourcing'
-FROM public.projects p WHERE p.proposal_id = 'd5300000-0000-4000-8000-000000000001';
 DO $$ BEGIN
-  ASSERT (SELECT billing_state FROM public.project_time_entries WHERE id = 'd5400000-0000-4000-8000-000000000001') = 'authorized',
-    'first entry should be authorized';
+  ASSERT (SELECT billing_state FROM public.project_time_entries WHERE id = 'd5400000-0000-4000-8000-000000000001') = 'pending_authorization',
+    'unpaid retainer time should remain pending';
   ASSERT (SELECT rated_amount_cents FROM public.project_time_entries WHERE id = 'd5400000-0000-4000-8000-000000000001') = 6000,
     'first entry rate snapshot';
-  ASSERT (SELECT billing_state FROM public.project_time_entries WHERE id = 'd5400000-0000-4000-8000-000000000002') = 'pending_authorization',
-    'over-cap entry should remain captured pending';
-  ASSERT NOT EXISTS (SELECT 1 FROM public.project_unbilled_time WHERE id = 'd5400000-0000-4000-8000-000000000002'),
-    'pending entry leaked into unbilled view';
+  ASSERT NOT EXISTS (SELECT 1 FROM public.project_unbilled_time WHERE id = 'd5400000-0000-4000-8000-000000000001'),
+    'retainer-gated entry leaked into unbilled view';
 END $$;
 
 -- Internal invoice settlement opens retainer-gated invoiceability.
@@ -206,17 +217,33 @@ BEGIN
   SELECT p.id, a.retainer_invoice_id INTO v_project, v_retainer
   FROM public.projects p JOIN public.project_billing_authorities a ON a.project_id = p.id
   WHERE p.proposal_id = 'd5300000-0000-4000-8000-000000000001';
+  PERFORM public.record_invoice_payment(v_retainer, 5000, 'check', 'RET-PAID', now(), NULL);
+  UPDATE public.project_time_entries SET duration_minutes = duration_minutes
+  WHERE id = 'd5400000-0000-4000-8000-000000000001';
+  ASSERT (SELECT billing_state FROM public.project_time_entries
+          WHERE id = 'd5400000-0000-4000-8000-000000000001') = 'authorized',
+    'paid retainer should authorize in-ceiling time';
+  ASSERT EXISTS (SELECT 1 FROM public.project_unbilled_time
+                 WHERE id = 'd5400000-0000-4000-8000-000000000001'),
+    'paid retainer time should enter unbilled view';
+
+  INSERT INTO public.project_time_entries (
+    id, project_id, user_id, started_at, duration_minutes, billable, activity
+  ) VALUES (
+    'd5400000-0000-4000-8000-000000000002', v_project,
+    'd5000000-0000-4000-8000-000000000001', now(), 60, true, 'sourcing'
+  );
+  ASSERT (SELECT billing_state FROM public.project_time_entries
+          WHERE id = 'd5400000-0000-4000-8000-000000000002') = 'pending_authorization',
+    'over-cap entry should remain captured pending';
+  ASSERT NOT EXISTS (SELECT 1 FROM public.project_unbilled_time
+                     WHERE id = 'd5400000-0000-4000-8000-000000000002'),
+    'over-cap pending entry leaked into unbilled view';
+
   INSERT INTO public.invoices (project_id, designer_id, client_id, status, currency, memo)
   VALUES (v_project, 'd5000000-0000-4000-8000-000000000001',
           'd5000000-0000-4000-8000-000000000002', 'draft', 'USD', 'Time draft')
   RETURNING id INTO v_draft;
-  BEGIN
-    UPDATE public.project_time_entries SET invoice_id = v_draft
-    WHERE id = 'd5400000-0000-4000-8000-000000000001';
-    ASSERT false, 'unpaid retainer should gate invoice attachment';
-  EXCEPTION WHEN check_violation THEN NULL;
-  END;
-  PERFORM public.record_invoice_payment(v_retainer, 5000, 'check', 'RET-PAID', now(), NULL);
   UPDATE public.project_time_entries SET invoice_id = v_draft
   WHERE id = 'd5400000-0000-4000-8000-000000000001';
   ASSERT (SELECT invoice_id FROM public.project_time_entries WHERE id = 'd5400000-0000-4000-8000-000000000001') = v_draft,
@@ -328,6 +355,44 @@ INSERT INTO public.proposal_items (
   'd5710000-0000-4000-8000-000000000001', 'Commercial Test Vendor',
   0, 'fixed', 'furniture'
 );
+
+-- An older acknowledgement cannot authorize a wave after a newer checkpoint
+-- is published. The newest checkpoint itself must be acknowledged/overridden.
+INSERT INTO public.project_budget_versions (
+  id, project_id, version, created_by
+) SELECT 'd5500000-0000-4000-8000-000000000002', p.id, 2,
+  'd5000000-0000-4000-8000-000000000001'
+FROM public.projects p WHERE p.proposal_id = 'd5300000-0000-4000-8000-000000000001';
+INSERT INTO public.project_budget_lines (
+  budget_version_id, room_name, category, low_cents, target_cents, high_cents
+) VALUES (
+  'd5500000-0000-4000-8000-000000000002', 'Living room', 'Seating', 110000, 160000, 210000
+);
+SELECT public.publish_budget_checkpoint(
+  (SELECT id FROM public.projects WHERE proposal_id = 'd5300000-0000-4000-8000-000000000001'),
+  'd5500000-0000-4000-8000-000000000002'
+);
+DO $$
+DECLARE v_project_id uuid;
+BEGIN
+  SELECT id INTO v_project_id FROM public.projects
+  WHERE proposal_id = 'd5300000-0000-4000-8000-000000000001';
+  BEGIN
+    PERFORM public.create_furnishings_authorization(
+      v_project_id, 'Blocked by newer checkpoint',
+      'd5700000-0000-4000-8000-000000000001'
+    );
+    ASSERT false, 'older acknowledgement must not bypass newer open checkpoint';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+END;
+$$;
+SELECT pg_temp.assume_user('d5000000-0000-4000-8000-000000000002');
+SELECT public.acknowledge_budget_checkpoint(
+  (SELECT id FROM public.project_budget_checkpoints
+   WHERE budget_version_id = 'd5500000-0000-4000-8000-000000000002')
+);
+SELECT pg_temp.assume_user('d5000000-0000-4000-8000-000000000001');
 DO $$
 DECLARE
   v_project_id uuid;
@@ -360,6 +425,15 @@ BEGIN
   v_deposit_id := (v_execution->>'depositInvoiceId')::uuid;
   ASSERT (v_execution->>'depositRequiredCents')::integer = 50000,
     'furnishings deposit amount';
+  ASSERT v_execution->>'checkpointId' = (
+    SELECT id::text FROM public.project_budget_checkpoints
+    WHERE budget_version_id = 'd5500000-0000-4000-8000-000000000002'
+  ), 'execution checkpoint alias';
+  ASSERT (v_execution->>'depositPaidCents')::integer = 0,
+    'new deposit invoice paid amount';
+  ASSERT (v_execution->>'deposit_required_cents')::integer = 50000
+      AND (v_execution->>'deposit_paid_cents')::integer = 0,
+    'execution snake-case deposit aliases';
   ASSERT (SELECT status FROM public.invoices WHERE id = v_deposit_id) = 'sent',
     'furnishings deposit invoice must be issued';
 
@@ -407,6 +481,97 @@ BEGIN
 END;
 $$;
 
+-- Commercial-project FF&E and signature evidence are not directly client
+-- readable. Legacy-project FF&E visibility remains intact, while curated RPCs
+-- expose only client-safe commercial aliases and amounts.
+INSERT INTO public.project_ffe_items (
+  id, project_id, name, item_type, status, quantity,
+  unit_price_cents, line_total_cents
+) VALUES (
+  'd5750000-0000-4000-8000-000000000001',
+  'd5730000-0000-4000-8000-000000000001',
+  'Legacy visible chair', 'fixed', 'specified', 1, 30000, 45000
+);
+SELECT pg_temp.assume_user('d5000000-0000-4000-8000-000000000002');
+SET LOCAL ROLE authenticated;
+DO $$
+DECLARE
+  v_project_id uuid;
+  v_list jsonb;
+  v_bundle jsonb;
+BEGIN
+  SELECT id INTO v_project_id FROM public.projects
+  WHERE proposal_id = 'd5300000-0000-4000-8000-000000000001';
+  ASSERT (SELECT count(*) FROM public.project_ffe_items
+          WHERE project_id = v_project_id) = 0,
+    'client directly read commercial-origin FF&E';
+  ASSERT (SELECT count(*) FROM public.project_ffe_items
+          WHERE project_id = 'd5730000-0000-4000-8000-000000000001') = 1,
+    'legacy client FF&E visibility regressed';
+  ASSERT (SELECT count(*) FROM public.commercial_document_signatures
+          WHERE proposal_id = 'd5300000-0000-4000-8000-000000000001') = 0,
+    'client directly read commercial signatures';
+
+  v_list := public.list_furnishings_authorizations(v_project_id);
+  ASSERT jsonb_array_length(v_list) = 1, 'safe furnishings list missing wave';
+  ASSERT (v_list->0->>'depositRequiredCents')::integer = 50000,
+    'safe furnishings required deposit alias';
+  ASSERT (v_list->0->>'depositPaidCents')::integer = 50000,
+    'safe furnishings paid deposit alias';
+  ASSERT (v_list->0->>'deposit_required_cents')::integer = 50000
+      AND (v_list->0->>'deposit_paid_cents')::integer = 50000,
+    'safe furnishings snake-case deposit aliases';
+  ASSERT v_list->0->>'checkpointId' = v_list->0->>'budgetCheckpointId',
+    'safe furnishings checkpoint alias';
+  ASSERT v_list->0->>'proposalSendDispatchId' IS NOT NULL
+      AND v_list->0->>'proposalSendDispatchId' = v_list->0->>'proposal_send_dispatch_id'
+      AND v_list->0->>'sentAt' = v_list->0->>'sent_at',
+    'safe furnishings persistent send status';
+  ASSERT position('trade' in lower(v_list::text)) = 0,
+    'safe furnishings list leaked trade fields';
+
+  v_bundle := public.get_client_commercial_document_bundle(
+    (SELECT proposal_id FROM public.project_commercial_documents
+     WHERE project_id = v_project_id
+       AND document_kind = 'furnishings_authorization')
+  );
+  ASSERT (v_bundle->'furnishings'->>'depositRequiredCents')::integer = 50000,
+    'bundle required deposit alias';
+  ASSERT (v_bundle->'furnishings'->>'depositPaidCents')::integer = 50000,
+    'bundle paid deposit alias';
+  ASSERT (v_bundle->'furnishings'->>'deposit_required_cents')::integer = 50000
+      AND (v_bundle->'furnishings'->>'deposit_paid_cents')::integer = 50000,
+    'bundle snake-case deposit aliases';
+  ASSERT v_bundle->'furnishings'->>'checkpointId'
+         = v_bundle->'furnishings'->>'budgetCheckpointId',
+    'bundle checkpoint alias';
+  ASSERT NOT (v_bundle->'signatures'->0 ? 'signerUserId'),
+    'bundle leaked signer user id';
+  ASSERT v_bundle->'document'->>'proposalSendDispatchId' IS NOT NULL
+      AND v_bundle->'document'->>'proposalSendDispatchId'
+          = v_bundle->'document'->>'proposal_send_dispatch_id'
+      AND v_bundle->'furnishings'->>'proposalSendDispatchId'
+          = v_bundle->'document'->>'proposalSendDispatchId'
+      AND v_bundle->'furnishings'->>'sentAt' = v_bundle->'furnishings'->>'sent_at',
+    'bundle persistent send status';
+END;
+$$;
+RESET ROLE;
+DO $$
+DECLARE v_project_id uuid; v_list jsonb;
+BEGIN
+  SELECT id INTO v_project_id FROM public.projects
+  WHERE proposal_id = 'd5300000-0000-4000-8000-000000000001';
+  v_list := public.list_furnishings_authorizations(v_project_id);
+  ASSERT EXISTS (
+    SELECT 1 FROM public.proposal_send_dispatches dispatch
+    WHERE dispatch.id = (v_list->0->>'proposalSendDispatchId')::uuid
+      AND dispatch.proposal_id = (v_list->0->>'proposalId')::uuid
+      AND dispatch.sent_at = (v_list->0->>'sentAt')::timestamptz
+  ), 'safe furnishings send status does not match persisted dispatch';
+END;
+$$;
+
 -- A service addendum reuses the same project identity, creates a new signed
 -- authority at countersign, and leaves historical time provenance untouched.
 SELECT pg_temp.assume_user('d5000000-0000-4000-8000-000000000001');
@@ -415,6 +580,8 @@ DECLARE
   v_project_id uuid;
   v_old_authority_id uuid;
   v_old_rate_id uuid;
+  v_old_pending_authority_id uuid;
+  v_old_pending_rate_id uuid;
   v_addendum_id uuid;
   v_created jsonb;
   v_snapshot jsonb;
@@ -427,6 +594,10 @@ BEGIN
   INTO v_old_authority_id, v_old_rate_id
   FROM public.project_time_entries
   WHERE id = 'd5400000-0000-4000-8000-000000000001';
+  SELECT billing_authority_id, authority_rate_id
+  INTO v_old_pending_authority_id, v_old_pending_rate_id
+  FROM public.project_time_entries
+  WHERE id = 'd5400000-0000-4000-8000-000000000002';
 
   v_created := public.create_service_addendum(v_project_id, 'Additional sourcing services');
   v_addendum_id := (v_created->>'proposalId')::uuid;
@@ -447,17 +618,23 @@ BEGIN
       'scope', 'Additional sourcing and installation coordination.',
       'deliverables', jsonb_build_array('Sourcing', 'Installation coordination'),
       'exclusions', jsonb_build_array('Construction administration'),
-      'billingCeilingCents', 30000,
+      'billingCeilingCents', 35000,
       'retainerAmountCents', 0,
       'retainerActivationPolicy', 'immediate',
       'billingCadence', 'monthly', 'currency', 'USD',
       'terms', 'Actual hours under the amended authority.',
       'currentRateVersion', 2
     ),
-    jsonb_build_array(jsonb_build_object(
-      'version', 2, 'roleName', 'Designer', 'hourlyRateCents', 15000,
-      'sortOrder', 0, 'effectiveAt', now()
-    ))
+    jsonb_build_array(
+      jsonb_build_object(
+        'version', 2, 'roleName', 'Lead Designer', 'hourlyRateCents', 15000,
+        'sortOrder', 0, 'effectiveAt', now()
+      ),
+      jsonb_build_object(
+        'version', 2, 'roleName', 'Support Designer', 'hourlyRateCents', 10000,
+        'sortOrder', 1, 'effectiveAt', now()
+      )
+    )
   );
   v_snapshot := public.get_commercial_document_send_snapshot(v_addendum_id);
   PERFORM public.send_commercial_document(
@@ -492,10 +669,79 @@ BEGIN
   ASSERT (SELECT authority_rate_id FROM public.project_time_entries
           WHERE id = 'd5400000-0000-4000-8000-000000000001') = v_old_rate_id,
     'historical time rate changed';
+  ASSERT (SELECT billing_state FROM public.project_time_entries
+          WHERE id = 'd5400000-0000-4000-8000-000000000002') = 'authorized',
+    'addendum ceiling should promote oldest prior pending work';
+  ASSERT (SELECT billing_authority_id FROM public.project_time_entries
+          WHERE id = 'd5400000-0000-4000-8000-000000000002') = v_old_pending_authority_id,
+    'promoted time authority provenance changed';
+  ASSERT (SELECT authority_rate_id FROM public.project_time_entries
+          WHERE id = 'd5400000-0000-4000-8000-000000000002') = v_old_pending_rate_id,
+    'promoted time rate provenance changed';
+  ASSERT (SELECT rated_amount_cents FROM public.project_time_entries
+          WHERE id = 'd5400000-0000-4000-8000-000000000002') = 12000,
+    'promoted time amount snapshot changed';
+
+  INSERT INTO public.project_team_members (
+    project_id, user_id, role, assigned_by
+  ) VALUES (
+    v_project_id, 'd5000000-0000-4000-8000-000000000004',
+    'support_designer', 'd5000000-0000-4000-8000-000000000001'
+  );
+  INSERT INTO public.project_time_entries (
+    id, project_id, user_id, started_at, duration_minutes, billable, activity
+  ) VALUES
+    ('d5400000-0000-4000-8000-000000000003', v_project_id,
+     'd5000000-0000-4000-8000-000000000001', now(), 30, true, 'design'),
+    ('d5400000-0000-4000-8000-000000000004', v_project_id,
+     'd5000000-0000-4000-8000-000000000004', now(), 30, true, 'sourcing');
+  ASSERT (SELECT hourly_rate_cents FROM public.project_time_entries
+          WHERE id = 'd5400000-0000-4000-8000-000000000003') = 15000,
+    'lead role did not select the signed lead rate';
+  ASSERT (SELECT hourly_rate_cents FROM public.project_time_entries
+          WHERE id = 'd5400000-0000-4000-8000-000000000004') = 10000,
+    'support role did not select the signed support rate';
+
+  -- Caller-selected authority/rate ids are ignored. With multiple current
+  -- rates and no server-owned project role, classification fails closed.
+  INSERT INTO public.project_time_entries (
+    id, project_id, user_id, started_at, duration_minutes, billable, activity,
+    billing_authority_id, authority_rate_id
+  ) VALUES (
+    'd5400000-0000-4000-8000-000000000005', v_project_id,
+    'd5000000-0000-4000-8000-000000000003', now(), 30, true, 'admin',
+    (v_executed->>'billingAuthorityId')::uuid,
+    (SELECT id FROM public.project_billing_authority_rates
+     WHERE billing_authority_id = (v_executed->>'billingAuthorityId')::uuid
+       AND role_name = 'Support Designer')
+  );
+  ASSERT (SELECT billing_state FROM public.project_time_entries
+          WHERE id = 'd5400000-0000-4000-8000-000000000005') = 'pending_authorization'
+      AND (SELECT authority_rate_id FROM public.project_time_entries
+           WHERE id = 'd5400000-0000-4000-8000-000000000005') IS NULL,
+    'caller-selected ambiguous rate did not fail closed';
+
+  INSERT INTO public.project_time_entries (
+    id, project_id, user_id, started_at, duration_minutes, billable, activity
+  ) VALUES (
+    'd5400000-0000-4000-8000-000000000006', v_project_id,
+    'd5000000-0000-4000-8000-000000000001', now(), 30, true, 'design'
+  );
+  ASSERT (SELECT billing_state FROM public.project_time_entries
+          WHERE id = 'd5400000-0000-4000-8000-000000000006') = 'pending_authorization',
+    'addendum incorrectly reset the cumulative project ceiling';
+
+  BEGIN
+    UPDATE public.project_billing_authorities SET status = 'active'
+    WHERE id = v_old_authority_id;
+    ASSERT false, 'two active authorities should violate the partial unique index';
+  EXCEPTION WHEN unique_violation THEN NULL;
+  END;
 END;
 $$;
 
 -- Client-safe reads contain no raw entry notes or trade cost keys.
+SELECT pg_temp.assume_user('d5000000-0000-4000-8000-000000000002');
 DO $$
 DECLARE v_project uuid; v_summary jsonb; v_bundle text;
 BEGIN
@@ -513,26 +759,101 @@ BEGIN
     'billingThrough', 'rates', 'includesRawEntries'
   ], 'frozen flat authority contract keys';
   ASSERT jsonb_typeof(v_summary->'rates') = 'array', 'flat authority rates';
+  ASSERT (v_summary->>'ceilingCents')::integer = 35000
+      AND (v_summary->>'accruedCents')::integer = 30500
+      AND (v_summary->>'pendingAuthorizationCents')::integer = 7500
+      AND (v_summary->>'remainingCents')::integer = 4500,
+    'authority summary must aggregate the cumulative project ceiling';
   ASSERT NOT (v_summary->>'includesRawEntries')::boolean, 'curated summary marker';
   ASSERT position('notes' in v_summary::text) = 0, 'raw time notes leaked';
   ASSERT NOT (v_summary ? 'authority') AND NOT (v_summary ? 'summary'),
     'authority response must not require a nested adapter';
   ASSERT position('trade' in lower(v_bundle)) = 0, 'trade cost leaked';
+  ASSERT position('signerUserId' in v_bundle) = 0, 'signer user id leaked';
   ASSERT position('Interior design services' in v_bundle) > 0, 'scope string missing';
+END;
+$$;
+
+-- Declining a commercial edition atomically closes both lifecycle fields and
+-- the dedicated signing rail cannot revive it.
+SELECT pg_temp.assume_user('d5000000-0000-4000-8000-000000000001');
+INSERT INTO public.proposals (
+  id, designer_id, designer_client_id, client_id, title, description,
+  total_amount, status, valid_until
+) VALUES (
+  'd5800000-0000-4000-8000-000000000001',
+  'd5000000-0000-4000-8000-000000000001',
+  'd5200000-0000-4000-8000-000000000001',
+  'd5000000-0000-4000-8000-000000000002',
+  'Declined services agreement', 'Decline lifecycle fixture', 0, 'draft',
+  now() + interval '30 days'
+);
+INSERT INTO public.proposal_phases (
+  proposal_id, name, phase_key, duration_days, lane, fee_cents, sort_order
+) VALUES (
+  'd5800000-0000-4000-8000-000000000001',
+  'Advisory', 'advisory', 7, 'main', 0, 0
+);
+DO $$
+DECLARE v_snapshot jsonb;
+BEGIN
+  PERFORM public.upsert_design_services_draft(
+    'd5800000-0000-4000-8000-000000000001',
+    jsonb_build_object(
+      'scope', 'A declinable services edition.',
+      'deliverables', jsonb_build_array('Advice'),
+      'exclusions', jsonb_build_array('Purchasing'),
+      'billingCeilingCents', 10000,
+      'retainerAmountCents', 0,
+      'retainerActivationPolicy', 'immediate',
+      'billingCadence', 'monthly', 'currency', 'USD',
+      'terms', 'Hourly.', 'currentRateVersion', 1
+    ),
+    jsonb_build_array(jsonb_build_object(
+      'version', 1, 'roleName', 'Lead Designer',
+      'hourlyRateCents', 10000, 'sortOrder', 0, 'effectiveAt', now()
+    ))
+  );
+  v_snapshot := public.get_commercial_document_send_snapshot(
+    'd5800000-0000-4000-8000-000000000001'
+  );
+  PERFORM public.send_commercial_document(
+    'd5800000-0000-4000-8000-000000000001',
+    v_snapshot->>'documentFingerprint', NULL, now() + interval '30 days'
+  );
+END;
+$$;
+SELECT pg_temp.assume_user('d5000000-0000-4000-8000-000000000002');
+SELECT public.decline_proposal(
+  'd5800000-0000-4000-8000-000000000001', 'Not proceeding'
+);
+DO $$
+BEGIN
+  ASSERT (SELECT status = 'declined' AND commercial_state = 'declined'
+          FROM public.proposals
+          WHERE id = 'd5800000-0000-4000-8000-000000000001'),
+    'commercial decline states diverged';
+  BEGIN
+    PERFORM public.sign_design_services_agreement(
+      'd5800000-0000-4000-8000-000000000001', 'Commercial Client'
+    );
+    ASSERT false, 'declined agreement should not be signable';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
 END;
 $$;
 
 -- Service-role cutover supersedes only unsigned legacy rows; accepted history
 -- remains untouched.
 INSERT INTO public.proposals (
-  id, designer_id, designer_client_id, client_id, title, status
+  id, designer_id, designer_client_id, client_id, title, status, valid_until
 ) VALUES
   ('d5600000-0000-4000-8000-000000000001', 'd5000000-0000-4000-8000-000000000001',
    'd5200000-0000-4000-8000-000000000001', 'd5000000-0000-4000-8000-000000000002',
-   'Unsigned legacy', 'draft'),
+   'Unsigned legacy', 'sent', now() + interval '30 days'),
   ('d5600000-0000-4000-8000-000000000002', 'd5000000-0000-4000-8000-000000000001',
    'd5200000-0000-4000-8000-000000000001', 'd5000000-0000-4000-8000-000000000002',
-   'Accepted legacy', 'accepted');
+   'Accepted legacy', 'accepted', now() + interval '30 days');
 SELECT pg_temp.assume_user('d5000000-0000-4000-8000-000000000001', 'service_role');
 SELECT public.supersede_unsigned_legacy_proposals(
   ARRAY['d5600000-0000-4000-8000-000000000001','d5600000-0000-4000-8000-000000000002']::uuid[],
@@ -543,6 +864,40 @@ DO $$ BEGIN
     'unsigned legacy should supersede';
   ASSERT (SELECT commercial_state FROM public.proposals WHERE id = 'd5600000-0000-4000-8000-000000000002') IS NULL,
     'accepted legacy history must remain untouched';
+END $$;
+
+SELECT pg_temp.assume_user('d5000000-0000-4000-8000-000000000002');
+DO $$ BEGIN
+  BEGIN
+    PERFORM public.sign_proposal(
+      'd5600000-0000-4000-8000-000000000001', 'Commercial Client'
+    );
+    ASSERT false, 'superseded legacy proposal should not be signable';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+END $$;
+SELECT pg_temp.assume_user('d5000000-0000-4000-8000-000000000001');
+DO $$ BEGIN
+  BEGIN
+    PERFORM public.activate_proposal_as_project(
+      'd5600000-0000-4000-8000-000000000001', current_date
+    );
+    ASSERT false, 'superseded legacy proposal should not activate';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+
+  -- Even an exact-row canonical capability cannot bypass terminal cutover.
+  PERFORM set_config(
+    'app.proposal_accept_id',
+    'd5600000-0000-4000-8000-000000000001', true
+  );
+  BEGIN
+    UPDATE public.proposals SET status = 'accepted', accepted_at = now()
+    WHERE id = 'd5600000-0000-4000-8000-000000000001';
+    ASSERT false, 'canonical lifecycle GUC revived superseded proposal';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+  PERFORM set_config('app.proposal_accept_id', '', true);
 END $$;
 
 ROLLBACK;
