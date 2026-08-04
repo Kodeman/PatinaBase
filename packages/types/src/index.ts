@@ -37,6 +37,7 @@ export * from './project-v2';
 export * from './ffe';
 export * from './phase-config';
 export * from './field-config';
+export * from './studio-config';
 export * from './scope';
 export * from './scope-change';
 export * from './comms';

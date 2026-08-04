@@ -26,7 +26,19 @@ export type FieldTrade =
   | 'drywall'
   | 'wallpaper'
   | 'window_treatments'
-  | 'general';
+  | 'general'
+  | 'carpentry_framing'
+  | 'masonry_concrete'
+  | 'roofing'
+  | 'glazing'
+  | 'stone_countertops'
+  | 'cabinetry'
+  | 'plaster'
+  | 'metalwork'
+  | 'low_voltage_av'
+  | 'appliance_install'
+  | 'landscape'
+  | 'demo';
 
 export const ALL_FIELD_TRADES: readonly FieldTrade[] = [
   'electrical',
@@ -40,6 +52,18 @@ export const ALL_FIELD_TRADES: readonly FieldTrade[] = [
   'wallpaper',
   'window_treatments',
   'general',
+  'carpentry_framing',
+  'masonry_concrete',
+  'roofing',
+  'glazing',
+  'stone_countertops',
+  'cabinetry',
+  'plaster',
+  'metalwork',
+  'low_voltage_av',
+  'appliance_install',
+  'landscape',
+  'demo',
 ] as const;
 
 export const FIELD_TRADE_LABELS: Record<FieldTrade, string> = {
@@ -54,6 +78,18 @@ export const FIELD_TRADE_LABELS: Record<FieldTrade, string> = {
   wallpaper: 'Wallpaper',
   window_treatments: 'Window Treatments',
   general: 'General',
+  carpentry_framing: 'Carpentry & framing',
+  masonry_concrete: 'Masonry & concrete',
+  roofing: 'Roofing',
+  glazing: 'Glazing',
+  stone_countertops: 'Stone countertops',
+  cabinetry: 'Cabinetry',
+  plaster: 'Plaster',
+  metalwork: 'Metalwork',
+  low_voltage_av: 'Low-voltage / AV',
+  appliance_install: 'Appliance installation',
+  landscape: 'Landscape',
+  demo: 'Demo',
 };
 
 /** Display label for a trade; falls back to the raw value for legacy/unknowns. */
@@ -78,7 +114,11 @@ export type PartyKind =
   | 'other'
   | 'sub'
   | 'installer'
-  | 'receiver';
+  | 'receiver'
+  | 'architect'
+  | 'photographer'
+  | 'stager'
+  | 'client';
 
 /** The party kinds that participate in field SMS coordination. */
 export const FIELD_PARTY_KINDS: readonly PartyKind[] = [
@@ -96,6 +136,10 @@ export const PARTY_KIND_LABELS: Record<PartyKind, string> = {
   sub: 'Subcontractor',
   installer: 'Installer',
   receiver: 'Receiver',
+  architect: 'Architect',
+  photographer: 'Photographer',
+  stager: 'Stager',
+  client: 'Client',
 };
 
 export function getPartyKindLabel(kind: string | null | undefined): string {
