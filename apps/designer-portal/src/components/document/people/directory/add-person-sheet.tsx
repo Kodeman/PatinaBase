@@ -44,10 +44,15 @@ export type AddedPersonKind =
   | 'installer'
   | 'receiver';
 
-const FIELD_KINDS: AddedPersonKind[] = ['gc', 'sub', 'installer', 'receiver'];
-const isFieldKind = (
-  k: AddedPersonKind,
-): k is Extract<AddedPersonKind, PartyKind> =>
+/** The four kinds this sheet writes as `project_parties` rows. Pinned as a
+ *  literal union rather than `Extract<AddedPersonKind, PartyKind>`: the Call
+ *  Sheet program widened PartyKind to include 'client' (00419), which would
+ *  silently pull 'client' into this predicate's narrowing and make the
+ *  maker/client branches below unreachable. FIELD_PARTY_KINDS stays four
+ *  values — so does this. */
+type FieldAddKind = 'gc' | 'sub' | 'installer' | 'receiver';
+const FIELD_KINDS: FieldAddKind[] = ['gc', 'sub', 'installer', 'receiver'];
+const isFieldKind = (k: AddedPersonKind): k is FieldAddKind =>
   (FIELD_KINDS as string[]).includes(k);
 /** Trade is a meaningful field only for the trade kinds (sub / installer). */
 const showsTrade = (k: AddedPersonKind) => k === 'sub' || k === 'installer';
@@ -106,6 +111,12 @@ const KIND_NOUN: Record<PartyKind, string> = {
   vendor: 'vendor',
   client_rep: 'client rep',
   other: 'contact',
+  // Call Sheet (00419) widened PartyKind; this sheet only ever indexes the
+  // four field kinds, but the map must stay total.
+  client: 'client',
+  architect: 'architect',
+  photographer: 'photographer',
+  stager: 'stager',
 };
 
 export function AddPersonSheet({
