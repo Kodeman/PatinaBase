@@ -1,14 +1,34 @@
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { DirectoryView } from '../views/directory-view';
+import { DEFAULT_CONTACT_SCOPE } from '../directory/scope-lens';
 import { DIRECTORY_ROLES } from '@/lib/document/directory-roles';
 import type { PeopleViewProps } from '../types';
 
 jest.mock('@/hooks/use-feature-flag', () => ({ useFeatureFlag: jest.fn() }));
 const mockUseFeatureFlag = useFeatureFlag as jest.Mock;
 
+// The MarginNote teach line reports through the wayfinding emitter — mocked
+// so this spec never loads posthog (same posture as margin-note.test.tsx).
+// actionShown/actionSelected are also mocked: the "review what seeded" click
+// mounts RolodexSeedSheet, whose DocumentAction buttons fire actionShown on
+// mount (same posture as studio-invite-modal.test.tsx).
+jest.mock('@/lib/analytics/document-events', () => ({
+  documentEvents: {
+    wayfinding: { marginNote: jest.fn() },
+    actionShown: jest.fn(),
+    actionSelected: jest.fn(),
+  },
+}));
+
+// Captures the filters DirectoryView actually passes through to
+// usePeopleDirectory — this is the whole point of the spec below: the U6/Wave
+// 4 ruling ("BROWSE surfaces get the lens") only holds if the query itself is
+// scoped, not just the ScopeLens toggle's visual state.
+const mockUsePeopleDirectory = jest.fn(() => ({ data: [], isLoading: false }));
+
 jest.mock('@patina/supabase', () => ({
-  usePeopleDirectory: jest.fn(() => ({ data: [], isLoading: false })),
+  usePeopleDirectory: (...args: unknown[]) => mockUsePeopleDirectory(...args),
   useStudioContacts: jest.fn(() => ({ data: [], isLoading: false })),
   useArchiveStudioContact: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useRestoreStudioContact: () => ({ mutateAsync: jest.fn(), isPending: false }),
@@ -18,6 +38,11 @@ jest.mock('@patina/supabase', () => ({
   isFieldRosterRole: (role: string | null | undefined) =>
     !!role && ['gc', 'sub', 'installer', 'receiver'].includes(role),
 }));
+
+beforeEach(() => {
+  window.localStorage.clear();
+  mockUsePeopleDirectory.mockClear();
+});
 
 const NAV: PeopleViewProps = {
   openPerson: jest.fn(),
@@ -93,16 +118,95 @@ describe('DirectoryView — role chip set, flag on', () => {
     }
   });
 
-  it('mounts the ScopeLens defaulting to MINE', () => {
+  it('the lens reflects MINE when the Room passes it (a controlled prop, not its own default)', () => {
     renderDirectory({ scope: 'mine' });
     expect(screen.getByRole('button', { name: 'mine' })).toHaveAttribute('aria-current', 'true');
     expect(screen.getByRole('button', { name: 'studio' })).not.toHaveAttribute('aria-current');
   });
 
-  it('the lens reflects a STUDIO scope when the Room passes one', () => {
+  it('the lens reflects STUDIO when the Room passes it', () => {
     renderDirectory({ scope: 'studio' });
     expect(screen.getByRole('button', { name: 'studio' })).toHaveAttribute('aria-current', 'true');
     expect(screen.getByRole('button', { name: 'mine' })).not.toHaveAttribute('aria-current');
+  });
+});
+
+describe('DirectoryView — U6 (Wave 4): STUDIO is the default lens', () => {
+  it("scope-lens.tsx's DEFAULT_CONTACT_SCOPE — the Room's single source of truth — is 'studio'", () => {
+    expect(DEFAULT_CONTACT_SCOPE).toBe('studio');
+  });
+});
+
+describe('DirectoryView — U6 (Wave 4): the lens actually filters the query', () => {
+  beforeEach(() => {
+    mockUseFeatureFlag.mockReturnValue({ value: true, isLoading: false });
+  });
+
+  it('STUDIO (the default) passes no scope filter — the unfiltered, RLS-admitted read', () => {
+    renderDirectory({ scope: 'studio' });
+    expect(mockUsePeopleDirectory).toHaveBeenCalledWith({
+      role: 'all',
+      scope: undefined,
+    });
+  });
+
+  it('toggling to MINE passes scope: "mine" through to the query', () => {
+    renderDirectory({ scope: 'mine' });
+    expect(mockUsePeopleDirectory).toHaveBeenCalledWith({
+      role: 'all',
+      scope: 'mine',
+    });
+  });
+
+  it('MINE composes with a role chip other than "all"', () => {
+    renderDirectory({ scope: 'mine', role: 'client' });
+    expect(mockUsePeopleDirectory).toHaveBeenCalledWith({
+      role: 'client',
+      scope: 'mine',
+    });
+  });
+});
+
+describe('DirectoryView — the STUDIO-lens teach line (R94)', () => {
+  beforeEach(() => {
+    mockUseFeatureFlag.mockReturnValue({ value: true, isLoading: false });
+  });
+
+  it('shows the teach line on first landing in STUDIO scope, with an underlined review link', () => {
+    renderDirectory({ scope: 'studio' });
+    const note = screen.getByRole('note');
+    expect(note).toHaveTextContent("The whole studio’s book, not just yours.");
+    const link = screen.getByRole('button', { name: 'review what seeded' });
+    expect(link).toHaveClass('underline');
+  });
+
+  it('never shows the teach line in MINE scope', () => {
+    renderDirectory({ scope: 'mine' });
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+  });
+
+  it('never shows the teach line with the flag off, even in STUDIO scope', () => {
+    mockUseFeatureFlag.mockReturnValue({ value: false, isLoading: false });
+    renderDirectory({ scope: 'studio' });
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+  });
+
+  it('recedes for good — marked seen in localStorage — the first time "review what seeded" fires', async () => {
+    renderDirectory({ scope: 'studio' });
+    expect(window.localStorage.getItem('patina:margin-note:rolodex-studio-lens')).toBeNull();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'review what seeded' }));
+    });
+
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+    expect(window.localStorage.getItem('patina:margin-note:rolodex-studio-lens')).not.toBeNull();
+  });
+
+  it('never renders once the note has already been seen, on a later mount', () => {
+    window.localStorage.setItem('patina:margin-note:rolodex-studio-lens', String(Date.now()));
+    renderDirectory({ scope: 'studio' });
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
   });
 });
 

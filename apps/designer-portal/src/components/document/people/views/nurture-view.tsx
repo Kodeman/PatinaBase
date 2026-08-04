@@ -18,7 +18,9 @@ import { TouchpointSheet } from '../ops/touchpoint-sheet';
 import type { PeopleViewProps } from '../types';
 
 export function NurtureView({ openPerson, notify }: PeopleViewProps) {
-  const { data, isLoading } = usePeopleDirectory({ role: 'all' });
+  // studio visibility ≠ shared nurture queues — a relationship-action surface;
+  // the widened (00420) STUDIO roster stays explicitly mine here.
+  const { data, isLoading } = usePeopleDirectory({ role: 'all', scope: 'mine' });
   const now = useMemo(() => new Date(), []);
   const [compose, setCompose] = useState<NurtureEntry | null>(null);
 

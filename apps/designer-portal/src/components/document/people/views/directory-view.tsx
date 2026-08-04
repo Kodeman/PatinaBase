@@ -21,6 +21,27 @@
  * `usePeopleDirectory` (the org-wide widening of THAT query is Wave 4's
  * `people_directory` view, not this wave's) — the lens's role here is gating
  * the ROLODEX marker on person rows, exactly as specced.
+ *
+ * Wave 4 (U6): STUDIO is now the default lens (`DEFAULT_CONTACT_SCOPE`, lifted
+ * by the Room) and `usePeopleDirectory` reads a studio-scoped `people_directory`
+ * (00420) — a STUDIO-lens roster can now contain OTHER designers' clients/
+ * leads/parties, allied-professional party kinds (architect/photographer/
+ * stager, 00419), and a role='contact' rolodex branch (00420) with no project
+ * at all. person-row.tsx (via people-derivation.ts) is hardened to render
+ * every one of those role/scope combinations gracefully — see that module's
+ * doc comment for the neutral-dot / STUDIO-marker contract.
+ *
+ * `role='contact'` specifically is EXCLUDED from `rows` below, in every chip
+ * (not narrowed per-chip) — never routed through PersonRow. The considered
+ * alternative was routing a company-kind contact (`meta.entity_kind ===
+ * 'company'`) to CompanyRow inline in the All feed while leaving person-kind
+ * contacts to PersonRow; simpler and just as honest: a company-kind contact
+ * already has a home (the Companies chip's card + its people-count expand),
+ * and a person-kind contact has no chip of its own this wave — either one
+ * surfacing a second time under All would read as a duplicate, not a
+ * feature, and CompanyRow doesn't belong inside a `<PersonRow>`-shaped `<ul>`
+ * anyway. A dedicated "kind chip" for standalone person contacts is future
+ * scope, not this wave's.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -91,8 +112,19 @@ const ROLE_ORDER: Record<PartyRole, number> = {
   sub: 3,
   installer: 4,
   receiver: 5,
-  maker: 6,
-  team: 7,
+  // Call Sheet Wave 3/4 (00419/00420) roster-widening kinds — allied
+  // project-scoped professionals, grouped with the field crew they sit beside
+  // on a call sheet, ahead of makers/team.
+  architect: 6,
+  photographer: 7,
+  stager: 8,
+  maker: 9,
+  team: 10,
+  // The studio rolodex branch (people_directory role='contact', 00420) —
+  // not yet engaged on a project, so it sorts last. 'contact' rows never
+  // reach this ordering in practice — `rows` filters them out before the
+  // sort (see the module doc) — but the Record must stay total.
+  contact: 11,
 };
 
 /** Empty-state copy is filter-aware so the roster never reads as "broken".
@@ -115,9 +147,10 @@ const EMPTY_COPY: Partial<Record<DirectoryRole, string>> = {
 
 /** A person row's dedupe key against the rolodex — name + phone_e164, the
  *  SAME key the 00418 fold uses for its own person-card uniqueness. This is a
- *  heuristic identity match (the exact project_parties.studio_contact_id FK is
- *  only plumbed for field-roster rows this wave), not a guarantee — it exists
- *  to give the ROLODEX marker an honest signal without a per-row fetch. */
+ *  heuristic identity match, used ONLY as a fallback now that Wave 4
+ *  (00419/00420) plumbs the exact lineage FK — see `hasRolodexMatch` below —
+ *  for rows whose `meta.studio_contact_id` isn't set (pre-fold rows, or roles
+ *  the fold never touched). */
 function rolodexDedupeKey(name: string, phoneE164: string | null | undefined): string {
   return `${name.trim().toLowerCase()}|${phoneE164 ?? ''}`;
 }
@@ -125,6 +158,22 @@ function rolodexDedupeKey(name: string, phoneE164: string | null | undefined): s
 function personRowDedupeKey(p: PeopleDirectoryRow): string {
   const phone = (p.meta?.['phone_e164'] as string | undefined) ?? null;
   return rolodexDedupeKey(p.display_name, phone);
+}
+
+/** Does this row have a studio rolodex match? Prefers the exact
+ *  `meta.studio_contact_id` FK (plumbed on party rows since 00419/00420) —
+ *  only falls back to the name+phone heuristic for rows whose meta lacks the
+ *  key. */
+function hasRolodexMatch(
+  p: PeopleDirectoryRow,
+  rolodexContactIds: ReadonlySet<string>,
+  rolodexKeys: ReadonlySet<string>,
+): boolean {
+  const studioContactId = p.meta?.['studio_contact_id'];
+  if (typeof studioContactId === 'string' && studioContactId) {
+    return rolodexContactIds.has(studioContactId);
+  }
+  return rolodexKeys.has(personRowDedupeKey(p));
 }
 
 export function DirectoryView({
@@ -174,7 +223,16 @@ export function DirectoryView({
   // simply unused on that chip (harmless: React Query already holds this
   // exact 'all' key from the Room's own usePeopleDirectory({role:'all'})).
   const queryRole = role === 'field' || role === 'company' ? 'all' : role;
-  const { data, isLoading } = usePeopleDirectory({ role: queryRole });
+  // Wave 4 (00420) scope wiring — the MINE · STUDIO lens actually narrows the
+  // query now. STUDIO (the default) passes no `scope`, which is the view's
+  // own unfiltered read (RLS already admits comembers); MINE narrows
+  // server-side via `.eq('scope','mine')`. Before this, `scope` was read for
+  // display only (the ScopeLens toggle) while every chip always read the
+  // widened, unfiltered roster underneath it — dead-code lens.
+  const { data, isLoading } = usePeopleDirectory({
+    role: queryRole,
+    scope: scope === 'mine' ? 'mine' : undefined,
+  });
   const now = useMemo(() => new Date(), []);
   const marketplace = role === 'maker' && makerLens === 'marketplace';
 
@@ -207,6 +265,17 @@ export function DirectoryView({
     }
     return keys;
   }, [contacts]);
+  // The exact-match set for the FK path (00419/00420's meta.studio_contact_id)
+  // — every studio_contacts person row's own id, since that FK points straight
+  // at studio_contacts.id.
+  const rolodexContactIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const c of contacts ?? []) {
+      if (c.entity_kind !== 'person') continue;
+      ids.add(c.id);
+    }
+    return ids;
+  }, [contacts]);
   // Companies the designer has already expanded (Wave 2 has no company detail
   // surface yet — an inline unfold of "who works here" is the honest stand-in
   // for the deck's chevron).
@@ -216,7 +285,12 @@ export function DirectoryView({
   const [seedSheetOpen, setSeedSheetOpen] = useState(false);
 
   const rows = useMemo(() => {
-    const list = [...(data ?? [])];
+    // Wave 4 hardening — a role='contact' row (studio_contacts card with no
+    // matching project party, person OR company) is excluded from every
+    // PersonRow-rendered feed, not narrowed per-chip: it has no chip of its
+    // own, and a company-kind one is already the Companies chip's business.
+    // See the module doc above for the full reasoning.
+    const list = (data ?? []).filter((p) => p.role !== 'contact');
     const scoped = role === 'field' ? list.filter((p) => isFieldRosterRole(p.role)) : list;
     scoped.sort(
       (a, b) =>
@@ -326,17 +400,16 @@ export function DirectoryView({
           actionEvents={['document:open-rolodex-seed-review']}
           className="mb-4"
         >
-          This is the studio&rsquo;s shared book — every active teammate reads
-          and writes the same rows.{' '}
+          The whole studio&rsquo;s book, not just yours.{' '}
           <button
             type="button"
             onClick={() => {
               window.dispatchEvent(new Event('document:open-rolodex-seed-review'));
               setSeedSheetOpen(true);
             }}
-            className="da-score-hover inline-flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            className="da-score-hover inline-flex min-h-11 items-center underline decoration-1 underline-offset-2 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
           >
-            Review what was seeded
+            review what seeded
           </button>
         </MarginNote>
       )}
@@ -485,7 +558,7 @@ export function DirectoryView({
                     callSheetOn &&
                     scope === 'mine' &&
                     isFieldRosterRole(p.role) &&
-                    rolodexKeys.has(personRowDedupeKey(p))
+                    hasRolodexMatch(p, rolodexContactIds, rolodexKeys)
                   }
                 />
               </li>

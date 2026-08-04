@@ -19,6 +19,11 @@ const getSupabase = () => createBrowserClient();
 // receiver) arrive from the people_directory party branch (00281) with `role`
 // set to the concrete party_kind; their canonical vocab/labels live in
 // @patina/types field-config. `gc` predates Field Coordination (00221).
+// `architect` / `photographer` / `stager` are the 00419/00420 roster-widening
+// kinds (project_parties, non-field — no SMS). `contact` is the 00420 studio
+// rolodex branch (studio_contacts rows with no matching project party) — note
+// there is deliberately NO `'client'` party kind here: a client-role row is
+// always the designer_clients branch, never a project party.
 export type PartyRole =
   | 'client'
   | 'maker'
@@ -27,7 +32,11 @@ export type PartyRole =
   | 'lead'
   | 'sub'
   | 'installer'
-  | 'receiver';
+  | 'receiver'
+  | 'architect'
+  | 'photographer'
+  | 'stager'
+  | 'contact';
 
 /** The field-coordination roster kinds (gc + the sites trades). A row of these
  *  roles is a `project_parties` row (person_id = the party id) and opens the
@@ -60,8 +69,26 @@ export interface PeopleDirectoryRow {
   status_raw: string | null;
   /** Most recent touch — drives dormancy ranking + ordering. */
   last_touch_at: string | null;
-  /** Role-specific extras (vendor lead time, client revenue, GC company, …). */
+  /**
+   * Role-specific extras (vendor lead time, client revenue, GC company, …).
+   * 00420 widened the shape per branch — still an untyped bag (the view
+   * unions several source tables), but the keys worth knowing about:
+   *  - party rows (gc/sub/installer/receiver/architect/photographer/stager):
+   *    `show_to_client` (boolean) and `studio_contact_id` (uuid | null) —
+   *    the 00418/00419 rolodex-lineage stamp.
+   *  - team rows: `job_title` / `staff_role` (00416 organization_members
+   *    columns).
+   *  - contact rows (`role: 'contact'`, the studio_contacts branch):
+   *    `contact_kind`, `entity_kind`, `specialties`, `organization_id`.
+   */
   meta: Record<string, unknown>;
+  /**
+   * 'mine' when the querying designer owns/leads the underlying project (or
+   * IS the row, for team/contact rows tied to them); 'studio' when it's a
+   * studio co-member's. Appended last by 00420's `CREATE OR REPLACE VIEW`
+   * (column order is append-only — never reorder ahead of it).
+   */
+  scope: 'mine' | 'studio';
 }
 
 export interface PeopleFilters {
@@ -69,6 +96,11 @@ export interface PeopleFilters {
   role?: PartyRole | 'all';
   /** Case-insensitive match over display_name + email. */
   search?: string;
+  /** 'mine' filters to the querying designer's own rows server-side
+   *  (`.eq('scope','mine')`). Omitted (or 'studio') returns everything the
+   *  view's RLS admits — comembers included — unfiltered; the caller (the
+   *  People Room's MINE·STUDIO lens) owns which is the default. */
+  scope?: 'mine' | 'studio';
 }
 
 export const peopleKeys = {
@@ -93,6 +125,12 @@ export function usePeopleDirectory(filters?: PeopleFilters) {
       let query = supabase.from('people_directory').select('*');
       if (filters?.role && filters.role !== 'all') {
         query = query.eq('role', filters.role);
+      }
+      // Studio is the unfiltered read (RLS already admits comembers); only
+      // 'mine' narrows server-side. Never .eq('scope','studio') — that would
+      // wrongly exclude the designer's own rows, which are scope:'mine'.
+      if (filters?.scope === 'mine') {
+        query = query.eq('scope', 'mine');
       }
       const { data, error } = await query;
       if (error) throw error;

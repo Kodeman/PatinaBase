@@ -19,7 +19,7 @@
  */
 
 import type { PartyRole, PeopleDirectoryRow } from '@patina/supabase';
-import { getFieldTradeLabel } from '@patina/types';
+import { getFieldTradeLabel, getPartyKindLabel, getVendorSpecialtyLabel } from '@patina/types';
 
 export type { PartyRole };
 
@@ -130,6 +130,18 @@ export function roleLabel(role: PartyRole): string {
       return 'Installer';
     case 'receiver':
       return 'Receiver';
+    // Wave 4 (00419/00420) roster-widening kinds — allied site professionals
+    // (project_parties, non-field, no SMS) and the studio rolodex's own
+    // contact branch (studio_contacts rows with no matching project party).
+    case 'architect':
+      return 'Architect';
+    case 'photographer':
+      return 'Photographer';
+    case 'stager':
+      return 'Stager';
+    // The studio rolodex branch (people_directory role='contact', 00420).
+    case 'contact':
+      return 'Contact';
   }
 }
 
@@ -193,6 +205,16 @@ export function deriveStatusDot(p: DirectoryPerson, now: Date): PartyStatus {
       if (p.status_raw === 'granted') return 'active';
       if (p.status_raw === 'pending') return 'warm';
       return 'cool';
+
+    // Wave 4 hardening — allied professionals (architect/photographer/stager)
+    // carry no SMS consent or nurture lifecycle of their own, and a rolodex
+    // 'contact' row is a card, not a relationship in progress — a neutral
+    // (cool/pearl) dot rather than fabricating a signal that doesn't exist.
+    case 'architect':
+    case 'photographer':
+    case 'stager':
+    case 'contact':
+      return 'cool';
   }
 }
 
@@ -220,6 +242,13 @@ export function isNurtureDue(p: DirectoryPerson, now: Date): boolean {
     case 'sub':
     case 'installer':
     case 'receiver':
+    // Call Sheet Wave 3/4 (00419/00420) roster-widening kinds — coordinated
+    // per-project like gc, never nurture-due. The studio rolodex branch
+    // (00420) is likewise not a relationship to nurture.
+    case 'architect':
+    case 'photographer':
+    case 'stager':
+    case 'contact':
       return false;
   }
 }
@@ -227,59 +256,97 @@ export function isNurtureDue(p: DirectoryPerson, now: Date): boolean {
 /**
  * The role-appropriate one-line under a person's name, plus whether it should
  * read as "due" (terracotta accent — see isNurtureDue).
+ *
+ * Wave 4 hardening: a STUDIO-scoped row (`p.scope === 'studio'` — 00420's
+ * appended column, meaning this is a co-member's client/lead/party, or a
+ * role='contact' rolodex card the viewer merely CAN see) never wears the
+ * due-state accent, and its line carries the mono 'STUDIO' marker instead —
+ * "someone owes a reply" is a work queue for the row's OWNER, not a task for
+ * every teammate who can read the shared book.
  */
 export function deriveRelationshipLine(
   p: DirectoryPerson,
   now: Date,
 ): { text: string; due: boolean } {
-  const due = isNurtureDue(p, now);
+  const foreignScope = p.scope === 'studio';
+  const due = foreignScope ? false : isNurtureDue(p, now);
   const since = humanizeSince(p.last_touch_at, now);
 
-  switch (p.role) {
-    case 'client': {
-      if (p.status_raw === 'active') return { text: `Active project · last touched ${since}`, due };
-      if (p.status_raw === 'proposal')
-        return { text: `Proposal sent · ${due ? 'hesitating' : 'awaiting signature'}`, due };
-      if (p.status_raw === 'completed' || p.status_raw === 'nurture')
-        return {
-          text: due ? `Past client · ${since} · time to reconnect` : `Past client · ${since}`,
-          due,
-        };
-      return { text: `Client · ${since}`, due };
-    }
+  const text = ((): string => {
+    switch (p.role) {
+      case 'client': {
+        if (p.status_raw === 'active') return `Active project · last touched ${since}`;
+        if (p.status_raw === 'proposal')
+          return `Proposal sent · ${due ? 'hesitating' : 'awaiting signature'}`;
+        if (p.status_raw === 'completed' || p.status_raw === 'nurture')
+          return due ? `Past client · ${since} · time to reconnect` : `Past client · ${since}`;
+        return `Client · ${since}`;
+      }
 
-    case 'lead': {
-      const kind = String(p.meta?.['project_type'] ?? '').replace(/_/g, ' ') || 'inquiry';
-      return { text: due ? `New lead · ${kind} · respond within 24 hours` : `Lead · ${kind}`, due };
-    }
+      case 'lead': {
+        const kind = String(p.meta?.['project_type'] ?? '').replace(/_/g, ' ') || 'inquiry';
+        return due ? `New lead · ${kind} · respond within 24 hours` : `Lead · ${kind}`;
+      }
 
-    case 'maker': {
-      const cat = String(p.meta?.['primary_category'] ?? '').replace(/_/g, ' ');
-      const lead = (p.meta?.['lead_times'] as Record<string, unknown> | null) ?? null;
-      const std = lead && typeof lead['standard'] === 'number' ? `${lead['standard']}d lead` : null;
-      const bits = ['Maker', cat || null, std].filter(Boolean);
-      return { text: bits.join(' · '), due: false };
-    }
+      case 'maker': {
+        const cat = String(p.meta?.['primary_category'] ?? '').replace(/_/g, ' ');
+        const lead = (p.meta?.['lead_times'] as Record<string, unknown> | null) ?? null;
+        const std = lead && typeof lead['standard'] === 'number' ? `${lead['standard']}d lead` : null;
+        const bits = ['Maker', cat || null, std].filter(Boolean);
+        return bits.join(' · ');
+      }
 
-    case 'gc': {
-      const proj = String(p.meta?.['project_name'] ?? '').trim();
-      return { text: proj ? `GC · ${proj}` : 'General contractor', due: false };
-    }
+      case 'gc': {
+        const proj = String(p.meta?.['project_name'] ?? '').trim();
+        return proj ? `GC · ${proj}` : 'General contractor';
+      }
 
-    case 'team':
-      return { text: `Studio · ${humanizeTeamRole(p.status_raw)}`, due: false };
+      case 'team':
+        return `Studio · ${humanizeTeamRole(p.status_raw)}`;
 
-    // Field kinds (00281): the trade + the project they work. Consent reads off
-    // the roster's consent chip, so the line stays about the work, not status.
-    case 'sub':
-    case 'installer':
-    case 'receiver': {
-      const trade = getFieldTradeLabel(p.meta?.['trade'] as string | undefined);
-      const proj = String(p.meta?.['project_name'] ?? '').trim();
-      const bits = [trade || null, proj || null].filter(Boolean);
-      return { text: bits.join(' · ') || 'Field party', due: false };
+      // Field kinds (00281): the trade + the project they work. Consent reads
+      // off the roster's consent chip, so the line stays about the work, not
+      // status.
+      case 'sub':
+      case 'installer':
+      case 'receiver': {
+        const trade = getFieldTradeLabel(p.meta?.['trade'] as string | undefined);
+        const proj = String(p.meta?.['project_name'] ?? '').trim();
+        const bits = [trade || null, proj || null].filter(Boolean);
+        return bits.join(' · ') || 'Field party';
+      }
+
+      // Wave 4 (00419) roster-widening kinds — allied site professionals on a
+      // project (no SMS, never "due" — see isNurtureDue). Same "role ·
+      // project" shape the gc line already uses.
+      case 'architect':
+      case 'photographer':
+      case 'stager': {
+        const proj = String(p.meta?.['project_name'] ?? '').trim();
+        return proj ? `${roleLabel(p.role)} · ${proj}` : roleLabel(p.role);
+      }
+
+      // Wave 4 (00420) studio rolodex branch — a studio_contacts row with no
+      // matching project party. Names what KIND of contact this is (the same
+      // free-text PartyKind vocab a person card's contact_kind draws from,
+      // labeled via @patina/types' getPartyKindLabel) plus vendor specialties
+      // when any are on file. Never a due/nurture read — a rolodex card is a
+      // reference, not a relationship in progress.
+      case 'contact': {
+        const kindLabel =
+          getPartyKindLabel(p.meta?.['contact_kind'] as string | undefined) || 'Contact';
+        const rawSpecialties = p.meta?.['specialties'];
+        const specialties = Array.isArray(rawSpecialties)
+          ? rawSpecialties
+              .filter((s): s is string => typeof s === 'string')
+              .map((s) => getVendorSpecialtyLabel(s) || s)
+          : [];
+        return specialties.length > 0 ? `${kindLabel} · ${specialties.join(', ')}` : kindLabel;
+      }
     }
-  }
+  })();
+
+  return foreignScope ? { text: `${text} · STUDIO`, due } : { text, due };
 }
 
 // ─── nurture queue (Track C owns; working v1) ──────────────────────────────

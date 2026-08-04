@@ -41,6 +41,7 @@ import { PortfolioView } from './views/portfolio-view';
 import { OutreachView } from './views/outreach-view';
 import { YourEyePanel } from './profile/your-eye';
 import { AskBar, routePeopleAsk } from './directory/ask-bar';
+import { DEFAULT_CONTACT_SCOPE } from './directory/scope-lens';
 import { AddPersonSheet } from './directory/add-person-sheet';
 import type { PeopleView, PeopleViewProps } from './types';
 import {
@@ -88,8 +89,9 @@ export function PeopleRoom() {
   // into a profile and back doesn't drop the designer out of the marketplace.
   const [makerLens, setMakerLens] = useState<MakerLens>('roster');
   // Call Sheet Wave 2 — the MINE · STUDIO lens (slide 8), lifted for the same
-  // reason as makerLens. Default MINE this wave (U6's STUDIO default is Wave 4).
-  const [scope, setScope] = useState<ContactScope>('mine');
+  // reason as makerLens. U6 (Wave 4): STUDIO is now the default — see
+  // scope-lens.tsx's DEFAULT_CONTACT_SCOPE, the single source of truth.
+  const [scope, setScope] = useState<ContactScope>(DEFAULT_CONTACT_SCOPE);
   // F4 — a person to scroll into view + quietly highlight in the Directory
   // once their row is on screen (set by the ?person= deep-link, or by a
   // return from that person's profile). Self-clears on a short timer.
@@ -105,6 +107,16 @@ export function PeopleRoom() {
     target: { kind: 'press', onPress: () => setAddOpen(true) },
   });
 
+  // Wave 4 (00420) scope ruling — left STUDIO-wide (unscoped) on purpose.
+  // `all` does three jobs here: the Room-wide "N people" count (browse), the
+  // ?person= deep-link role resolution (must reach anyone ⌘K or a cross-link
+  // could have named, including a studio-mate's party), and the Engine nudge
+  // (relationship-action — see the `nudge` useMemo below). That last use is a
+  // known gap: the nudge can currently surface a studio-mate's dormant tie,
+  // not just the signed-in designer's own. Not narrowed here because doing so
+  // would also starve the count/deep-link uses, which need the wide read;
+  // splitting the nudge onto its own `scope:'mine'` query is real, scoped-out
+  // follow-up, not this pass's fix.
   const { data: all } = usePeopleDirectory({ role: 'all' });
   const now = useMemo(() => new Date(), []);
 
