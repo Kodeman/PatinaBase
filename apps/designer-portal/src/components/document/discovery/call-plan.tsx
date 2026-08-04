@@ -51,7 +51,7 @@ const CHECKLIST: { block: BlockKey; q: string; sub: string }[] = [
   },
 ];
 
-export function DiscoveryCallSheet({
+export function CallPlan({
   open,
   onClose,
   done,
@@ -86,10 +86,10 @@ export function DiscoveryCallSheet({
     <DocPaperSheet
       open={open}
       onClose={onClose}
-      title="The discovery call · checklist"
+      title="The call plan · checklist"
     >
       <span className="mb-3 inline-block rounded-[2px] border border-[var(--color-rule-strong,#D8CCB8)] px-2 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.1em] text-[var(--color-mocha)]">
-        The discovery call · checklist
+        The call plan · checklist
       </span>
       <h2 className="font-heading text-[22px] font-medium text-[var(--color-charcoal)]">
         What to draw out

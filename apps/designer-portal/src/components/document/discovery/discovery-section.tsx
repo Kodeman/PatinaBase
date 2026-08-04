@@ -44,7 +44,7 @@ import {
   SiteScanEditor,
   type DiscoveryDraft,
 } from './editors';
-import { DiscoveryCallSheet } from './discovery-call-sheet';
+import { CallPlan } from './call-plan';
 import { DiscoveryScheduleLine } from './discovery-schedule-line';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 
@@ -506,7 +506,7 @@ export function DiscoverySection({
         </FacetSection>
       ))}
 
-      <DiscoveryCallSheet
+      <CallPlan
         open={callOpen}
         onClose={() => setCallOpen(false)}
         done={done}
