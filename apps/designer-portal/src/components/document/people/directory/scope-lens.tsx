@@ -5,8 +5,9 @@
  * two DM-mono words. Generalizes the MakerLens idiom already in
  * directory-view.tsx (roster vs marketplace): same shape, a different pair of
  * words. MINE is the directory a designer already has; STUDIO is the shared
- * rolodex (R1 — every active non-guest studio member's book). Default MINE
- * this wave — the STUDIO default flip is Wave 4 (U6).
+ * rolodex (R1 — every active non-guest studio member's book). U6 (Wave 4):
+ * STUDIO is the default — `DEFAULT_CONTACT_SCOPE` below is the single source
+ * of truth the People Room seeds its lifted `scope` state from.
  *
  * The active word is scored held-down (`da-score-on`, charcoal); the inactive
  * word carries only the hover hairline (`da-score-hover`, aged-oak) — the same
@@ -16,6 +17,10 @@
  */
 
 import type { ContactScope } from '@patina/types';
+
+/** U6 (Wave 4) — the studio's shared book is the default lens; a designer
+ *  opts INTO the narrower MINE view, not out of the shared one. */
+export const DEFAULT_CONTACT_SCOPE: ContactScope = 'studio';
 
 const LENS: ReadonlyArray<[ContactScope, string]> = [
   ['mine', 'mine'],

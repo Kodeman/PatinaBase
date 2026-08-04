@@ -62,6 +62,15 @@ const BADGE: Record<PartyRole, { color: string; border: string }> = {
   sub: { color: 'var(--color-mocha)', border: 'var(--color-mocha)' },
   installer: { color: '#B89A2E', border: 'var(--color-golden-hour)' },
   receiver: { color: 'var(--color-terracotta)', border: 'var(--color-terracotta)' },
+  // Wave 4 (00419/00420) roster-widening kinds — same family tints as their
+  // AVATAR_BG entries above: architect sits with the GC's dusty-blue (an
+  // allied site professional), photographer/stager read quiet-ink, and a
+  // rolodex 'contact' card shares the maker tint (both are, at bottom, a
+  // studio's outside business relationship).
+  architect: { color: 'var(--color-dusty-blue)', border: 'var(--color-dusty-blue)' },
+  photographer: { color: 'var(--color-quiet-ink)', border: 'var(--color-quiet-ink)' },
+  stager: { color: 'var(--color-quiet-ink)', border: 'var(--color-quiet-ink)' },
+  contact: { color: 'var(--color-aged-oak)', border: '#cbb48f' },
 };
 
 // A company's OWN kind vocabulary (studio_contacts.contact_kind on an
