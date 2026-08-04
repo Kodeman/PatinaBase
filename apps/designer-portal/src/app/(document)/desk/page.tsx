@@ -13,6 +13,7 @@ import {
   useOrganizations,
   useOrganizationMembers,
   useProjects,
+  useStudioContacts,
 } from '@patina/supabase';
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
 import { useAuth } from '@/hooks/use-auth';
@@ -62,15 +63,25 @@ export default function DeskPage() {
   // as account-studio-page.tsx, kept minimal here since this page only needs
   // the owner check + open-step count, not the full studio row.
   const { value: studioWorkspacesEnabled } = useFeatureFlag('studio-workspaces');
+  // The rolodex step (row 4) reads real data only behind `call-sheet`, exactly
+  // as the Studio page does — without these two inputs the step counted as
+  // permanently open here and the whisper's openCount ran one ahead of the
+  // checklist the whisper sends you to.
+  const { value: callSheetOn } = useFeatureFlag('call-sheet');
   const { data: orgs } = useOrganizations();
   const studio = orgs?.find((o) => o.type === 'design_studio') ?? orgs?.[0] ?? null;
   const { data: studioMembers } = useOrganizationMembers(studio?.id ?? '');
   const { data: studioProjects } = useProjects();
+  const { data: studioContacts } = useStudioContacts(
+    callSheetOn ? (studio?.id ?? null) : null,
+  );
   const { openCount: studioSetupOpenCount } = deriveSetupSteps({
     orgCreatedAt: studio?.created_at ?? null,
     myJobTitle: studioMembers?.find((m) => m.user_id === user?.id)?.job_title ?? null,
     memberCountBeyondSelf: (studioMembers ?? []).filter((m) => m.user_id !== user?.id).length,
     projectsCount: studioProjects?.length ?? 0,
+    contactsCount: callSheetOn ? (studioContacts?.length ?? 0) : 0,
+    seedSkipped: callSheetOn ? !!studio?.rolodex_seed_skipped_at : false,
   });
 
   useMobilePrimaryAction({
