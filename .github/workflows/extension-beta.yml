@@ -64,19 +64,23 @@ jobs:
           fi
           echo "path=$ZIP" >> "$GITHUB_OUTPUT"
 
+      # The CLI version is PINNED on purpose — see the note in extension-cws.yml.
+      # 4.x drops the credential flags and requires a publisher ID we do not hold.
       - name: Upload beta to Chrome Web Store
+        env:
+          EXTENSION_ID: ${{ secrets.CWS_BETA_EXTENSION_ID }}
+          CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
         run: |
-          npx chrome-webstore-upload-cli upload \
-            --source "${{ steps.zip.outputs.path }}" \
-            --extension-id "${{ secrets.CWS_BETA_EXTENSION_ID }}" \
-            --client-id "${{ secrets.CWS_CLIENT_ID }}" \
-            --client-secret "${{ secrets.CWS_CLIENT_SECRET }}" \
-            --refresh-token "${{ secrets.CWS_REFRESH_TOKEN }}"
+          npx --yes chrome-webstore-upload-cli@3.5.0 upload \
+            --source "${{ steps.zip.outputs.path }}"
 
       - name: Publish unlisted beta
+        env:
+          EXTENSION_ID: ${{ secrets.CWS_BETA_EXTENSION_ID }}
+          CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
         run: |
-          npx chrome-webstore-upload-cli publish \
-            --extension-id "${{ secrets.CWS_BETA_EXTENSION_ID }}" \
-            --client-id "${{ secrets.CWS_CLIENT_ID }}" \
-            --client-secret "${{ secrets.CWS_CLIENT_SECRET }}" \
-            --refresh-token "${{ secrets.CWS_REFRESH_TOKEN }}"
+          npx --yes chrome-webstore-upload-cli@3.5.0 publish

@@ -84,22 +84,30 @@ jobs:
           fi
           echo "path=$ZIP" >> "$GITHUB_OUTPUT"
 
+      # The CLI version is PINNED on purpose. Do not bump to 4.x without also
+      # adding a CWS_PUBLISHER_ID secret: 4.x removed the --client-id /
+      # --client-secret / --refresh-token flags (fregante/chrome-webstore-upload-cli#80)
+      # AND moved to Chrome Web Store API v2, whose client hard-requires a
+      # publisherId. 3.5.0 is the last release on the still-live v1.1 API, and it
+      # already accepts every credential via environment variables.
       - name: Upload to Chrome Web Store
+        env:
+          EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+          CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
         run: |
-          npx chrome-webstore-upload-cli upload \
-            --source "${{ steps.zip.outputs.path }}" \
-            --extension-id "${{ secrets.CWS_EXTENSION_ID }}" \
-            --client-id "${{ secrets.CWS_CLIENT_ID }}" \
-            --client-secret "${{ secrets.CWS_CLIENT_SECRET }}" \
-            --refresh-token "${{ secrets.CWS_REFRESH_TOKEN }}"
+          npx --yes chrome-webstore-upload-cli@3.5.0 upload \
+            --source "${{ steps.zip.outputs.path }}"
 
       - name: Publish to Chrome Web Store
+        env:
+          EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+          CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
         run: |
-          npx chrome-webstore-upload-cli publish \
-            --extension-id "${{ secrets.CWS_EXTENSION_ID }}" \
-            --client-id "${{ secrets.CWS_CLIENT_ID }}" \
-            --client-secret "${{ secrets.CWS_CLIENT_SECRET }}" \
-            --refresh-token "${{ secrets.CWS_REFRESH_TOKEN }}"
+          npx --yes chrome-webstore-upload-cli@3.5.0 publish
 
       - name: Publish result
         run: echo "Publish request submitted to the Chrome Web Store — this SUBMITS the extension for Google review, it does not go live immediately."
