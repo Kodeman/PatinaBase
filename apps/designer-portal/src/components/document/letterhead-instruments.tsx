@@ -383,7 +383,9 @@ function CallSheetInstrument({ projectId }: { projectId: string }) {
     <DocumentAction
       actionKey="open-call-sheet"
       variant="tertiary"
-      onClick={() => window.dispatchEvent(new CustomEvent('document:open-call-sheet'))}
+      onClick={() => {
+        window.dispatchEvent(new CustomEvent('document:open-call-sheet'));
+      }}
       trailing={
         onPaperSuffix ? (
           <span className="text-[var(--color-terracotta)]">{onPaperSuffix}</span>

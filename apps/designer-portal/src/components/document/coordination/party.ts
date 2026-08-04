@@ -101,7 +101,19 @@ export function courtToken(court: Court): CourtToken {
 export interface PartyLike {
   display_name: string | null;
   company_name: string | null;
-  party_kind?: 'gc' | 'vendor' | 'client_rep' | 'other' | 'sub' | 'installer' | 'receiver' | null;
+  party_kind?:
+    | 'gc'
+    | 'vendor'
+    | 'client_rep'
+    | 'other'
+    | 'sub'
+    | 'installer'
+    | 'receiver'
+    | 'architect'
+    | 'photographer'
+    | 'stager'
+    | 'client'
+    | null;
 }
 
 /**
