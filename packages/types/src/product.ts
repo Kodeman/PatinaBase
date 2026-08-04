@@ -55,7 +55,6 @@ export interface Product extends Timestamps {
   has3D: boolean;
   arSupported: boolean;
   customizable: boolean;
-  customizationOptions?: CustomizationOption[];
 
   // Media
   images: ProductImage[];
@@ -92,7 +91,6 @@ export interface Product extends Timestamps {
   ageRestricted?: boolean;
 
   // Relations
-  variants?: Variant[];
   attributes?: ProductAttribute[];
   vendorLinks?: VendorProduct[];
   tags?: string[];
@@ -117,36 +115,6 @@ export interface Dimensions {
 export interface Weight {
   value: number;
   unit: 'kg' | 'lb';
-}
-
-export interface Variant {
-  id: UUID;
-  productId: UUID;
-  sku: string;
-  barcode?: string;
-  name?: string;
-  options: Record<string, string>; // { color: "Walnut", size: "84in", fabric: "Linen" }
-
-  // Pricing overrides
-  price?: number;
-  salePrice?: number;
-  currency?: string;
-
-  // Availability
-  availabilityStatus: AvailabilityStatus;
-  quantity?: number;
-  leadTimeDays?: number;
-
-  // Physical overrides
-  dimensions?: Dimensions;
-  weight?: Weight;
-  materials?: string[];
-  colors?: string[];
-
-  // Media
-  images?: ProductImage[];
-  has3D?: boolean;
-  arSupported?: boolean;
 }
 
 export interface ProductAttribute {
@@ -198,22 +166,6 @@ export interface VendorProduct {
   availabilityStatus?: AvailabilityStatus;
   leadTimeDays?: number;
   lastSyncedAt?: Date;
-}
-
-export interface CustomizationOption {
-  id: UUID;
-  name: string;
-  type: 'color' | 'material' | 'size' | 'finish';
-  options: CustomizationValue[];
-  priceModifier?: number;
-}
-
-export interface CustomizationValue {
-  id: UUID;
-  value: string;
-  displayName: string;
-  priceModifier: number;
-  imageUrl?: string;
 }
 
 export interface ProductVersion {

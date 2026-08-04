@@ -18,7 +18,6 @@ import type {
 
 import type {
   Product,
-  Variant,
   Category,
   Collection,
   Vendor,
@@ -53,8 +52,6 @@ import type {
 import type {
   CreateProductRequest,
   UpdateProductRequest,
-  CreateVariantRequest,
-  UpdateVariantRequest,
   CreateCategoryRequest,
   UpdateCategoryRequest,
   CreateCollectionRequest,
@@ -240,26 +237,6 @@ export type UseBulkActionResult = UseMutationResult<
   CatalogServiceResponse<BulkActionResult>,
   Error,
   BulkActionRequest,
-  unknown
->;
-
-/**
- * Create variant mutation hook result.
- */
-export type UseCreateVariantResult = UseMutationResult<
-  CatalogServiceResponse<Variant>,
-  Error,
-  { productId: UUID; data: CreateVariantRequest },
-  unknown
->;
-
-/**
- * Update variant mutation hook result.
- */
-export type UseUpdateVariantResult = UseMutationResult<
-  CatalogServiceResponse<Variant>,
-  Error,
-  { variantId: UUID; data: UpdateVariantRequest },
   unknown
 >;
 

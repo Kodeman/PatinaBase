@@ -12,7 +12,6 @@ import type {
   Product,
   ProductStatus,
   AvailabilityStatus,
-  Variant,
   UUID,
 } from '@patina/types';
 
@@ -172,20 +171,6 @@ export type ProductWith3D = AdminProduct & {
  */
 export function has3DModel(product: AdminProduct): product is ProductWith3D {
   return product.has3D === true;
-}
-
-/**
- * Narrow product to products with variants.
- */
-export type ProductWithVariants = AdminProduct & {
-  variants: [Variant, ...Variant[]];
-};
-
-/**
- * Type guard for products with variants.
- */
-export function hasVariants(product: AdminProduct): product is ProductWithVariants {
-  return isNonEmptyArray(product.variants);
 }
 
 // ============================================================================

@@ -4,7 +4,7 @@
  * Provides mock data and response generators for catalog API endpoints
  */
 
-import type { Product, Variant, Category, PaginatedResponse } from '@patina/types';
+import type { Product, Category, PaginatedResponse } from '@patina/types';
 
 /**
  * Generate a mock product with default values
@@ -48,26 +48,6 @@ export function createMockProducts(count: number): Product[] {
       status: i % 3 === 0 ? 'published' : 'draft',
     })
   );
-}
-
-/**
- * Generate a mock variant
- */
-export function createMockVariant(overrides?: Partial<Variant>): Variant {
-  const baseVariant: Variant = {
-    id: '550e8400-e29b-41d4-a716-446655440100',
-    productId: '550e8400-e29b-41d4-a716-446655440000',
-    sku: 'SOFA-GRAY-001',
-    name: 'Gray Variant',
-    colors: ['Gray'],
-    price: 1299.99,
-    stock: 10,
-    available: true,
-    createdAt: new Date('2024-01-01'),
-    updatedAt: new Date('2024-01-01'),
-  } as any;
-
-  return { ...baseVariant, ...overrides };
 }
 
 /**

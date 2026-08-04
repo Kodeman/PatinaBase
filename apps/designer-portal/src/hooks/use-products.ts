@@ -276,31 +276,6 @@ export function useCategoryTree() {
   });
 }
 
-// Variants
-export function useVariants(productId: string | null) {
-  return useQuery({
-    queryKey: productId ? ['products', productId, 'variants'] : ['products', 'null', 'variants'],
-    queryFn: () => {
-      if (!productId) throw new Error('Product ID required');
-      return catalogApi.getVariants(productId);
-    },
-    enabled: !!productId,
-  });
-}
-
-export function useVariant(productId: string | null, variantId: string | null) {
-  return useQuery({
-    queryKey: productId && variantId
-      ? ['products', productId, 'variants', variantId]
-      : ['products', 'null', 'variants', 'null'],
-    queryFn: () => {
-      if (!productId || !variantId) throw new Error('Product ID and Variant ID required');
-      return catalogApi.getVariant(productId, variantId);
-    },
-    enabled: !!productId && !!variantId,
-  });
-}
-
 // Vendors
 export function useVendors(params?: Record<string, unknown>) {
   return useQuery({

@@ -167,36 +167,6 @@ export class CatalogApiClient extends BaseApiClient {
     return this.patch(`/categories/${id}/move`, { newParentId });
   }
 
-  // ==================== Variants ====================
-
-  async getVariants(productId: string) {
-    return this.get(`/products/${productId}/variants`);
-  }
-
-  async getVariant(productId: string, variantId: string) {
-    return this.get(`/products/${productId}/variants/${variantId}`);
-  }
-
-  async createVariant(productId: string, data: Record<string, unknown>) {
-    return this.post(`/products/${productId}/variants`, data);
-  }
-
-  async updateVariant(productId: string, variantId: string, data: Record<string, unknown>) {
-    return this.patch(`/products/${productId}/variants/${variantId}`, data);
-  }
-
-  async deleteVariant(productId: string, variantId: string) {
-    return this.delete(`/products/${productId}/variants/${variantId}`);
-  }
-
-  async updateVariantInventory(
-    productId: string,
-    variantId: string,
-    data: { quantity?: number; availabilityStatus?: string }
-  ) {
-    return this.patch(`/products/${productId}/variants/${variantId}/inventory`, data);
-  }
-
   // ==================== Vendors ====================
 
   async getVendors(params?: Record<string, unknown>) {

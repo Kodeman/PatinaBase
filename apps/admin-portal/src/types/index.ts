@@ -4,7 +4,6 @@
 export type {
   // Catalog types
   Product,
-  Variant,
   ProductImage,
   ProductCategory,
   ProductStatus,
@@ -89,8 +88,6 @@ export type {
   // Request types
   CreateProductRequest,
   UpdateProductRequest,
-  CreateVariantRequest,
-  UpdateVariantRequest,
   CreateCategoryRequest,
   UpdateCategoryRequest,
   DeleteCategoryOptions,
@@ -156,8 +153,6 @@ export type {
   UsePublishProductResult,
   UseDuplicateProductResult,
   UseBulkActionResult,
-  UseCreateVariantResult,
-  UseUpdateVariantResult,
   UseUploadMediaResult,
   UseExportProductsResult,
 
@@ -204,7 +199,6 @@ export type {
   PublishedProduct,
   ProductWithIssues,
   ProductWith3D,
-  ProductWithVariants,
 
   // Mapped types
   Optional,
@@ -309,7 +303,6 @@ export {
   isPublishedProduct,
   hasValidationIssues,
   has3DModel,
-  hasVariants,
   isFixableIssue,
 } from './catalog-utils';
 
