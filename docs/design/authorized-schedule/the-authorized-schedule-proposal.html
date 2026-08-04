@@ -1,0 +1,2357 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Authorized Schedule — Patina</title>
+<style>
+/* THE AUTHORIZED SCHEDULE — furnishings, trade work, and the commercial
+ life of an engaged project. House shell inherited from
+ the-call-sheet-ui-proposal.html. Self-contained: no external fonts,
+ scripts, or images. Deck chrome = drafting ink / bone paper / verdigris;
+ mock scope (.doc) = the designer portal's real tokens. No drop shadows
+ anywhere in this file — depth is flat paper offsets, 1px rules, and
+ value contrast. */
+
+:root{
+ --paper:#E7E9E3;
+ --paper-2:#F3F4F0;
+ --card:#FBFBF8;
+ --ink:#16202B;
+ --ink-2:#33404E;
+ --slate:#5D6773;
+ --rule:rgba(22,32,43,.14);
+ --rule-2:rgba(22,32,43,.28);
+ --verdigris:#2F6F63;
+ --verdigris-soft:rgba(47,111,99,.10);
+ --brass:#9A6B1F;
+ --brass-soft:rgba(154,107,31,.10);
+ --oxblood:#8A3A32;
+ --oxblood-soft:rgba(138,58,50,.09);
+ --grid:rgba(22,32,43,.045);
+
+ --display:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+ --body:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,Roboto,"Helvetica Neue",Arial,sans-serif;
+ --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+
+@media (prefers-color-scheme: dark){
+ :root[data-theme="auto"]{
+  --paper:#111820; --paper-2:#161E27; --card:#1B252F;
+  --ink:#E6E9E5; --ink-2:#C3CBD2; --slate:#8C98A4;
+  --rule:rgba(230,233,229,.14); --rule-2:rgba(230,233,229,.3);
+  --verdigris:#7CC7B6; --verdigris-soft:rgba(124,199,182,.12);
+  --brass:#D5A24C; --brass-soft:rgba(213,162,76,.12);
+  --oxblood:#DE8478; --oxblood-soft:rgba(222,132,120,.12);
+  --grid:rgba(230,233,229,.04);
+ }
+}
+:root[data-theme="dark"]{
+ --paper:#111820; --paper-2:#161E27; --card:#1B252F;
+ --ink:#E6E9E5; --ink-2:#C3CBD2; --slate:#8C98A4;
+ --rule:rgba(230,233,229,.14); --rule-2:rgba(230,233,229,.3);
+ --verdigris:#7CC7B6; --verdigris-soft:rgba(124,199,182,.12);
+ --brass:#D5A24C; --brass-soft:rgba(213,162,76,.12);
+ --oxblood:#DE8478; --oxblood-soft:rgba(222,132,120,.12);
+ --grid:rgba(230,233,229,.04);
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+html{-webkit-text-size-adjust:100%}
+
+body{
+ background:var(--paper);
+ color:var(--ink);
+ font-family:var(--body);
+ font-size:16px;
+ line-height:1.55;
+ overflow-x:hidden;
+ background-image:
+  linear-gradient(var(--grid) 1px, transparent 1px),
+  linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+ background-size:28px 28px, 28px 28px;
+}
+
+/* ---------- deck shell ---------- */
+#deck{
+ height:100dvh;
+ overflow-y:auto;
+ overflow-x:hidden;
+ scroll-snap-type:y proximity;
+}
+.slide{
+ min-height:100dvh;
+ scroll-snap-align:start;
+ display:flex;
+ align-items:center;
+ padding:clamp(24px,4.5vh,58px) clamp(18px,4.4vw,72px);
+ border-bottom:1px solid var(--rule);
+ position:relative;
+}
+.inner{
+ width:100%;
+ max-width:1180px;
+ margin:0 auto;
+ display:grid;
+ grid-template-columns:126px minmax(0,1fr);
+ gap:clamp(16px,2.6vw,40px);
+ align-items:start;
+}
+@media (max-width:880px){ .inner{grid-template-columns:minmax(0,1fr);gap:14px} }
+.gutter{position:sticky;top:0;padding-top:.4rem}
+.main{min-width:0}
+
+.slide.wide .inner{grid-template-columns:minmax(0,1fr);max-width:1340px;gap:0}
+.slide.wide .gutter{position:static;padding:0;display:flex;align-items:center;gap:12px;margin-bottom:.25rem}
+.slide.wide .gutter .num{margin-top:0}
+.slide.wide .gutter .tick{display:none}
+
+.slide.ink{
+ --paper:#111820; --paper-2:#161E27; --card:#1B252F;
+ --ink:#E6E9E5; --ink-2:#C3CBD2; --slate:#8C98A4;
+ --rule:rgba(230,233,229,.14); --rule-2:rgba(230,233,229,.3);
+ --verdigris:#7CC7B6; --verdigris-soft:rgba(124,199,182,.12);
+ --brass:#D5A24C; --brass-soft:rgba(213,162,76,.12);
+ --oxblood:#DE8478; --oxblood-soft:rgba(222,132,120,.12);
+ background:#111820; color:#E6E9E5;
+ background-image:
+  linear-gradient(rgba(230,233,229,.04) 1px, transparent 1px),
+  linear-gradient(90deg, rgba(230,233,229,.04) 1px, transparent 1px);
+ background-size:28px 28px, 28px 28px;
+}
+
+/* ---------- deck type ---------- */
+.eyebrow{
+ font-family:var(--mono);font-size:11px;letter-spacing:.14em;
+ text-transform:uppercase;color:var(--slate);display:block;
+}
+.gutter .num{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--verdigris);display:block;margin-top:6px}
+.gutter .tick{display:block;width:34px;height:2px;background:var(--verdigris);margin-top:12px;opacity:.55}
+@media (max-width:880px){ .gutter .tick{display:none} .gutter{position:static} }
+
+h1,h2,h3{font-family:var(--display);font-weight:600;letter-spacing:-.012em;margin:0}
+h1{font-size:clamp(2.3rem,6vw,4.3rem);line-height:1.03}
+h2{font-size:clamp(1.5rem,3.1vw,2.5rem);line-height:1.1;margin-bottom:.4rem}
+h3{font-size:clamp(1rem,1.55vw,1.22rem);line-height:1.25}
+.lede{font-size:clamp(.96rem,1.35vw,1.12rem);color:var(--ink-2);max-width:70ch;margin:.7rem 0 0}
+p{margin:.65rem 0;max-width:70ch}
+.small{font-size:.84rem;color:var(--slate);line-height:1.5}
+strong{font-weight:650;color:var(--ink)}
+code,.mono{font-family:var(--mono);font-size:.82em}
+code{background:var(--verdigris-soft);color:var(--verdigris);padding:.08em .38em;border-radius:3px;word-break:break-word}
+
+/* ---------- cover ---------- */
+.cover .inner{grid-template-columns:minmax(0,1fr)}
+.wordmark{display:flex;align-items:center;gap:10px;margin-bottom:clamp(18px,4.5vh,44px)}
+.wordmark span{font-family:var(--mono);font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--slate)}
+.cover-quote{
+ font-family:var(--display);font-size:clamp(1.3rem,2.6vw,1.9rem);line-height:1.25;
+ color:var(--ink-2);font-style:italic;border-left:3px solid var(--verdigris);
+ padding-left:clamp(14px,2vw,24px);margin:clamp(20px,3.6vh,36px) 0 0;max-width:34ch;
+}
+.cover-meta{
+ margin-top:clamp(24px,4.6vh,48px);display:flex;flex-wrap:wrap;gap:10px 26px;
+ font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+ color:var(--slate);border-top:1px solid var(--rule);padding-top:16px;
+}
+.cover-meta b{color:var(--ink);font-weight:500}
+
+/* ---------- cards ---------- */
+.grid{display:grid;gap:13px;margin-top:1rem}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:960px){ .g3,.g4{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media (max-width:640px){ .g2,.g3,.g4{grid-template-columns:minmax(0,1fr)} }
+.card{background:var(--card);border:1px solid var(--rule);border-radius:6px;padding:14px 16px;min-width:0}
+.card h3{margin-bottom:.3rem}
+.card p{margin:.35rem 0}
+.card.accent{border-left:3px solid var(--verdigris)}
+.card.warn{border-left:3px solid var(--brass)}
+.card.bad{border-left:3px solid var(--oxblood)}
+.card.tight{padding:10px 12px}
+.card.tight p{font-size:.82rem;color:var(--slate);line-height:1.45;margin:.2rem 0 0}
+.kicker{font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--slate);display:block;margin-bottom:.3rem}
+.quote{border-left:3px solid var(--verdigris);padding:2px 0 2px 16px;margin:14px 0}
+.quote p{font-family:var(--display);font-style:italic;font-size:clamp(1rem,1.4vw,1.14rem);line-height:1.4;color:var(--ink);margin:0}
+.quote .attr{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate);margin-top:8px;display:block}
+.callout{border:1px solid var(--verdigris);background:var(--verdigris-soft);border-radius:6px;padding:12px 15px;margin-top:1rem}
+.callout p{margin:0;font-size:.92rem;color:var(--ink);max-width:none}
+.callout .kicker{color:var(--verdigris)}
+.note{border:1px dashed var(--rule-2);border-radius:6px;padding:11px 14px;margin-top:.9rem;background:var(--paper-2)}
+.note p{margin:.25rem 0;font-size:.84rem;color:var(--slate);max-width:84ch}
+.note .kicker{color:var(--brass)}
+ul.plain{list-style:none;padding:0;margin:.55rem 0}
+ul.plain li{padding-left:19px;position:relative;margin:.38rem 0;max-width:72ch;font-size:.9rem;color:var(--ink-2)}
+ul.plain li::before{content:"";position:absolute;left:2px;top:.62em;width:7px;height:1.5px;background:var(--verdigris)}
+ul.plain li strong{color:var(--ink)}
+ul.plain.tight li{font-size:.83rem;margin:.28rem 0}
+ul.plain.ox li::before{background:var(--oxblood)}
+.tablewrap{overflow-x:auto;margin-top:1rem;border:1px solid var(--rule);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;min-width:720px;font-size:.78rem}
+th,td{text-align:left;padding:7px 12px;border-bottom:1px solid var(--rule);vertical-align:top;line-height:1.35}
+th{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate);font-weight:500;background:var(--paper-2)}
+tr:last-child td{border-bottom:none}
+td.lead{color:var(--ink);font-weight:600;font-family:var(--display);font-size:.94rem}
+td.where{font-family:var(--mono);font-size:.7rem;letter-spacing:.05em;color:var(--brass)}
+td.gone{font-family:var(--mono);font-size:.7rem;letter-spacing:.05em;color:var(--oxblood)}
+.figcap{font-size:.79rem;color:var(--slate);margin:.6rem 0 0;max-width:88ch;line-height:1.5}
+.figcap b{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--verdigris);font-weight:500}
+
+/* deck-scope phase strip + lifecycle chain */
+.phases{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));border:1px solid var(--rule);border-radius:6px;overflow:hidden;margin-top:14px;background:var(--card)}
+.ph{padding:12px 13px 14px;border-right:1px solid var(--rule);min-width:0}
+.ph:last-child{border-right:none}
+.ph b{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--verdigris);display:block}
+.ph em{font-family:var(--mono);font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:var(--slate);font-style:normal;display:block;margin-top:5px}
+.ph p{font-size:.75rem;color:var(--slate);margin:.4rem 0 0;max-width:none;line-height:1.4}
+@media (max-width:1040px){ .phases{grid-template-columns:repeat(3,minmax(0,1fr))} .ph{border-bottom:1px solid var(--rule)} }
+@media (max-width:640px){ .phases{grid-template-columns:repeat(2,minmax(0,1fr))} }
+.chain{display:flex;flex-wrap:wrap;align-items:center;margin-top:12px}
+.chain span{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2);border:1px solid var(--rule-2);border-radius:16px;padding:3px 10px;white-space:nowrap;margin:4px 0}
+.chain i{display:block;width:12px;height:1px;background:var(--rule-2);margin:0 6px;flex:0 0 auto}
+.chain span.key{color:var(--verdigris);border-color:var(--verdigris);background:var(--verdigris-soft)}
+.chain span.wait{color:var(--brass);border-color:var(--brass)}
+.twocol{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 26px;margin-top:12px}
+@media (max-width:820px){ .twocol{grid-template-columns:minmax(0,1fr)} }
+.edge{border-top:1px solid var(--rule);padding:9px 0}
+.edge b{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--brass);font-weight:500}
+.edge p{margin:.3rem 0 0;font-size:.8rem;color:var(--slate);line-height:1.45;max-width:none}
+.edge p em{color:var(--ink-2);font-style:normal;font-weight:600}
+
+/* ============================================================
+ MOCK SCOPE — The Document's real design language
+ ============================================================ */
+.doc{
+ --d-page:#FAF7F2;
+ --d-paper:#FCFAF6;
+ --d-p2:#F7F2EB;
+ --d-p3:#F1EBE2;
+ --d-card:#FFFFFF;
+ --d-pearl:#E5E2DD;
+ --d-rule:rgba(44,41,38,.18);
+ --d-char:#2C2926;
+ --d-mocha:#5C4A3C;
+ --d-quiet:#65594E;
+ --d-clay:#C4A57B;
+ --d-oak:#8B7355;
+ --d-sage:#A8B5A0;
+ --d-blue:#8B9CAD;
+ --d-terra:#D4A090;
+ --d-gold:#E8C547;
+ --d-sheet:#D8CCB8;
+ font-family:var(--body);
+ color:var(--d-char);
+ line-height:1.4;
+}
+.scroller{overflow-x:auto;overflow-y:hidden;padding-bottom:8px;margin-top:12px}
+.frame{border:1px solid var(--d-pearl);border-radius:8px;overflow:hidden;background:var(--d-page)}
+.scroller .frame{min-width:920px}
+.scroller.narrow .frame{min-width:660px}
+.fbar{display:flex;align-items:center;gap:10px;padding:7px 12px;background:var(--d-p3);border-bottom:1px solid var(--d-pearl)}
+.fdots{display:flex;gap:5px;flex:0 0 auto}
+.fdots i{width:8px;height:8px;border-radius:50%;background:rgba(44,41,38,.16);display:block}
+.furl{font-family:var(--mono);font-size:10px;letter-spacing:.05em;color:var(--d-quiet);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.furl b{color:var(--d-mocha);font-weight:500}
+.screen{position:relative;background:var(--d-page);padding:18px 22px 22px;min-height:120px}
+.veil{position:absolute;inset:0;background:rgba(20,18,16,.55);z-index:3}
+
+/* stacked flat paper depth — no shadows */
+.stack{position:relative;z-index:4;max-width:640px;margin:0 auto}
+.stack.w760{max-width:760px}
+.stack::before,.stack::after{content:"";position:absolute;border:1px solid var(--d-pearl);border-radius:5px;background:var(--d-p3);z-index:0}
+.stack::before{left:10px;top:10px;right:-10px;bottom:-10px}
+.stack::after{left:5px;top:5px;right:-5px;bottom:-5px;background:var(--d-p2)}
+.sheet{position:relative;z-index:2;background:var(--d-paper);border:1px solid var(--d-sheet);border-radius:5px;padding:16px 20px 18px}
+.shead{display:flex;align-items:baseline;justify-content:space-between;gap:16px;border-bottom:1px solid var(--d-pearl);padding-bottom:9px}
+.shead .st{font-family:var(--mono);font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--d-char)}
+.shead .sx{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--d-quiet);white-space:nowrap}
+.ssub{font-family:var(--display);font-style:italic;font-size:14px;color:var(--d-mocha);margin:11px 0 0}
+.vitals{font-family:var(--mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--d-quiet);margin-top:7px}
+
+/* scored ink */
+.si{position:relative;display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--d-char);font-weight:500;padding-bottom:9px;line-height:1;white-space:nowrap}
+.si::before{content:"";position:absolute;left:0;right:0;bottom:4.5px;height:1px;background:var(--d-char)}
+.si::after{content:"";position:absolute;left:0;right:0;bottom:1px;height:1px;background:var(--d-clay)}
+.si.sec{color:var(--d-mocha);font-weight:400}
+.si.sec::before{background:rgba(92,74,60,.5)}
+.si.sec::after{display:none}
+.si.ter{color:var(--d-quiet);font-weight:400}
+.si.ter::before{background:rgba(101,89,78,.32)}
+.si.ter::after{display:none}
+.si.dgr::before{background:var(--d-terra)}
+.si.dgr::after{background:var(--d-terra)}
+.si.dead{color:rgba(101,89,78,.34)}
+.si.dead::before{background:rgba(101,89,78,.16)}
+.si.dead::after{display:none}
+.si.lg{font-size:12px;padding-bottom:11px}
+.si.lg::before{bottom:5.5px}
+.si.lg::after{bottom:1.5px}
+.acts{display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-top:12px}
+
+/* the section-label recipe — aged oak over a quiet sub */
+.seclab{margin:16px 0 8px}
+.seclab b{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--d-oak);font-weight:500}
+.seclab i{display:block;font-style:normal;font-size:11px;color:var(--d-quiet);margin-top:3px;line-height:1.35}
+.seclab.row{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.seclab.row .acts{margin-top:0}
+
+/* person rows (kept from the house shell) */
+.prow{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;background:var(--d-card);border:1px solid var(--d-pearl);border-radius:10px;padding:8px 12px}
+.av{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;font-weight:700;color:#fff;letter-spacing:.02em;flex:0 0 auto}
+.av.lg{width:42px;height:42px;font-size:13px}
+.av.mocha{background:#5C4A3C}
+.pname{font-size:14px;font-weight:600;color:var(--d-char);display:flex;align-items:center;gap:8px;flex-wrap:wrap;line-height:1.25}
+.rel{font-size:11.5px;color:var(--d-quiet);margin-top:3px;display:block}
+.rside{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+.rp{font-family:var(--mono);font-size:8px;letter-spacing:.14em;text-transform:uppercase;border:1.5px solid;border-radius:16px;padding:1px 7px;line-height:1.55;white-space:nowrap}
+.rp.sub{color:#5C4A3C;border-color:#5C4A3C}
+.more{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--d-quiet);padding:5px 2px 1px}
+
+/* ticks + fields */
+.tick{width:18px;height:18px;border-radius:2px;border:1.5px solid rgba(101,89,78,.42);position:relative;background:transparent}
+.tick.done{background:var(--d-sage);border-color:var(--d-sage)}
+.tick.done::after{content:"";position:absolute;left:5.5px;top:2px;width:5px;height:9px;border:solid #fff;border-width:0 1.7px 1.7px 0;transform:rotate(42deg)}
+.cbx{width:15px;height:15px;border-radius:2px;border:1.5px solid rgba(101,89,78,.42);position:relative;display:block;background:transparent}
+.cbx.on{background:var(--d-clay);border-color:var(--d-clay)}
+.cbx.on::after{content:"";position:absolute;left:4.4px;top:1px;width:4px;height:8px;border:solid #fff;border-width:0 1.6px 1.6px 0;transform:rotate(42deg)}
+.cbx.off{border-color:rgba(101,89,78,.16)}
+.fld{margin-top:13px}
+.flab{font-family:var(--mono);font-size:8.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--d-quiet);display:block;margin-bottom:3px}
+.uin{border-bottom:1px solid rgba(44,41,38,.28);padding:5px 0 7px;font-size:14px;color:var(--d-char);display:flex;align-items:center;justify-content:space-between;gap:10px}
+.uin .car{font-family:var(--mono);font-size:10px;color:var(--d-quiet)}
+.tchips{display:flex;gap:8px;flex-wrap:wrap;margin-top:5px}
+.tchip{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;border:1px solid var(--d-pearl);border-radius:16px;padding:4px 12px;color:var(--d-quiet);background:var(--d-card)}
+.tchip.on{border-color:var(--d-clay);background:rgba(196,165,123,.2);color:#7a6034;font-weight:600}
+.hint{font-size:11.5px;color:var(--d-quiet);margin-top:6px;font-family:var(--display);font-style:italic}
+
+/* bands + empty states */
+.band{border:1px solid var(--d-pearl);background:var(--d-p2);border-radius:3px;padding:10px 14px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.band p{font-family:var(--display);font-style:italic;font-size:13.5px;color:var(--d-mocha);margin:0;max-width:none}
+.band.ok{background:rgba(168,181,160,.15);border-color:rgba(168,181,160,.55)}
+.band.ok p{color:#55684f}
+.band.hold{background:rgba(196,165,123,.14);border-color:var(--d-clay)}
+.band.hold p{color:#7a6034}
+
+/* letterhead / instruments */
+.letter{border-bottom:1px solid var(--d-pearl);padding-bottom:12px}
+.lname{font-family:var(--display);font-size:26px;color:var(--d-char);line-height:1.1}
+.hchip{font-family:var(--mono);font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--d-quiet);border:1px solid var(--d-pearl);border-radius:16px;padding:2px 9px;background:var(--d-p2)}
+.instr{display:flex;gap:26px;flex-wrap:wrap;margin-top:13px}
+.ins{display:flex;align-items:baseline;gap:8px}
+.ins b{font-family:var(--mono);font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--d-quiet);font-weight:500}
+.ins i{font-family:var(--mono);font-size:9px;letter-spacing:.14em;color:var(--d-char);font-style:normal}
+.ins.on b{color:var(--d-char)}
+.ins i.warn{color:#b0785f}
+.ins i.ok{color:#5f7357}
+.spine{position:absolute;left:0;top:0;bottom:0;width:24px;background:var(--d-p3);border-right:1px solid var(--d-pearl)}
+.spine i{display:block;height:1px;background:var(--d-pearl);margin:22px 5px}
+
+/* ---- the schedule ---- */
+.rr{text-align:right}
+.sgrid{display:grid;grid-template-columns:16px minmax(0,1fr) 88px 120px 150px;gap:10px;align-items:center}
+.scols{font-family:var(--mono);font-size:8px;letter-spacing:.16em;text-transform:uppercase;color:var(--d-quiet);padding-bottom:6px;border-bottom:1px solid var(--d-rule);margin-top:10px}
+.scols .r{text-align:right}
+.slines{border-top:none}
+.sline{padding:8px 0;border-bottom:1px solid rgba(44,41,38,.09)}
+.sline .nm{font-size:13px;color:var(--d-char);min-width:0;line-height:1.3}
+.sline .nm i{display:block;font-style:normal;font-size:10.5px;color:var(--d-quiet);margin-top:3px}
+.sline .px{font-family:var(--mono);font-size:11px;color:var(--d-char);text-align:right}
+.sline .px.q{color:var(--d-quiet)}
+.sline.quiet .nm,.sline.quiet .px{color:var(--d-quiet)}
+.sline.pick{background:rgba(196,165,123,.09)}
+.roomhd{display:flex;align-items:baseline;gap:12px;margin:15px 0 3px;flex-wrap:wrap}
+.roomhd b{font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--d-char);font-weight:500}
+.roomhd em{font-family:var(--mono);font-size:9px;letter-spacing:.14em;color:var(--d-clay);font-style:normal}
+.roomhd .rt{margin-left:auto;font-family:var(--mono);font-size:9px;letter-spacing:.14em;color:var(--d-quiet)}
+.reason{font-family:var(--mono);font-size:8px;letter-spacing:.08em;text-transform:lowercase;color:rgba(101,89,78,.62);white-space:nowrap}
+.reason.r2{grid-column:span 2}
+
+/* ---- stamps: two tracks ---- */
+.stp{font-family:var(--mono);font-size:7.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--d-quiet);border:1px solid var(--d-pearl);border-radius:16px;padding:2px 8px;white-space:nowrap;background:var(--d-card);display:inline-block;line-height:1.5}
+.stp.on{color:var(--d-mocha);border-color:rgba(92,74,60,.42)}
+.stp.trade{color:#6b7c8d;border-color:#8B9CAD;background:rgba(139,156,173,.12)}
+.astp{font-family:var(--mono);font-size:7.5px;letter-spacing:.11em;text-transform:uppercase;padding:2px 8px;border-radius:16px;border:1px solid;white-space:nowrap;display:inline-block;line-height:1.5}
+.astp.draft{color:var(--d-quiet);border-color:var(--d-pearl);background:var(--d-p2)}
+.astp.wait{color:#a1834f;border-color:var(--d-clay);background:rgba(196,165,123,.16)}
+.astp.auth{color:#5f7357;border-color:var(--d-sage);background:rgba(168,181,160,.2)}
+.astp.void{color:#b0785f;border-color:var(--d-terra);background:rgba(212,160,144,.14)}
+.astp.absent{border-color:transparent;background:transparent;color:rgba(101,89,78,.3)}
+
+/* ---- authority figures ---- */
+.figband{border-left:2px solid var(--d-sage);padding:3px 0 3px 15px;display:flex;gap:28px;flex-wrap:wrap;margin-top:13px}
+.fg b{display:block;font-family:var(--mono);font-size:8px;letter-spacing:.14em;text-transform:lowercase;color:var(--d-quiet);font-weight:400}
+.fg i{display:block;font-family:var(--display);font-style:normal;font-size:17px;color:var(--d-char);margin-top:3px;line-height:1.1}
+.fg i.q{color:var(--d-quiet)}
+.fg i.ok{color:#5f7357}
+
+/* ---- composition bar ---- */
+.cbar{display:flex;align-items:center;gap:22px;flex-wrap:wrap;border-top:1px solid var(--d-rule);background:var(--d-p2);padding:12px 16px;margin-top:14px}
+.cnum{font-family:var(--mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--d-quiet)}
+.cnum b{color:var(--d-char);font-weight:500}
+.cbar .si{margin-left:auto}
+
+/* ---- checkpoint gate strip ---- */
+.gate{display:flex;align-items:center;gap:16px;flex-wrap:wrap;border:1px solid rgba(168,181,160,.6);background:rgba(168,181,160,.13);border-radius:3px;padding:9px 13px;margin-top:12px}
+.gate .gk{font-family:var(--mono);font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;color:#5f7357}
+.gate p{margin:0;font-size:12px;color:#55684f;max-width:none}
+.gate.drift{border-color:var(--d-clay);background:rgba(196,165,123,.14)}
+.gate.drift .gk{color:#7a6034}
+.gate.drift p{color:#7a6034}
+
+/* ---- journey stepper ---- */
+.jstep{display:flex;align-items:center;flex-wrap:wrap;margin-top:8px}
+.jstep span{font-family:var(--mono);font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:rgba(101,89,78,.48);white-space:nowrap;margin:2px 0}
+.jstep span.done{color:var(--d-mocha)}
+.jstep span.now{color:#5f7357;font-weight:700}
+.jstep i{display:block;width:14px;height:1px;background:var(--d-pearl);margin:0 7px;flex:0 0 auto}
+.jstep i.done{background:var(--d-sage)}
+
+/* ---- budget grid ---- */
+.doc table{min-width:0}
+.bg{width:100%;border-collapse:collapse;font-size:12.5px;min-width:0}
+.bg th{font-family:var(--mono);font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--d-quiet);font-weight:500;text-align:left;padding:6px 10px;border-bottom:1px solid var(--d-rule);background:transparent;vertical-align:bottom}
+.bg th.r{text-align:right}
+.bg td{padding:6px 10px;border-bottom:1px solid rgba(44,41,38,.08);color:var(--d-char);vertical-align:middle;line-height:1.35}
+.bg td.n{font-family:var(--mono);font-size:11px;text-align:right;white-space:nowrap}
+.bg td.n.der{color:var(--d-quiet)}
+.bg td.n.tgt{color:#7a6034;background:rgba(196,165,123,.12);border-bottom:1px solid var(--d-clay)}
+.bg td.rm{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--d-oak)}
+.bg tr.tot td{border-bottom:none;border-top:1px solid var(--d-rule);font-weight:600;padding-top:8px}
+.bg tr.tot td.n{color:var(--d-char)}
+
+/* ---- bids + ledgers ---- */
+.bids{border:1px solid var(--d-pearl);border-radius:5px;background:var(--d-card);overflow:hidden;margin-top:9px}
+.bid{display:grid;grid-template-columns:14px minmax(0,1fr) 96px 106px;gap:12px;align-items:center;padding:8px 12px;border-bottom:1px solid rgba(44,41,38,.08);font-size:12.5px}
+.bid:last-child{border-bottom:none}
+.bid.on{background:rgba(196,165,123,.13)}
+.bid .bn{font-family:var(--mono);font-size:11px;text-align:right;color:var(--d-char)}
+.bid .bs{font-family:var(--mono);font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:var(--d-quiet);text-align:right}
+.bid .bs.won{color:#5f7357}
+.lgrid{display:grid;grid-template-columns:minmax(0,1fr) 96px 116px 120px;gap:12px;align-items:center}
+.lrow{padding:8px 0;border-bottom:1px solid rgba(44,41,38,.09);font-size:12.5px}
+.lrow .lm{font-family:var(--mono);font-size:10.5px;color:var(--d-char);text-align:right}
+.lrow .lq{font-family:var(--mono);font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--d-quiet)}
+.lhd{font-family:var(--mono);font-size:8px;letter-spacing:.16em;text-transform:uppercase;color:var(--d-quiet);padding-bottom:6px;border-bottom:1px solid var(--d-rule)}
+.lhd .r{text-align:right}
+.delta{font-family:var(--mono);font-size:8.5px;letter-spacing:.08em;color:#b0785f;text-transform:lowercase;white-space:nowrap}
+.po{font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:#7a6034;white-space:nowrap}
+.po.dead{color:rgba(101,89,78,.36)}
+
+/* annotations */
+.anno{position:absolute;z-index:6;display:flex;align-items:center}
+.anno .dot,.mnote .dot{width:17px;height:17px;border-radius:50%;background:var(--d-clay);color:#fff;font-family:var(--mono);font-size:9.5px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;line-height:1}
+.anno .ldr{height:1px;background:rgba(44,41,38,.4)}
+.anno.onveil .ldr{background:rgba(250,247,242,.5)}
+.mockgrid{display:grid;grid-template-columns:minmax(0,1fr) 216px;gap:20px;align-items:start}
+@media (max-width:1040px){ .mockgrid{grid-template-columns:minmax(0,1fr)} }
+.mnotes{display:flex;flex-direction:column;gap:12px;padding-top:14px}
+.mnote{display:grid;grid-template-columns:17px minmax(0,1fr);gap:9px;align-items:start}
+.mnote .dot{margin-top:1px}
+.mnote p{font-size:.77rem;color:var(--slate);margin:0;line-height:1.45;max-width:none}
+.mnote p b{color:var(--ink);font-weight:600}
+
+/* specimen strip */
+.spec-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(252px,1fr));border:1px solid var(--d-pearl);border-radius:8px;background:var(--d-page);overflow:hidden}
+.spec-strip.g4c{grid-template-columns:repeat(4,minmax(0,1fr))}
+.spec-strip.g4c .spec-cell:nth-child(4n){border-right:none}
+.spec-strip.g4c .spec-cell:nth-child(n+5){border-bottom:none}
+.spec-cell{border-right:1px solid var(--d-pearl);border-bottom:1px solid var(--d-pearl);padding:14px 16px 16px;min-width:0}
+.spec-cell .sl{font-family:var(--mono);font-size:8.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--d-quiet);display:block;margin-bottom:11px}
+.spec-cell .sn{font-size:11px;color:var(--d-quiet);margin:10px 0 0;line-height:1.4;max-width:none}
+
+/* client portal house style */
+.cp{font-family:var(--body);color:#2f2c29;line-height:1.45}
+.cp .cpscreen{background:#FBFAF8;padding:20px 24px 24px;position:relative}
+.cp .cphead{display:flex;align-items:center;gap:12px;padding-bottom:14px;border-bottom:1px solid #EEEAE4}
+.cp .cpmark{width:34px;height:34px;border-radius:12px;background:#E7E0D5;display:flex;align-items:center;justify-content:center;font-family:var(--display);font-size:14px;color:#6b5c4a}
+.cp .cpt{font-family:var(--display);font-size:19px;color:#2f2c29}
+.cp .cps{font-size:12px;color:#8a8078}
+.cp h4{font-family:var(--display);font-size:16px;margin:20px 0 9px;font-weight:600}
+.cp h4 small{font-weight:400;font-size:12px;color:#8a8078;margin-left:9px}
+.cp .cpcard{background:#fff;border:1px solid #EEEAE4;border-radius:14px;padding:12px 14px;display:flex;align-items:flex-start;gap:13px}
+.cp .cplist{display:flex;flex-direction:column;gap:9px}
+.cp .cpg2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.cp .cpn{font-size:14.5px;font-weight:600;line-height:1.3}
+.cp .cpr{font-size:12.5px;color:#8a8078;margin-top:2px}
+.cp .cpp{font-size:13px;color:#2f2c29;margin-top:4px;font-weight:600}
+.cp .cpnote{font-size:12.5px;color:#8a8078;font-family:var(--display);font-style:italic}
+.cp .cpsign{border:1px solid #DCCFAE;background:#FBF6EA;border-radius:14px;padding:14px 16px}
+.cp .cpsign .cpn{font-size:15px}
+.cp .cpbtn{display:inline-block;border:1px solid #6b5c4a;border-radius:999px;padding:7px 18px;font-size:12.5px;color:#6b5c4a;margin-top:10px}
+.cp .cpbtn.solid{background:#6b5c4a;color:#fff}
+.cp .jstep span{font-family:var(--body);font-size:10px;letter-spacing:0;text-transform:none;color:#a9a099}
+.cp .jstep i{width:10px;margin:0 5px}
+.cp .jstep span.done{color:#6b5c4a}
+.cp .jstep span.now{color:#5f7357;font-weight:700}
+.cp .jstep i{background:#E5DFD6}
+.cp .jstep i.done{background:#A8B5A0}
+.cp .bg th{font-family:var(--body);font-size:10.5px;letter-spacing:.03em;text-transform:none;color:#8a8078;border-bottom-color:#EEEAE4}
+.cp .bg td{border-bottom-color:#F1EDE7}
+.cp .bg td.n{font-family:var(--body);font-size:12.5px}
+.cp .bg td.n.der{color:#8a8078}
+.cp .bg td.rm{font-family:var(--body);font-size:12.5px;letter-spacing:0;text-transform:none;color:#2f2c29}
+.cp .bg tr.tot td{border-top-color:#DED6C9}
+
+/* flat placeholder swatches — never an image */
+.sw{width:62px;height:62px;border-radius:10px;flex:0 0 auto;display:flex;align-items:flex-end;padding:6px 7px;font-family:var(--mono);font-size:7px;letter-spacing:.1em;text-transform:uppercase;color:rgba(60,52,44,.5)}
+.sw.a{background:#E5E2DD}.sw.b{background:#D8CCB8}.sw.c{background:#DED6C9}
+.sw.d{background:#CFC7BA}.sw.e{background:#E7E0D5}.sw.f{background:#DAD3C6}
+
+/* watermark */
+.wm{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:7}
+.wm span{font-family:var(--mono);font-size:clamp(16px,2.3vw,26px);letter-spacing:.42em;color:rgba(44,41,38,.11);transform:rotate(-21deg);white-space:nowrap;text-transform:uppercase}
+
+/* honest "before" native controls */
+.plainbtn{border:1px solid #b9b6b1;border-radius:4px;background:#f2f1ef;padding:6px 14px;font-size:13px;color:#3d3a36;display:inline-block;margin-top:12px}
+.plainin{border:1px solid #b9b6b1;border-radius:4px;background:#fff;padding:5px 9px;font-size:13px;color:#4a4742;font-family:var(--body);display:inline-block;min-width:96px}
+.ba{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:14px}
+@media (max-width:900px){ .ba{grid-template-columns:minmax(0,1fr)} }
+.balab{font-family:var(--mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--slate);display:block;margin-bottom:7px}
+.balab.now{color:var(--oxblood)}
+.balab.next{color:var(--verdigris)}
+
+/* ---------- chrome ---------- */
+#progress{position:fixed;top:0;left:0;height:2px;background:var(--verdigris);width:0;z-index:60;transition:width .18s linear}
+@media (prefers-reduced-motion: reduce){ #progress{transition:none} }
+#chrome{
+ position:fixed;right:clamp(12px,2.4vw,26px);bottom:clamp(12px,2.4vh,24px);
+ z-index:60;display:flex;align-items:center;gap:8px;
+ background:var(--card);border:1px solid var(--rule-2);border-radius:999px;padding:5px 6px 5px 13px;
+}
+#counter{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--slate);min-width:52px}
+#counter b{color:var(--ink);font-weight:600}
+.navbtn{
+ appearance:none;border:1px solid var(--rule);background:var(--paper-2);color:var(--ink);
+ width:28px;height:28px;border-radius:999px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
+ font-size:13px;line-height:1;font-family:var(--mono);padding:0;
+}
+.navbtn:hover{border-color:var(--verdigris);color:var(--verdigris)}
+.navbtn:focus-visible,#themebtn:focus-visible{outline:2px solid var(--verdigris);outline-offset:2px}
+#themebtn{
+ appearance:none;border:1px solid var(--rule);background:var(--paper-2);color:var(--slate);
+ height:28px;border-radius:999px;cursor:pointer;padding:0 11px;
+ font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+}
+#themebtn:hover{border-color:var(--verdigris);color:var(--verdigris)}
+#hint{
+ position:fixed;left:clamp(12px,2.4vw,26px);bottom:clamp(12px,2.4vh,24px);z-index:60;
+ font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate);opacity:.75;
+}
+@media (max-width:700px){ #hint{display:none} }
+
+/* reveal */
+.slide .main > *, .slide .gutter > *{opacity:0;transform:translateY(8px);transition:opacity .5s ease, transform .5s ease}
+.slide.seen .main > *, .slide.seen .gutter > *{opacity:1;transform:none}
+.slide.seen .main > *:nth-child(2){transition-delay:.06s}
+.slide.seen .main > *:nth-child(3){transition-delay:.12s}
+.slide.seen .main > *:nth-child(4){transition-delay:.17s}
+@media (prefers-reduced-motion: reduce){
+ .slide .main > *, .slide .gutter > *{opacity:1;transform:none;transition:none}
+}
+
+/* ---------- print ---------- */
+@media print{
+ html,body{height:auto;background:#fff;color:#000;background-image:none}
+ #deck{height:auto;overflow:visible}
+ #chrome,#hint,#progress{display:none !important}
+ .slide{min-height:auto;height:auto;page-break-after:always;break-after:page;padding:12mm 10mm;border-bottom:none;display:block}
+ .slide.ink{background:#fff;background-image:none;color:#000}
+ .slide:last-child{page-break-after:auto;break-after:auto}
+ .slide .main > *,.slide .gutter > *{opacity:1 !important;transform:none !important}
+ .card,.frame,.spec-strip,.tablewrap,.phases{break-inside:avoid}
+ .scroller{overflow:visible}
+ .scroller .frame,.scroller.narrow .frame{min-width:0}
+ h1{font-size:28pt}h2{font-size:18pt}
+ .inner,.slide.wide .inner{max-width:none}
+}
+</style>
+</head>
+<body>
+
+<div id="progress" role="presentation"></div>
+
+<div id="deck" tabindex="-1">
+
+<!-- ============ 01 · COVER ============ -->
+<section class="slide cover ink" data-label="Cover">
+ <div class="inner">
+  <div class="main">
+   <div class="wordmark">
+    <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+    <rect x="1.5" y="1.5" width="19" height="19" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".35"/>
+    <path d="M5 16.5 L11 5.5 L17 16.5" fill="none" stroke="currentColor" stroke-width="1.4"/>
+    <line x1="7.6" y1="12" x2="14.4" y2="12" stroke="currentColor" stroke-width="1.1" opacity=".55"/>
+    </svg>
+    <span>Patina · The Document</span>
+   </div>
+
+   <h1>The Authorized<br>Schedule.</h1>
+   <p class="lede">Furnishings, trade work, and the commercial life of an engaged project — drawn inside the project, on the record the studio already keeps.</p>
+
+   <blockquote class="cover-quote">The schedule is already the proposal. The signature belongs on the record, not on a copy of it.</blockquote>
+
+   <div class="cover-meta">
+    <span>Deck <b>docs/design/authorized-schedule/</b></span>
+    <span>Screens <b>10 full · 6 details</b></span>
+    <span>Rulings <b>8</b></span>
+    <span>Status <b>proposal — nothing built</b></span>
+    <span><b>4 August 2026</b></span>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 02 · THE RAIL WE SHIPPED ============ -->
+<section class="slide" data-label="What shipped">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act I · Where we are</span><span class="num">02</span><span class="tick"></span></div>
+  <div class="main">
+   <h2>What we shipped, said plainly.</h2>
+   <p class="lede">Yesterday's ship made the agreement-first flow real, and it works: an executed design-services agreement unlocks the project. Everything after the unlock is what this deck is about.</p>
+
+   <div class="grid g2">
+    <div class="card accent">
+    <span class="kicker">Working, and staying</span>
+    <ul class="plain tight">
+    <li><strong>The agreement unlocks the project.</strong> Signature, countersignature, and the project opens for work. Nothing here touches it.</li>
+    <li><strong>The schedule is real.</strong> Every furnishing line already carries a room, a client price, a trade cost, a document code, an expected date, and an eight-state logistics stamp.</li>
+    <li><strong>The configuration sidecar is real.</strong> Finish, fabric, dimension, and option snapshots ride alongside each line.</li>
+    <li><strong>Checkpoints and fingerprints work</strong> — and are keyed to the project, not to any intermediate document.</li>
+    </ul>
+    </div>
+    <div class="card bad">
+    <span class="kicker">Redundant by construction</span>
+    <ul class="plain tight ox">
+    <li><strong>"Draft a furnishing proposal" mints an empty draft.</strong> Nothing carries over. The line count starts at zero.</li>
+    <li><strong>The Drafting Room asks for it all again</strong> — eight facets, re-authored by hand, from a schedule that is already sitting one screen away.</li>
+    <li><strong>Execution inserts twin rows.</strong> A second copy of each line lands on the schedule beside the original.</li>
+    <li><strong>The chain never reads the schedule.</strong> Not once, in either direction.</li>
+    </ul>
+    </div>
+   </div>
+
+   <div class="note">
+    <span class="kicker">The condition of production</span>
+    <p>Strata holds <strong>zero authorizations and zero executed agreements</strong> today. There is no data to migrate, no client mid-signature, no purchase order pointing at a twin. Whatever we rule, the pivot is close to free — and it will not be free again in six months.</p>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 03 · THE EVIDENCE ============ -->
+<section class="slide" data-label="The evidence">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act I · The evidence</span><span class="num">03</span><span class="tick"></span></div>
+  <div class="main">
+   <h2>Field by field, what the second authoring costs.</h2>
+   <p class="lede">The left column is what the Drafting Room asks a designer to type. The middle is where that same fact already lives. The right is what survives execution.</p>
+
+   <div class="tablewrap">
+    <table>
+    <thead>
+    <tr><th style="width:26%">Asked for again</th><th style="width:38%">Already on the schedule</th><th>What execution does with it</th></tr>
+    </thead>
+    <tbody>
+    <tr><td class="lead">Item &amp; description</td><td>The schedule line, authored once when the piece was specified.</td><td class="where">copied into a twin row</td></tr>
+    <tr><td class="lead">Room</td><td>A real room reference, not a label — the room the piece belongs to.</td><td class="gone">dropped — the twin has no room</td></tr>
+    <tr><td class="lead">Quantity</td><td>On the line.</td><td class="where">copied</td></tr>
+    <tr><td class="lead">Client price</td><td>On the line, with the trade cost and markup behind it.</td><td class="where">copied</td></tr>
+    <tr><td class="lead">Document code</td><td>The code the piece is called by on every drawing and purchase order.</td><td class="gone">dropped</td></tr>
+    <tr><td class="lead">Expected date</td><td>Lead time and expected arrival, kept current by procurement.</td><td class="gone">dropped</td></tr>
+    <tr><td class="lead">Allowance range</td><td>The ceiling agreed for a piece not yet chosen.</td><td class="gone">dropped</td></tr>
+    <tr><td class="lead">Configuration</td><td>The spec sidecar — finish, fabric, dimension, options.</td><td class="gone">no sidecar is created</td></tr>
+    <tr><td class="lead">Logistics state</td><td>Specified → quoted → approved → ordered → production → shipped → delivered → installed.</td><td class="gone">the twin starts over at the beginning</td></tr>
+    </tbody>
+    </table>
+   </div>
+
+   <div class="callout">
+    <span class="kicker">The finding under the table</span>
+    <p>Every row is a fact the studio already owns, retyped to make a document that then <strong>writes a worse copy back onto the schedule it never read</strong>. The intermediate proposal is not a step in the work. It is a vestige of a flow that predates the schedule.</p>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 04 · THE DEEPER WOUNDS ============ -->
+<section class="slide" data-label="The wounds">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act I · The wounds</span><span class="num">04</span><span class="tick"></span></div>
+  <div class="main">
+   <h2>Three wounds, and they compound.</h2>
+   <p class="lede">Retyping is tedious. The three below are not tedious — they stop the work, and two of them are visible to the client.</p>
+
+   <div class="grid g3">
+    <div class="card bad">
+    <span class="kicker">One · purchase-order death</span>
+    <p>On a commercial project, a schedule line with no authorization behind it <strong>cannot be purchased</strong>. The purchase-authority guard is right to exist. But because the chain never links back to the schedule, <em>every original line stays unauthorized forever</em> — only the twins carry provenance, and the twins have no room, no code, and no dates.</p>
+    <p class="small">Net effect: the schedule you specified from is the one you cannot buy from.</p>
+    </div>
+    <div class="card bad">
+    <span class="kicker">Two · the client blackout</span>
+    <p>Selections, the delivery pipeline, and the budget all read the schedule directly. On a commercial project those reads are closed, and nothing was opened in their place. The client's three most-visited panels <strong>render empty</strong> on exactly the projects with the most money in them.</p>
+    <p class="small">The client sees an engaged project with nothing in it. So do we, when we open their view.</p>
+    </div>
+    <div class="card bad">
+    <span class="kicker">Three · the fourth restatement</span>
+    <p>The working budget is typed by hand — a fourth statement of numbers the schedule already carries, kept true only by discipline. Every checkpoint published from it is a photograph of a number nobody derived.</p>
+    <p class="small">A studio that restates a total four times will eventually be wrong in three places.</p>
+    </div>
+   </div>
+
+   <div class="quote">
+    <p>None of these is a bug in the ship. They are all the same design decision, seen from three sides: the money document was built beside the record instead of on top of it.</p>
+    <span class="attr">Act I · close</span>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 05 · THESIS ============ -->
+<section class="slide" data-label="Thesis">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act II · The idea</span><span class="num">05</span><span class="tick"></span></div>
+  <div class="main">
+   <h2>The schedule is the proposal.</h2>
+   <p class="lede">Sign the record. Don't retype it.</p>
+
+   <p>A furnishings authorization stops being a document you author and becomes <strong>a selection you make on the schedule</strong>. You tick the lines that are ready, name a deposit, and release them for authorization. The client signs the lines. The lines remember that they were signed — the same lines, in the same rooms, with the same codes and dates and configuration they had that morning.</p>
+
+   <div class="grid g3" style="margin-top:1.1rem">
+    <div class="card accent tight">
+    <span class="kicker">The designer's act</span>
+    <p><strong>Release for authorization.</strong> A head act on the schedule. Not a new document to draft; a set of lines to choose.</p>
+    </div>
+    <div class="card accent tight">
+    <span class="kicker">The instrument</span>
+    <p><strong>Authorization № 3.</strong> A numbered, immutable record of what was signed, at what price, with what deposit — a receipt, not a workspace.</p>
+    </div>
+    <div class="card accent tight">
+    <span class="kicker">The schedule's memory</span>
+    <p><strong>Authorized, in place.</strong> The line keeps its signed price, gains a second stamp, and its purchase-order cell goes live when the deposit clears.</p>
+    </div>
+   </div>
+
+   <div class="callout">
+    <span class="kicker">What follows from one sentence</span>
+    <p>The twin rows stop existing. The room, the code, the dates, and the configuration are never dropped because they are never copied. The client's Selections panel has something to read again — because what it reads is what the designer specified. And the budget can be derived, because the numbers all live in one place.</p>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 06 · THE COMMERCIAL SPINE ============ -->
+<section class="slide" data-label="The spine">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act II · The spine</span><span class="num">06</span><span class="tick"></span></div>
+  <div class="main">
+   <h2>Six phases, pinned to the document you already have.</h2>
+   <p class="lede">Nothing below is a new page. Each phase names a region of the project's anatomy, and the instruments of that phase live in that region.</p>
+
+   <div class="phases">
+    <div class="ph"><b>Engage</b><em>authority band</em><p>The design-services agreement is signed and countersigned. The project opens.</p></div>
+    <div class="ph"><b>Design</b><em>rooms · boards</em><p>Concept, direction, decisions. No money crosses.</p></div>
+    <div class="ph"><b>Specify</b><em>the schedule</em><p>Lines are authored once, in their rooms, with codes, configuration, and prices.</p></div>
+    <div class="ph"><b>Align</b><em>budget panel</em><p>Targets are set per room and category; a checkpoint is published to the client.</p></div>
+    <div class="ph"><b>Authorize</b><em>the schedule</em><p>Lines are released, signed, and deposited against — furnishings and trade scopes alike.</p></div>
+    <div class="ph"><b>Procure</b><em>coordination · care</em><p>Purchase orders, freight, install, punch, acceptance, and the long tail of care.</p></div>
+   </div>
+
+   <div class="grid g2" style="margin-top:1.1rem">
+    <div class="card">
+    <span class="kicker">The anatomy, top to bottom</span>
+    <ul class="plain tight">
+    <li><strong>Authority band</strong> — what is signed and what it permits. The agreement lives here, and so does the count of live authorizations.</li>
+    <li><strong>Budget panel</strong> — the derived grid and the checkpoint history.</li>
+    <li><strong>Schedule</strong> — the rooms, the lines, both stamp tracks, the release act.</li>
+    <li><strong>Coordination</strong> — parties, site requests, trade scopes in progress.</li>
+    <li><strong>Care</strong> — after install: warranty, service, the piece's life.</li>
+    </ul>
+    </div>
+    <div class="card">
+    <span class="kicker">And in the Studio Drawer</span>
+    <ul class="plain tight">
+    <li><strong>Hours</strong> — time against the engagement, invoiced on the agreement's terms. Never on a furnishings instrument.</li>
+    <li><strong>Orders</strong> — purchase orders, vendor confirmations, freight. Fed by authorized lines; visible only to the studio.</li>
+    <li><strong>Trade costs and bids</strong> — the numbers the studio negotiates. They inform the client price. They never appear beside it.</li>
+    </ul>
+    <p class="small" style="margin-top:.6rem">The drawer is where the studio's half of the commerce lives. Nothing in it has a client-facing counterpart, which is why it can stay plain.</p>
+    </div>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 07 · PRINCIPLES ============ -->
+<section class="slide" data-label="Principles">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act II · Principles</span><span class="num">07</span><span class="tick"></span></div>
+  <div class="main">
+   <h2>Six rules the rest of the deck obeys.</h2>
+   <p class="lede">Every screen that follows can be checked against these. Where a screen breaks one, it says so on the glass.</p>
+
+   <div class="grid g3">
+    <div class="card accent tight">
+    <span class="kicker">One</span>
+    <h3>Author once.</h3>
+    <p>A fact is typed where it is first known and never again. The room is chosen when the line is created; nothing downstream asks for it a second time.</p>
+    </div>
+    <div class="card accent tight">
+    <span class="kicker">Two</span>
+    <h3>Sign the record.</h3>
+    <p>An instrument points at lines. It does not contain copies of them. What was signed and what is being bought are the same rows.</p>
+    </div>
+    <div class="card accent tight">
+    <span class="kicker">Three</span>
+    <h3>Link, never twin.</h3>
+    <p>Execution writes provenance onto existing lines and advances their state. It inserts nothing. The schedule's line count does not change when a client signs.</p>
+    </div>
+    <div class="card accent tight">
+    <span class="kicker">Four</span>
+    <h3>Derive, never restate.</h3>
+    <p>Scheduled and Authorized are computed from the lines. Target is the one number a human authors — because it is the only one that is an intention rather than a fact.</p>
+    </div>
+    <div class="card accent tight">
+    <span class="kicker">Five</span>
+    <h3>Instruments are immutable.</h3>
+    <p>Once sent, an authorization cannot be edited. The recovery act is always the same two words: <strong>void and supersede</strong>. A voided instrument frees its lines.</p>
+    </div>
+    <div class="card accent tight">
+    <span class="kicker">Six</span>
+    <h3>Quiet money.</h3>
+    <p>The client price is the only number that crosses. Trade cost, markup, bids, and holdbacks stay in the Studio Drawer, on every screen, without exception.</p>
+    </div>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 08 · GRAMMAR LEGEND ============ -->
+<section class="slide wide" data-label="Grammar">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act II · The legend</span><span class="num">08</span></div>
+  <div class="main">
+   <h2>The grammar, laid out once.</h2>
+   <p class="lede">Eight idioms. Every mock that follows is assembled out of these and nothing else — all of them either shipped already or are one small addition to something that did.</p>
+
+   <div class="doc">
+    <div class="scroller narrow">
+    <div class="spec-strip g4c" style="min-width:1160px">
+
+    <div class="spec-cell">
+    <span class="sl">Track one · logistics</span>
+    <div style="display:flex;flex-wrap:wrap;gap:5px">
+    <span class="stp on">Specified</span><span class="stp">Quoted</span><span class="stp">Approved</span><span class="stp">Ordered</span>
+    <span class="stp">Production</span><span class="stp">Shipped</span><span class="stp">Delivered</span><span class="stp">Installed</span>
+    </div>
+    <p class="sn">The eight-state chain that ships today, unchanged. Where a piece is in the world.</p>
+    </div>
+
+    <div class="spec-cell">
+    <span class="sl">Track two · authorization</span>
+    <div style="display:flex;flex-direction:column;gap:7px;align-items:flex-start">
+    <span class="astp draft">Draft · A3</span>
+    <span class="astp wait">Awaiting signature · A3</span>
+    <span class="astp auth">Authorized · A2</span>
+    <span class="astp absent">—&ensp;unreleased, so nothing is drawn</span>
+    </div>
+    <p class="sn">The one new stamp. Whether the client has agreed to buy it, and under which numbered instrument. Absence is a state, drawn as absence.</p>
+    </div>
+
+    <div class="spec-cell">
+    <span class="sl">Section label</span>
+    <div class="seclab" style="margin-top:2px">
+    <b>Furnishings schedule</b>
+    <i>18 lines across three rooms · 12 released</i>
+    </div>
+    <div class="seclab">
+    <b>Authorizations</b>
+    <i>Two signed · one awaiting signature</i>
+    </div>
+    <p class="sn">Nine-pixel mono in aged oak, then an eleven-pixel plain-language count underneath. The label names; the sub tells you the state without being asked.</p>
+    </div>
+
+    <div class="spec-cell">
+    <span class="sl">Scored ink · acts</span>
+    <div style="display:flex;flex-direction:column;gap:13px;align-items:flex-start">
+    <span class="si lg">Release for authorization</span>
+    <span class="si sec">Publish a checkpoint</span>
+    <span class="si ter">Add a line</span>
+    <span class="si dgr">Void &amp; supersede</span>
+    </div>
+    <p class="sn">A word, tracked, with rules under it. Twelve-pixel mono for the head act of a region, with the double score — charcoal above, clay below.</p>
+    </div>
+
+    <div class="spec-cell">
+    <span class="sl">Authority figures</span>
+    <div class="figband" style="margin-top:2px">
+    <span class="fg"><b>authorized</b><i>86,200</i></span>
+    <span class="fg"><b>accrued</b><i>43,100</i></span>
+    <span class="fg"><b>pending</b><i class="q">0</i></span>
+    <span class="fg"><b>remaining</b><i>43,100</i></span>
+    </div>
+    <p class="sn">A sage band on the left edge, lowercase mono labels, serif figures. Money is stated, never boxed, never coloured green.</p>
+    </div>
+
+    <div class="spec-cell">
+    <span class="sl">Composition bar</span>
+    <div class="cbar" style="margin-top:2px;padding:10px 13px">
+    <span class="cnum"><b>12</b> lines</span>
+    <span class="cnum"><b>3</b> rooms</span>
+    <span class="cnum"><b>86,200</b></span>
+    <span class="cnum">deposit <b>43,100</b> at 50%</span>
+    <span class="si">Review &amp; release</span>
+    </div>
+    <p class="sn">While you are selecting, the bar under the schedule counts what you have. It never floats and it never leaves before it is read.</p>
+    </div>
+
+    <div class="spec-cell">
+    <span class="sl">Checkpoint gate strip</span>
+    <div class="gate" style="margin-top:2px">
+    <span class="gk">Checkpoint № 4</span>
+    <p>Published 12 Jul · covers Primary Bedroom, Living</p>
+    </div>
+    <div class="gate drift">
+    <span class="gk">Drifted</span>
+    <p>Study has moved 4,100 since № 4.</p>
+    <span class="si sec">Publish fresh checkpoint</span>
+    </div>
+    <p class="sn">Inline, at the moment of release. Never a blocking dialog — the designer may release against a stale checkpoint, on the record, with their eyes open.</p>
+    </div>
+
+    <div class="spec-cell">
+    <span class="sl">Journey stepper</span>
+    <div class="jstep">
+    <span class="done">Authorized</span><i class="done"></i><span class="done">Ordered</span><i class="done"></i><span class="now">In production</span><i></i><span>Shipped</span><i></i><span>Delivered</span><i></i><span>Installed</span>
+    </div>
+    <div class="jstep" style="margin-top:12px">
+    <span class="done">Authorized</span><i class="done"></i><span class="now">Engaged</span><i></i><span>In progress</span><i></i><span>Complete</span>
+    </div>
+    <p class="sn">The client's reading of a stamp. Goods take the six-step journey; trade work takes the four-step one.</p>
+    </div>
+
+    </div>
+    </div>
+   </div>
+
+   <p class="figcap"><b>Read this way</b> &nbsp;The only genuinely new idiom is the second stamp track. Everything else on this strip either ships today or is a rearrangement of something that does — which is why this proposal is a set of rulings and not a design system.</p>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 09 · THE SCHEDULE ============ -->
+<section class="slide wide" data-label="The schedule">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act III · Furnishings</span><span class="num">09</span></div>
+  <div class="main">
+   <h2>The schedule, with the second stamp.</h2>
+   <p class="lede">One column added to a surface that already exists. Where a piece <em>is</em> stays on the left; whether it has been <em>agreed to</em> reads on the right.</p>
+
+   <div class="mockgrid">
+    <div class="doc">
+    <div class="scroller">
+    <div class="frame" style="min-width:1060px">
+    <div class="fbar">
+    <span class="fdots"><i></i><i></i><i></i></span>
+    <span class="furl">app.patina.cloud/doc/<b>ellsworth-residence</b></span>
+    </div>
+    <div class="screen" style="padding-left:52px">
+
+    <div class="spine"><i></i><i></i><i></i><i></i><i></i></div>
+
+    <div class="letter">
+    <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+    <span class="lname">Ellsworth Residence</span>
+    <span class="hchip">The Ellsworths</span>
+    <span class="hchip">Engaged · 12 March</span>
+    </div>
+    <div class="instr">
+    <span class="ins"><b>Agreement</b><i class="ok">Executed</i></span>
+    <span class="ins on"><b>Schedule</b><i>18</i></span>
+    <span class="ins"><b>Budget</b><i>Checkpoint № 4</i></span>
+    <span class="ins"><b>Authorizations</b><i>3</i><i class="warn">1 awaiting</i></span>
+    <span class="ins"><b>Call sheet</b><i>16</i></span>
+    </div>
+    </div>
+
+    <div class="seclab row" style="margin-top:18px">
+    <span>
+    <b>Furnishings schedule</b>
+    <i>18 lines across three rooms · 14 released · 4 not yet</i>
+    </span>
+    <span class="acts">
+    <span class="si lg">Release for authorization</span>
+    <span class="si sec">Publish a checkpoint</span>
+    </span>
+    </div>
+
+    <span class="anno" style="position:absolute;left:600px;top:112px;z-index:6"><span class="ldr" style="width:22px"></span><span class="dot">1</span></span>
+
+    <div class="sgrid scols">
+    <i></i><span>Line</span><span class="r">Client price</span><span>Logistics</span><span>Authorization</span>
+    </div>
+
+    <div class="roomhd"><b>Primary Bedroom</b><em>5</em><span class="rt">24,400 released · 3,900 not yet</span></div>
+    <div class="slines">
+    <div class="sline sgrid">
+    <i></i>
+    <span class="nm">Walnut bed, king<i>Hollowell Woodshop · PB-01</i></span>
+    <span class="px">12,300</span>
+    <span class="stp on">Specified</span>
+    <span class="astp wait">Awaiting signature · A3</span>
+    </div>
+    <div class="sline sgrid">
+    <i></i>
+    <span class="nm">Cane lounge chair<i>Thayer &amp; Co · PB-04</i></span>
+    <span class="px">4,200</span>
+    <span class="stp on">Specified</span>
+    <span class="astp wait">Awaiting signature · A3</span>
+    </div>
+    <div class="sline sgrid">
+    <i></i>
+    <span class="nm">Nightstands, pair<i>Verrier Woodworks · PB-06</i></span>
+    <span class="px">5,600</span>
+    <span class="stp on">Quoted</span>
+    <span class="astp wait">Awaiting signature · A3</span>
+    </div>
+    <div class="sline sgrid">
+    <i></i>
+    <span class="nm">Roman shades, six windows<i>Winfield Workroom · PB-09</i></span>
+    <span class="px">3,900</span>
+    <span class="stp on">Ordered</span>
+    <span class="astp auth">Authorized · A2</span>
+    </div>
+    <div class="sline sgrid quiet">
+    <i></i>
+    <span class="nm">Bench, foot of bed<i>To be sourced · PB-11</i></span>
+    <span class="px q">3,900</span>
+    <span class="stp">Specified</span>
+    <span class="astp absent">—</span>
+    </div>
+    </div>
+    <div style="margin-top:8px"><span class="si ter">Add a line to Primary Bedroom</span></div>
+
+    <div class="roomhd"><b>Living</b><em>7</em><span class="rt">38,300 released · 6,800 on a trade scope</span></div>
+    <div class="slines">
+    <div class="sline sgrid">
+    <i></i>
+    <span class="nm">Sectional sofa<i>Thayer &amp; Co · LV-02</i></span>
+    <span class="px">12,400</span>
+    <span class="stp on">Approved</span>
+    <span class="astp wait">Awaiting signature · A3</span>
+    </div>
+    <div class="sline sgrid">
+    <i></i>
+    <span class="nm">Linen club chairs, pair<i>Thayer &amp; Co · LV-05</i></span>
+    <span class="px">9,600</span>
+    <span class="stp on">Specified</span>
+    <span class="astp wait">Awaiting signature · A3</span>
+    </div>
+    <div class="sline sgrid">
+    <i></i>
+    <span class="nm">Drapery fabrication &amp; install<i>Atelier Marchand · trade scope · № 1</i></span>
+    <span class="px">6,800</span>
+    <span class="stp trade">Trade scope</span>
+    <span class="astp wait">Awaiting signature · TS1</span>
+    </div>
+    <div class="sline sgrid">
+    <i></i>
+    <span class="nm">Wool rug, 10 × 14<i>Loomis Mill · LV-08</i></span>
+    <span class="px">6,800</span>
+    <span class="stp on">Specified</span>
+    <span class="astp wait">Awaiting signature · A3</span>
+    </div>
+    <div class="more">+ 3 more — walnut coffee table, cast-iron floor lamp, console table</div>
+    </div>
+
+    <div class="roomhd"><b>Study</b><em>6</em><span class="rt">23,500 released · one allowance</span></div>
+    <div class="slines">
+    <div class="sline sgrid">
+    <i></i>
+    <span class="nm">Library table<i>Hollowell Woodshop · ST-01</i></span>
+    <span class="px">8,900</span>
+    <span class="stp on">Specified</span>
+    <span class="astp wait">Awaiting signature · A3</span>
+    </div>
+    <div class="sline sgrid">
+    <i></i>
+    <span class="nm">Sisal area rug<i>Allowance · up to 4,000 · ST-07</i></span>
+    <span class="px">4,000</span>
+    <span class="stp on">Specified</span>
+    <span class="astp auth">Authorized · A2</span>
+    </div>
+    <div class="more">+ 4 more — leather reading chair, shelving, task lamp, side table</div>
+    </div>
+
+    <div style="height:16px"></div>
+    </div>
+    </div>
+    </div>
+    </div>
+
+    <div class="mnotes">
+    <div class="mnote"><span class="dot">1</span><p><b>The head act is a verb.</b> There is no "new proposal" on this screen, because there is no new document to make.</p></div>
+    <div class="mnote"><span class="dot">·</span><p><b>Two tracks, left to right.</b> Where it is in the world, then whether it has been agreed to. A line can be ORDERED and AUTHORIZED; never ORDERED and unreleased.</p></div>
+    <div class="mnote"><span class="dot">·</span><p><b>Unreleased is quiet.</b> An em dash where a stamp would be. Most of a schedule is unreleased most of the time, and it should not read as a page of warnings.</p></div>
+    <div class="mnote"><span class="dot">·</span><p><b>A trade scope reads as a line</b> in the room where the work happens, under its own instrument number.</p></div>
+    <div class="mnote"><span class="dot">·</span><p><b>Add a line sits per room</b>, tertiary. Nothing about authorization changes how a piece gets onto the schedule.</p></div>
+    </div>
+   </div>
+
+   <div class="doc">
+    <div class="ba" style="gap:26px;margin-top:20px">
+    <div>
+    <span class="balab next" style="font-family:var(--mono)">Detail · line unfolded, authorized</span>
+    <div class="sheet" style="padding:14px 16px">
+    <div class="sline sgrid" style="border-bottom:none;padding-top:0">
+    <i></i>
+    <span class="nm">Roman shades, six windows<i>Winfield Workroom · PB-09 · 6 windows</i></span>
+    <span class="px">3,900</span>
+    <span class="stp on">Ordered</span>
+    <span class="astp auth">Authorized · A2</span>
+    </div>
+    <div class="figband" style="border-left-color:var(--d-sage)">
+    <span class="fg"><b>signed price</b><i>3,900</i></span>
+    <span class="fg"><b>authorized</b><i>3 Jul · A2</i></span>
+    <span class="fg"><b>deposit</b><i class="ok">clear</i></span>
+    </div>
+    <div class="acts" style="margin-top:14px">
+    <span class="po">PO available — deposit clear (A2)</span>
+    <span class="si sec" style="margin-left:auto">Raise the purchase order</span>
+    </div>
+    </div>
+    </div>
+    <div>
+    <span class="balab now" style="font-family:var(--mono)">Detail · line unfolded, unreleased</span>
+    <div class="sheet" style="padding:14px 16px">
+    <div class="sline sgrid" style="border-bottom:none;padding-top:0">
+    <i></i>
+    <span class="nm">Bench, foot of bed<i>To be sourced · PB-11</i></span>
+    <span class="px q">3,900</span>
+    <span class="stp">Specified</span>
+    <span class="astp absent">—</span>
+    </div>
+    <div class="figband" style="border-left-color:var(--d-pearl)">
+    <span class="fg"><b>signed price</b><i class="q">—</i></span>
+    <span class="fg"><b>authorized</b><i class="q">not yet</i></span>
+    <span class="fg"><b>deposit</b><i class="q">—</i></span>
+    </div>
+    <div class="acts" style="margin-top:14px">
+    <span class="po dead">Not yet authorized — no purchase order</span>
+    <span class="si sec" style="margin-left:auto">Include in the next release</span>
+    </div>
+    </div>
+    </div>
+    </div>
+   </div>
+
+   <p class="figcap"><b>Route</b> &nbsp;/doc/ellsworth-residence — the schedule region of the project. The two unfolds are one row in two states; the purchase-order sentence is the only thing that moves, and it is the whole of what authorization buys a studio on a commercial job.</p>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 10 · SELECTION MODE ============ -->
+<section class="slide wide" data-label="Selection">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act III · The ceremony</span><span class="num">10</span></div>
+  <div class="main">
+   <h2>Releasing is choosing, not drafting.</h2>
+   <p class="lede">The head act turns the schedule into a selection surface. Ticks appear on lines and on room headers; the ineligible say why in the quietest voice on the page; the bar underneath keeps the running composition.</p>
+
+   <div class="mockgrid">
+    <div class="doc">
+    <div class="scroller">
+    <div class="frame" style="min-width:1060px">
+    <div class="fbar">
+    <span class="fdots"><i></i><i></i><i></i></span>
+    <span class="furl">app.patina.cloud/doc/<b>ellsworth-residence</b> &nbsp;<b>› releasing</b></span>
+    </div>
+    <div class="screen" style="padding-left:52px">
+
+    <div class="spine"><i></i><i></i><i></i><i></i><i></i></div>
+
+    <div class="seclab row" style="margin-top:2px">
+    <span>
+    <b>Choose what to release</b>
+    <i>Tick the lines the client is being asked to authorize. Prices lock when you release.</i>
+    </span>
+    <span class="acts"><span class="si ter">Put back · Esc</span></span>
+    </div>
+
+    <span class="anno" style="position:absolute;left:26px;top:118px;z-index:6"><span class="dot">1</span><span class="ldr" style="width:20px"></span></span>
+    <span class="anno" style="position:absolute;left:26px;top:290px;z-index:6"><span class="dot">2</span><span class="ldr" style="width:20px"></span></span>
+    <span class="anno" style="position:absolute;left:26px;top:404px;z-index:6"><span class="dot">3</span><span class="ldr" style="width:20px"></span></span>
+
+    <div class="sgrid scols">
+    <i></i><span>Line</span><span class="r">Client price</span><span>Logistics</span><span>Authorization</span>
+    </div>
+
+    <div class="roomhd"><span class="cbx on" style="margin-right:2px"></span><b>Primary Bedroom</b><em>4 of 5</em></div>
+    <div class="slines">
+    <div class="sline sgrid pick"><span class="cbx on"></span><span class="nm">Walnut bed, king<i>Hollowell Woodshop · PB-01</i></span><span class="px">12,300</span><span class="stp on">Specified</span><span class="astp draft">Draft · A3</span></div>
+    <div class="sline sgrid pick"><span class="cbx on"></span><span class="nm">Cane lounge chair<i>Thayer &amp; Co · PB-04</i></span><span class="px">4,200</span><span class="stp on">Specified</span><span class="astp draft">Draft · A3</span></div>
+    <div class="sline sgrid pick"><span class="cbx on"></span><span class="nm">Nightstands, pair<i>Verrier Woodworks · PB-06</i></span><span class="px">5,600</span><span class="stp on">Quoted</span><span class="astp draft">Draft · A3</span></div>
+    <div class="sline sgrid pick"><span class="cbx on"></span><span class="nm">Bedside lamps, pair<i>Marden Glass · PB-07</i></span><span class="px">2,300</span><span class="stp on">Specified</span><span class="astp draft">Draft · A3</span></div>
+    <div class="sline sgrid quiet"><span class="cbx off"></span><span class="nm">Roman shades, six windows<i>Winfield Workroom · PB-09</i></span><span class="px q">3,900</span><span class="reason">in authorization № 2</span><span class="astp auth">Authorized · A2</span></div>
+    </div>
+
+    <div class="roomhd"><span class="cbx on" style="margin-right:2px"></span><b>Living</b><em>5 of 7</em></div>
+    <div class="slines">
+    <div class="sline sgrid pick"><span class="cbx on"></span><span class="nm">Sectional sofa<i>Thayer &amp; Co · LV-02</i></span><span class="px">12,400</span><span class="stp on">Approved</span><span class="astp draft">Draft · A3</span></div>
+    <div class="sline sgrid pick"><span class="cbx on"></span><span class="nm">Linen club chairs, pair<i>Thayer &amp; Co · LV-05</i></span><span class="px">9,600</span><span class="stp on">Specified</span><span class="astp draft">Draft · A3</span></div>
+    <div class="sline sgrid pick"><span class="cbx on"></span><span class="nm">Wool rug, 10 × 14<i>Loomis Mill · LV-08</i></span><span class="px">6,800</span><span class="stp on">Specified</span><span class="astp draft">Draft · A3</span></div>
+    <div class="sline sgrid quiet"><span class="cbx off"></span><span class="nm">Console table<i>To be sourced · LV-12</i></span><span class="px q">—</span><span class="reason r2">no price — resolve to release</span></div>
+    <div class="sline sgrid quiet"><span class="cbx off"></span><span class="nm">Drapery fabrication &amp; install<i>Atelier Marchand</i></span><span class="px q">6,800</span><span class="reason">on trade scope · № 1</span><span class="astp wait">Awaiting signature · TS1</span></div>
+    <div class="more">+ 2 more ticked — walnut coffee table, cast-iron floor lamp</div>
+    </div>
+
+    <div class="roomhd"><span class="cbx on" style="margin-right:2px"></span><b>Study</b><em>3 of 6</em></div>
+    <div class="slines">
+    <div class="sline sgrid pick"><span class="cbx on"></span><span class="nm">Library table<i>Hollowell Woodshop · ST-01</i></span><span class="px">8,900</span><span class="stp on">Specified</span><span class="astp draft">Draft · A3</span></div>
+    <div class="sline sgrid pick"><span class="cbx on"></span><span class="nm">Leather reading chair<i>Verrier Woodworks · ST-03</i></span><span class="px">5,200</span><span class="stp on">Specified</span><span class="astp draft">Draft · A3</span></div>
+    <div class="sline sgrid pick"><span class="cbx on"></span><span class="nm">Shelving, built to fit<i>Hollowell Woodshop · ST-05</i></span><span class="px">9,400</span><span class="stp on">Specified</span><span class="astp draft">Draft · A3</span></div>
+    <div class="sline sgrid quiet"><span class="cbx off"></span><span class="nm">Desk, built to fit<i>Hollowell Woodshop · ST-08</i></span><span class="px q">—</span><span class="reason r2">price to be determined</span></div>
+    </div>
+
+    <div class="cbar">
+    <span class="cnum"><b>12</b> lines</span>
+    <span class="cnum"><b>3</b> rooms</span>
+    <span class="cnum"><b>86,200</b></span>
+    <span class="cnum">deposit <b>43,100</b> at 50%</span>
+    <span class="si lg">Review &amp; release</span>
+    </div>
+
+    </div>
+    </div>
+    </div>
+    </div>
+
+    <div class="mnotes">
+    <div class="mnote"><span class="dot">1</span><p><b>Room headers tick too.</b> One click takes a whole room; the header's count reads "4 of 5" so a partial room is never mistaken for a whole one.</p></div>
+    <div class="mnote"><span class="dot">2</span><p><b>Ineligibility is a reason, not a refusal.</b> Lowercase mono where the logistics stamp sits: <span class="mono">no price — resolve to release</span>, <span class="mono">in authorization № 2</span>, <span class="mono">on trade scope · № 1</span>. The line stays visible; the tick stays drawn, hollow.</p></div>
+    <div class="mnote"><span class="dot">3</span><p><b>Allowances are eligible; blanks are not.</b> An allowance has a ceiling, so it can be signed. A line with no number cannot, and says the plainest version of why.</p></div>
+    <div class="mnote"><span class="dot">·</span><p><b>Draft · A3 appears on the first tick.</b> The number is minted at the start of the ceremony, so designer and client are talking about the same № throughout.</p></div>
+    <div class="mnote"><span class="dot">·</span><p><b>The bar is arithmetic, not a promise.</b> It counts what is ticked. The deposit percent is editable on the review sheet, not here.</p></div>
+    </div>
+   </div>
+
+   <p class="figcap"><b>Escape hatch</b> &nbsp;Put back · Esc leaves selection mode and forgets the ticks. Nothing has been created, nothing has been sent, and the draft number is released back for the next attempt.</p>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 11 · REVIEW & RELEASE ============ -->
+<section class="slide wide" data-label="Review &amp; release">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act III · The ceremony</span><span class="num">11</span></div>
+  <div class="main">
+   <h2>Review &amp; release.</h2>
+   <p class="lede">The last sheet before a client is asked to sign. Room-grouped, deposit named, checkpoint stated on the same paper — and one sentence at the bottom that tells the truth about what happens next.</p>
+
+   <div class="mockgrid">
+    <div class="doc">
+    <div class="scroller">
+    <div class="frame" style="min-width:980px">
+    <div class="fbar">
+    <span class="fdots"><i></i><i></i><i></i></span>
+    <span class="furl">app.patina.cloud/doc/<b>ellsworth-residence</b> &nbsp;<b>› release</b></span>
+    </div>
+    <div class="screen" style="padding-top:20px;padding-bottom:30px">
+
+    <div class="letter" style="opacity:.9">
+    <span class="lname">Ellsworth Residence</span>
+    <div class="instr">
+    <span class="ins"><b>Schedule</b><i>18</i></span>
+    <span class="ins on"><b>Authorizations</b><i>3</i></span>
+    </div>
+    </div>
+    <div style="height:120px"></div>
+
+    <div class="veil"></div>
+
+    <div class="stack w760" style="position:absolute;left:0;right:0;top:36px;margin:0 auto;width:760px;max-width:calc(100% - 120px)">
+    <div class="sheet" style="padding-bottom:20px">
+    <div class="shead"><span class="st">Release for authorization</span><span class="sx">Put back · Esc</span></div>
+    <p class="ssub">Authorization № 3 — twelve lines, three rooms.</p>
+    <p class="vitals">Ellsworth Residence · the Ellsworths · drafted 4 August</p>
+
+    <span class="anno" style="position:absolute;left:-52px;top:142px"><span class="dot">1</span><span class="ldr" style="width:34px"></span></span>
+    <span class="anno" style="position:absolute;left:-52px;top:634px"><span class="dot">2</span><span class="ldr" style="width:34px"></span></span>
+    <span class="anno" style="position:absolute;left:-52px;top:708px"><span class="dot">3</span><span class="ldr" style="width:34px"></span></span>
+
+    <div class="seclab"><b>Primary bedroom</b><i>Four lines · 24,400</i></div>
+    <div class="lgrid lhd"><span>Item</span><span class="r">Room</span><span class="r">Signed qty</span><span class="r">Client price</span></div>
+    <div class="lrow lgrid"><span>Walnut bed, king</span><span class="lq rr">Primary bedroom</span><span class="lq rr">1</span><span class="lm">12,300</span></div>
+    <div class="lrow lgrid"><span>Cane lounge chair</span><span class="lq rr">Primary bedroom</span><span class="lq rr">1</span><span class="lm">4,200</span></div>
+    <div class="lrow lgrid"><span>Nightstands, pair</span><span class="lq rr">Primary bedroom</span><span class="lq rr">2</span><span class="lm">5,600</span></div>
+    <div class="more">+ 1 more — bedside lamps, pair 2,300</div>
+
+    <div class="seclab"><b>Living</b><i>Five lines · 38,300</i></div>
+    <div class="lrow lgrid"><span>Sectional sofa</span><span class="lq rr">Living</span><span class="lq rr">1</span><span class="lm">12,400</span></div>
+    <div class="lrow lgrid"><span>Linen club chairs, pair</span><span class="lq rr">Living</span><span class="lq rr">2</span><span class="lm">9,600</span></div>
+    <div class="more">+ 3 more — wool rug 6,800, walnut coffee table 4,300, cast-iron floor lamp 5,200</div>
+
+    <div class="seclab"><b>Study</b><i>Three lines · 23,500</i></div>
+    <div class="lrow lgrid"><span>Library table</span><span class="lq rr">Study</span><span class="lq rr">1</span><span class="lm">8,900</span></div>
+    <div class="lrow lgrid" style="border-bottom:none"><span>Shelving, built to fit</span><span class="lq rr">Study</span><span class="lq rr">1</span><span class="lm">9,400</span></div>
+    <div class="more">+ 1 more — leather reading chair 5,200</div>
+
+    <div class="figband">
+    <span class="fg"><b>authorization total</b><i>86,200</i></span>
+    <span class="fg"><b>deposit at 50%</b><i>43,100</i></span>
+    <span class="fg"><b>balance on delivery</b><i class="q">43,100</i></span>
+    </div>
+
+    <div class="fld">
+    <span class="flab">Deposit</span>
+    <div class="tchips">
+    <span class="tchip">0%</span>
+    <span class="tchip">25%</span>
+    <span class="tchip on">50%</span>
+    <span class="tchip">100%</span>
+    <span class="tchip">Other</span>
+    </div>
+    <p class="hint">Your agreement's default is 50%. Changing it here changes this authorization only.</p>
+    </div>
+
+    <div class="gate">
+    <span class="gk">Budget checkpoint № 4</span>
+    <p>Published 12 Jul · covers Primary Bedroom, Living</p>
+    <span class="tick done" style="width:15px;height:15px;margin-left:auto"></span>
+    </div>
+
+    <p class="hint" style="margin-top:14px">Prices lock on release. To change one afterwards, void this authorization and supersede it.</p>
+
+    <div class="acts" style="margin-top:14px">
+    <span class="si sec">Save as draft</span>
+    <span class="si lg" style="margin-left:auto">Send to the Ellsworths</span>
+    </div>
+    </div>
+    </div>
+
+    <div style="height:660px"></div>
+    </div>
+    </div>
+    </div>
+    </div>
+
+    <div class="mnotes">
+    <div class="mnote"><span class="dot">1</span><p><b>Room, signed quantity, client price.</b> Four columns and no fifth. Trade cost is not on this sheet because this sheet becomes the client's document.</p></div>
+    <div class="mnote"><span class="dot">2</span><p><b>Deposit is chips, not a field.</b> Four common answers and an "other". The agreement's default arrives pre-chosen, which is the whole reason the agreement is signed first.</p></div>
+    <div class="mnote"><span class="dot">3</span><p><b>The gate strip is inline and honest.</b> It states which checkpoint the client last saw and which rooms it covered. It does not block.</p></div>
+    <div class="mnote"><span class="dot">·</span><p><b>Send is the only charcoal-and-clay word on the sheet.</b> Save as draft is secondary; Put back · Esc is not an action at all.</p></div>
+    </div>
+   </div>
+
+   <div class="doc">
+    <div class="ba" style="gap:26px;margin-top:18px">
+    <div>
+    <span class="balab next" style="font-family:var(--mono)">Detail · gate strip, current</span>
+    <div class="gate" style="margin-top:0">
+    <span class="gk">Budget checkpoint № 4</span>
+    <p>Published 12 Jul · covers Primary Bedroom, Living</p>
+    <span class="tick done" style="width:15px;height:15px;margin-left:auto"></span>
+    </div>
+    <p class="hint">Nothing to do. The client has seen a plan that covers what they are being asked to sign.</p>
+    </div>
+    <div>
+    <span class="balab now" style="font-family:var(--mono)">Detail · gate strip, drifted</span>
+    <div class="gate drift" style="margin-top:0">
+    <span class="gk">Checkpoint № 4 · 23 days old</span>
+    <p>Study has moved 4,100 since it was published, and is not covered.</p>
+    <span class="si sec" style="margin-left:auto">Publish fresh checkpoint</span>
+    </div>
+    <p class="hint">Still not a wall. The designer may send anyway; the instrument records which checkpoint was current when it was signed.</p>
+    </div>
+    </div>
+   </div>
+
+   <p class="figcap"><b>Ruling R6 lives here</b> &nbsp;What counts as drift — any change at all, a percentage of the room, an absolute figure, or a number of days? The strip is drawn for all four; the threshold is a ruling, not a drawing.</p>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 12 · AFTER SIGNATURE ============ -->
+<section class="slide wide" data-label="Authorization № 3">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act III · The instrument</span><span class="num">12</span></div>
+  <div class="main">
+   <h2>Authorization № 3, signed.</h2>
+   <p class="lede">The instrument is a receipt. What it changes is not on the instrument — it is on the twelve lines it points at, and on the purchase-order cells that go live when the deposit clears.</p>
+
+   <div class="mockgrid">
+    <div class="doc">
+    <div class="scroller">
+    <div class="frame" style="min-width:1000px">
+    <div class="fbar">
+    <span class="fdots"><i></i><i></i><i></i></span>
+    <span class="furl">app.patina.cloud/doc/<b>ellsworth-residence</b> &nbsp;<b>› authorization-3</b></span>
+    </div>
+    <div class="screen">
+
+    <div class="seclab row" style="margin-top:0">
+    <span><b>Furnishings authorization · № 3</b><i>Signed by Margaret Ellsworth · 14 July, 9:12&thinsp;am</i></span>
+    <span class="acts">
+    <span class="si sec">Print</span>
+    <span class="si dgr">Void &amp; supersede</span>
+    </span>
+    </div>
+
+    <span class="anno" style="position:absolute;left:6px;top:58px;z-index:6"><span class="dot">1</span><span class="ldr" style="width:16px"></span></span>
+    <span class="anno" style="position:absolute;left:6px;top:152px;z-index:6"><span class="dot">2</span><span class="ldr" style="width:16px"></span></span>
+    <span class="anno" style="position:absolute;left:6px;top:292px;z-index:6"><span class="dot">3</span><span class="ldr" style="width:16px"></span></span>
+
+    <div class="figband">
+    <span class="fg"><b>authorized</b><i>86,200</i></span>
+    <span class="fg"><b>deposit due</b><i>43,100</i></span>
+    <span class="fg"><b>deposit paid</b><i class="ok">43,100</i></span>
+    <span class="fg"><b>remaining</b><i class="q">43,100</i></span>
+    <span class="fg"><b>lines purchasable</b><i>12</i></span>
+    </div>
+
+    <div class="seclab"><b>Deposit</b><i>Invoiced on signature, paid the following morning</i></div>
+    <div class="band ok" style="gap:22px">
+    <p>Deposit invoice · 43,100 · sent 14 Jul · paid 15 Jul</p>
+    <span class="stp on">Card · receipt sent</span>
+    <span class="si ter" style="margin-left:auto">Open the receipt</span>
+    </div>
+
+    <div class="seclab"><b>What was signed</b><i>Twelve lines, at the prices current on 14 July</i></div>
+    <div class="lgrid lhd"><span>Item</span><span class="r">Room</span><span class="r">Signed qty</span><span class="r">Client price</span></div>
+    <div class="lrow lgrid">
+    <span>Walnut bed, king<br><span class="po">PO available — deposit clear (A3)</span></span>
+    <span class="lq rr">Primary bedroom</span><span class="lq rr">1</span><span class="lm">12,300</span>
+    </div>
+    <div class="lrow lgrid">
+    <span>Cane lounge chair<br><span class="delta">authorized 4,200 · now 4,650</span></span>
+    <span class="lq rr">Primary bedroom</span><span class="lq rr">1</span><span class="lm">4,200</span>
+    </div>
+    <div class="lrow lgrid">
+    <span>Nightstands, pair<br><span class="po">PO available — deposit clear (A3)</span></span>
+    <span class="lq rr">Primary bedroom</span><span class="lq rr">2</span><span class="lm">5,600</span>
+    </div>
+    <div class="lrow lgrid">
+    <span>Sectional sofa<br><span class="po">PO raised · PO-0114 · Thayer &amp; Co</span></span>
+    <span class="lq rr">Living</span><span class="lq rr">1</span><span class="lm">12,400</span>
+    </div>
+    <div class="more">+ 8 more — all purchasable, three already on purchase orders</div>
+
+    <div class="band hold" style="margin-top:16px">
+    <p>–&ensp;The cane lounge chair has moved 450 since it was signed. The client owes 4,200.</p>
+    <span class="si sec" style="margin-left:auto">Draft a delta line</span>
+    </div>
+
+    </div>
+    </div>
+    </div>
+    </div>
+
+    <div class="mnotes">
+    <div class="mnote"><span class="dot">1</span><p><b>Five figures, one band.</b> Lowercase mono labels against serif numerals, sage rule on the left. This is the only place on the screen where money is grouped, and it is never boxed.</p></div>
+    <div class="mnote"><span class="dot">2</span><p><b>The deposit is a payment, stated as a sentence.</b> Invoice, amount, sent, paid, method. The receipt opens; nothing else about payment appears on the instrument.</p></div>
+    <div class="mnote"><span class="dot">3</span><p><b>The purchase-order line is the payoff.</b> <span class="mono">PO available — deposit clear (A3)</span> under a line is the sentence that was impossible before, because the signed row and the schedule row are now one row.</p></div>
+    <div class="mnote"><span class="dot">·</span><p><b>The delta glyph is terracotta and tiny.</b> <span class="mono">authorized 4,200 · now 4,650</span>. The signed price stands; the drift is stated. A delta line is drafted for the difference, or the studio absorbs it — both are decisions, and neither is silent.</p></div>
+    <div class="mnote"><span class="dot">·</span><p><b>Void &amp; supersede is the only destructive act</b>, terracotta-scored, at the far right of the head. There is no edit.</p></div>
+    </div>
+   </div>
+
+   <p class="figcap"><b>Immutability, in practice</b> &nbsp;Voiding № 3 releases all twelve lines back to unreleased, marks the instrument <span class="mono">VOID</span> in the ledger, and leaves the deposit record intact and reconcilable. The superseding instrument is № 5, never № 3 again.</p>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 13 · BUDGET + LEDGER ============ -->
+<section class="slide wide" data-label="Budget">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act III · The money</span><span class="num">13</span></div>
+  <div class="main">
+   <h2>The budget panel, derived at last.</h2>
+   <p class="lede">Five columns. Three of them are arithmetic the schedule already knows. One is the number the studio actually authors. And underneath, the ledger of every instrument the project has issued.</p>
+
+   <div class="doc">
+    <div class="scroller">
+    <div class="frame" style="min-width:1000px">
+    <div class="fbar">
+    <span class="fdots"><i></i><i></i><i></i></span>
+    <span class="furl">app.patina.cloud/doc/<b>ellsworth-residence</b> &nbsp;<b>› budget</b></span>
+    </div>
+    <div class="screen">
+
+    <div class="seclab row" style="margin-top:0">
+    <span><b>Budget</b><i>Derived from the schedule · checkpoint № 4 published 12 July</i></span>
+    <span class="acts"><span class="si">Publish a checkpoint</span><span class="si ter">Checkpoint history</span></span>
+    </div>
+
+    <table class="bg" style="margin-top:6px">
+    <thead>
+    <tr><th style="width:22%">Room</th><th style="width:24%">Category</th><th class="r">Scheduled</th><th class="r">Target</th><th class="r">Authorized</th></tr>
+    </thead>
+    <tbody>
+    <tr><td class="rm">Primary bedroom</td><td>Furnishings</td><td class="n der">28,300</td><td class="n tgt">30,000</td><td class="n der">24,400</td></tr>
+    <tr><td class="rm">Primary bedroom</td><td>Window treatments</td><td class="n der">3,900</td><td class="n tgt">5,000</td><td class="n der">3,900</td></tr>
+    <tr><td class="rm">Living</td><td>Furnishings</td><td class="n der">38,300</td><td class="n tgt">42,000</td><td class="n der">38,300</td></tr>
+    <tr><td class="rm">Living</td><td>Trade work</td><td class="n der">6,800</td><td class="n tgt">8,000</td><td class="n der">—</td></tr>
+    <tr><td class="rm">Study</td><td>Furnishings</td><td class="n der">23,500</td><td class="n tgt">22,000</td><td class="n der">23,500</td></tr>
+    <tr><td class="rm">Study</td><td>Allowances</td><td class="n der">4,000</td><td class="n tgt">4,000</td><td class="n der">4,000</td></tr>
+    <tr class="tot"><td>All rooms</td><td>Six categories</td><td class="n">104,800</td><td class="n">111,000</td><td class="n">94,100</td></tr>
+    </tbody>
+    </table>
+
+    <p class="hint" style="margin-top:8px">Scheduled and Authorized are read from the lines and cannot be typed. Target is yours — clay cell, one click, one number.</p>
+
+    <div class="seclab"><b>Authorizations</b><i>Two signed · one trade scope awaiting signature</i></div>
+    <div class="lgrid lhd" style="grid-template-columns:minmax(0,1fr) 110px 116px 130px"><span>Instrument</span><span class="r">Lines</span><span class="r">Total</span><span class="r">State</span></div>
+    <div class="lrow lgrid" style="grid-template-columns:minmax(0,1fr) 110px 116px 130px">
+    <span>Furnishings authorization · № 3</span><span class="lq rr">12</span><span class="lm">86,200</span>
+    <span class="rr"><span class="astp auth">Signed 14 Jul</span></span>
+    </div>
+    <div class="lrow lgrid" style="grid-template-columns:minmax(0,1fr) 110px 116px 130px">
+    <span>Furnishings authorization · № 2</span><span class="lq rr">2</span><span class="lm">7,900</span>
+    <span class="rr"><span class="astp auth">Signed 3 Jul</span></span>
+    </div>
+    <div class="lrow lgrid" style="grid-template-columns:minmax(0,1fr) 110px 116px 130px">
+    <span>Trade scope · № 1<i style="display:block;font-style:normal;font-size:10.5px;color:var(--d-quiet);margin-top:2px">Drapery fabrication &amp; install · Atelier Marchand</i></span>
+    <span class="lq rr">1</span><span class="lm">6,800</span>
+    <span class="rr"><span class="astp wait">Awaiting signature</span></span>
+    </div>
+    <div class="lrow lgrid" style="grid-template-columns:minmax(0,1fr) 110px 116px 130px;border-bottom:none">
+    <span>Furnishings authorization · № 1</span><span class="lq rr">3</span><span class="lm">11,400</span>
+    <span class="rr"><span class="astp void">Void · superseded by № 2</span></span>
+    </div>
+
+    </div>
+    </div>
+    </div>
+
+    <div class="ba" style="gap:26px;margin-top:20px">
+    <div>
+    <span class="balab now">Today · the fourth restatement</span>
+    <div style="border:1px solid #b9b6b1;border-radius:4px;background:#fff;padding:14px 16px;max-width:420px">
+    <div style="font-family:var(--body);font-size:13px;color:#4a4742;margin-bottom:9px">Budget line</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <span class="plainin">Living</span>
+    <span class="plainin">Furnishings</span>
+    <span class="plainin" style="min-width:70px">38300</span>
+    <span class="plainin" style="min-width:70px">42000</span>
+    </div>
+    <span class="plainbtn">Add budget line</span>
+    </div>
+    <p class="figcap" style="max-width:420px">Four hand-typed numbers per row, no relationship to the schedule, true only until someone changes a price. This is what publishes a checkpoint today.</p>
+    </div>
+    <div>
+    <span class="balab next">The proposal · one authored number</span>
+    <div style="border:1px solid var(--d-pearl);border-radius:5px;background:var(--d-paper);padding:14px 16px;max-width:420px">
+    <table class="bg">
+    <thead><tr><th>Room</th><th class="r">Scheduled</th><th class="r">Target</th><th class="r">Authorized</th></tr></thead>
+    <tbody>
+    <tr><td class="rm">Living</td><td class="n der">38,300</td><td class="n tgt">42,000</td><td class="n der">38,300</td></tr>
+    </tbody>
+    </table>
+    </div>
+    <p class="figcap" style="max-width:420px">Two derived, one editable, one derived. The clay cell is the only place a human types a number, and it is the only number that is a decision.</p>
+    </div>
+    </div>
+   </div>
+
+   <p class="figcap"><b>Checkpoints publish this grid</b> &nbsp;A checkpoint is a dated photograph of these five columns, sent to the client. Because the columns are derived, a checkpoint can no longer disagree with the schedule it describes — which is the entire reason the client-facing budget was worth rebuilding.</p>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 14 · THE TRADE INSTRUMENT ============ -->
+<section class="slide" data-label="Trade lifecycle">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act IV · Trade work</span><span class="num">14</span><span class="tick"></span></div>
+  <div class="main">
+   <h2>Trade work is not a furnishing with a person attached.</h2>
+   <p class="lede">Drapery fabrication, millwork install, tile setting, paint — these are scopes of work. They are bid, engaged, performed, inspected, and accepted. They get their own instrument: <strong>Trade scope · № 1</strong>.</p>
+
+   <div class="chain">
+    <span>Draft scope</span><i></i>
+    <span>Bids</span><i></i>
+    <span>Select</span><i></i>
+    <span class="key">Release for authorization</span><i></i>
+    <span class="wait">Client signs</span><i></i>
+    <span>Engaged</span><i></i>
+    <span>In progress</span><i></i>
+    <span>Substantially complete</span><i></i>
+    <span class="key">Accepted</span><i></i>
+    <span>Final payment</span>
+   </div>
+
+   <div class="grid g3" style="margin-top:1.2rem">
+    <div class="card accent tight">
+    <span class="kicker">Phase 1 · the spine</span>
+    <p>Draft a scope, record the bids you already have, select one, release for authorization, engage the sub, mark complete, accept. Everything on the screens that follow.</p>
+    <p class="small">The smallest thing that makes trade work purchasable and client-visible.</p>
+    </div>
+    <div class="card warn tight">
+    <span class="kicker">Phase 2 · sent requests</span>
+    <p>Requests for quote sent out of the portal on the coordination rails the project already uses, with the responses landing back on the bid ledger.</p>
+    <p class="small">Candidate, not decision — ruling R3.</p>
+    </div>
+    <div class="card warn tight">
+    <span class="kicker">Phase 3 · progress billing</span>
+    <p>Draws against percentage complete, retainage held to acceptance, and a final release. Real construction money, and a real amount of work.</p>
+    <p class="small">Candidate, not decision — ruling R4.</p>
+    </div>
+   </div>
+
+   <div class="grid g2" style="margin-top:1rem">
+    <div class="card">
+    <span class="kicker">What it shares with a furnishings authorization</span>
+    <ul class="plain tight">
+    <li><strong>It is released, signed, and immutable.</strong> Same verb, same ceremony, same void-and-supersede recovery.</li>
+    <li><strong>It appears on the schedule</strong> as a line in the room where the work happens, with its own instrument stamp.</li>
+    <li><strong>It carries a client price only.</strong> The bids sit in the Studio Drawer.</li>
+    <li><strong>It counts in the budget</strong> under a Trade work category, in its room.</li>
+    </ul>
+    </div>
+    <div class="card">
+    <span class="kicker">What is different</span>
+    <ul class="plain tight">
+    <li><strong>A party, not a vendor.</strong> The sub or installer comes from the project's parties, not the product library.</li>
+    <li><strong>A bid ledger.</strong> Competing numbers per party, with one selected. Nothing like it exists for goods.</li>
+    <li><strong>Engagement is a second act.</strong> The client authorizes; the studio then engages the sub. Two events, two dates.</li>
+    <li><strong>It ends in acceptance</strong>, not installation — and acceptance is a ceremony with a signatory. That is ruling R2.</li>
+    </ul>
+    </div>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 15 · DRAFTING A TRADE SCOPE ============ -->
+<section class="slide wide" data-label="Draft a scope">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act IV · The studio side</span><span class="num">15</span></div>
+  <div class="main">
+   <h2>Drafting a trade scope.</h2>
+   <p class="lede">Plain-language work, in named rooms, against a party the project already knows. The bids are recorded here and read nowhere else.</p>
+
+   <div class="mockgrid">
+    <div class="doc">
+    <div class="scroller">
+    <div class="frame" style="min-width:940px">
+    <div class="fbar">
+    <span class="fdots"><i></i><i></i><i></i></span>
+    <span class="furl">app.patina.cloud/doc/<b>ellsworth-residence</b> &nbsp;<b>› trade-scope-1</b></span>
+    </div>
+    <div class="screen" style="padding-top:20px;padding-bottom:26px">
+
+    <div class="letter" style="opacity:.9">
+    <span class="lname">Ellsworth Residence</span>
+    <div class="instr"><span class="ins"><b>Coordination</b><i>6 parties</i></span><span class="ins on"><b>Trade scopes</b><i>1</i></span></div>
+    </div>
+    <div style="height:110px"></div>
+
+    <div class="veil"></div>
+
+    <div class="stack w760" style="position:absolute;left:0;right:0;top:34px;margin:0 auto;width:720px;max-width:calc(100% - 120px)">
+    <div class="sheet" style="padding-bottom:20px">
+    <div class="shead"><span class="st">Trade scope · № 1</span><span class="sx">Put back · Esc</span></div>
+    <p class="ssub">Drapery fabrication &amp; install — Living, Primary Bedroom.</p>
+
+    <span class="anno" style="position:absolute;left:-52px;top:124px"><span class="dot">1</span><span class="ldr" style="width:34px"></span></span>
+    <span class="anno" style="position:absolute;left:-52px;top:336px"><span class="dot">2</span><span class="ldr" style="width:34px"></span></span>
+    <span class="anno" style="position:absolute;left:-52px;top:454px"><span class="dot">3</span><span class="ldr" style="width:34px"></span></span>
+
+    <div class="seclab"><b>The work</b><i>Written the way you would say it standing in the room</i></div>
+    <div class="lgrid lhd" style="grid-template-columns:120px minmax(0,1fr)"><span>Room</span><span>Scope</span></div>
+    <div class="lrow lgrid" style="grid-template-columns:120px minmax(0,1fr)">
+    <span class="lq">Living</span>
+    <span>Fabricate and hang pinch-pleat drapery to five windows, client's linen, blackout lined. Includes hardware install and one return visit to dress.</span>
+    </div>
+    <div class="lrow lgrid" style="grid-template-columns:120px minmax(0,1fr)">
+    <span class="lq">Primary bedroom</span>
+    <span>Fabricate and hang matching panels to the two south windows. Hardware supplied by the studio.</span>
+    </div>
+    <div style="margin-top:8px"><span class="si ter">Add a room to the scope</span></div>
+
+    <div class="seclab"><b>Who does it</b><i>From the project's parties — subs and installers</i></div>
+    <div class="prow" style="padding:9px 12px">
+    <span class="av lg mocha">AM</span>
+    <div>
+    <span class="pname">Atelier Marchand <span class="rp sub">Sub · drapery</span></span>
+    <span class="rel">Columbus · 4 projects with this studio</span>
+    </div>
+    <span class="rside"><span class="si sec">Change</span></span>
+    </div>
+
+    <div class="seclab"><b>Bids</b><i>Recorded by the studio · never leaves the drawer</i></div>
+    <div class="bids">
+    <div class="bid on"><span class="cbx on" style="width:14px;height:14px"></span><span>Atelier Marchand</span><span class="bn">4,150</span><span class="bs won">Selected</span></div>
+    <div class="bid"><span class="cbx off" style="width:14px;height:14px"></span><span>Winfield Workroom</span><span class="bn">4,600</span><span class="bs">Quoted 8 Jul</span></div>
+    <div class="bid"><span class="cbx off" style="width:14px;height:14px"></span><span>Kesler Drapery</span><span class="bn">3,980</span><span class="bs">No install date</span></div>
+    </div>
+    <p class="hint">Their numbers never appear on client documents.</p>
+
+    <div class="seclab"><b>Client price</b><i>What the Ellsworths are asked to authorize</i></div>
+    <div class="fld" style="margin-top:4px">
+    <div class="uin" style="max-width:220px">6,800 <span class="car">&#9662;</span></div>
+    <p class="hint">Your standard trade markup would suggest 6,640.</p>
+    </div>
+
+    <div class="acts" style="margin-top:20px">
+    <span class="si sec">Save as draft</span>
+    <span class="si lg" style="margin-left:auto">Release for authorization</span>
+    </div>
+    </div>
+    </div>
+
+    <div style="height:580px"></div>
+    </div>
+    </div>
+    </div>
+    </div>
+
+    <div class="mnotes">
+    <div class="mnote"><span class="dot">1</span><p><b>Rooms first, prose second.</b> A scope is not a parts list. It is a sentence a tradesperson can price and a client can understand, filed under the room it happens in.</p></div>
+    <div class="mnote"><span class="dot">2</span><p><b>The party comes from the call sheet.</b> Subs and installers already on the project; no separate vendor record, no second directory.</p></div>
+    <div class="mnote"><span class="dot">3</span><p><b>The bid ledger is a studio instrument.</b> Three numbers, one selected, the losers kept with their reason. It informs the client price and never crosses to the client.</p></div>
+    <div class="mnote"><span class="dot">·</span><p><b>The markup suggestion is a whisper.</b> Italic, under the field, never enforced. The studio's price is the studio's decision.</p></div>
+    <div class="mnote"><span class="dot">·</span><p><b>The same verb.</b> "Release for authorization" ends this sheet exactly as it ends the furnishings ceremony — one grammar, two kinds of work.</p></div>
+    </div>
+   </div>
+
+   <p class="figcap"><b>Ruling R3 lives here</b> &nbsp;In Phase 1 the bids are numbers the designer already has, typed in. Phase 2 sends the request out of the portal and lets the response land on this ledger. The screen is the same either way; only where the numbers come from changes.</p>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 16 · THE CLIENT TRADE DOCUMENT ============ -->
+<section class="slide wide" data-label="Trade document">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act IV · The client's copy</span><span class="num">16</span></div>
+  <div class="main">
+   <h2>What the client is asked to sign.</h2>
+   <p class="lede">One page of plain language: the work, the rooms, the price, the terms, and what signing sets in motion. No bids, no trade cost, no markup — the client is buying finished work, and that is what the document describes.</p>
+
+   <div class="mockgrid">
+    <div class="doc">
+    <div class="scroller narrow">
+    <div class="frame" style="min-width:780px">
+    <div class="fbar">
+    <span class="fdots"><i></i><i></i><i></i></span>
+    <span class="furl">client.patina.cloud/<b>ellsworth-residence</b>/trade-scope-1</span>
+    </div>
+    <div class="screen" style="padding:26px 30px 30px 84px">
+
+    <div class="stack w760" style="width:100%;max-width:100%">
+    <div class="sheet" style="padding:22px 26px 24px">
+    <div class="shead">
+    <span class="st">Trade scope · № 1</span>
+    <span class="sx">Ellsworth Residence</span>
+    </div>
+    <p class="ssub" style="font-size:16px">Drapery fabrication &amp; install</p>
+    <p class="vitals">Prepared by Middle Studio · 4 August 2026 · awaiting your signature</p>
+
+    <span class="anno" style="position:absolute;left:-46px;top:164px"><span class="dot">1</span><span class="ldr" style="width:30px"></span></span>
+    <span class="anno" style="position:absolute;left:-46px;top:266px"><span class="dot">2</span><span class="ldr" style="width:30px"></span></span>
+    <span class="anno" style="position:absolute;left:-46px;top:360px"><span class="dot">3</span><span class="ldr" style="width:30px"></span></span>
+
+    <div class="seclab"><b>The work</b><i>Two rooms</i></div>
+    <div class="lrow lgrid" style="grid-template-columns:130px minmax(0,1fr)">
+    <span class="lq">Living</span>
+    <span>Pinch-pleat drapery fabricated and hung to five windows in your linen, blackout lined, hardware installed, and one return visit to dress the panels.</span>
+    </div>
+    <div class="lrow lgrid" style="grid-template-columns:130px minmax(0,1fr);border-bottom:none">
+    <span class="lq">Primary bedroom</span>
+    <span>Matching panels fabricated and hung to the two south windows.</span>
+    </div>
+
+    <div class="figband" style="margin-top:16px">
+    <span class="fg"><b>scope total</b><i>6,800</i></span>
+    <span class="fg"><b>deposit at 50%</b><i>3,400</i></span>
+    <span class="fg"><b>on acceptance</b><i class="q">3,400</i></span>
+    </div>
+
+    <div class="seclab"><b>What signing does</b><i>Three things, in this order</i></div>
+    <ul class="plain tight" style="color:var(--d-quiet)">
+    <li style="color:var(--d-char)">Your studio engages Atelier Marchand for this work at this price.</li>
+    <li style="color:var(--d-char)">A deposit of 3,400 is invoiced today; the balance falls due when you accept the finished work.</li>
+    <li style="color:var(--d-char)">The drapery appears on your project's plan, in Living and the Primary Bedroom, and you can follow it from here.</li>
+    </ul>
+
+    <div class="band" style="margin-top:16px">
+    <p>–&ensp;Prices on this scope are fixed. Anything added later comes to you as its own document.</p>
+    </div>
+
+    <div class="acts" style="margin-top:20px">
+    <span class="si ter">Ask a question</span>
+    <span class="si lg" style="margin-left:auto">Sign this scope</span>
+    </div>
+    </div>
+    </div>
+
+    </div>
+    </div>
+    </div>
+    </div>
+
+    <div class="mnotes">
+    <div class="mnote"><span class="dot">1</span><p><b>Rooms, then sentences.</b> The client reads the same two paragraphs the sub was given, minus nothing. The document the trade prices and the document the client signs describe identical work.</p></div>
+    <div class="mnote"><span class="dot">2</span><p><b>Three figures and no fourth.</b> Scope total, deposit, balance on acceptance. What Atelier Marchand is paid is not on this page, on any page the client can reach, or in any email they receive.</p></div>
+    <div class="mnote"><span class="dot">3</span><p><b>"What signing does" is a promise in three lines.</b> Engagement, money, and where to watch it happen. A signature that does not say what it starts is not consent, it is a formality.</p></div>
+    <div class="mnote"><span class="dot">·</span><p><b>Ask a question sits left, quiet.</b> The client's most common act before signing is not signing; a document that offers only one move gets signed unread or not at all.</p></div>
+    </div>
+   </div>
+
+   <p class="figcap"><b>Shell note</b> &nbsp;This is the studio's commercial paper served in the client's house — the instrument keeps the paper, rule, and scored-ink grammar it has everywhere else, because a signature page should look the same on both sides of the relationship. Everything the client browses <em>around</em> it stays in the client portal's softer style, as on slides 18 and 19.</p>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 17 · PROGRESS + ACCEPTANCE ============ -->
+<section class="slide wide" data-label="Acceptance">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act IV · Progress</span><span class="num">17</span></div>
+  <div class="main">
+   <h2>Engaged, in progress, accepted.</h2>
+   <p class="lede">After the signature the scope is a live piece of work on the project. It moves through four states, sits in its rooms on the schedule, and ends in a ceremony rather than a status change.</p>
+
+   <div class="doc">
+    <div class="scroller">
+    <div class="frame" style="min-width:1000px">
+    <div class="fbar">
+    <span class="fdots"><i></i><i></i><i></i></span>
+    <span class="furl">app.patina.cloud/doc/<b>ellsworth-residence</b> &nbsp;<b>› trade-scope-1</b></span>
+    </div>
+    <div class="screen">
+    <div class="wm"><span>Pending ruling R2</span></div>
+
+    <div class="seclab row" style="margin-top:0">
+    <span><b>Trade scope · № 1</b><i>Drapery fabrication &amp; install · signed 21 July · Atelier Marchand</i></span>
+    <span class="acts"><span class="si sec">Work order</span><span class="si dgr">Void &amp; supersede</span></span>
+    </div>
+
+    <div class="jstep" style="margin-top:12px">
+    <span class="done">Authorized 21 Jul</span><i class="done"></i>
+    <span class="done">Engaged 22 Jul</span><i class="done"></i>
+    <span class="now">In progress</span><i></i>
+    <span>Substantially complete</span><i></i>
+    <span>Accepted</span><i></i>
+    <span>Final payment</span>
+    </div>
+
+    <div class="figband">
+    <span class="fg"><b>authorized</b><i>6,800</i></span>
+    <span class="fg"><b>accrued</b><i>3,400</i></span>
+    <span class="fg"><b>pending</b><i class="q">0</i></span>
+    <span class="fg"><b>remaining</b><i>3,400</i></span>
+    </div>
+
+    <div class="seclab"><b>On the schedule</b><i>One line per room, in the rooms the work happens in</i></div>
+    <div class="sgrid scols"><i></i><span>Line</span><span class="r">Client price</span><span>Logistics</span><span>Authorization</span></div>
+    <div class="slines">
+    <div class="sline sgrid">
+    <i></i><span class="nm">Drapery fabrication &amp; install<i>Living · Atelier Marchand</i></span>
+    <span class="px">4,900</span><span class="stp trade">In progress</span><span class="astp auth">Authorized · TS1</span>
+    </div>
+    <div class="sline sgrid">
+    <i></i><span class="nm">Drapery fabrication &amp; install<i>Primary bedroom · Atelier Marchand</i></span>
+    <span class="px">1,900</span><span class="stp trade">In progress</span><span class="astp auth">Authorized · TS1</span>
+    </div>
+    </div>
+
+    <div class="seclab"><b>Acceptance</b><i>The act that closes the scope and releases the balance</i></div>
+    <div class="band hold">
+    <p>–&ensp;Atelier Marchand has marked the work substantially complete. One punch item is open in Living.</p>
+    <span class="si sec" style="margin-left:auto">Open the punch list</span>
+    </div>
+    <div class="acts" style="margin-top:14px">
+    <span class="si dead">Accept the work</span>
+    <span class="reason">available when the punch list is clear</span>
+    <span class="si ter" style="margin-left:auto">Send the client an acceptance request</span>
+    </div>
+
+    </div>
+    </div>
+    </div>
+   </div>
+
+   <div class="grid g3" style="margin-top:16px">
+    <div class="card warn tight">
+    <span class="kicker">R2 · who accepts</span>
+    <p><strong>The client</strong> is the one paying and the one living with it. <strong>The designer</strong> is the one who can tell whether a return has been mitred properly. <strong>Both</strong> is the honest answer and the slowest one.</p>
+    </div>
+    <div class="card tight">
+    <span class="kicker">Why acceptance, not "installed"</span>
+    <p>Goods arrive; work is judged. A trade journey that ends at "installed" has no room for a punch list, and a punch list with no state to sit in becomes an email thread.</p>
+    </div>
+    <div class="card tight">
+    <span class="kicker">What acceptance releases</span>
+    <p>The balance invoice, the line's move to complete on the schedule, and the client's journey stepper reaching its last step. One act, three consequences, all visible.</p>
+    </div>
+   </div>
+
+   <p class="figcap"><b>Split prices, one instrument</b> &nbsp;A scope covering two rooms appears as two schedule lines carrying the same instrument stamp and summing to the signed total. The rooms stay the organising fact of the project; the instrument stays the organising fact of the money.</p>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 18 · CLIENT, BEFORE ============ -->
+<section class="slide wide" data-label="Client · before">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act V · The client</span><span class="num">18</span></div>
+  <div class="main">
+   <h2>Before they sign: the plan, and what is waiting.</h2>
+   <p class="lede">This is the blackout repaired. A client on an engaged commercial project sees the published plan, the documents awaiting their signature, and — deliberately — nothing else.</p>
+
+   <div class="mockgrid">
+    <div class="doc cp">
+    <div class="scroller narrow">
+    <div class="frame" style="border-color:#EEEAE4;min-width:700px">
+    <div class="fbar" style="background:#F4F1EC;border-color:#EEEAE4">
+    <span class="fdots"><i></i><i></i><i></i></span>
+    <span class="furl" style="color:#8a8078">client.patina.cloud/projects/<b style="color:#6b5c4a">ellsworth-residence</b></span>
+    </div>
+    <div class="cpscreen">
+
+    <div class="cphead">
+    <span class="cpmark">MS</span>
+    <div>
+    <div class="cpt">Ellsworth Residence</div>
+    <div class="cps">Middle Studio · engaged 12 March</div>
+    </div>
+    </div>
+
+    <h4>Awaiting your signature <small>two documents</small></h4>
+    <div class="cplist">
+    <div class="cpsign">
+    <div class="cpn">Furnishings authorization · № 3</div>
+    <div class="cpr">Twelve pieces across the Primary Bedroom, Living, and the Study.</div>
+    <div class="cpp">86,200 · deposit 43,100 on signature</div>
+    <span class="cpbtn solid">Review &amp; sign</span>
+    </div>
+    <div class="cpsign">
+    <div class="cpn">Trade scope · № 1</div>
+    <div class="cpr">Drapery fabrication and install, Living and the Primary Bedroom.</div>
+    <div class="cpp">6,800 · deposit 3,400 on signature</div>
+    <span class="cpbtn solid">Review &amp; sign</span>
+    </div>
+    </div>
+
+    <h4>The plan <small>checkpoint № 4 · published 12 July</small></h4>
+    <table class="bg">
+    <thead><tr><th>Room</th><th>Category</th><th class="r">Planned</th><th class="r">Agreed so far</th></tr></thead>
+    <tbody>
+    <tr><td class="rm">Primary bedroom</td><td>Furnishings</td><td class="n">30,000</td><td class="n der">—</td></tr>
+    <tr><td class="rm">Primary bedroom</td><td>Window treatments</td><td class="n">5,000</td><td class="n der">3,900</td></tr>
+    <tr><td class="rm">Living</td><td>Furnishings</td><td class="n">42,000</td><td class="n der">—</td></tr>
+    <tr><td class="rm">Living</td><td>Trade work</td><td class="n">8,000</td><td class="n der">—</td></tr>
+    <tr><td class="rm">Study</td><td>Furnishings</td><td class="n">22,000</td><td class="n der">—</td></tr>
+    <tr><td class="rm">Study</td><td>Allowances</td><td class="n">4,000</td><td class="n der">4,000</td></tr>
+    <tr class="tot"><td>All rooms</td><td></td><td class="n">111,000</td><td class="n">7,900</td></tr>
+    </tbody>
+    </table>
+    <p class="cpnote" style="margin-top:10px">Your designer publishes a fresh plan whenever the shape of it changes. This one covers the Primary Bedroom and Living.</p>
+
+    <h4>Your selections</h4>
+    <p class="cpnote">–&ensp;Nothing yet. Pieces appear here once you have agreed to them.</p>
+
+    </div>
+    </div>
+    </div>
+    </div>
+
+    <div class="mnotes">
+    <div class="mnote"><span class="dot">·</span><p><b>Signature first, plan second.</b> A client arriving at an engaged project is almost always arriving because something needs signing. It goes at the top, twice the weight of anything else.</p></div>
+    <div class="mnote"><span class="dot">·</span><p><b>Planned and Agreed so far.</b> The same derived grid the studio reads, in the client's words. Scheduled is not shown — a client should not see a total for things they have not been asked to buy.</p></div>
+    <div class="mnote"><span class="dot">·</span><p><b>The empty state is a sentence, not a blank.</b> "Nothing yet. Pieces appear here once you have agreed to them." That single line is the whole difference between a repaired panel and the blackout.</p></div>
+    <div class="mnote"><span class="dot">·</span><p><b>No pipeline before authorization.</b> Delivery states are meaningless for pieces nobody has bought. The panel arrives with the first signature, on slide 19.</p></div>
+    </div>
+   </div>
+
+   <p class="figcap"><b>What is deliberately absent</b> &nbsp;The full schedule, unreleased lines, trade costs, bids, vendor names on unsigned pieces, and any number the client has not been shown in a published checkpoint. Restraint here is not a limitation of the build; it is the product.</p>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 19 · CLIENT, AFTER ============ -->
+<section class="slide wide" data-label="Client · after">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act V · The client</span><span class="num">19</span></div>
+  <div class="main">
+   <h2>After they sign: their selections, room by room.</h2>
+   <p class="lede">The panel that renders empty today. Room-grouped, image-led, one price and one journey per piece — and the same grammar for a piece of furniture and a piece of work.</p>
+
+   <div class="mockgrid">
+    <div class="doc cp">
+    <div class="scroller">
+    <div class="frame" style="border-color:#EEEAE4;min-width:900px">
+    <div class="fbar" style="background:#F4F1EC;border-color:#EEEAE4">
+    <span class="fdots"><i></i><i></i><i></i></span>
+    <span class="furl" style="color:#8a8078">client.patina.cloud/projects/<b style="color:#6b5c4a">ellsworth-residence</b>/selections</span>
+    </div>
+    <div class="cpscreen">
+
+    <div class="cphead">
+    <span class="cpmark">MS</span>
+    <div>
+    <div class="cpt">Your selections</div>
+    <div class="cps">Three documents signed · every piece you have agreed to</div>
+    </div>
+    </div>
+
+    <h4>Primary bedroom <small>six pieces · three shown</small></h4>
+    <div class="cpg2">
+    <div class="cpcard">
+    <span class="sw b">PB-01</span>
+    <div style="min-width:0">
+    <div class="cpn">Walnut bed, king</div>
+    <div class="cpr">Hollowell Woodshop</div>
+    <div class="cpp">12,300</div>
+    <div class="jstep"><span class="done">Agreed</span><i class="done"></i><span class="done">Ordered</span><i class="done"></i><span class="now">In production</span><i></i><span>Shipped</span><i></i><span>Delivered</span><i></i><span>Installed</span></div>
+    </div>
+    </div>
+    <div class="cpcard">
+    <span class="sw a">PB-04</span>
+    <div style="min-width:0">
+    <div class="cpn">Cane lounge chair</div>
+    <div class="cpr">Thayer &amp; Co</div>
+    <div class="cpp">4,200</div>
+    <div class="jstep"><span class="done">Agreed</span><i class="done"></i><span class="now">Ordered</span><i></i><span>In production</span><i></i><span>Shipped</span><i></i><span>Delivered</span><i></i><span>Installed</span></div>
+    </div>
+    </div>
+    <div class="cpcard">
+    <span class="sw f">TS-01</span>
+    <div style="min-width:0">
+    <div class="cpn">Drapery fabrication &amp; install</div>
+    <div class="cpr">Trade scope · № 1 · Atelier Marchand</div>
+    <div class="cpp">1,900</div>
+    <div class="jstep"><span class="done">Agreed</span><i class="done"></i><span class="done">Engaged</span><i class="done"></i><span class="now">In progress</span><i></i><span>Complete</span></div>
+    </div>
+    </div>
+    </div>
+
+    <h4>Study <small>four pieces · two shown</small></h4>
+    <div class="cpg2">
+    <div class="cpcard">
+    <span class="sw d">ST-07</span>
+    <div style="min-width:0">
+    <div class="cpn">Sisal area rug</div>
+    <div class="cpr">Loomis Mill · chosen against your 4,000 allowance</div>
+    <div class="cpp">3,650 <span class="cpnote">· 350 back to the Study</span></div>
+    <div class="jstep"><span class="done">Agreed</span><i class="done"></i><span class="done">Ordered</span><i class="done"></i><span class="done">In production</span><i class="done"></i><span class="done">Shipped</span><i class="done"></i><span class="now">Delivered</span><i></i><span>Installed</span></div>
+    </div>
+    </div>
+    <div class="cpcard">
+    <span class="sw e">ST-01</span>
+    <div style="min-width:0">
+    <div class="cpn">Library table</div>
+    <div class="cpr">Hollowell Woodshop</div>
+    <div class="cpp">8,900</div>
+    <div class="jstep"><span class="done">Agreed</span><i class="done"></i><span class="now">Ordered</span><i></i><span>In production</span><i></i><span>Shipped</span><i></i><span>Delivered</span><i></i><span>Installed</span></div>
+    </div>
+    </div>
+    </div>
+
+    <h4>The plan <small>checkpoint № 5 · published 16 July</small></h4>
+    <table class="bg">
+    <thead><tr><th>Room</th><th>Category</th><th class="r">Planned</th><th class="r">Agreed so far</th></tr></thead>
+    <tbody>
+    <tr><td class="rm">Primary bedroom</td><td>Furnishings</td><td class="n">30,000</td><td class="n der">24,400</td></tr>
+    <tr><td class="rm">Primary bedroom</td><td>Window treatments</td><td class="n">5,000</td><td class="n der">3,900</td></tr>
+    <tr><td class="rm">Living</td><td>Furnishings</td><td class="n">42,000</td><td class="n der">38,300</td></tr>
+    <tr><td class="rm">Study</td><td>Furnishings</td><td class="n">22,000</td><td class="n der">23,500</td></tr>
+    <tr class="tot"><td>All rooms</td><td></td><td class="n">111,000</td><td class="n">94,100</td></tr>
+    </tbody>
+    </table>
+
+    <h4>Receipts <small>three</small></h4>
+    <div class="cplist">
+    <div class="cpcard" style="align-items:center">
+    <div style="min-width:0;flex:1">
+    <div class="cpn" style="font-size:13.5px">Deposit · Furnishings authorization № 3</div>
+    <div class="cpr">Paid 15 July · card</div>
+    </div>
+    <div class="cpp" style="margin-top:0">43,100</div>
+    </div>
+    <div class="cpcard" style="align-items:center">
+    <div style="min-width:0;flex:1">
+    <div class="cpn" style="font-size:13.5px">Deposit · Trade scope № 1</div>
+    <div class="cpr">Paid 22 July · bank transfer</div>
+    </div>
+    <div class="cpp" style="margin-top:0">3,400</div>
+    </div>
+    </div>
+
+    </div>
+    </div>
+    </div>
+    </div>
+
+    <div class="mnotes">
+    <div class="mnote"><span class="dot">·</span><p><b>Agreed, not authorized.</b> The client's word for the first step of the journey is the one they used when they signed. "Authorized" is the studio's word for the same fact.</p></div>
+    <div class="mnote"><span class="dot">·</span><p><b>Two journeys, one shape.</b> Goods take six steps to installed; work takes four to complete. A client should not have to learn two visual languages to follow one project.</p></div>
+    <div class="mnote"><span class="dot">·</span><p><b>The allowance resolves in place.</b> The card that said "up to 4,000" becomes the piece that was chosen, at 3,650, and says where the difference went. Continuity is the point — it is the same card, not a new one.</p></div>
+    <div class="mnote"><span class="dot">·</span><p><b>The Agreed column fills as signatures land.</b> Same grid as slide 18, same rows; the right-hand column is the only thing that changed, and it changed because a signature happened.</p></div>
+    <div class="mnote"><span class="dot">·</span><p><b>Placeholders, not photographs.</b> These are flat tone blocks with the document code on them. Where the studio has a real image it shows; where it does not, the code is enough and the page still reads.</p></div>
+    </div>
+   </div>
+
+   <p class="figcap"><b>Study, over plan</b> &nbsp;The Study reads 23,500 agreed against a 22,000 target — drawn on purpose. The grid states it and does not colour it red; a room over its target is a conversation for the designer to have, not an alarm for the software to raise.</p>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 20 · UNDERNEATH ============ -->
+<section class="slide" data-label="Underneath">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act VI · Underneath</span><span class="num">20</span><span class="tick"></span></div>
+  <div class="main">
+   <h2>What changes underneath, honestly.</h2>
+   <p class="lede">The only slide in this deck that names code. Eight changes, none of them large, and one deletion that pays for most of them.</p>
+
+   <div class="grid g2">
+    <div class="card">
+    <span class="kicker">Additive</span>
+    <ul class="plain tight">
+    <li><strong>A nullable <code>source_ffe_item_id</code></strong> on the authorization line table, mutually exclusive with the existing proposal source. One of the two is set, never both.</li>
+    <li><strong>Fingerprint keys gain the schedule line's id</strong>, so compose-then-sign drift is detected against the real row rather than a copy of it.</li>
+    <li><strong>Instrument totals are computed</strong> — the sum of the selected lines' totals, plus an explicit deposit percent stored on the instrument.</li>
+    <li><strong>Room names are persisted on the snapshot</strong> so a signed document still reads correctly if a room is later renamed.</li>
+    </ul>
+    </div>
+    <div class="card">
+    <span class="kicker">Behavioural</span>
+    <ul class="plain tight">
+    <li><strong>Execution links instead of inserting.</strong> A provenance update and a status ratchet on rows that already exist. No new rows, ever.</li>
+    <li><strong>A guard against double authorization</strong> — one schedule line may sit in at most one live instrument. Voiding frees it.</li>
+    <li><strong>Client reads move to narrow client-safe views.</strong> The row-level closure stays closed; the views expose the client price, the room, the journey, and nothing else.</li>
+    <li><strong>The empty-draft path retires.</strong> <code>create_furnishing_wave_draft</code> and the Drafting-Room re-entry route both go, along with the eight facets they served.</li>
+    </ul>
+    </div>
+   </div>
+
+   <div class="note">
+    <span class="kicker">On the old word</span>
+    <p>The shipped tables are named <code>furnishing_waves</code> and <code>furnishing_wave_items</code>. They are the last place the old word survives, and they become <code>furnishing_authorization_*</code> in the same pass. After that, nothing anyone reads — designer, client, or maintainer — uses a word the studio never said out loud.</p>
+   </div>
+
+   <div class="callout">
+    <span class="kicker">The cost of doing it now</span>
+    <p>Zero authorizations and zero executed agreements exist in production. No backfill, no dual-read window, no client mid-signature, no purchase order pointing at a row that is about to change meaning. <strong>This is the cheapest this change will ever be</strong>, and the price rises with the first real project.</p>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 21 · EDGE CASES ============ -->
+<section class="slide" data-label="Edges">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act VI · Edges</span><span class="num">21</span><span class="tick"></span></div>
+  <div class="main">
+   <h2>The edges, and what each one does.</h2>
+   <p class="lede">Ten cases that decide whether this holds up in a real studio. Each has a stated behaviour; four of them also have a ruling attached.</p>
+
+   <div class="twocol">
+    <div>
+    <div class="edge">
+    <b>Price moves between compose and sign</b>
+    <p>The fingerprint catches it at the moment of signature. The client is told the document has changed and is not asked to sign a stale one. <em>Void &amp; supersede</em> — never a silent re-price.</p>
+    </div>
+    <div class="edge">
+    <b>Price moves after signature</b>
+    <p>The signed price stands. The line shows the delta glyph, and the designer either drafts a delta line for the difference or absorbs it. Both are recorded.</p>
+    </div>
+    <div class="edge">
+    <b>Partial rooms</b>
+    <p>Perfectly normal. The room header reads "4 of 5" and the instrument lists exactly what was ticked. A room is a grouping, not a unit of sale.</p>
+    </div>
+    <div class="edge">
+    <b>Mixed goods and trade in one instrument</b>
+    <p>Not allowed in Phase 1. Goods are authorized on a furnishings authorization, work on a trade scope. They read differently, they are performed differently, and they end differently.</p>
+    </div>
+    <div class="edge">
+    <b>Allowance ceilings</b>
+    <p>An allowance authorizes its ceiling: "Allowance · up to 4,000". Resolving at or under the ceiling carries the authorization forward to the chosen piece with no new signature. <em>Ruling R5</em> settles the wording.</p>
+    </div>
+    </div>
+    <div>
+    <div class="edge">
+    <b>Allowance overage</b>
+    <p>Resolving above the ceiling does not silently expand the authorization. The excess becomes a delta line, released in the next instrument like anything else.</p>
+    </div>
+    <div class="edge">
+    <b>A line in two live instruments</b>
+    <p>Refused by a guard, not by a warning. The selection surface shows the line as ineligible with the reason "in authorization № 2", and the database will not accept it either way.</p>
+    </div>
+    <div class="edge">
+    <b>Removing a line after sending</b>
+    <p>There is no such act. A sent instrument is immutable; the recovery is void and supersede, which frees every line at once and starts a clean number.</p>
+    </div>
+    <div class="edge">
+    <b>The client declines</b>
+    <p>The instrument voids, its lines return to unreleased, and the schedule is exactly as it was. <em>Ruling R1</em> decides whether declining part of an instrument is possible at all.</p>
+    </div>
+    <div class="edge">
+    <b>Stale checkpoint at release</b>
+    <p>Surfaced inline on the review sheet, never blocking. The instrument records which checkpoint was current when it was signed, so the question "did they see this plan?" is answerable years later.</p>
+    </div>
+    </div>
+   </div>
+
+   <p class="figcap"><b>The pattern</b> &nbsp;Every edge above resolves toward the same instinct: <em>state it on the glass, record what was true, and make the recovery act loud rather than clever</em>. Nothing here silently repairs itself, because a document that quietly changes what it said is worse than one that refuses to change at all.</p>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 22 · THE RULINGS ============ -->
+<section class="slide" data-label="Rulings">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Close · The ask</span><span class="num">22</span><span class="tick"></span></div>
+  <div class="main">
+   <h2>Eight rulings.</h2>
+   <p class="lede">The direction is drawn. These eight are the questions the drawing raised and could not answer by itself — each one changes a screen, and none of them changes the thesis.</p>
+
+   <div class="grid g4">
+    <div class="card warn tight">
+    <span class="kicker">R1 · partial signing</span>
+    <p><strong>May a client decline part of an instrument?</strong> Decline-whole-and-supersede is simpler, honest, and slower. Per-line decline is kinder and doubles the state space.</p>
+    </div>
+    <div class="card warn tight">
+    <span class="kicker">R2 · acceptance</span>
+    <p><strong>Who accepts finished trade work</strong> — the client, the designer, or both in sequence? It gates the balance invoice, so it gates the money.</p>
+    </div>
+    <div class="card warn tight">
+    <span class="kicker">R3 · bids in v1</span>
+    <p><strong>Designer-recorded numbers, or requests sent from the portal?</strong> Recorded is a week; sent needs the coordination rails and a response surface.</p>
+    </div>
+    <div class="card warn tight">
+    <span class="kicker">R4 · progress billing</span>
+    <p><strong>Do draws and holdbacks land in this build or a later one?</strong> Deposit-plus-balance covers most residential work. Anything larger will ask for draws.</p>
+    </div>
+    <div class="card warn tight">
+    <span class="kicker">R5 · allowance language</span>
+    <p><strong>What exactly is a client agreeing to</strong> when they sign an allowance at its ceiling? The wording on the client document is a commitment, not a caption.</p>
+    </div>
+    <div class="card warn tight">
+    <span class="kicker">R6 · checkpoint staleness</span>
+    <p><strong>What counts as drift?</strong> Any change, a percentage of the room, an absolute figure, or elapsed days. The strip is drawn for all four.</p>
+    </div>
+    <div class="card warn tight">
+    <span class="kicker">R7 · retiring the old path</span>
+    <p><strong>When does the Drafting Room come out?</strong> With the first authorization shipped, or after a studio has walked the new ceremony once in production?</p>
+    </div>
+    <div class="card warn tight">
+    <span class="kicker">R8 · deposit default</span>
+    <p><strong>Does the composition bar assume 50%,</strong> or read the deposit percent from the signed design-services agreement and show nothing until it can?</p>
+    </div>
+   </div>
+
+   <div class="grid g2" style="margin-top:14px">
+    <div class="card accent">
+    <span class="kicker">And then</span>
+    <p><strong>Rule on R1–R8, and a build plan follows.</strong> Phase 1 is the second stamp track, the selection ceremony, linking execution, and the derived budget — the four screens in Act III, on a schedule that already exists. The trade scope is Phase 2. Nothing starts before the rulings.</p>
+    </div>
+    <div class="quote" style="margin:0;align-self:center">
+    <p>A studio's records should read like a ledger kept by one careful hand, not like four hands writing the same number in four books and hoping.</p>
+    <span class="attr">The close</span>
+    </div>
+   </div>
+
+   <div class="cover-meta" style="margin-top:20px">
+    <span>Deck <b>docs/design/authorized-schedule/</b></span>
+    <span>Screens <b>10 full · 6 details</b></span>
+    <span>Rulings <b>8</b></span>
+    <span>Status <b>proposal — nothing built</b></span>
+   </div>
+  </div>
+ </div>
+</section>
+
+</div><!-- /#deck -->
+
+<div id="chrome">
+ <span id="counter"><b>01</b> / 22</span>
+ <button class="navbtn" id="prev" type="button" aria-label="Previous slide">&#8592;</button>
+ <button class="navbtn" id="next" type="button" aria-label="Next slide">&#8594;</button>
+ <button id="themebtn" type="button" aria-label="Toggle colour theme">Theme</button>
+</div>
+<div id="hint">← → or space · P to print</div>
+
+<script>
+(function(){
+ var deck = document.getElementById('deck');
+ var slides = Array.prototype.slice.call(deck.querySelectorAll('.slide'));
+ var counter = document.getElementById('counter');
+ var progress = document.getElementById('progress');
+ var current = 0;
+
+ function pad(n){ return (n < 10 ? '0' : '') + n; }
+
+ function setCurrent(i){
+  current = Math.max(0, Math.min(slides.length - 1, i));
+  counter.innerHTML = '<b>' + pad(current + 1) + '</b> / ' + slides.length;
+  progress.style.width = (((current + 1) / slides.length) * 100) + '%';
+ }
+
+ function go(i){
+  var t = Math.max(0, Math.min(slides.length - 1, i));
+  deck.scrollTop = deck.scrollTop + slides[t].getBoundingClientRect().top;
+  slides[t].classList.add('seen');
+  setCurrent(t);
+ }
+
+ if ('IntersectionObserver' in window){
+  var io = new IntersectionObserver(function(entries){
+   entries.forEach(function(e){
+    if (e.isIntersecting){
+    e.target.classList.add('seen');
+    if (e.intersectionRatio > 0.5) setCurrent(slides.indexOf(e.target));
+    }
+   });
+  }, { threshold: [0.12, 0.55] });
+  slides.forEach(function(s){ io.observe(s); });
+ } else {
+  slides.forEach(function(s){ s.classList.add('seen'); });
+ }
+
+ deck.addEventListener('scroll', function(){
+  var mid = deck.scrollTop + deck.clientHeight * 0.4;
+  for (var i = 0; i < slides.length; i++){
+   if (slides[i].offsetTop <= mid) setCurrent(i);
+  }
+ }, { passive: true });
+
+ document.getElementById('prev').addEventListener('click', function(){ go(current - 1); });
+ document.getElementById('next').addEventListener('click', function(){ go(current + 1); });
+
+ document.addEventListener('keydown', function(e){
+  var tag = (e.target && e.target.tagName) || '';
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  switch (e.key){
+   case 'ArrowRight': case 'PageDown': go(current + 1); e.preventDefault(); break;
+   case 'ArrowLeft':  case 'PageUp':   go(current - 1); e.preventDefault(); break;
+   case ' ': go(current + (e.shiftKey ? -1 : 1)); e.preventDefault(); break;
+   case 'Home': go(0); e.preventDefault(); break;
+   case 'End': go(slides.length - 1); e.preventDefault(); break;
+   case 'p': case 'P': window.print(); break;
+  }
+ });
+
+ var root = document.documentElement;
+ var btn = document.getElementById('themebtn');
+ var order = ['auto','light','dark'];
+ var label = { auto: 'Theme', light: 'Light', dark: 'Dark' };
+ var stored = null;
+ try { stored = window.localStorage.getItem('patina-authorized-schedule-theme'); } catch (err) {}
+ if (stored && order.indexOf(stored) > -1){ root.setAttribute('data-theme', stored); btn.textContent = label[stored]; }
+ btn.addEventListener('click', function(){
+  var now = root.getAttribute('data-theme') || 'auto';
+  var nextTheme = order[(order.indexOf(now) + 1) % order.length];
+  root.setAttribute('data-theme', nextTheme);
+  btn.textContent = label[nextTheme];
+  try { window.localStorage.setItem('patina-authorized-schedule-theme', nextTheme); } catch (err) {}
+ });
+
+ setCurrent(0);
+})();
+</script>
+
+</body>
+</html>
