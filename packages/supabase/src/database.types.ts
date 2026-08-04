@@ -8630,10 +8630,12 @@ export type Database = {
           invitation_expires_at: string | null
           invitation_token: string | null
           invited_by: string | null
+          job_title: string | null
           joined_at: string | null
           organization_id: string
           permissions_override: Json | null
           role: Database["public"]["Enums"]["member_role"]
+          staff_role: string | null
           status: Database["public"]["Enums"]["member_status"]
           updated_at: string
           user_id: string
@@ -8644,10 +8646,12 @@ export type Database = {
           invitation_expires_at?: string | null
           invitation_token?: string | null
           invited_by?: string | null
+          job_title?: string | null
           joined_at?: string | null
           organization_id: string
           permissions_override?: Json | null
           role: Database["public"]["Enums"]["member_role"]
+          staff_role?: string | null
           status?: Database["public"]["Enums"]["member_status"]
           updated_at?: string
           user_id: string
@@ -8658,10 +8662,12 @@ export type Database = {
           invitation_expires_at?: string | null
           invitation_token?: string | null
           invited_by?: string | null
+          job_title?: string | null
           joined_at?: string | null
           organization_id?: string
           permissions_override?: Json | null
           role?: Database["public"]["Enums"]["member_role"]
+          staff_role?: string | null
           status?: Database["public"]["Enums"]["member_status"]
           updated_at?: string
           user_id?: string
@@ -23371,6 +23377,10 @@ export type Database = {
         Args: { p_revision_id: string }
         Returns: Json
       }
+      _decision_selection_snapshot_safe: {
+        Args: { p_snapshot: Json }
+        Returns: Json
+      }
       _decline_proposal_impl: {
         Args: { p_proposal_id: string; p_reason?: string }
         Returns: {
@@ -27372,6 +27382,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      set_my_member_title: {
+        Args: { p_job_title: string; p_organization_id: string }
+        Returns: undefined
       }
       set_nomination_status: {
         Args: {

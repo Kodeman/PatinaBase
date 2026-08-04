@@ -66,6 +66,8 @@ interface InviteBody {
   member_role?: string;
   teammate_type?: string;
   name?: string;
+  job_title?: string;
+  staff_role?: string;
 }
 
 // Browser-facing: the invite modal (designer portal) calls this via
@@ -140,6 +142,19 @@ async function handleInvite(req: Request): Promise<Response> {
         : 'member';
 
   const name = body.name?.trim() || undefined;
+
+  // Call Sheet (Wave 1): optional job_title / staff_role, written at insert
+  // time. Both are free TEXT (vocab is code-resident in
+  // packages/types/src/studio-config.ts) — trim + cap 120 chars, matching the
+  // set_my_member_title RPC's own limit (00416).
+  const jobTitle = body.job_title?.trim() || undefined;
+  if (jobTitle && jobTitle.length > 120) {
+    return json({ error: 'invalid_job_title' }, 400);
+  }
+  const staffRole = body.staff_role?.trim() || undefined;
+  if (staffRole && staffRole.length > 120) {
+    return json({ error: 'invalid_job_title' }, 400);
+  }
 
   // ── Caller authz: active owner/admin of the target organization ──────────
   const { data: callerMembership, error: authzError } = await admin
@@ -236,16 +251,22 @@ async function handleInvite(req: Request): Promise<Response> {
   const expiresAt = new Date(
     Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000,
   ).toISOString();
+  const membershipUpsert: Record<string, unknown> = {
+    user_id: userId,
+    organization_id: organizationId,
+    role: memberRole,
+    status: 'invited',
+    invitation_token: token,
+    invitation_expires_at: expiresAt,
+    invited_by: caller.id,
+  };
+  // Only set job_title/staff_role when the caller actually sent one — an
+  // unconditional key here would NULL out an existing title on the re-invite
+  // refresh path (existing → invited → active keeps this same upsert).
+  if (jobTitle) membershipUpsert.job_title = jobTitle;
+  if (staffRole) membershipUpsert.staff_role = staffRole;
   const { error: upsertError } = await admin.from('organization_members').upsert(
-    {
-      user_id: userId,
-      organization_id: organizationId,
-      role: memberRole,
-      status: 'invited',
-      invitation_token: token,
-      invitation_expires_at: expiresAt,
-      invited_by: caller.id,
-    },
+    membershipUpsert,
     { onConflict: 'user_id,organization_id' },
   );
   if (upsertError) {
