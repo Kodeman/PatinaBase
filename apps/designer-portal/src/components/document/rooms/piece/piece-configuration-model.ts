@@ -4,6 +4,18 @@ export type ConfigurationMode = ProductConfigurationMode;
 
 export type DimensionValue = string | number | null;
 
+/**
+ * What the maker asks of a COM order, authored on the option value (00413
+ * `product_option_values.com_requirements`). Both fields are free text: this is
+ * an instruction to a human at the vendor, not a computed quantity.
+ */
+export interface PieceComRequirementsView {
+  /** Yardage the maker needs for the standard body — "14 yds", "18–20". */
+  yardage?: string | null;
+  /** Railroading, backing, ship-to, dye-lot — whatever the vendor must know. */
+  notes?: string | null;
+}
+
 export interface PieceOptionValueView {
   id: string;
   code?: string;
@@ -15,6 +27,9 @@ export interface PieceOptionValueView {
   tradePriceDeltaCents?: number | null;
   leadTimeDeltaWeeks?: number | null;
   dimensions?: Record<string, DimensionValue> | null;
+  /** Choosing this value means the designer supplies the material (COM/COL). */
+  allowsCom?: boolean;
+  comRequirements?: PieceComRequirementsView | null;
 }
 
 export interface PieceOptionGroupView {
@@ -138,6 +153,67 @@ export interface PieceConfigurationResolutionView {
     leadTimeWeeks: number | null;
     dimensions: Record<string, DimensionValue> | null;
   };
+}
+
+/**
+ * The COM/COL fabric the designer is specifying, as the form holds it. Every
+ * field is a string because every field is optional and hand-entered — a
+ * half-known fabric ("Rogers & Goffigon, name TBD") must still be recordable.
+ * The adapter narrows it to the wire shape at save time.
+ */
+export interface PieceComDetailsView {
+  /** Which selected COM-capable value this fabric fills. */
+  optionValueId: string | null;
+  fabricName: string;
+  mill: string;
+  pattern: string;
+  yardage: string;
+  railroaded: boolean;
+  shipTo: string;
+  sidemark: string;
+  secondLeadTimeWeeks: string;
+  notes: string;
+}
+
+export const EMPTY_COM_DETAILS: PieceComDetailsView = {
+  optionValueId: null,
+  fabricName: "",
+  mill: "",
+  pattern: "",
+  yardage: "",
+  railroaded: false,
+  shipTo: "",
+  sidemark: "",
+  secondLeadTimeWeeks: "",
+  notes: "",
+};
+
+/**
+ * A COM order's clock does not start when the PO is cut — it starts when the
+ * fabric lands at the maker. The designer is told so at the moment they specify
+ * it, in the same words the vendor PO prints.
+ */
+export const COM_LEAD_TIME_WARNING =
+  "Lead time provisional until COM fabric is received.";
+
+/** True once the designer has said anything at all about the fabric. */
+export function comDetailsHaveContent(
+  details: PieceComDetailsView | null | undefined,
+): boolean {
+  if (!details) return false;
+  return (
+    details.railroaded ||
+    [
+      details.fabricName,
+      details.mill,
+      details.pattern,
+      details.yardage,
+      details.shipTo,
+      details.sidemark,
+      details.secondLeadTimeWeeks,
+      details.notes,
+    ].some((value) => value.trim().length > 0)
+  );
 }
 
 export interface SuggestedOptionGroup {

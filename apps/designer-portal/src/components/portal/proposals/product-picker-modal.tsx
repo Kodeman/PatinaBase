@@ -15,6 +15,7 @@ import {
   type LayerProductRow,
 } from '@patina/supabase';
 import type {
+  ProductConfigurationComDetails,
   ProductConfigurationComponentSelection,
   ProductConfigurationMode,
   ProductConfigurationSelection,
@@ -51,6 +52,12 @@ export interface ProductPickConfigurationSelection {
   leadTimeWeeks: number | null;
   /** The raw server snapshot, for consumers that persist provenance. */
   snapshot: Record<string, unknown> | null;
+  /**
+   * COM/COL fabric the designer specified during the configure step (00413).
+   * The picker saves no configuration, so this travels with the pick as intent
+   * and is written for real when the piece is placed.
+   */
+  comDetails?: ProductConfigurationComDetails | null;
   /** Human label for the resolution — "King · Walnut". '' when unnameable. */
   label: string;
 }

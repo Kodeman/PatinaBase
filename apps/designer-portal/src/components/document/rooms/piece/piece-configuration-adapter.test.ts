@@ -3,11 +3,15 @@ import type {
   SavedProductConfiguration,
 } from "@patina/types";
 import {
+  comDetailsToView,
+  comDetailsViewToInput,
   configurationDefinitionToView,
+  configurationDraftToSaveInput,
   configurationViewToUpsertInput,
   pieceRoomConfigurationRows,
   savedConfigurationToView,
 } from "./piece-configuration-adapter";
+import { EMPTY_COM_DETAILS } from "./piece-configuration-model";
 
 const productId = "10000000-0000-4000-8000-000000000001";
 const groupId = "10000000-0000-4000-8000-000000000002";
@@ -218,6 +222,172 @@ describe("piece configuration adapter integrity", () => {
     });
 
     expect(input.variants[0].optionValueIds).toEqual(["size:queen"]);
+  });
+
+  it("round-trips the COM flag and the maker's requirements through authoring", () => {
+    const comDefinition = {
+      ...definition,
+      optionGroups: [
+        {
+          ...definition.optionGroups[0],
+          values: [
+            {
+              ...definition.optionGroups[0].values[0],
+              allowsCom: true,
+              comRequirements: {
+                yardage: "14 yds",
+                notes: "Railroaded",
+                // A key this editor never shows — it must survive an edit.
+                backing: "knit",
+              },
+            },
+            definition.optionGroups[0].values[1],
+          ],
+        },
+      ],
+    } as unknown as ProductConfigurationDefinition;
+
+    const view = configurationDefinitionToView(comDefinition, {
+      id: productId,
+      name: "Field Sectional",
+    });
+    expect(view.optionGroups[0].values[0]).toMatchObject({
+      allowsCom: true,
+      comRequirements: { yardage: "14 yds", notes: "Railroaded" },
+    });
+    expect(view.optionGroups[0].values[1].allowsCom).toBe(false);
+
+    const edited = {
+      ...view,
+      optionGroups: [
+        {
+          ...view.optionGroups[0],
+          values: [
+            {
+              ...view.optionGroups[0].values[0],
+              comRequirements: { yardage: "18 yds", notes: "Railroaded" },
+            },
+            view.optionGroups[0].values[1],
+          ],
+        },
+      ],
+    };
+    const input = configurationViewToUpsertInput(edited, comDefinition);
+    expect(input.optionGroups[0].values[0]).toMatchObject({
+      allowsCom: true,
+      comRequirements: {
+        yardage: "18 yds",
+        notes: "Railroaded",
+        backing: "knit",
+      },
+    });
+    expect(input.optionGroups[0].values[1]).toMatchObject({
+      allowsCom: false,
+      comRequirements: {},
+    });
+  });
+
+  it("narrows the COM form to the wire shape and restores it from a snapshot", () => {
+    expect(comDetailsViewToInput(EMPTY_COM_DETAILS)).toBeNull();
+    expect(
+      comDetailsViewToInput({
+        ...EMPTY_COM_DETAILS,
+        optionValueId: activeValueId,
+        fabricName: "  Belgian Linen 12  ",
+        mill: "Rogers & Goffigon",
+        yardage: "14",
+        railroaded: true,
+        secondLeadTimeWeeks: "4",
+      }),
+    ).toEqual({
+      optionValueId: activeValueId,
+      fabricName: "Belgian Linen 12",
+      mill: "Rogers & Goffigon",
+      yardage: "14",
+      railroaded: true,
+      secondLeadTimeWeeks: 4,
+    });
+
+    expect(
+      comDetailsToView({
+        optionValueId: activeValueId,
+        fabricName: "Mohair Velvet",
+        yardage: 18,
+        railroaded: false,
+      }),
+    ).toMatchObject({
+      optionValueId: activeValueId,
+      fabricName: "Mohair Velvet",
+      yardage: "18",
+      railroaded: false,
+      notes: "",
+    });
+    expect(comDetailsToView(null)).toBeNull();
+    expect(comDetailsToView({})).toBeNull();
+  });
+
+  it("carries the COM fabric into the save input, but never on a standard piece", () => {
+    const view = configurationDefinitionToView(definition, {
+      id: productId,
+      name: "Field Sectional",
+    });
+    const draft = {
+      name: null,
+      notes: null,
+      customRequirements: null,
+      selection: { optionValueIds: [activeValueId], components: [] },
+      comDetails: {
+        ...EMPTY_COM_DETAILS,
+        optionValueId: activeValueId,
+        fabricName: "Belgian Linen 12",
+      },
+    };
+
+    expect(
+      configurationDraftToSaveInput({
+        piece: { id: productId, name: "Field Sectional" },
+        definition: view,
+        draft,
+      }).comDetails,
+    ).toEqual({
+      optionValueId: activeValueId,
+      fabricName: "Belgian Linen 12",
+    });
+
+    expect(
+      configurationDraftToSaveInput({
+        piece: { id: productId, name: "Field Sectional" },
+        definition: { ...view, mode: "standard" },
+        draft,
+      }).comDetails,
+    ).toBeUndefined();
+  });
+
+  it("reopens a saved specification with its COM fabric still filled in", () => {
+    const saved = {
+      id: "20000000-0000-4000-8000-000000000009",
+      version: 2,
+      schemaRevision: 4,
+      status: "saved",
+      name: "Living room COM",
+      snapshot: {
+        selections: [{ optionValueId: activeValueId }],
+        components: [],
+        comDetails: {
+          optionValueId: activeValueId,
+          fabricName: "Belgian Linen 12",
+          mill: "Rogers & Goffigon",
+          railroaded: true,
+        },
+      },
+    } as unknown as SavedProductConfiguration;
+
+    expect(savedConfigurationToView(saved).comDetails).toMatchObject({
+      optionValueId: activeValueId,
+      fabricName: "Belgian Linen 12",
+      mill: "Rogers & Goffigon",
+      railroaded: true,
+    });
   });
 
   it("hides bound project copies except for the exact line being revised", () => {

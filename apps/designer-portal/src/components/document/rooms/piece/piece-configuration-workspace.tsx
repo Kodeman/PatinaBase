@@ -6,15 +6,20 @@ import { StrataSweep } from "@/components/ui/strata-sweep";
 import { libraryConfigurationEvents } from "@/lib/analytics/library-configuration-events";
 import { PieceConfigurationEditor } from "./piece-configuration-editor";
 import {
+  COM_LEAD_TIME_WARNING,
   CONFIGURATION_MODE_COPY,
+  EMPTY_COM_DETAILS,
   formatDimensions,
   formatMoney,
   initialSelection,
   resolvePieceConfiguration,
   type FlatPieceConfigurationSource,
+  type PieceComDetailsView,
   type PieceConfigurationDefinitionView,
   type PieceConfigurationResolutionView,
   type PieceConfigurationSelectionView,
+  type PieceOptionGroupView,
+  type PieceOptionValueView,
 } from "./piece-configuration-model";
 
 export interface AuthoritativeConfigurationResolution {
@@ -39,6 +44,8 @@ export interface SavedConfigurationView {
   isLibraryTemplate?: boolean;
   sourceChanged?: boolean;
   selection?: PieceConfigurationSelectionView;
+  /** The COM/COL fabric this version committed to, if any (00413). */
+  comDetails?: PieceComDetailsView | null;
 }
 
 export interface SaveConfigurationDraft {
@@ -46,6 +53,8 @@ export interface SaveConfigurationDraft {
   notes: string | null;
   customRequirements: Record<string, unknown> | null;
   selection: PieceConfigurationSelectionView;
+  /** Null unless a COM-capable value is chosen and the designer filled it in. */
+  comDetails: PieceComDetailsView | null;
 }
 
 export interface SavedConfigurationReference {
@@ -98,6 +107,12 @@ export function PieceConfigurationWorkspace({
     savedConfigurationId: string | null,
     resolution: PieceConfigurationResolutionView,
     authoritativeSnapshot?: Record<string, unknown>,
+    /**
+     * The COM/COL fabric as entered here. A saving host has already persisted
+     * it through the draft; a non-saving host (the picker's configure step)
+     * needs it handed over or the designer's fabric evaporates on emit.
+     */
+    comDetails?: PieceComDetailsView | null,
   ) => Promise<void> | void;
   onCustomCommission?: (
     savedConfigurationId: string | null,
@@ -116,6 +131,9 @@ export function PieceConfigurationWorkspace({
   const [customBrief, setCustomBrief] = useState("");
   const [customMeasurements, setCustomMeasurements] = useState("");
   const [customSiteNotes, setCustomSiteNotes] = useState("");
+  const [comEnabled, setComEnabled] = useState(false);
+  const [comDetails, setComDetails] =
+    useState<PieceComDetailsView>(EMPTY_COM_DETAILS);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [activeSavedConfiguration, setActiveSavedConfiguration] =
     useState<SavedConfigurationReference | null>(null);
@@ -134,6 +152,8 @@ export function PieceConfigurationWorkspace({
     setSelection(nextSelection);
     setActiveSavedConfiguration(null);
     setConfigurationDirty(false);
+    setComEnabled(false);
+    setComDetails(EMPTY_COM_DETAILS);
     loadedInitialConfigurationRef.current = null;
     evaluateRef.current?.(nextSelection);
   }, [definition.productId, definition.revision]);
@@ -158,6 +178,8 @@ export function PieceConfigurationWorkspace({
       sourceChanged: item.sourceChanged,
     });
     setSaveName(item.name);
+    setComEnabled(!!item.comDetails);
+    setComDetails(item.comDetails ?? EMPTY_COM_DETAILS);
     setConfigurationDirty(false);
     onEvaluate?.(item.selection);
   }, [
@@ -192,10 +214,44 @@ export function PieceConfigurationWorkspace({
     authoritativeResolution?.selectionKey === currentSelectionKey
       ? authoritativeResolution
       : null;
-  const effectiveResolution = useMemo(
-    () => mergeAuthoritativeResolution(localResolution, freshAuthoritative),
-    [freshAuthoritative, localResolution],
-  );
+
+  // COM/COL is offered by the maker on specific option values ("Customer's Own
+  // Material" in a Fabric group). It is a SELECTION concern, not an authoring
+  // one, so it appears wherever the piece is being configured — the Piece room
+  // and the picker's read-only embed alike.
+  const comSlots = useMemo(() => {
+    const chosen = new Set(selection.optionValueIds);
+    return draftDefinition.optionGroups.flatMap((group) =>
+      group.values
+        .filter((value) => value.allowsCom === true && chosen.has(value.id))
+        .map((value) => ({ group, value })),
+    );
+  }, [draftDefinition.optionGroups, selection.optionValueIds]);
+  const comAvailable = comSlots.length > 0;
+  const comActive = comAvailable && comEnabled;
+  // Deselecting the COM value must not leave the form pointing at a value the
+  // save RPC will reject (it validates optionValueId against the selections).
+  const comSlot =
+    comSlots.find((slot) => slot.value.id === comDetails.optionValueId) ??
+    comSlots[0] ??
+    null;
+  const comDraft: PieceComDetailsView | null = comActive
+    ? { ...comDetails, optionValueId: comSlot?.value.id ?? null }
+    : null;
+
+  const effectiveResolution = useMemo(() => {
+    const merged = mergeAuthoritativeResolution(
+      localResolution,
+      freshAuthoritative,
+    );
+    // The server evaluator does not know a fabric is coming from the designer,
+    // so this warning is ours to add — and it must survive the authoritative
+    // merge, which replaces the warning list wholesale.
+    if (!comActive || merged.warnings.includes(COM_LEAD_TIME_WARNING)) {
+      return merged;
+    }
+    return { ...merged, warnings: [...merged.warnings, COM_LEAD_TIME_WARNING] };
+  }, [comActive, freshAuthoritative, localResolution]);
   const authoritativeSnapshot = freshAuthoritative?.snapshot;
 
   useEffect(() => {
@@ -265,6 +321,7 @@ export function PieceConfigurationWorkspace({
                 }
               : null,
           selection,
+          comDetails: comDraft,
         },
         activeSavedConfiguration,
       );
@@ -328,6 +385,7 @@ export function PieceConfigurationWorkspace({
         savedConfigurationId,
         effectiveResolution,
         authoritativeSnapshot,
+        comDraft,
       );
     } catch (error) {
       setSaveError(
@@ -541,6 +599,23 @@ export function PieceConfigurationWorkspace({
                   onChange={changeComponent}
                 />
               )}
+
+            {comAvailable && (
+              <CustomerOwnMaterial
+                slots={comSlots}
+                activeSlot={comSlot}
+                enabled={comEnabled}
+                details={comDetails}
+                onToggle={(next) => {
+                  setComEnabled(next);
+                  setConfigurationDirty(true);
+                }}
+                onChange={(patch) => {
+                  setComDetails((current) => ({ ...current, ...patch }));
+                  setConfigurationDirty(true);
+                }}
+              />
+            )}
           </div>
 
           <ConfigurationSummary
@@ -650,6 +725,8 @@ export function PieceConfigurationWorkspace({
               sourceChanged: item.sourceChanged,
             });
             setSaveName(item.name);
+            setComEnabled(!!item.comDetails);
+            setComDetails(item.comDetails ?? EMPTY_COM_DETAILS);
             setConfigurationDirty(false);
           }}
         />
@@ -783,6 +860,184 @@ function CustomCommissionLauncher() {
         preserved revision; nothing is sent outside the studio automatically.
       </p>
     </div>
+  );
+}
+
+interface ComSlot {
+  group: PieceOptionGroupView;
+  value: PieceOptionValueView;
+}
+
+/**
+ * Customer's Own Material. The maker offers the slot; the designer fills it
+ * with a fabric the maker has never seen — which is why every field here is
+ * optional and free text. A half-known fabric ("Rogers & Goffigon, name TBD")
+ * is still worth recording: it goes on the vendor PO as written.
+ */
+function CustomerOwnMaterial({
+  slots,
+  activeSlot,
+  enabled,
+  details,
+  onToggle,
+  onChange,
+}: {
+  slots: ComSlot[];
+  activeSlot: ComSlot | null;
+  enabled: boolean;
+  details: PieceComDetailsView;
+  onToggle: (enabled: boolean) => void;
+  onChange: (patch: Partial<PieceComDetailsView>) => void;
+}) {
+  const requirements = activeSlot?.value.comRequirements ?? null;
+  return (
+    <fieldset data-testid="configuration-com">
+      <legend className="text-[0.87rem] font-semibold text-[var(--color-charcoal)]">
+        Customer’s Own Material
+      </legend>
+      <p className="mt-1 text-[0.72rem] text-[var(--color-quiet-ink)]">
+        {slots.length === 1
+          ? `${slots[0].group.name} — ${slots[0].value.label} takes a fabric you supply.`
+          : "A chosen option takes a fabric you supply."}
+      </p>
+      <label className="mt-2 flex items-center gap-2 text-[0.8rem] text-[var(--color-charcoal)]">
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(event) => onToggle(event.target.checked)}
+          className="accent-[var(--color-clay)]"
+        />
+        Specify the fabric now
+      </label>
+
+      {enabled && (
+        <div className="mt-3 space-y-3 rounded-[5px] border border-[var(--doc-ink-border)] bg-[var(--doc-sheet-2)] px-4 py-3">
+          {slots.length > 1 && (
+            <label className="block">
+              <span className="doc-type-meta mb-1 block font-semibold uppercase tracking-[0.06em]">
+                Applies to
+              </span>
+              <Select
+                aria-label="COM applies to"
+                value={activeSlot?.value.id ?? ""}
+                onChange={(event) =>
+                  onChange({ optionValueId: event.target.value })
+                }
+              >
+                {slots.map((slot) => (
+                  <option key={slot.value.id} value={slot.value.id}>
+                    {slot.group.name} — {slot.value.label}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          )}
+
+          {(requirements?.yardage || requirements?.notes) && (
+            <p className="text-[0.72rem] text-[var(--color-quiet-ink)]">
+              The maker asks for{" "}
+              {[requirements.yardage, requirements.notes]
+                .filter(Boolean)
+                .join(" · ")}
+              .
+            </p>
+          )}
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <ComField
+              label="Fabric"
+              value={details.fabricName}
+              placeholder="Belgian Linen 12"
+              onChange={(value) => onChange({ fabricName: value })}
+            />
+            <ComField
+              label="Mill"
+              value={details.mill}
+              placeholder="Rogers & Goffigon"
+              onChange={(value) => onChange({ mill: value })}
+            />
+            <ComField
+              label="Pattern"
+              value={details.pattern}
+              placeholder="Cascade"
+              onChange={(value) => onChange({ pattern: value })}
+            />
+            <ComField
+              label="Yardage"
+              value={details.yardage}
+              placeholder="14 yds"
+              onChange={(value) => onChange({ yardage: value })}
+            />
+            <ComField
+              label="Ship to"
+              value={details.shipTo}
+              placeholder="Vendor receiving, 22 Mill Rd"
+              onChange={(value) => onChange({ shipTo: value })}
+            />
+            <ComField
+              label="Sidemark"
+              value={details.sidemark}
+              placeholder="HAYES / LIVING"
+              onChange={(value) => onChange({ sidemark: value })}
+            />
+            <ComField
+              label="Second lead time (weeks)"
+              value={details.secondLeadTimeWeeks}
+              placeholder="4"
+              onChange={(value) => onChange({ secondLeadTimeWeeks: value })}
+            />
+            <label className="flex items-end gap-2 pb-2 text-[0.78rem] text-[var(--color-charcoal)]">
+              <input
+                type="checkbox"
+                checked={details.railroaded}
+                onChange={(event) =>
+                  onChange({ railroaded: event.target.checked })
+                }
+                className="accent-[var(--color-clay)]"
+              />
+              Railroaded
+            </label>
+            <div className="sm:col-span-2">
+              <ComField
+                label="Fabric notes"
+                value={details.notes}
+                placeholder="Dye lot, backing, cut direction…"
+                onChange={(value) => onChange({ notes: value })}
+              />
+            </div>
+          </div>
+
+          <p className="text-[0.7rem] italic text-[var(--color-quiet-ink)]">
+            {COM_LEAD_TIME_WARNING}
+          </p>
+        </div>
+      )}
+    </fieldset>
+  );
+}
+
+function ComField({
+  label,
+  value,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  placeholder?: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="doc-type-meta mb-1 block font-semibold uppercase tracking-[0.06em]">
+        {label}
+      </span>
+      <Input
+        value={value}
+        placeholder={placeholder}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
   );
 }
 

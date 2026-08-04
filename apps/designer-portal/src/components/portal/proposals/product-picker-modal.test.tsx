@@ -370,6 +370,64 @@ describe('ProductPickerModal — configure step for optioned pieces', () => {
     );
   });
 
+  it('lets the designer specify their own material and carries it out with the pick', async () => {
+    // COM is a selection, not authoring — the picker embeds the workspace
+    // read-only, and the fabric form must still be reachable there (P1-4).
+    mockProduct = { ...VARIANT_PRODUCT, configuration_mode: 'configured' };
+    mockDefinition = {
+      ...VARIANT_DEFINITION,
+      mode: 'configured',
+      variants: [],
+      optionGroups: [
+        {
+          ...VARIANT_DEFINITION.optionGroups[0],
+          id: 'group-fabric',
+          code: 'fabric',
+          name: 'Fabric',
+          values: [
+            {
+              ...VARIANT_DEFINITION.optionGroups[0].values[0],
+              id: 'value-com',
+              groupId: 'group-fabric',
+              code: 'com',
+              label: "Customer's Own Material",
+              allowsCom: true,
+              comRequirements: { yardage: '14 yds' },
+            },
+          ],
+        },
+      ],
+    };
+    mockLayerRows = [layerRow({ configuration_mode: 'configured' })];
+
+    const { onPick } = openLibraryPicker();
+    await pickFirstResult();
+
+    fireEvent.click(
+      await screen.findByRole('radio', { name: /Customer's Own Material/ }),
+    );
+    await act(async () => {});
+
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: 'Specify the fabric now' }),
+    );
+    fireEvent.change(screen.getByLabelText('Fabric'), {
+      target: { value: 'Belgian Linen 12' },
+    });
+
+    const confirm = await screen.findByRole('button', {
+      name: 'Add configured piece',
+    });
+    await waitFor(() => expect(confirm).not.toBeDisabled());
+    fireEvent.click(confirm);
+
+    await waitFor(() => expect(onPick).toHaveBeenCalled());
+    expect(lastPick(onPick).configurationSelection?.comDetails).toEqual({
+      optionValueId: 'value-com',
+      fabricName: 'Belgian Linen 12',
+    });
+  });
+
   it('cannot confirm before the maker rules have resolved a specification', async () => {
     openLibraryPicker();
     await pickFirstResult();
