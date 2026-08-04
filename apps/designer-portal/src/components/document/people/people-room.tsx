@@ -16,13 +16,16 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   usePeopleDirectory,
+  useOrganizations,
   isFieldRosterRole,
   type PartyRole,
 } from '@patina/supabase';
+import type { ContactScope } from '@patina/types';
 import {
   deriveNurtureQueue,
   humanizeSince,
 } from '@/lib/document/people-derivation';
+import { DIRECTORY_ROLES } from '@/lib/document/directory-roles';
 import { RoomShell } from '../rooms/room-shell';
 import {
   DirectoryView,
@@ -52,21 +55,9 @@ import { useMobilePrimaryAction } from '../mobile/mobile-shell';
 
 // R21 dissolve — `/people?view=<key>` still receives every permanent redirect
 // off the retired zone tree. `peopleViewFromParam` owns that stable key map.
-/** Roles a BARE `?role=` may filter the Directory to — /portal/clients and
- *  /portal/vendors redirect to `?role=client` / `?role=maker` with no person.
- *  Mirrors DirectoryRole (PartyRole | 'all' | 'field'). */
-const DIRECTORY_ROLES: readonly DirectoryRole[] = [
-  'all',
-  'field',
-  'client',
-  'lead',
-  'maker',
-  'team',
-  'gc',
-  'sub',
-  'installer',
-  'receiver',
-];
+// The `?role=` param map itself (DIRECTORY_ROLES) now lives in
+// lib/document/directory-roles.ts — dependency-free, so a spec can pin it
+// without importing this whole Room.
 
 export function PeopleRoom() {
   useDocumentSurface(DOCUMENT_SURFACE_KEYS.people); // R89 — scope help to the People room
@@ -96,6 +87,9 @@ export function PeopleRoom() {
   // R78 — the Makers filter's lens (roster | marketplace), lifted so walking
   // into a profile and back doesn't drop the designer out of the marketplace.
   const [makerLens, setMakerLens] = useState<MakerLens>('roster');
+  // Call Sheet Wave 2 — the MINE · STUDIO lens (slide 8), lifted for the same
+  // reason as makerLens. Default MINE this wave (U6's STUDIO default is Wave 4).
+  const [scope, setScope] = useState<ContactScope>('mine');
   // F4 — a person to scroll into view + quietly highlight in the Directory
   // once their row is on screen (set by the ?person= deep-link, or by a
   // return from that person's profile). Self-clears on a short timer.
@@ -113,6 +107,15 @@ export function PeopleRoom() {
 
   const { data: all } = usePeopleDirectory({ role: 'all' });
   const now = useMemo(() => new Date(), []);
+
+  // Call Sheet Wave 2 — the active studio, for the Companies chip / rolodex
+  // marker (same "prefer design_studio, else first org" resolution as the
+  // Account sheet's studio page). Null while orgs are still loading.
+  const { data: orgs } = useOrganizations();
+  const organizationId = useMemo(
+    () => orgs?.find((o) => o.type === 'design_studio')?.id ?? orgs?.[0]?.id ?? null,
+    [orgs],
+  );
 
   // Deep-link entry (R78/R60/F4): /people?person=<id>&role=<role> opens
   // straight onto a profile — the Orders book's "relationship & profile →"
@@ -146,6 +149,12 @@ export function PeopleRoom() {
     const thread = params.get('thread');
     const add = params.get('add');
     const viewParam = params.get('view');
+    // Call Sheet Wave 2 — an opening-state param exactly like `view`/`role`
+    // (never carries identity), so it's read + stripped the same way.
+    const scopeParam = params.get('scope');
+    const wantedScope: ContactScope | null =
+      scopeParam === 'mine' || scopeParam === 'studio' ? scopeParam : null;
+    if (wantedScope) setScope(wantedScope);
     const roles: PartyRole[] = [
       'client',
       'lead',
@@ -210,7 +219,7 @@ export function PeopleRoom() {
       if (wantedRole) setRoleFilter(wantedRole);
       setAddKind(add);
       setAddOpen(true);
-      stripHandledParams(['add', 'role', 'view']);
+      stripHandledParams(['add', 'role', 'view', 'scope']);
     } else {
       deepLinkHandledRef.current = true;
       // R21 dissolve — the rail and the Directory's role filter are addressable
@@ -226,7 +235,7 @@ export function PeopleRoom() {
       if (wantedRole) setRoleFilter(wantedRole);
       if (wantedView) setView(wantedView);
       else if (wantedRole) setView('directory');
-      stripHandledParams(['view', 'role']);
+      stripHandledParams(['view', 'role', 'scope']);
     }
   }, [all, router]);
 
@@ -328,6 +337,9 @@ export function PeopleRoom() {
       onMakerLens={setMakerLens}
       search={ask}
       highlightPersonId={highlightPersonId}
+      organizationId={organizationId}
+      scope={scope}
+      onScopeChange={setScope}
       onAddPerson={(kind) => {
         setAddKind(kind);
         setAddOpen(true);
