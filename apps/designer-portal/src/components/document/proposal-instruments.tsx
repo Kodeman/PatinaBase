@@ -36,6 +36,8 @@ import { ProposalVersionHistory } from './proposal-version-history';
 import { ProposalShareInstrument } from './proposal-share-instrument';
 import { ProposalWatch } from './proposal-watch';
 import { useMobilePrimaryAction } from './mobile/mobile-shell';
+import { commercialDocumentExperience } from '@/lib/document/commercial-documents';
+import { ServiceAgreementInstruments } from './commercial/service-agreement-instruments';
 
 export function ProposalInstruments({
   proposalId,
@@ -44,10 +46,39 @@ export function ProposalInstruments({
   proposalId: string;
   clientName: string;
 }) {
-  const router = useRouter();
-  const pathname = usePathname();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: proposal } = useProposal(proposalId) as { data: any };
+  const experience = commercialDocumentExperience(proposal?.document_kind);
+  if (experience === 'design_services') {
+    return <ServiceAgreementInstruments proposal={proposal} clientName={clientName} />;
+  }
+  if (experience === 'commercial_readonly') {
+    return (
+      <p className="mt-2 border-l-2 border-[var(--color-aged-oak)] pl-3 text-[12px] text-[var(--text-muted)]">
+        This commercial edition is read-only in Wave 1.
+      </p>
+    );
+  }
+  return (
+    <LegacyProposalInstruments
+      proposalId={proposalId}
+      clientName={clientName}
+      proposal={proposal}
+    />
+  );
+}
+
+function LegacyProposalInstruments({
+  proposalId,
+  clientName,
+  proposal,
+}: {
+  proposalId: string;
+  clientName: string;
+  proposal: any;
+}) {
+  const router = useRouter();
+  const pathname = usePathname();
 
   const [sendOpen, setSendOpen] = useState(false);
   // F6 (walk 2026-07): walking into the Room is a real transition, not an

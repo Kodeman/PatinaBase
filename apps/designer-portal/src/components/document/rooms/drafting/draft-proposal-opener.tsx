@@ -21,7 +21,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { useCreateProposal } from '@/hooks/use-proposals';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { createBrowserClient } from '@patina/supabase';
 import { useClients } from '@/hooks/use-clients';
 import { ClientPicker } from '@/components/portal/client-picker';
 import { rememberRoomOrigin } from '@/lib/document/room-origin';
@@ -44,16 +45,55 @@ export interface OpenDraftProposalArgs {
 export function useOpenDraftProposal() {
   const router = useRouter();
   const pathname = usePathname();
-  // Document surface — failures render inline in the sheet, never as a toast (R83).
-  const createProposal = useCreateProposal({ errorSurface: 'inline' });
+  const queryClient = useQueryClient();
+  // Hard cutover: current UI creates the commercial kind explicitly. The DB
+  // default stays `legacy` only for historical records and callers.
+  const createAgreement = useMutation({
+    mutationKey: ['create-design-services-agreement'],
+    mutationFn: async ({
+      title,
+      clientId,
+      designerClientId,
+    }: {
+      title: string;
+      clientId: string;
+      designerClientId: string;
+    }) => {
+      const supabase = createBrowserClient() as any;
+      const { data: auth, error: authError } = await supabase.auth.getUser();
+      if (authError) throw authError;
+      if (!auth.user) throw new Error('Sign in before opening an agreement.');
+
+      const { data, error } = await supabase
+        .from('proposals')
+        .insert({
+          designer_id: auth.user.id,
+          client_id: clientId,
+          designer_client_id: designerClientId,
+          title,
+          status: 'draft',
+          total_amount: 0,
+          document_kind: 'design_services',
+          commercial_state: 'draft',
+        })
+        .select('id')
+        .single();
+      if (error) throw error;
+      return data as { id: string };
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['proposals'] });
+      void queryClient.invalidateQueries({ queryKey: ['proposal-stats'] });
+    },
+  });
 
   const openDraftProposal = useCallback(
     async ({ clientId, designerClientId, clientName }: OpenDraftProposalArgs): Promise<string> => {
       const trimmed = clientName?.trim();
-      const title = trimmed ? `${trimmed} — new proposal` : 'New proposal';
-      // No templateId → an empty draft (templates retired, R85). The draft is
-      // real from the first keystroke; the Drafting Room self-saves every facet.
-      const proposal = await createProposal.mutateAsync({
+      const title = trimmed
+        ? `${trimmed} — design services agreement`
+        : 'Design services agreement';
+      const proposal = await createAgreement.mutateAsync({
         title,
         clientId,
         designerClientId,
@@ -63,10 +103,10 @@ export function useOpenDraftProposal() {
       router.push(`/drafting/${proposal.id}`);
       return proposal.id as string;
     },
-    [createProposal, router, pathname],
+    [createAgreement, router, pathname],
   );
 
-  return { openDraftProposal, isCreating: createProposal.isPending };
+  return { openDraftProposal, isCreating: createAgreement.isPending };
 }
 
 /**
@@ -132,11 +172,11 @@ export function DraftProposalSheet({
     >
       <div className="w-full max-w-[420px] rounded-[8px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] px-5 py-5">
         <p className="font-heading text-[1.15rem] text-[var(--color-charcoal)]">
-          Draft a proposal
+          Draft a design agreement
         </p>
         <p className="mb-4 mt-1 text-[0.78rem] text-[var(--color-aged-oak)]">
           For an existing household — no lead, no discovery. Pick the client and the Drafting Room
-          opens on a fresh draft.
+          opens in its services posture.
         </p>
         <ClientPicker
           value={null}

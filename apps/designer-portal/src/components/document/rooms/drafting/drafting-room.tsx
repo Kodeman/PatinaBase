@@ -69,6 +69,8 @@ import type { ComposeDecisionRequest } from '@/lib/document/compose-decision';
 import { ComposeDecisionSheet } from '@/components/document/coordination/compose-decision-sheet';
 import { DocumentAction, DocumentActionGroup } from '../../document-action';
 import { useMobilePrimaryAction } from '../../mobile/mobile-shell';
+import { commercialDocumentExperience } from '@/lib/document/commercial-documents';
+import { ServiceAgreementDraftingRoom } from './service-agreement-drafting-room';
 
 const STATE_TONE: Record<string, { color: string; bg: string }> = {
   Outline: { color: 'var(--color-aged-oak)', bg: 'transparent' },
@@ -134,12 +136,19 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
     error?: Error | null;
     refetch: () => unknown;
   };
+  const experience = commercialDocumentExperience(proposal?.document_kind);
+  const commercialState = proposal?.commercial_state ?? 'draft';
 
   useEffect(() => {
-    if (proposal && proposal.status !== 'draft') {
+    if (
+      proposal &&
+      ((experience === 'legacy' && proposal.status !== 'draft') ||
+        (experience === 'design_services' && commercialState !== 'draft') ||
+        experience === 'commercial_readonly')
+    ) {
       router.replace(`/doc/${proposalId}`);
     }
-  }, [proposal, proposalId, router]);
+  }, [commercialState, experience, proposal, proposalId, router]);
 
   if (isLoading) {
     return <DraftingRoomGateMessage message="Opening the draft…" />;
@@ -162,10 +171,23 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
     );
   }
 
-  if (proposal.status !== 'draft') {
+  if (experience === 'commercial_readonly') {
     return (
-      <DraftingRoomGateMessage message="This proposal has already been issued. Returning to its read-only document…" />
+      <DraftingRoomGateMessage message="This commercial edition is read-only in Wave 1. Returning to its document…" />
     );
+  }
+
+  if (
+    (experience === 'legacy' && proposal.status !== 'draft') ||
+    (experience === 'design_services' && commercialState !== 'draft')
+  ) {
+    return (
+      <DraftingRoomGateMessage message="This commercial document has already been issued. Returning to its read-only document…" />
+    );
+  }
+
+  if (experience === 'design_services') {
+    return <ServiceAgreementDraftingRoom proposal={proposal} />;
   }
 
   return <DraftingRoomEditor proposalId={proposalId} proposal={proposal} />;
