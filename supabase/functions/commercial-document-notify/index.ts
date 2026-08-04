@@ -127,52 +127,69 @@ Deno.serve(async (req: Request) => {
     .eq('proposal_id', documentId)
     .maybeSingle();
 
-  const clientFacing = transition !== 'client_signed';
-  const recipient = clientFacing ? proposal.client : proposal.designer;
-  const portalUrl = clientFacing
-    ? transition === 'budget_published'
-      ? `${CLIENT_PORTAL_URL}/budget`
-      : transition === 'deposit_ready'
-        ? `${CLIENT_PORTAL_URL}/invoices`
-        : `${CLIENT_PORTAL_URL}/proposals/${documentId}`
-    : `${DESIGNER_PORTAL_URL}/doc/${documentId}`;
+  const audiences: Array<'client' | 'studio'> =
+    transition === 'client_signed' || transition === 'furnishings_executed'
+      ? ['client', 'studio']
+      : transition === 'executed' || transition === 'budget_published' ||
+          transition === 'furnishings_sent' || transition === 'deposit_ready'
+        ? ['client']
+        : ['studio'];
+  const results: Record<string, unknown> = {};
 
-  if (!recipient?.email) return json({ ok: true, skipped: 'recipient_missing' });
-
-  const rendered = renderCommercialEmail({
-    transition,
-    documentTitle: proposal.title,
-    documentKind: proposal.document_kind,
-    signerName: proposal.signed_by_name,
-    recipientName: recipient.full_name,
-    counterpartyName: clientFacing ? proposal.designer?.full_name : proposal.client?.full_name,
-    portalUrl,
-    ceilingCents: (serviceTerms as any)?.billing_ceiling_cents ?? null,
-    retainerCents: (serviceTerms as any)?.retainer_amount_cents ?? null,
-  });
-
-  const sendResult = await sendCompliantEmail(admin, {
-    to: recipient.email,
-    subject: rendered.subject,
-    html: rendered.html,
-    userId: recipient.id,
-    notificationType: `commercial_${transition}`,
-    category: 'operational',
-    templateId: `commercial-${transition}`,
-    idempotencyKey: `commercial-document/${documentId}/${transition}/${recipient.id}`,
-    failClosedPolicyReads: true,
-    metadata: {
-      proposal_id: documentId,
-      document_kind: proposal.document_kind,
+  for (const audience of audiences) {
+    const recipient = audience === 'client' ? proposal.client : proposal.designer;
+    if (!recipient?.email) {
+      results[audience] = { skipped: 'recipient_missing' };
+      continue;
+    }
+    const portalUrl = audience === 'studio'
+      ? `${DESIGNER_PORTAL_URL}/doc/${documentId}`
+      : transition === 'budget_published'
+        ? `${CLIENT_PORTAL_URL}/budget`
+        : transition === 'deposit_ready'
+          ? `${CLIENT_PORTAL_URL}/invoices`
+          : `${CLIENT_PORTAL_URL}/proposals/${documentId}`;
+    const rendered = renderCommercialEmail({
       transition,
+      audience,
+      documentTitle: proposal.title,
+      documentKind: proposal.document_kind,
+      signerName: proposal.signed_by_name,
+      recipientName: recipient.full_name,
+      counterpartyName: audience === 'client'
+        ? proposal.designer?.full_name
+        : proposal.client?.full_name,
+      portalUrl,
+      ceilingCents: (serviceTerms as any)?.billing_ceiling_cents ?? null,
+      retainerCents: (serviceTerms as any)?.retainer_amount_cents ?? null,
+    });
+    const sendResult = await sendCompliantEmail(admin, {
+      to: recipient.email,
       subject: rendered.subject,
-      message: rendered.message,
-      deep_link: portalUrl.replace(CLIENT_PORTAL_URL, '').replace(DESIGNER_PORTAL_URL, ''),
-    },
-  });
-
-  if (!sendResult.success && !sendResult.suppressed) {
-    return json({ error: 'send_failed', detail: sendResult.error }, 502);
+      html: rendered.html,
+      userId: recipient.id,
+      notificationType: `commercial_${transition}`,
+      category: 'operational',
+      templateId: `commercial-${transition}-${audience}`,
+      idempotencyKey: `commercial-document/${documentId}/${transition}/${recipient.id}`,
+      failClosedPolicyReads: true,
+      metadata: {
+        proposal_id: documentId,
+        document_kind: proposal.document_kind,
+        transition,
+        subject: rendered.subject,
+        message: rendered.message,
+        deep_link: portalUrl.replace(CLIENT_PORTAL_URL, '').replace(DESIGNER_PORTAL_URL, ''),
+      },
+    });
+    if (!sendResult.success && !sendResult.suppressed) {
+      return json({ error: 'send_failed', audience, detail: sendResult.error }, 502);
+    }
+    results[audience] = {
+      suppressed: sendResult.suppressed ?? false,
+      logId: sendResult.logId,
+    };
   }
-  return json({ ok: true, suppressed: sendResult.suppressed ?? false, logId: sendResult.logId });
+
+  return json({ ok: true, results });
 });

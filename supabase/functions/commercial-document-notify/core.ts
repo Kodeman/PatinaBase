@@ -18,6 +18,7 @@ export type CommercialTransition =
 
 export interface CommercialEmailInput {
   transition: CommercialTransition;
+  audience: 'client' | 'studio';
   documentTitle: string;
   documentKind: string;
   signerName?: string | null;
@@ -60,12 +61,21 @@ export function renderCommercialEmail(input: CommercialEmailInput): RenderedComm
 
   switch (input.transition) {
     case 'client_signed':
-      subject = `Client signed: ${input.documentTitle}`;
-      eyebrow = 'Client signature received';
-      headline = 'Ready for studio countersignature';
-      body = `${signer} signed &ldquo;<strong>${title}</strong>&rdquo;. The agreement is not executed and no project has been created until the studio countersigns.`;
-      cta = 'Review and countersign';
-      message = `${input.signerName || 'The client'} signed ${input.documentTitle}; studio countersignature is required.`;
+      if (input.audience === 'client') {
+        subject = `Signature received: ${input.documentTitle}`;
+        eyebrow = 'Your signature is recorded';
+        headline = 'Studio countersignature is next';
+        body = `We recorded your signature on &ldquo;<strong>${title}</strong>&rdquo;. The agreement is not executed and design work is not active until ${counterparty} countersigns.`;
+        cta = 'View signed agreement';
+        message = `Your signature on ${input.documentTitle} is recorded; studio countersignature is still required.`;
+      } else {
+        subject = `Client signed: ${input.documentTitle}`;
+        eyebrow = 'Client signature received';
+        headline = 'Ready for studio countersignature';
+        body = `${signer} signed &ldquo;<strong>${title}</strong>&rdquo;. The agreement is not executed and no project has been created until the studio countersigns.`;
+        cta = 'Review and countersign';
+        message = `${input.signerName || 'The client'} signed ${input.documentTitle}; studio countersignature is required.`;
+      }
       break;
     case 'executed':
       subject = `Agreement executed: ${input.documentTitle}`;
