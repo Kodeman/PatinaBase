@@ -5,11 +5,31 @@ on:
     tags:
       - 'extension-v*'
 
+permissions:
+  contents: read
+
 jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Verify required secrets are set
+        shell: bash
+        run: |
+          missing=()
+          [ -z "${{ secrets.CWS_EXTENSION_ID }}" ] && missing+=("CWS_EXTENSION_ID")
+          [ -z "${{ secrets.CWS_CLIENT_ID }}" ] && missing+=("CWS_CLIENT_ID")
+          [ -z "${{ secrets.CWS_CLIENT_SECRET }}" ] && missing+=("CWS_CLIENT_SECRET")
+          [ -z "${{ secrets.CWS_REFRESH_TOKEN }}" ] && missing+=("CWS_REFRESH_TOKEN")
+          [ -z "${{ secrets.EXT_SUPABASE_URL }}" ] && missing+=("EXT_SUPABASE_URL")
+          [ -z "${{ secrets.EXT_SUPABASE_ANON_KEY }}" ] && missing+=("EXT_SUPABASE_ANON_KEY")
+          [ -z "${{ secrets.EXT_PORTAL_URL }}" ] && missing+=("EXT_PORTAL_URL")
+          [ -z "${{ secrets.EXT_POSTHOG_KEY }}" ] && missing+=("EXT_POSTHOG_KEY")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "Missing required secrets: ${missing[*]}" >&2
+            exit 1
+          fi
 
       - uses: pnpm/action-setup@v4
 
@@ -19,6 +39,23 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+
+      - name: Validate release version
+        id: version
+        shell: bash
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/extension-v}"
+          PACKAGE_VERSION="$(node -p "require('./apps/extension/package.json').version")"
+          if [ "$TAG_VERSION" != "$PACKAGE_VERSION" ]; then
+            echo "Tag version $TAG_VERSION does not match package version $PACKAGE_VERSION" >&2
+            exit 1
+          fi
+          echo "version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Quality gate
+        run: |
+          pnpm --filter @patina/extension type-check
+          pnpm --filter @patina/extension test
 
       - name: Build extension
         env:
@@ -33,8 +70,18 @@ jobs:
 
       - name: Find built zip
         id: zip
+        shell: bash
         run: |
-          ZIP=$(find apps/extension/build -name '*.zip' | head -1)
+          ZIP="$(find apps/extension/build -name '*.zip' | head -1)"
+          if [ -z "$ZIP" ]; then
+            echo "No packaged extension ZIP was produced" >&2
+            exit 1
+          fi
+          SIZE="$(stat -c%s "$ZIP" 2>/dev/null || stat -f%z "$ZIP")"
+          if [ "$SIZE" -lt 51200 ]; then
+            echo "Packaged extension ZIP is suspiciously small ($SIZE bytes): $ZIP" >&2
+            exit 1
+          fi
           echo "path=$ZIP" >> "$GITHUB_OUTPUT"
 
       - name: Upload to Chrome Web Store
@@ -53,3 +100,6 @@ jobs:
             --client-id "${{ secrets.CWS_CLIENT_ID }}" \
             --client-secret "${{ secrets.CWS_CLIENT_SECRET }}" \
             --refresh-token "${{ secrets.CWS_REFRESH_TOKEN }}"
+
+      - name: Publish result
+        run: echo "Publish request submitted to the Chrome Web Store — this SUBMITS the extension for Google review, it does not go live immediately."
