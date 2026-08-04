@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { createBrowserClient } from '../client';
-import type { ProductConfigurationSelection } from '@patina/types';
+import type { ProductConfigurationSelection, PartyKind as SharedPartyKind } from '@patina/types';
 import type { ClientDecisionOption, DecisionType } from './use-decisions';
 import { peopleKeys } from './use-people';
 
@@ -42,15 +42,11 @@ export type CoordinationKind = 'selection' | 'rfi' | 'submittal' | 'signoff' | '
 export type BlocksKind = 'none' | 'ffe' | 'task' | 'phase';
 export type CoordinationStatus = 'draft' | 'pending' | 'responded' | 'expired';
 
-/** The project_parties.party_kind vocab (00212 + 00281 field kinds). */
-export type PartyKind =
-  | 'gc'
-  | 'vendor'
-  | 'client_rep'
-  | 'other'
-  | 'sub'
-  | 'installer'
-  | 'receiver';
+/** The project_parties.party_kind vocab (00212 + 00281 field kinds + 00419
+ *  architect/photographer/stager/client — Call Sheet Wave 3). Re-exported
+ *  from @patina/types field-config, the single source of truth, so this
+ *  file's own consumers never see a stale local copy. */
+export type PartyKind = SharedPartyKind;
 
 /** A project_parties row (00212/00281) the court / owner can point at. */
 export interface ProjectParty {
@@ -75,6 +71,9 @@ export interface ProjectParty {
    *  auto-fold's Pass D link-back, or by `usePromoteToStudioContact`'s promote
    *  moment (Call Sheet Wave 2, slide 10). NULL = not yet in the rolodex. */
   studio_contact_id: string | null;
+  /** Call Sheet (00419, R4/U2): per-row designer opt-in for client portal
+   *  visibility. Default false — nothing shows unless chosen. */
+  show_to_client: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -373,6 +372,13 @@ export interface AddProjectPartyInput {
    *  which fires the opt-in invite server-side (Track B DB trigger); false →
    *  'not_asked'. The UI only writes the row; it never sends the invite. */
   textUpdates?: boolean;
+  /** Lineage into the shared studio rolodex (00417/00418) — set when the row
+   *  is added FROM a rolodex pick (Call Sheet Wave 3's rolodex-picker). Omit
+   *  or null for an inline add with no rolodex link. */
+  studioContactId?: string | null;
+  /** Call Sheet (00419, R4/U2): per-row client-portal visibility opt-in.
+   *  Defaults false — nothing shows on the client roster unless chosen. */
+  showToClient?: boolean;
 }
 
 /**
@@ -399,6 +405,8 @@ export function useAddProjectParty() {
           phone: input.phone?.trim() || null,
           email: input.email?.trim() || null,
           sms_consent_status: wantsText ? 'pending' : 'not_asked',
+          studio_contact_id: input.studioContactId ?? null,
+          show_to_client: input.showToClient ?? false,
         })
         .select()
         .single();
@@ -409,6 +417,141 @@ export function useAddProjectParty() {
       void queryClient.invalidateQueries({ queryKey: ['project-parties', data.project_id] });
       // The party joins the People Room roster (people_directory, 00281).
       void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
+    },
+  });
+}
+
+export interface UpdateProjectPartyPatch {
+  displayName?: string;
+  companyName?: string | null;
+  trade?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  showToClient?: boolean;
+  studioContactId?: string | null;
+}
+
+export interface UpdateProjectPartyInput {
+  id: string;
+  projectId: string;
+  patch: Partial<UpdateProjectPartyPatch>;
+}
+
+/**
+ * Edit a project_parties row in place (Call Sheet Wave 3 — roster-row unfold:
+ * rename, re-trade, re-phone/email, toggle SHOW TO CLIENT, or re-point the
+ * rolodex link). Patches only the provided columns. Invalidates the roster
+ * read models (project-parties, project-roster) plus the People Room, since a
+ * studio_contact_id change or a display-name edit can move where this row
+ * surfaces there.
+ */
+export function useUpdateProjectParty() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, patch }: UpdateProjectPartyInput) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const dbPatch: Record<string, unknown> = {};
+      if (patch.displayName !== undefined) dbPatch.display_name = patch.displayName;
+      if (patch.companyName !== undefined) dbPatch.company_name = patch.companyName?.trim() || null;
+      if (patch.trade !== undefined) dbPatch.trade = patch.trade?.trim() || null;
+      if (patch.phone !== undefined) dbPatch.phone = patch.phone?.trim() || null;
+      if (patch.email !== undefined) dbPatch.email = patch.email?.trim() || null;
+      if (patch.showToClient !== undefined) dbPatch.show_to_client = patch.showToClient;
+      if (patch.studioContactId !== undefined) dbPatch.studio_contact_id = patch.studioContactId;
+
+      const { data, error } = await supabase
+        .from('project_parties')
+        .update(dbPatch)
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as ProjectParty;
+    },
+    onSuccess: (_data, input) => {
+      void queryClient.invalidateQueries({ queryKey: ['project-parties', input.projectId] });
+      void queryClient.invalidateQueries({ queryKey: ['project-roster', input.projectId] });
+      void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
+    },
+  });
+}
+
+export interface RemoveProjectPartyInput {
+  id: string;
+  projectId: string;
+}
+
+/**
+ * Remove a party from a project's roster. A real DELETE (00212's
+ * `project_parties_designer_all` policy is `FOR ALL` — the project's designer
+ * can delete their own project's rows; the table also carries a DELETE grant
+ * to `authenticated`). Any coordination item still pointing `court_party_id`
+ * at this row degrades gracefully — the FK is `ON DELETE SET NULL` (00213) —
+ * so a removed party never leaves a dangling reference.
+ */
+export function useRemoveProjectParty() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }: RemoveProjectPartyInput) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { error } = await supabase.from('project_parties').delete().eq('id', id);
+      if (error) throw error;
+      return { id };
+    },
+    onSuccess: (_data, input) => {
+      void queryClient.invalidateQueries({ queryKey: ['project-parties', input.projectId] });
+      void queryClient.invalidateQueries({ queryKey: ['project-roster', input.projectId] });
+      void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
+    },
+  });
+}
+
+/** A `v_project_roster` (00419) row — the party branch (project_parties) UNION
+ *  ALL the team branch (project_team_members), one shape for the Call Sheet.
+ *  `source` distinguishes which table the row came from; team-branch rows
+ *  never carry `studio_contact_id` / real `show_to_client` / a field link. */
+export interface ProjectRosterRow {
+  roster_id: string | null;
+  source: 'party' | 'team' | string | null;
+  project_id: string | null;
+  kind: string | null;
+  display_name: string | null;
+  company_name: string | null;
+  email: string | null;
+  phone: string | null;
+  trade: string | null;
+  job_title: string | null;
+  staff_role: string | null;
+  studio_contact_id: string | null;
+  profile_id: string | null;
+  show_to_client: boolean | null;
+  has_active_field_link: boolean | null;
+  sms_consent_status: string | null;
+  updated_at: string | null;
+}
+
+/**
+ * The Call Sheet's project-scoped roster — every tracked party plus every
+ * real project team login, in one shape (`v_project_roster`, 00419,
+ * security_invoker: base-table RLS on project_parties / project_team_members
+ * / profiles / organization_members governs what the caller actually sees).
+ * Key `['project-roster', projectId]`.
+ */
+export function useProjectRoster(projectId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['project-roster', projectId],
+    enabled: !!projectId,
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('v_project_roster')
+        .select('*')
+        .eq('project_id', projectId);
+      if (error) throw error;
+      return (data ?? []) as ProjectRosterRow[];
     },
   });
 }

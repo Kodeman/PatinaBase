@@ -310,6 +310,9 @@ export {
   useSubmitCoordinationRevision,
   useCoordinationRealtime,
   useAddProjectParty,
+  useUpdateProjectParty,
+  useRemoveProjectParty,
+  useProjectRoster,
 } from './use-coordination';
 export type {
   Court,
@@ -329,6 +332,10 @@ export type {
   SubmitCoordinationRevisionInput,
   ResolveCoordinationItemInput,
   AddProjectPartyInput,
+  UpdateProjectPartyPatch,
+  UpdateProjectPartyInput,
+  RemoveProjectPartyInput,
+  ProjectRosterRow,
 } from './use-coordination';
 // Field Coordination (Wave 5) — SMS triage, cross-project field rollup, and the
 // per-party thread / composer / field-link data layer.
