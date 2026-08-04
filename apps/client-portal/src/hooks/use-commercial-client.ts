@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createBrowserClient } from '@patina/supabase';
+import { commercialKeys, createBrowserClient } from '@patina/supabase';
 import {
   adaptCommercialDocumentBundle,
   adaptProjectCommercialSummary,
@@ -17,7 +17,7 @@ const getSupabase = () => createBrowserClient() as any;
 
 export function useClientCommercialDocument(proposalId: string) {
   return useQuery<CommercialDocumentBundle | null>({
-    queryKey: ['commercial-document', proposalId, 'client-safe'],
+    queryKey: commercialKeys.clientBundle(proposalId),
     enabled: !!proposalId,
     queryFn: async () => {
       const { data, error } = await getSupabase().rpc('get_client_commercial_document_bundle', {
@@ -45,6 +45,7 @@ export function useProjectCommercialSummary(projectId: string) {
       if (error) throw error;
 
       return adaptProjectCommercialSummary({
+        projectId,
         authority: authorityResult.data,
         workingBudget: budgetResult.data,
         furnishingsAuthorizations: Array.isArray(furnishingsResult.data)
@@ -71,8 +72,35 @@ export function useAcknowledgeBudgetCheckpoint(projectId: string) {
       if (!response.ok) throw new Error(body.error || 'Unable to acknowledge the working budget.');
       return body;
     },
-    onSuccess: () => queryClient.invalidateQueries({
-      queryKey: ['project-commercial-summary', projectId],
-    }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ['project-commercial-summary', projectId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: commercialKeys.budget(projectId),
+        }),
+      ]);
+    },
   });
+}
+
+export async function invalidateSignedCommercialDocument(
+  queryClient: ReturnType<typeof useQueryClient>,
+  proposalId: string,
+  projectId: string | null,
+): Promise<void> {
+  const invalidations = [
+    queryClient.invalidateQueries({ queryKey: commercialKeys.clientBundle(proposalId) }),
+    // Prefix invalidation refreshes the client-safe detail bundle.
+    queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] }),
+    queryClient.invalidateQueries({ queryKey: ['proposals'] }),
+  ];
+  if (projectId) {
+    invalidations.push(
+      queryClient.invalidateQueries({ queryKey: ['project-commercial-summary', projectId] }),
+      queryClient.invalidateQueries({ queryKey: commercialKeys.waves(projectId) }),
+    );
+  }
+  await Promise.all(invalidations);
 }

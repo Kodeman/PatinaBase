@@ -8,12 +8,22 @@ export async function POST(
   const user = await getUser();
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 
-  const { checkpointId } = await params;
+  const { projectId, checkpointId } = await params;
   // The authenticated-session RPC owns project membership, current-version,
   // and idempotency checks. The browser cannot provide an override reason or
   // turn this planning acknowledgement into purchasing authority.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createServerClient()) as any;
+  const { data: budget, error: budgetError } = await supabase.rpc(
+    'get_project_working_budget',
+    { p_project_id: projectId },
+  );
+  const currentCheckpointId = budget?.checkpoint?.id ??
+    budget?.checkpoint?.checkpointId ?? budget?.checkpoint?.checkpoint_id;
+  if (budgetError || currentCheckpointId !== checkpointId) {
+    return NextResponse.json({ error: 'checkpoint_not_current' }, { status: 409 });
+  }
+
   const { data, error } = await supabase.rpc('acknowledge_budget_checkpoint', {
     p_checkpoint_id: checkpointId,
   });
