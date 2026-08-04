@@ -11,10 +11,15 @@
  *
  * So: pick one option group, tick the values worth putting in front of the
  * client, and the builder writes the sibling options for you — named for the
- * value, priced off the piece's resolved price, deltas measured against the
- * baseline, and each one carrying the FULL selection snapshot with just that
- * group's entry swapped. That snapshot is what `apply_decision` (00413) reads
- * to carry the winner's finish and material into `project_ffe_specs`.
+ * value, priced off the piece's resolved price, deltas measured in RETAIL
+ * against the option's own value, and each one carrying the FULL selection
+ * snapshot with just that group's entry swapped. That snapshot is what
+ * `apply_decision` (00413) reads to carry the winner's finish and material into
+ * `project_ffe_specs`.
+ *
+ * Two invariants the client's eyes depend on:
+ *   · Every number here is retail. Trade cost never crosses into an option field.
+ *   · The source option is never regenerated — its card already is that value.
  *
  * Everything it emits is a normal, editable option. Nothing is locked; the
  * deltas are a starting point, not a live formula fighting the designer's
@@ -113,6 +118,23 @@ export function hasStashedSelection(source: DecisionOptionValue): boolean {
 }
 
 /**
+ * The value the option is CURRENTLY specified to for one group, or undefined.
+ *
+ * Only a stashed specification counts. An option that never resolved one has no
+ * value of its own — the piece's base configuration stands in for it, but the
+ * option card itself is not that value and may be regenerated freely.
+ */
+export function specifiedValueIdForGroup(
+  source: DecisionOptionValue,
+  groupId: string,
+): string | undefined {
+  if (!hasStashedSelection(source)) return undefined;
+  return source.configurationSelections?.find(
+    (selection) => selection.optionGroupId === groupId,
+  )?.optionValueId;
+}
+
+/**
  * Swap one group's entry in a snapshot, preserving the ordinality of every
  * other entry. A group the base selection never spoke to is appended.
  */
@@ -184,12 +206,73 @@ export interface BuildComparisonSiblingsArgs {
 }
 
 /**
- * Build one sibling option per ticked value.
+ * The fixed point every sibling's price and delta is measured from. Ids are kept
+ * so the baseline can still claim the recommendation when it is itself generated.
+ */
+interface ComparisonBaseline {
+  valueId: string;
+  retailPriceDeltaCents: number;
+  leadTimeDeltaWeeks: number;
+}
+
+/**
+ * Resolve the baseline for ONE group.
  *
- * Baseline = the value the option is already specified to (so the deltas read
- * as "what changes from what you have"); failing that, the first ticked value
- * in the maker's own order. Prices and deltas are computed ONCE, as plain
- * editable strings — this never re-runs behind a designer's later edits.
+ * Order, and why:
+ *  1. The value the option is specified to — the piece the designer is standing
+ *     on. It anchors the math whether or not it is ticked: a tick decides which
+ *     cards get WRITTEN, never what the numbers are measured against.
+ *  2. Failing that (unspecified option, or a group its snapshot never spoke to),
+ *     the piece's base configuration for that group — the same reference the
+ *     panel already says it is working from.
+ *  3. Failing even that (an optional group with no default), the first compared
+ *     value, so the column still reads as relative rather than absolute.
+ *
+ * The group's own value row is authoritative for the deltas; the snapshot entry
+ * is the fallback for a value the maker has since retired.
+ */
+function resolveBaseline(
+  offered: ProductOptionValue[],
+  anchorEntry: ProductConfigurationSelection | undefined,
+  fallback: ProductOptionValue,
+): ComparisonBaseline {
+  const anchorValue = anchorEntry
+    ? offered.find((value) => value.id === anchorEntry.optionValueId)
+    : undefined;
+  if (anchorValue) {
+    return {
+      valueId: anchorValue.id,
+      retailPriceDeltaCents: anchorValue.retailPriceDeltaCents ?? 0,
+      leadTimeDeltaWeeks: anchorValue.leadTimeDeltaWeeks ?? 0,
+    };
+  }
+  if (anchorEntry) {
+    return {
+      valueId: anchorEntry.optionValueId,
+      retailPriceDeltaCents: anchorEntry.retailPriceDeltaCents ?? 0,
+      leadTimeDeltaWeeks: anchorEntry.leadTimeDeltaWeeks ?? 0,
+    };
+  }
+  return {
+    valueId: fallback.id,
+    retailPriceDeltaCents: fallback.retailPriceDeltaCents ?? 0,
+    leadTimeDeltaWeeks: fallback.leadTimeDeltaWeeks ?? 0,
+  };
+}
+
+/**
+ * Build one sibling option per ticked value — EXCEPT the value the option is
+ * already specified to. The composer inserts siblings directly after the source
+ * card, and that card already IS that value; emitting it again would put the
+ * same piece in front of the client twice. The source is left untouched: it
+ * keeps its own note, its own recommendation, and its saved configuration.
+ *
+ * Deltas are RETAIL-derived — the same money the client is shown in `price`.
+ * Trade (what the studio pays) never reaches a client-facing field, so
+ * `costDelta` is exactly the movement in the price beside it.
+ *
+ * Prices and deltas are computed ONCE, as plain editable strings — this never
+ * re-runs behind a designer's later edits.
  */
 export function buildComparisonSiblings({
   source,
@@ -201,33 +284,32 @@ export function buildComparisonSiblings({
   const group = (definition?.optionGroups ?? []).find((g) => g.id === groupId);
   if (!group) return [];
 
+  const offered = activeValues(group);
   const ticked = new Set(valueIds);
-  const values = activeValues(group).filter((value) => ticked.has(value.id));
+  const ownValueId = specifiedValueIdForGroup(source, group.id);
+  const values = offered.filter(
+    (value) => ticked.has(value.id) && value.id !== ownValueId,
+  );
   if (values.length === 0) return [];
 
+  const derived = deriveBaseSelections(definition);
   const baseSelections = hasStashedSelection(source)
     ? (source.configurationSelections as ProductConfigurationSelection[])
-    : deriveBaseSelections(definition);
-  const current = baseSelections.find(
-    (selection) => selection.optionGroupId === group.id,
-  );
-  const baseline =
-    values.find((value) => value.id === current?.optionValueId) ?? values[0];
+    : derived;
+  const anchorEntry =
+    baseSelections.find((selection) => selection.optionGroupId === group.id) ??
+    derived.find((selection) => selection.optionGroupId === group.id);
+  const baseline = resolveBaseline(offered, anchorEntry, values[0]);
 
   const base = basePriceCents ?? definition?.baseRetailPriceCents ?? null;
   const name = familyName(source, definition);
 
   return values.map((value) => {
-    const priceCents =
-      base == null
-        ? null
-        : base +
-          (value.retailPriceDeltaCents ?? 0) -
-          (baseline.retailPriceDeltaCents ?? 0);
-    const costDeltaCents =
-      (value.tradePriceDeltaCents ?? 0) - (baseline.tradePriceDeltaCents ?? 0);
+    const retailDelta =
+      (value.retailPriceDeltaCents ?? 0) - baseline.retailPriceDeltaCents;
+    const priceCents = base == null ? null : base + retailDelta;
     const leadTimeDays =
-      ((value.leadTimeDeltaWeeks ?? 0) - (baseline.leadTimeDeltaWeeks ?? 0)) * 7;
+      ((value.leadTimeDeltaWeeks ?? 0) - baseline.leadTimeDeltaWeeks) * 7;
 
     return {
       ...source,
@@ -235,11 +317,13 @@ export function buildComparisonSiblings({
       imageUrl: optionValueImageUrl(value) ?? source.imageUrl,
       // The note belongs to the option it was written on, not to its siblings.
       designerNote: '',
-      // The builder's array owner clears this when another option already
-      // carries the recommendation.
-      isRecommended: value.id === baseline.id,
+      // The baseline is only ever generated when the source option carries no
+      // specification of its own; when it does, the source keeps the mark. The
+      // builder's array owner clears this when another option already carries
+      // the recommendation.
+      isRecommended: value.id === baseline.valueId,
       price: priceCents == null ? '' : String(priceCents / 100),
-      costDelta: costDeltaCents === 0 ? '' : signedDollars(costDeltaCents),
+      costDelta: retailDelta === 0 ? '' : signedDollars(retailDelta),
       leadTimeDelta: leadTimeDays === 0 ? '' : signedInteger(leadTimeDays),
       manualMode: false,
       saveAsDraft: false,
@@ -305,16 +389,16 @@ export function CompareAcrossGroupPanel({
     null;
 
   const currentValueId = activeGroup
-    ? source.configurationSelections?.find(
-        (selection) => selection.optionGroupId === activeGroup.id,
-      )?.optionValueId
+    ? specifiedValueIdForGroup(source, activeGroup.id)
     : undefined;
 
-  // The option's own value starts ticked so the baseline is present by default.
+  // The option's own value starts ticked so the baseline is visible as the thing
+  // being compared against. It is never regenerated — this card already is it.
   const ticked = activeGroup
     ? (tickedByGroup[activeGroup.id] ??
       (currentValueId ? [currentValueId] : []))
     : [];
+  const newSiblingCount = ticked.filter((id) => id !== currentValueId).length;
 
   const toggle = (valueId: string) => {
     if (!activeGroup) return;
@@ -415,15 +499,15 @@ export function CompareAcrossGroupPanel({
               variant="secondary"
               size="sm"
               onClick={generate}
-              disabled={ticked.length === 0}
+              disabled={newSiblingCount === 0}
               data-testid={`option-${index}-compare-generate`}
             >
               Generate options
             </Button>
             <span style={metaStyle}>
-              {ticked.length === 0
-                ? 'Pick at least one value'
-                : `${ticked.length} option${ticked.length === 1 ? '' : 's'}`}
+              {newSiblingCount === 0
+                ? 'Pick a value beside this one'
+                : `${newSiblingCount} new option${newSiblingCount === 1 ? '' : 's'}`}
             </span>
           </div>
         </>
