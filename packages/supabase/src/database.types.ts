@@ -22188,6 +22188,7 @@ export type Database = {
           profile_id: string | null
           project_id: string | null
           role: string | null
+          scope: string | null
           status_raw: string | null
         }
         Relationships: []
