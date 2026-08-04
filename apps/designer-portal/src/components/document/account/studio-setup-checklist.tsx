@@ -18,6 +18,18 @@
  * `onSkipSeed`/`onOpenSeedReview` (the flag-off / Wave-1 shape) row 4 renders
  * exactly as it did before this wave — SKIP disabled, "coming with the
  * rolodex".
+ *
+ * `organizations.rolodex_seed_skipped_at` is owner/admin-gated by RLS — the
+ * SKIP word itself only ever renders for a caller that passes `onSkipSeed`
+ * (the page gates that on the viewer's role before passing it down), so a
+ * plain member simply never sees a SKIP control. `onOpenSeedReview` being
+ * present without `onSkipSeed` (Wave 2 live, viewer lacks permission) drops
+ * the SKIP affordance entirely rather than falling back to the Wave-1
+ * disabled placeholder, which reads as "not built yet" — wrong message for a
+ * plain member. `skipSeedError` is a belt-and-suspenders band for the race
+ * where the write itself still 403s (a role change mid-session) — it swaps in
+ * for row 4's hint line, mirroring rolodex-seed-sheet.tsx's inline RLS-error
+ * idiom.
  */
 
 import type { ReactNode } from 'react';
@@ -34,8 +46,14 @@ export interface StudioSetupChecklistProps extends StudioSetupInput {
   /** True while the skip write is in flight — disables SKIP a second time. */
   skipSeedPending?: boolean;
   /** Row 4's label — opens the rolodex review sheet. Only interactive
-   *  alongside `onSkipSeed` (both land together, Wave 2). */
+   *  alongside `onSkipSeed` (both land together, Wave 2). Any studio member
+   *  can open the review (it's read-only for them); presence of this prop
+   *  without `onSkipSeed` signals "Wave 2 live, viewer can't skip" and drops
+   *  the SKIP control rather than showing the Wave-1 placeholder. */
   onOpenSeedReview?: () => void;
+  /** A failed skip write (RLS race — see module doc) — replaces row 4's hint
+   *  line with an inline error band, mirroring rolodex-seed-sheet.tsx. */
+  skipSeedError?: string | null;
   className?: string;
 }
 
@@ -46,11 +64,15 @@ function ChecklistRow({
   done,
   label,
   hint,
+  error,
   action,
 }: {
   done: boolean;
   label: ReactNode;
   hint?: string;
+  /** Swaps in for `hint` when present — the RLS-race inline band (module
+   *  doc). Never shown alongside `hint`; an error always wins the slot. */
+  error?: string | null;
   action?: ReactNode;
 }) {
   return (
@@ -71,10 +93,19 @@ function ChecklistRow({
         >
           {label}
         </span>
-        {hint && (
-          <span className="mt-0.5 block font-heading text-[11px] italic text-[var(--color-aged-oak)]">
-            {hint}
+        {error ? (
+          <span
+            role="alert"
+            className="mt-0.5 block text-[11px] leading-relaxed text-[var(--color-terracotta)]"
+          >
+            {error}
           </span>
+        ) : (
+          hint && (
+            <span className="mt-0.5 block font-heading text-[11px] italic text-[var(--color-aged-oak)]">
+              {hint}
+            </span>
+          )
         )}
       </span>
       {action}
@@ -87,6 +118,7 @@ export function StudioSetupChecklist({
   onSkipSeed,
   skipSeedPending = false,
   onOpenSeedReview,
+  skipSeedError,
   className,
   ...input
 }: StudioSetupChecklistProps) {
@@ -155,6 +187,7 @@ export function StudioSetupChecklist({
         hint={
           rolodexSeeded.done ? undefined : 'The rolodex fills itself from your projects'
         }
+        error={rolodexSeeded.done ? undefined : skipSeedError}
         action={
           rolodexSeeded.done ? undefined : onSkipSeed ? (
             <button
@@ -165,6 +198,11 @@ export function StudioSetupChecklist({
             >
               Skip
             </button>
+          ) : onOpenSeedReview ? (
+            // Wave 2 is live but this viewer can't skip (not owner/admin) —
+            // no SKIP control at all, not even a disabled one; the Wave-1
+            // placeholder below reads as "not built yet", which is wrong here.
+            null
           ) : (
             <button
               type="button"

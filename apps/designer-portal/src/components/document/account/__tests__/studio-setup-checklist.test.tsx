@@ -170,6 +170,64 @@ describe('StudioSetupChecklist — row 4, Call Sheet Wave 2 live behavior', () =
   });
 });
 
+describe('StudioSetupChecklist — row 4, SKIP is owner/admin-gated (RLS)', () => {
+  it('renders no SKIP control at all — not even the disabled placeholder — when onOpenSeedReview is live but onSkipSeed is withheld (a plain member)', () => {
+    render(
+      <StudioSetupChecklist
+        {...INCOMPLETE}
+        onInvite={jest.fn()}
+        onOpenSeedReview={jest.fn()}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Skip' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByTitle('coming with the rolodex'),
+    ).not.toBeInTheDocument();
+    // The row (and its scored open-review label) still renders for the member.
+    expect(screen.getByText('Seed the rolodex')).toBeInTheDocument();
+  });
+
+  it('still shows the Wave-1 disabled placeholder when the flag itself is off (neither handler present)', () => {
+    render(<StudioSetupChecklist {...INCOMPLETE} onInvite={jest.fn()} />);
+    const skip = screen.getByRole('button', { name: 'Skip' });
+    expect(skip).toBeDisabled();
+    expect(skip).toHaveAttribute('title', 'coming with the rolodex');
+  });
+
+  it('swaps the hint line for an inline error band when skipSeedError is set', () => {
+    render(
+      <StudioSetupChecklist
+        {...INCOMPLETE}
+        onInvite={jest.fn()}
+        onSkipSeed={jest.fn()}
+        skipSeedError="Ask an owner or admin to skip this."
+      />,
+    );
+    expect(
+      screen.getByText('Ask an owner or admin to skip this.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('The rolodex fills itself from your projects'),
+    ).not.toBeInTheDocument();
+    // The SKIP control itself stays available to retry.
+    expect(screen.getByRole('button', { name: 'Skip' })).not.toBeDisabled();
+  });
+
+  it('shows the ordinary hint line, not an error, once skipSeedError clears', () => {
+    render(
+      <StudioSetupChecklist
+        {...INCOMPLETE}
+        onInvite={jest.fn()}
+        onSkipSeed={jest.fn()}
+        skipSeedError={null}
+      />,
+    );
+    expect(
+      screen.getByText('The rolodex fills itself from your projects'),
+    ).toBeInTheDocument();
+  });
+});
+
 describe('StudioSetupChecklist — row 5, open the first project', () => {
   it('opens the cross-surface open-project front door when not done', () => {
     render(<StudioSetupChecklist {...INCOMPLETE} onInvite={jest.fn()} />);
