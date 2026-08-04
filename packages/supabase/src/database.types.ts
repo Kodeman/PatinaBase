@@ -23447,6 +23447,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      _is_design_services_project: {
+        Args: { p_project_id: string }
+        Returns: boolean
+      }
       _issue_invoice_authorized_legacy_00397: {
         Args: { p_due_date?: string; p_invoice_id: string }
         Returns: {
