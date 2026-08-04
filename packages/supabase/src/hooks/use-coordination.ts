@@ -71,6 +71,10 @@ export interface ProjectParty {
   sms_opt_out_at: string | null;
   vendor_id: string | null;
   profile_id: string | null;
+  /** Lineage into the shared studio rolodex (00417/00418) — set by the
+   *  auto-fold's Pass D link-back, or by `usePromoteToStudioContact`'s promote
+   *  moment (Call Sheet Wave 2, slide 10). NULL = not yet in the rolodex. */
+  studio_contact_id: string | null;
   created_at: string;
   updated_at: string;
 }

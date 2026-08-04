@@ -37,6 +37,9 @@ export interface Organization {
   business_verified_at: string | null;
   tax_id: string | null;
   status: OrganizationStatus;
+  /** Call Sheet day-1 checklist row 4 ("Seed the rolodex"): set when the owner
+   *  explicitly skips the seeded-rolodex review (00417). NULL = not skipped. */
+  rolodex_seed_skipped_at: string | null;
   created_at: string;
   updated_at: string;
 }
