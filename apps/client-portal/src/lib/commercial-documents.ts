@@ -248,6 +248,31 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
   const replacementRaw = record(first(raw, 'replacement'));
   const signatureRows = first(raw, 'signatures') ?? first(source, 'signatures');
   const rateRows = first(raw, 'rates') ?? first(source, 'rates');
+  const depositRequiredValue = first(
+    furnishingRaw,
+    'depositRequiredCents',
+    'deposit_required_cents',
+    'depositRequired',
+    'deposit_required',
+  );
+  const depositPaidValue = first(
+    furnishingRaw,
+    'depositPaidCents',
+    'deposit_paid_cents',
+    'depositPaid',
+    'deposit_paid',
+  );
+  const totalAmountCents = number(
+    first(source, 'totalAmountCents', 'total_amount_cents', 'totalAmount', 'total_amount') ??
+      first(proposal, 'totalAmountCents', 'total_amount_cents', 'totalAmount', 'total_amount'),
+  );
+  const depositPercent = number(
+    first(source, 'depositPercent', 'deposit_percent') ??
+      first(proposal, 'depositPercent', 'deposit_percent'),
+  );
+  const depositRequiredCents = depositRequiredValue === undefined || depositRequiredValue === null
+    ? Math.max(0, Math.round(totalAmountCents * depositPercent / 100))
+    : number(depositRequiredValue);
 
   return {
     document: {
@@ -307,9 +332,15 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
       }];
     }) : [],
     furnishings: Object.keys(furnishingRaw).length === 0 ? null : {
-      checkpointId: nullableText(first(furnishingRaw, 'checkpointId', 'checkpoint_id')),
-      depositRequiredCents: number(first(furnishingRaw, 'depositRequiredCents', 'deposit_required_cents')),
-      depositPaidCents: number(first(furnishingRaw, 'depositPaidCents', 'deposit_paid_cents')),
+      checkpointId: nullableText(first(
+        furnishingRaw,
+        'checkpointId',
+        'checkpoint_id',
+        'budgetCheckpointId',
+        'budget_checkpoint_id',
+      )),
+      depositRequiredCents,
+      depositPaidCents: number(depositPaidValue),
       items: Array.isArray(furnishingRaw.items) ? furnishingRaw.items.map((item) => {
         const row = record(item);
         return {

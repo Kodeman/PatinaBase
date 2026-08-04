@@ -99,7 +99,7 @@ describe('POST /api/proposals/[id]/sign', () => {
       eq: boardCountProposalEqMock,
     });
     serviceFromMock = jest.fn().mockReturnValue({ select: boardCountSelectMock });
-    invokeMock = jest.fn().mockResolvedValue({ data: null, error: null });
+    invokeMock = jest.fn().mockResolvedValue({ data: { ok: true }, error: null });
 
     mockCreateServerClient.mockResolvedValue({
       rpc: userRpcMock,
@@ -343,6 +343,7 @@ describe('POST /api/proposals/[id]/sign', () => {
     expect(await response.json()).toMatchObject({
       commercialState: 'client_signed',
       newlyClientSigned: true,
+      notificationDelivery: { state: 'delivered' },
     });
     expect(invokeMock).toHaveBeenCalledWith('commercial-document-notify', {
       body: { documentId: 'prop-1', transition: 'client_signed' },
@@ -400,6 +401,80 @@ describe('POST /api/proposals/[id]/sign', () => {
       projectId: 'project-1',
       depositInvoiceId: 'invoice-1',
       newlyExecuted: true,
+      notificationDelivery: {
+        state: 'delivered',
+        transitions: {
+          furnishingsExecuted: 'delivered',
+          depositReady: 'delivered',
+        },
+      },
+    });
+  });
+
+  it('keeps a durable services signature successful while surfacing notification retry', async () => {
+    userRpcMock.mockImplementation((name: string) => {
+      if (name === 'get_client_commercial_document_bundle') {
+        return Promise.resolve({
+          data: { document: { id: 'prop-1', kind: 'design_services', state: 'sent' } },
+          error: null,
+        });
+      }
+      if (name === 'get_client_proposal_bundle') {
+        return Promise.resolve({ data: { proposal: { id: 'prop-1', valid_until: null } }, error: null });
+      }
+      return Promise.resolve({ error: null });
+    });
+    serviceRpcMock.mockResolvedValue({
+      data: { commercialState: 'client_signed', newlyClientSigned: true },
+      error: null,
+    });
+    invokeMock.mockResolvedValue({ data: null, error: { message: 'edge unavailable' } });
+
+    const response = await POST(makeRequest(), makeParams());
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      commercialState: 'client_signed',
+      newlyClientSigned: true,
+      notificationDelivery: { state: 'pending_retry' },
+    });
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('attempts both FF&E notices and reports a partial delivery failure truthfully', async () => {
+    userRpcMock.mockImplementation((name: string) => {
+      if (name === 'get_client_commercial_document_bundle') {
+        return Promise.resolve({
+          data: { document: { id: 'prop-1', kind: 'furnishings_authorization', state: 'sent' } },
+          error: null,
+        });
+      }
+      if (name === 'get_client_proposal_bundle') {
+        return Promise.resolve({ data: { proposal: { id: 'prop-1', valid_until: null } }, error: null });
+      }
+      return Promise.resolve({ error: null });
+    });
+    serviceRpcMock.mockResolvedValue({
+      data: { projectId: 'project-1', depositInvoiceId: 'invoice-1', newlyExecuted: true },
+      error: null,
+    });
+    invokeMock
+      .mockResolvedValueOnce({ data: null, error: { message: 'first unavailable' } })
+      .mockResolvedValueOnce({ data: { ok: true }, error: null });
+
+    const response = await POST(makeRequest(), makeParams());
+
+    expect(response.status).toBe(200);
+    expect(invokeMock).toHaveBeenCalledTimes(2);
+    expect(await response.json()).toMatchObject({
+      newlyExecuted: true,
+      notificationDelivery: {
+        state: 'pending_retry',
+        transitions: {
+          furnishingsExecuted: 'pending_retry',
+          depositReady: 'delivered',
+        },
+      },
     });
   });
 

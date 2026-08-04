@@ -310,17 +310,38 @@ export function useCountersignDesignServicesAgreement(proposalId: string) {
       );
       if (error) throw error;
       const result = mapCountersignResult(data);
+      let notificationDelivery: "delivered" | "pending_retry" | "not_requested" =
+        "not_requested";
       if (result.newlyExecuted) {
-        void supabase.functions
-          .invoke("commercial-document-notify", {
-            body: { documentId: proposalId, transition: "executed" },
-          })
-          .catch(() => {
-            // The countersign transaction is durable; notification replay is
-            // independent and must not repeat project activation.
+        try {
+          const delivery = await supabase.functions.invoke(
+            "commercial-document-notify",
+            {
+              body: { documentId: proposalId, transition: "executed" },
+            },
+          );
+          notificationDelivery =
+            !delivery.error && delivery.data?.ok === true
+              ? "delivered"
+              : "pending_retry";
+          if (notificationDelivery === "pending_retry") {
+            console.warn("commercial countersign notification pending retry", {
+              proposalId,
+              error:
+                delivery.error?.message ??
+                delivery.data?.error ??
+                "unconfirmed",
+            });
+          }
+        } catch (error) {
+          notificationDelivery = "pending_retry";
+          console.warn("commercial countersign notification pending retry", {
+            proposalId,
+            error: error instanceof Error ? error.message : "transport_error",
           });
+        }
       }
-      return result;
+      return { ...result, notificationDelivery };
     },
     onSuccess: (result) => {
       void queryClient.invalidateQueries({
@@ -876,11 +897,58 @@ export function useSendFurnishingsAuthorization(projectId: string) {
       const dispatchId =
         data?.proposalSendDispatchId ?? data?.proposal_send_dispatch_id;
       if (sentAt && dispatchId) {
-        await supabase.functions.invoke("proposal-send", {
-          body: { proposalId, sentAt, dispatchId },
-        });
+        try {
+          const delivery = await supabase.functions.invoke("proposal-send", {
+            body: { proposalId, sentAt, dispatchId },
+          });
+          const deliveryState =
+            typeof delivery.data?.delivery_state === "string"
+              ? delivery.data.delivery_state
+              : "pending";
+          if (delivery.error && deliveryState === "pending") {
+            console.warn("furnishings authorization email pending retry", {
+              proposalId,
+              error: delivery.error.message,
+            });
+          }
+          return {
+            ...data,
+            proposalSendDispatchId: dispatchId,
+            sentAt,
+            _emailDispatched: deliveryState === "delivered",
+            _emailDeliveryState: deliveryState,
+            _emailRetryable:
+              typeof delivery.data?.retryable === "boolean"
+                ? delivery.data.retryable
+                : deliveryState === "pending" || deliveryState === "in_flight",
+            _emailDispatchDetail:
+              typeof delivery.data?.detail === "string"
+                ? delivery.data.detail
+                : undefined,
+          };
+        } catch (error) {
+          console.warn("furnishings authorization email pending retry", {
+            proposalId,
+            error: error instanceof Error ? error.message : "transport_error",
+          });
+          return {
+            ...data,
+            proposalSendDispatchId: dispatchId,
+            sentAt,
+            _emailDispatched: false,
+            _emailDeliveryState: "pending",
+            _emailRetryable: true,
+          };
+        }
       }
-      return data;
+      return {
+        ...data,
+        _emailDispatched: false,
+        _emailDeliveryState: "pending",
+        _emailRetryable: false,
+        _emailDispatchDetail:
+          "The furnishings send instance is incomplete. Refresh before retrying.",
+      };
     },
     onSuccess: (_, proposalId) => {
       invalidateProjectCommerce(queryClient, projectId);

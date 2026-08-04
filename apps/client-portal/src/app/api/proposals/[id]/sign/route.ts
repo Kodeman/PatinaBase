@@ -10,6 +10,37 @@ import { captureMoodBoardProposalActivated } from '@/lib/analytics/mood-board-se
 
 const COMMERCIAL_DOCUMENT_KIND_SET = new Set<string>(COMMERCIAL_DOCUMENT_KINDS);
 
+type CommercialNotificationState = 'delivered' | 'pending_retry' | 'not_requested';
+
+async function notifyCommercialTransition(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  documentId: string,
+  transition: 'client_signed' | 'furnishings_executed' | 'deposit_ready',
+): Promise<CommercialNotificationState> {
+  try {
+    const { data, error } = await supabase.functions.invoke('commercial-document-notify', {
+      body: { documentId, transition },
+    });
+    if (error || data?.ok !== true) {
+      console.warn('commercial notification pending retry', {
+        documentId,
+        transition,
+        error: error?.message ?? data?.error ?? 'unconfirmed',
+      });
+      return 'pending_retry';
+    }
+    return 'delivered';
+  } catch (error) {
+    console.warn('commercial notification pending retry', {
+      documentId,
+      transition,
+      error: error instanceof Error ? error.message : 'transport_error',
+    });
+    return 'pending_retry';
+  }
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -117,18 +148,16 @@ export async function POST(
         executeResult?.newly_executed === true || executeResult?.newlyExecuted === true;
       const depositInvoiceId =
         executeResult?.deposit_invoice_id ?? executeResult?.depositInvoiceId ?? null;
+      let executionNotification: CommercialNotificationState = 'not_requested';
+      let depositNotification: CommercialNotificationState = 'not_requested';
       if (newlyExecuted) {
-        void supabase.functions.invoke('commercial-document-notify', {
-          body: { documentId: id, transition: 'furnishings_executed' },
-        }).catch(() => {
-          // Notification delivery does not weaken the durable execution.
-        });
+        executionNotification = await notifyCommercialTransition(
+          supabase,
+          id,
+          'furnishings_executed',
+        );
         if (depositInvoiceId) {
-          void supabase.functions.invoke('commercial-document-notify', {
-            body: { documentId: id, transition: 'deposit_ready' },
-          }).catch(() => {
-            // Notification delivery does not weaken the durable invoice handoff.
-          });
+          depositNotification = await notifyCommercialTransition(supabase, id, 'deposit_ready');
         }
       }
       return NextResponse.json({
@@ -137,6 +166,15 @@ export async function POST(
         projectId: executeResult?.project_id ?? executeResult?.projectId ?? null,
         depositInvoiceId,
         newlyExecuted,
+        notificationDelivery: {
+          state: executionNotification === 'pending_retry' || depositNotification === 'pending_retry'
+            ? 'pending_retry'
+            : executionNotification,
+          transitions: {
+            furnishingsExecuted: executionNotification,
+            depositReady: depositNotification,
+          },
+        },
       });
     }
 
@@ -160,18 +198,16 @@ export async function POST(
 
     const newlyClientSigned =
       signResult?.newly_client_signed === true || signResult?.newlyClientSigned === true;
+    let notificationDelivery: CommercialNotificationState = 'not_requested';
     if (newlyClientSigned) {
-      void supabase.functions.invoke('commercial-document-notify', {
-        body: { documentId: id, transition: 'client_signed' },
-      }).catch(() => {
-        // Notification delivery does not weaken the durable signature.
-      });
+      notificationDelivery = await notifyCommercialTransition(supabase, id, 'client_signed');
     }
 
     return NextResponse.json({
       ok: true,
       commercialState: signResult?.commercial_state ?? signResult?.commercialState ?? 'client_signed',
       newlyClientSigned,
+      notificationDelivery: { state: notificationDelivery },
     });
   }
 

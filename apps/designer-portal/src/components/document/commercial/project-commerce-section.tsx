@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRetryProposalSend } from "@patina/supabase";
 import {
   useCreateFurnishingsAuthorization,
   useFurnishingsAuthorizations,
@@ -595,9 +596,18 @@ function FurnishingsWaves({ projectId }: { projectId: string }) {
   const proposalsQuery = useProposals({ projectId, status: "draft" });
   const createWave = useCreateFurnishingsAuthorization(projectId);
   const sendWave = useSendFurnishingsAuthorization(projectId);
+  const retryDelivery = useRetryProposalSend({ errorSurface: "inline" });
   const [waveName, setWaveName] = useState("");
   const [sourceProposalId, setSourceProposalId] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
+  const [deliveryNotice, setDeliveryNotice] = useState<{
+    proposalId: string;
+    dispatchId: string;
+    sentAt: string;
+    state: string;
+    retryable: boolean;
+    detail?: string;
+  } | null>(null);
 
   const sourceProposals = (proposalsQuery.data ?? []).filter(
     (proposal: any) =>
@@ -679,6 +689,59 @@ function FurnishingsWaves({ projectId }: { projectId: string }) {
           {actionError}
         </p>
       )}
+      {deliveryNotice && deliveryNotice.state !== "delivered" && (
+        <div
+          role="status"
+          className="mt-2 border-l-2 border-[var(--color-aged-oak)] px-3 text-[11px] text-[var(--text-muted)]"
+        >
+          <p>
+            The authorization is sent, but email delivery is
+            {deliveryNotice.state === "pending" || deliveryNotice.state === "in_flight"
+              ? " still being confirmed."
+              : " not confirmed."}
+            {deliveryNotice.retryable
+              ? " Retrying uses the existing send and will not create a duplicate."
+              : " Confirm delivery with the client directly."}
+          </p>
+          {deliveryNotice.detail && (
+            <p className="mt-1 text-[10px]">{deliveryNotice.detail}</p>
+          )}
+          {deliveryNotice.retryable && (
+            <Button
+              className="mt-2"
+              size="sm"
+              variant="ghost"
+              loading={retryDelivery.isPending}
+              onClick={async () => {
+                setActionError(null);
+                try {
+                  const result = await retryDelivery.mutateAsync({
+                    proposalId: deliveryNotice.proposalId,
+                    dispatchId: deliveryNotice.dispatchId,
+                    sentAt: deliveryNotice.sentAt,
+                  });
+                  setDeliveryNotice((current) => current
+                    ? {
+                        ...current,
+                        state: result._emailDeliveryState,
+                        retryable: result._emailRetryable,
+                        detail: result._emailDispatchDetail,
+                      }
+                    : current);
+                } catch (error) {
+                  setActionError(
+                    error instanceof Error
+                      ? error.message
+                      : "Email delivery could not be checked.",
+                  );
+                }
+              }}
+            >
+              Retry email delivery
+            </Button>
+          )}
+        </div>
+      )}
 
       <div className="mt-4">
         {wavesQuery.isLoading && (
@@ -709,7 +772,26 @@ function FurnishingsWaves({ projectId }: { projectId: string }) {
             onSend={async () => {
               setActionError(null);
               try {
-                await sendWave.mutateAsync(wave.proposalId);
+                const result = await sendWave.mutateAsync(wave.proposalId);
+                const dispatchId =
+                  result?.proposalSendDispatchId ?? result?.proposal_send_dispatch_id;
+                const sentAt = result?.sentAt ?? result?.sent_at;
+                if (
+                  result?._emailDeliveryState !== "delivered" &&
+                  typeof dispatchId === "string" &&
+                  typeof sentAt === "string"
+                ) {
+                  setDeliveryNotice({
+                    proposalId: wave.proposalId,
+                    dispatchId,
+                    sentAt,
+                    state: result._emailDeliveryState ?? "pending",
+                    retryable: result._emailRetryable === true,
+                    detail: result._emailDispatchDetail,
+                  });
+                } else {
+                  setDeliveryNotice(null);
+                }
               } catch (error) {
                 setActionError(
                   error instanceof Error
