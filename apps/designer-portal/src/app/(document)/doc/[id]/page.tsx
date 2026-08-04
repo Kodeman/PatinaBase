@@ -56,7 +56,7 @@ import { ScheduleNavProvider } from '@/components/document/schedule/schedule-nav
 import { RippleProvider } from '@/components/document/schedule/schedule-ripple-context';
 import { ProjectScheduleHandoffMount } from '@/components/document/project-schedule-handoff-mount';
 import { LetterheadInstruments } from '@/components/document/letterhead-instruments';
-import { CallSheet } from '@/components/document/roster/call-sheet';
+import { CallSheet, type CallSheetOpenMode } from '@/components/document/roster/call-sheet';
 import { KickoffBand } from '@/components/document/roster/kickoff-band';
 import { HouseholdChip } from '@/components/document/household-chip';
 import { ProposalInstruments } from '@/components/document/proposal-instruments';
@@ -177,6 +177,9 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   // default; the letterhead instrument and ⌘K's "This surface" row both
   // dispatch document:open-call-sheet rather than holding their own state.
   const [callSheetOpen, setCallSheetOpen] = useState(false);
+  // FIX 2 — the event's optional { mode } detail (default 'sheet'), read off
+  // whichever dispatch opened it and forwarded straight through to CallSheet.
+  const [callSheetMode, setCallSheetMode] = useState<CallSheetOpenMode>('sheet');
   // R24: drags anywhere on the active section land in the folio.
   const [sectionDrag, setSectionDrag] = useState(false);
   const [folioDrop, setFolioDrop] = useState<File[] | null>(null);
@@ -208,7 +211,11 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   // band) all reach it this way — mirrors the document:open-section pattern
   // above. A no-op off a project document (the sheet below never mounts).
   useEffect(() => {
-    const onOpenCallSheet = () => setCallSheetOpen(true);
+    const onOpenCallSheet = (e: Event) => {
+      const mode = (e as CustomEvent<{ mode?: CallSheetOpenMode }>).detail?.mode ?? 'sheet';
+      setCallSheetMode(mode);
+      setCallSheetOpen(true);
+    };
     window.addEventListener('document:open-call-sheet', onOpenCallSheet);
     return () => window.removeEventListener('document:open-call-sheet', onOpenCallSheet);
   }, []);
@@ -469,12 +476,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
             (dismissal, retirement at 4 names), so this mount is unconditional
             for a project document. */}
         {row.engagement_kind === 'project' && row.project_id && (
-          <KickoffBand
-            projectId={row.project_id}
-            rows={rosterRows ?? []}
-            onFromRolodex={() => setCallSheetOpen(true)}
-            onNewPerson={() => setCallSheetOpen(true)}
-          />
+          <KickoffBand projectId={row.project_id} rows={rosterRows ?? []} />
         )}
 
         {/* D13: letterhead-anchored margin items (Pulse, section items) as
@@ -808,7 +810,9 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           here (closed by default), opened by document:open-call-sheet from
           ⌘K, the letterhead instrument, and the kickoff band. Project docs
           only; the sheet itself is also flag-gated (self-managed, like every
-          other Wave 3 roster component). */}
+          other Wave 3 roster component). `openMode` forwards the event's
+          detail — 'sheet' from ⌘K/the instrument, 'picker'/'add' from the
+          kickoff band's two doorways (FIX 2). */}
       {row.engagement_kind === 'project' && row.project_id && (
         <CallSheet
           open={callSheetOpen}
@@ -816,6 +820,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           projectId={row.project_id}
           projectTitle={row.title}
           clientName={row.client_name}
+          openMode={callSheetMode}
         />
       )}
     </div>

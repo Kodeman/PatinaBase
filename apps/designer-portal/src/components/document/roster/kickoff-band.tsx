@@ -17,6 +17,13 @@
  * dismissed band never flashes.
  *
  * Flag-gated on `call-sheet` at this consumer.
+ *
+ * FIX 2 (kickoff/instrument open modes) — the two doorways dispatch
+ * `document:open-call-sheet` directly (the same event ⌘K and the letterhead
+ * instrument use) rather than calling back into the page: FROM THE ROLODEX
+ * carries mode 'picker' (straight to the rolodex), NEW PERSON carries mode
+ * 'add' (the picker already in its add-a-person state) — so either one skips
+ * the intermediate roster list the plain sheet-open lands on.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -25,21 +32,22 @@ import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { kickoffRetired } from '@/lib/document/roster-derivation';
 import { hasMarginNoteBeenSeen, markMarginNoteSeen } from '../margin-note';
 import { DocumentAction, DocumentActionRow } from '../document-action';
+import type { CallSheetOpenMode } from './call-sheet';
 
 export function kickoffNoteKey(projectId: string): string {
   return `kickoff:${projectId}`;
 }
 
+function dispatchOpenCallSheet(mode: CallSheetOpenMode) {
+  window.dispatchEvent(new CustomEvent('document:open-call-sheet', { detail: { mode } }));
+}
+
 export function KickoffBand({
   projectId,
   rows,
-  onFromRolodex,
-  onNewPerson,
 }: {
   projectId: string;
   rows: ProjectRosterRow[];
-  onFromRolodex: () => void;
-  onNewPerson: () => void;
 }) {
   const { value: callSheetOn } = useFeatureFlag('call-sheet');
   const noteKey = kickoffNoteKey(projectId);
@@ -87,14 +95,14 @@ export function KickoffBand({
         <DocumentAction
           actionKey="kickoff-from-rolodex"
           variant="primary"
-          onClick={onFromRolodex}
+          onClick={() => dispatchOpenCallSheet('picker')}
         >
           From the rolodex
         </DocumentAction>
         <DocumentAction
           actionKey="kickoff-new-person"
           variant="secondary"
-          onClick={onNewPerson}
+          onClick={() => dispatchOpenCallSheet('add')}
         >
           New person
         </DocumentAction>

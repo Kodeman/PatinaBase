@@ -22,8 +22,12 @@ jest.mock('@/hooks/use-feature-flag', () => ({
 
 // The picker is its own sheet with its own spec — stub it so this spec is
 // about the call sheet's own pixels (and so a second overlay never stacks).
+// Kept as a prop-capturing mock (not just () => null) so the openMode specs
+// below can assert what CallSheet hands it — `open`/`startInAdd` — without
+// depending on the picker's own rendering.
+const mockRolodexPicker = jest.fn(() => null);
 jest.mock('../rolodex-picker', () => ({
-  RolodexPicker: () => null,
+  RolodexPicker: (props: unknown) => mockRolodexPicker(props),
 }));
 
 function row(over: Partial<ProjectRosterRow> = {}): ProjectRosterRow {
@@ -68,6 +72,7 @@ beforeEach(() => {
   mockFlagValue = true;
   useProjectRoster.mockReset();
   useProjectRoster.mockReturnValue({ data: ROSTER, isLoading: false });
+  mockRolodexPicker.mockClear();
 });
 
 describe('CallSheet — the sheet', () => {
@@ -146,5 +151,47 @@ describe('CallSheet — the flag', () => {
     const { baseElement } = render(<CallSheet {...props} />);
     expect(baseElement.querySelector('[data-call-sheet-region]')).toBeNull();
     expect(screen.queryByText('Studio side')).not.toBeInTheDocument();
+  });
+});
+
+// ============================================================================
+// openMode — FIX 2 (kickoff/instrument open modes). document:open-call-sheet
+// carries an optional { mode } detail; the page forwards it straight through
+// as this prop. 'picker'/'add' pre-address the RolodexPicker so the doorway
+// skips the intermediate roster list; the default 'sheet' behaves exactly as
+// before (the picker stays closed until the sheet's own actions open it).
+// ============================================================================
+
+describe('CallSheet — openMode', () => {
+  it('opens straight to the rolodex picker when openMode="picker"', () => {
+    render(<CallSheet {...props} openMode="picker" />);
+
+    expect(mockRolodexPicker).toHaveBeenLastCalledWith(
+      expect.objectContaining({ open: true, startInAdd: false }),
+    );
+  });
+
+  it('opens the picker already in its add-a-person state when openMode="add"', () => {
+    render(<CallSheet {...props} openMode="add" />);
+
+    expect(mockRolodexPicker).toHaveBeenLastCalledWith(
+      expect.objectContaining({ open: true, startInAdd: true }),
+    );
+  });
+
+  it('leaves the picker closed for the default "sheet" mode', () => {
+    render(<CallSheet {...props} />);
+
+    expect(mockRolodexPicker).toHaveBeenLastCalledWith(
+      expect.objectContaining({ open: false, startInAdd: false }),
+    );
+  });
+
+  it('never pre-addresses the picker while the sheet itself is closed', () => {
+    render(<CallSheet {...props} open={false} openMode="picker" />);
+
+    expect(mockRolodexPicker).toHaveBeenLastCalledWith(
+      expect.objectContaining({ open: false }),
+    );
   });
 });

@@ -20,7 +20,7 @@
  * overlay of its own.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Users } from 'lucide-react';
 import { useProjectRoster, type ProjectRosterRow } from '@patina/supabase';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
@@ -82,6 +82,13 @@ function RosterGroupSection({
   );
 }
 
+/** document:open-call-sheet's optional mode (FIX 2 — kickoff/instrument open
+ *  modes): 'picker' opens straight to the rolodex picker, 'add' opens it
+ *  already in its add-a-person state, 'sheet' (the default) just opens the
+ *  roster list. Exported so every dispatcher (kickoff-band, letterhead
+ *  instrument, ⌘K, the page listener) shares one literal union. */
+export type CallSheetOpenMode = 'sheet' | 'picker' | 'add';
+
 export function CallSheet({
   open,
   onClose,
@@ -89,6 +96,7 @@ export function CallSheet({
   projectTitle,
   clientName,
   onOpenProfile,
+  openMode = 'sheet',
 }: {
   open: boolean;
   onClose: () => void;
@@ -97,6 +105,10 @@ export function CallSheet({
   clientName?: string | null;
   /** The chevron's destination — the caller mounts PartyProfileSheet. */
   onOpenProfile?: (row: ProjectRosterRow) => void;
+  /** See {@link CallSheetOpenMode}. The sheet still opens underneath a
+   *  'picker'/'add' pre-address — putting the picker back lands on the full
+   *  roster, same as opening the picker from inside the sheet does. */
+  openMode?: CallSheetOpenMode;
 }) {
   const { value: callSheetOn } = useFeatureFlag('call-sheet');
   const { data: rows, isLoading } = useProjectRoster(open ? projectId : null);
@@ -109,6 +121,21 @@ export function CallSheet({
   const groups = useMemo(() => groupRoster(roster), [roster]);
   const vitals = useMemo(() => vitalsLine(roster), [roster]);
   const empty = !isLoading && roster.length === 0;
+
+  // FIX 2 — a doorway can pre-address the picker instead of landing on the
+  // roster list first. Inlined (not via openPicker below) so this hook still
+  // runs unconditionally, before the flag's early return. Keyed on
+  // [open, openMode] rather than a closed→open transition ref: the kickoff
+  // band's doorways are unreachable once the sheet's own backdrop is up, so
+  // re-firing on an already-open sheet never happens in practice, and this
+  // form also fires correctly the first time openMode arrives already 'true'
+  // (e.g. a test mounting straight into an open+pre-addressed sheet).
+  useEffect(() => {
+    if (!open || openMode === 'sheet') return;
+    setAdded(null);
+    setPickerStartsInAdd(openMode === 'add');
+    setPickerOpen(true);
+  }, [open, openMode]);
 
   if (!callSheetOn) return null;
 
