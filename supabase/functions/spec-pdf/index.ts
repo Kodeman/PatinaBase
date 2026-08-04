@@ -49,6 +49,7 @@ import {
 import { resolveStudioIdentity, studioDisplayName } from '../_shared/studio-identity.ts';
 import { canCallerUseOwner, ownedBoardOrNull, parseSpecPdfBody } from './core.ts';
 import { hydrateCompositionImages } from './image-loader.ts';
+import { preparePdfStudioLogo } from './pdf-logo.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -290,7 +291,7 @@ Deno.serve(async (req: Request) => {
       identity,
       (designerProfile as any)?.full_name?.trim() || 'Patina Designer',
     );
-    const studioLogoUrl = identity?.logoUrl ?? undefined;
+    const studioLogoUrl = await preparePdfStudioLogo(identity?.logoUrl ?? undefined);
 
     if (kind === 'board') {
       // ── Board export (B3) — the board must belong to the owner (404-collapse).
@@ -319,7 +320,7 @@ Deno.serve(async (req: Request) => {
         .filter((s) => s && s.id != null)
         .map((s) => ({ id: String(s.id), name: String(s.name ?? 'Section') }));
 
-      const tiles: SpecBoardTileInput[] = ((board.proposal_board_items ?? []) as any[]).map(
+      const rawTiles: SpecBoardTileInput[] = ((board.proposal_board_items ?? []) as any[]).map(
         (it) => {
           const data = (it.data ?? {}) as Record<string, any>;
           const swatches = Array.isArray(data.swatches)
@@ -337,6 +338,12 @@ Deno.serve(async (req: Request) => {
             sectionId: typeof data.section_id === 'string' ? data.section_id : null,
           };
         },
+      );
+      const tiles: SpecBoardTileInput[] = (await hydrateCompositionImages(rawTiles)).map(
+        ({ imageDataUrl, imageRequested: _imageRequested, ...tile }) => ({
+          ...tile,
+          imageUrl: imageDataUrl,
+        }),
       );
 
       const model = buildBoardModel(
@@ -607,6 +614,18 @@ Deno.serve(async (req: Request) => {
           .filter((s) => s != null && String(s).trim() !== '')
           .join('\n\n') || null;
 
+        const rawProductImageUrls: string[] = Array.isArray(product?.images)
+          ? product.images.filter((value: unknown): value is string =>
+            typeof value === 'string' && value.length > 0
+          ).slice(0, 4)
+          : [];
+        const hydratedProductImages = await hydrateCompositionImages(
+          rawProductImageUrls.map((imageUrl) => ({ imageUrl })),
+        );
+        const imageUrls = hydratedProductImages
+          .map(({ imageDataUrl }) => imageDataUrl)
+          .filter((value): value is string => value != null);
+
         const input: SpecItemInput = {
           studioName,
           studioLogoUrl,
@@ -624,7 +643,7 @@ Deno.serve(async (req: Request) => {
           capturedBy,
           recordPct: recordPctFor(item.productId),
           brand: product?.brand ?? null,
-          imageUrls: (product?.images ?? []) as string[],
+          imageUrls,
           clientUnitCents: item.clientUnitCents,
         };
         const model = buildItemModel(input, visibility);
