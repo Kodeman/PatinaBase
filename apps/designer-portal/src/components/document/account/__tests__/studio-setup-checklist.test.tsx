@@ -77,7 +77,7 @@ describe('StudioSetupChecklist — row 4, the rolodex SKIP affordance', () => {
 
     const skip = screen.getByRole('button', { name: 'Skip' });
     expect(skip).toBeDisabled();
-    expect(skip).toHaveAttribute('title', 'Coming with the rolodex');
+    expect(skip).toHaveAttribute('title', 'coming with the rolodex');
 
     fireEvent.click(skip);
     // Disabled buttons don't fire onClick — nothing to assert beyond "no throw".

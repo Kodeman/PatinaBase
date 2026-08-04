@@ -133,7 +133,7 @@ export function StudioSetupChecklist({
             <button
               type="button"
               disabled
-              title="Coming with the rolodex"
+              title="coming with the rolodex"
               aria-disabled="true"
               className="da-score-hover inline-flex min-h-11 min-w-11 items-center font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-aged-oak)] opacity-50 disabled:cursor-not-allowed"
             >
