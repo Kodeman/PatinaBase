@@ -4,9 +4,12 @@ Development handoff package for the reimagined Patina mood board. The direction
 deck was approved 2026-08-03; the four scope questions it left open are now
 decided (see [Decision log](#decision-log)).
 
-**Status:** implementation in progress on `moodboard/ga-integration`. Repository
-drift and the approved one-release GA policy are recorded in the implementation
-addendum.
+**Status (2026-08-03):** implementation and local integration are complete on
+`moodboard/ga-integration`; production release is **blocked** pending the
+remaining runtime/manual acceptance evidence and explicit M2/M3/M8 measurement
+decisions. See the [acceptance ledger](./06-acceptance-evidence.md) and
+[release baseline](./07-release-baseline.md). No production deployment is
+claimed by this package.
 
 ## Reading order
 
@@ -19,6 +22,7 @@ addendum.
 | 5 | [03-phase-3-the-reach.md](./03-phase-3-the-reach.md) | Phase 3 spec — composition-true export, URL unfurl, background removal, image pipeline, templates | Building Phase 3. |
 | 6 | [05-implementation-addendum.md](./05-implementation-addendum.md) | Current-repository reconciliation, locked runtime contracts, security decisions, and production order | Implementing or reviewing any phase. |
 | 7 | [06-acceptance-evidence.md](./06-acceptance-evidence.md) | Live owner/status/evidence ledger for all 85 numbered acceptance criteria | Every handoff, merge gate, and release review. |
+| 8 | [07-release-baseline.md](./07-release-baseline.md) | Dated M1–M8 query contracts, observed M3 proxy, unrecoverable legacy gaps, and required approvals | Release decision and post-GA measurement setup. |
 
 Docs 01–03 are self-contained specs. Doc 04 is the shared substrate every phase
 depends on — the undo/autosave contract in particular is a Phase 1 hard
