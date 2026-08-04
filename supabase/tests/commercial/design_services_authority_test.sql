@@ -192,6 +192,13 @@ DO $$ BEGIN
     'public.countersign_design_services_agreement(uuid,text)'::regprocedure
   ) ~ 'PERFORM 1 FROM public\.projects\s+WHERE id = v_project_id\s+FOR UPDATE',
     'addendum countersign must serialize on the shared project row';
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgrelid = 'public.project_time_entries'::regclass
+      AND tgname = 'aaa_guard_time_entry_invoice_insert_trg'
+      AND NOT tgisinternal
+      AND pg_get_triggerdef(oid) LIKE '%BEFORE INSERT%'
+  ), 'invoice insert guard must run before the classifier';
 END $$;
 
 -- A required unpaid retainer keeps otherwise-rated time pending and out of the
@@ -220,8 +227,76 @@ INSERT INTO public.invoices (
   'Forgery target'
 FROM public.projects project
 WHERE project.proposal_id = 'd5300000-0000-4000-8000-000000000001';
+INSERT INTO public.projects (
+  id, name, created_by, designer_id, client_id
+) VALUES (
+  'd5420000-0000-4000-8000-000000000001', 'Invoice guard other project',
+  'd5000000-0000-4000-8000-000000000001',
+  'd5000000-0000-4000-8000-000000000001',
+  'd5000000-0000-4000-8000-000000000002'
+);
+INSERT INTO public.invoices (
+  id, project_id, designer_id, client_id, status, currency, memo
+) VALUES (
+  'd5410000-0000-4000-8000-000000000002',
+  'd5420000-0000-4000-8000-000000000001',
+  'd5000000-0000-4000-8000-000000000001',
+  'd5000000-0000-4000-8000-000000000002',
+  'draft', 'USD', 'Cross-project insert target'
+);
+INSERT INTO public.invoices (
+  id, project_id, designer_id, client_id, invoice_number, status,
+  issue_date, sent_at, currency, memo
+) SELECT
+  'd5410000-0000-4000-8000-000000000003', project.id,
+  'd5000000-0000-4000-8000-000000000001',
+  'd5000000-0000-4000-8000-000000000002',
+  'INV-INSERT-GUARD-SENT', 'sent', current_date, now(), 'USD',
+  'Sent insert target'
+FROM public.projects project
+WHERE project.proposal_id = 'd5300000-0000-4000-8000-000000000001';
+INSERT INTO public.invoices (
+  id, project_id, designer_id, client_id, invoice_number, status,
+  issue_date, sent_at, paid_at, total_cents, amount_paid_cents, currency, memo
+) SELECT
+  'd5410000-0000-4000-8000-000000000004', project.id,
+  'd5000000-0000-4000-8000-000000000001',
+  'd5000000-0000-4000-8000-000000000002',
+  'INV-INSERT-GUARD-PAID', 'paid', current_date, now(), now(), 100, 100,
+  'USD', 'Paid insert target'
+FROM public.projects project
+WHERE project.proposal_id = 'd5300000-0000-4000-8000-000000000001';
 SET LOCAL ROLE authenticated;
-DO $$ BEGIN
+DO $$
+DECLARE
+  v_project_id uuid;
+  v_entry_ids uuid[] := ARRAY[
+    'd5400000-0000-4000-8000-000000000011'::uuid,
+    'd5400000-0000-4000-8000-000000000012'::uuid,
+    'd5400000-0000-4000-8000-000000000013'::uuid
+  ];
+  v_invoice_ids uuid[] := ARRAY[
+    'd5410000-0000-4000-8000-000000000002'::uuid,
+    'd5410000-0000-4000-8000-000000000003'::uuid,
+    'd5410000-0000-4000-8000-000000000004'::uuid
+  ];
+BEGIN
+  SELECT id INTO v_project_id FROM public.projects
+  WHERE proposal_id = 'd5300000-0000-4000-8000-000000000001';
+  FOR v_index IN 1..array_length(v_entry_ids, 1) LOOP
+    BEGIN
+      INSERT INTO public.project_time_entries (
+        id, project_id, user_id, started_at, duration_minutes, billable,
+        activity, invoice_id
+      ) VALUES (
+        v_entry_ids[v_index], v_project_id,
+        'd5000000-0000-4000-8000-000000000001', now(), 15, true,
+        'design', v_invoice_ids[v_index]
+      );
+      ASSERT false, 'authenticated caller attached invoice on insert';
+    EXCEPTION WHEN check_violation THEN NULL;
+    END;
+  END LOOP;
   BEGIN
     UPDATE public.project_time_entries
     SET billing_state = 'authorized', rated_amount_cents = 1,
@@ -243,6 +318,14 @@ DO $$ BEGIN
           FROM public.project_time_entries
           WHERE id = 'd5400000-0000-4000-8000-000000000001'),
     'rejected derived-field write changed the stored entry';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.project_time_entries
+    WHERE id IN (
+      'd5400000-0000-4000-8000-000000000011',
+      'd5400000-0000-4000-8000-000000000012',
+      'd5400000-0000-4000-8000-000000000013'
+    )
+  ), 'rejected invoice-bearing inserts persisted time entries';
 END $$;
 RESET ROLE;
 
