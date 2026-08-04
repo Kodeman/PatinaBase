@@ -81,6 +81,18 @@ export function documentKindCanNotify(
   return documentKind === "furnishings_authorization";
 }
 
+/** Non-budget transitions are document-scoped. Rejecting a caller-supplied
+ * event id prevents arbitrary UUIDs from manufacturing another idempotency
+ * key for the same committed act. */
+export function commercialNotificationEventKey(
+  transition: CommercialTransition,
+  documentId: string,
+  eventId: string | null,
+): string | null {
+  if (transition === "budget_published") return eventId || null;
+  return eventId === null ? documentId : null;
+}
+
 function hasExecutedServicesEvidence(
   input: CommercialTransitionPolicyInput,
 ): boolean {

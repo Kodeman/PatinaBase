@@ -1,13 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRetryProposalSend } from "@patina/supabase";
+import {
+  useProposalSendDispatchStatus,
+  useRetryProposalSend,
+} from "@patina/supabase";
 import {
   useCreateFurnishingsAuthorization,
   useFurnishingsAuthorizations,
   useOverrideBudgetCheckpoint,
   usePublishBudgetCheckpoint,
   useProjectBillingAuthority,
+  useReplayCommercialNotification,
   useSaveWorkingBudgetDraft,
   useSendFurnishingsAuthorization,
   useWorkingBudget,
@@ -89,9 +93,11 @@ function BudgetEditor({ projectId }: { projectId: string }) {
   const saveBudget = useSaveWorkingBudgetDraft(projectId);
   const publish = usePublishBudgetCheckpoint(projectId);
   const override = useOverrideBudgetCheckpoint(projectId);
+  const replayNotification = useReplayCommercialNotification();
   const budget = budgetQuery.data;
   const version = budget?.version ?? null;
   const checkpoint = budget?.checkpoint ?? null;
+  const agreementId = authorityQuery.data?.agreementId ?? null;
 
   const [lines, setLines] = useState<WorkingBudgetLineDraft[]>([]);
   const [note, setNote] = useState("");
@@ -101,6 +107,9 @@ function BudgetEditor({ projectId }: { projectId: string }) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [overrideReason, setOverrideReason] = useState("");
   const [showOverride, setShowOverride] = useState(false);
+  const [notificationMessage, setNotificationMessage] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     if (budgetQuery.isLoading || !budget) return;
@@ -151,15 +160,21 @@ function BudgetEditor({ projectId }: { projectId: string }) {
       !version ||
       version.state !== "draft" ||
       dirty ||
-      !authorityQuery.data?.agreementId
+      !agreementId
     )
       return;
     setActionError(null);
+    setNotificationMessage(null);
     try {
-      await publish.mutateAsync({
+      const result = await publish.mutateAsync({
         versionId: version.id,
-        agreementId: authorityQuery.data.agreementId,
+        agreementId,
       });
+      if (result.notificationDelivery === "pending_retry") {
+        setNotificationMessage(
+          "The checkpoint is published, but its client notice is pending. Retry it from the published checkpoint below.",
+        );
+      }
     } catch (error) {
       setActionError(
         error instanceof Error
@@ -363,7 +378,7 @@ function BudgetEditor({ projectId }: { projectId: string }) {
                   dirty ||
                   publish.isPending ||
                   saveBudget.isPending ||
-                  !authorityQuery.data?.agreementId
+                  !agreementId
                 }
                 onClick={publishCheckpoint}
               >
@@ -446,6 +461,38 @@ function BudgetEditor({ projectId }: { projectId: string }) {
               </li>
             )}
           </ol>
+          {agreementId && (
+            <Button
+              className="mt-2"
+              size="sm"
+              variant="ghost"
+              loading={replayNotification.isPending}
+              onClick={async () => {
+                setActionError(null);
+                setNotificationMessage(null);
+                try {
+                  const delivery = await replayNotification.mutateAsync({
+                    documentId: agreementId,
+                    transition: "budget_published",
+                    eventId: checkpoint.id,
+                  });
+                  setNotificationMessage(
+                    delivery === "delivered"
+                      ? "The working-budget notice is confirmed."
+                      : "The checkpoint remains published, but its notice is still pending. You can retry safely.",
+                  );
+                } catch (error) {
+                  setActionError(
+                    error instanceof Error
+                      ? error.message
+                      : "The budget notice could not be retried.",
+                  );
+                }
+              }}
+            >
+              Resend budget notice
+            </Button>
+          )}
           {checkpoint.state === "published" && !showOverride && (
             <Button
               className="mt-2"
@@ -503,6 +550,11 @@ function BudgetEditor({ projectId }: { projectId: string }) {
           {actionError}
         </p>
       )}
+      {notificationMessage && (
+        <p role="status" className="mt-3 text-[11px] text-[var(--color-mocha)]">
+          {notificationMessage}
+        </p>
+      )}
     </div>
   );
 }
@@ -517,7 +569,19 @@ function WaveDetail({
   sending: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [deliveryError, setDeliveryError] = useState<string | null>(null);
   const posture = furnishingsDepositPosture(wave);
+  const hasCommittedDelivery = Boolean(
+    wave.proposalSendDispatchId && wave.sentAt,
+  );
+  const deliveryStatus = useProposalSendDispatchStatus({
+    proposalId: wave.proposalId,
+    dispatchId: wave.proposalSendDispatchId,
+    sentAt: wave.sentAt,
+    enabled: wave.state !== "draft" && hasCommittedDelivery,
+  });
+  const retryDelivery = useRetryProposalSend({ errorSurface: "inline" });
+  const delivery = deliveryStatus.data;
   return (
     <article className="border-t border-[var(--doc-ink-border)] py-3 first:border-t-0">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -546,6 +610,85 @@ function WaveDetail({
           ? ` Expected deposit ${money(wave.depositRequiredCents)}.`
           : ""}
       </p>
+      {wave.state !== "draft" &&
+        hasCommittedDelivery &&
+        deliveryStatus.isLoading && (
+          <p
+            role="status"
+            className="mt-2 text-[10.5px] text-[var(--text-muted)]"
+          >
+            Checking email delivery…
+          </p>
+        )}
+      {wave.state !== "draft" && deliveryStatus.isError && (
+        <p
+          role="alert"
+          className="mt-2 text-[10.5px] text-[var(--color-terracotta)]"
+        >
+          Email delivery status is unavailable. Refresh before retrying.
+        </p>
+      )}
+      {wave.state !== "draft" && !hasCommittedDelivery && (
+        <p
+          role="alert"
+          className="mt-2 text-[10.5px] text-[var(--color-terracotta)]"
+        >
+          Email delivery status is incomplete. Refresh before retrying.
+        </p>
+      )}
+      {delivery && delivery.state !== "delivered" && (
+        <div
+          role="status"
+          className="mt-2 border-l-2 border-[var(--color-aged-oak)] px-3 text-[11px] text-[var(--text-muted)]"
+        >
+          <p>
+            The authorization is sent, but email delivery is
+            {delivery.state === "pending" || delivery.state === "in_flight"
+              ? " still being confirmed."
+              : " not confirmed."}
+            {delivery.retryable
+              ? " Retrying uses the existing send and will not create a duplicate."
+              : " Confirm delivery with the client directly."}
+          </p>
+          {delivery.detail && (
+            <p className="mt-1 text-[10px]">{delivery.detail}</p>
+          )}
+          {delivery.retryable && (
+            <Button
+              className="mt-2"
+              size="sm"
+              variant="ghost"
+              loading={retryDelivery.isPending}
+              onClick={async () => {
+                setDeliveryError(null);
+                try {
+                  await retryDelivery.mutateAsync({
+                    proposalId: wave.proposalId,
+                    dispatchId: delivery.dispatchId,
+                    sentAt: delivery.sentAt,
+                  });
+                } catch (error) {
+                  setDeliveryError(
+                    error instanceof Error
+                      ? error.message
+                      : "Email delivery could not be retried.",
+                  );
+                }
+              }}
+            >
+              Retry email delivery
+            </Button>
+          )}
+        </div>
+      )}
+      {deliveryError && (
+        <p
+          role="alert"
+          className="mt-2 text-[10.5px] text-[var(--color-terracotta)]"
+        >
+          {deliveryError}
+        </p>
+      )}
       {open && (
         <div className="mt-3 overflow-x-auto">
           <table className="w-full min-w-[500px] text-left text-[11px]">
@@ -596,18 +739,9 @@ function FurnishingsWaves({ projectId }: { projectId: string }) {
   const proposalsQuery = useProposals({ projectId, status: "draft" });
   const createWave = useCreateFurnishingsAuthorization(projectId);
   const sendWave = useSendFurnishingsAuthorization(projectId);
-  const retryDelivery = useRetryProposalSend({ errorSurface: "inline" });
   const [waveName, setWaveName] = useState("");
   const [sourceProposalId, setSourceProposalId] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
-  const [deliveryNotice, setDeliveryNotice] = useState<{
-    proposalId: string;
-    dispatchId: string;
-    sentAt: string;
-    state: string;
-    retryable: boolean;
-    detail?: string;
-  } | null>(null);
 
   const sourceProposals = (proposalsQuery.data ?? []).filter(
     (proposal: any) =>
@@ -689,60 +823,6 @@ function FurnishingsWaves({ projectId }: { projectId: string }) {
           {actionError}
         </p>
       )}
-      {deliveryNotice && deliveryNotice.state !== "delivered" && (
-        <div
-          role="status"
-          className="mt-2 border-l-2 border-[var(--color-aged-oak)] px-3 text-[11px] text-[var(--text-muted)]"
-        >
-          <p>
-            The authorization is sent, but email delivery is
-            {deliveryNotice.state === "pending" || deliveryNotice.state === "in_flight"
-              ? " still being confirmed."
-              : " not confirmed."}
-            {deliveryNotice.retryable
-              ? " Retrying uses the existing send and will not create a duplicate."
-              : " Confirm delivery with the client directly."}
-          </p>
-          {deliveryNotice.detail && (
-            <p className="mt-1 text-[10px]">{deliveryNotice.detail}</p>
-          )}
-          {deliveryNotice.retryable && (
-            <Button
-              className="mt-2"
-              size="sm"
-              variant="ghost"
-              loading={retryDelivery.isPending}
-              onClick={async () => {
-                setActionError(null);
-                try {
-                  const result = await retryDelivery.mutateAsync({
-                    proposalId: deliveryNotice.proposalId,
-                    dispatchId: deliveryNotice.dispatchId,
-                    sentAt: deliveryNotice.sentAt,
-                  });
-                  setDeliveryNotice((current) => current
-                    ? {
-                        ...current,
-                        state: result._emailDeliveryState,
-                        retryable: result._emailRetryable,
-                        detail: result._emailDispatchDetail,
-                      }
-                    : current);
-                } catch (error) {
-                  setActionError(
-                    error instanceof Error
-                      ? error.message
-                      : "Email delivery could not be checked.",
-                  );
-                }
-              }}
-            >
-              Retry email delivery
-            </Button>
-          )}
-        </div>
-      )}
-
       <div className="mt-4">
         {wavesQuery.isLoading && (
           <p className="text-[11px] text-[var(--text-muted)]">
@@ -772,26 +852,7 @@ function FurnishingsWaves({ projectId }: { projectId: string }) {
             onSend={async () => {
               setActionError(null);
               try {
-                const result = await sendWave.mutateAsync(wave.proposalId);
-                const dispatchId =
-                  result?.proposalSendDispatchId ?? result?.proposal_send_dispatch_id;
-                const sentAt = result?.sentAt ?? result?.sent_at;
-                if (
-                  result?._emailDeliveryState !== "delivered" &&
-                  typeof dispatchId === "string" &&
-                  typeof sentAt === "string"
-                ) {
-                  setDeliveryNotice({
-                    proposalId: wave.proposalId,
-                    dispatchId,
-                    sentAt,
-                    state: result._emailDeliveryState ?? "pending",
-                    retryable: result._emailRetryable === true,
-                    detail: result._emailDispatchDetail,
-                  });
-                } else {
-                  setDeliveryNotice(null);
-                }
+                await sendWave.mutateAsync(wave.proposalId);
               } catch (error) {
                 setActionError(
                   error instanceof Error

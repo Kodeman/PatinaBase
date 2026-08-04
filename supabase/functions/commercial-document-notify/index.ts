@@ -9,6 +9,7 @@ import { sendCompliantEmail } from '../_shared/send-email.ts';
 import { renderCommercialEmail, type CommercialTransition } from './core.ts';
 import {
   assessCommercialTransition,
+  commercialNotificationEventKey,
   type CommercialActorRole,
   type CommercialTransitionEvidence,
 } from './policy.ts';
@@ -42,7 +43,11 @@ interface ProposalRow {
   commercial_state: string | null;
   signed_by_name: string | null;
   client: { id: string; full_name: string | null; email: string | null } | null;
-  designer: { id: string; full_name: string | null; email: string | null } | null;
+  designer: {
+    id: string;
+    full_name: string | null;
+    email: string | null;
+  } | null;
 }
 
 function json(body: unknown, status = 200): Response {
@@ -83,22 +88,23 @@ Deno.serve(async (req: Request) => {
   } catch {
     return json({ error: 'invalid_body' }, 400);
   }
-  if (
-    !documentId ||
-    !TRANSITIONS.has(transition) ||
-    (transition === 'budget_published' && !eventId)
-  ) {
+  const notificationEventKey = TRANSITIONS.has(transition)
+    ? commercialNotificationEventKey(transition, documentId, eventId)
+    : null;
+  if (!documentId || !TRANSITIONS.has(transition) || !notificationEventKey) {
     return json({ error: 'invalid_transition' }, 400);
   }
 
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   const { data, error } = await admin
     .from('proposals')
-    .select(`
+    .select(
+      `
       id, title, client_id, project_id, designer_id, document_kind, commercial_state, signed_by_name,
       client:profiles!client_id(id, full_name, email),
       designer:profiles!designer_id(id, full_name, email)
-    `)
+    `
+    )
     .eq('id', documentId)
     .maybeSingle();
   if (error) {
@@ -165,9 +171,8 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'lookup_failed' }, 500);
   }
 
-  const checkpointId = transition === 'budget_published'
-    ? eventId
-    : (documentRow as any)?.budget_checkpoint_id ?? null;
+  const checkpointId =
+    transition === 'budget_published' ? eventId : ((documentRow as any)?.budget_checkpoint_id ?? null);
   let checkpointRow: any = null;
   let currentBudgetVersionId: string | null = null;
   if (checkpointId) {
@@ -192,10 +197,7 @@ Deno.serve(async (req: Request) => {
         .limit(1)
         .maybeSingle();
       if (currentBudgetVersionError) {
-        console.error(
-          'commercial-document-notify: current budget version lookup failed',
-          currentBudgetVersionError,
-        );
+        console.error('commercial-document-notify: current budget version lookup failed', currentBudgetVersionError);
         return json({ error: 'lookup_failed' }, 500);
       }
       currentBudgetVersionId = currentBudgetVersion?.id ?? null;
@@ -269,8 +271,10 @@ Deno.serve(async (req: Request) => {
   const audiences: Array<'client' | 'studio'> =
     transition === 'client_signed' || transition === 'furnishings_executed'
       ? ['client', 'studio']
-      : transition === 'executed' || transition === 'budget_published' ||
-          transition === 'furnishings_sent' || transition === 'deposit_ready'
+      : transition === 'executed' ||
+          transition === 'budget_published' ||
+          transition === 'furnishings_sent' ||
+          transition === 'deposit_ready'
         ? ['client']
         : ['studio'];
   const results: Record<string, unknown> = {};
@@ -281,13 +285,14 @@ Deno.serve(async (req: Request) => {
       results[audience] = { skipped: 'recipient_missing' };
       continue;
     }
-    const portalUrl = audience === 'studio'
-      ? `${DESIGNER_PORTAL_URL}/doc/${documentId}`
-      : transition === 'budget_published'
-        ? `${CLIENT_PORTAL_URL}/budget`
-        : transition === 'deposit_ready'
-          ? `${CLIENT_PORTAL_URL}/invoices`
-          : `${CLIENT_PORTAL_URL}/proposals/${documentId}`;
+    const portalUrl =
+      audience === 'studio'
+        ? `${DESIGNER_PORTAL_URL}/doc/${documentId}`
+        : transition === 'budget_published'
+          ? `${CLIENT_PORTAL_URL}/budget`
+          : transition === 'deposit_ready'
+            ? `${CLIENT_PORTAL_URL}/invoices`
+            : `${CLIENT_PORTAL_URL}/proposals/${documentId}`;
     const rendered = renderCommercialEmail({
       transition,
       audience,
@@ -295,9 +300,7 @@ Deno.serve(async (req: Request) => {
       documentKind: proposal.document_kind,
       signerName: proposal.signed_by_name,
       recipientName: recipient.full_name,
-      counterpartyName: audience === 'client'
-        ? proposal.designer?.full_name
-        : proposal.client?.full_name,
+      counterpartyName: audience === 'client' ? proposal.designer?.full_name : proposal.client?.full_name,
       portalUrl,
       ceilingCents: (serviceTerms as any)?.billing_ceiling_cents ?? null,
       retainerCents: (serviceTerms as any)?.retainer_amount_cents ?? null,
@@ -310,7 +313,7 @@ Deno.serve(async (req: Request) => {
       notificationType: `commercial_${transition}`,
       category: 'operational',
       templateId: `commercial-${transition}-${audience}`,
-      idempotencyKey: `commercial-document/${eventId ?? documentId}/${transition}/${recipient.id}`,
+      idempotencyKey: `commercial-document/${notificationEventKey}/${transition}/${recipient.id}`,
       failClosedPolicyReads: true,
       metadata: {
         proposal_id: documentId,

@@ -7,11 +7,7 @@
  * payload fields never control signed_ip, activation, or project start date.
  */
 import { NextRequest } from 'next/server';
-import {
-  getUser,
-  createServerClient,
-  createServiceClient,
-} from '@patina/supabase/server';
+import { getUser, createServerClient, createServiceClient } from '@patina/supabase/server';
 import { captureMoodBoardProposalActivated } from '@/lib/analytics/mood-board-server';
 
 import { POST } from '../route';
@@ -33,7 +29,7 @@ const mockCaptureProposalActivated = captureMoodBoardProposalActivated as jest.M
 describe('POST /api/proposals/[id]/sign', () => {
   function makeRequest(
     headers: Record<string, string> = {},
-    body: Record<string, unknown> = { signedByName: 'Jamie Homeowner' },
+    body: Record<string, unknown> = { signedByName: 'Jamie Homeowner' }
   ): NextRequest {
     return new NextRequest('http://localhost:3002/api/proposals/prop-1/sign', {
       method: 'POST',
@@ -82,15 +78,13 @@ describe('POST /api/proposals/[id]/sign', () => {
       }
       return Promise.resolve({ error: null });
     });
-    serviceRpcMock = jest
-      .fn()
-      .mockResolvedValue({
-        data: {
-          newly_signed: true,
-          project_id: 'e4061000-0000-4000-8000-000000000001',
-        },
-        error: null,
-      });
+    serviceRpcMock = jest.fn().mockResolvedValue({
+      data: {
+        newly_signed: true,
+        project_id: 'e4061000-0000-4000-8000-000000000001',
+      },
+      error: null,
+    });
     boardCountStatusEqMock = jest.fn().mockResolvedValue({ count: 2, error: null });
     const boardCountProposalEqMock = jest.fn().mockReturnValue({
       eq: boardCountStatusEqMock,
@@ -137,7 +131,10 @@ describe('POST /api/proposals/[id]/sign', () => {
   it('fails closed when the commercial kind preflight errors', async () => {
     userRpcMock.mockImplementation((name: string) => {
       if (name === 'get_client_commercial_document_bundle') {
-        return Promise.resolve({ data: null, error: { message: 'lookup failed' } });
+        return Promise.resolve({
+          data: null,
+          error: { message: 'lookup failed' },
+        });
       }
       return Promise.resolve({ data: null, error: null });
     });
@@ -151,7 +148,9 @@ describe('POST /api/proposals/[id]/sign', () => {
 
   it('does not default an unknown commercial kind into legacy activation', async () => {
     userRpcMock.mockResolvedValue({
-      data: { document: { id: 'prop-1', kind: 'future_contract', state: 'sent' } },
+      data: {
+        document: { id: 'prop-1', kind: 'future_contract', state: 'sent' },
+      },
       error: null,
     });
 
@@ -163,21 +162,15 @@ describe('POST /api/proposals/[id]/sign', () => {
   });
 
   it('passes verified client identity and cf-connecting-ip only to the service RPC', async () => {
-    const res = await POST(
-      makeRequest({ 'cf-connecting-ip': '203.0.113.7' }),
-      makeParams(),
-    );
+    const res = await POST(makeRequest({ 'cf-connecting-ip': '203.0.113.7' }), makeParams());
 
     expect(res.status).toBe(200);
-    expect(serviceRpcMock).toHaveBeenCalledWith(
-      'sign_proposal_with_trusted_ip',
-      {
-        p_proposal_id: 'prop-1',
-        p_signed_name: 'Jamie Homeowner',
-        p_client_id: 'client-1',
-        p_signed_ip: '203.0.113.7',
-      },
-    );
+    expect(serviceRpcMock).toHaveBeenCalledWith('sign_proposal_with_trusted_ip', {
+      p_proposal_id: 'prop-1',
+      p_signed_name: 'Jamie Homeowner',
+      p_client_id: 'client-1',
+      p_signed_ip: '203.0.113.7',
+    });
   });
 
   it('ignores caller-supplied IP, activation, start-date, and client fields', async () => {
@@ -190,33 +183,27 @@ describe('POST /api/proposals/[id]/sign', () => {
           autoActivate: false,
           startDate: '2040-01-01',
           clientId: 'attacker-controlled',
-        },
+        }
       ),
-      makeParams(),
+      makeParams()
     );
 
     expect(res.status).toBe(200);
-    expect(serviceRpcMock).toHaveBeenCalledWith(
-      'sign_proposal_with_trusted_ip',
-      {
-        p_proposal_id: 'prop-1',
-        p_signed_name: 'Jamie Homeowner',
-        p_client_id: 'client-1',
-        p_signed_ip: '203.0.113.7',
-      },
-    );
+    expect(serviceRpcMock).toHaveBeenCalledWith('sign_proposal_with_trusted_ip', {
+      p_proposal_id: 'prop-1',
+      p_signed_name: 'Jamie Homeowner',
+      p_client_id: 'client-1',
+      p_signed_ip: '203.0.113.7',
+    });
   });
 
   it('uses the first x-forwarded-for hop when Cloudflare IP is absent', async () => {
-    const res = await POST(
-      makeRequest({ 'x-forwarded-for': '198.51.100.1, 10.0.0.1' }),
-      makeParams(),
-    );
+    const res = await POST(makeRequest({ 'x-forwarded-for': '198.51.100.1, 10.0.0.1' }), makeParams());
 
     expect(res.status).toBe(200);
     expect(serviceRpcMock).toHaveBeenCalledWith(
       'sign_proposal_with_trusted_ip',
-      expect.objectContaining({ p_signed_ip: '198.51.100.1' }),
+      expect.objectContaining({ p_signed_ip: '198.51.100.1' })
     );
   });
 
@@ -226,7 +213,7 @@ describe('POST /api/proposals/[id]/sign', () => {
     expect(res.status).toBe(200);
     expect(serviceRpcMock).toHaveBeenCalledWith(
       'sign_proposal_with_trusted_ip',
-      expect.objectContaining({ p_signed_ip: null }),
+      expect.objectContaining({ p_signed_ip: null })
     );
   });
 
@@ -311,7 +298,9 @@ describe('POST /api/proposals/[id]/sign', () => {
     userRpcMock.mockImplementation((name: string) => {
       if (name === 'get_client_commercial_document_bundle') {
         return Promise.resolve({
-          data: { document: { id: 'prop-1', kind: 'design_services', state: 'sent' } },
+          data: {
+            document: { id: 'prop-1', kind: 'design_services', state: 'sent' },
+          },
           error: null,
         });
       }
@@ -324,22 +313,23 @@ describe('POST /api/proposals/[id]/sign', () => {
       return Promise.resolve({ error: null });
     });
     serviceRpcMock.mockResolvedValue({
-      data: { commercial_state: 'client_signed', newly_client_signed: true, project_id: null },
+      data: {
+        commercial_state: 'client_signed',
+        newly_client_signed: true,
+        project_id: null,
+      },
       error: null,
     });
 
     const response = await POST(makeRequest({ 'cf-connecting-ip': '203.0.113.7' }), makeParams());
 
     expect(response.status).toBe(200);
-    expect(serviceRpcMock).toHaveBeenCalledWith(
-      'sign_design_services_agreement_with_trusted_ip',
-      {
-        p_proposal_id: 'prop-1',
-        p_signed_name: 'Jamie Homeowner',
-        p_client_id: 'client-1',
-        p_signed_ip: '203.0.113.7',
-      },
-    );
+    expect(serviceRpcMock).toHaveBeenCalledWith('sign_design_services_agreement_with_trusted_ip', {
+      p_proposal_id: 'prop-1',
+      p_signed_name: 'Jamie Homeowner',
+      p_client_id: 'client-1',
+      p_signed_ip: '203.0.113.7',
+    });
     expect(await response.json()).toMatchObject({
       commercialState: 'client_signed',
       newlyClientSigned: true,
@@ -354,7 +344,13 @@ describe('POST /api/proposals/[id]/sign', () => {
     userRpcMock.mockImplementation((name: string) => {
       if (name === 'get_client_commercial_document_bundle') {
         return Promise.resolve({
-          data: { document: { id: 'prop-1', kind: 'furnishings_authorization', state: 'sent' } },
+          data: {
+            document: {
+              id: 'prop-1',
+              kind: 'furnishings_authorization',
+              state: 'sent',
+            },
+          },
           error: null,
         });
       }
@@ -375,21 +371,15 @@ describe('POST /api/proposals/[id]/sign', () => {
       error: null,
     });
 
-    const response = await POST(
-      makeRequest({ 'cf-connecting-ip': '203.0.113.7' }),
-      makeParams(),
-    );
+    const response = await POST(makeRequest({ 'cf-connecting-ip': '203.0.113.7' }), makeParams());
 
     expect(response.status).toBe(200);
-    expect(serviceRpcMock).toHaveBeenCalledWith(
-      'execute_furnishings_authorization_with_trusted_ip',
-      {
-        p_proposal_id: 'prop-1',
-        p_signed_name: 'Jamie Homeowner',
-        p_client_id: 'client-1',
-        p_signed_ip: '203.0.113.7',
-      },
-    );
+    expect(serviceRpcMock).toHaveBeenCalledWith('execute_furnishings_authorization_with_trusted_ip', {
+      p_proposal_id: 'prop-1',
+      p_signed_name: 'Jamie Homeowner',
+      p_client_id: 'client-1',
+      p_signed_ip: '203.0.113.7',
+    });
     expect(invokeMock).toHaveBeenNthCalledWith(1, 'commercial-document-notify', {
       body: { documentId: 'prop-1', transition: 'furnishings_executed' },
     });
@@ -415,12 +405,17 @@ describe('POST /api/proposals/[id]/sign', () => {
     userRpcMock.mockImplementation((name: string) => {
       if (name === 'get_client_commercial_document_bundle') {
         return Promise.resolve({
-          data: { document: { id: 'prop-1', kind: 'design_services', state: 'sent' } },
+          data: {
+            document: { id: 'prop-1', kind: 'design_services', state: 'sent' },
+          },
           error: null,
         });
       }
       if (name === 'get_client_proposal_bundle') {
-        return Promise.resolve({ data: { proposal: { id: 'prop-1', valid_until: null } }, error: null });
+        return Promise.resolve({
+          data: { proposal: { id: 'prop-1', valid_until: null } },
+          error: null,
+        });
       }
       return Promise.resolve({ error: null });
     });
@@ -428,7 +423,10 @@ describe('POST /api/proposals/[id]/sign', () => {
       data: { commercialState: 'client_signed', newlyClientSigned: true },
       error: null,
     });
-    invokeMock.mockResolvedValue({ data: null, error: { message: 'edge unavailable' } });
+    invokeMock.mockResolvedValue({
+      data: null,
+      error: { message: 'edge unavailable' },
+    });
 
     const response = await POST(makeRequest(), makeParams());
 
@@ -445,21 +443,37 @@ describe('POST /api/proposals/[id]/sign', () => {
     userRpcMock.mockImplementation((name: string) => {
       if (name === 'get_client_commercial_document_bundle') {
         return Promise.resolve({
-          data: { document: { id: 'prop-1', kind: 'furnishings_authorization', state: 'sent' } },
+          data: {
+            document: {
+              id: 'prop-1',
+              kind: 'furnishings_authorization',
+              state: 'sent',
+            },
+          },
           error: null,
         });
       }
       if (name === 'get_client_proposal_bundle') {
-        return Promise.resolve({ data: { proposal: { id: 'prop-1', valid_until: null } }, error: null });
+        return Promise.resolve({
+          data: { proposal: { id: 'prop-1', valid_until: null } },
+          error: null,
+        });
       }
       return Promise.resolve({ error: null });
     });
     serviceRpcMock.mockResolvedValue({
-      data: { projectId: 'project-1', depositInvoiceId: 'invoice-1', newlyExecuted: true },
+      data: {
+        projectId: 'project-1',
+        depositInvoiceId: 'invoice-1',
+        newlyExecuted: true,
+      },
       error: null,
     });
     invokeMock
-      .mockResolvedValueOnce({ data: null, error: { message: 'first unavailable' } })
+      .mockResolvedValueOnce({
+        data: null,
+        error: { message: 'first unavailable' },
+      })
       .mockResolvedValueOnce({ data: { ok: true }, error: null });
 
     const response = await POST(makeRequest(), makeParams());
@@ -478,24 +492,36 @@ describe('POST /api/proposals/[id]/sign', () => {
     });
   });
 
-  it('allows an executed FF&E retry without duplicating transition delivery', async () => {
+  it('replays idempotent FF&E notices on an executed retry without repeating execution', async () => {
     userRpcMock.mockImplementation((name: string) => {
       if (name === 'get_client_commercial_document_bundle') {
         return Promise.resolve({
-          data: { document: { id: 'prop-1', kind: 'furnishings_authorization', state: 'executed' } },
+          data: {
+            document: {
+              id: 'prop-1',
+              kind: 'furnishings_authorization',
+              state: 'executed',
+            },
+          },
           error: null,
         });
       }
       if (name === 'get_client_proposal_bundle') {
         return Promise.resolve({
-          data: { proposal: { id: 'prop-1', valid_until: '2020-01-01T00:00:00.000Z' } },
+          data: {
+            proposal: { id: 'prop-1', valid_until: '2020-01-01T00:00:00.000Z' },
+          },
           error: null,
         });
       }
       return Promise.resolve({ error: null });
     });
     serviceRpcMock.mockResolvedValue({
-      data: { project_id: 'project-1', newly_executed: false },
+      data: {
+        project_id: 'project-1',
+        deposit_invoice_id: 'invoice-1',
+        newly_executed: false,
+      },
       error: null,
     });
 
@@ -504,23 +530,78 @@ describe('POST /api/proposals/[id]/sign', () => {
     expect(response.status).toBe(200);
     expect(serviceRpcMock).toHaveBeenCalledWith(
       'execute_furnishings_authorization_with_trusted_ip',
-      expect.objectContaining({ p_client_id: 'client-1' }),
+      expect.objectContaining({ p_client_id: 'client-1' })
     );
-    expect(invokeMock).not.toHaveBeenCalled();
-    expect(await response.json()).toMatchObject({ newlyExecuted: false });
+    expect(invokeMock).toHaveBeenNthCalledWith(1, 'commercial-document-notify', {
+      body: { documentId: 'prop-1', transition: 'furnishings_executed' },
+    });
+    expect(invokeMock).toHaveBeenNthCalledWith(2, 'commercial-document-notify', {
+      body: { documentId: 'prop-1', transition: 'deposit_ready' },
+    });
+    expect(await response.json()).toMatchObject({
+      newlyExecuted: false,
+      notificationDelivery: { state: 'delivered' },
+    });
+  });
+
+  it('replays the idempotent client-sign notice when the committed retry is newly=false', async () => {
+    userRpcMock.mockImplementation((name: string) => {
+      if (name === 'get_client_commercial_document_bundle') {
+        return Promise.resolve({
+          data: {
+            document: {
+              id: 'prop-1',
+              kind: 'design_services',
+              state: 'client_signed',
+            },
+          },
+          error: null,
+        });
+      }
+      if (name === 'get_client_proposal_bundle') {
+        return Promise.resolve({
+          data: { proposal: { id: 'prop-1', valid_until: null } },
+          error: null,
+        });
+      }
+      return Promise.resolve({ error: null });
+    });
+    serviceRpcMock.mockResolvedValue({
+      data: { commercial_state: 'client_signed', newly_client_signed: false },
+      error: null,
+    });
+
+    const response = await POST(makeRequest(), makeParams());
+
+    expect(response.status).toBe(200);
+    expect(invokeMock).toHaveBeenCalledWith('commercial-document-notify', {
+      body: { documentId: 'prop-1', transition: 'client_signed' },
+    });
+    expect(await response.json()).toMatchObject({
+      newlyClientSigned: false,
+      notificationDelivery: { state: 'delivered' },
+    });
   });
 
   it('rejects an expired first commercial signature before privileged execution', async () => {
     userRpcMock.mockImplementation((name: string) => {
       if (name === 'get_client_commercial_document_bundle') {
         return Promise.resolve({
-          data: { document: { id: 'prop-1', kind: 'furnishings_authorization', state: 'sent' } },
+          data: {
+            document: {
+              id: 'prop-1',
+              kind: 'furnishings_authorization',
+              state: 'sent',
+            },
+          },
           error: null,
         });
       }
       if (name === 'get_client_proposal_bundle') {
         return Promise.resolve({
-          data: { proposal: { id: 'prop-1', valid_until: '2020-01-01T00:00:00.000Z' } },
+          data: {
+            proposal: { id: 'prop-1', valid_until: '2020-01-01T00:00:00.000Z' },
+          },
           error: null,
         });
       }
