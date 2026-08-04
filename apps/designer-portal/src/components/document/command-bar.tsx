@@ -179,6 +179,10 @@ export function CommandBar() {
   // The missing noun beside documents + ledgers (G3): every party in the
   // unified directory is ⌘K-reachable. Small per-designer roster — fetched once
   // and filtered in memory like the rest of the rows.
+  // Wave 4 (00420) scope ruling — ⌘K person search stays STUDIO-wide on
+  // purpose: searching the whole studio's book is correct here (it's a
+  // lookup, not a relationship-action queue), and people-room.tsx's deep-link
+  // resolution depends on ⌘K being able to surface a studio-mate's party.
   const { data: people } = usePeopleDirectory();
   const { data: recentBoards = [] } = useRecentBoards(8);
   // Account actions (Settings / Sign out) belong to the "do anything" surface;

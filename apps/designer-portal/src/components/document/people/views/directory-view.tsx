@@ -223,7 +223,16 @@ export function DirectoryView({
   // simply unused on that chip (harmless: React Query already holds this
   // exact 'all' key from the Room's own usePeopleDirectory({role:'all'})).
   const queryRole = role === 'field' || role === 'company' ? 'all' : role;
-  const { data, isLoading } = usePeopleDirectory({ role: queryRole });
+  // Wave 4 (00420) scope wiring — the MINE · STUDIO lens actually narrows the
+  // query now. STUDIO (the default) passes no `scope`, which is the view's
+  // own unfiltered read (RLS already admits comembers); MINE narrows
+  // server-side via `.eq('scope','mine')`. Before this, `scope` was read for
+  // display only (the ScopeLens toggle) while every chip always read the
+  // widened, unfiltered roster underneath it — dead-code lens.
+  const { data, isLoading } = usePeopleDirectory({
+    role: queryRole,
+    scope: scope === 'mine' ? 'mine' : undefined,
+  });
   const now = useMemo(() => new Date(), []);
   const marketplace = role === 'maker' && makerLens === 'marketplace';
 

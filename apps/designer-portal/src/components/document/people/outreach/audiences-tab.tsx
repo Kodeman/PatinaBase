@@ -42,7 +42,10 @@ const AXIS_LABEL: Record<string, string> = {
 
 export function AudiencesTab({ notify }: { notify: (m: string) => void }) {
   const { data: segments, isLoading } = useAudienceSegments();
-  const { data: people } = usePeopleDirectory({ role: 'all' });
+  // studio visibility ≠ shared nurture queues — a relationship-action surface;
+  // the widened (00420) STUDIO roster stays explicitly mine here (an outreach
+  // segment is built from the designer's own book, never a studio-mate's).
+  const { data: people } = usePeopleDirectory({ role: 'all', scope: 'mine' });
   const createSegment = useCreateAudienceSegment();
   const deleteSegment = useDeleteAudienceSegment();
 

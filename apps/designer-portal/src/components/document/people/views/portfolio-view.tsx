@@ -35,6 +35,11 @@ function shortClient(name: string): string {
 export function PortfolioView(_props: PeopleViewProps) {
   const router = useRouter();
   const { data: projects, isLoading } = useProjects();
+  // Wave 4 (00420) scope ruling — Portfolio is a BROWSE surface, not a
+  // relationship action: `useProjects()` is already studio-wide (Wave 5's
+  // owner-attribution join), so a studio-mate's completed project needs the
+  // same studio-wide directory to resolve its client name. Left unscoped
+  // (STUDIO, the default) on purpose — do not pin to 'mine' here.
   const { data: directory } = usePeopleDirectory({ role: 'client' });
   // Studio Wave 5 — owner-attribution byline shown only once the signed-in
   // designer's studio has >1 active member; solo designers see no change.
