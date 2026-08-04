@@ -39,6 +39,12 @@ export function makeDecisionOption(
     quantity: 1,
     cost_delta_cents: null,
     lead_time_days_delta: null,
+    // Mirrors the table defaults: `approves` is NOT NULL DEFAULT false (00202);
+    // the configuration-provenance pair is nullable and only set when the
+    // option is built from a saved product configuration (00413).
+    approves: false,
+    configuration_id: null,
+    selection_snapshot: null,
     created_at: new Date('2026-04-01T00:00:00Z').toISOString(),
     ...overrides,
   };
