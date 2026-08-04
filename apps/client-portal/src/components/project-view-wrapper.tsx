@@ -15,6 +15,7 @@ import { ProjectActivityFeed } from '@/components/project/ProjectActivityFeed';
 import { ProjectTeamPanel } from '@/components/project/ProjectTeamPanel';
 import { ProjectDocumentsPanel } from '@/components/project/ProjectDocumentsPanel';
 import { FFEPipelinePanel } from '@/components/project/FFEPipelinePanel';
+import { ProjectCommercialSummary } from '@/components/project-commercial-summary';
 import type { MilestoneDetail } from '@/types/project';
 import { useProjectPhaseRealtime } from '@/hooks/use-project-phase-realtime';
 
@@ -55,6 +56,8 @@ export function ProjectViewWrapper({
       debug={process.env.NODE_ENV === 'development'}
     >
       {showOverview && <ProjectOverview project={project} milestones={milestones} />}
+
+      {showOverview && <ProjectCommercialSummary projectId={projectId} />}
 
       {showOverview && <ProjectScopeDetails projectId={projectId} />}
 

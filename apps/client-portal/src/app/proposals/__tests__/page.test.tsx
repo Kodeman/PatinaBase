@@ -105,7 +105,24 @@ describe('ClientProposalsPage', () => {
 
     render(<ClientProposalsPage />);
 
-    expect(screen.getByText(/no proposals yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/no documents yet/i)).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('shows a client-signed design agreement as awaiting the studio', () => {
+    mockUseClientProposals.mockReturnValue({
+      data: [makeProposal({
+        status: 'accepted',
+        document_kind: 'design_services',
+        commercial_state: 'client_signed',
+      } as never)],
+      isLoading: false,
+      isError: false,
+    });
+
+    render(<ClientProposalsPage />);
+
+    expect(screen.getByText(/design services · signed by you · awaiting studio/i)).toBeInTheDocument();
+    expect(screen.queryByText(formatCurrency(750000))).not.toBeInTheDocument();
   });
 });

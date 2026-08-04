@@ -4,7 +4,13 @@ import { use, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useClientProposal } from '@/hooks/use-proposals-client';
+import {
+  invalidateSignedCommercialDocument,
+  useClientCommercialDocument,
+} from '@/hooks/use-commercial-client';
+import { commercialSummaryFromProposal } from '@/lib/commercial-documents';
 import { useAuth } from '@/hooks/use-auth';
 import { proposalClientEvents } from '@/lib/analytics/events';
 import { QueryFailure } from '@/components/query-failure';
@@ -16,8 +22,10 @@ export default function ClientProposalSignPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const { data: proposal, isLoading, isError, refetch } = useClientProposal(id);
+  const { data: commercialBundle } = useClientCommercialDocument(id);
   const [name, setName] = useState('');
   const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -58,7 +66,8 @@ export default function ClientProposalSignPage({
     );
   }
 
-  const isSignable = proposal.status === 'sent' || proposal.status === 'viewed';
+  const commercial = commercialBundle?.document ?? commercialSummaryFromProposal(proposal);
+  const isSignable = commercial.state === 'sent';
   if (!isSignable) {
     return (
       <div className="mx-auto max-w-2xl px-6 py-16 text-center">
@@ -109,12 +118,21 @@ export default function ClientProposalSignPage({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ signedByName: name.trim() }),
       });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        projectId?: string | null;
+        notificationDelivery?: { state?: string };
+      };
       if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(body.error || 'Failed to sign proposal.');
       }
+      await invalidateSignedCommercialDocument(queryClient, id, body.projectId ?? null);
       proposalClientEvents.signed({ proposalId: id, signedByName: name.trim() });
-      router.push(`/proposals/${id}`);
+      router.push(
+        body.notificationDelivery?.state === 'pending_retry'
+          ? `/proposals/${id}?delivery=pending_retry`
+          : `/proposals/${id}`,
+      );
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to sign proposal.');
@@ -132,10 +150,21 @@ export default function ClientProposalSignPage({
         Back to proposal
       </Link>
 
-      <h1 className="type-page-title">Sign Proposal</h1>
+      <h1 className="type-page-title">
+        {commercial.kind === 'furnishings_authorization'
+          ? `Authorize ${commercial.waveName ?? 'furnishings'}`
+          : commercial.kind === 'design_services'
+            ? 'Sign Design Services Agreement'
+            : commercial.kind === 'service_addendum'
+              ? 'Sign Design Services Addendum'
+              : 'Sign Proposal'}
+      </h1>
       <p className="type-body mt-2">
-        By signing, you accept the scope, investment, and terms outlined in
-        &ldquo;{proposal.title}&rdquo;.
+        {commercial.kind === 'furnishings_authorization'
+          ? `By signing, you authorize only the named furnishing lines, quantities, and client prices in “${proposal.title}”.`
+          : commercial.kind === 'design_services' || commercial.kind === 'service_addendum'
+            ? `By signing, you accept the services, signed role rates, design authorization ceiling, retainer, and terms in “${proposal.title}”. The agreement becomes effective only after the studio countersigns.`
+            : `By signing, you accept the scope, investment, and terms outlined in “${proposal.title}”.`}
       </p>
 
       <form onSubmit={handleSubmit} className="mt-8 space-y-6">
@@ -172,8 +201,11 @@ export default function ClientProposalSignPage({
             required
           />
           <span className="text-[var(--text-body)]">
-            I agree to the scope and investment in this proposal and authorize my designer to begin
-            the project.
+            {commercial.kind === 'furnishings_authorization'
+              ? 'I authorize the studio to procure only the named lines at the quantities and client prices shown. I understand any required deposit is a separate payment step.'
+              : commercial.kind === 'design_services' || commercial.kind === 'service_addendum'
+                ? 'I agree to these design-services terms and understand my signature alone does not authorize work until the studio countersigns.'
+                : 'I agree to the scope and investment in this proposal.'}
           </span>
         </label>
 
@@ -193,7 +225,11 @@ export default function ClientProposalSignPage({
             className="inline-flex items-center gap-2 rounded-[3px] bg-patina-charcoal px-6 py-3 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-60"
           >
             {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-            {submitting ? 'Signing…' : 'Sign and accept'}
+            {submitting
+              ? 'Signing…'
+              : commercial.kind === 'furnishings_authorization'
+                ? 'Sign authorization'
+                : 'Sign and accept'}
           </button>
           <Link
             href={`/proposals/${id}`}

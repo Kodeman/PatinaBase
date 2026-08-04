@@ -101,6 +101,9 @@ function mapSnapshot(value: unknown): ProposalSendSnapshot {
     clientId: requiredString(row, "client_id"),
     projectId: optionalString(row, "project_id"),
     proposalTitle: requiredString(row, "proposal_title"),
+    documentKind: optionalString(row, "document_kind") as
+      | ProposalSendSnapshot["documentKind"]
+      | undefined,
     personalMessage: optionalString(row, "personal_message"),
     ccEmail: optionalString(row, "cc_email"),
     validUntil: optionalString(row, "valid_until"),
@@ -220,7 +223,19 @@ function createGateway(authorization: string): ProposalSendGateway {
         p_lease_seconds: 30,
       });
       if (error) throw error;
-      return mapClaim(data);
+      const claim = mapClaim(data);
+      if (claim.dispatch && !claim.dispatch.documentKind) {
+        const { data: proposal, error: proposalError } = await admin
+          .from('proposals')
+          .select('document_kind')
+          .eq('id', claim.dispatch.proposalId)
+          .maybeSingle();
+        if (proposalError) throw proposalError;
+        claim.dispatch.documentKind = proposal?.document_kind as
+          | ProposalSendSnapshot['documentKind']
+          | undefined;
+      }
+      return claim;
     },
 
     async prepareRequest(input) {

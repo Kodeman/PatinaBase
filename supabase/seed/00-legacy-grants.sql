@@ -7199,3 +7199,417 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.apply_board_room_state(uuid, text, uuid, jsonb) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON public.proposal_service_terms TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON public.proposal_service_rates TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.commercial_document_signatures TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.project_commercial_documents TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.project_billing_authorities TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.project_billing_authority_rates TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON public.project_budget_versions TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON public.project_budget_lines TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.project_budget_checkpoints TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.furnishing_authorization_items TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_commercial_proposal_authority() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._decline_proposal_impl(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.decline_proposal(uuid, text) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.decline_proposal(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_commercial_immutable_row() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_commercial_authored_child() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_budget_immutability() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._commercial_document_fingerprint(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._budget_version_fingerprint(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._sign_design_services_agreement_authorized(uuid, text, uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sign_design_services_agreement(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.sign_design_services_agreement(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sign_design_services_agreement_with_trusted_ip(uuid, text, uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.sign_design_services_agreement_with_trusted_ip(uuid, text, uuid, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.countersign_design_services_agreement(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.countersign_design_services_agreement(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.activate_proposal_as_project(uuid, date) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.activate_proposal_as_project(uuid, date) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.upsert_design_services_draft(uuid, jsonb, jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.upsert_design_services_draft(uuid, jsonb, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_service_addendum(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_service_addendum(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_commercial_document_send_snapshot(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_commercial_document_send_snapshot(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.send_commercial_document(uuid, text, text, timestamptz) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.send_commercial_document(uuid, text, text, timestamptz) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.publish_budget_checkpoint(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.publish_budget_checkpoint(uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.acknowledge_budget_checkpoint(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.acknowledge_budget_checkpoint(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.override_budget_checkpoint(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.override_budget_checkpoint(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_working_budget(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_working_budget(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_furnishings_authorization(uuid, text, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_furnishings_authorization(uuid, text, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._execute_furnishings_authorization_authorized(uuid, text, uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.execute_furnishings_authorization(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.execute_furnishings_authorization(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.execute_furnishings_authorization_with_trusted_ip(uuid, text, uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.execute_furnishings_authorization_with_trusted_ip(uuid, text, uuid, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.list_furnishings_authorizations(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.list_furnishings_authorizations(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._is_design_services_project(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._is_design_services_project(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_commercial_time_entry_derived_fields() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.classify_project_time_entry_authority() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_time_entry_invoice_authority() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._issue_invoice_pre_00412(uuid, date) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.issue_invoice(uuid, date) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.issue_invoice(uuid, date) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_purchase_order_direct_insert() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_project_ffe_purchase_authority() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_authority_summary(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_authority_summary(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_client_commercial_document_bundle(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_client_commercial_document_bundle(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.supersede_unsigned_legacy_proposals(uuid[], uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00412_design_services_commercial_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.supersede_unsigned_legacy_proposals(uuid[], uuid, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

@@ -31,6 +31,8 @@ import {
 } from '@patina/design-system';
 import { useProposal } from '@/hooks/use-proposals';
 import { fmtDay } from '@/lib/document/format';
+import { commercialDocumentExperience } from '@/lib/document/commercial-documents';
+import { ServiceAgreementDocumentBody } from './commercial/commercial-document-body';
 
 /** Sign-off · Decision · Delivery · Event — the same kind labels the composer
  *  wears (milestone-composer.tsx's KINDS), so a milestone reads identically
@@ -51,6 +53,35 @@ function BlockLabel({ children }: { children: React.ReactNode }) {
 }
 
 export function ProposalBlocksReadOnly({ proposalId }: { proposalId: string }) {
+  // Choose the renderer before any legacy room, FF&E, palette, or board query mounts.
+  const { data: proposal, isLoading } = useProposal(proposalId) as {
+    data: any;
+    isLoading: boolean;
+  };
+  if (isLoading) {
+    return <p className="py-3 text-[11.5px] italic text-[var(--text-muted)]">Unfolding…</p>;
+  }
+
+  const experience = commercialDocumentExperience(proposal?.document_kind);
+  if (experience === 'design_services') {
+    return (
+      <ServiceAgreementDocumentBody
+        proposalId={proposalId}
+        clientName={proposal?.client?.full_name ?? undefined}
+      />
+    );
+  }
+  if (experience === 'commercial_readonly') {
+    return (
+      <p className="py-3 text-[11.5px] text-[var(--text-muted)]">
+        This commercial edition is read-only in Wave 1.
+      </p>
+    );
+  }
+  return <LegacyProposalBlocksReadOnly proposalId={proposalId} />;
+}
+
+function LegacyProposalBlocksReadOnly({ proposalId }: { proposalId: string }) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: proposal, isLoading } = useProposal(proposalId) as {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
