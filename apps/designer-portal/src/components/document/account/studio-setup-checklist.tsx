@@ -5,12 +5,19 @@
  * the Studio page. The tick visual mirrors work-block.tsx's stamp idiom (a
  * local ChecklistRow — WorkBlock itself is hook-bound to section tasks and
  * not reusable here); every tick renders straight from `deriveSetupSteps`
- * and is never itself clickable. Two rows carry a scored word instead of a
- * plain label: row 3 opens the invite sheet, row 5 opens the existing
- * open-project front door. Row 4's SKIP word is disabled this wave — the
- * rolodex table (and its seed-skip write) lands in Wave 2, so there is
- * nothing yet to skip into. Collapses to a single settled mono line once
+ * and is never itself clickable. Three rows carry a scored word instead of a
+ * plain label: row 3 opens the invite sheet, row 4 (Call Sheet Wave 2) opens
+ * the rolodex review and SKIPs the seed-review, row 5 opens the existing
+ * open-project front door. Collapses to a single settled mono line once
  * every step is done.
+ *
+ * Row 4 stays dependency-free (no @patina/supabase import, mirroring
+ * desk-derivation.ts) — the caller (account-studio-page.tsx) owns the
+ * `useStudioContacts` / `useUpdateOrganization` calls and passes primitives +
+ * callbacks in, same as it already does for `onInvite`. Without
+ * `onSkipSeed`/`onOpenSeedReview` (the flag-off / Wave-1 shape) row 4 renders
+ * exactly as it did before this wave — SKIP disabled, "coming with the
+ * rolodex".
  */
 
 import type { ReactNode } from 'react';
@@ -20,6 +27,15 @@ import { openOpenProject } from '../command-bar';
 export interface StudioSetupChecklistProps extends StudioSetupInput {
   /** Row 3 ("Invite your crew") — opens the studio invite sheet. */
   onInvite: () => void;
+  /** Row 4 ("Seed the rolodex") — Call Sheet Wave 2. Writes
+   *  `rolodex_seed_skipped_at`. Omitted (or `undefined`) keeps row 4 in its
+   *  Wave-1 disabled shape. */
+  onSkipSeed?: () => void;
+  /** True while the skip write is in flight — disables SKIP a second time. */
+  skipSeedPending?: boolean;
+  /** Row 4's label — opens the rolodex review sheet. Only interactive
+   *  alongside `onSkipSeed` (both land together, Wave 2). */
+  onOpenSeedReview?: () => void;
   className?: string;
 }
 
@@ -68,6 +84,9 @@ function ChecklistRow({
 
 export function StudioSetupChecklist({
   onInvite,
+  onSkipSeed,
+  skipSeedPending = false,
+  onOpenSeedReview,
   className,
   ...input
 }: StudioSetupChecklistProps) {
@@ -124,12 +143,29 @@ export function StudioSetupChecklist({
       />
       <ChecklistRow
         done={rolodexSeeded.done}
-        label={rolodexSeeded.label}
+        label={
+          rolodexSeeded.done || !onOpenSeedReview ? (
+            rolodexSeeded.label
+          ) : (
+            <button type="button" onClick={onOpenSeedReview} className={SCORED_ROW_LABEL}>
+              {rolodexSeeded.label}
+            </button>
+          )
+        }
         hint={
           rolodexSeeded.done ? undefined : 'The rolodex fills itself from your projects'
         }
         action={
-          rolodexSeeded.done ? undefined : (
+          rolodexSeeded.done ? undefined : onSkipSeed ? (
+            <button
+              type="button"
+              onClick={onSkipSeed}
+              disabled={skipSeedPending}
+              className="da-score-hover inline-flex min-h-11 min-w-11 items-center font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-aged-oak)] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Skip
+            </button>
+          ) : (
             <button
               type="button"
               disabled
