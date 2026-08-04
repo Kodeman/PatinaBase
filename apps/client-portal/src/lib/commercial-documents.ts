@@ -1,76 +1,63 @@
 import type { Proposal } from '@patina/supabase';
+import {
+  COMMERCIAL_DOCUMENT_KINDS,
+  COMMERCIAL_STATES,
+  type CommercialDocumentKind,
+  type CommercialState,
+  type CommercialDocumentSummary as CanonicalCommercialDocumentSummary,
+  type CommercialSignatureReceipt,
+  type DesignServiceRate,
+  type DesignServiceTerms,
+  type FurnishingsAuthorizationItem as CanonicalFurnishingsAuthorizationItem,
+  type ProjectBillingAuthoritySummary,
+  type WorkingBudgetCheckpoint as CanonicalWorkingBudgetCheckpoint,
+  type WorkingBudgetLine as CanonicalWorkingBudgetLine,
+  type WorkingBudgetVersion as CanonicalWorkingBudgetVersion,
+} from '@patina/types';
 
-export const COMMERCIAL_DOCUMENT_KINDS = [
-  'legacy',
-  'design_services',
-  'furnishings_authorization',
-  'service_addendum',
-] as const;
+export { COMMERCIAL_DOCUMENT_KINDS };
+export const COMMERCIAL_DOCUMENT_STATES = COMMERCIAL_STATES;
+export type { CommercialDocumentKind };
+export type CommercialDocumentState = CommercialState;
 
-export type CommercialDocumentKind = (typeof COMMERCIAL_DOCUMENT_KINDS)[number];
-
-export const COMMERCIAL_DOCUMENT_STATES = [
-  'draft',
-  'sent',
-  'client_signed',
-  'executed',
-  'declined',
-  'expired',
-  'superseded',
-] as const;
-
-export type CommercialDocumentState = (typeof COMMERCIAL_DOCUMENT_STATES)[number];
-
-export interface CommercialDocumentSummary {
-  id: string;
-  projectId: string | null;
-  kind: CommercialDocumentKind;
-  state: CommercialDocumentState;
-  title: string;
-  version: number;
-  waveName: string | null;
-  sentAt: string | null;
-  executedAt: string | null;
-  supersededAt: string | null;
-  replacementProposalId: string | null;
+export interface CommercialDocumentSummary extends CanonicalCommercialDocumentSummary {
   documentFingerprint: string | null;
 }
 
-export interface CommercialRate {
-  id: string;
-  version: number;
-  roleName: string;
-  hourlyRateCents: number;
-  effectiveAt: string;
-}
+export type CommercialRate = Pick<
+  DesignServiceRate,
+  'id' | 'version' | 'roleName' | 'hourlyRateCents' | 'effectiveAt'
+>;
 
-export interface CommercialSignature {
-  party: 'client' | 'studio';
-  signerName: string;
-  signedAt: string;
-  consentVersion: string;
-  documentFingerprint: string;
-}
+export type CommercialSignature = Pick<
+  CommercialSignatureReceipt,
+  'party' | 'signerName' | 'signedAt' | 'consentVersion' | 'documentFingerprint'
+>;
 
-export interface DesignServicesTerms {
+export type DesignServicesTerms = Omit<
+  Pick<
+    DesignServiceTerms,
+    | 'scope'
+    | 'deliverables'
+    | 'exclusions'
+    | 'billingCeilingCents'
+    | 'retainerAmountCents'
+    | 'retainerActivationPolicy'
+    | 'billingCadence'
+    | 'currency'
+    | 'terms'
+    | 'currentRateVersion'
+  >,
+  'scope' | 'terms'
+> & {
   scope: string | null;
-  deliverables: string[];
-  exclusions: string[];
-  billingCeilingCents: number;
-  retainerAmountCents: number;
-  retainerActivationPolicy: 'immediate' | 'retainer_paid';
-  billingCadence: 'monthly' | 'biweekly' | 'milestone';
-  currency: string;
   terms: string | null;
-  currentRateVersion: number;
-}
+};
 
-export interface FurnishingsAuthorizationItem {
-  description: string;
-  quantity: number;
-  clientUnitPriceCents: number;
-  currency: string;
-}
+export type FurnishingsAuthorizationItem = Pick<
+  CanonicalFurnishingsAuthorizationItem,
+  'description' | 'quantity' | 'clientUnitPriceCents' | 'currency'
+>;
 
 export interface FurnishingsAuthorization {
   checkpointId: string | null;
@@ -87,54 +74,34 @@ export interface CommercialDocumentBundle {
   furnishings: FurnishingsAuthorization | null;
 }
 
-export interface ProjectAuthoritySummary {
-  id: string;
-  projectId: string;
-  agreementId: string;
-  state: 'active' | 'retainer_pending' | 'exhausted' | 'superseded';
-  currency: string;
-  ceilingCents: number;
-  authorizedCents: number;
-  accruedCents: number;
-  invoicedCents: number;
-  pendingAuthorizationCents: number;
-  remainingCents: number;
-  retainerAmountCents: number;
-  retainerPaidCents: number;
-  retainerActivationPolicy: 'immediate' | 'retainer_paid';
-  activeRateVersion: number;
-  billingThrough: string | null;
+export interface ProjectAuthoritySummary extends Omit<ProjectBillingAuthoritySummary, 'rates'> {
   rates: CommercialRate[];
   activity: Array<{ label: string; hours: number; amountCents: number }>;
 }
 
-export interface WorkingBudgetLine {
-  roomName: string;
-  category: string;
-  lowCents: number;
-  targetCents: number;
-  highCents: number;
-  notes: string | null;
-}
+export type WorkingBudgetLine = Pick<
+  CanonicalWorkingBudgetLine,
+  'roomName' | 'category' | 'lowCents' | 'targetCents' | 'highCents' | 'notes'
+>;
 
-export interface WorkingBudgetCheckpoint {
-  id: string;
-  state: 'published' | 'acknowledged' | 'overridden';
-  publishedAt: string;
-  acknowledgedAt: string | null;
-  overrideReason: string | null;
+export interface WorkingBudgetCheckpoint extends Pick<
+  CanonicalWorkingBudgetCheckpoint,
+  'id' | 'state' | 'publishedAt' | 'acknowledgedAt' | 'overrideReason'
+> {
   evidenceFingerprint: string | null;
 }
 
-export interface WorkingBudgetVersion {
-  id: string;
-  projectId: string;
-  version: number;
-  state: string;
-  currency: string;
-  lowTotalCents: number;
-  targetTotalCents: number;
-  highTotalCents: number;
+export interface WorkingBudgetVersion extends Pick<
+  CanonicalWorkingBudgetVersion,
+  | 'id'
+  | 'projectId'
+  | 'version'
+  | 'state'
+  | 'currency'
+  | 'lowTotalCents'
+  | 'targetTotalCents'
+  | 'highTotalCents'
+> {
   lines: WorkingBudgetLine[];
   checkpoint: WorkingBudgetCheckpoint | null;
 }
@@ -249,7 +216,10 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
   const source = Object.keys(documentRaw).length > 0
     ? documentRaw
     : Object.keys(proposal).length > 0 ? proposal : raw;
-  const id = text(first(source, 'id', 'proposalId', 'proposal_id'));
+  // Project-level furnishing lists carry both the internal commercial-document
+  // id and the proposal id. Client routes are proposal-addressed, so prefer the
+  // latter whenever it is present.
+  const id = text(first(source, 'proposalId', 'proposal_id', 'id', 'documentId', 'document_id'));
   if (!id) return null;
 
   const legacyStatus = oneOf(
@@ -257,14 +227,27 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
     ['draft', 'sent', 'viewed', 'accepted', 'declined', 'expired', 'revised'] as const,
     'draft',
   );
-  const kind = oneOf(first(source, 'kind', 'documentKind', 'document_kind'), COMMERCIAL_DOCUMENT_KINDS, 'legacy');
-  const serviceRaw = record(first(raw, 'serviceTerms', 'service_terms'));
+  const inferredKind =
+    first(source, 'documentId', 'document_id') !== undefined &&
+    first(source, 'waveName', 'wave_name') !== undefined
+      ? 'furnishings_authorization'
+      : 'legacy';
+  const kind = oneOf(
+    first(source, 'kind', 'documentKind', 'document_kind'),
+    COMMERCIAL_DOCUMENT_KINDS,
+    inferredKind,
+  );
+  const nestedServiceTerms = record(first(raw, 'serviceTerms', 'service_terms'));
+  const serviceRaw = Object.keys(nestedServiceTerms).length > 0
+    ? nestedServiceTerms
+    : record(first(source, 'terms'));
   const nestedFurnishings = record(first(raw, 'furnishings', 'furnishingsAuthorization', 'furnishings_authorization'));
   const furnishingRaw = Object.keys(nestedFurnishings).length > 0
     ? nestedFurnishings
-    : kind === 'furnishings_authorization' ? raw : {};
+    : kind === 'furnishings_authorization' ? source : {};
   const replacementRaw = record(first(raw, 'replacement'));
-  const signatureRows = first(raw, 'signatures');
+  const signatureRows = first(raw, 'signatures') ?? first(source, 'signatures');
+  const rateRows = first(raw, 'rates') ?? first(source, 'rates');
 
   return {
     document: {
@@ -299,16 +282,29 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
       terms: nullableText(first(serviceRaw, 'terms')),
       currentRateVersion: number(first(serviceRaw, 'currentRateVersion', 'current_rate_version'), 1),
     },
-    rates: adaptRates(first(raw, 'rates')),
-    signatures: Array.isArray(signatureRows) ? signatureRows.map((item) => {
+    rates: adaptRates(rateRows),
+    signatures: Array.isArray(signatureRows) ? signatureRows.flatMap((item) => {
       const row = record(item);
-      return {
-        party: oneOf(first(row, 'party'), ['client', 'studio'] as const, 'client'),
-        signerName: text(first(row, 'signerName', 'signer_name')),
-        signedAt: text(first(row, 'signedAt', 'signed_at')),
+      const party = first(row, 'party', 'partyRole', 'party_role');
+      const signerName = text(first(row, 'signerName', 'signer_name', 'signedName', 'signed_name'));
+      const signedAt = text(first(row, 'signedAt', 'signed_at'));
+      const documentFingerprint = text(first(
+        row,
+        'documentFingerprint',
+        'document_fingerprint',
+        'evidenceFingerprint',
+        'evidence_fingerprint',
+      ));
+      if ((party !== 'client' && party !== 'studio') || !signerName || !signedAt || !documentFingerprint) {
+        return [];
+      }
+      return [{
+        party,
+        signerName,
+        signedAt,
         consentVersion: text(first(row, 'consentVersion', 'consent_version')),
-        documentFingerprint: text(first(row, 'documentFingerprint', 'document_fingerprint')),
-      };
+        documentFingerprint,
+      }];
     }) : [],
     furnishings: Object.keys(furnishingRaw).length === 0 ? null : {
       checkpointId: nullableText(first(furnishingRaw, 'checkpointId', 'checkpoint_id')),
@@ -317,7 +313,7 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
       items: Array.isArray(furnishingRaw.items) ? furnishingRaw.items.map((item) => {
         const row = record(item);
         return {
-          description: text(first(row, 'description')),
+          description: text(first(row, 'description', 'name')),
           quantity: number(first(row, 'quantity')),
           clientUnitPriceCents: number(first(row, 'clientUnitPriceCents', 'client_unit_price_cents')),
           currency: text(first(row, 'currency'), 'USD'),
@@ -334,10 +330,15 @@ export function adaptProjectCommercialSummary(value: unknown): ProjectCommercial
   const authorityRaw = Object.keys(nestedAuthority).length > 0
     ? nestedAuthority
     : first(raw, 'agreementId', 'agreement_id') !== undefined ? raw : {};
-  const budgetRaw = Object.keys(nestedBudget).length > 0
+  const budgetContainer = Object.keys(nestedBudget).length > 0
     ? nestedBudget
     : first(raw, 'targetTotalCents', 'target_total_cents') !== undefined ? raw : {};
-  const checkpointRaw = record(first(budgetRaw, 'checkpoint'));
+  const nestedBudgetVersion = record(first(budgetContainer, 'version'));
+  const budgetRaw = Object.keys(nestedBudgetVersion).length > 0
+    ? nestedBudgetVersion
+    : budgetContainer;
+  const checkpointRaw = record(first(budgetContainer, 'checkpoint'));
+  const budgetLines = first(budgetContainer, 'lines') ?? first(budgetRaw, 'lines');
 
   const authority: ProjectAuthoritySummary | null = Object.keys(authorityRaw).length === 0 ? null : {
     id: text(authorityRaw.id),
@@ -371,12 +372,16 @@ export function adaptProjectCommercialSummary(value: unknown): ProjectCommercial
     id: text(budgetRaw.id),
     projectId: text(first(budgetRaw, 'projectId', 'project_id')),
     version: number(budgetRaw.version),
-    state: text(budgetRaw.state),
+    state: oneOf(
+      first(budgetRaw, 'state', 'status'),
+      ['draft', 'published', 'superseded'] as const,
+      'draft',
+    ),
     currency: text(budgetRaw.currency, 'USD'),
     lowTotalCents: number(first(budgetRaw, 'lowTotalCents', 'low_total_cents')),
     targetTotalCents: number(first(budgetRaw, 'targetTotalCents', 'target_total_cents')),
     highTotalCents: number(first(budgetRaw, 'highTotalCents', 'high_total_cents')),
-    lines: Array.isArray(budgetRaw.lines) ? budgetRaw.lines.map((item) => {
+    lines: Array.isArray(budgetLines) ? budgetLines.map((item) => {
       const row = record(item);
       return {
         roomName: text(first(row, 'roomName', 'room_name')),
@@ -389,17 +394,34 @@ export function adaptProjectCommercialSummary(value: unknown): ProjectCommercial
     }) : [],
     checkpoint: Object.keys(checkpointRaw).length === 0 ? null : {
       id: text(checkpointRaw.id),
-      state: oneOf(checkpointRaw.state, ['published', 'acknowledged', 'overridden'] as const, 'published'),
+      state: first(checkpointRaw, 'state', 'status') === 'open'
+        ? 'published'
+        : oneOf(
+          first(checkpointRaw, 'state', 'status'),
+          ['published', 'acknowledged', 'overridden'] as const,
+          'published',
+        ),
       publishedAt: text(first(checkpointRaw, 'publishedAt', 'published_at')),
       acknowledgedAt: nullableText(first(checkpointRaw, 'acknowledgedAt', 'acknowledged_at')),
       overrideReason: nullableText(first(checkpointRaw, 'overrideReason', 'override_reason')),
-      evidenceFingerprint: nullableText(first(checkpointRaw, 'evidenceFingerprint', 'evidence_fingerprint')),
+      evidenceFingerprint: nullableText(first(
+        checkpointRaw,
+        'evidenceFingerprint',
+        'evidence_fingerprint',
+        'snapshotFingerprint',
+        'snapshot_fingerprint',
+      )),
     },
   };
 
   const furnishingRows = first(raw, 'furnishingsAuthorizations', 'furnishings_authorizations');
   const furnishingsAuthorizations = Array.isArray(furnishingRows)
-    ? furnishingRows.map(adaptCommercialDocumentBundle).filter((item): item is CommercialDocumentBundle => item !== null)
+    ? furnishingRows
+      .map((item) => adaptCommercialDocumentBundle({
+        ...record(item),
+        projectId: first(record(item), 'projectId', 'project_id') ?? first(raw, 'projectId', 'project_id'),
+      }))
+      .filter((item): item is CommercialDocumentBundle => item !== null)
     : [];
 
   return { authority, workingBudget, furnishingsAuthorizations };

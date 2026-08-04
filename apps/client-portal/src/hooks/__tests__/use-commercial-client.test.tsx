@@ -1,13 +1,21 @@
 import type { ReactNode } from 'react';
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { createBrowserClient } from '@patina/supabase';
+import { commercialKeys, createBrowserClient } from '@patina/supabase';
 import {
+  invalidateSignedCommercialDocument,
   useClientCommercialDocument,
   useProjectCommercialSummary,
 } from '../use-commercial-client';
 
-jest.mock('@patina/supabase', () => ({ createBrowserClient: jest.fn() }));
+jest.mock('@patina/supabase', () => ({
+  createBrowserClient: jest.fn(),
+  commercialKeys: {
+    clientBundle: (id: string) => ['commercial-documents', id, 'client-safe'],
+    budget: (id: string) => ['working-budget', id],
+    waves: (id: string) => ['furnishings-authorizations', id],
+  },
+}));
 
 const mockCreateBrowserClient = createBrowserClient as jest.Mock;
 
@@ -39,6 +47,25 @@ describe('commercial client hooks', () => {
     expect(result.current.data?.document.kind).toBe('design_services');
   });
 
+  it('uses the canonical shared commercial-document query key', async () => {
+    const rpc = jest.fn().mockResolvedValue({
+      data: { document: { id: 'ds-1', kind: 'design_services', state: 'sent' } },
+      error: null,
+    });
+    mockCreateBrowserClient.mockReturnValue({ rpc });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const canonicalWrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+
+    const { result } = renderHook(() => useClientCommercialDocument('ds-1'), {
+      wrapper: canonicalWrapper,
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(queryClient.getQueryData(commercialKeys.clientBundle('ds-1'))).toEqual(result.current.data);
+  });
+
   it('loads the three project shells without querying raw time entries', async () => {
     const rpc = jest.fn().mockImplementation((name: string) => {
       if (name === 'get_project_authority_summary') {
@@ -60,5 +87,24 @@ describe('commercial client hooks', () => {
       'list_furnishings_authorizations',
     ]);
     expect(result.current.data?.authority?.id).toBe('a1');
+  });
+
+  it('invalidates proposal, list, commercial, and project projections after signing', async () => {
+    const queryClient = new QueryClient();
+    const invalidate = jest.spyOn(queryClient, 'invalidateQueries').mockResolvedValue(undefined);
+
+    await invalidateSignedCommercialDocument(queryClient, 'ffe-1', 'project-1');
+
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: commercialKeys.clientBundle('ffe-1'),
+    });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['proposal', 'ffe-1'] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['proposals'] });
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: ['project-commercial-summary', 'project-1'],
+    });
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: commercialKeys.waves('project-1'),
+    });
   });
 });

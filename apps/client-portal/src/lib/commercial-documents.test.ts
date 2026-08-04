@@ -61,6 +61,67 @@ describe('commercial document client adapter', () => {
     expect(JSON.stringify(bundle)).not.toContain('Internal note');
   });
 
+  it('accepts the canonical @patina/types agreement with terms and evidence nested on document', () => {
+    const bundle = adaptCommercialDocumentBundle({
+      document: {
+        id: 'ds-canonical',
+        projectId: null,
+        kind: 'design_services',
+        state: 'client_signed',
+        title: 'Canonical agreement',
+        version: 1,
+        waveName: null,
+        sentAt: '2026-08-01T00:00:00Z',
+        executedAt: null,
+        supersededAt: null,
+        replacementProposalId: null,
+        terms: {
+          proposalId: 'ds-canonical',
+          scope: 'Design development',
+          deliverables: ['Concept package'],
+          exclusions: [],
+          billingCeilingCents: 1_800_000,
+          retainerAmountCents: 300_000,
+          retainerActivationPolicy: 'retainer_paid',
+          billingCadence: 'monthly',
+          currency: 'USD',
+          terms: 'Actual time billed monthly.',
+          currentRateVersion: 1,
+          updatedAt: '2026-08-01T00:00:00Z',
+        },
+        rates: [{
+          id: 'rate-canonical',
+          proposalId: 'ds-canonical',
+          version: 1,
+          roleName: 'Principal',
+          hourlyRateCents: 22_500,
+          effectiveAt: '2026-08-01T00:00:00Z',
+        }],
+        signatures: [{
+          id: 'signature-canonical',
+          proposalId: 'ds-canonical',
+          party: 'client',
+          signerUserId: 'client-1',
+          signerName: 'Jamie Client',
+          signedAt: '2026-08-02T00:00:00Z',
+          consentVersion: 'v1',
+          documentFingerprint: 'fingerprint-canonical',
+        }],
+      },
+      authority: null,
+      budgetVersion: null,
+      budgetCheckpoint: null,
+    });
+
+    expect(bundle?.serviceTerms?.billingCeilingCents).toBe(1_800_000);
+    expect(bundle?.rates[0]?.roleName).toBe('Principal');
+    expect(bundle?.signatures[0]).toMatchObject({
+      party: 'client',
+      signerName: 'Jamie Client',
+      documentFingerprint: 'fingerprint-canonical',
+    });
+  });
+
   it('maps only curated authority activity and ignores raw time-entry details', () => {
     const summary = adaptProjectCommercialSummary({
       authority: {
@@ -85,6 +146,52 @@ describe('commercial document client adapter', () => {
     expect(JSON.stringify(summary)).not.toContain('Do not leak me');
   });
 
+  it('adapts the nested working-budget RPC contract without zeroing the published version', () => {
+    const summary = adaptProjectCommercialSummary({
+      workingBudget: {
+        version: {
+          id: 'budget-3',
+          projectId: 'project-1',
+          version: 3,
+          status: 'published',
+          lowTotalCents: 5_400_000,
+          targetTotalCents: 7_400_000,
+          highTotalCents: 9_800_000,
+        },
+        lines: [{
+          roomName: 'Living room',
+          category: 'Seating',
+          lowCents: 1_000_000,
+          targetCents: 1_500_000,
+          highCents: 2_000_000,
+        }],
+        checkpoint: {
+          id: 'checkpoint-3',
+          status: 'open',
+          snapshotFingerprint: 'budget-fingerprint',
+          publishedAt: '2026-08-01T00:00:00Z',
+        },
+        isPurchaseAuthority: false,
+      },
+    });
+
+    expect(summary.workingBudget).toMatchObject({
+      id: 'budget-3',
+      version: 3,
+      state: 'published',
+      targetTotalCents: 7_400_000,
+      checkpoint: {
+        id: 'checkpoint-3',
+        state: 'published',
+        evidenceFingerprint: 'budget-fingerprint',
+      },
+    });
+    expect(summary.workingBudget?.lines[0]).toMatchObject({
+      roomName: 'Living room',
+      targetCents: 1_500_000,
+    });
+  });
+
   it('accepts a flat project FF&E summary and nested replacement guidance', () => {
     const furnishings = adaptCommercialDocumentBundle({
       id: 'ffe-1',
@@ -106,5 +213,36 @@ describe('commercial document client adapter', () => {
       replacementProposalId: 'ffe-2',
     });
     expect(furnishings?.furnishings?.items[0].description).toBe('Sectional');
+  });
+
+  it('maps the flat furnishings-list contract to proposal-addressed client links', () => {
+    const summary = adaptProjectCommercialSummary({
+      projectId: 'project-1',
+      furnishingsAuthorizations: [{
+        documentId: 'commercial-document-1',
+        proposalId: 'proposal-1',
+        waveName: 'Living floor',
+        commercialState: 'executed',
+        executedAt: '2026-08-02T00:00:00Z',
+        items: [{
+          id: 'item-1',
+          name: 'Sectional',
+          quantity: 1,
+          clientUnitPriceCents: 1_200_000,
+        }],
+      }],
+    });
+
+    expect(summary.furnishingsAuthorizations[0]).toMatchObject({
+      document: {
+        id: 'proposal-1',
+        projectId: 'project-1',
+        kind: 'furnishings_authorization',
+        state: 'executed',
+      },
+      furnishings: {
+        items: [{ description: 'Sectional', quantity: 1, clientUnitPriceCents: 1_200_000 }],
+      },
+    });
   });
 });

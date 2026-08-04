@@ -4,7 +4,10 @@ import {
   createServerClient,
   createServiceClient,
 } from '@patina/supabase/server';
+import { COMMERCIAL_DOCUMENT_KINDS } from '@patina/types';
 import { resolveClientIp } from '@/lib/utils/client-ip';
+
+const COMMERCIAL_DOCUMENT_KIND_SET = new Set<string>(COMMERCIAL_DOCUMENT_KINDS);
 
 export async function POST(
   request: NextRequest,
@@ -37,33 +40,92 @@ export async function POST(
     'get_client_commercial_document_bundle',
     { p_proposal_id: id },
   );
-  const documentKind =
-    commercialBundle?.document?.kind ?? commercialBundle?.document?.document_kind ??
-    commercialBundle?.document?.documentKind ?? 'legacy';
+  const commercialDocument = commercialBundle?.document;
+  const documentKind = commercialDocument?.kind ?? commercialDocument?.document_kind ??
+    commercialDocument?.documentKind;
+
+  // Kind selection controls which transaction may run, so absence, an RPC
+  // error, or an unknown future value must never fall back to legacy project
+  // activation. Legacy rows are returned explicitly as kind `legacy`.
+  if (
+    commercialLookupError ||
+    !commercialDocument ||
+    typeof documentKind !== 'string' ||
+    !COMMERCIAL_DOCUMENT_KIND_SET.has(documentKind)
+  ) {
+    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+  }
+
+  // Keep the existing client-safe proposal preflight for expiry and hardened
+  // legacy compatibility. Commercial kind still comes only from the dedicated
+  // database allowlist above.
+  const { data: bundle, error: fetchError } = await supabase.rpc(
+    'get_client_proposal_bundle',
+    { p_proposal_id: id },
+  );
+  const proposal = bundle?.proposal;
+
+  if (fetchError || !proposal) {
+    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+  }
 
   if (documentKind !== 'legacy') {
-    if (commercialLookupError || !commercialBundle?.document) {
-      return NextResponse.json({ error: 'not_found' }, { status: 404 });
-    }
-
-    const document = commercialBundle.document;
-    const commercialState = document.commercialState ?? document.commercial_state ?? document.state;
-    if (commercialState !== 'sent' && commercialState !== 'client_signed') {
+    const commercialState = commercialDocument.commercialState ??
+      commercialDocument.commercial_state ?? commercialDocument.state;
+    const isRetryableFurnishingsExecution =
+      documentKind === 'furnishings_authorization' && commercialState === 'executed';
+    const isClientSignedServicesRetry =
+      documentKind !== 'furnishings_authorization' && commercialState === 'client_signed';
+    if (
+      commercialState !== 'sent' &&
+      !isRetryableFurnishingsExecution &&
+      !isClientSignedServicesRetry
+    ) {
       return NextResponse.json({ error: 'not_signable' }, { status: 409 });
     }
 
+    // An executed FF&E retry repairs a lost response and does not create a new
+    // signature. Every first execution remains time-boxed like legacy and
+    // design-services signing.
+    if (commercialState !== 'executed' && proposal.valid_until) {
+      const expiresAt = new Date(proposal.valid_until).getTime();
+      if (!Number.isNaN(expiresAt) && expiresAt < Date.now()) {
+        return NextResponse.json({ error: 'proposal_expired' }, { status: 410 });
+      }
+    }
+
     if (documentKind === 'furnishings_authorization') {
-      const { data: executeResult, error: executeError } = await supabase.rpc(
-        'execute_furnishings_authorization',
-        { p_proposal_id: id, p_signed_name: signedByName },
+      // FF&E execution writes immutable signature evidence, applies the named
+      // lines, and creates the deposit handoff in one transaction. Only the
+      // server-mediated variant may receive the edge-derived client IP.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const commercialService = createServiceClient() as any;
+      const { data: executeResult, error: executeError } = await commercialService.rpc(
+        'execute_furnishings_authorization_with_trusted_ip',
+        {
+          p_proposal_id: id,
+          p_signed_name: signedByName,
+          p_client_id: user.id,
+          p_signed_ip: clientIp,
+        },
       );
       if (executeError) {
         return NextResponse.json({ error: executeError.message || 'sign_failed' }, { status: 500 });
       }
+      const newlyExecuted =
+        executeResult?.newly_executed === true || executeResult?.newlyExecuted === true;
+      if (newlyExecuted) {
+        void supabase.functions.invoke('commercial-document-notify', {
+          body: { documentId: id, transition: 'furnishings_executed' },
+        }).catch(() => {
+          // Notification delivery does not weaken the durable execution.
+        });
+      }
       return NextResponse.json({
         ok: true,
         commercialState: 'executed',
-        newlyExecuted: executeResult?.newly_executed ?? executeResult?.newlyExecuted ?? false,
+        projectId: executeResult?.project_id ?? executeResult?.projectId ?? null,
+        newlyExecuted,
       });
     }
 
@@ -103,16 +165,6 @@ export async function POST(
   }
 
   // Legacy compatibility stays on the hardened proposal bundle/signature path.
-  const { data: bundle, error: fetchError } = await supabase.rpc(
-    'get_client_proposal_bundle',
-    { p_proposal_id: id },
-  );
-  const proposal = bundle?.proposal;
-
-  if (fetchError || !proposal) {
-    return NextResponse.json({ error: 'not_found' }, { status: 404 });
-  }
-
   if (
     proposal.status !== 'sent' &&
     proposal.status !== 'viewed' &&

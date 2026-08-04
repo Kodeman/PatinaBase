@@ -4,8 +4,12 @@ import { use, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useClientProposal } from '@/hooks/use-proposals-client';
-import { useClientCommercialDocument } from '@/hooks/use-commercial-client';
+import {
+  invalidateSignedCommercialDocument,
+  useClientCommercialDocument,
+} from '@/hooks/use-commercial-client';
 import { commercialSummaryFromProposal } from '@/lib/commercial-documents';
 import { useAuth } from '@/hooks/use-auth';
 import { proposalClientEvents } from '@/lib/analytics/events';
@@ -18,6 +22,7 @@ export default function ClientProposalSignPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const { data: proposal, isLoading, isError, refetch } = useClientProposal(id);
   const { data: commercialBundle } = useClientCommercialDocument(id);
@@ -113,10 +118,14 @@ export default function ClientProposalSignPage({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ signedByName: name.trim() }),
       });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        projectId?: string | null;
+      };
       if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(body.error || 'Failed to sign proposal.');
       }
+      await invalidateSignedCommercialDocument(queryClient, id, body.projectId ?? null);
       proposalClientEvents.signed({ proposalId: id, signedByName: name.trim() });
       router.push(`/proposals/${id}`);
       router.refresh();

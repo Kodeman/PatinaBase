@@ -110,6 +110,34 @@ describe('POST /api/proposals/[id]/sign', () => {
     });
   });
 
+  it('fails closed when the commercial kind preflight errors', async () => {
+    userRpcMock.mockImplementation((name: string) => {
+      if (name === 'get_client_commercial_document_bundle') {
+        return Promise.resolve({ data: null, error: { message: 'lookup failed' } });
+      }
+      return Promise.resolve({ data: null, error: null });
+    });
+
+    const res = await POST(makeRequest(), makeParams());
+
+    expect(res.status).toBe(404);
+    expect(userRpcMock).toHaveBeenCalledTimes(1);
+    expect(mockCreateServiceClient).not.toHaveBeenCalled();
+  });
+
+  it('does not default an unknown commercial kind into legacy activation', async () => {
+    userRpcMock.mockResolvedValue({
+      data: { document: { id: 'prop-1', kind: 'future_contract', state: 'sent' } },
+      error: null,
+    });
+
+    const res = await POST(makeRequest(), makeParams());
+
+    expect(res.status).toBe(404);
+    expect(userRpcMock).toHaveBeenCalledTimes(1);
+    expect(mockCreateServiceClient).not.toHaveBeenCalled();
+  });
+
   it('passes verified client identity and cf-connecting-ip only to the service RPC', async () => {
     const res = await POST(
       makeRequest({ 'cf-connecting-ip': '203.0.113.7' }),
@@ -232,6 +260,12 @@ describe('POST /api/proposals/[id]/sign', () => {
           error: null,
         });
       }
+      if (name === 'get_client_proposal_bundle') {
+        return Promise.resolve({
+          data: { proposal: { id: 'prop-1', valid_until: null } },
+          error: null,
+        });
+      }
       return Promise.resolve({ error: null });
     });
     serviceRpcMock.mockResolvedValue({
@@ -258,5 +292,106 @@ describe('POST /api/proposals/[id]/sign', () => {
     expect(invokeMock).toHaveBeenCalledWith('commercial-document-notify', {
       body: { documentId: 'prop-1', transition: 'client_signed' },
     });
+  });
+
+  it('executes FF&E through the trusted service boundary and preserves evidence', async () => {
+    userRpcMock.mockImplementation((name: string) => {
+      if (name === 'get_client_commercial_document_bundle') {
+        return Promise.resolve({
+          data: { document: { id: 'prop-1', kind: 'furnishings_authorization', state: 'sent' } },
+          error: null,
+        });
+      }
+      if (name === 'get_client_proposal_bundle') {
+        return Promise.resolve({
+          data: { proposal: { id: 'prop-1', valid_until: null } },
+          error: null,
+        });
+      }
+      return Promise.resolve({ error: null });
+    });
+    serviceRpcMock.mockResolvedValue({
+      data: { projectId: 'project-1', newlyExecuted: true },
+      error: null,
+    });
+
+    const response = await POST(
+      makeRequest({ 'cf-connecting-ip': '203.0.113.7' }),
+      makeParams(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(serviceRpcMock).toHaveBeenCalledWith(
+      'execute_furnishings_authorization_with_trusted_ip',
+      {
+        p_proposal_id: 'prop-1',
+        p_signed_name: 'Jamie Homeowner',
+        p_client_id: 'client-1',
+        p_signed_ip: '203.0.113.7',
+      },
+    );
+    expect(invokeMock).toHaveBeenCalledWith('commercial-document-notify', {
+      body: { documentId: 'prop-1', transition: 'furnishings_executed' },
+    });
+    expect(await response.json()).toMatchObject({
+      commercialState: 'executed',
+      projectId: 'project-1',
+      newlyExecuted: true,
+    });
+  });
+
+  it('allows an executed FF&E retry without duplicating transition delivery', async () => {
+    userRpcMock.mockImplementation((name: string) => {
+      if (name === 'get_client_commercial_document_bundle') {
+        return Promise.resolve({
+          data: { document: { id: 'prop-1', kind: 'furnishings_authorization', state: 'executed' } },
+          error: null,
+        });
+      }
+      if (name === 'get_client_proposal_bundle') {
+        return Promise.resolve({
+          data: { proposal: { id: 'prop-1', valid_until: '2020-01-01T00:00:00.000Z' } },
+          error: null,
+        });
+      }
+      return Promise.resolve({ error: null });
+    });
+    serviceRpcMock.mockResolvedValue({
+      data: { project_id: 'project-1', newly_executed: false },
+      error: null,
+    });
+
+    const response = await POST(makeRequest(), makeParams());
+
+    expect(response.status).toBe(200);
+    expect(serviceRpcMock).toHaveBeenCalledWith(
+      'execute_furnishings_authorization_with_trusted_ip',
+      expect.objectContaining({ p_client_id: 'client-1' }),
+    );
+    expect(invokeMock).not.toHaveBeenCalled();
+    expect(await response.json()).toMatchObject({ newlyExecuted: false });
+  });
+
+  it('rejects an expired first commercial signature before privileged execution', async () => {
+    userRpcMock.mockImplementation((name: string) => {
+      if (name === 'get_client_commercial_document_bundle') {
+        return Promise.resolve({
+          data: { document: { id: 'prop-1', kind: 'furnishings_authorization', state: 'sent' } },
+          error: null,
+        });
+      }
+      if (name === 'get_client_proposal_bundle') {
+        return Promise.resolve({
+          data: { proposal: { id: 'prop-1', valid_until: '2020-01-01T00:00:00.000Z' } },
+          error: null,
+        });
+      }
+      return Promise.resolve({ error: null });
+    });
+
+    const response = await POST(makeRequest(), makeParams());
+
+    expect(response.status).toBe(410);
+    expect(mockCreateServiceClient).not.toHaveBeenCalled();
   });
 });
