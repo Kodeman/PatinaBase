@@ -29,6 +29,7 @@ import {
   Receipt,
   Clock,
   Bell,
+  ClipboardList,
   UserPlus,
   FolderPlus,
   PenLine,
@@ -133,8 +134,17 @@ export const STUDIO_ROOMS: StudioSurface[] = [
 ];
 
 /**
- * The four Ledgers (D14) — sheet-weight books that slide over whatever
- * document is in hand and slide back off without disturbing it.
+ * The Ledgers (D14) — sheet-weight books that slide over whatever
+ * document is in hand and slide back off without disturbing it. Four are
+ * global (reachable from anywhere, via the Studio Drawer's own hard-coded
+ * key list); the Call Sheet is the one document-scoped exception — a sheet
+ * in weight, but it only has a project to describe once one is in hand, so
+ * `scope: 'document'` keeps it out of every doorway that lists "reachable
+ * from anywhere" (Desk Contents' Ledgers column, ⌘K's unfiltered "Rooms &
+ * ledgers" group) exactly the way the Drafting Room (scope: 'document',
+ * room-weight) is already kept out of the equivalent global-rooms lists.
+ * Consumers must filter `scope === 'global'` before treating this array as
+ * "every ledger" — see desk-contents.tsx and command-bar.tsx.
  *
  * Ground truth: Package, Receipt, Clock, Bell are the exact icons the Studio
  * Drawer already imports — do not substitute.
@@ -213,6 +223,22 @@ export const STUDIO_LEDGERS: StudioSurface[] = [
     help: {
       surfaceKey: 'designer-portal/document/the-post',
       blurb: 'Letters and the record — what arrived, what needs review.',
+    },
+  },
+  {
+    key: 'call-sheet',
+    kind: 'ledger',
+    label: 'Call sheet',
+    subLabel: 'who is on the job',
+    aliases: ['call sheet', 'roster', 'crew', 'team', 'parties', 'who'],
+    icon: ClipboardList,
+    weight: 'sheet',
+    scope: 'document',
+    help: {
+      // Its own key — NOT `coordination` (that's court-bar.tsx's ball-in-court
+      // help panel; reusing it would leak this blurb onto that panel too).
+      surfaceKey: 'designer-portal/document/call-sheet',
+      blurb: 'Everyone on the job, and how to reach them.',
     },
   },
 ];

@@ -45,6 +45,9 @@ export const DOCUMENT_SURFACE_KEYS = {
   libraryPiece:    'designer-portal/document/library/piece',
   peoplePerson:    'designer-portal/document/people/person',
   deskField:       'designer-portal/document/desk/field',
+  // Wave 3 — the Call Sheet's own key (distinct from `coordination`, which
+  // court-bar.tsx already owns for the ball-in-court help panel).
+  callSheet:       'designer-portal/document/call-sheet',
 } as const;
 
 export type DocumentSurfaceKey =

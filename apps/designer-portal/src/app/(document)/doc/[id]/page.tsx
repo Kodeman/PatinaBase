@@ -16,6 +16,7 @@ import {
   useProjectV2,
   useProjectPhases,
   useProposalFeedback,
+  useProjectRoster,
 } from '@patina/supabase';
 import { rollupVerdicts, formatVerdictRollup } from '@patina/utils';
 import { useDocumentEngagement } from '@/hooks/use-document-state';
@@ -55,6 +56,8 @@ import { ScheduleNavProvider } from '@/components/document/schedule/schedule-nav
 import { RippleProvider } from '@/components/document/schedule/schedule-ripple-context';
 import { ProjectScheduleHandoffMount } from '@/components/document/project-schedule-handoff-mount';
 import { LetterheadInstruments } from '@/components/document/letterhead-instruments';
+import { CallSheet } from '@/components/document/roster/call-sheet';
+import { KickoffBand } from '@/components/document/roster/kickoff-band';
 import { HouseholdChip } from '@/components/document/household-chip';
 import { ProposalInstruments } from '@/components/document/proposal-instruments';
 import { FolioLetterhead, ProposalFolioStrip } from '@/components/document/folio-strip';
@@ -170,6 +173,10 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   const [openSection, setOpenSection] = useState<SectionKey | null>(null);
   const [highlightLineId, setHighlightLineId] = useState<string | null>(null);
   const [pendingNoteAnchor, setPendingNoteAnchor] = useState<string | null>(null);
+  // The Call Sheet (Wave 3) — an overlay, never a section (D1). Closed by
+  // default; the letterhead instrument and ⌘K's "This surface" row both
+  // dispatch document:open-call-sheet rather than holding their own state.
+  const [callSheetOpen, setCallSheetOpen] = useState(false);
   // R24: drags anywhere on the active section land in the folio.
   const [sectionDrag, setSectionDrag] = useState(false);
   const [folioDrop, setFolioDrop] = useState<File[] | null>(null);
@@ -196,6 +203,15 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     window.addEventListener('document:open-section', onOpenSection);
     return () => window.removeEventListener('document:open-section', onOpenSection);
   }, [jumpToSection]);
+
+  // The Call Sheet's doorways (⌘K, the letterhead instrument, the kickoff
+  // band) all reach it this way — mirrors the document:open-section pattern
+  // above. A no-op off a project document (the sheet below never mounts).
+  useEffect(() => {
+    const onOpenCallSheet = () => setCallSheetOpen(true);
+    window.addEventListener('document:open-call-sheet', onOpenCallSheet);
+    return () => window.removeEventListener('document:open-call-sheet', onOpenCallSheet);
+  }, []);
 
   // R25 rooms (spine-sheet jump rows + headings) · R23 gates (settled stamps).
   const { data: docRooms } = useDocumentRooms(row?.project_id ?? null);
@@ -285,6 +301,15 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   // C7 — the Schedule Spine flip gate. Rules of hooks: called unconditionally
   // above the early returns below, alongside the page's other hooks.
   const spineGate = useFeatureFlag('schedule-spine');
+  // Call Sheet (Wave 3) — same rules-of-hooks posture. The roster fetch is
+  // gated on the flag so a cohort without it doesn't pay for a query neither
+  // the kickoff band nor the instrument will render from.
+  const callSheetGate = useFeatureFlag('call-sheet');
+  const rosterProjectId =
+    callSheetGate.value && row?.engagement_kind === 'project' && row.project_id
+      ? row.project_id
+      : null;
+  const { data: rosterRows } = useProjectRoster(rosterProjectId);
   const resolutionState = documentResolutionState({
     resolutionKind: resolution?.kind,
     isLoading,
@@ -436,6 +461,19 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           <LetterheadInstruments
             clientProfileId={row.client_profile_id}
             clientName={row.client_name}
+          />
+        )}
+
+        {/* Wave 3 — the kickoff band. Project docs only; the band checks the
+            `call-sheet` flag itself and self-manages its own visibility
+            (dismissal, retirement at 4 names), so this mount is unconditional
+            for a project document. */}
+        {row.engagement_kind === 'project' && row.project_id && (
+          <KickoffBand
+            projectId={row.project_id}
+            rows={rosterRows ?? []}
+            onFromRolodex={() => setCallSheetOpen(true)}
+            onNewPerson={() => setCallSheetOpen(true)}
           />
         )}
 
@@ -765,6 +803,21 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           />
         )}
       </ResponsiveMarginRail>
+
+      {/* D1: the Call Sheet is an overlay, never a section — mounted once
+          here (closed by default), opened by document:open-call-sheet from
+          ⌘K, the letterhead instrument, and the kickoff band. Project docs
+          only; the sheet itself is also flag-gated (self-managed, like every
+          other Wave 3 roster component). */}
+      {row.engagement_kind === 'project' && row.project_id && (
+        <CallSheet
+          open={callSheetOpen}
+          onClose={() => setCallSheetOpen(false)}
+          projectId={row.project_id}
+          projectTitle={row.title}
+          clientName={row.client_name}
+        />
+      )}
     </div>
   );
 }

@@ -21,13 +21,16 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createBrowserClient,
   useProjectV2,
+  useProjectRoster,
   resolveCoverPhoto,
   publicUrlToPath,
   type RoomScanPhotoRow,
 } from '@patina/supabase';
 import { invalidateMarginSurfaces } from '@/hooks/use-margin-items';
 import { useSaveProjectVitals } from '@/hooks/use-project-lifecycle';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { familyLabel } from '@/lib/document/family-label';
+import { vitalsInstrumentSuffix } from '@/lib/document/roster-derivation';
 import { useMobilePrimaryAction } from './mobile/mobile-shell';
 import { ClientMirror } from './client-mirror';
 import {
@@ -216,6 +219,11 @@ export function LetterheadInstruments({
   const [noteBody, setNoteBody] = useState('');
   const sendNote = useSendDocumentNote(projectId, clientProfileId);
   const { data: scans } = useClientScans(clientProfileId);
+  // Call Sheet instrument — flag-gated at this consumer (never in the
+  // registry, per registry.tsx's canon). When off, CallSheetInstrument never
+  // mounts, so this row of the letterhead instruments stays byte-identical
+  // to before the flag existed.
+  const { value: callSheetOn } = useFeatureFlag('call-sheet');
 
   const scan = useMemo(
     () => (scans ?? []).find((s) => s.image_url) ?? null,
@@ -279,6 +287,7 @@ export function LetterheadInstruments({
           </DocumentAction>
         )}
         {projectId && <SharingTierInstrument projectId={projectId} />}
+        {projectId && callSheetOn && <CallSheetInstrument projectId={projectId} />}
       </DocumentActionGroup>
 
       {composing && (
@@ -352,6 +361,37 @@ export function LetterheadInstruments({
           />
         ) : null)}
     </>
+  );
+}
+
+/**
+ * The Call Sheet instrument (Wave 3) — "CALL SHEET · N", plus a terracotta
+ * mono "· N ON PAPER" tail when someone on the job is only reachable by
+ * phone. Both counts come straight off `v_project_roster` via
+ * `useProjectRoster` + roster-derivation's `vitalsInstrumentSuffix` (the same
+ * rows the sheet itself reads) — no separate count model, no derived state
+ * here. Clicking dispatches `document:open-call-sheet`; the sheet is mounted
+ * once on /doc/[id] and listens (same event-doorway pattern as the ledgers'
+ * own open-* events).
+ */
+function CallSheetInstrument({ projectId }: { projectId: string }) {
+  const { data: rosterRows } = useProjectRoster(projectId);
+  const roster = rosterRows ?? [];
+  const onPaperSuffix = vitalsInstrumentSuffix(roster);
+
+  return (
+    <DocumentAction
+      actionKey="open-call-sheet"
+      variant="tertiary"
+      onClick={() => window.dispatchEvent(new CustomEvent('document:open-call-sheet'))}
+      trailing={
+        onPaperSuffix ? (
+          <span className="text-[var(--color-terracotta)]">{onPaperSuffix}</span>
+        ) : undefined
+      }
+    >
+      Call sheet · {roster.length}
+    </DocumentAction>
   );
 }
 
