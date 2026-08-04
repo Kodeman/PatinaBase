@@ -461,6 +461,77 @@ Deno.test("vendorConfigurationLines tolerates unknown dimension keys", () => {
   );
 });
 
+Deno.test("vendorConfigurationLines drops dimension keys outside the allowlist (PRIV-4)", () => {
+  // A stray/adversarial key in the jsonb blob (e.g. injected via a capture
+  // payload) must never ride onto the vendor PDF next to the trade amounts.
+  assertEquals(
+    vendorConfigurationLines({
+      configuration_snapshot: {},
+      selected_dimensions: {
+        diameter: 42,
+        internalContact: "kody@patina.internal",
+        vendorCostCents: 45000,
+        notABlessedKey: "smuggled",
+        unit: "in",
+      },
+    }),
+    ["Dims: diameter 42 in"],
+  );
+  // Every key adversarial, nothing left to print at all.
+  assertEquals(
+    vendorConfigurationLines({
+      configuration_snapshot: {},
+      selected_dimensions: { secretNote: "do not ship", internalSku: "X-1" },
+    }),
+    [],
+  );
+});
+
+Deno.test("vendorConfigurationLines drops dimension values carrying forbidden money vocabulary (PRIV-4)", () => {
+  // Defence in depth: even an allowlisted key must not carry a smuggled
+  // value referencing trade/markup/margin/retail/price.
+  assertEquals(
+    vendorConfigurationLines({
+      configuration_snapshot: {},
+      selected_dimensions: {
+        clearance: "18 trade-only",
+        weight: 40,
+        unit: "in",
+      },
+    }),
+    ["Dims: weight 40 in"],
+  );
+  assertEquals(
+    vendorConfigurationLines({
+      configuration_snapshot: {},
+      selected_dimensions: { seatHeight: "retail markup 20%" },
+    }),
+    [],
+  );
+  // Forbidden substring inside the unit itself is dropped, not appended.
+  assertEquals(
+    vendorConfigurationLines({
+      configuration_snapshot: {},
+      selected_dimensions: { diameter: 42, unit: "in (margin)" },
+    }),
+    ["Dims: diameter 42"],
+  );
+  // Forbidden substring inside a width/depth/height triple falls the whole
+  // triple back to the per-key path rather than printing the tainted value.
+  assertEquals(
+    vendorConfigurationLines({
+      configuration_snapshot: {},
+      selected_dimensions: {
+        width: 72,
+        depth: "36 margin",
+        height: 30,
+        unit: "in",
+      },
+    }),
+    ["Dims: width 72 · height 30 in"],
+  );
+});
+
 Deno.test("vendorConfigurationLines returns [] when there is nothing vendor-safe to say", () => {
   assertEquals(vendorConfigurationLines(null), []);
   assertEquals(vendorConfigurationLines(undefined), []);

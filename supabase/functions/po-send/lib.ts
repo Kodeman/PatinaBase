@@ -336,25 +336,73 @@ function readCount(value: unknown): number | null {
   return null;
 }
 
+// Dimension keys this PDF is willing to print. `dimensions` / `selected_dimensions`
+// are wide-open jsonb — capture, rule effects, and hand-typed spec fields can put
+// ANY key in there. Without an allowlist, an unexpected key (or a value that
+// happens to carry an internal-only word) rides straight onto a vendor-facing
+// PDF next to the trade line amounts. Case-tolerant; matched lowercase.
+const DIMENSION_KEY_ALLOWLIST: ReadonlySet<string> = new Set([
+  'width',
+  'depth',
+  'height',
+  'length',
+  'diameter',
+  'seatheight',
+  'seatdepth',
+  'seatwidth',
+  'armheight',
+  'backheight',
+  'legheight',
+  'clearance',
+  'weight',
+  'unit',
+]);
+
+function isAllowedDimensionKey(key: string): boolean {
+  return DIMENSION_KEY_ALLOWLIST.has(key.toLowerCase());
+}
+
+// Defence in depth: even an allowlisted key (e.g. a hand-typed "clearance")
+// must not carry a value that mentions internal-only money vocabulary.
+const FORBIDDEN_VALUE_SUBSTRINGS = ['trade', 'markup', 'margin', 'retail', 'price'];
+
+function hasForbiddenSubstring(value: string): boolean {
+  const lower = value.toLowerCase();
+  return FORBIDDEN_VALUE_SUBSTRINGS.some((needle) => lower.includes(needle));
+}
+
 /**
  * "72 × 36 × 30 in" when width/depth/height all resolve; otherwise up to four
- * `key value` pairs (unknown-key tolerant — capture, variant and rule-effect
- * dimensions do not share one key set), with the unit appended when present.
+ * `key value` pairs from the dimension-key allowlist (capture, variant and
+ * rule-effect dimensions do not share one key set, so unknown-but-plausible
+ * keys like `diameter`/`seatHeight` are still tolerated) — any key outside
+ * the allowlist, or any value containing forbidden money vocabulary, is
+ * dropped rather than printed. The unit is appended when present and clean.
  */
 function formatDimensions(value: unknown): string | null {
   const dims = readRecord(value);
-  const unit = readScalar(dims.unit ?? dims.units);
+  const rawUnit = readScalar(dims.unit ?? dims.units);
+  const unit = rawUnit && !hasForbiddenSubstring(rawUnit) ? rawUnit : null;
   const width = readScalar(dims.width ?? dims.w);
   const depth = readScalar(dims.depth ?? dims.d);
   const height = readScalar(dims.height ?? dims.h);
-  if (width && depth && height) {
+  if (
+    width &&
+    depth &&
+    height &&
+    !hasForbiddenSubstring(width) &&
+    !hasForbiddenSubstring(depth) &&
+    !hasForbiddenSubstring(height)
+  ) {
     return [`${width} × ${depth} × ${height}`, unit].filter(Boolean).join(' ');
   }
   const pairs = Object.entries(dims)
     .filter(([key]) => key !== 'unit' && key !== 'units')
+    .filter(([key]) => isAllowedDimensionKey(key))
     .map(([key, entry]) => {
       const scalar = readScalar(entry);
-      return scalar ? `${key} ${scalar}` : null;
+      if (!scalar || hasForbiddenSubstring(scalar)) return null;
+      return `${key} ${scalar}`;
     })
     .filter((entry): entry is string => entry !== null);
   if (pairs.length === 0) return null;
