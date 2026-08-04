@@ -10,19 +10,24 @@
  * Chromium-pinned: the walk publishes decisions as the single seeded designer, so
  * the three browser projects would race the same rows (patina-testing step 11).
  * Serial within the file for the same reason.
+ *
+ * RUN THIS SUITE AS: `pnpm --filter @patina/designer-portal test:e2e:library`
+ * — chromium-only, `--workers=1`. `playwright.config.ts` is `fullyParallel`, so a
+ * plain `playwright test` puts these spec files in separate workers, racing one
+ * local database as one designer. Serial-within-file does not cover that.
  */
 import { test, expect } from '../fixtures/auth';
 import {
   RESOLVED_SUPABASE_URL,
   authorVariantSchema,
-  deleteDecisionByTitle,
-  deleteProducts,
-  deleteProject,
   designerAndClientIds,
   getDecisionOptionsByTitle,
-  seedProduct,
-  seedProject,
+  seedProductIn,
+  seedProjectIn,
+  seedScope,
   stamp,
+  teardownScope,
+  trackDecision,
 } from './fixtures';
 
 test.skip(
@@ -39,12 +44,15 @@ test.beforeEach(() => test.setTimeout(120_000));
 const RUN = stamp();
 const CONFIGURABLE = `E2E Config Bed ${RUN}`;
 const STANDARD = `E2E Plain Lamp ${RUN}`;
-const TITLE_CONFIGURED = `E2E configured pick ${RUN}`;
-const TITLE_SKIPPED = `E2E decide later ${RUN}`;
-const TITLE_STANDARD = `E2E standard pick ${RUN}`;
+
+// Every row this file creates is recorded in one scope as it is created, so a
+// beforeAll that dies halfway still leaves nothing behind.
+const scope = seedScope();
+const TITLE_CONFIGURED = trackDecision(scope, `E2E configured pick ${RUN}`);
+const TITLE_SKIPPED = trackDecision(scope, `E2E decide later ${RUN}`);
+const TITLE_STANDARD = trackDecision(scope, `E2E standard pick ${RUN}`);
 
 let projectId: string;
-let productIds: string[] = [];
 
 test.beforeAll(async () => {
   // Proof, in the run log, that every write below lands on the local stack.
@@ -52,24 +60,19 @@ test.beforeAll(async () => {
   console.log(`[library-configuration] service-role client resolved → ${RESOLVED_SUPABASE_URL}`);
 
   const { designerId, clientId } = designerAndClientIds();
-  projectId = await seedProject(`E2E Library Config ${RUN}`, designerId, clientId);
+  projectId = await seedProjectIn(scope, `E2E Library Config ${RUN}`, designerId, clientId);
 
-  const configurableId = await seedProduct({ name: CONFIGURABLE, ownerUserId: designerId });
+  const configurableId = await seedProductIn(scope, {
+    name: CONFIGURABLE,
+    ownerUserId: designerId,
+  });
   authorVariantSchema(designerId, configurableId);
 
   // No schema call — `configuration_mode` stays at its 'standard' default.
-  const standardId = await seedProduct({ name: STANDARD, ownerUserId: designerId });
-
-  productIds = [configurableId, standardId];
+  await seedProductIn(scope, { name: STANDARD, ownerUserId: designerId });
 });
 
-test.afterAll(() => {
-  for (const title of [TITLE_CONFIGURED, TITLE_SKIPPED, TITLE_STANDARD]) {
-    deleteDecisionByTitle(title);
-  }
-  deleteProducts(productIds);
-  if (projectId) deleteProject(projectId);
-});
+test.afterAll(() => teardownScope(scope));
 
 /** Open the Coordination composer on the seeded project and name the decision. */
 async function openComposer(page: import('@playwright/test').Page, title: string) {

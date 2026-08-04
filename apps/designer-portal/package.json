@@ -16,6 +16,7 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:e2e": "playwright test",
+    "test:e2e:library": "playwright test e2e/library-configuration --project=chromium --workers=1",
     "clean": "rm -rf .next",
     "analyze": "ANALYZE=true next build --webpack"
   },

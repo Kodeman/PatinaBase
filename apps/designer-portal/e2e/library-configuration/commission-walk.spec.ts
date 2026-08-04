@@ -26,17 +26,23 @@
  * file now runs from the repo root as `pnpm test:library-config`.
  *
  * Chromium-pinned + serial, as with the sibling specs.
+ *
+ * RUN THIS SUITE AS: `pnpm --filter @patina/designer-portal test:e2e:library`
+ * — chromium-only, `--workers=1`. `playwright.config.ts` is `fullyParallel`, so a
+ * plain `playwright test` puts these spec files in separate workers, racing one
+ * local database as one designer. Serial-within-file does not cover that.
  */
 import { test, expect } from '../fixtures/auth';
 import {
   RESOLVED_SUPABASE_URL,
   authorCustomSchema,
-  deleteProducts,
-  deleteProject,
   designerAndClientIds,
-  seedProduct,
-  seedProject,
+  seedProductIn,
+  seedProjectIn,
+  seedScope,
   stamp,
+  teardownScope,
+  trackDecision,
 } from './fixtures';
 
 test.skip(
@@ -53,34 +59,33 @@ test.beforeEach(() => test.setTimeout(120_000));
 const RUN = stamp();
 const CUSTOM = `E2E Commission Table ${RUN}`;
 
+// Rows are recorded as they are created, so a half-finished beforeAll still
+// tears down cleanly. The composer is never published here, so the title is
+// tracked only belt-and-braces — deleting a title that never landed is a no-op.
+const scope = seedScope();
+const TITLE = trackDecision(scope, `E2E commission pick ${RUN}`);
+
 let projectId: string;
-let productIds: string[] = [];
 
 test.beforeAll(async () => {
   // eslint-disable-next-line no-console
   console.log(`[library-configuration] service-role client resolved → ${RESOLVED_SUPABASE_URL}`);
 
   const { designerId, clientId } = designerAndClientIds();
-  projectId = await seedProject(`E2E Commission ${RUN}`, designerId, clientId);
-  const productId = await seedProduct({ name: CUSTOM, ownerUserId: designerId });
+  projectId = await seedProjectIn(scope, `E2E Commission ${RUN}`, designerId, clientId);
+  const productId = await seedProductIn(scope, { name: CUSTOM, ownerUserId: designerId });
   // 'custom' mode carries no option groups or variants by construction.
   authorCustomSchema(designerId, productId);
-  productIds = [productId];
 });
 
-test.afterAll(() => {
-  deleteProducts(productIds);
-  if (projectId) deleteProject(projectId);
-});
+test.afterAll(() => teardownScope(scope));
 
 test('a custom piece offers the piece-room interstitial instead of a configuration pane', async ({
   authenticatedPage: page,
 }) => {
   await page.goto(`/doc/${projectId}`, { waitUntil: 'domcontentloaded' });
   await page.getByRole('button', { name: '+ New open item' }).click();
-  await page
-    .getByPlaceholder('e.g. Which pendant for the entry?')
-    .fill(`E2E commission pick ${RUN}`);
+  await page.getByPlaceholder('e.g. Which pendant for the entry?').fill(TITLE);
 
   await page.getByTestId('option-0-choose-product').click();
   const modal = page.getByTestId('product-picker-modal');

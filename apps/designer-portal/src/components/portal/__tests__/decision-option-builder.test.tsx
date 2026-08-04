@@ -177,6 +177,53 @@ const mockSelectionSnapshot = [
   },
 ];
 
+/**
+ * W2-A — a made-to-configure body whose one group is COM-capable, so the
+ * configure step offers "Specify the fabric now" and the pick can carry
+ * `comDetails` out of the picker.
+ */
+const mockComDefinition = {
+  ...mockDefinition,
+  mode: 'configured',
+  variants: [],
+  optionGroups: [
+    {
+      ...mockDefinition.optionGroups[0],
+      id: 'group-fabric',
+      code: 'fabric',
+      name: 'Fabric',
+      values: [
+        optionValue({
+          id: 'value-com',
+          groupId: 'group-fabric',
+          code: 'com',
+          label: "Customer's Own Material",
+          allowsCom: true,
+          comRequirements: { yardage: '14 yds' },
+          position: 0,
+        }),
+      ],
+    },
+  ],
+};
+
+/** What the evaluate RPC answers with, per chosen value id. */
+const MOCK_VALUE_SNAPSHOTS: Record<string, Record<string, unknown>> = {
+  'value-king': mockSelectionSnapshot[0],
+  'value-com': {
+    optionGroupId: 'group-fabric',
+    optionValueId: 'value-com',
+    groupCode: 'fabric',
+    valueCode: 'com',
+    groupName: 'Fabric',
+    valueLabel: "Customer's Own Material",
+    retailPriceDeltaCents: 0,
+    tradePriceDeltaCents: 0,
+    leadTimeDeltaWeeks: 0,
+    allowsCom: true,
+  },
+};
+
 // The builder renders a ProductPickerModal (and exports a draft-materialize
 // hook), so the whole @patina/supabase surface it pulls in must be stubbed.
 jest.mock('@patina/supabase', () => ({
@@ -205,7 +252,10 @@ jest.mock('@patina/supabase', () => ({
   useEvaluateProductConfiguration: () => ({
     isPending: false,
     mutateAsync: async (input: { optionValueIds: string[] }) => {
-      const complete = input.optionValueIds.includes('value-king');
+      const selections = input.optionValueIds
+        .map((id) => MOCK_VALUE_SNAPSHOTS[id])
+        .filter(Boolean);
+      const complete = selections.length > 0;
       return {
         valid: true,
         complete,
@@ -227,7 +277,7 @@ jest.mock('@patina/supabase', () => ({
           pricingStrategy: 'base_plus_adjustments',
           schemaRevision: 2,
           variant: complete ? { id: 'variant-king', sku: 'BED-K' } : null,
-          selections: complete ? mockSelectionSnapshot : [],
+          selections,
           components: [],
           retailPriceCents: complete ? 440000 : null,
           tradePriceCents: complete ? 264000 : null,
@@ -242,6 +292,7 @@ jest.mock('@patina/supabase', () => ({
 
 import {
   DecisionOptionBuilder,
+  comDetailsNote,
   optionValueToInput,
   parsePriceToCents,
   type DecisionOptionValue,
@@ -484,6 +535,128 @@ describe('DecisionOptionBuilder — configured picks', () => {
   });
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// W2-A — the COM fabric the designer specified in the picker has no column on a
+// decision option. It must not evaporate at the boundary: it lands in the
+// designer note, where the client card shows it and the designer can edit it.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('comDetailsNote', () => {
+  it('reads as one line a human can act on', () => {
+    expect(
+      comDetailsNote({
+        fabricName: 'Belgian Linen 12',
+        mill: 'Rogers & Goffigon',
+        yardage: 14,
+      }),
+    ).toBe('COM: Belgian Linen 12 — Rogers & Goffigon · 14 yds');
+  });
+
+  it('prints only the parts the designer actually gave', () => {
+    expect(comDetailsNote({ fabricName: 'Belgian Linen 12' })).toBe(
+      'COM: Belgian Linen 12',
+    );
+    expect(comDetailsNote({ mill: 'Rogers & Goffigon' })).toBe(
+      'COM: Rogers & Goffigon',
+    );
+    expect(comDetailsNote({ yardage: '14' })).toBe('COM: 14 yds');
+    expect(comDetailsNote({ fabricName: 'Belgian Linen 12', yardage: 14 })).toBe(
+      'COM: Belgian Linen 12 · 14 yds',
+    );
+  });
+
+  it('says nothing when there is nothing to say', () => {
+    expect(comDetailsNote(null)).toBeNull();
+    expect(comDetailsNote(undefined)).toBeNull();
+    expect(comDetailsNote({})).toBeNull();
+    expect(comDetailsNote({ fabricName: '   ', mill: null, yardage: '' })).toBeNull();
+    // A COM row that only carries its own option id is not a fabric spec.
+    expect(comDetailsNote({ optionValueId: 'value-com' })).toBeNull();
+  });
+});
+
+describe('DecisionOptionBuilder — COM picks', () => {
+  beforeEach(() => {
+    mockActiveDefinition = mockComDefinition;
+    mockProductRow = {
+      id: 'bed-1',
+      name: 'Ledge Bed',
+      configuration_mode: 'configured',
+      price_retail: 400000,
+    };
+    mockLayerRows = [
+      {
+        id: 'bed-1',
+        name: 'Ledge Bed',
+        brand: 'Atelier Whitfield',
+        price_retail: 400000,
+        price_trade: 240000,
+        images: [],
+        source_url: null,
+        status: 'published',
+        category: null,
+        configuration_mode: 'configured',
+        configuration_summary: null,
+        layer: 'personal',
+        owner_user_id: 'user-1',
+        studio_id: null,
+        created_at: '2026-08-01T00:00:00Z',
+      },
+    ];
+  });
+
+  afterEach(() => {
+    mockActiveDefinition = mockDefinition;
+    mockLayerRows = [];
+    mockProductRow = { id: 'bed-1', name: 'Ledge Bed', configuration_mode: 'variant' };
+  });
+
+  /** Walk the picker to a confirmed COM specification and return the patch. */
+  const pickWithCom = async (
+    value: DecisionOptionValue,
+  ): Promise<DecisionOptionValue> => {
+    const onChange = jest.fn();
+    render(<DecisionOptionBuilder index={0} value={value} onChange={onChange} />);
+
+    fireEvent.click(screen.getByTestId('option-0-choose-product'));
+    fireEvent.click(screen.getAllByTestId('product-picker-result')[0]);
+    await act(async () => {});
+
+    fireEvent.click(
+      await screen.findByRole('radio', { name: /Customer's Own Material/ }),
+    );
+    await act(async () => {});
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Specify the fabric now' }));
+    fireEvent.change(screen.getByLabelText('Fabric'), {
+      target: { value: 'Belgian Linen 12' },
+    });
+    fireEvent.change(screen.getByLabelText('Mill'), {
+      target: { value: 'Rogers & Goffigon' },
+    });
+
+    const confirm = await screen.findByRole('button', { name: 'Add configured piece' });
+    await waitFor(() => expect(confirm).not.toBeDisabled());
+    fireEvent.click(confirm);
+
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    return onChange.mock.calls.at(-1)![0] as DecisionOptionValue;
+  };
+
+  it('carries the specified fabric onto the option as a readable note', async () => {
+    const patched = await pickWithCom(baseValue({ manualMode: false }));
+    expect(patched.designerNote).toBe('COM: Belgian Linen 12 — Rogers & Goffigon');
+  });
+
+  it('appends to the note the designer already wrote rather than replacing it', async () => {
+    const patched = await pickWithCom(
+      baseValue({ manualMode: false, designerNote: 'Client asked for softer arms.' }),
+    );
+    expect(patched.designerNote).toBe(
+      'Client asked for softer arms.\nCOM: Belgian Linen 12 — Rogers & Goffigon',
+    );
+  });
+});
+
 describe('optionValueToInput — configuration provenance', () => {
   it('carries the configuration id and selection snapshot to the decision RPC', () => {
     const input = optionValueToInput(
@@ -538,17 +711,32 @@ describe('buildComparisonSiblings', () => {
       basePriceCents: parsePriceToCents(source.price),
     });
 
-  it('produces one sibling per compared value, named for the value', () => {
+  it('produces one sibling per compared value, minus the option’s own', () => {
+    // King is what the source option already IS — its card stands for it, so a
+    // second King card would put the same piece in front of the client twice.
     const siblings = generate(specifiedOption(), [
       'value-king',
       'value-queen',
       'value-cal-king',
     ]);
     expect(siblings.map((o) => o.name)).toEqual([
-      'Ledge Bed — King',
       'Ledge Bed — Queen',
       'Ledge Bed — California King',
     ]);
+  });
+
+  it('generates nothing when only the option’s own value is ticked', () => {
+    expect(generate(specifiedOption(), ['value-king'])).toEqual([]);
+  });
+
+  it('leaves the source option untouched — it keeps the recommendation', () => {
+    const source = specifiedOption({ isRecommended: true, designerNote: 'Leah’s pick' });
+    const siblings = generate(source, ['value-king', 'value-queen']);
+    // The generator returns siblings only; the source object is never mutated,
+    // and no sibling claims the baseline's recommendation from it.
+    expect(source.isRecommended).toBe(true);
+    expect(source.designerNote).toBe('Leah’s pick');
+    expect(siblings.some((o) => o.isRecommended)).toBe(false);
   });
 
   it('prices each sibling off the resolved price, net of the baseline delta', () => {
@@ -557,23 +745,32 @@ describe('buildComparisonSiblings', () => {
       'value-queen',
       'value-cal-king',
     ]);
-    // 440000 base; Queen swaps a 40000 delta for a 10000 one, Cal King for 55000.
-    expect(siblings.map((o) => o.price)).toEqual(['4400', '4100', '4550']);
+    // 440000 base; Queen swaps King's 40000 delta for a 10000 one, Cal King for 55000.
+    expect(siblings.map((o) => o.price)).toEqual(['4100', '4550']);
   });
 
-  it('measures cost and lead-time deltas against the baseline value', () => {
+  it('measures cost deltas in RETAIL, matching the price beside them', () => {
     const siblings = generate(specifiedOption(), [
       'value-king',
       'value-queen',
       'value-cal-king',
     ]);
-    // Trade deltas 24000 / 6000 / 33000; lead weeks 2 / 0 / 3.
-    expect(siblings.map((o) => o.costDelta)).toEqual(['', '-180', '+90']);
-    expect(siblings.map((o) => o.leadTimeDelta)).toEqual(['', '-14', '+7']);
+    // Retail deltas 10000 / 55000 against King's 40000 — NOT the trade deltas
+    // (6000 / 33000 against 24000), which would leak the studio's own cost.
+    expect(siblings.map((o) => o.costDelta)).toEqual(['-300', '+150']);
+    // …and each one is exactly the movement in its own price: 4400 → 4100 / 4550.
+    expect(siblings.map((o) => o.leadTimeDelta)).toEqual(['-14', '+7']);
+  });
+
+  it('never lets a trade delta reach a client-facing field', () => {
+    const siblings = generate(specifiedOption(), ['value-queen', 'value-cal-king']);
+    // Trade would have read -180 / +90; retail reads -300 / +150.
+    expect(siblings.map((o) => o.costDelta)).not.toContain('-180');
+    expect(siblings.map((o) => o.costDelta)).not.toContain('+90');
   });
 
   it('carries the full snapshot with only the compared group swapped', () => {
-    const [, queen] = generate(specifiedOption(), ['value-king', 'value-queen']);
+    const [queen] = generate(specifiedOption(), ['value-king', 'value-queen']);
     expect(queen.configurationSelections).toEqual([
       {
         optionGroupId: 'group-size',
@@ -594,7 +791,7 @@ describe('buildComparisonSiblings', () => {
   });
 
   it('keeps the option link, layer and quantity, and takes the value swatch as the image', () => {
-    const [, queen] = generate(specifiedOption({ imageUrl: 'https://cdn.test/bed.jpg' }), [
+    const [queen] = generate(specifiedOption({ imageUrl: 'https://cdn.test/bed.jpg' }), [
       'value-king',
       'value-queen',
     ]);
@@ -604,32 +801,72 @@ describe('buildComparisonSiblings', () => {
   });
 
   it('falls back to the option image when the value has no swatch', () => {
-    const [king] = generate(specifiedOption({ imageUrl: 'https://cdn.test/bed.jpg' }), [
-      'value-king',
+    const [, calKing] = generate(specifiedOption({ imageUrl: 'https://cdn.test/bed.jpg' }), [
       'value-queen',
+      'value-cal-king',
     ]);
-    expect(king.imageUrl).toBe('https://cdn.test/bed.jpg');
+    expect(calKing.imageUrl).toBe('https://cdn.test/bed.jpg');
   });
 
-  it('recommends the value the option is already specified to', () => {
-    const siblings = generate(specifiedOption(), [
+  it('anchors the baseline to the option’s own value even when it is unticked', () => {
+    // Unticking King says "do not write a King card" — it does not move the
+    // reference the other cards are measured from. The math is the same whether
+    // King is ticked or not.
+    const ticked = generate(specifiedOption(), [
       'value-king',
       'value-queen',
       'value-cal-king',
     ]);
-    expect(siblings.filter((o) => o.isRecommended).map((o) => o.name)).toEqual([
-      'Ledge Bed — King',
-    ]);
+    const unticked = generate(specifiedOption(), ['value-queen', 'value-cal-king']);
+    expect(unticked.map((o) => [o.name, o.price, o.costDelta, o.leadTimeDelta])).toEqual(
+      ticked.map((o) => [o.name, o.price, o.costDelta, o.leadTimeDelta]),
+    );
+    expect(unticked.map((o) => o.price)).toEqual(['4100', '4550']);
+    expect(unticked.map((o) => o.costDelta)).toEqual(['-300', '+150']);
+    // Nothing here is the baseline, so nothing steals the recommendation.
+    expect(unticked.some((o) => o.isRecommended)).toBe(false);
   });
 
-  it('falls back to the first compared value as the baseline', () => {
-    // The option's own value (King) is not among the compared ones.
-    const siblings = generate(specifiedOption(), ['value-queen', 'value-cal-king']);
+  it('falls back to the base configuration for a group the snapshot never spoke to', () => {
+    // The option is specified to a Size but says nothing about Finish, so the
+    // Finish comparison anchors to the piece's base finish (Walnut, delta 0) —
+    // not to whichever value happened to be ticked first.
+    const siblings = buildComparisonSiblings({
+      source: specifiedOption(),
+      definition: mockCompareDefinition as never,
+      groupId: 'group-finish',
+      valueIds: ['value-oak'],
+      basePriceCents: 440000,
+    });
+    expect(siblings.map((o) => o.name)).toEqual(['Ledge Bed — Oak']);
+    // Oak retail delta 5000 against Walnut's 0 — not '' (which is what an
+    // Oak-as-its-own-baseline reading would produce).
+    expect(siblings[0].costDelta).toBe('+50');
+    expect(siblings[0].price).toBe('4450');
+    expect(siblings[0].isRecommended).toBe(false);
+  });
+
+  it('falls back to the first compared value when nothing anchors the group', () => {
+    // An optional group with no default: neither the option nor the piece's base
+    // configuration names a value, so the first compared value holds the line.
+    const optionalGroupDefinition = {
+      ...mockCompareDefinition,
+      variants: [],
+      optionGroups: [
+        { ...mockCompareDefinition.optionGroups[0], required: false },
+        mockCompareDefinition.optionGroups[1],
+      ],
+    };
+    const siblings = generate(
+      specifiedOption({ configurationSelections: undefined }),
+      ['value-queen', 'value-cal-king'],
+      optionalGroupDefinition,
+    );
     expect(siblings[0].name).toBe('Ledge Bed — Queen');
     expect(siblings[0].isRecommended).toBe(true);
     expect(siblings[0].costDelta).toBe('');
-    // Cal King now reads against Queen: 33000 − 6000, (3 − 0) weeks.
-    expect(siblings[1].costDelta).toBe('+270');
+    // Cal King now reads against Queen, in retail: 55000 − 10000, (3 − 0) weeks.
+    expect(siblings[1].costDelta).toBe('+450');
     expect(siblings[1].leadTimeDelta).toBe('+21');
   });
 
@@ -671,21 +908,38 @@ describe('buildComparisonSiblings', () => {
         expect.objectContaining({ groupCode: 'size', valueCode: 'queen' }),
         expect.objectContaining({ groupCode: 'finish', valueCode: 'walnut' }),
       ]);
-      // Priced off the list price, and no longer pending — it has a spec now.
-      expect(siblings.map((o) => o.price)).toEqual(['4000', '4450']);
+      // Anchored to the BASE configuration (King, 40000) — the same reference
+      // the panel says it is working from. 400000 + 10000 − 40000 = 370000.
+      expect(siblings.map((o) => o.price)).toEqual(['3700', '4150']);
       expect(siblings[0].configurationPending).toBe(false);
+    });
+
+    it('regenerates the base value freely — the source is not it', () => {
+      // Nothing to duplicate: the option carries no specification, so a King
+      // card is new content (it pins a spec the option never had).
+      const siblings = generate(unresolved(), ['value-king', 'value-queen']);
+      expect(siblings.map((o) => o.name)).toEqual([
+        'Ledge Bed — King',
+        'Ledge Bed — Queen',
+      ]);
+      // …and the base value, being the baseline, carries the recommendation.
+      expect(siblings.filter((o) => o.isRecommended).map((o) => o.name)).toEqual([
+        'Ledge Bed — King',
+      ]);
     });
   });
 
   it('feeds the decision RPC through optionValueToInput', () => {
-    const [, queen] = generate(specifiedOption(), ['value-king', 'value-queen']);
+    const [queen] = generate(specifiedOption(), ['value-king', 'value-queen']);
     const input = optionValueToInput(queen);
     expect(input).toMatchObject({
       name: 'Ledge Bed — Queen',
       productId: 'bed-1',
       price: 410000,
       quantity: 2,
-      costDeltaCents: -18000,
+      // Retail-derived: 10000 − 40000. The trade reading (6000 − 24000 = −18000)
+      // must never reach the row the client card is drawn from.
+      costDeltaCents: -30000,
       leadTimeDaysDelta: -14,
       configurationId: undefined,
     });
@@ -756,18 +1010,24 @@ describe('DecisionOptionBuilder — compare across a group', () => {
     fireEvent.click(screen.getByTestId('option-0-compare-group'));
     expect(screen.getByTestId('option-0-compare-panel')).toBeInTheDocument();
 
-    // The option's own value starts ticked, so the baseline is always present.
+    // The option's own value starts ticked — it is what the others are read
+    // against — but it is never written back out as a card of its own.
     expect(screen.getByRole('checkbox', { name: 'King' })).toBeChecked();
     fireEvent.click(screen.getByRole('checkbox', { name: 'Queen' }));
     fireEvent.click(screen.getByTestId('option-0-compare-generate'));
 
     expect(onGenerateSiblings).toHaveBeenCalledTimes(1);
     const siblings = onGenerateSiblings.mock.calls[0][0] as DecisionOptionValue[];
-    expect(siblings.map((o) => o.name)).toEqual([
-      'Ledge Bed — King',
-      'Ledge Bed — Queen',
-    ]);
+    expect(siblings.map((o) => o.name)).toEqual(['Ledge Bed — Queen']);
     expect(screen.queryByTestId('option-0-compare-panel')).not.toBeInTheDocument();
+  });
+
+  it('cannot generate when the only ticked value is the option’s own', () => {
+    renderBuilder(specifiedOption(), jest.fn());
+    fireEvent.click(screen.getByTestId('option-0-compare-group'));
+    // King alone is ticked by default, and King is this very card.
+    expect(screen.getByTestId('option-0-compare-generate')).toBeDisabled();
+    expect(screen.getByText('Pick a value beside this one')).toBeInTheDocument();
   });
 
   it('compares across the group the designer picks, not the default one', () => {

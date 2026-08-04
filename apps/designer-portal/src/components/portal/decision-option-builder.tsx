@@ -9,6 +9,7 @@ import {
   type ClientDecisionOption,
 } from '@patina/supabase';
 import type {
+  ProductConfigurationComDetails,
   ProductConfigurationMode,
   ProductConfigurationSelection,
 } from '@patina/types';
@@ -98,6 +99,46 @@ export const emptyOption = (): DecisionOptionValue => ({
   configurationPending: false,
   configurationMode: undefined,
 });
+
+/**
+ * The COM fabric the designer specified in the picker, as one line a human
+ * reads: "COM: Belgian Linen — Rogers & Goffigon · 12 yds".
+ *
+ * A decision option has nowhere structured to keep COM — the row carries a
+ * price, a note and a selection snapshot, and the snapshot's vocabulary has no
+ * fabric in it. Rather than drop the intent on the floor between the picker and
+ * the option, it is written into the designer note, where it is visible on the
+ * card and editable like any other note. Parts the designer left blank are
+ * simply absent; an empty COM produces no line at all.
+ */
+export function comDetailsNote(
+  com: ProductConfigurationComDetails | null | undefined,
+): string | null {
+  if (!com) return null;
+  const fabric = (com.fabricName ?? '').trim();
+  const mill = (com.mill ?? '').trim();
+  const rawYardage = com.yardage;
+  const yardage =
+    rawYardage == null || String(rawYardage).trim() === ''
+      ? ''
+      : `${String(rawYardage).trim()} yds`;
+  const head = [fabric, mill].filter(Boolean).join(' — ');
+  const parts = [head, yardage].filter(Boolean);
+  if (parts.length === 0) return null;
+  return `COM: ${parts.join(' · ')}`;
+}
+
+/** Append the COM line to a note without swallowing what the designer wrote. */
+function noteWithCom(
+  existing: string,
+  com: ProductConfigurationComDetails | null | undefined,
+): string {
+  const line = comDetailsNote(com);
+  if (!line) return existing;
+  const kept = existing.trim();
+  if (kept.includes(line)) return existing;
+  return kept ? `${kept}\n${line}` : line;
+}
 
 export function parsePriceToCents(price: string): number | undefined {
   if (!price) return undefined;
@@ -311,6 +352,9 @@ export function DecisionOptionBuilder({
       productId: r.productId,
       name,
       imageUrl: r.imageUrl ?? value.imageUrl,
+      // W2-A — the pick's COM fabric has no column on a decision option, so it
+      // rides in the note rather than being dropped at the boundary.
+      designerNote: noteWithCom(value.designerNote, selection?.comDetails),
       price: priceCents != null ? String(priceCents / 100) : value.price,
       brand: r.vendorName ?? undefined,
       layer: r.layer,

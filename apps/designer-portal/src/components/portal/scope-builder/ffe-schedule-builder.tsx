@@ -66,6 +66,7 @@ import { SpecFieldsManager } from '@/components/portal/scope-builder/spec-fields
 import { FinancialLensPanel, type LensRow } from '@/components/portal/scope-builder/financial-lens';
 import { useSpecFieldDefs } from '@/hooks/use-spec-fields';
 import { withFieldValue, formatFieldValue } from '@/lib/scope/spec-fields';
+import { buildProposalItemFromPick } from '@/components/portal/scope-builder/build-proposal-item-from-pick';
 import { computeMarkupUpdate } from '@/lib/scope/markup';
 import { downloadSpecPdf } from '@/lib/scope/spec-pdf-client';
 import { useDraftingFacetInvalidation } from '@/hooks/use-drafting-facet-invalidation';
@@ -1165,53 +1166,19 @@ export function FFEScheduleBuilder({
 
   // Picked from the catalog → add a fixed proposal_item directly from the
   // denormalized pick result (the result already carries name/price/vendor, so
-  // no follow-up product fetch is needed). priceCents is already cents.
+  // no follow-up product fetch is needed). The whole mapping — resolved pricing,
+  // the COM-carrying and trade-free configuration envelope, the doc-code
+  // suggestion — is `buildProposalItemFromPick`, unit-tested on its own.
   const handleAddProduct = (r: ProductPickResult, ffeCategorySlug: string | null) => {
-    // A configured pick prices and leads at its RESOLVED specification, not the
-    // product's list row — a King in walnut is not the base bed.
-    const selection = r.configurationSelection;
-    const unitPrice = selection?.retailPriceCents ?? r.priceCents ?? 0;
-    const leadTimeWeeks = selection?.leadTimeWeeks ?? null;
-    // proposal_items is PRE-SALE and has no configuration FK, so the intent
-    // rides in custom_fields; activation (00269) carries it forward.
-    const configurationField =
-      selection || r.configurationSkipped
-        ? {
-            configuration: {
-              mode: r.configurationMode ?? 'standard',
-              label: selection?.label ?? null,
-              selections: selection?.selections ?? [],
-              variantId: selection?.variantId ?? null,
-              optionValueIds: selection?.optionValueIds ?? [],
-              retailPriceCents: selection?.retailPriceCents ?? null,
-              tradePriceCents: selection?.tradePriceCents ?? null,
-              leadTimeWeeks: selection?.leadTimeWeeks ?? null,
-              skipped: r.configurationSkipped === true,
-            },
-          }
-        : null;
+    const line = buildProposalItemFromPick(r, { ffeCategorySlug, existingDocCodes });
     return addItem
-      .mutateAsync({
-        proposalId,
-        productId: r.productId,
-        name: r.name,
-        quantity: 1,
-        unitPrice,
-        vendorName: r.vendorName ?? undefined,
-        itemType: 'fixed',
-        scopeRoomId: r.scopeRoomId,
-        ffeCategory: ffeCategorySlug ?? undefined,
-        leadTimeWeeks,
-        customFields: configurationField,
-        // S1 — auto-suggest a spec code on add (prefix from category, else name).
-        docCode: resolveDocCode(null, ffeCategorySlug, existingDocCodes, r.name),
-      })
+      .mutateAsync({ proposalId, ...line })
       .then(() => {
         proposalEvents.itemAdded({
           proposalId,
           itemType: 'fixed',
           hasProduct: true,
-          lineTotal: unitPrice,
+          lineTotal: line.unitPrice,
         });
         return refreshDraftingSummary();
       });

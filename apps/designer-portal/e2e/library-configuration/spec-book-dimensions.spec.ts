@@ -8,17 +8,23 @@
  *
  * Chromium-pinned: `ensure_project_spec_book` provisions one book per project on
  * first load; parallel browser projects race that singleton as the same designer.
+ *
+ * RUN THIS SUITE AS: `pnpm --filter @patina/designer-portal test:e2e:library`
+ * — chromium-only, `--workers=1`. `playwright.config.ts` is `fullyParallel`, so a
+ * plain `playwright test` puts these spec files in separate workers, racing one
+ * local database as one designer. Serial-within-file does not cover that.
  */
 import { test, expect } from '../fixtures/auth';
 import {
   RESOLVED_SUPABASE_URL,
-  deleteProject,
   designerAndClientIds,
   getSpec,
   seedFfeItem,
-  seedProject,
+  seedProjectIn,
+  seedScope,
   setSpecDimensions,
   stamp,
+  teardownScope,
 } from './fixtures';
 
 test.skip(
@@ -37,6 +43,10 @@ const ITEM_NAME = `E2E Spec Sofa ${RUN}`;
 /** A key the structured control knows nothing about — the preservation subject. */
 const LEGACY_DIMENSIONS = { seatHeight: '18 in' };
 
+// The project is recorded the moment it exists; the FF&E line and its spec row
+// cascade with it, so a beforeAll that dies after the insert still cleans up.
+const scope = seedScope();
+
 let projectId: string;
 let ffeItemId: string;
 
@@ -45,15 +55,13 @@ test.beforeAll(async () => {
   console.log(`[library-configuration] service-role client resolved → ${RESOLVED_SUPABASE_URL}`);
 
   const { designerId, clientId } = designerAndClientIds();
-  projectId = await seedProject(`E2E Spec Book ${RUN}`, designerId, clientId);
+  projectId = await seedProjectIn(scope, `E2E Spec Book ${RUN}`, designerId, clientId);
   // `trg_spec_book_attach_ffe_line` creates the project_ffe_specs row for us.
   ffeItemId = await seedFfeItem(projectId, ITEM_NAME);
   await setSpecDimensions(ffeItemId, LEGACY_DIMENSIONS);
 });
 
-test.afterAll(() => {
-  if (projectId) deleteProject(projectId);
-});
+test.afterAll(() => teardownScope(scope));
 
 test('the structured editor writes W/D/H/unit and preserves unknown captured keys', async ({
   authenticatedPage: page,

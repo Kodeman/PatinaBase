@@ -8,19 +8,24 @@
  * picker and the spec book speak.
  *
  * Chromium-pinned + serial: publishes decisions as the single seeded designer.
+ *
+ * RUN THIS SUITE AS: `pnpm --filter @patina/designer-portal test:e2e:library`
+ * — chromium-only, `--workers=1`. `playwright.config.ts` is `fullyParallel`, so a
+ * plain `playwright test` puts these spec files in separate workers, racing one
+ * local database as one designer. Serial-within-file does not cover that.
  */
 import { test, expect } from '../fixtures/auth';
 import {
   RESOLVED_SUPABASE_URL,
   authorVariantSchema,
-  deleteDecisionByTitle,
-  deleteProducts,
-  deleteProject,
   designerAndClientIds,
   getDecisionOptionsByTitle,
-  seedProduct,
-  seedProject,
+  seedProductIn,
+  seedProjectIn,
+  seedScope,
   stamp,
+  teardownScope,
+  trackDecision,
 } from './fixtures';
 
 test.skip(
@@ -36,27 +41,28 @@ test.beforeEach(() => test.setTimeout(120_000));
 
 const RUN = stamp();
 const CONFIGURABLE = `E2E Compare Bed ${RUN}`;
-const TITLE = `E2E compare across group ${RUN}`;
+
+// Rows are recorded as they are created, so a half-finished beforeAll still
+// tears down cleanly.
+const scope = seedScope();
+const TITLE = trackDecision(scope, `E2E compare across group ${RUN}`);
 
 let projectId: string;
-let productIds: string[] = [];
 
 test.beforeAll(async () => {
   // eslint-disable-next-line no-console
   console.log(`[library-configuration] service-role client resolved → ${RESOLVED_SUPABASE_URL}`);
 
   const { designerId, clientId } = designerAndClientIds();
-  projectId = await seedProject(`E2E Compare ${RUN}`, designerId, clientId);
-  const productId = await seedProduct({ name: CONFIGURABLE, ownerUserId: designerId });
+  projectId = await seedProjectIn(scope, `E2E Compare ${RUN}`, designerId, clientId);
+  const productId = await seedProductIn(scope, {
+    name: CONFIGURABLE,
+    ownerUserId: designerId,
+  });
   authorVariantSchema(designerId, productId);
-  productIds = [productId];
 });
 
-test.afterAll(() => {
-  deleteDecisionByTitle(TITLE);
-  deleteProducts(productIds);
-  if (projectId) deleteProject(projectId);
-});
+test.afterAll(() => teardownScope(scope));
 
 test('generates priced sibling options across one group and persists each snapshot', async ({
   authenticatedPage: page,
@@ -87,29 +93,34 @@ test('generates priced sibling options across one group and persists each snapsh
   const panel = page.getByTestId('option-0-compare-panel');
   await expect(panel).toBeVisible();
 
-  // The option's OWN value starts ticked, so the baseline is present by default.
+  // The option's OWN value starts ticked — it is the thing being compared
+  // against. Leave it ticked and add the two alternatives; checkbox inputs sit
+  // under their label text, so click the label as a designer does.
   await expect(panel.getByRole('checkbox', { name: 'Oak' })).toBeChecked();
-
-  // Checkbox inputs sit under their label text — click the label, as a designer
-  // does. Drop Oak (already the source option) and compare the two alternatives.
-  await panel.getByText('Oak', { exact: true }).click();
   await panel.getByText('Walnut', { exact: true }).click();
   await panel.getByText('Boucle', { exact: true }).click();
-  await expect(panel.getByRole('checkbox', { name: 'Oak' })).not.toBeChecked();
+  await expect(panel.getByRole('checkbox', { name: 'Oak' })).toBeChecked();
   await expect(panel.getByRole('checkbox', { name: 'Walnut' })).toBeChecked();
   await expect(panel.getByRole('checkbox', { name: 'Boucle' })).toBeChecked();
 
   await panel.getByTestId('option-0-compare-generate').click();
 
-  // Siblings land immediately after the source, in the maker's value order.
-  // With Oak unticked the baseline falls to the first ticked value (Walnut), so
-  // price = 305000 + valueDelta − walnutDelta → Walnut 3050, Boucle 3300.
+  // Oak is ticked but NOT regenerated — the source card already is Oak. Two new
+  // siblings land immediately after it, in the maker's value order, anchored to
+  // Oak: price = 305000 + valueDelta − oakDelta(−15000) → Walnut 3200, Boucle
+  // 3450. Those are exactly the maker's own resolved variant prices.
   await expect(page.getByTestId('option-1-name')).toHaveValue(`${CONFIGURABLE} — Walnut`);
-  await expect(page.getByTestId('option-1-price')).toHaveValue('3050');
+  await expect(page.getByTestId('option-1-price')).toHaveValue('3200');
   await expect(page.getByTestId('option-2-name')).toHaveValue(`${CONFIGURABLE} — Boucle`);
-  await expect(page.getByTestId('option-2-price')).toHaveValue('3300');
-  // Boucle costs 16000c more at trade than the Walnut baseline.
-  await expect(page.getByTestId('option-2-cost-delta')).toHaveValue('+160');
+  await expect(page.getByTestId('option-2-price')).toHaveValue('3450');
+  // No third sibling: option 3 is still the composer's own pristine second
+  // option (library-first CTA, no fields), not a regenerated Oak.
+  await expect(page.getByTestId('option-3-choose-product')).toBeVisible();
+  await expect(page.getByTestId('option-3-name')).toHaveCount(0);
+  // Deltas are RETAIL — the movement in the price beside them, never trade.
+  // Boucle: 25000 − (−15000) = +$400.
+  await expect(page.getByTestId('option-2-cost-delta')).toHaveValue('+400');
+  await expect(page.getByTestId('option-1-cost-delta')).toHaveValue('+150');
 
   await page.locator('[data-action-key="publish-coordination-item"]').click();
 

@@ -405,6 +405,14 @@ export function PieceRoom({ productId }: { productId: string }) {
       draft: SaveConfigurationDraft,
       current?: SavedConfigurationReference | null,
     ) => {
+      // W1-B — the Piece room ALWAYS hands the workspace a save handler. Passing
+      // `undefined` when signed out would read to the workspace as "this host
+      // keeps no configuration record" (the picker's deliberate semantics), and
+      // a configured piece would place silently unconfigured. A signed-out
+      // designer must hit a wall here, not a quiet omission.
+      if (!user) {
+        throw new Error("Sign in to save configurations");
+      }
       const revising = revisionContext !== null;
       const currentConfiguration = revising ? revisionConfiguration.data : null;
       if (revising && !currentConfiguration) {
@@ -451,6 +459,7 @@ export function PieceRoom({ productId }: { productId: string }) {
       revisionConfiguration.data,
       revisionContext,
       saveConfiguration,
+      user,
     ],
   );
 
@@ -731,7 +740,7 @@ export function PieceRoom({ productId }: { productId: string }) {
           onDefinitionChange={() => setAuthoritativeConfiguration(null)}
           onSaveDefinition={canEdit ? saveDefinition : undefined}
           onEvaluate={evaluateSelection}
-          onSaveConfiguration={user ? saveConfiguredPiece : undefined}
+          onSaveConfiguration={saveConfiguredPiece}
           onPlace={(configurationId) => openPlacement(configurationId)}
           onCustomCommission={
             user && configurationView.mode === "custom"
