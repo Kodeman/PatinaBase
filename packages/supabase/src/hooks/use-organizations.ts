@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import type { StaffRole } from '@patina/types';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ORGANIZATION HOOKS
@@ -53,6 +54,10 @@ export interface OrganizationMember {
   joined_at: string | null;
   created_at: string;
   updated_at: string;
+  /** Call Sheet (U4): free-text human job title, own-row-writable via `set_my_member_title`. NULL = unset. */
+  job_title: string | null;
+  /** Call Sheet: coarse staff-role tier (StaffRole vocab, packages/types/src/studio-config.ts). Admin-writable only. NULL = unset. */
+  staff_role: string | null;
 }
 
 export interface OrganizationWithMembership extends Organization {
@@ -83,6 +88,10 @@ export interface InviteMemberInput {
   role: MemberRole;
   teammateType?: 'designer' | 'trades' | 'member';
   name?: string;
+  /** Call Sheet: human job title, written at invite-insert time when provided. */
+  jobTitle?: string;
+  /** Call Sheet: staff-role tier (StaffRole vocab), written at invite-insert time when provided. */
+  staffRole?: string;
 }
 
 /** Row shape returned by `accept_workspace_invitation` (00295). */
@@ -290,6 +299,8 @@ export function useInviteMember() {
           member_role: input.role,
           teammate_type: input.teammateType,
           name: input.name,
+          ...(input.jobTitle !== undefined ? { job_title: input.jobTitle } : {}),
+          ...(input.staffRole !== undefined ? { staff_role: input.staffRole } : {}),
         },
       });
 
@@ -495,6 +506,82 @@ export function useTransferOrganizationOwnership() {
         queryKey: ['organization-members', variables.organizationId],
       });
       queryClient.invalidateQueries({ queryKey: ['organizations'] });
+    },
+  });
+}
+
+/**
+ * Set the calling user's own job title on their membership row (U4) via the
+ * `set_my_member_title` RPC (00416, SECURITY DEFINER). There is deliberately
+ * no own-row UPDATE policy on `organization_members` — see the migration's
+ * comment block — so this is the only own-row title write path.
+ */
+export function useSetMyMemberTitle() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      organizationId,
+      jobTitle,
+    }: {
+      organizationId: string;
+      jobTitle: string;
+    }) => {
+      const supabase = getSupabase();
+      const { error } = await supabase.rpc('set_my_member_title', {
+        p_organization_id: organizationId,
+        p_job_title: jobTitle,
+      });
+
+      if (error) throw error;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['organization-members', variables.organizationId],
+      });
+    },
+  });
+}
+
+/**
+ * Update a co-member's job title and/or staff-role tier (admin path). Rides
+ * the existing 00068 "Org admins can update members" RLS policy — no new
+ * grant needed, unlike the own-row RPC above which a plain member must use.
+ */
+export function useUpdateMemberStaffRole() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      memberId,
+      organizationId,
+      jobTitle,
+      staffRole,
+    }: {
+      memberId: string;
+      organizationId: string;
+      jobTitle?: string | null;
+      staffRole?: StaffRole | string | null;
+    }) => {
+      const supabase = getSupabase();
+      const updates: Record<string, unknown> = {};
+      if (jobTitle !== undefined) updates.job_title = jobTitle;
+      if (staffRole !== undefined) updates.staff_role = staffRole;
+
+      const { data, error } = await supabase
+        .from('organization_members')
+        .update(updates)
+        .eq('id', memberId)
+        .select('*, organization_id')
+        .single();
+
+      if (error) throw error;
+      return { ...data, organizationId };
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['organization-members', variables.organizationId],
+      });
     },
   });
 }
