@@ -30,6 +30,79 @@ export async function POST(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createServerClient()) as any;
 
+  // Resolve kind from a database-owned client allowlist. Never trust a browser
+  // payload to select the legacy path, because that path also owns project
+  // activation semantics that are forbidden for a client-only services act.
+  const { data: commercialBundle, error: commercialLookupError } = await supabase.rpc(
+    'get_client_commercial_document_bundle',
+    { p_proposal_id: id },
+  );
+  const documentKind =
+    commercialBundle?.document?.kind ?? commercialBundle?.document?.document_kind ??
+    commercialBundle?.document?.documentKind ?? 'legacy';
+
+  if (documentKind !== 'legacy') {
+    if (commercialLookupError || !commercialBundle?.document) {
+      return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    }
+
+    const document = commercialBundle.document;
+    const commercialState = document.commercialState ?? document.commercial_state ?? document.state;
+    if (commercialState !== 'sent' && commercialState !== 'client_signed') {
+      return NextResponse.json({ error: 'not_signable' }, { status: 409 });
+    }
+
+    if (documentKind === 'furnishings_authorization') {
+      const { data: executeResult, error: executeError } = await supabase.rpc(
+        'execute_furnishings_authorization',
+        { p_proposal_id: id, p_signed_name: signedByName },
+      );
+      if (executeError) {
+        return NextResponse.json({ error: executeError.message || 'sign_failed' }, { status: 500 });
+      }
+      return NextResponse.json({
+        ok: true,
+        commercialState: 'executed',
+        newlyExecuted: executeResult?.newly_executed ?? executeResult?.newlyExecuted ?? false,
+      });
+    }
+
+    // A services agreement/addendum records the client's act only. The RPC
+    // never activates or creates a project; that remains the studio's separate
+    // countersignature transaction.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const commercialService = createServiceClient() as any;
+    const { data: signResult, error: signError } = await commercialService.rpc(
+      'sign_design_services_agreement_with_trusted_ip',
+      {
+        p_proposal_id: id,
+        p_signed_name: signedByName,
+        p_client_id: user.id,
+        p_signed_ip: clientIp,
+      },
+    );
+    if (signError) {
+      return NextResponse.json({ error: signError.message || 'sign_failed' }, { status: 500 });
+    }
+
+    const newlyClientSigned =
+      signResult?.newly_client_signed === true || signResult?.newlyClientSigned === true;
+    if (newlyClientSigned) {
+      void supabase.functions.invoke('commercial-document-notify', {
+        body: { documentId: id, transition: 'client_signed' },
+      }).catch(() => {
+        // Notification delivery does not weaken the durable signature.
+      });
+    }
+
+    return NextResponse.json({
+      ok: true,
+      commercialState: signResult?.commercial_state ?? signResult?.commercialState ?? 'client_signed',
+      newlyClientSigned,
+    });
+  }
+
+  // Legacy compatibility stays on the hardened proposal bundle/signature path.
   const { data: bundle, error: fetchError } = await supabase.rpc(
     'get_client_proposal_bundle',
     { p_proposal_id: id },
@@ -39,6 +112,7 @@ export async function POST(
   if (fetchError || !proposal) {
     return NextResponse.json({ error: 'not_found' }, { status: 404 });
   }
+
   if (
     proposal.status !== 'sent' &&
     proposal.status !== 'viewed' &&

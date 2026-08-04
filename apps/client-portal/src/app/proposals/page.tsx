@@ -5,6 +5,7 @@ import { Loader2 } from 'lucide-react';
 import type { Proposal } from '@patina/supabase';
 import { formatCurrency } from '@patina/shared';
 import { useClientProposals, partitionProposals } from '@/hooks/use-proposals-client';
+import { commercialSummaryFromProposal } from '@/lib/commercial-documents';
 import { StrataMark } from '@/components/strata-mark';
 import { QueryFailure } from '@/components/query-failure';
 
@@ -12,17 +13,22 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-const statusLabels: Record<Proposal['status'], string> = {
+const KIND_LABEL = {
+  legacy: 'Proposal',
+  design_services: 'Design services',
+  furnishings_authorization: 'Furnishings authorization',
+  service_addendum: 'Service addendum',
+} as const;
+
+const STATE_LABEL = {
   draft: 'Draft',
   sent: 'Awaiting your review',
-  viewed: 'In review',
-  accepted: 'Signed',
+  client_signed: 'Signed by you · awaiting studio',
+  executed: 'Executed',
   declined: 'Declined',
   expired: 'Expired',
-  // Superseded by a newer version — partitionProposals hides these, but the
-  // label keeps the map total over Proposal['status'].
-  revised: 'Superseded',
-};
+  superseded: 'Superseded',
+} as const;
 
 export default function ClientProposalsPage() {
   const { data, isLoading, isError, refetch } = useClientProposals();
@@ -30,10 +36,9 @@ export default function ClientProposalsPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-10">
-      <h1 className="type-page-title">Your Proposals</h1>
+      <h1 className="type-page-title">Your Documents</h1>
       <p className="type-body mt-2">
-        Design proposals from your designer. Review the scope, investment, and timeline, then sign to
-        kick off the project.
+        Review proposals, design-services agreements, and named furnishings authorizations from your studio.
       </p>
 
       {isLoading && (
@@ -58,7 +63,7 @@ export default function ClientProposalsPage() {
         archived.length === 0 && (
           <div className="py-16 text-center">
             <p className="type-body-small">
-              No proposals yet. Your designer will send proposals here when they&rsquo;re ready for your review.
+              No documents yet. Your studio will send them here when they&rsquo;re ready for your review.
             </p>
           </div>
         )}
@@ -80,7 +85,7 @@ export default function ClientProposalsPage() {
 
       {accepted.length > 0 && (
         <section className="mt-8">
-          <h2 className="type-meta mb-4 text-patina-sage">Signed ({accepted.length})</h2>
+          <h2 className="type-meta mb-4 text-patina-sage">Signed &amp; executed ({accepted.length})</h2>
           <ul className="space-y-0">
             {accepted.map((p) => (
               <ProposalRow key={p.id} proposal={p} />
@@ -104,6 +109,8 @@ export default function ClientProposalsPage() {
 }
 
 function ProposalRow({ proposal }: { proposal: Proposal }) {
+  const commercial = commercialSummaryFromProposal(proposal);
+  const showAmount = commercial.kind === 'legacy' || commercial.kind === 'furnishings_authorization';
   return (
     <li>
       <Link
@@ -113,8 +120,8 @@ function ProposalRow({ proposal }: { proposal: Proposal }) {
         <div className="flex items-baseline justify-between gap-4">
           <div className="min-w-0 flex-1">
             <p className="type-meta text-[var(--text-muted)]">
-              {statusLabels[proposal.status]}
-              {proposal.sent_at && ` · sent ${formatDate(proposal.sent_at)}`}
+              {KIND_LABEL[commercial.kind]} · {STATE_LABEL[commercial.state]}
+              {commercial.sentAt && ` · sent ${formatDate(commercial.sentAt)}`}
             </p>
             <h3 className="font-heading text-lg text-[var(--text-primary)]">{proposal.title}</h3>
             {proposal.description && (
@@ -124,10 +131,12 @@ function ProposalRow({ proposal }: { proposal: Proposal }) {
             )}
           </div>
           <div className="text-right">
-            <p className="font-heading text-base text-[var(--text-primary)]">
-              {formatCurrency(proposal.total_amount || 0)}
-            </p>
-            {proposal.valid_until && proposal.status !== 'accepted' && (
+            {showAmount && (
+              <p className="font-heading text-base text-[var(--text-primary)]">
+                {formatCurrency(proposal.total_amount || 0)}
+              </p>
+            )}
+            {proposal.valid_until && commercial.state !== 'executed' && (
               <p className="type-meta-small mt-0.5 text-[var(--text-muted)]">
                 Expires {formatDate(proposal.valid_until)}
               </p>
