@@ -115,9 +115,10 @@ const EMPTY_COPY: Partial<Record<DirectoryRole, string>> = {
 
 /** A person row's dedupe key against the rolodex — name + phone_e164, the
  *  SAME key the 00418 fold uses for its own person-card uniqueness. This is a
- *  heuristic identity match (the exact project_parties.studio_contact_id FK is
- *  only plumbed for field-roster rows this wave), not a guarantee — it exists
- *  to give the ROLODEX marker an honest signal without a per-row fetch. */
+ *  heuristic identity match, used ONLY as a fallback now that Wave 4
+ *  (00419/00420) plumbs the exact lineage FK — see `hasRolodexMatch` below —
+ *  for rows whose `meta.studio_contact_id` isn't set (pre-fold rows, or roles
+ *  the fold never touched). */
 function rolodexDedupeKey(name: string, phoneE164: string | null | undefined): string {
   return `${name.trim().toLowerCase()}|${phoneE164 ?? ''}`;
 }
@@ -125,6 +126,22 @@ function rolodexDedupeKey(name: string, phoneE164: string | null | undefined): s
 function personRowDedupeKey(p: PeopleDirectoryRow): string {
   const phone = (p.meta?.['phone_e164'] as string | undefined) ?? null;
   return rolodexDedupeKey(p.display_name, phone);
+}
+
+/** Does this row have a studio rolodex match? Prefers the exact
+ *  `meta.studio_contact_id` FK (plumbed on party rows since 00419/00420) —
+ *  only falls back to the name+phone heuristic for rows whose meta lacks the
+ *  key. */
+function hasRolodexMatch(
+  p: PeopleDirectoryRow,
+  rolodexContactIds: ReadonlySet<string>,
+  rolodexKeys: ReadonlySet<string>,
+): boolean {
+  const studioContactId = p.meta?.['studio_contact_id'];
+  if (typeof studioContactId === 'string' && studioContactId) {
+    return rolodexContactIds.has(studioContactId);
+  }
+  return rolodexKeys.has(personRowDedupeKey(p));
 }
 
 export function DirectoryView({
@@ -206,6 +223,17 @@ export function DirectoryView({
       keys.add(rolodexDedupeKey(c.full_name ?? '', c.phone_e164));
     }
     return keys;
+  }, [contacts]);
+  // The exact-match set for the FK path (00419/00420's meta.studio_contact_id)
+  // — every studio_contacts person row's own id, since that FK points straight
+  // at studio_contacts.id.
+  const rolodexContactIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const c of contacts ?? []) {
+      if (c.entity_kind !== 'person') continue;
+      ids.add(c.id);
+    }
+    return ids;
   }, [contacts]);
   // Companies the designer has already expanded (Wave 2 has no company detail
   // surface yet — an inline unfold of "who works here" is the honest stand-in
@@ -485,7 +513,7 @@ export function DirectoryView({
                     callSheetOn &&
                     scope === 'mine' &&
                     isFieldRosterRole(p.role) &&
-                    rolodexKeys.has(personRowDedupeKey(p))
+                    hasRolodexMatch(p, rolodexContactIds, rolodexKeys)
                   }
                 />
               </li>
