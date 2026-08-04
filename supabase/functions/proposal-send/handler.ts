@@ -42,6 +42,11 @@ export interface ProposalSendSnapshot {
   clientId: string;
   projectId?: string;
   proposalTitle: string;
+  documentKind?:
+    | 'legacy'
+    | 'design_services'
+    | 'furnishings_authorization'
+    | 'service_addendum';
   personalMessage?: string;
   ccEmail?: string;
   validUntil?: string;
@@ -210,7 +215,7 @@ function parseRequestBody(body: unknown): ProposalSendRequest | null {
   };
 }
 
-function renderProposalEmail(
+export function renderProposalEmail(
   dispatch: ProposalSendSnapshot,
   clientPortalUrl: string,
 ): { subject: string; html: string } {
@@ -229,29 +234,52 @@ function renderProposalEmail(
   const personalBlock = dispatch.personalMessage
     ? callout(escapeHtml(dispatch.personalMessage))
     : "";
+  const isServices = dispatch.documentKind === 'design_services' ||
+    dispatch.documentKind === 'service_addendum';
+  const isFurnishings = dispatch.documentKind === 'furnishings_authorization';
+  const documentLabel = isServices
+    ? 'design services agreement'
+    : isFurnishings
+      ? 'furnishings authorization'
+      : 'proposal';
   const subject =
-    `${dispatch.senderName} sent you a proposal: "${dispatch.proposalTitle}"`;
+    `${dispatch.senderName} sent you a ${documentLabel}: "${dispatch.proposalTitle}"`;
+  const description = isServices
+    ? 'Review the professional services, role-based rates, retainer policy, billing cadence, ceiling, and terms. Furnishings and permission to purchase are not included.'
+    : isFurnishings
+      ? 'Review the named furnishings wave. Only its listed items, quantities, and client prices become purchasing authority after signature and execution.'
+      : `${escapeHtml(dispatch.designerName)} has prepared a design proposal for you: <strong>${escapeHtml(dispatch.proposalTitle)}</strong>.`;
   const html = renderBrandedShell({
     title: subject,
-    preview: `${dispatch.designerName} has prepared a design proposal for you.`,
-    eyebrow: "Proposal",
+    preview: `${dispatch.designerName} has prepared a ${documentLabel} for you.`,
+    eyebrow: isServices
+      ? 'Design services'
+      : isFurnishings
+        ? 'FF&E authorization'
+        : 'Proposal',
     studioName: dispatch.studioName,
     studioLogoUrl: dispatch.studioLogoUrl,
     body: [
-      heading("Your proposal is ready"),
+      heading(isServices
+        ? 'Your design agreement is ready'
+        : isFurnishings
+          ? 'Your furnishings authorization is ready'
+          : 'Your proposal is ready'),
       paragraph(`Hi ${escapeHtml(clientName)},`),
-      paragraph(
-        `${
-          escapeHtml(dispatch.designerName)
-        } has prepared a design proposal for you: <strong>${
-          escapeHtml(dispatch.proposalTitle)
-        }</strong>.`,
-      ),
+      paragraph(description),
       personalBlock,
       totalLine,
       expiryLine,
       spacer(10),
-      ctaButton(link, "Review proposal", "ink"),
+      ctaButton(
+        link,
+        isServices
+          ? 'Review agreement'
+          : isFurnishings
+            ? 'Review authorization'
+            : 'Review proposal',
+        'ink',
+      ),
       spacer(),
       muted(`If the button doesn&rsquo;t work, copy this link:<br>${link}`),
       muted("— Patina"),
