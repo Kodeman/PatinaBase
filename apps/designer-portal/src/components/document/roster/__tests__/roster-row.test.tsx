@@ -83,6 +83,61 @@ describe('RosterRow — folded', () => {
     );
     expect(screen.queryByRole('button', { name: /profile/ })).not.toBeInTheDocument();
   });
+
+  it('shows no chevron for a vendor — people_directory has no row to open', () => {
+    // 00420's party branch admits gc/sub/installer/receiver/architect/
+    // photographer/stager only; a vendor chevron would open an empty sheet.
+    ul(
+      <RosterRow
+        row={row({ kind: 'vendor', display_name: 'Ochoa Lighting' })}
+        group="buildSupply"
+        expanded={false}
+        onToggle={jest.fn()}
+        onOpenProfile={jest.fn()}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: /profile/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('RosterRow — the synthetic client row (Wave 5)', () => {
+  const clientRow = row({
+    roster_id: 'client:client-profile-1',
+    source: 'client-synthetic',
+    kind: 'client',
+    display_name: 'Harold Ellsworth',
+    company_name: null,
+    email: null,
+    phone: null,
+    trade: null,
+    profile_id: 'client-profile-1',
+    sms_consent_status: null,
+    has_active_field_link: false,
+  });
+
+  it('wears a quiet mono THE CLIENT pill instead of a kind label', () => {
+    ul(
+      <RosterRow
+        row={clientRow}
+        group="clientSide"
+        expanded={false}
+        onToggle={jest.fn()}
+        onOpenProfile={jest.fn()}
+      />,
+    );
+    expect(screen.getByText('The client')).toBeInTheDocument();
+    expect(screen.queryByText('Client')).not.toBeInTheDocument();
+    expect(screen.getByText('Account')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /profile/ })).not.toBeInTheDocument();
+  });
+
+  it('carries no unfold actions — the client is not a party row', () => {
+    ul(<RosterRow row={clientRow} group="clientSide" expanded onToggle={jest.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Show to client' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Text' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Copy field link' })).not.toBeInTheDocument();
+  });
 });
 
 describe('RosterRow — unfolded actions', () => {

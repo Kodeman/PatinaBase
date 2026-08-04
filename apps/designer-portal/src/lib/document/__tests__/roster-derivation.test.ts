@@ -1,8 +1,13 @@
 import type { ProjectRosterRow } from '@patina/supabase';
 import {
+  CLIENT_SYNTHETIC_SOURCE,
+  flattenRoster,
   groupRoster,
+  isSyntheticClientRow,
   kickoffRetired,
   reachState,
+  rosterProfileRole,
+  syntheticClientRow,
   vitals,
   vitalsInstrumentSuffix,
   vitalsLine,
@@ -113,6 +118,157 @@ describe('groupRoster — the three sections (slide 11)', () => {
   });
 });
 
+// ============================================================================
+// THE CLIENT (Wave 5) — v_project_roster has no client branch
+// ============================================================================
+
+describe('groupRoster — the synthetic client row', () => {
+  const client = {
+    name: 'Margaret Ellsworth',
+    profileId: 'client-profile-1',
+    projectId: 'proj-1',
+  };
+
+  it('prepends the document’s client to the client side, ahead of the reps', () => {
+    const g = groupRoster(
+      [row({ kind: 'client_rep', display_name: 'Dana Ellsworth' })],
+      client,
+    );
+    expect(names(g.clientSide)).toEqual(['Margaret Ellsworth', 'Dana Ellsworth']);
+    expect(g.clientSide[0].source).toBe(CLIENT_SYNTHETIC_SOURCE);
+    expect(isSyntheticClientRow(g.clientSide[0])).toBe(true);
+    expect(g.clientSide[0].profile_id).toBe('client-profile-1');
+    expect(g.clientSide[0].roster_id).toBe('client:client-profile-1');
+  });
+
+  it('leads even a client-kind party row that is somebody else', () => {
+    const g = groupRoster(
+      [row({ kind: 'client', display_name: 'Aaron Ellsworth' })],
+      client,
+    );
+    expect(names(g.clientSide)).toEqual(['Margaret Ellsworth', 'Aaron Ellsworth']);
+  });
+
+  it('reads ACCOUNT with a profile and ON PAPER without one', () => {
+    expect(reachState(groupRoster([], client).clientSide[0])).toBe('account');
+    expect(
+      reachState(groupRoster([], { ...client, profileId: null }).clientSide[0]),
+    ).toBe('on_paper');
+  });
+
+  it('keys a profile-less client on their name so the row is still stable', () => {
+    const g = groupRoster([], { name: 'Margaret Ellsworth', profileId: null });
+    expect(g.clientSide[0].roster_id).toBe('client:Margaret Ellsworth');
+  });
+
+  it('adds nothing when the document carries no client name', () => {
+    expect(groupRoster([], { name: null }).clientSide).toHaveLength(0);
+    expect(groupRoster([], { name: '   ' }).clientSide).toHaveLength(0);
+    expect(groupRoster([]).clientSide).toHaveLength(0);
+  });
+
+  it('never doubles the client — a party row with the same profile wins', () => {
+    const g = groupRoster(
+      [
+        row({
+          kind: 'client',
+          display_name: 'M. Ellsworth',
+          profile_id: 'client-profile-1',
+          phone: '(513) 555-0101',
+        }),
+      ],
+      client,
+    );
+    expect(names(g.clientSide)).toEqual(['M. Ellsworth']);
+    expect(g.clientSide[0].source).toBe('party');
+  });
+
+  it('never doubles the client — a party row with the same name (any case) wins', () => {
+    const g = groupRoster(
+      [row({ kind: 'client', display_name: '  margaret ELLSWORTH ' })],
+      { ...client, profileId: null },
+    );
+    expect(g.clientSide).toHaveLength(1);
+    expect(g.clientSide[0].source).toBe('party');
+  });
+
+  it('does not dedupe against a client_rep who happens to share the name', () => {
+    const g = groupRoster(
+      [row({ kind: 'client_rep', display_name: 'Margaret Ellsworth' })],
+      client,
+    );
+    expect(g.clientSide).toHaveLength(2);
+  });
+
+  it('leaves the other two groups alone', () => {
+    const g = groupRoster(
+      [
+        row({ source: 'team', kind: 'team', display_name: 'Leah Warner' }),
+        row({ kind: 'gc', display_name: 'Danny Ochoa' }),
+      ],
+      client,
+    );
+    expect(names(g.studioSide)).toEqual(['Leah Warner']);
+    expect(names(g.buildSupply)).toEqual(['Danny Ochoa']);
+    expect(names(g.clientSide)).toEqual(['Margaret Ellsworth']);
+  });
+
+  it('carries no party affordances — nothing writes to a client_id', () => {
+    const synthetic = syntheticClientRow(client)!;
+    expect(synthetic.kind).toBe('client');
+    expect(synthetic.sms_consent_status).toBeNull();
+    expect(synthetic.has_active_field_link).toBe(false);
+    expect(synthetic.show_to_client).toBeNull();
+    expect(synthetic.studio_contact_id).toBeNull();
+    expect(synthetic.project_id).toBe('proj-1');
+    expect(syntheticClientRow({ name: '' })).toBeNull();
+  });
+});
+
+describe('flattenRoster — what the sheet actually shows', () => {
+  it('returns every group in sheet order', () => {
+    const g = groupRoster(
+      [
+        row({ kind: 'gc', display_name: 'Danny Ochoa' }),
+        row({ source: 'team', kind: 'team', display_name: 'Leah Warner' }),
+      ],
+      { name: 'Margaret Ellsworth', profileId: 'p-c' },
+    );
+    expect(names(flattenRoster(g))).toEqual([
+      'Leah Warner',
+      'Margaret Ellsworth',
+      'Danny Ochoa',
+    ]);
+  });
+});
+
+describe('rosterProfileRole — where the chevron can actually go', () => {
+  it.each(['gc', 'sub', 'installer', 'receiver', 'architect', 'photographer', 'stager'])(
+    'opens a profile for a %s party row',
+    (kind) => {
+      expect(rosterProfileRole(row({ kind }))).toBe(kind);
+    },
+  );
+
+  it.each(['vendor', 'client_rep', 'other', 'client', 'inspector'])(
+    'has nowhere to go for a %s party row (people_directory excludes it)',
+    (kind) => {
+      expect(rosterProfileRole(row({ kind }))).toBeNull();
+    },
+  );
+
+  it('has nowhere to go for a team row or the synthetic client', () => {
+    expect(rosterProfileRole(row({ source: 'team', kind: 'gc' }))).toBeNull();
+    expect(
+      rosterProfileRole(syntheticClientRow({ name: 'Margaret Ellsworth' })!),
+    ).toBeNull();
+  });
+
+  it('has nowhere to go without a roster id to open', () => {
+    expect(rosterProfileRole(row({ kind: 'gc', roster_id: null }))).toBeNull();
+  });
+});
+
 describe('reachState — the precedence truth table', () => {
   it.each([
     // profile_id, has_active_field_link, expected
@@ -181,6 +337,33 @@ describe('vitals — the counts and the mono strings', () => {
     expect(vitalsLine([])).toBe(
       '0 ON THE JOB · 0 REACHABLE BY TEXT · 0 WITH ACCOUNTS',
     );
+  });
+
+  it('counts the synthetic client in the total and in WITH ACCOUNTS', () => {
+    const shown = flattenRoster(
+      groupRoster([row({ profile_id: 'p-1', sms_consent_status: 'granted' })], {
+        name: 'Margaret Ellsworth',
+        profileId: 'client-profile-1',
+      }),
+    );
+    expect(vitals(shown)).toEqual({
+      total: 2,
+      textable: 1,
+      withAccounts: 2,
+      onPaper: 0,
+    });
+  });
+
+  it('never counts the synthetic client as textable — there is no consent ledger', () => {
+    // Even if something upstream handed the row a granted consent, a client
+    // has no project_parties row and therefore no SMS rail.
+    const synthetic = {
+      ...syntheticClientRow({ name: 'Margaret Ellsworth' })!,
+      sms_consent_status: 'granted',
+    };
+    expect(vitals([synthetic]).textable).toBe(0);
+    expect(vitals([synthetic]).total).toBe(1);
+    expect(vitals([synthetic]).onPaper).toBe(1);
   });
 
   it('renders the instrument suffix only when someone is on paper', () => {

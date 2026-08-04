@@ -16,7 +16,10 @@
  *
  * Team rows are read-only here on purpose: SHOW TO CLIENT, REMOVE, TEXT and
  * COPY FIELD LINK all write `project_parties`, and a team row is a
- * `project_team_members` login. It has no party to write to.
+ * `project_team_members` login. It has no party to write to. The synthetic
+ * client row (Wave 5) is read-only for the same reason and one more: it isn't
+ * a row at all, it's the project's `client_id` wearing a roster shape. It
+ * carries a quiet mono THE CLIENT pill where a kind label would go.
  */
 
 import { useState } from 'react';
@@ -29,7 +32,12 @@ import {
   type ProjectRosterRow,
 } from '@patina/supabase';
 import { getStaffRoleLabel, isFieldPartyKind } from '@patina/types';
-import { reachState, type RosterGroup } from '@/lib/document/roster-derivation';
+import {
+  isSyntheticClientRow,
+  reachState,
+  rosterProfileRole,
+  type RosterGroup,
+} from '@/lib/document/roster-derivation';
 import { Avatar, ConsentChip } from '../people/person-bits';
 import { DocumentAction, DocumentActionRow } from '../document-action';
 import { ReachChip } from './reach-chip';
@@ -71,6 +79,15 @@ export function RosterRow({
   onOpenProfile?: (row: ProjectRosterRow) => void;
 }) {
   const isParty = row.source === 'party';
+  // The project's own client (Wave 5) — a synthetic row, not a party row.
+  // Nothing writes to it: no SHOW TO CLIENT (they ARE the client), no REMOVE
+  // (you'd be removing the project's client from the project), no consent dot
+  // and no chevron. It states who they are and how they're reachable.
+  const isClient = isSyntheticClientRow(row);
+  // A chevron only where PartyProfileSheet has something to show — the
+  // people_directory party branch (00420) excludes vendor / client_rep /
+  // other, so those rows would open an empty sheet.
+  const canOpenProfile = !!rosterProfileRole(row);
   const partyId = row.roster_id ?? '';
   const projectId = row.project_id ?? '';
   const name = row.display_name ?? row.company_name ?? 'Unnamed';
@@ -122,7 +139,13 @@ export function RosterRow({
               {isParty && <ConsentChip status={consent} dotOnly />}
             </span>
             <span className={`mt-[0.1rem] flex items-baseline gap-1.5 ${META}`}>
-              <span className="truncate">{rosterSecondLine(row, group)}</span>
+              {isClient ? (
+                <span className="inline-flex items-center rounded-[3px] border border-[var(--color-pearl)] px-1.5 py-[0.1rem] tracking-[0.12em] text-[var(--color-mocha)]">
+                  The client
+                </span>
+              ) : (
+                <span className="truncate">{rosterSecondLine(row, group)}</span>
+              )}
               {row.company_name && (
                 <span className="truncate normal-case tracking-normal text-[0.68rem] text-[var(--color-aged-oak)]">
                   <span aria-hidden>■</span> {row.company_name}
@@ -132,7 +155,7 @@ export function RosterRow({
           </span>
         </button>
         <ReachChip state={reach} />
-        {isParty && onOpenProfile && (
+        {canOpenProfile && onOpenProfile && (
           <button
             type="button"
             onClick={() => onOpenProfile(row)}

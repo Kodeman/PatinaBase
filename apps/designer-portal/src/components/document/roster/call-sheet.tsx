@@ -25,6 +25,7 @@ import { Users } from 'lucide-react';
 import { useProjectRoster, type ProjectRosterRow } from '@patina/supabase';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import {
+  flattenRoster,
   groupRoster,
   vitalsLine,
   type RosterGroup,
@@ -95,6 +96,7 @@ export function CallSheet({
   projectId,
   projectTitle,
   clientName,
+  clientProfileId,
   onOpenProfile,
   openMode = 'sheet',
 }: {
@@ -103,6 +105,9 @@ export function CallSheet({
   projectId: string;
   projectTitle: string;
   clientName?: string | null;
+  /** The document's `client_profile_id` — with `clientName`, the synthetic
+   *  client row that leads the CLIENT SIDE group (Wave 5). */
+  clientProfileId?: string | null;
   /** The chevron's destination — the caller mounts PartyProfileSheet. */
   onOpenProfile?: (row: ProjectRosterRow) => void;
   /** See {@link CallSheetOpenMode}. The sheet still opens underneath a
@@ -118,9 +123,23 @@ export function CallSheet({
   const [added, setAdded] = useState<string | null>(null);
 
   const roster = useMemo(() => rows ?? [], [rows]);
-  const groups = useMemo(() => groupRoster(roster), [roster]);
-  const vitals = useMemo(() => vitalsLine(roster), [roster]);
-  const empty = !isLoading && roster.length === 0;
+  // The project's own client (Wave 5). `v_project_roster` has no client
+  // branch, so the document hands their identity down and groupRoster
+  // prepends a synthetic row — unless a party row already claims them.
+  const groups = useMemo(
+    () =>
+      groupRoster(roster, {
+        name: clientName,
+        profileId: clientProfileId ?? null,
+        projectId,
+      }),
+    [roster, clientName, clientProfileId, projectId],
+  );
+  // The vitals count what the sheet SHOWS — the synthetic client included, so
+  // the mono line and the groups beneath it can never disagree.
+  const shown = useMemo(() => flattenRoster(groups), [groups]);
+  const vitals = useMemo(() => vitalsLine(shown), [shown]);
+  const empty = !isLoading && shown.length === 0;
 
   // FIX 2 — a doorway can pre-address the picker instead of landing on the
   // roster list first. Inlined (not via openPicker below) so this hook still

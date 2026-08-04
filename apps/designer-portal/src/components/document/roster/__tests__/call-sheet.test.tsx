@@ -60,12 +60,14 @@ const ROSTER = [
   row({ kind: 'sub', trade: 'tile', display_name: 'Rosa Martínez' }),
 ];
 
+// The default props carry NO client identity — the specs below that are about
+// the roster's own rows stay exactly as they were before Wave 5's synthetic
+// client row existed. The client-side specs pass it explicitly.
 const props = {
   open: true,
   onClose: jest.fn(),
   projectId: 'proj-1',
   projectTitle: 'Ellsworth Residence',
-  clientName: 'The Ellsworths',
 };
 
 beforeEach(() => {
@@ -120,6 +122,81 @@ describe('CallSheet — the sheet', () => {
     expect(
       region!.querySelector('[data-action-variant="primary"]')?.textContent,
     ).toContain('From the rolodex');
+  });
+});
+
+// ============================================================================
+// THE CLIENT (Wave 5) — v_project_roster has no client branch, so the project's
+// actual client (projects.client_id) never appeared on their own call sheet.
+// The document hands their identity down; the sheet prepends the row.
+// ============================================================================
+
+describe('CallSheet — the client on the call sheet', () => {
+  // Deliberately NOT the ROSTER's client-kind party row (Margaret) — the
+  // dedupe specs below own that collision.
+  const withClient = {
+    ...props,
+    clientName: 'Harold Ellsworth',
+    clientProfileId: 'client-profile-1',
+  };
+
+  // The sheet also prints the client name as its mono sub-line, so rows are
+  // queried by their own unfold button rather than by bare text.
+  const clientRows = () =>
+    screen.queryAllByRole('button', { expanded: false, name: /Harold Ellsworth/ });
+
+  it('shows the client on the client side, and says so in mono', () => {
+    render(<CallSheet {...withClient} />);
+    expect(clientRows()).toHaveLength(1);
+    expect(screen.getByText('The client')).toBeInTheDocument();
+    expect(screen.getByText('Client side')).toBeInTheDocument();
+  });
+
+  it('counts the client in the vitals the sheet prints', () => {
+    render(<CallSheet {...withClient} />);
+    // 5 rows shown (4 roster + the client), 3 with accounts (2 roster + the
+    // client's own profile). Nobody is textable — no consent is granted.
+    expect(
+      screen.getByText('5 ON THE JOB · 0 REACHABLE BY TEXT · 3 WITH ACCOUNTS'),
+    ).toBeInTheDocument();
+  });
+
+  it('gives the client no party affordances — not even a chevron', () => {
+    render(<CallSheet {...withClient} onOpenProfile={jest.fn()} />);
+    expect(
+      screen.queryByRole('button', { name: /Open Harold Ellsworth's profile/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('stands in for the empty state when nobody else is on the job yet', () => {
+    useProjectRoster.mockReturnValue({ data: [], isLoading: false });
+    render(<CallSheet {...withClient} />);
+    expect(screen.queryByText('– No one is on the call sheet yet.')).not.toBeInTheDocument();
+    expect(clientRows()).toHaveLength(1);
+    expect(
+      screen.getByText('1 ON THE JOB · 0 REACHABLE BY TEXT · 1 WITH ACCOUNTS'),
+    ).toBeInTheDocument();
+  });
+
+  it('never reads the client twice when a party row already claims them', () => {
+    useProjectRoster.mockReturnValue({
+      data: [
+        row({
+          kind: 'client',
+          display_name: 'Harold Ellsworth',
+          profile_id: 'client-profile-1',
+        }),
+      ],
+      isLoading: false,
+    });
+    render(<CallSheet {...withClient} />);
+    // One row, not two — and it is the party row (no THE CLIENT pill), the
+    // one with a phone number and actions under it.
+    expect(clientRows()).toHaveLength(1);
+    expect(screen.queryByText('The client')).not.toBeInTheDocument();
+    expect(
+      screen.getByText('1 ON THE JOB · 0 REACHABLE BY TEXT · 1 WITH ACCOUNTS'),
+    ).toBeInTheDocument();
   });
 });
 

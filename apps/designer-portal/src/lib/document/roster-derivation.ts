@@ -65,6 +65,124 @@ function buildSupplyRank(kind: string | null | undefined): number {
   return i === -1 ? BUILD_SUPPLY_ORDER.length : i;
 }
 
+// ============================================================================
+// THE CLIENT (Wave 5) — the one name the view cannot give us
+// ============================================================================
+
+/**
+ * `v_project_roster` has no client branch: it unions `project_parties` with
+ * `project_team_members`, and the project's actual client lives on
+ * `projects.client_id`. So the person the whole job is for never appeared in
+ * the sheet's CLIENT SIDE group.
+ *
+ * Rather than widen the view (a migration for one row the document already
+ * holds in hand), the /doc/[id] page — which already reads `client_name` /
+ * `client_profile_id` for the letterhead — hands them down and this module
+ * PREPENDS a synthetic row. It is marked by its `source`, never by its kind,
+ * so every consumer can tell "the client" from "a party row that happens to
+ * be kind=client".
+ */
+export const CLIENT_SYNTHETIC_SOURCE = 'client-synthetic';
+
+export interface SyntheticClient {
+  /** The document's `client_name`. Blank/absent means no client row at all. */
+  name: string | null | undefined;
+  /** The document's `client_profile_id` — non-null means they log in. */
+  profileId?: string | null;
+  projectId?: string | null;
+}
+
+/** True for the row this module synthesized rather than read from the view. */
+export function isSyntheticClientRow(row: ProjectRosterRow): boolean {
+  return row.source === CLIENT_SYNTHETIC_SOURCE;
+}
+
+function normalizeName(value: string | null | undefined): string {
+  return (value ?? '').trim().toLowerCase();
+}
+
+/**
+ * The synthetic client row, or null when the document carries no client name.
+ * `reach` derives normally off `profile_id` (ACCOUNT when they log in, ON
+ * PAPER otherwise) — nothing special-cases it. `roster_id` is stable across
+ * renders so the expanded-row state keyed on it survives a refetch.
+ */
+export function syntheticClientRow(
+  client: SyntheticClient | null | undefined,
+): ProjectRosterRow | null {
+  const name = (client?.name ?? '').trim();
+  if (!name) return null;
+  const profileId = client?.profileId ?? null;
+  return {
+    roster_id: `client:${profileId || name}`,
+    source: CLIENT_SYNTHETIC_SOURCE,
+    project_id: client?.projectId ?? null,
+    kind: 'client',
+    display_name: name,
+    company_name: null,
+    email: null,
+    phone: null,
+    trade: null,
+    job_title: null,
+    staff_role: null,
+    studio_contact_id: null,
+    profile_id: profileId,
+    show_to_client: null,
+    has_active_field_link: false,
+    sms_consent_status: null,
+    updated_at: null,
+  };
+}
+
+/**
+ * Has a real `project_parties` row already claimed this client? A studio that
+ * tracked the client as a party (same profile, or the same name typed by
+ * hand) must not read twice on the sheet — the party row wins, because it is
+ * the one with a phone number, a consent state, and actions under it.
+ */
+function clientAlreadyOnSheet(
+  clientRows: ProjectRosterRow[],
+  synthetic: ProjectRosterRow,
+): boolean {
+  return clientRows.some(
+    (r) =>
+      r.kind === 'client' &&
+      ((!!synthetic.profile_id && r.profile_id === synthetic.profile_id) ||
+        normalizeName(r.display_name) === normalizeName(synthetic.display_name)),
+  );
+}
+
+// ============================================================================
+// THE CHEVRON'S DESTINATION
+// ============================================================================
+
+/**
+ * The party kinds `people_directory`'s party branch actually admits (00420) —
+ * and therefore the only rows whose chevron can open PartyProfileSheet with
+ * anything in it. 'vendor' / 'client_rep' / 'other' / 'client' are excluded
+ * from the view by design, so a chevron on them would open an empty sheet.
+ */
+const PROFILE_OPENABLE_KINDS: readonly string[] = [
+  'gc',
+  'sub',
+  'installer',
+  'receiver',
+  'architect',
+  'photographer',
+  'stager',
+];
+
+/**
+ * The `PartyRole` to open PartyProfileSheet with for this row, or null when
+ * the row has no profile to open (a team row, the synthetic client, or a
+ * party kind the directory view excludes). Returned as a plain string so this
+ * module keeps its type-only import surface; the caller casts.
+ */
+export function rosterProfileRole(row: ProjectRosterRow): string | null {
+  if (row.source !== 'party' || !row.roster_id) return null;
+  return PROFILE_OPENABLE_KINDS.includes(row.kind ?? '') ? (row.kind as string) : null;
+}
+
 function nameOf(row: ProjectRosterRow): string {
   return (row.display_name ?? row.company_name ?? '').trim();
 }
@@ -88,8 +206,16 @@ function byName(a: ProjectRosterRow, b: ProjectRosterRow): number {
  * Studio and client sides sort by name (there is no staff seniority column to
  * order by — `staff_role` is free TEXT with no rank, so inventing one here
  * would be a fiction).
+ *
+ * `client` (Wave 5, optional) is the document's own client identity. When
+ * given — and when no party row already claims them — a synthetic client row
+ * is PREPENDED to clientSide, ahead of the name sort: the client leads their
+ * own side of the sheet, never sorts into the middle of their reps.
  */
-export function groupRoster(rows: ProjectRosterRow[]): GroupedRoster {
+export function groupRoster(
+  rows: ProjectRosterRow[],
+  client?: SyntheticClient | null,
+): GroupedRoster {
   const studioSide: ProjectRosterRow[] = [];
   const clientSide: ProjectRosterRow[] = [];
   const buildSupply: ProjectRosterRow[] = [];
@@ -127,7 +253,17 @@ export function groupRoster(rows: ProjectRosterRow[]): GroupedRoster {
     return byName(a, b);
   });
 
+  const synthetic = syntheticClientRow(client);
+  if (synthetic && !clientAlreadyOnSheet(clientSide, synthetic)) {
+    clientSide.unshift(synthetic);
+  }
+
   return { studioSide, clientSide, buildSupply };
+}
+
+/** Every row the sheet shows, in group order — the array the vitals count. */
+export function flattenRoster(groups: GroupedRoster): ProjectRosterRow[] {
+  return [...groups.studioSide, ...groups.clientSide, ...groups.buildSupply];
 }
 
 // ============================================================================
@@ -165,12 +301,19 @@ export interface RosterVitals {
   onPaper: number;
 }
 
+/**
+ * The synthetic client (Wave 5) counts toward `total` and `withAccounts` —
+ * they are on the job, and they do log in — but never toward `textable`:
+ * there is no `project_parties` row behind them, so there is no consent
+ * ledger and no SMS rail. Saying "reachable by text" about a row nothing can
+ * text would be the one lie this line exists to avoid.
+ */
 export function vitals(rows: ProjectRosterRow[]): RosterVitals {
   let textable = 0;
   let withAccounts = 0;
   let onPaper = 0;
   for (const row of rows) {
-    if (row.sms_consent_status === 'granted') textable += 1;
+    if (!isSyntheticClientRow(row) && row.sms_consent_status === 'granted') textable += 1;
     if (row.profile_id) withAccounts += 1;
     if (reachState(row) === 'on_paper') onPaper += 1;
   }
