@@ -311,7 +311,11 @@ describe('POST /api/proposals/[id]/sign', () => {
       return Promise.resolve({ error: null });
     });
     serviceRpcMock.mockResolvedValue({
-      data: { projectId: 'project-1', newlyExecuted: true },
+      data: {
+        projectId: 'project-1',
+        depositInvoiceId: 'invoice-1',
+        newlyExecuted: true,
+      },
       error: null,
     });
 
@@ -330,12 +334,16 @@ describe('POST /api/proposals/[id]/sign', () => {
         p_signed_ip: '203.0.113.7',
       },
     );
-    expect(invokeMock).toHaveBeenCalledWith('commercial-document-notify', {
+    expect(invokeMock).toHaveBeenNthCalledWith(1, 'commercial-document-notify', {
       body: { documentId: 'prop-1', transition: 'furnishings_executed' },
+    });
+    expect(invokeMock).toHaveBeenNthCalledWith(2, 'commercial-document-notify', {
+      body: { documentId: 'prop-1', transition: 'deposit_ready' },
     });
     expect(await response.json()).toMatchObject({
       commercialState: 'executed',
       projectId: 'project-1',
+      depositInvoiceId: 'invoice-1',
       newlyExecuted: true,
     });
   });

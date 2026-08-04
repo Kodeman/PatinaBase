@@ -114,17 +114,27 @@ export async function POST(
       }
       const newlyExecuted =
         executeResult?.newly_executed === true || executeResult?.newlyExecuted === true;
+      const depositInvoiceId =
+        executeResult?.deposit_invoice_id ?? executeResult?.depositInvoiceId ?? null;
       if (newlyExecuted) {
         void supabase.functions.invoke('commercial-document-notify', {
           body: { documentId: id, transition: 'furnishings_executed' },
         }).catch(() => {
           // Notification delivery does not weaken the durable execution.
         });
+        if (depositInvoiceId) {
+          void supabase.functions.invoke('commercial-document-notify', {
+            body: { documentId: id, transition: 'deposit_ready' },
+          }).catch(() => {
+            // Notification delivery does not weaken the durable invoice handoff.
+          });
+        }
       }
       return NextResponse.json({
         ok: true,
         commercialState: 'executed',
         projectId: executeResult?.project_id ?? executeResult?.projectId ?? null,
+        depositInvoiceId,
         newlyExecuted,
       });
     }
