@@ -614,6 +614,8 @@ export {
   useRemoveMember,
   useLeaveOrganization,
   useTransferOrganizationOwnership,
+  useSetMyMemberTitle,
+  useUpdateMemberStaffRole,
 } from './use-organizations';
 export type {
   Organization,
