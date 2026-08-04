@@ -40,6 +40,13 @@ import { DocSheetHead } from './overlays/doc-sheet';
 import { STUDIO_LEDGERS } from '@/lib/document/registry';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 import { DocumentAction, DocumentActionGroup } from './document-action';
+import { ProjectAuthorityBandForProject } from './commercial/project-authority-band';
+import { useProjectBillingAuthority } from '@/hooks/use-commercial-documents';
+import {
+  isInvoiceEligibleTimeEntry,
+  timeBillingStateLabel,
+  timeRateProvenance,
+} from '@/lib/document/authority-hours';
 
 // R96 — the registry is the single source of the surface icon (no drift).
 const HOURS_ICON = STUDIO_LEDGERS.find((l) => l.key === 'hours')!.icon;
@@ -69,6 +76,7 @@ function weekRange(offset: number): { start: Date; end: Date } {
 interface UnbilledInfo {
   amount_cents: number;
   project_id: string;
+  authority_rate_id?: string | null;
 }
 
 export function HoursLedger({
@@ -163,8 +171,9 @@ export function HoursLedger({
     const map = new Map<string, UnbilledInfo>();
     for (const row of unbilledRows ?? [])
       map.set(row.id, {
-        amount_cents: row.amount_cents ?? 0,
+        amount_cents: row.rated_amount_cents ?? row.amount_cents ?? 0,
         project_id: row.project_id,
+        authority_rate_id: row.authority_rate_id ?? null,
       });
     return map;
   }, [unbilledRows]);
@@ -173,7 +182,7 @@ export function HoursLedger({
     0,
   );
   const unbilledCents = (unbilledRows ?? []).reduce(
-    (s, r) => s + (r.amount_cents ?? 0),
+    (s, r) => s + (r.rated_amount_cents ?? r.amount_cents ?? 0),
     0,
   );
   const unbilledProjects = useMemo(
@@ -209,7 +218,7 @@ export function HoursLedger({
 
   // R75 — the shown week's exportable share: billable, completed, unclaimed.
   const weekUnbilled = useMemo(
-    () => (entries ?? []).filter((e) => e.billable && !e.invoice_id),
+    () => (entries ?? []).filter(isInvoiceEligibleTimeEntry),
     [entries],
   );
   const weekUnbilledProjects = useMemo(
@@ -367,6 +376,13 @@ export function HoursLedger({
             : []),
         ]}
       />
+
+      {/* A project-scoped Hours sheet carries the same RPC-owned authority
+          readout as the open project document. Studio-wide mode stays a
+          cross-project ledger rather than inventing an aggregate cap. */}
+      {lensProjectId && (
+        <ProjectAuthorityBandForProject projectId={lensProjectId} />
+      )}
 
       {/* R77 — the all-time unbilled balance, with its one act. */}
       {unbilledMinutes > 0 && (
@@ -532,6 +548,10 @@ function EntryRow({
   const [confirming, setConfirming] = useState(false);
   const [rowNote, setRowNote] = useState<string | null>(null);
   const billed = Boolean(e.invoice_id);
+  const authority = useProjectBillingAuthority(e.project_id);
+  const provenance = timeRateProvenance(e, authority.data);
+  const billingLabel = timeBillingStateLabel(e);
+  const amountCents = e.rated_amount_cents ?? unbilled?.amount_cents ?? 0;
 
   const doDelete = async () => {
     setRowNote(null);
@@ -555,9 +575,13 @@ function EntryRow({
             {[
               e.phase_key,
               SOURCE_LABEL[e.source] ?? e.source,
-              // The money the 00177 view resolved for this entry (BIL-08).
-              unbilled && unbilled.amount_cents > 0
-                ? fmtUsd(unbilled.amount_cents)
+              provenance
+                ? `${provenance.role} · ${fmtUsd(provenance.hourlyRateCents)}/hr${provenance.version ? ` · v${provenance.version}` : ''}`
+                : null,
+              // New rows use the server-rated snapshot; legacy rows retain
+              // the project_unbilled_time amount alias.
+              amountCents > 0
+                ? fmtUsd(amountCents)
                 : null,
             ]
               .filter(Boolean)
@@ -602,7 +626,7 @@ function EntryRow({
                 }
           }
         >
-          {billed ? 'Billed' : e.billable ? 'Unbilled' : 'Non-bill'}
+          {billingLabel}
         </span>
         {/* R77 — delete-with-confirm; a billed entry is history, immutable. */}
         {!billed ? (

@@ -406,19 +406,44 @@ export function useSendServiceAgreement(proposalId: string) {
   });
 }
 
-function mapAuthority(value: any): ProjectBillingAuthority | null {
-  const row = Array.isArray(value) ? value[0] : value;
+export function adaptProjectBillingAuthority(
+  value: any,
+): ProjectBillingAuthority | null {
+  const payload = Array.isArray(value) ? value[0] : value;
+  // 00406 returns a deliberately curated envelope. Keep the old flat shape as
+  // a rollout fallback, but never pass activity/raw-entry collections through
+  // this studio summary adapter.
+  const authority =
+    payload?.authority && typeof payload.authority === "object"
+      ? payload.authority
+      : payload;
+  const summary =
+    payload?.summary && typeof payload.summary === "object"
+      ? payload.summary
+      : {};
+  const row = authority
+    ? {
+        ...authority,
+        ...summary,
+        rates: Array.isArray(payload?.rates)
+          ? payload.rates
+          : authority.rates,
+      }
+    : null;
   if (!row?.id) return null;
   return {
     id: String(row.id),
     projectId: String(row.projectId ?? row.project_id),
     agreementId: String(row.agreementId ?? row.agreement_id),
+    // Unknown future/malformed states must never accidentally grant billable
+    // authority. Only the server's exact `active` value is active.
     state:
+      row.state === "active" ||
       row.state === "retainer_pending" ||
       row.state === "exhausted" ||
       row.state === "superseded"
         ? row.state
-        : "active",
+        : "superseded",
     currency: String(row.currency ?? "USD"),
     ceilingCents: finiteCents(row.ceilingCents ?? row.ceiling_cents),
     authorizedCents: finiteCents(row.authorizedCents ?? row.authorized_cents),
@@ -466,18 +491,82 @@ function mapAuthority(value: any): ProjectBillingAuthority | null {
   };
 }
 
+export async function fetchProjectBillingAuthority(
+  projectId: string,
+): Promise<ProjectBillingAuthority | null> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase.rpc(
+    "get_project_authority_summary",
+    { p_project_id: projectId },
+  );
+  if (error) throw error;
+  return adaptProjectBillingAuthority(data);
+}
+
+export interface CreateServiceAddendumResult {
+  proposalId: string;
+  documentId: string;
+  projectId: string;
+  documentKind: "service_addendum";
+  commercialState: "draft";
+}
+
+function mapCreateServiceAddendumResult(value: any): CreateServiceAddendumResult {
+  const row = Array.isArray(value) ? value[0] : value;
+  const proposalId = row?.proposalId ?? row?.proposal_id;
+  const documentId = row?.documentId ?? row?.document_id ?? proposalId;
+  const projectId = row?.projectId ?? row?.project_id;
+  const documentKind = row?.documentKind ?? row?.document_kind;
+  const commercialState = row?.commercialState ?? row?.commercial_state;
+  if (
+    !proposalId ||
+    !documentId ||
+    !projectId ||
+    documentKind !== "service_addendum" ||
+    commercialState !== "draft"
+  ) {
+    throw new Error("The services addendum result was incomplete.");
+  }
+  return {
+    proposalId: String(proposalId),
+    documentId: String(documentId),
+    projectId: String(projectId),
+    documentKind,
+    commercialState,
+  };
+}
+
+export function useCreateServiceAddendum(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: ["create-service-addendum", projectId],
+    mutationFn: async (title: string) => {
+      const { data, error } = await getSupabase().rpc(
+        "create_service_addendum",
+        {
+          p_project_id: projectId,
+          p_title: title.trim(),
+        },
+      );
+      if (error) throw error;
+      return mapCreateServiceAddendumResult(data);
+    },
+    onSuccess: (result) => {
+      // Creating a draft addendum does not replace or invalidate the current
+      // authority. That transition remains countersign-only on the server.
+      void queryClient.invalidateQueries({ queryKey: ["proposals"] });
+      void queryClient.invalidateQueries({ queryKey: ["document-state"] });
+      void queryClient.invalidateQueries({
+        queryKey: commercialDocumentKeys.bundle(result.proposalId),
+      });
+    },
+  });
+}
+
 export function useProjectBillingAuthority(projectId: string, enabled = true) {
   return useQuery({
     queryKey: commercialDocumentKeys.authority(projectId),
     enabled: enabled && Boolean(projectId),
-    queryFn: async () => {
-      const supabase = getSupabase();
-      const { data, error } = await supabase.rpc(
-        "get_project_authority_summary",
-        { p_project_id: projectId },
-      );
-      if (error) throw error;
-      return mapAuthority(data);
-    },
+    queryFn: () => fetchProjectBillingAuthority(projectId),
   });
 }

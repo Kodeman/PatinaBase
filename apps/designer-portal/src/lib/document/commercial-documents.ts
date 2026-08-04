@@ -115,9 +115,9 @@ export function commercialDocumentExperience(
 ): CommercialDocumentExperience {
   switch (kind) {
     case "design_services":
+    case "service_addendum":
       return "design_services";
     case "furnishings_authorization":
-    case "service_addendum":
       return "commercial_readonly";
     case "legacy":
     default:
@@ -143,8 +143,13 @@ export function assessServiceAgreementReadiness({
 }): ServiceAgreementReadiness {
   const blockers: string[] = [];
 
-  if (document.kind !== "design_services") {
-    blockers.push("Only a design services agreement can use this send review.");
+  if (
+    document.kind !== "design_services" &&
+    document.kind !== "service_addendum"
+  ) {
+    blockers.push(
+      "Only a design services agreement or addendum can use this send review.",
+    );
   }
   if (document.state !== "draft") {
     blockers.push("Only a draft agreement can be sent.");

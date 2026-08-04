@@ -2,6 +2,7 @@
 
 import { useProjectBillingAuthority } from "@/hooks/use-commercial-documents";
 import type { ProjectBillingAuthority } from "@/lib/document/commercial-documents";
+import { ProjectServicesAddendumAction } from "./project-services-addendum-action";
 
 const money = (cents: number, currency: string) =>
   new Intl.NumberFormat("en-US", {
@@ -12,12 +13,21 @@ const money = (cents: number, currency: string) =>
 
 export function ProjectAuthorityBandForProject({
   projectId,
+  allowAddendum = false,
 }: {
   projectId: string;
+  allowAddendum?: boolean;
 }) {
   const authority = useProjectBillingAuthority(projectId);
   if (authority.isLoading || authority.error || !authority.data) return null;
-  return <ProjectAuthorityBand authority={authority.data} />;
+  return (
+    <>
+      <ProjectAuthorityBand authority={authority.data} />
+      {allowAddendum && authority.data.state !== "superseded" && (
+        <ProjectServicesAddendumAction projectId={projectId} />
+      )}
+    </>
+  );
 }
 
 /** DTO-driven shell: Hours/Accounts can pass the canonical live summary later. */
@@ -55,16 +65,36 @@ export function ProjectAuthorityBand({
           style={{ width: `${percent}%` }}
         />
       </div>
-      <div className="mt-2 flex flex-wrap justify-between gap-3 text-[11.5px] text-[var(--color-charcoal)]">
-        <span>
-          {money(authority.accruedCents, authority.currency)} accrued ·{" "}
-          {money(authority.invoicedCents, authority.currency)} invoiced
-        </span>
-        <strong>
-          {money(authority.remainingCents, authority.currency)} remains of{" "}
-          {money(authority.ceilingCents, authority.currency)}
-        </strong>
+      <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-[11.5px] text-[var(--color-charcoal)] sm:grid-cols-4">
+        <AuthorityFigure
+          label="authorized"
+          value={money(authority.authorizedCents, authority.currency)}
+        />
+        <AuthorityFigure
+          label="accrued"
+          value={money(authority.accruedCents, authority.currency)}
+        />
+        <AuthorityFigure
+          label="pending"
+          value={money(authority.pendingAuthorizationCents, authority.currency)}
+        />
+        <AuthorityFigure
+          label="remaining"
+          value={money(authority.remainingCents, authority.currency)}
+        />
       </div>
+
+      {authority.rates.length > 0 && (
+        <p className="mt-2 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+          Agreement v{authority.activeRateVersion} ·{" "}
+          {authority.rates
+            .map(
+              (rate) =>
+                `${rate.roleName} ${money(rate.hourlyRateCents, authority.currency)}/hr`,
+            )
+            .join(" · ")}
+        </p>
+      )}
 
       {(retainerPending || authority.pendingAuthorizationCents > 0) && (
         <p className="mt-2 border-t border-[var(--doc-ink-border)] pt-2 text-[11px] text-[var(--color-mocha)]">
@@ -74,5 +104,16 @@ export function ProjectAuthorityBand({
         </p>
       )}
     </section>
+  );
+}
+
+function AuthorityFigure({ label, value }: { label: string; value: string }) {
+  return (
+    <span>
+      <span className="block font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+        {label}
+      </span>
+      <strong>{value}</strong>
+    </span>
   );
 }
