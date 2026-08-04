@@ -20,6 +20,14 @@ export interface PieceRow {
   price_retail?: number | null;
   price_trade?: number | null;
   images?: string[] | null;
+  /**
+   * Present on the row but INTENTIONALLY unused by `pieceSections` below —
+   * see the note on `piece`. Kept here only so a row's full shape can be
+   * passed straight through without narrowing.
+   */
+  available_colors?: string[] | null;
+  finish?: string | null;
+  configuration_mode?: string | null;
 }
 
 export interface PieceSections {
@@ -47,7 +55,18 @@ function hasDimensions(d: unknown): boolean {
   });
 }
 
-/** Derive the five sections from a loaded row + whether the eye is taught. */
+/**
+ * Derive the five sections from a loaded row + whether the eye is taught.
+ *
+ * `piece` reads only `dimensions` + `materials` — it never reads
+ * `available_colors` or `finish`. That's deliberate, not an oversight: those
+ * two facets are gated read-only on the Piece Room for any non-`standard`
+ * configuration mode (P2-9 — a configured piece's color/finish live on the
+ * configuration's selections, not the flat columns), and a gated field must
+ * never be able to strand this completeness read. If a future change wants
+ * color/finish to count toward `piece`, it has to account for
+ * `configuration_mode` at the same time — see the regression test.
+ */
 export function pieceSections(row: PieceRow, hasTeaching: boolean): PieceSections {
   return {
     identity: !!row.name?.trim() && !!row.brand?.trim(),

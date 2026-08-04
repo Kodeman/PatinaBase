@@ -40,6 +40,7 @@ import { useHydrated } from "@/hooks/use-hydrated";
 import { specBookEvents } from "@/lib/analytics/spec-book-events";
 import { resolveClientPortalOrigin } from "@/lib/client-portal-url";
 import { ConfigurationSnapshotCard } from "@/components/document/configuration-snapshot-card";
+import { DimensionFields } from "@/components/document/dimension-fields";
 import { extractConfigurationSnapshotEnvelope } from "@/components/document/rooms/piece/custom-commission-model";
 import {
   audienceAllows,
@@ -209,7 +210,15 @@ function ItemCard({
   );
 }
 
-function SelectionEditor({
+/** Is this a plain `{...}` object — never an array, string, number, or null?
+ *  `selected_dimensions` is typed `Record<string, unknown> | null` but the
+ *  jsonb column has carried legacy non-object values; the editor must tolerate
+ *  those rather than pretend they're shaped like a fresh dimensions draft. */
+function isDimensionsObject(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+export function SelectionEditor({
   item,
   onSaved,
 }: {
@@ -220,31 +229,92 @@ function SelectionEditor({
   const [draft, setDraft] = useState<Record<string, string>>(
     item.spec ? editableSpecSeed(item.spec) : {},
   );
+  const [dimensionsValue, setDimensionsValue] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
+  const [rawDimensionsMode, setRawDimensionsMode] = useState(false);
+  const [rawDimensionsText, setRawDimensionsText] = useState("");
   const [naField, setNaField] = useState<SpecField>("finish");
   const [naReason, setNaReason] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
 
   useEffect(() => {
     setDraft(item.spec ? editableSpecSeed(item.spec) : {});
+    const raw: unknown = item.spec?.selected_dimensions ?? null;
+    if (raw == null) {
+      setDimensionsValue(null);
+      setRawDimensionsMode(false);
+      setRawDimensionsText("");
+    } else if (isDimensionsObject(raw)) {
+      setDimensionsValue(raw);
+      setRawDimensionsMode(false);
+      setRawDimensionsText(JSON.stringify(raw, null, 2));
+    } else {
+      // Legacy non-object value on file — tolerate it via the raw JSON
+      // escape hatch rather than coercing it into a shape it never had.
+      setDimensionsValue(null);
+      setRawDimensionsMode(true);
+      setRawDimensionsText(JSON.stringify(raw, null, 2));
+    }
     setFeedback(null);
   }, [item]);
 
   const set = (field: string, value: string) =>
     setDraft((current) => ({ ...current, [field]: value }));
 
+  const switchToRawDimensions = () => {
+    setRawDimensionsText(
+      dimensionsValue ? JSON.stringify(dimensionsValue, null, 2) : "",
+    );
+    setRawDimensionsMode(true);
+    setFeedback(null);
+  };
+
+  const switchToStructuredDimensions = () => {
+    if (!rawDimensionsText.trim()) {
+      setDimensionsValue(null);
+      setRawDimensionsMode(false);
+      setFeedback(null);
+      return;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(rawDimensionsText);
+    } catch {
+      setFeedback(
+        'Dimensions must be valid JSON, for example {"width":"32 in"}.',
+      );
+      return;
+    }
+    if (!isDimensionsObject(parsed)) {
+      setFeedback(
+        'The structured editor needs an object like {"width":"32 in"} — keep editing it as raw JSON, or clear the field and start fresh.',
+      );
+      return;
+    }
+    setDimensionsValue(parsed);
+    setRawDimensionsMode(false);
+    setFeedback(null);
+  };
+
   const save = async () => {
     if (!item.spec) return;
     setFeedback(null);
     let dimensions: Record<string, unknown> | null = null;
-    if (draft.selected_dimensions?.trim()) {
-      try {
-        dimensions = JSON.parse(draft.selected_dimensions);
-      } catch {
-        setFeedback(
-          'Dimensions must be valid JSON, for example {"width":"32 in"}.',
-        );
-        return;
+    if (rawDimensionsMode) {
+      if (rawDimensionsText.trim()) {
+        try {
+          dimensions = JSON.parse(rawDimensionsText);
+        } catch {
+          setFeedback(
+            'Dimensions must be valid JSON, for example {"width":"32 in"}.',
+          );
+          return;
+        }
       }
+    } else {
+      dimensions = dimensionsValue;
     }
     try {
       await updateSpec.mutateAsync({
@@ -446,15 +516,44 @@ function SelectionEditor({
             />
           </label>
         ))}
-        <label className="text-[11px] text-[var(--text-muted)] sm:col-span-2">
-          Selected dimensions
-          <Input
-            className="mt-1"
-            value={draft.selected_dimensions ?? ""}
-            placeholder='{"width":"32 in","height":"30 in"}'
-            onChange={(event) => set("selected_dimensions", event.target.value)}
-          />
-        </label>
+        <div className="text-[11px] text-[var(--text-muted)] sm:col-span-2">
+          <span>Selected dimensions</span>
+          <div className="mt-1">
+            {rawDimensionsMode ? (
+              <div>
+                <Textarea
+                  className="min-h-20 font-mono text-[11px]"
+                  value={rawDimensionsText}
+                  placeholder='{"width":"32 in","height":"30 in"}'
+                  onChange={(event) =>
+                    setRawDimensionsText(event.target.value)
+                  }
+                />
+                <button
+                  type="button"
+                  onClick={switchToStructuredDimensions}
+                  className="mt-1.5 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay)] underline-offset-4 hover:underline"
+                >
+                  Use structured editor
+                </button>
+              </div>
+            ) : (
+              <div>
+                <DimensionFields
+                  value={dimensionsValue}
+                  onChange={setDimensionsValue}
+                />
+                <button
+                  type="button"
+                  onClick={switchToRawDimensions}
+                  className="mt-2 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)] underline-offset-4 hover:underline"
+                >
+                  Edit raw JSON
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
