@@ -26,10 +26,18 @@ import {
 const getSupabase = () => createBrowserClient() as any;
 
 export const commercialDocumentKeys = {
-  bundle: commercialKeys.document,
-  authority: commercialKeys.authority,
-  budget: commercialKeys.budget,
-  waves: commercialKeys.waves,
+  bundle: (documentId: string) =>
+    commercialKeys?.document?.(documentId) ??
+    (["commercial-documents", documentId] as const),
+  authority: (projectId: string) =>
+    commercialKeys?.authority?.(projectId) ??
+    (["project-authority", projectId] as const),
+  budget: (projectId: string) =>
+    commercialKeys?.budget?.(projectId) ??
+    (["working-budget", projectId] as const),
+  waves: (projectId: string) =>
+    commercialKeys?.waves?.(projectId) ??
+    (["furnishings-authorizations", projectId] as const),
 };
 
 export interface CommercialDocumentBundle {
