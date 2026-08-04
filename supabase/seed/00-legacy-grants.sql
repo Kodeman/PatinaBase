@@ -7931,3 +7931,45 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.set_my_member_title(uuid, text) TO authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00417_studio_contacts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.is_active_studio_member(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00417_studio_contacts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.is_active_studio_member(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00417_studio_contacts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.studio_contacts FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00417_studio_contacts.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE ON public.studio_contacts TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00417_studio_contacts.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.studio_contacts TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00418_studio_contacts_backfill.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fold_legacy_contacts_into_studios() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00418_studio_contacts_backfill.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.fold_legacy_contacts_into_studios() TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
