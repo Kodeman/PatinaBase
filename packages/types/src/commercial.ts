@@ -172,6 +172,17 @@ export interface FurnishingsAuthorization extends CommercialDocumentSummary {
   signatures: CommercialSignatureReceipt[];
 }
 
+export interface FurnishingsAuthorizationDraftResult {
+  proposalId: string;
+  documentId: string;
+  projectId: string;
+  waveName: string;
+  commercialState: 'draft';
+  budgetCheckpointId: string;
+  itemCount: number;
+  documentFingerprint: string;
+}
+
 export interface ClientCommercialDocumentBundle {
   document: DesignServicesAgreement | FurnishingsAuthorization | CommercialDocumentSummary;
   authority: ProjectBillingAuthoritySummary | null;

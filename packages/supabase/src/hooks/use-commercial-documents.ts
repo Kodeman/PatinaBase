@@ -4,6 +4,7 @@ import type {
   DesignServiceTerms,
   DesignServicesExecutionResult,
   FurnishingsAuthorization,
+  FurnishingsAuthorizationDraftResult,
   ProjectBillingAuthoritySummary,
   WorkingBudgetCheckpoint,
   WorkingBudgetVersion,
@@ -356,9 +357,7 @@ export function useCreateFurnishingsAuthorization() {
         p_source_proposal_id: sourceProposalId ?? null,
       });
       if (error) throw error;
-      const result = data as FurnishingsAuthorization;
-      await notifyCommercialTransition(supabase, result.id, 'furnishings_sent');
-      return result;
+      return data as FurnishingsAuthorizationDraftResult;
     },
     onSuccess: (_, { projectId }) => invalidateProjectCommerce(queryClient, projectId),
   });

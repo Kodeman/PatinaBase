@@ -19,6 +19,7 @@ import {
   useAcknowledgeBudgetCheckpoint,
   useClientCommercialDocumentBundle,
   useCountersignDesignServicesAgreement,
+  useCreateFurnishingsAuthorization,
   useSendCommercialDocument,
   useUpsertDesignServicesDraft,
 } from '../use-commercial-documents';
@@ -140,6 +141,41 @@ describe('commercial document hooks', () => {
         effectiveAt: '2026-08-03T00:00:00Z',
       }],
     }));
+  });
+
+  it('creates an FF&E authorization draft without notifying the client', async () => {
+    rpc.mockResolvedValueOnce({
+      data: {
+        proposalId: 'wave-1',
+        documentId: 'document-1',
+        projectId: 'project-1',
+        waveName: 'Living level',
+        commercialState: 'draft',
+        budgetCheckpointId: 'checkpoint-1',
+        itemCount: 3,
+        documentFingerprint: 'fingerprint-1',
+      },
+      error: null,
+    });
+    const mutation = useCreateFurnishingsAuthorization() as unknown as MutationConfig<any>;
+
+    const result = await mutation.mutationFn({
+      projectId: 'project-1',
+      waveName: 'Living level',
+      sourceProposalId: 'source-1',
+    });
+
+    expect(rpc).toHaveBeenCalledWith('create_furnishings_authorization', {
+      p_project_id: 'project-1',
+      p_wave_name: 'Living level',
+      p_source_proposal_id: 'source-1',
+    });
+    expect(result).toMatchObject({
+      proposalId: 'wave-1',
+      documentId: 'document-1',
+      commercialState: 'draft',
+    });
+    expect(invoke).not.toHaveBeenCalled();
   });
 
   it('sends the exact reviewed commercial fingerprint and persisted dispatch tuple', async () => {
