@@ -428,6 +428,9 @@ export type {
 } from './use-proposals';
 export {
   commercialKeys,
+  useUpsertDesignServicesDraft,
+  useCommercialDocumentSendSnapshot,
+  useSendCommercialDocument,
   useClientCommercialDocumentBundle,
   useProjectBillingAuthority,
   useWorkingBudget,
@@ -437,6 +440,10 @@ export {
   useAcknowledgeBudgetCheckpoint,
   useOverrideBudgetCheckpoint,
   useCreateFurnishingsAuthorization,
+} from './use-commercial-documents';
+export type {
+  CommercialDocumentSendSnapshot,
+  SendCommercialDocumentResult,
 } from './use-commercial-documents';
 export type {
   Proposal,

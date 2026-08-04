@@ -1,5 +1,7 @@
 import type {
   ClientCommercialDocumentBundle,
+  DesignServiceRate,
+  DesignServiceTerms,
   DesignServicesExecutionResult,
   FurnishingsAuthorization,
   ProjectBillingAuthoritySummary,
@@ -41,7 +43,131 @@ export const commercialKeys = {
   authority: (projectId: string) => ['project-authority', projectId] as const,
   budget: (projectId: string) => ['working-budget', projectId] as const,
   waves: (projectId: string) => ['furnishings-authorizations', projectId] as const,
+  sendSnapshot: (documentId: string) =>
+    ['commercial-documents', documentId, 'send-snapshot'] as const,
 };
+
+export interface CommercialDocumentSendSnapshot {
+  proposalId: string;
+  updatedAt: string;
+  documentFingerprint: string;
+}
+
+export interface SendCommercialDocumentResult {
+  proposalId: string;
+  documentKind: string;
+  commercialState: string;
+  sentAt: string;
+  proposalSendDispatchId: string | null;
+  documentFingerprint: string;
+}
+
+export function useUpsertDesignServicesDraft() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      proposalId,
+      terms,
+      rates,
+    }: {
+      proposalId: string;
+      terms: DesignServiceTerms;
+      rates: DesignServiceRate[];
+    }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc('upsert_design_services_draft', {
+        p_proposal_id: proposalId,
+        p_terms: {
+          scope: terms.scope,
+          deliverables: terms.deliverables,
+          exclusions: terms.exclusions,
+          billingCeilingCents: terms.billingCeilingCents,
+          retainerAmountCents: terms.retainerAmountCents,
+          retainerActivationPolicy: terms.retainerActivationPolicy,
+          billingCadence: terms.billingCadence,
+          currency: terms.currency,
+          terms: terms.terms,
+          currentRateVersion: terms.currentRateVersion,
+        },
+        p_rates: rates.map((rate, sortOrder) => ({
+          roleName: rate.roleName,
+          hourlyRateCents: rate.hourlyRateCents,
+          sortOrder,
+          effectiveAt: rate.effectiveAt,
+        })),
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, { proposalId }) => {
+      queryClient.invalidateQueries({ queryKey: commercialKeys.document(proposalId) });
+      queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
+      queryClient.invalidateQueries({ queryKey: commercialKeys.sendSnapshot(proposalId) });
+    },
+  });
+}
+
+export function useCommercialDocumentSendSnapshot(documentId: string) {
+  return useQuery({
+    queryKey: commercialKeys.sendSnapshot(documentId),
+    enabled: !!documentId,
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc('get_commercial_document_send_snapshot', {
+        p_proposal_id: documentId,
+      });
+      if (error) throw error;
+      return data as CommercialDocumentSendSnapshot;
+    },
+  });
+}
+
+export function useSendCommercialDocument() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      proposalId,
+      expectedFingerprint,
+      personalMessage,
+      validUntil,
+    }: {
+      proposalId: string;
+      expectedFingerprint: string;
+      personalMessage?: string;
+      validUntil?: string;
+    }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc('send_commercial_document', {
+        p_proposal_id: proposalId,
+        p_expected_fingerprint: expectedFingerprint,
+        p_personal_message: personalMessage?.trim() || null,
+        p_valid_until: validUntil ?? null,
+      });
+      if (error) throw error;
+      const result = data as SendCommercialDocumentResult;
+      if (result.sentAt && result.proposalSendDispatchId) {
+        await supabase.functions.invoke('proposal-send', {
+          body: {
+            proposalId,
+            sentAt: result.sentAt,
+            dispatchId: result.proposalSendDispatchId,
+          },
+        });
+      }
+      return result;
+    },
+    onSuccess: (_, { proposalId }) => {
+      queryClient.invalidateQueries({ queryKey: commercialKeys.document(proposalId) });
+      queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
+      queryClient.invalidateQueries({ queryKey: commercialKeys.sendSnapshot(proposalId) });
+      queryClient.invalidateQueries({ queryKey: ['document-state'] });
+      queryClient.invalidateQueries({ queryKey: ['desk-engagements'] });
+    },
+  });
+}
 
 function invalidateProjectCommerce(
   queryClient: ReturnType<typeof useQueryClient>,

@@ -19,6 +19,8 @@ import {
   useAcknowledgeBudgetCheckpoint,
   useClientCommercialDocumentBundle,
   useCountersignDesignServicesAgreement,
+  useSendCommercialDocument,
+  useUpsertDesignServicesDraft,
 } from '../use-commercial-documents';
 
 type QueryConfig = { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> };
@@ -97,6 +99,77 @@ describe('commercial document hooks', () => {
 
     expect(rpc).toHaveBeenCalledWith('acknowledge_budget_checkpoint', {
       p_checkpoint_id: 'checkpoint-1',
+    });
+  });
+
+  it('writes service drafts through the atomic RPC contract', async () => {
+    const mutation = useUpsertDesignServicesDraft() as unknown as MutationConfig<any>;
+    await mutation.mutationFn({
+      proposalId: 'agreement-1',
+      terms: {
+        proposalId: 'agreement-1',
+        scope: 'Design the main level',
+        deliverables: ['Concept', 'Selections'],
+        exclusions: ['Construction administration'],
+        billingCeilingCents: 2_500_000,
+        retainerAmountCents: 500_000,
+        retainerActivationPolicy: 'retainer_paid',
+        billingCadence: 'monthly',
+        currency: 'USD',
+        terms: 'Net 15',
+        currentRateVersion: 1,
+        updatedAt: '2026-08-03T00:00:00Z',
+      },
+      rates: [{
+        id: 'rate-1',
+        proposalId: 'agreement-1',
+        version: 1,
+        roleName: 'Principal Designer',
+        hourlyRateCents: 25_000,
+        effectiveAt: '2026-08-03T00:00:00Z',
+      }],
+    });
+
+    expect(rpc).toHaveBeenCalledWith('upsert_design_services_draft', expect.objectContaining({
+      p_proposal_id: 'agreement-1',
+      p_terms: expect.objectContaining({ scope: 'Design the main level' }),
+      p_rates: [{
+        roleName: 'Principal Designer',
+        hourlyRateCents: 25_000,
+        sortOrder: 0,
+        effectiveAt: '2026-08-03T00:00:00Z',
+      }],
+    }));
+  });
+
+  it('sends the exact reviewed commercial fingerprint and persisted dispatch tuple', async () => {
+    rpc.mockResolvedValueOnce({
+      data: {
+        proposalId: 'agreement-1',
+        sentAt: '2026-08-03T00:00:00Z',
+        proposalSendDispatchId: 'dispatch-1',
+      },
+      error: null,
+    });
+    const mutation = useSendCommercialDocument() as unknown as MutationConfig<any>;
+    await mutation.mutationFn({
+      proposalId: 'agreement-1',
+      expectedFingerprint: 'fingerprint-1',
+      personalMessage: 'Looking forward to working together.',
+    });
+
+    expect(rpc).toHaveBeenCalledWith('send_commercial_document', {
+      p_proposal_id: 'agreement-1',
+      p_expected_fingerprint: 'fingerprint-1',
+      p_personal_message: 'Looking forward to working together.',
+      p_valid_until: null,
+    });
+    expect(invoke).toHaveBeenCalledWith('proposal-send', {
+      body: {
+        proposalId: 'agreement-1',
+        sentAt: '2026-08-03T00:00:00Z',
+        dispatchId: 'dispatch-1',
+      },
     });
   });
 });
