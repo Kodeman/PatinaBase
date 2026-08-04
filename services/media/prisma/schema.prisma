@@ -354,3 +354,52 @@ model OutboxEvent {
   @@index([createdAt])
   @@map("outbox_events")
 }
+
+model BackgroundRemovalRequest {
+  id                   String                    @id @default(uuid()) @db.Uuid
+  quotaOwnerId         String                    @map("quota_owner_id") @db.Uuid
+  studioId             String?                   @map("studio_id") @db.Uuid
+  requestedBy          String                    @map("requested_by") @db.Uuid
+  boardId              String                    @map("board_id") @db.Uuid
+  itemId               String                    @map("item_id") @db.Uuid
+  idempotencyKey       String                    @map("idempotency_key") @db.VarChar(128)
+  status               BackgroundRemovalStatus   @default(RESERVED)
+  outcome              BackgroundRemovalOutcome?
+  studioPeriodStart    DateTime                  @map("studio_period_start") @db.Date
+  globalPeriodStart    DateTime                  @map("global_period_start") @db.Date
+  studioLimit          Int                       @map("studio_limit")
+  globalLimit          Int                       @map("global_limit")
+  reservationExpiresAt DateTime                  @map("reservation_expires_at")
+  originalUrl          String?                   @map("original_url") @db.Text
+  cutoutUrl            String?                   @map("cutout_url") @db.Text
+  creditsUsed          Decimal                   @default(0) @map("credits_used") @db.Decimal(10, 4)
+  createdAt            DateTime                  @default(now()) @map("created_at")
+  updatedAt            DateTime                  @updatedAt @map("updated_at")
+  completedAt          DateTime?                 @map("completed_at")
+
+  @@unique([quotaOwnerId, idempotencyKey], map: "background_removal_requests_quota_owner_idempotency_key")
+  @@index([quotaOwnerId, studioPeriodStart, status], map: "background_removal_requests_studio_quota_idx")
+  @@index([globalPeriodStart, status], map: "background_removal_requests_global_quota_idx")
+  @@index([boardId, itemId], map: "background_removal_requests_target_idx")
+  @@map("background_removal_requests")
+}
+
+enum BackgroundRemovalStatus {
+  RESERVED
+  SUCCEEDED
+  FAILED_RELEASED
+  FAILED_CHARGED
+  FAILED_COUNTED
+
+  @@map("background_removal_status")
+}
+
+enum BackgroundRemovalOutcome {
+  SUCCEEDED
+  SOURCE_REJECTED
+  VENDOR_FAILED
+  STORAGE_FAILED
+  INTERNAL_FAILED
+
+  @@map("background_removal_outcome")
+}

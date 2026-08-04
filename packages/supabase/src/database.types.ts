@@ -828,6 +828,143 @@ export type Database = {
         }
         Relationships: []
       }
+      board_asset_gc_candidates: {
+        Row: {
+          bucket_id: string
+          created_at: string
+          deleted_at: string | null
+          detail: Json
+          eligible_after: string
+          first_unreferenced_at: string
+          last_job_run_id: number | null
+          last_reference_count: number
+          last_scanned_at: string
+          object_name: string
+          updated_at: string
+        }
+        Insert: {
+          bucket_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          detail?: Json
+          eligible_after?: string
+          first_unreferenced_at?: string
+          last_job_run_id?: number | null
+          last_reference_count?: number
+          last_scanned_at?: string
+          object_name: string
+          updated_at?: string
+        }
+        Update: {
+          bucket_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          detail?: Json
+          eligible_after?: string
+          first_unreferenced_at?: string
+          last_job_run_id?: number | null
+          last_reference_count?: number
+          last_scanned_at?: string
+          object_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "board_asset_gc_candidates_last_job_run_id_fkey"
+            columns: ["last_job_run_id"]
+            isOneToOne: false
+            referencedRelation: "job_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      board_templates: {
+        Row: {
+          background_color: string
+          canvas_height: number
+          canvas_width: number
+          cover_url: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          items: Json
+          kind: string
+          name: string
+          sections: Json
+          studio_id: string | null
+          template_key: string
+          updated_at: string
+        }
+        Insert: {
+          background_color?: string
+          canvas_height: number
+          canvas_width: number
+          cover_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          items?: Json
+          kind: string
+          name: string
+          sections?: Json
+          studio_id?: string | null
+          template_key: string
+          updated_at?: string
+        }
+        Update: {
+          background_color?: string
+          canvas_height?: number
+          canvas_width?: number
+          cover_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          items?: Json
+          kind?: string
+          name?: string
+          sections?: Json
+          studio_id?: string | null
+          template_key?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "board_templates_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "board_templates_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      board_unfurl_usage: {
+        Row: {
+          consumed_at: string
+          id: number
+          user_id: string
+        }
+        Insert: {
+          consumed_at?: string
+          id?: never
+          user_id: string
+        }
+        Update: {
+          consumed_at?: string
+          id?: never
+          user_id?: string
+        }
+        Relationships: []
+      }
       bridge_state: {
         Row: {
           bridge: string
@@ -4708,6 +4845,7 @@ export type Database = {
       }
       document_shares: {
         Row: {
+          board_id: string | null
           created_at: string
           created_by: string | null
           expires_at: string | null
@@ -4723,6 +4861,7 @@ export type Database = {
           visibility: Json
         }
         Insert: {
+          board_id?: string | null
           created_at?: string
           created_by?: string | null
           expires_at?: string | null
@@ -4738,6 +4877,7 @@ export type Database = {
           visibility: Json
         }
         Update: {
+          board_id?: string | null
           created_at?: string
           created_by?: string | null
           expires_at?: string | null
@@ -4753,6 +4893,13 @@ export type Database = {
           visibility?: Json
         }
         Relationships: [
+          {
+            foreignKeyName: "document_shares_board_id_fkey"
+            columns: ["board_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_boards"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "document_shares_proposal_id_fkey"
             columns: ["proposal_id"]
@@ -11155,6 +11302,7 @@ export type Database = {
           name: string
           project_id: string
           project_room_id: string | null
+          sections: Json
           sort_order: number
           source_board_id: string | null
         }
@@ -11169,6 +11317,7 @@ export type Database = {
           name: string
           project_id: string
           project_room_id?: string | null
+          sections?: Json
           sort_order?: number
           source_board_id?: string | null
         }
@@ -11183,6 +11332,7 @@ export type Database = {
           name?: string
           project_id?: string
           project_room_id?: string | null
+          sections?: Json
           sort_order?: number
           source_board_id?: string | null
         }
@@ -13179,6 +13329,7 @@ export type Database = {
           scope_room_id: string | null
           sections: Json
           sort_order: number
+          source_project_board_id: string | null
           status: string
           updated_at: string
         }
@@ -13195,6 +13346,7 @@ export type Database = {
           scope_room_id?: string | null
           sections?: Json
           sort_order?: number
+          source_project_board_id?: string | null
           status?: string
           updated_at?: string
         }
@@ -13211,6 +13363,7 @@ export type Database = {
           scope_room_id?: string | null
           sections?: Json
           sort_order?: number
+          source_project_board_id?: string | null
           status?: string
           updated_at?: string
         }
@@ -13241,6 +13394,13 @@ export type Database = {
             columns: ["scope_room_id"]
             isOneToOne: false
             referencedRelation: "proposal_scope_rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_boards_source_project_board_id_fkey"
+            columns: ["source_project_board_id"]
+            isOneToOne: false
+            referencedRelation: "project_boards"
             referencedColumns: ["id"]
           },
         ]
@@ -22984,6 +23144,15 @@ export type Database = {
         Returns: undefined
       }
       app_setting: { Args: { p_name: string }; Returns: string }
+      apply_board_room_state: {
+        Args: {
+          p_board_id: string
+          p_owner_id: string
+          p_owner_kind: string
+          p_state: Json
+        }
+        Returns: undefined
+      }
       apply_client_decision: {
         Args: {
           p_client_consent_method?: string
@@ -23587,6 +23756,10 @@ export type Database = {
       compute_house_taste_draft: { Args: never; Returns: string }
       concierge_checklist_template: { Args: { p_stage: string }; Returns: Json }
       concierge_damage_photo_checklist: { Args: never; Returns: Json }
+      consume_board_unfurl_quota: {
+        Args: { p_user_id?: string }
+        Returns: Json
+      }
       consume_capture: {
         Args: {
           p_capture_id: string
@@ -23608,6 +23781,13 @@ export type Database = {
           p_target_proposal_id?: string
         }
         Returns: string[]
+      }
+      create_board_share: {
+        Args: { p_board_id: string; p_expires_at?: string; p_label?: string }
+        Returns: {
+          id: string
+          token: string
+        }[]
       }
       create_client_decision: {
         Args: {
@@ -23921,6 +24101,10 @@ export type Database = {
         Returns: Json
       }
       dismiss_field_capture: { Args: { p_capture_id: string }; Returns: Json }
+      dispatch_board_asset_gc: {
+        Args: { p_dry_run?: boolean }
+        Returns: number
+      }
       draft_invoice_from_milestone: {
         Args: { p_milestone_id: string }
         Returns: string
@@ -23940,6 +24124,7 @@ export type Database = {
           scope_room_id: string | null
           sections: Json
           sort_order: number
+          source_project_board_id: string | null
           status: string
           updated_at: string
         }
@@ -24337,6 +24522,15 @@ export type Database = {
           source_url: string
           style_tags: string[]
         }[]
+      }
+      finish_board_asset_gc_run: {
+        Args: {
+          p_detail?: Json
+          p_error?: string
+          p_run_id: number
+          p_status: string
+        }
+        Returns: undefined
       }
       flip_pending_balance_to_due: {
         Args: { p_purchase_order_id: string }
@@ -25110,6 +25304,16 @@ export type Database = {
           similarity: number
         }[]
       }
+      materialize_board_template: {
+        Args: {
+          p_name?: string
+          p_project_id?: string
+          p_proposal_id?: string
+          p_scope_room_id?: string
+          p_template_id: string
+        }
+        Returns: string
+      }
       may_resolve_coordination_item: {
         Args: {
           actor: string
@@ -25658,6 +25862,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      resolve_board_share: { Args: { p_token: string }; Returns: Json }
       resolve_coordination_item: {
         Args: {
           p_answer?: string
@@ -25877,6 +26082,38 @@ export type Database = {
           detail: Json
           passed: boolean
         }[]
+      }
+      sanitize_board_template_json: { Args: { p_value: Json }; Returns: Json }
+      save_board_as_template: {
+        Args: {
+          p_board_id: string
+          p_description?: string
+          p_name: string
+          p_studio_id: string
+        }
+        Returns: {
+          background_color: string
+          canvas_height: number
+          canvas_width: number
+          cover_url: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          items: Json
+          kind: string
+          name: string
+          sections: Json
+          studio_id: string | null
+          template_key: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "board_templates"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       save_product_configuration: { Args: { p_input: Json }; Returns: Json }
       search_products: {

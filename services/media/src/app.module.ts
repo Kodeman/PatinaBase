@@ -11,6 +11,7 @@ import { PrismaClient } from './generated/prisma-client';
 import { MediaModule } from './modules/media/media.module';
 import { SearchModule } from './modules/search/search.module';
 import { ThreeDModule } from './modules/3d/3d.module';
+import { BackgroundRemovalModule } from './modules/background-removal/background-removal.module';
 
 // Controllers
 import { UploadController } from './modules/upload/upload.controller';
@@ -57,6 +58,7 @@ import { CloudflareCDNProvider } from './modules/storage/cdn/cloudflare-cdn.prov
     MediaModule,
     SearchModule,
     ThreeDModule,
+    BackgroundRemovalModule,
   ],
   controllers: [UploadController, AssetsController, JobsController],
   providers: [

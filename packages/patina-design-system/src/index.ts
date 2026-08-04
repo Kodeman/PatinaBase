@@ -21,5 +21,8 @@ export * from './components'
 // Proposal Document Blocks (shared client + designer proposal rendering)
 export * from './components/proposal'
 
+// Mood-board geometry and raster rendering (DOM-independent core)
+export * from './mood-board'
+
 // Styles
 export const stylesPath = './styles/globals.css'

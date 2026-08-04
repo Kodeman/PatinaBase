@@ -64,6 +64,7 @@ import { gateState, useSectionGates } from '@/hooks/use-section-work';
 import { deriveFillState } from '@/lib/document/fill-state';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { useHydrated } from '@/hooks/use-hydrated';
+import { ProjectMoodBoards } from '@/components/document/project-mood-boards';
 
 const prettyPhase = (phase: string | null) =>
   phase
@@ -515,7 +516,10 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
         {/* R26: the Account Page — engagement money at the top of the
             Project section. Studio eyes only; never mirrored. */}
         {row.engagement_kind === 'project' && row.project_id && (
-          <AccountBand projectId={row.project_id} clientName={row.client_name} />
+          <>
+            <AccountBand projectId={row.project_id} clientName={row.client_name} />
+            <ProjectMoodBoards projectId={row.project_id} />
+          </>
         )}
 
         {/* ScheduleNavProvider wires the Rule (below) to the Spine (mounted

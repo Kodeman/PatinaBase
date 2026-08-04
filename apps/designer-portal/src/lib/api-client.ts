@@ -112,3 +112,7 @@ export const proposalsApi = new ProposalsApiClient(
   createClientConfig(env.projectsApiUrl) // Proposals is part of projects service
 );
 addCsrfInterceptor(proposalsApi);
+
+// Portal-local media operations that intentionally terminate at authenticated
+// Next.js proxy routes rather than exposing a backend-service URL in the browser.
+export { moodBoardAssetsApi } from './mood-board-assets/background-removal-client';

@@ -7,6 +7,7 @@ import {
   moveSection,
   renameSection,
   sectionBounds,
+  sortItemsInReadingOrder,
   type ArrangeItem,
 } from './board-arrange';
 
@@ -121,6 +122,39 @@ describe('arrangeBoardItems', () => {
     const y = (id: string) => out.find((p) => p.id === id)!.y;
     // The orphan trails after the real section's band.
     expect(y('ghost')).toBeGreaterThan(y('a1'));
+  });
+
+  it('tidies only an explicit selection at its supplied bbox origin', () => {
+    const items: ArrangeItem[] = [
+      { ...mk('outside', null), x: 10, y: 10 },
+      { ...mk('late', null), x: 520, y: 320 },
+      { ...mk('first', null), x: 280, y: 200 },
+      { ...mk('second', null), x: 510, y: 205 },
+      { ...mk('third', null), x: 285, y: 330 },
+    ];
+    const out = arrangeBoardItems(items, [], {
+      canvasWidth: 1200,
+      itemIds: ['late', 'first', 'second', 'third'],
+      origin: { x: 280, y: 200 },
+    });
+
+    expect(out.map((position) => position.id)).toEqual(['first', 'second', 'third', 'late']);
+    expect(out).toHaveLength(4);
+    expect(out.find((position) => position.id === 'outside')).toBeUndefined();
+    expect(out[0]).toMatchObject({ x: 280, y: 200 });
+  });
+
+  it('uses half the median item height as the visual row tolerance', () => {
+    const items: ArrangeItem[] = [
+      { ...mk('row-1-right', null), x: 400, y: 100 },
+      { ...mk('row-2', null), x: 10, y: 170 },
+      { ...mk('row-1-left', null), x: 10, y: 145 },
+    ];
+    expect(sortItemsInReadingOrder(items).map((item) => item.id)).toEqual([
+      'row-1-left',
+      'row-1-right',
+      'row-2',
+    ]);
   });
 });
 

@@ -157,6 +157,9 @@ export function useSubmitVerdict() {
       verdict: Verdict;
       body?: string | null;
     }): Promise<ItemFeedback> => {
+      if (input.verdict === 'comment' && !input.body?.trim()) {
+        throw new Error('Add a note before submitting.');
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const anchor = input.boardItemId

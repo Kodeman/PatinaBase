@@ -30,7 +30,12 @@ import { usePathname, useRouter } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
 import { LifeBuoy } from 'lucide-react';
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
-import { usePeopleDirectory, type PeopleDirectoryRow } from '@patina/supabase';
+import {
+  usePeopleDirectory,
+  useRecentBoards,
+  type PeopleDirectoryRow,
+  type RecentBoard,
+} from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import { openAccount } from './account/account-sheet';
 import { openInvoiceComposer } from './accounts/invoice-overlays';
@@ -55,6 +60,7 @@ import {
 import { authEvents } from '@/lib/analytics/events';
 import { StrataMark } from './strata-mark';
 import { EngineResults, type InDocument } from './engine/engine-results';
+import { recentBoardCommandDescriptor } from '@/lib/mood-board/navigation';
 
 /** One selectable line. `match` is the lowercased filter text (label + aliases
  *  or keywords); registry surfaces additionally carry their icon + wayfinding
@@ -172,6 +178,7 @@ export function CommandBar() {
   // unified directory is ⌘K-reachable. Small per-designer roster — fetched once
   // and filtered in memory like the rest of the rows.
   const { data: people } = usePeopleDirectory();
+  const { data: recentBoards = [] } = useRecentBoards(8);
   // Account actions (Settings / Sign out) belong to the "do anything" surface;
   // the identity itself is answered by the persistent nameplate.
   const { user, signOut } = useAuth();
@@ -287,6 +294,15 @@ export function CommandBar() {
         sub: entry.title,
         run: () => router.push(`/doc/${entry.id}`),
         match: `${label} ${entry.title}`.toLowerCase(),
+      };
+    };
+
+    const recentBoardRow = (board: RecentBoard): PaletteRow => {
+      const command = recentBoardCommandDescriptor(board, pathname);
+      return {
+        kind: 'document',
+        ...command,
+        run: () => router.push(command.href),
       };
     };
 
@@ -443,6 +459,12 @@ export function CommandBar() {
       if (inHandRow) {
         sections.push({ eyebrow: 'In hand', rows: [documentRow(inHandRow.row, 'resume')] });
       }
+      if (recentBoards.length) {
+        sections.push({
+          eyebrow: 'Recent boards',
+          rows: recentBoards.slice(0, 4).map(recentBoardRow),
+        });
+      }
       const recentRows = recent
         .filter((r) => r.id !== inHandRow?.row.engagement_id)
         .slice(0, 3)
@@ -490,6 +512,9 @@ export function CommandBar() {
       // Drafting Room, "po" Orders) + people + the studio's own actions. The
       // Engine is always offered; a dry query recovers to the Help Center.
       const list: PaletteRow[] = [];
+      // Concrete boards intentionally precede the static Drafting Room match
+      // for "board" / "moodboard" queries.
+      list.push(...recentBoards.map(recentBoardRow).filter((r) => r.match.includes(q)));
       list.push(...liveDocs.map((f) => documentRow(f.row)).filter((r) => r.match.includes(q)));
       list.push(...matchSurfaces(query).map(surfaceRow));
       if (people) {
@@ -536,7 +561,7 @@ export function CommandBar() {
       flatRows: sections.flatMap((s) => s.rows),
       matchCount: matches,
     };
-  }, [query, data, people, recent, inHandRow, router, pathname, user?.email, signOut]);
+  }, [query, data, people, recentBoards, recent, inHandRow, router, pathname, user?.email, signOut]);
 
   // F1 — queried (debounced ~300ms, not per-keystroke) + zeroResult.
   useEffect(() => {

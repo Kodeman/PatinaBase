@@ -102,7 +102,7 @@ export default defineConfig({
      * workspaces deterministic in local and CI journeys. */
     env: {
       NEXT_PUBLIC_FLAG_OVERRIDES:
-        'procurement-workspace-pilot:true',
+        'procurement-workspace-pilot:true,the-document-pilot:true',
     },
   },
 });

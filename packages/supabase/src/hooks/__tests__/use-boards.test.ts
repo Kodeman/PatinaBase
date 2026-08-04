@@ -98,6 +98,9 @@ vi.mock('@tanstack/react-query', () => ({
 
 // Import AFTER the mocks are wired up.
 import {
+  useAddBoardItem,
+  useApplyBoardRoomState,
+  useBoards,
   useSaveBoardLayout,
   useBoardsWithItems,
   useDuplicateBoard,
@@ -126,9 +129,9 @@ beforeEach(() => {
 
 describe('useSaveBoardLayout', () => {
   const positions: BoardLayoutPosition[] = [
-    { id: 'i1', board_id: 'b1', type: 'product', x: 10, y: 20, z_index: 0, rotation: 0 },
-    { id: 'i2', board_id: 'b1', type: 'note', x: 30, y: 40, z_index: 1, rotation: 15 },
-    { id: 'i3', board_id: 'b1', type: 'palette', x: 50, y: 60, z_index: 2, rotation: 0 },
+    { id: 'i1', board_id: 'b1', type: 'product', x: 10, y: 20, width: 220, height: null, z_index: 0, rotation: 0 },
+    { id: 'i2', board_id: 'b1', type: 'note', x: 30, y: 40, width: 180, height: 140, z_index: 1, rotation: 15 },
+    { id: 'i3', board_id: 'b1', type: 'palette', x: 50, y: 60, width: 260, height: 96, z_index: 2, rotation: 0 },
   ];
 
   it('upserts every row carrying board_id + type (WITH-CHECK guard)', async () => {
@@ -150,10 +153,12 @@ describe('useSaveBoardLayout', () => {
       expect(row.board_id, `row ${row.id} missing board_id`).toBe('b1');
       expect(row.type, `row ${row.id} missing type`).toBeDefined();
       expect(typeof row.type).toBe('string');
+      expect(row.width, `row ${row.id} missing width`).toBeDefined();
+      expect(row).toHaveProperty('height');
     }
     // Layout columns ride along too.
     expect(rows[1]).toEqual(
-      expect.objectContaining({ id: 'i2', board_id: 'b1', type: 'note', x: 30, y: 40, z_index: 1, rotation: 15 })
+      expect.objectContaining({ id: 'i2', board_id: 'b1', type: 'note', x: 30, y: 40, width: 180, height: 140, z_index: 1, rotation: 15 })
     );
     // Conflict target is the primary key so every row takes the update path.
     expect(upsert?.args[1]).toEqual({ onConflict: 'id' });
@@ -175,6 +180,140 @@ describe('useSaveBoardLayout', () => {
       mutationFn: (input: any) => Promise<any>;
     };
     await expect(config.mutationFn({ boardId: 'b1', positions })).rejects.toThrow('rls reject');
+  });
+});
+
+describe('useApplyBoardRoomState', () => {
+  const input = {
+    boardId: 'board-1',
+    owner: { kind: 'project' as const, id: 'project-1' },
+    state: {
+      name: 'Living room direction',
+      canvasWidth: 1200,
+      canvasHeight: 800,
+      backgroundColor: '#FAF8F5',
+      sections: [{ id: 'section-1', name: 'Seating' }],
+      items: [{
+        id: '11111111-1111-4111-8111-111111111111',
+        type: 'note' as const,
+        x: 40,
+        y: 60,
+        width: 200,
+        height: 120,
+        zIndex: 1,
+        rotation: 0,
+        locked: false,
+        content: 'Warm, quiet, grounded',
+        data: {},
+      }],
+    },
+  };
+
+  it('sends one owner-scoped full-state RPC', async () => {
+    rpc.mockResolvedValue({ data: null, error: null });
+    const config = useApplyBoardRoomState() as unknown as {
+      mutationFn: (value: typeof input) => Promise<void>;
+    };
+
+    await config.mutationFn(input);
+
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith('apply_board_room_state', {
+      p_board_id: 'board-1',
+      p_owner_kind: 'project',
+      p_owner_id: 'project-1',
+      p_state: input.state,
+    });
+    expect(fromSpy).not.toHaveBeenCalled();
+  });
+
+  it('throws the RPC error and invalidates every owner projection on settle', async () => {
+    rpc.mockResolvedValue({ data: null, error: new Error('transaction rolled back') });
+    const config = useApplyBoardRoomState() as unknown as {
+      mutationFn: (value: typeof input) => Promise<void>;
+      onSettled: (data: undefined, error: Error, value: typeof input) => Promise<void>;
+    };
+
+    await expect(config.mutationFn(input)).rejects.toThrow('transaction rolled back');
+    await config.onSettled(undefined, new Error('transaction rolled back'), input);
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['board', 'board-1'] });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['project-owned-boards', 'project-1'] });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['project-owned-boards-with-items', 'project-1'] });
+  });
+
+  it('invalidates pin feedback after a proposal room snapshot can cascade rows', async () => {
+    const config = useApplyBoardRoomState() as unknown as {
+      onSettled: (
+        data: undefined,
+        error: null,
+        value: Omit<typeof input, 'owner'> & {
+          owner: { kind: 'proposal'; id: string };
+        },
+      ) => Promise<void>;
+    };
+    const proposalInput = {
+      ...input,
+      owner: { kind: 'proposal' as const, id: 'proposal-1' },
+    };
+
+    await config.onSettled(undefined, null, proposalInput);
+
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['board-feedback', 'proposal-1'],
+    });
+  });
+});
+
+describe('owner-aware board hooks', () => {
+  it('keeps legacy proposal query keys while scoping project owners to project_id', async () => {
+    const builder = pushTableResult('proposal_boards', { data: [], error: null });
+    const project = useBoards({ kind: 'project', id: 'project-1' }) as unknown as {
+      queryKey: readonly unknown[];
+      queryFn: () => Promise<unknown[]>;
+    };
+    expect(project.queryKey).toEqual(['project-owned-boards', 'project-1']);
+    await project.queryFn();
+    expect(builder.__chain.filter((call) => call.method === 'eq').map((call) => call.args))
+      .toContainEqual(['project_id', 'project-1']);
+
+    const legacy = useBoards('proposal-1') as unknown as { queryKey: readonly unknown[] };
+    expect(legacy.queryKey).toEqual(['boards', 'proposal-1']);
+  });
+
+  it('inserts a caller-supplied id and complete snapshot for delete resurrection', async () => {
+    const inserted = {
+      id: 'item-original',
+      board_id: 'board-1',
+      type: 'product',
+      x: 12,
+      y: 34,
+    };
+    const builder = pushTableResult('proposal_board_items', { data: inserted, error: null });
+    const config = useAddBoardItem() as unknown as {
+      mutationFn: (input: Record<string, unknown>) => Promise<unknown>;
+    };
+    await config.mutationFn({
+      itemId: 'item-original',
+      boardId: 'board-1',
+      owner: { kind: 'project', id: 'project-1' },
+      type: 'product',
+      x: 12,
+      y: 34,
+      width: 210,
+      height: null,
+      productId: 'product-1',
+      imageUrl: 'https://cdn.example/chair.jpg',
+      data: { source_url: 'https://maker.example/chair' },
+    });
+
+    const insert = builder.__chain.find((call) => call.method === 'insert');
+    expect(insert?.args[0]).toEqual(expect.objectContaining({
+      id: 'item-original',
+      board_id: 'board-1',
+      product_id: 'product-1',
+      image_url: 'https://cdn.example/chair.jpg',
+      data: { source_url: 'https://maker.example/chair' },
+    }));
   });
 });
 
@@ -308,18 +447,30 @@ describe('useDuplicateBoard atomic RPC', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('summarizeBoard', () => {
-  it('counts items and picks the lowest-z image as the fallback cover', () => {
+  it('counts items and returns the first four pin images in z-order for the fallback mosaic', () => {
     const summary = summarizeBoard(
       { id: 'b1', name: 'Whole Home', proposal_id: 'p1', cover_image_url: null },
       [
-        { type: 'product', image_url: 'p.jpg', z_index: 0 },
+        { type: 'product', image_url: 'product.jpg', z_index: 0 },
         { type: 'image', image_url: 'top.jpg', z_index: 5 },
-        { type: 'image', image_url: 'bottom.jpg', z_index: 1 },
+        {
+          type: 'image',
+          image_url: 'bottom.jpg',
+          data: { thumbnail_url: 'bottom-thumb.jpg' },
+          z_index: 1,
+        },
+        { type: 'capture', image_url: 'material.jpg', z_index: 3 },
+        { type: 'product', image_url: 'fifth.jpg', z_index: 9 },
       ],
     );
-    expect(summary.item_count).toBe(3);
-    // Lowest-z image wins (bottom→top render order).
-    expect(summary.cover_fallback_url).toBe('bottom.jpg');
+    expect(summary.item_count).toBe(5);
+    expect(summary.cover_fallback_url).toBe('product.jpg');
+    expect(summary.cover_fallback_urls).toEqual([
+      'product.jpg',
+      'bottom-thumb.jpg',
+      'material.jpg',
+      'top.jpg',
+    ]);
   });
 
   it('defaults sections/status for pre-00264 rows and null cover with no images', () => {
@@ -329,6 +480,51 @@ describe('summarizeBoard', () => {
     expect(summary.sections).toEqual([]);
     expect(summary.status).toBe('active');
     expect(summary.cover_fallback_url).toBeNull();
+    expect(summary.cover_fallback_urls).toEqual([]);
+    expect(summary.verdict_counts).toEqual({ approved: 0, rejected: 0, comment: 0, total: 0 });
+  });
+
+  it('uses the active cutout for fallback covers while original_image_url marks it as applied', () => {
+    const summary = summarizeBoard(
+      { id: 'b1', name: 'Cutout', proposal_id: 'p1', cover_image_url: null },
+      [{
+        type: 'image',
+        image_url: 'chair-cutout.png',
+        data: {
+          original_image_url: 'chair.jpg',
+          thumbnail_url: 'chair-thumb.jpg',
+        },
+        z_index: 0,
+      }],
+    );
+
+    expect(summary.cover_fallback_urls).toEqual(['chair-cutout.png']);
+  });
+
+  it('folds RLS-visible current verdicts into the cover summary', () => {
+    const summary = summarizeBoard({ id: 'b1', name: 'B', proposal_id: 'p1' }, [
+      {
+        type: 'product',
+        image_url: null,
+        z_index: 0,
+        verdicts: [
+          {
+            id: 'f1',
+            client_id: 'client-1',
+            verdict: 'rejected',
+            created_at: '2026-08-01T10:00:00Z',
+          },
+          {
+            id: 'f2',
+            client_id: 'client-1',
+            verdict: 'approved',
+            created_at: '2026-08-02T10:00:00Z',
+          },
+        ],
+      },
+    ]);
+
+    expect(summary.verdict_counts).toEqual({ approved: 1, rejected: 0, comment: 0, total: 1 });
   });
 });
 
@@ -411,6 +607,9 @@ describe('useProjectOwnedBoards', () => {
     };
     const result = await config.queryFn();
     expect(builder.__chain.find((c) => c.method === 'eq')?.args).toEqual(['project_id', 'proj-1']);
+    expect(builder.__chain.find((c) => c.method === 'select')?.args[0]).toContain(
+      'verdicts:item_feedback!item_feedback_board_item_id_fkey',
+    );
     expect(result[0].project_id).toBe('proj-1');
     expect(result[0].item_count).toBe(1);
   });

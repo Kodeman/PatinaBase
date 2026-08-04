@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { registerProposalAutosave } from '@/lib/proposal-autosave-registry';
+import type { BoardOwnerRef } from '@patina/types';
+import { registerBoardOwnerAutosave } from '@/lib/proposal-autosave-registry';
 
 export type BufferedAutosaveState =
   | 'idle'
@@ -10,19 +11,24 @@ export type BufferedAutosaveState =
   | 'saved'
   | 'error';
 
-interface BufferedAutosaveOptions<Key extends string, Patch extends object> {
-  proposalId: string;
+type BufferedAutosaveOwnerOptions =
+  | { owner: BoardOwnerRef; proposalId?: never }
+  | { owner?: never; proposalId: string };
+
+type BufferedAutosaveOptions<Key extends string, Patch extends object> =
+  BufferedAutosaveOwnerOptions & {
   /** Retires the old buffer generation when an editor changes identity. */
   generationKey?: string;
   save: (key: Key, patch: Patch) => Promise<unknown>;
   delay?: number;
-}
+};
 
 interface BufferedAutosaveGeneration<
   Key extends string,
   Patch extends object,
 > {
-  proposalId: string;
+  owner: BoardOwnerRef;
+  ownerKey: string;
   generationKey: string;
   save: (key: Key, patch: Patch) => Promise<unknown>;
   pending: Map<Key, Patch>;
@@ -36,12 +42,13 @@ interface BufferedAutosaveGeneration<
 }
 
 function createGeneration<Key extends string, Patch extends object>(
-  proposalId: string,
+  owner: BoardOwnerRef,
   generationKey: string,
   save: (key: Key, patch: Patch) => Promise<unknown>,
 ): BufferedAutosaveGeneration<Key, Patch> {
   return {
-    proposalId,
+    owner,
+    ownerKey: `${owner.kind}:${owner.id}`,
     generationKey,
     save,
     pending: new Map(),
@@ -72,21 +79,28 @@ function firstBufferedError<Key extends string>(
  * registry handle.
  */
 export function useBufferedAutosave<Key extends string, Patch extends object>({
+  owner: explicitOwner,
   proposalId,
-  generationKey = proposalId,
+  generationKey,
   save,
   delay = 600,
 }: BufferedAutosaveOptions<Key, Patch>) {
+  const owner: BoardOwnerRef = explicitOwner ?? {
+    kind: 'proposal',
+    id: proposalId!,
+  };
+  const ownerKey = `${owner.kind}:${owner.id}`;
+  const resolvedGenerationKey = generationKey ?? ownerKey;
   const generationRef = useRef<BufferedAutosaveGeneration<
     Key,
     Patch
   > | null>(null);
   if (
     !generationRef.current ||
-    generationRef.current.proposalId !== proposalId ||
-    generationRef.current.generationKey !== generationKey
+    generationRef.current.ownerKey !== ownerKey ||
+    generationRef.current.generationKey !== resolvedGenerationKey
   ) {
-    generationRef.current = createGeneration(proposalId, generationKey, save);
+    generationRef.current = createGeneration(owner, resolvedGenerationKey, save);
   } else {
     // Same proposal, newer render: future drains may use the latest callback.
     // A drain snapshots this callback when it starts, and a proposal change
@@ -247,7 +261,7 @@ export function useBufferedAutosave<Key extends string, Patch extends object>({
 
   useEffect(() => {
     let detached = false;
-    let registration: ReturnType<typeof registerProposalAutosave>;
+    let registration: ReturnType<typeof registerBoardOwnerAutosave>;
     const handle = {
       getSnapshot: () => ({
         // An in-flight patch is still unsaved until persistence resolves.
@@ -265,7 +279,7 @@ export function useBufferedAutosave<Key extends string, Patch extends object>({
         }
       },
     };
-    registration = registerProposalAutosave(generation.proposalId, handle);
+    registration = registerBoardOwnerAutosave(generation.owner, handle);
     generation.notify = registration.notify;
     generation.mounted = true;
     if (activeGenerationRef.current === generation) {
