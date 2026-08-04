@@ -14,6 +14,91 @@ import { createBrowserClient } from '../client';
 
 const getSupabase = () => createBrowserClient();
 
+function normalizeWorkingBudget(
+  data: unknown,
+  projectId: string,
+): { version: WorkingBudgetVersion; checkpoint: WorkingBudgetCheckpoint | null } | null {
+  if (!data || typeof data !== 'object') return null;
+  // RPC responses are deliberately client-safe camelCase payloads, but their
+  // status vocabulary follows the persisted schema.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const payload = data as any;
+  if (!payload.version || typeof payload.version !== 'object') return null;
+
+  const rawVersion = payload.version;
+  const versionId = String(rawVersion.id ?? '');
+  const rawLines = Array.isArray(payload.lines)
+    ? payload.lines
+    : Array.isArray(rawVersion.lines)
+      ? rawVersion.lines
+      : [];
+  const version: WorkingBudgetVersion = {
+    id: versionId,
+    projectId: String(rawVersion.projectId ?? rawVersion.project_id ?? projectId),
+    version: Number(rawVersion.version ?? 0),
+    state:
+      rawVersion.state === 'superseded'
+        ? 'superseded'
+        : (rawVersion.state ?? rawVersion.status) === 'published'
+          ? 'published'
+          : 'draft',
+    currency: String(rawVersion.currency ?? 'USD'),
+    lowTotalCents: Number(rawVersion.lowTotalCents ?? rawVersion.low_total_cents ?? 0),
+    targetTotalCents: Number(rawVersion.targetTotalCents ?? rawVersion.target_total_cents ?? 0),
+    highTotalCents: Number(rawVersion.highTotalCents ?? rawVersion.high_total_cents ?? 0),
+    lines: rawLines.map((line: Record<string, unknown>) => ({
+      id: String(line.id ?? ''),
+      versionId: String(line.versionId ?? line.budget_version_id ?? versionId),
+      roomId: (line.roomId ?? line.projectRoomId ?? line.project_room_id ?? null) as string | null,
+      roomName: String(line.roomName ?? line.room_name ?? ''),
+      category: String(line.category ?? ''),
+      lowCents: Number(line.lowCents ?? line.low_cents ?? 0),
+      targetCents: Number(line.targetCents ?? line.target_cents ?? 0),
+      highCents: Number(line.highCents ?? line.high_cents ?? 0),
+      notes: (line.notes ?? null) as string | null,
+      sortOrder: Number(line.sortOrder ?? line.sort_order ?? 0),
+    })),
+    createdAt: String(
+      rawVersion.createdAt ?? rawVersion.created_at ?? rawVersion.publishedAt ??
+        rawVersion.published_at ?? '',
+    ),
+    publishedAt: (rawVersion.publishedAt ?? rawVersion.published_at ?? null) as string | null,
+  };
+
+  const rawCheckpoint = payload.checkpoint;
+  if (!rawCheckpoint || typeof rawCheckpoint !== 'object') {
+    return { version, checkpoint: null };
+  }
+  const rawState = rawCheckpoint.state ?? rawCheckpoint.status;
+  const checkpoint: WorkingBudgetCheckpoint = {
+    id: String(rawCheckpoint.id ?? ''),
+    projectId: String(rawCheckpoint.projectId ?? rawCheckpoint.project_id ?? projectId),
+    versionId: String(
+      rawCheckpoint.versionId ?? rawCheckpoint.budgetVersionId ??
+        rawCheckpoint.budget_version_id ?? versionId,
+    ),
+    state:
+      rawState === 'acknowledged'
+        ? 'acknowledged'
+        : rawState === 'overridden'
+          ? 'overridden'
+          : 'published',
+    publishedAt: String(
+      rawCheckpoint.publishedAt ?? rawCheckpoint.published_at ?? version.publishedAt ?? '',
+    ),
+    acknowledgedAt: (rawCheckpoint.acknowledgedAt ??
+      rawCheckpoint.acknowledged_at ?? null) as string | null,
+    acknowledgedBy: (rawCheckpoint.acknowledgedBy ??
+      rawCheckpoint.acknowledged_by ?? null) as string | null,
+    overrideAt: (rawCheckpoint.overrideAt ?? rawCheckpoint.overriddenAt ??
+      rawCheckpoint.overridden_at ?? null) as string | null,
+    overrideBy: (rawCheckpoint.overrideBy ?? rawCheckpoint.override_by ?? null) as string | null,
+    overrideReason: (rawCheckpoint.overrideReason ??
+      rawCheckpoint.override_reason ?? null) as string | null,
+  };
+  return { version, checkpoint };
+}
+
 async function notifyCommercialTransition(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
@@ -227,10 +312,7 @@ export function useWorkingBudget(projectId: string) {
         p_project_id: projectId,
       });
       if (error) throw error;
-      return data as {
-        version: WorkingBudgetVersion | null;
-        checkpoint: WorkingBudgetCheckpoint | null;
-      };
+      return normalizeWorkingBudget(data, projectId);
     },
   });
 }

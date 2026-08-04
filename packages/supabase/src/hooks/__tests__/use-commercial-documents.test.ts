@@ -22,6 +22,7 @@ import {
   useCreateFurnishingsAuthorization,
   useSendCommercialDocument,
   useUpsertDesignServicesDraft,
+  useWorkingBudget,
 } from '../use-commercial-documents';
 
 type QueryConfig = { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> };
@@ -88,6 +89,60 @@ describe('commercial document hooks', () => {
     ]) {
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey });
     }
+  });
+
+  it('normalizes the client-safe working-budget RPC shape', async () => {
+    rpc.mockResolvedValueOnce({
+      data: {
+        version: {
+          id: 'version-1',
+          projectId: 'project-1',
+          version: 2,
+          status: 'published',
+          currency: 'USD',
+          lowTotalCents: 100,
+          targetTotalCents: 150,
+          highTotalCents: 200,
+          createdAt: '2026-08-03T00:00:00Z',
+          publishedAt: '2026-08-03T01:00:00Z',
+        },
+        lines: [{
+          id: 'line-1',
+          projectRoomId: 'room-1',
+          roomName: 'Living Room',
+          category: 'Seating',
+          lowCents: 100,
+          targetCents: 150,
+          highCents: 200,
+          sortOrder: 0,
+        }],
+        checkpoint: {
+          id: 'checkpoint-1',
+          checkpointCode: 'BUD-002',
+          status: 'open',
+          publishedAt: '2026-08-03T01:00:00Z',
+        },
+        isPurchaseAuthority: false,
+      },
+      error: null,
+    });
+    const query = useWorkingBudget('project-1') as unknown as QueryConfig;
+
+    const result = await query.queryFn();
+
+    expect(result).toMatchObject({
+      version: {
+        id: 'version-1',
+        state: 'published',
+        lines: [{ versionId: 'version-1', roomId: 'room-1' }],
+      },
+      checkpoint: {
+        id: 'checkpoint-1',
+        projectId: 'project-1',
+        versionId: 'version-1',
+        state: 'published',
+      },
+    });
   });
 
   it('acknowledges a checkpoint without accepting budget or purchasing inputs', async () => {
