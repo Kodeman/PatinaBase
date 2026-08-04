@@ -24,6 +24,7 @@ import {
   useRemoveMember,
   useLeaveOrganization,
   useTransferOrganizationOwnership,
+  useProjects,
   type MemberRole,
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
@@ -31,6 +32,8 @@ import { Select, StatusBadge, type StatusTone } from '@/components/ui/controls';
 import { monogramOf } from '@/lib/document/account-identity';
 import { StudioInviteModal } from './studio-invite-modal';
 import { StudioLogoUploadField } from './studio-logo-upload-field';
+import { StudioSetupChecklist } from './studio-setup-checklist';
+import { MemberTitleLine } from './member-title-line';
 import { studioEvents } from '@/lib/analytics/studio-events';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 
@@ -75,6 +78,7 @@ export function AccountStudioPage() {
   );
 
   const { data: members } = useOrganizationMembers(studio?.id ?? '');
+  const { data: projects } = useProjects();
 
   const createOrg = useCreateOrganization();
   const updateOrg = useUpdateOrganization();
@@ -127,6 +131,15 @@ export function AccountStudioPage() {
         .length,
     [members],
   );
+
+  // Day-1 checklist inputs (U3) — own title + crew count read off the same
+  // members list the roster below renders; the rolodex inputs are Wave 2's,
+  // so they're left at the derivation's un-seeded defaults for now.
+  const myJobTitle =
+    members?.find((m) => m.user_id === user?.id)?.job_title ?? null;
+  const memberCountBeyondSelf = (members ?? []).filter(
+    (m) => m.user_id !== user?.id,
+  ).length;
 
   const handleCreateStudio = () => {
     const name = newStudioName.trim();
@@ -296,6 +309,17 @@ export function AccountStudioPage() {
 
   return (
     <div className="pt-1">
+      {/* Day-1 checklist (U3) — everything the studio is still missing, read
+          straight off state rather than ticked by hand. */}
+      <StudioSetupChecklist
+        orgCreatedAt={studio.created_at}
+        myJobTitle={myJobTitle}
+        memberCountBeyondSelf={memberCountBeyondSelf}
+        projectsCount={projects?.length ?? 0}
+        onInvite={() => setInviteOpen(true)}
+        className="mb-6 border-b border-[var(--color-pearl)] pb-5"
+      />
+
       {/* Identity */}
       <div className="mb-6">
         {isRenaming ? (
@@ -641,6 +665,14 @@ export function AccountStudioPage() {
                         {m.profiles.email}
                       </p>
                     )}
+                    <MemberTitleLine
+                      organizationId={studio.id}
+                      memberId={m.id}
+                      jobTitle={m.job_title}
+                      isSelf={isSelf}
+                      viewerIsOwnerOrAdmin={canManage}
+                      className="mt-0.5"
+                    />
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2.5">
