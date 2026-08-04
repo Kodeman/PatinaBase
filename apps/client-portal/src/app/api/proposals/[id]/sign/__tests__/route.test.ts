@@ -54,6 +54,12 @@ describe('POST /api/proposals/[id]/sign', () => {
     validUntil = null;
 
     userRpcMock = jest.fn().mockImplementation((name: string) => {
+      if (name === 'get_client_commercial_document_bundle') {
+        return Promise.resolve({
+          data: { document: { id: 'prop-1', kind: 'legacy', state: 'sent' } },
+          error: null,
+        });
+      }
       if (name === 'get_client_proposal_bundle') {
         return Promise.resolve({
           data: {
@@ -95,8 +101,11 @@ describe('POST /api/proposals/[id]/sign', () => {
     const res = await POST(makeRequest(), makeParams());
 
     expect(res.status).toBe(200);
-    expect(userRpcMock).toHaveBeenCalledTimes(1);
-    expect(userRpcMock).toHaveBeenCalledWith('get_client_proposal_bundle', {
+    expect(userRpcMock).toHaveBeenCalledTimes(2);
+    expect(userRpcMock).toHaveBeenNthCalledWith(1, 'get_client_commercial_document_bundle', {
+      p_proposal_id: 'prop-1',
+    });
+    expect(userRpcMock).toHaveBeenNthCalledWith(2, 'get_client_proposal_bundle', {
       p_proposal_id: 'prop-1',
     });
   });
@@ -213,5 +222,41 @@ describe('POST /api/proposals/[id]/sign', () => {
 
     expect(res.status).toBe(500);
     expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  it('records design-services client consent without assuming project activation', async () => {
+    userRpcMock.mockImplementation((name: string) => {
+      if (name === 'get_client_commercial_document_bundle') {
+        return Promise.resolve({
+          data: { document: { id: 'prop-1', kind: 'design_services', state: 'sent' } },
+          error: null,
+        });
+      }
+      return Promise.resolve({ error: null });
+    });
+    serviceRpcMock.mockResolvedValue({
+      data: { commercial_state: 'client_signed', newly_client_signed: true, project_id: null },
+      error: null,
+    });
+
+    const response = await POST(makeRequest({ 'cf-connecting-ip': '203.0.113.7' }), makeParams());
+
+    expect(response.status).toBe(200);
+    expect(serviceRpcMock).toHaveBeenCalledWith(
+      'sign_design_services_agreement_with_trusted_ip',
+      {
+        p_proposal_id: 'prop-1',
+        p_signed_name: 'Jamie Homeowner',
+        p_client_id: 'client-1',
+        p_signed_ip: '203.0.113.7',
+      },
+    );
+    expect(await response.json()).toMatchObject({
+      commercialState: 'client_signed',
+      newlyClientSigned: true,
+    });
+    expect(invokeMock).toHaveBeenCalledWith('commercial-document-notify', {
+      body: { documentId: 'prop-1', transition: 'client_signed' },
+    });
   });
 });

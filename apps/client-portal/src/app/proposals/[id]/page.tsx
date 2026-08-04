@@ -8,12 +8,15 @@ import {
 } from '@patina/supabase';
 import { FeatureAnnouncementCoachmark, SurfaceKeys } from '@patina/help-system';
 import { useClientProposal } from '@/hooks/use-proposals-client';
+import { useClientCommercialDocument } from '@/hooks/use-commercial-client';
+import { commercialSummaryFromProposal } from '@/lib/commercial-documents';
 import { useHelpStateReady } from '@/components/help/help-state-setup';
 import { ProposalDocument } from '@/components/proposal-document';
 import { ProposalDeclineDialog } from '@/components/proposals/ProposalDeclineDialog';
 import { ProposalRequestChangeDialog } from '@/components/proposals/ProposalRequestChangeDialog';
 import { ProposalClarifyButton } from '@/components/proposals/ProposalClarifyButton';
 import { QueryFailure } from '@/components/query-failure';
+import { CommercialDocumentShell } from '@/components/commercial-document-shell';
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', {
@@ -36,6 +39,7 @@ export default function ClientProposalDetailPage({
     isError: proposalError,
     refetch: refetchProposal,
   } = useClientProposal(id);
+  const { data: commercialBundle } = useClientCommercialDocument(id);
   const sections = bundle?.sections ?? [];
   const paymentMilestones = bundle?.payment_milestones ?? [];
   const phases = bundle?.phases ?? [];
@@ -101,9 +105,11 @@ export default function ClientProposalDetailPage({
     );
   }
 
-  const isSigned = proposal.status === 'accepted';
-  const isExpiredStatus = proposal.status === 'expired';
-  const isDeclined = proposal.status === 'declined';
+  const commercial = commercialBundle?.document ?? commercialSummaryFromProposal(proposal);
+  const isLegacy = commercial.kind === 'legacy';
+  const isSigned = commercial.state === 'executed';
+  const isExpiredStatus = commercial.state === 'expired';
+  const isDeclined = commercial.state === 'declined';
 
   // Expiry gate: a proposal can still carry status "sent"/"viewed" past its
   // valid_until date if the server-side expiry job hasn't run yet. Treat a
@@ -118,7 +124,7 @@ export default function ClientProposalDetailPage({
 
   const isExpired = isExpiredStatus || isPassedExpiry;
   const isActionable =
-    (proposal.status === 'sent' || proposal.status === 'viewed') && !isPassedExpiry;
+    commercial.state === 'sent' && !isPassedExpiry;
 
   // C3 — the per-line verdict loop is offered while the proposal is live for
   // review and the per-proposal gate (proposals.feedback_enabled, 00267) is on.
@@ -167,7 +173,7 @@ export default function ClientProposalDetailPage({
         </button>
       </div>
 
-      {isSigned && proposalAudit.signed_at && (
+      {isLegacy && isSigned && proposalAudit.signed_at && (
         <div
           className="proposal-print-hide mb-6 flex items-center gap-2 rounded-[3px] border border-patina-sage/30 px-4 py-3"
           style={{ background: 'rgba(122, 155, 118, 0.06)' }}
@@ -214,24 +220,34 @@ export default function ClientProposalDetailPage({
         </div>
       )}
 
-      <ProposalDocument
-        proposal={proposal}
-        sections={sections}
-        trackEngagement={!isSigned}
-        paymentMilestones={paymentMilestones}
-        phases={phases}
-        exclusions={exclusions}
-        scopeRooms={scopeRooms}
-        boards={[]}
-        resolvedBoards={boards}
-        feedbackEnabled={feedbackEnabled}
-        sharedByStudio={identity?.name ?? undefined}
-      />
+      {commercialBundle && !isLegacy ? (
+        <CommercialDocumentShell bundle={commercialBundle} />
+      ) : (
+        <ProposalDocument
+          proposal={proposal}
+          sections={sections}
+          trackEngagement={!isSigned}
+          paymentMilestones={paymentMilestones}
+          phases={phases}
+          exclusions={exclusions}
+          scopeRooms={scopeRooms}
+          boards={[]}
+          resolvedBoards={boards}
+          feedbackEnabled={feedbackEnabled}
+          sharedByStudio={identity?.name ?? undefined}
+        />
+      )}
 
       {isActionable && (
         <div className="proposal-print-hide mx-auto mt-6 flex max-w-[760px] flex-col gap-4 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="type-body-small text-[var(--text-body)]">
-            Ready to move forward? Sign to confirm scope and kick off your project.
+            {commercial.kind === 'design_services'
+              ? 'Sign to record your consent. The agreement becomes effective only after the studio countersigns.'
+              : commercial.kind === 'furnishings_authorization'
+                ? 'Authorize only the named furnishing lines, quantities, and client prices shown here.'
+                : commercial.kind === 'service_addendum'
+                  ? 'Sign to accept these additional design-services terms.'
+                  : 'Ready to move forward? Sign to confirm the proposal.'}
           </p>
           <div className="flex flex-wrap gap-2">
             {proposal.project_id && <ProposalClarifyButton projectId={proposal.project_id} />}
@@ -255,7 +271,8 @@ export default function ClientProposalDetailPage({
               href={`/proposals/${proposal.id}/sign`}
               className="inline-flex items-center gap-2 rounded-[3px] bg-patina-charcoal px-5 py-2.5 text-sm font-medium text-white no-underline transition hover:opacity-90"
             >
-              Sign proposal
+              {commercial.kind === 'furnishings_authorization' ? 'Authorize furnishings' :
+                commercial.kind === 'legacy' ? 'Sign proposal' : 'Sign document'}
             </Link>
           </div>
         </div>
