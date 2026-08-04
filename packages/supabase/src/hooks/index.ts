@@ -1293,6 +1293,7 @@ export {
   useAddBoardItem,
   useUpdateBoardItem,
   useDeleteBoardItem,
+  useApplyBoardRoomState,
   useSaveBoardLayout,
   useProjectBoards,
   // B8 (00272/00273) — project-owned live boards
@@ -1300,8 +1301,11 @@ export {
   useContinueBoardInProject,
   // Pure helper (00264 — exported for unit tests + reuse)
   summarizeBoard,
+  normalizeBoardOwner,
+  boardOwnerQueryKeys,
 } from './use-boards';
 export type {
+  BoardOwnerInput,
   BoardItemType,
   BoardStatus,
   BoardSection,
@@ -1314,8 +1318,18 @@ export type {
   UpsertBoardInput,
   AddBoardItemInput,
   UpdateBoardItemInput,
+  ApplyBoardRoomStateInput,
   BoardLayoutPosition,
 } from './use-boards';
+export {
+  emptyBoardVerdictCounts,
+  summarizeBoardVerdicts,
+} from './board-verdicts';
+export type {
+  BoardVerdictCounts,
+  BoardVerdictProjection,
+  BoardItemVerdictProjection,
+} from './board-verdicts';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Invoicing money core (Wave 1 — see migration 00178)
@@ -1455,10 +1469,24 @@ export type {
 // Schedule & Boards Wave 2 · Track C — document shares (C2) + per-line verdicts (C3)
 export {
   useProposalShares,
+  useBoardShares,
   useCreateShare,
+  useCreateBoardShare,
   useRevokeShare,
 } from './use-document-shares';
 export type { DocumentShare, CreatedShare } from './use-document-shares';
+
+export {
+  useBoardTemplates,
+  useSaveBoardAsTemplate,
+  useMaterializeBoardTemplate,
+  useRenameBoardTemplate,
+  useDeleteBoardTemplate,
+} from './use-board-templates';
+export type { BoardTemplate } from './use-board-templates';
+
+export { useRecentBoards } from './use-recent-boards';
+export type { RecentBoard } from './use-recent-boards';
 export {
   useProposalFeedback,
   useClientProposalFeedback,

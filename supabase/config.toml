@@ -499,6 +499,19 @@ verify_jwt = true
 [functions.spec-book-render]
 verify_jwt = true
 
+# Authenticated designer URL unfurl. The gateway verifies the user JWT, the
+# function resolves that caller again with auth.getUser, and 00410's durable
+# quota RPC receives only that verified id (never an id from the request body).
+[functions.capture-from-url]
+verify_jwt = true
+
+# Service-only mood-board Storage maintenance. 00410's pg_cron dispatch carries
+# a service-role Bearer and always requests dry-run. The function additionally
+# requires role=service_role in-code; deletion also needs a separate, absent-by-
+# default BOARD_ASSET_CLEANUP_DESTRUCTIVE_ENABLED=true environment switch.
+[functions.board-asset-cleanup]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327

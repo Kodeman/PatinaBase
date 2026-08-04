@@ -9,15 +9,22 @@ declare global {
 let initialized = false;
 
 const FIELD_BEARER_IN_URL = /\/field\/[A-Za-z0-9_-]{32,256}(?![A-Za-z0-9_-])/g;
+const SHARE_BEARER_IN_URL = /\/share\/[0-9a-f]{64}(?![0-9a-f])/gi;
+
+function redactBearerPaths(value: string): string {
+  return value
+    .replace(FIELD_BEARER_IN_URL, '/field/[redacted]')
+    .replace(SHARE_BEARER_IN_URL, '/share/[redacted]');
+}
 
 function sanitizeAnalyticsValue(value: unknown, seen: WeakMap<object, unknown>): unknown {
   if (typeof value === 'string') {
-    return value.replace(FIELD_BEARER_IN_URL, '/field/[redacted]');
+    return redactBearerPaths(value);
   }
   if (!value || typeof value !== 'object') return value;
 
   if (typeof URL !== 'undefined' && value instanceof URL) {
-    return value.toString().replace(FIELD_BEARER_IN_URL, '/field/[redacted]');
+    return redactBearerPaths(value.toString());
   }
   if (value instanceof Date || value instanceof RegExp) return value;
 
@@ -37,7 +44,7 @@ function sanitizeAnalyticsValue(value: unknown, seen: WeakMap<object, unknown>):
   const sanitized: Record<string, unknown> = {};
   seen.set(value, sanitized);
   for (const [key, entry] of Object.entries(value)) {
-    const sanitizedKey = key.replace(FIELD_BEARER_IN_URL, '/field/[redacted]');
+    const sanitizedKey = redactBearerPaths(key);
     sanitized[sanitizedKey] = sanitizeAnalyticsValue(entry, seen);
   }
   return sanitized;
@@ -45,9 +52,10 @@ function sanitizeAnalyticsValue(value: unknown, seen: WeakMap<object, unknown>):
 
 /**
  * Last-mile privacy boundary for every PostHog event, including SDK-generated
- * autocapture properties and URLs added after an SPA navigation. Field guest
- * bearer credentials are valid path segments, so no event may leave the
- * browser with one embedded in a URL, referrer, element href, or nested value.
+ * autocapture properties and URLs added after an SPA navigation. Field and
+ * document-share bearer credentials are valid path segments, so no event may
+ * leave the browser with one embedded in a URL, referrer, element href, key,
+ * or nested value.
  */
 export function sanitizePostHogEvent(event: CaptureResult | null): CaptureResult | null {
   if (!event) return null;

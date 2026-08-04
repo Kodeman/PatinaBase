@@ -80,12 +80,6 @@ POST /search/ai/smart-crop/:assetId?ratios=1:1,16:9
 ```
 **Returns**: Array of crop suggestions with coordinates
 
-### Remove Background
-```http
-POST /search/ai/remove-background/:assetId
-```
-**Returns**: `{ success, outputBuffer, confidence }`
-
 ### Detect Products
 ```http
 POST /search/ai/detect-products/:assetId
@@ -375,7 +369,6 @@ curl -X POST http://localhost:3000/search/reports/cost-analysis \
 
 ```env
 # AI Services
-BACKGROUND_REMOVAL_API_KEY=your_key
 VISION_API_KEY=your_key
 
 # Costs

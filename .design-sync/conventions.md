@@ -97,7 +97,7 @@ export function DeskFolder() {
 - **Letterhead** — the head of an open document: title in `font-heading`, live vitals as `type-meta` micro-labels.
 - **Margin** — decisions/needs sit in a right-margin rail as bordered rows (hairline `border-border`), never a modal.
 - **Ledgers** — Orders, Hours, Accounts, Library, People render as quiet ruled tables (`Table`/`List` + `Stat`), each with front-matter.
-- **Client-facing moments** — for the client's copy use the kit's narrative components: `ApprovalTheater` (proposal sign-off), `MilestoneCard`/`ImmersiveTimeline` (progress), `CostVisualizer` (budget), `BoardStatic` (mood board).
+- **Client-facing moments** — for the client's copy use the kit's narrative components: `ApprovalTheater` (proposal sign-off), `MilestoneCard`/`ImmersiveTimeline` (progress), `CostVisualizer` (budget), `BoardComposition` (mood board).
 
 **Calm.** Motion only under `@media (prefers-reduced-motion: no-preference)`; quiet by default (`bg-card`/`bg-background`, `border-border` hairlines, generous whitespace). Reserve saturated color for status stamps and Strata Mark.
 

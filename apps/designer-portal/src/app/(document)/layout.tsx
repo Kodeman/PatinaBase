@@ -20,6 +20,7 @@ import { MobileBar } from '@/components/document/mobile/mobile-bar';
 import { MobileActionDock } from '@/components/document/mobile/mobile-action-dock';
 import { MobileSheets } from '@/components/document/mobile/mobile-sheets';
 import { DocumentTimeProvider } from '@/hooks/document-time-provider';
+import { DocumentRouteBoundary } from '@/components/document/document-route-boundary';
 
 export const metadata: Metadata = {
   title: 'The Desk · Patina',
@@ -45,7 +46,8 @@ export default function DocumentLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="document-route-shell min-h-screen bg-[var(--bg-primary)]">
+    <DocumentRouteBoundary bare={children}>
+      <div className="document-route-shell min-h-screen bg-[var(--bg-primary)]">
       {/* One time system above the Desk and every document (R4): the
           log-offer strip rides across navigation inside the provider. */}
       <DocumentTimeProvider>
@@ -104,6 +106,7 @@ export default function DocumentLayout({
           </HelpStateProvider>
         </MobileShellProvider>
       </DocumentTimeProvider>
-    </div>
+      </div>
+    </DocumentRouteBoundary>
   );
 }

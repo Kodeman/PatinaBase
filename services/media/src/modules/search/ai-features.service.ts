@@ -1,8 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaClient } from '../../generated/prisma-client';
-import { ConfigService } from '@nestjs/config';
 import sharp from 'sharp';
-import axios from 'axios';
 import { AITag } from './search.types';
 
 export interface AutoTagResult {
@@ -39,14 +37,6 @@ export interface SmartCropSuggestion {
   focusPoint: { x: number; y: number };
   confidence: number;
   reason: string;
-}
-
-export interface BackgroundRemovalResult {
-  success: boolean;
-  outputBuffer?: Buffer;
-  mask?: Buffer;
-  confidence: number;
-  hasTransparency: boolean;
 }
 
 export interface ProductDetectionResult {
@@ -93,10 +83,7 @@ export interface QualityIssue {
 export class AIFeaturesService {
   private readonly logger = new Logger(AIFeaturesService.name);
 
-  constructor(
-    private prisma: PrismaClient,
-    private config: ConfigService,
-  ) {}
+  constructor(private prisma: PrismaClient) {}
 
   /**
    * Auto-tag image using computer vision API
@@ -204,56 +191,6 @@ export class AIFeaturesService {
     } catch (error) {
       this.logger.error(`Failed to generate smart crops: ${error.message}`);
       throw error;
-    }
-  }
-
-  /**
-   * Remove background from image
-   */
-  async removeBackground(imageBuffer: Buffer): Promise<BackgroundRemovalResult> {
-    this.logger.log('Removing background from image');
-
-    try {
-      // Call background removal API (e.g., remove.bg, rembg)
-      const apiKey = this.config.get('BACKGROUND_REMOVAL_API_KEY');
-      const apiUrl = this.config.get('BACKGROUND_REMOVAL_API_URL') || 'https://api.remove.bg/v1.0/removebg';
-
-      if (!apiKey) {
-        this.logger.warn('Background removal API key not configured, using fallback');
-        return this.fallbackBackgroundRemoval(imageBuffer);
-      }
-
-      const response = await axios.post(
-        apiUrl,
-        {
-          image_file_b64: imageBuffer.toString('base64'),
-          size: 'auto',
-          format: 'png',
-        },
-        {
-          headers: {
-            'X-Api-Key': apiKey,
-            'Content-Type': 'application/json',
-          },
-          responseType: 'arraybuffer',
-        },
-      );
-
-      const outputBuffer = Buffer.from(response.data);
-
-      return {
-        success: true,
-        outputBuffer,
-        confidence: 0.95,
-        hasTransparency: true,
-      };
-    } catch (error) {
-      this.logger.error(`Failed to remove background: ${error.message}`);
-      return {
-        success: false,
-        confidence: 0,
-        hasTransparency: false,
-      };
     }
   }
 
@@ -560,33 +497,6 @@ export class AIFeaturesService {
   ): number {
     // Higher confidence if we detected actual focus points
     return focusPointCount > 0 ? 0.9 : 0.6;
-  }
-
-  /**
-   * Fallback background removal using edge detection
-   */
-  private async fallbackBackgroundRemoval(
-    imageBuffer: Buffer,
-  ): Promise<BackgroundRemovalResult> {
-    try {
-      // Simple threshold-based background removal
-      const output = await sharp(imageBuffer)
-        .threshold(240)
-        .toBuffer();
-
-      return {
-        success: true,
-        outputBuffer: output,
-        confidence: 0.5,
-        hasTransparency: false,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        confidence: 0,
-        hasTransparency: false,
-      };
-    }
   }
 
   /**

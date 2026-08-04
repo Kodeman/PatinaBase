@@ -1,0 +1,6 @@
+{
+  "sharedModule": "supabase/functions/_shared/spec-pdf.ts",
+  "deployImporters": ["spec-pdf"],
+  "nonDeployImporters": ["supabase/functions/_shared/spec-pdf.test.ts"],
+  "deployNote": "Any change to the shared module requires redeploying every deployImporter; currently: supabase functions deploy spec-pdf"
+}

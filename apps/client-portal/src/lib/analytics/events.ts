@@ -116,3 +116,83 @@ export const proposalClientEvents = {
       platform: 'client',
     }),
 };
+
+export interface MoodBoardClientRenderProperties {
+  proposalId: string | null;
+  boardCount: number;
+  surface: 'client_proposal' | 'guest_share';
+}
+
+function moodBoardRenderProperties(p: MoodBoardClientRenderProperties) {
+  return {
+    proposal_id: p.proposalId,
+    board_count: p.boardCount,
+    surface: p.surface,
+    renderer: 'boards_block',
+  } as const;
+}
+
+function captureMoodBoardRenderWhenReady(capture: () => void): void {
+  if (isAnalyticsEnabled()) {
+    capture();
+    return;
+  }
+  if (typeof window === 'undefined') return;
+
+  // The analytics provider initializes in a parent passive effect while this
+  // renderer's success effect/error boundary can run earlier in the same
+  // commit. Retry once on the next task so first-paint M8 samples are not lost.
+  window.setTimeout(() => {
+    if (isAnalyticsEnabled()) capture();
+  }, 0);
+}
+
+/** MoodBoard addendum: client telemetry contains identifiers/counts, never board content. */
+export const moodBoardEvents = {
+  verdictGiven: (p: {
+    verdict: 'approved' | 'rejected' | 'comment';
+    boardId: string;
+    boardItemId: string;
+    itemType: string;
+  }) =>
+    track('mood_board_verdict_given', {
+      verdict: p.verdict,
+      board_id: p.boardId,
+      board_item_id: p.boardItemId,
+      item_type: p.itemType,
+      surface: 'client_portal',
+    }),
+  renderSucceeded: (p: MoodBoardClientRenderProperties) => {
+    const properties = moodBoardRenderProperties(p);
+    captureMoodBoardRenderWhenReady(() => {
+      posthog.capture('mood_board_client_render_succeeded', properties);
+    });
+  },
+  renderFailed: (error: unknown, p: MoodBoardClientRenderProperties) => {
+    const properties = moodBoardRenderProperties(p);
+    // Do not forward the caught message or thrown value: renderer exceptions
+    // can contain product copy or a guest URL. Preserve only a conservative
+    // exception class so PostHog Error Tracking remains groupable.
+    const candidateName = error instanceof Error ? error.name : '';
+    const safeName = new Set([
+      'Error',
+      'TypeError',
+      'RangeError',
+      'ReferenceError',
+      'SyntaxError',
+      'URIError',
+      'EvalError',
+    ]).has(candidateName)
+      ? candidateName
+      : 'MoodBoardRenderError';
+    const safeError = new Error('MoodBoard client renderer failed');
+    safeError.name = safeName;
+    captureMoodBoardRenderWhenReady(() => {
+      posthog.capture('mood_board_client_render_failed', properties);
+      posthog.captureException(safeError, {
+        ...properties,
+        feature: 'mood_board',
+      });
+    });
+  },
+};

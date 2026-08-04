@@ -15,63 +15,7 @@ import {
   type ReactNode,
 } from 'react';
 import { DocumentAction } from '../document-action';
-
-const FOCUSABLE_SELECTOR = [
-  'a[href]:not([tabindex="-1"])',
-  'button:not([disabled]):not([tabindex="-1"])',
-  'input:not([disabled]):not([type="hidden"]):not([tabindex="-1"])',
-  'select:not([disabled]):not([tabindex="-1"])',
-  'textarea:not([disabled]):not([tabindex="-1"])',
-  'iframe:not([tabindex="-1"])',
-  '[contenteditable="true"]:not([tabindex="-1"])',
-  '[tabindex]:not([tabindex="-1"])',
-].join(',');
-
-let bodyScrollLocks = 0;
-let bodyOverflowBeforeLock = '';
-let bodyPaddingBeforeLock = '';
-
-function lockBodyScroll() {
-  if (bodyScrollLocks === 0) {
-    bodyOverflowBeforeLock = document.body.style.overflow;
-    bodyPaddingBeforeLock = document.body.style.paddingRight;
-
-    const layoutWidth = document.documentElement.clientWidth;
-    const scrollbarWidth =
-      layoutWidth > 0 ? Math.max(0, window.innerWidth - layoutWidth) : 0;
-    if (scrollbarWidth > 0) {
-      const currentPadding =
-        Number.parseFloat(window.getComputedStyle(document.body).paddingRight) ||
-        0;
-      document.body.style.paddingRight = `${currentPadding + scrollbarWidth}px`;
-    }
-    document.body.style.overflow = 'hidden';
-  }
-
-  bodyScrollLocks += 1;
-  return () => {
-    bodyScrollLocks = Math.max(0, bodyScrollLocks - 1);
-    if (bodyScrollLocks > 0) return;
-    document.body.style.overflow = bodyOverflowBeforeLock;
-    document.body.style.paddingRight = bodyPaddingBeforeLock;
-  };
-}
-
-function focusableWithin(panel: HTMLElement) {
-  return Array.from(
-    panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
-  ).filter((element) => {
-    const style = window.getComputedStyle(element);
-    return (
-      !element.hidden &&
-      !element.matches(':disabled') &&
-      element.getAttribute('aria-disabled') !== 'true' &&
-      !element.closest('[hidden], [aria-hidden="true"], [inert]') &&
-      style.display !== 'none' &&
-      style.visibility !== 'hidden'
-    );
-  });
-}
+import { lockBodyScroll, trapTabWithin } from '@/lib/full-screen-boundary';
 
 interface ViewerContextValue {
   title: string;
@@ -126,29 +70,9 @@ export function FullScreenViewerShell({
         return;
       }
 
-      if (event.key !== 'Tab' || event.defaultPrevented) return;
       const panel = panelRef.current;
       if (!panel) return;
-      const focusable = focusableWithin(panel);
-      if (focusable.length === 0) {
-        event.preventDefault();
-        panel.focus({ preventScroll: true });
-        return;
-      }
-
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      const active = document.activeElement;
-      if (active === panel || !panel.contains(active)) {
-        event.preventDefault();
-        (event.shiftKey ? last : first).focus();
-      } else if (!event.shiftKey && active === last) {
-        event.preventDefault();
-        first.focus();
-      } else if (event.shiftKey && active === first) {
-        event.preventDefault();
-        last.focus();
-      }
+      trapTabWithin(event, panel);
     };
 
     document.addEventListener('keydown', onKeyDown, true);

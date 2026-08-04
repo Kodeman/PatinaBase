@@ -2,6 +2,8 @@ import { render, screen } from '@testing-library/react';
 
 import { ProposalDocument } from '../proposal-document';
 
+const mockBoardsBlock = jest.fn(() => null);
+
 jest.mock('@/hooks/use-auth', () => ({
   useAuth: () => ({ user: { id: 'client-1' } }),
 }));
@@ -51,7 +53,9 @@ jest.mock('@patina/design-system', () => ({
 }));
 
 jest.mock('@/components/strata-mark', () => ({ StrataMark: () => null }));
-jest.mock('@/components/board-block', () => ({ BoardsBlock: () => null }));
+jest.mock('@/components/board-block', () => ({
+  BoardsBlock: (props: unknown) => mockBoardsBlock(props),
+}));
 jest.mock('@/components/proposal-line-feedback', () => ({
   LineFeedback: () => null,
 }));
@@ -63,6 +67,8 @@ jest.mock('@/lib/analytics/events', () => ({
 }));
 
 describe('ProposalDocument structured proposal data', () => {
+  beforeEach(() => mockBoardsBlock.mockClear());
+
   it('renders scope, investment, payment schedule, and timeline without authored section rows', () => {
     render(
       <ProposalDocument
@@ -136,5 +142,36 @@ describe('ProposalDocument structured proposal data', () => {
     expect(screen.getByTestId('investment-block')).toHaveTextContent('100000');
     expect(screen.getByTestId('payment-schedule-block')).toHaveTextContent('Final payment');
     expect(screen.getByTestId('timeline-block')).toHaveTextContent('Consultation');
+  });
+
+  it('forwards pre-resolved authenticated boards as the client surface', () => {
+    const resolvedBoards = [{ id: 'board-1', name: 'Living room', items: [] }] as never;
+    render(
+      <ProposalDocument
+        proposal={{
+          id: 'proposal-1',
+          title: 'Living room',
+          status: 'sent',
+          designer_id: 'designer-1',
+          client_visibility_tier: 'milestone',
+          created_at: '2026-08-01T12:00:00.000Z',
+          total_amount: 0,
+          items: [],
+        } as never}
+        sections={[]}
+        boards={[]}
+        resolvedBoards={resolvedBoards}
+        moodBoardSurface="client_proposal"
+        feedbackEnabled
+        trackEngagement={false}
+      />,
+    );
+
+    expect(mockBoardsBlock).toHaveBeenCalledWith(expect.objectContaining({
+      resolved: resolvedBoards,
+      proposalId: 'proposal-1',
+      feedbackEnabled: true,
+      surface: 'client_proposal',
+    }));
   });
 });

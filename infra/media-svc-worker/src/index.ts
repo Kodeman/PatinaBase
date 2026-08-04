@@ -5,6 +5,13 @@ interface Env {
   // Secrets (wrangler secret put …) — Supabase Cloud pooler connection.
   DATABASE_URL: string;
   SUPABASE_URL: string;
+  // Optional background-removal bindings. Server-only secrets are forwarded
+  // to the container when configured and are never committed here.
+  SUPABASE_SERVICE_ROLE_KEY?: string;
+  BACKGROUND_REMOVAL_PROVIDER?: string;
+  REMOVE_BG_API_KEY?: string;
+  BACKGROUND_REMOVAL_STUDIO_MONTHLY_CAP?: string;
+  BACKGROUND_REMOVAL_GLOBAL_DAILY_CAP?: string;
   // Cloudflare Queues producer pairing (infra/media-worker) — addJob() POSTs
   // here; its consumer POSTs completions back to this container's
   // /v1/media/jobs/complete.
@@ -48,6 +55,27 @@ export class MediaService extends Container<Env> {
       REDIS_DISABLED: 'true',
       DATABASE_URL: env.DATABASE_URL,
       SUPABASE_URL: env.SUPABASE_URL,
+      ...(env.SUPABASE_SERVICE_ROLE_KEY
+        ? { SUPABASE_SERVICE_ROLE_KEY: env.SUPABASE_SERVICE_ROLE_KEY }
+        : {}),
+      ...(env.BACKGROUND_REMOVAL_PROVIDER
+        ? { BACKGROUND_REMOVAL_PROVIDER: env.BACKGROUND_REMOVAL_PROVIDER }
+        : {}),
+      ...(env.REMOVE_BG_API_KEY
+        ? { REMOVE_BG_API_KEY: env.REMOVE_BG_API_KEY }
+        : {}),
+      ...(env.BACKGROUND_REMOVAL_STUDIO_MONTHLY_CAP
+        ? {
+            BACKGROUND_REMOVAL_STUDIO_MONTHLY_CAP:
+              env.BACKGROUND_REMOVAL_STUDIO_MONTHLY_CAP,
+          }
+        : {}),
+      ...(env.BACKGROUND_REMOVAL_GLOBAL_DAILY_CAP
+        ? {
+            BACKGROUND_REMOVAL_GLOBAL_DAILY_CAP:
+              env.BACKGROUND_REMOVAL_GLOBAL_DAILY_CAP,
+          }
+        : {}),
       MEDIA_WORKER_URL: env.MEDIA_WORKER_URL,
       MEDIA_WORKER_ENQUEUE_SECRET: env.MEDIA_WORKER_ENQUEUE_SECRET,
       COMPLETE_CALLBACK_SECRET: env.COMPLETE_CALLBACK_SECRET,

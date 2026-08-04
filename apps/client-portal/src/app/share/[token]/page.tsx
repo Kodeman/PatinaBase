@@ -12,6 +12,10 @@
 
 import type { ComponentProps } from 'react';
 import { createServiceClient } from '@patina/supabase/server';
+import {
+  BoardComposition,
+  type BoardsBlockBoard,
+} from '@patina/design-system';
 import { normalizeShareVisibility, guestShareVisibility, isLikelyShareToken } from '@patina/utils';
 import { ProposalDocument } from '@/components/proposal-document';
 import {
@@ -25,6 +29,7 @@ import {
   GUEST_SCOPE_ROOM_SELECT,
   GUEST_SECTION_SELECT,
 } from '@/lib/guest-proposal-document';
+import { captureMoodBoardShareViewed } from '@/lib/analytics/mood-board-server';
 
 // The token is resolved per request (and bumps view stats) — never static.
 export const dynamic = 'force-dynamic';
@@ -56,6 +61,49 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
   if (!isLikelyShareToken(token)) return <DeadLink />;
 
   const admin = createServiceClient() as any;
+
+  // A board share is deliberately resolved through its own narrow RPC. The
+  // returned DTO contains one composition and no parent proposal/project ids,
+  // money, client data, or verdict capability. Trying this resolver first is
+  // safe for historical proposal tokens: a non-board token returns null and
+  // does not increment either share's view count.
+  const { data: resolvedBoard, error: boardResolveError } = await admin.rpc(
+    'resolve_board_share',
+    { p_token: token },
+  );
+  if (!boardResolveError && resolvedBoard?.board) {
+    const board = resolvedBoard.board as BoardsBlockBoard;
+    if (typeof board.id === 'string' && typeof resolvedBoard.shareId === 'string') {
+      await captureMoodBoardShareViewed({
+        boardId: board.id,
+        shareId: resolvedBoard.shareId,
+      });
+    }
+    return (
+      <main className="flex min-h-dvh flex-col bg-[var(--bg-page)]">
+        <header className="flex shrink-0 items-center justify-between border-b border-[var(--border-subtle)] px-5 py-3 sm:px-8">
+          <div className="min-w-0">
+            <h1 className="truncate type-title-small text-[var(--text-primary)]">
+              {board.name}
+            </h1>
+            <p className="type-meta-small text-[var(--text-muted)]">
+              Shared by {resolvedBoard.studioName ?? 'the studio'}
+            </p>
+          </div>
+        </header>
+        <div className="min-h-0 flex-1 p-3 sm:p-6">
+          <BoardComposition
+            board={board}
+            fit="contain"
+            fullBleed
+            showNotes
+            interactive={false}
+            className="h-full"
+          />
+        </div>
+      </main>
+    );
+  }
 
   const { data: resolved, error: resolveError } = await admin.rpc('resolve_document_share', {
     p_token: token,
@@ -166,6 +214,7 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
         trackEngagement={false}
         boards={[]}
         resolvedBoards={bundle.resolvedBoards}
+        moodBoardSurface="guest_share"
         visibility={visibility}
         feedbackEnabled={false}
         sharedByStudio={share.studio_name ?? undefined}

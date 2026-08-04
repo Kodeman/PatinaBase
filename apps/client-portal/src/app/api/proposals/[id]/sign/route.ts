@@ -6,6 +6,7 @@ import {
 } from '@patina/supabase/server';
 import { COMMERCIAL_DOCUMENT_KINDS } from '@patina/types';
 import { resolveClientIp } from '@/lib/utils/client-ip';
+import { captureMoodBoardProposalActivated } from '@/lib/analytics/mood-board-server';
 
 const COMMERCIAL_DOCUMENT_KIND_SET = new Set<string>(COMMERCIAL_DOCUMENT_KINDS);
 
@@ -229,6 +230,32 @@ export async function POST(
       .catch(() => {
         // Silent — confirmation email failure should not block sign
       });
+  }
+
+  // Emit on fresh signatures and accepted repair/retry responses. The server
+  // helper supplies a deterministic $insert_id, so a lost HTTP response can be
+  // retried without either losing the denominator or double-counting it.
+  const projectId = typeof signResult?.project_id === 'string'
+    ? signResult.project_id
+    : null;
+  if (projectId) {
+    try {
+      const { count: boardCount, error: boardCountError } = await service
+        .from('proposal_boards')
+        .select('id', { count: 'exact', head: true })
+        .eq('proposal_id', id)
+        .eq('status', 'active');
+      if (!boardCountError && typeof boardCount === 'number') {
+        await captureMoodBoardProposalActivated({
+          proposalId: id,
+          projectId,
+          boardCount,
+        });
+      }
+    } catch {
+      // Analytics is best effort; canonical signature/activation already
+      // committed and must never be reported to the client as a failure.
+    }
   }
 
   return NextResponse.json({ ok: true });

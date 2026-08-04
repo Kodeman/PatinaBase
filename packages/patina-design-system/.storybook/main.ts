@@ -25,6 +25,10 @@ const config: StorybookConfig = {
         alias: {
           ...config.resolve?.alias,
           '@': path.resolve(__dirname, '../src'),
+          // Workspace @patina/types emits CommonJS. Vite treats its symlinked
+          // dist as source (not a dependency to pre-bundle), so its export-star
+          // constants disappear at runtime unless Storybook consumes source.
+          '@patina/types': path.resolve(__dirname, '../../types/src/index.ts'),
         },
       },
     }
