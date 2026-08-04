@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const rpc = vi.fn();
+const invoke = vi.fn();
 const invalidateQueries = vi.fn();
 
 vi.mock('@supabase/ssr', () => ({
-  createBrowserClient: () => ({ rpc }),
+  createBrowserClient: () => ({ rpc, functions: { invoke } }),
 }));
 
 vi.mock('@tanstack/react-query', () => ({
@@ -30,6 +31,8 @@ beforeEach(() => {
   rpc.mockReset();
   rpc.mockResolvedValue({ data: {}, error: null });
   invalidateQueries.mockReset();
+  invoke.mockReset();
+  invoke.mockResolvedValue({ data: { ok: true }, error: null });
 });
 
 describe('commercial document hooks', () => {
@@ -66,6 +69,9 @@ describe('commercial document hooks', () => {
     expect(rpc).toHaveBeenCalledWith('countersign_design_services_agreement', {
       p_proposal_id: 'agreement-1',
       p_signer_name: 'Morgan Designer',
+    });
+    expect(invoke).toHaveBeenCalledWith('commercial-document-notify', {
+      body: { documentId: 'agreement-1', transition: 'executed' },
     });
     for (const queryKey of [
       commercialKeys.document('agreement-1'),

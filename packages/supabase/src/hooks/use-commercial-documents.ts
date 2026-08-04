@@ -12,6 +12,28 @@ import { createBrowserClient } from '../client';
 
 const getSupabase = () => createBrowserClient();
 
+async function notifyCommercialTransition(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  documentId: string,
+  transition:
+    | 'executed'
+    | 'furnishings_sent'
+    | 'furnishings_executed'
+    | 'deposit_ready',
+) {
+  try {
+    await supabase.functions?.invoke('commercial-document-notify', {
+      body: { documentId, transition },
+    });
+  } catch (error) {
+    // The state transition already committed. Delivery is replay-safe and can
+    // be retried without repeating the commercial mutation.
+    // eslint-disable-next-line no-console
+    console.warn('commercial-document-notify invocation failed', error);
+  }
+}
+
 export const commercialKeys = {
   all: ['commercial-documents'] as const,
   document: (documentId: string) => ['commercial-documents', documentId] as const,
@@ -114,7 +136,11 @@ export function useCountersignDesignServicesAgreement() {
         p_signer_name: signerName,
       });
       if (error) throw error;
-      return data as DesignServicesExecutionResult;
+      const result = data as DesignServicesExecutionResult;
+      if (result.newlyExecuted) {
+        await notifyCommercialTransition(supabase, proposalId, 'executed');
+      }
+      return result;
     },
     onSuccess: (result, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: commercialKeys.document(proposalId) });
@@ -205,7 +231,9 @@ export function useCreateFurnishingsAuthorization() {
         p_source_proposal_id: sourceProposalId ?? null,
       });
       if (error) throw error;
-      return data as FurnishingsAuthorization;
+      const result = data as FurnishingsAuthorization;
+      await notifyCommercialTransition(supabase, result.id, 'furnishings_sent');
+      return result;
     },
     onSuccess: (_, { projectId }) => invalidateProjectCommerce(queryClient, projectId),
   });
@@ -222,7 +250,11 @@ export function useExecuteFurnishingsAuthorization() {
         p_signed_name: signerName,
       });
       if (error) throw error;
-      return data as FurnishingsExecutionResult;
+      const result = data as FurnishingsExecutionResult;
+      if (result.newlyExecuted) {
+        await notifyCommercialTransition(supabase, documentId, 'furnishings_executed');
+      }
+      return result;
     },
     onSuccess: (result, { documentId }) => {
       queryClient.invalidateQueries({ queryKey: commercialKeys.document(documentId) });
