@@ -374,7 +374,7 @@ function PalettePanel({
             paletteId: palette.id,
             data: { name: palette.name, swatches: swatchesByPalette.get(palette.id) ?? [] },
           })}
-          className="flex min-h-11 w-full items-center justify-between rounded-[4px] border border-[var(--border-default)] px-3 text-left text-[12px] hover:border-[var(--color-clay)] disabled:opacity-60"
+          className="flex min-h-11 w-full items-center justify-between rounded-[4px] border border-[var(--border-default)] px-3 text-left text-[12px] hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] disabled:opacity-60"
         >
           <span className="truncate">{palette.name}</span>
           <span className="font-mono text-[9px] uppercase text-[var(--text-muted)]">
@@ -445,7 +445,7 @@ function ScansList({
               },
             ], 'rail_click');
           }}
-          className="overflow-hidden rounded-[4px] border border-[var(--border-default)] text-left hover:border-[var(--color-clay)]"
+          className="min-h-11 min-w-11 overflow-hidden rounded-[4px] border border-[var(--border-default)] text-left hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={scan.thumbnail_url ?? ''} alt="" className="aspect-[4/3] w-full object-cover" />
@@ -515,7 +515,7 @@ function FeedbackPanel({
             type="button"
             aria-pressed={filter === value}
             onClick={() => setFilter(value)}
-            className={`rounded-full border px-2 py-1 font-mono text-[8px] uppercase ${filter === value ? 'border-[var(--color-clay)] text-[var(--color-clay)]' : 'border-[var(--border-default)] text-[var(--text-muted)]'}`}
+            className={`min-h-11 min-w-11 rounded-full border px-2 py-1 font-mono text-[8px] uppercase focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] ${filter === value ? 'border-[var(--color-clay)] text-[var(--color-clay)]' : 'border-[var(--border-default)] text-[var(--text-muted)]'}`}
           >
             {value === 'rejected' ? 'flagged' : value === 'comment' ? 'noted' : value === 'none' ? 'no verdict' : value}
           </button>
@@ -536,7 +536,7 @@ function FeedbackPanel({
                 <button
                   type="button"
                   onClick={() => onSelectItem?.(item.id)}
-                  className="flex min-h-10 w-full items-center justify-between gap-2 rounded-[4px] border border-[var(--border-default)] px-2.5 text-left hover:border-[var(--color-clay)]"
+                  className="flex min-h-11 w-full items-center justify-between gap-2 rounded-[4px] border border-[var(--border-default)] px-2.5 text-left hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
                 >
                   <span className="truncate text-[11px]">{label}</span>
                   <span className="shrink-0 font-mono text-[8px] uppercase" style={{ color: chip?.color ?? 'var(--text-muted)' }}>
@@ -698,7 +698,7 @@ export function BoardAddRail({
             role="tab"
             aria-selected={tab === value}
             onClick={() => selectTab(value)}
-            className={`min-h-11 shrink-0 px-2 font-mono text-[8px] uppercase tracking-[0.04em] ${tab === value ? 'border-b-2 border-[var(--color-clay)] text-[var(--color-clay)]' : 'text-[var(--text-muted)]'}`}
+            className={`min-h-11 min-w-11 shrink-0 px-2 font-mono text-[8px] uppercase tracking-[0.04em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] ${tab === value ? 'border-b-2 border-[var(--color-clay)] text-[var(--color-clay)]' : 'text-[var(--text-muted)]'}`}
           >
             {value}
           </button>
@@ -711,7 +711,7 @@ export function BoardAddRail({
             <p className="text-[11px] leading-4 text-[var(--text-muted)]">
               Search personal, studio, and catalog pieces.
             </p>
-            <Button variant="secondary" size="sm" onClick={() => setPickerOpen(true)}>
+            <Button variant="secondary" size="sm" className="min-h-11 min-w-11" onClick={() => setPickerOpen(true)}>
               Browse products
             </Button>
           </div>
@@ -720,6 +720,7 @@ export function BoardAddRail({
         {tab === 'captures' && (
           <div className="space-y-2">
             <Input
+              className="h-11"
               value={captureSearch}
               onChange={(event) => setCaptureSearch(event.target.value)}
               aria-label="Search captures"
@@ -745,7 +746,7 @@ export function BoardAddRail({
                     boardId,
                     captureToBoardItem(capture, { x: 0, y: 0 }, 0),
                   )}
-                  className="flex w-full items-center gap-2 rounded-[4px] border border-[var(--border-default)] p-2 text-left hover:border-[var(--color-clay)]"
+                  className="flex min-h-11 w-full items-center gap-2 rounded-[4px] border border-[var(--border-default)] p-2 text-left hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
                 >
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[3px] bg-[var(--bg-muted)]">
                     {capture.thumbnail_url ? (
@@ -780,7 +781,7 @@ export function BoardAddRail({
               className="sr-only"
               onChange={(event) => void upload(Array.from(event.target.files ?? []))}
             />
-            <Button variant="secondary" size="sm" disabled={uploading} onClick={() => inputRef.current?.click()}>
+            <Button variant="secondary" size="sm" className="min-h-11 min-w-11" disabled={uploading} onClick={() => inputRef.current?.click()}>
               {uploading ? 'Preparing images…' : 'Choose images'}
             </Button>
             {uploadProgress && <p role="status" className="text-[11px] text-[var(--text-muted)]">{uploadProgress}</p>}
@@ -817,7 +818,7 @@ export function BoardAddRail({
                           y: 0,
                           zIndex: 0,
                         })}
-                        className="overflow-hidden rounded-[4px] border border-[var(--border-default)] text-left hover:border-[var(--color-clay)]"
+                        className="min-h-11 min-w-11 overflow-hidden rounded-[4px] border border-[var(--border-default)] text-left hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={thumbnail} alt="" className="aspect-[4/3] w-full object-cover" />
@@ -884,7 +885,7 @@ export function BoardAddRail({
             )
           }
         />
-        <Button variant="ghost" size="sm" onClick={addNote}>+ Note</Button>
+        <Button variant="ghost" size="sm" className="min-h-11 min-w-11" onClick={addNote}>+ Note</Button>
         {error && <p role="alert" className="mt-2 text-[11px] text-[var(--color-clay)]">{error}</p>}
       </div>
 

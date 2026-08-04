@@ -224,6 +224,7 @@ export default function ClientProposalDetailPage({
         scopeRooms={scopeRooms}
         boards={[]}
         resolvedBoards={boards}
+        moodBoardSurface="client_proposal"
         feedbackEnabled={feedbackEnabled}
         sharedByStudio={identity?.name ?? undefined}
       />

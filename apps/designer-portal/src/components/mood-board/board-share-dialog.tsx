@@ -14,6 +14,7 @@ import {
   useRevokeShare,
   type DocumentShare,
 } from '@patina/supabase';
+import type { BoardOwnerRef } from '@patina/types';
 import { Button, Input } from '@/components/ui/controls';
 import { guestProposalShareUrl } from '@/lib/client-portal-url';
 import { moodBoardEvents } from '@/lib/analytics/mood-board-events';
@@ -33,6 +34,9 @@ function expiresAtFromDate(value: string): string | null {
 export interface BoardShareDialogProps {
   boardId: string;
   boardName: string;
+  owner: BoardOwnerRef;
+  /** Activation lineage for project-owned boards; proposal owners derive it. */
+  sourceProposalId?: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Called only after a newly minted link has reached the clipboard. */
@@ -45,6 +49,8 @@ export interface BoardShareDialogProps {
 export function BoardShareDialog({
   boardId,
   boardName,
+  owner,
+  sourceProposalId,
   open,
   onOpenChange,
   onShareCreated,
@@ -105,6 +111,11 @@ export function BoardShareDialog({
         scope: 'board',
         has_expiry: Boolean(expiresAtFromDate(expiryDate)),
         share_id: result.id,
+        owner_kind: owner.kind,
+        owner_id: owner.id,
+        proposal_id: sourceProposalId ?? (owner.kind === 'proposal' ? owner.id : null),
+        source_proposal_id: sourceProposalId ?? (owner.kind === 'proposal' ? owner.id : null),
+        project_id: owner.kind === 'project' ? owner.id : null,
       });
       if (await copy(url)) onShareCreated?.(result.id);
     } catch (cause) {

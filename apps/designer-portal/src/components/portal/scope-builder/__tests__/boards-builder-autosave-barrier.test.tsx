@@ -4,7 +4,12 @@ import { BoardsBuilder } from '../boards-builder';
 const push = jest.fn();
 const upsert = jest.fn();
 const materialize = jest.fn();
-const runAutosaveAction = jest.fn(async (_ownerId: string, action: () => Promise<void>) => action());
+const draftingTouched = jest.fn();
+const templateUsed = jest.fn();
+const runAutosaveAction = jest.fn(async (
+  _owner: { kind: 'proposal' | 'project'; id: string },
+  action: () => Promise<void>,
+) => action());
 
 const board = {
   id: 'board-1',
@@ -26,6 +31,7 @@ const board = {
   created_at: '2026-08-01T12:00:00.000Z',
   updated_at: '2026-08-01T12:00:00.000Z',
 };
+let mockProposalBoards = [board];
 
 const template = {
   id: 'template-1',
@@ -51,8 +57,15 @@ jest.mock('next/navigation', () => ({
 }));
 
 jest.mock('@/lib/proposal-autosave-registry', () => ({
-  runProposalAutosaveAction: (...args: Parameters<typeof runAutosaveAction>) =>
+  runBoardOwnerAutosaveAction: (...args: Parameters<typeof runAutosaveAction>) =>
     runAutosaveAction(...args),
+}));
+
+jest.mock('@/lib/analytics/mood-board-events', () => ({
+  moodBoardEvents: {
+    draftingTouched: (...args: unknown[]) => draftingTouched(...args),
+    templateUsed: (...args: unknown[]) => templateUsed(...args),
+  },
 }));
 
 jest.mock('@/components/ui/controls', () => ({
@@ -71,7 +84,7 @@ jest.mock('@patina/design-system', () => ({
 }));
 
 jest.mock('@patina/supabase', () => ({
-  useBoards: () => ({ data: [board], isLoading: false }),
+  useBoards: () => ({ data: mockProposalBoards, isLoading: false }),
   useProjectOwnedBoards: () => ({ data: [], isLoading: false }),
   useOrganizations: () => ({ data: [{ id: 'studio-1', type: 'design_studio' }] }),
   useBoardTemplates: () => ({ data: [template], isLoading: false, isError: false }),
@@ -84,11 +97,23 @@ describe('BoardsBuilder launcher', () => {
     push.mockReset();
     upsert.mockReset();
     materialize.mockReset();
+    draftingTouched.mockReset();
+    templateUsed.mockReset();
+    mockProposalBoards = [board];
     runAutosaveAction.mockClear();
   });
 
-  it('opens existing boards in the dedicated room with origin attribution', () => {
+  it('records a durable drafting-touch denominator and opens existing boards with attribution', async () => {
     render(<BoardsBuilder proposalId="proposal-1" />);
+
+    await waitFor(() => expect(draftingTouched).toHaveBeenCalledWith({
+      proposal_id: 'proposal-1',
+      board_count: 1,
+      has_board: true,
+      surface: 'drafting_facet',
+      touch_type: 'facet_visit',
+    }));
+    expect(draftingTouched).toHaveBeenCalledTimes(1);
 
     expect(screen.queryByText('Canvas editable')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open mood board Living room direction' })).toHaveAttribute(
@@ -100,6 +125,20 @@ describe('BoardsBuilder launcher', () => {
     expect(screen.getByLabelText('Client verdicts: 2 approved, 1 flagged')).toHaveTextContent('1 Flagged');
   });
 
+  it('counts an empty-state facet visit while making the no-board cohort explicit', async () => {
+    mockProposalBoards = [];
+
+    render(<BoardsBuilder proposalId="proposal-1" />);
+
+    await waitFor(() => expect(draftingTouched).toHaveBeenCalledWith({
+      proposal_id: 'proposal-1',
+      board_count: 0,
+      has_board: false,
+      surface: 'drafting_facet',
+      touch_type: 'facet_visit',
+    }));
+  });
+
   it('flushes surrounding work before creating a blank board and navigating', async () => {
     upsert.mockResolvedValue({ id: 'blank-board' });
     render(<BoardsBuilder proposalId="proposal-1" />);
@@ -108,10 +147,31 @@ describe('BoardsBuilder launcher', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Blank board A clean, flexible canvas. Choose' }));
 
     await waitFor(() => expect(upsert).toHaveBeenCalled());
-    expect(runAutosaveAction).toHaveBeenCalledWith('proposal-1', expect.any(Function));
+    expect(runAutosaveAction).toHaveBeenCalledWith(
+      { kind: 'proposal', id: 'proposal-1' },
+      expect.any(Function),
+    );
     expect(push).toHaveBeenCalledWith(
       '/board/blank-board?source=drafting_strip&from=%2Fdrafting%2Fproposal-1',
     );
+  });
+
+  it('uses the project owner namespace before creating a project-owned board', async () => {
+    upsert.mockResolvedValue({ id: 'project-board' });
+    render(<BoardsBuilder projectId="same-id" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'New board' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Blank board A clean, flexible canvas. Choose' }));
+
+    await waitFor(() => expect(upsert).toHaveBeenCalledWith(expect.objectContaining({
+      proposalId: undefined,
+      projectId: 'same-id',
+    })));
+    expect(runAutosaveAction).toHaveBeenCalledWith(
+      { kind: 'project', id: 'same-id' },
+      expect.any(Function),
+    );
+    expect(draftingTouched).not.toHaveBeenCalled();
   });
 
   it('offers Patina starters and materializes a fresh board under the owner', async () => {

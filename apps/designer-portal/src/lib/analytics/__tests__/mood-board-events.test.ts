@@ -23,6 +23,14 @@ describe("moodBoardEvents", () => {
   it("covers the complete namespaced Phase 1–3 event taxonomy", () => {
     const calls: Array<() => void> = [
       () =>
+        moodBoardEvents.draftingTouched({
+          proposal_id: "proposal-1",
+          board_count: 2,
+          has_board: true,
+          surface: "drafting_facet",
+          touch_type: "facet_visit",
+        }),
+      () =>
         moodBoardEvents.opened({
           source: "command_bar",
           board_id: "board-1",
@@ -60,6 +68,11 @@ describe("moodBoardEvents", () => {
           section_count: 2,
           surface: "room",
           duration_ms: 5000,
+          owner_kind: "proposal",
+          owner_id: "proposal-1",
+          proposal_id: "proposal-1",
+          source_proposal_id: "proposal-1",
+          project_id: null,
         }),
       () =>
         moodBoardEvents.shared({
@@ -67,6 +80,11 @@ describe("moodBoardEvents", () => {
           scope: "board",
           has_expiry: true,
           share_id: "share-1",
+          owner_kind: "proposal",
+          owner_id: "proposal-1",
+          proposal_id: "proposal-1",
+          source_proposal_id: "proposal-1",
+          project_id: null,
         }),
       () =>
         moodBoardEvents.shareViewed({
@@ -139,7 +157,7 @@ describe("moodBoardEvents", () => {
       Object.values(MOOD_BOARD_EVENT_NAMES),
     );
     expect(captureMock).toHaveBeenNthCalledWith(
-      16,
+      17,
       "mood_board_url_unfurled",
       expect.objectContaining({
         board_id: "board-1",

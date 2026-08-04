@@ -12,6 +12,7 @@ import posthog from 'posthog-js';
 import { initPostHog, sanitizePostHogEvent } from '../posthog';
 
 const token = 'opaque_site_request_token_1234567890abcd';
+const shareToken = 'a'.repeat(64);
 const initMock = (posthog as unknown as { init: jest.Mock }).init;
 
 describe('PostHog Field bearer privacy boundary', () => {
@@ -62,5 +63,28 @@ describe('PostHog Field bearer privacy boundary', () => {
 
     if (priorKey === undefined) delete process.env.NEXT_PUBLIC_POSTHOG_KEY;
     else process.env.NEXT_PUBLIC_POSTHOG_KEY = priorKey;
+  });
+
+  it('redacts share bearers from pageview, referrer, autocapture, and nested values', () => {
+    const event = sanitizePostHogEvent({
+      event: '$autocapture',
+      properties: {
+        $current_url: `https://client.patina.cloud/share/${shareToken}?from=email`,
+        $referrer: `/share/${shareToken}`,
+        $elements: [{
+          tag_name: 'a',
+          attributes: {
+            href: `/share/${shareToken}/details`,
+            'data-source': JSON.stringify({ returnTo: `/share/${shareToken}` }),
+          },
+        }],
+        already_redacted: '/share/[redacted]',
+      },
+    });
+
+    const serialized = JSON.stringify(event);
+    expect(serialized).not.toContain(shareToken);
+    expect(serialized.match(/\/share\/\[redacted\]/g)?.length).toBeGreaterThanOrEqual(5);
+    expect(event.properties?.already_redacted).toBe('/share/[redacted]');
   });
 });

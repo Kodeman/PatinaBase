@@ -10,6 +10,11 @@ const IMAGE_ID = "e2e00000-0000-4000-8000-000000000013";
 const PALETTE_ID = "e2e00000-0000-4000-8000-000000000014";
 const NOTE_ID = "e2e00000-0000-4000-8000-000000000015";
 const SCAN_ID = "e2e00000-0000-4000-8000-000000000016";
+const SOURCE_PALETTE_ID = "e2e00000-0000-4000-8000-000000000021";
+const SOURCE_SWATCH_ID = "e2e00000-0000-4000-8000-000000000022";
+const PRODUCT_FEEDBACK_ID = "e2e00000-0000-4000-8000-000000000031";
+const NOTE_FEEDBACK_ID = "e2e00000-0000-4000-8000-000000000032";
+const FEEDBACK_CLIENT_ID = "a0000000-0000-0000-0000-000000000005";
 const PIXEL =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
 
@@ -17,6 +22,35 @@ function seedBoard(): void {
   psqlRun(`
 BEGIN;
 DELETE FROM public.proposal_boards WHERE id = '${BOARD_ID}'::uuid;
+DELETE FROM public.proposal_palettes WHERE id = '${SOURCE_PALETTE_ID}'::uuid;
+
+INSERT INTO public.proposal_palettes (
+  id,
+  proposal_id,
+  name,
+  is_primary,
+  sort_order
+) VALUES (
+  '${SOURCE_PALETTE_ID}'::uuid,
+  '${PROPOSAL_ID}'::uuid,
+  'GA rail palette',
+  false,
+  999
+);
+
+INSERT INTO public.palette_swatches (
+  id,
+  palette_id,
+  hex,
+  name,
+  sort_order
+) VALUES (
+  '${SOURCE_SWATCH_ID}'::uuid,
+  '${SOURCE_PALETTE_ID}'::uuid,
+  '#9B7653',
+  'Warm oak',
+  0
+);
 
 INSERT INTO public.proposal_boards (
   id,
@@ -145,12 +179,43 @@ INSERT INTO public.proposal_board_items (
     NULL,
     '{"name":"North wall scan","room_type":"Living room","section_id":"details"}'::jsonb
   );
+
+INSERT INTO public.item_feedback (
+  id,
+  board_item_id,
+  client_id,
+  verdict,
+  body,
+  created_at,
+  updated_at
+) VALUES
+  (
+    '${PRODUCT_FEEDBACK_ID}'::uuid,
+    '${PRODUCT_ID}'::uuid,
+    '${FEEDBACK_CLIENT_ID}'::uuid,
+    'approved',
+    NULL,
+    '2026-08-03T12:00:00Z',
+    '2026-08-03T12:00:00Z'
+  ),
+  (
+    '${NOTE_FEEDBACK_ID}'::uuid,
+    '${NOTE_ID}'::uuid,
+    '${FEEDBACK_CLIENT_ID}'::uuid,
+    'rejected',
+    'Please revise this note.',
+    '2026-08-03T12:01:00Z',
+    '2026-08-03T12:01:00Z'
+  );
 COMMIT;
 `);
 }
 
 function deleteBoard(): void {
-  psqlRun(`DELETE FROM public.proposal_boards WHERE id = '${BOARD_ID}'::uuid;`);
+  psqlRun(`
+    DELETE FROM public.proposal_boards WHERE id = '${BOARD_ID}'::uuid;
+    DELETE FROM public.proposal_palettes WHERE id = '${SOURCE_PALETTE_ID}'::uuid;
+  `);
 }
 
 function boardItemScalar(selectExpression: string, itemId: string): string {
@@ -167,9 +232,53 @@ async function openBoard(page: AuthenticatedPage): Promise<void> {
     page.getByRole("main", {
       name: "GA browser acceptance board mood board room",
     }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId("board-room-canvas")).toBeVisible();
   await expect(page.locator("[data-board-item-id]")).toHaveCount(6);
+}
+
+async function setBoardZoom(
+  page: AuthenticatedPage,
+  percent: 5 | 100 | 400,
+): Promise<void> {
+  const application = page.getByRole("application", {
+    name: "GA browser acceptance board mood board",
+  });
+  await application.focus();
+  await application.press("Meta+0");
+  await expect(page.getByText("100%", { exact: true })).toBeVisible();
+  const key = percent === 5 ? "Meta+Minus" : "Meta+Equal";
+  const presses = percent === 5 ? 10 : percent === 400 ? 30 : 0;
+  for (let index = 0; index < presses; index += 1) {
+    await application.press(key);
+  }
+  await expect(page.getByText(`${percent}%`, { exact: true })).toBeVisible();
+}
+
+async function dragRailSourceTo(
+  page: AuthenticatedPage,
+  source: ReturnType<AuthenticatedPage["locator"]>,
+  release: { x: number; y: number },
+): Promise<void> {
+  const application = page.getByRole("application", {
+    name: "GA browser acceptance board mood board",
+  });
+  const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+  try {
+    await source.dispatchEvent("dragstart", { dataTransfer });
+    await application.dispatchEvent("dragover", {
+      clientX: release.x,
+      clientY: release.y,
+      dataTransfer,
+    });
+    await application.dispatchEvent("drop", {
+      clientX: release.x,
+      clientY: release.y,
+      dataTransfer,
+    });
+  } finally {
+    await dataTransfer.dispose();
+  }
 }
 
 test.describe.configure({ mode: "serial" });
@@ -229,6 +338,56 @@ test.describe("MoodBoard GA browser acceptance", () => {
       page.getByRole("tablist", { name: "Board sources" }),
     ).toBeVisible();
 
+    const visibleControlSizes = await page
+      .locator("header button:visible, header summary:visible, aside button:visible")
+      .evaluateAll((controls) =>
+        controls.map((control) => {
+          const rect = control.getBoundingClientRect();
+          return {
+            label: control.getAttribute("aria-label") ?? control.textContent?.trim() ?? "control",
+            width: rect.width,
+            height: rect.height,
+          };
+        }),
+      );
+    expect(visibleControlSizes.length).toBeGreaterThan(0);
+    expect(
+      visibleControlSizes.filter(({ width, height }) => width < 44 || height < 44),
+    ).toEqual([]);
+
+    await page.getByRole("button", { name: "Browse products", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "Add a product" })).toBeVisible();
+    await expect
+      .poll(() => page.evaluate(() => document.body.style.overflow))
+      .toBe("hidden");
+    await page.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "Add a product" })).toHaveCount(0);
+    await expect
+      .poll(() => page.evaluate(() => document.body.style.overflow))
+      .toBe("hidden");
+
+    const focusedLastRoomControl = await page.evaluate(() => {
+      const room = document.querySelector<HTMLElement>('main[aria-label$="mood board room"]');
+      if (!room) return false;
+      const controls = Array.from(room.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )).filter((control) => {
+        const style = window.getComputedStyle(control);
+        return style.display !== 'none' && style.visibility !== 'hidden' && control.getClientRects().length > 0;
+      });
+      const last = controls.at(-1);
+      last?.focus();
+      return document.activeElement === last;
+    });
+    expect(focusedLastRoomControl).toBe(true);
+    await page.keyboard.press("Tab");
+    expect(
+      await page.evaluate(() => {
+        const room = document.querySelector<HTMLElement>('main[aria-label$="mood board room"]');
+        return Boolean(room?.contains(document.activeElement));
+      }),
+    ).toBe(true);
+
     for (const type of [
       "product",
       "capture",
@@ -255,8 +414,12 @@ test.describe("MoodBoard GA browser acceptance", () => {
       page.getByText("Scan · North wall scan", { exact: true }),
     ).toBeVisible();
     await expect(page.locator("[data-board-section]")).toHaveCount(2);
-    await expect(page.getByText("Foundation", { exact: true })).toBeVisible();
-    await expect(page.getByText("Details", { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("textbox", { name: "Rename Foundation section" }),
+    ).toHaveValue("Foundation");
+    await expect(
+      page.getByRole("textbox", { name: "Rename Details section" }),
+    ).toHaveValue("Details");
 
     expect(
       psqlScalar(
@@ -331,6 +494,56 @@ test.describe("MoodBoard GA browser acceptance", () => {
     await expect(page.getByText("3 pins", { exact: true })).toBeVisible();
   });
 
+  test("centers rail drops at 5%, 100%, and 400% zoom (AC1.9)", async ({
+    authenticatedPage: page,
+  }) => {
+    await openBoard(page);
+    await page.getByRole("tab", { name: "palettes", exact: true }).click();
+    const source = page.getByRole("button", { name: /GA rail palette/i });
+    await expect(source).toBeVisible();
+    await expect(source).toHaveAttribute("draggable", "true");
+    const application = page.getByRole("application", {
+      name: "GA browser acceptance board mood board",
+    });
+    const viewport = await application.boundingBox();
+    expect(viewport).not.toBeNull();
+    const release = {
+      x: viewport!.x + viewport!.width * 0.64,
+      y: viewport!.y + viewport!.height * 0.58,
+    };
+
+    for (const [index, zoom] of ([5, 100, 400] as const).entries()) {
+      await setBoardZoom(page, zoom);
+      await dragRailSourceTo(page, source, release);
+      const droppedPins = page
+        .locator("[data-board-item-id]")
+        .filter({ hasText: "GA rail palette" });
+      await expect(droppedPins).toHaveCount(index + 1);
+      await expect
+        .poll(async () => {
+          const box = await droppedPins.nth(index).boundingBox();
+          return box
+            ? {
+                x: Math.abs(box.x + box.width / 2 - release.x) <= 2,
+                y: Math.abs(box.y + box.height / 2 - release.y) <= 2,
+              }
+            : null;
+        })
+        .toEqual({ x: true, y: true });
+      await expect
+        .poll(
+          () =>
+            Number(
+              psqlScalar(
+                `SELECT count(*) FROM public.proposal_board_items WHERE board_id = '${BOARD_ID}'::uuid`,
+              ),
+            ),
+          { timeout: 15_000 },
+        )
+        .toBe(7 + index);
+    }
+  });
+
   test("Alt-drag duplicates one pin and persists the structural write", async ({
     authenticatedPage: page,
   }) => {
@@ -374,8 +587,10 @@ test.describe("MoodBoard GA browser acceptance", () => {
 
     const note = page.getByRole("button", { name: "note item", exact: true });
     const beforeX = Number(boardItemScalar("x::text", NOTE_ID));
-    await note.click();
+    await note.focus();
+    await expect(note).toHaveAttribute("aria-pressed", "false");
     await note.press("ArrowRight");
+    await expect(note).toHaveAttribute("aria-pressed", "true");
 
     await expect
       .poll(() => Number(boardItemScalar("x::text", NOTE_ID)), {
@@ -453,6 +668,116 @@ test.describe("MoodBoard GA browser acceptance", () => {
     await expect(
       page.getByRole("tablist", { name: "Board sources" }),
     ).toBeVisible();
+  });
+
+  test("shows verdicts in Edit and Present, focuses Feedback, and drops feedback across delete/undo (AC2.12/AC2.13)", async ({
+    authenticatedPage: page,
+  }) => {
+    await openBoard(page);
+
+    const product = page.locator(`[data-board-item-id="${PRODUCT_ID}"]`);
+    const note = page.locator(`[data-board-item-id="${NOTE_ID}"]`);
+    await expect(
+      product.locator('[data-board-verdict="approved"]'),
+    ).toHaveText("Approved");
+    await expect(
+      note.locator('[data-board-verdict="rejected"]'),
+    ).toHaveText("Flagged");
+
+    await page.getByRole("button", { name: "Present", exact: true }).click();
+    const presentCanvas = page.locator('[data-board-composition-canvas="true"]');
+    await expect(
+      presentCanvas
+        .locator(`[data-board-item-id="${PRODUCT_ID}"]`)
+        .locator('[data-board-verdict="approved"]'),
+    ).toHaveText("Approved");
+    await expect(
+      presentCanvas
+        .locator(`[data-board-item-id="${NOTE_ID}"]`)
+        .locator('[data-board-verdict="rejected"]'),
+    ).toHaveText("Flagged");
+    await page.getByRole("button", { name: "Edit", exact: true }).click();
+
+    const boardCanvas = page.getByTestId("board-room-canvas");
+    const transformBefore = await boardCanvas.getAttribute("style");
+    await page.getByRole("tab", { name: "feedback", exact: true }).click();
+    const feedbackRail = page.locator(
+      `[data-board-feedback-filter="${BOARD_ID}"]`,
+    );
+    await feedbackRail
+      .getByRole("button", { name: "flagged", exact: true })
+      .click();
+    const flaggedPin = feedbackRail.getByRole("button", {
+      name: /Composition note.*Flagged/i,
+    });
+    await expect(flaggedPin).toBeVisible();
+    await expect(
+      feedbackRail.getByRole("button", { name: /Heirloom lounge chair/i }),
+    ).toHaveCount(0);
+    await flaggedPin.click();
+    await expect(note).toHaveAttribute("aria-pressed", "true");
+    await expect
+      .poll(() => boardCanvas.getAttribute("style"))
+      .not.toBe(transformBefore);
+
+    const inspector = page.getByRole("complementary", {
+      name: "Selected board item inspector",
+    });
+    const dialogPromise = page.waitForEvent("dialog");
+    const deleteClick = inspector
+      .getByRole("button", { name: "Delete", exact: true })
+      .click();
+    const dialog = await dialogPromise;
+    expect(dialog.message()).toContain("1 client feedback entry");
+    expect(dialog.message()).toContain("permanently remove it");
+    await dialog.accept();
+    await deleteClick;
+
+    await expect(note).toHaveCount(0);
+    await expect
+      .poll(
+        () =>
+          Number(
+            psqlScalar(
+              `SELECT count(*) FROM public.proposal_board_items WHERE id = '${NOTE_ID}'::uuid`,
+            ),
+          ),
+        { timeout: 15_000 },
+      )
+      .toBe(0);
+    await expect
+      .poll(() =>
+        Number(
+          psqlScalar(
+            `SELECT count(*) FROM public.item_feedback WHERE board_item_id = '${NOTE_ID}'::uuid`,
+          ),
+        ),
+      )
+      .toBe(0);
+
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    await expect(page.locator(`[data-board-item-id="${NOTE_ID}"]`)).toHaveCount(1);
+    await expect
+      .poll(
+        () =>
+          Number(
+            psqlScalar(
+              `SELECT count(*) FROM public.proposal_board_items WHERE id = '${NOTE_ID}'::uuid`,
+            ),
+          ),
+        { timeout: 15_000 },
+      )
+      .toBe(1);
+    expect(
+      psqlScalar(
+        `SELECT count(*) FROM public.item_feedback WHERE board_item_id = '${NOTE_ID}'::uuid`,
+      ),
+    ).toBe("0");
+    await expect(
+      page
+        .locator(`[data-board-item-id="${NOTE_ID}"]`)
+        .locator("[data-board-verdict]"),
+    ).toHaveCount(0);
   });
 
   test("keeps the mobile room bounded and disables canvas motion for reduced-motion users", async ({

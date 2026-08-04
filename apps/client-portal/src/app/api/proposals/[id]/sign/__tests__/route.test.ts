@@ -12,6 +12,7 @@ import {
   createServerClient,
   createServiceClient,
 } from '@patina/supabase/server';
+import { captureMoodBoardProposalActivated } from '@/lib/analytics/mood-board-server';
 
 import { POST } from '../route';
 
@@ -20,10 +21,14 @@ jest.mock('@patina/supabase/server', () => ({
   createServerClient: jest.fn(),
   createServiceClient: jest.fn(),
 }));
+jest.mock('@/lib/analytics/mood-board-server', () => ({
+  captureMoodBoardProposalActivated: jest.fn().mockResolvedValue(undefined),
+}));
 
 const mockGetUser = getUser as jest.Mock;
 const mockCreateServerClient = createServerClient as jest.Mock;
 const mockCreateServiceClient = createServiceClient as jest.Mock;
+const mockCaptureProposalActivated = captureMoodBoardProposalActivated as jest.Mock;
 
 describe('POST /api/proposals/[id]/sign', () => {
   function makeRequest(
@@ -44,6 +49,8 @@ describe('POST /api/proposals/[id]/sign', () => {
   let userRpcMock: jest.Mock;
   let serviceRpcMock: jest.Mock;
   let invokeMock: jest.Mock;
+  let serviceFromMock: jest.Mock;
+  let boardCountStatusEqMock: jest.Mock;
   let proposalStatus: 'sent' | 'viewed' | 'accepted';
   let validUntil: string | null;
 
@@ -71,14 +78,31 @@ describe('POST /api/proposals/[id]/sign', () => {
     });
     serviceRpcMock = jest
       .fn()
-      .mockResolvedValue({ data: { newly_signed: true }, error: null });
+      .mockResolvedValue({
+        data: {
+          newly_signed: true,
+          project_id: 'e4061000-0000-4000-8000-000000000001',
+        },
+        error: null,
+      });
+    boardCountStatusEqMock = jest.fn().mockResolvedValue({ count: 2, error: null });
+    const boardCountProposalEqMock = jest.fn().mockReturnValue({
+      eq: boardCountStatusEqMock,
+    });
+    const boardCountSelectMock = jest.fn().mockReturnValue({
+      eq: boardCountProposalEqMock,
+    });
+    serviceFromMock = jest.fn().mockReturnValue({ select: boardCountSelectMock });
     invokeMock = jest.fn().mockResolvedValue({ data: null, error: null });
 
     mockCreateServerClient.mockResolvedValue({
       rpc: userRpcMock,
       functions: { invoke: invokeMock },
     });
-    mockCreateServiceClient.mockReturnValue({ rpc: serviceRpcMock });
+    mockCreateServiceClient.mockReturnValue({
+      rpc: serviceRpcMock,
+      from: serviceFromMock,
+    });
   });
 
   it('authenticates before constructing a service-role client', async () => {
@@ -173,7 +197,10 @@ describe('POST /api/proposals/[id]/sign', () => {
     proposalStatus = 'accepted';
     validUntil = '2020-01-01T00:00:00.000Z';
     serviceRpcMock.mockResolvedValue({
-      data: { newly_signed: false },
+      data: {
+        newly_signed: false,
+        project_id: 'e4061000-0000-4000-8000-000000000001',
+      },
       error: null,
     });
 
@@ -182,6 +209,11 @@ describe('POST /api/proposals/[id]/sign', () => {
     expect(res.status).toBe(200);
     expect(serviceRpcMock).toHaveBeenCalledTimes(1);
     expect(invokeMock).not.toHaveBeenCalled();
+    expect(mockCaptureProposalActivated).toHaveBeenCalledWith({
+      proposalId: 'prop-1',
+      projectId: 'e4061000-0000-4000-8000-000000000001',
+      boardCount: 2,
+    });
   });
 
   it('sends confirmation only for the transaction that created the signature', async () => {
@@ -194,6 +226,28 @@ describe('POST /api/proposals/[id]/sign', () => {
     });
   });
 
+  it('records the authoritative active-board count for a newly activated proposal', async () => {
+    const res = await POST(makeRequest(), makeParams());
+
+    expect(res.status).toBe(200);
+    expect(serviceFromMock).toHaveBeenCalledWith('proposal_boards');
+    expect(boardCountStatusEqMock).toHaveBeenCalledWith('status', 'active');
+    expect(mockCaptureProposalActivated).toHaveBeenCalledWith({
+      proposalId: 'prop-1',
+      projectId: 'e4061000-0000-4000-8000-000000000001',
+      boardCount: 2,
+    });
+  });
+
+  it('does not let an activation analytics count failure break signing', async () => {
+    boardCountStatusEqMock.mockRejectedValue(new Error('count unavailable'));
+
+    const res = await POST(makeRequest(), makeParams());
+
+    expect(res.status).toBe(200);
+    expect(mockCaptureProposalActivated).not.toHaveBeenCalled();
+  });
+
   it('fails closed on a legacy or malformed RPC result without duplicating mail', async () => {
     serviceRpcMock.mockResolvedValue({ data: {}, error: null });
 
@@ -201,6 +255,7 @@ describe('POST /api/proposals/[id]/sign', () => {
 
     expect(res.status).toBe(200);
     expect(invokeMock).not.toHaveBeenCalled();
+    expect(mockCaptureProposalActivated).not.toHaveBeenCalled();
   });
 
   it('does not send confirmation when the authoritative service RPC fails', async () => {

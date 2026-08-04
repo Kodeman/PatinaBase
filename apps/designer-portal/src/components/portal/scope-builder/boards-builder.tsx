@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -23,7 +23,7 @@ import {
 import type { BoardOwnerRef } from '@patina/types';
 import { Button } from '@/components/ui/controls';
 import { boardRoomHref } from '@/lib/mood-board/navigation';
-import { runProposalAutosaveAction } from '@/lib/proposal-autosave-registry';
+import { runBoardOwnerAutosaveAction } from '@/lib/proposal-autosave-registry';
 import { moodBoardEvents } from '@/lib/analytics/mood-board-events';
 import { BoardVerdictSummary } from '@/components/mood-board/board-verdict-summary';
 import { BoardCoverArt } from '@/components/mood-board/board-cover-art';
@@ -126,6 +126,30 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const actionPending = useRef(false);
+  const draftingTouchRecorded = useRef(false);
+
+  // FacetSection lazy-mounts this launcher on the first real visit. Emit one
+  // explicit event after its active-board read settles so M1 has a durable,
+  // session-deduplicatable denominator instead of relying on autocapture.
+  // Empty-state visits intentionally count: opening the board surface to start
+  // a first board is a real adoption opportunity; `has_board` keeps the two
+  // cohorts independently queryable.
+  useEffect(() => {
+    if (
+      !proposalId ||
+      boardsQuery.isLoading ||
+      boardsQuery.isError ||
+      draftingTouchRecorded.current
+    ) return;
+    draftingTouchRecorded.current = true;
+    moodBoardEvents.draftingTouched({
+      proposal_id: proposalId,
+      board_count: boards.length,
+      has_board: boards.length > 0,
+      surface: 'drafting_facet',
+      touch_type: 'facet_visit',
+    });
+  }, [boards.length, boardsQuery.isError, boardsQuery.isLoading, proposalId]);
 
   const source = isProject ? 'project_surface' : 'drafting_strip';
   const hrefFor = (boardId: string) =>
@@ -138,7 +162,7 @@ export function BoardsBuilder({ proposalId, projectId }: BoardsBuilderProps) {
     setError(null);
     try {
       let boardId = '';
-      await runProposalAutosaveAction(owner.id, async () => {
+      await runBoardOwnerAutosaveAction(owner, async () => {
         boardId = await action();
       });
       if (!boardId) throw new Error('The new board did not return an id.');

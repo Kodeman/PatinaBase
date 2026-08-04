@@ -645,6 +645,19 @@ export function useBoardRoomController({
     onError?.(normalized);
   }, [onError]);
 
+  const offsetViewForStateTranslation = useCallback((
+    translation: BoardPoint,
+    direction: 1 | -1,
+  ) => {
+    setView((active) => ({
+      ...active,
+      pan: {
+        x: active.pan.x - direction * translation.x * active.zoom,
+        y: active.pan.y - direction * translation.y * active.zoom,
+      },
+    }));
+  }, []);
+
   const layoutBuffer = useBufferedAutosave<string, LayoutEnvelope>({
     owner,
     generationKey: `${identityKey}:layout`,
@@ -712,6 +725,7 @@ export function useBoardRoomController({
     after: BoardRoomState,
     command: BoardRoomCommand,
     direction: StructuralTransitionDirection,
+    viewTranslationDelta?: BoardPoint,
   ): void => {
     const previous = structuralQueueRef.current;
     const task = previous.catch(() => undefined).then(async () => {
@@ -750,6 +764,15 @@ export function useBoardRoomController({
           setHistory(reconciled);
           setSelectedItemIds((ids) => ids.filter((id) => reverted.items.some((item) => item.id === id)));
         }
+        const viewTranslation = direction === 'apply'
+          ? viewTranslationDelta
+          : command.viewTranslation;
+        if (viewTranslation) {
+          offsetViewForStateTranslation(
+            viewTranslation,
+            direction === 'undo' ? 1 : -1,
+          );
+        }
         const normalized = error instanceof Error ? error : new Error('The board change could not be saved.');
         reportError(new Error(`That change was reverted because it could not be saved. ${normalized.message}`));
         throw error;
@@ -762,13 +785,14 @@ export function useBoardRoomController({
       structuralTasksRef.current.delete(task);
       setStructuralSaving(structuralTasksRef.current.size > 0);
     });
-  }, [applyStateMutation, boardId, owner, reportError]);
+  }, [applyStateMutation, boardId, offsetViewForStateTranslation, owner, reportError]);
 
   const persistTransition = useCallback((
     before: BoardRoomState,
     after: BoardRoomState,
     command: BoardRoomCommand,
     direction: StructuralTransitionDirection,
+    viewTranslationDelta?: BoardPoint,
   ) => {
     const beforeById = new Map(before.items.map((item) => [item.id, item]));
     const afterById = new Map(after.items.map((item) => [item.id, item]));
@@ -802,7 +826,7 @@ export function useBoardRoomController({
     // serialized path. This prevents a late layout request from racing an item
     // create/delete snapshot.
     if (structural || structuralTasksRef.current.size > 0) {
-      scheduleStructural(before, after, command, direction);
+      scheduleStructural(before, after, command, direction, viewTranslationDelta);
       return;
     }
 
@@ -826,15 +850,24 @@ export function useBoardRoomController({
     if (!previous || !result.command) return result;
     historyRef.current = result.history;
     stateRef.current = result.history.present;
+    if (result.viewTranslationDelta) {
+      offsetViewForStateTranslation(result.viewTranslationDelta, 1);
+    }
     setPersistenceError(null);
     setHistory(result.history);
     if (selection) setSelectedItemIds([...selection]);
     else setSelectedItemIds((ids) => ids.filter((id) => result.history.present.items.some((item) => item.id === id)));
-    persistTransition(previous.present, result.history.present, result.command, 'apply');
+    persistTransition(
+      previous.present,
+      result.history.present,
+      result.command,
+      'apply',
+      result.viewTranslationDelta,
+    );
     setAnnouncement(`${result.command.kind.replaceAll('-', ' ')} applied`);
     onCommandCommitted?.({ command: result.command, direction: 'apply' });
     return result;
-  }, [onCommandCommitted, persistTransition]);
+  }, [offsetViewForStateTranslation, onCommandCommitted, persistTransition]);
 
   const execute = useCallback((
     create: (current: BoardRoomHistory) => BoardRoomCommandResult,
@@ -877,12 +910,16 @@ export function useBoardRoomController({
     if (!step.command) return;
     historyRef.current = step.history;
     stateRef.current = step.history.present;
+    const viewTranslation = step.command.viewTranslation;
+    if (viewTranslation) {
+      offsetViewForStateTranslation(viewTranslation, -1);
+    }
     setHistory(step.history);
     setSelectedItemIds((ids) => ids.filter((id) => step.history.present.items.some((item) => item.id === id)));
     persistTransition(current.present, step.history.present, step.command, 'undo');
     setAnnouncement(`Undid ${step.command.kind.replaceAll('-', ' ')}`);
     onCommandCommitted?.({ command: step.command, direction: 'undo' });
-  }, [onCommandCommitted, persistTransition]);
+  }, [offsetViewForStateTranslation, onCommandCommitted, persistTransition]);
 
   const redo = useCallback(() => {
     const current = historyRef.current;
@@ -891,12 +928,16 @@ export function useBoardRoomController({
     if (!step.command) return;
     historyRef.current = step.history;
     stateRef.current = step.history.present;
+    const viewTranslation = step.command.viewTranslation;
+    if (viewTranslation) {
+      offsetViewForStateTranslation(viewTranslation, 1);
+    }
     setHistory(step.history);
     setSelectedItemIds((ids) => ids.filter((id) => step.history.present.items.some((item) => item.id === id)));
     persistTransition(current.present, step.history.present, step.command, 'redo');
     setAnnouncement(`Redid ${step.command.kind.replaceAll('-', ' ')}`);
     onCommandCommitted?.({ command: step.command, direction: 'redo' });
-  }, [onCommandCommitted, persistTransition]);
+  }, [offsetViewForStateTranslation, onCommandCommitted, persistTransition]);
 
   const addItems = useCallback((items: readonly EditableMoodBoardItem[], options: BoardRoomAddOptions = {}) => {
     const normalized = items.map((item) => ({ ...item, id: item.id || generatedId() }));
@@ -1074,6 +1115,7 @@ export function useBoardRoomController({
     applyResult(tidyBoardRoomItems(current, positions, {
       id: options.gestureId ?? generatedId('tidy'),
       committedAt: options.committedAt,
+      scope: selectionScoped ? 'selection' : 'board',
     }));
   }, [applyResult, selectedItemIds]);
   const commitItemsSectionMembership = useCallback((itemIds: readonly string[], sectionId: string | null, gestureId: string) => {
@@ -1317,16 +1359,10 @@ export function useBoardRoomController({
     },
     onCanvasGrow: (growth) => {
       const id = activeSemanticGestureRef.current ?? generatedId('grow');
-      if (growth.translation.x !== 0 || growth.translation.y !== 0) {
-        setView((current) => ({
-          ...current,
-          pan: {
-            x: current.pan.x - growth.translation.x * current.zoom,
-            y: current.pan.y - growth.translation.y * current.zoom,
-          },
-        }));
-      }
-      execute((current) => growBoardRoomCanvas(current, growth, { id }));
+      const current = historyRef.current;
+      if (!current) return;
+      const result = growBoardRoomCanvas(current, growth, { id });
+      applyResult(result);
     },
     onItemsDropped: onItemsDropped ? (commit) => {
       lastPointerRef.current = commit.point;
@@ -1364,6 +1400,7 @@ export function useBoardRoomController({
   } : null, [
     addItems,
     altDragItems,
+    applyResult,
     armSemanticGesture,
     commitPatches,
     execute,
@@ -1523,7 +1560,7 @@ function BoardRoomContextMenu({
           type="button"
           role="menuitem"
           tabIndex={index === 0 ? 0 : -1}
-          className="block w-full rounded px-3 py-2 text-left text-sm hover:bg-black/5 focus:bg-black/5 focus:outline-none"
+          className="block min-h-11 w-full rounded px-3 py-2 text-left text-sm hover:bg-black/5 focus:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--color-clay)]"
           onClick={() => {
             entry.action();
             api.closeContextMenu();

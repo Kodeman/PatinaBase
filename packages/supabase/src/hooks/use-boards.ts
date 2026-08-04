@@ -340,6 +340,15 @@ export function summarizeBoardCoverUrls(
       const data = item.data && typeof item.data === 'object'
         ? item.data as Record<string, unknown>
         : null;
+      const originalImage = data?.original_image_url;
+      if (
+        typeof originalImage === 'string' &&
+        originalImage.trim() &&
+        typeof item.image_url === 'string' &&
+        item.image_url.trim()
+      ) {
+        return [item.image_url];
+      }
       const thumbnail = data?.thumbnail_url;
       if (typeof thumbnail === 'string' && thumbnail.trim()) return [thumbnail];
       return typeof item.image_url === 'string' && item.image_url.trim() ? [item.image_url] : [];
@@ -806,7 +815,12 @@ export function useApplyBoardRoomState() {
       queryClient.invalidateQueries({ queryKey: boardOwnerQueryKeys.list(variables.owner) });
       queryClient.invalidateQueries({ queryKey: boardOwnerQueryKeys.withItems(variables.owner) });
       if (variables.owner.kind === 'proposal') {
-        await invalidateProposalClientQueries(queryClient, variables.owner.id);
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: ['board-feedback', variables.owner.id],
+          }),
+          invalidateProposalClientQueries(queryClient, variables.owner.id),
+        ]);
       }
     },
   });

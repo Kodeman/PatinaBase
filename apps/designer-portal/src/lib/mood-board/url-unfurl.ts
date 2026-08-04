@@ -36,6 +36,14 @@ export class MoodBoardUrlUnfurlError extends Error {
   }
 }
 
+/** User-facing room notice used when a failed rich import is preserved as a note. */
+export function moodBoardUrlFallbackNotice(error: unknown): string {
+  const reason = error instanceof MoodBoardUrlUnfurlError
+    ? error.message
+    : "This site could not be added as a rich pin.";
+  return `${reason} An editable note with the URL was added instead.`;
+}
+
 export interface MoodBoardUrlUnfurlResult {
   sourceUrl: string;
   host: string;

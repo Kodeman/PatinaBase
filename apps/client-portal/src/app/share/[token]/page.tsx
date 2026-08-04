@@ -214,6 +214,7 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
         trackEngagement={false}
         boards={[]}
         resolvedBoards={bundle.resolvedBoards}
+        moodBoardSurface="guest_share"
         visibility={visibility}
         feedbackEnabled={false}
         sharedByStudio={share.studio_name ?? undefined}

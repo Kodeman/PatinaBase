@@ -39,6 +39,10 @@ export interface BoardRoomCommand {
   before: BoardRoomState;
   after: BoardRoomState;
   committedAt: number;
+  /** Total canvas-origin translation represented by this undo step. */
+  viewTranslation?: BoardPoint;
+  /** Semantic target for commands whose analytics distinguish selection vs board. */
+  scope?: 'selection' | 'board';
 }
 
 export interface BoardRoomHistory {
@@ -55,12 +59,17 @@ export interface BoardRoomCommandOptions {
   /** Stale gesture commits are rejected when any required item is absent. */
   requireExisting?: readonly string[];
   committedAt?: number;
+  /** Canvas-origin translation applied by this individual transition. */
+  viewTranslation?: BoardPoint;
+  scope?: 'selection' | 'board';
 }
 
 export interface BoardRoomCommandResult {
   history: BoardRoomHistory;
   command: BoardRoomCommand | null;
   rejected: 'stale' | 'noop' | null;
+  /** Canvas-origin translation applied only by this result. */
+  viewTranslationDelta?: BoardPoint;
 }
 
 export interface BoardRoomHistoryStep {
@@ -97,6 +106,20 @@ function distinct(values: readonly string[]): string[] {
   return [...new Set(values)];
 }
 
+function nonZeroPoint(point: BoardPoint | undefined): BoardPoint | undefined {
+  if (!point || (point.x === 0 && point.y === 0)) return undefined;
+  return { x: point.x, y: point.y };
+}
+
+function addPoints(
+  first: BoardPoint | undefined,
+  second: BoardPoint | undefined,
+): BoardPoint | undefined {
+  if (!first) return nonZeroPoint(second);
+  if (!second) return nonZeroPoint(first);
+  return nonZeroPoint({ x: first.x + second.x, y: first.y + second.y });
+}
+
 export function createBoardRoomHistory(state: BoardRoomState): BoardRoomHistory {
   return { present: cloneBoardRoomState(state), past: [], future: [] };
 }
@@ -122,6 +145,7 @@ export function commitBoardRoomCommand(
   }
 
   const committedAt = options.committedAt ?? Date.now();
+  const viewTranslationDelta = nonZeroPoint(options.viewTranslation);
   const command: BoardRoomCommand = {
     id: options.id,
     kind: options.kind,
@@ -130,17 +154,25 @@ export function commitBoardRoomCommand(
     before,
     after,
     committedAt,
+    ...(viewTranslationDelta ? { viewTranslation: viewTranslationDelta } : {}),
+    ...(options.scope ? { scope: options.scope } : {}),
   };
   const previous = history.past[history.past.length - 1];
   const coalesces =
     previous?.id === command.id &&
     committedAt - previous.committedAt >= 0 &&
     committedAt - previous.committedAt <= BOARD_ROOM_COALESCE_MS;
+  const mergedViewTranslation = coalesces
+    ? addPoints(previous?.viewTranslation, command.viewTranslation)
+    : command.viewTranslation;
   const merged = coalesces
     ? {
         ...command,
         before: previous.before,
         touches: distinct([...previous.touches, ...command.touches]),
+        ...(mergedViewTranslation
+          ? { viewTranslation: mergedViewTranslation }
+          : { viewTranslation: undefined }),
       }
     : command;
   const past = coalesces
@@ -151,6 +183,7 @@ export function commitBoardRoomCommand(
     history: { present: after, past, future: [] },
     command: merged,
     rejected: null,
+    ...(viewTranslationDelta ? { viewTranslationDelta } : {}),
   };
 }
 
@@ -379,6 +412,50 @@ function unionRects(rects: readonly BoardRect[]): BoardRect | null {
   return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
 }
 
+function growBoardRoomStateToFitItems(
+  state: BoardRoomState,
+  margin = BOARD_ROOM_CANVAS_MARGIN,
+): { state: BoardRoomState; translation: BoardPoint } {
+  const bounds = unionRects(state.items.map(rotatedRect));
+  if (!bounds) return { state, translation: { x: 0, y: 0 } };
+  const right = bounds.x + bounds.width;
+  const bottom = bounds.y + bounds.height;
+  const leftGrowth = bounds.x < 0 ? -bounds.x + margin : 0;
+  const topGrowth = bounds.y < 0 ? -bounds.y + margin : 0;
+  const rightGrowth = right > state.canvasWidth
+    ? right - state.canvasWidth + margin
+    : 0;
+  const bottomGrowth = bottom > state.canvasHeight
+    ? bottom - state.canvasHeight + margin
+    : 0;
+  const translation = { x: leftGrowth, y: topGrowth };
+  if (
+    leftGrowth === 0 &&
+    topGrowth === 0 &&
+    rightGrowth === 0 &&
+    bottomGrowth === 0
+  ) {
+    return { state, translation };
+  }
+  return {
+    state: {
+      ...state,
+      canvasWidth: Math.ceil(
+        state.canvasWidth + leftGrowth + rightGrowth,
+      ),
+      canvasHeight: Math.ceil(
+        state.canvasHeight + topGrowth + bottomGrowth,
+      ),
+      items: state.items.map((item) => ({
+        ...item,
+        x: item.x + translation.x,
+        y: item.y + translation.y,
+      })),
+    },
+    translation,
+  };
+}
+
 export type BoardRoomAlignment =
   | 'left'
   | 'horizontal-center'
@@ -468,7 +545,7 @@ export function distributeBoardRoomItems(
 export function tidyBoardRoomItems(
   history: BoardRoomHistory,
   positions: ReadonlyArray<{ id: string; x: number; y: number }>,
-  options: Pick<BoardRoomCommandOptions, 'id' | 'committedAt'>,
+  options: Pick<BoardRoomCommandOptions, 'id' | 'committedAt' | 'scope'>,
 ): BoardRoomCommandResult {
   return commitItemPatches(
     history,
@@ -636,7 +713,14 @@ export function growBoardRoomCanvas(
   const positions = new Map(translated.map((item) => [item.id, item]));
   return commitBoardRoomCommand(
     history,
-    { ...options, kind: 'canvas-grow', lane: 'canvas', touches: ids, requireExisting: ids },
+    {
+      ...options,
+      kind: 'canvas-grow',
+      lane: 'canvas',
+      touches: ids,
+      requireExisting: ids,
+      viewTranslation: growth.translation,
+    },
     (state) => ({
       ...state,
       canvasWidth: growth.canvas.width,
@@ -850,6 +934,8 @@ export function parseBoardRoomClipboard(value: string): BoardRoomClipboardEnvelo
 
 export interface PasteBoardRoomItemsResult extends BoardRoomCommandResult {
   createdIds: string[];
+  /** Existing and pasted pins are translated together for left/top growth. */
+  translation: BoardPoint;
 }
 
 export function pasteBoardRoomItems(
@@ -877,10 +963,28 @@ export function pasteBoardRoomItems(
       data,
     };
   });
-  const result = addBoardRoomItems(history, created, {
-    ...options,
-    kind: 'paste',
-    lane: 'structural',
+  const createdIds = created.map((item) => item.id);
+  const existing = new Set(history.present.items.map((item) => item.id));
+  const fitted = growBoardRoomStateToFitItems({
+    ...history.present,
+    items: [
+      ...history.present.items,
+      ...created
+        .filter((item) => !existing.has(item.id))
+        .map(cloneBoardItem),
+    ],
   });
-  return { ...result, createdIds: created.map((item) => item.id) };
+  const translation = fitted.translation;
+  const result = commitBoardRoomCommand(
+    history,
+    {
+      ...options,
+      kind: 'paste',
+      lane: 'structural',
+      touches: createdIds,
+      viewTranslation: translation,
+    },
+    () => fitted.state,
+  );
+  return { ...result, createdIds, translation };
 }

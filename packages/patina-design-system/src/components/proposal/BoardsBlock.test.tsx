@@ -318,6 +318,25 @@ describe('BoardComposition unified renderer props', () => {
     ).toBeInTheDocument()
   })
 
+  it('uses the active cutout instead of a stale thumbnail in the stacked fallback', () => {
+    const board = sectionBoard()
+    const image = board.items.find((item) => item.type === 'image')!
+    image.image_url = 'https://images.example/reference-cutout.png'
+    image.data = {
+      ...(image.data as Record<string, unknown>),
+      original_image_url: 'https://images.example/reference.jpg',
+      thumbnail_url: 'https://images.example/reference-thumb.jpg',
+    }
+
+    const { container } = render(<BoardComposition board={board} />)
+    expect(
+      container.querySelectorAll('img[src="https://images.example/reference-cutout.png"]'),
+    ).toHaveLength(2)
+    expect(
+      container.querySelector('img[src="https://images.example/reference-thumb.jpg"]'),
+    ).not.toBeInTheDocument()
+  })
+
   it('honors dimension, fit, full-bleed and background overrides additively', () => {
     const { container } = render(
       <BoardComposition

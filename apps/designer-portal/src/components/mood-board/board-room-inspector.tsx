@@ -234,7 +234,7 @@ export function BoardRoomInspector({
           type="button"
           aria-label="Close inspector"
           onClick={() => api.setSelection([])}
-          className="min-h-11 min-w-11 text-[var(--text-muted)]"
+          className="min-h-11 min-w-11 text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--color-clay)]"
         >
           ×
         </button>

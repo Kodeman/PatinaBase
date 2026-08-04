@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { BoardRoomControllerApi } from './board-room-controller';
 import { BoardRoomController, revertFailedStructuralTransition } from './board-room-controller';
 import type { BoardRoomState } from './board-room-command-engine';
+import { serializeBoardRoomSelection } from './board-room-command-engine';
 import { resetProposalAutosaveRegistryForTests } from '@/lib/proposal-autosave-registry';
 
 const mockSaveLayout = jest.fn();
@@ -187,6 +188,47 @@ describe('BoardRoomController binding', () => {
     expect(screen.getByTestId('alt-items')).toHaveTextContent('1');
   });
 
+  it('keeps a left/top rail drop visually anchored through undo and redo', async () => {
+    let api: BoardRoomControllerApi | null = null;
+    render(
+      <BoardRoomController owner={{ kind: 'project', id: 'project-1' }} boardId="board-project">
+        {(value) => {
+          api = value;
+          return <span data-testid="paste-items">{value.state?.items.length ?? 0}</span>;
+        }}
+      </BoardRoomController>,
+    );
+    await waitFor(() => expect(api?.state).not.toBeNull());
+    const serialized = serializeBoardRoomSelection({
+      boardId: 'source-board',
+      owner: { kind: 'project', id: 'project-1' },
+      name: 'Rail source',
+      canvasWidth: 100,
+      canvasHeight: 100,
+      backgroundColor: '#FAF8F5',
+      sections: [],
+      items: [{
+        id: 'rail-source', type: 'image', x: 0, y: 0, width: 100, height: 100,
+        zIndex: 0, rotation: 0, locked: false, productId: null, captureId: null,
+        paletteId: null, imageUrl: 'https://cdn.example/rail.jpg', content: null, data: {},
+      }],
+    }, ['rail-source']);
+
+    await act(async () => {
+      await api!.pasteAt({ x: -50, y: -30 }, serialized!, 'rail_drag');
+    });
+    expect(screen.getByTestId('paste-items')).toHaveTextContent('2');
+    expect(api!.view.pan).toEqual({ x: -258, y: -238 });
+
+    act(() => api!.undo());
+    expect(screen.getByTestId('paste-items')).toHaveTextContent('1');
+    expect(api!.view.pan).toEqual({ x: 32, y: 32 });
+
+    act(() => api!.redo());
+    expect(screen.getByTestId('paste-items')).toHaveTextContent('2');
+    expect(api!.view.pan).toEqual({ x: -258, y: -238 });
+  });
+
   it('commits drag promotion with position and group resize patches as single undo steps', async () => {
     mockBoardResult = {
       ...mockBoard,
@@ -271,7 +313,7 @@ describe('BoardRoomController binding', () => {
     expect(screen.getByTestId('present-composition')).toHaveTextContent('present-x:410');
   });
 
-  it('compensates pan for top/left canvas growth so the composition does not jump (AC1.8)', async () => {
+  it('coalesces direct drag growth and compensates pan once through undo and redo (AC1.8)', async () => {
     let api: BoardRoomControllerApi | null = null;
     render(
       <BoardRoomController owner={{ kind: 'project', id: 'project-1' }} boardId="board-project">
@@ -282,16 +324,232 @@ describe('BoardRoomController binding', () => {
       </BoardRoomController>,
     );
     await waitFor(() => expect(api?.canvasProps).not.toBeNull());
-    act(() => api!.canvasProps!.onCanvasGrow?.({
-      grew: true,
-      canvas: { width: 1480, height: 1070 },
-      translation: { x: 280, y: 270 },
-      items: [{ key: 'item-1', id: 'item-1', x: 290, y: 290 }],
-      reason: 'move',
-    }));
+    act(() => {
+      const canvas = api!.canvasProps!;
+      canvas.onItemsMoved?.({
+        itemIds: ['item-1'],
+        before: [{ id: 'item-1', x: 10, y: 20 }],
+        after: [{ id: 'item-1', x: -40, y: -30 }],
+        delta: { x: -50, y: -50 },
+        reason: 'drag',
+        guides: [],
+      });
+      canvas.onCanvasGrow?.({
+        grew: true,
+        canvas: { width: 1480, height: 1070 },
+        translation: { x: 280, y: 270 },
+        items: [{ key: 'item-1', id: 'item-1', x: 240, y: 240 }],
+        reason: 'move',
+      });
+    });
     expect(screen.getByTestId('pan')).toHaveTextContent('-248,-238');
     expect(api!.state).toMatchObject({ canvasWidth: 1480, canvasHeight: 1070 });
-    expect(api!.state?.items[0]).toMatchObject({ x: 290, y: 290 });
+    expect(api!.state?.items[0]).toMatchObject({ x: 240, y: 240 });
+
+    act(() => api!.undo());
+    expect(api!.state).toMatchObject({ canvasWidth: 1200, canvasHeight: 800 });
+    expect(api!.state?.items[0]).toMatchObject({ x: 10, y: 20 });
+    expect(api!.view.pan).toEqual({ x: 32, y: 32 });
+    expect(api!.canUndo).toBe(false);
+
+    act(() => api!.undo());
+    expect(api!.view.pan).toEqual({ x: 32, y: 32 });
+
+    act(() => api!.redo());
+    expect(api!.state).toMatchObject({ canvasWidth: 1480, canvasHeight: 1070 });
+    expect(api!.state?.items[0]).toMatchObject({ x: 240, y: 240 });
+    expect(api!.view.pan).toEqual({ x: -248, y: -238 });
+    expect(api!.canRedo).toBe(false);
+
+    act(() => api!.redo());
+    expect(api!.view.pan).toEqual({ x: -248, y: -238 });
+
+    await act(async () => {
+      await api!.flushPending();
+    });
+  });
+
+  it('accumulates repeated growth across a later no-growth coalesce', async () => {
+    let api: BoardRoomControllerApi | null = null;
+    render(
+      <BoardRoomController owner={{ kind: 'project', id: 'project-1' }} boardId="board-project">
+        {(value) => {
+          api = value;
+          return <span data-testid="cumulative-pan">{value.view.pan.x},{value.view.pan.y}</span>;
+        }}
+      </BoardRoomController>,
+    );
+    await waitFor(() => expect(api?.canvasProps).not.toBeNull());
+
+    act(() => {
+      const canvas = api!.canvasProps!;
+      canvas.onItemsMoved?.({
+        itemIds: ['item-1'],
+        before: [{ id: 'item-1', x: 10, y: 20 }],
+        after: [{ id: 'item-1', x: -40, y: -30 }],
+        delta: { x: -50, y: -50 },
+        reason: 'keyboard',
+        guides: [],
+      });
+      canvas.onCanvasGrow?.({
+        grew: true,
+        canvas: { width: 1480, height: 1070 },
+        translation: { x: 280, y: 270 },
+        items: [{ key: 'item-1', id: 'item-1', x: 240, y: 240 }],
+        reason: 'move',
+      });
+      canvas.onCanvasGrow?.({
+        grew: true,
+        canvas: { width: 1500, height: 1080 },
+        translation: { x: 20, y: 10 },
+        items: [{ key: 'item-1', id: 'item-1', x: 260, y: 250 }],
+        reason: 'move',
+      });
+      canvas.onItemsMoved?.({
+        itemIds: ['item-1'],
+        before: [{ id: 'item-1', x: 260, y: 250 }],
+        after: [{ id: 'item-1', x: 210, y: 200 }],
+        delta: { x: -50, y: -50 },
+        reason: 'keyboard',
+        guides: [],
+      });
+    });
+
+    expect(api!.view.pan).toEqual({ x: -268, y: -248 });
+    expect(api!.state).toMatchObject({ canvasWidth: 1500, canvasHeight: 1080 });
+    expect(api!.state?.items[0]).toMatchObject({ x: 210, y: 200 });
+
+    act(() => api!.undo());
+    expect(api!.view.pan).toEqual({ x: 32, y: 32 });
+    expect(api!.state?.items[0]).toMatchObject({ x: 10, y: 20 });
+    expect(api!.canUndo).toBe(false);
+
+    act(() => api!.redo());
+    expect(api!.view.pan).toEqual({ x: -268, y: -248 });
+    expect(api!.state?.items[0]).toMatchObject({ x: 210, y: 200 });
+
+    await act(async () => {
+      await api!.flushPending();
+    });
+  });
+
+  it('does not apply stale compensation when a nudge id is reused after 500ms', async () => {
+    let api: BoardRoomControllerApi | null = null;
+    render(
+      <BoardRoomController owner={{ kind: 'project', id: 'project-1' }} boardId="board-project">
+        {(value) => {
+          api = value;
+          return <span data-testid="reused-id-pan">{value.view.pan.x},{value.view.pan.y}</span>;
+        }}
+      </BoardRoomController>,
+    );
+    await waitFor(() => expect(api?.canvasProps).not.toBeNull());
+
+    act(() => {
+      const canvas = api!.canvasProps!;
+      canvas.onItemsMoved?.({
+        itemIds: ['item-1'],
+        before: [{ id: 'item-1', x: 10, y: 20 }],
+        after: [{ id: 'item-1', x: 9, y: 20 }],
+        delta: { x: -1, y: 0 },
+        reason: 'keyboard',
+        guides: [],
+      });
+      canvas.onCanvasGrow?.({
+        grew: true,
+        canvas: { width: 1480, height: 1070 },
+        translation: { x: 280, y: 270 },
+        items: [{ key: 'item-1', id: 'item-1', x: 289, y: 290 }],
+        reason: 'move',
+      });
+    });
+    expect(api!.view.pan).toEqual({ x: -248, y: -238 });
+
+    act(() => {
+      jest.advanceTimersByTime(501);
+      api!.canvasProps!.onItemsMoved?.({
+        itemIds: ['item-1'],
+        before: [{ id: 'item-1', x: 289, y: 290 }],
+        after: [{ id: 'item-1', x: 288, y: 290 }],
+        delta: { x: -1, y: 0 },
+        reason: 'keyboard',
+        guides: [],
+      });
+    });
+
+    act(() => api!.undo());
+    expect(api!.view.pan).toEqual({ x: -248, y: -238 });
+    expect(api!.state?.items[0]).toMatchObject({ x: 289, y: 290 });
+
+    act(() => api!.undo());
+    expect(api!.view.pan).toEqual({ x: 32, y: 32 });
+    expect(api!.state?.items[0]).toMatchObject({ x: 10, y: 20 });
+
+    act(() => api!.redo());
+    expect(api!.view.pan).toEqual({ x: -248, y: -238 });
+    act(() => api!.redo());
+    expect(api!.view.pan).toEqual({ x: -248, y: -238 });
+    expect(api!.state?.items[0]).toMatchObject({ x: 288, y: 290 });
+
+    await act(async () => {
+      await api!.flushPending();
+    });
+  });
+
+  it('reverses direct coalesced growth compensation once when persistence rolls back', async () => {
+    const onError = jest.fn();
+    mockApplyBoardRoomState.mockRejectedValue(
+      new Error('injected growth transaction failure'),
+    );
+    let api: BoardRoomControllerApi | null = null;
+    render(
+      <BoardRoomController
+        owner={{ kind: 'project', id: 'project-1' }}
+        boardId="board-project"
+        onError={onError}
+      >
+        {(value) => {
+          api = value;
+          return <span data-testid="rollback-pan">{value.view.pan.x},{value.view.pan.y}</span>;
+        }}
+      </BoardRoomController>,
+    );
+    await waitFor(() => expect(api?.canvasProps).not.toBeNull());
+
+    act(() => {
+      const canvas = api!.canvasProps!;
+      const created = canvas.onItemsAltDragged?.({
+        itemIds: ['item-1'],
+        before: [{ id: 'item-1', x: 10, y: 20 }],
+        after: [{ id: 'item-1', x: -50, y: -30 }],
+        delta: { x: -60, y: -50 },
+        guides: [],
+      }) ?? [];
+      expect(created).toHaveLength(1);
+      canvas.onCanvasGrow?.({
+        grew: true,
+        canvas: { width: 1490, height: 1070 },
+        translation: { x: 290, y: 270 },
+        items: [
+          { key: 'item-1', id: 'item-1', x: 300, y: 290 },
+          { key: created[0], id: created[0], x: 240, y: 240 },
+        ],
+        reason: 'move',
+      });
+    });
+    expect(screen.getByTestId('rollback-pan')).toHaveTextContent('-258,-238');
+    expect(api!.state).toMatchObject({ canvasWidth: 1490, canvasHeight: 1070 });
+    expect(api!.state?.items).toHaveLength(2);
+
+    await waitFor(() => expect(mockApplyBoardRoomState).toHaveBeenCalledTimes(2));
+    await waitFor(() => {
+      expect(api!.state).toMatchObject({ canvasWidth: 1200, canvasHeight: 800 });
+      expect(api!.state?.items).toEqual([
+        expect.objectContaining({ id: 'item-1', x: 10, y: 20 }),
+      ]);
+      expect(api!.view.pan).toEqual({ x: 32, y: 32 });
+    });
+    expect(onError).toHaveBeenCalled();
   });
 
   it('routes band drag and inline section edits through undoable persisted commands (AC1.27)', async () => {

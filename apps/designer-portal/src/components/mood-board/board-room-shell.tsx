@@ -43,6 +43,7 @@ import {
 } from '@/components/portal/scope-builder/board-room-command-engine';
 import { verdictChipSpec } from '@/lib/document/verdict-chip';
 import { moodBoardEvents } from '@/lib/analytics/mood-board-events';
+import { lockBodyScroll, trapTabWithin } from '@/lib/full-screen-boundary';
 import {
   moodBoardOpenSource,
   resolveMoodBoardReturnTarget,
@@ -53,6 +54,7 @@ import {
   buildMoodBoardUrlFallbackNote,
   buildMoodBoardUrlPlaceholder,
   buildResolvedMoodBoardUrlItem,
+  moodBoardUrlFallbackNotice,
 } from '@/lib/mood-board/url-unfurl';
 import { generateAndUploadMoodBoardCover } from '@/lib/mood-board-assets/board-cover';
 import { prepareAndUploadBoardImages } from '@/lib/mood-board-assets/upload-board-assets';
@@ -157,7 +159,7 @@ function InlineNoteEditor({
   );
 }
 
-/** Route-level scroll isolation; Radix dialogs own their portal focus traps. */
+/** Route-level focus and scroll isolation; portalled nested dialogs keep their own trap. */
 function useBoardRoomBoundary(
   ref: MutableRefObject<HTMLElement | null>,
   active: boolean,
@@ -166,19 +168,16 @@ function useBoardRoomBoundary(
     if (!active) return;
     const root = ref.current;
     if (!root) return;
-    const previousOverflow = document.body.style.overflow;
-    const previousPadding = document.body.style.paddingRight;
-    const scrollbar = Math.max(0, window.innerWidth - document.documentElement.clientWidth);
-    if (scrollbar > 0) {
-      const padding = Number.parseFloat(window.getComputedStyle(document.body).paddingRight) || 0;
-      document.body.style.paddingRight = `${padding + scrollbar}px`;
-    }
-    document.body.style.overflow = 'hidden';
+    const unlockBodyScroll = lockBodyScroll();
     const frame = requestAnimationFrame(() => root.focus({ preventScroll: true }));
+    const handleKeyDown = (event: KeyboardEvent) => {
+      trapTabWithin(event, root);
+    };
+    document.addEventListener('keydown', handleKeyDown, true);
     return () => {
       cancelAnimationFrame(frame);
-      document.body.style.overflow = previousOverflow;
-      document.body.style.paddingRight = previousPadding;
+      document.removeEventListener('keydown', handleKeyDown, true);
+      unlockBodyScroll();
     };
   }, [active, ref]);
 }
@@ -205,7 +204,7 @@ function BoardNameField({ api }: { api: BoardRoomControllerApi }) {
           event.currentTarget.blur();
         }
       }}
-      className="h-9 min-w-[120px] border-transparent bg-transparent px-1 font-heading text-[15px] hover:border-[var(--border-default)] focus:border-[var(--color-clay)]"
+      className="h-11 min-w-[120px] border-transparent bg-transparent px-1 font-heading text-[15px] hover:border-[var(--border-default)] focus:border-[var(--color-clay)]"
     />
   );
 }
@@ -249,6 +248,8 @@ function BoardRoomSurface({
   lastCommand,
   itemActionsRef,
   dropUploadProgress,
+  externalNotice,
+  onConsumeExternalNotice,
 }: {
   api: BoardRoomControllerApi;
   owner: BoardOwnerRef;
@@ -260,6 +261,8 @@ function BoardRoomSurface({
   lastCommand: BoardRoomCommandCommittedEvent | null;
   itemActionsRef: MutableRefObject<BoardRoomItemActions | null>;
   dropUploadProgress: string | null;
+  externalNotice: string | null;
+  onConsumeExternalNotice: () => void;
 }) {
   const router = useRouter();
   const { user } = useAuth();
@@ -280,6 +283,9 @@ function BoardRoomSurface({
   const boardQuery = useBoard(api.state?.boardId);
   const proposalQuery = useProposal(owner.kind === 'proposal' ? owner.id : '');
   const projectQuery = useProject(owner.kind === 'project' ? owner.id : '');
+  const sourceProposalId = owner.kind === 'proposal'
+    ? owner.id
+    : projectQuery.data?.proposal_id ?? null;
   const scheduleQuery = useProposalScheduleItems(owner.kind === 'proposal' ? owner.id : undefined);
   const addScheduleItem = useAddProposalItem();
   const feedbackQuery = useBoardFeedback(owner.kind === 'proposal' ? owner.id : undefined);
@@ -298,6 +304,13 @@ function BoardRoomSurface({
     async () => undefined,
   );
   const coverLifecycleRef = useRef<ReturnType<typeof createMoodBoardCoverLifecycle> | null>(null);
+
+  useEffect(() => {
+    if (!externalNotice) return;
+    setSurfaceError(null);
+    setSurfaceNotice(externalNotice);
+    onConsumeExternalNotice();
+  }, [externalNotice, onConsumeExternalNotice]);
   upsertCoverRef.current = upsertBoard.mutateAsync;
   coverWriteRef.current = async (snapshot) => {
     const generated = await generateAndUploadMoodBoardCover({
@@ -558,10 +571,15 @@ function BoardRoomSurface({
         section_count: api.state.sections.length,
         surface: 'room',
         duration_ms: Math.max(0, Math.round(performance.now() - presentStartedRef.current)),
+        owner_kind: owner.kind,
+        owner_id: owner.id,
+        proposal_id: sourceProposalId,
+        source_proposal_id: sourceProposalId,
+        project_id: owner.kind === 'project' ? owner.id : null,
       });
       presentStartedRef.current = null;
     }
-  }, [api.mode, api.state]);
+  }, [api.mode, api.state, owner.id, owner.kind, sourceProposalId]);
 
   const input = useMemo(() => boardRasterInput(api), [api]);
   useBoardRoomBoundary(
@@ -615,9 +633,14 @@ function BoardRoomSurface({
       section_count: api.state.sections.length,
       surface: 'room',
       duration_ms: Math.max(0, Math.round(performance.now() - presentStartedRef.current)),
+      owner_kind: owner.kind,
+      owner_id: owner.id,
+      proposal_id: sourceProposalId,
+      source_proposal_id: sourceProposalId,
+      project_id: owner.kind === 'project' ? owner.id : null,
     });
     presentStartedRef.current = null;
-  }, [api.state]);
+  }, [api.state, owner.id, owner.kind, sourceProposalId]);
 
   const completeExit = useCallback(async () => {
     if (!api.state) return;
@@ -757,25 +780,25 @@ function BoardRoomSurface({
         </span>
 
         {api.mode === 'present' ? (
-          <label className="hidden items-center gap-1.5 text-[10px] text-[var(--text-muted)] sm:flex">
+          <label className="hidden min-h-11 min-w-11 items-center justify-center gap-1.5 text-[10px] text-[var(--text-muted)] sm:flex">
             <input type="checkbox" checked={api.showNotes} onChange={(event) => api.setShowNotes(event.target.checked)} />
             Notes
           </label>
         ) : (
           <>
-            <button type="button" onClick={toggleRail} className="hidden min-h-11 px-2 font-mono text-[9px] uppercase text-[var(--text-muted)] md:block">
+            <button type="button" onClick={toggleRail} className="hidden min-h-11 min-w-11 px-2 font-mono text-[9px] uppercase text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] md:block">
               {railCollapsed ? 'Sources' : 'Hide sources'}
             </button>
-            <button type="button" disabled={!api.canUndo} onClick={api.undo} className="hidden min-h-11 px-2 text-sm disabled:opacity-30 sm:block" aria-label="Undo">↶</button>
-            <button type="button" disabled={!api.canRedo} onClick={api.redo} className="hidden min-h-11 px-2 text-sm disabled:opacity-30 sm:block" aria-label="Redo">↷</button>
+            <button type="button" disabled={!api.canUndo} onClick={api.undo} className="hidden min-h-11 min-w-11 px-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] disabled:opacity-30 sm:block" aria-label="Undo">↶</button>
+            <button type="button" disabled={!api.canRedo} onClick={api.redo} className="hidden min-h-11 min-w-11 px-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] disabled:opacity-30 sm:block" aria-label="Redo">↷</button>
             <span className="hidden min-w-10 text-center font-mono text-[9px] tabular-nums text-[var(--text-muted)] lg:block">{Math.round(api.view.zoom * 100)}%</span>
-            <Button variant="ghost" size="sm" className="hidden lg:inline-flex" onClick={fit}>Fit</Button>
-            <button type="button" aria-pressed={showGrid} onClick={toggleGrid} className="hidden min-h-11 px-2 font-mono text-[8px] uppercase text-[var(--text-muted)] xl:block">Grid</button>
-            <button type="button" aria-pressed={snapToGrid} onClick={toggleSnap} className="hidden min-h-11 px-2 font-mono text-[8px] uppercase text-[var(--text-muted)] xl:block">Snap</button>
+            <Button variant="ghost" size="sm" className="hidden min-h-11 min-w-11 lg:inline-flex" onClick={fit}>Fit</Button>
+            <button type="button" aria-pressed={showGrid} onClick={toggleGrid} className="hidden min-h-11 min-w-11 px-2 font-mono text-[8px] uppercase text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] xl:block">Grid</button>
+            <button type="button" aria-pressed={snapToGrid} onClick={toggleSnap} className="hidden min-h-11 min-w-11 px-2 font-mono text-[8px] uppercase text-[var(--text-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] xl:block">Snap</button>
             <Button
               variant="ghost"
               size="sm"
-              className="hidden xl:inline-flex"
+              className="hidden min-h-11 min-w-11 xl:inline-flex"
               disabled={!tidyTarget.enabled}
               onClick={runTidy}
             >
@@ -785,22 +808,24 @@ function BoardRoomSurface({
         )}
 
         <div className="flex shrink-0 items-center gap-1">
-          <Button variant="ghost" size="sm" onClick={() => setShareOpen(true)}>Share</Button>
-          {api.mode === 'edit' && <Button variant="ghost" size="sm" className="hidden sm:inline-flex" onClick={() => setExportOpen(true)}>Export</Button>}
-          <Button variant={api.mode === 'present' ? 'secondary' : 'ghost'} size="sm" onClick={api.togglePresent}>
+          <Button variant="ghost" size="sm" className="min-h-11 min-w-11" onClick={() => setShareOpen(true)}>Share</Button>
+          {api.mode === 'edit' && <Button variant="ghost" size="sm" className="hidden min-h-11 min-w-11 sm:inline-flex" onClick={() => setExportOpen(true)}>Export</Button>}
+          <Button variant={api.mode === 'present' ? 'secondary' : 'ghost'} size="sm" className="min-h-11 min-w-11" onClick={api.togglePresent}>
             {api.mode === 'present' ? 'Edit' : 'Present'}
           </Button>
-          <BoardRoomSectionsMenu
-            api={api}
-            showGrid={showGrid}
-            snapToGrid={snapToGrid}
-            onToggleGrid={toggleGrid}
-            onToggleSnap={toggleSnap}
-            tidyEnabled={tidyTarget.enabled}
-            onTidy={runTidy}
-            onSaveTemplate={() => setTemplateOpen(true)}
-          />
-          <Button variant="primary" size="sm" disabled={api.isExiting} onClick={() => void api.requestExit()}>
+          {api.mode === 'edit' && (
+            <BoardRoomSectionsMenu
+              api={api}
+              showGrid={showGrid}
+              snapToGrid={snapToGrid}
+              onToggleGrid={toggleGrid}
+              onToggleSnap={toggleSnap}
+              tidyEnabled={tidyTarget.enabled}
+              onTidy={runTidy}
+              onSaveTemplate={() => setTemplateOpen(true)}
+            />
+          )}
+          <Button variant="primary" size="sm" className="min-h-11 min-w-11" disabled={api.isExiting} onClick={() => void api.requestExit()}>
             {api.isExiting ? 'Saving…' : 'Done'}
           </Button>
         </div>
@@ -811,7 +836,7 @@ function BoardRoomSurface({
           <span>{surfaceError ?? api.persistenceError}</span>
           <button
             type="button"
-            className="min-h-9 shrink-0 font-mono text-[9px] uppercase"
+            className="min-h-11 min-w-11 shrink-0 font-mono text-[9px] uppercase focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
             onClick={() => {
               setSurfaceError(null);
               api.discardPersistenceError();
@@ -828,7 +853,7 @@ function BoardRoomSurface({
           <button
             type="button"
             aria-label="Dismiss board notice"
-            className="min-h-9 shrink-0 font-mono text-[9px] uppercase"
+            className="min-h-11 min-w-11 shrink-0 font-mono text-[9px] uppercase focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
             onClick={() => setSurfaceNotice(null)}
           >
             Dismiss
@@ -951,6 +976,8 @@ function BoardRoomSurface({
       <BoardShareDialog
         boardId={state.boardId}
         boardName={state.name}
+        owner={owner}
+        sourceProposalId={sourceProposalId}
         open={shareOpen}
         onOpenChange={setShareOpen}
         flush={api.flushPending}
@@ -990,6 +1017,7 @@ export function MoodBoardRoom({
   const deleteGuardRef = useRef<((items: readonly EditableMoodBoardItem[]) => boolean) | null>(null);
   const unfurl = useMoodBoardUrlUnfurl();
   const [dropUploadProgress, setDropUploadProgress] = useState<string | null>(null);
+  const [externalNotice, setExternalNotice] = useState<string | null>(null);
   const metricsRef = useRef<SessionMetrics>({
     commands: 0,
     usedUndo: false,
@@ -1008,15 +1036,10 @@ export function MoodBoardRoom({
     if (command.kind === 'resize' || command.kind === 'rotate') {
       metricsRef.current.usedHandles = true;
     }
-    if (
-      direction === 'apply' &&
-      ['tidy', 'align', 'distribute'].includes(command.kind)
-    ) {
+    if (direction === 'apply' && command.kind === 'tidy') {
       moodBoardEvents.arranged({
         board_id: boardId,
-        scope: command.touches.length > 0 && command.touches.length < command.after.items.length
-          ? 'selection'
-          : 'board',
+        scope: command.scope ?? 'board',
         item_count: command.touches.length || command.after.items.length,
       });
     }
@@ -1072,6 +1095,7 @@ export function MoodBoardRoom({
       const fallback = buildMoodBoardUrlFallbackNote({ placeholder, url });
       controls.replaceItem(fallback);
       observeItemsAdded([fallback], 'paste');
+      setExternalNotice(moodBoardUrlFallbackNotice(error));
       let host = 'unknown';
       try { host = new URL(url).hostname; } catch { /* normalized upstream */ }
       moodBoardEvents.urlUnfurled({ board_id: boardId, host, outcome: 'failed' });
@@ -1169,6 +1193,8 @@ export function MoodBoardRoom({
             lastCommand={lastCommandRef.current}
             itemActionsRef={itemActionsRef}
             dropUploadProgress={dropUploadProgress}
+            externalNotice={externalNotice}
+            onConsumeExternalNotice={() => setExternalNotice(null)}
           />
         );
       }}

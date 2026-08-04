@@ -1,5 +1,6 @@
 import {
   MoodBoardUrlUnfurlError,
+  moodBoardUrlFallbackNotice,
   buildMoodBoardUrlFallbackNote,
   buildMoodBoardUrlPlaceholder,
   buildResolvedMoodBoardUrlItem,
@@ -151,6 +152,9 @@ describe("mood-board URL unfurl helpers", () => {
       resetAt,
       message: `URL import limit reached. Try again after ${resetAt}.`,
     });
+    expect(moodBoardUrlFallbackNotice(translated)).toBe(
+      `URL import limit reached. Try again after ${resetAt}. An editable note with the URL was added instead.`,
+    );
   });
 
   it("turns scraper transport failures into a clear site-blocked message", async () => {
@@ -167,5 +171,8 @@ describe("mood-board URL unfurl helpers", () => {
       status: 502,
     });
     expect(translated.message).toContain("blocked");
+    expect(moodBoardUrlFallbackNotice(translated)).toContain(
+      "An editable note with the URL was added instead.",
+    );
   });
 });

@@ -4,6 +4,11 @@ import { BoardShareDialog } from './board-share-dialog';
 const create = jest.fn();
 const revoke = jest.fn();
 const writeText = jest.fn();
+const shared = jest.fn();
+
+jest.mock('@/lib/analytics/mood-board-events', () => ({
+  moodBoardEvents: { shared: (...args: unknown[]) => shared(...args) },
+}));
 
 jest.mock('@patina/supabase', () => ({
   useBoardShares: () => ({
@@ -61,6 +66,7 @@ describe('BoardShareDialog', () => {
     create.mockReset();
     revoke.mockReset();
     writeText.mockReset();
+    shared.mockReset();
     writeText.mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
@@ -71,7 +77,13 @@ describe('BoardShareDialog', () => {
   it('lists only active board links with usage and revokes in board scope', async () => {
     revoke.mockResolvedValue(undefined);
     render(
-      <BoardShareDialog boardId="board-1" boardName="Living room" open onOpenChange={jest.fn()} />,
+      <BoardShareDialog
+        boardId="board-1"
+        boardName="Living room"
+        owner={{ kind: 'proposal', id: 'proposal-1' }}
+        open
+        onOpenChange={jest.fn()}
+      />,
     );
 
     expect(screen.getByText('Client review')).toBeInTheDocument();
@@ -91,6 +103,8 @@ describe('BoardShareDialog', () => {
       <BoardShareDialog
         boardId="board-1"
         boardName="Living room"
+        owner={{ kind: 'project', id: 'project-1' }}
+        sourceProposalId="proposal-1"
         open
         onOpenChange={jest.fn()}
         onShareCreated={onShareCreated}
@@ -111,6 +125,17 @@ describe('BoardShareDialog', () => {
     );
     expect(writeText).toHaveBeenCalledWith(expect.stringMatching(/\/share\/raw-token$/));
     expect(onShareCreated).toHaveBeenCalledWith('share-new');
+    expect(shared).toHaveBeenCalledWith({
+      board_id: 'board-1',
+      scope: 'board',
+      has_expiry: false,
+      share_id: 'share-new',
+      owner_kind: 'project',
+      owner_id: 'project-1',
+      proposal_id: 'proposal-1',
+      source_proposal_id: 'proposal-1',
+      project_id: 'project-1',
+    });
     await waitFor(() => {
       const link = screen.getByLabelText('Board share link') as HTMLInputElement;
       expect(link.value).toMatch(/\/share\/raw-token$/);

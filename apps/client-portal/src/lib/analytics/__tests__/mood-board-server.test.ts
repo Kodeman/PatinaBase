@@ -1,8 +1,13 @@
-import { captureMoodBoardShareViewed } from '../mood-board-server';
+import {
+  captureMoodBoardProposalActivated,
+  captureMoodBoardShareViewed,
+} from '../mood-board-server';
 
 const RAW_TOKEN = 'a'.repeat(64);
 const BOARD_ID = 'c4061000-0000-4000-8000-000000000001';
 const SHARE_ID = 'd4061000-0000-4000-8000-000000000001';
+const PROPOSAL_ID = 'e4061000-0000-4000-8000-000000000001';
+const PROJECT_ID = 'f4061000-0000-4000-8000-000000000001';
 
 function response(ok = true, status = 200): Response {
   return {
@@ -99,5 +104,44 @@ describe('captureMoodBoardShareViewed', () => {
       '[MoodBoard analytics] capture skipped: invalid identifiers',
     );
     expect(JSON.stringify(warn.mock.calls)).not.toContain(RAW_TOKEN);
+  });
+});
+
+describe('captureMoodBoardProposalActivated', () => {
+  it('sends the authoritative board count without creating a person profile', async () => {
+    const fetchImpl = jest.fn().mockResolvedValue(response());
+
+    await captureMoodBoardProposalActivated(
+      { proposalId: PROPOSAL_ID, projectId: PROJECT_ID, boardCount: 2 },
+      {
+        fetchImpl,
+        getEnv: (name) =>
+          name === 'NEXT_PUBLIC_POSTHOG_KEY'
+            ? 'phc_test'
+            : name === 'NEXT_PUBLIC_POSTHOG_HOST'
+              ? 'https://analytics.example/'
+              : undefined,
+        now: () => new Date('2026-08-03T12:00:00.000Z'),
+      },
+    );
+
+    const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://analytics.example/i/v0/e/');
+    expect(JSON.parse(String(init.body))).toEqual({
+      api_key: 'phc_test',
+      event: 'mood_board_proposal_activated',
+      distinct_id: `mood-board-proposal:${PROPOSAL_ID}`,
+      properties: {
+        proposal_id: PROPOSAL_ID,
+        source_proposal_id: PROPOSAL_ID,
+        project_id: PROJECT_ID,
+        board_count: 2,
+        has_board: true,
+        activation_source: 'client_signature',
+        $insert_id: `mood-board-proposal-activated:${PROPOSAL_ID}`,
+        $process_person_profile: false,
+      },
+      timestamp: '2026-08-03T12:00:00.000Z',
+    });
   });
 });

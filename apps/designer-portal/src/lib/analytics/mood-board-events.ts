@@ -12,6 +12,7 @@ import type { BoardOwnerKind, MoodBoardItemType } from "@patina/types";
 import { isAnalyticsEnabled } from "./posthog";
 
 export const MOOD_BOARD_EVENT_NAMES = {
+  draftingTouched: "mood_board_drafting_touched",
   opened: "mood_board_opened",
   itemAdded: "mood_board_item_added",
   arranged: "mood_board_arranged",
@@ -50,6 +51,14 @@ export type MoodBoardExportFormat =
   | "pdf_composition"
   | "pdf_spec_sheet";
 
+export interface MoodBoardDraftingTouchedProperties {
+  proposal_id: string;
+  board_count: number;
+  has_board: boolean;
+  surface: "drafting_facet";
+  touch_type: "facet_visit";
+}
+
 export interface MoodBoardOpenedProperties {
   source: MoodBoardOpenSource;
   board_id: string;
@@ -81,7 +90,17 @@ export interface MoodBoardDoneProperties {
   board_id: string;
 }
 
-export interface MoodBoardPresentedProperties {
+export interface MoodBoardOwnerLineageProperties {
+  owner_kind: BoardOwnerKind;
+  owner_id: string;
+  /** M5 join key; for project boards this is the project's source proposal. */
+  proposal_id: string | null;
+  source_proposal_id: string | null;
+  /** Present for post-activation project-owned boards. */
+  project_id: string | null;
+}
+
+export interface MoodBoardPresentedProperties extends MoodBoardOwnerLineageProperties {
   board_id: string;
   item_count: number;
   section_count: number;
@@ -89,7 +108,7 @@ export interface MoodBoardPresentedProperties {
   duration_ms: number;
 }
 
-export interface MoodBoardSharedProperties {
+export interface MoodBoardSharedProperties extends MoodBoardOwnerLineageProperties {
   board_id: string;
   scope: "board";
   has_expiry: boolean;
@@ -168,6 +187,8 @@ function track(
 }
 
 export const moodBoardEvents = {
+  draftingTouched: (properties: MoodBoardDraftingTouchedProperties) =>
+    track(MOOD_BOARD_EVENT_NAMES.draftingTouched, properties),
   opened: (properties: MoodBoardOpenedProperties) =>
     track(MOOD_BOARD_EVENT_NAMES.opened, properties),
   itemAdded: (properties: MoodBoardItemAddedProperties) =>

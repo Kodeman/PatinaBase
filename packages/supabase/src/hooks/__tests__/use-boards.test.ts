@@ -240,6 +240,28 @@ describe('useApplyBoardRoomState', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['project-owned-boards', 'project-1'] });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['project-owned-boards-with-items', 'project-1'] });
   });
+
+  it('invalidates pin feedback after a proposal room snapshot can cascade rows', async () => {
+    const config = useApplyBoardRoomState() as unknown as {
+      onSettled: (
+        data: undefined,
+        error: null,
+        value: Omit<typeof input, 'owner'> & {
+          owner: { kind: 'proposal'; id: string };
+        },
+      ) => Promise<void>;
+    };
+    const proposalInput = {
+      ...input,
+      owner: { kind: 'proposal' as const, id: 'proposal-1' },
+    };
+
+    await config.onSettled(undefined, null, proposalInput);
+
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['board-feedback', 'proposal-1'],
+    });
+  });
 });
 
 describe('owner-aware board hooks', () => {
@@ -460,6 +482,23 @@ describe('summarizeBoard', () => {
     expect(summary.cover_fallback_url).toBeNull();
     expect(summary.cover_fallback_urls).toEqual([]);
     expect(summary.verdict_counts).toEqual({ approved: 0, rejected: 0, comment: 0, total: 0 });
+  });
+
+  it('uses the active cutout for fallback covers while original_image_url marks it as applied', () => {
+    const summary = summarizeBoard(
+      { id: 'b1', name: 'Cutout', proposal_id: 'p1', cover_image_url: null },
+      [{
+        type: 'image',
+        image_url: 'chair-cutout.png',
+        data: {
+          original_image_url: 'chair.jpg',
+          thumbnail_url: 'chair-thumb.jpg',
+        },
+        z_index: 0,
+      }],
+    );
+
+    expect(summary.cover_fallback_urls).toEqual(['chair-cutout.png']);
   });
 
   it('folds RLS-visible current verdicts into the cover summary', () => {

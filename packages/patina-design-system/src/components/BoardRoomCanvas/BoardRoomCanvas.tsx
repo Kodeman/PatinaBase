@@ -349,6 +349,14 @@ function resizeGeometry(
       width = resolvedHeight * aspect
       if (movesLeft) x = before.x + before.width - width
     }
+  } else if (preserveAspect && (movesLeft || movesRight)) {
+    const aspect = before.width / before.resolvedHeight
+    resolvedHeight = width / aspect
+    y = before.y + (before.resolvedHeight - resolvedHeight) / 2
+  } else if (preserveAspect && (movesTop || movesBottom)) {
+    const aspect = before.width / before.resolvedHeight
+    width = resolvedHeight * aspect
+    x = before.x + (before.width - width) / 2
   }
 
   if (width < min) {
@@ -361,8 +369,7 @@ function resizeGeometry(
   }
 
   const horizontalOnly = (movesLeft || movesRight) && !movesTop && !movesBottom
-  const implicitAspectHeight =
-    before.height === null && (horizontalOnly || preserveAspect)
+  const implicitAspectHeight = before.height === null && horizontalOnly
   return {
     x,
     y,
@@ -1528,10 +1535,31 @@ export const BoardRoomCanvas = React.forwardRef<
         !readOnly &&
         ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(
           event.key,
-        ) &&
-        selectedItemIds.length > 0
+        )
       ) {
+        const eventFocusedItemId = target
+          .closest<HTMLElement>('[data-board-item-id]')
+          ?.dataset.boardItemId
+        const keyboardFocusId = eventFocusedItemId ?? focusedItemId
+        const keyboardTargetIds = keyboardFocusId && !selectedItemIds.includes(keyboardFocusId)
+          ? [keyboardFocusId]
+          : selectedItemIds.length > 0
+            ? selectedItemIds
+            : keyboardFocusId
+              ? [keyboardFocusId]
+              : []
+        const keyboardTargetSet = new Set(keyboardTargetIds)
+        const movable = items.filter(
+          (item) => keyboardTargetSet.has(item.id) && !item.locked,
+        )
+        if (movable.length === 0) return
         event.preventDefault()
+        if (
+          keyboardTargetIds.length !== selectedItemIds.length ||
+          keyboardTargetIds.some((id, index) => id !== selectedItemIds[index])
+        ) {
+          setSelection([...keyboardTargetIds], 'keyboard')
+        }
         const distance = event.shiftKey ? 10 : 1
         const delta = {
           x:
@@ -1548,19 +1576,17 @@ export const BoardRoomCanvas = React.forwardRef<
                 : 0,
         }
         emitMovePatches(
-          items
-            .filter((item) => selectedSet.has(item.id) && !item.locked)
-            .map((item) => ({
+          movable.map((item) => ({
               id: item.id,
               x: item.x + delta.x,
               y: item.y + delta.y,
-            })),
+          })),
           'keyboard',
         )
         setAnnouncement(
-          selectedItemIds.length === 1
+          movable.length === 1
             ? `Moved 1 item ${distance} pixels`
-            : `Moved ${selectedItemIds.length} items ${distance} pixels`,
+            : `Moved ${movable.length} items ${distance} pixels`,
         )
       }
     }
@@ -2123,7 +2149,7 @@ function SectionBand({
                   event.currentTarget.blur()
                 }
               }}
-              className="min-w-0 max-w-36 border-0 bg-transparent p-0 text-[11px] font-medium text-white outline-none focus-visible:ring-1 focus-visible:ring-white"
+              className="min-w-0 max-w-36 border-0 bg-transparent p-0 text-[11px] font-medium text-white outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-clay)] focus-visible:ring-offset-2"
             />
             <input
               type="color"

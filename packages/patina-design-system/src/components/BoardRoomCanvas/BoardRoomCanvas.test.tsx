@@ -432,6 +432,93 @@ describe('BoardRoomCanvas semantic commits', () => {
     )
   })
 
+  it.each([
+    { label: '5%', zoom: 0.05 },
+    { label: '100%', zoom: 1 },
+    { label: '400%', zoom: 4 },
+  ])('converts a rail drop to the same logical release point at $label (AC1.9)', ({ zoom }) => {
+    const onItemsDropped = vi.fn()
+    const pan = { x: 37, y: 23 }
+    const release = { x: 512, y: 288 }
+    renderCanvas({
+      view: { pan, zoom },
+      onItemsDropped,
+      showViewControls: false,
+    })
+    const application = screen.getByRole('application')
+    const dataTransfer = { files: [] }
+
+    const drop = new MouseEvent('drop', {
+      bubbles: true,
+      clientX: pan.x + release.x * zoom,
+      clientY: pan.y + release.y * zoom,
+    })
+    Object.defineProperty(drop, 'dataTransfer', { value: dataTransfer })
+    fireEvent(application, drop)
+
+    expect(onItemsDropped).toHaveBeenCalledTimes(1)
+    const commit = onItemsDropped.mock.lastCall?.[0]
+    expect(commit).toMatchObject({
+      files: [],
+      dataTransfer,
+    })
+    expect(commit.point.x).toBeCloseTo(release.x, 5)
+    expect(commit.point.y).toBeCloseTo(release.y, 5)
+  })
+
+  it.each([
+    {
+      label: 'snaps with the grid hidden',
+      showGrid: false,
+      snapToGrid: true,
+      expected: { x: 50, y: 100 },
+    },
+    {
+      label: 'moves freely with the grid visible when snap is off',
+      showGrid: true,
+      snapToGrid: false,
+      expected: { x: 63, y: 97 },
+    },
+  ])('$label (AC1.16)', ({ showGrid, snapToGrid, expected }) => {
+    const onItemsMoved = vi.fn()
+    renderCanvas({
+      selectedItemIds: ['chair'],
+      view: { pan: { x: 0, y: 0 }, zoom: 1 },
+      gridSize: 50,
+      showGrid,
+      snapToGrid,
+      showGuides: false,
+      showViewControls: false,
+      onItemsMoved,
+    })
+    const application = screen.getByRole('application')
+    const chair = document.querySelector('[data-board-item-id="chair"]')!
+    fireEvent.pointerDown(chair, {
+      button: 0,
+      pointerId: 71,
+      clientX: 100,
+      clientY: 100,
+    })
+    fireEvent.pointerMove(application, {
+      pointerId: 71,
+      clientX: 123,
+      clientY: 117,
+    })
+    fireEvent.pointerUp(application, {
+      pointerId: 71,
+      clientX: 123,
+      clientY: 117,
+    })
+
+    expect(onItemsMoved).toHaveBeenCalledWith(
+      expect.objectContaining({
+        itemIds: ['chair'],
+        after: [{ id: 'chair', ...expected }],
+        reason: 'drag',
+      }),
+    )
+  })
+
   it('previews Alt-drag copies, preserves selection offsets, and leaves originals still', () => {
     const onItemsAltDragged = vi.fn(() => ['chair-copy', 'image-copy'])
     renderCanvas({
@@ -564,7 +651,7 @@ describe('BoardRoomCanvas semantic commits', () => {
     })
   })
 
-  it('emits a single free resize commit and retains nullable height for width-only resize', () => {
+  it('keeps image aspect on horizontal and vertical edge resizes while preserving auto height only for width-only resize', () => {
     const onItemResized = vi.fn()
     const autoHeight = ITEMS.map((item) =>
       item.id === 'image'
@@ -597,18 +684,46 @@ describe('BoardRoomCanvas semantic commits', () => {
       clientX: 620,
       clientY: 180,
     })
-    expect(onItemResized).toHaveBeenCalledWith(
-      expect.objectContaining({
-        itemId: 'image',
-        handle: 'e',
-        after: expect.objectContaining({
-          width: 280,
-          height: null,
-          resolvedHeight: 160,
-        }),
-      }),
-    )
+    const eastCommit = onItemResized.mock.lastCall?.[0]
+    expect(eastCommit).toEqual(expect.objectContaining({ itemId: 'image', handle: 'e' }))
+    expect(eastCommit.after.width).toBe(280)
+    expect(eastCommit.after.height).toBeNull()
+    expect(eastCommit.after.resolvedHeight).toBeCloseTo(203.636, 2)
+    expect(eastCommit.after.y).toBeCloseTo(78.182, 2)
     rerender(<div />)
+
+    onItemResized.mockClear()
+    renderCanvas({
+      items: autoHeight,
+      selectedItemIds: ['image'],
+      view: { pan: { x: 0, y: 0 }, zoom: 1 },
+      onItemResized,
+      showViewControls: false,
+    })
+    const northApplication = screen.getByRole('application')
+    const north = screen.getByRole('button', { name: 'Resize n' })
+    fireEvent.pointerDown(north, {
+      button: 0,
+      pointerId: 7,
+      clientX: 450,
+      clientY: 100,
+    })
+    fireEvent.pointerMove(northApplication, {
+      pointerId: 7,
+      clientX: 450,
+      clientY: 60,
+    })
+    fireEvent.pointerUp(northApplication, {
+      pointerId: 7,
+      clientX: 450,
+      clientY: 60,
+    })
+    const northCommit = onItemResized.mock.lastCall?.[0]
+    expect(northCommit).toEqual(expect.objectContaining({ itemId: 'image', handle: 'n' }))
+    expect(northCommit.after.width).toBe(275)
+    expect(northCommit.after.x).toBeCloseTo(312.5, 2)
+    expect(northCommit.after.height).toBe(200)
+    expect(northCommit.after.resolvedHeight).toBe(200)
   })
 
   it('exposes eight constant-screen-size group handles and scales every member about the anchor', () => {
@@ -760,13 +875,19 @@ describe('BoardRoomCanvas semantic commits', () => {
 
   it('nudges from keyboard focus and exposes align/distribute actions', () => {
     const onItemsMoved = vi.fn()
+    const onSelectionChange = vi.fn()
     const { rerender } = renderCanvas({
-      selectedItemIds: ['chair'],
+      selectedItemIds: ['image'],
       onItemsMoved,
+      onSelectionChange,
     })
     const chair = document.querySelector('[data-board-item-id="chair"]')!
     fireEvent.focus(chair)
     fireEvent.keyDown(chair, { key: 'ArrowRight', shiftKey: true })
+    // Keyboard focus wins over a stale selection on a different pin.
+    expect(onSelectionChange).toHaveBeenCalledWith(['chair'], {
+      reason: 'keyboard',
+    })
     expect(onItemsMoved).toHaveBeenLastCalledWith(
       expect.objectContaining({
         reason: 'keyboard',

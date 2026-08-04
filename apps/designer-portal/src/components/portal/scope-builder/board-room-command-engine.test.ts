@@ -200,6 +200,63 @@ describe('duplicate, clipboard and keyboard command groups', () => {
     expect(crossOwner.history.present.items[1].imageUrl).toBe('https://cdn.example/reference.jpg');
   });
 
+  it('grows the canvas in the same paste command so low-zoom rail drops persist (AC1.9)', () => {
+    const source = state({ items: [item('rail', 0, 0, { width: 320, height: 120 })] });
+    const envelope = parseBoardRoomClipboard(
+      serializeBoardRoomSelection(source, ['rail'])!,
+    );
+    const target = createBoardRoomHistory(state({
+      canvasWidth: 1_040,
+      canvasHeight: 650,
+      items: [],
+    }));
+
+    const result = pasteBoardRoomItems(
+      target,
+      envelope!,
+      { x: 7_000, y: 4_000 },
+      () => 'dropped-rail',
+      { id: 'rail-drop', committedAt: 1 },
+    );
+
+    expect(result.history.present.items[0]).toMatchObject({
+      id: 'dropped-rail',
+      x: 7_000,
+      y: 4_000,
+    });
+    expect(result.history.present).toMatchObject({
+      canvasWidth: 7_560,
+      canvasHeight: 4_360,
+    });
+    expect(result.translation).toEqual({ x: 0, y: 0 });
+    expect(undoBoardRoomCommand(result.history).history.present).toMatchObject({
+      canvasWidth: 1_040,
+      canvasHeight: 650,
+      items: [],
+    });
+  });
+
+  it('reports left/top paste growth as both the apply delta and command total', () => {
+    const source = state({ items: [item('rail', 0, 0)] });
+    const envelope = parseBoardRoomClipboard(
+      serializeBoardRoomSelection(source, ['rail'])!,
+    );
+    const target = createBoardRoomHistory(state({ items: [] }));
+
+    const result = pasteBoardRoomItems(
+      target,
+      envelope!,
+      { x: -100, y: -80 },
+      () => 'left-top-paste',
+      { id: 'left-top-paste', committedAt: 1 },
+    );
+
+    expect(result.translation.x).toBeGreaterThan(0);
+    expect(result.translation.y).toBeGreaterThan(0);
+    expect(result.viewTranslationDelta).toEqual(result.translation);
+    expect(result.command?.viewTranslation).toEqual(result.translation);
+  });
+
   it('rejects oversized and malformed clipboard envelopes before they reach history', () => {
     expect(parseBoardRoomClipboard('x'.repeat(BOARD_ROOM_CLIPBOARD_MAX_BYTES + 1))).toBeNull();
     expect(parseBoardRoomClipboard(JSON.stringify({
@@ -364,6 +421,8 @@ describe('sections, tidy and canvas commands', () => {
       })),
     }, { id: 'gesture-grow', committedAt: 11 });
     expect(growth.history.past).toHaveLength(1);
+    expect(growth.viewTranslationDelta).toEqual({ x: 280, y: 270 });
+    expect(growth.command?.viewTranslation).toEqual({ x: 280, y: 270 });
     expect(growth.history.present).toMatchObject({ canvasWidth: 980, canvasHeight: 770 });
     expect(growth.history.present.items[0]).toMatchObject({ x: 240, y: 240 });
     expect(undoBoardRoomCommand(growth.history).history.present).toMatchObject({
@@ -371,6 +430,79 @@ describe('sections, tidy and canvas commands', () => {
       canvasHeight: 500,
     });
     expect(undoBoardRoomCommand(growth.history).history.present.items[0]).toMatchObject({ x: 100, y: 100 });
+  });
+
+  it('accumulates repeated growth and carries it through a later no-growth coalesce', () => {
+    const initial = createBoardRoomHistory(state());
+    const moved = commitItemPatches(initial, { i1: { x: -10, y: -20 } }, {
+      id: 'repeated-grow',
+      kind: 'move',
+      lane: 'layout',
+      committedAt: 10,
+    });
+    const firstGrowth = growBoardRoomCanvas(moved.history, {
+      canvas: { width: 1_220, height: 830 },
+      translation: { x: 10, y: 20 },
+      items: moved.history.present.items.map((entry) => ({
+        id: entry.id,
+        x: entry.x + 10,
+        y: entry.y + 20,
+      })),
+    }, { id: 'repeated-grow', committedAt: 11 });
+    const secondGrowth = growBoardRoomCanvas(firstGrowth.history, {
+      canvas: { width: 1_225, height: 837 },
+      translation: { x: 5, y: 7 },
+      items: firstGrowth.history.present.items.map((entry) => ({
+        id: entry.id,
+        x: entry.x + 5,
+        y: entry.y + 7,
+      })),
+    }, { id: 'repeated-grow', committedAt: 12 });
+    const finalMove = commitItemPatches(secondGrowth.history, {
+      i1: { x: secondGrowth.history.present.items[0].x - 1 },
+    }, {
+      id: 'repeated-grow',
+      kind: 'move',
+      lane: 'layout',
+      committedAt: 13,
+    });
+
+    expect(firstGrowth.viewTranslationDelta).toEqual({ x: 10, y: 20 });
+    expect(secondGrowth.viewTranslationDelta).toEqual({ x: 5, y: 7 });
+    expect(secondGrowth.command?.viewTranslation).toEqual({ x: 15, y: 27 });
+    expect(finalMove.viewTranslationDelta).toBeUndefined();
+    expect(finalMove.command?.viewTranslation).toEqual({ x: 15, y: 27 });
+    expect(finalMove.history.past).toHaveLength(1);
+
+    const undone = undoBoardRoomCommand(finalMove.history);
+    expect(undone.command?.viewTranslation).toEqual({ x: 15, y: 27 });
+    expect(undone.history.present).toEqual(initial.present);
+    expect(redoBoardRoomCommand(undone.history).command?.viewTranslation).toEqual({ x: 15, y: 27 });
+  });
+
+  it('does not inherit translation when a command id is reused after the coalesce window', () => {
+    const initial = createBoardRoomHistory(state());
+    const growth = growBoardRoomCanvas(initial, {
+      canvas: { width: 1_210, height: 820 },
+      translation: { x: 10, y: 20 },
+      items: initial.present.items.map((entry) => ({
+        id: entry.id,
+        x: entry.x + 10,
+        y: entry.y + 20,
+      })),
+    }, { id: 'reused-nudge', committedAt: 1 });
+    const later = commitItemPatches(growth.history, { i1: { x: 111 } }, {
+      id: 'reused-nudge',
+      kind: 'move',
+      lane: 'layout',
+      committedAt: 502,
+    });
+
+    expect(later.history.past).toHaveLength(2);
+    expect(later.command?.viewTranslation).toBeUndefined();
+    const firstUndo = undoBoardRoomCommand(later.history);
+    expect(firstUndo.command?.viewTranslation).toBeUndefined();
+    expect(undoBoardRoomCommand(firstUndo.history).command?.viewTranslation).toEqual({ x: 10, y: 20 });
   });
 
   it('trims to item bounds plus margin as a reversible canvas command', () => {
