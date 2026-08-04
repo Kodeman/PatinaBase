@@ -8,9 +8,11 @@
 --       DELIBERATELY NOT widened — both still REJECT 'architect'.
 --   (c) project_parties.show_to_client defaults false.
 --   (d) the project CLIENT (projects.client_id = auth.uid()) sees ZERO
---       project_parties rows and ZERO v_project_roster party rows even with
---       show_to_client = true (the client-read policy is the NEXT wave — this
---       pins today's posture).
+--       project_parties rows while nothing is opted in, and EXACTLY the
+--       opted-in row once show_to_client is flipped on — the posture
+--       project_parties_client_select establishes in 00420. (Before 00420 this
+--       case asserted zero in both directions; the policy that ships in that
+--       migration is what changes it.)
 --   (e) the designer sees BOTH branches (party + team) in v_project_roster.
 --   (f) a studio co-member viewer gets job_title on the team branch.
 --   (g) has_active_field_link is true only for a party with a live token,
@@ -160,19 +162,44 @@ BEGIN
 END
 $$;
 
--- ─── (d) the client sees ZERO rows, party or roster, even with show_to_client=true ──
+-- ─── (d) the client sees ONLY opted-in rows (00420 project_parties_client_select) ──
 DO $$
 DECLARE
   v_count INTEGER;
+  v_id    UUID;
 BEGIN
+  -- Nothing opted in yet: temporarily clear the fixture's opt-in.
+  UPDATE project_parties SET show_to_client = false
+   WHERE id = 'c9000000-0000-4000-8000-0000000000b1';
+
   PERFORM pg_temp.assume_user('c9000000-0000-4000-8000-000000000004');
 
   SELECT count(*) INTO v_count FROM project_parties WHERE project_id = 'c9000000-0000-4000-8000-0000000000e1';
-  ASSERT v_count = 0, 'FAIL d1: the client must see 0 project_parties rows, got ' || v_count;
+  ASSERT v_count = 0, 'FAIL d1: with nothing opted in the client must see 0 project_parties rows, got ' || v_count;
 
   SELECT count(*) INTO v_count FROM v_project_roster
    WHERE project_id = 'c9000000-0000-4000-8000-0000000000e1' AND source = 'party';
-  ASSERT v_count = 0, 'FAIL d2: the client must see 0 v_project_roster party rows, got ' || v_count;
+  ASSERT v_count = 0, 'FAIL d2: with nothing opted in the client must see 0 v_project_roster party rows, got ' || v_count;
+
+  PERFORM pg_temp.reset_role();
+
+  -- Opt the one row back in (as the owning designer, through 00212's policy).
+  PERFORM pg_temp.assume_user('c9000000-0000-4000-8000-000000000001');
+  UPDATE project_parties SET show_to_client = true
+   WHERE id = 'c9000000-0000-4000-8000-0000000000b1';
+  PERFORM pg_temp.reset_role();
+
+  PERFORM pg_temp.assume_user('c9000000-0000-4000-8000-000000000004');
+
+  SELECT count(*) INTO v_count FROM project_parties WHERE project_id = 'c9000000-0000-4000-8000-0000000000e1';
+  ASSERT v_count = 1, 'FAIL d3: the client must see exactly the 1 opted-in party row, got ' || v_count;
+
+  SELECT id INTO v_id FROM project_parties WHERE project_id = 'c9000000-0000-4000-8000-0000000000e1';
+  ASSERT v_id = 'c9000000-0000-4000-8000-0000000000b1', 'FAIL d4: the visible row must be the opted-in one';
+
+  SELECT count(*) INTO v_count FROM v_project_roster
+   WHERE project_id = 'c9000000-0000-4000-8000-0000000000e1' AND source = 'party';
+  ASSERT v_count = 1, 'FAIL d5: the client must see exactly 1 v_project_roster party row, got ' || v_count;
 
   PERFORM pg_temp.reset_role();
   RAISE NOTICE 'project_roster: case (d) passed.';
