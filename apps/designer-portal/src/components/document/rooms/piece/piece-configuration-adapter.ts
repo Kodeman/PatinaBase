@@ -14,6 +14,7 @@ import {
   definitionForConfigurationMode,
   flatDefinition,
   type DimensionValue,
+  type FlatPieceCaptureOptions,
   type FlatPieceConfigurationSource,
   type PieceConfigurationDefinitionView,
   type PieceConfigurationRuleView,
@@ -43,6 +44,7 @@ export interface ConfigurationSourceProductRow {
   colors?: string[] | null;
   available_colors?: string[] | null;
   finish?: string | null;
+  capture_provenance?: unknown;
 }
 
 /**
@@ -67,7 +69,37 @@ export function pieceToConfigurationSource(
     colors: product?.colors ?? null,
     availableColors: product?.available_colors ?? null,
     finish: product?.finish ?? null,
+    captureOptions: captureOptionsFromProvenance(product?.capture_provenance),
   };
+}
+
+/**
+ * Tolerant reader for products.capture_provenance.captureOptions (P2-8, extension
+ * write). The column is untyped jsonb and other writers (iOS field-capture RPC
+ * 00235) use a different namespace (studioCustom), so every key here is
+ * optional/unknown-shaped until proven a string array.
+ */
+function captureOptionsFromProvenance(
+  provenance: unknown,
+): FlatPieceCaptureOptions | null {
+  if (!provenance || typeof provenance !== "object") return null;
+  const options = (provenance as Record<string, unknown>).captureOptions;
+  if (!options || typeof options !== "object") return null;
+  const record = options as Record<string, unknown>;
+  const result: FlatPieceCaptureOptions = {
+    colors: stringArray(record.colors),
+    finishes: stringArray(record.finishes),
+    materials: stringArray(record.materials),
+  };
+  return result.colors || result.finishes || result.materials ? result : null;
+}
+
+function stringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const strings = value.filter(
+    (item): item is string => typeof item === "string",
+  );
+  return strings.length > 0 ? strings : undefined;
 }
 
 export function configurationDefinitionToView(

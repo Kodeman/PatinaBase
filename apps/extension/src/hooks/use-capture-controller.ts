@@ -330,6 +330,7 @@ export function useCaptureController(): CaptureController {
             colors: null,
             finish: null,
             availableColors: null,
+            availableFinishes: null,
             manufacturer: null,
             extractedAt: new Date().toISOString(),
             confidence: data.images?.length > 0 && data.productName ? 'medium' : 'low',

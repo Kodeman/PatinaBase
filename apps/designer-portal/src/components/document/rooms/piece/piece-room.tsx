@@ -103,6 +103,7 @@ interface PieceProduct extends PieceRow {
   colors: string[] | null;
   available_colors: string[] | null;
   finish: string | null;
+  capture_provenance?: unknown;
   price_retail: number | null;
   price_trade: number | null;
   commission_rate: number | null;

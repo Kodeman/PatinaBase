@@ -24,6 +24,7 @@ export interface BuildProductPayloadInput {
 
 export function buildProductInsertPayload(input: BuildProductPayloadInput) {
   const { productName, extractedData, price, images, vendorId, retailerId, userId } = input;
+  const capturedAt = new Date().toISOString();
 
   return {
     name: productName || extractedData.productName || 'Untitled Product',
@@ -35,6 +36,22 @@ export function buildProductInsertPayload(input: BuildProductPayloadInput) {
     colors: extractedData.colors?.map(c => c.name) || null,
     finish: extractedData.finish?.name || null,
     available_colors: extractedData.availableColors || null,
+    // capture_source / capture_provenance (migration 00232) — the extension
+    // hadn't written these before; capture_provenance.captureOptions is a
+    // free namespace (studioCustom is claimed by field-capture) carrying the
+    // FULL scraped option lists so the Piece editor's suggestion seeder can
+    // surface multi-value color/finish/material groups for human confirmation
+    // (P2-8). The flat scalar writes above stay for back-compat.
+    capture_source: 'web_extension' as const,
+    capture_provenance: {
+      captureOptions: {
+        colors: extractedData.availableColors ?? [],
+        finishes: extractedData.availableFinishes ?? [],
+        materials: extractedData.materials ?? [],
+        source: 'web_extension' as const,
+        capturedAt,
+      },
+    },
     dimensions: extractedData.dimensions
       ? {
           width: extractedData.dimensions.width,
@@ -53,7 +70,7 @@ export function buildProductInsertPayload(input: BuildProductPayloadInput) {
     vendor_id: vendorId,
     retailer_id: retailerId,
     captured_by: userId,
-    captured_at: new Date().toISOString(),
+    captured_at: capturedAt,
     // Three-layer catalog (migration 00152). Captures always land in the
     // personal library — owner_user_id is the authoritative owner; the
     // legacy captured_by stays for historical attribution. The DB trigger

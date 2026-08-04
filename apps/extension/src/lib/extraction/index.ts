@@ -272,6 +272,7 @@ export async function extractProductData(url: string): Promise<ExtractedProductD
     colors: colorFinish.colors.length > 0 ? colorFinish.colors : null,
     finish: primaryFinish,
     availableColors: colorFinish.availableColors.length > 0 ? colorFinish.availableColors : null,
+    availableFinishes: colorFinish.availableFinishes.length > 0 ? colorFinish.availableFinishes : null,
     images,
     manufacturer,
     url,

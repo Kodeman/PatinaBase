@@ -140,6 +140,7 @@ export function emptyDraft(url: string): DraftSlice {
     colors: null,
     finish: null,
     availableColors: null,
+    availableFinishes: null,
     images: [],
     manufacturer: null,
     url,
@@ -187,6 +188,7 @@ export function draftToProductPayload(
     finish: f.finish.value ? { name: f.finish.value } : null,
     dimensions: editableDimensionsToExtracted(f.dimensions.value, draft.raw.dimensions),
     availableColors: draft.raw.availableColors,
+    availableFinishes: draft.raw.availableFinishes,
     url: draft.sourceUrl,
   } as unknown as ExtractedProductData;
 
