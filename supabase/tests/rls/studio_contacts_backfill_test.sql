@@ -23,6 +23,17 @@
 --   F. a GUEST seat's saved maker is NOT folded.
 --   G. IDEMPOTENCY — calling fold a second time in the same transaction leaves
 --      every count identical (org-scoped AND global).
+--   H. MERGES NEED EVIDENCE — two DISTINCT humans sharing a display_name, both
+--      with NULL phone AND NULL email, on two projects of one studio, stay TWO
+--      cards, and each party links to its OWN card. (A name is not evidence;
+--      the R5 owner review archives a real duplicate, but a wrong merge welds
+--      two people's history together irreversibly.)
+--   H2. …and the email IS evidence: same name, same non-NULL email, NULL
+--      phones → ONE card, both parties on it.
+--   I. ORG RESOLUTION THROUGH A GUEST SEAT — a designer holding an EARLIER
+--      guest seat in studio X and a later active member seat in studio Y folds
+--      into Y. (Resolving the primary studio first and re-checking non-guest
+--      afterwards would surface X and then drop the designer entirely.)
 --
 -- Runs entirely as postgres (the fold is service_role-only and writes across
 -- studios); RLS is not the subject here — studio_contacts_test.sql covers that.
@@ -42,24 +53,44 @@ VALUES
   ('bf000000-0000-4000-8000-000000000001', 'bf-des1@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
   ('bf000000-0000-4000-8000-000000000002', 'bf-des2@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
   ('bf000000-0000-4000-8000-000000000003', 'bf-orphan@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
-  ('bf000000-0000-4000-8000-000000000004', 'bf-guest@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+  ('bf000000-0000-4000-8000-000000000004', 'bf-guest@test.invalid',  '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  -- H / H2: owner of a SECOND studio, so the new person fixtures cannot move
+  -- the card counts case C asserts on the first studio.
+  ('bf000000-0000-4000-8000-000000000005', 'bf-des3@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  -- I: guest in one studio, real member in another.
+  ('bf000000-0000-4000-8000-000000000006', 'bf-des4@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
 
 INSERT INTO profiles (id, email, full_name, created_at, updated_at)
 VALUES
   ('bf000000-0000-4000-8000-000000000001', 'bf-des1@test.invalid',   'BF Designer One', NOW(), NOW()),
   ('bf000000-0000-4000-8000-000000000002', 'bf-des2@test.invalid',   'BF Designer Two', NOW(), NOW()),
   ('bf000000-0000-4000-8000-000000000003', 'bf-orphan@test.invalid', 'BF Orphan',       NOW(), NOW()),
-  ('bf000000-0000-4000-8000-000000000004', 'bf-guest@test.invalid',  'BF Guest',        NOW(), NOW())
+  ('bf000000-0000-4000-8000-000000000004', 'bf-guest@test.invalid',  'BF Guest',        NOW(), NOW()),
+  ('bf000000-0000-4000-8000-000000000005', 'bf-des3@test.invalid',   'BF Designer Three', NOW(), NOW()),
+  ('bf000000-0000-4000-8000-000000000006', 'bf-des4@test.invalid',   'BF Designer Four',  NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO organizations (id, type, name, slug)
-VALUES ('bf000000-0000-4000-8000-0000000000a1', 'design_studio', 'BF Studio', 'bf-studio-test');
+VALUES
+  ('bf000000-0000-4000-8000-0000000000a1', 'design_studio', 'BF Studio',        'bf-studio-test'),
+  -- H / H2 live here, isolated from a1's counts.
+  ('bf000000-0000-4000-8000-0000000000a2', 'design_studio', 'BF Studio Two',    'bf-studio-two-test'),
+  -- I: X (the guest seat) and Y (the real seat). BOTH are design_studio orgs —
+  -- that is the point: X is a perfectly valid resolution target by every rule
+  -- EXCEPT role, so only a resolver that excludes guests up front reaches Y.
+  ('bf000000-0000-4000-8000-0000000000a3', 'design_studio', 'BF Studio Guesty', 'bf-studio-guesty-test'),
+  ('bf000000-0000-4000-8000-0000000000a4', 'design_studio', 'BF Studio Real',   'bf-studio-real-test');
 
 INSERT INTO organization_members (id, user_id, organization_id, role, status, joined_at)
 VALUES
   ('bf000000-0000-4000-8000-0000000000c1', 'bf000000-0000-4000-8000-000000000001', 'bf000000-0000-4000-8000-0000000000a1', 'owner',  'active', NOW() - INTERVAL '30 days'),
   ('bf000000-0000-4000-8000-0000000000c2', 'bf000000-0000-4000-8000-000000000002', 'bf000000-0000-4000-8000-0000000000a1', 'member', 'active', NOW() - INTERVAL '20 days'),
-  ('bf000000-0000-4000-8000-0000000000c4', 'bf000000-0000-4000-8000-000000000004', 'bf000000-0000-4000-8000-0000000000a1', 'guest',  'active', NOW() - INTERVAL '10 days');
+  ('bf000000-0000-4000-8000-0000000000c4', 'bf000000-0000-4000-8000-000000000004', 'bf000000-0000-4000-8000-0000000000a1', 'guest',  'active', NOW() - INTERVAL '10 days'),
+  ('bf000000-0000-4000-8000-0000000000c5', 'bf000000-0000-4000-8000-000000000005', 'bf000000-0000-4000-8000-0000000000a2', 'owner',  'active', NOW() - INTERVAL '25 days'),
+  -- I: the guest seat is EARLIER and neither seat is owner, so joined_at order
+  -- puts X first for any resolver that does not filter on role.
+  ('bf000000-0000-4000-8000-0000000000c6', 'bf000000-0000-4000-8000-000000000006', 'bf000000-0000-4000-8000-0000000000a3', 'guest',  'active', NOW() - INTERVAL '40 days'),
+  ('bf000000-0000-4000-8000-0000000000c7', 'bf000000-0000-4000-8000-000000000006', 'bf000000-0000-4000-8000-0000000000a4', 'member', 'active', NOW() - INTERVAL '5 days');
 
 -- d1 saved by BOTH designers · d2 saved by one · d3 never saved (party only)
 -- d4 saved only by the guest seat.
@@ -68,7 +99,9 @@ VALUES
   ('bf000000-0000-4000-8000-0000000000d1', 'BF Maker One',   'lighting'),
   ('bf000000-0000-4000-8000-0000000000d2', 'BF Maker Two',   'textiles'),
   ('bf000000-0000-4000-8000-0000000000d3', 'BF Maker Three', NULL),
-  ('bf000000-0000-4000-8000-0000000000d4', 'BF Maker Four',  'rugs');
+  ('bf000000-0000-4000-8000-0000000000d4', 'BF Maker Four',  'rugs'),
+  -- I: saved by the designer whose ordering-first seat is a guest seat.
+  ('bf000000-0000-4000-8000-0000000000d5', 'BF Maker Five',  'stone');
 
 INSERT INTO saved_vendors (id, designer_id, vendor_id, saved_at)
 VALUES
@@ -77,7 +110,10 @@ VALUES
   ('bf000000-0000-4000-8000-0000000000f2', 'bf000000-0000-4000-8000-000000000001', 'bf000000-0000-4000-8000-0000000000d1', NOW() - INTERVAL '2 days'),
   ('bf000000-0000-4000-8000-0000000000f3', 'bf000000-0000-4000-8000-000000000001', 'bf000000-0000-4000-8000-0000000000d2', NOW() - INTERVAL '5 days'),
   -- Guest seat: must NOT seed the studio book.
-  ('bf000000-0000-4000-8000-0000000000f4', 'bf000000-0000-4000-8000-000000000004', 'bf000000-0000-4000-8000-0000000000d4', NOW() - INTERVAL '3 days');
+  ('bf000000-0000-4000-8000-0000000000f4', 'bf000000-0000-4000-8000-000000000004', 'bf000000-0000-4000-8000-0000000000d4', NOW() - INTERVAL '3 days'),
+  -- I: must land in the REAL seat's studio (a4), not the guest studio (a3),
+  -- and must not be dropped.
+  ('bf000000-0000-4000-8000-0000000000f5', 'bf000000-0000-4000-8000-000000000006', 'bf000000-0000-4000-8000-0000000000d5', NOW() - INTERVAL '3 days');
 
 INSERT INTO projects (id, name, designer_id, created_by, studio_id)
 VALUES
@@ -106,6 +142,27 @@ VALUES
 INSERT INTO project_parties (id, project_id, party_kind, display_name, phone, created_by)
 VALUES
   ('bf000000-0000-4000-8000-0000000000b4', 'bf000000-0000-4000-8000-0000000000e3', 'gc', 'Orphan Gary', '5559998888', 'bf000000-0000-4000-8000-000000000003');
+
+-- ─── H / H2 fixtures — studio TWO's projects ───────────────────────────────
+-- A second studio, so these rows cannot move the counts cases A–G assert on a1.
+INSERT INTO projects (id, name, designer_id, created_by, studio_id)
+VALUES
+  ('bf000000-0000-4000-8000-0000000000e4', 'BF2 Project One', 'bf000000-0000-4000-8000-000000000005', 'bf000000-0000-4000-8000-000000000005', 'bf000000-0000-4000-8000-0000000000a2'),
+  ('bf000000-0000-4000-8000-0000000000e5', 'BF2 Project Two', 'bf000000-0000-4000-8000-000000000005', 'bf000000-0000-4000-8000-000000000005', 'bf000000-0000-4000-8000-0000000000a2');
+
+-- H: two DIFFERENT humans who happen to share a name. No phone, no email —
+-- nothing in the data says they are one person, so nothing may merge them.
+INSERT INTO project_parties (id, project_id, party_kind, display_name, trade, created_by, created_at, updated_at)
+VALUES
+  ('bf000000-0000-4000-8000-0000000000b5', 'bf000000-0000-4000-8000-0000000000e4', 'gc', 'Chris Crew', 'framing', 'bf000000-0000-4000-8000-000000000005', NOW() - INTERVAL '7 days', NOW() - INTERVAL '7 days'),
+  ('bf000000-0000-4000-8000-0000000000b6', 'bf000000-0000-4000-8000-0000000000e5', 'gc', 'Chris Crew', 'roofing', 'bf000000-0000-4000-8000-000000000005', NOW() - INTERVAL '6 days', NOW() - INTERVAL '6 days');
+
+-- H2: same name (different casing), same email (different casing), no phones.
+-- The EMAIL is the evidence → one card, and the later-updated row wins trade.
+INSERT INTO project_parties (id, project_id, party_kind, display_name, email, trade, created_by, created_at, updated_at)
+VALUES
+  ('bf000000-0000-4000-8000-0000000000b7', 'bf000000-0000-4000-8000-0000000000e4', 'installer', 'Dana Dup', 'dana@test.invalid', 'tile',     'bf000000-0000-4000-8000-000000000005', NOW() - INTERVAL '7 days', NOW() - INTERVAL '7 days'),
+  ('bf000000-0000-4000-8000-0000000000b8', 'bf000000-0000-4000-8000-0000000000e5', 'installer', 'dana dup', 'Dana@Test.Invalid', 'millwork', 'bf000000-0000-4000-8000-000000000005', NOW() - INTERVAL '6 days', NOW() - INTERVAL '2 days');
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- Run the fold.
@@ -228,7 +285,98 @@ END
 $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
+-- H / H2 / I — merges need evidence, and org resolution must see past a guest
+-- seat. These are the two ways the fold can silently CORRUPT rather than merely
+-- miss: welding two humans onto one card, and dropping a designer's whole book.
+-- ═══════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  v_org2    CONSTANT uuid := 'bf000000-0000-4000-8000-0000000000a2';
+  v_orgX    CONSTANT uuid := 'bf000000-0000-4000-8000-0000000000a3';  -- guest seat
+  v_orgY    CONSTANT uuid := 'bf000000-0000-4000-8000-0000000000a4';  -- real seat
+  v_count   INTEGER;
+  v_b5_card uuid;
+  v_b6_card uuid;
+  v_b7_card uuid;
+  v_b8_card uuid;
+  v_id      uuid;
+  v_arr     TEXT[];
+BEGIN
+  -- ── H: a shared NAME with no phone and no email is NOT evidence ───────────
+  SELECT count(*) INTO v_count FROM studio_contacts
+   WHERE organization_id = v_org2
+     AND entity_kind     = 'person'
+     AND lower(btrim(full_name)) = 'chris crew';
+  ASSERT v_count = 2,
+    'FAIL H: two same-named people with NULL phone AND NULL email must stay TWO cards, got ' || v_count;
+
+  SELECT studio_contact_id INTO v_b5_card FROM project_parties WHERE id = 'bf000000-0000-4000-8000-0000000000b5';
+  SELECT studio_contact_id INTO v_b6_card FROM project_parties WHERE id = 'bf000000-0000-4000-8000-0000000000b6';
+  ASSERT v_b5_card IS NOT NULL AND v_b6_card IS NOT NULL,
+    'FAIL H2a: both evidence-free parties must still be stamped with lineage';
+  ASSERT v_b5_card <> v_b6_card,
+    'FAIL H2b: each evidence-free party must link to its OWN card, both got ' || v_b5_card::text;
+
+  -- …and each stamp points at a real Chris card in this studio (not a stray).
+  SELECT count(*) INTO v_count FROM studio_contacts
+   WHERE id IN (v_b5_card, v_b6_card)
+     AND organization_id = v_org2
+     AND entity_kind     = 'person'
+     AND lower(btrim(full_name)) = 'chris crew';
+  ASSERT v_count = 2,
+    'FAIL H2c: both stamps should resolve to Chris person cards in studio two, got ' || v_count;
+
+  -- ── H2: a shared non-NULL EMAIL *is* evidence → one card ──────────────────
+  SELECT count(*) INTO v_count FROM studio_contacts
+   WHERE organization_id = v_org2
+     AND entity_kind     = 'person'
+     AND lower(btrim(full_name)) = 'dana dup';
+  ASSERT v_count = 1,
+    'FAIL H2: same name + same email (NULL phones) should merge to ONE card, got ' || v_count;
+
+  SELECT studio_contact_id INTO v_b7_card FROM project_parties WHERE id = 'bf000000-0000-4000-8000-0000000000b7';
+  SELECT studio_contact_id INTO v_b8_card FROM project_parties WHERE id = 'bf000000-0000-4000-8000-0000000000b8';
+  ASSERT v_b7_card IS NOT NULL AND v_b7_card = v_b8_card,
+    'FAIL H2d: both email-matched parties must link to the SAME card, got ' ||
+    COALESCE(v_b7_card::text, 'NULL') || ' / ' || COALESCE(v_b8_card::text, 'NULL');
+
+  SELECT specialties INTO v_arr FROM studio_contacts WHERE id = v_b7_card;
+  ASSERT v_arr = ARRAY['millwork'],
+    'FAIL H2e: the latest-updated party should still win the trade, got ' || COALESCE(v_arr::text, 'NULL');
+
+  -- Studio two holds exactly these three person cards — no stray merge, no
+  -- stray split.
+  SELECT count(*) INTO v_count FROM studio_contacts
+   WHERE organization_id = v_org2 AND entity_kind = 'person';
+  ASSERT v_count = 3,
+    'FAIL H3: studio two should hold 3 person cards (2 Chris + 1 Dana), got ' || v_count;
+
+  -- ── I: an earlier GUEST seat must not shadow a later real seat ────────────
+  SELECT count(*) INTO v_count FROM studio_contacts WHERE organization_id = v_orgX;
+  ASSERT v_count = 0,
+    'FAIL I: the guest-seat studio must receive nothing, got ' || v_count;
+
+  SELECT id INTO v_id FROM studio_contacts
+   WHERE organization_id = v_orgY
+     AND entity_kind     = 'company'
+     AND vendor_id       = 'bf000000-0000-4000-8000-0000000000d5';
+  ASSERT v_id IS NOT NULL,
+    'FAIL I2: the saved maker must fold into the studio where the designer holds a REAL seat';
+
+  SELECT count(*) INTO v_count FROM studio_contacts WHERE organization_id = v_orgY;
+  ASSERT v_count = 1,
+    'FAIL I3: the real-seat studio should hold exactly the one company card, got ' || v_count;
+
+  RAISE NOTICE 'studio_contacts_backfill: cases H, H2, I passed.';
+END
+$$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
 -- G. IDEMPOTENCY — a second fold in the same transaction changes nothing.
+--
+-- This also guards the 'party:' discriminator specifically: the evidence-free
+-- Chris cards (H) can only survive a re-run if the key reproduces itself from
+-- the party row's id, since there is no phone or email to find them by.
 -- ═══════════════════════════════════════════════════════════════════════════
 DO $$
 DECLARE
