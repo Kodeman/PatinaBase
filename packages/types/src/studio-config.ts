@@ -16,6 +16,7 @@ export type StaffRole =
   | 'design_director'
   | 'senior_designer'
   | 'designer'
+  | 'junior_designer'
   | 'design_assistant'
   | 'project_manager'
   | 'procurement'
@@ -27,6 +28,7 @@ export const ALL_STAFF_ROLES: readonly StaffRole[] = [
   'design_director',
   'senior_designer',
   'designer',
+  'junior_designer',
   'design_assistant',
   'project_manager',
   'procurement',
@@ -39,6 +41,7 @@ export const STAFF_ROLE_LABELS: Record<StaffRole, string> = {
   design_director: 'Design Director',
   senior_designer: 'Senior Designer',
   designer: 'Designer',
+  junior_designer: 'Junior Designer',
   design_assistant: 'Design Assistant',
   project_manager: 'Project Manager',
   procurement: 'Procurement / Expeditor',
@@ -58,6 +61,7 @@ export const STAFF_ROLE_DEFAULT_TIER: Record<StaffRole, 'owner' | 'admin' | 'mem
   design_director: 'admin',
   senior_designer: 'member',
   designer: 'member',
+  junior_designer: 'member',
   design_assistant: 'member',
   project_manager: 'member',
   procurement: 'member',

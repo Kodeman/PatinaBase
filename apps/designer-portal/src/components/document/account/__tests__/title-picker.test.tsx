@@ -7,8 +7,10 @@ import {
 import { TitlePicker, findStaffRoleByLabel } from '../title-picker';
 
 describe('TitlePicker', () => {
-  it('lists all nine curated titles plus Custom title…', () => {
-    expect(ALL_STAFF_ROLES).toHaveLength(9);
+  it('lists all ten curated titles plus Custom title…', () => {
+    // Ten since Wave 5 — 'junior_designer' joined the vocab because both decks
+    // ship it explicitly ("the vocabulary is not ours to pick").
+    expect(ALL_STAFF_ROLES).toHaveLength(10);
 
     render(
       <TitlePicker value={null} onPick={jest.fn()} onClose={jest.fn()} />,
