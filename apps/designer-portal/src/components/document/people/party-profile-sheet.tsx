@@ -146,14 +146,20 @@ export function PartyProfileSheet({
 
   // Call Sheet Wave 2 — the promote band (slide 10). Gated on the flag AND on
   // finding this party's real project_parties row (the mutation needs the
-  // full row, not just the people_directory projection `person` is).
+  // full row, not just the people_directory projection `person` is). Both
+  // queries below are flag-disabled rather than merely flag-unused — the
+  // sheet stays mounted while closed (see the `open` gate on
+  // useProjectParties), so an ungated query would fire on every mount
+  // regardless of whether the promote band can ever render, flag on or not.
   const { value: callSheetOn } = useFeatureFlag('call-sheet');
-  const { data: orgs } = useOrganizations();
+  const { data: orgs } = useOrganizations({ enabled: callSheetOn });
   const organizationId = useMemo(
     () => orgs?.find((o) => o.type === 'design_studio')?.id ?? orgs?.[0]?.id ?? null,
     [orgs],
   );
-  const { data: projectParties } = useProjectParties(open ? person?.project_id : null);
+  const { data: projectParties } = useProjectParties(
+    callSheetOn && open ? person?.project_id : null,
+  );
   const linkedParty = useMemo(
     () => projectParties?.find((p) => p.id === partyId) ?? null,
     [projectParties, partyId],
