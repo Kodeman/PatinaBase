@@ -7859,3 +7859,75 @@ DO $g$ BEGIN
   GRANT SELECT ( id, proposal_id, party_role, signer_user_id, signed_name, evidence_fingerprint, signed_at, metadata ) ON public.commercial_document_signatures TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00415_decision_selection_and_template_privacy.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public._decision_selection_snapshot_safe(jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00415_decision_selection_and_template_privacy.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._decision_selection_snapshot_safe(jsonb) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00415_decision_selection_and_template_privacy.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.save_product_configuration(jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00415_decision_selection_and_template_privacy.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.save_product_configuration(jsonb) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00415_decision_selection_and_template_privacy.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.promote_configuration_to_library(uuid, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00415_decision_selection_and_template_privacy.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.promote_configuration_to_library(uuid, text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00415_decision_selection_and_template_privacy.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_client_decision( uuid, jsonb, jsonb, uuid[], uuid[] ) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00415_decision_selection_and_template_privacy.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_client_decision( uuid, jsonb, jsonb, uuid[], uuid[] ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00415_decision_selection_and_template_privacy.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.update_client_decision(uuid, jsonb, jsonb, timestamptz) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00415_decision_selection_and_template_privacy.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.update_client_decision(uuid, jsonb, jsonb, timestamptz) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00416_studio_staff_titles.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_my_member_title(uuid, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00416_studio_staff_titles.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_my_member_title(uuid, text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
