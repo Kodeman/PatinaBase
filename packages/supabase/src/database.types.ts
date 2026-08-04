@@ -1488,6 +1488,7 @@ export type Database = {
         Row: {
           approves: boolean
           client_note: string | null
+          configuration_id: string | null
           cost_delta_cents: number | null
           created_at: string
           decision_id: string
@@ -1501,11 +1502,13 @@ export type Database = {
           product_id: string | null
           quantity: number | null
           selected: boolean | null
+          selection_snapshot: Json | null
           sort_order: number | null
         }
         Insert: {
           approves?: boolean
           client_note?: string | null
+          configuration_id?: string | null
           cost_delta_cents?: number | null
           created_at?: string
           decision_id: string
@@ -1519,11 +1522,13 @@ export type Database = {
           product_id?: string | null
           quantity?: number | null
           selected?: boolean | null
+          selection_snapshot?: Json | null
           sort_order?: number | null
         }
         Update: {
           approves?: boolean
           client_note?: string | null
+          configuration_id?: string | null
           cost_delta_cents?: number | null
           created_at?: string
           decision_id?: string
@@ -1537,9 +1542,17 @@ export type Database = {
           product_id?: string | null
           quantity?: number | null
           selected?: boolean | null
+          selection_snapshot?: Json | null
           sort_order?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "client_decision_options_configuration_id_fkey"
+            columns: ["configuration_id"]
+            isOneToOne: false
+            referencedRelation: "product_configurations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "client_decision_options_decision_id_fkey"
             columns: ["decision_id"]
@@ -9709,6 +9722,7 @@ export type Database = {
         Row: {
           approved_at: string | null
           approved_by: string | null
+          com_details: Json | null
           component_quantities: Json
           configuration_key: string
           created_at: string
@@ -9744,6 +9758,7 @@ export type Database = {
         Insert: {
           approved_at?: string | null
           approved_by?: string | null
+          com_details?: Json | null
           component_quantities?: Json
           configuration_key?: string
           created_at?: string
@@ -9779,6 +9794,7 @@ export type Database = {
         Update: {
           approved_at?: string | null
           approved_by?: string | null
+          com_details?: Json | null
           component_quantities?: Json
           configuration_key?: string
           created_at?: string
@@ -10380,7 +10396,9 @@ export type Database = {
       }
       product_option_values: {
         Row: {
+          allows_com: boolean
           code: string
+          com_requirements: Json
           created_at: string
           description: string | null
           id: string
@@ -10397,7 +10415,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          allows_com?: boolean
           code: string
+          com_requirements?: Json
           created_at?: string
           description?: string | null
           id?: string
@@ -10414,7 +10434,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          allows_com?: boolean
           code?: string
+          com_requirements?: Json
           created_at?: string
           description?: string | null
           id?: string
@@ -23329,6 +23351,10 @@ export type Database = {
         }
       }
       _compute_quiz_profile: { Args: { p_answers: Json }; Returns: Json }
+      _configuration_com_color_fabric: {
+        Args: { p_com_details: Json }
+        Returns: string
+      }
       _configuration_quote_snapshot: {
         Args: { p_configuration_id: string }
         Returns: Json

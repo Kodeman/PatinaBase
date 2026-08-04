@@ -11,12 +11,14 @@ INSERT INTO auth.users (
   instance_id, aud, role
 ) VALUES
   ('4c000000-0000-4000-8000-000000000001', 'config-owner@test.invalid', '', now(), now(), now(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
-  ('4c000000-0000-4000-8000-000000000002', 'config-outsider@test.invalid', '', now(), now(), now(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+  ('4c000000-0000-4000-8000-000000000002', 'config-outsider@test.invalid', '', now(), now(), now(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('4c000000-0000-4000-8000-000000000003', 'config-client@test.invalid', '', now(), now(), now(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
 
 INSERT INTO public.profiles (id, email, full_name, created_at, updated_at)
 VALUES
   ('4c000000-0000-4000-8000-000000000001', 'config-owner@test.invalid', 'Configuration Owner', now(), now()),
-  ('4c000000-0000-4000-8000-000000000002', 'config-outsider@test.invalid', 'Configuration Outsider', now(), now())
+  ('4c000000-0000-4000-8000-000000000002', 'config-outsider@test.invalid', 'Configuration Outsider', now(), now()),
+  ('4c000000-0000-4000-8000-000000000003', 'config-client@test.invalid', 'Configuration Client', now(), now())
 ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name;
 
 INSERT INTO public.organizations (id, type, name, slug, status, created_at, updated_at)
@@ -37,6 +39,17 @@ INSERT INTO public.projects (id, name, designer_id, created_by)
 VALUES ('4c000000-0000-4000-8000-000000000030', 'Configuration Project',
   '4c000000-0000-4000-8000-000000000001', '4c000000-0000-4000-8000-000000000001');
 
+-- A claimed relationship + its project: client decisions need a registered
+-- recipient before they can be published and answered.
+INSERT INTO public.designer_clients (id, designer_id, client_id, status)
+VALUES ('4c000000-0000-4000-8000-000000000040',
+  '4c000000-0000-4000-8000-000000000001', '4c000000-0000-4000-8000-000000000003', 'active');
+
+INSERT INTO public.projects (id, name, designer_id, client_id, created_by)
+VALUES ('4c000000-0000-4000-8000-000000000031', 'Decision Project',
+  '4c000000-0000-4000-8000-000000000001', '4c000000-0000-4000-8000-000000000003',
+  '4c000000-0000-4000-8000-000000000001');
+
 INSERT INTO public.products (
   id, name, source_url, captured_by, captured_at, layer, owner_user_id,
   status, price_retail, price_trade, lead_time_weeks, dimensions, vendor_id
@@ -44,7 +57,9 @@ INSERT INTO public.products (
   ('4c000000-0000-4000-8000-000000000101', 'Finite Bed', 'https://example.invalid/bed', '4c000000-0000-4000-8000-000000000001', now(), 'personal', '4c000000-0000-4000-8000-000000000001', 'draft', NULL, NULL, 6, '{"unit":"in"}'::jsonb, '4c000000-0000-4000-8000-000000000020'),
   ('4c000000-0000-4000-8000-000000000102', 'Modular Sectional', 'https://example.invalid/sectional', '4c000000-0000-4000-8000-000000000001', now(), 'personal', '4c000000-0000-4000-8000-000000000001', 'draft', 999999, 888888, 10, NULL, '4c000000-0000-4000-8000-000000000020'),
   ('4c000000-0000-4000-8000-000000000103', 'Material Table', 'https://example.invalid/table', '4c000000-0000-4000-8000-000000000001', now(), 'personal', '4c000000-0000-4000-8000-000000000001', 'draft', 50000, 35000, 8, '{"width":72,"unit":"in"}'::jsonb, '4c000000-0000-4000-8000-000000000020'),
-  ('4c000000-0000-4000-8000-000000000104', 'Custom Cabinetry', 'https://example.invalid/cabinet', '4c000000-0000-4000-8000-000000000001', now(), 'personal', '4c000000-0000-4000-8000-000000000001', 'draft', NULL, NULL, NULL, NULL, '4c000000-0000-4000-8000-000000000020');
+  ('4c000000-0000-4000-8000-000000000104', 'Custom Cabinetry', 'https://example.invalid/cabinet', '4c000000-0000-4000-8000-000000000001', now(), 'personal', '4c000000-0000-4000-8000-000000000001', 'draft', NULL, NULL, NULL, NULL, '4c000000-0000-4000-8000-000000000020'),
+  ('4c000000-0000-4000-8000-000000000105', 'COM Sofa', 'https://example.invalid/sofa', '4c000000-0000-4000-8000-000000000001', now(), 'personal', '4c000000-0000-4000-8000-000000000001', 'draft', 200000, 140000, 8, NULL, '4c000000-0000-4000-8000-000000000020'),
+  ('4c000000-0000-4000-8000-000000000106', 'Plain Floor Lamp', 'https://example.invalid/lamp', '4c000000-0000-4000-8000-000000000001', now(), 'personal', '4c000000-0000-4000-8000-000000000001', 'draft', 40000, 28000, 3, NULL, '4c000000-0000-4000-8000-000000000020');
 
 CREATE OR REPLACE FUNCTION pg_temp.assume_user(p_user_id uuid)
 RETURNS void LANGUAGE plpgsql AS $$
@@ -129,6 +144,26 @@ DECLARE
   v_item_snapshot jsonb;
   v_raised boolean;
   v_count integer;
+  v_com_oak uuid;
+  v_com_walnut uuid;
+  v_com_natural uuid;
+  v_com_ebonized uuid;
+  v_com_house_linen uuid;
+  v_com_value uuid;
+  v_locked_config_id uuid;
+  v_other_selections jsonb;
+  v_com_config_a uuid;
+  v_com_config_b uuid;
+  v_com_hash_a text;
+  v_com_hash_b text;
+  v_com_item_id uuid;
+  v_com_spec_id uuid;
+  v_selections jsonb;
+  v_decision_id uuid;
+  v_decision_option_id uuid;
+  v_locked_decision_id uuid;
+  v_locked_option_id uuid;
+  v_locked_item_id uuid;
 BEGIN
   PERFORM pg_temp.assume_user('4c000000-0000-4000-8000-000000000001');
 
@@ -907,6 +942,293 @@ BEGIN
   END;
   ASSERT v_raised, 'exact configuration lookup must enforce the owner/studio/project boundary';
 
+  -- ═════════════════════════════════════════════════════════════════════════
+  -- 00413 — COM/COL and decision-carried selections
+  -- ═════════════════════════════════════════════════════════════════════════
+  PERFORM pg_temp.reset_user();
+  PERFORM pg_temp.assume_user('4c000000-0000-4000-8000-000000000001');
+
+  -- COM is authored on the option value and survives the definition round-trip.
+  v_schema := public.upsert_product_configuration_schema(
+    '4c000000-0000-4000-8000-000000000105',
+    '{
+      "mode":"configured","pricingStrategy":"base_plus_adjustments",
+      "optionGroups":[
+        {"code":"material","name":"Frame Material","selectionType":"single","required":true,"minSelections":1,"maxSelections":1,"position":0,"values":[
+          {"code":"oak","label":"Oak","position":0},
+          {"code":"walnut","label":"Walnut","retailPriceDeltaCents":20000,"tradePriceDeltaCents":14000,"position":1}]},
+        {"code":"finish","name":"Finish","selectionType":"single","required":true,"minSelections":1,"maxSelections":1,"position":1,"values":[
+          {"code":"natural","label":"Natural","position":0},
+          {"code":"ebonized","label":"Ebonized","position":1}]},
+        {"code":"fabric","name":"Fabric","selectionType":"single","required":true,"minSelections":1,"maxSelections":1,"position":2,"values":[
+          {"code":"house-linen","label":"House Linen","position":0},
+          {"code":"com","label":"Customer''s Own Material","allowsCom":true,"comRequirements":{"yardageMinimum":14,"railroaded":true},"position":1}]}
+      ],"variants":[],"components":[],"rules":[]
+    }'::jsonb,
+    1
+  );
+  ASSERT (SELECT (value->>'allowsCom')::boolean
+            AND value#>>'{comRequirements,yardageMinimum}' = '14'
+          FROM jsonb_array_elements(v_schema#>'{optionGroups,2,values}')
+          WHERE value->>'code' = 'com'),
+    'COM flag and vendor requirements must round-trip through the definition RPCs';
+  ASSERT (SELECT NOT (value->>'allowsCom')::boolean AND value->'comRequirements' = '{}'::jsonb
+          FROM jsonb_array_elements(v_schema#>'{optionGroups,2,values}')
+          WHERE value->>'code' = 'house-linen'),
+    'option values default to non-COM with empty requirements';
+
+  -- Re-authoring the same definition takes the DO UPDATE arm, not an insert.
+  v_schema := public.upsert_product_configuration_schema(
+    '4c000000-0000-4000-8000-000000000105',
+    '{
+      "mode":"configured","pricingStrategy":"base_plus_adjustments",
+      "optionGroups":[
+        {"code":"material","name":"Frame Material","selectionType":"single","required":true,"minSelections":1,"maxSelections":1,"position":0,"values":[
+          {"code":"oak","label":"Oak","position":0},
+          {"code":"walnut","label":"Walnut","retailPriceDeltaCents":20000,"tradePriceDeltaCents":14000,"position":1}]},
+        {"code":"finish","name":"Finish","selectionType":"single","required":true,"minSelections":1,"maxSelections":1,"position":1,"values":[
+          {"code":"natural","label":"Natural","position":0},
+          {"code":"ebonized","label":"Ebonized","position":1}]},
+        {"code":"fabric","name":"Fabric","selectionType":"single","required":true,"minSelections":1,"maxSelections":1,"position":2,"values":[
+          {"code":"house-linen","label":"House Linen","position":0},
+          {"code":"com","label":"Customer''s Own Material","allowsCom":true,"comRequirements":{"yardageMinimum":18,"railroaded":false,"shipTo":"Fabricator dock"},"position":1}]}
+      ],"variants":[],"components":[],"rules":[]
+    }'::jsonb,
+    2
+  );
+  ASSERT (SELECT value#>>'{comRequirements,yardageMinimum}' = '18'
+            AND value#>>'{comRequirements,shipTo}' = 'Fabricator dock'
+          FROM jsonb_array_elements(v_schema#>'{optionGroups,2,values}')
+          WHERE value->>'code' = 'com'),
+    'edited COM requirements must update in place, not orphan the option value';
+
+  SELECT (value->>'id')::uuid INTO v_com_oak
+  FROM jsonb_array_elements(v_schema#>'{optionGroups,0,values}') WHERE value->>'code' = 'oak';
+  SELECT (value->>'id')::uuid INTO v_com_walnut
+  FROM jsonb_array_elements(v_schema#>'{optionGroups,0,values}') WHERE value->>'code' = 'walnut';
+  SELECT (value->>'id')::uuid INTO v_com_natural
+  FROM jsonb_array_elements(v_schema#>'{optionGroups,1,values}') WHERE value->>'code' = 'natural';
+  SELECT (value->>'id')::uuid INTO v_com_ebonized
+  FROM jsonb_array_elements(v_schema#>'{optionGroups,1,values}') WHERE value->>'code' = 'ebonized';
+  SELECT (value->>'id')::uuid INTO v_com_house_linen
+  FROM jsonb_array_elements(v_schema#>'{optionGroups,2,values}') WHERE value->>'code' = 'house-linen';
+  SELECT (value->>'id')::uuid INTO v_com_value
+  FROM jsonb_array_elements(v_schema#>'{optionGroups,2,values}') WHERE value->>'code' = 'com';
+
+  -- Evaluation carries the COM flag into the selection snapshot for the PO.
+  v_eval := public.evaluate_product_configuration(
+    '4c000000-0000-4000-8000-000000000105', NULL,
+    ARRAY[v_com_oak, v_com_natural, v_com_value], '[]'::jsonb
+  );
+  ASSERT (v_eval->>'valid')::boolean AND (v_eval->>'complete')::boolean,
+    'a fully chosen COM sofa must evaluate valid and complete';
+  ASSERT (SELECT (selection->>'allowsCom')::boolean
+          FROM jsonb_array_elements(v_eval#>'{snapshot,selections}') AS chosen(selection)
+          WHERE selection->>'groupCode' = 'fabric'),
+    'the selection snapshot must say the fabric is customer-supplied';
+
+  -- Saving records the fabric and hashes it with the rest of the snapshot.
+  v_saved := public.save_product_configuration(jsonb_build_object(
+    'productId', '4c000000-0000-4000-8000-000000000105',
+    'name', 'COM Sofa in Belgian Linen',
+    'selections', jsonb_build_object(
+      'material', jsonb_build_array(v_com_oak),
+      'finish', jsonb_build_array(v_com_natural),
+      'fabric', jsonb_build_array(v_com_value)),
+    'components', '[]'::jsonb,
+    'comDetails', jsonb_build_object(
+      'optionValueId', v_com_value, 'fabricName', 'Belgian Linen',
+      'mill', 'Rogers & Goffigon', 'pattern', 'Kalahari',
+      'yardage', 18, 'railroaded', true, 'sidemark', 'HAYES / LIVING')
+  ));
+  v_com_config_a := (v_saved#>>'{configuration,id}')::uuid;
+  SELECT snapshot_hash INTO v_com_hash_a
+  FROM public.product_configurations WHERE id = v_com_config_a;
+  ASSERT (SELECT com_details->>'fabricName' = 'Belgian Linen'
+            AND snapshot#>>'{comDetails,mill}' = 'Rogers & Goffigon'
+            AND snapshot_hash = pg_temp.configuration_snapshot_hash(snapshot)
+          FROM public.product_configurations WHERE id = v_com_config_a),
+    'COM details must persist and be hashed as part of the immutable snapshot';
+
+  v_raised := false;
+  BEGIN
+    PERFORM public.save_product_configuration(jsonb_build_object(
+      'productId', '4c000000-0000-4000-8000-000000000105',
+      'selections', jsonb_build_object(
+        'material', jsonb_build_array(v_com_oak),
+        'finish', jsonb_build_array(v_com_natural),
+        'fabric', jsonb_build_array(v_com_house_linen)),
+      'components', '[]'::jsonb,
+      'comDetails', jsonb_build_object('optionValueId', v_com_value, 'fabricName', 'Unchosen')
+    ));
+  EXCEPTION WHEN foreign_key_violation THEN v_raised := true;
+  END;
+  ASSERT v_raised, 'COM details cannot name an option value the configuration did not select';
+
+  v_raised := false;
+  BEGIN
+    PERFORM public.save_product_configuration(jsonb_build_object(
+      'productId', '4c000000-0000-4000-8000-000000000106',
+      'selections', '{}'::jsonb, 'components', '[]'::jsonb,
+      'comDetails', jsonb_build_object('fabricName', 'Not for a plain piece')
+    ));
+  EXCEPTION WHEN invalid_parameter_value THEN v_raised := true;
+  END;
+  ASSERT v_raised, 'standard products must reject COM details outright';
+
+  -- A different fabric is a different specification, so a different hash.
+  v_saved := public.save_product_configuration(jsonb_build_object(
+    'productId', '4c000000-0000-4000-8000-000000000105',
+    'configurationId', v_com_config_a,
+    'expectedVersion', 1,
+    'name', 'COM Sofa in Mohair Velvet',
+    'selections', jsonb_build_object(
+      'material', jsonb_build_array(v_com_oak),
+      'finish', jsonb_build_array(v_com_natural),
+      'fabric', jsonb_build_array(v_com_value)),
+    'components', '[]'::jsonb,
+    'comDetails', jsonb_build_object(
+      'optionValueId', v_com_value, 'fabricName', 'Mohair Velvet', 'mill', 'Pierre Frey')
+  ));
+  v_com_config_b := (v_saved#>>'{configuration,id}')::uuid;
+  SELECT snapshot_hash INTO v_com_hash_b
+  FROM public.product_configurations WHERE id = v_com_config_b;
+  ASSERT v_com_hash_b IS DISTINCT FROM v_com_hash_a,
+    'changing only the COM fabric must change the configuration hash';
+
+  -- Placement denormalizes a vendor-readable fabric line onto the spec, from
+  -- the snapshot the project copy carries.
+  v_place := public.place_product_configuration_in_project(
+    '4c000000-0000-4000-8000-000000000030', v_com_config_b,
+    NULL, NULL, 'seating', '{"placement":"com-sofa"}'
+  );
+  v_com_item_id := (v_place->>'ffeItemId')::uuid;
+  v_com_spec_id := (v_place->>'specId')::uuid;
+  ASSERT (SELECT color_fabric = 'Mohair Velvet — Pierre Frey'
+            AND material = 'Oak' AND finish = 'Natural'
+          FROM public.project_ffe_specs WHERE id = v_com_spec_id),
+    'placement must denormalize the COM fabric alongside material and finish';
+  UPDATE public.project_ffe_items SET status = 'approved' WHERE id = v_com_item_id;
+  ASSERT (SELECT configuration_locked_at IS NOT NULL
+            AND color_fabric = 'Mohair Velvet — Pierre Frey'
+          FROM public.project_ffe_specs WHERE id = v_com_spec_id),
+    'project approval must keep the COM fabric line while it locks the spec';
+
+  -- Decision options carry a real configuration selection, not a typed delta.
+  SELECT snapshot->'selections' INTO v_selections
+  FROM public.product_configurations WHERE id = v_com_config_b;
+  PERFORM pg_temp.reset_user();
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', '4c000000-0000-4000-8000-000000000001',
+                      'role', 'authenticated')::text, true);
+
+  v_decision_id := '4c000000-0000-4000-8000-000000000050';
+  PERFORM public.create_client_decision(
+    v_decision_id,
+    jsonb_build_object(
+      'designer_client_id', '4c000000-0000-4000-8000-000000000040',
+      'project_id', '4c000000-0000-4000-8000-000000000031',
+      'title', 'Living room sofa fabric',
+      'status', 'pending',
+      'blocking_status', 'non_blocking'),
+    jsonb_build_array(jsonb_build_object(
+      'name', 'COM Sofa in Mohair Velvet',
+      'price', 240000,
+      'quantity', 1,
+      'product_id', '4c000000-0000-4000-8000-000000000105',
+      'configuration_id', v_com_config_b,
+      'selection_snapshot', v_selections,
+      'sort_order', 0))
+  );
+  SELECT id INTO v_decision_option_id
+  FROM public.client_decision_options WHERE decision_id = v_decision_id;
+  ASSERT (SELECT configuration_id = v_com_config_b
+            AND jsonb_typeof(selection_snapshot) = 'array'
+            AND jsonb_array_length(selection_snapshot) = 3
+          FROM public.client_decision_options WHERE id = v_decision_option_id),
+    'decision options must carry configuration provenance and its selections';
+
+  -- Winning writes those selections onto the auto-created specification.
+  PERFORM public._apply_client_decision_authorized(
+    v_decision_id, v_decision_option_id,
+    '4c000000-0000-4000-8000-000000000001', NULL, NULL, NULL, NULL
+  );
+  ASSERT (SELECT spec.material = 'Oak' AND spec.finish = 'Natural'
+            AND spec.color_fabric = 'Customer''s Own Material'
+          FROM public.project_ffe_specs AS spec
+          JOIN public.project_ffe_items AS item ON item.id = spec.ffe_item_id
+          WHERE item.source_decision_id = v_decision_id),
+    'a winning option with selections must specify its FF&E line, not just price it';
+
+  -- Replaying the same winner stays idempotent with the selection write in place.
+  PERFORM public._apply_client_decision_authorized(
+    v_decision_id, v_decision_option_id,
+    '4c000000-0000-4000-8000-000000000001', NULL, NULL, NULL, NULL
+  );
+  ASSERT (SELECT count(*) = 1 FROM public.project_ffe_items
+          WHERE source_decision_id = v_decision_id),
+    'replaying the same winning option must not duplicate the FF&E line';
+
+  -- A specification already locked to its own configuration is never
+  -- rewritten by a later decision, even one the line answers.
+  v_eval := public.evaluate_product_configuration(
+    '4c000000-0000-4000-8000-000000000105', NULL,
+    ARRAY[v_com_walnut, v_com_ebonized, v_com_value], '[]'::jsonb
+  );
+  v_other_selections := v_eval#>'{snapshot,selections}';
+  v_locked_decision_id := '4c000000-0000-4000-8000-000000000051';
+  PERFORM public.create_client_decision(
+    v_locked_decision_id,
+    jsonb_build_object(
+      'designer_client_id', '4c000000-0000-4000-8000-000000000040',
+      'project_id', '4c000000-0000-4000-8000-000000000031',
+      'title', 'Already-specified sofa',
+      'status', 'pending',
+      'blocking_status', 'non_blocking'),
+    jsonb_build_array(jsonb_build_object(
+      'name', 'COM Sofa in Walnut and Ebonized',
+      'price', 200000,
+      'quantity', 1,
+      'product_id', '4c000000-0000-4000-8000-000000000105',
+      'configuration_id', v_com_config_b,
+      'selection_snapshot', v_other_selections,
+      'sort_order', 0))
+  );
+  SELECT id INTO v_locked_option_id
+  FROM public.client_decision_options WHERE decision_id = v_locked_decision_id;
+
+  v_saved := public.save_product_configuration(jsonb_build_object(
+    'productId', '4c000000-0000-4000-8000-000000000105',
+    'name', 'House Linen Sofa',
+    'selections', jsonb_build_object(
+      'material', jsonb_build_array(v_com_oak),
+      'finish', jsonb_build_array(v_com_natural),
+      'fabric', jsonb_build_array(v_com_house_linen)),
+    'components', '[]'::jsonb
+  ));
+  v_locked_config_id := (v_saved#>>'{configuration,id}')::uuid;
+  v_place := public.place_product_configuration_in_project(
+    '4c000000-0000-4000-8000-000000000031', v_locked_config_id,
+    NULL, NULL, 'seating', '{"placement":"already-specified"}'
+  );
+  v_locked_item_id := (v_place->>'ffeItemId')::uuid;
+  UPDATE public.project_ffe_items SET status = 'approved' WHERE id = v_locked_item_id;
+  UPDATE public.project_ffe_items
+  SET source_decision_id = v_locked_decision_id WHERE id = v_locked_item_id;
+  ASSERT (SELECT configuration_locked_at IS NOT NULL
+            AND material = 'Oak' AND finish = 'Natural' AND color_fabric IS NULL
+          FROM public.project_ffe_specs WHERE ffe_item_id = v_locked_item_id),
+    'the locked fixture must start as an Oak/Natural configured line with no COM fabric';
+
+  PERFORM public._apply_client_decision_authorized(
+    v_locked_decision_id, v_locked_option_id,
+    '4c000000-0000-4000-8000-000000000001', NULL, NULL, NULL, NULL
+  );
+  ASSERT (SELECT material = 'Oak' AND finish = 'Natural' AND color_fabric IS NULL
+          FROM public.project_ffe_specs WHERE ffe_item_id = v_locked_item_id),
+    'a locked specification must survive the decision feed-through untouched';
+
+  PERFORM set_config('request.jwt.claims', NULL, true);
   PERFORM pg_temp.reset_user();
   RAISE NOTICE 'All furniture configuration assertions passed.';
 END;

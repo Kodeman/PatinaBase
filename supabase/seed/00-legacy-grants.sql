@@ -7613,3 +7613,123 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.supersede_unsigned_legacy_proposals(uuid[], uuid, text) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00413_configuration_com_and_decision_selection.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public._configuration_com_color_fabric(jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00413_configuration_com_and_decision_selection.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._configuration_com_color_fabric(jsonb) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00413_configuration_com_and_decision_selection.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.guard_project_ffe_configuration_integrity() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00413_configuration_com_and_decision_selection.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.get_product_configuration_schema(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00413_configuration_com_and_decision_selection.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.upsert_product_configuration_schema(uuid, jsonb, integer) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00413_configuration_com_and_decision_selection.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.evaluate_product_configuration(uuid, uuid, uuid[], jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00413_configuration_com_and_decision_selection.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.save_product_configuration(jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00413_configuration_com_and_decision_selection.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.place_product_configuration_in_project(uuid, uuid, uuid, uuid, text, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00413_configuration_com_and_decision_selection.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.revise_project_ffe_configuration(uuid, uuid, uuid, integer, text, uuid, integer) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00413_configuration_com_and_decision_selection.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_product_configuration_schema(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00413_configuration_com_and_decision_selection.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.upsert_product_configuration_schema(uuid, jsonb, integer) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00413_configuration_com_and_decision_selection.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.evaluate_product_configuration(uuid, uuid, uuid[], jsonb) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00413_configuration_com_and_decision_selection.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.save_product_configuration(jsonb) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00413_configuration_com_and_decision_selection.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.place_product_configuration_in_project(uuid, uuid, uuid, uuid, text, jsonb) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00413_configuration_com_and_decision_selection.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.revise_project_ffe_configuration(uuid, uuid, uuid, integer, text, uuid, integer) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00413_configuration_com_and_decision_selection.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_client_decision( uuid, jsonb, jsonb, uuid[], uuid[] ) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00413_configuration_com_and_decision_selection.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_client_decision( uuid, jsonb, jsonb, uuid[], uuid[] ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00413_configuration_com_and_decision_selection.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.update_client_decision(uuid, jsonb, jsonb, timestamptz) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00413_configuration_com_and_decision_selection.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.update_client_decision(uuid, jsonb, jsonb, timestamptz) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00413_configuration_com_and_decision_selection.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._apply_client_decision_authorized( uuid, uuid, uuid, text, text, text, integer ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
