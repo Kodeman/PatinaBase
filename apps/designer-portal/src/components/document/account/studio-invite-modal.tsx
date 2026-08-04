@@ -21,6 +21,11 @@ import { useInviteMember, type MemberRole } from '@patina/supabase';
 import { studioEvents } from '@/lib/analytics/studio-events';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { DocSheet } from '../overlays/doc-sheet';
+import {
+  TitlePicker,
+  findStaffRoleByLabel,
+  type PermissionTier,
+} from './title-picker';
 
 export interface StudioInviteModalProps {
   open: boolean;
@@ -30,10 +35,36 @@ export interface StudioInviteModalProps {
 }
 
 type TeammateType = 'designer' | 'member';
-type InvitableRole = Extract<MemberRole, 'member' | 'admin'>;
+// Owner is deliberately not a chip here: inviting a NEW owner requires an
+// EXISTING owner to already be present per the 00319 last-owner guard, and
+// the flow for that is "make owner" on an active member (account-studio-page
+// .tsx), not a fresh invite. A "Principal" title (whose default tier is
+// owner) therefore never moves this radiogroup — see handleTitlePick below.
+type InvitableTier = Extract<MemberRole, 'admin' | 'member' | 'guest'>;
+
+const TIER_OPTIONS: { value: InvitableTier; label: string }[] = [
+  { value: 'admin', label: 'Admin' },
+  { value: 'member', label: 'Member' },
+  { value: 'guest', label: 'Guest' },
+];
 
 const LABEL = 'mb-1 block text-[12px] font-medium text-[var(--text-primary)]';
 const HELP = 'text-[12px] leading-relaxed text-[var(--color-aged-oak)]';
+
+/** Friendly copy for the invite edge function's error codes. Notably:
+ *  `workspace-member-invite` (00296) currently only accepts member_role
+ *  'admin' | 'member' — a Guest-tier invite reaches this branch until the
+ *  edge function is extended to accept 'guest' (tracked as a follow-up; see
+ *  the PermissionTier chips above, which intentionally offer Guest per the
+ *  Call Sheet design). */
+function friendlyInviteError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err ?? '');
+  if (msg.includes('invalid_member_role'))
+    return 'Guest invites aren’t wired up on the server yet — try Admin or Member for now.';
+  if (msg.includes('already_member'))
+    return 'That person is already part of this studio.';
+  return msg || 'Failed to send the invite.';
+}
 
 export function StudioInviteModal({
   open,
@@ -42,7 +73,9 @@ export function StudioInviteModal({
 }: StudioInviteModalProps) {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
-  const [role, setRole] = useState<InvitableRole>('member');
+  const [jobTitle, setJobTitle] = useState('');
+  const [titleOpen, setTitleOpen] = useState(false);
+  const [tier, setTier] = useState<InvitableTier>('member');
   const [teammateType, setTeammateType] = useState<TeammateType>('designer');
   const [invitedEmail, setInvitedEmail] = useState<string | null>(null);
 
@@ -51,8 +84,20 @@ export function StudioInviteModal({
   const resetForm = () => {
     setEmail('');
     setName('');
-    setRole('member');
+    setJobTitle('');
+    setTitleOpen(false);
+    setTier('member');
     setTeammateType('designer');
+  };
+
+  // Picking a curated title moves the tier chip to that role's default —
+  // it's a suggestion, not a lock (the hint under the chips says as much).
+  // A tier of 'owner' (the Principal title) can't move the radiogroup since
+  // there is no Owner chip to move it to; the selection is left as-is.
+  const handleTitlePick = (title: string, suggestedTier?: PermissionTier) => {
+    setJobTitle(title);
+    if (suggestedTier && suggestedTier !== 'owner') setTier(suggestedTier);
+    setTitleOpen(false);
   };
 
   const handleOpenChange = (nextOpen: boolean) => {
@@ -69,17 +114,26 @@ export function StudioInviteModal({
     const trimmedEmail = email.trim();
     if (!trimmedEmail || inviteMember.isPending) return;
 
+    const trimmedTitle = jobTitle.trim();
+    // The curated StaffRole key, omitted (undefined) for free-text titles —
+    // findStaffRoleByLabel only matches one of the nine curated labels.
+    const curatedRole = trimmedTitle
+      ? findStaffRoleByLabel(trimmedTitle)
+      : undefined;
+
     inviteMember.mutate(
       {
         organizationId,
         email: trimmedEmail,
-        role,
+        role: tier,
         teammateType,
         name: name.trim() || undefined,
+        jobTitle: trimmedTitle || undefined,
+        staffRole: curatedRole,
       },
       {
         onSuccess: () => {
-          studioEvents.teammateInvited({ teammate_type: teammateType, role });
+          studioEvents.teammateInvited({ teammate_type: teammateType, role: tier });
           setInvitedEmail(trimmedEmail);
         },
       },
@@ -180,25 +234,70 @@ export function StudioInviteModal({
               </Select>
             </div>
 
-            <div>
-              <label htmlFor="studio-invite-role" className={LABEL}>
-                Role
+            <div className="relative">
+              <label htmlFor="studio-invite-title-trigger" className={LABEL}>
+                Title{' '}
+                <span className="font-normal text-[var(--text-muted)]">
+                  (optional)
+                </span>
               </label>
-              <Select
-                id="studio-invite-role"
-                value={role}
-                onChange={(e) => setRole(e.target.value as InvitableRole)}
+              <button
+                id="studio-invite-title-trigger"
+                type="button"
+                onClick={() => setTitleOpen((o) => !o)}
+                aria-haspopup="listbox"
+                aria-expanded={titleOpen}
+                className="flex min-h-11 w-full items-center justify-between border-0 border-b border-[var(--border-default)] bg-transparent py-2 text-left text-[0.85rem] text-[var(--text-primary)] outline-none transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
               >
-                <option value="member">Member</option>
-                <option value="admin">Admin</option>
-              </Select>
+                <span className={jobTitle ? '' : 'italic text-[var(--text-muted)]'}>
+                  {jobTitle || 'None yet'}
+                </span>
+                <span aria-hidden className="font-mono text-[10px] text-[var(--color-aged-oak)]">
+                  ▾
+                </span>
+              </button>
+              {titleOpen && (
+                <TitlePicker
+                  value={jobTitle || null}
+                  onPick={handleTitlePick}
+                  onClose={() => setTitleOpen(false)}
+                  showTierHints
+                  className="left-0 top-full mt-1 w-full"
+                />
+              )}
+            </div>
+
+            <div>
+              <span className={LABEL}>Permission tier</span>
+              <div role="radiogroup" aria-label="Permission tier" className="flex flex-wrap gap-1.5">
+                {TIER_OPTIONS.map(({ value, label }) => {
+                  const selected = tier === value;
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      onClick={() => setTier(value)}
+                      className={`flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-[5px] border px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.1em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
+                        selected
+                          ? 'border-[rgba(196,165,123,0.45)] bg-[rgba(196,165,123,0.12)] font-semibold text-[var(--color-charcoal)]'
+                          : 'border-[var(--color-pearl)] text-[var(--color-mocha)] hover:border-[rgba(196,165,123,0.4)]'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className={`${HELP} mt-1.5`}>
+                Suggested by the title. Change it if your studio works differently.
+              </p>
             </div>
 
             {inviteMember.isError && (
               <p role="alert" className="text-sm text-[var(--color-error)]">
-                {inviteMember.error instanceof Error
-                  ? inviteMember.error.message
-                  : 'Failed to send the invite.'}
+                {friendlyInviteError(inviteMember.error)}
               </p>
             )}
 
