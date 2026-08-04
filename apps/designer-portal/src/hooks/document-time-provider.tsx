@@ -49,6 +49,11 @@ import {
   type LogOffer,
   type TimeSource,
 } from '@/lib/document/time-derivation';
+import {
+  commercialDocumentKeys,
+  fetchProjectBillingAuthority,
+} from '@/hooks/use-commercial-documents';
+import { automaticTimeBillingIntent } from '@/lib/document/authority-hours';
 
 // R64 — grace added past the last activity ping when bounding an abandoned
 // timer's end, so a normal trailing pause near the threshold isn't shaved.
@@ -154,6 +159,25 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
     void qc.invalidateQueries({ queryKey: ['margin-items'] });
   }, [qc]);
 
+  /** Resolve billable intent from the server-owned authority summary. Any
+   * missing or failed authority read fails closed, while the timer still
+   * records truthful time as explicitly nonbillable. */
+  const automaticBillableIntent = useCallback(
+    async (projectId: string): Promise<boolean> => {
+      try {
+        const authority = await qc.fetchQuery({
+          queryKey: commercialDocumentKeys.authority(projectId),
+          queryFn: () => fetchProjectBillingAuthority(projectId),
+          staleTime: 30_000,
+        });
+        return automaticTimeBillingIntent(authority).billable;
+      } catch {
+        return false;
+      }
+    },
+    [qc],
+  );
+
   /** Stop (or silently discard) a running row per the R4 source rule. */
   const closeOut = useCallback(
     async (
@@ -246,17 +270,20 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
           await closeOut(timer, { offerStrip: true });
         }
         if (pausedRef.current === doc.projectId) return;
+        const billable = await automaticBillableIntent(doc.projectId);
+        if (heldRef.current?.projectId !== doc.projectId) return;
         await api.current.startTimer
           .mutateAsync({
             projectId: doc.projectId,
             phaseKey: doc.phaseKey,
             source: 'timer_auto',
+            billable,
             quiet: true,
           })
           .catch(() => {});
       });
     },
-    [enqueue, fetchRunning, closeOut],
+    [enqueue, fetchRunning, closeOut, automaticBillableIntent],
   );
 
   /** Put down: close out the held document's timer through the strip. */
@@ -301,16 +328,19 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
     enqueue(async () => {
       const timer = await fetchRunning();
       if (timer) return;
+      const billable = await automaticBillableIntent(doc.projectId);
+      if (heldRef.current?.projectId !== doc.projectId) return;
       await api.current.startTimer
         .mutateAsync({
           projectId: doc.projectId,
           phaseKey: doc.phaseKey,
           source: 'timer_auto',
+          billable,
           quiet: true,
         })
         .catch(() => {});
     });
-  }, [enqueue, fetchRunning]);
+  }, [enqueue, fetchRunning, automaticBillableIntent]);
 
   /** "+ Log" — a typed entry against the held document (source manual_entry). */
   const manualLog = useCallback(

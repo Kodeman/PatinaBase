@@ -58,7 +58,7 @@ describe("commercial document routing", () => {
       "commercial_readonly",
     );
     expect(commercialDocumentExperience("service_addendum")).toBe(
-      "commercial_readonly",
+      "design_services",
     );
     expect(commercialDocumentExperience(null)).toBe("legacy");
     expect(commercialDocumentExperience("unexpected")).toBe("legacy");
@@ -102,6 +102,17 @@ describe("service agreement send readiness", () => {
         "Link a client with an email address.",
       ]),
     );
+  });
+
+  it("allows a draft services addendum through the existing agreement review", () => {
+    expect(
+      assessServiceAgreementReadiness({
+        document: { ...document, kind: "service_addendum" },
+        terms,
+        rates,
+        recipientEmail: "sarah@example.com",
+      }),
+    ).toEqual({ ready: true, blockers: [] });
   });
 });
 

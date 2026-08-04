@@ -15,6 +15,10 @@ import { queryKeys } from '@/lib/react-query';
 import { studioPeriodStartISO, type StudioPeriod } from '@/lib/time-billing';
 import { useToast } from '@/components/portal/toast-provider';
 import type { MockTimeTracking, TimeEntry as TimeSummaryEntry } from '@/types/project-ui';
+import {
+  isInvoiceEligibleTimeEntry,
+  type TimeBillingState,
+} from '@/lib/document/authority-hours';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const getSupabase = () => createBrowserClient() as any;
@@ -34,6 +38,10 @@ export interface ProjectTimeEntry {
   notes: string | null;
   billable: boolean;
   hourly_rate_cents: number | null;
+  billing_authority_id?: string | null;
+  authority_rate_id?: string | null;
+  billing_state?: TimeBillingState | null;
+  rated_amount_cents?: number | null;
   invoice_id: string | null;
   created_at: string;
   updated_at: string;
@@ -63,6 +71,10 @@ export interface UnbilledTimeRow {
   notes: string | null;
   resolved_rate_cents: number;
   amount_cents: number;
+  billing_authority_id?: string | null;
+  authority_rate_id?: string | null;
+  billing_state?: TimeBillingState | null;
+  rated_amount_cents?: number | null;
 }
 
 export interface UnbilledTimeSummary {
@@ -132,7 +144,26 @@ export function useUnbilledTime(projectId: string | null) {
         .eq('project_id', projectId)
         .order('started_at', { ascending: false });
       if (error) throw error;
-      const entries = (data ?? []) as UnbilledTimeRow[];
+      // The view is expected to be server-filtered. Keep the portal defensive:
+      // pending cap/retainer time and explicit nonbillable time must never be
+      // selectable even if a stale view briefly returns them. Null preserves
+      // compatibility with entries created before billing authorities existed.
+      const entries = ((data ?? []) as UnbilledTimeRow[])
+        .filter((entry) =>
+          isInvoiceEligibleTimeEntry({
+            ...entry,
+            billable: true,
+            invoice_id: null,
+          }),
+        )
+        .map((entry) => ({
+          ...entry,
+          // New authority-aware rows carry the immutable rated snapshot.
+          // The legacy view aliases remain the compatibility fallback.
+          resolved_rate_cents:
+            entry.resolved_rate_cents ?? 0,
+          amount_cents: entry.rated_amount_cents ?? entry.amount_cents ?? 0,
+        }));
       return {
         entries,
         totalMinutes: entries.reduce((sum, e) => sum + (e.duration_minutes || 0), 0),
@@ -247,7 +278,6 @@ export interface CreateTimeEntryInput {
   taskId?: string | null;
   notes?: string | null;
   billable?: boolean;
-  hourlyRateCents?: number | null;
   /** R4 (00198): activity attribution + entry provenance. Optional — old
    *  callers keep the DB defaults ('timer_manual', activity NULL). */
   activity?: string | null;
@@ -275,7 +305,6 @@ export function useCreateTimeEntry(options?: { errorSurface?: 'inline' }) {
         task_id: input.taskId ?? null,
         notes: input.notes ?? null,
         billable: input.billable ?? true,
-        hourly_rate_cents: input.hourlyRateCents ?? null,
       };
       if (input.activity !== undefined) row.activity = input.activity;
       if (input.source !== undefined) row.source = input.source;
@@ -301,7 +330,6 @@ export interface UpdateTimeEntryInput {
     task_id: string | null;
     notes: string | null;
     billable: boolean;
-    hourly_rate_cents: number | null;
     /** R4 (00198) */
     activity: string | null;
   }>;
@@ -390,6 +418,9 @@ export interface StartTimerInput {
   /** R4 (00198): 'timer_auto' = the document spine's pick-up timer (D11).
    *  Omitted = the DB default 'timer_manual' (header TimerButton unchanged). */
   source?: 'timer_auto' | 'timer_manual';
+  /** Billable intent only. Authority IDs, rate snapshots, billing_state, and
+   *  rated amounts are written by the database classification edge. */
+  billable?: boolean;
   /** Suppress the conflict/error toasts — the document auto-start resolves
    *  23505 races by adopting the existing timer, not by nagging. */
   quiet?: boolean;
@@ -420,6 +451,7 @@ export function useStartTimer() {
         task_id: input.taskId ?? null,
       };
       if (input.source !== undefined) row.source = input.source;
+      if (input.billable !== undefined) row.billable = input.billable;
       const { data, error } = await supabase
         .from('project_time_entries')
         .insert(row)
@@ -459,11 +491,8 @@ export interface StopTimerInput {
   activity?: string | null;
 }
 
-/**
- * Stop a running timer: snapshot the hourly rate (project change-order rate →
- * profile default — the same precedence the project_unbilled_time view in
- * 00177 resolves at read time) and write the elapsed duration (min 1 minute).
- */
+/** Stop a running timer. The database snapshots authority/rate provenance,
+ * classifies the entry, and rates its amount; the portal only records time. */
 export function useStopTimer() {
   const queryClient = useQueryClient();
 
@@ -481,35 +510,12 @@ export function useStopTimer() {
       if (!entry) throw new Error('Timer not found — it may have been discarded elsewhere.');
       if (entry.duration_minutes !== null) throw new Error('This timer was already stopped.');
 
-      // Rate snapshot. NULLIF(..., 0) parity with the view: a 0 change-order
-      // rate falls through to the profile default.
-      const [projectRes, profileRes] = await Promise.all([
-        supabase
-          .from('projects')
-          .select('change_order_terms')
-          .eq('id', entry.project_id)
-          .maybeSingle(),
-        supabase
-          .from('profiles')
-          .select('default_hourly_rate_cents')
-          .eq('id', entry.user_id)
-          .maybeSingle(),
-      ]);
-      if (projectRes.error) throw projectRes.error;
-      if (profileRes.error) throw profileRes.error;
-
-      const projectRateRaw = Number(projectRes.data?.change_order_terms?.hourly_rate_cents);
-      const projectRate =
-        Number.isFinite(projectRateRaw) && projectRateRaw !== 0 ? Math.round(projectRateRaw) : null;
-      const hourlyRateCents = projectRate ?? profileRes.data?.default_hourly_rate_cents ?? null;
-
       const elapsedSeconds = Math.max(0, (Date.now() - new Date(entry.started_at).getTime()) / 1000);
       const durationMinutes =
         input.durationMinutesOverride ?? Math.max(1, Math.round(elapsedSeconds / 60));
 
       const updates: Record<string, unknown> = {
         duration_minutes: durationMinutes,
-        hourly_rate_cents: hourlyRateCents,
       };
       if (input.notes !== undefined) updates.notes = input.notes;
       if (input.phaseKey !== undefined) updates.phase_key = input.phaseKey;
@@ -586,6 +592,8 @@ export function useClaimTimeEntries(options?: { errorSurface?: 'inline' }) {
         .update({ invoice_id: invoiceId })
         .in('id', entryIds)
         .is('invoice_id', null)
+        .eq('billable', true)
+        .or('billing_state.eq.authorized,billing_state.is.null')
         .select('id');
       if (error) throw error;
 
@@ -683,7 +691,7 @@ export function useStudioTimeReport(period: StudioPeriod) {
           .order('started_at', { ascending: false }),
         supabase
           .from('project_unbilled_time')
-          .select('project_id, duration_minutes, amount_cents'),
+          .select('*'),
       ]);
       if (entriesRes.error) throw entriesRes.error;
       if (unbilledRes.error) throw unbilledRes.error;
@@ -693,6 +701,8 @@ export function useStudioTimeReport(period: StudioPeriod) {
         project_id: string;
         duration_minutes: number;
         amount_cents: number;
+        rated_amount_cents?: number | null;
+        billing_state?: TimeBillingState | null;
       }>;
 
       const byProject = new Map<string, StudioProjectRollup>();
@@ -732,11 +742,21 @@ export function useStudioTimeReport(period: StudioPeriod) {
       let unbilledMinutes = 0;
       let unbilledAmountCents = 0;
       for (const row of unbilledRows) {
+        if (
+          !isInvoiceEligibleTimeEntry({
+            billable: true,
+            invoice_id: null,
+            billing_state: row.billing_state,
+          })
+        ) {
+          continue;
+        }
+        const amountCents = row.rated_amount_cents ?? row.amount_cents ?? 0;
         unbilledMinutes += row.duration_minutes || 0;
-        unbilledAmountCents += row.amount_cents || 0;
+        unbilledAmountCents += amountCents;
         const rollup = ensure(row.project_id);
         rollup.unbilledMinutes += row.duration_minutes || 0;
-        rollup.unbilledAmountCents += row.amount_cents || 0;
+        rollup.unbilledAmountCents += amountCents;
       }
 
       return {
