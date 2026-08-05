@@ -1,15 +1,14 @@
 'use client';
 
 import { useState, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { createBrowserClient, normalizeAuthError, safeAuthReturnPath } from '@patina/supabase';
+import { useSearchParams } from 'next/navigation';
+import { buildAuthCallbackUrl, createBrowserClient, normalizeAuthError, safeAuthReturnPath } from '@patina/supabase';
 import { AuthForm, type AuthFormField } from '@patina/design-system';
 import Link from 'next/link';
 import { authEvents } from '@/lib/analytics/events';
 import { DESIGNER_AUTH_DESTINATION, DesignerAuthShell } from '../auth-shell';
 
 function SignUpContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = safeAuthReturnPath(searchParams.get('callbackUrl'), DESIGNER_AUTH_DESTINATION);
 
@@ -94,6 +93,7 @@ function SignUpContent() {
         email: data.email,
         password: data.password,
         options: {
+          emailRedirectTo: buildAuthCallbackUrl(window.location.origin, callbackUrl),
           data: {
             name: data.name,
             company: data.company,
@@ -112,7 +112,11 @@ function SignUpContent() {
 
       // Redirect to sign in page after 2 seconds
       setTimeout(() => {
-        router.push('/auth/signin?registered=true');
+        const params = new URLSearchParams({
+          registered: 'true',
+          callbackUrl,
+        });
+        window.location.replace(`/auth/signin?${params.toString()}`);
       }, 2000);
     } catch (err) {
       setError(normalizeAuthError(err, 'unknown').message);
@@ -149,7 +153,7 @@ function SignUpContent() {
                 </p>
                 <p className="text-center text-sm text-muted-foreground">
                   Already have an account?{' '}
-                  <Link href="/auth/signin" className="text-primary font-medium hover:underline">
+                  <Link href={`/auth/signin?callbackUrl=${encodeURIComponent(callbackUrl)}`} className="text-primary font-medium hover:underline">
                     Sign in
                   </Link>
                 </p>

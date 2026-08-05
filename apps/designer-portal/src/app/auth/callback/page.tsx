@@ -9,24 +9,37 @@ import { callbackDestination } from '../auth-journey';
 
 function CallbackContent() {
   const searchParams = useSearchParams();
-  const handled = useRef(false);
+  const callbackRun = useRef<{
+    key: string;
+    promise: ReturnType<typeof finalizeAuthCallback>;
+  } | null>(null);
   const [result, setResult] = useState<'working' | 'success' | 'failed'>('working');
   const [error, setError] = useState<string | null>(null);
   const destination = callbackDestination({ callbackUrl: searchParams.get('callbackUrl'), next: searchParams.get('next'), type: searchParams.get('type') });
+  const code = searchParams.get('code');
+  const callbackKey = code ?? 'fragment-or-existing-session';
 
   useEffect(() => {
-    if (handled.current) return;
-    handled.current = true;
-    const controller = new AbortController();
-    void finalizeAuthCallback({ supabase: createBrowserClient(), code: searchParams.get('code'), signal: controller.signal })
+    let active = true;
+    if (!callbackRun.current || callbackRun.current.key !== callbackKey) {
+      callbackRun.current = {
+        key: callbackKey,
+        // Reuse this single exchange across React Strict Mode's effect replay;
+        // a PKCE code can only be exchanged once.
+        promise: finalizeAuthCallback({ supabase: createBrowserClient(), code }),
+      };
+    }
+    void callbackRun.current.promise
       .then((callback) => {
-        if (controller.signal.aborted) return;
+        if (!active) return;
         if (callback.status === 'failed') { setError(callback.failure.message); setResult('failed'); return; }
         setResult('success');
       })
-      .catch((cause) => { if (!controller.signal.aborted) { setError('We could not finish opening your session. Please try again.'); setResult('failed'); } });
-    return () => controller.abort();
-  }, [searchParams]);
+      .catch(() => { if (active) { setError('We could not finish opening your session. Please try again.'); setResult('failed'); } });
+    return () => {
+      active = false;
+    };
+  }, [callbackKey, code]);
 
   useEffect(() => {
     if (result !== 'success') return;
@@ -34,13 +47,33 @@ function CallbackContent() {
     return () => window.clearTimeout(timer);
   }, [destination, result]);
 
-  useEffect(() => {
-    if (result !== 'failed') return;
-    const timer = window.setTimeout(() => window.location.replace(buildSignInPath(destination, 'oauth')), 900);
-    return () => window.clearTimeout(timer);
-  }, [destination, result]);
-
-  return <DesignerAuthShell>{result === 'success' ? <PortalAuthSuccess destinationHref={destination} onContinue={() => window.location.replace(destination)} /> : <PortalAuthNotice tone={result === 'failed' ? 'error' : 'info'} title={result === 'failed' ? 'Sign-in needs another try.' : 'Completing sign in'}>{error ?? 'Confirming your secure session.'}</PortalAuthNotice>}</DesignerAuthShell>;
+  return (
+    <DesignerAuthShell>
+      {result === 'success' ? (
+        <PortalAuthSuccess
+          destinationHref={destination}
+          onContinue={() => window.location.replace(destination)}
+        />
+      ) : (
+        <div className="space-y-4">
+          <PortalAuthNotice
+            tone={result === 'failed' ? 'error' : 'info'}
+            title={result === 'failed' ? 'Sign-in needs another try.' : 'Completing sign in'}
+          >
+            {error ?? 'Confirming your secure session.'}
+          </PortalAuthNotice>
+          {result === 'failed' && (
+            <a
+              href={buildSignInPath(destination, 'oauth')}
+              className="inline-flex min-h-11 items-center text-sm font-semibold underline decoration-[#6d726b] underline-offset-4 focus:outline-none focus:ring-2 focus:ring-[#252a25]"
+            >
+              Try sign in again
+            </a>
+          )}
+        </div>
+      )}
+    </DesignerAuthShell>
+  );
 }
 
 export default function AuthCallbackPage() {

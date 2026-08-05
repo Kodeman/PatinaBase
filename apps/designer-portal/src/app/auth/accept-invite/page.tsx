@@ -24,6 +24,7 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createBrowserClient, useAcceptInvitation } from '@patina/supabase';
+import { PortalAuthSuccess } from '@patina/design-system';
 import { StrataSweep } from '@/components/ui/strata-sweep';
 import { studioEvents } from '@/lib/analytics/studio-events';
 import { DesignerAuthShell } from '../auth-shell';
@@ -47,7 +48,7 @@ function friendlyInviteError(error: unknown): string {
     case 'invalid_token':
       return 'This invite link is missing its token. Ask your studio admin to resend it.';
     default:
-      return message || 'This invitation could not be accepted.';
+      return 'This invitation could not be accepted. Ask your studio admin to resend it, or contact Patina support.';
   }
 }
 
@@ -119,6 +120,9 @@ function AcceptInviteContent() {
 
     return () => {
       cancelled = true;
+      // Strict Mode replays effects in development. Let the replay own a new
+      // run after this one observes `cancelled` and exits before the RPC.
+      started.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
@@ -144,6 +148,20 @@ function AcceptInviteContent() {
     );
   }
 
+  if (status === 'success') {
+    return (
+      <DesignerAuthShell>
+        <PortalAuthSuccess
+          title={studioName ? `Welcome to ${studioName}.` : 'Your studio is ready.'}
+          description="Your invitation is accepted. We’re taking you to your desk now."
+          destinationLabel="Continue to your desk"
+          destinationHref="/desk"
+          onContinue={() => window.location.replace('/desk')}
+        />
+      </DesignerAuthShell>
+    );
+  }
+
   return (
     <DesignerAuthShell>
       <div className="space-y-4 text-center">
@@ -151,9 +169,7 @@ function AcceptInviteContent() {
           <StrataSweep size="sm" label="Joining your studio" />
         </div>
         <p className="text-sm text-muted-foreground">
-          {status === 'success' && studioName
-            ? `Welcome to ${studioName} — taking you to your desk…`
-            : 'Joining your studio…'}
+          Joining your studio…
         </p>
       </div>
     </DesignerAuthShell>

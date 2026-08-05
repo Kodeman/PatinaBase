@@ -14,21 +14,25 @@ import {
   useSendEmailOtp,
   useVerifyOtp,
 } from '@patina/supabase';
-import { DevAccountsPanel, PortalAuthNotice, PortalLogin, type PortalLoginState } from '@patina/design-system';
+import { DevAccountsPanel, PortalAuthNotice, PortalLogin } from '@patina/design-system';
 import { getAccountsForPortal } from '@patina/types';
 import { authEvents } from '@/lib/analytics/events';
 import { DESIGNER_AUTH_DESTINATION, DesignerAuthShell } from '../auth-shell';
-import { confirmedSession, designerDestination, qrPresentation, shouldActivateQr } from '../auth-journey';
+import { confirmedSession, designerDestination, designerLoginState, designerSignInNotice, qrPresentation, shouldActivateQr, type DesignerLoginPhase } from '../auth-journey';
 
 function SignInContent() {
   const searchParams = useSearchParams();
   const destination = designerDestination(searchParams.get('callbackUrl'));
+  const entryNotice = designerSignInNotice(
+    searchParams.get('error'),
+    searchParams.get('registered'),
+  );
   const sendOtp = useSendEmailOtp();
   const verifyOtp = useVerifyOtp();
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
-  const [phase, setPhase] = useState<'email' | 'code' | 'password' | 'apple-pending' | 'success'>('email');
+  const [phase, setPhase] = useState<DesignerLoginPhase>('email');
   const [passwordExpanded, setPasswordExpanded] = useState(false);
   const [qrExpanded, setQrExpanded] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -145,17 +149,7 @@ function SignInContent() {
     }
   }, [finish]);
 
-  const qrState: PortalLoginState = phase === 'success'
-    ? 'success'
-    : phase === 'code'
-      ? 'code'
-      : phase === 'password'
-        ? 'password'
-        : phase === 'apple-pending'
-          ? 'apple-pending'
-          : qrExpanded && (qr.state === 'expired' || qr.state === 'denied')
-            ? 'qr-expired'
-            : 'email';
+  const qrState = designerLoginState(phase, qrExpanded, qr.state);
   const qrView = qrPresentation(qr.state, qr.secondsRemaining, qr.failure?.message);
   const visibleError = error || (qr.state === 'denied'
     ? 'This QR code was declined. Refresh it for a new code, or use email instead.'
@@ -165,6 +159,11 @@ function SignInContent() {
 
   return (
     <DesignerAuthShell>
+      {entryNotice && (
+        <PortalAuthNotice tone={entryNotice.tone} title={entryNotice.title} className="mb-5">
+          {entryNotice.description}
+        </PortalAuthNotice>
+      )}
       <PortalLogin
         state={qrState}
         email={email}

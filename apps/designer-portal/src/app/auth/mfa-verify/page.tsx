@@ -120,19 +120,20 @@ function MfaVerifyContent() {
           </p>
         </div>
 
-        {error && <Alert variant="error">{error}</Alert>}
+        {error && <Alert id="designer-mfa-error" variant="error">{error}</Alert>}
 
         {/* Factor selection (only shown when multiple factors exist) */}
         {verifiedFactors.length > 1 && (
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">
+          <fieldset className="space-y-2">
+            <legend className="block text-sm font-medium text-gray-700">
               Select authenticator
-            </label>
+            </legend>
             <div className="space-y-2">
               {verifiedFactors.map((factor) => (
                 <button
                   key={factor.id}
                   type="button"
+                  aria-pressed={selectedFactorId === factor.id}
                   onClick={() => {
                     setSelectedFactorId(factor.id);
                     setCode('');
@@ -151,17 +152,18 @@ function MfaVerifyContent() {
                 </button>
               ))}
             </div>
-          </div>
+          </fieldset>
         )}
 
         {/* Code input */}
         {selectedFactorId && (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700">
+              <label htmlFor="designer-mfa-code" className="block text-sm font-medium text-gray-700">
                 Verification Code
               </label>
               <Input
+                id="designer-mfa-code"
                 ref={codeInputRef}
                 type="text"
                 inputMode="numeric"
@@ -176,6 +178,8 @@ function MfaVerifyContent() {
                 className="mt-1 font-mono text-lg tracking-[0.5em]"
                 placeholder="000000"
                 maxLength={6}
+                aria-invalid={Boolean(error) || undefined}
+                aria-describedby={error ? 'designer-mfa-error' : undefined}
               />
             </div>
 

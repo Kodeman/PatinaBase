@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { createBrowserClient, normalizeAuthError, safeAuthReturnPath, useSendEmailOtp, useVerifyOtp } from '@patina/supabase';
+import { buildAuthCallbackUrl, createBrowserClient, normalizeAuthError, safeAuthReturnPath, useSendEmailOtp, useVerifyOtp } from '@patina/supabase';
 import { PortalAuthNotice, PortalLogin } from '@patina/design-system';
 import { authEvents } from '@/lib/analytics/events';
 import { DESIGNER_AUTH_DESTINATION, DesignerAuthShell } from '../auth-shell';
@@ -52,12 +52,15 @@ function VerifyOtpContent() {
     if (!email || resendInSeconds > 0) return;
     setError(null);
     try {
-      await resendOtp.mutateAsync({ email });
+      await resendOtp.mutateAsync({
+        email,
+        redirectTo: buildAuthCallbackUrl(window.location.origin, destination),
+      });
       setResendInSeconds(60);
     } catch (cause) {
       setError(normalizeAuthError(cause, 'unknown').message);
     }
-  }, [email, resendInSeconds, resendOtp]);
+  }, [destination, email, resendInSeconds, resendOtp]);
 
   if (!email) {
     return <DesignerAuthShell><PortalAuthNotice tone="error" title="We need your email address.">Start again from <Link className="underline" href={`/auth/signin?callbackUrl=${encodeURIComponent(destination)}`}>sign in</Link> so we know where to send your code.</PortalAuthNotice></DesignerAuthShell>;

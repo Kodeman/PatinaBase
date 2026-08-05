@@ -2,13 +2,10 @@
 
 import { createBrowserClient } from '@patina/supabase';
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { authEvents } from '@/lib/analytics/events';
 import { DesignerAuthShell } from '../auth-shell';
 
 export default function SignOutPage() {
-  const router = useRouter();
-
   useEffect(() => {
     async function handleSignOut() {
       authEvents.logout();
@@ -24,7 +21,7 @@ export default function SignOutPage() {
       window.location.replace('/auth/signin');
     }
     handleSignOut();
-  }, [router]);
+  }, []);
 
   return (
     <DesignerAuthShell>
