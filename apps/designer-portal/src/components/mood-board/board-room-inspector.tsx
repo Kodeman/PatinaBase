@@ -115,6 +115,66 @@ function NoteDraft({
   );
 }
 
+/**
+ * Controlled width/rotation input. The DOM node must survive a committed geometry change
+ * (canvas handle drag, another save) without remounting, or an in-progress edit loses focus
+ * and its typed text — so the draft re-syncs from the prop only while unfocused.
+ */
+function GeometryField({
+  value,
+  min,
+  className,
+  onCommit,
+}: {
+  value: number;
+  min?: number;
+  className?: string;
+  onCommit: (next: number) => void;
+}) {
+  const [draft, setDraft] = useState(() => String(Math.round(value)));
+  const focusedRef = useRef(false);
+  const skipCommitRef = useRef(false);
+
+  useEffect(() => {
+    if (!focusedRef.current) setDraft(String(Math.round(value)));
+  }, [value]);
+
+  const commit = () => {
+    const parsed = Number(draft);
+    if (Number.isFinite(parsed) && (min === undefined || parsed >= min) && parsed !== value) {
+      onCommit(parsed);
+    }
+  };
+
+  return (
+    <Input
+      type="number"
+      min={min}
+      value={draft}
+      className={className}
+      onFocus={() => { focusedRef.current = true; }}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={() => {
+        focusedRef.current = false;
+        if (skipCommitRef.current) skipCommitRef.current = false;
+        else commit();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          event.currentTarget.blur();
+        }
+        if (event.key === 'Escape') {
+          // Must not reach the room's window-level Escape handling (arms an exit guard).
+          event.stopPropagation();
+          skipCommitRef.current = true;
+          setDraft(String(Math.round(value)));
+          event.currentTarget.blur();
+        }
+      }}
+    />
+  );
+}
+
 export function BoardRoomInspector({
   api,
   owner,
@@ -292,34 +352,26 @@ export function BoardRoomInspector({
           <div className="grid grid-cols-2 gap-2">
             <label className="text-[9px] uppercase text-[var(--text-muted)]">
               Width
-              <Input
-                key={`${lead.id}:width:${lead.width}`}
-                type="number"
+              <GeometryField
+                key={`${lead.id}:width`}
+                value={lead.width}
                 min={40}
-                defaultValue={Math.round(lead.width)}
                 className="mt-1"
-                onBlur={(event) => {
-                  const width = Number(event.currentTarget.value);
-                  if (Number.isFinite(width) && width >= 40 && width !== lead.width) {
-                    api.updateItem(lead.id, { width });
-                    onCommand?.('handle');
-                  }
+                onCommit={(width) => {
+                  api.updateItem(lead.id, { width });
+                  onCommand?.('handle');
                 }}
               />
             </label>
             <label className="text-[9px] uppercase text-[var(--text-muted)]">
               Rotation
-              <Input
-                key={`${lead.id}:rotation:${lead.rotation ?? 0}`}
-                type="number"
-                defaultValue={Math.round(lead.rotation ?? 0)}
+              <GeometryField
+                key={`${lead.id}:rotation`}
+                value={lead.rotation ?? 0}
                 className="mt-1"
-                onBlur={(event) => {
-                  const rotation = Number(event.currentTarget.value);
-                  if (Number.isFinite(rotation) && rotation !== (lead.rotation ?? 0)) {
-                    api.rotateItem(lead.id, rotation);
-                    onCommand?.('handle');
-                  }
+                onCommit={(rotation) => {
+                  api.rotateItem(lead.id, rotation);
+                  onCommand?.('handle');
                 }}
               />
             </label>

@@ -48,6 +48,16 @@ const mockBoard = {
     },
   ],
 };
+const secondBoardRow = {
+  ...mockBoard.items[0],
+  id: 'item-2',
+  x: 310,
+  y: 120,
+  width: 100,
+  height: 100,
+  z_index: 4,
+  product_id: 'product-2',
+};
 let mockBoardResult = mockBoard;
 
 jest.mock('@patina/design-system', () => ({
@@ -661,7 +671,172 @@ describe('BoardRoomController binding', () => {
     expect(screen.getByTestId('edit-canvas')).toHaveTextContent('selected:0');
     expect(onExit).not.toHaveBeenCalled();
     fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onExit).not.toHaveBeenCalled();
+    fireEvent.keyDown(window, { key: 'Escape' });
     await waitFor(() => expect(onExit).toHaveBeenCalledTimes(1));
+  });
+
+  it('leaves the board only on a second Escape within the confirmation window', async () => {
+    const onExit = jest.fn().mockResolvedValue(undefined);
+    let api: BoardRoomControllerApi | null = null;
+    render(
+      <BoardRoomController
+        owner={{ kind: 'project', id: 'project-1' }}
+        boardId="board-project"
+        onExit={onExit}
+      >
+        {(value) => {
+          api = value;
+          return <span data-testid="escape-announcement">{value.announcement}</span>;
+        }}
+      </BoardRoomController>,
+    );
+    await waitFor(() => expect(api?.state).not.toBeNull());
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onExit).not.toHaveBeenCalled();
+    expect(screen.getByTestId('escape-announcement'))
+      .toHaveTextContent('Press Escape again to leave the board');
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => expect(onExit).toHaveBeenCalledTimes(1));
+  });
+
+  it('re-arms instead of exiting once the Escape confirmation window lapses', async () => {
+    const onExit = jest.fn().mockResolvedValue(undefined);
+    let api: BoardRoomControllerApi | null = null;
+    render(
+      <BoardRoomController
+        owner={{ kind: 'project', id: 'project-1' }}
+        boardId="board-project"
+        onExit={onExit}
+      >
+        {(value) => {
+          api = value;
+          return <span data-testid="lapsed-announcement">{value.announcement}</span>;
+        }}
+      </BoardRoomController>,
+    );
+    await waitFor(() => expect(api?.state).not.toBeNull());
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.getByTestId('lapsed-announcement'))
+      .toHaveTextContent('Press Escape again to leave the board');
+    act(() => { jest.advanceTimersByTime(1_600); });
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await act(async () => { await Promise.resolve(); });
+    expect(onExit).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => expect(onExit).toHaveBeenCalledTimes(1));
+  });
+
+  it('re-announces the exit prompt after the confirmation window lapses', async () => {
+    let api: BoardRoomControllerApi | null = null;
+    render(
+      <BoardRoomController owner={{ kind: 'project', id: 'project-1' }} boardId="board-project">
+        {(value) => {
+          api = value;
+          return <span data-testid="rearm-announcement">{value.announcement}</span>;
+        }}
+      </BoardRoomController>,
+    );
+    await waitFor(() => expect(api?.state).not.toBeNull());
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.getByTestId('rearm-announcement'))
+      .toHaveTextContent('Press Escape again to leave the board');
+
+    // The prompt retires with the window it describes, which is also what lets
+    // the live region speak it again rather than bail on an identical string.
+    act(() => { jest.advanceTimersByTime(1_600); });
+    expect(screen.getByTestId('rearm-announcement')).toBeEmptyDOMElement();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.getByTestId('rearm-announcement'))
+      .toHaveTextContent('Press Escape again to leave the board');
+  });
+
+  it('promotes a recreated item’s drag while its create is queued behind the delete', async () => {
+    mockBoardResult = { ...mockBoard, items: [...mockBoard.items, secondBoardRow] };
+    let settleDelete: () => void = () => undefined;
+    mockApplyBoardRoomState.mockImplementationOnce(
+      () => new Promise<void>((resolve) => { settleDelete = () => resolve(); }),
+    );
+    let api: BoardRoomControllerApi | null = null;
+    render(
+      <BoardRoomController owner={{ kind: 'project', id: 'project-1' }} boardId="board-project">
+        {(value) => {
+          api = value;
+          return <span data-testid="recreated-items">{value.state?.items.map((item) => item.id).join(',')}</span>;
+        }}
+      </BoardRoomController>,
+    );
+    await waitFor(() => expect(api?.state).not.toBeNull());
+
+    act(() => api!.deleteItems(['item-2']));
+    await waitFor(() => expect(mockApplyBoardRoomState).toHaveBeenCalledTimes(1));
+    act(() => api!.undo());
+    expect(screen.getByTestId('recreated-items')).toHaveTextContent('item-1,item-2');
+    act(() => api!.moveItems({ 'item-2': { x: 700, y: 120 } }));
+    await act(async () => { jest.advanceTimersByTime(700); });
+    expect(mockSaveLayout).not.toHaveBeenCalled();
+
+    // The delete told the server to forget item-2, so the undo's recreate is
+    // unsent: its geometry rides the queued full-state write, never a layout
+    // upsert that would land ahead of the create as a partial row.
+    await act(async () => { settleDelete(); await Promise.resolve(); });
+    await waitFor(() => expect(mockApplyBoardRoomState).toHaveBeenCalledTimes(3));
+    expect(mockSaveLayout).not.toHaveBeenCalled();
+    expect(mockApplyBoardRoomState).toHaveBeenLastCalledWith(expect.objectContaining({
+      state: expect.objectContaining({
+        items: expect.arrayContaining([
+          expect.objectContaining({ id: 'item-2', x: 700, y: 120 }),
+        ]),
+      }),
+    }));
+  });
+
+  it('keeps a restored item on the buffered path after its delete write fails', async () => {
+    mockBoardResult = { ...mockBoard, items: [...mockBoard.items, secondBoardRow] };
+    const onError = jest.fn();
+    let failDelete: (error: Error) => void = () => undefined;
+    mockApplyBoardRoomState.mockImplementationOnce(
+      () => new Promise<void>((_resolve, reject) => { failDelete = reject; }),
+    );
+    let api: BoardRoomControllerApi | null = null;
+    render(
+      <BoardRoomController
+        owner={{ kind: 'project', id: 'project-1' }}
+        boardId="board-project"
+        onError={onError}
+      >
+        {(value) => {
+          api = value;
+          return <span data-testid="restored-items">{value.state?.items.map((item) => item.id).join(',')}</span>;
+        }}
+      </BoardRoomController>,
+    );
+    await waitFor(() => expect(api?.state).not.toBeNull());
+
+    act(() => api!.deleteItems(['item-2']));
+    await waitFor(() => expect(mockApplyBoardRoomState).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      failDelete(new Error('injected transaction failure'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(onError).toHaveBeenCalled());
+    expect(screen.getByTestId('restored-items')).toHaveTextContent('item-1,item-2');
+
+    // The write never landed, so the server still holds item-2: its drag has no
+    // reason to amplify into another full-board write.
+    act(() => api!.moveItems({ 'item-2': { x: 700, y: 120 } }));
+    await act(async () => { jest.advanceTimersByTime(700); });
+    await waitFor(() => expect(mockSaveLayout).toHaveBeenCalledWith(expect.objectContaining({
+      positions: [expect.objectContaining({ id: 'item-2', x: 700 })],
+    })));
+    expect(mockApplyBoardRoomState).toHaveBeenCalledTimes(1);
   });
 
   it('flushes a project-owner layout before exit and supports shell rename (AC1.29)', async () => {
@@ -790,5 +965,149 @@ describe('BoardRoomController binding', () => {
         ],
       }),
     }));
+  });
+
+  it('keeps an unrelated drag on the buffered layout path behind an in-flight delete', async () => {
+    mockBoardResult = { ...mockBoard, items: [...mockBoard.items, secondBoardRow] };
+    let settleDelete: () => void = () => undefined;
+    mockApplyBoardRoomState.mockImplementationOnce(
+      () => new Promise<void>((resolve) => { settleDelete = () => resolve(); }),
+    );
+    let api: BoardRoomControllerApi | null = null;
+    render(
+      <BoardRoomController owner={{ kind: 'project', id: 'project-1' }} boardId="board-project">
+        {(value) => {
+          api = value;
+          return <span data-testid="gated-items">{value.state?.items.map((item) => item.id).join(',')}</span>;
+        }}
+      </BoardRoomController>,
+    );
+    await waitFor(() => expect(api?.state).not.toBeNull());
+
+    act(() => api!.deleteItems(['item-2']));
+    await waitFor(() => expect(mockApplyBoardRoomState).toHaveBeenCalledTimes(1));
+    act(() => api!.moveItems({ 'item-1': { x: 640, y: 20 } }));
+    await act(async () => { jest.advanceTimersByTime(700); });
+
+    // No promotion: an unrelated drag never becomes a full-board write.
+    expect(mockApplyBoardRoomState).toHaveBeenCalledTimes(1);
+    expect(mockSaveLayout).not.toHaveBeenCalled();
+
+    await act(async () => { settleDelete(); await Promise.resolve(); });
+    await waitFor(() => expect(mockSaveLayout).toHaveBeenCalledWith(expect.objectContaining({
+      boardId: 'board-project',
+      positions: [expect.objectContaining({ id: 'item-1', x: 640 })],
+    })));
+    expect(mockApplyBoardRoomState).toHaveBeenCalledTimes(1);
+  });
+
+  it('orders a new item’s dragged geometry behind the create write', async () => {
+    let settleCreate: () => void = () => undefined;
+    mockApplyBoardRoomState.mockImplementationOnce(
+      () => new Promise<void>((resolve) => { settleCreate = () => resolve(); }),
+    );
+    let api: BoardRoomControllerApi | null = null;
+    render(
+      <BoardRoomController owner={{ kind: 'project', id: 'project-1' }} boardId="board-project">
+        {(value) => {
+          api = value;
+          return <span data-testid="created-items">{value.state?.items.map((item) => item.id).join(',')}</span>;
+        }}
+      </BoardRoomController>,
+    );
+    await waitFor(() => expect(api?.state).not.toBeNull());
+
+    act(() => api!.addItems([{
+      id: 'item-new', type: 'note', x: 300, y: 40, width: 160, height: 100,
+      zIndex: 1, rotation: 0, locked: false, content: 'New', data: {},
+    }]));
+    await waitFor(() => expect(mockApplyBoardRoomState).toHaveBeenCalledTimes(1));
+    act(() => api!.moveItems({ 'item-new': { x: 520, y: 90 } }));
+    await act(async () => { jest.advanceTimersByTime(700); });
+    expect(mockSaveLayout).not.toHaveBeenCalled();
+
+    await act(async () => { settleCreate(); await Promise.resolve(); });
+    await waitFor(() => expect(mockSaveLayout).toHaveBeenCalledWith(expect.objectContaining({
+      positions: [expect.objectContaining({ id: 'item-new', x: 520 })],
+    })));
+    expect(mockApplyBoardRoomState).toHaveBeenCalledTimes(1);
+  });
+
+  it('promotes geometry for an item whose create has not reached the server yet', async () => {
+    let settleFirst: () => void = () => undefined;
+    mockApplyBoardRoomState.mockImplementationOnce(
+      () => new Promise<void>((resolve) => { settleFirst = () => resolve(); }),
+    );
+    let api: BoardRoomControllerApi | null = null;
+    render(
+      <BoardRoomController owner={{ kind: 'project', id: 'project-1' }} boardId="board-project">
+        {(value) => {
+          api = value;
+          return <span data-testid="fresh-items">{value.state?.items.map((item) => item.id).join(',')}</span>;
+        }}
+      </BoardRoomController>,
+    );
+    await waitFor(() => expect(api?.state).not.toBeNull());
+
+    act(() => {
+      api!.addItems([{
+        id: 'item-fresh', type: 'note', x: 300, y: 40, width: 160, height: 100,
+        zIndex: 1, rotation: 0, locked: false, content: 'Fresh', data: {},
+      }]);
+      api!.moveItems({ 'item-fresh': { x: 520, y: 90 } });
+    });
+    await waitFor(() => expect(mockApplyBoardRoomState).toHaveBeenCalledTimes(1));
+    await act(async () => { settleFirst(); jest.advanceTimersByTime(700); });
+
+    await waitFor(() => expect(mockApplyBoardRoomState).toHaveBeenCalledTimes(2));
+    expect(mockSaveLayout).not.toHaveBeenCalled();
+    expect(mockApplyBoardRoomState).toHaveBeenLastCalledWith(expect.objectContaining({
+      state: expect.objectContaining({
+        items: expect.arrayContaining([
+          expect.objectContaining({ id: 'item-fresh', x: 520, y: 90 }),
+        ]),
+      }),
+    }));
+  });
+
+  it('persists an uninvolved item’s geometry after the structural write fails', async () => {
+    mockBoardResult = { ...mockBoard, items: [...mockBoard.items, secondBoardRow] };
+    const onError = jest.fn();
+    let failDelete: (error: Error) => void = () => undefined;
+    mockApplyBoardRoomState.mockImplementationOnce(
+      () => new Promise<void>((_resolve, reject) => { failDelete = reject; }),
+    );
+    let api: BoardRoomControllerApi | null = null;
+    render(
+      <BoardRoomController
+        owner={{ kind: 'project', id: 'project-1' }}
+        boardId="board-project"
+        onError={onError}
+      >
+        {(value) => {
+          api = value;
+          return <span data-testid="reverted-items">{value.state?.items.map((item) => item.id).join(',')}</span>;
+        }}
+      </BoardRoomController>,
+    );
+    await waitFor(() => expect(api?.state).not.toBeNull());
+
+    act(() => api!.deleteItems(['item-2']));
+    await waitFor(() => expect(mockApplyBoardRoomState).toHaveBeenCalledTimes(1));
+    act(() => api!.moveItems({ 'item-1': { x: 640, y: 20 } }));
+    await act(async () => { jest.advanceTimersByTime(700); });
+    expect(mockSaveLayout).not.toHaveBeenCalled();
+
+    await act(async () => {
+      failDelete(new Error('injected transaction failure'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(mockSaveLayout).toHaveBeenCalledWith(expect.objectContaining({
+      positions: [expect.objectContaining({ id: 'item-1', x: 640 })],
+    })));
+    await waitFor(() => expect(onError).toHaveBeenCalled());
+    expect(screen.getByTestId('reverted-items')).toHaveTextContent('item-1,item-2');
   });
 });

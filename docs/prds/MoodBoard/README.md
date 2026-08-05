@@ -52,6 +52,21 @@ deck (S22).
 | 3 | Background removal: in-house or third-party? | **Third-party API first**, behind a media-service endpoint. Revisit in-house (rembg/ONNX on the inference worker) only if volume justifies it. Cutout is stored as a *new* image in the `proposal-mood-boards` bucket; the original is retained so the action is revertible. | [Phase 3 · R3.4](./03-phase-3-the-reach.md#r34--background-removal) |
 | 4 | Templates: seed a starter set, or let studios grow their own? | **Both.** "Save board as template" (studio-grown) plus a small Patina-seeded starter set. Requires a Phase 3 migration (`board_templates`). | [Phase 3 · R3.6](./03-phase-3-the-reach.md#r36--board-templates) |
 
+### Post-GA rulings
+
+Appended after GA. The 2026-08-03 rulings above stand as recorded.
+
+- **2026-08-05, Kody — R1.3.1/AC1.5 superseded.** Escape with an empty
+  selection requires a **double-press** to leave the room. The first press arms
+  a 1.5s window and announces “Press Escape again to leave the board” through
+  the room's aria-live region; a second press inside that window performs the
+  same exit as **Done**. Single-press exit proved an accidental-exit foot-gun
+  in production use. The rest of the ladder is unchanged — context menu, then
+  Present, then clear selection, then leave — as are R1.3.2 return-target
+  resolution and R1.3.3 flush-before-exit. Implemented in
+  `apps/designer-portal/src/components/portal/scope-builder/board-room-controller.tsx`
+  and covered by the CONTROLLER-UNIT path (22 tests as of this append).
+
 ## GA release decision
 
 Rulings by **Kody**, 2026-08-03:

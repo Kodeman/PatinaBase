@@ -448,7 +448,7 @@ function ScansList({
           className="min-h-11 min-w-11 overflow-hidden rounded-[4px] border border-[var(--border-default)] text-left hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={scan.thumbnail_url ?? ''} alt="" className="aspect-[4/3] w-full object-cover" />
+          <img src={scan.thumbnail_url ?? ''} alt="" draggable={false} className="aspect-[4/3] w-full object-cover" />
           <span className="block truncate px-2 py-1.5 text-[10px]">{scan.name}</span>
         </button>
       ))}
@@ -751,7 +751,7 @@ export function BoardAddRail({
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[3px] bg-[var(--bg-muted)]">
                     {capture.thumbnail_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={capture.thumbnail_url} alt="" className="h-full w-full object-cover" />
+                      <img src={capture.thumbnail_url} alt="" draggable={false} className="h-full w-full object-cover" />
                     ) : (
                       <span aria-hidden className="font-heading text-sm italic text-[var(--text-muted)]">C</span>
                     )}
@@ -821,7 +821,7 @@ export function BoardAddRail({
                         className="min-h-11 min-w-11 overflow-hidden rounded-[4px] border border-[var(--border-default)] text-left hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={thumbnail} alt="" className="aspect-[4/3] w-full object-cover" />
+                        <img src={thumbnail} alt="" draggable={false} className="aspect-[4/3] w-full object-cover" />
                         <span className="block truncate px-2 py-1.5 text-[10px]">{label}</span>
                       </button>
                     );

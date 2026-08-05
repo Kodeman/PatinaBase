@@ -544,6 +544,9 @@ const BOARD_IMAGE_TYPES = new Set([
   'image/avif',
 ]);
 const BOARD_IMAGE_MAX_BYTES = 20 * 1024 * 1024;
+/** Window in which a second Escape means "leave" (supersedes PRD R1.3.1). */
+const BOARD_ROOM_EXIT_CONFIRM_MS = 1_500;
+const BOARD_ROOM_EXIT_CONFIRM_MESSAGE = 'Press Escape again to leave the board';
 
 export function validateBoardImageFiles(files: readonly File[]): void {
   const invalidType = files.find((file) => !BOARD_IMAGE_TYPES.has(file.type));
@@ -620,9 +623,14 @@ export function useBoardRoomController({
   const stateRef = useRef<BoardRoomState | null>(null);
   const initializedIdentityRef = useRef<string | null>(null);
   const generationsRef = useRef(new Map<string, number>());
-  const structuralTasksRef = useRef(new Set<Promise<unknown>>());
+  /** Outstanding full-state writes, mapped to the command that scheduled them. */
+  const structuralTasksRef = useRef(new Map<Promise<unknown>, string>());
   const structuralQueueRef = useRef<Promise<void>>(Promise.resolve());
   const structuralWriteGateRef = useRef<Promise<void> | null>(null);
+  /** Ids the server has been told about — loaded rows plus every id already
+   * carried by a structural snapshot. A layout upsert on any other id would
+   * insert a partial row instead of taking the conflict-update path. */
+  const snapshotItemIdsRef = useRef(new Set<string>());
   const [structuralSaving, setStructuralSaving] = useState(false);
   const [persistenceError, setPersistenceError] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState('');
@@ -634,6 +642,8 @@ export function useBoardRoomController({
   const [view, setView] = useState<BoardView>({ pan: { x: 32, y: 32 }, zoom: 1 });
   const [isExiting, setIsExiting] = useState(false);
   const lastPointerRef = useRef<BoardPoint | null>(null);
+  const escapeArmedUntilRef = useRef(0);
+  const escapeArmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeSemanticGestureRef = useRef<string | null>(null);
   const transitionBarrierRef = useRef<() => Promise<void>>(async () => {});
   const mode = controlledMode ?? internalMode;
@@ -711,6 +721,7 @@ export function useBoardRoomController({
     };
     const initialHistory = createBoardRoomHistory(initialState);
     generationsRef.current = new Map(initialState.items.map((item) => [item.id, 0]));
+    snapshotItemIdsRef.current = new Set(initialState.items.map((item) => item.id));
     historyRef.current = initialHistory;
     stateRef.current = initialHistory.present;
     initializedIdentityRef.current = identityKey;
@@ -729,11 +740,23 @@ export function useBoardRoomController({
   ): void => {
     const previous = structuralQueueRef.current;
     const task = previous.catch(() => undefined).then(async () => {
+      // Ids this snapshot deletes from the server. Held so a failed write can
+      // put them back — the rows outlive a write that never landed.
+      let droppedIds: string[] = [];
       try {
         await runBoardOwnerAutosaveAction(owner, () => {
           // Snapshot at execution time. A later queued command therefore
           // rebases on any rollback that occurred ahead of it.
           const live = stateRef.current ?? after;
+          const liveIds = new Set(live.items.map((item) => item.id));
+          // The snapshot is the whole board, so an id missing from it is being
+          // deleted. Dropping it keeps the set true to "ids the server knows",
+          // which is what makes a later recreate of that id read as unsent and
+          // order its geometry behind the queued create instead of racing ahead
+          // of it through the buffer as a partial-row insert.
+          droppedIds = [...snapshotItemIdsRef.current].filter((id) => !liveIds.has(id));
+          for (const id of droppedIds) snapshotItemIdsRef.current.delete(id);
+          for (const id of liveIds) snapshotItemIdsRef.current.add(id);
           const write = applyStateMutation.mutateAsync({
             boardId,
             owner,
@@ -746,6 +769,7 @@ export function useBoardRoomController({
           });
         });
       } catch (error) {
+        for (const id of droppedIds) snapshotItemIdsRef.current.add(id);
         const current = stateRef.current;
         if (current) {
           const reverted = revertFailedStructuralTransition(current, before, after);
@@ -779,7 +803,7 @@ export function useBoardRoomController({
       }
     });
     structuralQueueRef.current = task.then(() => undefined, () => undefined);
-    structuralTasksRef.current.add(task);
+    structuralTasksRef.current.set(task, command.id);
     setStructuralSaving(true);
     void task.catch(() => undefined).finally(() => {
       structuralTasksRef.current.delete(task);
@@ -822,10 +846,18 @@ export function useBoardRoomController({
       }
     }
 
-    // While a full-state write is queued, keep subsequent geometry on the same
-    // serialized path. This prevents a late layout request from racing an item
-    // create/delete snapshot.
-    if (structural || structuralTasksRef.current.size > 0) {
+    // Geometry only leaves through the buffer once every id in it is one the
+    // server has heard of; a layout upsert on an id whose create is still
+    // queued would insert a partial row. Coalesced continuations of a command
+    // that is already writing stay on that command's path so a rollback
+    // reverts the whole gesture rather than half of it. Everything else — a
+    // plain drag while some unrelated structural write is in flight — keeps
+    // the 600ms buffer, which the in-flight write gate already orders.
+    const carriesUnsentItem = Object.keys(layoutEnvelope)
+      .some((id) => !snapshotItemIdsRef.current.has(id));
+    const continuesQueuedCommand = [...structuralTasksRef.current.values()]
+      .includes(command.id);
+    if (structural || carriesUnsentItem || continuesQueuedCommand) {
       scheduleStructural(before, after, command, direction, viewTranslationDelta);
       return;
     }
@@ -1155,7 +1187,7 @@ export function useBoardRoomController({
 
   const flushPending = useCallback(async () => {
     await Promise.all([layoutBuffer.flushAll(), canvasBuffer.flushAll()]);
-    await Promise.all([...structuralTasksRef.current]);
+    await Promise.all([...structuralTasksRef.current.keys()]);
     await flushBoardOwnerAutosaves(owner);
     if (persistenceError) throw new Error(persistenceError);
   }, [canvasBuffer, layoutBuffer, owner, persistenceError]);
@@ -1193,7 +1225,28 @@ export function useBoardRoomController({
           setMode('edit');
         }
         else if (selectedItemIds.length > 0) setSelectedItemIds([]);
-        else void requestExit();
+        // Leaving is the last rung and costs the whole session's context, so
+        // it takes two presses. Only the lapse and the exit itself disarm.
+        else if (Date.now() < escapeArmedUntilRef.current) {
+          escapeArmedUntilRef.current = 0;
+          if (escapeArmTimerRef.current) clearTimeout(escapeArmTimerRef.current);
+          escapeArmTimerRef.current = null;
+          void requestExit();
+        } else {
+          escapeArmedUntilRef.current = Date.now() + BOARD_ROOM_EXIT_CONFIRM_MS;
+          if (escapeArmTimerRef.current) clearTimeout(escapeArmTimerRef.current);
+          // Retiring the prompt as the window lapses is both truthful and what
+          // makes a re-arm audible: re-setting the identical string is a no-op
+          // update, so the live region would never speak the prompt twice.
+          escapeArmTimerRef.current = setTimeout(() => {
+            escapeArmTimerRef.current = null;
+            escapeArmedUntilRef.current = 0;
+            setAnnouncement((current) => (
+              current === BOARD_ROOM_EXIT_CONFIRM_MESSAGE ? '' : current
+            ));
+          }, BOARD_ROOM_EXIT_CONFIRM_MS);
+          setAnnouncement(BOARD_ROOM_EXIT_CONFIRM_MESSAGE);
+        }
         return;
       }
       if (key === 'p' && !mod && !event.altKey) {
@@ -1266,6 +1319,10 @@ export function useBoardRoomController({
     togglePresent,
     undo,
   ]);
+
+  useEffect(() => () => {
+    if (escapeArmTimerRef.current) clearTimeout(escapeArmTimerRef.current);
+  }, []);
 
   const state = history?.present ?? null;
   const canvasProps = useMemo<BoardRoomCanvasProps | null>(() => state ? {

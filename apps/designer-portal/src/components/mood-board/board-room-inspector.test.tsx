@@ -5,6 +5,13 @@ import {
   resolveBoardRoomInspectorPosition,
 } from './board-room-inspector';
 
+// BoardImageInspectorActions (rendered for any single-item selection) calls this via
+// react-query; stub it so single-selection tests don't need a QueryClientProvider.
+jest.mock('@/hooks/use-background-removal', () => ({
+  useBackgroundRemovalCapability: () => ({ data: undefined, isLoading: false }),
+  useRemoveBoardItemBackground: () => ({ mutateAsync: jest.fn(), isPending: false, error: null }),
+}));
+
 function controllerApi(): BoardRoomControllerApi {
   return {
     state: {
@@ -105,6 +112,100 @@ describe('BoardRoomInspector multi-selection', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     expect(api.deleteItems).toHaveBeenCalled();
+  });
+});
+
+describe('BoardRoomInspector geometry fields', () => {
+  function singleSelectionApi() {
+    const api = controllerApi();
+    api.selectedItemIds = ['chair'];
+    return api;
+  }
+
+  it('retains focus and the in-progress draft when a committed width lands mid-edit', () => {
+    const api = singleSelectionApi();
+    const { rerender } = render(
+      <div className="relative h-[600px] w-[800px]">
+        <BoardRoomInspector api={api} />
+      </div>,
+    );
+
+    const width = screen.getByLabelText('Width') as HTMLInputElement;
+    width.focus();
+    fireEvent.change(width, { target: { value: '555' } });
+
+    // A canvas-drag (or anything else) commits a new width on the same item mid-type.
+    const nextApi = singleSelectionApi();
+    nextApi.state = {
+      ...nextApi.state!,
+      items: nextApi.state!.items.map((item) => (item.id === 'chair' ? { ...item, width: 250 } : item)),
+    };
+    rerender(
+      <div className="relative h-[600px] w-[800px]">
+        <BoardRoomInspector api={nextApi} />
+      </div>,
+    );
+
+    const widthAfter = screen.getByLabelText('Width') as HTMLInputElement;
+    expect(widthAfter).toBe(width);
+    expect(document.activeElement).toBe(width);
+    expect(widthAfter.value).toBe('555');
+    expect(api.updateItem).not.toHaveBeenCalled();
+  });
+
+  it('commits the parsed width via api.updateItem on Enter', () => {
+    const api = singleSelectionApi();
+    render(
+      <div className="relative h-[600px] w-[800px]">
+        <BoardRoomInspector api={api} />
+      </div>,
+    );
+
+    const width = screen.getByLabelText('Width') as HTMLInputElement;
+    width.focus();
+    fireEvent.change(width, { target: { value: '321' } });
+    fireEvent.keyDown(width, { key: 'Enter' });
+
+    expect(api.updateItem).toHaveBeenCalledWith('chair', { width: 321 });
+    expect(document.activeElement).not.toBe(width);
+  });
+
+  it('commits the parsed rotation via api.rotateItem on blur', () => {
+    const api = singleSelectionApi();
+    render(
+      <div className="relative h-[600px] w-[800px]">
+        <BoardRoomInspector api={api} />
+      </div>,
+    );
+
+    const rotation = screen.getByLabelText('Rotation') as HTMLInputElement;
+    rotation.focus();
+    fireEvent.change(rotation, { target: { value: '42' } });
+    fireEvent.blur(rotation);
+
+    expect(api.rotateItem).toHaveBeenCalledWith('chair', 42);
+  });
+
+  it('reverts the draft on Escape without committing, and never reaches a window keydown listener', () => {
+    const api = singleSelectionApi();
+    render(
+      <div className="relative h-[600px] w-[800px]">
+        <BoardRoomInspector api={api} />
+      </div>,
+    );
+
+    const width = screen.getByLabelText('Width') as HTMLInputElement;
+    width.focus();
+    fireEvent.change(width, { target: { value: '900' } });
+
+    const windowKeyDown = jest.fn();
+    window.addEventListener('keydown', windowKeyDown);
+    fireEvent.keyDown(width, { key: 'Escape' });
+    window.removeEventListener('keydown', windowKeyDown);
+
+    expect(width.value).toBe('200'); // the chair item's width in controllerApi()
+    expect(api.updateItem).not.toHaveBeenCalled();
+    expect(windowKeyDown).not.toHaveBeenCalled();
   });
 });
 

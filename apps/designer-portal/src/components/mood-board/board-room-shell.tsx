@@ -160,7 +160,7 @@ function InlineNoteEditor({
 }
 
 /** Route-level focus and scroll isolation; portalled nested dialogs keep their own trap. */
-function useBoardRoomBoundary(
+export function useBoardRoomBoundary(
   ref: MutableRefObject<HTMLElement | null>,
   active: boolean,
 ) {
@@ -174,9 +174,24 @@ function useBoardRoomBoundary(
       trapTabWithin(event, root);
     };
     document.addEventListener('keydown', handleKeyDown, true);
+    // A drop that misses the canvas must never navigate the browser to the dragged
+    // URL/file. React delegates at the app root, so canvas onDragOver/onDrop run
+    // before this window bubble listener — defaultPrevented cleanly distinguishes
+    // accepted drops. This also covers Present mode (where the canvas prevents nothing).
+    // Editable targets (board name, note textarea, inspector fields) bail out too, or
+    // a native text-drag into the room's own inputs would be dead while it's mounted.
+    const swallow = (event: DragEvent) => {
+      if (event.defaultPrevented || isTextEntryTarget(event.target)) return;
+      event.preventDefault();
+      if (event.type === 'dragover' && event.dataTransfer) event.dataTransfer.dropEffect = 'none';
+    };
+    window.addEventListener('dragover', swallow);
+    window.addEventListener('drop', swallow);
     return () => {
       cancelAnimationFrame(frame);
       document.removeEventListener('keydown', handleKeyDown, true);
+      window.removeEventListener('dragover', swallow);
+      window.removeEventListener('drop', swallow);
       unlockBodyScroll();
     };
   }, [active, ref]);
