@@ -1,4 +1,5 @@
 import {
+  adaptClientPlan,
   adaptCommercialDocumentBundle,
   adaptProjectCommercialSummary,
   commercialSummaryFromProposal,
@@ -387,6 +388,79 @@ describe('commercial document client adapter', () => {
     });
   });
 
+  // The document the client signs is filed by room and states its own terms.
+  // Both facts were arriving from get_client_commercial_document_bundle and
+  // being discarded by the adapter — roomName by a narrowed Pick, the total and
+  // deposit percent by being collapsed into depositRequiredCents and dropped.
+  it('carries the room, the line total, and the document terms through to the shell', () => {
+    const bundle = adaptCommercialDocumentBundle({
+      document: {
+        id: 'ffe-rooms',
+        projectId: 'project-1',
+        documentKind: 'furnishings_authorization',
+        commercialState: 'executed',
+        title: 'Release one',
+        totalAmountCents: 700_000,
+        depositPercent: 30,
+      },
+      furnishings: {
+        budgetCheckpointId: 'checkpoint-1',
+        depositRequiredCents: 210_000,
+        depositPaidCents: 0,
+        items: [
+          {
+            name: 'Lounge sofa', room_name: 'Living room', quantity: 1,
+            client_unit_price_cents: 400_000, client_line_total_cents: 400_000,
+          },
+          // An allowance whose ceiling does not divide evenly: 3 × 66_666 is
+          // 199_998, but the client signed for 200_000. The line total is the
+          // authoritative figure and the one that reconciles to the document.
+          {
+            name: 'Room rug', room_name: 'Living room', quantity: 3,
+            client_unit_price_cents: 66_666, client_line_total_cents: 200_000,
+          },
+          {
+            name: 'Writing desk', room_name: 'Study', quantity: 1,
+            client_unit_price_cents: 100_000, client_line_total_cents: 100_000,
+          },
+        ],
+      },
+    });
+
+    expect(bundle?.document).toMatchObject({ totalAmountCents: 700_000, depositPercent: 30 });
+    expect(bundle?.furnishings?.items.map((i) => i.roomName)).toEqual([
+      'Living room', 'Living room', 'Study',
+    ]);
+    expect(bundle?.furnishings?.items[1]).toMatchObject({
+      description: 'Room rug', clientLineTotalCents: 200_000,
+    });
+    const summed = (bundle?.furnishings?.items ?? []).reduce(
+      (sum, item) => sum + item.clientLineTotalCents, 0,
+    );
+    expect(summed).toBe(bundle?.document.totalAmountCents);
+  });
+
+  it('files a roomless line under General and falls back to quantity × unit only when no line total came', () => {
+    const bundle = adaptCommercialDocumentBundle({
+      document: {
+        id: 'ffe-legacy-items',
+        documentKind: 'furnishings_authorization',
+        commercialState: 'sent',
+        title: 'Legacy payload',
+      },
+      furnishings: {
+        depositRequiredCents: 0,
+        depositPaidCents: 0,
+        items: [{ description: 'Sectional', quantity: 2, clientUnitPriceCents: 120_000 }],
+      },
+    });
+
+    expect(bundle?.furnishings?.items[0]).toMatchObject({
+      roomName: 'General',
+      clientLineTotalCents: 240_000,
+    });
+  });
+
   it('maps the flat furnishings-list contract to proposal-addressed client links', () => {
     const summary = adaptProjectCommercialSummary({
       projectId: 'project-1',
@@ -416,5 +490,53 @@ describe('commercial document client adapter', () => {
         items: [{ description: 'Sectional', quantity: 1, clientUnitPriceCents: 1_200_000 }],
       },
     });
+  });
+});
+
+describe('adaptClientPlan', () => {
+  // The stamped and the live figure are different questions and must survive
+  // as different fields. publish_budget_checkpoint freezes authorizedCents at
+  // publication — necessarily before anything can be released against the
+  // checkpoint — so it is the right answer to "as of the checkpoint" and the
+  // wrong answer to "so far".
+  it('carries the live authorized figure alongside the stamped one', () => {
+    const plan = adaptClientPlan({
+      version: {
+        id: 'v1',
+        publishedAt: '2026-08-01T00:00:00Z',
+        liveAuthorizedTotalCents: 700_000,
+      },
+      lines: [
+        {
+          id: 'l1', roomName: 'Living room', category: 'Seating',
+          targetCents: 530_000, scheduledCents: 530_000,
+          authorizedCents: 0, liveAuthorizedCents: 400_000,
+        },
+        {
+          id: 'l2', room_name: 'Study', category: 'Casegoods',
+          target_cents: 300_000, scheduled_cents: 300_000,
+          authorized_cents: 0, live_authorized_cents: 0,
+        },
+      ],
+    });
+
+    expect(plan?.liveAuthorizedTotalCents).toBe(700_000);
+    expect(plan?.lines[0]).toMatchObject({ authorizedCents: 0, liveAuthorizedCents: 400_000 });
+    expect(plan?.lines[1]).toMatchObject({ roomName: 'Study', liveAuthorizedCents: 0 });
+    expect(plan?.rooms).toEqual(['Living room', 'Study']);
+  });
+
+  it('reads a legacy payload with no live keys as zero rather than NaN', () => {
+    const plan = adaptClientPlan({
+      version: { id: 'v1', publishedAt: null },
+      lines: [{ id: 'l1', roomName: 'Living room', category: 'Seating', targetCents: 100 }],
+    });
+
+    expect(plan?.liveAuthorizedTotalCents).toBe(0);
+    expect(plan?.lines[0].liveAuthorizedCents).toBe(0);
+  });
+
+  it('returns null when there is no published version at all', () => {
+    expect(adaptClientPlan(null)).toBeNull();
   });
 });

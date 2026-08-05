@@ -55,6 +55,21 @@
 --   create_furnishing_wave_draft ................ 00414 (sole) → RETIRED here
 --   ffe_status_rank (read, not redefined) ....... 00184
 --
+-- ACCEPTANCE-WALK DELTAS (folded in before this file was ever pushed — 00422 is
+-- still unapplied on Strata, so these are edits in place, not fix-forwards):
+--   · list_client_proposals now answers with the project a document is actually
+--     bound to. A furnishings authorization has proposals.project_id = NULL —
+--     its binding lives in project_commercial_documents — so every client
+--     surface that filters this list by project saw none of them.
+--   · get_project_working_budget gains liveAuthorizedCents per line and
+--     liveAuthorizedTotalCents on the version. The stamped authorized_cents is
+--     frozen at PUBLICATION, which is necessarily before anything can be
+--     released against the checkpoint, so the client's "Agreed so far" column
+--     read $0 forever. Both figures now ship; the stamp is unchanged.
+--   · get_client_project_selections stops reporting an unresolved allowance's
+--     line_total_cents (DEFAULT 0) as a settled price. resolvedCents is NULL
+--     until the schedule stops typing the line as an allowance.
+--
 -- Room identity: a budget line IS its room. The derivation, the publish stamp
 -- and the coverage proof all key on project_room_id; room_name is display text
 -- and survives only as the fallback for legacy rows that carry no id (a budget
@@ -960,7 +975,33 @@ REVOKE ALL ON FUNCTION public.publish_budget_checkpoint(uuid, uuid)
 GRANT EXECUTE ON FUNCTION public.publish_budget_checkpoint(uuid, uuid)
   TO authenticated;
 
--- 00414 body VERBATIM except two added line keys.
+-- 00414 body VERBATIM except two added line keys — and, from the phase-1
+-- acceptance walk, a LIVE authorized figure alongside the stamped one.
+--
+-- Why both. `authorized_cents` is STAMPED: publish_budget_checkpoint freezes it
+-- into the version at publication, and guard_budget_immutability then freezes
+-- the row. That is exactly right for the checkpoint the client acknowledged —
+-- it is a dated statement, and it must not move under the acknowledgement. But
+-- it means the column reads $0 for the whole life of a version published before
+-- anything was authorized, which is every version: the studio publishes a
+-- checkpoint, the client acknowledges it, and only THEN can a release be minted
+-- against it. So the client's plan grid said "Agreed so far $0" after signing —
+-- the stamp was telling the truth about publication time and the client was
+-- reading it as the truth about now.
+--
+-- `liveAuthorizedCents` answers "now", computed at read from the same rollup
+-- publish_budget_checkpoint stamps with: Σ client_line_total_cents of every
+-- snapshot on an EXECUTED instrument whose room×category matches the line, room
+-- id where both sides carry one and room name only for a legacy row that has
+-- none. Neither figure replaces the other; the grid renders the live one and
+-- the stamped one stays for anything narrating the checkpoint as of its date.
+--
+-- `liveAuthorizedTotalCents` is deliberately NOT Σ lines. It is the project's
+-- whole executed-authorization total. Room coverage is proven at RELEASE time
+-- against the room only (R6), never the category, so furniture can be signed in
+-- a category the budget version never named — and a client asking what they
+-- have agreed to is owed that dollar too. Summing the lines would silently drop
+-- it. The two can therefore differ, and when they do the difference is real.
 CREATE OR REPLACE FUNCTION public.get_project_working_budget(p_project_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -1002,6 +1043,15 @@ BEGIN
       'targetTotalCents', v_version.target_total_cents,
       'highTotalCents', v_version.high_total_cents,
       'currency', 'USD', 'note', v_version.note,
+      'liveAuthorizedTotalCents', COALESCE((
+        SELECT SUM(a.client_line_total_cents)
+        FROM public.furnishing_authorization_items a
+        JOIN public.project_commercial_documents d ON d.id = a.commercial_document_id
+        JOIN public.proposals p ON p.id = d.proposal_id
+        WHERE d.project_id = p_project_id
+          AND d.executed_at IS NOT NULL
+          AND p.commercial_state = 'executed'
+      ), 0),
       'createdAt', v_version.created_at, 'publishedAt', v_version.published_at
     ) - CASE WHEN v_is_studio THEN '{}'::text[] ELSE ARRAY['note'] END,
     'lines', COALESCE((SELECT jsonb_agg(jsonb_build_object(
@@ -1009,6 +1059,24 @@ BEGIN
       'category', l.category, 'lowCents', l.low_cents,
       'targetCents', l.target_cents, 'highCents', l.high_cents,
       'scheduledCents', l.scheduled_cents, 'authorizedCents', l.authorized_cents,
+      -- The publish stamp's `authorized` rollup, run at read time instead of at
+      -- publication. Kept character-for-character the same shape on purpose: if
+      -- one of the two ever needs a fix, the other needs the identical fix.
+      'liveAuthorizedCents', COALESCE((
+        SELECT SUM(a.client_line_total_cents)
+        FROM public.furnishing_authorization_items a
+        JOIN public.project_commercial_documents d ON d.id = a.commercial_document_id
+        JOIN public.proposals p ON p.id = d.proposal_id
+        WHERE d.project_id = p_project_id
+          AND d.executed_at IS NOT NULL
+          AND p.commercial_state = 'executed'
+          AND CASE
+                WHEN l.project_room_id IS NOT NULL AND a.project_room_id IS NOT NULL
+                  THEN a.project_room_id = l.project_room_id
+                ELSE COALESCE(a.room_name, '') = l.room_name
+              END
+          AND COALESCE(a.category, 'Uncategorized') = l.category
+      ), 0),
       'sortOrder', l.sort_order
     ) ORDER BY l.sort_order, l.id) FROM public.project_budget_lines l
       WHERE l.budget_version_id = v_version.id), '[]'::jsonb),
@@ -2099,6 +2167,33 @@ GRANT EXECUTE ON FUNCTION public.list_furnishings_authorizations(uuid)
 -- lock is deliberately NOT extended to executed instruments — the fix is to
 -- show the client the figures they signed, not to freeze the studio's schedule.
 -- Live money still appears where it is honestly labelled: allowance.resolvedCents.
+--
+-- WHAT "RESOLVED" MEANS (phase-1 acceptance walk). resolvedCents used to be
+-- i.line_total_cents unconditionally, so an allowance nobody had resolved yet
+-- reported that column's DEFAULT 0 (00066) — or worse, some stale figure — as a
+-- settled price, and the client's card dropped "up to $X" and rendered a flat
+-- number for a selection that had not been made. resolvedCents is now NULL until
+-- the line is resolved, and NULL is the client-side signal for "still an
+-- allowance" (adaptClientSelectionAllowance → resolvedCents: null).
+--
+-- The rule is the item_type flip: a line resolves when the schedule itself stops
+-- calling it an allowance. That is not a preference, it is the definition the
+-- rest of the system already runs on — publish_budget_checkpoint's `scheduled`
+-- rollup and derive_working_budget_draft BOTH read budget_max_cents, not
+-- line_total_cents, for as long as item_type = 'allowance'. If the budget will
+-- not treat that column as the line's money, neither will the client's read.
+-- Provenance is intact by construction: the join reaches i only through
+-- i.source_authorization_item_id = a.id on an executed document.
+--
+-- The alternative rule considered and rejected — "priced at or under the
+-- ceiling counts as resolved" — is what the PO gate uses
+-- (guard_project_ffe_purchase_authority branches on the SNAPSHOT's item_type
+-- and never requires the flip). Its consequence, stated plainly: a line the
+-- studio purchased under its ceiling while leaving it typed 'allowance' still
+-- reads to the client as "up to $X". That is the conservative answer and the
+-- honest one — a provisional price is not a selection, and the ceiling is what
+-- the client signed. The flip is a one-column edit on the schedule the studio
+-- is already working in.
 CREATE OR REPLACE FUNCTION public.get_client_project_selections(p_project_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -2134,9 +2229,14 @@ BEGIN
       'clientLineTotalCents', a.client_line_total_cents,
       'itemType', i.item_type,
       'status', i.status,
+      -- The block exists because the CLIENT signed an allowance — that is the
+      -- frozen snapshot's business (a.item_type), and it never changes. Whether
+      -- the allowance has since been RESOLVED is the live schedule line's
+      -- business (i.item_type), and that is what decides resolvedCents.
       'allowance', CASE WHEN a.item_type = 'allowance' THEN jsonb_build_object(
         'ceilingCents', a.client_line_total_cents,
-        'resolvedCents', i.line_total_cents
+        'resolvedCents', CASE WHEN i.item_type = 'fixed'
+          THEN i.line_total_cents ELSE NULL END
       ) ELSE NULL END,
       'instrument', jsonb_build_object(
         'documentId', d.id, 'name', d.wave_name, 'executedAt', d.executed_at
@@ -2163,7 +2263,7 @@ GRANT EXECUTE ON FUNCTION public.get_client_project_selections(uuid)
   TO authenticated;
 
 COMMENT ON FUNCTION public.get_client_project_selections(uuid) IS
-  'Client-safe read of the schedule lines a client actually authorized. Trade cost, markup, and purchase-order fields never appear.';
+  'Client-safe read of the schedule lines a client actually authorized. Trade cost, markup, and purchase-order fields never appear. allowance.resolvedCents is NULL until the schedule stops typing the line as an allowance (item_type flips to fixed) — the same rule the budget rollups use when they read budget_max_cents rather than line_total_cents.';
 
 -- 00414 body VERBATIM except one added conjunct in the WHERE clause: the same
 -- "issued, not merely terminal" rule the bundle and the instrument list now
@@ -2171,6 +2271,21 @@ COMMENT ON FUNCTION public.get_client_project_selections(uuid) IS
 -- void deliberately leaves alone, so it was not the door the void opened — but
 -- a client-facing list that trusts one column while its siblings trust another
 -- is a door waiting to be opened by the next state that writes only one of them.
+--
+-- …and one more delta, from the phase-1 acceptance walk: a FURNISHINGS
+-- authorization carries proposals.project_id = NULL. Its binding to the project
+-- lives in project_commercial_documents, because the release is minted straight
+-- from the schedule and never goes through activate_proposal_as_project (which
+-- is what stamps proposals.project_id on the legacy rail). A client surface that
+-- filters this list by project — the awaiting-signature cards do exactly that —
+-- therefore saw every furnishings authorization as belonging to no project at
+-- all, and rendered nothing. The list now answers with the binding a document
+-- actually has: its own project_id where it has one, else the commercial
+-- binding's. project_commercial_documents.proposal_id is UNIQUE (00412), so the
+-- LEFT JOIN cannot multiply a row. The `project` object hangs off the SAME
+-- coalesced id — a payload that names a project_id while its sibling object
+-- reads NULL is a trap for the next consumer. jsonb_strip_nulls is unchanged:
+-- a document bound to nothing still drops both keys.
 CREATE OR REPLACE FUNCTION public.list_client_proposals()
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -2188,7 +2303,7 @@ BEGIN
 
   SELECT COALESCE(jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
         'id', proposal.id,
-        'project_id', proposal.project_id,
+        'project_id', COALESCE(proposal.project_id, commercial_binding.project_id),
         'project', CASE
           WHEN project.id IS NULL THEN NULL
           ELSE jsonb_build_object('id', project.id, 'name', project.name)
@@ -2237,7 +2352,10 @@ BEGIN
       )) ORDER BY proposal.updated_at DESC, proposal.id), '[]'::jsonb)
   INTO v_payload
   FROM public.proposals AS proposal
-  LEFT JOIN public.projects AS project ON project.id = proposal.project_id
+  LEFT JOIN public.project_commercial_documents AS commercial_binding
+    ON commercial_binding.proposal_id = proposal.id
+  LEFT JOIN public.projects AS project
+    ON project.id = COALESCE(proposal.project_id, commercial_binding.project_id)
   WHERE proposal.client_id = auth.uid()
     AND proposal.status IN ('sent', 'viewed', 'accepted', 'declined', 'expired')
     -- 00422: a terminal commercial edition is the client's to read only if it

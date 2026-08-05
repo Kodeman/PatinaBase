@@ -23,9 +23,17 @@ function formatPublishedDate(iso: string | null): string | null {
 /**
  * "The plan" — the room-by-category working budget grid on the commercial
  * rail. Replaces BudgetOverview for commercial projects: planned (target)
- * vs. agreed so far (authorized), dated to the published checkpoint. A line
- * running over target is stated in words, never flagged in red — this is a
- * planning read, not an alarm.
+ * vs. agreed so far (authorized). A line running over target is stated in
+ * words, never flagged in red — this is a planning read, not an alarm.
+ *
+ * "Agreed so far" reads `liveAuthorizedCents`, not the stamped
+ * `authorizedCents`. The stamp is frozen into the budget version at
+ * PUBLICATION — and a checkpoint must be published, then acknowledged, before
+ * any furnishings release can be drawn against it, so the stamp is necessarily
+ * zero at the moment it is taken and stays zero until the next publish. A
+ * client who had just signed a $700k authorization was being shown "$0 agreed
+ * so far". The dateline stays on the version's publishedAt: the PLAN is as of
+ * that date. What has been agreed against it is as of now.
  */
 export function ClientPlanGrid({ projectId }: { projectId: string }) {
   const { data: plan, isLoading, isError } = useClientPlan(projectId);
@@ -46,9 +54,19 @@ export function ClientPlanGrid({ projectId }: { projectId: string }) {
     <section className="mt-8" data-testid="client-plan-grid">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="type-section-head">The plan</h2>
-        {publishedLabel && (
-          <p className="type-meta-small text-[var(--text-muted)]">{`Budget as of ${publishedLabel}`}</p>
-        )}
+        <div className="flex flex-wrap items-baseline gap-x-3">
+          {plan.liveAuthorizedTotalCents > 0 && (
+            <p
+              className="type-meta-small text-[var(--text-muted)]"
+              data-testid="client-plan-agreed-total"
+            >
+              {`${money(plan.liveAuthorizedTotalCents)} agreed so far`}
+            </p>
+          )}
+          {publishedLabel && (
+            <p className="type-meta-small text-[var(--text-muted)]">{`Budget as of ${publishedLabel}`}</p>
+          )}
+        </div>
       </div>
 
       <div className="mt-4 divide-y divide-[var(--border-subtle)] border-y border-[var(--border-subtle)]">
@@ -59,7 +77,7 @@ export function ClientPlanGrid({ projectId }: { projectId: string }) {
           <span className="text-right">Agreed so far</span>
         </div>
         {plan.lines.map((line) => {
-          const overTargetCents = line.authorizedCents - line.targetCents;
+          const overTargetCents = line.liveAuthorizedCents - line.targetCents;
           return (
             <div
               key={line.id}
@@ -70,7 +88,7 @@ export function ClientPlanGrid({ projectId }: { projectId: string }) {
               <span className="text-[var(--text-muted)]">{line.category}</span>
               <span className="text-right">{money(line.targetCents)}</span>
               <div className="text-right">
-                <span>{money(line.authorizedCents)}</span>
+                <span>{money(line.liveAuthorizedCents)}</span>
                 {overTargetCents > 0 && (
                   <p className="type-meta-small mt-0.5 text-[var(--text-muted)]">
                     {`${money(overTargetCents)} over the room’s target`}

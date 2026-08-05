@@ -21,9 +21,27 @@
  *     inline hint rather than letting the dialog silently no-op.
  *
  * Zero shadows (D4); Esc closes; failures render inline (R83 — no toast).
+ *
+ * LAYERING. The sheet was mouse-dead: the picker opened, and every click on it
+ * closed the dialog instead of selecting a household. Two causes, one shape.
+ *   (a) The layer sat INLINE at `z-[70]`. ClientPicker's Radix popover portals
+ *       to <body> at `z-50`, so the backdrop painted over it —
+ *       `document.elementFromPoint` under the cursor returned the backdrop, not
+ *       the row the designer could plainly see.
+ *   (b) The layer was ALSO the backdrop and carried the dismiss handler, so the
+ *       mousedown that landed on it read as "clicked outside" and closed.
+ * The fix is the shape DocSheet already uses (doc-sheet.tsx), which is why the
+ * other three ClientPicker hosts — household-sheet, open-project-sheet,
+ * send-sheet — never had this problem: portal the layer to <body>, keep it in
+ * the `z-50` overlay band, and make the scrim a separate absolutely-positioned
+ * child. Ordering is then by DOM position, and the popover's portal is always
+ * appended after the sheet's. There is deliberately no z-index bump on the
+ * popover: nothing in the repo overrides that `z-50`, and a picker that has to
+ * out-number its host is a picker that breaks in the next host.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { usePathname, useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '@patina/supabase';
@@ -226,17 +244,27 @@ export function DraftProposalSheet({
     }
   };
 
-  return (
+  const layer = (
     <div
-      className="fixed inset-0 z-[70] flex items-start justify-center bg-[rgba(28,25,23,0.28)] px-4 pt-[18vh]"
+      className="fixed inset-0 z-50 flex items-start justify-center px-4 pt-[18vh]"
       role="dialog"
       aria-modal="true"
       aria-label="Draft a design agreement for an existing household"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+      data-testid="draft-proposal-layer"
     >
-      <div className="w-full max-w-[420px] rounded-[8px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] px-5 py-5">
+      {/* The scrim is its OWN element, not the layer. When the layer carried
+          both the veil and the dismiss handler, every mousedown that landed on
+          it — including one aimed at the picker's popover — satisfied
+          `e.target === e.currentTarget` and closed the sheet. */}
+      <button
+        type="button"
+        aria-label="Close draft agreement backdrop"
+        data-testid="draft-proposal-backdrop"
+        tabIndex={-1}
+        onMouseDown={onClose}
+        className="absolute inset-0 h-full w-full cursor-default bg-[rgba(28,25,23,0.28)]"
+      />
+      <div className="relative w-full max-w-[420px] rounded-[8px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] px-5 py-5">
         <p className="font-heading text-[1.15rem] text-[var(--color-charcoal)]">
           Draft a design agreement
         </p>
@@ -263,6 +291,14 @@ export function DraftProposalSheet({
       </div>
     </div>
   );
+
+  // Portalled to <body>, exactly as DocSheet is. The stack orders by DOM
+  // position: ClientPicker's Radix popover portals to <body> too, and it is
+  // appended AFTER this layer (it cannot exist before the sheet is open), so at
+  // equal z-index the popover paints on top. That is the whole mechanism, and
+  // it is why the three DocSheet-hosted ClientPickers work and this one did
+  // not. Rendered inline the layer never joins that ordering at all.
+  return typeof document === 'undefined' ? layer : createPortal(layer, document.body);
 }
 
 /** Open the household-picker cold start from anywhere (⌘K). The overlay is

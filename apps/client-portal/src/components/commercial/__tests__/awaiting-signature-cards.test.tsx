@@ -110,6 +110,49 @@ describe('AwaitingSignatureCards', () => {
     expect(screen.queryByText(/Deposit/)).not.toBeInTheDocument();
   });
 
+  // The defect this fences, from the DB side. A furnishings authorization is
+  // minted straight from the schedule and never runs through
+  // activate_proposal_as_project, so proposals.project_id stays NULL on it —
+  // its binding lives in project_commercial_documents. list_client_proposals
+  // now COALESCEs the two into the projected `project_id`, which is the key
+  // this card filters on. Before the graft the row arrived with no project at
+  // all and the card rendered for nobody. The SQL fence for the coalesce itself
+  // is section (1c) of supabase/tests/commercial/authorized_schedule_test.sql;
+  // this one pins the shape the portal is handed.
+  it('renders a furnishings authorization bound through project_commercial_documents', () => {
+    mockUseClientProposals.mockReturnValue({
+      data: [
+        proposal({
+          id: 'fa-1',
+          title: 'Release one',
+          document_kind: 'furnishings_authorization',
+          project_id: 'project-1',
+          total_amount: 700_000,
+        }),
+      ],
+    });
+    render(<AwaitingSignatureCards projectId="project-1" />);
+
+    expect(screen.getByText('Release one')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /release one/i })).toHaveAttribute(
+      'href',
+      '/proposals/fa-1/sign',
+    );
+  });
+
+  it('excludes a document the list could not bind to any project at all', () => {
+    const row = proposal({
+      id: 'fa-2',
+      document_kind: 'furnishings_authorization',
+    }) as unknown as Record<string, unknown>;
+    // jsonb_strip_nulls drops the key entirely when both sides of the COALESCE
+    // are NULL. Absent must never read as "belongs to the project I'm on".
+    delete row.project_id;
+    mockUseClientProposals.mockReturnValue({ data: [row] });
+    render(<AwaitingSignatureCards projectId="project-1" />);
+    expect(screen.queryByTestId('awaiting-signature-cards')).not.toBeInTheDocument();
+  });
+
   it('excludes documents belonging to a different project', () => {
     mockUseClientProposals.mockReturnValue({
       data: [proposal({ id: 'ds-other', project_id: 'project-2' })],

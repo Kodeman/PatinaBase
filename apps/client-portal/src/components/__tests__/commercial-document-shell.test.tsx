@@ -16,6 +16,7 @@ function bundle(overrides: Partial<CommercialDocumentBundle> = {}): CommercialDo
       title: 'Whitfield design services', version: 1, waveName: null, sentAt: null,
       executedAt: null, supersededAt: null, replacementProposalId: null,
       documentFingerprint: 'fingerprint-1',
+      totalAmountCents: 0, depositPercent: 0,
     },
     serviceTerms: {
       scope: 'Concept and design development', deliverables: ['Concept package'],
@@ -26,6 +27,50 @@ function bundle(overrides: Partial<CommercialDocumentBundle> = {}): CommercialDo
     },
     rates: [{ id: 'r1', version: 1, roleName: 'Principal designer', hourlyRateCents: 22_500, effectiveAt: '2026-08-01' }],
     signatures: [], furnishings: null, ...overrides,
+  };
+}
+
+/**
+ * An executed furnishings authorization over two rooms. Deliberately includes
+ * an allowance (Room rug) whose 200,000 ceiling does not divide evenly by its
+ * quantity, so `quantity × clientUnitPriceCents` (199,998) and
+ * `clientLineTotalCents` (200,000) disagree — the case that decides which one
+ * the document is allowed to print. Σ clientLineTotalCents = 2,000,000 =
+ * document.totalAmountCents, the invariant the terms strip rests on.
+ */
+function furnishingsBundle(): CommercialDocumentBundle {
+  const base = bundle();
+  return {
+    ...base,
+    document: {
+      ...base.document,
+      kind: 'furnishings_authorization',
+      state: 'executed',
+      projectId: 'p1',
+      waveName: 'Living floor',
+      totalAmountCents: 2_000_000,
+      depositPercent: 50,
+    },
+    serviceTerms: null,
+    furnishings: {
+      checkpointId: 'b3',
+      depositRequiredCents: 1_000_000,
+      depositPaidCents: 250_000,
+      items: [
+        {
+          description: 'Meadow linen sectional', roomName: 'Living room', quantity: 1,
+          clientUnitPriceCents: 1_480_000, clientLineTotalCents: 1_480_000, currency: 'USD',
+        },
+        {
+          description: 'Room rug', roomName: 'Living room', quantity: 3,
+          clientUnitPriceCents: 66_666, clientLineTotalCents: 200_000, currency: 'USD',
+        },
+        {
+          description: 'Writing desk', roomName: 'Study', quantity: 1,
+          clientUnitPriceCents: 320_000, clientLineTotalCents: 320_000, currency: 'USD',
+        },
+      ],
+    },
   };
 }
 
@@ -49,18 +94,68 @@ describe('CommercialDocumentShell', () => {
   });
 
   it('renders a named FF&E authorization and deposit handoff without reopening design services', () => {
-    render(<CommercialDocumentShell bundle={bundle({
-      document: { ...bundle().document, kind: 'furnishings_authorization', state: 'executed', projectId: 'p1', waveName: 'Living floor' },
-      serviceTerms: null,
-      furnishings: {
-        checkpointId: 'b3', depositRequiredCents: 1_000_000, depositPaidCents: 250_000,
-        items: [{ description: 'Meadow linen sectional', quantity: 1, clientUnitPriceCents: 1_480_000, currency: 'USD' }],
-      },
-    })} />);
+    render(<CommercialDocumentShell bundle={furnishingsBundle()} />);
     expect(screen.getByText('Living floor')).toBeInTheDocument();
     expect(screen.getByText('Meadow linen sectional')).toBeInTheDocument();
     expect(screen.getByText(/\$7,500 remains due/i)).toBeInTheDocument();
     expect(screen.getByText(/does not alter the design-services agreement/i)).toBeInTheDocument();
+  });
+
+  // The document a client signs is read alongside the rooms it furnishes. A
+  // flat list asks them to work out for themselves which pieces are the study.
+  it('files the named lines under room headings, in the order the RPC sent them', () => {
+    render(<CommercialDocumentShell bundle={furnishingsBundle()} />);
+    const headings = screen.getAllByTestId('authorization-room-heading').map((h) => h.textContent);
+    expect(headings).toEqual(['Living room', 'Study']);
+
+    const groups = screen.getAllByTestId('authorization-room-group');
+    expect(groups).toHaveLength(2);
+    expect(groups[0]).toHaveTextContent('Meadow linen sectional');
+    expect(groups[0]).toHaveTextContent('Room rug');
+    expect(groups[1]).toHaveTextContent('Writing desk');
+    expect(groups[1]).not.toHaveTextContent('Meadow linen sectional');
+  });
+
+  it('states the terms — total, deposit, percent — under the named lines', () => {
+    render(<CommercialDocumentShell bundle={furnishingsBundle()} />);
+    expect(screen.getByTestId('authorization-terms-strip')).toHaveTextContent(
+      'Total $20,000 · Deposit $10,000 (50%) on signature',
+    );
+  });
+
+  it('omits the terms strip when the instrument asks for no deposit', () => {
+    const base = furnishingsBundle();
+    render(<CommercialDocumentShell bundle={{
+      ...base,
+      document: { ...base.document, depositPercent: 0 },
+      furnishings: { ...base.furnishings!, depositRequiredCents: 0, depositPaidCents: 0 },
+    }} />);
+    expect(screen.queryByTestId('authorization-terms-strip')).not.toBeInTheDocument();
+  });
+
+  // An allowance is snapshotted at its ceiling, and its unit price is that
+  // ceiling divided by quantity with integer truncation — so quantity × unit
+  // understates it. The line total is the authoritative figure and is what
+  // reconciles to the document's own total.
+  it('prices each line from its line total, not quantity × unit price', () => {
+    render(<CommercialDocumentShell bundle={furnishingsBundle()} />);
+    // Room rug: 3 × 66,666 = 199,998 ≠ the 200,000 ceiling actually signed.
+    expect(screen.getByText('$2,000')).toBeInTheDocument();
+    expect(screen.queryByText('$1,999')).not.toBeInTheDocument();
+    expect(screen.getByText('Authorized furnishings').parentElement).toHaveTextContent('$20,000');
+  });
+
+  it('files a line with no room under a General heading rather than dropping it', () => {
+    const base = furnishingsBundle();
+    render(<CommercialDocumentShell bundle={{
+      ...base,
+      furnishings: {
+        ...base.furnishings!,
+        items: [{ ...base.furnishings!.items[0], roomName: '' }],
+      },
+    }} />);
+    expect(screen.getByTestId('authorization-room-heading')).toHaveTextContent('General');
+    expect(screen.getByText('Meadow linen sectional')).toBeInTheDocument();
   });
 
   it('guides superseded documents to their replacement', () => {

@@ -26,6 +26,23 @@ export interface CommercialDocumentSummary extends CanonicalCommercialDocumentSu
   documentFingerprint: string | null;
 }
 
+/**
+ * What the BUNDLE's document carries beyond what a list row does.
+ * `get_client_commercial_document_bundle` projects `totalAmountCents` and
+ * `depositPercent`; `list_client_proposals` projects the total but no deposit
+ * term (there is no per-document deposit figure on a pending-list row). Both
+ * were already arriving in the bundle and were being collapsed into
+ * `furnishings.depositRequiredCents` and then discarded — so an authorization
+ * could state a deposit without ever stating what it was a deposit ON. Kept a
+ * separate type rather than widened onto the summary, because widening would
+ * force `commercialSummaryFromProposal` to invent a deposit term it does not
+ * have, and a fabricated 0% reads as "no deposit due".
+ */
+export interface CommercialDocumentBundleSummary extends CommercialDocumentSummary {
+  totalAmountCents: number;
+  depositPercent: number;
+}
+
 export type CommercialRate = Pick<
   DesignServiceRate,
   'id' | 'version' | 'roleName' | 'hourlyRateCents' | 'effectiveAt'
@@ -59,7 +76,24 @@ export type DesignServicesTerms = Omit<
 export type FurnishingsAuthorizationItem = Pick<
   CanonicalFurnishingsAuthorizationItem,
   'description' | 'quantity' | 'clientUnitPriceCents' | 'currency'
->;
+> & {
+  /**
+   * The room the line files under. The RPC has always projected it
+   * (`furnishing_authorization_items.room_name`); the portal was throwing it
+   * away, which is why the client's authorization read as one flat list of
+   * furniture with no idea which room anything went in.
+   */
+  roomName: string;
+  /**
+   * The authoritative per-line figure — NOT `quantity × clientUnitPriceCents`.
+   * An allowance is snapshotted at its ceiling and the unit price is that
+   * ceiling divided by quantity with integer truncation, so the product can
+   * fall up to (quantity − 1) cents short of what the client actually signed
+   * for. Σ clientLineTotalCents reconciles exactly to the document's
+   * totalAmountCents; the product does not.
+   */
+  clientLineTotalCents: number;
+};
 
 export interface FurnishingsAuthorization {
   checkpointId: string | null;
@@ -69,7 +103,7 @@ export interface FurnishingsAuthorization {
 }
 
 export interface CommercialDocumentBundle {
-  document: CommercialDocumentSummary;
+  document: CommercialDocumentBundleSummary;
   serviceTerms: DesignServicesTerms | null;
   rates: CommercialRate[];
   signatures: CommercialSignature[];
@@ -321,6 +355,8 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
         nullableText(first(source, 'replacementProposalId', 'replacement_proposal_id')) ??
         nullableText(first(replacementRaw, 'proposalId', 'proposal_id', 'id')),
       documentFingerprint: nullableText(first(source, 'documentFingerprint', 'document_fingerprint', 'evidenceFingerprint', 'evidence_fingerprint')),
+      totalAmountCents,
+      depositPercent,
     },
     serviceTerms: Object.keys(serviceRaw).length === 0 ? null : {
       scope: nullableText(first(serviceRaw, 'scope')),
@@ -370,10 +406,19 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
       depositPaidCents: number(depositPaidValue),
       items: Array.isArray(furnishingRaw.items) ? furnishingRaw.items.map((item) => {
         const row = record(item);
+        const quantity = number(first(row, 'quantity'));
+        const clientUnitPriceCents = number(first(row, 'clientUnitPriceCents', 'client_unit_price_cents'));
+        const lineTotal = first(row, 'clientLineTotalCents', 'client_line_total_cents');
         return {
           description: text(first(row, 'description', 'name')),
-          quantity: number(first(row, 'quantity')),
-          clientUnitPriceCents: number(first(row, 'clientUnitPriceCents', 'client_unit_price_cents')),
+          roomName: text(first(row, 'roomName', 'room_name'), 'General'),
+          quantity,
+          clientUnitPriceCents,
+          // Fall back to the product only when the RPC sent no line total at
+          // all (a legacy payload). Where both exist the line total wins.
+          clientLineTotalCents: lineTotal === undefined || lineTotal === null
+            ? quantity * clientUnitPriceCents
+            : number(lineTotal),
           currency: text(first(row, 'currency'), 'USD'),
         };
       }) : [],
@@ -582,13 +627,29 @@ export interface ClientPlanLine {
   category: string;
   targetCents: number;
   scheduledCents: number;
+  /**
+   * STAMPED at publication by publish_budget_checkpoint, then frozen with the
+   * rest of the version. It is the right figure for narrating the checkpoint as
+   * of its date — and the wrong one for "so far", because a checkpoint has to
+   * be acknowledged before anything can be released against it, so the stamp is
+   * necessarily zero at the moment it is taken.
+   */
   authorizedCents: number;
+  /** Computed at read from the same rollup. What has been agreed as of now. */
+  liveAuthorizedCents: number;
 }
 
 export interface ClientPlan {
   publishedAt: string | null;
   rooms: string[];
   lines: ClientPlanLine[];
+  /**
+   * The project's whole executed-authorization total — deliberately not Σ
+   * lines. Release-time coverage is proven per ROOM, never per category, so
+   * furniture can be signed in a category this budget version never named, and
+   * the client is owed that dollar too.
+   */
+  liveAuthorizedTotalCents: number;
 }
 
 /**
@@ -613,6 +674,9 @@ export function adaptClientPlan(value: unknown): ClientPlan | null {
         targetCents: number(first(row, 'targetCents', 'target_cents')),
         scheduledCents: number(first(row, 'scheduledCents', 'scheduled_cents')),
         authorizedCents: number(first(row, 'authorizedCents', 'authorized_cents')),
+        liveAuthorizedCents: number(
+          first(row, 'liveAuthorizedCents', 'live_authorized_cents'),
+        ),
       };
     })
     : [];
@@ -623,5 +687,8 @@ export function adaptClientPlan(value: unknown): ClientPlan | null {
     publishedAt: nullableText(first(versionRaw, 'publishedAt', 'published_at')),
     rooms,
     lines,
+    liveAuthorizedTotalCents: number(
+      first(versionRaw, 'liveAuthorizedTotalCents', 'live_authorized_total_cents'),
+    ),
   };
 }

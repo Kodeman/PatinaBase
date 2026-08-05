@@ -80,6 +80,34 @@ describe('ClientSelections', () => {
     expect(screen.getByText('Allowance · up to $2,000')).toBeInTheDocument();
   });
 
+  // The half of the allowance contract that lives in the RPC. This card's
+  // "unresolved" branch keys strictly on NULL, so a resolvedCents of 0 — which
+  // is exactly what project_ffe_items.line_total_cents DEFAULTs to (00066) —
+  // renders as a settled price of nothing. That is why
+  // get_client_project_selections must withhold the column entirely until the
+  // schedule stops typing the line as an allowance, rather than passing it
+  // through. Pinned here so the coupling is visible from the portal side too.
+  it('treats resolvedCents 0 as resolved, not unresolved — the RPC must send null', () => {
+    mockUseClientSelections.mockReturnValue({
+      data: {
+        origin: 'commercial',
+        selections: [
+          selection({
+            id: 'sel-zero',
+            name: 'Coffee table allowance',
+            clientUnitPriceCents: 200_000,
+            allowance: { ceilingCents: 200_000, resolvedCents: 0 },
+          }),
+        ],
+      },
+      isLoading: false,
+      isError: false,
+    });
+    render(<ClientSelections projectId="project-1" />);
+
+    expect(screen.queryByText(/up to/)).not.toBeInTheDocument();
+  });
+
   it('shows a resolved allowance as the piece plus money back to the room', () => {
     mockUseClientSelections.mockReturnValue({
       data: {

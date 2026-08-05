@@ -27,9 +27,17 @@ const KIND_LABEL: Partial<Record<CommercialDocumentKind, string>> = {
 export function AwaitingSignatureCards({ projectId }: { projectId: string }) {
   const { data } = useClientProposals();
   const { pending } = partitionProposals(data);
+  // Filter on the SUMMARY's projectId, not the raw row's. A furnishings
+  // authorization is minted straight from the schedule and never runs through
+  // activate_proposal_as_project, so proposals.project_id stays NULL on it —
+  // its binding to the project lives in project_commercial_documents.
+  // list_client_proposals now coalesces the two into the projected `project_id`
+  // key, and commercialSummaryFromProposal is where that key is read.
+  // Filtering on the raw column showed a client no furnishings authorization
+  // to sign, ever.
   const documents = pending.filter((proposal) => {
-    if (proposal.project_id !== projectId) return false;
-    return commercialSummaryFromProposal(proposal).kind !== 'legacy';
+    const commercial = commercialSummaryFromProposal(proposal);
+    return commercial.projectId === projectId && commercial.kind !== 'legacy';
   });
 
   if (documents.length === 0) return null;

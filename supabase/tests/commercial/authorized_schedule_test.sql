@@ -534,6 +534,150 @@ BEGIN
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
+-- (1b) "Agreed so far", live. The stamped authorized_cents froze at PUBLICATION
+--      — necessarily before any release could be minted against the checkpoint,
+--      because the checkpoint has to be acknowledged first. So the stamp reads
+--      $0 for a version that has since been signed against, and a client grid
+--      rendering the stamp told a client who had just signed that they had
+--      agreed to nothing. liveAuthorizedCents answers "now", from the same
+--      rollup, with no re-publish anywhere in the sentence.
+-- ═══════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  v_project uuid := (SELECT value FROM sched_ids WHERE key = 'project');
+  v_version uuid := (SELECT value FROM sched_ids WHERE key = 'version1');
+  v_budget jsonb;
+  v_line jsonb;
+BEGIN
+  -- The stamp is untouched by execution. That is the point of a stamp.
+  ASSERT NOT EXISTS (SELECT 1 FROM public.project_budget_lines
+    WHERE budget_version_id = v_version AND authorized_cents <> 0),
+    'publication stamped a non-zero authorized figure before anything was signed';
+
+  PERFORM pg_temp.assume_user('d7000000-0000-4000-8000-000000000002');
+  v_budget := public.get_project_working_budget(v_project);
+  ASSERT (v_budget->'version'->>'id')::uuid = v_version,
+    'the client reads the published version';
+
+  SELECT value INTO v_line FROM jsonb_array_elements(v_budget->'lines') AS value
+  WHERE value->>'roomName' = 'Living room' AND value->>'category' = 'Seating';
+  ASSERT (v_line->>'authorizedCents')::bigint = 0,
+    'the stamped figure must still say what was true at publication';
+  ASSERT (v_line->>'liveAuthorizedCents')::bigint = 400000,
+    format('Living/Seating live authorized: %s (expected the released sofa)',
+           v_line->>'liveAuthorizedCents');
+  ASSERT (v_line->>'scheduledCents')::bigint = 530000,
+    'the schedule rollup is unchanged — releasing is not scheduling';
+
+  SELECT value INTO v_line FROM jsonb_array_elements(v_budget->'lines') AS value
+  WHERE value->>'roomName' = 'Living room' AND value->>'category' = 'Casegoods';
+  ASSERT (v_line->>'liveAuthorizedCents')::bigint = 100000,
+    format('Living/Casegoods live authorized: %s (side table only; the console '
+           || 'was never released)', v_line->>'liveAuthorizedCents');
+
+  -- An allowance counts at the CEILING it was signed at, exactly as the publish
+  -- stamp counts it: client_line_total_cents, not whatever it resolves to.
+  SELECT value INTO v_line FROM jsonb_array_elements(v_budget->'lines') AS value
+  WHERE value->>'roomName' = 'Living room' AND value->>'category' = 'Textiles';
+  ASSERT (v_line->>'liveAuthorizedCents')::bigint = 200000,
+    format('Living/Textiles live authorized: %s (the signed ceiling)',
+           v_line->>'liveAuthorizedCents');
+
+  -- A room nobody released into stays at zero. "Agreed so far" is not "planned".
+  SELECT value INTO v_line FROM jsonb_array_elements(v_budget->'lines') AS value
+  WHERE value->>'roomName' = 'Study' AND value->>'category' = 'Casegoods';
+  ASSERT (v_line->>'liveAuthorizedCents')::bigint = 0,
+    'an unreleased room must not report authorized money';
+
+  ASSERT (v_budget->'version'->>'liveAuthorizedTotalCents')::bigint = 700000,
+    format('project live authorized total: %s (expected the release total)',
+           v_budget->'version'->>'liveAuthorizedTotalCents');
+  PERFORM pg_temp.assume_user('d7000000-0000-4000-8000-000000000001');
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (1c) The client's list names the project a furnishings authorization is bound
+--      to. A release is minted straight from the schedule and never goes through
+--      activate_proposal_as_project, so proposals.project_id stays NULL and the
+--      binding lives one table over. A client surface that filters this list by
+--      project — the awaiting-signature cards do — saw none of them.
+-- ═══════════════════════════════════════════════════════════════════════════
+SELECT pg_temp.assume_user('d7000000-0000-4000-8000-000000000002');
+DO $$
+DECLARE
+  v_project uuid := (SELECT value FROM sched_ids WHERE key = 'project');
+  v_release uuid := (SELECT value FROM sched_ids WHERE key = 'release1');
+  v_row jsonb;
+BEGIN
+  -- The column really is empty. Without that, this section proves nothing.
+  ASSERT (SELECT project_id IS NULL FROM public.proposals WHERE id = v_release),
+    'a furnishings authorization is expected to carry no proposals.project_id';
+  ASSERT (SELECT project_id FROM public.project_commercial_documents
+          WHERE proposal_id = v_release) = v_project,
+    'the binding lives on project_commercial_documents';
+
+  SELECT value INTO v_row
+  FROM jsonb_array_elements(public.list_client_proposals()) AS value
+  WHERE value->>'id' = v_release::text;
+  ASSERT v_row IS NOT NULL, 'the client must see their own executed release';
+  ASSERT (v_row->>'project_id')::uuid = v_project,
+    format('client list project_id for a furnishings authorization: %s',
+           COALESCE(v_row->>'project_id', 'ABSENT'));
+  -- The sibling object hangs off the same id — a payload naming a project_id
+  -- while `project` reads NULL is the next consumer's trap.
+  ASSERT (v_row->'project'->>'id')::uuid = v_project,
+    'the project object must resolve from the same binding';
+
+  -- The design-services origin is unaffected: it already carried the column.
+  ASSERT (SELECT count(*) FROM jsonb_array_elements(public.list_client_proposals()) AS value
+          WHERE (value->>'project_id')::uuid = v_project) >= 1,
+    'the coalesce must not drop rows that already had a project_id';
+END $$;
+SELECT pg_temp.assume_user('d7000000-0000-4000-8000-000000000001');
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (1d) The authorization document the client actually reads. Its shell files
+--      the named lines by ROOM and states the terms — total, deposit, percent —
+--      so the keys it renders from are pinned here rather than discovered by a
+--      blank strip in production.
+-- ═══════════════════════════════════════════════════════════════════════════
+SELECT pg_temp.assume_user('d7000000-0000-4000-8000-000000000002');
+DO $$
+DECLARE
+  v_release uuid := (SELECT value FROM sched_ids WHERE key = 'release1');
+  v_bundle jsonb;
+  v_items jsonb;
+BEGIN
+  v_bundle := public.get_client_commercial_document_bundle(v_release);
+  ASSERT (v_bundle->'document'->>'totalAmountCents')::bigint = 700000,
+    format('bundle totalAmountCents: %s', v_bundle->'document'->>'totalAmountCents');
+  ASSERT (v_bundle->'document'->>'depositPercent')::numeric = 30,
+    format('bundle depositPercent: %s', v_bundle->'document'->>'depositPercent');
+  ASSERT (v_bundle->'furnishings'->>'depositRequiredCents')::bigint = 210000,
+    'the deposit the strip states must be the one the instrument asks for';
+
+  v_items := v_bundle->'furnishings'->'items';
+  ASSERT jsonb_array_length(v_items) = 3, 'the document names all three lines';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM jsonb_array_elements(v_items) AS item
+    WHERE item->>'roomName' IS NULL
+  ), 'every named line must carry the room it files under';
+  ASSERT (SELECT count(DISTINCT item->>'roomName') FROM jsonb_array_elements(v_items) AS item) = 1
+     AND (SELECT DISTINCT item->>'roomName' FROM jsonb_array_elements(v_items) AS item) = 'Living room',
+    'this release is one room; the grouping must not invent a second';
+
+  -- The invariant the document's total rests on. clientLineTotalCents is the
+  -- authoritative per-line figure — quantity × clientUnitPriceCents truncates
+  -- for an allowance whose ceiling does not divide evenly — so the shell sums
+  -- the line totals and they must reconcile to the document's own total.
+  ASSERT (SELECT SUM((item->>'clientLineTotalCents')::bigint)
+          FROM jsonb_array_elements(v_items) AS item)
+         = (v_bundle->'document'->>'totalAmountCents')::bigint,
+    'the sum of the named line totals must equal the document total';
+END $$;
+SELECT pg_temp.assume_user('d7000000-0000-4000-8000-000000000001');
+
+-- ═══════════════════════════════════════════════════════════════════════════
 -- (2) Coverage is HARD. A room the client never saw a budget for cannot be
 --     authorized, and a line filed in no room cannot prove coverage at all.
 --     Two different defects, two different sentences.
@@ -1115,15 +1259,29 @@ BEGIN
   ASSERT v_sofa_row->'allowance' = 'null'::jsonb,
     'a fixed selection carries no allowance block';
 
+  -- Section 4 priced this allowance honestly (1 × 180000, under the signed
+  -- 200000 ceiling) and put it on a purchase order — but it left the SCHEDULE
+  -- still calling the line an allowance. So the client is still owed the
+  -- ceiling, not a flat price: a provisional number under a ceiling is not a
+  -- selection. resolvedCents is NULL, and NULL is the whole signal the client
+  -- card branches on.
   SELECT value INTO v_rug_row FROM jsonb_array_elements(v_payload->'selections') AS value
   WHERE value->>'id' = v_rug::text;
-  ASSERT (v_rug_row->'allowance'->>'ceilingCents')::integer = 200000
-     AND (v_rug_row->'allowance'->>'resolvedCents')::integer = 180000,
-    'an allowance must show the signed ceiling and what it resolved to';
+  ASSERT (v_rug_row->'allowance'->>'ceilingCents')::integer = 200000,
+    'an allowance must show the ceiling the client signed';
+  ASSERT v_rug_row->'allowance' ? 'resolvedCents'
+     AND v_rug_row->'allowance'->>'resolvedCents' IS NULL,
+    format('an allowance the schedule still types as an allowance must read '
+           || 'unresolved, whatever price sits on it; got %s',
+           v_rug_row->'allowance'->>'resolvedCents');
+  ASSERT (SELECT line_total_cents FROM public.project_ffe_items WHERE id = v_rug) = 180000,
+    'the live price is present — the read withholds it on purpose, not by accident';
 
   ASSERT v_payload::text !~* 'trade|markup',
     'the client selections payload leaked a trade-side field';
 END $$;
+-- (Section 19 carries the other half: once the schedule stops calling the line
+-- an allowance, resolvedCents reports what it resolved to.)
 DO $$
 DECLARE v_err text;
 BEGIN
@@ -1830,12 +1988,24 @@ END $$;
 DO $$
 DECLARE
   v_sofa uuid := (SELECT value FROM sched_ids WHERE key = 'lounge_sofa_LR-01');
+  v_rug uuid := (SELECT value FROM sched_ids WHERE key = 'room_rug_LR-03');
 BEGIN
   -- The studio reprices an executed, purchase-ordered line. Nothing refuses it.
   UPDATE public.project_ffe_items
   SET unit_price_cents = 450000, line_total_cents = 450000 WHERE id = v_sofa;
   ASSERT (SELECT unit_price_cents FROM public.project_ffe_items WHERE id = v_sofa) = 450000,
     'fixture: post-execution drift must be permitted, not refused';
+
+  -- And the studio finishes resolving the allowance section 4 priced: the line
+  -- stops being an allowance. That single column is what the budget rollups
+  -- already consult to decide whether line_total_cents is this line's money
+  -- (publish_budget_checkpoint / derive_working_budget_draft read
+  -- budget_max_cents while item_type = 'allowance'), so it is what the client's
+  -- read consults too. Section 11 proved the other side: priced-but-still-typed
+  -- -an-allowance reads as unresolved.
+  UPDATE public.project_ffe_items SET item_type = 'fixed' WHERE id = v_rug;
+  ASSERT (SELECT line_total_cents FROM public.project_ffe_items WHERE id = v_rug) = 180000,
+    'fixture: the resolved allowance keeps the price section 4 gave it';
 END $$;
 SELECT pg_temp.assume_user('d7000000-0000-4000-8000-000000000002');
 DO $$
@@ -1861,7 +2031,8 @@ BEGIN
   ASSERT (v_rug_row->>'clientLineTotalCents')::integer = 200000
      AND (v_rug_row->'allowance'->>'ceilingCents')::integer = 200000
      AND (v_rug_row->'allowance'->>'resolvedCents')::integer = 180000,
-    'an allowance signs its ceiling and reports its live resolution separately';
+    format('a RESOLVED allowance signs its ceiling and reports its live '
+           || 'resolution separately: %s', v_rug_row);
 END $$;
 SELECT pg_temp.assume_user('d7000000-0000-4000-8000-000000000001');
 

@@ -14,6 +14,7 @@ import { useDeclineCommercialDocument } from '@/hooks/use-commercial-client';
 import type {
   CommercialDocumentBundle,
   CommercialDocumentKind,
+  FurnishingsAuthorizationItem,
 } from '@/lib/commercial-documents';
 
 const KIND_LABEL: Record<Exclude<CommercialDocumentKind, 'legacy'>, string> = {
@@ -218,33 +219,78 @@ function DesignServicesBody({ bundle }: { bundle: CommercialDocumentBundle }) {
   );
 }
 
+/**
+ * Files the named lines by room, preserving the order the RPC sent them in
+ * (sort_order, id) both between rooms and inside one. A furnishings
+ * authorization is read alongside the rooms it furnishes; a flat list of
+ * fifteen pieces asks the client to work out for themselves which ones are the
+ * living room. Mirrors groupByRoom in components/commercial/client-selections.
+ */
+function groupItemsByRoom(
+  items: FurnishingsAuthorizationItem[],
+): Array<[string, FurnishingsAuthorizationItem[]]> {
+  const groups = new Map<string, FurnishingsAuthorizationItem[]>();
+  for (const item of items) {
+    const key = item.roomName || 'General';
+    const existing = groups.get(key);
+    if (existing) existing.push(item);
+    else groups.set(key, [item]);
+  }
+  return Array.from(groups.entries());
+}
+
+/** 30 → "30", 12.5 → "12.5". A deposit term is numeric in the DB. */
+function percent(value: number): string {
+  return String(Math.round(value * 100) / 100);
+}
+
 function FurnishingsBody({ bundle }: { bundle: CommercialDocumentBundle }) {
   const authorization = bundle.furnishings;
   if (!authorization) return null;
-  const total = authorization.items.reduce(
-    (sum, item) => sum + item.quantity * item.clientUnitPriceCents,
-    0,
-  );
+  // clientLineTotalCents, never quantity × unit: an allowance is snapshotted at
+  // its ceiling and its unit price is that ceiling divided by quantity with
+  // integer truncation, so the product understates what the client signed for.
+  // Summing the line totals is what reconciles to the document's own total.
+  const total = authorization.items.reduce((sum, item) => sum + item.clientLineTotalCents, 0);
   const currency = authorization.items[0]?.currency ?? 'USD';
   const outstandingDeposit = Math.max(
     authorization.depositRequiredCents - authorization.depositPaidCents,
     0,
   );
+  const rooms = groupItemsByRoom(authorization.items);
+  const statedTotal = bundle.document.totalAmountCents > 0
+    ? bundle.document.totalAmountCents
+    : total;
 
   return (
     <div className="mt-8 space-y-8">
       <section>
         <h2 className="type-section-head">Named furnishing lines</h2>
         <div className="mt-4 divide-y divide-[var(--border-subtle)] border-y border-[var(--border-subtle)]">
-          {authorization.items.map((item, index) => (
-            <div key={`${item.description}-${index}`} className="grid grid-cols-[1fr_auto] gap-x-4 py-3">
-              <div>
-                <p className="type-body-small text-[var(--text-primary)]">{item.description}</p>
-                <p className="type-meta-small mt-0.5">Quantity {item.quantity}</p>
-              </div>
-              <p className="type-label text-right">
-                {money(item.quantity * item.clientUnitPriceCents, item.currency)}
+          {rooms.map(([roomName, items]) => (
+            <div key={roomName} data-testid="authorization-room-group">
+              <p
+                className="type-meta pt-4 text-[var(--accent-primary)]"
+                data-testid="authorization-room-heading"
+              >
+                {roomName}
               </p>
+              <div className="divide-y divide-[var(--border-subtle)]">
+                {items.map((item, index) => (
+                  <div
+                    key={`${roomName}-${item.description}-${index}`}
+                    className="grid grid-cols-[1fr_auto] gap-x-4 py-3"
+                  >
+                    <div>
+                      <p className="type-body-small text-[var(--text-primary)]">{item.description}</p>
+                      <p className="type-meta-small mt-0.5">Quantity {item.quantity}</p>
+                    </div>
+                    <p className="type-label text-right">
+                      {money(item.clientLineTotalCents, item.currency)}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
           ))}
           <div className="flex items-baseline justify-between py-4">
@@ -252,6 +298,17 @@ function FurnishingsBody({ bundle }: { bundle: CommercialDocumentBundle }) {
             <span className="type-data-large">{money(total, currency)}</span>
           </div>
         </div>
+        {authorization.depositRequiredCents > 0 && (
+          <p
+            className="type-body-small mt-3 text-[var(--text-primary)]"
+            data-testid="authorization-terms-strip"
+          >
+            {`Total ${money(statedTotal, currency)} · Deposit ${money(
+              authorization.depositRequiredCents,
+              currency,
+            )} (${percent(bundle.document.depositPercent)}%) on signature`}
+          </p>
+        )}
         <p className="type-body-small mt-3 text-[var(--text-muted)]">
           This signature covers only the descriptions, quantities, and client prices shown here.
           It does not alter the design-services agreement.

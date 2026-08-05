@@ -295,4 +295,64 @@ describe('DraftProposalSheet', () => {
       }),
     ).toBeVisible();
   });
+
+  // ── Layering ────────────────────────────────────────────────────────────
+  // The sheet was mouse-dead: the picker opened, and every click on a row
+  // closed the dialog instead of selecting a household. Two causes — an inline
+  // `z-[70]` layer painting over the popover's `z-50` body portal, and the
+  // layer doubling as the backdrop so the mousedown read as "clicked outside".
+  //
+  // jsdom has no layout engine, so paint order and elementFromPoint are not
+  // observable here. What IS observable is the mechanism the repo relies on
+  // (DocSheet's, doc-sheet.tsx): both layers are body children, they sit in the
+  // same z band, and DOM order decides — so these assert the structure, and the
+  // real stacking is confirmed in a browser on the ship walk.
+  describe('layering (the picker must be clickable)', () => {
+    it('portals the layer to <body> in the z-50 overlay band, not inline at z-[70]', () => {
+      mockClients = [relationship('relationship-own', 'designer-current')];
+      const { container } = renderSheet();
+
+      const layer = screen.getByTestId('draft-proposal-layer');
+      expect(container).toBeEmptyDOMElement();
+      expect(layer.parentElement).toBe(document.body);
+      expect(layer.className).toContain('z-50');
+      expect(layer.className).not.toContain('z-[70]');
+    });
+
+    it('puts the popover portal AFTER the sheet layer in <body>, which is what wins at equal z', async () => {
+      mockClients = [relationship('relationship-own', 'designer-current')];
+      renderSheet();
+
+      fireEvent.click(screen.getByTestId('client-picker-trigger'));
+      const option = await screen.findByTestId('client-picker-option-client-1');
+
+      // The layer must be a DIRECT body child for the comparison to mean
+      // anything — an inline layer sits inside RTL's container and would
+      // trivially "come first" while still being the thing that paints on top.
+      const layer = screen.getByTestId('draft-proposal-layer');
+      expect(layer.parentElement).toBe(document.body);
+      const popoverHost = option.closest('body > *')!;
+      expect(popoverHost).not.toBe(layer);
+      const order = Array.from(document.body.children);
+      expect(order.indexOf(popoverHost)).toBeGreaterThan(order.indexOf(layer));
+    });
+
+    it('dismisses from a dedicated backdrop, never from the layer itself', () => {
+      mockClients = [relationship('relationship-own', 'designer-current')];
+      renderSheet();
+
+      const layer = screen.getByTestId('draft-proposal-layer');
+      const backdrop = screen.getByTestId('draft-proposal-backdrop');
+      expect(backdrop.parentElement).toBe(layer);
+
+      // A mousedown that reaches the layer but not the backdrop must not close.
+      // Before the fix this was the whole bug: `e.target === e.currentTarget`
+      // on the layer swallowed anything aimed at the popover.
+      fireEvent.mouseDown(layer);
+      expect(onClose).not.toHaveBeenCalled();
+
+      fireEvent.mouseDown(backdrop);
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+  });
 });
