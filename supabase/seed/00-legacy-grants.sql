@@ -8759,3 +8759,93 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.enforce_qr_auth_session_rate_limit() TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00428_invoice_payment_method_surcharge.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.studio_billing_settings FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00428_invoice_payment_method_surcharge.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE ON TABLE public.studio_billing_settings TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00428_invoice_payment_method_surcharge.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.studio_billing_settings TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00428_invoice_payment_method_surcharge.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.invoice_payment_surcharge_cents(integer, text, integer) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00428_invoice_payment_method_surcharge.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.invoice_payment_surcharge_cents(integer, text, integer) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00428_invoice_payment_method_surcharge.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.claim_invoice_checkout_attempt(uuid, uuid, text, boolean, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00428_invoice_payment_method_surcharge.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.claim_invoice_checkout_attempt(uuid, uuid, text, boolean, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00428_invoice_payment_method_surcharge.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.finalize_invoice_checkout_attempt(uuid, uuid, text, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00428_invoice_payment_method_surcharge.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.finalize_invoice_checkout_attempt(uuid, uuid, text, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00428_invoice_payment_method_surcharge.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.recover_invoice_checkout_session_evidence(uuid, uuid, text, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00428_invoice_payment_method_surcharge.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.recover_invoice_checkout_session_evidence(uuid, uuid, text, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00428_invoice_payment_method_surcharge.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.settle_invoice_checkout_payment(uuid, text, text, integer, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00428_invoice_payment_method_surcharge.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.settle_invoice_checkout_payment(uuid, text, text, integer, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00428_invoice_payment_method_surcharge.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_invoice_payment_options(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00428_invoice_payment_method_surcharge.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_invoice_payment_options(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

@@ -720,12 +720,12 @@ BEGIN
   -- Service-only Checkout authority remains explicit.
   ASSERT has_function_privilege(
     'service_role',
-    'public.claim_invoice_checkout_attempt(uuid,uuid,text,boolean)',
+    'public.claim_invoice_checkout_attempt(uuid,uuid,text,boolean,text)',
     'EXECUTE'
   ), 'service role must execute claim';
   ASSERT NOT has_function_privilege(
     'authenticated',
-    'public.claim_invoice_checkout_attempt(uuid,uuid,text,boolean)',
+    'public.claim_invoice_checkout_attempt(uuid,uuid,text,boolean,text)',
     'EXECUTE'
   ), 'browser role must not execute service checkout claim';
   ASSERT NOT has_function_privilege(

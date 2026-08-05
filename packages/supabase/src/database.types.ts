@@ -6968,11 +6968,13 @@ export type Database = {
           id: string
           invoice_id: string
           payer_id: string
+          payment_method: string | null
           state: string
           stripe_checkout_session_id: string | null
           stripe_customer_id: string
           stripe_idempotency_key: string
           stripe_payment_intent_id: string | null
+          surcharge_cents: number
           updated_at: string
         }
         Insert: {
@@ -6984,11 +6986,13 @@ export type Database = {
           id?: string
           invoice_id: string
           payer_id: string
+          payment_method?: string | null
           state?: string
           stripe_checkout_session_id?: string | null
           stripe_customer_id: string
           stripe_idempotency_key: string
           stripe_payment_intent_id?: string | null
+          surcharge_cents?: number
           updated_at?: string
         }
         Update: {
@@ -7000,11 +7004,13 @@ export type Database = {
           id?: string
           invoice_id?: string
           payer_id?: string
+          payment_method?: string | null
           state?: string
           stripe_checkout_session_id?: string | null
           stripe_customer_id?: string
           stripe_idempotency_key?: string
           stripe_payment_intent_id?: string | null
+          surcharge_cents?: number
           updated_at?: string
         }
         Relationships: [
@@ -7144,6 +7150,8 @@ export type Database = {
           stripe_checkout_session_id: string | null
           stripe_event_id: string | null
           stripe_payment_intent_id: string | null
+          stripe_payment_method_type: string | null
+          surcharge_cents: number
           updated_at: string
         }
         Insert: {
@@ -7161,6 +7169,8 @@ export type Database = {
           stripe_checkout_session_id?: string | null
           stripe_event_id?: string | null
           stripe_payment_intent_id?: string | null
+          stripe_payment_method_type?: string | null
+          surcharge_cents?: number
           updated_at?: string
         }
         Update: {
@@ -7178,6 +7188,8 @@ export type Database = {
           stripe_checkout_session_id?: string | null
           stripe_event_id?: string | null
           stripe_payment_intent_id?: string | null
+          stripe_payment_method_type?: string | null
+          surcharge_cents?: number
           updated_at?: string
         }
         Relationships: [
@@ -19648,6 +19660,45 @@ export type Database = {
         }
         Relationships: []
       }
+      studio_billing_settings: {
+        Row: {
+          card_surcharge_bps: number
+          check_remit_to: string | null
+          created_at: string
+          studio_id: string
+          updated_at: string
+        }
+        Insert: {
+          card_surcharge_bps?: number
+          check_remit_to?: string | null
+          created_at?: string
+          studio_id: string
+          updated_at?: string
+        }
+        Update: {
+          card_surcharge_bps?: number
+          check_remit_to?: string | null
+          created_at?: string
+          studio_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_billing_settings_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_billing_settings_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: true
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       studio_contacts: {
         Row: {
           archived_at: string | null
@@ -24505,6 +24556,8 @@ export type Database = {
           stripe_checkout_session_id: string | null
           stripe_event_id: string | null
           stripe_payment_intent_id: string | null
+          stripe_payment_method_type: string | null
+          surcharge_cents: number
           updated_at: string
         }
         SetofOptions: {
@@ -25385,6 +25438,7 @@ export type Database = {
           p_allow_designer_test?: boolean
           p_invoice_id: string
           p_payer_id: string
+          p_payment_method?: string
           p_stripe_customer_id: string
         }
         Returns: Json
@@ -26685,6 +26739,10 @@ export type Database = {
           invoice_status: string
         }[]
       }
+      get_invoice_payment_options: {
+        Args: { p_invoice_id: string }
+        Returns: Json
+      }
       get_marketplace_vitals: {
         Args: never
         Returns: {
@@ -26854,6 +26912,10 @@ export type Database = {
           p_template_configuration_id: string
         }
         Returns: Json
+      }
+      invoice_payment_surcharge_cents: {
+        Args: { p_amount_cents: number; p_card_bps: number; p_method: string }
+        Returns: number
       }
       invoke_edge_function: {
         Args: { body?: Json; fn_name: string }
@@ -27515,6 +27577,8 @@ export type Database = {
           stripe_checkout_session_id: string | null
           stripe_event_id: string | null
           stripe_payment_intent_id: string | null
+          stripe_payment_method_type: string | null
+          surcharge_cents: number
           updated_at: string
         }
         SetofOptions: {
@@ -28358,6 +28422,7 @@ export type Database = {
           p_reported_amount_cents: number
           p_stripe_event_id: string
           p_stripe_payment_intent_id: string
+          p_stripe_payment_method_type?: string
         }
         Returns: Json
       }
