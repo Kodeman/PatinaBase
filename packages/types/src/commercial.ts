@@ -31,7 +31,11 @@ export type RetainerActivationPolicy = 'immediate' | 'retainer_paid';
 export type BillingCadence = 'monthly' | 'biweekly' | 'milestone';
 export type CommercialSignatureParty = 'client' | 'studio';
 export type TimeBillingState = 'authorized' | 'pending_authorization' | 'nonbillable';
-export type BudgetCheckpointState = 'published' | 'acknowledged' | 'overridden';
+// DB values (project_budget_checkpoints.status, 00412/00422): a checkpoint is
+// 'open' the moment it's published and stays there until the client
+// acknowledges it or the designer records an audited override. 'open' is the
+// unacknowledged state — never rendered or read as though it were terminal.
+export type BudgetCheckpointState = 'open' | 'acknowledged' | 'overridden';
 
 export interface DesignServiceTerms {
   proposalId: string;

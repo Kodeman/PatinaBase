@@ -12,7 +12,14 @@ export const commercialKeys = {
     ['commercial-documents', documentId, 'client-safe'] as const,
   authority: (projectId: string) => ['project-authority', projectId] as const,
   budget: (projectId: string) => ['working-budget', projectId] as const,
+  // `instruments` is the current name (furnishings authorizations are one of
+  // the project's commercial "instruments" — Phase 1 naming sweep). `waves`
+  // stays as an alias to the SAME key string for cache continuity — the
+  // client portal (apps/client-portal/src/hooks/use-commercial-client.ts) is
+  // out of this change's file scope and still calls `.waves(...)`; removing
+  // it would break that caller. Both resolve to identical query keys.
   waves: (projectId: string) => ['furnishings-authorizations', projectId] as const,
+  instruments: (projectId: string) => ['furnishings-authorizations', projectId] as const,
   sendSnapshot: (documentId: string) =>
     ['commercial-documents', documentId, 'send-snapshot'] as const,
 };

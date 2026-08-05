@@ -22,6 +22,11 @@ describe('commercialKeys', () => {
     expect(commercialKeys.waves('project-1')).toEqual(['furnishings-authorizations', 'project-1']);
   });
 
+  it('keys the renamed `instruments` accessor onto the same string as `waves`, for cache continuity', () => {
+    expect(commercialKeys.instruments('project-1')).toEqual(['furnishings-authorizations', 'project-1']);
+    expect(commercialKeys.instruments('project-1')).toEqual(commercialKeys.waves('project-1'));
+  });
+
   it('keys the send snapshot distinctly from the document and client-safe bundle', () => {
     expect(commercialKeys.sendSnapshot('agreement-1')).toEqual([
       'commercial-documents',
