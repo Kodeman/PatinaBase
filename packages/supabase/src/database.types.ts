@@ -20896,8 +20896,11 @@ export type Database = {
       trade_scope_terms: {
         Row: {
           acceptance_fingerprint: string | null
+          acceptance_recorded_by: string | null
+          acceptance_scan_document_id: string | null
           accepted_at: string | null
           accepted_by: string | null
+          accepted_on_paper: boolean
           accepted_signed_name: string | null
           client_price_cents: number
           created_at: string
@@ -20916,8 +20919,11 @@ export type Database = {
         }
         Insert: {
           acceptance_fingerprint?: string | null
+          acceptance_recorded_by?: string | null
+          acceptance_scan_document_id?: string | null
           accepted_at?: string | null
           accepted_by?: string | null
+          accepted_on_paper?: boolean
           accepted_signed_name?: string | null
           client_price_cents?: number
           created_at?: string
@@ -20936,8 +20942,11 @@ export type Database = {
         }
         Update: {
           acceptance_fingerprint?: string | null
+          acceptance_recorded_by?: string | null
+          acceptance_scan_document_id?: string | null
           accepted_at?: string | null
           accepted_by?: string | null
+          accepted_on_paper?: boolean
           accepted_signed_name?: string | null
           client_price_cents?: number
           created_at?: string
@@ -20955,6 +20964,27 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "trade_scope_terms_acceptance_recorded_by_fkey"
+            columns: ["acceptance_recorded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trade_scope_terms_acceptance_recorded_by_fkey"
+            columns: ["acceptance_recorded_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trade_scope_terms_acceptance_scan_document_id_fkey"
+            columns: ["acceptance_scan_document_id"]
+            isOneToOne: false
+            referencedRelation: "project_documents"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "trade_scope_terms_accepted_by_fkey"
             columns: ["accepted_by"]
@@ -23902,6 +23932,14 @@ export type Database = {
         }
         Returns: Json
       }
+      _assert_paper_provenance: {
+        Args: {
+          p_paper_signed_on: string
+          p_proposal_id: string
+          p_scan_document_id: string
+        }
+        Returns: undefined
+      }
       _assert_project_phase_topology: {
         Args: { p_context: string; p_project_id: string }
         Returns: undefined
@@ -24121,12 +24159,32 @@ export type Database = {
         }
         Returns: Json
       }
+      _execute_furnishings_authorization_on_paper_authorized: {
+        Args: {
+          p_paper_signed_on: string
+          p_proposal_id: string
+          p_recorded_by: string
+          p_scan_document_id?: string
+          p_signed_name: string
+        }
+        Returns: Json
+      }
       _execute_trade_scope_authorized: {
         Args: {
           p_client_id: string
           p_proposal_id: string
           p_signed_name: string
           p_trusted_signed_ip?: string
+        }
+        Returns: Json
+      }
+      _execute_trade_scope_on_paper_authorized: {
+        Args: {
+          p_paper_signed_on: string
+          p_proposal_id: string
+          p_recorded_by: string
+          p_scan_document_id?: string
+          p_signed_name: string
         }
         Returns: Json
       }
@@ -24313,6 +24371,16 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      _paper_signature_metadata: {
+        Args: {
+          p_paper_signed_on: string
+          p_proposal_id: string
+          p_recorded_by: string
+          p_scan_document_id: string
+          p_via: string
+        }
+        Returns: Json
       }
       _prepare_legacy_proposal_phase_insert: {
         Args: { p_proposal_id: string; p_requested_follows_phase_id: string }
@@ -26017,6 +26085,15 @@ export type Database = {
         Args: { p_proposal_id: string; p_signed_name: string }
         Returns: Json
       }
+      execute_furnishings_authorization_on_paper: {
+        Args: {
+          p_paper_signed_on: string
+          p_proposal_id: string
+          p_scan_document_id?: string
+          p_signed_name: string
+        }
+        Returns: Json
+      }
       execute_furnishings_authorization_with_trusted_ip: {
         Args: {
           p_client_id: string
@@ -26028,6 +26105,15 @@ export type Database = {
       }
       execute_trade_scope: {
         Args: { p_proposal_id: string; p_signed_name: string }
+        Returns: Json
+      }
+      execute_trade_scope_on_paper: {
+        Args: {
+          p_paper_signed_on: string
+          p_proposal_id: string
+          p_scan_document_id?: string
+          p_signed_name: string
+        }
         Returns: Json
       }
       execute_trade_scope_with_trusted_ip: {
@@ -27422,6 +27508,24 @@ export type Database = {
           p_start_date?: string
         }
         Returns: string
+      }
+      record_paper_client_signature: {
+        Args: {
+          p_paper_signed_on: string
+          p_proposal_id: string
+          p_scan_document_id?: string
+          p_signed_name: string
+        }
+        Returns: Json
+      }
+      record_paper_trade_acceptance: {
+        Args: {
+          p_paper_signed_on: string
+          p_proposal_id: string
+          p_scan_document_id?: string
+          p_signed_name: string
+        }
+        Returns: Json
       }
       record_trade_scope_substantial_completion: {
         Args: { p_proposal_id: string }

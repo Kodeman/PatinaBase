@@ -8639,3 +8639,99 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.void_trade_scope(uuid, text) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00425_executed_on_paper.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_trade_scope_terms() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00425_executed_on_paper.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_project_documents_paper_scan() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00425_executed_on_paper.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._assert_paper_provenance(uuid, date, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00425_executed_on_paper.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._paper_signature_metadata(uuid, text, date, uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00425_executed_on_paper.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_paper_client_signature(uuid, text, date, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00425_executed_on_paper.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_paper_client_signature(uuid, text, date, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00425_executed_on_paper.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._execute_furnishings_authorization_on_paper_authorized(uuid, text, date, uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00425_executed_on_paper.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.execute_furnishings_authorization_on_paper(uuid, text, date, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00425_executed_on_paper.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.execute_furnishings_authorization_on_paper(uuid, text, date, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00425_executed_on_paper.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._execute_trade_scope_on_paper_authorized(uuid, text, date, uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00425_executed_on_paper.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.execute_trade_scope_on_paper(uuid, text, date, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00425_executed_on_paper.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.execute_trade_scope_on_paper(uuid, text, date, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00425_executed_on_paper.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_paper_trade_acceptance(uuid, text, date, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00425_executed_on_paper.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_paper_trade_acceptance(uuid, text, date, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00425_executed_on_paper.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_client_commercial_document_bundle(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00425_executed_on_paper.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_client_commercial_document_bundle(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

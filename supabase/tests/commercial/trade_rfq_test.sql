@@ -1574,6 +1574,10 @@ DO $$
 DECLARE
   v_submit text := pg_get_functiondef('public.submit_trade_rfq_response(text,integer,text)'::regprocedure);
   v_exec text := pg_get_functiondef('public._execute_trade_scope_authorized(uuid,text,uuid,text)'::regprocedure);
+  -- 00425 added a third retiring seam: the paper twin of execution. It is a
+  -- verbatim copy of v_exec, so it inherits the lock order — but a copy is
+  -- exactly the thing that can drift, so it is read off the live body too.
+  v_paper text := pg_get_functiondef('public._execute_trade_scope_on_paper_authorized(uuid,text,date,uuid,uuid)'::regprocedure);
   v_void text := pg_get_functiondef('public.void_trade_scope(uuid,text)'::regprocedure);
   v_close text := pg_get_functiondef('public._close_trade_rfqs_for_scope(uuid)'::regprocedure);
   v_scope_lock integer;
@@ -1599,6 +1603,11 @@ BEGIN
      AND position('WHERE id = p_proposal_id FOR UPDATE' in v_exec)
          < position('_close_trade_rfqs_for_scope' in v_exec),
     'execution must hold the scope before it closes the asking';
+  ASSERT position('WHERE id = p_proposal_id FOR UPDATE' in v_paper) > 0
+     AND position('_close_trade_rfqs_for_scope' in v_paper) > 0
+     AND position('WHERE id = p_proposal_id FOR UPDATE' in v_paper)
+         < position('_close_trade_rfqs_for_scope' in v_paper),
+    'and so must the paper execution that copies it (00425)';
   ASSERT position('WHERE id = p_proposal_id FOR UPDATE' in v_void) > 0
      AND position('_close_trade_rfqs_for_scope' in v_void) > 0
      AND position('WHERE id = p_proposal_id FOR UPDATE' in v_void)
@@ -1621,8 +1630,8 @@ BEGIN
     'the scope-wide revoke must exist exactly once in the schema — in the helper';
   ASSERT (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
           WHERE n.nspname = 'public'
-            AND p.prosrc LIKE '%_close_trade_rfqs_for_scope(p_proposal_id)%') = 2,
-    'and exactly two callers reach it: execution and void';
+            AND p.prosrc LIKE '%_close_trade_rfqs_for_scope(p_proposal_id)%') = 3,
+    'and exactly three callers reach it: execution, its 00425 paper twin, and void';
 END $$;
 
 -- FALSIFY (THE SCOPE LOCK) — ` FOR SHARE` is stripped from submit's live body,
