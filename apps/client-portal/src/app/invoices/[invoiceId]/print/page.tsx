@@ -3,13 +3,13 @@
 import { use } from 'react';
 import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
-import { useInvoice, useStudioIdentity } from '@patina/supabase';
+import { useInvoice, useInvoicePaymentOptions, useStudioIdentity } from '@patina/supabase';
 import {
   INVOICE_STATUS_LABELS,
-  INVOICE_PAYMENT_METHOD_LABELS,
   formatCurrency,
   formatInvoiceDate,
   invoiceBalanceCents,
+  invoicePaymentMethodLabel,
 } from '@patina/shared';
 import { QueryFailure } from '@/components/query-failure';
 
@@ -28,6 +28,9 @@ export default function ClientInvoicePrintPage({
   // Studio brand identity (Designer Studios). projectId path; disabled until the
   // invoice resolves. name/logoUrl are nullable — fall back to the designer join.
   const { data: identity } = useStudioIdentity({ projectId: invoice?.project_id });
+  // check_remit_to for the "How to pay" block (migration 00428). Falls back to
+  // platform defaults on any failure — a config read never blocks printing.
+  const paymentOptions = useInvoicePaymentOptions(invoiceId);
 
   if (isLoading) {
     return (
@@ -273,14 +276,26 @@ export default function ClientInvoicePrintPage({
           <div className="mb-10">
             <PrintLabel>Payments Received</PrintLabel>
             <div style={{ fontSize: '0.8rem', lineHeight: 1.7 }}>
-              {succeededPayments.map((p) => (
-                <div key={p.id}>
-                  {formatInvoiceDate(p.received_at ?? p.created_at)} ·{' '}
-                  {INVOICE_PAYMENT_METHOD_LABELS[p.method]}
-                  {p.reference ? ` · ${p.reference}` : ''} —{' '}
-                  {formatCurrency(p.amount_cents, invoice.currency)}
-                </div>
-              ))}
+              {succeededPayments.map((p) => {
+                // A settled payment's fee is historical fact, not a live quote
+                // — it can't drift, so the printed record carries it exactly as
+                // the interactive PaymentRow does.
+                const surchargeCents = p.surcharge_cents ?? 0;
+                return (
+                  <div key={p.id}>
+                    {formatInvoiceDate(p.received_at ?? p.created_at)} ·{' '}
+                    {invoicePaymentMethodLabel(p)}
+                    {p.reference ? ` · ${p.reference}` : ''}
+                    {surchargeCents > 0
+                      ? ` · + ${formatCurrency(surchargeCents, invoice.currency)} processing fee (${formatCurrency(
+                          p.amount_cents + surchargeCents,
+                          invoice.currency,
+                        )} charged)`
+                      : ''}{' '}
+                    — {formatCurrency(p.amount_cents, invoice.currency)}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -291,6 +306,31 @@ export default function ClientInvoicePrintPage({
             <PrintLabel>Notes</PrintLabel>
             <div style={{ fontSize: '0.85rem', lineHeight: 1.6, whiteSpace: 'pre-line' }}>
               {invoice.memo}
+            </div>
+          </div>
+        )}
+
+        {/* How to pay — no dollar fee amounts here; they drift from the live
+            chooser. The exact figure is shown only on the interactive page. */}
+        {balance > 0 && invoice.status !== 'void' && (
+          <div className="mb-10">
+            <PrintLabel>How to Pay</PrintLabel>
+            <div style={{ fontSize: '0.85rem', lineHeight: 1.6 }}>
+              <p>Pay online by card or bank transfer from the digital invoice.</p>
+              {/* An address-labeled slot only ever holds a real address. With no
+                  remit-to configured there is nothing to mail to, so the copy
+                  says so instead of printing a sentence under "mail to:". */}
+              {paymentOptions.data?.check_remit_to?.trim() ? (
+                <p style={{ marginTop: '0.5rem', whiteSpace: 'pre-line' }}>
+                  To pay by check, mail to:
+                  <br />
+                  {paymentOptions.data.check_remit_to.trim()}
+                </p>
+              ) : (
+                <p style={{ marginTop: '0.5rem' }}>
+                  To pay by check, contact your designer for mailing details.
+                </p>
+              )}
             </div>
           </div>
         )}

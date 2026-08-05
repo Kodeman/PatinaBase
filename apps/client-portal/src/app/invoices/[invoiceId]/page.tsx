@@ -2,9 +2,11 @@
 
 import { use, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, CheckCircle2, CreditCard, Loader2, Printer, X } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, CreditCard, Landmark, Loader2, Printer, X } from 'lucide-react';
 import {
   useInvoice,
+  useInvoicePaymentOptions,
+  useNotifyCheckIntent,
   useStartCheckout,
   useStudioIdentity,
   InvoiceCheckoutError,
@@ -12,15 +14,18 @@ import {
   type InvoicePayment,
 } from '@patina/supabase';
 import {
-  INVOICE_PAYMENT_METHOD_LABELS,
+  DEFAULT_CARD_SURCHARGE_BPS,
   formatCurrency,
   formatInvoiceDate,
   invoiceBalanceCents,
+  invoicePaymentMethodLabel,
   isInvoiceOverdue,
+  onlineSurchargeCents,
   timeLineHoursLabel,
 } from '@patina/shared';
 import { clientEvents } from '@/lib/analytics/events';
 import { resolveReturnedCheckoutPayment } from './checkout-return';
+import { PaymentMethodChooser, type InvoicePaymentUIMethod } from './payment-method-chooser';
 
 // Client-facing invoice detail. RLS only exposes issued (non-draft) invoices
 // on the client's own projects, with their lines and payments. Online payment
@@ -70,6 +75,12 @@ export default function ClientInvoiceDetailPage({
   const { data: identity } = useStudioIdentity({
     projectId: invoice?.project_id,
   });
+
+  // Payment-method chooser (migration 00428) — ACH default, per-studio card
+  // bps + check remit-to (falls back to platform defaults, never blocks pay).
+  const [method, setMethod] = useState<InvoicePaymentUIMethod>('us_bank_account');
+  const paymentOptions = useInvoicePaymentOptions(invoiceId);
+  const notifyCheckIntent = useNotifyCheckIntent();
 
   // client_invoice_view — fires once, the first time the invoice resolves.
   const invoiceViewCaptured = useRef(false);
@@ -208,16 +219,34 @@ export default function ClientInvoiceDetailPage({
     return () => clearInterval(timer);
   }, [confirmState, refetch]);
 
-  const handlePay = async () => {
+  const handleMethodChange = (next: InvoicePaymentUIMethod) => {
+    setMethod(next);
     if (!invoice) return;
+    clientEvents.paymentMethodSelected({ invoiceId: invoice.id, method: next });
+  };
+
+  const handleNotifyCheckIntent = async () => {
+    if (!invoice) return;
+    clientEvents.checkIntentSubmitted({ invoiceId: invoice.id });
+    await notifyCheckIntent.mutateAsync({ invoiceId: invoice.id });
+  };
+
+  const handlePay = async () => {
+    // Busy-gate re-entry guard: a second click while a session is already
+    // being claimed, or while "check" is selected (no online session for
+    // that method), is a no-op — one click, at most one checkout session.
+    if (!invoice || startCheckout.isPending || method === 'check') return;
     setPayError(null);
     try {
       const receipt = await startCheckout.mutateAsync({
         invoiceId: invoice.id,
+        paymentMethod: method,
       });
       clientEvents.paymentStarted({
         invoiceId: invoice.id,
         amountCents: receipt.amount_cents,
+        paymentMethod: method,
+        surchargeCents: receipt.surcharge_cents,
       });
       window.location.href = receipt.url;
     } catch (err) {
@@ -316,6 +345,22 @@ export default function ClientInvoiceDetailPage({
     confirmState !== 'confirming' &&
     confirmState !== 'processing' &&
     confirmState !== 'unconfirmed';
+  // null ONLY while get_invoice_payment_options is still in flight. Previewing
+  // the platform default there over-quotes every studio configured below 3%,
+  // so the chooser renders a placeholder instead of a wrong number. A hard
+  // failure (the query resolved without data) keeps the 300 fallback —
+  // over-quoting is survivable, under-quoting is not.
+  const cardSurchargeBps: number | null = paymentOptions.isPending
+    ? null
+    : (paymentOptions.data?.card_surcharge_bps ?? DEFAULT_CARD_SURCHARGE_BPS);
+  // The ACH fee is a platform formula — it never depends on the studio's bps,
+  // so only the card preview is unknown during that window.
+  const surchargeKnown = method !== 'card' || cardSurchargeBps !== null;
+  const surcharge =
+    method === 'check'
+      ? 0
+      : onlineSurchargeCents(method, balance, cardSurchargeBps ?? DEFAULT_CARD_SURCHARGE_BPS);
+  const chargeTotal = balance + surcharge;
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-10">
@@ -451,7 +496,7 @@ export default function ClientInvoiceDetailPage({
           )}
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          {canPay && (
+          {canPay && method !== 'check' && (
             <button
               type="button"
               onClick={handlePay}
@@ -460,10 +505,12 @@ export default function ClientInvoiceDetailPage({
             >
               {startCheckout.isPending ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              ) : method === 'us_bank_account' ? (
+                <Landmark className="h-3.5 w-3.5" aria-hidden />
               ) : (
                 <CreditCard className="h-3.5 w-3.5" aria-hidden />
               )}
-              Pay {formatCurrency(balance, invoice.currency)}
+              Pay {formatCurrency(chargeTotal, invoice.currency)}
             </button>
           )}
           <Link
@@ -517,6 +564,21 @@ export default function ClientInvoiceDetailPage({
           )}
         </div>
       </div>
+
+      {canPay && (
+        <PaymentMethodChooser
+          method={method}
+          onMethodChange={handleMethodChange}
+          balanceCents={balance}
+          currency={invoice.currency}
+          cardSurchargeBps={cardSurchargeBps}
+          disabled={startCheckout.isPending || notifyCheckIntent.isPending}
+          designerName={designerName}
+          invoiceNumber={invoice.invoice_number}
+          checkRemitTo={paymentOptions.data?.check_remit_to ?? null}
+          onNotifyCheckIntent={handleNotifyCheckIntent}
+        />
+      )}
 
       {processingPayments.length > 0 && confirmState !== 'confirming' && (
         <p className="type-body-small mt-4 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] p-3 text-[var(--text-muted)]">
@@ -584,21 +646,49 @@ export default function ClientInvoiceDetailPage({
                 {formatCurrency(invoice.total_cents, invoice.currency)}
               </span>
             </div>
+            {/* Partially-paid invoices must show the arithmetic that connects
+                Total to the fee rows below it — otherwise a $1,000 total with a
+                $15 fee reads as "$1,015 to pay" when only $515 is owed.
+                Mirrors the print page's Paid / Balance due pair. */}
+            {invoice.amount_paid_cents > 0 && (
+              <>
+                <div className="flex justify-between py-0.5">
+                  <span className="type-meta-small">Paid</span>
+                  <span className="type-label">
+                    −{formatCurrency(invoice.amount_paid_cents, invoice.currency)}
+                  </span>
+                </div>
+                <div className="flex justify-between py-0.5">
+                  <span className="type-meta-small">Balance due</span>
+                  <span className="type-label">{formatCurrency(balance, invoice.currency)}</span>
+                </div>
+              </>
+            )}
+            {canPay && surchargeKnown && surcharge > 0 && (
+              <>
+                <div className="flex justify-between py-0.5">
+                  <span className="type-meta-small">
+                    {method === 'us_bank_account' ? 'Bank transfer fee' : 'Card processing fee'}
+                  </span>
+                  <span className="type-label">{formatCurrency(surcharge, invoice.currency)}</span>
+                </div>
+                <div className="flex justify-between border-t border-[var(--border-default)] py-1.5">
+                  <span className="type-label">Total to pay</span>
+                  <span className="font-heading text-base font-semibold text-[var(--text-primary)]">
+                    {formatCurrency(chargeTotal, invoice.currency)}
+                  </span>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </section>
 
-      {/* Note from the designer + how to pay */}
+      {/* Note from the designer */}
       {invoice.memo && (
         <section className="mt-10">
           <h2 className="type-section-head">A note from {designerName}</h2>
           <p className="type-body mt-3 whitespace-pre-line">{invoice.memo}</p>
-          {balance > 0 && invoice.status !== 'void' && (
-            <p className="type-body-small mt-3 text-[var(--text-muted)]">
-              You can pay online with the Pay button above (card or bank transfer); your designer
-              also accepts payment by check or wire — details are on the invoice.
-            </p>
-          )}
         </section>
       )}
 
@@ -636,12 +726,19 @@ function PaymentRow({ payment, currency }: { payment: InvoicePayment; currency: 
         : payment.status === 'requires_refund'
           ? 'Refund review required'
           : `Received ${formatInvoiceDate(payment.received_at ?? payment.created_at)}`;
+  const surchargeCents = payment.surcharge_cents ?? 0;
   return (
     <div className="flex items-baseline justify-between gap-4 border-b border-[var(--border-subtle,var(--border-default))] py-3">
       <div className="min-w-0 flex-1">
         <p className="text-sm text-[var(--text-primary)]">
-          {INVOICE_PAYMENT_METHOD_LABELS[payment.method]}
+          {invoicePaymentMethodLabel(payment)}
           {payment.reference ? ` · ${payment.reference}` : ''}
+          {surchargeCents > 0
+            ? ` · + ${formatCurrency(surchargeCents, currency)} processing fee (${formatCurrency(
+                payment.amount_cents + surchargeCents,
+                currency,
+              )} charged)`
+            : ''}
         </p>
         <p className="type-meta-small mt-0.5 text-[var(--text-muted)]">
           {statusCopy}

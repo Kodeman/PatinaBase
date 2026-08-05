@@ -49,16 +49,39 @@ export const clientEvents = {
   // verbatim (design plan §1.4). `paymentStarted` fires immediately before the
   // Stripe Checkout redirect, so it uses sendBeacon transport to survive
   // navigation away from the page.
-  paymentStarted: (p: { invoiceId: string; amountCents?: number }) =>
+  // paymentMethod/surchargeCents are additive (migration 00428 payment-method
+  // chooser) — existing consumers reading only invoice_id/amount are unaffected.
+  paymentStarted: (p: {
+    invoiceId: string;
+    amountCents?: number;
+    paymentMethod?: 'us_bank_account' | 'card';
+    surchargeCents?: number;
+  }) =>
     track(
       'client_payment_started',
-      { invoice_id: p.invoiceId, amount: p.amountCents },
+      {
+        invoice_id: p.invoiceId,
+        amount: p.amountCents,
+        payment_method: p.paymentMethod,
+        surcharge_cents: p.surchargeCents,
+      },
       { transport: 'sendBeacon' }
     ),
   paymentCompleted: (p: { invoiceId: string; amountCents?: number }) =>
     track('client_payment_completed', { invoice_id: p.invoiceId, amount: p.amountCents }),
   paymentCancelled: (p: { invoiceId: string; amountCents?: number }) =>
     track('client_payment_cancelled', { invoice_id: p.invoiceId, amount: p.amountCents }),
+  // New for the payment-method chooser (migration 00428).
+  paymentMethodSelected: (p: {
+    invoiceId: string;
+    method: 'us_bank_account' | 'card' | 'check';
+  }) =>
+    track('client_payment_method_selected', {
+      invoice_id: p.invoiceId,
+      payment_method: p.method,
+    }),
+  checkIntentSubmitted: (p: { invoiceId: string }) =>
+    track('client_check_intent_submitted', { invoice_id: p.invoiceId }),
 };
 
 export const navEvents = {
