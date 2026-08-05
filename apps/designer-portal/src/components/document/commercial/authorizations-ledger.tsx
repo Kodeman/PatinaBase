@@ -111,9 +111,13 @@ function LedgerRow({
 export function AuthorizationsLedger({
   projectId,
   projectName = "",
+  clientName = "",
 }: {
   projectId: string;
   projectName?: string;
+  /** Forwarded to both detail sheets, which prefill it on the record-on-paper
+   *  act — the same courtesy the design-services act has always had. */
+  clientName?: string;
 }) {
   const instrumentsQuery = useProjectInstruments(projectId);
   const tradeScopesQuery = useTradeScopes(projectId);
@@ -220,6 +224,7 @@ export function AuthorizationsLedger({
       <AuthorizationDetail
         projectId={projectId}
         instrument={openInstrument ?? null}
+        clientName={clientName}
         open={Boolean(openInstrument)}
         onClose={() => setOpenInstrumentId(null)}
       />
@@ -227,6 +232,7 @@ export function AuthorizationsLedger({
       <TradeScopeDetail
         projectId={projectId}
         projectName={projectName}
+        clientName={clientName}
         scope={openScope ?? null}
         open={Boolean(openScope)}
         onClose={() => setOpenTradeId(null)}

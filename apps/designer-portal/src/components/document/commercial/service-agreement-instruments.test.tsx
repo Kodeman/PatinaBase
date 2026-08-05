@@ -135,7 +135,7 @@ describe("ServiceAgreementInstruments notification recovery", () => {
     );
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Record signed on paper" }),
+      screen.getByRole("button", { name: "Record the signature" }),
     );
 
     const nameField = await screen.findByLabelText("Signed by");

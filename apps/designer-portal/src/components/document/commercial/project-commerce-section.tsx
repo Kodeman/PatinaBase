@@ -6,6 +6,7 @@ import { AuthorizationsLedger } from "./authorizations-ledger";
 export function ProjectCommerceSection({
   projectId,
   projectName,
+  clientName,
 }: {
   projectId: string;
   /**
@@ -15,6 +16,12 @@ export function ProjectCommerceSection({
    * project title yet still renders the rest of this section.
    */
   projectName?: string;
+  /**
+   * Forwarded the same way, to the record-on-paper sheets both detail surfaces
+   * open — so the FF&E and trade acts prefill the client's name the way the
+   * design-services act does. Optional for the same reason as projectName.
+   */
+  clientName?: string;
 }) {
   return (
     <section
@@ -23,7 +30,11 @@ export function ProjectCommerceSection({
     >
       <DerivedBudgetGrid projectId={projectId} />
       <div className="my-5 border-t border-[var(--doc-ink-border)]" />
-      <AuthorizationsLedger projectId={projectId} projectName={projectName} />
+      <AuthorizationsLedger
+        projectId={projectId}
+        projectName={projectName}
+        clientName={clientName}
+      />
     </section>
   );
 }

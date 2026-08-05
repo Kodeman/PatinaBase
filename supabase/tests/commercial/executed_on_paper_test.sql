@@ -368,11 +368,29 @@ BEGIN
   ASSERT NOT (v_client ? 'metadata') AND NOT (v_client ? 'recordedBy'),
     'raw signature metadata must never cross the client edge';
 
+  -- ...AND WHEN. The date on the paper is the date the client signed; signed_at
+  -- is the day the studio typed it up. The client's copy must be able to print
+  -- the first, so the bundle has to carry it — without this key the surface has
+  -- only signed_at and renders "SIGNED <the wrong day>".
+  ASSERT v_client ? 'paperSignedOn',
+    'the client bundle must carry the paper date key on a paper signature';
+  ASSERT v_client->>'paperSignedOn' = pg_temp.paper_date()::text,
+    format('the client bundle must carry the DATE ON THE PAPER — got %L, want %L',
+           v_client->>'paperSignedOn', pg_temp.paper_date()::text);
+  -- And the fixture must actually be able to tell the two apart, or the
+  -- assertion above proves nothing.
+  ASSERT (v_client->>'signedAt')::date <> pg_temp.paper_date(),
+    'this fixture must separate the paper date from the record moment';
+  ASSERT v_studio->>'paperSignedOn' IS NULL,
+    'a countersign taken in the browser has no paper date';
+
   v_bundle := public.get_client_commercial_document_bundle('ea300000-0000-4000-8000-000000000001');
   SELECT s INTO v_client FROM jsonb_array_elements(v_bundle->'signatures') AS s
   WHERE s->>'partyRole' = 'client';
   ASSERT NOT (v_client->>'signedOnPaper')::boolean,
     'a portal-signed document must project signedOnPaper = false';
+  ASSERT v_client->>'paperSignedOn' IS NULL,
+    'a portal-signed document has no paper date to project';
   PERFORM pg_temp.assume_user('ea000000-0000-4000-8000-000000000001');
 END $$;
 
@@ -1561,6 +1579,18 @@ BEGIN
     'the client bundle must say the acceptance was recorded from paper';
   ASSERT (v_bundle->'tradeScope'->'progress'->>'state') = 'accepted',
     'and that the scope is accepted';
+  -- The acceptance leg needs no paperAcceptedOn twin: acceptedAt IS the date on
+  -- the paper here (record_paper_trade_acceptance writes accepted_at =
+  -- p_paper_signed_on::timestamptz), so what the client's copy must print is
+  -- already in the bundle — as a midnight timestamp whose DATE COMPONENT is the
+  -- whole meaning. Readers must format it without shifting it west.
+  ASSERT (v_bundle->'tradeScope'->'progress'->>'acceptedAt')::date
+         = pg_temp.paper_date(),
+    format('acceptedAt must carry the paper date — got %L',
+           v_bundle->'tradeScope'->'progress'->>'acceptedAt');
+  ASSERT (v_bundle->'tradeScope'->'progress'->>'acceptedAt')::timestamptz
+         = pg_temp.paper_date()::timestamptz,
+    'and land on the day boundary, so a UTC-formatted read is exact';
   -- The page is scoped exactly like the signature scan: the studio filed it
   -- unshared, so the client is told an acceptance happened and not handed the
   -- file id.

@@ -1196,11 +1196,20 @@ GRANT EXECUTE ON FUNCTION public.record_paper_trade_acceptance(uuid, text, date,
 COMMENT ON FUNCTION public.record_paper_trade_acceptance(uuid, text, date, uuid) IS
   '00425: the studio records that the client accepted a substantially complete trade scope on a signed printed copy. accepted_by remains the CLIENT; accepted_at is the date on the paper; accepted_on_paper, acceptance_recorded_by and acceptance_scan_document_id carry the tell and the page. Issues nothing — the acceptance-gated draw simply becomes billable.';
 
--- ── Client bundle — regrafted from 00423, two deltas ──────────────────────
+-- ── Client bundle — regrafted from 00423, three deltas ────────────────────
 -- The client is told, on their own copy, that a signature was recorded from a
--- printed original. That is the point of the whole rail: the paper act is
--- honest at the surface the client actually reads, not only in a metadata
--- column only the studio can see.
+-- printed original, AND WHICH DAY THEY SIGNED IT. That is the point of the
+-- whole rail: the paper act is honest at the surface the client actually
+-- reads, not only in a metadata column only the studio can see — and a copy
+-- that prints the studio's typing day as the signing day is not honest, it is
+-- just wrong on a different axis.
+--
+--   signedOnPaper       the tell, boolean
+--   paperSignedOn       the date on the paper (NEW) — the signing date
+--   paperScanDocumentId the page, when shared
+--
+-- The acceptance leg needs no fourth key: accepted_at ALREADY IS the paper
+-- date on a paper acceptance (see the progress block below).
 
 CREATE OR REPLACE FUNCTION public.get_client_commercial_document_bundle(p_proposal_id uuid)
 RETURNS jsonb
@@ -1304,6 +1313,15 @@ BEGIN
       -- metadata never crosses this edge — it carries recordedBy, which is a
       -- studio member's uuid, and the client has no business with it.
       'signedOnPaper', COALESCE((s.metadata->>'executedOnPaper')::boolean, false),
+      -- 00425: THE DATE ON THE PAPER, and it is the one the client's copy must
+      -- print as the signing date. signed_at is when the STUDIO wrote the act
+      -- down, which on this rail is a different day — often weeks later — so a
+      -- copy that renders signed_at as "SIGNED <date>" tells the client they
+      -- signed on a day they did not. Projected as the bare yyyy-mm-dd text the
+      -- studio typed (no timestamp, no zone: a calendar date has neither), and
+      -- NULL on portal rows, which carry no such key because there the record
+      -- moment IS the signing moment.
+      'paperSignedOn', s.metadata->>'paperSignedOn',
       -- The scan pointer is projected ONLY when the folio row is flagged
       -- client_visible AND still anchored to THIS document. This body is
       -- SECURITY DEFINER, so project_documents RLS is not in force here; both
@@ -1389,6 +1407,12 @@ BEGIN
           'state', t.progress_state,
           'engagedAt', t.engaged_at,
           'substantialCompletionAt', t.substantial_completion_at,
+          -- 00425: on a PAPER acceptance this IS the date on the paper —
+          -- record_paper_trade_acceptance writes `accepted_at =
+          -- p_paper_signed_on::timestamptz`, i.e. midnight UTC on the day the
+          -- client signed, not the moment of typing. So the acceptance leg
+          -- needs no paper-date twin the way signatures do; it needs its
+          -- readers to format the DATE COMPONENT and not shift it west.
           'acceptedAt', t.accepted_at,
           'acceptedSignedName', t.accepted_signed_name,
           -- 00425: acceptance recorded from a printed copy says so, and carries

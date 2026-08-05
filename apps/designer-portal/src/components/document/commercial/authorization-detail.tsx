@@ -21,7 +21,7 @@ import {
   useCommercialDocument,
   useSendFurnishingsAuthorization,
 } from "@/hooks/use-commercial-documents";
-import { SIGNED_ON_PAPER_NOTE } from "@/lib/document/commercial-documents";
+import { signedOnPaperNote } from "@/lib/document/commercial-documents";
 import {
   furnishingsDepositPosture,
   money,
@@ -30,7 +30,10 @@ import {
   type ProjectInstrumentView,
 } from "@/lib/document/project-commerce";
 import { DocSheet } from "../overlays/doc-sheet";
-import { RecordOnPaperSheet } from "./record-on-paper-sheet";
+import {
+  RECORD_ON_PAPER_ACT_LABEL,
+  RecordOnPaperSheet,
+} from "./record-on-paper-sheet";
 import { VoidAct } from "./void-supersede-act";
 
 const depositCopy: Record<
@@ -179,11 +182,17 @@ function DispatchRetryBand({
 export function AuthorizationDetail({
   projectId,
   instrument,
+  clientName = "",
   open,
   onClose,
 }: {
   projectId: string;
   instrument: ProjectInstrumentView | null;
+  /** Prefills the signer line on the record-on-paper sheet, exactly as the
+   *  design-services act already does. Threaded down from the open document's
+   *  own `client_name`; optional, because a caller without one should still get
+   *  the sheet (empty, typed by hand) rather than no sheet. */
+  clientName?: string;
   open: boolean;
   onClose: () => void;
 }) {
@@ -210,9 +219,10 @@ export function AuthorizationDetail({
     instrument?.proposalId ?? "",
     open && instrument?.state === "executed",
   );
-  const executedOnPaper = bundle.data?.signatures.some(
+  const paperSignature = bundle.data?.signatures.find(
     (signature) => signature.party === "client" && signature.executedOnPaper,
   );
+  const executedOnPaper = Boolean(paperSignature);
 
   if (!instrument) return null;
 
@@ -269,7 +279,7 @@ export function AuthorizationDetail({
             variant="secondary"
             onClick={() => setRecordOnPaperOpen(true)}
           >
-            Record executed on paper
+            {RECORD_ON_PAPER_ACT_LABEL.furnishings}
           </Button>
         )}
         {sendError && (
@@ -297,7 +307,7 @@ export function AuthorizationDetail({
 
         {instrument.state === "executed" && executedOnPaper && (
           <p className="mt-2 text-[10.5px] italic text-[var(--text-muted)]">
-            {SIGNED_ON_PAPER_NOTE}
+            {signedOnPaperNote(paperSignature?.paperSignedOn)}
           </p>
         )}
 
@@ -363,6 +373,7 @@ export function AuthorizationDetail({
         kind="furnishings"
         proposalId={instrument.proposalId}
         projectId={projectId}
+        clientName={clientName}
         open={recordOnPaperOpen}
         onClose={() => setRecordOnPaperOpen(false)}
         onRecorded={() => setRecordOnPaperOpen(false)}

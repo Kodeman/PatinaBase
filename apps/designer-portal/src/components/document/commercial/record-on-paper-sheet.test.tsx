@@ -17,7 +17,10 @@ jest.mock('@/hooks/use-commercial-documents', () => ({
     uploadPaperScanDocument(...args),
 }));
 
-import { RecordOnPaperSheet } from './record-on-paper-sheet';
+import {
+  RECORD_ON_PAPER_ACT_LABEL,
+  RecordOnPaperSheet,
+} from './record-on-paper-sheet';
 
 describe('RecordOnPaperSheet', () => {
   beforeEach(() => {
@@ -254,5 +257,41 @@ describe('RecordOnPaperSheet', () => {
       />,
     );
     expect(container).toBeEmptyDOMElement();
+  });
+});
+
+/**
+ * One grammar for the four paper acts. The rail shipped with three phrasings
+ * for the same thing ("Record a paper signature", "Record signed on paper",
+ * "Record executed on paper") beside the acceptance sheet's clean "Record the
+ * acceptance"; a studio should not have to work out that three of those mean
+ * the same act. The offline-ness lives in the eyebrow, which states it.
+ */
+describe('the act labels, as one family', () => {
+  it('names the same act the same way across every kind', () => {
+    expect(RECORD_ON_PAPER_ACT_LABEL).toEqual({
+      'design-services': 'Record the signature',
+      furnishings: 'Record the signature',
+      'trade-execution': 'Record the signature',
+      'trade-acceptance': 'Record the acceptance',
+    });
+  });
+
+  it.each([
+    ['design-services', 'Record the signature · signed offline'],
+    ['furnishings', 'Record the signature · signed offline'],
+    ['trade-execution', 'Record the signature · signed offline'],
+    ['trade-acceptance', 'Record the acceptance · signed offline'],
+  ] as const)('says where %s was signed in its eyebrow, not in its act', (kind, eyebrow) => {
+    render(
+      <RecordOnPaperSheet
+        kind={kind}
+        proposalId="proposal-1"
+        projectId="project-1"
+        open
+        onClose={jest.fn()}
+      />,
+    );
+    expect(screen.getByText(eyebrow)).toBeVisible();
   });
 });

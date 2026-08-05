@@ -657,9 +657,10 @@ describe('signature provenance (paper vs. on-screen)', () => {
       },
       signatures: [
         {
-          party: 'client', signerName: 'Jamie Client', signedAt: '2026-08-02T00:00:00Z',
+          party: 'client', signerName: 'Jamie Client', signedAt: '2026-08-05T14:20:00Z',
           consentVersion: 'v1', documentFingerprint: 'fp-1',
-          signedOnPaper: true, paperScanDocumentId: 'doc-scan-1',
+          signedOnPaper: true, paperSignedOn: '2026-01-15',
+          paperScanDocumentId: 'doc-scan-1',
         },
         {
           party: 'studio', signerName: 'Morgan Designer', signedAt: '2026-08-03T00:00:00Z',
@@ -669,8 +670,17 @@ describe('signature provenance (paper vs. on-screen)', () => {
     });
 
     expect(bundle?.signatures).toEqual([
-      expect.objectContaining({ party: 'client', signedOnPaper: true, paperScanDocumentId: 'doc-scan-1' }),
-      expect.objectContaining({ party: 'studio', signedOnPaper: false, paperScanDocumentId: null }),
+      expect.objectContaining({
+        party: 'client', signedOnPaper: true, paperScanDocumentId: 'doc-scan-1',
+        // The day on the paper, kept apart from the day it was recorded — the
+        // two are weeks apart on this rail and only the first is the signing
+        // date.
+        paperSignedOn: '2026-01-15', signedAt: '2026-08-05T14:20:00Z',
+      }),
+      expect.objectContaining({
+        party: 'studio', signedOnPaper: false, paperScanDocumentId: null,
+        paperSignedOn: null,
+      }),
     ]);
   });
 
@@ -686,6 +696,17 @@ describe('signature provenance (paper vs. on-screen)', () => {
       }],
     });
     expect(bundle?.signatures[0]).toMatchObject({ signedOnPaper: true, paperScanDocumentId: null });
+  });
+
+  it('carries no paper date when the RPC sent none — a portal signature has one date', () => {
+    const bundle = adaptCommercialDocumentBundle({
+      document: { id: 'ds-portal-1', documentKind: 'design_services', commercialState: 'client_signed' },
+      signatures: [{
+        party: 'client', signerName: 'Jamie Client', signedAt: '2026-08-05T14:20:00Z',
+        consentVersion: 'v1', documentFingerprint: 'fp-1', signedOnPaper: false,
+      }],
+    });
+    expect(bundle?.signatures[0]).toMatchObject({ signedOnPaper: false, paperSignedOn: null });
   });
 });
 

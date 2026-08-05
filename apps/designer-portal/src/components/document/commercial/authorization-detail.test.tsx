@@ -151,11 +151,42 @@ describe("AuthorizationDetail", () => {
     expect(screen.getByText("lines PO-ready").nextSibling).toHaveTextContent("0");
   });
 
-  it("shows the paper tell once executed, when the client's signature was recorded from a printed original", () => {
+  it("shows the paper tell once executed, with the day written on the paper — not the day it was typed up", () => {
     mockCommercialDocument = {
       data: {
         signatures: [
-          { party: "client", signerName: "Jamie Client", executedOnPaper: true, paperScanDocumentId: null },
+          {
+            party: "client", signerName: "Jamie Client", executedOnPaper: true,
+            // The client signed in January; the studio recorded it in August.
+            signedAt: "2026-08-05T14:20:00Z", paperSignedOn: "2026-01-15",
+            paperScanDocumentId: null,
+          },
+        ],
+      },
+      isLoading: false,
+    };
+    render(
+      <AuthorizationDetail
+        projectId="project-1"
+        instrument={baseInstrument}
+        open
+        onClose={jest.fn()}
+      />,
+    );
+    expect(
+      screen.getByText("Signed Jan 15, 2026 on paper · recorded by the studio."),
+    ).toBeVisible();
+    expect(screen.queryByText(/Aug 5, 2026/)).not.toBeInTheDocument();
+  });
+
+  it("falls back to the undated phrase when a paper row carries no date", () => {
+    mockCommercialDocument = {
+      data: {
+        signatures: [
+          {
+            party: "client", signerName: "Jamie Client", executedOnPaper: true,
+            paperSignedOn: null, paperScanDocumentId: null,
+          },
         ],
       },
       isLoading: false,
@@ -301,24 +332,26 @@ describe("AuthorizationDetail", () => {
       />,
     );
     expect(
-      screen.queryByRole("button", { name: "Record executed on paper" }),
+      screen.queryByRole("button", { name: "Record the signature" }),
     ).not.toBeInTheDocument();
 
     rerender(
       <AuthorizationDetail
         projectId="project-1"
         instrument={{ ...baseInstrument, state: "sent" }}
+        clientName="Harper Vale"
         open
         onClose={jest.fn()}
       />,
     );
     fireEvent.click(
-      screen.getByRole("button", { name: "Record executed on paper" }),
+      screen.getByRole("button", { name: "Record the signature" }),
     );
 
-    fireEvent.change(await screen.findByLabelText("Signed by"), {
-      target: { value: "Harper Vale" },
-    });
+    // Parity with the design-services act: the sheet arrives already naming
+    // the client, rather than asking the studio to retype a name the document
+    // already knows.
+    expect(await screen.findByLabelText("Signed by")).toHaveValue("Harper Vale");
     fireEvent.click(screen.getByRole("button", { name: "Record & execute" }));
 
     await waitFor(() =>

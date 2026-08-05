@@ -113,6 +113,7 @@ const renderDetail = (view: TradeScopeView) =>
     <TradeScopeDetail
       projectId="project-1"
       projectName="Ellsworth Residence"
+      clientName="Harper Vale"
       scope={view}
       open
       onClose={jest.fn()}
@@ -195,17 +196,77 @@ describe('TradeScopeDetail', () => {
     expect(screen.getByText(/Acceptance is the client/)).toBeVisible();
   });
 
-  it("shows the paper tell for the scope's own execution, once executed, from the client signature", () => {
+  it("shows the paper tell for the scope's own execution, dated to the day on the paper", () => {
     mockCommercialDocument = {
       data: {
         signatures: [
-          { party: 'client', signerName: 'Jamie Client', executedOnPaper: true, paperScanDocumentId: null },
+          {
+            party: 'client', signerName: 'Jamie Client', executedOnPaper: true,
+            // Signed in January, written down in August. The scope must say
+            // January — that is when the client authorized the work.
+            signedAt: '2026-08-05T14:20:00Z', paperSignedOn: '2026-01-15',
+            paperScanDocumentId: null,
+          },
         ],
       },
       isLoading: false,
     };
     renderDetail(scope());
-    expect(screen.getByText('Signed on paper · recorded by the studio.')).toBeVisible();
+    expect(
+      screen.getByText('Signed Jan 15, 2026 on paper · recorded by the studio.'),
+    ).toBeVisible();
+  });
+
+  /**
+   * A paper acceptance stores its day as midnight UTC (00425:
+   * `accepted_at = p_paper_signed_on::timestamptz`). Read through `when` —
+   * timezone-aware — a studio in Chicago sees 9 February for a 10 February
+   * acceptance. The header line reads it as a DAY instead.
+   */
+  describe('west of UTC', () => {
+    const originalTz = process.env.TZ;
+    beforeEach(() => {
+      process.env.TZ = 'America/Chicago';
+    });
+    afterEach(() => {
+      process.env.TZ = originalTz;
+    });
+
+    it('dates a paper acceptance to the day it was accepted, not the day before', () => {
+      mockWorkspace = {
+        data: {
+          ...workspaceData,
+          terms: {
+            ...workspaceData.terms,
+            progressState: 'accepted',
+            acceptedAt: '2026-02-10T00:00:00Z',
+            acceptedSignedName: 'Jamie Client',
+            acceptedOnPaper: true,
+            acceptanceRecordedByName: 'Morgan Designer',
+          },
+        },
+      };
+      renderDetail(scope({ progressState: 'accepted' }));
+      expect(screen.getByText(/accepted Feb 10, 2026/)).toBeVisible();
+      expect(screen.queryByText(/accepted Feb 9, 2026/)).not.toBeInTheDocument();
+    });
+
+    it('leaves an online acceptance in the studio\'s own timezone — it is a moment, not a day', () => {
+      mockWorkspace = {
+        data: {
+          ...workspaceData,
+          terms: {
+            ...workspaceData.terms,
+            progressState: 'accepted',
+            acceptedAt: '2026-02-10T00:00:00Z',
+            acceptedSignedName: 'Jamie Client',
+            acceptedOnPaper: false,
+          },
+        },
+      };
+      renderDetail(scope({ progressState: 'accepted' }));
+      expect(screen.getByText(/accepted Feb 9, 2026/)).toBeVisible();
+    });
   });
 
   it('shows the acceptance note and recorder name once a paper acceptance is on record', () => {
@@ -248,18 +309,17 @@ describe('TradeScopeDetail', () => {
   it('offers to record executed on paper only while sent, and records it', async () => {
     const { unmount } = renderDetail(scope());
     expect(
-      screen.queryByRole('button', { name: 'Record executed on paper' }),
+      screen.queryByRole('button', { name: 'Record the signature' }),
     ).not.toBeInTheDocument();
     unmount();
 
     renderDetail(scope({ state: 'sent', progressState: 'none' }));
     fireEvent.click(
-      screen.getByRole('button', { name: 'Record executed on paper' }),
+      screen.getByRole('button', { name: 'Record the signature' }),
     );
 
-    fireEvent.change(await screen.findByLabelText('Signed by'), {
-      target: { value: 'Harper Vale' },
-    });
+    // Parity with the design-services act: prefilled from the document.
+    expect(await screen.findByLabelText('Signed by')).toHaveValue('Harper Vale');
     fireEvent.click(screen.getByRole('button', { name: 'Record & execute' }));
 
     await waitFor(() =>
@@ -275,18 +335,16 @@ describe('TradeScopeDetail', () => {
   it('offers to record a paper acceptance only once substantially complete, and records it', async () => {
     const { unmount } = renderDetail(scope({ progressState: 'in_progress' }));
     expect(
-      screen.queryByRole('button', { name: 'Record accepted on paper' }),
+      screen.queryByRole('button', { name: 'Record the acceptance' }),
     ).not.toBeInTheDocument();
     unmount();
 
     renderDetail(scope({ progressState: 'substantially_complete' }));
     fireEvent.click(
-      screen.getByRole('button', { name: 'Record accepted on paper' }),
+      screen.getByRole('button', { name: 'Record the acceptance' }),
     );
 
-    fireEvent.change(await screen.findByLabelText('Accepted by'), {
-      target: { value: 'Harper Vale' },
-    });
+    expect(await screen.findByLabelText('Accepted by')).toHaveValue('Harper Vale');
     fireEvent.click(
       screen.getByRole('button', { name: 'Record accepted' }),
     );

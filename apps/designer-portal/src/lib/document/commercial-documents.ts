@@ -7,6 +7,8 @@
  * raw commercial tables or spread their rows into a client preview.
  */
 
+import { formatCalendarDate } from "./format";
+
 export const COMMERCIAL_DOCUMENT_KINDS = [
   "legacy",
   "design_services",
@@ -85,6 +87,12 @@ export interface CommercialSignature {
    *  studio countersigned/executed on the client's behalf (00412's paper
    *  RPCs), rather than signed on screen. */
   executedOnPaper: boolean;
+  /** The day written on the paper — bare `YYYY-MM-DD`, exactly as the studio
+   *  typed it into the record sheet (00425's metadata.paperSignedOn). THIS is
+   *  when the signature happened; `signedAt` is when it was written down, and
+   *  on this rail those are different days. Null on portal signatures, where
+   *  they are the same moment. */
+  paperSignedOn: string | null;
   /** The project_documents.id of the paper original's scan, when the studio
    *  attached one at record time. Null when no scan was attached. */
   paperScanDocumentId: string | null;
@@ -266,6 +274,7 @@ export interface ServiceAgreementPreview {
     signerName: string;
     signedAt: string;
     executedOnPaper: boolean;
+    paperSignedOn: string | null;
     paperScanDocumentId: string | null;
   }>;
 }
@@ -306,6 +315,7 @@ export function buildServiceAgreementPreview({
       signerName: signature.signerName,
       signedAt: signature.signedAt,
       executedOnPaper: signature.executedOnPaper,
+      paperSignedOn: signature.paperSignedOn,
       paperScanDocumentId: signature.paperScanDocumentId,
     })),
   };
@@ -325,6 +335,22 @@ export interface CommercialStatusView {
  *  this same sentence rather than each inventing their own wording. */
 export const SIGNED_ON_PAPER_NOTE = "Signed on paper · recorded by the studio.";
 
+/**
+ * The same sentence, dated — because a paper act has two days and the studio
+ * should be able to see which is which without opening the row.
+ *
+ * `paperSignedOn` is the day on the page; the record moment lives in
+ * `signedAt` and stays where it is. Falls back to the undated phrase when the
+ * date is missing, so a row recorded before 00425 carried the key still reads
+ * as a sentence rather than as "Signed null on paper".
+ */
+export function signedOnPaperNote(paperSignedOn?: string | null): string {
+  const day = formatCalendarDate(paperSignedOn);
+  return day
+    ? `Signed ${day} on paper · recorded by the studio.`
+    : SIGNED_ON_PAPER_NOTE;
+}
+
 export function commercialStatusView(
   state: CommercialState,
   options?: {
@@ -334,6 +360,9 @@ export function commercialStatusView(
      *  description once consent exists to describe (client_signed onward) —
      *  never for draft/sent, where there is nothing yet to have been paper. */
     clientSignedOnPaper?: boolean;
+    /** The day written on that paper, when known — promotes the appended
+     *  sentence to its dated form (see {@link signedOnPaperNote}). */
+    clientPaperSignedOn?: string | null;
   },
 ): CommercialStatusView {
   const base = ((): CommercialStatusView => {
@@ -413,7 +442,7 @@ export function commercialStatusView(
   ) {
     return {
       ...base,
-      description: `${base.description} ${SIGNED_ON_PAPER_NOTE}`,
+      description: `${base.description} ${signedOnPaperNote(options.clientPaperSignedOn)}`,
     };
   }
   return base;

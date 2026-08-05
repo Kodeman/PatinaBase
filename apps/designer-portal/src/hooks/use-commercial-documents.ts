@@ -242,6 +242,13 @@ function mapSignature(row: any): CommercialSignature {
     // RLS covers the whole row, unlike the client bundle RPC's allowlist),
     // so this reads it straight rather than waiting on a server projection.
     executedOnPaper: metadata.executedOnPaper === true,
+    // The day on the page, bare `YYYY-MM-DD` (00425). Kept as the string the
+    // studio typed rather than a Date — it is a calendar day, and turning it
+    // into an instant here is exactly how it would start rendering a day early.
+    paperSignedOn:
+      typeof metadata.paperSignedOn === "string"
+        ? metadata.paperSignedOn
+        : null,
     paperScanDocumentId:
       typeof metadata.paperScanDocumentId === "string"
         ? metadata.paperScanDocumentId
@@ -2142,7 +2149,7 @@ export interface PaperRecordResult {
 }
 
 /**
- * "Record signed on paper" for a design services agreement / addendum —
+ * "Record the signature" for a design services agreement / addendum —
  * `record_paper_client_signature` (sent → client_signed only; execution
  * remains the studio's separate, unchanged countersign act below).
  */
@@ -2330,7 +2337,7 @@ export interface RecordPaperTradeAcceptanceInput {
 }
 
 /**
- * "Record accepted on paper" — record_paper_trade_acceptance. Requires
+ * "Record the acceptance" — record_paper_trade_acceptance. Requires
  * progress_state='substantially_complete' server-side and is idempotent
  * once accepted. It issues nothing of its own on the money side — the final
  * draw is still a separate "Issue draw" act once the schedule allows it —

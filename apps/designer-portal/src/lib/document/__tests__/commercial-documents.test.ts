@@ -3,6 +3,8 @@ import {
   buildServiceAgreementPreview,
   commercialDocumentExperience,
   commercialStatusView,
+  SIGNED_ON_PAPER_NOTE,
+  signedOnPaperNote,
   type CommercialDocument,
   type ServiceAgreementTerms,
   type ServiceRate,
@@ -225,5 +227,52 @@ describe("commercial status treatment", () => {
       canCountersign: false,
       isExecuted: true,
     });
+  });
+
+  it("names the day on the paper in the status line, when the rail knows it", () => {
+    expect(
+      commercialStatusView("client_signed", {
+        clientSignedOnPaper: true,
+        clientPaperSignedOn: "2026-01-15",
+      }).description,
+    ).toContain("Signed Jan 15, 2026 on paper · recorded by the studio.");
+  });
+
+  it("keeps the undated phrase when it does not", () => {
+    expect(
+      commercialStatusView("client_signed", { clientSignedOnPaper: true })
+        .description,
+    ).toContain(SIGNED_ON_PAPER_NOTE);
+  });
+
+  it("says nothing about paper for a signature taken on screen", () => {
+    expect(
+      commercialStatusView("client_signed", {
+        clientSignedOnPaper: false,
+        clientPaperSignedOn: "2026-01-15",
+      }).description,
+    ).not.toContain("paper");
+  });
+});
+
+describe("signedOnPaperNote", () => {
+  const originalTz = process.env.TZ;
+  beforeEach(() => {
+    process.env.TZ = "America/Chicago";
+  });
+  afterEach(() => {
+    process.env.TZ = originalTz;
+  });
+
+  it("prints the calendar day it was given, undisturbed by the reader's timezone", () => {
+    expect(signedOnPaperNote("2026-02-10")).toBe(
+      "Signed Feb 10, 2026 on paper · recorded by the studio.",
+    );
+  });
+
+  it("falls back to the undated phrase rather than printing an empty date", () => {
+    expect(signedOnPaperNote(null)).toBe(SIGNED_ON_PAPER_NOTE);
+    expect(signedOnPaperNote(undefined)).toBe(SIGNED_ON_PAPER_NOTE);
+    expect(signedOnPaperNote("")).toBe(SIGNED_ON_PAPER_NOTE);
   });
 });

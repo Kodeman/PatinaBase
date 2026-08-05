@@ -23,6 +23,7 @@ jest.mock('@tanstack/react-query', () => ({
 }));
 
 import {
+  fetchCommercialDocumentBundle,
   useCountersignDesignServicesAgreement,
   useDeriveWorkingBudget,
   useExecuteFurnishingsAuthorizationOnPaper,
@@ -885,6 +886,114 @@ describe('designer commercial document hooks', () => {
       await expect(mutationFnOf()(resendInput)).rejects.toThrow(
         "The request could not be sent. Check the party's email and try again.",
       );
+    });
+  });
+});
+
+/**
+ * The mapper, at the seam it actually reads: the designer reads
+ * commercial_document_signatures DIRECTLY (studio RLS covers the whole row),
+ * so `paperSignedOn` comes off `metadata`, not off the client bundle RPC's
+ * allowlist. It is a calendar day and stays a string — turning it into a Date
+ * here is exactly how it would start rendering a day early.
+ */
+describe('fetchCommercialDocumentBundle — signature provenance', () => {
+  function stubBundleTables(signatureRows: Array<Record<string, unknown>>) {
+    fromMock.mockImplementation((table: string) => {
+      if (table === 'proposals') {
+        return {
+          select: () => ({
+            eq: () => ({
+              single: () =>
+                Promise.resolve({
+                  data: {
+                    id: 'agreement-1',
+                    document_kind: 'design_services',
+                    commercial_state: 'executed',
+                    title: 'Whitfield design agreement',
+                  },
+                  error: null,
+                }),
+            }),
+          }),
+        };
+      }
+      if (table === 'proposal_service_terms') {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: () => Promise.resolve({ data: null, error: null }),
+            }),
+          }),
+        };
+      }
+      if (table === 'proposal_service_rates') {
+        return {
+          select: () => ({
+            eq: () => ({
+              order: () => ({
+                order: () => Promise.resolve({ data: [], error: null }),
+              }),
+            }),
+          }),
+        };
+      }
+      return {
+        select: () => ({
+          eq: () => ({
+            order: () => Promise.resolve({ data: signatureRows, error: null }),
+          }),
+        }),
+      };
+    });
+  }
+
+  it('carries the day on the paper alongside the day it was recorded', async () => {
+    stubBundleTables([
+      {
+        id: 'sig-1',
+        proposal_id: 'agreement-1',
+        party_role: 'client',
+        signed_name: 'Jamie Client',
+        evidence_fingerprint: 'fp-1',
+        // Recorded in August; the paper itself was signed in January.
+        signed_at: '2026-08-05T14:20:00Z',
+        metadata: {
+          executedOnPaper: true,
+          paperSignedOn: '2026-01-15',
+          recordedBy: 'studio-user-1',
+        },
+      },
+    ]);
+
+    const bundle = await fetchCommercialDocumentBundle('agreement-1');
+
+    expect(bundle.signatures[0]).toMatchObject({
+      party: 'client',
+      executedOnPaper: true,
+      paperSignedOn: '2026-01-15',
+      signedAt: '2026-08-05T14:20:00Z',
+    });
+  });
+
+  it('leaves paperSignedOn null on a portal signature, which has only one date', async () => {
+    stubBundleTables([
+      {
+        id: 'sig-2',
+        proposal_id: 'agreement-1',
+        party_role: 'client',
+        signed_name: 'Jamie Client',
+        evidence_fingerprint: 'fp-2',
+        signed_at: '2026-08-05T14:20:00Z',
+        metadata: { consent_version: 1 },
+      },
+    ]);
+
+    const bundle = await fetchCommercialDocumentBundle('agreement-1');
+
+    expect(bundle.signatures[0]).toMatchObject({
+      executedOnPaper: false,
+      paperSignedOn: null,
     });
   });
 });

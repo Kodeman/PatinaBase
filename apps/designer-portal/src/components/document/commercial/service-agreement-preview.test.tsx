@@ -66,6 +66,62 @@ describe("ServiceAgreementPreview", () => {
     ).toBeVisible();
   });
 
+  /**
+   * The client copy the studio previews is the client copy the client reads, so
+   * the same date discipline applies here: the signature block prints the day
+   * on the paper, never the day the studio typed the record up.
+   */
+  it("dates a paper signature block to the day on the paper", () => {
+    render(
+      <ServiceAgreementPreview
+        document={document}
+        terms={terms}
+        rates={[]}
+        signatures={[
+          {
+            party: "client",
+            signerName: "Jamie Client",
+            signedAt: "2026-08-05T14:20:00Z",
+            consentVersion: 1,
+            documentFingerprint: "fp-1",
+            executedOnPaper: true,
+            paperSignedOn: "2026-01-15",
+            paperScanDocumentId: null,
+          },
+        ]}
+      />,
+    );
+
+    expect(
+      screen.getByText("Signed Jan 15, 2026 on paper · recorded by the studio."),
+    ).toBeVisible();
+    expect(screen.queryByText(/Aug 5, 2026/)).not.toBeInTheDocument();
+  });
+
+  it("says nothing about paper for a signature taken on screen", () => {
+    render(
+      <ServiceAgreementPreview
+        document={document}
+        terms={terms}
+        rates={[]}
+        signatures={[
+          {
+            party: "client",
+            signerName: "Jamie Client",
+            signedAt: "2026-08-05T14:20:00Z",
+            consentVersion: 1,
+            documentFingerprint: "fp-1",
+            executedOnPaper: false,
+            paperSignedOn: null,
+            paperScanDocumentId: null,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.queryByText(/on paper/)).not.toBeInTheDocument();
+  });
+
   it("says the deposit is unset rather than printing a null percent", () => {
     render(
       <ServiceAgreementPreview

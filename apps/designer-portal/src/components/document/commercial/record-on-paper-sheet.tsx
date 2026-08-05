@@ -56,8 +56,8 @@ const KIND_COPY: Record<
   }
 > = {
   'design-services': {
-    sheetTitle: 'Record signed on paper',
-    eyebrow: 'Signed offline · on paper',
+    sheetTitle: 'Record the signature',
+    eyebrow: 'Record the signature · signed offline',
     nameLabel: 'Signed by',
     dateLabel: 'Date signed',
     heading: 'Who signed the paper original, and when?',
@@ -66,8 +66,8 @@ const KIND_COPY: Record<
     submittingLabel: 'Recording…',
   },
   furnishings: {
-    sheetTitle: 'Record signed on paper',
-    eyebrow: 'Signed offline · on paper',
+    sheetTitle: 'Record the signature',
+    eyebrow: 'Record the signature · signed offline',
     nameLabel: 'Signed by',
     dateLabel: 'Date signed',
     heading: 'Who signed the paper original, and when?',
@@ -76,8 +76,8 @@ const KIND_COPY: Record<
     submittingLabel: 'Executing…',
   },
   'trade-execution': {
-    sheetTitle: 'Record signed on paper',
-    eyebrow: 'Signed offline · on paper',
+    sheetTitle: 'Record the signature',
+    eyebrow: 'Record the signature · signed offline',
     nameLabel: 'Signed by',
     dateLabel: 'Date signed',
     heading: 'Who signed the paper original, and when?',
@@ -95,6 +95,23 @@ const KIND_COPY: Record<
     submitLabel: 'Record accepted',
     submittingLabel: 'Recording…',
   },
+};
+
+/**
+ * The act that opens this sheet, per kind — one grammar for all four.
+ *
+ * The rail shipped with three different phrasings for the same act ("Record a
+ * paper signature", "Record signed on paper", "Record executed on paper")
+ * against the acceptance sheet's cleaner "Record the acceptance". A studio
+ * reading a project should not have to notice that three of those mean the
+ * same thing; the offline-ness belongs in the sheet's own eyebrow, which says
+ * it, not in the word on the page.
+ */
+export const RECORD_ON_PAPER_ACT_LABEL: Record<RecordOnPaperKind, string> = {
+  'design-services': 'Record the signature',
+  furnishings: 'Record the signature',
+  'trade-execution': 'Record the signature',
+  'trade-acceptance': 'Record the acceptance',
 };
 
 /** All four paper acts can now carry a scan (00425 added trade-acceptance's

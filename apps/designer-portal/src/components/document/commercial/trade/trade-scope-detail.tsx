@@ -28,7 +28,11 @@ import {
   useTradeScopeWorkspace,
   useVoidTradeScope,
 } from '@/hooks/use-commercial-documents';
-import { SIGNED_ON_PAPER_NOTE } from '@/lib/document/commercial-documents';
+import {
+  SIGNED_ON_PAPER_NOTE,
+  signedOnPaperNote,
+} from '@/lib/document/commercial-documents';
+import { formatCalendarDate } from '@/lib/document/format';
 import {
   drawIsLiveBilled,
   drawIsPaid,
@@ -42,7 +46,10 @@ import {
 } from '@/lib/document/project-commerce';
 import { DocSheet } from '../../overlays/doc-sheet';
 import { DocumentAction, DocumentActionGroup } from '../../document-action';
-import { RecordOnPaperSheet } from '../record-on-paper-sheet';
+import {
+  RECORD_ON_PAPER_ACT_LABEL,
+  RecordOnPaperSheet,
+} from '../record-on-paper-sheet';
 import { WorkOrderSheet } from './work-order-sheet';
 
 function Figure({ label, value }: { label: string; value: string }) {
@@ -255,12 +262,17 @@ function TradeVoidAct({
 export function TradeScopeDetail({
   projectId,
   projectName = '',
+  clientName = '',
   scope,
   open,
   onClose,
 }: {
   projectId: string;
   projectName?: string;
+  /** Prefills the signer line on both record-on-paper sheets, exactly as the
+   *  design-services act already does. Threaded down from the open document's
+   *  own `client_name`; optional, so a caller without one still gets the sheet. */
+  clientName?: string;
   scope: TradeScopeView | null;
   open: boolean;
   onClose: () => void;
@@ -279,9 +291,10 @@ export function TradeScopeDetail({
     scope?.proposalId ?? '',
     open && scope?.state === 'executed',
   );
-  const executedOnPaper = bundle.data?.signatures.some(
+  const paperSignature = bundle.data?.signatures.find(
     (signature) => signature.party === 'client' && signature.executedOnPaper,
   );
+  const executedOnPaper = Boolean(paperSignature);
   const [error, setError] = useState<string | null>(null);
   const [workOrderOpen, setWorkOrderOpen] = useState(false);
   const [paperAct, setPaperAct] = useState<'execution' | 'acceptance' | null>(
@@ -327,14 +340,24 @@ export function TradeScopeDetail({
           {[
             partyName,
             terms?.engagedAt ? `engaged ${when(terms.engagedAt)}` : null,
-            terms?.acceptedAt ? `accepted ${when(terms.acceptedAt)}` : null,
+            // engagedAt is a moment; acceptedAt is only a moment when the
+            // client accepted HERE. A paper acceptance stamps the day on the
+            // page as midnight UTC (00425), which `when` — timezone-aware —
+            // renders a day early west of UTC. Read that case as a day.
+            terms?.acceptedAt
+              ? `accepted ${
+                  terms.acceptedOnPaper
+                    ? formatCalendarDate(terms.acceptedAt)
+                    : when(terms.acceptedAt)
+                }`
+              : null,
           ]
             .filter(Boolean)
             .join(' · ')}
         </p>
         {scope.state === 'executed' && executedOnPaper && (
           <p className="mt-1 text-[10.5px] italic text-[var(--text-muted)]">
-            {SIGNED_ON_PAPER_NOTE}
+            {signedOnPaperNote(paperSignature?.paperSignedOn)}
           </p>
         )}
 
@@ -409,7 +432,7 @@ export function TradeScopeDetail({
               variant="secondary"
               onClick={() => setPaperAct('execution')}
             >
-              Record executed on paper
+              {RECORD_ON_PAPER_ACT_LABEL['trade-execution']}
             </DocumentAction>
           )}
           <DocumentAction
@@ -436,7 +459,7 @@ export function TradeScopeDetail({
                 variant="tertiary"
                 onClick={() => setPaperAct('acceptance')}
               >
-                Record accepted on paper
+                {RECORD_ON_PAPER_ACT_LABEL['trade-acceptance']}
               </DocumentAction>
             )}
           </div>
@@ -600,6 +623,7 @@ export function TradeScopeDetail({
         kind="trade-execution"
         proposalId={scope.proposalId}
         projectId={projectId}
+        clientName={clientName}
         open={paperAct === 'execution'}
         onClose={() => setPaperAct(null)}
         onRecorded={() => setPaperAct(null)}
@@ -608,6 +632,7 @@ export function TradeScopeDetail({
         kind="trade-acceptance"
         proposalId={scope.proposalId}
         projectId={projectId}
+        clientName={clientName}
         open={paperAct === 'acceptance'}
         onClose={() => setPaperAct(null)}
         onRecorded={() => setPaperAct(null)}

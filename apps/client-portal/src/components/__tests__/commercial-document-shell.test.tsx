@@ -127,7 +127,8 @@ describe('CommercialDocumentShell', () => {
       document: { ...bundle().document, state: 'client_signed' },
       signatures: [{
         party: 'client', signerName: 'Sarah Whitfield', signedAt: '2026-08-02', consentVersion: 'v1',
-        documentFingerprint: 'f1', signedOnPaper: false, paperScanDocumentId: null,
+        documentFingerprint: 'f1', signedOnPaper: false, paperSignedOn: null,
+        paperScanDocumentId: null,
       }],
     })} />);
     expect(screen.getByText(/awaiting the studio countersignature and is not yet effective/i)).toBeInTheDocument();
@@ -138,14 +139,50 @@ describe('CommercialDocumentShell', () => {
     render(<CommercialDocumentShell bundle={bundle({
       document: { ...bundle().document, state: 'client_signed' },
       signatures: [{
-        party: 'client', signerName: 'Sarah Whitfield', signedAt: '2026-08-02', consentVersion: 'v1',
-        documentFingerprint: 'f1', signedOnPaper: true, paperScanDocumentId: null,
+        party: 'client', signerName: 'Sarah Whitfield', signedAt: '2026-08-05T14:20:00Z', consentVersion: 'v1',
+        documentFingerprint: 'f1', signedOnPaper: true, paperSignedOn: '2026-01-15',
+        paperScanDocumentId: null,
       }],
     })} />);
     expect(
       screen.getByText(/studio recorded your signed paper original/i),
     ).toBeInTheDocument();
-    expect(screen.getByText(/Signed on paper/i)).toBeInTheDocument();
+    expect(screen.getByText(/on paper/i)).toBeInTheDocument();
+  });
+
+  /**
+   * The defect this fixture exists for: the studio typed the record up on
+   * 5 August; the client signed the printed copy on 15 January. The client's
+   * own copy has to say January, because that is when they signed. The record
+   * moment is real and stays on the page — demoted, and labelled as what it is.
+   */
+  it('prints the day on the paper as the signing date, and demotes the day it was recorded', () => {
+    render(<CommercialDocumentShell bundle={bundle({
+      document: { ...bundle().document, state: 'client_signed' },
+      signatures: [{
+        party: 'client', signerName: 'Sarah Whitfield', signedAt: '2026-08-05T14:20:00Z', consentVersion: 'v1',
+        documentFingerprint: 'f1', signedOnPaper: true, paperSignedOn: '2026-01-15',
+        paperScanDocumentId: null,
+      }],
+    })} />);
+    expect(screen.getByText(/^Signed January 15, 2026 · on paper$/)).toBeInTheDocument();
+    expect(screen.getByText(/^recorded August 5, 2026$/)).toBeInTheDocument();
+    // And never the record date dressed up as the signature date.
+    expect(screen.queryByText(/^Signed August 5, 2026/)).not.toBeInTheDocument();
+  });
+
+  it('leaves a portal signature with the one date it has, unlabelled and undemoted', () => {
+    render(<CommercialDocumentShell bundle={bundle({
+      document: { ...bundle().document, state: 'client_signed' },
+      signatures: [{
+        party: 'client', signerName: 'Sarah Whitfield', signedAt: '2026-08-05T14:20:00Z', consentVersion: 'v1',
+        documentFingerprint: 'f1', signedOnPaper: false, paperSignedOn: null,
+        paperScanDocumentId: null,
+      }],
+    })} />);
+    expect(screen.getByText(/^Signed August 5, 2026$/)).toBeInTheDocument();
+    expect(screen.queryByText(/recorded /)).not.toBeInTheDocument();
+    expect(screen.queryByText(/on paper/i)).not.toBeInTheDocument();
   });
 
   it('states a fully executed document was signed on paper, and links the signed original when a scan is attached', () => {
@@ -153,12 +190,14 @@ describe('CommercialDocumentShell', () => {
       document: { ...bundle().document, state: 'executed', executedAt: '2026-08-03T00:00:00Z' },
       signatures: [
         {
-          party: 'client', signerName: 'Sarah Whitfield', signedAt: '2026-08-02', consentVersion: 'v1',
-          documentFingerprint: 'f1', signedOnPaper: true, paperScanDocumentId: 'doc-scan-1',
+          party: 'client', signerName: 'Sarah Whitfield', signedAt: '2026-08-05T14:20:00Z', consentVersion: 'v1',
+          documentFingerprint: 'f1', signedOnPaper: true, paperSignedOn: '2026-01-15',
+          paperScanDocumentId: 'doc-scan-1',
         },
         {
           party: 'studio', signerName: 'Morgan Designer', signedAt: '2026-08-03', consentVersion: 'v1',
-          documentFingerprint: 'f2', signedOnPaper: false, paperScanDocumentId: null,
+          documentFingerprint: 'f2', signedOnPaper: false, paperSignedOn: null,
+          paperScanDocumentId: null,
         },
       ],
     })} />);
@@ -386,6 +425,56 @@ describe('CommercialDocumentShell', () => {
     expect(
       screen.queryByRole('button', { name: /view the signed original/i }),
     ).not.toBeInTheDocument();
+  });
+
+  /**
+   * The off-by-one, pinned. A paper acceptance stores the day as midnight UTC
+   * (00425: `accepted_at = p_paper_signed_on::timestamptz`), so every reader
+   * west of UTC used to print the day before — a client in Los Angeles told
+   * their February 10 acceptance happened on February 9.
+   */
+  describe('west of UTC', () => {
+    const originalTz = process.env.TZ;
+    beforeEach(() => {
+      process.env.TZ = 'America/Los_Angeles';
+    });
+    afterEach(() => {
+      process.env.TZ = originalTz;
+    });
+
+    it('prints a paper acceptance on the day it was accepted, not the day before', () => {
+      const base = tradeScopeBundle();
+      render(<CommercialDocumentShell bundle={{
+        ...base,
+        tradeScope: {
+          ...base.tradeScope!,
+          progress: {
+            ...base.tradeScope!.progress,
+            state: 'accepted',
+            acceptedAt: '2026-02-10T00:00:00Z',
+            acceptedSignedName: 'Sarah Whitfield',
+            acceptedOnPaper: true,
+            acceptanceScanDocumentId: null,
+          },
+        },
+      }} />);
+      expect(screen.getByTestId('trade-scope-acceptance')).toHaveTextContent(
+        'Accepted by Sarah Whitfield on February 10, 2026.',
+      );
+      expect(screen.getByTestId('trade-scope-acceptance')).not.toHaveTextContent('February 9');
+    });
+
+    it('prints a paper signature on the day it was signed, not the day before', () => {
+      render(<CommercialDocumentShell bundle={bundle({
+        document: { ...bundle().document, state: 'client_signed' },
+        signatures: [{
+          party: 'client', signerName: 'Sarah Whitfield', signedAt: '2026-08-05T14:20:00Z',
+          consentVersion: 'v1', documentFingerprint: 'f1', signedOnPaper: true,
+          paperSignedOn: '2026-02-10', paperScanDocumentId: null,
+        }],
+      })} />);
+      expect(screen.getByText(/^Signed February 10, 2026 · on paper$/)).toBeInTheDocument();
+    });
   });
 
   it('guides superseded documents to their replacement', () => {

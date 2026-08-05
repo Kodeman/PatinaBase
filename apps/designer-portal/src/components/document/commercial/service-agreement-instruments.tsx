@@ -12,7 +12,10 @@ import { commercialStatusView } from "@/lib/document/commercial-documents";
 import { rememberRoomOrigin } from "@/lib/document/room-origin";
 import { DocumentAction, DocumentActionGroup } from "../document-action";
 import { DocSheet } from "../overlays/doc-sheet";
-import { RecordOnPaperSheet } from "./record-on-paper-sheet";
+import {
+  RECORD_ON_PAPER_ACT_LABEL,
+  RecordOnPaperSheet,
+} from "./record-on-paper-sheet";
 import { ServiceAgreementPreview } from "./service-agreement-preview";
 import { ServiceAgreementSendSheet } from "./service-agreement-send-sheet";
 
@@ -60,10 +63,16 @@ export function ServiceAgreementInstruments({
   }
 
   const { document, terms, rates, signatures } = bundle.data;
-  const clientSignedOnPaper = signatures.some(
+  const clientPaperSignature = signatures.find(
     (signature) => signature.party === "client" && signature.executedOnPaper,
   );
-  const status = commercialStatusView(document.state, { clientSignedOnPaper });
+  const clientSignedOnPaper = Boolean(clientPaperSignature);
+  const status = commercialStatusView(document.state, {
+    clientSignedOnPaper,
+    // The day on the page, so the status line says WHEN the client signed
+    // rather than only that they did it somewhere else.
+    clientPaperSignedOn: clientPaperSignature?.paperSignedOn ?? null,
+  });
   const projectId = resultProjectId ?? document.projectId;
   const clientEmail =
     typeof proposal.client?.email === "string" ? proposal.client.email : null;
@@ -184,7 +193,7 @@ export function ServiceAgreementInstruments({
           {document.state === "sent" && (
             <div className="mt-4 border-t border-[var(--doc-ink-border)] pt-3">
               <p className="font-heading text-[1rem] italic text-[var(--color-charcoal)]">
-                Record a paper signature
+                Signed offline
               </p>
               <p className="mt-1 text-[11.5px] text-[var(--text-muted)]">
                 For a client who signed a printed copy instead of signing
@@ -196,7 +205,7 @@ export function ServiceAgreementInstruments({
                   variant="secondary"
                   onClick={() => setRecordOnPaperOpen(true)}
                 >
-                  Record signed on paper
+                  {RECORD_ON_PAPER_ACT_LABEL['design-services']}
                 </DocumentAction>
               </div>
             </div>

@@ -59,6 +59,12 @@ export type CommercialSignature = Pick<
    *  paper RPCs). The bundle RPC projects this only from the signature's own
    *  metadata — never raw metadata itself. */
   signedOnPaper: boolean;
+  /** The day written on the paper — `YYYY-MM-DD`, exactly as the studio typed
+   *  it (00425's metadata.paperSignedOn, projected by the bundle RPC). THIS is
+   *  the date this signature happened; `signedAt` is only when the studio wrote
+   *  it down, which on the paper rail is a later day. Null on portal rows,
+   *  where the two are the same moment. */
+  paperSignedOn: string | null;
   /** The project_documents.id of the paper original's scan. Present only
    *  when the studio attached one AND that file is client_visible — the RPC
    *  omits it otherwise, so this is never a pointer to a file the client
@@ -542,6 +548,7 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
         consentVersion: text(first(row, 'consentVersion', 'consent_version')),
         documentFingerprint,
         signedOnPaper: first(row, 'signedOnPaper', 'signed_on_paper') === true,
+        paperSignedOn: nullableText(first(row, 'paperSignedOn', 'paper_signed_on')),
         paperScanDocumentId: nullableText(first(row, 'paperScanDocumentId', 'paper_scan_document_id')),
       }];
     }) : [],

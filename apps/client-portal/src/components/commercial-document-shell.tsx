@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from '@patina/design-system';
 import { useDeclineCommercialDocument } from '@/hooks/use-commercial-client';
+import { formatCalendarDate } from '@/lib/utils/format';
 import type {
   CommercialDocumentBundle,
   CommercialDocumentKind,
@@ -51,6 +52,15 @@ function date(value: string): string {
     day: 'numeric',
     year: 'numeric',
   });
+}
+
+/**
+ * A calendar date the client wrote on a page — the day they signed, the day
+ * they accepted. Not a moment, so `date()` above (which reads the viewer's
+ * timezone) would render it a day early anywhere west of UTC.
+ */
+function calendarDate(value: string): string {
+  return formatCalendarDate(value) ?? date(value);
 }
 
 export function CommercialDocumentShell({ bundle }: { bundle: CommercialDocumentBundle }) {
@@ -451,7 +461,17 @@ function TradeScopeBody({ bundle }: { bundle: CommercialDocumentBundle }) {
         >
           <h2 className="type-section-head">Acceptance</h2>
           <p className="type-body-small mt-2 text-[var(--text-primary)]">
-            {`Accepted by ${scope.progress.acceptedSignedName || 'you'} on ${date(scope.progress.acceptedAt)}.`}
+            {/* Two different things share this column. A portal acceptance
+                stamps `now()` — a real moment, which belongs in the reader's own
+                timezone. A PAPER acceptance stamps `p_paper_signed_on::timestamptz`
+                (00425) — midnight UTC standing for a day someone wrote on a
+                page, which a timezone-aware formatter renders a day early
+                everywhere west of UTC. So the paper case is read as a day. */}
+            {`Accepted by ${scope.progress.acceptedSignedName || 'you'} on ${
+              scope.progress.acceptedOnPaper
+                ? calendarDate(scope.progress.acceptedAt)
+                : date(scope.progress.acceptedAt)
+            }.`}
             {scope.progress.acceptedOnPaper
               ? ' Recorded by your studio from a signed paper original.'
               : ''}
@@ -553,10 +573,23 @@ function SignatureLedger({ bundle }: { bundle: CommercialDocumentBundle }) {
           <div key={`${signature.party}-${signature.signedAt}`} className="border-b border-[var(--border-default)] pb-3">
             <p className="type-meta capitalize">{signature.party}</p>
             <p className="font-heading text-lg">{signature.signerName}</p>
+            {/* The signing date the client reads is the date they signed. On
+                the paper rail that is `paperSignedOn` — the day written on the
+                page — and `signedAt` is only the day the studio typed it up,
+                so it is demoted to the line below rather than printed as the
+                signature date. A portal signature has one date and says so. */}
             <p className="type-meta-small mt-1">
-              Signed {date(signature.signedAt)}
-              {signature.signedOnPaper && ' · Signed on paper'}
+              Signed{' '}
+              {signature.paperSignedOn
+                ? calendarDate(signature.paperSignedOn)
+                : date(signature.signedAt)}
+              {signature.signedOnPaper && ' · on paper'}
             </p>
+            {signature.signedOnPaper && signature.paperSignedOn && (
+              <p className="type-meta-small text-[var(--text-muted)]">
+                recorded {date(signature.signedAt)}
+              </p>
+            )}
             {signature.signedOnPaper && signature.paperScanDocumentId && (
               <PaperScanLink
                 proposalId={bundle.document.id}
