@@ -1,6 +1,6 @@
 'use client';
 
-import { use } from 'react';
+import { use, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import type { BoardOwnerRef } from '@patina/types';
 import { useBoard, type BoardWithItems } from '@patina/supabase';
@@ -37,7 +37,37 @@ export default function MoodBoardPage({
 }) {
   const { boardId } = use(params);
   const boardQuery = useBoard(boardId);
-  if (boardQuery.isLoading) {
+  // RQ v5 keeps stale `data` around through a background-refetch error, so a
+  // mounted room falls back to the last good board instead of unmounting
+  // (which would blow away undo/zoom/selection) on a transient hiccup. But
+  // useBoard's .maybeSingle() also resolves to a SUCCESSFUL null when the row
+  // is gone or access was revoked — that outcome is authoritative, not a
+  // hiccup, so it clears the ref and falls through to UnavailableBoard rather
+  // than pinning a deleted board for the life of the mount.
+  const lastBoardRef = useRef<BoardWithItems | null>(null);
+  useEffect(() => {
+    if (boardQuery.data) {
+      lastBoardRef.current = boardQuery.data;
+    } else if (boardQuery.isSuccess) {
+      lastBoardRef.current = null;
+    }
+  }, [boardQuery.data, boardQuery.isSuccess]);
+
+  let board: BoardWithItems | null;
+  if (boardQuery.data) {
+    board = boardQuery.data;
+  } else if (boardQuery.isSuccess) {
+    board = null;
+  } else {
+    // isError (background refetch failure) or a refetch still in flight —
+    // the transient case the ref exists for.
+    board = lastBoardRef.current;
+  }
+  const owner = board ? moodBoardOwner(board) : null;
+
+  if (board && owner) return <MoodBoardRoom owner={owner} boardId={boardId} />;
+
+  if (boardQuery.isPending) {
     return (
       <main
         aria-label="Loading mood board"
@@ -48,7 +78,10 @@ export default function MoodBoardPage({
       </main>
     );
   }
-  const owner = boardQuery.data ? moodBoardOwner(boardQuery.data) : null;
-  if (boardQuery.isError || !boardQuery.data || !owner) return <UnavailableBoard />;
-  return <MoodBoardRoom owner={owner} boardId={boardId} />;
+
+  // Reached on a successful fetch with no row — either the initial load, or
+  // (deliberately) a later refetch discovering the board was deleted or
+  // access was revoked. Never reached on isError, where the ref keeps the
+  // room mounted instead.
+  return <UnavailableBoard />;
 }

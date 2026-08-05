@@ -9,9 +9,17 @@ export function useBackgroundRemovalCapability(boardId: string | null | undefine
   return useQuery({
     queryKey: queryKeys.moodBoardAssets.backgroundRemovalCapability(boardId ?? null),
     enabled: !!boardId,
-    queryFn: (): Promise<BackgroundRemovalCapability> => {
+    queryFn: async (): Promise<BackgroundRemovalCapability> => {
       if (!boardId) throw new Error('Board ID is required');
-      return moodBoardAssetsApi.getBackgroundRemovalCapability(boardId);
+      // Launched disabled at GA — any probe failure (401, 5xx, network) degrades
+      // to the contract's existing "unavailable" shape rather than a thrown query
+      // error. A thrown 401 here previously reached the global auth handler and
+      // reloaded the page just because this optional capability check failed.
+      try {
+        return await moodBoardAssetsApi.getBackgroundRemovalCapability(boardId);
+      } catch {
+        return { available: false, code: 'background_removal_not_configured' };
+      }
     },
     staleTime: 30_000,
     meta: { errorSurface: 'silent' },

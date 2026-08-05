@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { PropsWithChildren } from 'react';
 import { queryKeys } from '@/lib/react-query';
+import { BackgroundRemovalClientError } from '@/lib/mood-board-assets/background-removal-client';
 
 const mockGetCapability = jest.fn();
 const mockRemoveBackground = jest.fn();
@@ -58,6 +59,27 @@ describe('background-removal hooks', () => {
       'board-id',
       'background-removal-capability',
     ]);
+  });
+
+  it('degrades to the disabled shape instead of throwing when the capability probe fails', async () => {
+    mockGetCapability.mockRejectedValue(
+      new BackgroundRemovalClientError({
+        code: 'authentication_required',
+        message: 'Authentication required.',
+        status: 401,
+      }),
+    );
+    const { wrapper } = setup();
+    const { result } = renderHook(() => useBackgroundRemovalCapability('board-id'), {
+      wrapper,
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.isError).toBe(false);
+    expect(result.current.data).toEqual({
+      available: false,
+      code: 'background_removal_not_configured',
+    });
   });
 
   it('disables mutation retries even when the QueryClient default retries', async () => {
