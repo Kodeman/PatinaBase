@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server';
 
 const singleMock = jest.fn();
 const selectMock = jest.fn();
+const orMock = jest.fn();
 const updateEqMock = jest.fn().mockResolvedValue({ error: null });
 const updateMock = jest.fn();
 const fromMock = jest.fn();
@@ -23,8 +24,10 @@ function request(session = SESSION_TOKEN, origin?: string) {
 }
 
 function setSession(session: Record<string, unknown> | null) {
-  singleMock.mockResolvedValue({ data: session, error: session ? null : { message: 'not found' } });
-  selectMock.mockReturnValue({ eq: jest.fn().mockReturnValue({ single: singleMock }) });
+  const row = session ? { id: 'qr-row-1', ...session } : null;
+  singleMock.mockResolvedValue({ data: row, error: row ? null : { message: 'not found' } });
+  orMock.mockReturnValue({ single: singleMock });
+  selectMock.mockReturnValue({ or: orMock });
   updateMock.mockReturnValue({ eq: updateEqMock });
   fromMock.mockReturnValue({ select: selectMock, update: updateMock });
 }
@@ -52,6 +55,58 @@ describe('GET /api/auth/qr/status', () => {
     });
     expect(fromMock).toHaveBeenCalledWith('qr_auth_sessions');
     expect(updateMock).not.toHaveBeenCalled();
+    expect(orMock).toHaveBeenCalledWith(expect.stringContaining('poll_token_hash.eq.'));
+  });
+
+  it('fails closed when the QR-visible approval nonce is presented for a new row', async () => {
+    setSession(null);
+
+    const response = await GET(request('c'.repeat(64)));
+
+    await expect(response.json()).resolves.toEqual({ status: 'expired' });
+    expect(orMock).toHaveBeenCalledWith(
+      expect.stringContaining('and(poll_token_hash.is.null,session_token.eq.')
+    );
+  });
+
+  it('accepts the browser poll bearer by its SHA-256 digest', async () => {
+    setSession({
+      status: 'pending',
+      token_hash: null,
+      user_email: null,
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+    });
+
+    const pollSecret = 'd'.repeat(64);
+    const response = await GET(request(pollSecret));
+
+    await expect(response.json()).resolves.toEqual({ status: 'pending' });
+    const filter = orMock.mock.calls[0][0] as string;
+    expect(filter).toMatch(/^poll_token_hash\.eq\.[a-f0-9]{64},/);
+  });
+
+  it('keeps a tightly scoped fallback for legacy in-flight rows only', async () => {
+    setSession({
+      status: 'pending',
+      token_hash: null,
+      user_email: null,
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+    });
+
+    const pollSecret = 'e'.repeat(64);
+    const response = await GET(request(pollSecret));
+
+    await expect(response.json()).resolves.toEqual({ status: 'pending' });
+    const filter = orMock.mock.calls[0][0] as string;
+    expect(filter).toContain(`poll_token_hash.is.null,session_token.eq.${pollSecret}`);
+  });
+
+  it('fails closed for an unknown browser secret', async () => {
+    setSession(null);
+
+    const response = await GET(request('f'.repeat(64)));
+
+    await expect(response.json()).resolves.toEqual({ status: 'expired' });
   });
 
   it('marks an expired session and does not return its authentication material', async () => {
@@ -66,6 +121,7 @@ describe('GET /api/auth/qr/status', () => {
 
     await expect(response.json()).resolves.toEqual({ status: 'expired' });
     expect(updateMock).toHaveBeenCalledWith({ status: 'expired' });
+    expect(updateEqMock).toHaveBeenCalledWith('id', 'qr-row-1');
   });
 
   it('returns a denied terminal state without exposing a token', async () => {

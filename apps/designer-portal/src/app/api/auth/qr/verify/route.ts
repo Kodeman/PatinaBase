@@ -5,7 +5,8 @@ import { corsHeaders, handleCors } from '../cors';
 
 interface VerifyRequestBody {
   sessionToken: string;
-  userJwt: string;
+  /** @deprecated Ignored. Authentication comes only from Authorization. */
+  userJwt?: string;
   deviceInfo: Record<string, unknown>;
   biometricConfirmed: boolean;
 }
@@ -20,8 +21,9 @@ function jsonResponse(data: unknown, request: NextRequest, init?: ResponseInit) 
 /**
  * POST /api/auth/qr/verify
  *
- * Called by the iOS app after scanning a QR code and confirming via biometrics.
- * Validates the user's JWT, generates a magic link, and marks the session as approved.
+ * Called by a native app after scanning a QR code. The Authorization bearer is
+ * the server-validated proof of identity. `biometricConfirmed` records the
+ * native UX confirmation; it is not cryptographic proof to this server.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -35,9 +37,11 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    const { sessionToken, userJwt, deviceInfo, biometricConfirmed } = body;
+    const { sessionToken, deviceInfo, biometricConfirmed } = body;
+    const authorization = request.headers.get('authorization');
+    const bearerMatch = authorization?.match(/^Bearer\s+(.+)$/i);
 
-    if (!sessionToken || !/^[a-fA-F0-9]{64}$/.test(sessionToken) || !userJwt) {
+    if (!sessionToken || !/^[a-fA-F0-9]{64}$/.test(sessionToken)) {
       return jsonResponse(
         { success: false, error: 'Missing required fields' },
         request,
@@ -53,10 +57,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!bearerMatch?.[1]) {
+      return jsonResponse(
+        { success: false, error: 'Authentication required' },
+        request,
+        { status: 401 }
+      );
+    }
+
     const supabase = createAdminClient();
 
     // Validate the user's JWT
-    const { data: userData, error: userError } = await supabase.auth.getUser(userJwt);
+    const { data: userData, error: userError } = await supabase.auth.getUser(bearerMatch[1]);
 
     if (userError || !userData?.user) {
       return jsonResponse(

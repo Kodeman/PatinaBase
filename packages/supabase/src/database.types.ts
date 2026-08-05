@@ -15773,6 +15773,7 @@ export type Database = {
           id: string
           ip_address: unknown
           os: string | null
+          poll_token_hash: string | null
           session_token: string
           status: string
           token_hash: string | null
@@ -15788,6 +15789,7 @@ export type Database = {
           id?: string
           ip_address?: unknown
           os?: string | null
+          poll_token_hash?: string | null
           session_token: string
           status?: string
           token_hash?: string | null
@@ -15803,6 +15805,7 @@ export type Database = {
           id?: string
           ip_address?: unknown
           os?: string | null
+          poll_token_hash?: string | null
           session_token?: string
           status?: string
           token_hash?: string | null

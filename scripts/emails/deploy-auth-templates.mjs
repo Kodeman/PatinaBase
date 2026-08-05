@@ -98,7 +98,8 @@ function verify(cfg) {
   });
 
   console.log(`  otp_length: ${cfg.mailer_otp_length} (want 6)`);
-  return localOk && remoteOk && cfg.mailer_otp_length === 6;
+  console.log(`  otp_exp: ${cfg.mailer_otp_exp} (want 3600 seconds)`);
+  return localOk && remoteOk && cfg.mailer_otp_length === 6 && cfg.mailer_otp_exp === 3600;
 }
 
 if (CHECK_ONLY) {
@@ -109,10 +110,10 @@ if (CHECK_ONLY) {
 }
 
 // Core templates + otp_length in one PATCH.
-const corePayload = { mailer_otp_length: 6 };
+const corePayload = { mailer_otp_length: 6, mailer_otp_exp: 3600 };
 for (const t of TEMPLATES.filter((x) => x.core)) Object.assign(corePayload, loadTemplate(t));
 await patch(corePayload);
-console.log(`Pushed ${TEMPLATES.filter((x) => x.core).length} core templates + otp_length=6.`);
+console.log(`Pushed ${TEMPLATES.filter((x) => x.core).length} core templates + otp_length=6 + otp_exp=3600.`);
 
 // Reauthentication best-effort (unknown key on some API versions).
 for (const t of TEMPLATES.filter((x) => !x.core)) {

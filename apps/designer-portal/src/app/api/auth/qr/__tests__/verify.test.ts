@@ -24,10 +24,17 @@ import { POST } from '../verify/route';
 
 const SESSION_TOKEN = 'b'.repeat(64);
 
-function makeRequest(overrides: Record<string, unknown> = {}) {
+function makeRequest(
+  overrides: Record<string, unknown> = {},
+  authorization: string | null = 'Bearer header-user-jwt',
+) {
   return new NextRequest('http://localhost:3000/api/auth/qr/verify', {
     method: 'POST',
-    headers: { 'content-type': 'application/json', origin: 'http://localhost:3001' },
+    headers: {
+      'content-type': 'application/json',
+      origin: 'http://localhost:3001',
+      ...(authorization ? { authorization } : {}),
+    },
     body: JSON.stringify({
       sessionToken: SESSION_TOKEN,
       userJwt: 'valid-user-jwt',
@@ -71,6 +78,23 @@ describe('POST /api/auth/qr/verify', () => {
       user_email: 'designer@example.com',
     }));
     expect(response.headers.get('access-control-allow-origin')).toBe('http://localhost:3001');
+    expect(getUserMock).toHaveBeenCalledWith('header-user-jwt');
+  });
+
+  it('rejects a body-only JWT and never passes it to Supabase auth', async () => {
+    const response = await POST(makeRequest({ userJwt: 'body-only-jwt' }, null));
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({ success: false, error: 'Authentication required' });
+    expect(getUserMock).not.toHaveBeenCalled();
+  });
+
+  it('uses the Authorization bearer and ignores a conflicting body JWT', async () => {
+    const response = await POST(makeRequest({ userJwt: 'attacker-body-jwt' }, 'Bearer trusted-header-jwt'));
+
+    expect(response.status).toBe(200);
+    expect(getUserMock).toHaveBeenCalledWith('trusted-header-jwt');
+    expect(getUserMock).not.toHaveBeenCalledWith('attacker-body-jwt');
   });
 
   it('does not overwrite a session that was approved by a competing verification', async () => {

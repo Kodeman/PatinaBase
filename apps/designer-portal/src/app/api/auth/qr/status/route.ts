@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { createAdminClient } from '@patina/supabase/client';
 import { corsHeaders, handleCors } from '../cors';
 
@@ -37,11 +38,14 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = createAdminClient();
+    const pollTokenHash = crypto.createHash('sha256').update(sessionToken).digest('hex');
 
     const { data: session, error } = await (supabase as any)
       .from('qr_auth_sessions')
-      .select('status, token_hash, user_email, expires_at')
-      .eq('session_token', sessionToken)
+      .select('id, status, token_hash, user_email, expires_at')
+      .or(
+        `poll_token_hash.eq.${pollTokenHash},and(poll_token_hash.is.null,session_token.eq.${sessionToken})`
+      )
       .single();
 
     if (error || !session) {
@@ -54,7 +58,7 @@ export async function GET(request: NextRequest) {
       await (supabase as any)
         .from('qr_auth_sessions')
         .update({ status: 'expired' })
-        .eq('session_token', sessionToken);
+        .eq('id', session.id);
 
       return jsonResponse({ status: 'expired' }, request);
     }

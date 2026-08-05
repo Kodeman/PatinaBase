@@ -8,6 +8,27 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const QR_SESSION_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const QR_RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const QR_RATE_LIMIT_MAX = 10;
+
+function hashSecret(secret: string): string {
+  return crypto.createHash('sha256').update(secret).digest('hex');
+}
+
+function trustedClientIp(request: NextRequest): string | null {
+  const cloudflareIp = request.headers.get('cf-connecting-ip')?.trim();
+  if (cloudflareIp) return cloudflareIp;
+
+  // Forwarded headers are only trusted for local development, where there is
+  // no Cloudflare edge to supply cf-connecting-ip.
+  if (['localhost', '127.0.0.1', '::1'].includes(request.nextUrl.hostname)) {
+    return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+      || request.headers.get('x-real-ip')?.trim()
+      || null;
+  }
+
+  return null;
+}
 
 function parseBrowserFromUA(ua: string): { browser: string; os: string } {
   let browser = 'Unknown';
@@ -45,22 +66,53 @@ async function createQrAuthSession(
   deviceInfo: Record<string, unknown> | null,
 ): Promise<NextResponse> {
   try {
-    const sessionToken = crypto.randomBytes(32).toString('hex');
+    const approvalNonce = crypto.randomBytes(32).toString('hex');
+    const pollSecret = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + QR_SESSION_TTL_MS);
 
     const ua = request.headers.get('user-agent') || '';
     const { browser, os } = parseBrowserFromUA(ua);
 
-    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-      || request.headers.get('x-real-ip')
-      || null;
+    const ip = trustedClientIp(request);
 
     const supabase = createAdminClient();
+
+    if (ip) {
+      const windowStart = new Date(Date.now() - QR_RATE_LIMIT_WINDOW_MS).toISOString();
+      const { count, error: countError } = await (supabase as any)
+        .from('qr_auth_sessions')
+        .select('id', { count: 'exact', head: true })
+        .eq('ip_address', ip)
+        .gte('created_at', windowStart);
+
+      if (countError) {
+        console.error('Failed to check QR rate limit:', countError);
+        return NextResponse.json(
+          { error: 'Unable to create session' },
+          { status: 503, headers: corsHeaders(request) }
+        );
+      }
+
+      if ((count ?? 0) >= QR_RATE_LIMIT_MAX) {
+        return NextResponse.json(
+          { error: 'Too many QR sign-in attempts. Try again shortly.' },
+          {
+            status: 429,
+            headers: {
+              ...corsHeaders(request),
+              'Retry-After': '60',
+              'Cache-Control': 'no-store',
+            },
+          }
+        );
+      }
+    }
 
     const { error } = await (supabase as any)
       .from('qr_auth_sessions')
       .insert({
-        session_token: sessionToken,
+        session_token: approvalNonce,
+        poll_token_hash: hashSecret(pollSecret),
         status: 'pending',
         browser,
         os,
@@ -78,10 +130,11 @@ async function createQrAuthSession(
     }
 
     const expTimestamp = Math.floor(expiresAt.getTime() / 1000);
-    const qrUrl = `patina://auth?session=${sessionToken}&exp=${expTimestamp}&browser=${encodeURIComponent(browser)}&os=${encodeURIComponent(os)}`;
+    const qrUrl = `patina://auth?session=${approvalNonce}&exp=${expTimestamp}&browser=${encodeURIComponent(browser)}&os=${encodeURIComponent(os)}`;
 
     return NextResponse.json({
-      sessionToken,
+      // Backward-compatible response field; its value is now browser-only.
+      sessionToken: pollSecret,
       qrUrl,
       expiresAt: expiresAt.toISOString(),
     }, { headers: corsHeaders(request) });
