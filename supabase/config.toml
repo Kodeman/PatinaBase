@@ -512,6 +512,17 @@ verify_jwt = true
 [functions.board-asset-cleanup]
 verify_jwt = true
 
+# Trade Instrument RFQ send (00424). Gateway verifies the caller's JWT; the
+# function re-derives the caller with auth.getUser and re-checks authorship of
+# the specific scope via public.is_design_studio_comember (a design-studio
+# comember check, evaluated as the caller) before it will load, mint a token
+# for, or send a trade_rfq_requests row. The party recipient is never a
+# platform user, so no verify_jwt exemption is needed for their side — they
+# reach the RFQ through the minted token on the client portal, not this
+# function.
+[functions.trade-rfq-send]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327
