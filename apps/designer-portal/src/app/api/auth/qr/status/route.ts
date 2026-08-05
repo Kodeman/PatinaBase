@@ -60,12 +60,10 @@ export async function GET(request: NextRequest) {
     }
 
     if (session.status === 'approved') {
-      // Delete the session after consumption to prevent replay
-      await (supabase as any)
-        .from('qr_auth_sessions')
-        .delete()
-        .eq('session_token', sessionToken);
-
+      // The browser still needs this one-time hash to establish its session.
+      // Keep the approved row through its short TTL: deleting it here races the
+      // browser's `verifyOtp` call. Replay is prevented by GoTrue consuming the
+      // hash once and /verify only conditionally approving pending sessions.
       return jsonResponse({
         status: 'approved',
         tokenHash: session.token_hash,

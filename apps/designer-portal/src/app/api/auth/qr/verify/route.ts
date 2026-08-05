@@ -10,6 +10,13 @@ interface VerifyRequestBody {
   biometricConfirmed: boolean;
 }
 
+function jsonResponse(data: unknown, request: NextRequest, init?: ResponseInit) {
+  return NextResponse.json(data, {
+    ...init,
+    headers: { ...corsHeaders(request), ...init?.headers },
+  });
+}
+
 /**
  * POST /api/auth/qr/verify
  *
@@ -18,19 +25,30 @@ interface VerifyRequestBody {
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as VerifyRequestBody;
+    let body: VerifyRequestBody;
+    try {
+      body = (await request.json()) as VerifyRequestBody;
+    } catch {
+      return jsonResponse(
+        { success: false, error: 'Invalid request' },
+        request,
+        { status: 400 }
+      );
+    }
     const { sessionToken, userJwt, deviceInfo, biometricConfirmed } = body;
 
-    if (!sessionToken || !userJwt) {
-      return NextResponse.json(
+    if (!sessionToken || !/^[a-fA-F0-9]{64}$/.test(sessionToken) || !userJwt) {
+      return jsonResponse(
         { success: false, error: 'Missing required fields' },
+        request,
         { status: 400 }
       );
     }
 
     if (!biometricConfirmed) {
-      return NextResponse.json(
+      return jsonResponse(
         { success: false, error: 'Biometric confirmation required' },
+        request,
         { status: 403 }
       );
     }
@@ -41,8 +59,9 @@ export async function POST(request: NextRequest) {
     const { data: userData, error: userError } = await supabase.auth.getUser(userJwt);
 
     if (userError || !userData?.user) {
-      return NextResponse.json(
+      return jsonResponse(
         { success: false, error: 'Invalid authentication token' },
+        request,
         { status: 401 }
       );
     }
@@ -58,8 +77,9 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (sessionError || !session) {
-      return NextResponse.json(
+      return jsonResponse(
         { success: false, error: 'Session not found or already used' },
+        request,
         { status: 404 }
       );
     }
@@ -69,10 +89,12 @@ export async function POST(request: NextRequest) {
       await (supabase as any)
         .from('qr_auth_sessions')
         .update({ status: 'expired' })
-        .eq('session_token', sessionToken);
+        .eq('session_token', sessionToken)
+        .eq('status', 'pending');
 
-      return NextResponse.json(
+      return jsonResponse(
         { success: false, error: 'Session has expired' },
+        request,
         { status: 410 }
       );
     }
@@ -86,8 +108,9 @@ export async function POST(request: NextRequest) {
 
     if (linkError || !linkData) {
       console.error('Failed to generate magic link:', linkError);
-      return NextResponse.json(
+      return jsonResponse(
         { success: false, error: 'Failed to generate authentication link' },
+        request,
         { status: 500 }
       );
     }
@@ -97,14 +120,18 @@ export async function POST(request: NextRequest) {
 
     if (!tokenHash) {
       console.error('No hashed_token in magic link response');
-      return NextResponse.json(
+      return jsonResponse(
         { success: false, error: 'Failed to generate authentication token' },
+        request,
         { status: 500 }
       );
     }
 
     // Update the session as approved
-    const { error: updateError } = await (supabase as any)
+    // Only the first approved device may transition a pending session. This
+    // protects against concurrent scans without deleting the browser's handoff
+    // record before it can consume the one-time GoTrue token.
+    const { data: approvedSession, error: updateError } = await (supabase as any)
       .from('qr_auth_sessions')
       .update({
         status: 'approved',
@@ -114,24 +141,37 @@ export async function POST(request: NextRequest) {
         approved_at: new Date().toISOString(),
         device_info: deviceInfo || null,
       })
-      .eq('session_token', sessionToken);
+      .eq('session_token', sessionToken)
+      .eq('status', 'pending')
+      .select('session_token')
+      .maybeSingle();
 
     if (updateError) {
       console.error('Failed to update QR session:', updateError);
-      return NextResponse.json(
+      return jsonResponse(
         { success: false, error: 'Failed to update session' },
+        request,
         { status: 500 }
       );
     }
 
-    return NextResponse.json({
+    if (!approvedSession) {
+      return jsonResponse(
+        { success: false, error: 'Session was already used' },
+        request,
+        { status: 409 }
+      );
+    }
+
+    return jsonResponse({
       success: true,
       message: 'Session approved',
-    }, { headers: corsHeaders(request) });
+    }, request);
   } catch (err) {
     console.error('QR verify error:', err);
-    return NextResponse.json(
+    return jsonResponse(
       { success: false, error: 'Internal server error' },
+      request,
       { status: 500, headers: corsHeaders(request) }
     );
   }
