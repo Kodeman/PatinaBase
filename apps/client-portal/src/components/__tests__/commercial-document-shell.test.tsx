@@ -1,6 +1,13 @@
-import { render, screen } from '@testing-library/react';
-import { CommercialDocumentShell } from '../commercial-document-shell';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { CommercialDeclineDialog, CommercialDocumentShell } from '../commercial-document-shell';
+import { useDeclineCommercialDocument } from '@/hooks/use-commercial-client';
 import type { CommercialDocumentBundle } from '@/lib/commercial-documents';
+
+jest.mock('@/hooks/use-commercial-client', () => ({
+  useDeclineCommercialDocument: jest.fn(),
+}));
+
+const mockUseDeclineCommercialDocument = useDeclineCommercialDocument as jest.Mock;
 
 function bundle(overrides: Partial<CommercialDocumentBundle> = {}): CommercialDocumentBundle {
   return {
@@ -61,5 +68,76 @@ describe('CommercialDocumentShell', () => {
       document: { ...bundle().document, state: 'superseded', replacementProposalId: 'ds-2' },
     })} />);
     expect(screen.getByRole('link', { name: /open the current edition/i })).toHaveAttribute('href', '/proposals/ds-2');
+  });
+
+  it('states a declined document was withdrawn, in brand voice, without an alarm treatment', () => {
+    render(<CommercialDocumentShell bundle={bundle({
+      document: { ...bundle().document, state: 'declined' },
+    })} />);
+    expect(
+      screen.getByText('This document was withdrawn and no longer asks anything of you.'),
+    ).toBeInTheDocument();
+  });
+
+  it('states a superseded document was withdrawn, in the same brand-voice phrase as declined', () => {
+    render(<CommercialDocumentShell bundle={bundle({
+      document: { ...bundle().document, state: 'superseded', replacementProposalId: null },
+    })} />);
+    expect(
+      screen.getByText(/^This document was withdrawn and no longer asks anything of you\./),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Ask your studio for the current edition/)).toBeInTheDocument();
+  });
+});
+
+describe('CommercialDeclineDialog', () => {
+  beforeEach(() => {
+    mockUseDeclineCommercialDocument.mockReturnValue({
+      mutateAsync: jest.fn().mockResolvedValue({ ok: true }),
+      isPending: false,
+    });
+  });
+
+  it('wires the reason field and confirm action to useDeclineCommercialDocument for this proposal/project', async () => {
+    const mutateAsync = jest.fn().mockResolvedValue({ ok: true });
+    mockUseDeclineCommercialDocument.mockReturnValue({ mutateAsync, isPending: false });
+    const onOpenChange = jest.fn();
+    const onDeclined = jest.fn();
+
+    render(
+      <CommercialDeclineDialog
+        proposalId="ds-1"
+        projectId="project-1"
+        open
+        onOpenChange={onOpenChange}
+        onDeclined={onDeclined}
+      />,
+    );
+
+    expect(useDeclineCommercialDocument).toHaveBeenCalledWith('ds-1', 'project-1');
+
+    fireEvent.change(screen.getByTestId('commercial-decline-reason'), {
+      target: { value: 'Going a different direction' },
+    });
+    fireEvent.click(screen.getByTestId('commercial-decline-confirm'));
+
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledWith('Going a different direction'));
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    expect(onDeclined).toHaveBeenCalled();
+  });
+
+  it('surfaces the mutation error instead of closing the dialog', async () => {
+    const mutateAsync = jest.fn().mockRejectedValue(new Error('not_found'));
+    mockUseDeclineCommercialDocument.mockReturnValue({ mutateAsync, isPending: false });
+    const onOpenChange = jest.fn();
+
+    render(
+      <CommercialDeclineDialog proposalId="ds-1" projectId="project-1" open onOpenChange={onOpenChange} />,
+    );
+
+    fireEvent.click(screen.getByTestId('commercial-decline-confirm'));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('not_found');
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
 });

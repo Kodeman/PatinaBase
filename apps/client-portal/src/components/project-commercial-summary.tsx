@@ -152,7 +152,7 @@ export function WorkingBudgetCheckpointShell({
             {money(budget.lowTotalCents, budget.currency)} low · {money(budget.highTotalCents, budget.currency)} high
           </p>
         </div>
-        {checkpoint && !isAcknowledged && checkpoint.state === 'published' && (
+        {checkpoint && !isAcknowledged && checkpoint.state === 'open' && (
           <button
             type="button"
             disabled={acknowledging}

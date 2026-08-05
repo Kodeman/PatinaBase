@@ -1,5 +1,16 @@
 import Link from 'next/link';
+import { useState } from 'react';
 import { CheckCircle2, Clock3, ReceiptText } from 'lucide-react';
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@patina/design-system';
+import { useDeclineCommercialDocument } from '@/hooks/use-commercial-client';
 import type {
   CommercialDocumentBundle,
   CommercialDocumentKind,
@@ -83,10 +94,18 @@ export function CommercialDocumentShell({ bundle }: { bundle: CommercialDocument
         </div>
       )}
 
+      {document.state === 'declined' && (
+        <div className="mt-6 border-l-2 border-[var(--border-default)] bg-[var(--bg-surface)] px-4 py-3">
+          <p className="type-body-small text-[var(--text-primary)]">
+            This document was withdrawn and no longer asks anything of you.
+          </p>
+        </div>
+      )}
+
       {document.state === 'superseded' && (
         <div className="mt-6 border-l-2 border-[var(--border-default)] bg-[var(--bg-surface)] px-4 py-3">
           <p className="type-body-small text-[var(--text-primary)]">
-            This edition was replaced and can no longer be signed.
+            This document was withdrawn and no longer asks anything of you.
             {document.replacementProposalId ? (
               <>
                 {' '}<Link className="text-[var(--accent-primary)]" href={`/proposals/${document.replacementProposalId}`}>
@@ -294,5 +313,108 @@ function SignatureLedger({ bundle }: { bundle: CommercialDocumentBundle }) {
           )}
       </div>
     </section>
+  );
+}
+
+const DECLINE_REASON_MAX = 1000;
+
+/**
+ * R1 decline-whole for a commercial document — the counterpart to the
+ * legacy ProposalDeclineDialog, wired to the dedicated decline route instead
+ * of calling decline_proposal directly. Rendered by the proposal detail page
+ * in place of ProposalDeclineDialog whenever the document isn't legacy.
+ */
+export function CommercialDeclineDialog({
+  proposalId,
+  projectId,
+  open,
+  onOpenChange,
+  onDeclined,
+}: {
+  proposalId: string;
+  projectId: string | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onDeclined?: () => void;
+}) {
+  const decline = useDeclineCommercialDocument(proposalId, projectId);
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  async function onConfirm() {
+    setError(null);
+    try {
+      await decline.mutateAsync(reason.trim() || undefined);
+      setReason('');
+      onOpenChange(false);
+      onDeclined?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to decline this document.');
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) {
+          setReason('');
+          setError(null);
+        }
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Decline this document?</DialogTitle>
+          <DialogDescription>
+            Your studio will be notified. You can share a reason to help them respond — this is
+            optional.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="py-2">
+          <label htmlFor="commercial-decline-reason" className="block">
+            <span className="block text-sm font-medium text-[var(--text-primary)] mb-2">
+              Reason (optional)
+            </span>
+            <textarea
+              id="commercial-decline-reason"
+              data-testid="commercial-decline-reason"
+              value={reason}
+              onChange={(e) => setReason(e.target.value.slice(0, DECLINE_REASON_MAX))}
+              rows={4}
+              maxLength={DECLINE_REASON_MAX}
+              placeholder="What&rsquo;s holding you back?"
+              className="w-full resize-none rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]"
+            />
+          </label>
+          <p className="mt-1 text-xs text-[var(--text-muted)]">
+            {reason.length} / {DECLINE_REASON_MAX}
+          </p>
+          {error && (
+            <p className="mt-2 text-sm text-patina-terracotta" role="alert">
+              {error}
+            </p>
+          )}
+        </div>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={decline.isPending}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={onConfirm}
+            disabled={decline.isPending}
+            data-testid="commercial-decline-confirm"
+          >
+            {decline.isPending ? 'Declining…' : 'Decline document'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

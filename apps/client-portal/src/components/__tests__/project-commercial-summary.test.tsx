@@ -34,7 +34,7 @@ describe('ProjectCommercialSummary', () => {
         workingBudget: {
           id: 'b1', projectId: 'p1', version: 3, state: 'published', currency: 'USD',
           lowTotalCents: 5_400_000, targetTotalCents: 7_400_000, highTotalCents: 9_800_000,
-          lines: [], checkpoint: { id: 'c1', state: 'published', publishedAt: '2026-08-01', acknowledgedAt: null, overrideReason: null, evidenceFingerprint: null },
+          lines: [], checkpoint: { id: 'c1', state: 'open', publishedAt: '2026-08-01', acknowledgedAt: null, overrideReason: null, evidenceFingerprint: null },
         },
         furnishingsAuthorizations: [],
       },

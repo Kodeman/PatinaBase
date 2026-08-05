@@ -2,12 +2,14 @@ import type { Proposal } from '@patina/supabase';
 import {
   COMMERCIAL_DOCUMENT_KINDS,
   COMMERCIAL_STATES,
+  FFE_STAGE_KEYS,
   type CommercialDocumentKind,
   type CommercialState,
   type CommercialDocumentSummary as CanonicalCommercialDocumentSummary,
   type CommercialSignatureReceipt,
   type DesignServiceRate,
   type DesignServiceTerms,
+  type FFEStageKey,
   type FurnishingsAuthorizationItem as CanonicalFurnishingsAuthorizationItem,
   type ProjectBillingAuthoritySummary,
   type WorkingBudgetCheckpoint as CanonicalWorkingBudgetCheckpoint,
@@ -442,13 +444,15 @@ export function adaptProjectCommercialSummary(value: unknown): ProjectCommercial
     }) : [],
     checkpoint: Object.keys(checkpointRaw).length === 0 ? null : {
       id: text(checkpointRaw.id),
-      state: first(checkpointRaw, 'state', 'status') === 'open'
-        ? 'published'
-        : oneOf(
-          first(checkpointRaw, 'state', 'status'),
-          ['published', 'acknowledged', 'overridden'] as const,
-          'published',
-        ),
+      // project_budget_checkpoints.status (00412/00422) is exactly
+      // 'open' | 'acknowledged' | 'overridden' — 'open' is the unacknowledged
+      // default the moment a checkpoint publishes. Read it through, never
+      // translated to 'published' (that word is never a real status value).
+      state: oneOf(
+        first(checkpointRaw, 'state', 'status'),
+        ['open', 'acknowledged', 'overridden'] as const,
+        'open',
+      ),
       publishedAt: text(first(checkpointRaw, 'publishedAt', 'published_at')),
       acknowledgedAt: nullableText(first(checkpointRaw, 'acknowledgedAt', 'acknowledged_at')),
       overrideReason: nullableText(first(checkpointRaw, 'overrideReason', 'override_reason')),
@@ -473,4 +477,151 @@ export function adaptProjectCommercialSummary(value: unknown): ProjectCommercial
     : [];
 
   return { authority, workingBudget, furnishingsAuthorizations };
+}
+
+// ── Client selections & plan (Phase 1 repair) ──────────────────────────────
+// get_client_project_selections and get_project_working_budget's per-line
+// scheduledCents/authorizedCents additions are database-owned allowlist
+// projections, same discipline as the bundle above: read only known keys,
+// tolerate camelCase or snake_case, and discard everything else.
+
+export type ClientSelectionOrigin = 'commercial' | 'legacy';
+
+export interface ClientSelectionAllowance {
+  ceilingCents: number;
+  resolvedCents: number | null;
+}
+
+export interface ClientSelectionInstrument {
+  documentId: string;
+  name: string;
+  executedAt: string | null;
+}
+
+export interface ClientSelection {
+  id: string;
+  name: string;
+  roomId: string | null;
+  roomName: string;
+  quantity: number;
+  clientUnitPriceCents: number;
+  clientLineTotalCents: number;
+  itemType: string;
+  status: FFEStageKey;
+  allowance: ClientSelectionAllowance | null;
+  instrument: ClientSelectionInstrument | null;
+  productId: string | null;
+  imageUrl: string | null;
+  docCode: string | null;
+}
+
+export interface ClientProjectSelections {
+  origin: ClientSelectionOrigin;
+  selections: ClientSelection[];
+}
+
+function adaptClientSelectionAllowance(value: unknown): ClientSelectionAllowance | null {
+  const row = record(value);
+  if (Object.keys(row).length === 0) return null;
+  const resolvedRaw = first(row, 'resolvedCents', 'resolved_cents');
+  return {
+    ceilingCents: number(first(row, 'ceilingCents', 'ceiling_cents')),
+    resolvedCents: resolvedRaw === undefined || resolvedRaw === null ? null : number(resolvedRaw),
+  };
+}
+
+function adaptClientSelectionInstrument(value: unknown): ClientSelectionInstrument | null {
+  const row = record(value);
+  const documentId = text(first(row, 'documentId', 'document_id'));
+  if (!documentId) return null;
+  return {
+    documentId,
+    name: text(first(row, 'name'), 'Signed document'),
+    executedAt: nullableText(first(row, 'executedAt', 'executed_at')),
+  };
+}
+
+/** Maps the database-owned allowlist result of get_client_project_selections. */
+export function adaptClientSelections(value: unknown): ClientProjectSelections {
+  const raw = record(value);
+  const origin = oneOf(raw.origin, ['commercial', 'legacy'] as const, 'legacy');
+  const rows = first(raw, 'selections');
+
+  const selections: ClientSelection[] = Array.isArray(rows)
+    ? rows
+      .map((item) => {
+        const row = record(item);
+        const id = text(row.id);
+        if (!id) return null;
+        return {
+          id,
+          name: text(row.name),
+          roomId: nullableText(first(row, 'roomId', 'room_id')),
+          roomName: text(first(row, 'roomName', 'room_name'), 'General'),
+          quantity: number(row.quantity, 1),
+          clientUnitPriceCents: number(first(row, 'clientUnitPriceCents', 'client_unit_price_cents')),
+          clientLineTotalCents: number(first(row, 'clientLineTotalCents', 'client_line_total_cents')),
+          itemType: text(first(row, 'itemType', 'item_type')),
+          status: oneOf(row.status, FFE_STAGE_KEYS, 'specified'),
+          allowance: adaptClientSelectionAllowance(first(row, 'allowance')),
+          instrument: adaptClientSelectionInstrument(first(row, 'instrument')),
+          productId: nullableText(first(row, 'productId', 'product_id')),
+          imageUrl: nullableText(first(row, 'imageUrl', 'image_url')),
+          docCode: nullableText(first(row, 'docCode', 'doc_code')),
+        };
+      })
+      .filter((item): item is ClientSelection => item !== null)
+    : [];
+
+  return { origin, selections };
+}
+
+export interface ClientPlanLine {
+  id: string;
+  roomName: string;
+  category: string;
+  targetCents: number;
+  scheduledCents: number;
+  authorizedCents: number;
+}
+
+export interface ClientPlan {
+  publishedAt: string | null;
+  rooms: string[];
+  lines: ClientPlanLine[];
+}
+
+/**
+ * Maps get_project_working_budget for the client "plan" grid. Distinct from
+ * adaptProjectCommercialSummary's workingBudget projection above — this one
+ * reads the per-line scheduledCents/authorizedCents fields the grid needs and
+ * derives the covered-room list, instead of carrying the low/high range.
+ */
+export function adaptClientPlan(value: unknown): ClientPlan | null {
+  const raw = record(value);
+  const versionRaw = record(raw.version);
+  const lineRows = first(raw, 'lines');
+  if (Object.keys(versionRaw).length === 0 && !Array.isArray(lineRows)) return null;
+
+  const lines: ClientPlanLine[] = Array.isArray(lineRows)
+    ? lineRows.map((item) => {
+      const row = record(item);
+      return {
+        id: text(row.id),
+        roomName: text(first(row, 'roomName', 'room_name'), 'General'),
+        category: text(row.category),
+        targetCents: number(first(row, 'targetCents', 'target_cents')),
+        scheduledCents: number(first(row, 'scheduledCents', 'scheduled_cents')),
+        authorizedCents: number(first(row, 'authorizedCents', 'authorized_cents')),
+      };
+    })
+    : [];
+
+  const rooms = Array.from(new Set(lines.map((line) => line.roomName).filter(Boolean)));
+
+  return {
+    publishedAt: nullableText(first(versionRaw, 'publishedAt', 'published_at')),
+    rooms,
+    lines,
+  };
 }

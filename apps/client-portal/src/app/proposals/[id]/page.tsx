@@ -16,7 +16,7 @@ import { ProposalDeclineDialog } from '@/components/proposals/ProposalDeclineDia
 import { ProposalRequestChangeDialog } from '@/components/proposals/ProposalRequestChangeDialog';
 import { ProposalClarifyButton } from '@/components/proposals/ProposalClarifyButton';
 import { QueryFailure } from '@/components/query-failure';
-import { CommercialDocumentShell } from '@/components/commercial-document-shell';
+import { CommercialDeclineDialog, CommercialDocumentShell } from '@/components/commercial-document-shell';
 import { CommercialNotificationRecovery } from '@/components/commercial-notification-recovery';
 
 function formatDate(iso: string): string {
@@ -317,11 +317,20 @@ export default function ClientProposalDetailPage({
         </div>
       )}
 
-      <ProposalDeclineDialog
-        proposalId={proposal.id}
-        open={declineOpen}
-        onOpenChange={setDeclineOpen}
-      />
+      {isLegacy ? (
+        <ProposalDeclineDialog
+          proposalId={proposal.id}
+          open={declineOpen}
+          onOpenChange={setDeclineOpen}
+        />
+      ) : (
+        <CommercialDeclineDialog
+          proposalId={proposal.id}
+          projectId={proposal.project_id}
+          open={declineOpen}
+          onOpenChange={setDeclineOpen}
+        />
+      )}
 
       <ProposalRequestChangeDialog
         proposalId={proposal.id}

@@ -306,7 +306,7 @@ describe('commercial document client adapter', () => {
       targetTotalCents: 7_400_000,
       checkpoint: {
         id: 'checkpoint-3',
-        state: 'published',
+        state: 'open',
         evidenceFingerprint: 'budget-fingerprint',
       },
     });

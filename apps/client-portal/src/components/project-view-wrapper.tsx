@@ -16,6 +16,10 @@ import { ProjectTeamPanel } from '@/components/project/ProjectTeamPanel';
 import { ProjectDocumentsPanel } from '@/components/project/ProjectDocumentsPanel';
 import { FFEPipelinePanel } from '@/components/project/FFEPipelinePanel';
 import { ProjectCommercialSummary } from '@/components/project-commercial-summary';
+import { AwaitingSignatureCards } from '@/components/commercial/awaiting-signature-cards';
+import { ClientPlanGrid } from '@/components/commercial/client-plan-grid';
+import { ClientSelections } from '@/components/commercial/client-selections';
+import { useClientSelections } from '@/hooks/use-commercial-client';
 import type { MilestoneDetail } from '@/types/project';
 import { useProjectPhaseRealtime } from '@/hooks/use-project-phase-realtime';
 
@@ -42,6 +46,15 @@ export function ProjectViewWrapper({
   const effectiveUserId = userId ?? user?.id;
   const effectiveAuthToken = authToken ?? session?.accessToken;
 
+  // The commercial rail (design-services + furnishings authority) replaces
+  // the legacy FF&E/budget mounts below with the plan grid and room-grouped
+  // selections. Fail closed to the legacy tree — today's byte-identical
+  // mounts — until origin === 'commercial' is confirmed; a mid-load flash
+  // into the new UI, or a permanent stall on an errored fetch, is worse than
+  // a beat of the familiar mounts.
+  const { data: selectionsData } = useClientSelections(projectId);
+  const isCommercial = selectionsData?.origin === 'commercial';
+
   useProjectPhaseRealtime(projectId, realtimeEnabled);
 
   useEffect(() => {
@@ -61,13 +74,17 @@ export function ProjectViewWrapper({
 
       {showOverview && <ProjectScopeDetails projectId={projectId} />}
 
-      {showOverview && <BudgetOverview projectId={projectId} />}
+      {showOverview && isCommercial && <AwaitingSignatureCards projectId={projectId} />}
+      {showOverview && isCommercial && <ClientPlanGrid projectId={projectId} />}
+      {showOverview && isCommercial && <ClientSelections projectId={projectId} />}
+
+      {showOverview && !isCommercial && <BudgetOverview projectId={projectId} />}
 
       {showOverview && <ProjectInvoicesSummary projectId={projectId} />}
 
-      {showOverview && <FFEStatus projectId={projectId} />}
+      {showOverview && !isCommercial && <FFEStatus projectId={projectId} />}
 
-      {showOverview && (
+      {showOverview && !isCommercial && (
         <div className="mt-8">
           <FFEPipelinePanel projectId={projectId} />
         </div>

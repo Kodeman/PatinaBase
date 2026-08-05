@@ -3,11 +3,21 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { commercialKeys, createBrowserClient } from '@patina/supabase';
 import {
+  adaptClientPlan,
+  adaptClientSelections,
   adaptCommercialDocumentBundle,
   adaptProjectCommercialSummary,
+  type ClientPlan,
+  type ClientProjectSelections,
   type CommercialDocumentBundle,
   type ProjectCommercialSummary,
 } from '@/lib/commercial-documents';
+
+/** Canonical query keys for the client selections/plan projections — kept as
+ * plain arrays (not object literals) so callers can pass them straight to
+ * invalidateQueries without importing a helper. */
+export const clientSelectionsKey = (projectId: string) => ['client-selections', projectId];
+export const clientPlanKey = (projectId: string) => ['client-plan', projectId];
 
 // The Wave 1 RPCs intentionally return hand-curated JSON rather than database
 // rows. Keep their untrusted response at this boundary until the allowlist
@@ -56,6 +66,71 @@ export function useProjectCommercialSummary(projectId: string) {
   });
 }
 
+/**
+ * Room-grouped goods selections for the commercial rail's "Your selections"
+ * card. origin discriminates commercial (design-services/furnishings
+ * authority) projects from legacy ones — project-view-wrapper branches on it.
+ */
+export function useClientSelections(projectId: string) {
+  return useQuery<ClientProjectSelections>({
+    queryKey: clientSelectionsKey(projectId),
+    enabled: !!projectId,
+    queryFn: async () => {
+      const { data, error } = await getSupabase().rpc('get_client_project_selections', {
+        p_project_id: projectId,
+      });
+      if (error) throw error;
+      return adaptClientSelections(data);
+    },
+  });
+}
+
+/** Published working-budget checkpoint grid for the commercial rail's "The
+ * plan" card. Returns null when the project has no published version yet —
+ * same "nothing to show" semantics as get_project_working_budget itself. */
+export function useClientPlan(projectId: string) {
+  return useQuery<ClientPlan | null>({
+    queryKey: clientPlanKey(projectId),
+    enabled: !!projectId,
+    queryFn: async () => {
+      const { data, error } = await getSupabase().rpc('get_project_working_budget', {
+        p_project_id: projectId,
+      });
+      if (error) throw error;
+      return adaptClientPlan(data);
+    },
+  });
+}
+
+/**
+ * R1 decline-whole: posts to the dedicated commercial decline route (which
+ * resolves kind fail-closed before calling decline_proposal) rather than
+ * calling decline_proposal directly the way the legacy ProposalDeclineDialog
+ * does. On success, refreshes every projection the decline can change.
+ */
+export function useDeclineCommercialDocument(proposalId: string, projectId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (reason?: string) => {
+      const response = await fetch(`/api/proposals/${proposalId}/decline`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: reason?.trim() || undefined }),
+      });
+      const body = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        status?: string;
+        declinedAt?: string | null;
+      };
+      if (!response.ok) throw new Error(body.error || 'Unable to decline this document.');
+      return body;
+    },
+    onSuccess: async () => {
+      await invalidateSignedCommercialDocument(queryClient, proposalId, projectId);
+    },
+  });
+}
+
 export function useAcknowledgeBudgetCheckpoint(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -100,6 +175,8 @@ export async function invalidateSignedCommercialDocument(
     invalidations.push(
       queryClient.invalidateQueries({ queryKey: ['project-commercial-summary', projectId] }),
       queryClient.invalidateQueries({ queryKey: commercialKeys.waves(projectId) }),
+      queryClient.invalidateQueries({ queryKey: clientSelectionsKey(projectId) }),
+      queryClient.invalidateQueries({ queryKey: clientPlanKey(projectId) }),
     );
   }
   await Promise.all(invalidations);
