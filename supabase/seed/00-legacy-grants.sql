@@ -8189,3 +8189,315 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.create_furnishing_wave_draft(uuid, text) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON public.trade_scope_terms TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON public.trade_scope_sections TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON public.trade_scope_bids TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON public.trade_scope_draws TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.trade_scope_terms TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.trade_scope_sections TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.trade_scope_bids TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.trade_scope_draws TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._trade_scope_progress_rank(text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_commercial_authored_child() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_trade_scope_terms() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_trade_scope_draws() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_project_ffe_purchase_authority() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_trade_presence_line_lock() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_trade_scope_bid_party() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_furnishings_authorization_from_schedule(uuid, text, uuid[], numeric) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_furnishings_authorization_from_schedule(uuid, text, uuid[], numeric) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._commercial_document_fingerprint(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_trade_scope(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_trade_scope(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_trade_scope_party(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_trade_scope_party(uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.select_trade_bid(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.select_trade_bid(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.send_commercial_document(uuid, text, text, timestamptz) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.send_commercial_document(uuid, text, text, timestamptz) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._execute_trade_scope_authorized(uuid, text, uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.execute_trade_scope(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.execute_trade_scope(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.execute_trade_scope_with_trusted_ip(uuid, text, uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.execute_trade_scope_with_trusted_ip(uuid, text, uuid, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.engage_trade_scope(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.engage_trade_scope(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.mark_trade_scope_in_progress(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.mark_trade_scope_in_progress(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_trade_scope_substantial_completion(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_trade_scope_substantial_completion(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._accept_trade_scope_authorized(uuid, text, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.accept_trade_scope(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.accept_trade_scope(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.accept_trade_scope_with_trusted_ip(uuid, text, uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.accept_trade_scope_with_trusted_ip(uuid, text, uuid, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.issue_trade_draw_invoice(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.issue_trade_draw_invoice(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.void_trade_scope(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.void_trade_scope(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_client_commercial_document_bundle(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_client_commercial_document_bundle(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_client_project_selections(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_client_project_selections(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.list_trade_scopes(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.list_trade_scopes(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

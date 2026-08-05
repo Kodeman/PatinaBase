@@ -12281,6 +12281,7 @@ export type Database = {
           source_proposal_item_id: string | null
           status: string
           trade_price_cents: number | null
+          trade_scope_document_id: string | null
           unit_price_cents: number | null
           updated_at: string
           vendor_id: string | null
@@ -12319,6 +12320,7 @@ export type Database = {
           source_proposal_item_id?: string | null
           status?: string
           trade_price_cents?: number | null
+          trade_scope_document_id?: string | null
           unit_price_cents?: number | null
           updated_at?: string
           vendor_id?: string | null
@@ -12357,6 +12359,7 @@ export type Database = {
           source_proposal_item_id?: string | null
           status?: string
           trade_price_cents?: number | null
+          trade_scope_document_id?: string | null
           unit_price_cents?: number | null
           updated_at?: string
           vendor_id?: string | null
@@ -12473,6 +12476,13 @@ export type Database = {
             columns: ["source_proposal_item_id"]
             isOneToOne: false
             referencedRelation: "proposal_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_items_trade_scope_document_id_fkey"
+            columns: ["trade_scope_document_id"]
+            isOneToOne: false
+            referencedRelation: "project_commercial_documents"
             referencedColumns: ["id"]
           },
         ]
@@ -20537,6 +20547,280 @@ export type Database = {
           },
         ]
       }
+      trade_scope_bids: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          id: string
+          note: string | null
+          noted_at: string
+          party_display_name: string | null
+          party_id: string
+          proposal_id: string
+          responded_at: string | null
+          response_token_id: string | null
+          rfq_request_id: string | null
+          source: string
+          status: string
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          id?: string
+          note?: string | null
+          noted_at?: string
+          party_display_name?: string | null
+          party_id: string
+          proposal_id: string
+          responded_at?: string | null
+          response_token_id?: string | null
+          rfq_request_id?: string | null
+          source?: string
+          status?: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          id?: string
+          note?: string | null
+          noted_at?: string
+          party_display_name?: string | null
+          party_id?: string
+          proposal_id?: string
+          responded_at?: string | null
+          response_token_id?: string | null
+          rfq_request_id?: string | null
+          source?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trade_scope_bids_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "project_parties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trade_scope_bids_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trade_scope_draws: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          gates_on_acceptance: boolean
+          id: string
+          invoice_id: string | null
+          label: string
+          percentage: number | null
+          proposal_id: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          gates_on_acceptance?: boolean
+          id?: string
+          invoice_id?: string | null
+          label: string
+          percentage?: number | null
+          proposal_id: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          gates_on_acceptance?: boolean
+          id?: string
+          invoice_id?: string | null
+          label?: string
+          percentage?: number | null
+          proposal_id?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trade_scope_draws_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trade_scope_draws_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trade_scope_sections: {
+        Row: {
+          allocation_cents: number | null
+          created_at: string
+          id: string
+          project_room_id: string | null
+          proposal_id: string
+          prose: string
+          room_name: string | null
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          allocation_cents?: number | null
+          created_at?: string
+          id?: string
+          project_room_id?: string | null
+          proposal_id: string
+          prose: string
+          room_name?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          allocation_cents?: number | null
+          created_at?: string
+          id?: string
+          project_room_id?: string | null
+          proposal_id?: string
+          prose?: string
+          room_name?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trade_scope_sections_project_room_id_fkey"
+            columns: ["project_room_id"]
+            isOneToOne: false
+            referencedRelation: "project_rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trade_scope_sections_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trade_scope_terms: {
+        Row: {
+          acceptance_fingerprint: string | null
+          accepted_at: string | null
+          accepted_by: string | null
+          accepted_signed_name: string | null
+          client_price_cents: number
+          created_at: string
+          currency: string
+          engaged_at: string | null
+          party_company_name: string | null
+          party_display_name: string | null
+          party_id: string | null
+          party_trade: string | null
+          progress_state: string
+          proposal_id: string
+          substantial_completion_at: string | null
+          substantial_completion_by: string | null
+          terms: string | null
+          updated_at: string
+        }
+        Insert: {
+          acceptance_fingerprint?: string | null
+          accepted_at?: string | null
+          accepted_by?: string | null
+          accepted_signed_name?: string | null
+          client_price_cents?: number
+          created_at?: string
+          currency?: string
+          engaged_at?: string | null
+          party_company_name?: string | null
+          party_display_name?: string | null
+          party_id?: string | null
+          party_trade?: string | null
+          progress_state?: string
+          proposal_id: string
+          substantial_completion_at?: string | null
+          substantial_completion_by?: string | null
+          terms?: string | null
+          updated_at?: string
+        }
+        Update: {
+          acceptance_fingerprint?: string | null
+          accepted_at?: string | null
+          accepted_by?: string | null
+          accepted_signed_name?: string | null
+          client_price_cents?: number
+          created_at?: string
+          currency?: string
+          engaged_at?: string | null
+          party_company_name?: string | null
+          party_display_name?: string | null
+          party_id?: string | null
+          party_trade?: string | null
+          progress_state?: string
+          proposal_id?: string
+          substantial_completion_at?: string | null
+          substantial_completion_by?: string | null
+          terms?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trade_scope_terms_accepted_by_fkey"
+            columns: ["accepted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trade_scope_terms_accepted_by_fkey"
+            columns: ["accepted_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trade_scope_terms_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "project_parties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trade_scope_terms_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: true
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trade_scope_terms_substantial_completion_by_fkey"
+            columns: ["substantial_completion_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trade_scope_terms_substantial_completion_by_fkey"
+            columns: ["substantial_completion_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           granted_at: string
@@ -23271,6 +23555,14 @@ export type Database = {
         Args: { p_lead_id: string }
         Returns: Json
       }
+      _accept_trade_scope_authorized: {
+        Args: {
+          p_client_id: string
+          p_proposal_id: string
+          p_signed_name: string
+        }
+        Returns: Json
+      }
       _activate_proposal_as_project_authorized: {
         Args: { p_proposal_id: string; p_start_date?: string }
         Returns: string
@@ -23639,6 +23931,15 @@ export type Database = {
         Returns: string
       }
       _execute_furnishings_authorization_authorized: {
+        Args: {
+          p_client_id: string
+          p_proposal_id: string
+          p_signed_name: string
+          p_trusted_signed_ip?: string
+        }
+        Returns: Json
+      }
+      _execute_trade_scope_authorized: {
         Args: {
           p_client_id: string
           p_proposal_id: string
@@ -24182,6 +24483,7 @@ export type Database = {
         Args: { p_dispatch_id: string }
         Returns: undefined
       }
+      _trade_scope_progress_rank: { Args: { p_state: string }; Returns: number }
       _void_invoice_authorized_legacy_00397: {
         Args: { p_invoice_id: string; p_reason: string }
         Returns: {
@@ -24227,6 +24529,19 @@ export type Database = {
         Returns: Json
       }
       accept_design_request: { Args: { p_lead_id: string }; Returns: Json }
+      accept_trade_scope: {
+        Args: { p_proposal_id: string; p_signed_name: string }
+        Returns: Json
+      }
+      accept_trade_scope_with_trusted_ip: {
+        Args: {
+          p_client_id: string
+          p_proposal_id: string
+          p_signed_ip?: string
+          p_signed_name: string
+        }
+        Returns: Json
+      }
       accept_workspace_invitation: {
         Args: { p_token: string }
         Returns: {
@@ -25249,6 +25564,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_trade_scope: {
+        Args: { p_project_id: string; p_title: string }
+        Returns: Json
+      }
       cut_schedule_revision: {
         Args: { p_project_id: string; p_reason?: string }
         Returns: number
@@ -25325,6 +25644,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      engage_trade_scope: { Args: { p_proposal_id: string }; Returns: Json }
       enqueue_agent_successor_if_owned: {
         Args: {
           p_actor?: string
@@ -25512,6 +25832,19 @@ export type Database = {
         Returns: Json
       }
       execute_furnishings_authorization_with_trusted_ip: {
+        Args: {
+          p_client_id: string
+          p_proposal_id: string
+          p_signed_ip?: string
+          p_signed_name: string
+        }
+        Returns: Json
+      }
+      execute_trade_scope: {
+        Args: { p_proposal_id: string; p_signed_name: string }
+        Returns: Json
+      }
+      execute_trade_scope_with_trusted_ip: {
         Args: {
           p_client_id: string
           p_proposal_id: string
@@ -26304,6 +26637,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      issue_trade_draw_invoice: { Args: { p_draw_id: string }; Returns: Json }
       item_feedback_gate: {
         Args: {
           p_board_item_id: string
@@ -26422,6 +26756,7 @@ export type Database = {
         Args: { p_product_id: string; p_project_id?: string }
         Returns: Json
       }
+      list_trade_scopes: { Args: { p_project_id: string }; Returns: Json }
       lock_client_decision_option_parent: {
         Args: { p_decision_id: string; p_path: string }
         Returns: boolean
@@ -26524,6 +26859,10 @@ export type Database = {
       mark_scan_upload_complete: {
         Args: { p_scan_id: string }
         Returns: undefined
+      }
+      mark_trade_scope_in_progress: {
+        Args: { p_proposal_id: string }
+        Returns: Json
       }
       match_designers_for_client: {
         Args: { p_session_key: string }
@@ -26881,6 +27220,10 @@ export type Database = {
           p_start_date?: string
         }
         Returns: string
+      }
+      record_trade_scope_substantial_completion: {
+        Args: { p_proposal_id: string }
+        Returns: Json
       }
       recover_invoice_checkout_session_evidence: {
         Args: {
@@ -27398,6 +27741,7 @@ export type Database = {
         Args: { p_project_id: string; p_template_slug: string }
         Returns: string[]
       }
+      select_trade_bid: { Args: { p_bid_id: string }; Returns: Json }
       send_commercial_document: {
         Args: {
           p_expected_fingerprint: string
@@ -27672,6 +28016,10 @@ export type Database = {
           p_room_id: string
         }
         Returns: undefined
+      }
+      set_trade_scope_party: {
+        Args: { p_party_id: string; p_proposal_id: string }
+        Returns: Json
       }
       settle_invoice_checkout_payment: {
         Args: {
@@ -28370,6 +28718,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      void_trade_scope: {
+        Args: { p_proposal_id: string; p_reason: string }
+        Returns: Json
       }
     }
     Enums: {
