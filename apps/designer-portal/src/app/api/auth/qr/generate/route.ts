@@ -2,14 +2,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { createAdminClient } from '@patina/supabase/client';
-import { corsHeaders, handleCors } from '../cors';
+import { corsHeaders, handleCors, isAllowedOrigin } from '../cors';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const QR_SESSION_TTL_MS = 5 * 60 * 1000; // 5 minutes
-const QR_RATE_LIMIT_WINDOW_MS = 60 * 1000;
-const QR_RATE_LIMIT_MAX = 10;
 
 function responseHeaders(request: NextRequest): Record<string, string> {
   return {
@@ -35,6 +33,17 @@ function trustedClientIp(request: NextRequest): string | null {
   }
 
   return null;
+}
+
+function isLocalRequest(request: NextRequest): boolean {
+  return ['localhost', '127.0.0.1', '::1'].includes(request.nextUrl.hostname);
+}
+
+function requestIsAllowed(request: NextRequest): boolean {
+  const origin = request.headers.get('origin');
+  const fetchSite = request.headers.get('sec-fetch-site');
+  if (fetchSite === 'cross-site') return false;
+  return !origin || isAllowedOrigin(origin);
 }
 
 function parseBrowserFromUA(ua: string): { browser: string; os: string } {
@@ -82,38 +91,17 @@ async function createQrAuthSession(
 
     const ip = trustedClientIp(request);
 
-    const supabase = createAdminClient();
-
-    if (ip) {
-      const windowStart = new Date(Date.now() - QR_RATE_LIMIT_WINDOW_MS).toISOString();
-      const { count, error: countError } = await (supabase as any)
-        .from('qr_auth_sessions')
-        .select('id', { count: 'exact', head: true })
-        .eq('ip_address', ip)
-        .gte('created_at', windowStart);
-
-      if (countError) {
-        console.error('Failed to check QR rate limit:', countError);
-        return NextResponse.json(
-          { error: 'Unable to create session' },
-          { status: 503, headers: responseHeaders(request) }
-        );
-      }
-
-      if ((count ?? 0) >= QR_RATE_LIMIT_MAX) {
-        return NextResponse.json(
-          { error: 'Too many QR sign-in attempts. Try again shortly.' },
-          {
-            status: 429,
-            headers: {
-              ...responseHeaders(request),
-              'Retry-After': '60',
-              'Cache-Control': 'no-store',
-            },
-          }
-        );
-      }
+    // Cloudflare supplies the only trusted production client address. Failing
+    // closed prevents an infrastructure/header regression from silently
+    // bypassing the database-backed limiter.
+    if (!ip && !isLocalRequest(request)) {
+      return NextResponse.json(
+        { error: 'Unable to create session' },
+        { status: 503, headers: responseHeaders(request) },
+      );
     }
+
+    const supabase = createAdminClient();
 
     const { error } = await (supabase as any)
       .from('qr_auth_sessions')
@@ -129,6 +117,21 @@ async function createQrAuthSession(
       });
 
     if (error) {
+      if (
+        error.code === 'P0001' &&
+        error.message === 'qr_auth_rate_limited'
+      ) {
+        return NextResponse.json(
+          { error: 'Too many QR sign-in attempts. Try again shortly.' },
+          {
+            status: 429,
+            headers: {
+              ...responseHeaders(request),
+              'Retry-After': '60',
+            },
+          },
+        );
+      }
       console.error('Failed to create QR session:', error);
       return NextResponse.json(
         { error: 'Failed to create session' },
@@ -157,11 +160,21 @@ async function createQrAuthSession(
 /**
  * GET /api/auth/qr/generate
  *
- * Generate a new QR authentication session.
- * Returns a session token and QR URL for display.
+ * Temporary compatibility path for already-deployed portal and extension
+ * clients. Cross-site resource requests are rejected and the same atomic
+ * database limiter used by POST applies. New clients use POST.
  */
 export async function GET(request: NextRequest) {
-  return createQrAuthSession(request, null);
+  if (!requestIsAllowed(request)) {
+    return NextResponse.json(
+      { error: 'Origin is not allowed' },
+      { status: 403, headers: responseHeaders(request) },
+    );
+  }
+
+  const response = await createQrAuthSession(request, null);
+  response.headers.set('Deprecation', 'true');
+  return response;
 }
 
 /**
@@ -178,6 +191,19 @@ export async function GET(request: NextRequest) {
  * or absent body is valid. Malformed JSON returns 400.
  */
 export async function POST(request: NextRequest) {
+  if (!requestIsAllowed(request)) {
+    return NextResponse.json(
+      { error: 'Origin is not allowed' },
+      { status: 403, headers: responseHeaders(request) },
+    );
+  }
+  if (!request.headers.get('content-type')?.toLowerCase().startsWith('application/json')) {
+    return NextResponse.json(
+      { error: 'Content-Type must be application/json' },
+      { status: 415, headers: responseHeaders(request) },
+    );
+  }
+
   // Optional JSON body. Empty / absent body is fine; only reject malformed JSON.
   let deviceInfo: Record<string, unknown> | null = null;
   const rawBody = await request.text();

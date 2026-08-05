@@ -9,9 +9,16 @@ const ALLOWED_ORIGINS = [
   'http://localhost:3002',
 ];
 
+export function isAllowedOrigin(origin: string): boolean {
+  return (
+    ALLOWED_ORIGINS.includes(origin) ||
+    origin.startsWith('chrome-extension://')
+  );
+}
+
 export function corsHeaders(request: NextRequest): Record<string, string> {
   const origin = request.headers.get('origin');
-  if (!origin || !ALLOWED_ORIGINS.includes(origin)) {
+  if (!origin || !isAllowedOrigin(origin)) {
     return {};
   }
   return {

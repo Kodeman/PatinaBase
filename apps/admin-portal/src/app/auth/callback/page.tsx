@@ -3,7 +3,13 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { createBrowserClient, finalizeAuthCallback } from '@patina/supabase';
+import {
+  consumeAuthCallbackFragment,
+  createBrowserClient,
+  finalizeAuthCallback,
+  normalizeOAuthCallbackError,
+  recoveryFinalReturnPath,
+} from '@patina/supabase';
 import { PortalAuthNotice, PortalAuthSuccess } from '@patina/design-system';
 import {
   adminAuthDestination,
@@ -17,15 +23,25 @@ function CallbackContent() {
   const code = searchParams.get('code');
   const callbackUrl =
     searchParams.get('callbackUrl') || searchParams.get('next');
-  const isRecovery = searchParams.get('type') === 'recovery';
-  const destination = isRecovery
+  const queryRecovery = searchParams.get('type') === 'recovery';
+  const providerError =
+    searchParams.get('error') ?? searchParams.get('error_code');
+  const queryDestination = queryRecovery
     ? recoveryDestination(callbackUrl)
     : adminAuthDestination(callbackUrl);
+  const [isRecovery, setIsRecovery] = useState(queryRecovery);
+  const [destination, setDestination] = useState(queryDestination);
   const [result, setResult] = useState<'working' | 'success' | 'failed'>(
     'working',
   );
   const [message, setMessage] = useState<string | null>(null);
-  const attempt = useRef(0);
+  const callbackRun = useRef<{
+    key: string;
+    promise: ReturnType<typeof finalizeAuthCallback>;
+  } | null>(null);
+  const callbackFragment = useRef<
+    ReturnType<typeof consumeAuthCallbackFragment> | undefined
+  >(undefined);
   const redirected = useRef(false);
 
   const hardRedirect = useCallback(
@@ -39,17 +55,50 @@ function CallbackContent() {
   );
 
   useEffect(() => {
-    const currentAttempt = ++attempt.current;
-    const controller = new AbortController();
+    callbackFragment.current ??= consumeAuthCallbackFragment();
+    const fragment = callbackFragment.current;
+    const recovery = queryRecovery || fragment.isRecovery;
+    const resolvedDestination = recovery
+      ? recoveryDestination(callbackUrl)
+      : adminAuthDestination(callbackUrl);
+    setIsRecovery(recovery);
+    setDestination(resolvedDestination);
 
-    void finalizeAuthCallback({
-      supabase: createBrowserClient(),
-      code,
-      signal: controller.signal,
-    })
+    const providerFailure = normalizeOAuthCallbackError(
+      fragment.oauthError ?? providerError,
+    );
+    if (providerFailure) {
+      setMessage(providerFailure.message);
+      setResult('failed');
+      return;
+    }
+
+    let active = true;
+    const recoveryTokenHash = fragment.recoveryTokenHash;
+    const callbackKey =
+      recoveryTokenHash !== undefined
+        ? `recovery:${recoveryTokenHash}`
+        : fragment.legacyRecovery
+          ? 'legacy-recovery-fragment'
+          : code ?? 'fragment-or-existing-session';
+    if (!callbackRun.current || callbackRun.current.key !== callbackKey) {
+      callbackRun.current = {
+        key: callbackKey,
+        // PKCE codes are single-use. Share one exchange across React Strict
+        // Mode's effect replay instead of aborting and racing a second call.
+        promise: finalizeAuthCallback({
+          supabase: createBrowserClient(),
+          code,
+          recovery,
+          recoveryTokenHash,
+          legacyRecoveryFragment: fragment.legacyRecovery,
+        }),
+      };
+    }
+
+    void callbackRun.current.promise
       .then((callback) => {
-        if (controller.signal.aborted || attempt.current !== currentAttempt)
-          return;
+        if (!active) return;
         if (callback.status === 'failed') {
           setMessage(callback.failure.message);
           setResult('failed');
@@ -58,8 +107,7 @@ function CallbackContent() {
         setResult('success');
       })
       .catch(() => {
-        if (controller.signal.aborted || attempt.current !== currentAttempt)
-          return;
+        if (!active) return;
         setMessage(
           'We could not finish opening your session. Please try again.',
         );
@@ -67,16 +115,20 @@ function CallbackContent() {
       });
 
     return () => {
-      controller.abort();
-      if (attempt.current === currentAttempt) attempt.current += 1;
+      active = false;
     };
-  }, [code]);
+  }, [callbackUrl, code, providerError, queryRecovery]);
 
   useEffect(() => {
     if (result !== 'success') return;
     const timer = window.setTimeout(hardRedirect, 350);
     return () => window.clearTimeout(timer);
   }, [hardRedirect, result]);
+
+  const recoveryReturnDestination = recoveryFinalReturnPath(
+    destination,
+    adminAuthDestination(null),
+  );
 
   return (
     <AdminAuthShell>
@@ -97,7 +149,9 @@ function CallbackContent() {
           tone={result === 'failed' ? 'error' : 'info'}
           title={
             result === 'failed'
-              ? 'Sign-in needs another try.'
+              ? isRecovery
+                ? 'That reset link needs another try.'
+                : 'Sign-in needs another try.'
               : 'Completing sign in'
           }
         >
@@ -106,9 +160,13 @@ function CallbackContent() {
             <p className="mt-3">
               <Link
                 className="font-semibold underline underline-offset-4"
-                href={`/auth/signin?callbackUrl=${encodeURIComponent(adminAuthDestination(callbackUrl))}`}
+                href={
+                  isRecovery
+                    ? `/auth/forgot-password?callbackUrl=${encodeURIComponent(recoveryReturnDestination)}`
+                    : `/auth/signin?callbackUrl=${encodeURIComponent(adminAuthDestination(callbackUrl))}`
+                }
               >
-                Return to sign in
+                {isRecovery ? 'Request a new reset link' : 'Return to sign in'}
               </Link>
             </p>
           )}

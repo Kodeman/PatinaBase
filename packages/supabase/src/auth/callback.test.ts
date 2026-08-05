@@ -11,6 +11,10 @@ function createAuthClient(overrides: Record<string, unknown> = {}) {
   const unsubscribe = vi.fn();
   let listener: ((event: string, session: Session | null) => void) | undefined;
   const auth = {
+    verifyOtp: vi.fn().mockResolvedValue({
+      data: { session },
+      error: null,
+    }),
     exchangeCodeForSession: vi.fn().mockResolvedValue({
       data: { session },
       error: null,
@@ -41,6 +45,174 @@ afterEach(() => {
 });
 
 describe('finalizeAuthCallback', () => {
+  it('verifies a recovery token and confirms that its session was persisted', async () => {
+    const client = createAuthClient({
+      getSession: vi.fn().mockResolvedValue({
+        data: { session },
+        error: null,
+      }),
+    });
+
+    await expect(
+      finalizeAuthCallback({
+        supabase: client.supabase,
+        code: 'legacy-code-is-ignored',
+        recoveryTokenHash: 'one-time-token-hash',
+      }),
+    ).resolves.toEqual({
+      status: 'authenticated',
+      session,
+      method: 'recovery-token',
+    });
+    expect(client.auth.verifyOtp).toHaveBeenCalledWith({
+      token_hash: 'one-time-token-hash',
+      type: 'recovery',
+    });
+    expect(client.auth.exchangeCodeForSession).not.toHaveBeenCalled();
+  });
+
+  it('fails a recovery token closed even when an unrelated session exists', async () => {
+    const client = createAuthClient({
+      verifyOtp: vi.fn().mockResolvedValue({
+        data: { session: null },
+        error: new Error('Token has expired'),
+      }),
+      getSession: vi.fn().mockResolvedValue({
+        data: { session },
+        error: null,
+      }),
+    });
+
+    await expect(
+      finalizeAuthCallback({
+        supabase: client.supabase,
+        recoveryTokenHash: 'expired-token-hash',
+      }),
+    ).resolves.toMatchObject({
+      status: 'failed',
+      failure: { kind: 'invalid_recovery' },
+    });
+    expect(client.auth.getSession).not.toHaveBeenCalled();
+  });
+
+  it('fails an invalid legacy recovery PKCE code closed despite an existing session', async () => {
+    const client = createAuthClient({
+      exchangeCodeForSession: vi.fn().mockResolvedValue({
+        // Defensive: even inconsistent response data must not mask the error.
+        data: { session },
+        error: new Error('code already used'),
+      }),
+      getSession: vi.fn().mockResolvedValue({
+        data: { session },
+        error: null,
+      }),
+    });
+
+    await expect(
+      finalizeAuthCallback({
+        supabase: client.supabase,
+        code: 'invalid-recovery-code',
+        recovery: true,
+      }),
+    ).resolves.toMatchObject({
+      status: 'failed',
+      failure: { kind: 'invalid_recovery' },
+    });
+    expect(client.auth.getSession).not.toHaveBeenCalled();
+  });
+
+  it('preserves a valid legacy recovery PKCE callback', async () => {
+    const client = createAuthClient();
+
+    await expect(
+      finalizeAuthCallback({
+        supabase: client.supabase,
+        code: 'valid-recovery-code',
+        recovery: true,
+      }),
+    ).resolves.toEqual({
+      status: 'authenticated',
+      session,
+      method: 'pkce',
+    });
+    expect(client.auth.exchangeCodeForSession).toHaveBeenCalledWith(
+      'valid-recovery-code',
+    );
+  });
+
+  it('accepts only PASSWORD_RECOVERY for a legacy implicit recovery fragment', async () => {
+    vi.useFakeTimers();
+    const client = createAuthClient();
+    let settled = false;
+    const pending = finalizeAuthCallback({
+      supabase: client.supabase,
+      recovery: true,
+      legacyRecoveryFragment: true,
+      timeoutMs: 5_000,
+    });
+    void pending.then(() => {
+      settled = true;
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    client.emit('INITIAL_SESSION', session);
+    client.emit('SIGNED_IN', session);
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    client.emit('PASSWORD_RECOVERY', session);
+    await expect(pending).resolves.toEqual({
+      status: 'authenticated',
+      session,
+      method: 'recovery-session',
+    });
+    expect(client.auth.getSession).not.toHaveBeenCalled();
+    expect(client.unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails a recovery callback without a credential closed', async () => {
+    const client = createAuthClient({
+      getSession: vi.fn().mockResolvedValue({
+        data: { session },
+        error: null,
+      }),
+    });
+
+    await expect(
+      finalizeAuthCallback({
+        supabase: client.supabase,
+        recovery: true,
+      }),
+    ).resolves.toMatchObject({
+      status: 'failed',
+      failure: { kind: 'invalid_recovery' },
+    });
+    expect(client.auth.getSession).not.toHaveBeenCalled();
+  });
+
+  it('rejects a recovery session that was not persisted as the active session', async () => {
+    const unrelatedSession = {
+      ...session,
+      access_token: 'unrelated-session',
+    } as Session;
+    const client = createAuthClient({
+      getSession: vi.fn().mockResolvedValue({
+        data: { session: unrelatedSession },
+        error: null,
+      }),
+    });
+
+    await expect(
+      finalizeAuthCallback({
+        supabase: client.supabase,
+        recoveryTokenHash: 'one-time-token-hash',
+      }),
+    ).resolves.toMatchObject({
+      status: 'failed',
+      failure: { kind: 'session' },
+    });
+  });
+
   it('exchanges a PKCE code and returns the confirmed session without listening', async () => {
     const client = createAuthClient();
     const result = await finalizeAuthCallback({
@@ -70,6 +242,27 @@ describe('finalizeAuthCallback', () => {
         message: 'That sign-in didn\'t finish. Try again, or use a code by email.',
         retryable: true,
       },
+    });
+  });
+
+  it('accepts an existing session when a previously consumed PKCE code is revisited', async () => {
+    const client = createAuthClient({
+      exchangeCodeForSession: vi.fn().mockResolvedValue({
+        data: { session: null },
+        error: new Error('code already used'),
+      }),
+      getSession: vi.fn().mockResolvedValue({
+        data: { session },
+        error: null,
+      }),
+    });
+
+    await expect(
+      finalizeAuthCallback({ supabase: client.supabase, code: 'used-code' }),
+    ).resolves.toEqual({
+      status: 'authenticated',
+      session,
+      method: 'existing-session',
     });
   });
 
@@ -110,6 +303,45 @@ describe('finalizeAuthCallback', () => {
     });
     expect(client.unsubscribe).toHaveBeenCalledTimes(1);
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('accepts a session-bearing INITIAL_SESSION race', async () => {
+    vi.useFakeTimers();
+    const client = createAuthClient();
+    const pending = finalizeAuthCallback({
+      supabase: client.supabase,
+      timeoutMs: 5_000,
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    client.emit('INITIAL_SESSION', session);
+
+    await expect(pending).resolves.toEqual({
+      status: 'authenticated',
+      session,
+      method: 'auth-state',
+    });
+    expect(client.unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it('applies the callback deadline while PKCE exchange is still pending', async () => {
+    vi.useFakeTimers();
+    const client = createAuthClient({
+      exchangeCodeForSession: vi.fn(
+        () => new Promise(() => undefined),
+      ),
+    });
+    const pending = finalizeAuthCallback({
+      supabase: client.supabase,
+      code: 'stalled-code',
+      timeoutMs: 250,
+    });
+    await vi.advanceTimersByTimeAsync(250);
+
+    await expect(pending).resolves.toMatchObject({
+      status: 'failed',
+      failure: { kind: 'timeout' },
+    });
+    expect(client.auth.getSession).not.toHaveBeenCalled();
   });
 
   it('times out with friendly copy and unsubscribes', async () => {

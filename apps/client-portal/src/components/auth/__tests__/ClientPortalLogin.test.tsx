@@ -33,6 +33,7 @@ const pendingQr = {
   failure: null,
   start: jest.fn(),
   regenerate: jest.fn(),
+  cancel: jest.fn(),
 };
 
 describe('ClientPortalLogin', () => {
@@ -73,6 +74,10 @@ describe('ClientPortalLogin', () => {
     fireEvent.click(qr);
     expect(usePortalQrAuth).toHaveBeenLastCalledWith(
       expect.objectContaining({ enabled: true }),
+    );
+    fireEvent.click(password);
+    expect(usePortalQrAuth).toHaveBeenLastCalledWith(
+      expect.objectContaining({ enabled: false }),
     );
   });
 

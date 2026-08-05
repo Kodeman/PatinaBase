@@ -243,6 +243,8 @@ export function PortalLogin({
   destinationHref,
   isSubmitting = false,
 }: PortalLoginProps) {
+  const codeSubmissionInFlight = React.useRef(false)
+  const interactionLocked = isSubmitting || state === 'apple-pending'
   const passwordOpen = passwordExpanded ?? state === 'password'
   const showQr = state === 'qr' || state === 'qr-expired'
   const visibleOAuthActions = oauthActions.filter((action) =>
@@ -252,6 +254,21 @@ export function PortalLogin({
   const errorId = `portal-auth-${errorTarget}-error`
   const friendlyError = error && <PortalAuthNotice id={errorId} tone="error" title="Let’s try that again.">{error}</PortalAuthNotice>
 
+  React.useEffect(() => {
+    if (!interactionLocked) codeSubmissionInFlight.current = false
+  }, [error, interactionLocked])
+
+  const submitCode = (nextCode: string) => {
+    if (
+      nextCode.length !== 6 ||
+      interactionLocked ||
+      codeSubmissionInFlight.current ||
+      !onVerifyCode
+    ) return
+    codeSubmissionInFlight.current = true
+    onVerifyCode(nextCode)
+  }
+
   if (state === 'success') return <PortalAuthSuccess destinationHref={destinationHref} onContinue={onContinue} />
 
   return (
@@ -259,16 +276,16 @@ export function PortalLogin({
       {state === 'apple-pending' && <PortalAuthNotice tone="info" title="Opening Apple sign in">Finish securely in the Apple window, then return here.</PortalAuthNotice>}
       {friendlyError}
       {state === 'code' ? (
-        <form className="space-y-5" onSubmit={(event) => { event.preventDefault(); if (code.length === 6) onVerifyCode?.(code) }}>
+        <form className="space-y-5" onSubmit={(event) => { event.preventDefault(); submitCode(code) }}>
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#4f554f]">Email passcode</p>
             <h2 className="mt-2 font-serif text-3xl tracking-[-0.03em]">Check your inbox.</h2>
             <p className="mt-2 text-sm leading-6 text-[#4f554f]">We sent a six-digit code to <strong className="font-semibold text-[#252a25]">{email}</strong>.</p>
           </div>
-          <OtpInput value={code} onChange={onCodeChange ?? (() => undefined)} onComplete={onVerifyCode} disabled={isSubmitting} error={Boolean(error)} errorId={errorId} />
+          <OtpInput value={code} onChange={onCodeChange ?? (() => undefined)} onComplete={submitCode} disabled={interactionLocked} error={Boolean(error)} errorId={errorId} />
           <div className="flex items-center justify-between gap-4 text-sm">
-            <button type="button" onClick={onChangeMethod} className="min-h-11 underline decoration-[#6d726b] underline-offset-4 focus:outline-none focus:ring-2 focus:ring-[#252a25]">Use a different email</button>
-            <button type="button" disabled={resendInSeconds > 0 || isSubmitting} onClick={onResendCode} className="min-h-11 font-semibold underline decoration-[#6d726b] underline-offset-4 disabled:cursor-not-allowed disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#252a25]">{resendInSeconds > 0 ? `Resend in ${resendInSeconds}s` : 'Resend code'}</button>
+            <button type="button" onClick={onChangeMethod} disabled={interactionLocked} className="min-h-11 underline decoration-[#6d726b] underline-offset-4 disabled:cursor-not-allowed disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#252a25]">Use a different email</button>
+            <button type="button" disabled={resendInSeconds > 0 || interactionLocked} onClick={onResendCode} className="min-h-11 font-semibold underline decoration-[#6d726b] underline-offset-4 disabled:cursor-not-allowed disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#252a25]">{resendInSeconds > 0 ? `Resend in ${resendInSeconds}s` : 'Resend code'}</button>
           </div>
         </form>
       ) : (
@@ -279,27 +296,27 @@ export function PortalLogin({
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium" htmlFor="portal-auth-email">Email address</label>
-            <input id="portal-auth-email" type="email" autoComplete="email" value={email} onChange={(event) => onEmailChange(event.target.value)} aria-invalid={errorTarget === 'email' && Boolean(error) || undefined} aria-describedby={errorTarget === 'email' && error ? errorId : undefined} className="h-12 w-full border border-[#6d726b] bg-white px-3 text-base outline-none transition-colors placeholder:text-[#5b605a] focus:border-[#252a25] focus:ring-2 focus:ring-[#252a25] motion-reduce:transition-none" placeholder="you@studio.com" disabled={isSubmitting} />
+            <input id="portal-auth-email" type="email" autoComplete="email" value={email} onChange={(event) => onEmailChange(event.target.value)} aria-invalid={errorTarget === 'email' && Boolean(error) || undefined} aria-describedby={errorTarget === 'email' && error ? errorId : undefined} className="h-12 w-full border border-[#6d726b] bg-white px-3 text-base outline-none transition-colors placeholder:text-[#5b605a] focus:border-[#252a25] focus:ring-2 focus:ring-[#252a25] motion-reduce:transition-none" placeholder="you@studio.com" disabled={interactionLocked} />
           </div>
-          <button type="submit" disabled={!email || isSubmitting} className="h-12 w-full bg-[#252a25] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#343b34] disabled:cursor-not-allowed disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#252a25] focus:ring-offset-2 motion-reduce:transition-none">{isSubmitting ? 'Sending code…' : 'Email me a one-time code'}</button>
+          <button type="submit" disabled={!email || interactionLocked} className="h-12 w-full bg-[#252a25] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#343b34] disabled:cursor-not-allowed disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#252a25] focus:ring-offset-2 motion-reduce:transition-none">{interactionLocked ? 'Sending code…' : 'Email me a one-time code'}</button>
         </form>
       )}
 
       {state !== 'code' && <>
         <div className="border-t border-[#6d726b]" />
         <div>
-          <button type="button" aria-expanded={showQr} aria-controls="portal-auth-qr-panel" onClick={showQr ? onCloseQr : onOpenQr} className="flex min-h-11 w-full items-center justify-between text-left text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#252a25] focus:ring-offset-2"><span>Use a QR code</span><span aria-hidden="true">{showQr ? '−' : '+'}</span></button>
+          <button type="button" aria-expanded={showQr} aria-controls="portal-auth-qr-panel" onClick={showQr ? onCloseQr : onOpenQr} disabled={interactionLocked} className="flex min-h-11 w-full items-center justify-between text-left text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#252a25] focus:ring-offset-2"><span>Use a QR code</span><span aria-hidden="true">{showQr ? '−' : '+'}</span></button>
           {showQr && <div id="portal-auth-qr-panel" className="mt-4 border border-[#6d726b] bg-[#f3f0e8] p-5 text-center">
             {state === 'qr-expired' ? <div role="status" aria-live="polite"><p className="font-serif text-2xl">That code has expired.</p><p className="mt-2 text-sm text-[#4f554f]">Refresh for a new one, then scan with your phone.</p><button type="button" onClick={onRefreshQr} className="mt-4 min-h-11 text-sm font-semibold underline underline-offset-4 focus:outline-none focus:ring-2 focus:ring-[#252a25]">Refresh QR code</button></div> : <><div className="mx-auto flex min-h-40 max-w-40 items-center justify-center bg-white p-3">{qrCode ?? <span className="text-sm text-[#4f554f]">Preparing QR code…</span>}</div><p className="mt-4 text-sm leading-6 text-[#4f554f]">{qrDescription}</p></>}
           </div>}
         </div>
         {visibleOAuthActions.map((action) => {
           const pending = action.pending || (action.id === 'apple' && state === 'apple-pending')
-          return <button key={action.id} type="button" onClick={action.onSelect} disabled={pending || isSubmitting} aria-busy={pending || undefined} className="flex min-h-12 w-full items-center justify-center gap-2 border border-[#6d726b] bg-white px-4 text-sm font-semibold transition-colors hover:border-[#252a25] disabled:cursor-not-allowed disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#252a25] motion-reduce:transition-none">{action.id === 'apple' && <Apple aria-hidden="true" className="h-4 w-4" strokeWidth={1.75} />}{pending ? `Connecting to ${action.label.replace(/^Continue with /, '')}…` : action.label}</button>
+          return <button key={action.id} type="button" onClick={action.onSelect} disabled={pending || interactionLocked} aria-busy={pending || undefined} className="flex min-h-12 w-full items-center justify-center gap-2 border border-[#6d726b] bg-white px-4 text-sm font-semibold transition-colors hover:border-[#252a25] disabled:cursor-not-allowed disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#252a25] motion-reduce:transition-none">{action.id === 'apple' && <Apple aria-hidden="true" className="h-4 w-4" strokeWidth={1.75} />}{pending ? `Connecting to ${action.label.replace(/^Continue with /, '')}…` : action.label}</button>
         })}
         <div>
-          <button type="button" aria-expanded={passwordOpen} aria-controls="portal-auth-password-panel" onClick={() => onPasswordExpandedChange?.(!passwordOpen)} className="flex min-h-11 w-full items-center justify-between border-t border-[#6d726b] py-3 text-left text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#252a25] focus:ring-offset-2"><span>Use email and password instead</span><span aria-hidden="true">{passwordOpen ? '−' : '+'}</span></button>
-          {passwordOpen && <form id="portal-auth-password-panel" className="space-y-3 pb-1" onSubmit={(event) => { event.preventDefault(); onPasswordSignIn?.() }}><div className="space-y-2"><label className="text-sm font-medium" htmlFor="portal-auth-password">Password</label><input id="portal-auth-password" type="password" autoComplete="current-password" value={password} onChange={(event) => onPasswordChange?.(event.target.value)} aria-invalid={errorTarget === 'password' && Boolean(error) || undefined} aria-describedby={errorTarget === 'password' && error ? errorId : undefined} className="h-12 w-full border border-[#6d726b] bg-white px-3 outline-none focus:border-[#252a25] focus:ring-2 focus:ring-[#252a25]" /></div><div className="flex items-center justify-between gap-3"><button type="button" onClick={onForgotPassword} className="min-h-11 text-sm underline decoration-[#6d726b] underline-offset-4 focus:outline-none focus:ring-2 focus:ring-[#252a25]">Forgot password?</button><button type="submit" disabled={!email || !password || isSubmitting} className="min-h-11 bg-[#252a25] px-4 py-2 text-sm font-semibold text-white disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#252a25] focus:ring-offset-2">Sign in</button></div></form>}
+          <button type="button" aria-expanded={passwordOpen} aria-controls="portal-auth-password-panel" onClick={() => onPasswordExpandedChange?.(!passwordOpen)} disabled={interactionLocked} className="flex min-h-11 w-full items-center justify-between border-t border-[#6d726b] py-3 text-left text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#252a25] focus:ring-offset-2"><span>Use email and password instead</span><span aria-hidden="true">{passwordOpen ? '−' : '+'}</span></button>
+          {passwordOpen && <form id="portal-auth-password-panel" className="space-y-3 pb-1" onSubmit={(event) => { event.preventDefault(); if (!interactionLocked) onPasswordSignIn?.() }}><div className="space-y-2"><label className="text-sm font-medium" htmlFor="portal-auth-password">Password</label><input id="portal-auth-password" type="password" autoComplete="current-password" value={password} onChange={(event) => onPasswordChange?.(event.target.value)} disabled={interactionLocked} aria-invalid={errorTarget === 'password' && Boolean(error) || undefined} aria-describedby={errorTarget === 'password' && error ? errorId : undefined} className="h-12 w-full border border-[#6d726b] bg-white px-3 outline-none disabled:cursor-not-allowed disabled:opacity-55 focus:border-[#252a25] focus:ring-2 focus:ring-[#252a25]" /></div><div className="flex items-center justify-between gap-3"><button type="button" onClick={onForgotPassword} disabled={interactionLocked} className="min-h-11 text-sm underline decoration-[#6d726b] underline-offset-4 disabled:cursor-not-allowed disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#252a25]">Forgot password?</button><button type="submit" disabled={!email || !password || interactionLocked} className="min-h-11 bg-[#252a25] px-4 py-2 text-sm font-semibold text-white disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#252a25] focus:ring-offset-2">Sign in</button></div></form>}
         </div>
       </>}
     </div>

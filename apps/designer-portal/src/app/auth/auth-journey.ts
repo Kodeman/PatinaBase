@@ -99,8 +99,13 @@ export function confirmedSession(...sessions: Array<unknown>): boolean {
 }
 
 /** QR transport is opt-in: the hook must never create or poll a code while collapsed. */
-export function shouldActivateQr(expanded: boolean): boolean {
-  return expanded;
+export function shouldActivateQr(
+  expanded: boolean,
+  phase: DesignerLoginPhase = 'email',
+  passwordExpanded = false,
+  submitting = false,
+): boolean {
+  return expanded && phase === 'email' && !passwordExpanded && !submitting;
 }
 
 export function designerLoginState(

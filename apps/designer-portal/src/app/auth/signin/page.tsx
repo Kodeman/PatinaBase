@@ -38,9 +38,19 @@ function SignInContent() {
   const [error, setError] = useState<string | null>(null);
   const [resendInSeconds, setResendInSeconds] = useState(0);
   const [passwordSubmitting, setPasswordSubmitting] = useState(false);
+  const [devSubmitting, setDevSubmitting] = useState(false);
   const [devAuthError, setDevAuthError] = useState<string | null>(null);
   const navigated = useRef(false);
-  const qr = usePortalQrAuth({ baseUrl: '', enabled: shouldActivateQr(qrExpanded) });
+  const qr = usePortalQrAuth({
+    baseUrl: '',
+    enabled: shouldActivateQr(
+      qrExpanded,
+      phase,
+      passwordExpanded,
+      sendOtp.isPending || passwordSubmitting,
+    ),
+  });
+  const cancelQr = qr.cancel;
 
   const finish = useCallback((method: string) => {
     if (navigated.current) return;
@@ -67,6 +77,8 @@ function SignInContent() {
 
   const sendCode = useCallback(async () => {
     if (!email.trim()) return;
+    cancelQr();
+    setQrExpanded(false);
     setError(null);
     try {
       await sendOtp.mutateAsync({
@@ -80,10 +92,11 @@ function SignInContent() {
     } catch (cause) {
       setError(normalizeAuthError(cause, 'unknown').message);
     }
-  }, [destination, email, sendOtp]);
+  }, [cancelQr, destination, email, sendOtp]);
 
   const verifyCode = useCallback(async (value: string) => {
     if (value.length !== 6) return;
+    cancelQr();
     setError(null);
     try {
       const result = await verifyOtp.mutateAsync({ email: email.trim(), token: value, type: 'email' });
@@ -97,9 +110,11 @@ function SignInContent() {
       setCode('');
       setError(normalizeAuthError(cause, 'invalid_code').message);
     }
-  }, [email, finish, verifyOtp]);
+  }, [cancelQr, email, finish, verifyOtp]);
 
   const signInWithPassword = useCallback(async () => {
+    cancelQr();
+    setQrExpanded(false);
     setError(null);
     setPasswordSubmitting(true);
     try {
@@ -114,9 +129,11 @@ function SignInContent() {
     } finally {
       setPasswordSubmitting(false);
     }
-  }, [email, finish, password]);
+  }, [cancelQr, email, finish, password]);
 
   const signInWithApple = useCallback(async () => {
+    cancelQr();
+    setQrExpanded(false);
     setError(null);
     setPhase('apple-pending');
     try {
@@ -133,9 +150,12 @@ function SignInContent() {
       setPhase('email');
       setError(normalizeAuthError(cause, 'oauth').message);
     }
-  }, [destination]);
+  }, [cancelQr, destination]);
 
   const handleDevLogin = useCallback(async (devEmail: string, devPassword: string) => {
+    cancelQr();
+    setQrExpanded(false);
+    setDevSubmitting(true);
     setDevAuthError(null);
     try {
       const supabase = createBrowserClient();
@@ -146,8 +166,10 @@ function SignInContent() {
       finish('dev');
     } catch {
       setDevAuthError('That development account could not be opened. Check the local setup and try again.');
+    } finally {
+      setDevSubmitting(false);
     }
-  }, [finish]);
+  }, [cancelQr, finish]);
 
   const qrState = designerLoginState(phase, qrExpanded, qr.state);
   const qrView = qrPresentation(qr.state, qr.secondsRemaining, qr.failure?.message);
@@ -156,6 +178,13 @@ function SignInContent() {
     : qr.state === 'error'
       ? qr.failure?.message ?? 'We could not prepare a QR code. Refresh it or use email instead.'
       : null);
+  const isAuthSubmitting =
+    sendOtp.isPending ||
+    verifyOtp.isPending ||
+    passwordSubmitting ||
+    devSubmitting ||
+    phase === 'apple-pending' ||
+    qr.state === 'verifying';
 
   return (
     <DesignerAuthShell>
@@ -175,26 +204,26 @@ function SignInContent() {
         resendInSeconds={resendInSeconds}
         onResendCode={sendCode}
         error={visibleError}
-        isSubmitting={sendOtp.isPending || verifyOtp.isPending || passwordSubmitting}
+        isSubmitting={isAuthSubmitting}
         qrCode={qr.qrUrl ? <QRCodeSVG value={qr.qrUrl} size={144} level="M" bgColor="transparent" fgColor="#252a25" /> : undefined}
         qrDescription={qrView.description}
         onOpenQr={() => { setQrExpanded(true); setError(null); }}
-        onCloseQr={() => setQrExpanded(false)}
+        onCloseQr={() => { cancelQr(); setQrExpanded(false); }}
         onRefreshQr={() => void qr.regenerate()}
         oauthActions={[{ id: 'apple', label: 'Continue with Apple', available: isOAuthProviderEnabled('apple'), pending: phase === 'apple-pending', onSelect: signInWithApple }]}
         password={password}
         onPasswordChange={(value) => { setPassword(value); setError(null); }}
         onPasswordSignIn={signInWithPassword}
         passwordExpanded={passwordExpanded}
-        onPasswordExpandedChange={(expanded) => { setPasswordExpanded(expanded); setPhase(expanded ? 'password' : 'email'); setError(null); }}
-        onForgotPassword={() => { window.location.assign(`/auth/forgot-password?callbackUrl=${encodeURIComponent(destination)}`); }}
+        onPasswordExpandedChange={(expanded) => { setPasswordExpanded(expanded); if (expanded) { cancelQr(); setQrExpanded(false); } setPhase(expanded ? 'password' : 'email'); setError(null); }}
+        onForgotPassword={() => { cancelQr(); window.location.assign(`/auth/forgot-password?callbackUrl=${encodeURIComponent(destination)}`); }}
         onChangeMethod={() => { setPhase('email'); setCode(''); setError(null); }}
         onContinue={() => window.location.replace(destination)}
         destinationHref={destination}
       />
       <div className="mt-6 space-y-3 text-center text-sm text-[#4f554f]">
         <p><Link className="underline underline-offset-4" href={`/auth/signup?callbackUrl=${encodeURIComponent(destination)}`}>Need an account? Ask to join your studio.</Link></p>
-        {process.env.NODE_ENV === 'development' && <DevAccountsPanel accounts={getAccountsForPortal('designer')} onLogin={handleDevLogin} isLoading={passwordSubmitting} error={devAuthError} defaultCollapsed />}
+        {process.env.NODE_ENV === 'development' && <DevAccountsPanel accounts={getAccountsForPortal('designer')} onLogin={handleDevLogin} isLoading={isAuthSubmitting} error={devAuthError} defaultCollapsed />}
       </div>
     </DesignerAuthShell>
   );

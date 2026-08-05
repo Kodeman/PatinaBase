@@ -4,7 +4,7 @@ import { NextRequest } from 'next/server';
 
 const singleMock = jest.fn();
 const selectMock = jest.fn();
-const orMock = jest.fn();
+const eqMock = jest.fn();
 const updateEqMock = jest.fn().mockResolvedValue({ error: null });
 const updateMock = jest.fn();
 const fromMock = jest.fn();
@@ -18,16 +18,19 @@ import { GET } from '../status/route';
 const SESSION_TOKEN = 'a'.repeat(64);
 
 function request(session = SESSION_TOKEN, origin?: string) {
-  return new NextRequest(`http://localhost:3000/api/auth/qr/status?session=${session}`, {
-    headers: origin ? { origin } : undefined,
+  return new NextRequest('http://localhost:3000/api/auth/qr/status', {
+    headers: {
+      authorization: `Bearer ${session}`,
+      ...(origin ? { origin } : {}),
+    },
   });
 }
 
 function setSession(session: Record<string, unknown> | null) {
   const row = session ? { id: 'qr-row-1', ...session } : null;
   singleMock.mockResolvedValue({ data: row, error: row ? null : { message: 'not found' } });
-  orMock.mockReturnValue({ single: singleMock });
-  selectMock.mockReturnValue({ or: orMock });
+  eqMock.mockReturnValue({ single: singleMock });
+  selectMock.mockReturnValue({ eq: eqMock });
   updateMock.mockReturnValue({ eq: updateEqMock });
   fromMock.mockReturnValue({ select: selectMock, update: updateMock });
 }
@@ -55,7 +58,10 @@ describe('GET /api/auth/qr/status', () => {
     });
     expect(fromMock).toHaveBeenCalledWith('qr_auth_sessions');
     expect(updateMock).not.toHaveBeenCalled();
-    expect(orMock).toHaveBeenCalledWith(expect.stringContaining('poll_token_hash.eq.'));
+    expect(eqMock).toHaveBeenCalledWith(
+      'poll_token_hash',
+      expect.stringMatching(/^[a-f0-9]{64}$/),
+    );
   });
 
   it('fails closed when the QR-visible approval nonce is presented for a new row', async () => {
@@ -64,8 +70,9 @@ describe('GET /api/auth/qr/status', () => {
     const response = await GET(request('c'.repeat(64)));
 
     await expect(response.json()).resolves.toEqual({ status: 'expired' });
-    expect(orMock).toHaveBeenCalledWith(
-      expect.stringContaining('and(poll_token_hash.is.null,session_token.eq.')
+    expect(eqMock).toHaveBeenCalledWith(
+      'poll_token_hash',
+      expect.not.stringContaining('c'.repeat(64)),
     );
   });
 
@@ -81,11 +88,13 @@ describe('GET /api/auth/qr/status', () => {
     const response = await GET(request(pollSecret));
 
     await expect(response.json()).resolves.toEqual({ status: 'pending' });
-    const filter = orMock.mock.calls[0][0] as string;
-    expect(filter).toMatch(/^poll_token_hash\.eq\.[a-f0-9]{64},/);
+    expect(eqMock).toHaveBeenCalledWith(
+      'poll_token_hash',
+      expect.stringMatching(/^[a-f0-9]{64}$/),
+    );
   });
 
-  it('keeps a tightly scoped fallback for legacy in-flight rows only', async () => {
+  it('never sends the raw browser bearer to PostgREST', async () => {
     setSession({
       status: 'pending',
       token_hash: null,
@@ -97,8 +106,10 @@ describe('GET /api/auth/qr/status', () => {
     const response = await GET(request(pollSecret));
 
     await expect(response.json()).resolves.toEqual({ status: 'pending' });
-    const filter = orMock.mock.calls[0][0] as string;
-    expect(filter).toContain(`poll_token_hash.is.null,session_token.eq.${pollSecret}`);
+    expect(eqMock).toHaveBeenCalledWith(
+      'poll_token_hash',
+      expect.not.stringContaining(pollSecret),
+    );
   });
 
   it('fails closed for an unknown browser secret', async () => {
@@ -140,8 +151,42 @@ describe('GET /api/auth/qr/status', () => {
   it('rejects malformed session tokens', async () => {
     const response = await GET(request('not-a-session'));
 
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({ error: 'Invalid session token' });
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({ error: 'Invalid polling credential' });
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it('temporarily accepts a legacy query poll but hashes it before PostgREST', async () => {
+    setSession({
+      status: 'pending',
+      token_hash: null,
+      user_email: null,
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+    });
+    const response = await GET(
+      new NextRequest(
+        `http://localhost:3000/api/auth/qr/status?session=${SESSION_TOKEN}`,
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('deprecation')).toBe('true');
+    await expect(response.json()).resolves.toEqual({ status: 'pending' });
+    expect(eqMock).toHaveBeenCalledWith(
+      'poll_token_hash',
+      expect.not.stringContaining(SESSION_TOKEN),
+    );
+  });
+
+  it('rejects a malformed bearer instead of falling back to a query credential', async () => {
+    const response = await GET(
+      new NextRequest(
+        `http://localhost:3000/api/auth/qr/status?session=${SESSION_TOKEN}`,
+        { headers: { authorization: 'Bearer malformed' } },
+      ),
+    );
+
+    expect(response.status).toBe(401);
     expect(fromMock).not.toHaveBeenCalled();
   });
 

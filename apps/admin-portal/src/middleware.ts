@@ -23,16 +23,8 @@ export async function middleware(req: NextRequest) {
 
   const baseUrl = req.nextUrl.origin;
 
-  const isRSCRequest = req.headers.get('rsc') === '1';
-  const isPrefetch = req.headers.get('next-router-prefetch') === '1';
-
   // API routes pass through (auth handled per-route)
   if (isApiRoute) {
-    return res;
-  }
-
-  // RSC/prefetch requests pass through
-  if (isRSCRequest || isPrefetch) {
     return res;
   }
 
@@ -92,8 +84,6 @@ export async function middleware(req: NextRequest) {
     return redirectWithCookies(loginUrl);
   }
 
-  const isMfaEnrollPage = req.nextUrl.pathname === '/auth/mfa-enroll';
-
   // For authenticated users on protected pages (not auth, not public, not unauthorized),
   // verify they have an admin-domain role
   if (isAuthenticated && !isAuthPage && !isPublicPage && !isUnauthorizedPage) {
@@ -101,57 +91,70 @@ export async function middleware(req: NextRequest) {
       const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
-      if (serviceRoleKey && supabaseUrl) {
-        const adminClient = createClient(supabaseUrl, serviceRoleKey, {
-          auth: { autoRefreshToken: false, persistSession: false },
-        });
+      if (!serviceRoleKey || !supabaseUrl) {
+        return redirectWithCookies(
+          new URL('/auth/error?error=Configuration', baseUrl),
+        );
+      }
 
-        const { data: adminRoles } = await adminClient
-          .from('user_roles')
-          .select('role_id, roles!inner(domain)')
-          .eq('user_id', user!.id)
-          .eq('roles.domain', 'admin');
+      const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
 
-        if (!adminRoles || adminRoles.length === 0) {
-          return redirectWithCookies(new URL('/unauthorized', baseUrl));
+      const { data: adminRoles, error: roleError } = await adminClient
+        .from('user_roles')
+        .select('role_id, roles!inner(domain)')
+        .eq('user_id', user!.id)
+        .eq('roles.domain', 'admin');
+
+      if (roleError) {
+        return redirectWithCookies(
+          new URL('/auth/error?error=Configuration', baseUrl),
+        );
+      }
+      if (!adminRoles || adminRoles.length === 0) {
+        return redirectWithCookies(new URL('/unauthorized', baseUrl));
+      }
+
+      const { data: profile, error: profileError } = await adminClient
+        .from('profiles')
+        .select('mfa_enforced')
+        .eq('id', user!.id)
+        .maybeSingle();
+
+      if (profileError) {
+        return redirectWithCookies(
+          new URL('/auth/error?error=Configuration', baseUrl),
+        );
+      }
+
+      const mfaEnforced = !!(profile as { mfa_enforced?: boolean } | null)
+        ?.mfa_enforced;
+
+      if (mfaEnforced) {
+        const { data: aal, error: aalError } =
+          await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        if (aalError) {
+          return redirectWithCookies(
+            new URL('/auth/error?error=Configuration', baseUrl),
+          );
         }
-
-        // MFA enforcement: if profiles.mfa_enforced=true and the user is not at AAL2,
-        // bounce to enrollment. Already-on-the-enroll-page passes through.
-        if (!isMfaEnrollPage) {
-          try {
-            const { data: profile } = await adminClient
-              .from('profiles')
-              .select('mfa_enforced')
-              .eq('id', user!.id)
-              .maybeSingle();
-
-            const mfaEnforced = !!(profile as { mfa_enforced?: boolean } | null)
-              ?.mfa_enforced;
-
-            if (mfaEnforced) {
-              const { data: aal } =
-                await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-              const currentLevel = aal?.currentLevel ?? null;
-              if (currentLevel !== 'aal2') {
-                const enrollUrl = new URL('/auth/mfa-enroll', baseUrl);
-                enrollUrl.searchParams.set(
-                  'callbackUrl',
-                  safeAuthReturnPath(
-                    `${req.nextUrl.pathname}${req.nextUrl.search}`,
-                    '/dashboard',
-                  ),
-                );
-                return redirectWithCookies(enrollUrl);
-              }
-            }
-          } catch {
-            // MFA enforcement failure is fail-open: allow request through, API routes still enforce admin role.
-          }
+        if (aal?.currentLevel !== 'aal2') {
+          const enrollUrl = new URL('/auth/mfa-enroll', baseUrl);
+          enrollUrl.searchParams.set(
+            'callbackUrl',
+            safeAuthReturnPath(
+              `${req.nextUrl.pathname}${req.nextUrl.search}`,
+              '/dashboard',
+            ),
+          );
+          return redirectWithCookies(enrollUrl);
         }
       }
     } catch {
-      // If role check fails, allow through (fail-open for now, API routes still enforce)
+      return redirectWithCookies(
+        new URL('/auth/error?error=Configuration', baseUrl),
+      );
     }
   }
 

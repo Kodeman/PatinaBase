@@ -68,8 +68,15 @@ function SignInContent() {
   const redirected = useRef(false);
   const qr = usePortalQrAuth({
     baseUrl: QR_AUTH_BASE_URL,
-    enabled: qrExpanded,
+    enabled:
+      qrExpanded &&
+      phase === 'email' &&
+      !passwordExpanded &&
+      !sendOtp.isPending &&
+      !passwordSubmitting &&
+      !devSubmitting,
   });
+  const cancelQr = qr.cancel;
 
   const hardRedirect = useCallback(
     (event?: React.MouseEvent<HTMLAnchorElement>) => {
@@ -110,6 +117,8 @@ function SignInContent() {
   const sendCode = useCallback(async () => {
     const normalizedEmail = email.trim();
     if (!normalizedEmail) return;
+    cancelQr();
+    setQrExpanded(false);
     setError(null);
     try {
       await sendOtp.mutateAsync({
@@ -127,11 +136,12 @@ function SignInContent() {
     } catch (cause) {
       setError(normalizeAuthError(cause).message);
     }
-  }, [destination, email, sendOtp]);
+  }, [cancelQr, destination, email, sendOtp]);
 
   const verifyCode = useCallback(
     async (value: string) => {
       if (value.length !== 6 || completed.current) return;
+      cancelQr();
       setError(null);
       try {
         const result = await verifyOtp.mutateAsync({
@@ -149,11 +159,13 @@ function SignInContent() {
         setError(normalizeAuthError(cause, 'invalid_code').message);
       }
     },
-    [email, finish, verifyOtp],
+    [cancelQr, email, finish, verifyOtp],
   );
 
   const signInWithPassword = useCallback(async () => {
     if (!email.trim() || !password) return;
+    cancelQr();
+    setQrExpanded(false);
     setError(null);
     setPasswordSubmitting(true);
     try {
@@ -174,9 +186,11 @@ function SignInContent() {
     } finally {
       setPasswordSubmitting(false);
     }
-  }, [email, finish, password]);
+  }, [cancelQr, email, finish, password]);
 
   const signInWithApple = useCallback(async () => {
+    cancelQr();
+    setQrExpanded(false);
     setError(null);
     setPhase('apple-pending');
     try {
@@ -196,10 +210,12 @@ function SignInContent() {
       setPhase('email');
       setError(normalizeAuthError(cause, 'oauth').message);
     }
-  }, [destination]);
+  }, [cancelQr, destination]);
 
   const handleDevLogin = useCallback(
     async (devEmail: string, devPassword: string) => {
+      cancelQr();
+      setQrExpanded(false);
       setDevSubmitting(true);
       setDevAuthError(null);
       try {
@@ -223,7 +239,7 @@ function SignInContent() {
         setDevSubmitting(false);
       }
     },
-    [finish],
+    [cancelQr, finish],
   );
 
   const loginState: PortalLoginState =
@@ -288,6 +304,13 @@ function SignInContent() {
             : qr.state === 'pending'
               ? `Scan with the Patina app. Expires in ${qr.secondsRemaining}s.`
               : 'Use your signed-in phone to scan this code.';
+  const isAuthSubmitting =
+    sendOtp.isPending ||
+    verifyOtp.isPending ||
+    passwordSubmitting ||
+    devSubmitting ||
+    phase === 'apple-pending' ||
+    qr.state === 'verifying';
 
   return (
     <AdminAuthShell>
@@ -308,16 +331,17 @@ function SignInContent() {
         resendInSeconds={resendInSeconds}
         onResendCode={sendCode}
         error={error}
-        isSubmitting={
-          sendOtp.isPending || verifyOtp.isPending || passwordSubmitting
-        }
+        isSubmitting={isAuthSubmitting}
         qrCode={qrCode}
         qrDescription={qrDescription}
         onOpenQr={() => {
           setQrExpanded(true);
           setError(null);
         }}
-        onCloseQr={() => setQrExpanded(false)}
+        onCloseQr={() => {
+          cancelQr();
+          setQrExpanded(false);
+        }}
         onRefreshQr={() => void qr.regenerate()}
         oauthActions={[
           {
@@ -337,10 +361,15 @@ function SignInContent() {
         passwordExpanded={passwordExpanded}
         onPasswordExpandedChange={(expanded) => {
           setPasswordExpanded(expanded);
+          if (expanded) {
+            cancelQr();
+            setQrExpanded(false);
+          }
           setPhase(expanded ? 'password' : 'email');
           setError(null);
         }}
         onForgotPassword={() => {
+          cancelQr();
           window.location.assign(
             `/auth/forgot-password?callbackUrl=${encodeURIComponent(destination)}`,
           );
@@ -358,7 +387,7 @@ function SignInContent() {
           <DevAccountsPanel
             accounts={getAccountsForPortal('admin')}
             onLogin={handleDevLogin}
-            isLoading={devSubmitting}
+            isLoading={isAuthSubmitting}
             error={devAuthError}
             defaultCollapsed
           />

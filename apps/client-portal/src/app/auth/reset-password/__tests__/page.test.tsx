@@ -10,6 +10,11 @@ import { replaceAuthDestination } from '@/lib/auth-redirect';
 
 const getSession = jest.fn();
 const updatePassword = jest.fn();
+let searchParams = new URLSearchParams();
+
+jest.mock('next/navigation', () => ({
+  useSearchParams: () => searchParams,
+}));
 
 jest.mock('@patina/supabase', () => ({
   createBrowserClient: () => ({ auth: { getSession } }),
@@ -28,9 +33,13 @@ describe('ResetPasswordPage', () => {
       error: null,
     });
     updatePassword.mockResolvedValue(undefined);
+    searchParams = new URLSearchParams();
   });
 
   it('validates, updates through Supabase, reconfirms the session, and hard redirects', async () => {
+    searchParams = new URLSearchParams(
+      'callbackUrl=%2Fprojects%2Fp1%3Ftab%3Dorders',
+    );
     jest.useFakeTimers();
     render(<ResetPasswordPage />);
     await act(async () => {
@@ -53,7 +62,9 @@ describe('ResetPasswordPage', () => {
     act(() => {
       jest.advanceTimersByTime(700);
     });
-    expect(replaceAuthDestination).toHaveBeenCalledWith('/projects');
+    expect(replaceAuthDestination).toHaveBeenCalledWith(
+      '/projects/p1?tab=orders',
+    );
     jest.useRealTimers();
   });
 
@@ -66,5 +77,23 @@ describe('ResetPasswordPage', () => {
       ).toBeInTheDocument(),
     );
     expect(updatePassword).not.toHaveBeenCalled();
+  });
+
+  it('explains a reused password without mislabeling it as a session failure', async () => {
+    updatePassword.mockRejectedValueOnce({ code: 'same_password' });
+    render(<ResetPasswordPage />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    fireEvent.change(screen.getByLabelText('New password'), {
+      target: { value: 'StrongPass1' },
+    });
+    fireEvent.change(screen.getByLabelText('Confirm new password'), {
+      target: { value: 'StrongPass1' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Update password' }));
+
+    expect(await screen.findByText(/have not used/)).toBeVisible();
+    expect(screen.queryByText(/session/i)).not.toBeInTheDocument();
   });
 });

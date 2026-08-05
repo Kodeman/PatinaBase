@@ -137,14 +137,10 @@ export async function middleware(req: NextRequest) {
   const isUnauthorizedPage = req.nextUrl.pathname === '/unauthorized';
   const isAuthenticated = !!user;
 
-  const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || 'localhost:3002';
-  const protocol = req.headers.get('x-forwarded-proto') || 'http';
-  const baseUrl = `${protocol}://${host}`;
+  const baseUrl = req.nextUrl.origin;
   const requestedPath = `${req.nextUrl.pathname}${req.nextUrl.search || ''}`;
 
   if (isApiRoute) return res;
-  if (req.headers.get('rsc') === '1' || req.headers.get('next-router-prefetch') === '1') return res;
-
   // Helper: create a redirect that preserves Supabase auth cookies from res.
   // Use the object-set form so domain/secure/sameSite/path/httpOnly/TTL
   // attributes carry over — the (name, value) shorthand drops them, which

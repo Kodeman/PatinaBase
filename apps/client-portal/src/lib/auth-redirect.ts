@@ -13,6 +13,32 @@ export function resolveAuthReturnPath(raw: string | null | undefined): string {
   return safeAuthReturnPath(raw, CLIENT_AUTH_DESTINATION);
 }
 
+/** Recovery callbacks may only open the reset form, never a portal page. */
+export function resolveRecoveryPath(raw: string | null | undefined): string {
+  const destination = safeAuthReturnPath(raw, '/auth/reset-password');
+  return destination === '/auth/reset-password' ||
+    destination.startsWith('/auth/reset-password?')
+    ? destination
+    : '/auth/reset-password';
+}
+
+export function buildRecoveryCallbackUrl(
+  origin: string,
+  destination: string | null | undefined,
+): string {
+  const resetQuery = new URLSearchParams({
+    callbackUrl: resolveAuthReturnPath(destination),
+  });
+  const callback = new URL(
+    buildAuthCallbackUrl(
+      origin,
+      `/auth/reset-password?${resetQuery.toString()}`,
+    ),
+  );
+  callback.searchParams.set('type', 'recovery');
+  return callback.toString();
+}
+
 export { buildAuthCallbackUrl, buildSignInPath, buildVerifyOtpPath };
 
 interface SessionReader {

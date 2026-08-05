@@ -40,6 +40,7 @@ describe('client middleware Universal Link exemption', () => {
     const response = await middleware({
       headers: new Headers(),
       nextUrl: {
+        origin: 'http://localhost:3002',
         pathname: '/.well-known/apple-app-site-association',
         search: '',
         searchParams: new URLSearchParams(),
@@ -53,6 +54,7 @@ describe('client middleware Universal Link exemption', () => {
     const response = await middleware({
       headers: new Headers({ host: 'localhost:3002' }),
       nextUrl: {
+        origin: 'http://localhost:3002',
         pathname: `/rfq/${'a'.repeat(64)}`,
         search: '',
         searchParams: new URLSearchParams(),
@@ -66,6 +68,7 @@ describe('client middleware Universal Link exemption', () => {
     await middleware({
       headers: new Headers({ host: 'localhost:3002' }),
       nextUrl: {
+        origin: 'http://localhost:3002',
         pathname: '/invoices/invoice-1',
         search: '?checkout=success&session_id=cs_1',
         searchParams: new URLSearchParams('checkout=success&session_id=cs_1'),
@@ -96,6 +99,7 @@ describe('client middleware Universal Link exemption', () => {
       const response = await middleware({
         headers: new Headers({ host: 'localhost:3002' }),
         nextUrl: {
+          origin: 'http://localhost:3002',
           pathname,
           search: query ? `?${query}` : '',
           searchParams: new URLSearchParams(query),
@@ -128,6 +132,7 @@ describe('client middleware Universal Link exemption', () => {
     await middleware({
       headers: new Headers({ host: 'localhost:3002' }),
       nextUrl: {
+        origin: 'http://localhost:3002',
         pathname: '/auth/signin',
         search: '?callbackUrl=https%3A%2F%2Fevil.test',
         searchParams: new URLSearchParams(
@@ -140,5 +145,44 @@ describe('client middleware Universal Link exemption', () => {
     expect(redirectUrl.pathname).toBe('/projects');
     expect(redirectUrl.host).toBe('localhost:3002');
     delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+  });
+
+  it('does not let RSC headers bypass anonymous authentication', async () => {
+    await middleware({
+      headers: new Headers({ host: 'localhost:3002', rsc: '1' }),
+      nextUrl: {
+        origin: 'http://localhost:3002',
+        pathname: '/projects',
+        search: '?view=active',
+        searchParams: new URLSearchParams('view=active'),
+      },
+    } as never);
+
+    const redirectUrl = (NextResponse.redirect as jest.Mock).mock
+      .calls[0][0] as URL;
+    expect(redirectUrl.pathname).toBe('/auth/signin');
+    expect(redirectUrl.searchParams.get('callbackUrl')).toBe(
+      '/projects?view=active',
+    );
+  });
+
+  it('ignores a spoofed forwarded host when building auth redirects', async () => {
+    await middleware({
+      headers: new Headers({
+        host: 'localhost:3002',
+        'x-forwarded-host': 'evil.test',
+        'x-forwarded-proto': 'https',
+      }),
+      nextUrl: {
+        origin: 'http://localhost:3002',
+        pathname: '/projects',
+        search: '',
+        searchParams: new URLSearchParams(),
+      },
+    } as never);
+
+    const redirectUrl = (NextResponse.redirect as jest.Mock).mock
+      .calls[0][0] as URL;
+    expect(redirectUrl.origin).toBe('http://localhost:3002');
   });
 });

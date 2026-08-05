@@ -13,6 +13,7 @@ const mockSignInWithPassword = jest.fn();
 const mockSignInWithOAuth = jest.fn();
 const mockGetSession = jest.fn();
 const mockRegenerateQr = jest.fn();
+const mockCancelQr = jest.fn();
 const mockHardNavigate = jest.fn();
 let mockSearchParams = new URLSearchParams();
 let mockQr = {
@@ -25,6 +26,7 @@ const mockUsePortalQrAuth = jest.fn(({ enabled }: { enabled: boolean }) => ({
   ...mockQr,
   start: jest.fn(),
   regenerate: mockRegenerateQr,
+  cancel: mockCancelQr,
   enabled,
 }));
 
@@ -184,6 +186,20 @@ describe('Admin sign in', () => {
     };
     view.rerender(<SignInPage />);
     expect(screen.getByText('That code has expired.')).toBeVisible();
+  });
+
+  it('stops QR transport before another sign-in method can run', () => {
+    render(<SignInPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Use a QR code' }));
+    expect(mockUsePortalQrAuth).toHaveBeenLastCalledWith(
+      expect.objectContaining({ enabled: true }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Use email and password instead' }),
+    );
+    expect(mockUsePortalQrAuth).toHaveBeenLastCalledWith(
+      expect.objectContaining({ enabled: false }),
+    );
   });
 
   it('confirms the password session and does not redirect twice', async () => {

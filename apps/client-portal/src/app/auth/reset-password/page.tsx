@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { createBrowserClient, useUpdatePassword } from '@patina/supabase';
 import { normalizeAuthError } from '@patina/supabase/auth';
 import {
@@ -9,9 +10,9 @@ import {
 } from '@patina/design-system/PortalAuth';
 import { ClientAuthShell } from '@/components/auth/ClientAuthShell';
 import {
-  CLIENT_AUTH_DESTINATION,
   confirmBrowserSession,
   replaceAuthDestination,
+  resolveAuthReturnPath,
 } from '@/lib/auth-redirect';
 
 type RecoveryState = 'checking' | 'ready' | 'success' | 'invalid';
@@ -32,7 +33,9 @@ function passwordValidation(
   return null;
 }
 
-export default function ResetPasswordPage() {
+function ResetPasswordContent() {
+  const searchParams = useSearchParams();
+  const destination = resolveAuthReturnPath(searchParams?.get('callbackUrl'));
   const updatePassword = useUpdatePassword();
   const [state, setState] = useState<RecoveryState>('checking');
   const [password, setPassword] = useState('');
@@ -41,6 +44,16 @@ export default function ResetPasswordPage() {
   const redirectingRef = useRef(false);
   const supabaseRef = useRef<ReturnType<typeof createBrowserClient> | null>(
     null,
+  );
+
+  const hardRedirect = useCallback(
+    (event?: React.MouseEvent<HTMLAnchorElement>) => {
+      event?.preventDefault();
+      if (redirectingRef.current) return;
+      redirectingRef.current = true;
+      replaceAuthDestination(destination);
+    },
+    [destination],
   );
 
   useEffect(() => {
@@ -60,17 +73,12 @@ export default function ResetPasswordPage() {
   }, []);
 
   useEffect(() => {
-    if (state !== 'success' || redirectingRef.current) return;
-    redirectingRef.current = true;
-    const timer = window.setTimeout(
-      () => replaceAuthDestination(CLIENT_AUTH_DESTINATION),
-      650,
-    );
+    if (state !== 'success') return;
+    const timer = window.setTimeout(hardRedirect, 650);
     return () => {
       window.clearTimeout(timer);
-      redirectingRef.current = false;
     };
-  }, [state]);
+  }, [hardRedirect, state]);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -95,7 +103,7 @@ export default function ResetPasswordPage() {
   return (
     <ClientAuthShell
       title="Choose a new password."
-      description="Set a strong password, then we’ll return you to your projects."
+      description="Set a strong password, then we’ll return you to Patina."
     >
       {state === 'checking' ? (
         <PortalAuthNotice title="Checking your recovery link">
@@ -108,7 +116,7 @@ export default function ResetPasswordPage() {
             continue.
           </PortalAuthNotice>
           <a
-            href="/auth/forgot-password"
+            href={`/auth/forgot-password?callbackUrl=${encodeURIComponent(destination)}`}
             className="inline-flex min-h-11 items-center text-sm font-semibold underline underline-offset-4"
           >
             Request another link
@@ -118,12 +126,8 @@ export default function ResetPasswordPage() {
         <PortalAuthSuccess
           title="Your password is updated."
           description="We’re taking you to your projects now."
-          destinationHref={CLIENT_AUTH_DESTINATION}
-          onContinue={() => {
-            if (redirectingRef.current) return;
-            redirectingRef.current = true;
-            replaceAuthDestination(CLIENT_AUTH_DESTINATION);
-          }}
+          destinationHref={destination}
+          onContinue={hardRedirect}
         />
       ) : (
         <form className="space-y-5" onSubmit={submit}>
@@ -140,7 +144,7 @@ export default function ResetPasswordPage() {
             </p>
           </div>
           {error ? (
-            <PortalAuthNotice tone="error" title="Check your password">
+            <PortalAuthNotice id="client-reset-error" tone="error" title="Check your password">
               {error}
             </PortalAuthNotice>
           ) : null}
@@ -156,6 +160,7 @@ export default function ResetPasswordPage() {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               aria-invalid={Boolean(error) || undefined}
+              aria-describedby={error ? 'client-reset-error' : undefined}
               className="h-12 w-full border border-[#6d726b] bg-white px-3 outline-none focus:border-[#252a25] focus:ring-2 focus:ring-[#252a25]"
             />
           </div>
@@ -171,6 +176,7 @@ export default function ResetPasswordPage() {
               value={confirmation}
               onChange={(event) => setConfirmation(event.target.value)}
               aria-invalid={Boolean(error) || undefined}
+              aria-describedby={error ? 'client-reset-error' : undefined}
               className="h-12 w-full border border-[#6d726b] bg-white px-3 outline-none focus:border-[#252a25] focus:ring-2 focus:ring-[#252a25]"
             />
           </div>
@@ -186,5 +192,21 @@ export default function ResetPasswordPage() {
         </form>
       )}
     </ClientAuthShell>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <ClientAuthShell>
+          <PortalAuthNotice title="Checking your recovery link">
+            Confirming the secure recovery session.
+          </PortalAuthNotice>
+        </ClientAuthShell>
+      }
+    >
+      <ResetPasswordContent />
+    </Suspense>
   );
 }

@@ -6,7 +6,12 @@ import {
   type AuthFailureKind,
 } from './errors';
 
-export type AuthCallbackMethod = 'pkce' | 'existing-session' | 'auth-state';
+export type AuthCallbackMethod =
+  | 'recovery-token'
+  | 'recovery-session'
+  | 'pkce'
+  | 'existing-session'
+  | 'auth-state';
 
 export type AuthCallbackResult =
   | {
@@ -22,6 +27,9 @@ export type AuthCallbackResult =
 export interface FinalizeAuthCallbackOptions {
   supabase: Pick<SupabaseClient<Database>, 'auth'>;
   code?: string | null;
+  recovery?: boolean;
+  recoveryTokenHash?: string | null;
+  legacyRecoveryFragment?: boolean;
   timeoutMs?: number;
   signal?: AbortSignal;
 }
@@ -41,36 +49,57 @@ function failed(error: unknown, fallback: AuthFailureKind): AuthCallbackResult {
 export async function finalizeAuthCallback({
   supabase,
   code,
+  recovery = false,
+  recoveryTokenHash,
+  legacyRecoveryFragment = false,
   timeoutMs = 5_000,
   signal,
 }: FinalizeAuthCallbackOptions): Promise<AuthCallbackResult> {
   if (signal?.aborted) return failed(signal.reason, 'cancelled');
+  const hasRecoveryToken =
+    recoveryTokenHash !== undefined && recoveryTokenHash !== null;
+  const isRecovery = recovery || hasRecoveryToken || legacyRecoveryFragment;
+  const startedAt = Date.now();
+  const remainingMs = () =>
+    Math.max(0, timeoutMs - (Date.now() - startedAt));
 
-  try {
-    if (code) {
-      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-      if (signal?.aborted) return failed(signal.reason, 'cancelled');
-      if (error) return failed(error, 'oauth');
-      if (data.session) {
-        return { status: 'authenticated', session: data.session, method: 'pkce' };
-      }
-    }
+  const awaitWithinDeadline = <T>(operation: PromiseLike<T>): Promise<T> =>
+    new Promise<T>((resolve, reject) => {
+      let settled = false;
+      let timerId: ReturnType<typeof setTimeout> | undefined;
 
-    const {
-      data: { session },
-      error,
-    } = await supabase.auth.getSession();
-    if (signal?.aborted) return failed(signal.reason, 'cancelled');
-    if (error) return failed(error, 'session');
-    if (session) {
-      return {
-        status: 'authenticated',
-        session,
-        method: code ? 'pkce' : 'existing-session',
+      const cleanup = () => {
+        if (timerId !== undefined) clearTimeout(timerId);
+        signal?.removeEventListener('abort', handleAbort);
       };
-    }
+      const finish = (callback: () => void) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        callback();
+      };
+      const handleAbort = () =>
+        finish(() => reject(signal?.reason ?? new Error('Auth callback aborted')));
 
-    return await new Promise<AuthCallbackResult>((resolve) => {
+      signal?.addEventListener('abort', handleAbort, { once: true });
+      if (signal?.aborted) {
+        handleAbort();
+        return;
+      }
+      timerId = setTimeout(
+        () => finish(() => reject(new Error('Auth callback timed out'))),
+        remainingMs(),
+      );
+      Promise.resolve(operation).then(
+        (value) => finish(() => resolve(value)),
+        (error) => finish(() => reject(error)),
+      );
+    });
+
+  const waitForAuthState = (
+    recoveryOnly: boolean,
+  ): Promise<AuthCallbackResult> =>
+    new Promise<AuthCallbackResult>((resolve) => {
       let settled = false;
       let timeoutId: ReturnType<typeof setTimeout> | undefined;
       let subscription: { unsubscribe(): void } | undefined;
@@ -80,18 +109,14 @@ export async function finalizeAuthCallback({
         subscription?.unsubscribe();
         signal?.removeEventListener('abort', handleAbort);
       };
-
       const finish = (result: AuthCallbackResult) => {
         if (settled) return;
         settled = true;
         cleanup();
         resolve(result);
       };
-
       const handleAbort = () => finish(failed(signal?.reason, 'cancelled'));
 
-      // Register before subscribing. A client/test double can synchronously
-      // trigger cancellation while onAuthStateChange is being registered.
       signal?.addEventListener('abort', handleAbort, { once: true });
       if (signal?.aborted) {
         handleAbort();
@@ -101,22 +126,23 @@ export async function finalizeAuthCallback({
       let authState: ReturnType<typeof supabase.auth.onAuthStateChange>;
       try {
         authState = supabase.auth.onAuthStateChange((event, nextSession) => {
-          if (event === 'SIGNED_IN' && nextSession) {
+          const accepted = recoveryOnly
+            ? event === 'PASSWORD_RECOVERY'
+            : event === 'SIGNED_IN' || event === 'INITIAL_SESSION';
+          if (accepted && nextSession) {
             finish({
               status: 'authenticated',
               session: nextSession,
-              method: 'auth-state',
+              method: recoveryOnly ? 'recovery-session' : 'auth-state',
             });
           }
         });
       } catch (error) {
-        finish(failed(error, 'oauth'));
+        finish(failed(error, 'session'));
         return;
       }
       subscription = authState.data.subscription;
 
-      // Some test doubles and alternate clients may synchronously deliver the
-      // current state while registering the listener.
       if (settled) {
         subscription.unsubscribe();
         return;
@@ -124,10 +150,108 @@ export async function finalizeAuthCallback({
 
       timeoutId = setTimeout(
         () => finish(failed(new Error('Auth callback timed out'), 'timeout')),
-        timeoutMs,
+        remainingMs(),
       );
     });
+
+  try {
+    if (hasRecoveryToken) {
+      const { data, error } = await awaitWithinDeadline(
+        supabase.auth.verifyOtp({
+          token_hash: recoveryTokenHash,
+          type: 'recovery',
+        }),
+      );
+      if (signal?.aborted) return failed(signal.reason, 'cancelled');
+      if (error) return failed(error, 'invalid_recovery');
+      const recoverySession = data.session;
+      if (!recoverySession) {
+        return failed(new Error('Recovery session unavailable'), 'session');
+      }
+
+      const {
+        data: { session: persistedSession },
+        error: sessionError,
+      } = await awaitWithinDeadline(supabase.auth.getSession());
+      if (signal?.aborted) return failed(signal.reason, 'cancelled');
+      if (sessionError || !persistedSession) {
+        return failed(
+          sessionError ?? new Error('Session unavailable'),
+          'session',
+        );
+      }
+      // An unrelated session must never make an invalid or partially persisted
+      // recovery callback look successful. Confirm the session created by this
+      // one-time token is the session now stored by the browser client.
+      if (persistedSession.access_token !== recoverySession.access_token) {
+        return failed(new Error('Recovery session mismatch'), 'session');
+      }
+
+      return {
+        status: 'authenticated',
+        session: recoverySession,
+        method: 'recovery-token',
+      };
+    }
+
+    if (legacyRecoveryFragment) {
+      // A pre-TokenHash ConfirmationURL can still deliver implicit recovery
+      // tokens. Do not trust a pre-existing session: only Supabase's dedicated
+      // PASSWORD_RECOVERY event proves this fragment authorized a reset.
+      return await waitForAuthState(true);
+    }
+
+    let exchangeFailure: AuthCallbackResult | null = null;
+    if (code) {
+      const { data, error } = await awaitWithinDeadline(
+        supabase.auth.exchangeCodeForSession(code),
+      );
+      if (signal?.aborted) return failed(signal.reason, 'cancelled');
+      if (error) {
+        exchangeFailure = failed(
+          error,
+          isRecovery ? 'invalid_recovery' : 'oauth',
+        );
+        // A recovery code authorizes a password change. Never let response
+        // data or an unrelated existing session mask a rejected credential.
+        if (isRecovery) return exchangeFailure;
+      }
+      if (data.session) {
+        return { status: 'authenticated', session: data.session, method: 'pkce' };
+      }
+    }
+
+    if (isRecovery) {
+      return failed(
+        new Error('Recovery credential unavailable'),
+        'invalid_recovery',
+      );
+    }
+
+    const {
+      data: { session },
+      error,
+    } = await awaitWithinDeadline(supabase.auth.getSession());
+    if (signal?.aborted) return failed(signal.reason, 'cancelled');
+    if (error) return failed(error, 'session');
+    if (session) {
+      return {
+        status: 'authenticated',
+        session,
+        method: exchangeFailure
+          ? 'existing-session'
+          : code
+            ? 'pkce'
+            : 'existing-session',
+      };
+    }
+    // A back-navigation or reload may revisit a callback whose one-time PKCE
+    // code was already consumed successfully. Prefer the persisted session
+    // above; without one, return the original exchange failure immediately.
+    if (exchangeFailure) return exchangeFailure;
+
+    return await waitForAuthState(false);
   } catch (error) {
-    return failed(error, 'oauth');
+    return failed(error, isRecovery ? 'invalid_recovery' : 'oauth');
   }
 }

@@ -8,6 +8,8 @@ let mockAdminRoles: Array<{ role_id: string; roles: { domain: string } }> = [
   { role_id: 'admin-role', roles: { domain: 'admin' } },
 ];
 let mockProfile: { mfa_enforced?: boolean } | null = { mfa_enforced: false };
+let mockRoleError: Error | null = null;
+let mockProfileError: Error | null = null;
 
 jest.mock('@patina/supabase/client', () => ({
   createMiddlewareClient: () => ({
@@ -60,10 +62,12 @@ jest.mock('next/server', () => {
   return { NextResponse: MockNextResponse };
 });
 
-function request(url: string) {
+function request(url: string, headerValues: Record<string, string> = {}) {
   return {
     nextUrl: new URL(url),
-    headers: { get: () => null },
+    headers: {
+      get: (name: string) => headerValues[name.toLowerCase()] ?? null,
+    },
   } as never;
 }
 
@@ -80,9 +84,12 @@ describe('Admin auth middleware', () => {
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-test-key';
     mockAdminRoles = [{ role_id: 'admin-role', roles: { domain: 'admin' } }];
     mockProfile = { mfa_enforced: false };
+    mockRoleError = null;
+    mockProfileError = null;
     mockGetUser.mockResolvedValue({ data: { user: null } });
     mockGetAssuranceLevel.mockResolvedValue({
       data: { currentLevel: 'aal1', nextLevel: 'aal2' },
+      error: null,
     });
     mockCreateClient.mockReturnValue({
       from: (table: string) => {
@@ -90,7 +97,10 @@ describe('Admin auth middleware', () => {
           return {
             select: () => ({
               eq: () => ({
-                eq: async () => ({ data: mockAdminRoles }),
+                eq: async () => ({
+                  data: mockAdminRoles,
+                  error: mockRoleError,
+                }),
               }),
             }),
           };
@@ -99,7 +109,10 @@ describe('Admin auth middleware', () => {
           return {
             select: () => ({
               eq: () => ({
-                maybeSingle: async () => ({ data: mockProfile }),
+                maybeSingle: async () => ({
+                  data: mockProfile,
+                  error: mockProfileError,
+                }),
               }),
             }),
           };
@@ -125,6 +138,22 @@ describe('Admin auth middleware', () => {
     expect(location?.searchParams.get('callbackUrl')).toBe(
       '/orders?state=late&page=2',
     );
+  });
+
+  it('does not let RSC or prefetch headers bypass authentication and roles', async () => {
+    const anonymous = await middleware(
+      request('https://admin.patina.cloud/orders', { rsc: '1' }),
+    );
+    expect(redirectedTo(anonymous)?.pathname).toBe('/auth/signin');
+
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'not-admin' } } });
+    mockAdminRoles = [];
+    const nonAdmin = await middleware(
+      request('https://admin.patina.cloud/orders', {
+        'next-router-prefetch': '1',
+      }),
+    );
+    expect(redirectedTo(nonAdmin)?.pathname).toBe('/unauthorized');
   });
 
   it('rejects an external callback for an already authenticated user', async () => {
@@ -191,6 +220,7 @@ describe('Admin auth middleware', () => {
     mockProfile = { mfa_enforced: true };
     mockGetAssuranceLevel.mockResolvedValue({
       data: { currentLevel: 'aal2', nextLevel: 'aal2' },
+      error: null,
     });
 
     const response = await middleware(
@@ -199,5 +229,49 @@ describe('Admin auth middleware', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('location')).toBeNull();
+  });
+
+  it('fails closed when role-check configuration or queries are unavailable', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'admin' } } });
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const missingConfig = await middleware(
+      request('https://admin.patina.cloud/orders'),
+    );
+    expect(redirectedTo(missingConfig)?.href).toContain(
+      '/auth/error?error=Configuration',
+    );
+
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-test-key';
+    mockRoleError = new Error('role lookup unavailable');
+    const roleFailure = await middleware(
+      request('https://admin.patina.cloud/orders'),
+    );
+    expect(redirectedTo(roleFailure)?.href).toContain(
+      '/auth/error?error=Configuration',
+    );
+  });
+
+  it('fails closed when MFA profile or assurance checks fail', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'admin' } } });
+    mockProfileError = new Error('profile unavailable');
+    const profileFailure = await middleware(
+      request('https://admin.patina.cloud/orders'),
+    );
+    expect(redirectedTo(profileFailure)?.href).toContain(
+      '/auth/error?error=Configuration',
+    );
+
+    mockProfileError = null;
+    mockProfile = { mfa_enforced: true };
+    mockGetAssuranceLevel.mockResolvedValue({
+      data: null,
+      error: new Error('aal unavailable'),
+    });
+    const aalFailure = await middleware(
+      request('https://admin.patina.cloud/orders'),
+    );
+    expect(redirectedTo(aalFailure)?.href).toContain(
+      '/auth/error?error=Configuration',
+    );
   });
 });

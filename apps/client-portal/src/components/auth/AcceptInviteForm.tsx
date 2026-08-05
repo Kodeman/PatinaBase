@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createBrowserClient } from '@patina/supabase';
 import { normalizeAuthError } from '@patina/supabase/auth';
 import {
@@ -26,18 +26,23 @@ export function AcceptInviteForm({ email, token }: AcceptInviteFormProps) {
   const [error, setError] = useState<string | null>(null);
   const redirectingRef = useRef(false);
 
+  const hardRedirect = useCallback(
+    (event?: React.MouseEvent<HTMLAnchorElement>) => {
+      event?.preventDefault();
+      if (redirectingRef.current) return;
+      redirectingRef.current = true;
+      replaceAuthDestination(CLIENT_AUTH_DESTINATION);
+    },
+    [],
+  );
+
   useEffect(() => {
-    if (!accepted || redirectingRef.current) return;
-    redirectingRef.current = true;
-    const timer = window.setTimeout(
-      () => replaceAuthDestination(CLIENT_AUTH_DESTINATION),
-      650,
-    );
+    if (!accepted) return;
+    const timer = window.setTimeout(hardRedirect, 650);
     return () => {
       window.clearTimeout(timer);
-      redirectingRef.current = false;
     };
-  }, [accepted]);
+  }, [accepted, hardRedirect]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -77,11 +82,18 @@ export function AcceptInviteForm({ email, token }: AcceptInviteFormProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token }),
       });
-      if (!response.ok) throw new Error('Invitation acceptance failed');
+      if (!response.ok) {
+        setError(
+          response.status === 401
+            ? 'Your sign-in could not be confirmed. Sign in again, then reopen the invitation.'
+            : 'We couldn’t finish accepting this invitation. Ask your designer to resend it, or contact Patina.',
+        );
+        return;
+      }
       await confirmBrowserSession(supabase);
       setAccepted(true);
     } catch (acceptError) {
-      setError(normalizeAuthError(acceptError, 'session').message);
+      setError(normalizeAuthError(acceptError).message);
     } finally {
       setSubmitting(false);
     }
@@ -93,11 +105,7 @@ export function AcceptInviteForm({ email, token }: AcceptInviteFormProps) {
         title="Your invitation is accepted."
         description="We’re opening your projects now."
         destinationHref={CLIENT_AUTH_DESTINATION}
-        onContinue={() => {
-          if (redirectingRef.current) return;
-          redirectingRef.current = true;
-          replaceAuthDestination(CLIENT_AUTH_DESTINATION);
-        }}
+        onContinue={hardRedirect}
       />
     );
   }

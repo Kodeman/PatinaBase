@@ -1,10 +1,15 @@
 /** Stable categories that portal UIs may branch on without inspecting SDK text. */
 export type AuthFailureKind =
   | 'invalid_code'
+  | 'invalid_recovery'
   | 'invalid_credentials'
   | 'oauth'
   | 'qr'
   | 'network'
+  | 'rate_limit'
+  | 'service'
+  | 'weak_password'
+  | 'same_password'
   | 'access_denied'
   | 'timeout'
   | 'session'
@@ -19,12 +24,22 @@ export interface AuthFailure {
 const FAILURE_MESSAGES: Record<AuthFailureKind, string> = {
   invalid_code:
     'That code has expired or isn\'t correct. Request a new code and try again.',
+  invalid_recovery:
+    'That password-reset link has expired or was already used. Request a new link and try again.',
   invalid_credentials:
     'That email and password don\'t match. Try again, or use a code by email.',
   oauth: 'That sign-in didn\'t finish. Try again, or use a code by email.',
   qr: 'We couldn\'t make a QR code. Refresh it, or use a code by email.',
   network:
     'We couldn\'t reach Patina just now. Check your connection and try again.',
+  rate_limit:
+    'Too many attempts were made just now. Wait a minute, then try again.',
+  service:
+    'Patina’s sign-in service is temporarily unavailable. Please try again shortly.',
+  weak_password:
+    'That password does not meet the security requirements. Try a longer, more varied password.',
+  same_password:
+    'Choose a password you have not used for this account before.',
   access_denied:
     'This account does not have access to this portal. Try another account or contact Patina.',
   timeout: 'Sign-in took longer than expected. Please try again.',
@@ -65,6 +80,10 @@ export function normalizeAuthError(
   if (error instanceof AuthFlowError) return error.failure;
 
   const text = errorText(error);
+  const status =
+    error && typeof error === 'object'
+      ? Number((error as Record<string, unknown>).status)
+      : Number.NaN;
 
   if (
     text.includes('aborterror') ||
@@ -76,6 +95,28 @@ export function normalizeAuthError(
   }
   if (text.includes('timeout') || text.includes('timed out')) {
     return failure('timeout');
+  }
+  if (
+    status === 429 ||
+    text.includes('rate limit') ||
+    text.includes('rate_limit') ||
+    text.includes('too many requests')
+  ) {
+    return failure('rate_limit');
+  }
+  if (
+    text.includes('same_password') ||
+    text.includes('password should be different') ||
+    text.includes('new password must be different')
+  ) {
+    return failure('same_password');
+  }
+  if (
+    text.includes('weak_password') ||
+    text.includes('password should be') ||
+    text.includes('password must contain')
+  ) {
+    return failure('weak_password');
   }
   if (
     text.includes('invalid login credentials') ||
@@ -92,7 +133,9 @@ export function normalizeAuthError(
     text.includes('invalid otp') ||
     text.includes('token is invalid')
   ) {
-    return failure('invalid_code');
+    return failure(
+      fallback === 'invalid_recovery' ? 'invalid_recovery' : 'invalid_code',
+    );
   }
   if (
     text.includes('access_denied') ||
@@ -112,8 +155,33 @@ export function normalizeAuthError(
   ) {
     return failure('network');
   }
+  if (
+    status >= 500 ||
+    text.includes('provider is not enabled') ||
+    text.includes('email provider') ||
+    text.includes('configuration error')
+  ) {
+    return failure('service');
+  }
 
   return failure(fallback);
+}
+
+/** Map stable OAuth callback query/fragment codes without rendering provider text. */
+export function normalizeOAuthCallbackError(
+  error: string | null | undefined,
+): AuthFailure | null {
+  if (!error) return null;
+  const code = error.toLowerCase();
+  if (
+    code === 'access_denied' ||
+    code === 'cancelled' ||
+    code === 'canceled' ||
+    code === 'user_cancelled_authorize'
+  ) {
+    return failure('cancelled');
+  }
+  return failure('oauth');
 }
 
 /** An Error safe for React Query to expose to presentation code. */

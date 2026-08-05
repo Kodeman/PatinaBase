@@ -65,3 +65,24 @@ export function buildSignInPath(
   if (failure) params.set('error', failure);
   return `/auth/signin?${params.toString()}`;
 }
+
+/**
+ * Recover the final portal destination nested inside a sanitized reset route.
+ * Invalid outer or inner paths fall back to the portal's own landing page.
+ */
+export function recoveryFinalReturnPath(
+  recoveryPath: string | null | undefined,
+  fallback = '/',
+): string {
+  const safeFallback = safeAuthReturnPath(undefined, fallback);
+  const safeRecoveryPath = safeAuthReturnPath(
+    recoveryPath,
+    '/auth/reset-password',
+  );
+  const recoveryUrl = new URL(safeRecoveryPath, 'https://auth.patina.local');
+  if (recoveryUrl.pathname !== '/auth/reset-password') return safeFallback;
+  return safeAuthReturnPath(
+    recoveryUrl.searchParams.get('callbackUrl'),
+    safeFallback,
+  );
+}

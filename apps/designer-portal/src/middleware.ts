@@ -69,24 +69,15 @@ export async function middleware(req: NextRequest) {
   // Recovery links establish a short-lived Supabase session before rendering
   // the reset form. Do not bounce that session to /desk before the password
   // can be updated.
-  const isPasswordRecoveryPage = req.nextUrl.pathname.startsWith('/auth/reset-password');
+  const isPasswordRecoveryPage =
+    req.nextUrl.pathname.startsWith('/auth/reset-password') ||
+    (req.nextUrl.pathname === '/auth/callback' &&
+      req.nextUrl.searchParams.get('type') === 'recovery');
 
-  // Get the actual host from headers (handles proxy scenarios)
-  const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || 'localhost:3000';
-  const protocol = req.headers.get('x-forwarded-proto') || 'http';
-  const baseUrl = `${protocol}://${host}`;
-
-  // Detect RSC and prefetch requests - let them through
-  const isRSCRequest = req.headers.get('rsc') === '1';
-  const isPrefetch = req.headers.get('next-router-prefetch') === '1';
+  const baseUrl = req.nextUrl.origin;
 
   // API routes pass through — auth handled by api-routes middleware
   if (isApiRoute) {
-    return res;
-  }
-
-  // RSC/prefetch requests pass through
-  if (isRSCRequest || isPrefetch) {
     return res;
   }
 

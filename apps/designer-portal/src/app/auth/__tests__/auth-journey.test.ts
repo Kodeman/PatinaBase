@@ -52,6 +52,8 @@ describe('designer auth journey', () => {
   it('maps QR states distinctly while leaving generation lazy to the disclosure', () => {
     expect(shouldActivateQr(false)).toBe(false);
     expect(shouldActivateQr(true)).toBe(true);
+    expect(shouldActivateQr(true, 'password', true)).toBe(false);
+    expect(shouldActivateQr(true, 'email', false, true)).toBe(false);
     expect(qrPresentation('idle', 0)).toEqual(expect.objectContaining({ loginState: 'qr' }));
     expect(qrPresentation('pending', 42).description).toContain('42s');
     expect(qrPresentation('verifying', 0).description).toContain('Confirming');

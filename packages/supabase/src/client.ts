@@ -70,6 +70,24 @@ export function createBrowserClient(): SupabaseClient<Database> {
 }
 
 /**
+ * Isolated browser auth client for validating one-time credentials before they
+ * are allowed to replace the portal's persisted session.
+ *
+ * This client deliberately has no storage side effects. Callers must explicitly
+ * commit an accepted session through the shared browser client after their
+ * operation is still current.
+ */
+export function createEphemeralAuthClient(): SupabaseClient<Database> {
+  return createSupabaseClient<Database>(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      persistSession: false,
+    },
+  });
+}
+
+/**
  * Middleware client - for Next.js middleware
  * Handles cookie operations via request/response
  */

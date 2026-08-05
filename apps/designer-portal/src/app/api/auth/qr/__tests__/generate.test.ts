@@ -3,10 +3,9 @@
  *
  * Tests for /api/auth/qr/generate.
  *
- * Regression: in production, POST /api/auth/qr/generate returned 405 with no
- * Allow header because the route only exported GET + OPTIONS. The Chrome
- * extension and iOS QR-pairing flow depend on a working POST handler as the
- * bootstrap of cross-device sign-in.
+ * The Chrome extension and portal clients depend on POST as the bootstrap of
+ * cross-device sign-in. GET remains temporarily compatible for already-shipped
+ * clients, with origin checks and the same atomic limiter as POST.
  *
  * Uses the `node` test env (not jsdom) so Web Fetch globals (Request/Response/
  * Headers/ReadableStream) come from Node directly and `next/server`'s
@@ -114,11 +113,8 @@ describe('POST /api/auth/qr/generate', () => {
   });
 
   it('rate limits repeated creation from a trusted Cloudflare address', async () => {
-    const gteMock = jest.fn().mockResolvedValue({ count: 10, error: null });
-    const eqMock = jest.fn().mockReturnValue({ gte: gteMock });
-    fromMock.mockReturnValue({
-      select: jest.fn().mockReturnValue({ eq: eqMock }),
-      insert: insertMock,
+    insertMock.mockResolvedValueOnce({
+      error: { code: 'P0001', message: 'qr_auth_rate_limited' },
     });
 
     const response = await POST(makeRequest('POST', {}, {
@@ -128,12 +124,46 @@ describe('POST /api/auth/qr/generate', () => {
 
     expect(response.status).toBe(429);
     expect(response.headers.get('retry-after')).toBe('60');
-    expect(eqMock).toHaveBeenCalledWith('ip_address', '203.0.113.10');
+    expect(insertMock).toHaveBeenCalledWith(
+      expect.objectContaining({ ip_address: '203.0.113.10' }),
+    );
+  });
+
+  it('fails closed when a production request has no trusted Cloudflare address', async () => {
+    const response = await POST(
+      new NextRequest('https://app.patina.cloud/api/auth/qr/generate', {
+        method: 'POST',
+        body: '{}',
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    expect(response.status).toBe(503);
+    expect(insertMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects cross-site and simple-form session creation requests', async () => {
+    const crossSite = await POST(
+      makeRequest('POST', {}, {
+        origin: 'https://evil.example',
+        'sec-fetch-site': 'cross-site',
+      }),
+    );
+    expect(crossSite.status).toBe(403);
+
+    const simpleForm = await POST(
+      new NextRequest('http://localhost:3000/api/auth/qr/generate', {
+        method: 'POST',
+        body: 'device=browser',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      }),
+    );
+    expect(simpleForm.status).toBe(415);
     expect(insertMock).not.toHaveBeenCalled();
   });
 });
 
-describe('GET /api/auth/qr/generate (preserved)', () => {
+describe('legacy GET /api/auth/qr/generate', () => {
   beforeEach(() => {
     insertMock.mockReset();
     insertMock.mockResolvedValue({ error: null });
@@ -141,14 +171,24 @@ describe('GET /api/auth/qr/generate (preserved)', () => {
     fromMock.mockReturnValue({ insert: insertMock });
   });
 
-  it('still returns 200 with the same shape (regression guard)', async () => {
+  it('creates a rate-limited session for an existing same-origin client', async () => {
     const req = makeRequest('GET');
     const res = await GET(req);
 
     expect(res.status).toBe(200);
-    const data = await res.json();
-    expect(data.sessionToken).toMatch(/^[a-f0-9]{64}$/);
-    expect(typeof data.qrUrl).toBe('string');
-    expect(typeof data.expiresAt).toBe('string');
+    expect(res.headers.get('deprecation')).toBe('true');
+    expect(insertMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects cross-site resource amplification', async () => {
+    const res = await GET(
+      makeRequest('GET', undefined, {
+        origin: 'https://evil.example',
+        'sec-fetch-site': 'cross-site',
+      }),
+    );
+
+    expect(res.status).toBe(403);
+    expect(insertMock).not.toHaveBeenCalled();
   });
 });

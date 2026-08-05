@@ -150,6 +150,11 @@ const AUTH_SAMPLE = {
   "{{ .SiteURL }}": "https://app.patina.cloud",
 };
 
+const RECOVERY_LINK_TEMPLATE =
+  "{{ if .RedirectTo }}{{ .RedirectTo }}#token_hash={{ .TokenHash }}&amp;type=recovery{{ else }}{{ .ConfirmationURL }}{{ end }}";
+const RECOVERY_LINK_SAMPLE =
+  "https://client.patina.cloud/auth/callback?type=recovery#token_hash=preview-token-hash&amp;type=recovery";
+
 const DELIM = "$tmpl$";
 
 function readSrc(rel) {
@@ -417,8 +422,14 @@ if (!AUTH_PREVIEWS_ONLY) {
 // ---- 2. Admin preview module ------------------------------------------------
 const previews = AUTH_TEMPLATES.map((t) => {
   let html = readSrc(`supabase/templates/${t.file}`);
+  html = html.replaceAll(RECOVERY_LINK_TEMPLATE, RECOVERY_LINK_SAMPLE);
   for (const [token, value] of Object.entries(AUTH_SAMPLE)) {
     html = html.replaceAll(token, value);
+  }
+  if (/{{\s*(?:\.|if\b|else\b|end\b)/.test(html)) {
+    throw new Error(
+      `supabase/templates/${t.file} has an unresolved GoTrue variable in its admin preview`,
+    );
   }
   return { key: t.key, file: t.file, subject: t.subject, html };
 });

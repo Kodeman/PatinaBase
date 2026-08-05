@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   createBrowserClient,
@@ -37,6 +37,16 @@ function VerifyOtpContent() {
   const redirectingRef = useRef(false);
   const verifyingRef = useRef(false);
 
+  const hardRedirect = useCallback(
+    (event?: React.MouseEvent<HTMLAnchorElement>) => {
+      event?.preventDefault();
+      if (redirectingRef.current) return;
+      redirectingRef.current = true;
+      replaceAuthDestination(destination);
+    },
+    [destination],
+  );
+
   useEffect(() => {
     if (resendInSeconds <= 0) return;
     const timer = window.setTimeout(
@@ -47,17 +57,12 @@ function VerifyOtpContent() {
   }, [resendInSeconds]);
 
   useEffect(() => {
-    if (!success || redirectingRef.current) return;
-    redirectingRef.current = true;
-    const timer = window.setTimeout(
-      () => replaceAuthDestination(destination),
-      450,
-    );
+    if (!success) return;
+    const timer = window.setTimeout(hardRedirect, 450);
     return () => {
       window.clearTimeout(timer);
-      redirectingRef.current = false;
     };
-  }, [destination, success]);
+  }, [hardRedirect, success]);
 
   if (!email) {
     return (
@@ -122,11 +127,7 @@ function VerifyOtpContent() {
         onChangeMethod={() => window.location.assign(signInPath)}
         error={error}
         destinationHref={destination}
-        onContinue={() => {
-          if (redirectingRef.current) return;
-          redirectingRef.current = true;
-          replaceAuthDestination(destination);
-        }}
+        onContinue={hardRedirect}
         isSubmitting={verifyingRef.current || sendEmailOtp.isPending}
       />
     </ClientAuthShell>

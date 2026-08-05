@@ -2,9 +2,11 @@
 -- 00426 — Harden the portal QR authentication handoff
 --
 -- Separates the QR-visible mobile approval nonce from the browser-only polling
--- bearer. Existing in-flight rows remain compatible while poll_token_hash is
--- NULL. A guarded five-minute cleanup removes expired handoffs after a short
--- grace period. The table remains service-role-only under its existing RLS.
+-- bearer. The status endpoint temporarily accepts existing query-based clients,
+-- but hashes their credential before the database lookup; new clients use an
+-- Authorization bearer. A guarded five-minute cleanup removes expired handoffs
+-- after a short grace period. The table remains service-role-only under its
+-- existing RLS.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 ALTER TABLE public.qr_auth_sessions

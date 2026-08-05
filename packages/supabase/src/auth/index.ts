@@ -1,6 +1,7 @@
 export {
   AuthFlowError,
   normalizeAuthError,
+  normalizeOAuthCallbackError,
   type AuthFailure,
   type AuthFailureKind,
 } from './errors';
@@ -9,6 +10,7 @@ export {
   buildAuthCallbackUrl,
   buildVerifyOtpPath,
   buildSignInPath,
+  recoveryFinalReturnPath,
 } from './redirects';
 export {
   finalizeAuthCallback,
@@ -16,6 +18,10 @@ export {
   type AuthCallbackResult,
   type FinalizeAuthCallbackOptions,
 } from './callback';
+export {
+  consumeAuthCallbackFragment,
+  type AuthCallbackFragment,
+} from './fragment';
 export {
   ENABLED_OAUTH_PROVIDERS,
   getOAuthProviderLabel,

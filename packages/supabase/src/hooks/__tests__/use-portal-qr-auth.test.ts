@@ -2,7 +2,11 @@ import type { Session } from '@supabase/supabase-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPortalQrAuthController } from '../use-portal-qr-auth';
 
-const session = { access_token: 'qr-access-token' } as Session;
+const session = {
+  access_token: 'qr-access-token',
+  refresh_token: 'qr-refresh-token',
+  user: { id: 'qr-user' },
+} as Session;
 
 function response(body: unknown, ok = true): Response {
   return {
@@ -23,6 +27,7 @@ function authClient(verifyResult: { session: Session | null } = { session }) {
   return {
     auth: {
       verifyOtp: vi.fn().mockResolvedValue({ data: verifyResult, error: null }),
+      setSession: vi.fn().mockResolvedValue({ data: verifyResult, error: null }),
       getSession: vi.fn().mockResolvedValue({
         data: { session: verifyResult.session },
         error: null,
@@ -72,6 +77,7 @@ describe('createPortalQrAuthController', () => {
       baseUrl: 'https://app.patina.cloud/',
       fetcher,
       getSupabase: () => client as never,
+      getVerifier: () => client as never,
     });
 
     await controller.start();
@@ -84,11 +90,25 @@ describe('createPortalQrAuthController', () => {
     expect(fetcher).toHaveBeenNthCalledWith(
       1,
       'https://app.patina.cloud/api/auth/qr/generate',
-      expect.objectContaining({ cache: 'no-store' }),
+      expect.objectContaining({
+        body: '{}',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      }),
     );
 
     await vi.advanceTimersByTimeAsync(2_000);
     expect(controller.getSnapshot().state).toBe('verifying');
+    expect(fetcher).toHaveBeenNthCalledWith(
+      2,
+      'https://app.patina.cloud/api/auth/qr/status',
+      expect.objectContaining({
+        cache: 'no-store',
+        headers: { Authorization: 'Bearer session-secret' },
+      }),
+    );
+    expect(String(fetcher.mock.calls[1][0])).not.toContain('session-secret');
     expect(client.auth.verifyOtp).toHaveBeenCalledWith({
       token_hash: 'one-time-token-hash',
       type: 'magiclink',
@@ -101,7 +121,50 @@ describe('createPortalQrAuthController', () => {
       secondsRemaining: 0,
       failure: null,
     });
+    expect(client.auth.setSession).toHaveBeenCalledWith({
+      access_token: 'qr-access-token',
+      refresh_token: 'qr-refresh-token',
+    });
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('consumes approval in isolation and never commits after cancellation', async () => {
+    let resolveVerification: ((value: unknown) => void) | undefined;
+    const verifier = {
+      auth: {
+        verifyOtp: vi.fn(
+          () =>
+            new Promise((resolve) => {
+              resolveVerification = resolve;
+            }),
+        ),
+      },
+    };
+    const persistent = authClient();
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(generateResponse())
+      .mockResolvedValueOnce(
+        response({ status: 'approved', tokenHash: 'cancelled-token-hash' }),
+      );
+    const controller = createPortalQrAuthController({
+      baseUrl: '',
+      fetcher,
+      getVerifier: () => verifier as never,
+      getSupabase: () => persistent as never,
+    });
+
+    await controller.start();
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(controller.getSnapshot().state).toBe('verifying');
+    controller.stop();
+
+    resolveVerification?.({ data: { session }, error: null });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(verifier.auth.verifyOtp).toHaveBeenCalledTimes(1);
+    expect(persistent.auth.setSession).not.toHaveBeenCalled();
+    expect(controller.getSnapshot()).toMatchObject({ state: 'idle' });
   });
 
   it('distinguishes denial from expiry', async () => {
@@ -140,6 +203,7 @@ describe('createPortalQrAuthController', () => {
       baseUrl: '',
       fetcher,
       getSupabase: () => client as never,
+      getVerifier: () => client as never,
       pollIntervalMs: 500,
     });
 
@@ -176,6 +240,7 @@ describe('createPortalQrAuthController', () => {
       baseUrl: '',
       fetcher,
       getSupabase: () => client as never,
+      getVerifier: () => client as never,
     });
 
     await controller.start();
@@ -214,6 +279,7 @@ describe('createPortalQrAuthController', () => {
       baseUrl: '',
       fetcher,
       getSupabase: () => client as never,
+      getVerifier: () => client as never,
     });
 
     await controller.start();
@@ -245,6 +311,7 @@ describe('createPortalQrAuthController', () => {
       baseUrl: '',
       fetcher,
       getSupabase: () => client as never,
+      getVerifier: () => client as never,
     });
 
     await controller.start();

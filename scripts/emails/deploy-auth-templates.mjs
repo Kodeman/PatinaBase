@@ -7,6 +7,8 @@
 //   SUPABASE_ACCESS_TOKEN=sbp_... node scripts/emails/deploy-auth-templates.mjs
 // Verify without writing:
 //   SUPABASE_ACCESS_TOKEN=sbp_... node scripts/emails/deploy-auth-templates.mjs --check
+// Validate local sources without credentials or network access:
+//   node scripts/emails/deploy-auth-templates.mjs --check-local
 //
 // The supabase/templates/*.html files are the single source of truth; local dev
 // picks them up through config.toml [auth.email.template.*].
@@ -18,6 +20,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const REF = process.env.SUPABASE_PROJECT_REF || "bkvcixdmuyejfzcijpdg"; // Strata
 const TOKEN = process.env.SUPABASE_ACCESS_TOKEN;
 const CHECK_ONLY = process.argv.includes("--check");
+const LOCAL_CHECK_ONLY = process.argv.includes("--check-local");
 const API = `https://api.supabase.com/v1/projects/${REF}/config/auth`;
 const TAGLINE = "A workshop for interior designers, their clients, and the makers they trust.";
 
@@ -35,11 +38,21 @@ const TEMPLATES = [
 const REQUIRED_TEMPLATE_DETAILS = {
   "magic-link.html": ["{{ .Token }}", "{{ .ConfirmationURL }}", "60 minutes"],
   "confirmation.html": ["{{ .ConfirmationURL }}", "60 minutes"],
-  "recovery.html": ["{{ .ConfirmationURL }}", "60 minutes"],
+  "recovery.html": [
+    "{{ if .RedirectTo }}",
+    "{{ .RedirectTo }}#token_hash={{ .TokenHash }}&amp;type=recovery",
+    "{{ else }}{{ .ConfirmationURL }}{{ end }}",
+    "60 minutes",
+  ],
   "email-change.html": ["{{ .ConfirmationURL }}", "60 minutes"],
   "invite.html": ["{{ .ConfirmationURL }}", "60 minutes"],
   "reauthentication.html": ["{{ .Token }}", "60 minutes"],
 };
+
+if (LOCAL_CHECK_ONLY) {
+  console.log("Local auth email templates:");
+  process.exit(verifyLocalTemplates() ? 0 : 2);
+}
 
 if (!TOKEN) {
   console.error("Missing SUPABASE_ACCESS_TOKEN (Supabase personal access token).");
@@ -67,18 +80,31 @@ function readTemplate(t) {
   return readFileSync(join(ROOT, "supabase/templates", t.file), "utf8");
 }
 
+function templateDetails(t, html) {
+  const missing = [TAGLINE, ...REQUIRED_TEMPLATE_DETAILS[t.file]].filter(
+    (detail) => !html.includes(detail),
+  );
+  if (t.file === "recovery.html" && html.includes("?token_hash=")) {
+    missing.push("fragment-only token_hash (query form is forbidden)");
+  }
+  return missing;
+}
+
+function verifyLocalTemplates() {
+  return TEMPLATES.every((t) => {
+    const missing = templateDetails(t, readTemplate(t));
+    console.log(`  ${t.file}: ${missing.length === 0 ? "yes" : `NO (missing ${missing.join(", ")})`}`);
+    return missing.length === 0;
+  });
+}
+
 function loadTemplate(t) {
   const html = readTemplate(t);
   return { [t.contentKey]: html, [t.subjectKey]: t.subject };
 }
 
 function verify(cfg) {
-  const localOk = TEMPLATES.every((t) => {
-    const html = readTemplate(t);
-    const missing = [TAGLINE, ...REQUIRED_TEMPLATE_DETAILS[t.file]].filter((detail) => !html.includes(detail));
-    console.log(`  ${t.file}: ${missing.length === 0 ? "yes" : `NO (missing ${missing.join(", ")})`}`);
-    return missing.length === 0;
-  });
+  const localOk = verifyLocalTemplates();
 
   // Strata may not expose reauthentication's content key in every Management
   // API version. Every local source is checked above; remotely verify every
@@ -91,7 +117,7 @@ function verify(cfg) {
     }
     const missing = !html
       ? ["template content"]
-      : [TAGLINE, ...REQUIRED_TEMPLATE_DETAILS[t.file]].filter((detail) => !html.includes(detail));
+      : templateDetails(t, html);
     const subjectOk = cfg[t.subjectKey] === t.subject;
     console.log(`  ${t.file} in Strata: ${missing.length === 0 && subjectOk ? "yes" : `NO${missing.length ? ` (missing ${missing.join(", ")})` : ""}${subjectOk ? "" : " (subject differs)"}`}`);
     return missing.length === 0 && subjectOk;

@@ -1,10 +1,12 @@
 import {
   buildAuthCallbackUrl,
+  buildRecoveryCallbackUrl,
   buildSignInPath,
   buildVerifyOtpPath,
   confirmBrowserSession,
   replaceAuthDestination,
   resolveAuthReturnPath,
+  resolveRecoveryPath,
 } from '../auth-redirect';
 
 describe('client auth return continuity', () => {
@@ -56,6 +58,22 @@ describe('client auth return continuity', () => {
     );
     expect(retry.searchParams.get('error')).toBe('OAuthCallback');
     expect(retry.searchParams.get('callbackUrl')).toBe(destination);
+  });
+
+  it('forces recovery through reset while preserving the final safe destination', () => {
+    const callback = new URL(
+      buildRecoveryCallbackUrl('https://client.patina.test', destination),
+    );
+    expect(callback.searchParams.get('type')).toBe('recovery');
+    const resetPath = callback.searchParams.get('callbackUrl');
+    expect(resolveRecoveryPath(resetPath)).toBe(resetPath);
+    expect(
+      new URL(resetPath!, 'https://client.patina.test').searchParams.get(
+        'callbackUrl',
+      ),
+    ).toBe(destination);
+    expect(resolveRecoveryPath(destination)).toBe('/auth/reset-password');
+    expect(resolveRecoveryPath('//evil.test')).toBe('/auth/reset-password');
   });
 
   it('requires a persisted browser session before auth success', async () => {

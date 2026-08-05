@@ -50,7 +50,10 @@ export function useQRAuth(): QRAuthResult {
 
     try {
       const res = await fetch(`${PORTAL_URL}/api/auth/qr/generate`, {
+        body: '{}',
         cache: 'no-store',
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
       });
       if (!res.ok) throw new Error('Failed to generate QR session');
 
@@ -75,8 +78,11 @@ export function useQRAuth(): QRAuthResult {
     const poll = async () => {
       try {
         const res = await fetch(
-          `${PORTAL_URL}/api/auth/qr/status?session=${sessionToken}`,
-          { cache: 'no-store' }
+          `${PORTAL_URL}/api/auth/qr/status`,
+          {
+            cache: 'no-store',
+            headers: { Authorization: `Bearer ${sessionToken}` },
+          }
         );
         if (!res.ok) return;
 

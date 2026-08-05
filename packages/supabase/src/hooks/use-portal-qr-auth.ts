@@ -7,7 +7,10 @@ import {
   useSyncExternalStore,
 } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { createBrowserClient } from '../client';
+import {
+  createBrowserClient,
+  createEphemeralAuthClient,
+} from '../client';
 import type { Database } from '../database.types';
 import {
   normalizeAuthError,
@@ -43,6 +46,8 @@ export interface PortalQrAuthSnapshot {
 export interface PortalQrAuthResult extends PortalQrAuthSnapshot {
   start: () => Promise<void>;
   regenerate: () => Promise<void>;
+  /** Synchronously invalidates any in-flight QR operation. */
+  cancel: () => void;
 }
 
 interface GenerateResponse {
@@ -59,7 +64,10 @@ interface StatusResponse {
 interface PortalQrControllerOptions {
   baseUrl: string;
   fetcher?: typeof fetch;
+  /** Persistent portal client used only after an isolated verification wins. */
   getSupabase?: () => Pick<SupabaseClient<Database>, 'auth'>;
+  /** Non-persisting client that may safely consume a one-time QR token. */
+  getVerifier?: () => Pick<SupabaseClient<Database>, 'auth'>;
   now?: () => number;
   pollIntervalMs?: number;
   countdownIntervalMs?: number;
@@ -109,6 +117,7 @@ export function createPortalQrAuthController({
   baseUrl,
   fetcher = fetch,
   getSupabase = createBrowserClient,
+  getVerifier = createEphemeralAuthClient,
   now = Date.now,
   pollIntervalMs = 2_000,
   countdownIntervalMs = 1_000,
@@ -171,6 +180,14 @@ export function createPortalQrAuthController({
     }, pollIntervalMs);
   };
 
+  const isCurrentOperation = (
+    currentOperation: number,
+    expectedState: PortalQrAuthState,
+  ) =>
+    !disposed &&
+    currentOperation === operation &&
+    snapshot.state === expectedState;
+
   const poll = async (currentOperation: number): Promise<void> => {
     if (
       disposed ||
@@ -183,11 +200,12 @@ export function createPortalQrAuthController({
 
     try {
       const response = await fetcher(
-        endpoint(
-          baseUrl,
-          `/api/auth/qr/status?session=${encodeURIComponent(sessionToken)}`,
-        ),
-        { cache: 'no-store', signal: abortController?.signal },
+        endpoint(baseUrl, '/api/auth/qr/status'),
+        {
+          cache: 'no-store',
+          headers: { Authorization: `Bearer ${sessionToken}` },
+          signal: abortController?.signal,
+        },
       );
       if (
         disposed ||
@@ -240,12 +258,18 @@ export function createPortalQrAuthController({
       countdownTimer = undefined;
       publish({ state: 'verifying', failure: null });
 
-      const supabase = getSupabase();
-      const { data: verified, error: verifyError } = await supabase.auth.verifyOtp({
+      // Consuming a token on the shared browser client would immediately
+      // persist its session. Verify in isolation first so a collapsed QR flow,
+      // unmount, or competing sign-in method cannot overwrite the intended
+      // account after this operation has been cancelled.
+      const verifier = getVerifier();
+      const { data: verified, error: verifyError } = await verifier.auth.verifyOtp({
         token_hash: data.tokenHash,
         type: 'magiclink',
       });
-      if (disposed || currentOperation !== operation) return;
+      if (!isCurrentOperation(currentOperation, 'verifying')) {
+        return;
+      }
       if (verifyError) {
         if (normalizeAuthError(verifyError).kind === 'invalid_code') {
           finish('expired');
@@ -255,16 +279,39 @@ export function createPortalQrAuthController({
         return;
       }
 
-      let authenticatedSession = verified.session;
-      if (!authenticatedSession) {
-        const { data: current, error: sessionError } =
-          await supabase.auth.getSession();
-        if (disposed || currentOperation !== operation) return;
-        if (sessionError || !current.session) {
-          fail(sessionError ?? new Error('No session after QR verification'));
-          return;
-        }
-        authenticatedSession = current.session;
+      if (!verified.session) {
+        fail(new Error('No session after QR verification'));
+        return;
+      }
+
+      // Recheck immediately before the only persistent side effect. JavaScript
+      // runs this check and setSession invocation in the same turn; portal
+      // methods synchronously call cancel() before starting another auth call.
+      if (!isCurrentOperation(currentOperation, 'verifying')) {
+        return;
+      }
+      const supabase = getSupabase();
+      const { data: committed, error: commitError } =
+        await supabase.auth.setSession({
+          access_token: verified.session.access_token,
+          refresh_token: verified.session.refresh_token,
+        });
+      if (disposed || currentOperation !== operation) return;
+      if (commitError || !committed.session) {
+        fail(commitError ?? new Error('QR session could not be saved'));
+        return;
+      }
+
+      const { data: current, error: sessionError } =
+        await supabase.auth.getSession();
+      if (disposed || currentOperation !== operation) return;
+      if (
+        sessionError ||
+        !current.session ||
+        current.session.user.id !== verified.session.user.id
+      ) {
+        fail(sessionError ?? new Error('QR session was not confirmed'));
+        return;
       }
 
       clearWork();
@@ -303,7 +350,13 @@ export function createPortalQrAuthController({
     try {
       const response = await fetcher(
         endpoint(baseUrl, '/api/auth/qr/generate'),
-        { cache: 'no-store', signal: abortController.signal },
+        {
+          body: '{}',
+          cache: 'no-store',
+          headers: { 'Content-Type': 'application/json' },
+          method: 'POST',
+          signal: abortController.signal,
+        },
       );
       if (disposed || currentOperation !== operation) return;
       if (!response.ok) {
@@ -397,6 +450,7 @@ export function usePortalQrAuth({
     () => (enabled ? controller.regenerate() : Promise.resolve()),
     [controller, enabled],
   );
+  const cancel = useCallback(() => controller.stop(), [controller]);
 
-  return { ...snapshot, start, regenerate };
+  return { ...snapshot, start, regenerate, cancel };
 }

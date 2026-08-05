@@ -41,7 +41,7 @@ describe('Portal auth components', () => {
     const user = userEvent.setup()
     const onComplete = vi.fn()
     const onCodeChange = vi.fn()
-    render(<PortalLogin {...loginProps} state="code" code="" onCodeChange={onCodeChange} onVerifyCode={onComplete} />)
+    const { rerender } = render(<PortalLogin {...loginProps} state="code" code="" onCodeChange={onCodeChange} onVerifyCode={onComplete} />)
     expect(screen.getByLabelText('Six-digit code')).toHaveFocus()
     await user.click(screen.getByLabelText('Six-digit code'))
     await user.paste('123456')
@@ -49,6 +49,9 @@ describe('Portal auth components', () => {
     expect(onCodeChange).toHaveBeenCalledWith('123456')
     expect(onComplete).toHaveBeenCalledTimes(1)
     expect(onComplete).toHaveBeenCalledWith('123456')
+    rerender(<PortalLogin {...loginProps} state="code" code="123456" onCodeChange={onCodeChange} onVerifyCode={onComplete} />)
+    await user.keyboard('{Enter}')
+    expect(onComplete).toHaveBeenCalledTimes(1)
   })
 
   it('renders the QR expiry recovery and success fallback', () => {
@@ -90,6 +93,18 @@ describe('Portal auth components', () => {
     const appleAction = screen.getByRole('button', { name: 'Connecting to Apple…' })
     expect(appleAction).toBeDisabled()
     expect(appleAction).toHaveAttribute('aria-busy', 'true')
+    expect(screen.getByLabelText('Email address')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Use a QR code' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Use email and password instead' })).toBeDisabled()
+  })
+
+  it('locks competing disclosures while an authentication method is finishing', () => {
+    const { rerender } = render(<PortalLogin {...loginProps} state="qr" isSubmitting />)
+    expect(screen.getByRole('button', { name: 'Use a QR code' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Use email and password instead' })).toBeDisabled()
+    rerender(<PortalLogin {...loginProps} state="password" password="secret" isSubmitting />)
+    expect(screen.getByLabelText('Password')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Forgot password?' })).toBeDisabled()
   })
 
   it('associates friendly errors with the active credential input', () => {

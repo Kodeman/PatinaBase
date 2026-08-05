@@ -3,6 +3,7 @@ import {
   buildAuthCallbackUrl,
   buildSignInPath,
   buildVerifyOtpPath,
+  recoveryFinalReturnPath,
   safeAuthReturnPath,
 } from './redirects';
 
@@ -78,5 +79,25 @@ describe('auth URL builders', () => {
         'callbackUrl',
       ),
     ).toBe('/');
+  });
+});
+
+describe('recoveryFinalReturnPath', () => {
+  it('returns the sanitized final destination nested in the reset route', () => {
+    expect(
+      recoveryFinalReturnPath(
+        '/auth/reset-password?callbackUrl=%2Fprojects%2Fp1%3Ftab%3Dorders',
+        '/projects',
+      ),
+    ).toBe('/projects/p1?tab=orders');
+  });
+
+  it.each([
+    '/orders',
+    '/auth/reset-passwording?callbackUrl=%2Fadmin',
+    '/auth/reset-password?callbackUrl=https%3A%2F%2Fevil.test',
+    '/auth/reset-password?callbackUrl=%2F%252f%252fevil.test',
+  ])('falls back for an unsafe recovery destination %s', (path) => {
+    expect(recoveryFinalReturnPath(path, '/dashboard')).toBe('/dashboard');
   });
 });

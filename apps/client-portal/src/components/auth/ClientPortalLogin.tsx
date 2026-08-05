@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   createBrowserClient,
+  isOAuthProviderEnabled,
   usePortalQrAuth,
   useSendEmailOtp,
   useVerifyOtp,
@@ -66,8 +67,23 @@ export function ClientPortalLogin({
 
   const qr = usePortalQrAuth({
     baseUrl: QR_AUTH_BASE_URL,
-    enabled: qrExpanded,
+    enabled:
+      qrExpanded &&
+      state === 'email' &&
+      !passwordExpanded &&
+      !isSubmitting,
   });
+  const cancelQr = qr.cancel;
+
+  const hardRedirect = useCallback(
+    (event?: React.MouseEvent<HTMLAnchorElement>) => {
+      event?.preventDefault();
+      if (redirectingRef.current) return;
+      redirectingRef.current = true;
+      replaceAuthDestination(destination);
+    },
+    [destination],
+  );
 
   useEffect(() => {
     if (resendInSeconds <= 0) return;
@@ -100,21 +116,18 @@ export function ClientPortalLogin({
   }, [finishAuthenticated, qr.state]);
 
   useEffect(() => {
-    if (state !== 'success' || redirectingRef.current) return;
-    redirectingRef.current = true;
-    const timer = window.setTimeout(
-      () => replaceAuthDestination(destination),
-      450,
-    );
+    if (state !== 'success') return;
+    const timer = window.setTimeout(hardRedirect, 450);
     return () => {
       window.clearTimeout(timer);
-      redirectingRef.current = false;
     };
-  }, [destination, state]);
+  }, [hardRedirect, state]);
 
   const sendCode = async () => {
     const normalizedEmail = email.trim();
     if (!normalizedEmail) return;
+    cancelQr();
+    setQrExpanded(false);
     setIsSubmitting(true);
     setError(null);
     try {
@@ -135,6 +148,7 @@ export function ClientPortalLogin({
 
   const verifyCode = async (nextCode: string) => {
     if (nextCode.length !== 6 || isSubmitting) return;
+    cancelQr();
     setIsSubmitting(true);
     setError(null);
     try {
@@ -150,6 +164,8 @@ export function ClientPortalLogin({
 
   const signInWithPassword = async () => {
     if (!email.trim() || !password) return;
+    cancelQr();
+    setQrExpanded(false);
     setIsSubmitting(true);
     setError(null);
     try {
@@ -169,6 +185,8 @@ export function ClientPortalLogin({
   };
 
   const signInWithApple = async () => {
+    cancelQr();
+    setQrExpanded(false);
     setState('apple-pending');
     setError(null);
     try {
@@ -241,7 +259,9 @@ export function ClientPortalLogin({
     qrDescription =
       qr.state === 'verifying'
         ? 'Approved. Finishing your secure sign-in…'
-        : `Scan with your signed-in phone. Expires in ${qr.secondsRemaining} seconds.`;
+        : qr.state === 'authenticated'
+          ? 'Signed in. Opening your projects now…'
+          : `Scan with your signed-in phone. Expires in ${qr.secondsRemaining} seconds.`;
   }
 
   return (
@@ -263,12 +283,16 @@ export function ClientPortalLogin({
           setError(null);
           setQrExpanded(true);
         }}
-        onCloseQr={() => setQrExpanded(false)}
+        onCloseQr={() => {
+          cancelQr();
+          setQrExpanded(false);
+        }}
         onRefreshQr={() => void qr.regenerate()}
         oauthActions={[
           {
             id: 'apple',
             label: 'Continue with Apple',
+            available: isOAuthProviderEnabled('apple'),
             pending: state === 'apple-pending',
             onSelect: () => void signInWithApple(),
           },
@@ -277,20 +301,31 @@ export function ClientPortalLogin({
         onPasswordChange={setPassword}
         onPasswordSignIn={() => void signInWithPassword()}
         passwordExpanded={passwordExpanded}
-        onPasswordExpandedChange={setPasswordExpanded}
-        onForgotPassword={() => window.location.assign('/auth/forgot-password')}
+        onPasswordExpandedChange={(expanded) => {
+          setPasswordExpanded(expanded);
+          if (expanded) {
+            cancelQr();
+            setQrExpanded(false);
+          }
+        }}
+        onForgotPassword={() => {
+          cancelQr();
+          window.location.assign(
+            `/auth/forgot-password?callbackUrl=${encodeURIComponent(destination)}`,
+          )
+        }}
         onChangeMethod={() => {
           setCode('');
           setError(null);
           setState('email');
         }}
-        onContinue={() => {
-          if (redirectingRef.current) return;
-          redirectingRef.current = true;
-          replaceAuthDestination(destination);
-        }}
+        onContinue={hardRedirect}
         destinationHref={destination}
-        isSubmitting={isSubmitting}
+        isSubmitting={
+          isSubmitting ||
+          state === 'apple-pending' ||
+          qr.state === 'verifying'
+        }
       />
     </ClientAuthShell>
   );

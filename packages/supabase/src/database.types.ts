@@ -15763,6 +15763,27 @@ export type Database = {
           },
         ]
       }
+      qr_auth_rate_limits: {
+        Row: {
+          attempt_count: number
+          ip_address: unknown
+          updated_at: string
+          window_started_at: string
+        }
+        Insert: {
+          attempt_count: number
+          ip_address: unknown
+          updated_at?: string
+          window_started_at: string
+        }
+        Update: {
+          attempt_count?: number
+          ip_address?: unknown
+          updated_at?: string
+          window_started_at?: string
+        }
+        Relationships: []
+      }
       qr_auth_sessions: {
         Row: {
           approved_at: string | null
