@@ -8525,3 +8525,117 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.publish_budget_checkpoint(uuid, uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00424_trade_rfq_rail.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.trade_rfq_requests FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00424_trade_rfq_rail.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.trade_rfq_tokens FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00424_trade_rfq_rail.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.trade_rfq_requests TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00424_trade_rfq_rail.sql
+DO $g$ BEGIN
+  GRANT SELECT ( id, rfq_request_id, proposal_id, party_id, status, expires_at, last_used_at, created_at ) ON public.trade_rfq_tokens TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00424_trade_rfq_rail.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.trade_rfq_requests TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00424_trade_rfq_rail.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.trade_rfq_tokens TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00424_trade_rfq_rail.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._trade_rfq_scope_snapshot(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00424_trade_rfq_rail.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.prepare_trade_rfq(uuid, uuid, text, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00424_trade_rfq_rail.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.prepare_trade_rfq(uuid, uuid, text, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00424_trade_rfq_rail.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.mint_trade_rfq_token(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00424_trade_rfq_rail.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.mint_trade_rfq_token(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00424_trade_rfq_rail.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.resolve_trade_rfq_link(text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00424_trade_rfq_rail.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.resolve_trade_rfq_link(text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00424_trade_rfq_rail.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.submit_trade_rfq_response(text, integer, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00424_trade_rfq_rail.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.submit_trade_rfq_response(text, integer, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00424_trade_rfq_rail.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._close_trade_rfqs_for_scope(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00424_trade_rfq_rail.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._execute_trade_scope_authorized(uuid, text, uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00424_trade_rfq_rail.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.void_trade_scope(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00424_trade_rfq_rail.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.void_trade_scope(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

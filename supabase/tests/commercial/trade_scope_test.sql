@@ -376,13 +376,17 @@ BEGIN
 
   -- A party answers an RFQ once. The partial unique index constrains only
   -- RESPONSES — which is why Hollis was able to be written down twice above.
+  -- rfq_request_id / response_token_id are left NULL here: 00424 turned both
+  -- bare columns into real foreign keys, so the arbitrary uuids this block used
+  -- to carry no longer insert. What it is testing is the response-uniqueness
+  -- index, not the provenance columns — those are covered end to end by
+  -- supabase/tests/commercial/trade_rfq_test.sql (11).
   INSERT INTO public.trade_scope_bids (
     proposal_id, party_id, party_display_name, amount_cents, status, source,
-    rfq_request_id, response_token_id, responded_at
+    responded_at
   ) VALUES (
     v_scope_id, 'd8800000-0000-4000-8000-000000000002', 'Renn Tile',
-    671000, 'quoted', 'party_response',
-    extensions.gen_random_uuid(), extensions.gen_random_uuid(), now()
+    671000, 'quoted', 'party_response', now()
   );
   BEGIN
     INSERT INTO public.trade_scope_bids (

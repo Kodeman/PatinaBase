@@ -20547,6 +20547,170 @@ export type Database = {
           },
         ]
       }
+      trade_rfq_requests: {
+        Row: {
+          closed_at: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          message: string | null
+          party_display_name: string | null
+          party_email: string | null
+          party_id: string
+          proposal_id: string
+          responded_at: string | null
+          scope_snapshot: Json
+          scope_snapshot_hash: string | null
+          sent_at: string | null
+          status: string
+          timeline: string | null
+          updated_at: string
+        }
+        Insert: {
+          closed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          message?: string | null
+          party_display_name?: string | null
+          party_email?: string | null
+          party_id: string
+          proposal_id: string
+          responded_at?: string | null
+          scope_snapshot?: Json
+          scope_snapshot_hash?: string | null
+          sent_at?: string | null
+          status?: string
+          timeline?: string | null
+          updated_at?: string
+        }
+        Update: {
+          closed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          message?: string | null
+          party_display_name?: string | null
+          party_email?: string | null
+          party_id?: string
+          proposal_id?: string
+          responded_at?: string | null
+          scope_snapshot?: Json
+          scope_snapshot_hash?: string | null
+          sent_at?: string | null
+          status?: string
+          timeline?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trade_rfq_requests_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trade_rfq_requests_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trade_rfq_requests_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "project_parties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trade_rfq_requests_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trade_rfq_tokens: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          expires_at: string
+          id: string
+          last_used_at: string | null
+          party_id: string
+          proposal_id: string
+          rfq_request_id: string
+          status: string
+          token_hash: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          last_used_at?: string | null
+          party_id: string
+          proposal_id: string
+          rfq_request_id: string
+          status?: string
+          token_hash: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          last_used_at?: string | null
+          party_id?: string
+          proposal_id?: string
+          rfq_request_id?: string
+          status?: string
+          token_hash?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trade_rfq_tokens_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trade_rfq_tokens_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trade_rfq_tokens_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "project_parties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trade_rfq_tokens_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trade_rfq_tokens_rfq_request_id_fkey"
+            columns: ["rfq_request_id"]
+            isOneToOne: false
+            referencedRelation: "trade_rfq_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       trade_scope_bids: {
         Row: {
           amount_cents: number
@@ -20606,6 +20770,20 @@ export type Database = {
             columns: ["proposal_id"]
             isOneToOne: false
             referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trade_scope_bids_response_token_id_fkey"
+            columns: ["response_token_id"]
+            isOneToOne: false
+            referencedRelation: "trade_rfq_tokens"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trade_scope_bids_rfq_request_id_fkey"
+            columns: ["rfq_request_id"]
+            isOneToOne: false
+            referencedRelation: "trade_rfq_requests"
             referencedColumns: ["id"]
           },
         ]
@@ -23770,6 +23948,10 @@ export type Database = {
         }
         Returns: string
       }
+      _close_trade_rfqs_for_scope: {
+        Args: { p_proposal_id: string }
+        Returns: undefined
+      }
       _commercial_document_fingerprint: {
         Args: { p_proposal_id: string }
         Returns: string
@@ -24482,6 +24664,10 @@ export type Database = {
       _sync_proposal_send_email_log: {
         Args: { p_dispatch_id: string }
         Returns: undefined
+      }
+      _trade_rfq_scope_snapshot: {
+        Args: { p_proposal_id: string }
+        Returns: Json
       }
       _trade_scope_progress_rank: { Args: { p_state: string }; Returns: number }
       _void_invoice_authorized_legacy_00397: {
@@ -26898,6 +27084,13 @@ export type Database = {
         Returns: undefined
       }
       migrate_legacy_ffe_notes: { Args: never; Returns: number }
+      mint_trade_rfq_token: {
+        Args: { p_rfq_id: string }
+        Returns: {
+          id: string
+          token: string
+        }[]
+      }
       move_pipeline_stage: {
         Args: {
           p_actor: string
@@ -27006,6 +27199,15 @@ export type Database = {
           p_reason: string
           p_spec_book_id: string
           p_warning_acknowledgements?: Json
+        }
+        Returns: Json
+      }
+      prepare_trade_rfq: {
+        Args: {
+          p_message?: string
+          p_party_id: string
+          p_proposal_id: string
+          p_timeline?: string
         }
         Returns: Json
       }
@@ -27540,6 +27742,7 @@ export type Database = {
           website: string
         }[]
       }
+      resolve_trade_rfq_link: { Args: { p_token: string }; Returns: Json }
       retire_designer_taste: {
         Args: { p_designer_id: string }
         Returns: undefined
@@ -28376,6 +28579,10 @@ export type Database = {
           p_latency_ms?: number
           p_pair: Json
         }
+        Returns: Json
+      }
+      submit_trade_rfq_response: {
+        Args: { p_amount_cents: number; p_note?: string; p_token: string }
         Returns: Json
       }
       supersede_unsigned_legacy_proposals: {
