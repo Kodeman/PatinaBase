@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createMiddlewareClient } from '@patina/supabase/client';
+import { safeAuthReturnPath } from '@patina/supabase/auth';
 import { createClient } from '@supabase/supabase-js';
 
 export async function middleware(req: NextRequest) {
@@ -8,17 +9,19 @@ export async function middleware(req: NextRequest) {
 
   // Create Supabase client for middleware (refreshes session via cookies)
   const supabase = createMiddlewareClient(req, res);
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  const isAuthPage = req.nextUrl.pathname.startsWith('/auth') || req.nextUrl.pathname.startsWith('/login');
+  const isAuthPage =
+    req.nextUrl.pathname.startsWith('/auth') ||
+    req.nextUrl.pathname.startsWith('/login');
   const isPublicPage = req.nextUrl.pathname === '/';
   const isApiRoute = req.nextUrl.pathname.startsWith('/api');
   const isUnauthorizedPage = req.nextUrl.pathname === '/unauthorized';
   const isAuthenticated = !!user;
 
-  const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || 'localhost:3001';
-  const protocol = req.headers.get('x-forwarded-proto') || 'http';
-  const baseUrl = `${protocol}://${host}`;
+  const baseUrl = req.nextUrl.origin;
 
   const isRSCRequest = req.headers.get('rsc') === '1';
   const isPrefetch = req.headers.get('next-router-prefetch') === '1';
@@ -55,19 +58,37 @@ export async function middleware(req: NextRequest) {
     return redirect;
   };
 
-  // Redirect authenticated users away from auth pages
-  if (isAuthenticated && isAuthPage) {
-    const callbackUrl = req.nextUrl.searchParams.get('callbackUrl');
-    if (callbackUrl) {
-      return redirectWithCookies(new URL(callbackUrl, baseUrl));
-    }
-    return redirectWithCookies(new URL('/dashboard', baseUrl));
+  // Callback, recovery, MFA enrollment, signout, and friendly error pages need
+  // to remain reachable with an authenticated session. In particular,
+  // Supabase recovery establishes a session before the user chooses a new
+  // password, and MFA enrollment starts at AAL1.
+  const allowsAuthenticatedSession = [
+    '/auth/callback',
+    '/auth/reset-password',
+    '/auth/mfa-enroll',
+    '/auth/signout',
+    '/auth/error',
+  ].includes(req.nextUrl.pathname);
+
+  // Redirect authenticated users away from entry-only auth pages.
+  if (isAuthenticated && isAuthPage && !allowsAuthenticatedSession) {
+    const callbackUrl = safeAuthReturnPath(
+      req.nextUrl.searchParams.get('callbackUrl'),
+      '/dashboard',
+    );
+    return redirectWithCookies(new URL(callbackUrl, baseUrl));
   }
 
   // Redirect unauthenticated users to login
   if (!isAuthenticated && !isAuthPage && !isPublicPage) {
     const loginUrl = new URL('/auth/signin', baseUrl);
-    loginUrl.searchParams.set('callbackUrl', req.nextUrl.pathname);
+    loginUrl.searchParams.set(
+      'callbackUrl',
+      safeAuthReturnPath(
+        `${req.nextUrl.pathname}${req.nextUrl.search}`,
+        '/dashboard',
+      ),
+    );
     return redirectWithCookies(loginUrl);
   }
 
@@ -105,15 +126,22 @@ export async function middleware(req: NextRequest) {
               .eq('id', user!.id)
               .maybeSingle();
 
-            const mfaEnforced =
-              !!(profile as { mfa_enforced?: boolean } | null)?.mfa_enforced;
+            const mfaEnforced = !!(profile as { mfa_enforced?: boolean } | null)
+              ?.mfa_enforced;
 
             if (mfaEnforced) {
-              const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+              const { data: aal } =
+                await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
               const currentLevel = aal?.currentLevel ?? null;
               if (currentLevel !== 'aal2') {
                 const enrollUrl = new URL('/auth/mfa-enroll', baseUrl);
-                enrollUrl.searchParams.set('callbackUrl', req.nextUrl.pathname);
+                enrollUrl.searchParams.set(
+                  'callbackUrl',
+                  safeAuthReturnPath(
+                    `${req.nextUrl.pathname}${req.nextUrl.search}`,
+                    '/dashboard',
+                  ),
+                );
                 return redirectWithCookies(enrollUrl);
               }
             }
