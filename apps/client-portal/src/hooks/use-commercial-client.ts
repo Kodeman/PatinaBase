@@ -131,6 +131,42 @@ export function useDeclineCommercialDocument(proposalId: string, projectId: stri
   });
 }
 
+/**
+ * Client "accept the finished work" act on a trade scope — posts to the
+ * dedicated accept route (which resolves kind + progress fail-closed before
+ * calling accept_trade_scope_with_trusted_ip). On success, refreshes every
+ * projection the acceptance can change — same invalidation set as decline
+ * and signing, since progress_state lives alongside commercial_state on the
+ * same bundle.
+ */
+export function useAcceptTradeScope(proposalId: string | null, projectId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (signedByName: string) => {
+      if (!proposalId) {
+        throw new Error('This trade scope is not ready to accept yet.');
+      }
+      const response = await fetch(`/api/trade-scopes/${proposalId}/accept`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ signedByName }),
+      });
+      const body = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        progressState?: string;
+        acceptedAt?: string | null;
+      };
+      if (!response.ok) throw new Error(body.error || 'Unable to accept this work right now.');
+      return body;
+    },
+    onSuccess: async () => {
+      if (proposalId) {
+        await invalidateSignedCommercialDocument(queryClient, proposalId, projectId);
+      }
+    },
+  });
+}
+
 export function useAcknowledgeBudgetCheckpoint(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({

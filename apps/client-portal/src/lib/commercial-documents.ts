@@ -3,6 +3,7 @@ import {
   COMMERCIAL_DOCUMENT_KINDS,
   COMMERCIAL_STATES,
   FFE_STAGE_KEYS,
+  TRADE_SCOPE_PROGRESS_STATES,
   type CommercialDocumentKind,
   type CommercialState,
   type CommercialDocumentSummary as CanonicalCommercialDocumentSummary,
@@ -12,6 +13,7 @@ import {
   type FFEStageKey,
   type FurnishingsAuthorizationItem as CanonicalFurnishingsAuthorizationItem,
   type ProjectBillingAuthoritySummary,
+  type TradeScopeProgressState,
   type WorkingBudgetCheckpoint as CanonicalWorkingBudgetCheckpoint,
   type WorkingBudgetLine as CanonicalWorkingBudgetLine,
   type WorkingBudgetVersion as CanonicalWorkingBudgetVersion,
@@ -102,12 +104,61 @@ export interface FurnishingsAuthorization {
   items: FurnishingsAuthorizationItem[];
 }
 
+export type TradeScopeParty = {
+  displayName: string;
+  company: string | null;
+  trade: string | null;
+};
+
+export interface TradeScopeSection {
+  roomName: string;
+  prose: string;
+  allocationCents: number | null;
+  sortOrder: number;
+}
+
+export interface TradeScopeDraw {
+  id: string;
+  label: string;
+  percentage: number | null;
+  amountCents: number;
+  sortOrder: number;
+  gatesOnAcceptance: boolean;
+  invoiceId: string | null;
+  invoiceStatus: string | null;
+  invoicePaidCents: number;
+}
+
+export interface TradeScopeProgress {
+  state: TradeScopeProgressState;
+  engagedAt: string | null;
+  substantialCompletionAt: string | null;
+  acceptedAt: string | null;
+  acceptedSignedName: string | null;
+}
+
+/**
+ * The client-safe trade scope projection — party display/company/trade ONLY
+ * (never email, phone, or party_id), and NEVER the bid ledger. A client reads
+ * the work they agreed to and its draw schedule, not who else quoted it.
+ */
+export interface TradeScopeAuthorization {
+  party: TradeScopeParty;
+  clientPriceCents: number;
+  currency: string;
+  sections: TradeScopeSection[];
+  draws: TradeScopeDraw[];
+  progress: TradeScopeProgress;
+  depositInvoiceId: string | null;
+}
+
 export interface CommercialDocumentBundle {
   document: CommercialDocumentBundleSummary;
   serviceTerms: DesignServicesTerms | null;
   rates: CommercialRate[];
   signatures: CommercialSignature[];
   furnishings: FurnishingsAuthorization | null;
+  tradeScope: TradeScopeAuthorization | null;
 }
 
 export interface ProjectAuthoritySummary extends Omit<ProjectBillingAuthoritySummary, 'rates'> {
@@ -260,6 +311,76 @@ function adaptRates(value: unknown): CommercialRate[] {
   });
 }
 
+/**
+ * The RPC (get_client_commercial_document_bundle, send_commercial_document,
+ * list_trade_scopes — 00423) emits the party on the `tradeScope` object
+ * itself as FLAT keys (`partyDisplayName` / `partyCompanyName` / `partyTrade`
+ * — see 00423_trade_scope_instrument.sql's jsonb_build_object for
+ * `tradeScope`), never a nested `party` sub-object. `scopeRow` is that whole
+ * tradeScope record; a nested `party` is read only as a fallback for a
+ * hypothetical future/alternate shape, never the live contract.
+ */
+function adaptTradeScopeParty(scopeRow: UnknownRecord): TradeScopeParty {
+  const nested = record(first(scopeRow, 'party'));
+  return {
+    displayName: text(
+      first(scopeRow, 'partyDisplayName', 'party_display_name') ?? first(nested, 'displayName', 'display_name'),
+    ),
+    company: nullableText(
+      first(scopeRow, 'partyCompanyName', 'party_company_name') ?? first(nested, 'company'),
+    ),
+    trade: nullableText(first(scopeRow, 'partyTrade', 'party_trade') ?? first(nested, 'trade')),
+  };
+}
+
+function adaptTradeScopeSections(value: unknown): TradeScopeSection[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      const row = record(item);
+      const allocationRaw = first(row, 'allocationCents', 'allocation_cents');
+      return {
+        roomName: text(first(row, 'roomName', 'room_name'), 'General'),
+        prose: text(row.prose),
+        allocationCents: allocationRaw === undefined || allocationRaw === null ? null : number(allocationRaw),
+        sortOrder: number(first(row, 'sortOrder', 'sort_order')),
+      };
+    })
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+function adaptTradeScopeDraws(value: unknown): TradeScopeDraw[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      const row = record(item);
+      const percentageRaw = first(row, 'percentage');
+      return {
+        id: text(row.id),
+        label: text(row.label),
+        percentage: percentageRaw === undefined || percentageRaw === null ? null : number(percentageRaw),
+        amountCents: number(first(row, 'amountCents', 'amount_cents')),
+        sortOrder: number(first(row, 'sortOrder', 'sort_order')),
+        gatesOnAcceptance: first(row, 'gatesOnAcceptance', 'gates_on_acceptance') === true,
+        invoiceId: nullableText(first(row, 'invoiceId', 'invoice_id')),
+        invoiceStatus: nullableText(first(row, 'invoiceStatus', 'invoice_status')),
+        invoicePaidCents: number(first(row, 'invoicePaidCents', 'invoice_paid_cents')),
+      };
+    })
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+function adaptTradeScopeProgress(value: unknown): TradeScopeProgress {
+  const row = record(value);
+  return {
+    state: oneOf(row.state, TRADE_SCOPE_PROGRESS_STATES, 'none'),
+    engagedAt: nullableText(first(row, 'engagedAt', 'engaged_at')),
+    substantialCompletionAt: nullableText(first(row, 'substantialCompletionAt', 'substantial_completion_at')),
+    acceptedAt: nullableText(first(row, 'acceptedAt', 'accepted_at')),
+    acceptedSignedName: nullableText(first(row, 'acceptedSignedName', 'accepted_signed_name')),
+  };
+}
+
 /** Maps the database-owned allowlist bundle and intentionally discards every unknown key. */
 export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumentBundle | null {
   const raw = record(value);
@@ -297,6 +418,10 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
   const furnishingRaw = Object.keys(nestedFurnishings).length > 0
     ? nestedFurnishings
     : kind === 'furnishings_authorization' ? source : {};
+  const nestedTradeScope = record(first(raw, 'tradeScope', 'trade_scope'));
+  const tradeScopeRaw = Object.keys(nestedTradeScope).length > 0
+    ? nestedTradeScope
+    : kind === 'trade_scope' ? source : {};
   const replacementRaw = record(first(raw, 'replacement'));
   const signatureRows = first(raw, 'signatures') ?? first(source, 'signatures');
   const rateRows = first(raw, 'rates') ?? first(source, 'rates');
@@ -423,6 +548,15 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
         };
       }) : [],
     },
+    tradeScope: Object.keys(tradeScopeRaw).length === 0 ? null : {
+      party: adaptTradeScopeParty(tradeScopeRaw),
+      clientPriceCents: number(first(tradeScopeRaw, 'clientPriceCents', 'client_price_cents')),
+      currency: text(first(tradeScopeRaw, 'currency'), 'USD'),
+      sections: adaptTradeScopeSections(first(tradeScopeRaw, 'sections')),
+      draws: adaptTradeScopeDraws(first(tradeScopeRaw, 'draws')),
+      progress: adaptTradeScopeProgress(first(tradeScopeRaw, 'progress')),
+      depositInvoiceId: nullableText(first(tradeScopeRaw, 'depositInvoiceId', 'deposit_invoice_id')),
+    },
   };
 }
 
@@ -539,12 +673,28 @@ export interface ClientSelectionAllowance {
 
 export interface ClientSelectionInstrument {
   documentId: string;
+  /**
+   * The instrument's OWN proposal id — distinct from documentId (which is
+   * project_commercial_documents.id). A trade card's "Accept the finished
+   * work" act calls a proposal-keyed route (accept_trade_scope is
+   * p_proposal_id), so it needs this even though no furnishings action has
+   * ever needed it. Null on rows the RPC doesn't send it for.
+   */
+  proposalId: string | null;
   name: string;
   executedAt: string | null;
 }
 
+/**
+ * What kind of line this is. Absent (pre-trade-scope RPC payloads and every
+ * existing test fixture) defaults to 'furnishings' — the only kind that has
+ * ever existed on this list.
+ */
+export type ClientSelectionKind = 'furnishings' | 'trade';
+
 export interface ClientSelection {
   id: string;
+  kind: ClientSelectionKind;
   name: string;
   roomId: string | null;
   roomName: string;
@@ -553,6 +703,12 @@ export interface ClientSelection {
   clientLineTotalCents: number;
   itemType: string;
   status: FFEStageKey;
+  /**
+   * Set only on kind:'trade' rows — the trade scope's own progress vocabulary
+   * (TradeScopeProgressState), never the FF&E `status` above. Null for
+   * furnishings lines.
+   */
+  tradeJourney: TradeScopeProgressState | null;
   allowance: ClientSelectionAllowance | null;
   instrument: ClientSelectionInstrument | null;
   productId: string | null;
@@ -581,6 +737,7 @@ function adaptClientSelectionInstrument(value: unknown): ClientSelectionInstrume
   if (!documentId) return null;
   return {
     documentId,
+    proposalId: nullableText(first(row, 'proposalId', 'proposal_id')),
     name: text(first(row, 'name'), 'Signed document'),
     executedAt: nullableText(first(row, 'executedAt', 'executed_at')),
   };
@@ -598,8 +755,10 @@ export function adaptClientSelections(value: unknown): ClientProjectSelections {
         const row = record(item);
         const id = text(row.id);
         if (!id) return null;
+        const tradeJourneyRaw = first(row, 'tradeJourney', 'trade_journey');
         return {
           id,
+          kind: oneOf(row.kind, ['furnishings', 'trade'] as const, 'furnishings'),
           name: text(row.name),
           roomId: nullableText(first(row, 'roomId', 'room_id')),
           roomName: text(first(row, 'roomName', 'room_name'), 'General'),
@@ -608,6 +767,9 @@ export function adaptClientSelections(value: unknown): ClientProjectSelections {
           clientLineTotalCents: number(first(row, 'clientLineTotalCents', 'client_line_total_cents')),
           itemType: text(first(row, 'itemType', 'item_type')),
           status: oneOf(row.status, FFE_STAGE_KEYS, 'specified'),
+          tradeJourney: tradeJourneyRaw === undefined || tradeJourneyRaw === null
+            ? null
+            : oneOf(tradeJourneyRaw, TRADE_SCOPE_PROGRESS_STATES, 'none'),
           allowance: adaptClientSelectionAllowance(first(row, 'allowance')),
           instrument: adaptClientSelectionInstrument(first(row, 'instrument')),
           productId: nullableText(first(row, 'productId', 'product_id')),

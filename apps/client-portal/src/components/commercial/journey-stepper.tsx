@@ -1,4 +1,4 @@
-import type { FFEStageKey } from '@patina/types';
+import type { FFEStageKey, TradeScopeProgressState } from '@patina/types';
 
 /**
  * Goods journey the client sees on a selection card — six stops distilled
@@ -34,12 +34,51 @@ export function journeyStageIndexForStatus(status: FFEStageKey): number {
   return STAGE_INDEX_BY_STATUS[status] ?? 0;
 }
 
-export function JourneyStepper({ status }: { status: FFEStageKey }) {
-  const currentIndex = journeyStageIndexForStatus(status);
+/**
+ * Trade scope journey — a sub does not move through procurement, they move
+ * through the work itself. Four stops (matches the deck's slide-19
+ * vocabulary), one per TradeScopeProgressState EXCEPT 'accepted': the
+ * client's own acceptance act is the endpoint of "Complete", not a fifth
+ * stop of its own, so 'accepted' maps onto the same index as
+ * 'substantially_complete'. A client only ever sees a presence line once the
+ * studio has engaged the sub (progress_state can't go below 'engaged' by the
+ * time a line exists), but 'none' still maps to the first stop as a safe
+ * fallback.
+ */
+export const TRADE_JOURNEY_STAGES = [
+  'Agreed',
+  'Engaged',
+  'In progress',
+  'Complete',
+] as const;
 
+export type TradeJourneyStage = (typeof TRADE_JOURNEY_STAGES)[number];
+
+const TRADE_STAGE_INDEX_BY_STATE: Record<TradeScopeProgressState, number> = {
+  none: 0,
+  engaged: 1,
+  in_progress: 2,
+  substantially_complete: 3,
+  accepted: 3,
+};
+
+/** Maps a trade scope's progress_state onto its index in TRADE_JOURNEY_STAGES. */
+export function tradeJourneyStageIndexForState(state: TradeScopeProgressState): number {
+  return TRADE_STAGE_INDEX_BY_STATE[state] ?? 0;
+}
+
+function StageList({
+  stages,
+  currentIndex,
+  ariaLabel,
+}: {
+  stages: readonly string[];
+  currentIndex: number;
+  ariaLabel: string;
+}) {
   return (
-    <ol className="flex flex-wrap items-center gap-x-1.5 gap-y-1" aria-label="Order journey">
-      {GOODS_JOURNEY_STAGES.map((stage, index) => {
+    <ol className="flex flex-wrap items-center gap-x-1.5 gap-y-1" aria-label={ariaLabel}>
+      {stages.map((stage, index) => {
         const isComplete = index < currentIndex;
         const isCurrent = index === currentIndex;
         return (
@@ -58,7 +97,7 @@ export function JourneyStepper({ status }: { status: FFEStageKey }) {
             >
               {stage}
             </span>
-            {index < GOODS_JOURNEY_STAGES.length - 1 && (
+            {index < stages.length - 1 && (
               <span aria-hidden="true" className="text-[var(--border-default)]">
                 ·
               </span>
@@ -67,5 +106,25 @@ export function JourneyStepper({ status }: { status: FFEStageKey }) {
         );
       })}
     </ol>
+  );
+}
+
+export function JourneyStepper({ status }: { status: FFEStageKey }) {
+  return (
+    <StageList
+      stages={GOODS_JOURNEY_STAGES}
+      currentIndex={journeyStageIndexForStatus(status)}
+      ariaLabel="Order journey"
+    />
+  );
+}
+
+export function TradeJourneyStepper({ state }: { state: TradeScopeProgressState }) {
+  return (
+    <StageList
+      stages={TRADE_JOURNEY_STAGES}
+      currentIndex={tradeJourneyStageIndexForState(state)}
+      ariaLabel="Trade scope journey"
+    />
   );
 }

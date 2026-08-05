@@ -69,6 +69,14 @@ describe('AwaitingSignatureCards', () => {
     );
   });
 
+  it('labels a pending trade scope as "Trade scope", not the generic Document fallback', () => {
+    mockUseClientProposals.mockReturnValue({
+      data: [proposal({ id: 'trade-1', title: 'Whitfield tile work', document_kind: 'trade_scope', commercial_state: 'sent' })],
+    });
+    render(<AwaitingSignatureCards projectId="project-1" />);
+    expect(screen.getByText('Trade scope')).toBeInTheDocument();
+  });
+
   it('shows the total amount from the pending list, no extra round trip needed', () => {
     mockUseClientProposals.mockReturnValue({
       data: [proposal({ total_amount: 1_800_000 })],
@@ -98,6 +106,42 @@ describe('AwaitingSignatureCards', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(`Deposit ${formatCurrency(1_200_000)} on signature`),
+    ).toBeInTheDocument();
+  });
+
+  // A trade scope has no per-document depositPercent (that figure is
+  // furnishings-only) — its deposit is the first draw in its own schedule
+  // (sortOrder 0, "Deposit · on signature"). Before this fix the card only
+  // ever read bundle.furnishings, so a client with a pending trade scope saw
+  // a total and no deposit at all.
+  it('shows the deposit due on signature for a trade scope, read from its first draw', () => {
+    mockUseClientProposals.mockReturnValue({
+      data: [
+        proposal({
+          id: 'trade-1',
+          title: 'Whitfield tile work',
+          document_kind: 'trade_scope',
+          total_amount: 1_200_000,
+        }),
+      ],
+    });
+    mockUseClientCommercialDocument.mockReturnValue({
+      data: {
+        tradeScope: {
+          draws: [
+            { id: 'draw-1', label: 'Deposit', percentage: 25, amountCents: 300_000, sortOrder: 0, gatesOnAcceptance: false, invoiceId: null, invoiceStatus: null, invoicePaidCents: 0 },
+            { id: 'draw-2', label: 'Final', percentage: 75, amountCents: 900_000, sortOrder: 1, gatesOnAcceptance: true, invoiceId: null, invoiceStatus: null, invoicePaidCents: 0 },
+          ],
+        },
+      },
+      isLoading: false,
+    });
+    render(<AwaitingSignatureCards projectId="project-1" />);
+    expect(
+      screen.getByText(new RegExp(formatCurrency(1_200_000).replace('$', '\\$'))),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(`Deposit ${formatCurrency(300_000)} on signature`),
     ).toBeInTheDocument();
   });
 

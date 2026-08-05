@@ -1,5 +1,6 @@
 import {
   adaptClientPlan,
+  adaptClientSelections,
   adaptCommercialDocumentBundle,
   adaptProjectCommercialSummary,
   commercialSummaryFromProposal,
@@ -490,6 +491,160 @@ describe('commercial document client adapter', () => {
         items: [{ description: 'Sectional', quantity: 1, clientUnitPriceCents: 1_200_000 }],
       },
     });
+  });
+
+  describe('trade scope bundle', () => {
+    // Fixture is the VERBATIM shape get_client_commercial_document_bundle's
+    // tradeScope arm emits (supabase/migrations/00423_trade_scope_instrument.sql
+    // jsonb_build_object('tradeScope', ...)): the party is three FLAT keys
+    // (partyDisplayName/partyCompanyName/partyTrade) directly on the tradeScope
+    // object — there is no nested `party` sub-object anywhere in the RPC. A
+    // prior version of this fixture hand-authored a nested `party: {...}`,
+    // which the DB never sends and which let the adapter's bug (reading
+    // `tradeScopeRaw.party`) pass every test while shipping "Performed by "
+    // with no name to the client's signed document.
+    it('maps the client-safe party off the RPC flat keys, plus sections/draws/progress — never a bid', () => {
+      const bundle = adaptCommercialDocumentBundle({
+        document: {
+          id: 'trade-1',
+          projectId: 'project-1',
+          documentKind: 'trade_scope',
+          commercialState: 'executed',
+          title: 'Whitfield tile work',
+        },
+        tradeScope: {
+          documentId: 'pcd-1',
+          partyDisplayName: 'Marcus Hale',
+          partyCompanyName: 'Hale Tile & Stone',
+          partyTrade: 'tile',
+          clientPriceCents: 1_200_000,
+          currency: 'USD',
+          terms: 'Net 15 on each draw.',
+          depositInvoiceId: 'inv-1',
+          sections: [
+            { id: 'sec-2', roomId: 'room-2', roomName: 'Powder room', prose: 'Reset the entry hex tile.', allocationCents: null, sortOrder: 1 },
+            { id: 'sec-1', roomId: 'room-1', roomName: 'Primary bath', prose: 'Strip and reset the shower floor.', allocationCents: 700_000, sortOrder: 0 },
+          ],
+          draws: [
+            { id: 'draw-2', label: 'Final', percentage: null, amountCents: 360_000, sortOrder: 2, gatesOnAcceptance: true, invoiceId: null, invoiceStatus: null, invoicePaidCents: 0 },
+            { id: 'draw-1', label: 'Deposit', percentage: null, amountCents: 360_000, sortOrder: 0, gatesOnAcceptance: false, invoiceId: 'inv-1', invoiceStatus: 'paid', invoicePaidCents: 360_000 },
+          ],
+          progress: { state: 'in_progress', engagedAt: '2026-07-01T00:00:00Z', substantialCompletionAt: null, acceptedAt: null, acceptedSignedName: null },
+          // The RPC never emits a bid ledger to the client — asserted below —
+          // but the adapter must stay defensive if a future arm ever did.
+          bids: [{ id: 'bid-1', amountCents: 999 }],
+        },
+      });
+
+      expect(bundle?.tradeScope).toMatchObject({
+        party: { displayName: 'Marcus Hale', company: 'Hale Tile & Stone', trade: 'tile' },
+        clientPriceCents: 1_200_000,
+        depositInvoiceId: 'inv-1',
+        progress: { state: 'in_progress', engagedAt: '2026-07-01T00:00:00Z', acceptedAt: null },
+      });
+      // sections/draws come back sorted by sortOrder regardless of send order.
+      expect(bundle?.tradeScope?.sections.map((s) => s.roomName)).toEqual(['Primary bath', 'Powder room']);
+      expect(bundle?.tradeScope?.draws.map((d) => d.id)).toEqual(['draw-1', 'draw-2']);
+      // The bid ledger never survives the allowlist, even if the RPC sent one.
+      expect(bundle?.tradeScope).not.toHaveProperty('bids');
+      expect(JSON.stringify(bundle)).not.toContain('bid-1');
+    });
+
+    it('normalizes DB-cased trade scope party aliases (snake_case flat keys)', () => {
+      const bundle = adaptCommercialDocumentBundle({
+        document: { id: 'trade-2', documentKind: 'trade_scope', commercialState: 'sent' },
+        trade_scope: {
+          party_display_name: 'Marcus Hale',
+          party_company_name: null,
+          party_trade: 'tile',
+          client_price_cents: 500_000,
+          sections: [{ room_name: 'Kitchen', prose: 'Backsplash reset.', allocation_cents: 500_000, sort_order: 0 }],
+          draws: [{ id: 'draw-1', label: 'Deposit', amount_cents: 150_000, sort_order: 0, gates_on_acceptance: false }],
+          progress: { state: 'engaged', engaged_at: '2026-07-01T00:00:00Z' },
+          deposit_invoice_id: 'inv-9',
+        },
+      });
+
+      expect(bundle?.tradeScope).toMatchObject({
+        party: { displayName: 'Marcus Hale', trade: 'tile' },
+        clientPriceCents: 500_000,
+        depositInvoiceId: 'inv-9',
+      });
+      expect(bundle?.tradeScope?.sections[0]).toMatchObject({ roomName: 'Kitchen', allocationCents: 500_000 });
+      expect(bundle?.tradeScope?.progress).toMatchObject({ state: 'engaged', engagedAt: '2026-07-01T00:00:00Z' });
+    });
+
+    // Regression for the confirmed P2 blocker: the adapter used to read a
+    // nested `tradeScope.party` object the RPC never sends, so the signed
+    // document rendered "Performed by " with no name, company, or trade.
+    it('names the performing party on a fixture shaped exactly like the live RPC — the client-facing document names who does the work', () => {
+      const bundle = adaptCommercialDocumentBundle({
+        document: { id: 'trade-3', documentKind: 'trade_scope', commercialState: 'sent' },
+        tradeScope: {
+          partyDisplayName: 'Dana Cho',
+          partyCompanyName: 'Cho Woodworks',
+          partyTrade: 'millwork',
+          clientPriceCents: 800_000,
+          currency: 'USD',
+          sections: [],
+          draws: [],
+          progress: { state: 'none', engagedAt: null, substantialCompletionAt: null, acceptedAt: null, acceptedSignedName: null },
+        },
+      });
+
+      expect(bundle?.tradeScope?.party).toEqual({
+        displayName: 'Dana Cho',
+        company: 'Cho Woodworks',
+        trade: 'millwork',
+      });
+    });
+
+    it('leaves tradeScope null for a non-trade document', () => {
+      const bundle = adaptCommercialDocumentBundle({
+        document: { id: 'ds-99', documentKind: 'design_services', commercialState: 'sent' },
+      });
+      expect(bundle?.tradeScope).toBeNull();
+    });
+  });
+});
+
+describe('adaptClientSelections', () => {
+  it('defaults an absent kind to furnishings — every pre-trade-scope row', () => {
+    const result = adaptClientSelections({
+      origin: 'commercial',
+      selections: [{ id: 'sel-1', name: 'Sectional', clientLineTotalCents: 480_000 }],
+    });
+    expect(result.selections[0]).toMatchObject({ kind: 'furnishings', tradeJourney: null });
+  });
+
+  it('reads a trade presence line — kind, tradeJourney, and the instrument proposalId the accept act needs', () => {
+    const result = adaptClientSelections({
+      origin: 'commercial',
+      selections: [{
+        id: 'trade-sel-1',
+        kind: 'trade',
+        name: 'Kitchen tile work — Kitchen',
+        roomName: 'Kitchen',
+        clientLineTotalCents: 1_200_000,
+        tradeJourney: 'substantially_complete',
+        instrument: { documentId: 'pcd-1', proposalId: 'prop-trade-1', name: 'Kitchen tile work' },
+      }],
+    });
+
+    expect(result.selections[0]).toMatchObject({
+      kind: 'trade',
+      tradeJourney: 'substantially_complete',
+      instrument: { documentId: 'pcd-1', proposalId: 'prop-trade-1' },
+    });
+  });
+
+  it('falls back to null tradeJourney and null instrument.proposalId when the RPC omits them', () => {
+    const result = adaptClientSelections({
+      origin: 'commercial',
+      selections: [{ id: 'sel-2', name: 'Sofa', instrument: { documentId: 'pcd-2' } }],
+    });
+    expect(result.selections[0].tradeJourney).toBeNull();
+    expect(result.selections[0].instrument).toMatchObject({ documentId: 'pcd-2', proposalId: null });
   });
 });
 

@@ -18,6 +18,7 @@ const KIND_LABEL = {
   design_services: 'Design services',
   furnishings_authorization: 'Furnishings authorization',
   service_addendum: 'Service addendum',
+  trade_scope: 'Trade scope',
 } as const;
 
 const STATE_LABEL = {

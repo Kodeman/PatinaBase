@@ -171,14 +171,18 @@ export default function ClientProposalSignPage({
       <h1 className="type-page-title">
         {commercial.kind === 'furnishings_authorization'
           ? `Authorize ${commercial.waveName ?? 'furnishings'}`
-          : commercial.kind === 'service_addendum'
-            ? 'Sign Design Services Addendum'
-            : 'Sign Design Services Agreement'}
+          : commercial.kind === 'trade_scope'
+            ? 'Authorize this trade scope'
+            : commercial.kind === 'service_addendum'
+              ? 'Sign Design Services Addendum'
+              : 'Sign Design Services Agreement'}
       </h1>
       <p className="type-body mt-2">
         {commercial.kind === 'furnishings_authorization'
           ? `By signing, you authorize only the named furnishing lines, quantities, and client prices in “${proposal.title}”.`
-          : `By signing, you accept the services, signed role rates, design authorization ceiling, retainer, and terms in “${proposal.title}”. The agreement becomes effective only after the studio countersigns.`}
+          : commercial.kind === 'trade_scope'
+            ? `By signing, you authorize the scope of work, price, and draw schedule in “${proposal.title}”.`
+            : `By signing, you accept the services, signed role rates, design authorization ceiling, retainer, and terms in “${proposal.title}”. The agreement becomes effective only after the studio countersigns.`}
       </p>
 
       <form onSubmit={handleSubmit} className="mt-8 space-y-6">
@@ -217,9 +221,11 @@ export default function ClientProposalSignPage({
           <span className="text-[var(--text-body)]">
             {commercial.kind === 'furnishings_authorization'
               ? 'I authorize the studio to procure only the named lines at the quantities and client prices shown. I understand any required deposit is a separate payment step.'
-              : commercial.kind === 'design_services' || commercial.kind === 'service_addendum'
-                ? 'I agree to these design-services terms and understand my signature alone does not authorize work until the studio countersigns.'
-                : 'I agree to the scope and investment in this proposal.'}
+              : commercial.kind === 'trade_scope'
+                ? 'I authorize this trade to begin the work described, at the price shown. I understand the deposit draw is due on signature and each remaining draw is billed as the work reaches that stage.'
+                : commercial.kind === 'design_services' || commercial.kind === 'service_addendum'
+                  ? 'I agree to these design-services terms and understand my signature alone does not authorize work until the studio countersigns.'
+                  : 'I agree to the scope and investment in this proposal.'}
           </span>
         </label>
 
@@ -243,7 +249,9 @@ export default function ClientProposalSignPage({
               ? 'Signing…'
               : commercial.kind === 'furnishings_authorization'
                 ? 'Sign authorization'
-                : 'Sign and accept'}
+                : commercial.kind === 'trade_scope'
+                  ? 'Sign and authorize'
+                  : 'Sign and accept'}
           </button>
           <Link
             href={`/proposals/${id}`}

@@ -464,6 +464,103 @@ describe('POST /api/proposals/[id]/sign', () => {
     });
   });
 
+  it('executes a trade scope through the trusted service boundary and fires both notices', async () => {
+    userRpcMock.mockImplementation((name: string) => {
+      if (name === 'get_client_commercial_document_bundle') {
+        return Promise.resolve({
+          data: {
+            document: { id: 'prop-1', documentKind: 'trade_scope', commercialState: 'sent' },
+          },
+          error: null,
+        });
+      }
+      if (name === 'get_client_proposal_bundle') {
+        return Promise.resolve({
+          data: { proposal: { id: 'prop-1', valid_until: null } },
+          error: null,
+        });
+      }
+      return Promise.resolve({ error: null });
+    });
+    serviceRpcMock.mockResolvedValue({
+      data: {
+        projectId: 'project-1',
+        depositInvoiceId: 'invoice-trade-1',
+        newlyExecuted: true,
+      },
+      error: null,
+    });
+
+    const response = await POST(makeRequest({ 'cf-connecting-ip': '203.0.113.7' }), makeParams());
+
+    expect(response.status).toBe(200);
+    expect(serviceRpcMock).toHaveBeenCalledWith('execute_trade_scope_with_trusted_ip', {
+      p_proposal_id: 'prop-1',
+      p_signed_name: 'Jamie Homeowner',
+      p_client_id: 'client-1',
+      p_signed_ip: '203.0.113.7',
+    });
+    expect(invokeMock).toHaveBeenNthCalledWith(1, 'commercial-document-notify', {
+      body: { documentId: 'prop-1', transition: 'trade_scope_executed' },
+    });
+    expect(invokeMock).toHaveBeenNthCalledWith(2, 'commercial-document-notify', {
+      body: { documentId: 'prop-1', transition: 'deposit_ready' },
+    });
+    expect(await response.json()).toMatchObject({
+      commercialState: 'executed',
+      projectId: 'project-1',
+      depositInvoiceId: 'invoice-trade-1',
+      newlyExecuted: true,
+      notificationDelivery: {
+        state: 'delivered',
+        transitions: {
+          tradeScopeExecuted: 'delivered',
+          depositReady: 'delivered',
+        },
+      },
+    });
+  });
+
+  it('replays an idempotent trade scope execution retry without repeating it', async () => {
+    userRpcMock.mockImplementation((name: string) => {
+      if (name === 'get_client_commercial_document_bundle') {
+        return Promise.resolve({
+          data: {
+            document: { id: 'prop-1', documentKind: 'trade_scope', commercialState: 'executed' },
+          },
+          error: null,
+        });
+      }
+      if (name === 'get_client_proposal_bundle') {
+        return Promise.resolve({
+          data: { proposal: { id: 'prop-1', valid_until: '2020-01-01T00:00:00.000Z' } },
+          error: null,
+        });
+      }
+      return Promise.resolve({ error: null });
+    });
+    serviceRpcMock.mockResolvedValue({
+      data: {
+        project_id: 'project-1',
+        deposit_invoice_id: 'invoice-trade-1',
+        newly_executed: false,
+      },
+      error: null,
+    });
+
+    const response = await POST(makeRequest(), makeParams());
+
+    expect(response.status).toBe(200);
+    expect(serviceRpcMock).toHaveBeenCalledWith(
+      'execute_trade_scope_with_trusted_ip',
+      expect.objectContaining({ p_client_id: 'client-1' })
+    );
+    expect(await response.json()).toMatchObject({
+      newlyExecuted: false,
+      notificationDelivery: { state: 'delivered' },
+    });
+  });
+
   it('replays the idempotent client-sign notice when the committed retry is newly=false', async () => {
     userRpcMock.mockImplementation((name: string) => {
       if (name === 'get_client_commercial_document_bundle') {

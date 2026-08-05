@@ -11,7 +11,7 @@ async function notifyCommercialTransition(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
   documentId: string,
-  transition: 'client_signed' | 'furnishings_executed' | 'deposit_ready'
+  transition: 'client_signed' | 'furnishings_executed' | 'trade_scope_executed' | 'deposit_ready'
 ): Promise<CommercialNotificationState> {
   try {
     const { data, error } = await supabase.functions.invoke('commercial-document-notify', {
@@ -96,9 +96,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       commercialDocument.commercialState ?? commercialDocument.commercial_state ?? commercialDocument.state;
     const isRetryableFurnishingsExecution =
       documentKind === 'furnishings_authorization' && commercialState === 'executed';
+    const isRetryableTradeScopeExecution =
+      documentKind === 'trade_scope' && commercialState === 'executed';
     const isClientSignedServicesRetry =
-      documentKind !== 'furnishings_authorization' && commercialState === 'client_signed';
-    if (commercialState !== 'sent' && !isRetryableFurnishingsExecution && !isClientSignedServicesRetry) {
+      documentKind !== 'furnishings_authorization' &&
+      documentKind !== 'trade_scope' &&
+      commercialState === 'client_signed';
+    if (
+      commercialState !== 'sent' &&
+      !isRetryableFurnishingsExecution &&
+      !isRetryableTradeScopeExecution &&
+      !isClientSignedServicesRetry
+    ) {
       return NextResponse.json({ error: 'not_signable' }, { status: 409 });
     }
 
@@ -154,6 +163,56 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
               : executionNotification,
           transitions: {
             furnishingsExecuted: executionNotification,
+            depositReady: depositNotification,
+          },
+        },
+      });
+    }
+
+    if (documentKind === 'trade_scope') {
+      // Trade scope execution is the same one-act sent→executed shape as
+      // furnishings: it writes immutable signature evidence, applies the
+      // sections/draws, and auto-issues the deposit draw invoice in one
+      // transaction. Only the server-mediated variant may receive the
+      // edge-derived client IP.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const commercialService = createServiceClient() as any;
+      const { data: executeResult, error: executeError } = await commercialService.rpc(
+        'execute_trade_scope_with_trusted_ip',
+        {
+          p_proposal_id: id,
+          p_signed_name: signedByName,
+          p_client_id: user.id,
+          p_signed_ip: clientIp,
+        }
+      );
+      if (executeError) {
+        return NextResponse.json({ error: executeError.message || 'sign_failed' }, { status: 500 });
+      }
+      const newlyExecuted = executeResult?.newly_executed === true || executeResult?.newlyExecuted === true;
+      const depositInvoiceId = executeResult?.deposit_invoice_id ?? executeResult?.depositInvoiceId ?? null;
+      let executionNotification: CommercialNotificationState = 'not_requested';
+      let depositNotification: CommercialNotificationState = 'not_requested';
+      const executedState = executeResult?.commercial_state ?? executeResult?.commercialState ?? 'executed';
+      if (executedState === 'executed') {
+        executionNotification = await notifyCommercialTransition(supabase, id, 'trade_scope_executed');
+        if (depositInvoiceId) {
+          depositNotification = await notifyCommercialTransition(supabase, id, 'deposit_ready');
+        }
+      }
+      return NextResponse.json({
+        ok: true,
+        commercialState: 'executed',
+        projectId: executeResult?.project_id ?? executeResult?.projectId ?? null,
+        depositInvoiceId,
+        newlyExecuted,
+        notificationDelivery: {
+          state:
+            executionNotification === 'pending_retry' || depositNotification === 'pending_retry'
+              ? 'pending_retry'
+              : executionNotification,
+          transitions: {
+            tradeScopeExecuted: executionNotification,
             depositReady: depositNotification,
           },
         },

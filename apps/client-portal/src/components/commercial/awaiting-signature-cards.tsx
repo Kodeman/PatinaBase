@@ -15,6 +15,7 @@ const KIND_LABEL: Partial<Record<CommercialDocumentKind, string>> = {
   design_services: 'Design services agreement',
   furnishings_authorization: 'Furnishings authorization',
   service_addendum: 'Design services addendum',
+  trade_scope: 'Trade scope',
 };
 
 /**
@@ -63,7 +64,13 @@ function AwaitingSignatureCard({ proposal }: { proposal: Proposal }) {
   // cards actually awaiting signature on this project, never a list-wide
   // fetch.
   const bundle = useClientCommercialDocument(proposal.id);
-  const depositRequiredCents = bundle.data?.furnishings?.depositRequiredCents;
+  // A trade scope carries no per-document deposit percent (get_client_
+  // commercial_document_bundle's depositPercent is a furnishings-only figure)
+  // — its deposit is simply the first draw in its draw schedule (sortOrder 0,
+  // "Deposit · on signature"). adaptTradeScopeDraws already sorts ascending,
+  // so draws[0] is that draw whenever one exists.
+  const depositRequiredCents =
+    bundle.data?.furnishings?.depositRequiredCents ?? bundle.data?.tradeScope?.draws[0]?.amountCents;
   const totalAmountCents =
     typeof proposal.total_amount === 'number' ? proposal.total_amount : null;
 

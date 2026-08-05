@@ -11,6 +11,7 @@ export const COMMERCIAL_DOCUMENT_KINDS = [
   'design_services',
   'furnishings_authorization',
   'service_addendum',
+  'trade_scope',
 ] as const;
 
 export type CommercialDocumentKind = (typeof COMMERCIAL_DOCUMENT_KINDS)[number];
@@ -187,8 +188,91 @@ export interface FurnishingsAuthorizationDraftResult {
   documentFingerprint: string;
 }
 
+// A trade scope's own progress vocabulary — distinct from FFEStageKey, which
+// tracks goods through procurement. A trade scope tracks a sub through the
+// work itself: 'none' before the studio engages them (a state a client never
+// actually sees, since presence lines only exist from 'engaged' on), forward-
+// ratcheting through 'accepted'. Never conflate with CommercialState, which
+// tracks the DOCUMENT (draft → sent → executed …) — a trade scope's document
+// reaches 'executed' in one act and then sits there while progressState keeps
+// moving underneath it.
+export const TRADE_SCOPE_PROGRESS_STATES = [
+  'none',
+  'engaged',
+  'in_progress',
+  'substantially_complete',
+  'accepted',
+] as const;
+
+export type TradeScopeProgressState = (typeof TRADE_SCOPE_PROGRESS_STATES)[number];
+
+/** Client-safe party projection — never email/phone/party_id (RLS-adjacent
+ * discipline enforced by get_client_commercial_document_bundle, not by this
+ * type, but the type documents the contract). */
+export interface TradeScopeParty {
+  displayName: string;
+  company: string | null;
+  trade: string | null;
+}
+
+export interface TradeScopeSection {
+  roomName: string;
+  projectRoomId: string | null;
+  /** The exact scope-of-work text the sub priced — rendered verbatim, never summarized. */
+  prose: string;
+  allocationCents: number | null;
+  sortOrder: number;
+}
+
+export interface TradeScopeDraw {
+  id: string;
+  label: string;
+  /** Display-only — amountCents is the canonical figure a draw bills for. */
+  percentage: number | null;
+  amountCents: number;
+  sortOrder: number;
+  gatesOnAcceptance: boolean;
+  invoiceId: string | null;
+  invoiceStatus: string | null;
+  invoicePaidCents: number;
+}
+
+export interface TradeScopeProgress {
+  state: TradeScopeProgressState;
+  engagedAt: string | null;
+  substantialCompletionAt: string | null;
+  acceptedAt: string | null;
+  acceptedSignedName: string | null;
+}
+
+export interface TradeScopeAuthorization extends CommercialDocumentSummary {
+  kind: 'trade_scope';
+  projectId: string;
+  party: TradeScopeParty;
+  clientPriceCents: number;
+  currency: string;
+  sections: TradeScopeSection[];
+  draws: TradeScopeDraw[];
+  progress: TradeScopeProgress;
+  depositInvoiceId: string | null;
+  signatures: CommercialSignatureReceipt[];
+}
+
+export interface TradeScopeExecutionResult {
+  proposalId: string;
+  commercialState: CommercialState;
+  projectId: string;
+  documentId: string;
+  depositInvoiceId: string | null;
+  newlyExecuted: boolean;
+}
+
 export interface ClientCommercialDocumentBundle {
-  document: DesignServicesAgreement | FurnishingsAuthorization | CommercialDocumentSummary;
+  document:
+    | DesignServicesAgreement
+    | FurnishingsAuthorization
+    | TradeScopeAuthorization
+    | CommercialDocumentSummary;
   authority: ProjectBillingAuthoritySummary | null;
   budgetVersion: WorkingBudgetVersion | null;
   budgetCheckpoint: WorkingBudgetCheckpoint | null;

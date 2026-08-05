@@ -1,8 +1,10 @@
 'use client';
 
-import { useClientSelections } from '@/hooks/use-commercial-client';
+import { useState } from 'react';
+import { Button } from '@patina/design-system';
+import { useAcceptTradeScope, useClientSelections } from '@/hooks/use-commercial-client';
 import type { ClientSelection } from '@/lib/commercial-documents';
-import { JourneyStepper } from './journey-stepper';
+import { JourneyStepper, TradeJourneyStepper } from './journey-stepper';
 
 // Whole-dollar, no cents — matches the rest of the commercial-document rail
 // (commercial-document-shell.tsx, project-commercial-summary.tsx), which
@@ -63,9 +65,97 @@ function SelectionCard({ selection }: { selection: ClientSelection }) {
 }
 
 /**
+ * A trade presence card — one per scope section, standing in for the work
+ * itself rather than a piece of furniture. No image, no productId, no FF&E
+ * journey: the trade rail tracks progress through the work
+ * (selection.tradeJourney), not procurement. "Accept the finished work"
+ * appears only once the studio has marked the scope substantially complete —
+ * the same gate the accept route itself enforces server-side.
+ */
+function TradeSelectionCard({ selection, projectId }: { selection: ClientSelection; projectId: string }) {
+  const proposalId = selection.instrument?.proposalId ?? null;
+  const journey = selection.tradeJourney ?? 'none';
+  const canAccept = journey === 'substantially_complete' && !!proposalId;
+  const accept = useAcceptTradeScope(proposalId, projectId);
+  const [name, setName] = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onAccept() {
+    if (name.trim().length < 2) {
+      setError('Type your full name to accept the finished work.');
+      return;
+    }
+    setError(null);
+    try {
+      await accept.mutateAsync(name.trim());
+      setShowForm(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to accept this work right now.');
+    }
+  }
+
+  return (
+    <div className="flex gap-4 py-4" data-testid="client-trade-selection-card">
+      <div className="min-w-0 flex-1">
+        <p className="type-body-small text-[var(--text-primary)]">{selection.name}</p>
+        <p className="type-meta-small mt-0.5 text-[var(--text-muted)]">
+          {money(selection.clientLineTotalCents)}
+        </p>
+        <div className="mt-2">
+          <TradeJourneyStepper state={journey} />
+        </div>
+
+        {canAccept && (
+          <div className="mt-3">
+            {showForm ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Full name"
+                  autoComplete="name"
+                  className="rounded-[3px] border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 type-body-small text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus-visible:focus-ring"
+                  data-testid="accept-trade-scope-name"
+                />
+                <Button
+                  size="sm"
+                  onClick={onAccept}
+                  disabled={accept.isPending}
+                  data-testid="accept-trade-scope-confirm"
+                >
+                  {accept.isPending ? 'Accepting…' : 'Confirm acceptance'}
+                </Button>
+              </div>
+            ) : (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => setShowForm(true)}
+                data-testid="accept-trade-scope"
+              >
+                Accept the finished work
+              </Button>
+            )}
+            {error && (
+              <p className="type-meta-small mt-1 text-patina-terracotta" role="alert">
+                {error}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
  * "Your selections" — room-grouped, image-led cards for the goods a client
  * has agreed to on this project. Replaces FFEStatus + FFEPipelinePanel for
- * commercial projects.
+ * commercial projects. Trade presence lines (kind:'trade') render as
+ * TradeSelectionCard instead — no image, a trade journey instead of a
+ * goods journey, and the accept act when the work is substantially complete.
  */
 export function ClientSelections({ projectId }: { projectId: string }) {
   const { data, isLoading, isError } = useClientSelections(projectId);
@@ -95,9 +185,13 @@ export function ClientSelections({ projectId }: { projectId: string }) {
           <div key={roomName} className="mt-6">
             <p className="type-meta text-[var(--text-muted)]">{roomName}</p>
             <div className="mt-2 divide-y divide-[var(--border-subtle)]">
-              {items.map((item) => (
-                <SelectionCard key={item.id} selection={item} />
-              ))}
+              {items.map((item) =>
+                item.kind === 'trade' ? (
+                  <TradeSelectionCard key={item.id} selection={item} projectId={projectId} />
+                ) : (
+                  <SelectionCard key={item.id} selection={item} />
+                ),
+              )}
             </div>
           </div>
         ))

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { CommercialDeclineDialog, CommercialDocumentShell } from '../commercial-document-shell';
 import { useDeclineCommercialDocument } from '@/hooks/use-commercial-client';
-import type { CommercialDocumentBundle } from '@/lib/commercial-documents';
+import { adaptCommercialDocumentBundle, type CommercialDocumentBundle } from '@/lib/commercial-documents';
 
 jest.mock('@/hooks/use-commercial-client', () => ({
   useDeclineCommercialDocument: jest.fn(),
@@ -26,7 +26,7 @@ function bundle(overrides: Partial<CommercialDocumentBundle> = {}): CommercialDo
       currentRateVersion: 1,
     },
     rates: [{ id: 'r1', version: 1, roleName: 'Principal designer', hourlyRateCents: 22_500, effectiveAt: '2026-08-01' }],
-    signatures: [], furnishings: null, ...overrides,
+    signatures: [], furnishings: null, tradeScope: null, ...overrides,
   };
 }
 
@@ -70,6 +70,43 @@ function furnishingsBundle(): CommercialDocumentBundle {
           clientUnitPriceCents: 320_000, clientLineTotalCents: 320_000, currency: 'USD',
         },
       ],
+    },
+  };
+}
+
+/** An executed trade scope: two sections, three draws (deposit, midpoint, final-on-acceptance). */
+function tradeScopeBundle(): CommercialDocumentBundle {
+  const base = bundle();
+  return {
+    ...base,
+    document: {
+      ...base.document,
+      kind: 'trade_scope',
+      state: 'executed',
+      projectId: 'p1',
+      title: 'Whitfield tile work',
+      totalAmountCents: 0,
+      depositPercent: 0,
+    },
+    serviceTerms: null,
+    tradeScope: {
+      party: { displayName: 'Marcus Hale', company: 'Hale Tile & Stone', trade: 'tile' },
+      clientPriceCents: 1_200_000,
+      currency: 'USD',
+      sections: [
+        { roomName: 'Primary bath', prose: 'Strip and reset the shower floor in honed marble.', allocationCents: 700_000, sortOrder: 0 },
+        { roomName: 'Powder room', prose: 'Reset the entry hex tile to match the original pattern.', allocationCents: 500_000, sortOrder: 1 },
+      ],
+      draws: [
+        { id: 'draw-1', label: 'Deposit', percentage: 25, amountCents: 300_000, sortOrder: 0, gatesOnAcceptance: false, invoiceId: 'inv-1', invoiceStatus: 'paid', invoicePaidCents: 300_000 },
+        { id: 'draw-2', label: 'Midpoint', percentage: 40, amountCents: 480_000, sortOrder: 1, gatesOnAcceptance: false, invoiceId: null, invoiceStatus: null, invoicePaidCents: 0 },
+        { id: 'draw-3', label: 'Final', percentage: 30, amountCents: 360_000, sortOrder: 2, gatesOnAcceptance: true, invoiceId: null, invoiceStatus: null, invoicePaidCents: 0 },
+      ],
+      progress: {
+        state: 'in_progress', engagedAt: '2026-07-01T00:00:00Z',
+        substantialCompletionAt: null, acceptedAt: null, acceptedSignedName: null,
+      },
+      depositInvoiceId: 'inv-1',
     },
   };
 }
@@ -156,6 +193,88 @@ describe('CommercialDocumentShell', () => {
     }} />);
     expect(screen.getByTestId('authorization-room-heading')).toHaveTextContent('General');
     expect(screen.getByText('Meadow linen sectional')).toBeInTheDocument();
+  });
+
+  it('labels a trade scope, states who performs it, and never shows a countersignature wait', () => {
+    render(<CommercialDocumentShell bundle={tradeScopeBundle()} />);
+    expect(screen.getByText('Trade scope')).toBeInTheDocument();
+    expect(screen.getByTestId('trade-scope-party')).toHaveTextContent('Performed by Marcus Hale, tile · Hale Tile & Stone');
+    expect(screen.queryByText(/awaiting countersignature/i)).not.toBeInTheDocument();
+  });
+
+  // The blocker this fences end-to-end: the adapter used to read a nested
+  // `tradeScope.party` object the RPC never sends, so the signed document
+  // silently rendered "Performed by " with no name. This drives a payload
+  // shaped EXACTLY like get_client_commercial_document_bundle's tradeScope
+  // arm (flat partyDisplayName/partyCompanyName/partyTrade, 00423) through
+  // the real adapter before the shell ever sees it — not a hand-typed
+  // TradeScopeAuthorization — so the producer/consumer seam is proven, not
+  // just each half in isolation.
+  it('names the performing party when driven from the real RPC shape (flat party keys), not a hand-typed fixture', () => {
+    const rawBundle = {
+      document: {
+        id: 'trade-4',
+        projectId: 'p1',
+        documentKind: 'trade_scope',
+        commercialState: 'executed',
+        title: 'Whitfield tile work',
+      },
+      tradeScope: {
+        documentId: 'pcd-4',
+        partyDisplayName: 'Marcus Hale',
+        partyCompanyName: 'Hale Tile & Stone',
+        partyTrade: 'tile',
+        clientPriceCents: 1_200_000,
+        currency: 'USD',
+        sections: [
+          { id: 'sec-1', roomId: 'room-1', roomName: 'Primary bath', prose: 'Strip and reset the shower floor.', allocationCents: 1_200_000, sortOrder: 0 },
+        ],
+        draws: [
+          { id: 'draw-1', label: 'Deposit', percentage: 100, amountCents: 1_200_000, sortOrder: 0, gatesOnAcceptance: false, invoiceId: null, invoiceStatus: null, invoicePaidCents: 0 },
+        ],
+        progress: { state: 'in_progress', engagedAt: '2026-07-01T00:00:00Z', substantialCompletionAt: null, acceptedAt: null, acceptedSignedName: null },
+      },
+    };
+    const adapted = adaptCommercialDocumentBundle(rawBundle);
+    expect(adapted).not.toBeNull();
+
+    render(<CommercialDocumentShell bundle={adapted!} />);
+    expect(screen.getByTestId('trade-scope-party')).toHaveTextContent(
+      'Performed by Marcus Hale, tile · Hale Tile & Stone',
+    );
+  });
+
+  it('renders each section under its own room heading with the exact priced prose', () => {
+    render(<CommercialDocumentShell bundle={tradeScopeBundle()} />);
+    const headings = screen.getAllByTestId('trade-scope-section-heading').map((h) => h.textContent);
+    expect(headings).toEqual(['Primary bath', 'Powder room']);
+    expect(screen.getByText('Strip and reset the shower floor in honed marble.')).toBeInTheDocument();
+    expect(screen.getByText('Reset the entry hex tile to match the original pattern.')).toBeInTheDocument();
+  });
+
+  it('states the scope total, the deposit (draw one), and the on-acceptance figure (final draw)', () => {
+    render(<CommercialDocumentShell bundle={tradeScopeBundle()} />);
+    const figures = screen.getByTestId('trade-scope-figures');
+    expect(figures).toHaveTextContent('Scope total');
+    expect(figures).toHaveTextContent('$12,000');
+    expect(figures).toHaveTextContent('Deposit');
+    expect(figures).toHaveTextContent('$3,000');
+    expect(figures).toHaveTextContent('On acceptance');
+    // Final draw amount appears exactly twice: once in the figures strip,
+    // once again in the draw schedule below it.
+    expect(screen.getAllByText('$3,600')).toHaveLength(2);
+  });
+
+  it('lists every draw in the schedule and marks the one due on acceptance', () => {
+    render(<CommercialDocumentShell bundle={tradeScopeBundle()} />);
+    expect(screen.getByText('Midpoint')).toBeInTheDocument();
+    expect(screen.getByText('$4,800')).toBeInTheDocument();
+    expect(screen.getByText('Due on acceptance')).toBeInTheDocument();
+  });
+
+  it('never renders a bid ledger on a trade scope', () => {
+    render(<CommercialDocumentShell bundle={tradeScopeBundle()} />);
+    expect(screen.queryByText(/bid/i)).not.toBeInTheDocument();
   });
 
   it('guides superseded documents to their replacement', () => {

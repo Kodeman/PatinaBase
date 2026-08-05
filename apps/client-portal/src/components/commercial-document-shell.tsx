@@ -21,6 +21,7 @@ const KIND_LABEL: Record<Exclude<CommercialDocumentKind, 'legacy'>, string> = {
   design_services: 'Design services agreement',
   service_addendum: 'Design services addendum',
   furnishings_authorization: 'Furnishings authorization',
+  trade_scope: 'Trade scope',
 };
 
 const STATE_LABEL = {
@@ -125,6 +126,9 @@ export function CommercialDocumentShell({ bundle }: { bundle: CommercialDocument
       )}
       {document.kind === 'furnishings_authorization' && (
         <FurnishingsBody bundle={bundle} />
+      )}
+      {document.kind === 'trade_scope' && (
+        <TradeScopeBody bundle={bundle} />
       )}
 
       <SignatureLedger bundle={bundle} />
@@ -346,6 +350,99 @@ function FurnishingsBody({ bundle }: { bundle: CommercialDocumentBundle }) {
   );
 }
 
+/**
+ * A trade scope's client-facing body. Deliberately excludes the bid ledger —
+ * a client signs the sub's finished scope and price, never the field of
+ * quotes it was chosen from. Sections render the exact scope-of-work prose
+ * the sub priced, room by room; the draw schedule is the whole payment plan,
+ * never collapsed to a single number the way a furnishings deposit is.
+ */
+function TradeScopeBody({ bundle }: { bundle: CommercialDocumentBundle }) {
+  const scope = bundle.tradeScope;
+  if (!scope) return null;
+  const currency = scope.currency;
+  const draws = scope.draws;
+  const depositDraw = draws[0] ?? null;
+  const finalDraw = draws.length > 0 ? draws[draws.length - 1] : null;
+
+  return (
+    <div className="mt-8 space-y-8">
+      <section>
+        <p className="type-body-small text-[var(--text-primary)]" data-testid="trade-scope-party">
+          {`Performed by ${scope.party.displayName}${scope.party.trade ? `, ${scope.party.trade}` : ''}`}
+          {scope.party.company ? ` · ${scope.party.company}` : ''}
+        </p>
+      </section>
+
+      <section>
+        <h2 className="type-section-head">Scope of work</h2>
+        <div className="mt-4 divide-y divide-[var(--border-subtle)] border-y border-[var(--border-subtle)]">
+          {scope.sections.map((section, index) => (
+            <div key={`${section.roomName}-${index}`} className="py-4" data-testid="trade-scope-section">
+              <p
+                className="type-meta text-[var(--accent-primary)]"
+                data-testid="trade-scope-section-heading"
+              >
+                {section.roomName}
+              </p>
+              <p className="type-body mt-2 whitespace-pre-wrap">{section.prose}</p>
+              {section.allocationCents !== null && (
+                <p className="type-meta-small mt-2 text-[var(--text-muted)]">
+                  {money(section.allocationCents, currency)}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="grid gap-4 sm:grid-cols-3" data-testid="trade-scope-figures">
+        <div className="border-b border-[var(--border-default)] pb-4">
+          <p className="type-meta">Scope total</p>
+          <p className="type-data-large mt-1">{money(scope.clientPriceCents, currency)}</p>
+        </div>
+        {depositDraw && (
+          <div className="border-b border-[var(--border-default)] pb-4">
+            <p className="type-meta">Deposit</p>
+            <p className="type-data-large mt-1">{money(depositDraw.amountCents, currency)}</p>
+            <p className="type-body-small mt-1">{depositDraw.label}</p>
+          </div>
+        )}
+        {finalDraw && (
+          <div className="border-b border-[var(--border-default)] pb-4">
+            <p className="type-meta">On acceptance</p>
+            <p className="type-data-large mt-1">{money(finalDraw.amountCents, currency)}</p>
+            <p className="type-body-small mt-1">{finalDraw.label}</p>
+          </div>
+        )}
+      </section>
+
+      <section>
+        <h2 className="type-section-head">Draw schedule</h2>
+        <div className="mt-4 divide-y divide-[var(--border-subtle)] border-y border-[var(--border-subtle)]">
+          {draws.map((draw) => (
+            <div key={draw.id} className="flex items-baseline justify-between gap-4 py-3">
+              <div>
+                <p className="type-body-small text-[var(--text-primary)]">{draw.label}</p>
+                {draw.gatesOnAcceptance && (
+                  <p className="type-meta-small mt-0.5 text-[var(--text-muted)]">Due on acceptance</p>
+                )}
+              </div>
+              <span className="type-label">{money(draw.amountCents, currency)}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <p className="border-l-2 border-patina-dusty-blue bg-patina-dusty-blue/5 px-4 py-3 type-body-small">
+        Signing authorizes this trade to begin the work described above, at the price shown. The
+        deposit draw is due on signature; each remaining draw is billed as the work reaches that
+        stage. Accepting the finished work later releases the final draw.
+      </p>
+    </div>
+  );
+}
+
 function SignatureLedger({ bundle }: { bundle: CommercialDocumentBundle }) {
   if (bundle.signatures.length === 0) return null;
   return (
@@ -360,6 +457,7 @@ function SignatureLedger({ bundle }: { bundle: CommercialDocumentBundle }) {
           </div>
         ))}
         {bundle.document.kind !== 'furnishings_authorization' &&
+          bundle.document.kind !== 'trade_scope' &&
           !bundle.signatures.some((signature) => signature.party === 'studio') && (
             <div className="border-b border-[var(--border-default)] pb-3">
               <p className="type-meta">Studio</p>
