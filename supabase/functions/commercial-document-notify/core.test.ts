@@ -136,3 +136,165 @@ Deno.test('trade draw ready copy mirrors deposit-ready payment framing', () => {
   assertStringIncludes(email.subject, 'Draw invoice ready');
   assertStringIncludes(email.html, 'Patina records the required payment');
 });
+
+// ─── paper-channel copy ──────────────────────────────────────────────────────
+
+Deno.test('paper-executed copy names the CLIENT as the one who signed the printed copy, not a mutual online signature', () => {
+  const email = renderCommercialEmail({
+    transition: 'executed',
+    audience: 'client',
+    documentTitle: 'Lake House Design Services',
+    documentKind: 'design_services',
+    counterpartyName: 'Morgan Studio',
+    portalUrl: 'https://client.patina.cloud/proposals/agreement-1',
+    channel: 'paper',
+  });
+
+  assertStringIncludes(email.subject, 'Agreement executed');
+  assertStringIncludes(email.html, 'You signed a printed copy');
+  assertStringIncludes(email.html, 'Morgan Studio recorded it and has countersigned');
+  assert(!email.html.includes('Both you and'));
+  assert(!email.html.includes('countersigned paper original'));
+});
+
+Deno.test('paper furnishings-executed copy carries the same provenance line as the online copy carries none of', () => {
+  const paper = renderCommercialEmail({
+    transition: 'furnishings_executed',
+    audience: 'client',
+    documentTitle: 'Living Room Wave',
+    documentKind: 'furnishings_authorization',
+    counterpartyName: 'Morgan Studio',
+    portalUrl: 'https://client.patina.cloud/proposals/wave-1',
+    channel: 'paper',
+  });
+  const online = renderCommercialEmail({
+    transition: 'furnishings_executed',
+    audience: 'client',
+    documentTitle: 'Living Room Wave',
+    documentKind: 'furnishings_authorization',
+    portalUrl: 'https://client.patina.cloud/proposals/wave-1',
+  });
+
+  assertStringIncludes(paper.html, 'Morgan Studio recorded your signed printed copy');
+  assertStringIncludes(paper.html, 'immutable item, quantity, and price snapshot');
+  assert(!online.html.includes('recorded your signed printed copy'));
+  assert(!paper.html.includes('countersigned paper original'));
+});
+
+Deno.test('paper trade-scope-executed copy applies only to the client leg; the studio leg is untouched by the channel', () => {
+  const clientPaper = renderCommercialEmail({
+    transition: 'trade_scope_executed',
+    audience: 'client',
+    documentTitle: 'Kitchen Millwork',
+    documentKind: 'trade_scope',
+    counterpartyName: 'Morgan Studio',
+    portalUrl: 'https://client.patina.cloud/proposals/trade-1',
+    channel: 'paper',
+  });
+  const studioPaper = renderCommercialEmail({
+    transition: 'trade_scope_executed',
+    audience: 'studio',
+    documentTitle: 'Kitchen Millwork',
+    documentKind: 'trade_scope',
+    signerName: 'Jamie Client',
+    portalUrl: 'https://app.patina.cloud/doc/trade-1',
+    channel: 'paper',
+  });
+
+  assertStringIncludes(clientPaper.html, 'Morgan Studio recorded your signed printed copy');
+  assertStringIncludes(clientPaper.html, 'first draw invoice is on its way');
+  assert(!clientPaper.html.includes('countersigned paper original'));
+  // A paper-narrowed audience list never actually invokes this leg (see
+  // lib.test.ts), but the copy itself stays honest even if it were: it
+  // still correctly attributes the signature to the client, not the studio.
+  assertStringIncludes(studioPaper.html, 'Jamie Client signed');
+});
+
+Deno.test('paper trade-scope-accepted copy tells the client the studio recorded their acceptance, never payment itself', () => {
+  const clientPaper = renderCommercialEmail({
+    transition: 'trade_scope_accepted',
+    audience: 'client',
+    documentTitle: 'Kitchen Millwork',
+    documentKind: 'trade_scope',
+    counterpartyName: 'Morgan Studio',
+    portalUrl: 'https://client.patina.cloud/proposals/trade-1',
+    channel: 'paper',
+  });
+
+  assertStringIncludes(clientPaper.subject, 'Trade scope accepted');
+  assertStringIncludes(clientPaper.html, 'Morgan Studio recorded your signed acceptance');
+  assertStringIncludes(clientPaper.html, 'the final payment follows');
+  assert(!clientPaper.html.includes('final draw is ready to invoice'));
+});
+
+Deno.test('paper trade-scope-accepted copy leaves the studio leg exactly as the online copy reads it', () => {
+  const studioPaper = renderCommercialEmail({
+    transition: 'trade_scope_accepted',
+    audience: 'studio',
+    documentTitle: 'Kitchen Millwork',
+    documentKind: 'trade_scope',
+    signerName: 'Jamie Client',
+    portalUrl: 'https://app.patina.cloud/doc/trade-1',
+    channel: 'paper',
+  });
+
+  assertStringIncludes(studioPaper.html, 'Jamie Client accepted');
+  assertStringIncludes(studioPaper.html, 'final draw is ready to invoice');
+});
+
+Deno.test('the attached-scan line appears only when hasScan is true, and only on paper copy', () => {
+  const withScan = renderCommercialEmail({
+    transition: 'furnishings_executed',
+    audience: 'client',
+    documentTitle: 'Living Room Wave',
+    documentKind: 'furnishings_authorization',
+    portalUrl: 'https://client.patina.cloud/proposals/wave-1',
+    channel: 'paper',
+    hasScan: true,
+  });
+  const withoutScan = renderCommercialEmail({
+    transition: 'furnishings_executed',
+    audience: 'client',
+    documentTitle: 'Living Room Wave',
+    documentKind: 'furnishings_authorization',
+    portalUrl: 'https://client.patina.cloud/proposals/wave-1',
+    channel: 'paper',
+    hasScan: false,
+  });
+  const onlineIgnoresHasScan = renderCommercialEmail({
+    transition: 'furnishings_executed',
+    audience: 'client',
+    documentTitle: 'Living Room Wave',
+    documentKind: 'furnishings_authorization',
+    portalUrl: 'https://client.patina.cloud/proposals/wave-1',
+    hasScan: true,
+  });
+
+  assertStringIncludes(withScan.html, 'scanned copy of the signed paper original');
+  assert(!withoutScan.html.includes('scanned copy'));
+  assert(!onlineIgnoresHasScan.html.includes('scanned copy'));
+});
+
+Deno.test('the attached-scan line also appears on a paper trade-scope-accepted notice when hasScan is true', () => {
+  const withScan = renderCommercialEmail({
+    transition: 'trade_scope_accepted',
+    audience: 'client',
+    documentTitle: 'Kitchen Millwork',
+    documentKind: 'trade_scope',
+    portalUrl: 'https://client.patina.cloud/proposals/trade-1',
+    channel: 'paper',
+    hasScan: true,
+  });
+  const withoutScan = renderCommercialEmail({
+    transition: 'trade_scope_accepted',
+    audience: 'client',
+    documentTitle: 'Kitchen Millwork',
+    documentKind: 'trade_scope',
+    portalUrl: 'https://client.patina.cloud/proposals/trade-1',
+    channel: 'paper',
+    hasScan: false,
+  });
+
+  assertStringIncludes(withScan.html, 'scanned copy of the signed paper original');
+  assert(!withoutScan.html.includes('scanned copy'));
+});

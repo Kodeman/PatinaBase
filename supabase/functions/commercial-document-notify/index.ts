@@ -13,6 +13,11 @@ import {
   type CommercialActorRole,
   type CommercialTransitionEvidence,
 } from './policy.ts';
+import {
+  parseNotificationChannel,
+  resolveCommercialNotificationAudiences,
+  type NotificationChannel,
+} from './lib.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -84,11 +89,20 @@ Deno.serve(async (req: Request) => {
   let documentId: string;
   let transition: CommercialTransition;
   let eventId: string | null = null;
+  // The caller's asserted channel is used ONLY for the contradiction check
+  // below (a caller claiming 'paper' for a transition the evidence does not
+  // support gets rejected) — it never drives audience selection or copy.
+  // hasScan is not read from the body at all: it is always derived, see the
+  // channel/hasScan derivation block after the policy check.
+  let callerAssertedChannel: NotificationChannel | null = null;
   try {
     const body = await req.json();
     documentId = typeof body?.documentId === 'string' ? body.documentId : '';
     transition = body?.transition;
     eventId = typeof body?.eventId === 'string' ? body.eventId : null;
+    const parsedChannel = parseNotificationChannel(body?.channel);
+    if (!parsedChannel.ok) return json({ error: 'invalid_channel' }, 400);
+    callerAssertedChannel = parsedChannel.channel;
   } catch {
     return json({ error: 'invalid_body' }, 400);
   }
@@ -163,7 +177,7 @@ Deno.serve(async (req: Request) => {
 
   const { data: signatureRows, error: signatureError } = await admin
     .from('commercial_document_signatures')
-    .select('party_role')
+    .select('party_role, metadata')
     .eq('proposal_id', documentId);
   const { data: documentRow, error: documentError } = await admin
     .from('project_commercial_documents')
@@ -227,7 +241,7 @@ Deno.serve(async (req: Request) => {
   if (transition === 'trade_scope_accepted') {
     const { data: termsRow, error: termsError } = await admin
       .from('trade_scope_terms')
-      .select('accepted_at, accepted_signed_name')
+      .select('accepted_at, accepted_signed_name, accepted_on_paper, acceptance_scan_document_id')
       .eq('proposal_id', documentId)
       .maybeSingle();
     if (termsError) {
@@ -317,25 +331,39 @@ Deno.serve(async (req: Request) => {
     return json({ error: policy.reason }, status);
   }
 
+  // channel/hasScan are never taken on the caller's word — they are derived
+  // here from the same rows the paper act itself wrote (00425's shared
+  // provenance contract), so a replay call that never mentions `channel`
+  // (the client-portal notifications/replay route, e.g.) still renders the
+  // correct paper-variant copy for a document that was actually paper-
+  // executed, and a caller who explicitly asserts 'paper' for something that
+  // was not gets rejected rather than lying to the client. trade_scope_
+  // accepted has no signature row of its own — acceptance lives on
+  // trade_scope_terms, not commercial_document_signatures (00425) — so it
+  // reads its own evidence column instead.
+  let derivedChannel: NotificationChannel | null = null;
+  let derivedHasScan = false;
+  if (transition === 'trade_scope_accepted') {
+    derivedChannel = (tradeScopeTermsRow as any)?.accepted_on_paper === true ? 'paper' : null;
+    derivedHasScan =
+      derivedChannel === 'paper' && Boolean((tradeScopeTermsRow as any)?.acceptance_scan_document_id);
+  } else {
+    const clientSignatureRow = (signatureRows ?? []).find((row: any) => row.party_role === 'client');
+    const metadata = (clientSignatureRow as any)?.metadata ?? null;
+    derivedChannel = metadata?.executedOnPaper === true ? 'paper' : null;
+    derivedHasScan = derivedChannel === 'paper' && Boolean(metadata?.paperScanDocumentId);
+  }
+  if (callerAssertedChannel === 'paper' && derivedChannel !== 'paper') {
+    return json({ error: 'channel_mismatch' }, 400);
+  }
+
   const { data: serviceTerms } = await admin
     .from('proposal_service_terms')
     .select('billing_ceiling_cents, retainer_amount_cents')
     .eq('proposal_id', documentId)
     .maybeSingle();
 
-  const audiences: Array<'client' | 'studio'> =
-    transition === 'client_signed' ||
-      transition === 'furnishings_executed' ||
-      transition === 'trade_scope_executed'
-      ? ['client', 'studio']
-      : transition === 'executed' ||
-          transition === 'budget_published' ||
-          transition === 'furnishings_sent' ||
-          transition === 'deposit_ready' ||
-          transition === 'trade_scope_sent' ||
-          transition === 'trade_draw_ready'
-        ? ['client']
-        : ['studio'];
+  const audiences = resolveCommercialNotificationAudiences(transition, derivedChannel);
   const results: Record<string, unknown> = {};
 
   for (const audience of audiences) {
@@ -366,6 +394,8 @@ Deno.serve(async (req: Request) => {
       portalUrl,
       ceilingCents: (serviceTerms as any)?.billing_ceiling_cents ?? null,
       retainerCents: (serviceTerms as any)?.retainer_amount_cents ?? null,
+      channel: derivedChannel ?? undefined,
+      hasScan: derivedHasScan,
     });
     const sendResult = await sendCompliantEmail(admin, {
       to: recipient.email,
@@ -382,6 +412,7 @@ Deno.serve(async (req: Request) => {
         budget_checkpoint_id: transition === 'budget_published' ? eventId : null,
         document_kind: proposal.document_kind,
         transition,
+        channel: derivedChannel ?? null,
         subject: rendered.subject,
         message: rendered.message,
         deep_link: portalUrl.replace(CLIENT_PORTAL_URL, '').replace(DESIGNER_PORTAL_URL, ''),

@@ -31,6 +31,14 @@ export interface CommercialEmailInput {
   portalUrl: string;
   ceilingCents?: number | null;
   retainerCents?: number | null;
+  /** Set only for the executed-family transitions when the act was recorded
+   * from a paper original rather than an online signature — see the
+   * paper-notify route. Absent (the default) renders the ordinary online
+   * copy unchanged. */
+  channel?: 'paper';
+  /** Only meaningful alongside channel:'paper' — true when the recording
+   * designer attached a scan of the signed original. */
+  hasScan?: boolean;
 }
 
 export interface RenderedCommercialEmail {
@@ -55,6 +63,9 @@ export function renderCommercialEmail(input: CommercialEmailInput): RenderedComm
   const counterparty = escapeHtml(input.counterpartyName || 'your design team');
   const ceiling = money(input.ceilingCents);
   const retainer = money(input.retainerCents);
+  const scanNote = input.hasScan
+    ? ' A scanned copy of the signed paper original is available on the document.'
+    : '';
 
   let subject: string;
   let eyebrow: string;
@@ -83,11 +94,19 @@ export function renderCommercialEmail(input: CommercialEmailInput): RenderedComm
       break;
     case 'executed':
       subject = `Agreement executed: ${input.documentTitle}`;
-      eyebrow = 'Design services authorized';
-      headline = 'Your design engagement is active';
-      body = `Both you and ${counterparty} have signed &ldquo;<strong>${title}</strong>&rdquo;. Design time can now be tracked under the signed authority.`;
-      cta = 'View your project';
-      message = `${input.documentTitle} is fully executed and the design engagement is active.`;
+      if (input.channel === 'paper') {
+        eyebrow = 'Signed on paper';
+        headline = 'Your design engagement is active';
+        body = `You signed a printed copy of &ldquo;<strong>${title}</strong>&rdquo;; ${counterparty} recorded it and has countersigned. The agreement is executed.${scanNote}`;
+        cta = 'View your project';
+        message = `You signed a printed copy of ${input.documentTitle}; ${input.counterpartyName || 'your studio'} recorded it and has countersigned. The agreement is executed.`;
+      } else {
+        eyebrow = 'Design services authorized';
+        headline = 'Your design engagement is active';
+        body = `Both you and ${counterparty} have signed &ldquo;<strong>${title}</strong>&rdquo;. Design time can now be tracked under the signed authority.`;
+        cta = 'View your project';
+        message = `${input.documentTitle} is fully executed and the design engagement is active.`;
+      }
       break;
     case 'budget_published':
       subject = `Working budget ready: ${input.documentTitle}`;
@@ -107,11 +126,19 @@ export function renderCommercialEmail(input: CommercialEmailInput): RenderedComm
       break;
     case 'furnishings_executed':
       subject = `Furnishings authorized: ${input.documentTitle}`;
-      eyebrow = 'FF&E wave executed';
-      headline = 'This furnishings wave is authorized';
-      body = `&ldquo;<strong>${title}</strong>&rdquo; is signed and executed. Procurement remains limited to its immutable item, quantity, and price snapshot.`;
-      cta = 'View authorization';
-      message = `${input.documentTitle} is executed and its signed items are authorized.`;
+      if (input.channel === 'paper') {
+        eyebrow = 'Signed on paper';
+        headline = 'This furnishings wave is authorized';
+        body = `${counterparty} recorded your signed printed copy of &ldquo;<strong>${title}</strong>&rdquo;. Procurement remains limited to its immutable item, quantity, and price snapshot.${scanNote}`;
+        cta = 'View authorization';
+        message = `${input.counterpartyName || 'Your studio'} recorded your signed printed copy of ${input.documentTitle}.`;
+      } else {
+        eyebrow = 'FF&E wave executed';
+        headline = 'This furnishings wave is authorized';
+        body = `&ldquo;<strong>${title}</strong>&rdquo; is signed and executed. Procurement remains limited to its immutable item, quantity, and price snapshot.`;
+        cta = 'View authorization';
+        message = `${input.documentTitle} is executed and its signed items are authorized.`;
+      }
       break;
     case 'deposit_ready':
       subject = `Deposit ready: ${input.documentTitle}`;
@@ -130,7 +157,14 @@ export function renderCommercialEmail(input: CommercialEmailInput): RenderedComm
       message = `${input.documentTitle} is ready for your review and signature.`;
       break;
     case 'trade_scope_executed':
-      if (input.audience === 'client') {
+      if (input.audience === 'client' && input.channel === 'paper') {
+        subject = `Trade scope authorized: ${input.documentTitle}`;
+        eyebrow = 'Signed on paper';
+        headline = 'Your trade scope is signed and active';
+        body = `${counterparty} recorded your signed printed copy of &ldquo;<strong>${title}</strong>&rdquo;. The first draw invoice is on its way &mdash; the trade begins once it is paid.${scanNote}`;
+        cta = 'View trade scope';
+        message = `${input.counterpartyName || 'Your studio'} recorded your signed printed copy of ${input.documentTitle}; the deposit draw is being issued.`;
+      } else if (input.audience === 'client') {
         subject = `Trade scope authorized: ${input.documentTitle}`;
         eyebrow = 'Trade scope authorized';
         headline = 'Your trade scope is signed and active';
@@ -148,11 +182,19 @@ export function renderCommercialEmail(input: CommercialEmailInput): RenderedComm
       break;
     case 'trade_scope_accepted':
       subject = `Trade scope accepted: ${input.documentTitle}`;
-      eyebrow = 'Substantial completion accepted';
-      headline = 'The client signed off on this trade';
-      body = `${signer} accepted &ldquo;<strong>${title}</strong>&rdquo; as substantially complete. The final draw is ready to invoice.`;
-      cta = 'View trade scope';
-      message = `${input.documentTitle} was accepted by the client; the final draw can now be invoiced.`;
+      if (input.audience === 'client' && input.channel === 'paper') {
+        eyebrow = 'Accepted on paper';
+        headline = 'Your acceptance is recorded';
+        body = `${counterparty} recorded your signed acceptance of the finished work on &ldquo;<strong>${title}</strong>&rdquo; &mdash; the final payment follows.${scanNote}`;
+        cta = 'View trade scope';
+        message = `${input.counterpartyName || 'Your studio'} recorded your signed acceptance of the finished work — the final payment follows.`;
+      } else {
+        eyebrow = 'Substantial completion accepted';
+        headline = 'The client signed off on this trade';
+        body = `${signer} accepted &ldquo;<strong>${title}</strong>&rdquo; as substantially complete. The final draw is ready to invoice.`;
+        cta = 'View trade scope';
+        message = `${input.documentTitle} was accepted by the client; the final draw can now be invoiced.`;
+      }
       break;
     case 'trade_draw_ready':
       subject = `Draw invoice ready: ${input.documentTitle}`;
