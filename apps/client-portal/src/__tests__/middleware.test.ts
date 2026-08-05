@@ -46,6 +46,19 @@ describe("client middleware Universal Link exemption", () => {
     expect(createMiddlewareClient).not.toHaveBeenCalled();
   });
 
+  it("lets an unauthenticated guest through to /rfq/[token] without a sign-in redirect", async () => {
+    const response = await middleware({
+      headers: new Headers({ host: "localhost:3002" }),
+      nextUrl: {
+        pathname: `/rfq/${"a".repeat(64)}`,
+        search: "",
+        searchParams: new URLSearchParams(),
+      },
+    } as never);
+    expect(NextResponse.redirect).not.toHaveBeenCalled();
+    expect(response).toBeDefined();
+  });
+
   it("preserves pathname and query in the post-sign-in callback", async () => {
     await middleware({
       headers: new Headers({ host: "localhost:3002" }),

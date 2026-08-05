@@ -1718,3 +1718,207 @@ export function useVoidTradeScope(projectId: string) {
     },
   });
 }
+
+/* ── Trade RFQs (Act IV · Phase 2 — asking a party for a number) ────────────
+ *
+ * A bid can also arrive because the studio ASKED for it, rather than being
+ * typed in by hand. trade_rfq_requests is the ask: one row per party, snapshot-
+ * ing the scope's current sections at the moment of the ask so a later edit to
+ * the draft never rewrites what a party was shown. Sending is two calls, one
+ * user act — prepare_trade_rfq upserts the (draft) ask, then the trade-rfq-send
+ * edge function mints a one-time link and emails it, mirroring the
+ * fingerprint→RPC→function shape the sends above use (minus the fingerprint —
+ * an RFQ protects no prior signature). A party's reply lands back as a
+ * trade_scope_bids row with source='party_response'; the bid ledger already
+ * renders that row, so this section only owns the ask itself and its status.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+export type TradeRfqStatus = "draft" | "sent" | "responded" | "closed";
+
+export interface TradeRfqView {
+  id: string;
+  proposalId: string;
+  partyId: string;
+  partyDisplayName: string | null;
+  status: TradeRfqStatus;
+  message: string | null;
+  timeline: string | null;
+  sentAt: string | null;
+  respondedAt: string | null;
+  closedAt: string | null;
+  createdAt: string | null;
+}
+
+function tradeRfqStatus(value: unknown): TradeRfqStatus {
+  return value === "sent" || value === "responded" || value === "closed"
+    ? value
+    : "draft";
+}
+
+function mapTradeRfq(row: any): TradeRfqView {
+  return {
+    id: String(row.id),
+    proposalId: String(row.proposal_id ?? row.proposalId),
+    partyId: String(row.party_id ?? row.partyId),
+    partyDisplayName:
+      typeof row.party_display_name === "string" ? row.party_display_name : null,
+    status: tradeRfqStatus(row.status),
+    message: typeof row.message === "string" ? row.message : null,
+    timeline: typeof row.timeline === "string" ? row.timeline : null,
+    sentAt: typeof row.sent_at === "string" ? row.sent_at : null,
+    respondedAt: typeof row.responded_at === "string" ? row.responded_at : null,
+    closedAt: typeof row.closed_at === "string" ? row.closed_at : null,
+    createdAt: typeof row.created_at === "string" ? row.created_at : null,
+  };
+}
+
+async function fetchTradeRfqs(scopeId: string): Promise<TradeRfqView[]> {
+  const { data, error } = await getSupabase()
+    .from("trade_rfq_requests")
+    .select("*")
+    .eq("proposal_id", scopeId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(mapTradeRfq);
+}
+
+const tradeRfqKeys = {
+  list: (scopeId: string) => ["trade-rfqs", scopeId] as const,
+};
+
+/**
+ * The RFQ dispatch log for one scope — direct studio-RLS select, read-only.
+ * A reply arrives out-of-band (the party answers from their own device, on
+ * their own time, with nothing on this screen to invalidate the cache), so
+ * this opts back into refetch-on-focus: the app's global default turns it
+ * off (src/lib/react-query.ts), which is right for everything else here but
+ * wrong for a status only an outside actor can change.
+ */
+export function useTradeRfqs(scopeId: string, enabled = true) {
+  return useQuery({
+    queryKey: tradeRfqKeys.list(scopeId),
+    queryFn: () => fetchTradeRfqs(scopeId),
+    enabled: enabled && Boolean(scopeId),
+    refetchOnWindowFocus: true,
+  });
+}
+
+export interface SendTradeRfqInput {
+  partyId: string;
+  message?: string | null;
+  timeline?: string | null;
+  /**
+   * Resend: re-invoke trade-rfq-send directly against an already-sent ask's
+   * id, skipping prepare_trade_rfq. prepare_trade_rfq's upsert is
+   * DRAFT-only (00403 idiom) — a 'sent' row never matches its WHERE clause,
+   * so calling it again after a send would silently INSERT A SECOND ask row
+   * for the same party rather than reuse the first. mint_trade_rfq_token's
+   * revoke-then-mint is scoped to a single rfq_request_id, so resending
+   * against the SAME row is what actually revokes the old link; a second row
+   * would leave the original token live (wrong — "resend" must mean the old
+   * link stops working, not "also send a new one").
+   */
+  existingRfqId?: string;
+}
+
+export interface SendTradeRfqResult {
+  rfqId: string;
+  recipient: string | null;
+  emailSent: boolean;
+}
+
+/**
+ * Translates a trade-rfq-send failure — a thrown FunctionsHttpError (non-2xx)
+ * or a resolved body that carries its own `error` — into designer-readable
+ * copy. no_recipient in particular has to read as fixable, not as a stack
+ * trace (the po-send / quote-request-send idiom this mirrors).
+ */
+async function tradeRfqSendFailureMessage(
+  error: unknown,
+  fallback: unknown,
+): Promise<string> {
+  let code: string | null = null;
+  let detail: string | null = null;
+
+  const context = (error as { context?: { json?: () => Promise<any> } } | null)
+    ?.context;
+  if (context && typeof context.json === "function") {
+    try {
+      const body = await context.json();
+      code = typeof body?.error === "string" ? body.error : null;
+      detail = typeof body?.detail === "string" ? body.detail : null;
+    } catch {
+      // No JSON body on the error response — fall through.
+    }
+  }
+  if (!code && fallback && typeof fallback === "object") {
+    const body = fallback as { error?: string; detail?: string };
+    code = typeof body.error === "string" ? body.error : code;
+    detail = typeof body.detail === "string" ? body.detail : detail;
+  }
+
+  if (code === "no_recipient") {
+    return (
+      detail ??
+      "No email on file for this party — add one to their contact and try again."
+    );
+  }
+  if (detail) return detail;
+  if (error instanceof Error) return error.message;
+  return "That request could not be sent.";
+}
+
+/**
+ * "Send a request" — one party, one act: snapshot the scope's current
+ * sections into a draft ask (prepare_trade_rfq — upsert-by-draft, so a retry
+ * after a failed send reuses the same draft rather than piling up rows), then
+ * mint the token and email it (trade-rfq-send, mode 'send').
+ *
+ * "Resend" (input.existingRfqId set) skips prepare_trade_rfq entirely and
+ * re-invokes trade-rfq-send against the SAME already-sent row — see
+ * SendTradeRfqInput.existingRfqId for why that distinction is load-bearing.
+ */
+export function useSendTradeRfq(scopeId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: ["send-trade-rfq", scopeId],
+    mutationFn: async (input: SendTradeRfqInput): Promise<SendTradeRfqResult> => {
+      const supabase = getSupabase();
+      let rfqId = input.existingRfqId;
+
+      if (!rfqId) {
+        const { data: prepared, error: prepareError } = await supabase.rpc(
+          "prepare_trade_rfq",
+          {
+            p_proposal_id: scopeId,
+            p_party_id: input.partyId,
+            p_message: input.message?.trim() || null,
+            p_timeline: input.timeline?.trim() || null,
+          },
+        );
+        if (prepareError) throw prepareError;
+        const preparedRow = Array.isArray(prepared) ? prepared[0] : prepared;
+        rfqId = preparedRow?.id ?? preparedRow?.rfqId ?? preparedRow?.rfq_id;
+        if (!rfqId) {
+          throw new Error("The request could not be prepared.");
+        }
+      }
+
+      const { data, error } = await supabase.functions.invoke("trade-rfq-send", {
+        body: { rfqRequestId: rfqId, mode: "send" },
+      });
+      if (error || data?.error) {
+        throw new Error(await tradeRfqSendFailureMessage(error, data));
+      }
+
+      return {
+        rfqId: String(rfqId),
+        recipient: typeof data?.recipient === "string" ? data.recipient : null,
+        emailSent: data?.emailSent === true,
+      };
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: tradeRfqKeys.list(scopeId) });
+    },
+  });
+}

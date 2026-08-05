@@ -1,10 +1,24 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { TradeScopeBidView } from '@/lib/document/project-commerce';
+import type { TradeRfqView } from '@/hooks/use-commercial-documents';
 
 let mockParties: { data: Record<string, unknown>[] } = { data: [] };
+let mockRfqs: { data: TradeRfqView[] } = { data: [] };
+const sendRfqMutateAsync = jest.fn();
+let sendRfqIsPending = false;
+let sendRfqVariables: { partyId: string } | undefined;
 
 jest.mock('@patina/supabase', () => ({
   useProjectParties: () => mockParties,
+}));
+
+jest.mock('@/hooks/use-commercial-documents', () => ({
+  useTradeRfqs: () => mockRfqs,
+  useSendTradeRfq: () => ({
+    mutateAsync: sendRfqMutateAsync,
+    isPending: sendRfqIsPending,
+    variables: sendRfqVariables,
+  }),
 }));
 
 import { BidLedger } from './bid-ledger';
@@ -19,6 +33,21 @@ const bid = (overrides: Partial<TradeScopeBidView> = {}): TradeScopeBidView => (
   note: null,
   notedAt: '2026-07-07T00:00:00Z',
   respondedAt: null,
+  ...overrides,
+});
+
+const rfq = (overrides: Partial<TradeRfqView> = {}): TradeRfqView => ({
+  id: 'rfq-1',
+  proposalId: 'scope-1',
+  partyId: 'party-1',
+  partyDisplayName: 'Atelier Marchand',
+  status: 'sent',
+  message: null,
+  timeline: null,
+  sentAt: '2026-07-07T00:00:00Z',
+  respondedAt: null,
+  closedAt: null,
+  createdAt: '2026-07-07T00:00:00Z',
   ...overrides,
 });
 
@@ -41,21 +70,30 @@ const parties = [
   },
 ];
 
+const renderLedger = (props: Partial<Parameters<typeof BidLedger>[0]> = {}) =>
+  render(
+    <BidLedger
+      projectId="project-1"
+      proposalId="scope-1"
+      bids={[]}
+      editable
+      onRecord={jest.fn()}
+      onSelect={jest.fn()}
+      {...props}
+    />,
+  );
+
 describe('BidLedger', () => {
   beforeEach(() => {
     mockParties = { data: parties };
+    mockRfqs = { data: [] };
+    sendRfqIsPending = false;
+    sendRfqVariables = undefined;
+    sendRfqMutateAsync.mockReset();
   });
 
   it('says the ledger never leaves the drawer', () => {
-    render(
-      <BidLedger
-        projectId="project-1"
-        bids={[]}
-        editable
-        onRecord={jest.fn()}
-        onSelect={jest.fn()}
-      />,
-    );
+    renderLedger();
     expect(screen.getByText('No bids recorded yet.')).toBeVisible();
     expect(
       screen.getByText('Their numbers never appear on client documents.'),
@@ -63,24 +101,18 @@ describe('BidLedger', () => {
   });
 
   it('lists each bid with its number, its note and its date, one selected', () => {
-    render(
-      <BidLedger
-        projectId="project-1"
-        bids={[
-          bid(),
-          bid({
-            id: 'bid-2',
-            partyDisplayName: 'Winfield Workroom',
-            amountCents: 460_000,
-            status: 'quoted',
-            note: 'No install date',
-          }),
-        ]}
-        editable
-        onRecord={jest.fn()}
-        onSelect={jest.fn()}
-      />,
-    );
+    renderLedger({
+      bids: [
+        bid(),
+        bid({
+          id: 'bid-2',
+          partyDisplayName: 'Winfield Workroom',
+          amountCents: 460_000,
+          status: 'quoted',
+          note: 'No install date',
+        }),
+      ],
+    });
 
     expect(screen.getByText('$4,150')).toBeVisible();
     expect(screen.getByText('$4,600')).toBeVisible();
@@ -93,51 +125,29 @@ describe('BidLedger', () => {
   });
 
   it('marks a bid that came back from the party itself', () => {
-    render(
-      <BidLedger
-        projectId="project-1"
-        bids={[
-          bid({
-            id: 'bid-3',
-            status: 'quoted',
-            source: 'party_response',
-            respondedAt: '2026-07-09T00:00:00Z',
-          }),
-        ]}
-        editable
-        onRecord={jest.fn()}
-        onSelect={jest.fn()}
-      />,
-    );
+    renderLedger({
+      bids: [
+        bid({
+          id: 'bid-3',
+          status: 'quoted',
+          source: 'party_response',
+          respondedAt: '2026-07-09T00:00:00Z',
+        }),
+      ],
+    });
     expect(screen.getByText('Answered')).toBeVisible();
   });
 
   it('selects a bid through its caller', async () => {
     const onSelect = jest.fn().mockResolvedValue(undefined);
-    render(
-      <BidLedger
-        projectId="project-1"
-        bids={[bid({ status: 'quoted' })]}
-        editable
-        onRecord={jest.fn()}
-        onSelect={onSelect}
-      />,
-    );
+    renderLedger({ bids: [bid({ status: 'quoted' })], onSelect });
     fireEvent.click(screen.getByRole('radio'));
     await waitFor(() => expect(onSelect).toHaveBeenCalledWith('bid-1'));
   });
 
   it('records a bid against a sub, refusing one with no number', async () => {
     const onRecord = jest.fn().mockResolvedValue(undefined);
-    render(
-      <BidLedger
-        projectId="project-1"
-        bids={[]}
-        editable
-        onRecord={onRecord}
-        onSelect={jest.fn()}
-      />,
-    );
+    renderLedger({ onRecord });
 
     fireEvent.click(screen.getByText('Record a bid'));
     // Only trades are offered — a vendor is not a candidate for trade work.
@@ -180,16 +190,123 @@ describe('BidLedger', () => {
   });
 
   it('reads only, once the scope has been released', () => {
-    render(
-      <BidLedger
-        projectId="project-1"
-        bids={[bid()]}
-        editable={false}
-        onRecord={jest.fn()}
-        onSelect={jest.fn()}
-      />,
-    );
+    renderLedger({ bids: [bid()], editable: false });
     expect(screen.queryByText('Record a bid')).not.toBeInTheDocument();
     expect(screen.getByRole('radio')).toBeDisabled();
+  });
+
+  describe('asking a party for a number', () => {
+    it('offers a sub or installer a request, but not a vendor', () => {
+      renderLedger();
+      expect(screen.getByText('Ask for a number')).toBeVisible();
+      expect(screen.getByText('Atelier Marchand')).toBeVisible();
+      expect(screen.queryByText('Hardwick Supply')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Send a request' })).toBeVisible();
+    });
+
+    it('sends a request through its caller', async () => {
+      sendRfqMutateAsync.mockResolvedValue({
+        rfqId: 'rfq-1',
+        recipient: 'sub@example.com',
+        emailSent: true,
+      });
+      renderLedger();
+      fireEvent.click(screen.getByRole('button', { name: 'Send a request' }));
+      await waitFor(() =>
+        expect(sendRfqMutateAsync).toHaveBeenCalledWith({ partyId: 'party-1' }),
+      );
+    });
+
+    it('shows a quiet "requested" badge once an ask is sent, with a Resend act beside it instead of "Send a request"', () => {
+      mockRfqs = { data: [rfq({ status: 'sent', sentAt: '2026-07-07T00:00:00Z' })] };
+      renderLedger();
+      // Date rendering is exercised elsewhere (project-commerce's `when`);
+      // this only pins the badge's own text, not a timezone-sensitive day.
+      expect(screen.getByText(/^Requested /)).toBeVisible();
+      expect(
+        screen.queryByRole('button', { name: 'Send a request' }),
+      ).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Resend' })).toBeVisible();
+    });
+
+    it('resends against the SAME ask id, not a fresh prepare_trade_rfq call', async () => {
+      sendRfqMutateAsync.mockResolvedValue({
+        rfqId: 'rfq-1',
+        recipient: 'sub@example.com',
+        emailSent: true,
+      });
+      mockRfqs = { data: [rfq({ status: 'sent', sentAt: '2026-07-07T00:00:00Z' })] };
+      renderLedger();
+      fireEvent.click(screen.getByRole('button', { name: 'Resend' }));
+      await waitFor(() =>
+        expect(sendRfqMutateAsync).toHaveBeenCalledWith({
+          partyId: 'party-1',
+          existingRfqId: 'rfq-1',
+        }),
+      );
+    });
+
+    it('offers no Resend act once the scope has been released', () => {
+      mockRfqs = { data: [rfq({ status: 'sent', sentAt: '2026-07-07T00:00:00Z' })] };
+      renderLedger({ editable: false });
+      expect(screen.queryByRole('button', { name: 'Resend' })).not.toBeInTheDocument();
+    });
+
+    it('offers no Resend act once a party has answered', () => {
+      mockRfqs = {
+        data: [
+          rfq({
+            status: 'responded',
+            sentAt: '2026-07-07T00:00:00Z',
+            respondedAt: '2026-07-09T00:00:00Z',
+          }),
+        ],
+      };
+      renderLedger();
+      expect(screen.queryByRole('button', { name: 'Resend' })).not.toBeInTheDocument();
+    });
+
+    it('shows the answer with its amount once a party responds', () => {
+      mockRfqs = {
+        data: [
+          rfq({
+            status: 'responded',
+            sentAt: '2026-07-07T00:00:00Z',
+            respondedAt: '2026-07-09T00:00:00Z',
+          }),
+        ],
+      };
+      renderLedger({
+        bids: [
+          bid({
+            id: 'bid-3',
+            source: 'party_response',
+            amountCents: 415_000,
+            respondedAt: '2026-07-09T00:00:00Z',
+          }),
+        ],
+      });
+      expect(screen.getByText(/^Responded \$4,150 · /)).toBeVisible();
+    });
+
+    it('surfaces a failed send inline, scoped to that party, without blocking the rest of the ledger', async () => {
+      sendRfqMutateAsync.mockRejectedValue(
+        new Error('No email on file for this party — add one and try again.'),
+      );
+      renderLedger();
+      fireEvent.click(screen.getByRole('button', { name: 'Send a request' }));
+      await waitFor(() =>
+        expect(screen.getByRole('alert')).toHaveTextContent('No email on file'),
+      );
+      // The rest of the ledger — recording a bid by hand — stays available.
+      expect(screen.getByText('Record a bid')).toBeVisible();
+    });
+
+    it('offers no request act once the scope has been released', () => {
+      renderLedger({ editable: false });
+      expect(
+        screen.queryByRole('button', { name: 'Send a request' }),
+      ).not.toBeInTheDocument();
+    });
   });
 });

@@ -103,6 +103,11 @@ export async function middleware(req: NextRequest) {
   // resolve_field_link() — a contractor on a jobsite phone has no Patina
   // account and never will (R46-style tracked, login-less courts).
   const isFieldPage = req.nextUrl.pathname.startsWith('/field/');
+  // /rfq/[token] is the same login-less pattern for a trade party asked for a
+  // number (Trade Scope RFQ dispatch, Phase 2): the token is resolved
+  // server-side via resolve_trade_rfq_link() — a sub or installer replying to
+  // an ask has no Patina account and never will.
+  const isRfqPage = req.nextUrl.pathname.startsWith('/rfq/');
   // /evidence/[token] is the same login-less pattern for a client asked to
   // photograph receiving-exception damage (Back of House S7): the token is
   // resolved server-side via fulfillment_evidence_token_context() — a client
@@ -115,6 +120,7 @@ export async function middleware(req: NextRequest) {
     isQuizPage ||
     isSharePage ||
     isFieldPage ||
+    isRfqPage ||
     isEvidencePage;
   const isApiRoute = req.nextUrl.pathname.startsWith('/api');
   // The wrong-portal interstitial is the redirect target for wrong-role users;

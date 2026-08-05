@@ -13,6 +13,8 @@ import { initPostHog, sanitizePostHogEvent } from '../posthog';
 
 const token = 'opaque_site_request_token_1234567890abcd';
 const shareToken = 'a'.repeat(64);
+const rfqToken = 'b'.repeat(64);
+const evidenceToken = 'c'.repeat(64);
 const initMock = (posthog as unknown as { init: jest.Mock }).init;
 
 describe('PostHog Field bearer privacy boundary', () => {
@@ -86,5 +88,51 @@ describe('PostHog Field bearer privacy boundary', () => {
     expect(serialized).not.toContain(shareToken);
     expect(serialized.match(/\/share\/\[redacted\]/g)?.length).toBeGreaterThanOrEqual(5);
     expect(event.properties?.already_redacted).toBe('/share/[redacted]');
+  });
+
+  it('redacts trade RFQ bearers from pageview, referrer, autocapture, and nested values', () => {
+    const event = sanitizePostHogEvent({
+      event: '$autocapture',
+      properties: {
+        $current_url: `https://client.patina.cloud/rfq/${rfqToken}?from=sms`,
+        $referrer: `/rfq/${rfqToken}`,
+        $elements: [{
+          tag_name: 'a',
+          attributes: {
+            href: `/rfq/${rfqToken}`,
+            'data-source': JSON.stringify({ returnTo: `/rfq/${rfqToken}` }),
+          },
+        }],
+        already_redacted: '/rfq/[redacted]',
+      },
+    });
+
+    const serialized = JSON.stringify(event);
+    expect(serialized).not.toContain(rfqToken);
+    expect(serialized.match(/\/rfq\/\[redacted\]/g)?.length).toBeGreaterThanOrEqual(4);
+    expect(event.properties?.already_redacted).toBe('/rfq/[redacted]');
+  });
+
+  it('redacts evidence-upload bearers from pageview, referrer, autocapture, and nested values', () => {
+    const event = sanitizePostHogEvent({
+      event: '$autocapture',
+      properties: {
+        $current_url: `https://client.patina.cloud/evidence/${evidenceToken}?from=email`,
+        $referrer: `/evidence/${evidenceToken}`,
+        $elements: [{
+          tag_name: 'a',
+          attributes: {
+            href: `/evidence/${evidenceToken}`,
+            'data-source': JSON.stringify({ returnTo: `/evidence/${evidenceToken}` }),
+          },
+        }],
+        already_redacted: '/evidence/[redacted]',
+      },
+    });
+
+    const serialized = JSON.stringify(event);
+    expect(serialized).not.toContain(evidenceToken);
+    expect(serialized.match(/\/evidence\/\[redacted\]/g)?.length).toBeGreaterThanOrEqual(4);
+    expect(event.properties?.already_redacted).toBe('/evidence/[redacted]');
   });
 });

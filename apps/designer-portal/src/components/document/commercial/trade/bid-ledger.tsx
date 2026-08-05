@@ -13,11 +13,22 @@
  * a request sent out of the portal (Phase 2, ruling R3) writes the same row
  * with source 'party_response' — the ledger renders it here, marked as having
  * come back from the party, and nothing else about the screen changes.
+ *
+ * Phase 2 also adds the ask itself: "Ask for a number" sends a one-time link
+ * a party opens with no Patina account (useSendTradeRfq → trade-rfq-send).
+ * That link never carries the studio's price or another party's bid — only
+ * the scope, so a party is never negotiating against a figure they should
+ * not see. useTradeRfqs reads the dispatch log for the per-party status.
  */
 
 import { useMemo, useState } from 'react';
 import { useProjectParties } from '@patina/supabase';
 import type { PartyKind } from '@patina/types';
+import {
+  useSendTradeRfq,
+  useTradeRfqs,
+  type TradeRfqView,
+} from '@/hooks/use-commercial-documents';
 import {
   money,
   when,
@@ -25,6 +36,37 @@ import {
 } from '@/lib/document/project-commerce';
 import { DocumentAction } from '../../document-action';
 import { TRADE_PARTY_KINDS, type TradePartyOption } from './party-field';
+
+/** "Requested {date}" while sent; "Responded {amount} · {date}" once
+ *  answered (the matching source='party_response' bid supplies the amount —
+ *  the RFQ row itself never carries money). Silent for draft/closed asks: a
+ *  draft means send is still retryable, and a closed ask just goes back to
+ *  offering "Send a request" again. */
+function partyRfqBadge(
+  rfq: TradeRfqView | undefined,
+  respondedBid: TradeScopeBidView | undefined,
+) {
+  if (!rfq) return null;
+  if (rfq.status === 'responded') {
+    const date = when(rfq.respondedAt);
+    return (
+      <span className="font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--color-sage)]">
+        Responded
+        {respondedBid ? ` ${money(respondedBid.amountCents)}` : ''}
+        {date ? ` · ${date}` : ''}
+      </span>
+    );
+  }
+  if (rfq.status === 'sent') {
+    const date = when(rfq.sentAt);
+    return (
+      <span className="font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+        Requested{date ? ` ${date}` : ''}
+      </span>
+    );
+  }
+  return null;
+}
 
 const FIELD_LABEL =
   'mb-1 block font-mono text-[8.5px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]';
@@ -38,6 +80,7 @@ const dollarsToCents = (value: string): number => {
 
 export function BidLedger({
   projectId,
+  proposalId,
   bids,
   editable,
   onRecord,
@@ -46,6 +89,8 @@ export function BidLedger({
   selecting = false,
 }: {
   projectId: string;
+  /** The trade scope this ledger belongs to — asks are dispatched per scope. */
+  proposalId: string;
   bids: readonly TradeScopeBidView[];
   /** Bids are recorded and selected while the scope is a draft. */
   editable: boolean;
@@ -66,6 +111,13 @@ export function BidLedger({
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  const rfqsQuery = useTradeRfqs(proposalId);
+  const rfqs = rfqsQuery.data ?? [];
+  const sendRfq = useSendTradeRfq(proposalId);
+  const [rfqError, setRfqError] = useState<{ partyId: string; message: string } | null>(
+    null,
+  );
+
   const eligible = useMemo(
     () =>
       ((parties ?? []) as TradePartyOption[]).filter((party) =>
@@ -73,6 +125,19 @@ export function BidLedger({
       ),
     [parties],
   );
+
+  const sendRequest = async (party: TradePartyOption, existingRfqId?: string) => {
+    setRfqError(null);
+    try {
+      await sendRfq.mutateAsync({ partyId: party.id, existingRfqId });
+    } catch (cause) {
+      setRfqError({
+        partyId: party.id,
+        message:
+          cause instanceof Error ? cause.message : 'That request could not be sent.',
+      });
+    }
+  };
 
   const record = async () => {
     const party = eligible.find((option) => option.id === partyId);
@@ -200,6 +265,82 @@ export function BidLedger({
       <p className="mt-2 text-[10px] italic text-[var(--text-muted)]">
         Their numbers never appear on client documents.
       </p>
+
+      {eligible.length > 0 && (
+        <div className="mt-4 border-t border-[var(--color-pearl)] pt-3">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+              Ask for a number
+            </p>
+            <span className="font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+              A private link · no price, no other bids
+            </span>
+          </div>
+          <ul className="mt-2">
+            {eligible.map((party) => {
+              const rfq = rfqs.find((candidate) => candidate.partyId === party.id);
+              const respondedBid = bids.find(
+                (candidate) =>
+                  candidate.partyId === party.id &&
+                  candidate.source === 'party_response',
+              );
+              const sending =
+                sendRfq.isPending && sendRfq.variables?.partyId === party.id;
+              const badge = partyRfqBadge(rfq, respondedBid);
+              return (
+                <li
+                  key={party.id}
+                  className="border-b border-[var(--color-pearl)] py-1.5 last:border-b-0"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="truncate text-[11.5px] text-[var(--color-charcoal)]">
+                      {party.display_name}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      {badge}
+                      {!badge && editable && (
+                        <DocumentAction
+                          actionKey="send-trade-rfq"
+                          surfaceKey="trade-scope"
+                          regionKey="bid-ledger"
+                          variant="tertiary"
+                          loading={sending}
+                          loadingLabel="Sending…"
+                          onClick={() => void sendRequest(party)}
+                        >
+                          Send a request
+                        </DocumentAction>
+                      )}
+                      {rfq?.status === 'sent' && editable && (
+                        <DocumentAction
+                          actionKey="resend-trade-rfq"
+                          surfaceKey="trade-scope"
+                          regionKey="bid-ledger"
+                          variant="tertiary"
+                          loading={sending}
+                          loadingLabel="Sending…"
+                          title="Mints a fresh link — the old one stops working"
+                          onClick={() => void sendRequest(party, rfq.id)}
+                        >
+                          Resend
+                        </DocumentAction>
+                      )}
+                    </span>
+                  </div>
+                  {rfqError?.partyId === party.id && (
+                    <p
+                      role="alert"
+                      className="mt-1 text-[10.5px] text-[var(--color-terracotta)]"
+                    >
+                      {rfqError.message}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
 
       {editable && !adding && (
         <DocumentAction

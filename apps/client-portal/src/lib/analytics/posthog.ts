@@ -8,13 +8,22 @@ declare global {
 
 let initialized = false;
 
+// /field tokens are either a 64-hex field_link_tokens value OR an
+// `sr_`-prefixed site-request token (see field/[token]/site-request-types.ts)
+// — a broader URL-safe alphabet than plain hex, so it stays its own pattern
+// rather than folding into the generic hex one below.
 const FIELD_BEARER_IN_URL = /\/field\/[A-Za-z0-9_-]{32,256}(?![A-Za-z0-9_-])/g;
-const SHARE_BEARER_IN_URL = /\/share\/[0-9a-f]{64}(?![0-9a-f])/gi;
+
+// /share, /rfq, and /evidence all mint the same 64-char lowercase-hex bearer
+// (sha256/gen_random_bytes idiom — document_shares, trade_rfq_tokens,
+// fulfillment_mint_evidence_token) — one generic pattern covers all three
+// while preserving which prefix gets redacted back into the URL.
+const HEX_BEARER_IN_URL = /\/(share|rfq|evidence)\/[0-9a-f]{64}(?![0-9a-f])/gi;
 
 function redactBearerPaths(value: string): string {
   return value
     .replace(FIELD_BEARER_IN_URL, '/field/[redacted]')
-    .replace(SHARE_BEARER_IN_URL, '/share/[redacted]');
+    .replace(HEX_BEARER_IN_URL, (_match, prefix: string) => `/${prefix}/[redacted]`);
 }
 
 function sanitizeAnalyticsValue(value: unknown, seen: WeakMap<object, unknown>): unknown {

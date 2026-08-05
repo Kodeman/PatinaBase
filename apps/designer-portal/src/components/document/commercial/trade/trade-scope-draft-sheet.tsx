@@ -451,6 +451,7 @@ export function TradeScopeDraftSheet({
           <section className="mt-6">
             <BidLedger
               projectId={projectId}
+              proposalId={liveProposalId}
               bids={bids}
               editable
               recording={recordBid.isPending}
