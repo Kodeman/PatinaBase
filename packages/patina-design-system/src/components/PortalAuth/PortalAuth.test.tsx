@@ -33,8 +33,23 @@ describe('Portal auth components', () => {
     const refresh = vi.fn()
     const { rerender } = render(<PortalLogin {...loginProps} state="qr-expired" onRefreshQr={refresh} />)
     expect(screen.getByText('That code has expired.')).toBeInTheDocument()
-    rerender(<PortalLogin {...loginProps} state="success" onContinue={vi.fn()} />)
-    expect(screen.getByRole('button', { name: 'Continue to your portal' })).toBeInTheDocument()
+    rerender(<PortalLogin {...loginProps} state="success" destinationHref="/projects" onContinue={vi.fn()} />)
+    expect(screen.getByRole('link', { name: 'Continue to your portal' })).toHaveAttribute('href', '/projects')
+  })
+
+  it('submits email and password entry with Enter', async () => {
+    const user = userEvent.setup()
+    const onSendCode = vi.fn()
+    const onPasswordSignIn = vi.fn()
+    const { rerender } = render(<PortalLogin {...loginProps} onSendCode={onSendCode} state="email" />)
+    await user.click(screen.getByLabelText('Email address'))
+    await user.keyboard('{Enter}')
+    expect(onSendCode).toHaveBeenCalledTimes(1)
+
+    rerender(<PortalLogin {...loginProps} state="password" password="secret" onPasswordSignIn={onPasswordSignIn} />)
+    await user.click(screen.getByLabelText('Password'))
+    await user.keyboard('{Enter}')
+    expect(onPasswordSignIn).toHaveBeenCalledTimes(1)
   })
 
   it('has no basic accessibility violations', async () => {
