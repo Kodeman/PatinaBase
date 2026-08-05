@@ -38,6 +38,7 @@ export * from './FormField'
 export * from './FormError'
 export * from './AuthForm'
 export * from './AuthLayout'
+export * from './PortalAuth'
 
 // Advanced Form Components
 // Note: DatePicker is exported from Calendar component to avoid duplicates

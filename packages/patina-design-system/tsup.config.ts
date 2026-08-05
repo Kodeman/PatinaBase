@@ -6,6 +6,7 @@ export default defineConfig({
   entry: {
     index: 'src/index.ts',
     'tokens/index': 'src/tokens/index.ts',
+    'components/PortalAuth/index': 'src/components/PortalAuth/index.ts',
   },
   format: ['esm', 'cjs'],
   dts: {
