@@ -22,7 +22,7 @@ describe('normalizeAuthError', () => {
     );
     expect(result).toEqual({
       kind: 'oauth',
-      message: 'Apple sign-in didn\'t finish. Try again, or use a code by email.',
+      message: 'That sign-in didn\'t finish. Try again, or use a code by email.',
       retryable: true,
     });
   });

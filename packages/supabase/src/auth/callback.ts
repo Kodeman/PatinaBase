@@ -90,15 +90,29 @@ export async function finalizeAuthCallback({
 
       const handleAbort = () => finish(failed(signal?.reason, 'cancelled'));
 
-      const authState = supabase.auth.onAuthStateChange((event, nextSession) => {
-        if (event === 'SIGNED_IN' && nextSession) {
-          finish({
-            status: 'authenticated',
-            session: nextSession,
-            method: 'auth-state',
-          });
-        }
-      });
+      // Register before subscribing. A client/test double can synchronously
+      // trigger cancellation while onAuthStateChange is being registered.
+      signal?.addEventListener('abort', handleAbort, { once: true });
+      if (signal?.aborted) {
+        handleAbort();
+        return;
+      }
+
+      let authState: ReturnType<typeof supabase.auth.onAuthStateChange>;
+      try {
+        authState = supabase.auth.onAuthStateChange((event, nextSession) => {
+          if (event === 'SIGNED_IN' && nextSession) {
+            finish({
+              status: 'authenticated',
+              session: nextSession,
+              method: 'auth-state',
+            });
+          }
+        });
+      } catch (error) {
+        finish(failed(error, 'oauth'));
+        return;
+      }
       subscription = authState.data.subscription;
 
       // Some test doubles and alternate clients may synchronously deliver the
@@ -108,7 +122,6 @@ export async function finalizeAuthCallback({
         return;
       }
 
-      signal?.addEventListener('abort', handleAbort, { once: true });
       timeoutId = setTimeout(
         () => finish(failed(new Error('Auth callback timed out'), 'timeout')),
         timeoutMs,

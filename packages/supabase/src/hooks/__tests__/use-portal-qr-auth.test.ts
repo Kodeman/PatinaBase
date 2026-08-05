@@ -124,6 +124,45 @@ describe('createPortalQrAuthController', () => {
     });
   });
 
+  it('does not verify or overwrite expiry when an in-flight status response arrives late', async () => {
+    const client = authClient();
+    let resolveStatus: ((value: Response) => void) | undefined;
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(generateResponse(1_000))
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            resolveStatus = resolve;
+          }),
+      );
+    const controller = createPortalQrAuthController({
+      baseUrl: '',
+      fetcher,
+      getSupabase: () => client as never,
+      pollIntervalMs: 500,
+    });
+
+    await controller.start();
+    await vi.advanceTimersByTimeAsync(500);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(500);
+    expect(controller.getSnapshot().state).toBe('expired');
+
+    resolveStatus?.(
+      response({ status: 'approved', tokenHash: 'late-token-hash' }),
+    );
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(controller.getSnapshot()).toMatchObject({
+      state: 'expired',
+      failure: null,
+    });
+    expect(client.auth.verifyOtp).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('retries transient polling failures while the QR remains valid', async () => {
     const client = authClient();
     const fetcher = vi

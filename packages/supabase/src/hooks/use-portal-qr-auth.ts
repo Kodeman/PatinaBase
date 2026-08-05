@@ -189,7 +189,13 @@ export function createPortalQrAuthController({
         ),
         { cache: 'no-store', signal: abortController?.signal },
       );
-      if (disposed || currentOperation !== operation) return;
+      if (
+        disposed ||
+        currentOperation !== operation ||
+        snapshot.state !== 'pending'
+      ) {
+        return;
+      }
 
       // A transient status failure should not invalidate a QR session. Keep
       // polling until its local expiry gives the user a deterministic state.
@@ -199,6 +205,13 @@ export function createPortalQrAuthController({
       }
 
       const data: unknown = await response.json();
+      if (
+        disposed ||
+        currentOperation !== operation ||
+        snapshot.state !== 'pending'
+      ) {
+        return;
+      }
       if (!isStatusResponse(data)) {
         schedulePoll(currentOperation);
         return;
@@ -262,13 +275,12 @@ export function createPortalQrAuthController({
       });
     } catch (error) {
       if (disposed || currentOperation !== operation) return;
-      if (abortController?.signal.aborted) return;
       if (snapshot.state === 'pending') {
         // Network interruptions during polling are retried while the code is
         // valid. Verification failures are surfaced rather than leaving the
         // UI stranded in its verifying state.
         schedulePoll(currentOperation);
-      } else {
+      } else if (snapshot.state === 'verifying') {
         fail(error);
       }
     }
@@ -370,10 +382,12 @@ export function usePortalQrAuth({
     if (enabled) void controller.start();
     else controller.stop();
 
+    // `stop` is intentionally reusable. React Strict Mode replays this
+    // setup/cleanup pair with the same memoized controller; permanently
+    // disposing here would make the replayed setup inert. On real unmount,
+    // useSyncExternalStore unsubscribes and this cleanup cancels all work.
     return () => controller.stop();
   }, [controller, enabled]);
-
-  useEffect(() => () => controller.dispose(), [controller]);
 
   const start = useCallback(
     () => (enabled ? controller.start() : Promise.resolve()),

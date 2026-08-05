@@ -304,17 +304,21 @@ export function useSendEmailOtp() {
       email: string;
       redirectTo?: string;
     }) => {
-      const supabase = getSupabase();
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          emailRedirectTo:
-            redirectTo || `${window.location.origin}/auth/callback?type=email`,
-          shouldCreateUser: false,
-        },
-      });
+      try {
+        const supabase = getSupabase();
+        const { error } = await supabase.auth.signInWithOtp({
+          email,
+          options: {
+            emailRedirectTo:
+              redirectTo || `${window.location.origin}/auth/callback?type=email`,
+            shouldCreateUser: false,
+          },
+        });
 
-      if (error) throw new AuthFlowError(error);
+        if (error) throw error;
+      } catch (error) {
+        throw new AuthFlowError(error);
+      }
     },
   });
 }

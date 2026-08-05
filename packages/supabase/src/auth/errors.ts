@@ -21,7 +21,7 @@ const FAILURE_MESSAGES: Record<AuthFailureKind, string> = {
     'That code has expired or isn\'t correct. Request a new code and try again.',
   invalid_credentials:
     'That email and password don\'t match. Try again, or use a code by email.',
-  oauth: 'Apple sign-in didn\'t finish. Try again, or use a code by email.',
+  oauth: 'That sign-in didn\'t finish. Try again, or use a code by email.',
   qr: 'We couldn\'t make a QR code. Refresh it, or use a code by email.',
   network:
     'We couldn\'t reach Patina just now. Check your connection and try again.',

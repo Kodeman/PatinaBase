@@ -60,6 +60,26 @@ describe('useSendEmailOtp', () => {
     expect(error.message).not.toContain('provider secret');
   });
 
+  it('sanitizes a rejected network promise as well as a returned error', async () => {
+    signInWithOtp.mockRejectedValueOnce(
+      new TypeError('Failed to fetch https://internal-auth-host.test'),
+    );
+    const mutation = useSendEmailOtp() as unknown as MutationConfig;
+
+    const error = await mutation
+      .mutationFn({
+        email: 'client@patina.com',
+        redirectTo: 'https://client.patina.cloud/auth/callback',
+      })
+      .catch((caught) => caught);
+    expect(error).toBeInstanceOf(AuthFlowError);
+    expect(error.failure).toMatchObject({ kind: 'network' });
+    expect(error.message).toBe(
+      'We couldn\'t reach Patina just now. Check your connection and try again.',
+    );
+    expect(error.message).not.toContain('internal-auth-host');
+  });
+
   it('retains legacy magic-link account creation behavior for compatibility', async () => {
     const mutation = useSendMagicLink() as unknown as MutationConfig;
     await mutation.mutationFn({

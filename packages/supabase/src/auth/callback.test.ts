@@ -67,7 +67,7 @@ describe('finalizeAuthCallback', () => {
       status: 'failed',
       failure: {
         kind: 'oauth',
-        message: 'Apple sign-in didn\'t finish. Try again, or use a code by email.',
+        message: 'That sign-in didn\'t finish. Try again, or use a code by email.',
         retryable: true,
       },
     });
@@ -173,5 +173,27 @@ describe('finalizeAuthCallback', () => {
       failure: { kind: 'cancelled' },
     });
     expect(client.auth.onAuthStateChange).not.toHaveBeenCalled();
+  });
+
+  it('cleans up when cancellation occurs during listener registration', async () => {
+    const abortController = new AbortController();
+    const unsubscribe = vi.fn();
+    const client = createAuthClient({
+      onAuthStateChange: vi.fn(() => {
+        abortController.abort();
+        return { data: { subscription: { unsubscribe } } };
+      }),
+    });
+
+    await expect(
+      finalizeAuthCallback({
+        supabase: client.supabase,
+        signal: abortController.signal,
+      }),
+    ).resolves.toMatchObject({
+      status: 'failed',
+      failure: { kind: 'cancelled' },
+    });
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
   });
 });
