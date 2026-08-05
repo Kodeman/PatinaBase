@@ -31,6 +31,7 @@ import {
   formatCurrency,
   formatInvoiceDate,
   invoiceBalanceCents,
+  invoicePaymentMethodLabel,
   isInvoiceOverdue,
   timeLineHoursLabel,
 } from '@patina/shared';
@@ -473,7 +474,12 @@ export function InvoiceFolio({
                   {formatInvoiceDate(p.received_at ?? p.created_at)}
                 </span>
                 <span className="min-w-0 truncate text-[11px] text-[var(--color-charcoal)]">
-                  {INVOICE_PAYMENT_METHOD_LABELS[p.method]}
+                  {invoicePaymentMethodLabel(p)}
+                  {(p.surcharge_cents ?? 0) > 0 && (
+                    <span className="ml-1.5 text-[var(--text-muted)]">
+                      + fee {formatCurrency(p.surcharge_cents ?? 0, invoice.currency)}
+                    </span>
+                  )}
                   {p.reference && (
                     <span className="ml-1.5 text-[var(--text-muted)]">{p.reference}</span>
                   )}

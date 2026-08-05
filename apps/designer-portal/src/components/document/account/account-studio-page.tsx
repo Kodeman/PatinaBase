@@ -26,6 +26,8 @@ import {
   useTransferOrganizationOwnership,
   useProjects,
   useStudioContacts,
+  useStudioBillingSettings,
+  useUpdateStudioBillingSettings,
   type MemberRole,
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
@@ -55,6 +57,30 @@ function friendlyStudioError(err: unknown, fallback: string): string {
   if (msg.includes('owner_insert_requires_owner'))
     return 'Only an owner can add another owner.';
   return msg || fallback;
+}
+
+/** Card fee (%) input ↔ card_surcharge_bps (migration 00428). 300 bps = 3%. */
+const BILLING_BPS_MAX = 300;
+
+function bpsToPercentInput(bps: number): string {
+  return String(bps / 100);
+}
+
+/**
+ * Clamped to the network cap (0..300 bps) — the same range the DB CHECK
+ * enforces, so a stray value here can never round-trip a save into a 400.
+ *
+ * Returns **null** for an empty or unparseable field: "no answer" is not the
+ * same as "charge nothing". Coercing it to 0 would let a cleared input save a
+ * 0% card fee the studio never chose. An explicit '0' still parses to 0 —
+ * absorbing the fee is a legitimate deliberate choice.
+ */
+function percentInputToBps(value: string): number | null {
+  const trimmed = value.trim();
+  if (trimmed === '') return null;
+  const n = Number(trimmed);
+  if (!Number.isFinite(n)) return null;
+  return Math.min(BILLING_BPS_MAX, Math.max(0, Math.round(n * 100)));
 }
 
 /** Row 4's SKIP write (organizations.rolodex_seed_skipped_at) is owner/admin-
@@ -103,6 +129,7 @@ export function AccountStudioPage() {
   const { data: members } = useOrganizationMembers(studio?.id ?? '');
   const { data: projects } = useProjects();
   const { data: contacts } = useStudioContacts(callSheetOn ? (studio?.id ?? null) : null);
+  const { data: billingSettings } = useStudioBillingSettings(studio?.id);
 
   const createOrg = useCreateOrganization();
   const updateOrg = useUpdateOrganization();
@@ -110,6 +137,7 @@ export function AccountStudioPage() {
   const removeMember = useRemoveMember();
   const leaveOrg = useLeaveOrganization();
   const transferOwner = useTransferOrganizationOwnership();
+  const updateBilling = useUpdateStudioBillingSettings();
 
   const [newStudioName, setNewStudioName] = useState('');
   const [isRenaming, setIsRenaming] = useState(false);
@@ -146,6 +174,26 @@ export function AccountStudioPage() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studio?.id]);
+
+  // Billing form (card fee % + check remit-to). Seeded from
+  // useStudioBillingSettings, which resolves to platform defaults
+  // ({card_surcharge_bps: 300, check_remit_to: null}) even before a studio
+  // has ever saved a row — so this never has to special-case "unconfigured".
+  // Re-synced keyed on the settings row's own studio_id (not just studio?.id)
+  // because this query loads asynchronously after the studio row itself; the
+  // effect fires once the first time it resolves for the active studio,
+  // matching the branding effect's "don't clobber an in-progress edit on a
+  // background refetch" invariant.
+  const [billing, setBilling] = useState({ cardFeePercent: '', checkRemitTo: '' });
+
+  useEffect(() => {
+    if (!billingSettings) return;
+    setBilling({
+      cardFeePercent: bpsToPercentInput(billingSettings.card_surcharge_bps),
+      checkRemitTo: billingSettings.check_remit_to ?? '',
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [billingSettings?.studio_id]);
 
   const myRole = studio?.membership.role ?? null;
   const canManage = myRole === 'owner' || myRole === 'admin';
@@ -249,6 +297,30 @@ export function AccountStudioPage() {
     });
   };
 
+  const handleSaveBilling = () => {
+    if (!studio || updateBilling.isPending) return;
+    const cardSurchargeBps = percentInputToBps(billing.cardFeePercent);
+    if (cardSurchargeBps === null) return; // Save is disabled here; belt-and-braces.
+    const checkRemitTo = billing.checkRemitTo.trim() || null;
+    updateBilling.mutate(
+      { studioId: studio.id, cardSurchargeBps, checkRemitTo },
+      {
+        onSuccess: () => {
+          // Re-seed from what was actually PERSISTED — the clamped bps and the
+          // trimmed remit-to. Without this the field can keep showing a value
+          // that was never saved ('10' after it clamped to 3%, '2.567' after it
+          // rounded), and a trailing newline leaves the form permanently dirty.
+          // The seeding effect can't do it: it is keyed on the settings row's
+          // studio_id, which doesn't change when the row is refetched.
+          setBilling({
+            cardFeePercent: bpsToPercentInput(cardSurchargeBps),
+            checkRemitTo: checkRemitTo ?? '',
+          });
+        },
+      },
+    );
+  };
+
   const handleTransfer = (newOwnerUserId: string, label: string) => {
     if (!studio) return;
     if (
@@ -331,6 +403,13 @@ export function AccountStudioPage() {
     branding.city !== asStr(currentAddress.city) ||
     branding.state !== asStr(currentAddress.state) ||
     branding.zip !== asStr(currentAddress.zip);
+  // null = the card-fee field is empty/unparseable — nothing to save, and the
+  // Save button stays disabled rather than persisting a coerced 0%.
+  const billingBps = percentInputToBps(billing.cardFeePercent);
+  const billingDirty =
+    !!billingSettings &&
+    (billingBps !== billingSettings.card_surcharge_bps ||
+      billing.checkRemitTo !== (billingSettings.check_remit_to ?? ''));
   const addressLines = [
     asStr(currentAddress.line1),
     asStr(currentAddress.line2),
@@ -650,6 +729,122 @@ export function AccountStudioPage() {
                 {addressLines.length > 0 ? (
                   addressLines.map((line, i) => <div key={i}>{line}</div>)
                 ) : (
+                  <span className="text-[var(--color-aged-oak)]">Not set</span>
+                )}
+              </dd>
+            </div>
+          </dl>
+        )}
+      </div>
+
+      {/* Billing */}
+      <div className="mb-6 border-t border-[var(--color-pearl)] pt-5">
+        <h3 className={`${LABEL} mb-3`}>Billing</h3>
+        <p className={`${HELP} mb-4 mt-0`}>
+          The card fee and check remit-to instructions a client sees when
+          paying an invoice from the client portal.
+        </p>
+
+        {canManage ? (
+          <div className="max-w-md">
+            <div className="mb-4">
+              <label htmlFor="studio-card-fee" className={LABEL}>
+                Card fee (%)
+              </label>
+              <input
+                id="studio-card-fee"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                max={3}
+                step={0.05}
+                value={billing.cardFeePercent}
+                onChange={(e) =>
+                  setBilling((b) => ({ ...b, cardFeePercent: e.target.value }))
+                }
+                className={FIELD}
+              />
+              {billingBps === null ? (
+                <p
+                  role="alert"
+                  className="mt-1 text-[12px] text-[var(--color-terracotta)]"
+                >
+                  Enter a card fee between 0 and 3 percent. Enter 0 if your
+                  studio absorbs card processing.
+                </p>
+              ) : (
+                <p className={HELP}>
+                  Default 3% — added to card payments to cover processing.
+                  Bank transfer (ACH) carries its own lower, fixed fee and
+                  isn&rsquo;t affected by this setting.
+                </p>
+              )}
+            </div>
+            <div className="mb-4">
+              <label htmlFor="studio-check-remit" className={LABEL}>
+                Remit checks to
+              </label>
+              <textarea
+                id="studio-check-remit"
+                rows={3}
+                value={billing.checkRemitTo}
+                onChange={(e) =>
+                  setBilling((b) => ({ ...b, checkRemitTo: e.target.value }))
+                }
+                placeholder={'Studio Name\n123 Main St\nCity, ST 00000'}
+                className={`${FIELD} resize-none`}
+              />
+              <p className={HELP}>
+                Shown to clients who choose to mail a check instead of
+                paying online.
+              </p>
+            </div>
+
+            <DocumentActionGroup
+              surfaceKey="account"
+              regionKey="studio-billing"
+              className="mt-4 items-center"
+            >
+              <DocumentAction
+                actionKey="save-studio-billing"
+                variant="primary"
+                onClick={handleSaveBilling}
+                disabled={!billingDirty || billingBps === null || updateBilling.isPending}
+                loading={updateBilling.isPending}
+                loadingLabel="Saving…"
+              >
+                Save billing
+              </DocumentAction>
+              {!billingDirty && !updateBilling.isPending && (
+                <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+                  Saved
+                </span>
+              )}
+            </DocumentActionGroup>
+            {updateBilling.isError && (
+              <p
+                role="alert"
+                className="mt-2 text-[12px] text-[var(--color-terracotta)]"
+              >
+                {friendlyStudioError(
+                  updateBilling.error,
+                  'Failed to save billing.',
+                )}
+              </p>
+            )}
+          </div>
+        ) : (
+          <dl className="max-w-md space-y-3">
+            <div>
+              <dt className={LABEL}>Card fee</dt>
+              <dd className="text-[13px] text-[var(--color-charcoal)]">
+                {billingSettings ? `${billingSettings.card_surcharge_bps / 100}%` : '—'}
+              </dd>
+            </div>
+            <div>
+              <dt className={LABEL}>Remit checks to</dt>
+              <dd className="whitespace-pre-line text-[13px] text-[var(--color-charcoal)]">
+                {billingSettings?.check_remit_to || (
                   <span className="text-[var(--color-aged-oak)]">Not set</span>
                 )}
               </dd>
