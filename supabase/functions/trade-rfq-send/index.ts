@@ -39,8 +39,10 @@
 //                    CLIENT_PORTAL_URL + '/rfq/' + token, email the party
 //                    (operational, reply-to the designer, no attachment,
 //                    no userId — the party is not a platform user); on
-//                    success set status='sent' + party_email snapshot, and
-//                    sent_at on the first send only.
+//                    success snapshot party_email (always) and sent_at (on
+//                    the first send only); status moves draft/sent → 'sent'
+//                    but a resend never downgrades 'responded' or 'closed'
+//                    back to 'sent'.
 //
 // Body: { rfqRequestId: string, mode?: 'preview' | 'send', recipientEmail?: string }
 // Returns (preview) { ok, mode, rfqRequestId, recipient?, subject, html }
@@ -225,9 +227,12 @@ const deps: TradeRfqSendDeps = {
 
   stampSent: async (rfqRequestId, patch): Promise<{ error?: string }> => {
     const dbPatch: Record<string, unknown> = {
-      status: "sent",
       party_email: patch.partyEmail,
     };
+    // Never downgrade: lib.ts only sends status='sent' when the row's
+    // current status was 'draft' or 'sent' — a resend of a 'responded' or
+    // 'closed' ask omits status entirely, so the column is left untouched.
+    if (patch.status) dbPatch.status = patch.status;
     if (patch.sentAt) dbPatch.sent_at = patch.sentAt;
     const { error } = await admin()
       .from("trade_rfq_requests")

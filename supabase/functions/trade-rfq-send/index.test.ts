@@ -175,7 +175,7 @@ interface DepsCallLog {
   mintTokenCalled: boolean;
   sendEmailCalled: boolean;
   stampSentCalled: boolean;
-  stampPatch?: { partyEmail: string; sentAt?: string };
+  stampPatch?: { partyEmail: string; sentAt?: string; status?: "sent" };
   sentEmailOpts?: { to: string; subject: string; html: string; replyTo?: string };
 }
 
@@ -419,9 +419,11 @@ Deno.test("send mode ok, first send: stamps sent_at + party_email, response omit
   assertFalse("html" in body);
   assertEquals(log.stampPatch?.sentAt, "2026-08-05T12:00:00.000Z");
   assertEquals(log.stampPatch?.partyEmail, "sub@hewn.test");
+  // draft → sent: the one legitimate forward transition.
+  assertEquals(log.stampPatch?.status, "sent");
 });
 
-Deno.test("send mode ok, resend: sent_at NOT re-stamped, response echoes the original sentAt", async () => {
+Deno.test("send mode ok, resend of a 'sent' ask: sent_at NOT re-stamped, status stays 'sent', response echoes the original sentAt", async () => {
   const log: DepsCallLog = { mintTokenCalled: false, sendEmailCalled: false, stampSentCalled: false };
   const res = await handleTradeRfqSend(
     req("POST", { Authorization: "Bearer abc" }, { rfqRequestId: "rfq-1", mode: "send" }),
@@ -437,4 +439,64 @@ Deno.test("send mode ok, resend: sent_at NOT re-stamped, response echoes the ori
   // party_email is still refreshed on a resend — it is the record of where
   // the RFQ was actually delivered, not a one-time draft artifact.
   assertEquals(log.stampPatch?.partyEmail, "sub@hewn.test");
+  assertEquals(log.stampPatch?.status, "sent");
+});
+
+// ─── Resend never downgrades an answered/closed ask ──────────────────────────
+
+Deno.test("send mode, resend of a 'responded' ask: re-mints + re-emails, but status is NOT downgraded back to 'sent'", async () => {
+  const log: DepsCallLog = { mintTokenCalled: false, sendEmailCalled: false, stampSentCalled: false };
+  const res = await handleTradeRfqSend(
+    req("POST", { Authorization: "Bearer abc" }, { rfqRequestId: "rfq-1", mode: "send" }),
+    makeDeps(
+      {
+        loadRequest: () =>
+          Promise.resolve({
+            ...BASE_ROW,
+            status: "responded",
+            sentAt: "2026-07-01T00:00:00.000Z",
+          }),
+      },
+      log,
+    ),
+  );
+  assertEquals(res.status, 200);
+  const body = await res.json();
+  assertEquals(body.ok, true);
+  assertEquals(body.emailSent, true);
+  // The resend still happens in full: a fresh token is minted and the party
+  // is re-emailed.
+  assert(log.mintTokenCalled);
+  assert(log.sendEmailCalled);
+  assert(log.stampSentCalled);
+  // ...but the patch omits status entirely — omitted, not 'responded' —
+  // because deps.stampSent's contract is "undefined means leave it alone";
+  // the answered state must never be erased back to 'sent'.
+  assertEquals(log.stampPatch?.status, undefined);
+  // sent_at was already set, so it is not re-stamped either.
+  assertEquals(log.stampPatch?.sentAt, undefined);
+  // party_email still refreshes — it records where the resend actually went.
+  assertEquals(log.stampPatch?.partyEmail, "sub@hewn.test");
+});
+
+Deno.test("send mode, resend of a 'closed' ask: re-mints + re-emails, but status is NOT reopened to 'sent'", async () => {
+  const log: DepsCallLog = { mintTokenCalled: false, sendEmailCalled: false, stampSentCalled: false };
+  const res = await handleTradeRfqSend(
+    req("POST", { Authorization: "Bearer abc" }, { rfqRequestId: "rfq-1", mode: "send" }),
+    makeDeps(
+      {
+        loadRequest: () =>
+          Promise.resolve({
+            ...BASE_ROW,
+            status: "closed",
+            sentAt: "2026-07-01T00:00:00.000Z",
+          }),
+      },
+      log,
+    ),
+  );
+  assertEquals(res.status, 200);
+  assert(log.mintTokenCalled);
+  assert(log.sendEmailCalled);
+  assertEquals(log.stampPatch?.status, undefined);
 });

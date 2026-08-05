@@ -1832,6 +1832,11 @@ export interface SendTradeRfqResult {
  * or a resolved body that carries its own `error` — into designer-readable
  * copy. no_recipient in particular has to read as fixable, not as a stack
  * trace (the po-send / quote-request-send idiom this mirrors).
+ *
+ * Any failure that carries no parseable JSON body (or a JSON body with no
+ * `detail`) falls through to a brand-voice generic — never the raw SDK
+ * string ("Edge Function returned a non-2xx status code"), which reads like
+ * an internal error, not a fixable instruction.
  */
 async function tradeRfqSendFailureMessage(
   error: unknown,
@@ -1864,8 +1869,9 @@ async function tradeRfqSendFailureMessage(
     );
   }
   if (detail) return detail;
-  if (error instanceof Error) return error.message;
-  return "That request could not be sent.";
+  // No JSON body (or a body without a detail string) — never surface the raw
+  // SDK/network string; a designer needs an instruction, not a stack trace.
+  return "The request could not be sent. Check the party's email and try again.";
 }
 
 /**

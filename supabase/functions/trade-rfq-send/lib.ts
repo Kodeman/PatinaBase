@@ -193,6 +193,12 @@ export interface StampSentPatch {
   partyEmail: string;
   /** Only set when this is the first successful send (sentAt not already set). */
   sentAt?: string;
+  /**
+   * Only set when the row's current status is 'draft' or 'sent' — i.e. a
+   * resend never downgrades an already-'responded' or 'closed' ask back to
+   * 'sent'. Undefined means "leave status alone".
+   */
+  status?: "sent";
 }
 
 export interface TradeRfqSendDeps {
@@ -220,7 +226,11 @@ export interface TradeRfqSendDeps {
     replyTo?: string;
     metadata: Record<string, unknown>;
   }) => Promise<SendEmailResult>;
-  /** Persist the send-time stamp (status='sent' + party_email, + sentAt if unset). */
+  /**
+   * Persist the send-time stamp: party_email always, sentAt if unset, and
+   * status='sent' only when patch.status says so (never a downgrade from
+   * 'responded'/'closed').
+   */
   stampSent: (
     rfqRequestId: string,
     patch: StampSentPatch,
@@ -256,6 +266,13 @@ export interface TradeRfqSendDeps {
  *     (send-mode responses deliberately omit subject/html — the live link
  *     embeds a real bearer token, so it is never echoed into a JSON response
  *     beyond the one email it was sent in)
+ *
+ *   Resend of an already-answered ask: a 'send' against a row already past
+ *   'sent' still re-mints a token and re-emails (the whole point of a
+ *   resend), and party_email still refreshes to record where it actually
+ *   went — but status is a one-way ratchet. It moves draft→sent; 'responded'
+ *   and 'closed' are never overwritten back to 'sent', because that would
+ *   erase the fact that the party already answered (or the ask was closed).
  */
 export async function handleTradeRfqSend(
   req: Request,
@@ -383,9 +400,18 @@ export async function handleTradeRfqSend(
   }
 
   const nowIso = deps.now();
+  // Status is a one-way ratchet: a resend of an already-'responded' or
+  // 'closed' ask must not flip it back to 'sent' and erase that the party
+  // answered (or that the ask was closed). Only draft→sent and sent→sent
+  // (no-op) are stamped.
+  const stampStatus =
+    request.status === "draft" || request.status === "sent"
+      ? "sent" as const
+      : undefined;
   const stamp = await deps.stampSent(request.id, {
     partyEmail: recipient,
     sentAt: request.sentAt ? undefined : nowIso,
+    status: stampStatus,
   });
   if (stamp.error) {
     // The email already went out; surface the write failure rather than

@@ -29,6 +29,7 @@ import {
   useReleaseForAuthorization,
   useReplayCommercialNotification,
   useSendFurnishingsAuthorization,
+  useSendTradeRfq,
   useSetBudgetTargets,
   useVoidAuthorization,
 } from '../use-commercial-documents';
@@ -468,5 +469,83 @@ describe('designer commercial document hooks', () => {
         proposalSendDispatchId: 'dispatch-1',
       })
     );
+  });
+
+  describe('useSendTradeRfq — trade-rfq-send failure copy', () => {
+    const resendInput = { partyId: 'party-1', existingRfqId: 'rfq-1' };
+
+    const mutationFnOf = (scopeId = 'scope-1') =>
+      (useSendTradeRfq(scopeId) as unknown as {
+        mutationFn: (input: typeof resendInput) => Promise<unknown>;
+      }).mutationFn;
+
+    it('surfaces the specific no_recipient copy from a resolved error body', async () => {
+      invoke.mockResolvedValue({
+        data: {
+          error: 'no_recipient',
+          detail: 'No party email on file — set the party\'s email and try again.',
+        },
+        error: null,
+      });
+
+      await expect(mutationFnOf()(resendInput)).rejects.toThrow(
+        'No party email on file',
+      );
+    });
+
+    it('surfaces a detail string carried by a thrown FunctionsHttpError JSON body', async () => {
+      invoke.mockResolvedValue({
+        data: null,
+        error: {
+          message: 'Edge Function returned a non-2xx status code',
+          context: {
+            json: () =>
+              Promise.resolve({ error: 'send_failed', detail: 'provider_down' }),
+          },
+        },
+      });
+
+      await expect(mutationFnOf()(resendInput)).rejects.toThrow('provider_down');
+    });
+
+    it('falls back to brand-voice generic copy — never the raw SDK string — when the thrown error carries no JSON body', async () => {
+      invoke.mockResolvedValue({
+        data: null,
+        error: {
+          message: 'Edge Function returned a non-2xx status code',
+          // No `context`, matching a network-level failure or a non-JSON
+          // response the SDK could not parse.
+        },
+      });
+
+      await expect(mutationFnOf()(resendInput)).rejects.toThrow(
+        "The request could not be sent. Check the party's email and try again.",
+      );
+    });
+
+    it('falls back to brand-voice generic copy when context.json() itself rejects', async () => {
+      invoke.mockResolvedValue({
+        data: null,
+        error: {
+          message: 'Edge Function returned a non-2xx status code',
+          context: { json: () => Promise.reject(new Error('not json')) },
+        },
+      });
+
+      await expect(mutationFnOf()(resendInput)).rejects.toThrow(
+        "The request could not be sent. Check the party's email and try again.",
+      );
+    });
+
+    it('falls back to brand-voice generic copy when the resolved body carries an error code but no detail', async () => {
+      invoke.mockResolvedValue({
+        data: { error: 'stamp_failed' },
+        error: null,
+      });
+
+      await expect(mutationFnOf()(resendInput)).rejects.toThrow(
+        "The request could not be sent. Check the party's email and try again.",
+      );
+    });
   });
 });
