@@ -1,218 +1,154 @@
 'use client';
 
-import { Suspense, useEffect, useRef, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useSendMagicLink, useVerifyOtp } from '@patina/supabase';
-import { Alert, Button, Input } from '@patina/design-system';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import {
+  buildAuthCallbackUrl,
+  createBrowserClient,
+  normalizeAuthError,
+  useSendEmailOtp,
+  useVerifyOtp,
+} from '@patina/supabase';
+import { PortalAuthNotice, PortalLogin } from '@patina/design-system';
 import { authEvents } from '@/lib/analytics/events';
+import { adminAuthDestination, hardNavigate } from '@/lib/auth-navigation';
+import { AdminAuthShell } from '../auth-shell';
 
 function VerifyOtpContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const email = searchParams.get('email') ?? '';
-
+  const email = searchParams.get('email')?.trim() ?? '';
+  const destination = adminAuthDestination(searchParams.get('callbackUrl'));
   const verifyOtp = useVerifyOtp();
-  const resendMagicLink = useSendMagicLink();
+  const resendOtp = useSendEmailOtp();
+  const [code, setCode] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [resendInSeconds, setResendInSeconds] = useState(60);
+  const [success, setSuccess] = useState(false);
+  const completed = useRef(false);
+  const redirected = useRef(false);
 
-  const [token, setToken] = useState('');
-  const [formError, setFormError] = useState<string | null>(null);
-  const [resendCooldown, setResendCooldown] = useState(30);
-  const [resendSuccess, setResendSuccess] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const hardRedirect = useCallback(
+    (event?: React.MouseEvent<HTMLAnchorElement>) => {
+      event?.preventDefault();
+      if (redirected.current) return;
+      redirected.current = true;
+      hardNavigate(destination);
+    },
+    [destination],
+  );
 
   useEffect(() => {
-    if (resendCooldown <= 0) return;
-    const timer = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [resendCooldown]);
+    if (resendInSeconds <= 0) return;
+    const timer = window.setInterval(
+      () => setResendInSeconds((value) => Math.max(0, value - 1)),
+      1_000,
+    );
+    return () => window.clearInterval(timer);
+  }, [resendInSeconds]);
+
+  useEffect(() => {
+    if (!success) return;
+    const timer = window.setTimeout(hardRedirect, 350);
+    return () => window.clearTimeout(timer);
+  }, [hardRedirect, success]);
+
+  const verify = useCallback(
+    async (value: string) => {
+      if (!email || value.length !== 6 || completed.current) return;
+      setError(null);
+      try {
+        const result = await verifyOtp.mutateAsync({
+          email,
+          token: value,
+          type: 'email',
+        });
+        const current = await createBrowserClient().auth.getSession();
+        if (!result.session && !current.data.session) {
+          throw new Error('No session after code verification');
+        }
+        completed.current = true;
+        authEvents.login('email-otp');
+        setSuccess(true);
+      } catch (cause) {
+        setCode('');
+        setError(normalizeAuthError(cause, 'invalid_code').message);
+      }
+    },
+    [email, verifyOtp],
+  );
+
+  const resend = useCallback(async () => {
+    if (!email || resendInSeconds > 0 || resendOtp.isPending) return;
+    setError(null);
+    try {
+      await resendOtp.mutateAsync({
+        email,
+        redirectTo: buildAuthCallbackUrl(window.location.origin, destination),
+      });
+      setResendInSeconds(60);
+    } catch (cause) {
+      setError(normalizeAuthError(cause).message);
+    }
+  }, [destination, email, resendInSeconds, resendOtp]);
 
   if (!email) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
-        <div className="w-full max-w-md space-y-6">
-          <div className="rounded-lg bg-card p-8 shadow-lg border">
-            <div className="text-center mb-6">
-              <h1 className="text-2xl font-bold text-foreground">Missing email</h1>
-              <p className="mt-2 text-sm text-muted-foreground">
-                We need to know which email to verify. Please start over from sign in.
-              </p>
-            </div>
-            <Link
-              href="/auth/signin"
-              className="block w-full text-center text-sm text-primary hover:underline"
-            >
-              Back to sign in
-            </Link>
-          </div>
-        </div>
-      </div>
+      <AdminAuthShell>
+        <PortalAuthNotice tone="error" title="We need your email address.">
+          Start again from{' '}
+          <Link
+            className="font-semibold underline underline-offset-4"
+            href={`/auth/signin?callbackUrl=${encodeURIComponent(destination)}`}
+          >
+            sign in
+          </Link>{' '}
+          so we know where to send your code.
+        </PortalAuthNotice>
+      </AdminAuthShell>
     );
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (token.length !== 6) return;
-    setFormError(null);
-    setResendSuccess(false);
-
-    try {
-      await verifyOtp.mutateAsync({ email, token, type: 'email' });
-      authEvents.login('magic-link');
-      router.replace('/dashboard');
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Invalid code. Please try again.';
-      setFormError(message);
-      setToken('');
-      inputRef.current?.focus();
-    }
-  };
-
-  const handleResend = async () => {
-    if (resendCooldown > 0 || resendMagicLink.isPending) return;
-    setFormError(null);
-    setResendSuccess(false);
-
-    try {
-      await resendMagicLink.mutateAsync({ email });
-      setResendSuccess(true);
-      setResendCooldown(60);
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Could not resend code. Please try again.';
-      setFormError(message);
-    }
-  };
-
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
-      <div className="w-full max-w-md space-y-6">
-        <div className="rounded-lg bg-card p-8 shadow-lg border">
-          {/* Header */}
-          <div className="text-center mb-6">
-            <h1 className="text-2xl font-bold text-foreground">
-              Enter your sign-in code
-            </h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              We sent a 6-digit code to <strong className="text-foreground">{email}</strong>
-            </p>
-          </div>
-
-          {formError && (
-            <div id="otp-error" className="mb-4" role="alert">
-              <Alert variant="error" title="Verification failed" description={formError} />
-            </div>
-          )}
-
-          {resendSuccess && (
-            <div className="mb-4" role="status">
-              <Alert
-                variant="success"
-                title="Code sent"
-                description="A new code was sent to your inbox."
-              />
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} noValidate>
-            <label htmlFor="otp-code" className="sr-only">
-              6-digit sign-in code
-            </label>
-            <Input
-              id="otp-code"
-              ref={inputRef}
-              type="text"
-              inputMode="numeric"
-              pattern="\d{6}"
-              maxLength={6}
-              autoComplete="one-time-code"
-              autoFocus
-              value={token}
-              onChange={(e) =>
-                setToken(e.target.value.replace(/\D/g, '').slice(0, 6))
-              }
-              placeholder="000000"
-              aria-invalid={formError ? true : undefined}
-              aria-describedby={formError ? 'otp-error' : undefined}
-              disabled={verifyOtp.isPending}
-              state={formError ? 'error' : 'default'}
-              size="lg"
-              className="text-center font-mono text-lg tracking-[0.5em]"
-              required
-            />
-
-            <Button
-              type="submit"
-              size="lg"
-              disabled={token.length !== 6 || verifyOtp.isPending}
-              className="mt-6 w-full"
-            >
-              {verifyOtp.isPending ? (
-                <>
-                  <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  Verifying...
-                </>
-              ) : (
-                'Verify'
-              )}
-            </Button>
-          </form>
-
-          {/* Resend */}
-          <div className="mt-6 text-center">
-            <button
-              type="button"
-              onClick={handleResend}
-              disabled={resendCooldown > 0 || resendMagicLink.isPending}
-              className="text-sm text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:no-underline"
-              aria-label={
-                resendCooldown > 0
-                  ? `Resend code available in ${resendCooldown} seconds`
-                  : 'Resend code'
-              }
-            >
-              {resendMagicLink.isPending
-                ? 'Sending new code...'
-                : resendCooldown > 0
-                  ? `Didn't get the code? Resend in ${resendCooldown}s`
-                  : 'Resend code'}
-            </button>
-          </div>
-
-          {/* Footer */}
-          <div className="mt-6 text-center">
-            <Link
-              href="/auth/signin"
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Back to sign in
-            </Link>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function VerifyOtpLoadingFallback() {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
-      <div className="w-full max-w-md space-y-6">
-        <div className="rounded-lg bg-card p-8 shadow-lg border">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold text-foreground">Verify code</h1>
-            <p className="mt-2 text-sm text-muted-foreground">Loading...</p>
-          </div>
-        </div>
-      </div>
-    </div>
+    <AdminAuthShell>
+      <PortalLogin
+        state={success ? 'success' : 'code'}
+        email={email}
+        onEmailChange={() => undefined}
+        onSendCode={() => undefined}
+        code={code}
+        onCodeChange={(value) => {
+          setCode(value);
+          setError(null);
+        }}
+        onVerifyCode={verify}
+        resendInSeconds={resendInSeconds}
+        onResendCode={resend}
+        error={error}
+        isSubmitting={verifyOtp.isPending || resendOtp.isPending}
+        onChangeMethod={() => {
+          window.location.assign(
+            `/auth/signin?callbackUrl=${encodeURIComponent(destination)}`,
+          );
+        }}
+        onContinue={hardRedirect}
+        destinationHref={destination}
+      />
+    </AdminAuthShell>
   );
 }
 
 export default function VerifyOtpPage() {
   return (
-    <Suspense fallback={<VerifyOtpLoadingFallback />}>
+    <Suspense
+      fallback={
+        <AdminAuthShell>
+          <PortalAuthNotice title="Opening your code">
+            Loading your sign-in code.
+          </PortalAuthNotice>
+        </AdminAuthShell>
+      }
+    >
       <VerifyOtpContent />
     </Suspense>
   );

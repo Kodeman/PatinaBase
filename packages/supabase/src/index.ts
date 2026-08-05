@@ -7,7 +7,31 @@ export {
 } from './client';
 export type { Database, Json } from './database.types';
 export * from './hooks';
-export { isOAuthProviderEnabled, ENABLED_OAUTH_PROVIDERS, type OAuthProvider } from './lib/oauth-providers';
+export {
+  isOAuthProviderEnabled,
+  getOAuthProviderLabel,
+  parseOAuthProviders,
+  ENABLED_OAUTH_PROVIDERS,
+  type OAuthProvider,
+} from './lib/oauth-providers';
+export {
+  AuthFlowError,
+  normalizeAuthError,
+  normalizeOAuthCallbackError,
+  safeAuthReturnPath,
+  buildAuthCallbackUrl,
+  buildVerifyOtpPath,
+  buildSignInPath,
+  recoveryFinalReturnPath,
+  consumeAuthCallbackFragment,
+  finalizeAuthCallback,
+  type AuthCallbackFragment,
+  type AuthCallbackMethod,
+  type AuthCallbackResult,
+  type AuthFailure,
+  type AuthFailureKind,
+  type FinalizeAuthCallbackOptions,
+} from './auth';
 export { getCookieDomain } from './lib/cookie-domain';
 export {
   invalidateProposalClientQueries,

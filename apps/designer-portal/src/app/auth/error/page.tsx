@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { AlertCircle, ArrowLeft, ShieldAlert, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/controls';
+import { DesignerAuthShell } from '../auth-shell';
 
 const ERROR_CONFIGS: Record<string, { title: string; description: string; icon: React.ReactNode }> = {
   Configuration: {
@@ -45,9 +46,10 @@ function AuthErrorContent() {
   const errorConfig = ERROR_CONFIGS[error] || ERROR_CONFIGS.Default;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 px-4">
+    <DesignerAuthShell>
+      <div className="w-full">
       <div className="w-full max-w-lg space-y-6">
-        <div className="rounded-lg bg-white p-8 shadow-2xl">
+        <div className="border border-[#6d726b] bg-white p-8">
           <div className="text-center">
             <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-red-50">
               {errorConfig.icon}
@@ -76,7 +78,7 @@ function AuthErrorContent() {
           </div>
         </div>
 
-        <div className="rounded-lg bg-blue-100 p-4 text-center">
+        <div className="border border-[#6d726b] bg-[#f3f0e8] p-4 text-center">
           <p className="text-sm text-blue-800">
             Need help?{' '}
             <a href="mailto:support@patina.com" className="font-medium underline hover:text-blue-600">
@@ -85,13 +87,14 @@ function AuthErrorContent() {
           </p>
         </div>
       </div>
-    </div>
+      </div>
+    </DesignerAuthShell>
   );
 }
 
 export default function AuthErrorPage() {
   return (
-    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">Loading...</div>}>
+    <Suspense fallback={<DesignerAuthShell><p className="text-sm text-[#4f554f]">Loading your sign-in details.</p></DesignerAuthShell>}>
       <AuthErrorContent />
     </Suspense>
   );

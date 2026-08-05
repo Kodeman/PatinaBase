@@ -15763,6 +15763,27 @@ export type Database = {
           },
         ]
       }
+      qr_auth_rate_limits: {
+        Row: {
+          attempt_count: number
+          ip_address: unknown
+          updated_at: string
+          window_started_at: string
+        }
+        Insert: {
+          attempt_count: number
+          ip_address: unknown
+          updated_at?: string
+          window_started_at: string
+        }
+        Update: {
+          attempt_count?: number
+          ip_address?: unknown
+          updated_at?: string
+          window_started_at?: string
+        }
+        Relationships: []
+      }
       qr_auth_sessions: {
         Row: {
           approved_at: string | null
@@ -15773,6 +15794,7 @@ export type Database = {
           id: string
           ip_address: unknown
           os: string | null
+          poll_token_hash: string | null
           session_token: string
           status: string
           token_hash: string | null
@@ -15788,6 +15810,7 @@ export type Database = {
           id?: string
           ip_address?: unknown
           os?: string | null
+          poll_token_hash?: string | null
           session_token: string
           status?: string
           token_hash?: string | null
@@ -15803,6 +15826,7 @@ export type Database = {
           id?: string
           ip_address?: unknown
           os?: string | null
+          poll_token_hash?: string | null
           session_token?: string
           status?: string
           token_hash?: string | null

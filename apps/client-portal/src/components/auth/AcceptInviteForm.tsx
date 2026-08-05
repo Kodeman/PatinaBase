@@ -1,9 +1,17 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createBrowserClient } from '@patina/supabase';
+import { normalizeAuthError } from '@patina/supabase/auth';
+import {
+  PortalAuthNotice,
+  PortalAuthSuccess,
+} from '@patina/design-system/PortalAuth';
+import {
+  CLIENT_AUTH_DESTINATION,
+  confirmBrowserSession,
+  replaceAuthDestination,
+} from '@/lib/auth-redirect';
 
 interface AcceptInviteFormProps {
   email: string;
@@ -11,14 +19,33 @@ interface AcceptInviteFormProps {
 }
 
 export function AcceptInviteForm({ email, token }: AcceptInviteFormProps) {
-  const router = useRouter();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [accepted, setAccepted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const redirectingRef = useRef(false);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  const hardRedirect = useCallback(
+    (event?: React.MouseEvent<HTMLAnchorElement>) => {
+      event?.preventDefault();
+      if (redirectingRef.current) return;
+      redirectingRef.current = true;
+      replaceAuthDestination(CLIENT_AUTH_DESTINATION);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!accepted) return;
+    const timer = window.setTimeout(hardRedirect, 650);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [accepted, hardRedirect]);
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
     setError(null);
 
     if (password.length < 8) {
@@ -31,76 +58,78 @@ export function AcceptInviteForm({ email, token }: AcceptInviteFormProps) {
     }
 
     setSubmitting(true);
+    const supabase = createBrowserClient();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const supabase = createBrowserClient() as any;
-
-    const { error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-    });
-
-    if (signUpError) {
-      const msg = signUpError.message ?? 'Sign up failed';
-      // If user exists, sign them in instead so we can complete the accept flow.
-      if (/already (registered|exists)/i.test(msg)) {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (signInError) {
-          setSubmitting(false);
-          setError(
-            'An account already exists for this email. Please sign in instead.',
-          );
-          return;
-        }
-      } else {
-        setSubmitting(false);
-        setError(msg);
-        return;
-      }
-    }
-
-    // Mark invite accepted
     try {
-      const res = await fetch('/api/auth/invite/accept', {
+      const { error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+      if (signUpError) {
+        if (/already (registered|exists)/i.test(signUpError.message ?? '')) {
+          const { error: signInError } = await supabase.auth.signInWithPassword(
+            { email, password },
+          );
+          if (signInError) throw signInError;
+        } else {
+          throw signUpError;
+        }
+      }
+
+      await confirmBrowserSession(supabase);
+      const response = await fetch('/api/auth/invite/accept', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token }),
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        const code = data?.error ?? `http_${res.status}`;
-        setSubmitting(false);
-        setError(`Couldn’t finalize invitation (${code}). Please contact your designer.`);
+      if (!response.ok) {
+        setError(
+          response.status === 401
+            ? 'Your sign-in could not be confirmed. Sign in again, then reopen the invitation.'
+            : 'We couldn’t finish accepting this invitation. Ask your designer to resend it, or contact Patina.',
+        );
         return;
       }
-    } catch (err) {
+      await confirmBrowserSession(supabase);
+      setAccepted(true);
+    } catch (acceptError) {
+      setError(normalizeAuthError(acceptError).message);
+    } finally {
       setSubmitting(false);
-      setError(err instanceof Error ? err.message : 'Network error.');
-      return;
     }
+  }
 
-    router.push('/projects');
+  if (accepted) {
+    return (
+      <PortalAuthSuccess
+        title="Your invitation is accepted."
+        description="We’re opening your projects now."
+        destinationHref={CLIENT_AUTH_DESTINATION}
+        onContinue={hardRedirect}
+      />
+    );
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4" data-testid="accept-invite-form">
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-4"
+      data-testid="accept-invite-form"
+    >
       <div>
-        <label htmlFor="invite-email" className="block type-meta">
-          Email
+        <label htmlFor="invite-email" className="text-sm font-medium">
+          Email address
         </label>
         <input
           id="invite-email"
           type="email"
           value={email}
           readOnly
-          className="mt-1 w-full rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-muted)]"
+          className="mt-2 h-12 w-full border border-[#6d726b] bg-[#f3f0e8] px-3 text-sm text-[#4f554f]"
         />
       </div>
       <div>
-        <label htmlFor="invite-password" className="block type-meta">
+        <label htmlFor="invite-password" className="text-sm font-medium">
           Set a password
         </label>
         <input
@@ -110,12 +139,12 @@ export function AcceptInviteForm({ email, token }: AcceptInviteFormProps) {
           required
           minLength={8}
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="mt-1 w-full rounded-md border border-[var(--border-default)] bg-white px-3 py-2 text-sm focus:border-[var(--accent-primary)] focus:outline-none"
+          onChange={(event) => setPassword(event.target.value)}
+          className="mt-2 h-12 w-full border border-[#6d726b] bg-white px-3 outline-none focus:border-[#252a25] focus:ring-2 focus:ring-[#252a25]"
         />
       </div>
       <div>
-        <label htmlFor="invite-confirm" className="block type-meta">
+        <label htmlFor="invite-confirm" className="text-sm font-medium">
           Confirm password
         </label>
         <input
@@ -125,22 +154,25 @@ export function AcceptInviteForm({ email, token }: AcceptInviteFormProps) {
           required
           minLength={8}
           value={confirm}
-          onChange={(e) => setConfirm(e.target.value)}
-          className="mt-1 w-full rounded-md border border-[var(--border-default)] bg-white px-3 py-2 text-sm focus:border-[var(--accent-primary)] focus:outline-none"
+          onChange={(event) => setConfirm(event.target.value)}
+          className="mt-2 h-12 w-full border border-[#6d726b] bg-white px-3 outline-none focus:border-[#252a25] focus:ring-2 focus:ring-[#252a25]"
         />
       </div>
       {error ? (
-        <p className="type-meta-small text-patina-terracotta" role="alert">
+        <PortalAuthNotice
+          tone="error"
+          title="We couldn’t accept the invitation"
+        >
           {error}
-        </p>
+        </PortalAuthNotice>
       ) : null}
       <button
         type="submit"
         disabled={submitting}
-        className="w-full rounded-[3px] bg-patina-charcoal px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-60"
+        className="h-12 w-full bg-[#252a25] px-4 text-sm font-semibold text-white disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#252a25] focus:ring-offset-2"
         data-testid="accept-invite-submit"
       >
-        {submitting ? 'Setting up…' : 'Create account & accept'}
+        {submitting ? 'Setting up…' : 'Create account and accept'}
       </button>
     </form>
   );

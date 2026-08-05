@@ -1,446 +1,234 @@
 'use client';
 
-import { useState, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { createBrowserClient, isOAuthProviderEnabled, useSendMagicLink } from '@patina/supabase';
-import { AuthForm, type AuthFormField, Alert, DevAccountsPanel } from '@patina/design-system';
-import { getAccountsForPortal } from '@patina/types';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { QRLoginDisplay } from '@/components/auth/QRLoginDisplay';
-import { StrataMark } from '@/components/portal/strata-mark';
-import { Button } from '@/components/ui/controls';
-import { StrataSweep } from '@/components/ui/strata-sweep';
+import { QRCodeSVG } from 'qrcode.react';
+import {
+  buildAuthCallbackUrl,
+  buildVerifyOtpPath,
+  createBrowserClient,
+  isOAuthProviderEnabled,
+  normalizeAuthError,
+  usePortalQrAuth,
+  useSendEmailOtp,
+  useVerifyOtp,
+} from '@patina/supabase';
+import { DevAccountsPanel, PortalAuthNotice, PortalLogin } from '@patina/design-system';
+import { getAccountsForPortal } from '@patina/types';
 import { authEvents } from '@/lib/analytics/events';
-import { safeInternalPath } from '@/lib/safe-internal-path';
-
-const ERROR_MESSAGES: Record<string, { title: string; description: string }> = {
-  OAuthSignin: {
-    title: 'OAuth Sign-In Error',
-    description: 'There was an error initiating the OAuth sign-in process. Please try again.',
-  },
-  OAuthCallback: {
-    title: 'OAuth Callback Error',
-    description: 'There was an error handling the OAuth callback. Please try signing in again.',
-  },
-  OAuthCreateAccount: {
-    title: 'Account Creation Failed',
-    description: 'Could not create your account. Please contact support if this continues.',
-  },
-  OAuthAccountNotLinked: {
-    title: 'Account Not Linked',
-    description: 'This account is not linked to any existing user. Please contact your administrator.',
-  },
-  SessionExpired: {
-    title: 'Session Expired',
-    description: 'Your session has expired. Please sign in again to continue.',
-  },
-  SessionRequired: {
-    title: 'Authentication Required',
-    description: 'Please sign in to access this page.',
-  },
-  AccessDenied: {
-    title: 'Access Denied',
-    description: 'You do not have permission to access this resource.',
-  },
-  Configuration: {
-    title: 'Configuration Error',
-    description: 'There is a problem with the server configuration. Please contact support.',
-  },
-  Default: {
-    title: 'Authentication Failed',
-    description: 'An unexpected error occurred. Please try again.',
-  },
-};
+import { DESIGNER_AUTH_DESTINATION, DesignerAuthShell } from '../auth-shell';
+import { confirmedSession, designerDestination, designerLoginState, designerSignInNotice, qrPresentation, shouldActivateQr, type DesignerLoginPhase } from '../auth-journey';
 
 function SignInContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  // Guarded at the source, so every leg below (the two safeRedirect calls and
-  // the QR display's own hard navigation) carries a value that cannot leave
-  // this origin. Absent/hostile → /desk.
-  const callbackUrl = safeInternalPath(searchParams.get('callbackUrl'));
-  const error = searchParams.get('error');
-  const registered = searchParams.get('registered');
-  const reset = searchParams.get('reset');
-
-  const supabase = createBrowserClient();
-
-  const [isLoading, setIsLoading] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
+  const destination = designerDestination(searchParams.get('callbackUrl'));
+  const entryNotice = designerSignInNotice(
+    searchParams.get('error'),
+    searchParams.get('registered'),
+  );
+  const sendOtp = useSendEmailOtp();
+  const verifyOtp = useVerifyOtp();
+  const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
+  const [password, setPassword] = useState('');
+  const [phase, setPhase] = useState<DesignerLoginPhase>('email');
+  const [passwordExpanded, setPasswordExpanded] = useState(false);
+  const [qrExpanded, setQrExpanded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [resendInSeconds, setResendInSeconds] = useState(0);
+  const [passwordSubmitting, setPasswordSubmitting] = useState(false);
+  const [devSubmitting, setDevSubmitting] = useState(false);
   const [devAuthError, setDevAuthError] = useState<string | null>(null);
-  const [oauthLoading, setOauthLoading] = useState<string | null>(null);
-  const [showEmailForm, setShowEmailForm] = useState(false);
-  const [authMode, setAuthMode] = useState<'password' | 'magic'>('password');
+  const navigated = useRef(false);
+  const qr = usePortalQrAuth({
+    baseUrl: '',
+    enabled: shouldActivateQr(
+      qrExpanded,
+      phase,
+      passwordExpanded,
+      sendOtp.isPending || passwordSubmitting,
+    ),
+  });
+  const cancelQr = qr.cancel;
 
-  const sendMagicLink = useSendMagicLink();
+  const finish = useCallback((method: string) => {
+    if (navigated.current) return;
+    navigated.current = true;
+    authEvents.login(method);
+    setPhase('success');
+  }, []);
 
-  const devAccounts = getAccountsForPortal('designer');
+  useEffect(() => {
+    if (phase !== 'success' || !navigated.current) return;
+    const timer = window.setTimeout(() => window.location.replace(destination), 350);
+    return () => window.clearTimeout(timer);
+  }, [destination, phase]);
 
-  const fields: AuthFormField[] = [
-    {
-      name: 'email',
-      label: 'Email Address',
-      type: 'email',
-      placeholder: 'you@example.com',
-      required: true,
-      autoComplete: 'email',
-    },
-    {
-      name: 'password',
-      label: 'Password',
-      type: 'password',
-      placeholder: 'Enter your password',
-      required: true,
-      autoComplete: 'current-password',
-    },
-  ];
+  useEffect(() => {
+    if (resendInSeconds <= 0) return;
+    const timer = window.setInterval(() => setResendInSeconds((value) => Math.max(0, value - 1)), 1_000);
+    return () => window.clearInterval(timer);
+  }, [resendInSeconds]);
 
-  const magicFields: AuthFormField[] = [
-    {
-      name: 'email',
-      label: 'Email Address',
-      type: 'email',
-      placeholder: 'you@example.com',
-      required: true,
-      autoComplete: 'email',
-    },
-  ];
+  useEffect(() => {
+    if (qr.state === 'authenticated') finish('qr');
+  }, [finish, qr.state]);
 
-  // A full-page navigation (not router.push) on purpose: the fresh session's
-  // cookies have to reach the middleware, which re-derives the landing route.
-  // The target passes `safeInternalPath` — the same guard the middleware ran
-  // when it minted the callbackUrl (@/lib/safe-internal-path).
-  const safeRedirect = (url: string) => {
-    window.location.href = safeInternalPath(url);
-  };
-
-  const handleOAuthSignIn = async (provider: 'google' | 'apple') => {
-    setOauthLoading(provider);
-    setFormError(null);
-
+  const sendCode = useCallback(async () => {
+    if (!email.trim()) return;
+    cancelQr();
+    setQrExpanded(false);
+    setError(null);
     try {
+      await sendOtp.mutateAsync({
+        email: email.trim(),
+        redirectTo: buildAuthCallbackUrl(window.location.origin, destination),
+      });
+      setCode('');
+      setResendInSeconds(60);
+      setPhase('code');
+      window.history.replaceState(null, '', buildVerifyOtpPath(email.trim(), destination));
+    } catch (cause) {
+      setError(normalizeAuthError(cause, 'unknown').message);
+    }
+  }, [cancelQr, destination, email, sendOtp]);
+
+  const verifyCode = useCallback(async (value: string) => {
+    if (value.length !== 6) return;
+    cancelQr();
+    setError(null);
+    try {
+      const result = await verifyOtp.mutateAsync({ email: email.trim(), token: value, type: 'email' });
+      const supabase = createBrowserClient();
+      const current = await supabase.auth.getSession();
+      if (!confirmedSession(result?.session, current.data.session)) {
+        throw new Error('No session after code verification');
+      }
+      finish('email-otp');
+    } catch (cause) {
+      setCode('');
+      setError(normalizeAuthError(cause, 'invalid_code').message);
+    }
+  }, [cancelQr, email, finish, verifyOtp]);
+
+  const signInWithPassword = useCallback(async () => {
+    cancelQr();
+    setQrExpanded(false);
+    setError(null);
+    setPasswordSubmitting(true);
+    try {
+      const supabase = createBrowserClient();
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (signInError) throw signInError;
+      const current = await supabase.auth.getSession();
+      if (!data.session && !current.data.session) throw new Error('No session after password sign in');
+      finish('credentials');
+    } catch (cause) {
+      setError(normalizeAuthError(cause, 'invalid_credentials').message);
+    } finally {
+      setPasswordSubmitting(false);
+    }
+  }, [cancelQr, email, finish, password]);
+
+  const signInWithApple = useCallback(async () => {
+    cancelQr();
+    setQrExpanded(false);
+    setError(null);
+    setPhase('apple-pending');
+    try {
+      const supabase = createBrowserClient();
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
-        provider,
+        provider: 'apple',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-          ...(provider === 'apple'
-            ? { queryParams: { response_mode: 'fragment' } }
-            : {}),
+          redirectTo: buildAuthCallbackUrl(window.location.origin, destination),
+          queryParams: { response_mode: 'fragment' },
         },
       });
-
-      if (oauthError) {
-        setFormError(oauthError.message || `Failed to sign in with ${provider}`);
-        setOauthLoading(null);
-      } else {
-        authEvents.login(provider);
-      }
-    } catch (err) {
-      console.error(`[OAuth SignIn] ${provider} exception:`, err);
-      setFormError(`An error occurred during ${provider} sign in`);
-      setOauthLoading(null);
+      if (oauthError) throw oauthError;
+    } catch (cause) {
+      setPhase('email');
+      setError(normalizeAuthError(cause, 'oauth').message);
     }
-  };
+  }, [cancelQr, destination]);
 
-  const handleCredentialsSignIn = async (data: Record<string, string>) => {
-    setIsLoading(true);
-    setFormError(null);
-
-    try {
-      const { error: authError } = await supabase.auth.signInWithPassword({
-        email: data.email,
-        password: data.password,
-      });
-
-      if (authError) {
-        setFormError('Invalid email or password');
-        setIsLoading(false);
-      } else {
-        authEvents.login('credentials');
-        safeRedirect(callbackUrl);
-      }
-    } catch (err) {
-      console.error('[Credentials SignIn] Exception:', err);
-      setFormError('An error occurred during sign in');
-      setIsLoading(false);
-    }
-  };
-
-  const handleMagicLinkSubmit = async (data: Record<string, string>) => {
-    setFormError(null);
-
-    try {
-      await sendMagicLink.mutateAsync({ email: data.email });
-      router.push(`/auth/verify-otp?email=${encodeURIComponent(data.email)}`);
-    } catch (err) {
-      console.error('[Magic Link] Exception:', err);
-      const message =
-        err instanceof Error ? err.message : 'Failed to send sign-in code. Please try again.';
-      setFormError(message);
-    }
-  };
-
-  const handleDevLogin = async (email: string, password: string) => {
+  const handleDevLogin = useCallback(async (devEmail: string, devPassword: string) => {
+    cancelQr();
+    setQrExpanded(false);
+    setDevSubmitting(true);
     setDevAuthError(null);
-    setFormError(null);
-    setIsLoading(true);
-
     try {
-      const { error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (authError) {
-        setDevAuthError('Login failed. Check that the user-management service is running.');
-        setIsLoading(false);
-      } else {
-        authEvents.login('dev');
-        safeRedirect(callbackUrl);
-      }
-    } catch (err) {
-      console.error('[Dev Login] Exception:', err);
-      setDevAuthError('An error occurred during sign in');
-      setIsLoading(false);
+      const supabase = createBrowserClient();
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({ email: devEmail, password: devPassword });
+      if (signInError) throw signInError;
+      const current = await supabase.auth.getSession();
+      if (!data.session && !current.data.session) throw new Error('No session after password sign in');
+      finish('dev');
+    } catch {
+      setDevAuthError('That development account could not be opened. Check the local setup and try again.');
+    } finally {
+      setDevSubmitting(false);
     }
-  };
+  }, [cancelQr, finish]);
 
-  const errorConfig = error ? ERROR_MESSAGES[error] || ERROR_MESSAGES.Default : null;
+  const qrState = designerLoginState(phase, qrExpanded, qr.state);
+  const qrView = qrPresentation(qr.state, qr.secondsRemaining, qr.failure?.message);
+  const visibleError = error || (qr.state === 'denied'
+    ? 'This QR code was declined. Refresh it for a new code, or use email instead.'
+    : qr.state === 'error'
+      ? qr.failure?.message ?? 'We could not prepare a QR code. Refresh it or use email instead.'
+      : null);
+  const isAuthSubmitting =
+    sendOtp.isPending ||
+    verifyOtp.isPending ||
+    passwordSubmitting ||
+    devSubmitting ||
+    phase === 'apple-pending' ||
+    qr.state === 'verifying';
 
   return (
-    <div className="min-h-screen px-6 py-20 md:py-32">
-      <div className="mx-auto max-w-md">
-        {/* Header */}
-        <h1 className="type-section-head mb-2 animate-text-reveal">Sign In</h1>
-        <p className="type-meta mb-10 animate-section-enter">Patina Designer Portal</p>
-
-        {/* Status Messages */}
-        {registered === 'true' && (
-          <div className="mb-8">
-            <Alert
-              variant="success"
-              title="Account Created"
-              description="Your account has been created successfully. Please sign in to continue."
-            />
-          </div>
-        )}
-
-        {reset === 'success' && (
-          <div className="mb-8">
-            <Alert
-              variant="success"
-              title="Password Reset"
-              description="Your password has been reset successfully. Please sign in with your new password."
-            />
-          </div>
-        )}
-
-        {reset === 'requested' && (
-          <div className="mb-8">
-            <Alert
-              variant="info"
-              title="Reset Link Sent"
-              description="Check your email for the password reset link."
-            />
-          </div>
-        )}
-
-        {errorConfig && (
-          <div className="mb-8">
-            <Alert
-              variant="error"
-              title={errorConfig.title}
-              description={errorConfig.description}
-              closable
-            />
-          </div>
-        )}
-
-        {/* QR Code */}
-        <div className="mb-4">
-          <p className="type-meta mb-4">Quick Access</p>
-          <QRLoginDisplay redirectTo={callbackUrl} />
-        </div>
-
-        {/* Strata divider */}
-        <StrataMark variant="mini" />
-        <p className="type-meta mb-6">Or continue with</p>
-
-        {/* OAuth Buttons */}
-        <div className={`grid gap-4 ${isOAuthProviderEnabled('google') ? 'grid-cols-2' : 'grid-cols-1'}`}>
-          {isOAuthProviderEnabled('google') && (
-            <Button
-              variant="secondary"
-              onClick={() => handleOAuthSignIn('google')}
-              disabled={isLoading || !!oauthLoading}
-            >
-              {oauthLoading === 'google' ? (
-                <StrataSweep size="xs" ground="dark" label="Signing in" />
-              ) : (
-                <svg className="h-4 w-4" viewBox="0 0 24 24">
-                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
-                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
-                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-                </svg>
-              )}
-              Google
-            </Button>
-          )}
-
-          <Button
-            variant="secondary"
-            onClick={() => handleOAuthSignIn('apple')}
-            disabled={isLoading || !!oauthLoading}
-          >
-            {oauthLoading === 'apple' ? (
-              <StrataSweep size="xs" ground="dark" label="Signing in" />
-            ) : (
-              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
-              </svg>
-            )}
-            Apple
-          </Button>
-        </div>
-
-        {/* Expandable Email/Password */}
-        <div className="mt-6">
-          <Button
-            variant="ghost"
-            type="button"
-            onClick={() => setShowEmailForm(!showEmailForm)}
-            className="type-meta w-full justify-center py-3"
-          >
-            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="2" y="4" width="20" height="16" rx="2" />
-              <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-            </svg>
-            Sign in with email
-            <svg className={`h-3 w-3 transition-transform ${showEmailForm ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="m6 9 6 6 6-6" />
-            </svg>
-          </Button>
-
-          {showEmailForm && (
-            <div className="mt-4">
-              {authMode === 'magic' ? (
-                <AuthForm
-                  key="magic"
-                  title=""
-                  fields={magicFields}
-                  submitText={sendMagicLink.isPending ? 'Sending code...' : 'Send code'}
-                  isLoading={sendMagicLink.isPending}
-                  error={formError || undefined}
-                  onSubmit={handleMagicLinkSubmit}
-                />
-              ) : (
-                <AuthForm
-                  key="password"
-                  title=""
-                  fields={fields}
-                  submitText={isLoading ? 'Signing in...' : 'Sign In'}
-                  isLoading={isLoading}
-                  error={formError || undefined}
-                  onSubmit={handleCredentialsSignIn}
-                />
-              )}
-
-              <Button
-                variant="ghost"
-                size="sm"
-                type="button"
-                onClick={() => {
-                  setAuthMode((m) => (m === 'magic' ? 'password' : 'magic'));
-                  setFormError(null);
-                }}
-                disabled={sendMagicLink.isPending}
-                className="mt-4 w-full justify-center"
-                aria-label={
-                  authMode === 'magic'
-                    ? 'Switch to password sign in'
-                    : 'Switch to magic link sign in'
-                }
-                data-testid="auth-mode-toggle"
-              >
-                {authMode === 'magic' ? 'Use password instead' : 'Email me a code'}
-              </Button>
-            </div>
-          )}
-        </div>
-
-        {/* Footer Links */}
-        <div className="mt-10 space-y-4">
-          <StrataMark variant="micro" />
-          <div className="flex items-center justify-between">
-            <Link
-              href="/auth/forgot-password"
-              className="type-body-small text-patina-clay hover:text-patina-aged-oak transition-colors"
-            >
-              Forgot password?
-            </Link>
-          </div>
-          <p className="type-body-small text-center">
-            Don&apos;t have an account?{' '}
-            <Link href="/auth/signup" className="text-patina-clay hover:text-patina-aged-oak transition-colors">
-              Sign up
-            </Link>
-          </p>
-          <p className="type-meta-small text-center">
-            By signing in, you agree to our{' '}
-            <Link href="/terms" className="text-patina-clay hover:text-patina-aged-oak transition-colors">
-              Terms of Service
-            </Link>{' '}
-            and{' '}
-            <Link href="/privacy" className="text-patina-clay hover:text-patina-aged-oak transition-colors">
-              Privacy Policy
-            </Link>
-          </p>
-        </div>
-
-        {/* Dev Accounts Panel */}
-        {process.env.NODE_ENV === 'development' && (
-          <DevAccountsPanel
-            accounts={devAccounts}
-            onLogin={handleDevLogin}
-            isLoading={isLoading}
-            error={devAuthError}
-            defaultCollapsed={true}
-          />
-        )}
-
-        {/* Help Text */}
-        <div className="mt-12 text-center">
-          <p className="type-body-small">
-            Need help signing in?{' '}
-            <Link href="/support" className="text-patina-clay hover:text-patina-aged-oak transition-colors">
-              Contact Support
-            </Link>
-          </p>
-        </div>
+    <DesignerAuthShell>
+      {entryNotice && (
+        <PortalAuthNotice tone={entryNotice.tone} title={entryNotice.title} className="mb-5">
+          {entryNotice.description}
+        </PortalAuthNotice>
+      )}
+      <PortalLogin
+        state={qrState}
+        email={email}
+        onEmailChange={(value) => { setEmail(value); setError(null); }}
+        onSendCode={sendCode}
+        code={code}
+        onCodeChange={setCode}
+        onVerifyCode={verifyCode}
+        resendInSeconds={resendInSeconds}
+        onResendCode={sendCode}
+        error={visibleError}
+        isSubmitting={isAuthSubmitting}
+        qrCode={qr.qrUrl ? <QRCodeSVG value={qr.qrUrl} size={144} level="M" bgColor="transparent" fgColor="#252a25" /> : undefined}
+        qrDescription={qrView.description}
+        onOpenQr={() => { setQrExpanded(true); setError(null); }}
+        onCloseQr={() => { cancelQr(); setQrExpanded(false); }}
+        onRefreshQr={() => void qr.regenerate()}
+        oauthActions={[{ id: 'apple', label: 'Continue with Apple', available: isOAuthProviderEnabled('apple'), pending: phase === 'apple-pending', onSelect: signInWithApple }]}
+        password={password}
+        onPasswordChange={(value) => { setPassword(value); setError(null); }}
+        onPasswordSignIn={signInWithPassword}
+        passwordExpanded={passwordExpanded}
+        onPasswordExpandedChange={(expanded) => { setPasswordExpanded(expanded); if (expanded) { cancelQr(); setQrExpanded(false); } setPhase(expanded ? 'password' : 'email'); setError(null); }}
+        onForgotPassword={() => { cancelQr(); window.location.assign(`/auth/forgot-password?callbackUrl=${encodeURIComponent(destination)}`); }}
+        onChangeMethod={() => { setPhase('email'); setCode(''); setError(null); }}
+        onContinue={() => window.location.replace(destination)}
+        destinationHref={destination}
+      />
+      <div className="mt-6 space-y-3 text-center text-sm text-[#4f554f]">
+        <p><Link className="underline underline-offset-4" href={`/auth/signup?callbackUrl=${encodeURIComponent(destination)}`}>Need an account? Ask to join your studio.</Link></p>
+        {process.env.NODE_ENV === 'development' && <DevAccountsPanel accounts={getAccountsForPortal('designer')} onLogin={handleDevLogin} isLoading={isAuthSubmitting} error={devAuthError} defaultCollapsed />}
       </div>
-    </div>
-  );
-}
-
-function SignInLoadingFallback() {
-  return (
-    <div className="min-h-screen px-6 py-20 md:py-32">
-      <div className="mx-auto max-w-md">
-        <div className="animate-pulse">
-          <div className="h-8 w-32 bg-patina-pearl rounded mb-2" />
-          <div className="h-4 w-48 bg-patina-pearl/60 rounded mb-10" />
-          <div className="h-[280px] w-full bg-patina-pearl/30 rounded" />
-        </div>
-      </div>
-    </div>
+    </DesignerAuthShell>
   );
 }
 
 export default function SignInPage() {
-  return (
-    <Suspense fallback={<SignInLoadingFallback />}>
-      <SignInContent />
-    </Suspense>
-  );
+  return <Suspense fallback={<DesignerAuthShell><PortalAuthNotice title="Opening your studio">Getting the sign-in page ready.</PortalAuthNotice></DesignerAuthShell>}><SignInContent /></Suspense>;
 }

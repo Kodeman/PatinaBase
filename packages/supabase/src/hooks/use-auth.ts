@@ -4,6 +4,10 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 import type { Session } from '@supabase/supabase-js';
+import { AuthFlowError } from '../auth/errors';
+import type { OAuthProvider } from '../lib/oauth-providers';
+
+export type { OAuthProvider } from '../lib/oauth-providers';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // AUTH HOOKS
@@ -224,10 +228,8 @@ export function useUpdatePassword() {
 // OAUTH HOOKS (Phase 2: Consumer Auth)
 // ═══════════════════════════════════════════════════════════════════════════
 
-export type OAuthProvider = 'google' | 'apple';
-
 /**
- * Sign in with OAuth provider (Google or Apple)
+ * Sign in with OAuth provider (Apple, Google, or Microsoft via `azure`)
  * Redirects to provider's auth page
  */
 export function useSignInWithOAuth() {
@@ -282,6 +284,41 @@ export function useSendMagicLink() {
       });
 
       if (error) throw error;
+    },
+  });
+}
+
+/**
+ * Send a six-digit email code to an existing Patina account.
+ *
+ * Unlike the legacy magic-link hook, this flow must never silently create a
+ * new user. Errors are wrapped with presentation-safe copy while preserving a
+ * stable failure category for the portal.
+ */
+export function useSendEmailOtp() {
+  return useMutation({
+    mutationFn: async ({
+      email,
+      redirectTo,
+    }: {
+      email: string;
+      redirectTo?: string;
+    }) => {
+      try {
+        const supabase = getSupabase();
+        const { error } = await supabase.auth.signInWithOtp({
+          email,
+          options: {
+            emailRedirectTo:
+              redirectTo || `${window.location.origin}/auth/callback?type=email`,
+            shouldCreateUser: false,
+          },
+        });
+
+        if (error) throw error;
+      } catch (error) {
+        throw new AuthFlowError(error);
+      }
     },
   });
 }

@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createAdminClient, createMiddlewareClient } from '@patina/supabase/client';
+import { safeAuthReturnPath } from '@patina/supabase/auth';
 import {
   resolvePortalDecision,
-  safeCallbackPath,
   type RoleDomain,
   type RoleLookup,
 } from '@/lib/portal-access';
@@ -90,6 +90,13 @@ export async function middleware(req: NextRequest) {
   // The invite landing page is auth-adjacent but valid for both signed-in and
   // signed-out users — RLS-protected token lookup happens server-side.
   const isInviteLanding = req.nextUrl.pathname.startsWith('/auth/invite/');
+  // Recovery callbacks establish a temporary authenticated session before the
+  // password is changed. Let that session reach the reset screen instead of
+  // treating it like an already-signed-in visit and redirecting it away.
+  const isRecoveryFlow =
+    req.nextUrl.pathname === '/auth/reset-password' ||
+    (req.nextUrl.pathname === '/auth/callback' &&
+      req.nextUrl.searchParams.get('type') === 'recovery');
   // /quiz + /quiz/results are pre-auth by design (Aesthete Engine §7.1):
   // anonymous visitors take the style quiz; the localStorage session key is
   // the capability, claimed on signup via claim_quiz_session.
@@ -130,14 +137,10 @@ export async function middleware(req: NextRequest) {
   const isUnauthorizedPage = req.nextUrl.pathname === '/unauthorized';
   const isAuthenticated = !!user;
 
-  const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || 'localhost:3002';
-  const protocol = req.headers.get('x-forwarded-proto') || 'http';
-  const baseUrl = `${protocol}://${host}`;
+  const baseUrl = req.nextUrl.origin;
   const requestedPath = `${req.nextUrl.pathname}${req.nextUrl.search || ''}`;
 
   if (isApiRoute) return res;
-  if (req.headers.get('rsc') === '1' || req.headers.get('next-router-prefetch') === '1') return res;
-
   // Helper: create a redirect that preserves Supabase auth cookies from res.
   // Use the object-set form so domain/secure/sameSite/path/httpOnly/TTL
   // attributes carry over — the (name, value) shorthand drops them, which
@@ -173,15 +176,18 @@ export async function middleware(req: NextRequest) {
   // with no consumer/admin role would be redirected to `/`, then bounced back
   // to `/wrong-portal` from a deeper protected route — the round trip causes
   // the QR signin page to re-render mid-flight and looks like a reload loop.
-  if (isAuthenticated && isAuthPage && !isInviteLanding) {
+  if (isAuthenticated && isAuthPage && !isInviteLanding && !isRecoveryFlow) {
     // Sanitized: an absolute or protocol-relative callbackUrl would otherwise
     // be an open redirect via `new URL(callbackUrl, baseUrl)` below, since
     // new URL() ignores its base argument when the first argument already
-    // parses as an absolute URL. See safeCallbackPath in portal-access.ts.
-    const callbackUrl = safeCallbackPath(req.nextUrl.searchParams.get('callbackUrl'));
+    // parses as an absolute URL. Keep this on the shared auth redirect policy.
+    const callbackUrl = safeAuthReturnPath(
+      req.nextUrl.searchParams.get('callbackUrl'),
+      '/projects',
+    );
     const decision = resolvePortalDecision(
       await getClientPortalRoleLookup(user!.id),
-      callbackUrl || '/',
+      callbackUrl,
     );
     if (decision.action === 'redirect') {
       return redirectWithCookies(new URL(decision.to, baseUrl));
@@ -191,10 +197,7 @@ export async function middleware(req: NextRequest) {
       // (no marker header — that is reserved for protected routes), but we log.
       logRoleCheckSkipped(decision.reason, req.nextUrl.pathname, user!.id);
     }
-    if (callbackUrl) {
-      return redirectWithCookies(new URL(callbackUrl, baseUrl));
-    }
-    return redirectWithCookies(new URL('/', baseUrl));
+    return redirectWithCookies(new URL(callbackUrl, baseUrl));
   }
 
   if (!isAuthenticated && !isAuthPage && !isPublicPage) {

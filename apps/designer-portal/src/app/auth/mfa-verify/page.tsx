@@ -10,6 +10,9 @@ import { Input, Alert } from '@patina/design-system';
 import { Button } from '@/components/ui/controls';
 import { ShieldCheck, Smartphone } from 'lucide-react';
 import { safeInternalPath } from '@/lib/safe-internal-path';
+import { createBrowserClient, normalizeAuthError } from '@patina/supabase';
+import { PortalAuthSuccess } from '@patina/design-system';
+import { DesignerAuthShell } from '../auth-shell';
 
 function MfaVerifyContent() {
   const router = useRouter();
@@ -25,6 +28,7 @@ function MfaVerifyContent() {
   const [selectedFactorId, setSelectedFactorId] = useState<string | null>(null);
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
   const codeInputRef = useRef<HTMLInputElement>(null);
 
   const verifiedFactors = factors.filter((f) => f.status === 'verified');
@@ -57,26 +61,34 @@ function MfaVerifyContent() {
         factorId: selectedFactorId,
         code,
       });
-      router.push(callbackUrl);
-    } catch (err: any) {
-      setError(err.message || 'Invalid verification code. Please try again.');
+      const { data } = await createBrowserClient().auth.getSession();
+      if (!data.session) throw new Error('No session after verification');
+      setSuccess(true);
+    } catch (err) {
+      setError(normalizeAuthError(err, 'invalid_code').message);
       setCode('');
       codeInputRef.current?.focus();
     }
   };
 
+  useEffect(() => {
+    if (!success) return;
+    const timer = window.setTimeout(() => window.location.replace(callbackUrl), 350);
+    return () => window.clearTimeout(timer);
+  }, [callbackUrl, success]);
+
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+      <DesignerAuthShell>
         <p className="text-sm text-gray-500">Loading...</p>
-      </div>
+      </DesignerAuthShell>
     );
   }
 
   if (verifiedFactors.length === 0) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <div className="w-full max-w-md rounded-lg bg-white p-8 shadow">
+      <DesignerAuthShell>
+        <div className="w-full max-w-md border border-[#6d726b] bg-white p-8">
           <Alert variant="error">
             No two-factor authentication methods found. Please contact support.
           </Alert>
@@ -88,13 +100,14 @@ function MfaVerifyContent() {
             Back to Sign In
           </Button>
         </div>
-      </div>
+      </DesignerAuthShell>
     );
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50">
-      <div className="w-full max-w-md space-y-6 rounded-lg bg-white p-8 shadow">
+    <DesignerAuthShell>
+      <div className="w-full max-w-md space-y-6 border border-[#6d726b] bg-white p-8">
+        {success ? <PortalAuthSuccess destinationHref={callbackUrl} onContinue={() => window.location.replace(callbackUrl)} /> : <>
         <div className="flex flex-col items-center gap-3 text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
             <ShieldCheck className="h-6 w-6 text-blue-600" />
@@ -107,19 +120,20 @@ function MfaVerifyContent() {
           </p>
         </div>
 
-        {error && <Alert variant="error">{error}</Alert>}
+        {error && <Alert id="designer-mfa-error" variant="error">{error}</Alert>}
 
         {/* Factor selection (only shown when multiple factors exist) */}
         {verifiedFactors.length > 1 && (
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">
+          <fieldset className="space-y-2">
+            <legend className="block text-sm font-medium text-gray-700">
               Select authenticator
-            </label>
+            </legend>
             <div className="space-y-2">
               {verifiedFactors.map((factor) => (
                 <button
                   key={factor.id}
                   type="button"
+                  aria-pressed={selectedFactorId === factor.id}
                   onClick={() => {
                     setSelectedFactorId(factor.id);
                     setCode('');
@@ -138,17 +152,18 @@ function MfaVerifyContent() {
                 </button>
               ))}
             </div>
-          </div>
+          </fieldset>
         )}
 
         {/* Code input */}
         {selectedFactorId && (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700">
+              <label htmlFor="designer-mfa-code" className="block text-sm font-medium text-gray-700">
                 Verification Code
               </label>
               <Input
+                id="designer-mfa-code"
                 ref={codeInputRef}
                 type="text"
                 inputMode="numeric"
@@ -163,6 +178,8 @@ function MfaVerifyContent() {
                 className="mt-1 font-mono text-lg tracking-[0.5em]"
                 placeholder="000000"
                 maxLength={6}
+                aria-invalid={Boolean(error) || undefined}
+                aria-describedby={error ? 'designer-mfa-error' : undefined}
               />
             </div>
 
@@ -185,8 +202,9 @@ function MfaVerifyContent() {
             Cancel and sign in with a different account
           </Button>
         </div>
+        </>}
       </div>
-    </div>
+    </DesignerAuthShell>
   );
 }
 
@@ -194,9 +212,9 @@ export default function MfaVerifyPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-gray-50">
+        <DesignerAuthShell>
           <p className="text-sm text-gray-500">Loading...</p>
-        </div>
+        </DesignerAuthShell>
       }
     >
       <MfaVerifyContent />

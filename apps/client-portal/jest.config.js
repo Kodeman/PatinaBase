@@ -20,6 +20,8 @@ const customJestConfig = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@patina/design-system$': '<rootDir>/../../packages/patina-design-system/src',
+    '^@patina/design-system/(.*)$':
+      '<rootDir>/../../packages/patina-design-system/src/components/$1',
     // Subpath imports (e.g. `@patina/supabase/server`) must resolve into
     // that package's src/<subpath> — this has to come before the bare
     // catch-all below, which would otherwise swallow the whole

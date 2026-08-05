@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { createAdminClient } from '@patina/supabase/client';
 
 import { AcceptInviteForm } from '@/components/auth/AcceptInviteForm';
+import { ClientAuthShell } from '@/components/auth/ClientAuthShell';
 
 interface InvitePageProps {
   params: Promise<{ token: string }>;
@@ -69,24 +70,16 @@ async function loadInvite(token: string) {
   return { row, designer, project };
 }
 
-function ErrorShell({
-  title,
-  body,
-}: {
-  title: string;
-  body: string;
-}) {
+function ErrorShell({ title, body }: { title: string; body: string }) {
   return (
-    <main className="mx-auto max-w-md px-6 py-16 text-center">
-      <h1 className="type-page-title">{title}</h1>
-      <p className="type-body mt-4 text-[var(--text-muted)]">{body}</p>
+    <ClientAuthShell title={title} description={body}>
       <Link
         href="/auth/signin"
-        className="mt-6 inline-block rounded-[3px] bg-patina-charcoal px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
+        className="inline-flex min-h-11 items-center text-sm font-semibold underline underline-offset-4"
       >
         Sign in instead
       </Link>
-    </main>
+    </ClientAuthShell>
   );
 }
 
@@ -125,26 +118,24 @@ export default async function InvitePage({ params }: InvitePageProps) {
   }
 
   const designerName =
-    designer?.full_name?.trim() || designer?.business_name?.trim() || 'Your designer';
+    designer?.full_name?.trim() ||
+    designer?.business_name?.trim() ||
+    'Your designer';
   const projectName = project?.name ?? null;
 
   return (
-    <main className="mx-auto max-w-md px-6 py-16">
-      <h1 className="type-page-title">Welcome to Patina</h1>
-      <p className="type-body mt-3 text-[var(--text-muted)]">
-        {designerName} invited you to collaborate
-        {projectName ? ` on "${projectName}"` : ''}.
-      </p>
-
+    <ClientAuthShell
+      title="Welcome to Patina."
+      description={`${designerName} invited you to collaborate${projectName ? ` on “${projectName}”` : ''}.`}
+    >
       {row.personal_message ? (
-        <blockquote className="mt-6 border-l-2 border-[var(--accent-primary)] bg-[var(--bg-surface)] px-4 py-3 text-sm text-[var(--text-primary)]">
+        <blockquote className="mb-6 border-l-2 border-[#8FA18B] bg-[#f3f0e8] px-4 py-3 text-sm leading-6 text-[#252a25]">
           {row.personal_message}
         </blockquote>
       ) : null}
-
-      <div className="mt-8">
+      <div>
         <AcceptInviteForm email={row.email} token={row.token} />
       </div>
-    </main>
+    </ClientAuthShell>
   );
 }

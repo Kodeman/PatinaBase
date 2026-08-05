@@ -18,34 +18,37 @@ test.describe('Authentication Flow', () => {
   test('should display signin page correctly', async ({ page }) => {
     await page.goto('/auth/signin');
 
-    // Check page elements
-    await expect(page.getByRole('heading', { name: /Patina Designer Portal/i })).toBeVisible();
-    await expect(page.getByText(/Sign in to access your account/i)).toBeVisible();
-    await expect(page.getByRole('button', { name: /Sign in with OCI/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Welcome back to the studio/i })).toBeVisible();
+    await expect(page.getByText(/their clients, and the makers they trust/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: /Email me a one-time code/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Use a QR code/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Use email and password instead/i })).toBeVisible();
   });
 
   test('should display error messages on signin page', async ({ page }) => {
     // Test SessionExpired error
     await page.goto('/auth/signin?error=SessionExpired');
-    await expect(page.getByText(/Session Expired/i)).toBeVisible();
-    await expect(page.getByText(/Your session has expired/i)).toBeVisible();
+    await expect(page.getByText(/Your session ended/i)).toBeVisible();
+    await expect(page.getByText(/Your saved studio work is still here/i)).toBeVisible();
 
     // Test AccessDenied error
     await page.goto('/auth/signin?error=AccessDenied');
-    await expect(page.getByText(/Access Denied/i)).toBeVisible();
+    await expect(page.getByText(/This account can’t open the studio/i)).toBeVisible();
   });
 
-  test('should handle OIDC signin flow', async ({ page, context }) => {
-    // Mock OIDC provider response (in real tests, use a test OIDC provider)
+  test('should keep the approved sign-in methods in order', async ({ page }) => {
     await page.goto('/auth/signin');
 
-    // Click signin button
-    const signinButton = page.getByRole('button', { name: /Sign in with OCI/i });
-    await signinButton.click();
+    const labels = await page.getByRole('button').allTextContents();
+    const emailIndex = labels.findIndex((label) => label.includes('Email me a one-time code'));
+    const qrIndex = labels.findIndex((label) => label.includes('Use a QR code'));
+    const appleIndex = labels.findIndex((label) => label.includes('Continue with Apple'));
+    const passwordIndex = labels.findIndex((label) => label.includes('Use email and password instead'));
 
-    // In real E2E tests, this would redirect to OCI Identity Domains
-    // For now, we just check that the button triggers navigation
-    // You would need to configure a test OIDC provider for full E2E testing
+    expect(emailIndex).toBeGreaterThanOrEqual(0);
+    expect(qrIndex).toBeGreaterThan(emailIndex);
+    if (appleIndex >= 0) expect(appleIndex).toBeGreaterThan(qrIndex);
+    expect(passwordIndex).toBeGreaterThan(appleIndex >= 0 ? appleIndex : qrIndex);
   });
 });
 

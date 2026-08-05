@@ -7,6 +7,8 @@
 //   SUPABASE_ACCESS_TOKEN=sbp_... node scripts/emails/deploy-auth-templates.mjs
 // Verify without writing:
 //   SUPABASE_ACCESS_TOKEN=sbp_... node scripts/emails/deploy-auth-templates.mjs --check
+// Validate local sources without credentials or network access:
+//   node scripts/emails/deploy-auth-templates.mjs --check-local
 //
 // The supabase/templates/*.html files are the single source of truth; local dev
 // picks them up through config.toml [auth.email.template.*].
@@ -18,7 +20,9 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const REF = process.env.SUPABASE_PROJECT_REF || "bkvcixdmuyejfzcijpdg"; // Strata
 const TOKEN = process.env.SUPABASE_ACCESS_TOKEN;
 const CHECK_ONLY = process.argv.includes("--check");
+const LOCAL_CHECK_ONLY = process.argv.includes("--check-local");
 const API = `https://api.supabase.com/v1/projects/${REF}/config/auth`;
+const TAGLINE = "A workshop for interior designers, their clients, and the makers they trust.";
 
 // GoTrue Management-API config keys. reauthentication is best-effort — some
 // API versions don't expose a content key for it (config.toml still covers local).
@@ -30,6 +34,25 @@ const TEMPLATES = [
   { file: "invite.html", subjectKey: "mailer_subjects_invite", contentKey: "mailer_templates_invite_content", subject: "You're invited to Patina", core: true },
   { file: "reauthentication.html", subjectKey: "mailer_subjects_reauthentication", contentKey: "mailer_templates_reauthentication_content", subject: "Your Patina verification code", core: false },
 ];
+
+const REQUIRED_TEMPLATE_DETAILS = {
+  "magic-link.html": ["{{ .Token }}", "{{ .ConfirmationURL }}", "60 minutes"],
+  "confirmation.html": ["{{ .ConfirmationURL }}", "60 minutes"],
+  "recovery.html": [
+    "{{ if .RedirectTo }}",
+    "{{ .RedirectTo }}#token_hash={{ .TokenHash }}&amp;type=recovery",
+    "{{ else }}{{ .ConfirmationURL }}{{ end }}",
+    "60 minutes",
+  ],
+  "email-change.html": ["{{ .ConfirmationURL }}", "60 minutes"],
+  "invite.html": ["{{ .ConfirmationURL }}", "60 minutes"],
+  "reauthentication.html": ["{{ .Token }}", "60 minutes"],
+};
+
+if (LOCAL_CHECK_ONLY) {
+  console.log("Local auth email templates:");
+  process.exit(verifyLocalTemplates() ? 0 : 2);
+}
 
 if (!TOKEN) {
   console.error("Missing SUPABASE_ACCESS_TOKEN (Supabase personal access token).");
@@ -53,17 +76,56 @@ async function patch(payload) {
   return res.json();
 }
 
+function readTemplate(t) {
+  return readFileSync(join(ROOT, "supabase/templates", t.file), "utf8");
+}
+
+function templateDetails(t, html) {
+  const missing = [TAGLINE, ...REQUIRED_TEMPLATE_DETAILS[t.file]].filter(
+    (detail) => !html.includes(detail),
+  );
+  if (t.file === "recovery.html" && html.includes("?token_hash=")) {
+    missing.push("fragment-only token_hash (query form is forbidden)");
+  }
+  return missing;
+}
+
+function verifyLocalTemplates() {
+  return TEMPLATES.every((t) => {
+    const missing = templateDetails(t, readTemplate(t));
+    console.log(`  ${t.file}: ${missing.length === 0 ? "yes" : `NO (missing ${missing.join(", ")})`}`);
+    return missing.length === 0;
+  });
+}
+
 function loadTemplate(t) {
-  const html = readFileSync(join(ROOT, "supabase/templates", t.file), "utf8");
+  const html = readTemplate(t);
   return { [t.contentKey]: html, [t.subjectKey]: t.subject };
 }
 
 function verify(cfg) {
-  const magic = cfg.mailer_templates_magic_link_content || "";
-  const ok = magic.includes("{{ .Token }}") && magic.includes("Patina");
+  const localOk = verifyLocalTemplates();
+
+  // Strata may not expose reauthentication's content key in every Management
+  // API version. Every local source is checked above; remotely verify every
+  // template key that the API does expose, and require all core templates.
+  const remoteOk = TEMPLATES.every((t) => {
+    const html = cfg[t.contentKey];
+    if (!html && !t.core) {
+      console.log(`  ${t.file} in Strata: not exposed by this API version (local source checked)`);
+      return true;
+    }
+    const missing = !html
+      ? ["template content"]
+      : templateDetails(t, html);
+    const subjectOk = cfg[t.subjectKey] === t.subject;
+    console.log(`  ${t.file} in Strata: ${missing.length === 0 && subjectOk ? "yes" : `NO${missing.length ? ` (missing ${missing.join(", ")})` : ""}${subjectOk ? "" : " (subject differs)"}`}`);
+    return missing.length === 0 && subjectOk;
+  });
+
   console.log(`  otp_length: ${cfg.mailer_otp_length} (want 6)`);
-  console.log(`  magic_link has {{ .Token }} + branding: ${ok ? "yes" : "NO"}`);
-  return ok && cfg.mailer_otp_length === 6;
+  console.log(`  otp_exp: ${cfg.mailer_otp_exp} (want 3600 seconds)`);
+  return localOk && remoteOk && cfg.mailer_otp_length === 6 && cfg.mailer_otp_exp === 3600;
 }
 
 if (CHECK_ONLY) {
@@ -74,10 +136,10 @@ if (CHECK_ONLY) {
 }
 
 // Core templates + otp_length in one PATCH.
-const corePayload = { mailer_otp_length: 6 };
+const corePayload = { mailer_otp_length: 6, mailer_otp_exp: 3600 };
 for (const t of TEMPLATES.filter((x) => x.core)) Object.assign(corePayload, loadTemplate(t));
 await patch(corePayload);
-console.log(`Pushed ${TEMPLATES.filter((x) => x.core).length} core templates + otp_length=6.`);
+console.log(`Pushed ${TEMPLATES.filter((x) => x.core).length} core templates + otp_length=6 + otp_exp=3600.`);
 
 // Reauthentication best-effort (unknown key on some API versions).
 for (const t of TEMPLATES.filter((x) => !x.core)) {

@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { createAdminClient } from '@patina/supabase/client';
 import { corsHeaders, handleCors } from '../cors';
 
@@ -12,36 +13,62 @@ const noCacheHeaders = {
 };
 
 function jsonResponse(data: unknown, request: NextRequest, init?: ResponseInit) {
+  const legacyPoll = request.nextUrl.searchParams.has('session');
   return NextResponse.json(data, {
     ...init,
-    headers: { ...noCacheHeaders, ...corsHeaders(request), ...init?.headers },
+    headers: {
+      ...noCacheHeaders,
+      ...corsHeaders(request),
+      ...(legacyPoll ? { Deprecation: 'true' } : {}),
+      ...init?.headers,
+    },
   });
 }
 
 /**
- * GET /api/auth/qr/status?session=<token>
+ * GET /api/auth/qr/status
  *
- * Poll the status of a QR authentication session.
+ * Poll the status of a QR authentication session. New clients carry the
+ * browser-only capability as an Authorization bearer. The legacy query
+ * contract remains temporarily available for already-deployed portals and
+ * extension versions; both forms are hashed before any database lookup.
  * Returns the current status and, if approved, the token hash and email.
  */
 export async function GET(request: NextRequest) {
   try {
-    const sessionToken = request.nextUrl.searchParams.get('session');
+    const authorization = request.headers.get('authorization');
+    const bearerToken = authorization?.match(
+      /^Bearer\s+([a-fA-F0-9]{64})$/i,
+    )?.[1];
+    const legacyQueryToken = request.nextUrl.searchParams.get('session');
+
+    // Never fall back to the query when an Authorization header is present but
+    // malformed. Credential precedence stays unambiguous at the boundary.
+    if (authorization && !bearerToken) {
+      return jsonResponse(
+        { error: 'Invalid polling credential' },
+        request,
+        { status: 401 }
+      );
+    }
+
+    const sessionToken = bearerToken ?? legacyQueryToken;
 
     if (!sessionToken || !/^[a-fA-F0-9]{64}$/.test(sessionToken)) {
       return jsonResponse(
-        { error: 'Invalid session token' },
+        { error: 'Invalid polling credential' },
         request,
-        { status: 400 }
+        { status: authorization ? 401 : 400 }
       );
     }
 
     const supabase = createAdminClient();
+    const pollTokenHash = crypto.createHash('sha256').update(sessionToken).digest('hex');
 
     const { data: session, error } = await (supabase as any)
       .from('qr_auth_sessions')
-      .select('status, token_hash, user_email, expires_at')
-      .eq('session_token', sessionToken)
+      .select('id, status, token_hash, user_email, expires_at')
+      .eq('poll_token_hash', pollTokenHash)
       .single();
 
     if (error || !session) {
@@ -54,18 +81,16 @@ export async function GET(request: NextRequest) {
       await (supabase as any)
         .from('qr_auth_sessions')
         .update({ status: 'expired' })
-        .eq('session_token', sessionToken);
+        .eq('id', session.id);
 
       return jsonResponse({ status: 'expired' }, request);
     }
 
     if (session.status === 'approved') {
-      // Delete the session after consumption to prevent replay
-      await (supabase as any)
-        .from('qr_auth_sessions')
-        .delete()
-        .eq('session_token', sessionToken);
-
+      // The browser still needs this one-time hash to establish its session.
+      // Keep the approved row through its short TTL: deleting it here races the
+      // browser's `verifyOtp` call. Replay is prevented by GoTrue consuming the
+      // hash once and /verify only conditionally approving pending sessions.
       return jsonResponse({
         status: 'approved',
         tokenHash: session.token_hash,

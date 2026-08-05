@@ -1,374 +1,413 @@
 'use client';
 
-import { useState, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { createBrowserClient, isOAuthProviderEnabled, useSendMagicLink } from '@patina/supabase';
-import { AuthForm, type AuthFormField, Alert, Button, DevAccountsPanel } from '@patina/design-system';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { QRCodeSVG } from 'qrcode.react';
+import {
+  buildAuthCallbackUrl,
+  buildVerifyOtpPath,
+  createBrowserClient,
+  isOAuthProviderEnabled,
+  normalizeAuthError,
+  usePortalQrAuth,
+  useSendEmailOtp,
+  useVerifyOtp,
+} from '@patina/supabase';
+import {
+  DevAccountsPanel,
+  PortalAuthNotice,
+  PortalLogin,
+  type PortalLoginState,
+} from '@patina/design-system';
 import { getAccountsForPortal } from '@patina/types';
-import Link from 'next/link';
-import { QRLoginDisplay } from '@/components/auth/QRLoginDisplay';
+import { authEvents } from '@/lib/analytics/events';
+import { adminAuthDestination, hardNavigate } from '@/lib/auth-navigation';
+import { AdminAuthShell } from '../auth-shell';
 
 const QR_AUTH_BASE_URL = process.env.NEXT_PUBLIC_QR_AUTH_URL || '';
 
-const ERROR_MESSAGES: Record<string, { title: string; description: string }> = {
-  OAuthSignin: {
-    title: 'OAuth Sign-In Error',
-    description: 'There was an error initiating the OAuth sign-in process. Please try again.',
-  },
-  OAuthCallback: {
-    title: 'OAuth Callback Error',
-    description: 'There was an error handling the OAuth callback. Please try signing in again.',
-  },
-  SessionExpired: {
-    title: 'Session Expired',
-    description: 'Your session has expired. Please sign in again to continue.',
-  },
-  SessionRequired: {
-    title: 'Authentication Required',
-    description: 'Please sign in to access this page.',
-  },
-  AccessDenied: {
-    title: 'Access Denied',
-    description: 'You do not have permission to access this resource.',
-  },
-  Default: {
-    title: 'Authentication Failed',
-    description: 'An unexpected error occurred. Please try again.',
-  },
+const QUERY_ERROR_MESSAGES: Record<string, string> = {
+  OAuthSignin:
+    'Apple sign in could not be opened. Try again, or use a code by email.',
+  OAuthCallback:
+    'That sign-in did not finish. Try again, or use a code by email.',
+  SessionExpired: 'Your session has ended. Sign in again to keep working.',
+  SessionRequired: 'Sign in to open that part of Patina Operations.',
+  AccessDenied: 'This account does not have access to Patina Operations.',
 };
 
-function SignInContent() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl') || '/';
-  const error = searchParams.get('error');
-
-  const supabase = createBrowserClient();
-
-  const [isLoading, setIsLoading] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [devAuthError, setDevAuthError] = useState<string | null>(null);
-  const [oauthLoading, setOauthLoading] = useState<string | null>(null);
-  const [showEmailForm, setShowEmailForm] = useState(false);
-  const [authMode, setAuthMode] = useState<'password' | 'magic'>('password');
-
-  const sendMagicLink = useSendMagicLink();
-
-  const devAccounts = getAccountsForPortal('admin');
-
-  const fields: AuthFormField[] = [
-    {
-      name: 'email',
-      label: 'Email Address',
-      type: 'email',
-      placeholder: 'you@example.com',
-      required: true,
-      autoComplete: 'email',
-    },
-    {
-      name: 'password',
-      label: 'Password',
-      type: 'password',
-      placeholder: 'Enter your password',
-      required: true,
-      autoComplete: 'current-password',
-    },
-  ];
-
-  const magicFields: AuthFormField[] = [
-    {
-      name: 'email',
-      label: 'Email Address',
-      type: 'email',
-      placeholder: 'you@example.com',
-      required: true,
-      autoComplete: 'email',
-    },
-  ];
-
-  const safeRedirect = (url: string) => {
-    if (url.startsWith('/') && !url.startsWith('//')) {
-      window.location.href = url;
-    } else {
-      window.location.href = '/';
-    }
-  };
-
-  const handleOAuthSignIn = async (provider: 'google' | 'apple') => {
-    setOauthLoading(provider);
-    setFormError(null);
-
-    try {
-      const { error: oauthError } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-          ...(provider === 'apple'
-            ? { queryParams: { response_mode: 'fragment' } }
-            : {}),
-        },
-      });
-
-      if (oauthError) {
-        setFormError(oauthError.message || `Failed to sign in with ${provider}`);
-        setOauthLoading(null);
-      }
-    } catch (err) {
-      console.error(`[OAuth SignIn] ${provider} exception:`, err);
-      setFormError(`An error occurred during ${provider} sign in`);
-      setOauthLoading(null);
-    }
-  };
-
-  const handleCredentialsSignIn = async (data: Record<string, string>) => {
-    setIsLoading(true);
-    setFormError(null);
-
-    try {
-      const { error: authError } = await supabase.auth.signInWithPassword({
-        email: data.email,
-        password: data.password,
-      });
-
-      if (authError) {
-        setFormError('Invalid email or password');
-        setIsLoading(false);
-      } else {
-        safeRedirect(callbackUrl);
-      }
-    } catch (err) {
-      console.error('[Credentials SignIn] Exception:', err);
-      setFormError('An error occurred during sign in');
-      setIsLoading(false);
-    }
-  };
-
-  const handleMagicLinkSubmit = async (data: Record<string, string>) => {
-    setFormError(null);
-
-    try {
-      await sendMagicLink.mutateAsync({ email: data.email });
-      router.push(`/auth/verify-otp?email=${encodeURIComponent(data.email)}`);
-    } catch (err) {
-      console.error('[Magic Link] Exception:', err);
-      const message =
-        err instanceof Error ? err.message : 'Failed to send sign-in code. Please try again.';
-      setFormError(message);
-    }
-  };
-
-  const handleDevLogin = async (email: string, password: string) => {
-    setDevAuthError(null);
-    setFormError(null);
-    setIsLoading(true);
-
-    try {
-      const { error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (authError) {
-        setDevAuthError('Login failed. Check that the user-management service is running.');
-        setIsLoading(false);
-      } else {
-        safeRedirect(callbackUrl);
-      }
-    } catch (err) {
-      console.error('[Dev Login] Exception:', err);
-      setDevAuthError('An error occurred during sign in');
-      setIsLoading(false);
-    }
-  };
-
-  const errorConfig = error ? ERROR_MESSAGES[error] || ERROR_MESSAGES.Default : null;
-
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
-      <div className="w-full max-w-md space-y-6">
-        <div className="rounded-lg bg-card p-8 shadow-lg border">
-          {/* Header */}
-          <div className="text-center mb-6">
-            <h1 className="text-2xl font-bold text-foreground">Patina Admin Portal</h1>
-            <p className="mt-2 text-sm text-muted-foreground">Sign in to continue</p>
-          </div>
-
-          {errorConfig && (
-            <div className="mb-6">
-              <Alert
-                variant="error"
-                title={errorConfig.title}
-                description={errorConfig.description}
-                closable
-              />
-            </div>
-          )}
-
-          {/* QR Code Hero */}
-          <QRLoginDisplay redirectTo={callbackUrl} baseUrl={QR_AUTH_BASE_URL} />
-
-          {/* Divider */}
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-border" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
-            </div>
-          </div>
-
-          {/* OAuth Buttons */}
-          <div className={`grid gap-3 ${isOAuthProviderEnabled('google') ? 'grid-cols-2' : 'grid-cols-1'}`}>
-            {isOAuthProviderEnabled('google') && (
-              <Button
-                variant="outline"
-                size="lg"
-                onClick={() => handleOAuthSignIn('google')}
-                disabled={isLoading || !!oauthLoading}
-                className="w-full"
-              >
-                {oauthLoading === 'google' ? (
-                  <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                ) : (
-                  <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
-                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
-                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
-                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-                  </svg>
-                )}
-                Google
-              </Button>
-            )}
-
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={() => handleOAuthSignIn('apple')}
-              disabled={isLoading || !!oauthLoading}
-              className="w-full"
-            >
-              {oauthLoading === 'apple' ? (
-                <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-              ) : (
-                <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
-                </svg>
-              )}
-              Apple
-            </Button>
-          </div>
-
-          {/* Expandable Email/Password */}
-          <div className="mt-4">
-            <button
-              type="button"
-              onClick={() => setShowEmailForm(!showEmailForm)}
-              className="w-full flex items-center justify-center gap-2 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="4" width="20" height="16" rx="2" />
-                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-              </svg>
-              Sign in with email
-              <svg className={`h-3 w-3 transition-transform ${showEmailForm ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="m6 9 6 6 6-6" />
-              </svg>
-            </button>
-
-            {showEmailForm && (
-              <div className="mt-3">
-                {authMode === 'magic' ? (
-                  <AuthForm
-                    key="magic"
-                    title=""
-                    fields={magicFields}
-                    submitText={sendMagicLink.isPending ? 'Sending code...' : 'Send code'}
-                    isLoading={sendMagicLink.isPending}
-                    error={formError || undefined}
-                    onSubmit={handleMagicLinkSubmit}
-                  />
-                ) : (
-                  <AuthForm
-                    key="password"
-                    title=""
-                    fields={fields}
-                    submitText={isLoading ? 'Signing in...' : 'Sign In'}
-                    isLoading={isLoading}
-                    error={formError || undefined}
-                    onSubmit={handleCredentialsSignIn}
-                  />
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAuthMode((m) => (m === 'magic' ? 'password' : 'magic'));
-                    setFormError(null);
-                  }}
-                  disabled={sendMagicLink.isPending}
-                  className="mt-3 w-full text-center text-sm text-primary hover:underline disabled:opacity-50"
-                  aria-label={
-                    authMode === 'magic'
-                      ? 'Switch to password sign in'
-                      : 'Switch to magic link sign in'
-                  }
-                  data-testid="auth-mode-toggle"
-                >
-                  {authMode === 'magic' ? 'Use password instead' : 'Email me a code'}
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Footer Links */}
-          <div className="mt-6 space-y-3">
-            <p className="text-center text-xs text-muted-foreground">
-              By signing in, you agree to our{' '}
-              <Link href={"/terms" as any} className="text-primary hover:underline">
-                Terms of Service
-              </Link>{' '}
-              and{' '}
-              <Link href={"/privacy" as any} className="text-primary hover:underline">
-                Privacy Policy
-              </Link>
-            </p>
-          </div>
-
-          {/* Dev Accounts Panel */}
-          {process.env.NODE_ENV === 'development' && (
-            <DevAccountsPanel
-              accounts={devAccounts}
-              onLogin={handleDevLogin}
-              isLoading={isLoading}
-              error={devAuthError}
-              defaultCollapsed={true}
-            />
-          )}
-        </div>
-      </div>
-    </div>
-  );
+function sessionPresent(session: unknown): boolean {
+  return Boolean(session && typeof session === 'object');
 }
 
-function SignInLoadingFallback() {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
-      <div className="w-full max-w-md space-y-6">
-        <div className="rounded-lg bg-card p-8 shadow-lg border">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold text-foreground">Patina Admin Portal</h1>
-            <p className="mt-2 text-sm text-muted-foreground">Loading...</p>
-          </div>
-        </div>
+function SignInContent() {
+  const searchParams = useSearchParams();
+  const destination = adminAuthDestination(searchParams.get('callbackUrl'));
+  const sendOtp = useSendEmailOtp();
+  const verifyOtp = useVerifyOtp();
+  const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
+  const [password, setPassword] = useState('');
+  const [phase, setPhase] = useState<
+    'email' | 'code' | 'password' | 'apple-pending' | 'success'
+  >('email');
+  const [passwordExpanded, setPasswordExpanded] = useState(false);
+  const [qrExpanded, setQrExpanded] = useState(false);
+  const [error, setError] = useState<string | null>(() => {
+    const queryError = searchParams.get('error');
+    return queryError
+      ? (QUERY_ERROR_MESSAGES[queryError] ??
+          'Sign-in needs another try. Please begin again.')
+      : null;
+  });
+  const [resendInSeconds, setResendInSeconds] = useState(0);
+  const [passwordSubmitting, setPasswordSubmitting] = useState(false);
+  const [devSubmitting, setDevSubmitting] = useState(false);
+  const [devAuthError, setDevAuthError] = useState<string | null>(null);
+  const completed = useRef(false);
+  const redirected = useRef(false);
+  const qr = usePortalQrAuth({
+    baseUrl: QR_AUTH_BASE_URL,
+    enabled:
+      qrExpanded &&
+      phase === 'email' &&
+      !passwordExpanded &&
+      !sendOtp.isPending &&
+      !passwordSubmitting &&
+      !devSubmitting,
+  });
+  const cancelQr = qr.cancel;
+
+  const hardRedirect = useCallback(
+    (event?: React.MouseEvent<HTMLAnchorElement>) => {
+      event?.preventDefault();
+      if (redirected.current) return;
+      redirected.current = true;
+      hardNavigate(destination);
+    },
+    [destination],
+  );
+
+  const finish = useCallback((method: string) => {
+    if (completed.current) return;
+    completed.current = true;
+    authEvents.login(method);
+    setPhase('success');
+  }, []);
+
+  useEffect(() => {
+    if (phase !== 'success') return;
+    const timer = window.setTimeout(hardRedirect, 350);
+    return () => window.clearTimeout(timer);
+  }, [hardRedirect, phase]);
+
+  useEffect(() => {
+    if (resendInSeconds <= 0) return;
+    const timer = window.setInterval(
+      () => setResendInSeconds((value) => Math.max(0, value - 1)),
+      1_000,
+    );
+    return () => window.clearInterval(timer);
+  }, [resendInSeconds]);
+
+  useEffect(() => {
+    if (qr.state === 'authenticated') finish('qr');
+  }, [finish, qr.state]);
+
+  const sendCode = useCallback(async () => {
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail) return;
+    cancelQr();
+    setQrExpanded(false);
+    setError(null);
+    try {
+      await sendOtp.mutateAsync({
+        email: normalizedEmail,
+        redirectTo: buildAuthCallbackUrl(window.location.origin, destination),
+      });
+      setCode('');
+      setResendInSeconds(60);
+      setPhase('code');
+      window.history.replaceState(
+        null,
+        '',
+        buildVerifyOtpPath(normalizedEmail, destination),
+      );
+    } catch (cause) {
+      setError(normalizeAuthError(cause).message);
+    }
+  }, [cancelQr, destination, email, sendOtp]);
+
+  const verifyCode = useCallback(
+    async (value: string) => {
+      if (value.length !== 6 || completed.current) return;
+      cancelQr();
+      setError(null);
+      try {
+        const result = await verifyOtp.mutateAsync({
+          email: email.trim(),
+          token: value,
+          type: 'email',
+        });
+        const current = await createBrowserClient().auth.getSession();
+        if (!sessionPresent(result.session) && !current.data.session) {
+          throw new Error('No session after code verification');
+        }
+        finish('email-otp');
+      } catch (cause) {
+        setCode('');
+        setError(normalizeAuthError(cause, 'invalid_code').message);
+      }
+    },
+    [cancelQr, email, finish, verifyOtp],
+  );
+
+  const signInWithPassword = useCallback(async () => {
+    if (!email.trim() || !password) return;
+    cancelQr();
+    setQrExpanded(false);
+    setError(null);
+    setPasswordSubmitting(true);
+    try {
+      const supabase = createBrowserClient();
+      const { data, error: signInError } =
+        await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
+      if (signInError) throw signInError;
+      const current = await supabase.auth.getSession();
+      if (!data.session && !current.data.session) {
+        throw new Error('No session after password sign in');
+      }
+      finish('credentials');
+    } catch (cause) {
+      setError(normalizeAuthError(cause, 'invalid_credentials').message);
+    } finally {
+      setPasswordSubmitting(false);
+    }
+  }, [cancelQr, email, finish, password]);
+
+  const signInWithApple = useCallback(async () => {
+    cancelQr();
+    setQrExpanded(false);
+    setError(null);
+    setPhase('apple-pending');
+    try {
+      const { error: oauthError } =
+        await createBrowserClient().auth.signInWithOAuth({
+          provider: 'apple',
+          options: {
+            redirectTo: buildAuthCallbackUrl(
+              window.location.origin,
+              destination,
+            ),
+            queryParams: { response_mode: 'fragment' },
+          },
+        });
+      if (oauthError) throw oauthError;
+    } catch (cause) {
+      setPhase('email');
+      setError(normalizeAuthError(cause, 'oauth').message);
+    }
+  }, [cancelQr, destination]);
+
+  const handleDevLogin = useCallback(
+    async (devEmail: string, devPassword: string) => {
+      cancelQr();
+      setQrExpanded(false);
+      setDevSubmitting(true);
+      setDevAuthError(null);
+      try {
+        const supabase = createBrowserClient();
+        const { data, error: signInError } =
+          await supabase.auth.signInWithPassword({
+            email: devEmail,
+            password: devPassword,
+          });
+        if (signInError) throw signInError;
+        const current = await supabase.auth.getSession();
+        if (!data.session && !current.data.session) {
+          throw new Error('No session after development sign in');
+        }
+        finish('dev');
+      } catch {
+        setDevAuthError(
+          'That development account could not be opened. Check the local setup and try again.',
+        );
+      } finally {
+        setDevSubmitting(false);
+      }
+    },
+    [cancelQr, finish],
+  );
+
+  const loginState: PortalLoginState =
+    phase === 'success'
+      ? 'success'
+      : phase === 'code'
+        ? 'code'
+        : phase === 'password'
+          ? 'password'
+          : phase === 'apple-pending'
+            ? 'apple-pending'
+            : qrExpanded
+              ? qr.state === 'expired'
+                ? 'qr-expired'
+                : 'qr'
+              : 'email';
+
+  const qrCode =
+    qr.state === 'denied' ? (
+      <div role="status" className="space-y-3 text-sm text-[#4f554f]">
+        <p className="font-semibold text-[#252a25]">
+          That request was declined.
+        </p>
+        <button
+          type="button"
+          className="min-h-11 underline underline-offset-4"
+          onClick={() => void qr.regenerate()}
+        >
+          Make a new QR code
+        </button>
       </div>
-    </div>
+    ) : qr.state === 'error' ? (
+      <div role="alert" className="space-y-3 text-sm text-[#4f554f]">
+        <p>{qr.failure?.message ?? 'We could not prepare a QR code.'}</p>
+        <button
+          type="button"
+          className="min-h-11 underline underline-offset-4"
+          onClick={() => void qr.regenerate()}
+        >
+          Try QR again
+        </button>
+      </div>
+    ) : qr.qrUrl ? (
+      <QRCodeSVG
+        value={qr.qrUrl}
+        size={144}
+        level="M"
+        bgColor="transparent"
+        fgColor="#252a25"
+      />
+    ) : undefined;
+
+  const qrDescription =
+    qr.state === 'loading'
+      ? 'Preparing a private code for your phone.'
+      : qr.state === 'verifying'
+        ? 'Your phone approved this code. Confirming your session now.'
+        : qr.state === 'denied'
+          ? 'No session was opened. You can make a new code or use email.'
+          : qr.state === 'error'
+            ? 'Use email while the QR connection is unavailable.'
+            : qr.state === 'pending'
+              ? `Scan with the Patina app. Expires in ${qr.secondsRemaining}s.`
+              : 'Use your signed-in phone to scan this code.';
+  const isAuthSubmitting =
+    sendOtp.isPending ||
+    verifyOtp.isPending ||
+    passwordSubmitting ||
+    devSubmitting ||
+    phase === 'apple-pending' ||
+    qr.state === 'verifying';
+
+  return (
+    <AdminAuthShell>
+      <PortalLogin
+        state={loginState}
+        email={email}
+        onEmailChange={(value) => {
+          setEmail(value);
+          setError(null);
+        }}
+        onSendCode={sendCode}
+        code={code}
+        onCodeChange={(value) => {
+          setCode(value);
+          setError(null);
+        }}
+        onVerifyCode={verifyCode}
+        resendInSeconds={resendInSeconds}
+        onResendCode={sendCode}
+        error={error}
+        isSubmitting={isAuthSubmitting}
+        qrCode={qrCode}
+        qrDescription={qrDescription}
+        onOpenQr={() => {
+          setQrExpanded(true);
+          setError(null);
+        }}
+        onCloseQr={() => {
+          cancelQr();
+          setQrExpanded(false);
+        }}
+        onRefreshQr={() => void qr.regenerate()}
+        oauthActions={[
+          {
+            id: 'apple',
+            label: 'Continue with Apple',
+            available: isOAuthProviderEnabled('apple'),
+            pending: phase === 'apple-pending',
+            onSelect: signInWithApple,
+          },
+        ]}
+        password={password}
+        onPasswordChange={(value) => {
+          setPassword(value);
+          setError(null);
+        }}
+        onPasswordSignIn={signInWithPassword}
+        passwordExpanded={passwordExpanded}
+        onPasswordExpandedChange={(expanded) => {
+          setPasswordExpanded(expanded);
+          if (expanded) {
+            cancelQr();
+            setQrExpanded(false);
+          }
+          setPhase(expanded ? 'password' : 'email');
+          setError(null);
+        }}
+        onForgotPassword={() => {
+          cancelQr();
+          window.location.assign(
+            `/auth/forgot-password?callbackUrl=${encodeURIComponent(destination)}`,
+          );
+        }}
+        onChangeMethod={() => {
+          setPhase('email');
+          setCode('');
+          setError(null);
+        }}
+        onContinue={hardRedirect}
+        destinationHref={destination}
+      />
+      {process.env.NODE_ENV === 'development' && (
+        <div className="mt-6">
+          <DevAccountsPanel
+            accounts={getAccountsForPortal('admin')}
+            onLogin={handleDevLogin}
+            isLoading={isAuthSubmitting}
+            error={devAuthError}
+            defaultCollapsed
+          />
+        </div>
+      )}
+    </AdminAuthShell>
   );
 }
 
 export default function SignInPage() {
   return (
-    <Suspense fallback={<SignInLoadingFallback />}>
+    <Suspense
+      fallback={
+        <AdminAuthShell>
+          <PortalAuthNotice title="Opening Patina Operations">
+            Getting the sign-in page ready.
+          </PortalAuthNotice>
+        </AdminAuthShell>
+      }
+    >
       <SignInContent />
     </Suspense>
   );

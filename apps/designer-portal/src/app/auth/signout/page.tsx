@@ -2,12 +2,10 @@
 
 import { createBrowserClient } from '@patina/supabase';
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { authEvents } from '@/lib/analytics/events';
+import { DesignerAuthShell } from '../auth-shell';
 
 export default function SignOutPage() {
-  const router = useRouter();
-
   useEffect(() => {
     async function handleSignOut() {
       authEvents.logout();
@@ -20,13 +18,13 @@ export default function SignOutPage() {
       // Then clear Supabase session
       const supabase = createBrowserClient();
       await supabase.auth.signOut();
-      router.push('/auth/signin');
+      window.location.replace('/auth/signin');
     }
     handleSignOut();
-  }, [router]);
+  }, []);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50">
+    <DesignerAuthShell>
       <div className="text-center">
         <h1 className="text-2xl font-semibold text-gray-900">
           Signing out...
@@ -35,6 +33,6 @@ export default function SignOutPage() {
           Please wait while we sign you out
         </p>
       </div>
-    </div>
+    </DesignerAuthShell>
   );
 }

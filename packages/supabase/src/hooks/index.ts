@@ -123,6 +123,7 @@ export {
   // OAuth & Magic Link (Phase 2)
   useSignInWithOAuth,
   useSendMagicLink,
+  useSendEmailOtp,
   useResendVerification,
   useLinkOAuthAccount,
   useUnlinkOAuthAccount,
@@ -141,6 +142,14 @@ export {
   useSignOutOtherDevices,
 } from './use-auth';
 export type { OAuthProvider, MfaFactorType, MfaFactor, UserSession } from './use-auth';
+export {
+  usePortalQrAuth,
+  type PortalQrAuthFailure,
+  type PortalQrAuthOptions,
+  type PortalQrAuthResult,
+  type PortalQrAuthSnapshot,
+  type PortalQrAuthState,
+} from './use-portal-qr-auth';
 export {
   // Designer Onboarding (Phase 3)
   useMyDesignerApplication,

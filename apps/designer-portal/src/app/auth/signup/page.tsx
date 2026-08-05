@@ -1,16 +1,16 @@
 'use client';
 
 import { useState, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { createBrowserClient } from '@patina/supabase';
+import { useSearchParams } from 'next/navigation';
+import { buildAuthCallbackUrl, createBrowserClient, normalizeAuthError, safeAuthReturnPath } from '@patina/supabase';
 import { AuthForm, type AuthFormField } from '@patina/design-system';
 import Link from 'next/link';
 import { authEvents } from '@/lib/analytics/events';
+import { DESIGNER_AUTH_DESTINATION, DesignerAuthShell } from '../auth-shell';
 
 function SignUpContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl') || '/';
+  const callbackUrl = safeAuthReturnPath(searchParams.get('callbackUrl'), DESIGNER_AUTH_DESTINATION);
 
   const supabase = createBrowserClient();
 
@@ -93,6 +93,7 @@ function SignUpContent() {
         email: data.email,
         password: data.password,
         options: {
+          emailRedirectTo: buildAuthCallbackUrl(window.location.origin, callbackUrl),
           data: {
             name: data.name,
             company: data.company,
@@ -111,19 +112,24 @@ function SignUpContent() {
 
       // Redirect to sign in page after 2 seconds
       setTimeout(() => {
-        router.push('/auth/signin?registered=true');
+        const params = new URLSearchParams({
+          registered: 'true',
+          callbackUrl,
+        });
+        window.location.replace(`/auth/signin?${params.toString()}`);
       }, 2000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred during registration');
+      setError(normalizeAuthError(err, 'unknown').message);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
+    <DesignerAuthShell>
+      <div className="w-full">
       <div className="w-full max-w-md">
-        <div className="rounded-lg bg-card p-8 shadow-lg border">
+        <div className="border border-[#6d726b] bg-white p-6">
           <AuthForm
             title="Create Designer Account"
             description="Join Patina to start creating beautiful spaces"
@@ -147,7 +153,7 @@ function SignUpContent() {
                 </p>
                 <p className="text-center text-sm text-muted-foreground">
                   Already have an account?{' '}
-                  <Link href="/auth/signin" className="text-primary font-medium hover:underline">
+                  <Link href={`/auth/signin?callbackUrl=${encodeURIComponent(callbackUrl)}`} className="text-primary font-medium hover:underline">
                     Sign in
                   </Link>
                 </p>
@@ -158,22 +164,23 @@ function SignUpContent() {
 
         {/* Development Mode Notice */}
         {process.env.NODE_ENV === 'development' && (
-          <div className="mt-4 rounded-lg bg-yellow-50 border border-yellow-200 p-4 text-center">
+          <div className="mt-4 border border-[#6d726b] bg-[#f3f0e8] p-4 text-center">
             <p className="text-xs text-yellow-800">
               <strong>Development Mode:</strong> Account will be created automatically
             </p>
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </DesignerAuthShell>
   );
 }
 
 function SignUpLoadingFallback() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
+    <DesignerAuthShell>
       <div className="w-full max-w-md">
-        <div className="rounded-lg bg-card p-8 shadow-lg border">
+        <div className="border border-[#6d726b] bg-white p-6">
           <div className="text-center">
             <div className="mx-auto h-12 w-12 text-primary mb-4 animate-pulse">
               <svg
@@ -210,7 +217,7 @@ function SignUpLoadingFallback() {
           </div>
         </div>
       </div>
-    </div>
+    </DesignerAuthShell>
   );
 }
 

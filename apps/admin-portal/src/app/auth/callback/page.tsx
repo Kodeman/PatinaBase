@@ -1,80 +1,178 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { createBrowserClient } from '@patina/supabase';
-import { Suspense } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import {
+  consumeAuthCallbackFragment,
+  createBrowserClient,
+  finalizeAuthCallback,
+  normalizeOAuthCallbackError,
+  recoveryFinalReturnPath,
+} from '@patina/supabase';
+import { PortalAuthNotice, PortalAuthSuccess } from '@patina/design-system';
+import {
+  adminAuthDestination,
+  hardNavigate,
+  recoveryDestination,
+} from '@/lib/auth-navigation';
+import { AdminAuthShell } from '../auth-shell';
 
 function CallbackContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const processed = useRef(false);
+  const code = searchParams.get('code');
+  const callbackUrl =
+    searchParams.get('callbackUrl') || searchParams.get('next');
+  const queryRecovery = searchParams.get('type') === 'recovery';
+  const providerError =
+    searchParams.get('error') ?? searchParams.get('error_code');
+  const queryDestination = queryRecovery
+    ? recoveryDestination(callbackUrl)
+    : adminAuthDestination(callbackUrl);
+  const [isRecovery, setIsRecovery] = useState(queryRecovery);
+  const [destination, setDestination] = useState(queryDestination);
+  const [result, setResult] = useState<'working' | 'success' | 'failed'>(
+    'working',
+  );
+  const [message, setMessage] = useState<string | null>(null);
+  const callbackRun = useRef<{
+    key: string;
+    promise: ReturnType<typeof finalizeAuthCallback>;
+  } | null>(null);
+  const callbackFragment = useRef<
+    ReturnType<typeof consumeAuthCallbackFragment> | undefined
+  >(undefined);
+  const redirected = useRef(false);
+
+  const hardRedirect = useCallback(
+    (event?: React.MouseEvent<HTMLAnchorElement>) => {
+      event?.preventDefault();
+      if (redirected.current) return;
+      redirected.current = true;
+      hardNavigate(destination);
+    },
+    [destination],
+  );
 
   useEffect(() => {
-    if (processed.current) return;
-    processed.current = true;
+    callbackFragment.current ??= consumeAuthCallbackFragment();
+    const fragment = callbackFragment.current;
+    const recovery = queryRecovery || fragment.isRecovery;
+    const resolvedDestination = recovery
+      ? recoveryDestination(callbackUrl)
+      : adminAuthDestination(callbackUrl);
+    setIsRecovery(recovery);
+    setDestination(resolvedDestination);
 
-    const handleCallback = async () => {
-      const supabase = createBrowserClient();
-      const code = searchParams.get('code');
-      const next = searchParams.get('callbackUrl') || searchParams.get('next') || '/';
+    const providerFailure = normalizeOAuthCallbackError(
+      fragment.oauthError ?? providerError,
+    );
+    if (providerFailure) {
+      setMessage(providerFailure.message);
+      setResult('failed');
+      return;
+    }
 
-      try {
-        // PKCE flow: GoTrue redirected back with `?code=` — exchange it
-        // explicitly. Relying on supabase-js auto-detect alone races the 5s
-        // timeout below, so we drive the exchange here.
-        if (code) {
-          const { error } = await supabase.auth.exchangeCodeForSession(code);
-          if (error) {
-            console.error('[Auth Callback Page] exchangeCodeForSession:', error.message);
-            router.replace('/auth/signin?error=OAuthCallback' as any);
-            return;
-          }
-          router.replace(next as any);
+    let active = true;
+    const recoveryTokenHash = fragment.recoveryTokenHash;
+    const callbackKey =
+      recoveryTokenHash !== undefined
+        ? `recovery:${recoveryTokenHash}`
+        : fragment.legacyRecovery
+          ? 'legacy-recovery-fragment'
+          : code ?? 'fragment-or-existing-session';
+    if (!callbackRun.current || callbackRun.current.key !== callbackKey) {
+      callbackRun.current = {
+        key: callbackKey,
+        // PKCE codes are single-use. Share one exchange across React Strict
+        // Mode's effect replay instead of aborting and racing a second call.
+        promise: finalizeAuthCallback({
+          supabase: createBrowserClient(),
+          code,
+          recovery,
+          recoveryTokenHash,
+          legacyRecoveryFragment: fragment.legacyRecovery,
+        }),
+      };
+    }
+
+    void callbackRun.current.promise
+      .then((callback) => {
+        if (!active) return;
+        if (callback.status === 'failed') {
+          setMessage(callback.failure.message);
+          setResult('failed');
           return;
         }
-
-        // Fragment flow (legacy implicit, or Apple response_mode=fragment).
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (error) {
-          console.error('[Auth Callback Page] Session error:', error.message);
-          router.replace('/auth/signin?error=OAuthCallback' as any);
-          return;
-        }
-        if (session) {
-          router.replace(next as any);
-          return;
-        }
-
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(
-          (event, session) => {
-            if (event === 'SIGNED_IN' && session) {
-              subscription.unsubscribe();
-              router.replace(next as any);
-            }
-          }
+        setResult('success');
+      })
+      .catch(() => {
+        if (!active) return;
+        setMessage(
+          'We could not finish opening your session. Please try again.',
         );
+        setResult('failed');
+      });
 
-        setTimeout(() => {
-          subscription.unsubscribe();
-          router.replace('/auth/signin?error=OAuthCallback' as any);
-        }, 5000);
-      } catch (err) {
-        console.error('[Auth Callback Page] Exception:', err);
-        router.replace('/auth/signin?error=OAuthCallback');
-      }
+    return () => {
+      active = false;
     };
+  }, [callbackUrl, code, providerError, queryRecovery]);
 
-    handleCallback();
-  }, [router, searchParams]);
+  useEffect(() => {
+    if (result !== 'success') return;
+    const timer = window.setTimeout(hardRedirect, 350);
+    return () => window.clearTimeout(timer);
+  }, [hardRedirect, result]);
+
+  const recoveryReturnDestination = recoveryFinalReturnPath(
+    destination,
+    adminAuthDestination(null),
+  );
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center space-y-4">
-        <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-        <p className="text-sm text-muted-foreground">Completing sign in...</p>
-      </div>
-    </div>
+    <AdminAuthShell>
+      {result === 'success' ? (
+        <PortalAuthSuccess
+          title={isRecovery ? 'Your secure reset is ready.' : undefined}
+          description={
+            isRecovery
+              ? 'We’re taking you to choose a new password now.'
+              : undefined
+          }
+          destinationLabel={isRecovery ? 'Choose a new password' : undefined}
+          destinationHref={destination}
+          onContinue={hardRedirect}
+        />
+      ) : (
+        <PortalAuthNotice
+          tone={result === 'failed' ? 'error' : 'info'}
+          title={
+            result === 'failed'
+              ? isRecovery
+                ? 'That reset link needs another try.'
+                : 'Sign-in needs another try.'
+              : 'Completing sign in'
+          }
+        >
+          {message ?? 'Confirming your secure session.'}
+          {result === 'failed' && (
+            <p className="mt-3">
+              <Link
+                className="font-semibold underline underline-offset-4"
+                href={
+                  isRecovery
+                    ? `/auth/forgot-password?callbackUrl=${encodeURIComponent(recoveryReturnDestination)}`
+                    : `/auth/signin?callbackUrl=${encodeURIComponent(adminAuthDestination(callbackUrl))}`
+                }
+              >
+                {isRecovery ? 'Request a new reset link' : 'Return to sign in'}
+              </Link>
+            </p>
+          )}
+        </PortalAuthNotice>
+      )}
+    </AdminAuthShell>
   );
 }
 
@@ -82,12 +180,11 @@ export default function AuthCallbackPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-background">
-          <div className="text-center space-y-4">
-            <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-            <p className="text-sm text-muted-foreground">Loading...</p>
-          </div>
-        </div>
+        <AdminAuthShell>
+          <PortalAuthNotice title="Completing sign in">
+            Loading your secure callback.
+          </PortalAuthNotice>
+        </AdminAuthShell>
       }
     >
       <CallbackContent />

@@ -1,121 +1,135 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { AuthForm, type AuthFormField } from '@patina/design-system';
+import { Suspense, useState, type FormEvent } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import {
+  createBrowserClient,
+  normalizeAuthError,
+  safeAuthReturnPath,
+} from '@patina/supabase';
+import { PortalAuthNotice } from '@patina/design-system';
+import { DESIGNER_AUTH_DESTINATION, DesignerAuthShell } from '../auth-shell';
 
-export default function ForgotPasswordPage() {
-  const router = useRouter();
+function ForgotPasswordContent() {
+  const searchParams = useSearchParams();
+  const destination = safeAuthReturnPath(
+    searchParams.get('callbackUrl'),
+    DESIGNER_AUTH_DESTINATION,
+  );
+  const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [sent, setSent] = useState(false);
 
-  const fields: AuthFormField[] = [
-    {
-      name: 'email',
-      label: 'Email Address',
-      type: 'email',
-      placeholder: 'you@example.com',
-      required: true,
-      autoComplete: 'email',
-    },
-  ];
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!email.trim() || isLoading) return;
 
-  const handleSubmit = async (data: Record<string, string>) => {
-    setIsLoading(true);
     setError(null);
-    setSuccess(null);
-
+    setIsLoading(true);
     try {
-      // Check if we're in development mode
-      const isDevelopment = process.env.NODE_ENV === 'development';
-      const hasOIDC = !!(
-        process.env.NEXT_PUBLIC_OIDC_ISSUER &&
-        process.env.NEXT_PUBLIC_OIDC_CLIENT_ID
+      const resetPath = `/auth/reset-password?callbackUrl=${encodeURIComponent(destination)}`;
+      const callback = new URL('/auth/callback', window.location.origin);
+      callback.searchParams.set('type', 'recovery');
+      callback.searchParams.set('callbackUrl', resetPath);
+
+      const { error: resetError } = await createBrowserClient().auth.resetPasswordForEmail(
+        email.trim(),
+        { redirectTo: callback.toString() },
       );
-
-      if (isDevelopment && !hasOIDC) {
-        // Development mode - simulate password reset
-        setSuccess(
-          'Password reset email sent! Check your inbox for further instructions. (Development Mode)'
-        );
-
-        // Redirect to sign in page after 3 seconds
-        setTimeout(() => {
-          router.push('/auth/signin?reset=requested');
-        }, 3000);
-      } else {
-        // Production mode - call password reset API
-        const response = await fetch('/api/auth/forgot-password', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: data.email }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || 'Failed to send reset email');
-        }
-
-        setSuccess('Password reset email sent! Check your inbox for further instructions.');
-
-        // Redirect to sign in page after 3 seconds
-        setTimeout(() => {
-          router.push('/auth/signin?reset=requested');
-        }, 3000);
-      }
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'An error occurred. Please try again later.'
-      );
+      if (resetError) throw resetError;
+      setSent(true);
+    } catch (cause) {
+      setError(normalizeAuthError(cause, 'unknown').message);
     } finally {
       setIsLoading(false);
     }
   };
 
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
-      <div className="w-full max-w-md">
-        <div className="rounded-lg bg-card p-8 shadow-lg border">
-          <AuthForm
-            title="Reset Your Password"
-            description="Enter your email address and we'll send you a link to reset your password"
-            fields={fields}
-            submitText="Send Reset Link"
-            isLoading={isLoading}
-            error={error || undefined}
-            success={success || undefined}
-            onSubmit={handleSubmit}
-            footer={
-              <div className="space-y-2 text-center">
-                <Link
-                  href="/auth/signin"
-                  className="block text-sm text-primary font-medium hover:underline"
-                >
-                  Back to Sign In
-                </Link>
-                <p className="text-sm text-muted-foreground">
-                  Don't have an account?{' '}
-                  <Link href="/auth/signup" className="text-primary hover:underline">
-                    Sign up
-                  </Link>
-                </p>
-              </div>
-            }
-          />
-        </div>
+  const signInHref = `/auth/signin?callbackUrl=${encodeURIComponent(destination)}`;
 
-        {/* Help Text */}
-        <div className="mt-6 rounded-lg bg-muted p-4 text-center">
-          <p className="text-sm text-muted-foreground">
-            Need immediate help?{' '}
-            <Link href="/support" className="text-primary font-medium hover:underline">
-              Contact Support
-            </Link>
-          </p>
-        </div>
+  return (
+    <DesignerAuthShell>
+      <div className="space-y-5">
+        {sent ? (
+          <PortalAuthNotice tone="success" title="Check your inbox.">
+            If an account belongs to that address, its password reset link is on the way. You can close this page safely.
+          </PortalAuthNotice>
+        ) : (
+          <form className="space-y-5" onSubmit={handleSubmit}>
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#4f554f]">
+                Password recovery
+              </p>
+              <h2 className="mt-2 font-serif text-3xl tracking-[-0.03em]">
+                Reset your password.
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-[#4f554f]">
+                We’ll email a private reset link to the address on your Patina account.
+              </p>
+            </div>
+
+            {error && (
+              <PortalAuthNotice tone="error" title="We couldn’t send that link.">
+                {error}
+              </PortalAuthNotice>
+            )}
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="designer-recovery-email">
+                Email address
+              </label>
+              <input
+                id="designer-recovery-email"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  setError(null);
+                }}
+                aria-invalid={Boolean(error) || undefined}
+                className="h-12 w-full border border-[#6d726b] bg-white px-3 text-base outline-none placeholder:text-[#5b605a] focus:border-[#252a25] focus:ring-2 focus:ring-[#252a25]"
+                placeholder="you@studio.com"
+                disabled={isLoading}
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={!email.trim() || isLoading}
+              className="h-12 w-full bg-[#252a25] px-4 text-sm font-semibold text-white hover:bg-[#343b34] disabled:cursor-not-allowed disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#252a25] focus:ring-offset-2"
+            >
+              {isLoading ? 'Sending reset link…' : 'Email me a reset link'}
+            </button>
+          </form>
+        )}
+
+        <Link
+          href={signInHref}
+          className="inline-flex min-h-11 items-center text-sm font-semibold underline decoration-[#6d726b] underline-offset-4 focus:outline-none focus:ring-2 focus:ring-[#252a25]"
+        >
+          Back to sign in
+        </Link>
       </div>
-    </div>
+    </DesignerAuthShell>
+  );
+}
+
+export default function ForgotPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <DesignerAuthShell>
+          <PortalAuthNotice title="Opening password recovery">
+            Getting your secure reset form ready.
+          </PortalAuthNotice>
+        </DesignerAuthShell>
+      }
+    >
+      <ForgotPasswordContent />
+    </Suspense>
   );
 }

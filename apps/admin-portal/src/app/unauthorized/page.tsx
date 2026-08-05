@@ -1,40 +1,88 @@
 'use client';
 
-import { createBrowserClient } from '@patina/supabase';
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { createBrowserClient, normalizeAuthError } from '@patina/supabase';
+import { PortalAuthNotice, PortalAuthSuccess } from '@patina/design-system';
+import { AdminAuthShell } from '../auth/auth-shell';
+import { hardNavigate } from '@/lib/auth-navigation';
 
 export default function UnauthorizedPage() {
-  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [state, setState] = useState<'denied' | 'signing-out' | 'success'>(
+    'denied',
+  );
+  const [error, setError] = useState<string | null>(null);
+  const redirected = useRef(false);
+
+  const continueToSignIn = useCallback(
+    (event?: React.MouseEvent<HTMLAnchorElement>) => {
+      event?.preventDefault();
+      if (redirected.current) return;
+      redirected.current = true;
+      hardNavigate('/auth/signin');
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (state !== 'success') return;
+    const timer = window.setTimeout(continueToSignIn, 350);
+    return () => window.clearTimeout(timer);
+  }, [continueToSignIn, state]);
 
   async function handleSignInWithDifferentAccount() {
-    setIsSigningOut(true);
+    setState('signing-out');
+    setError(null);
     try {
       const supabase = createBrowserClient();
-      await supabase.auth.signOut();
-    } catch (error) {
-      console.error('Sign out failed:', error);
+      const { error: signOutError } = await supabase.auth.signOut();
+      if (signOutError) throw signOutError;
+      const { data, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || data.session) {
+        throw sessionError ?? new Error('Session remained after sign out');
+      }
+      setState('success');
+    } catch (cause) {
+      setError(normalizeAuthError(cause, 'session').message);
+      setState('denied');
     }
-    window.location.href = '/auth/signin';
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold text-gray-900">Access Denied</h1>
-        <p className="mt-4 text-lg text-gray-600">
-          You do not have permission to access the admin portal.
-        </p>
-        <p className="mt-2 text-sm text-gray-500">
-          Contact your administrator if you believe this is an error.
-        </p>
-        <button
-          onClick={handleSignInWithDifferentAccount}
-          disabled={isSigningOut}
-          className="mt-8 inline-block rounded-md bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
-        >
-          {isSigningOut ? 'Signing out...' : 'Sign in with a different account'}
-        </button>
-      </div>
-    </div>
+    <AdminAuthShell>
+      {state === 'success' ? (
+        <PortalAuthSuccess
+          title="You’re signed out."
+          description="Choose another account to open Patina Operations."
+          destinationLabel="Return to sign in"
+          destinationHref="/auth/signin"
+          onContinue={continueToSignIn}
+        />
+      ) : (
+        <div className="space-y-5">
+          <PortalAuthNotice
+            tone="error"
+            title="This account can’t open Patina Operations."
+          >
+            Sign in with an administrator account, or contact support@patina.com
+            if you think this access should be restored.
+          </PortalAuthNotice>
+          {error && (
+            <PortalAuthNotice tone="error" title="Sign-out needs another try.">
+              {error}
+            </PortalAuthNotice>
+          )}
+          <button
+            type="button"
+            onClick={() => void handleSignInWithDifferentAccount()}
+            disabled={state === 'signing-out'}
+            className="h-12 w-full bg-[#252a25] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#252a25] focus:ring-offset-2"
+          >
+            {state === 'signing-out'
+              ? 'Signing out…'
+              : 'Sign in with a different account'}
+          </button>
+        </div>
+      )}
+    </AdminAuthShell>
   );
 }
