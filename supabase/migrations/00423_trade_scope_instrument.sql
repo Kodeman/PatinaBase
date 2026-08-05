@@ -49,6 +49,8 @@
 --                                                 regraft it; verified by grep)
 --   create_furnishings_authorization_from_schedule
 --                                       ........ 00422 (sole) → 00423
+--   derive_working_budget_draft ................. 00422 → 00423
+--   publish_budget_checkpoint ................... 00412 → 00414 → 00422 → 00423
 --
 -- Verified UNCHANGED and deliberately not redefined:
 --   · guard_commercial_proposal_authority (00412). It is kind-GENERIC: every
@@ -62,18 +64,13 @@
 --     with COALESCE(proposal.project_id, commercial_binding.project_id), which
 --     is exactly how a trade scope is bound. A sent trade scope reaches the
 --     client's awaiting cards with no change.
---   · get_project_working_budget / publish_budget_checkpoint (00422). A trade
---     scope is NOT furnishings and must not enter the furnishings coverage
---     proof. Its presence lines carry trade_scope_document_id, never
---     source_commercial_document_id, so the authorized rollups (which key on
---     furnishing_authorization_items) cannot see them. Nor, in practice, do they
---     reach the `scheduled` rollup: that sum joins a schedule line to a budget
---     line on room AND category (00422's `COALESCE(i.ffe_category,
---     'Uncategorized') = l.category`), and a presence line is filed under
---     'trade work' — a category no budget line carries. So a trade scope is
---     invisible to BOTH budget rollups. That is the honest statement of what
---     this migration does; making trade work visible to the budget is a
---     deliberate category decision nobody has made yet.
+--   · get_project_working_budget (00422). Its two live rollups
+--     (liveAuthorizedCents, liveAuthorizedTotalCents) sum
+--     furnishing_authorization_items snapshots on executed instruments, and a
+--     trade presence line can never become one — PART 5 refuses to release it
+--     and the table-edge guard refuses to let it hold a purchase order. Its
+--     scheduledCents is the stamped column, which PART 12 now writes correctly.
+--     So it is genuinely unchanged.
 --
 -- FINGERPRINT BYTE-STABILITY. _commercial_document_fingerprint gains a
 -- 'tradeScope' key that is CONDITIONALLY PRESENT: for every other document kind
@@ -3126,3 +3123,294 @@ GRANT EXECUTE ON FUNCTION public.list_trade_scopes(uuid) TO authenticated;
 
 COMMENT ON FUNCTION public.list_trade_scopes(uuid) IS
   'Studio companion read: every trade scope on a project, numbered by binding order, with its party, price, progress, deposit and draw schedule. Studio-only — bids are still not projected here.';
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- PART 12 — Budget purity: the furnishing budget refuses trade money
+-- ═══════════════════════════════════════════════════════════════════════════
+
+-- The invariant this migration opened with is that goods and trade never share
+-- an instrument. The working budget is the same rule read from the other end:
+-- it is a FURNISHING budget, and a trade scope's money lives on the trade
+-- scope's own instrument — its client price, its draw schedule, its invoices.
+--
+-- The earlier reading of this file argued that the presence lines were already
+-- invisible to both budget rollups, on the grounds that publish's `scheduled`
+-- sum matches a schedule line to a budget line on room AND category, and no
+-- budget line carries the category 'trade work'. That argument was self-
+-- defeating. derive_working_budget_draft rolls up EVERY project_ffe_items row
+-- on the project by room × category — presence lines included — so derive is
+-- precisely what MINTS the 'trade work' budget line. Once it exists the
+-- category match succeeds, publish stamps the trade price into scheduled_cents,
+-- and the client's acknowledged checkpoint and plan grid both read a trade
+-- scope's price as furnishing budget. That is the leak the phase-2 acceptance
+-- walk found, and it is fixed here rather than left as prose.
+--
+-- Both rollups now exclude any project_ffe_items row carrying
+-- trade_scope_document_id. Two exclusions, not one, and neither is redundant:
+-- derive stops the line being minted, and publish refuses the presence lines
+-- against any 'trade work' line that exists anyway — one typed by hand, or one
+-- already sitting in a version derived before this migration.
+--
+-- The AUTHORIZED rollups need no change, and this is a verified statement, not
+-- an assumption. publish_budget_checkpoint's `authorized` stamp, and
+-- get_project_working_budget's `liveAuthorizedCents` and
+-- `liveAuthorizedTotalCents`, all sum furnishing_authorization_items snapshots
+-- joined through an EXECUTED instrument. A presence line is a
+-- project_ffe_items row; it can only become such a snapshot through
+-- create_furnishings_authorization_from_schedule, which this migration already
+-- refuses for any line carrying trade_scope_document_id (PART 5), with
+-- guard_project_ffe_purchase_authority holding the same rule at the table edge.
+-- So get_project_working_budget is genuinely UNCHANGED by this part: it reads
+-- scheduled_cents as the stamped column publish now writes correctly, and its
+-- own live rollups never could see a presence line.
+--
+-- Lineage grafted here (00422 heads, bodies VERBATIM except the stated delta):
+--   derive_working_budget_draft ... 00422 → 00423 (one WHERE predicate added)
+--   publish_budget_checkpoint ..... 00412 → 00414 → 00422 → 00423 (one WHERE
+--                                   predicate added to the `scheduled` subquery;
+--                                   the `authorized` subquery is untouched)
+
+CREATE OR REPLACE FUNCTION public.derive_working_budget_draft(p_project_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_actor uuid := auth.uid();
+  v_project public.projects%ROWTYPE;
+  v_version public.project_budget_versions%ROWTYPE;
+BEGIN
+  SELECT * INTO v_project FROM public.projects WHERE id = p_project_id FOR SHARE;
+  IF NOT FOUND OR v_actor IS NULL
+     OR NOT public.is_studio_comember(v_project.designer_id) THEN
+    RAISE EXCEPTION 'project % not found or access denied', p_project_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  SELECT * INTO v_version FROM public.project_budget_versions
+  WHERE project_id = p_project_id
+  ORDER BY version DESC LIMIT 1 FOR UPDATE;
+  IF v_version.id IS NULL OR v_version.status <> 'draft' THEN
+    INSERT INTO public.project_budget_versions (project_id, version, created_by)
+    VALUES (p_project_id, COALESCE(v_version.version, 0) + 1, v_actor)
+    RETURNING * INTO v_version;
+  END IF;
+
+  -- Additive only. A studio target the designer typed is a JUDGEMENT; the
+  -- schedule rollup is an OBSERVATION. Re-deriving must never overwrite the
+  -- judgement, so an existing (version, room, category) line is left alone and
+  -- only genuinely new room×category pairs appear.
+  --
+  -- The conflict key is the ROOM ID, not the room name: two rooms both called
+  -- "Bedroom" are two rooms, and the old name key silently discarded the
+  -- second one's rollup — leaving its schedule lines permanently un-releasable
+  -- against an id-keyed coverage proof.
+  INSERT INTO public.project_budget_lines (
+    budget_version_id, project_room_id, room_name, category,
+    low_cents, target_cents, high_cents, sort_order
+  )
+  SELECT
+    v_version.id, rollup.room_id, rollup.room_name, rollup.category,
+    0,
+    public._cents_to_int4(rollup.target,
+      format('the scheduled rollup for %s · %s', rollup.room_name, rollup.category)),
+    0,
+    rollup.sort_order
+  FROM (
+    SELECT
+      room.id AS room_id, room.name AS room_name,
+      COALESCE(item.ffe_category, 'Uncategorized') AS category,
+      room.sort_order AS sort_order,
+      SUM(CASE
+        WHEN item.item_type = 'fixed' THEN COALESCE(item.line_total_cents, 0)
+        WHEN item.item_type = 'allowance' THEN COALESCE(item.budget_max_cents, 0)
+        ELSE 0 END)::bigint AS target
+    FROM public.project_ffe_items item
+    JOIN public.project_rooms room ON room.id = item.project_room_id
+    WHERE item.project_id = p_project_id
+      -- 00423 delta: a trade scope's presence lines are not furnishings, and
+      -- this is a FURNISHING budget. Without this predicate the rollup mints a
+      -- 'trade work' budget line out of them — which is also what let the
+      -- presence lines into publish_budget_checkpoint's scheduled stamp, since
+      -- that stamp matches a schedule line to a budget line on category.
+      AND item.trade_scope_document_id IS NULL
+    GROUP BY room.id, room.name, COALESCE(item.ffe_category, 'Uncategorized'),
+             room.sort_order
+  ) rollup
+  -- A legacy line carrying no project_room_id still owns its (name, category)
+  -- pair on this version. Re-deriving must not shadow that judgement with a
+  -- second, id-keyed line for the same room and category.
+  WHERE NOT EXISTS (
+    SELECT 1 FROM public.project_budget_lines legacy
+    WHERE legacy.budget_version_id = v_version.id
+      AND legacy.project_room_id IS NULL
+      AND legacy.room_name = rollup.room_name
+      AND legacy.category = rollup.category
+  )
+  ON CONFLICT (budget_version_id, project_room_id, category)
+    WHERE project_room_id IS NOT NULL
+  DO NOTHING;
+
+  RETURN public.get_project_working_budget(p_project_id);
+END;
+$$;
+REVOKE ALL ON FUNCTION public.derive_working_budget_draft(uuid)
+  FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.derive_working_budget_draft(uuid)
+  TO authenticated;
+
+COMMENT ON FUNCTION public.derive_working_budget_draft(uuid) IS
+  'Grows the current draft budget version (minting version n+1 if the latest is published) with one line per scheduled room×category. Additive: existing lines are never rewritten. Trade scope presence lines are excluded — this is a furnishing budget.';
+
+CREATE OR REPLACE FUNCTION public.publish_budget_checkpoint(
+  p_project_id uuid,
+  p_version_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_actor uuid := auth.uid();
+  v_version public.project_budget_versions%ROWTYPE;
+  v_checkpoint public.project_budget_checkpoints%ROWTYPE;
+  v_low bigint;
+  v_target bigint;
+  v_high bigint;
+  v_stamp record;
+  v_fingerprint text;
+  v_previous_publish text := current_setting('app.budget_publish_id', true);
+BEGIN
+  SELECT v.* INTO v_version
+  FROM public.project_budget_versions v
+  JOIN public.projects p ON p.id = v.project_id
+  WHERE v.id = p_version_id AND v.project_id = p_project_id
+    AND public.is_studio_comember(p.designer_id)
+  FOR UPDATE OF v;
+  IF NOT FOUND OR v_actor IS NULL OR v_version.status <> 'draft' THEN
+    RAISE EXCEPTION 'draft budget version % not found or access denied', p_version_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  -- 00414: a checkpoint is an act of signed commercial authority — it is what a
+  -- furnishing wave is built on. A legacy project has no such authority, so it
+  -- can no longer publish one.
+  IF NOT EXISTS (
+    SELECT 1 FROM public.project_commercial_documents d
+    JOIN public.proposals p ON p.id = d.proposal_id
+    WHERE d.project_id = p_project_id AND d.is_origin
+      AND d.document_kind = 'design_services' AND p.commercial_state = 'executed'
+  ) THEN
+    RAISE EXCEPTION 'project % has no executed design-services origin', p_project_id
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.project_budget_lines l WHERE l.budget_version_id = p_version_id) THEN
+    RAISE EXCEPTION 'budget version % has no lines', p_version_id
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- 00422: freeze the coverage picture INTO the version, so the checkpoint the
+  -- client acknowledges says what was scheduled and what was already authorized
+  -- against each line — not just what was targeted.
+  --
+  -- Both rollups match on the ROOM ID wherever both sides carry one, and fall
+  -- back to the name only for a legacy row that has no id (a budget line filed
+  -- before 00412's project_room_id, or a proposal-sourced snapshot that never
+  -- had one). Matching on name alone double-counted every pair of rooms that
+  -- happened to share a name, and froze that inflated figure into the hash the
+  -- client acknowledges. Written as a loop, not one UPDATE, so the narrowing to
+  -- the integer columns can name which rollup overflowed.
+  FOR v_stamp IN
+    SELECT
+      l.id AS line_id, l.room_name AS room_name, l.category AS category,
+      COALESCE((
+        SELECT SUM(CASE
+          WHEN i.item_type = 'fixed' THEN COALESCE(i.line_total_cents, 0)
+          WHEN i.item_type = 'allowance' THEN COALESCE(i.budget_max_cents, 0)
+          ELSE 0 END)
+        FROM public.project_ffe_items i
+        LEFT JOIN public.project_rooms r ON r.id = i.project_room_id
+        WHERE i.project_id = p_project_id
+          -- 00423 delta: same exclusion as derive_working_budget_draft, and it
+          -- is load-bearing independently. derive is not the only way a
+          -- 'trade work' budget line can exist — a studio can type any category
+          -- by hand, and a version derived before 00423 already carries one —
+          -- so the stamp must refuse the presence lines on its own account.
+          AND i.trade_scope_document_id IS NULL
+          AND CASE
+                WHEN l.project_room_id IS NOT NULL AND i.project_room_id IS NOT NULL
+                  THEN i.project_room_id = l.project_room_id
+                ELSE COALESCE(r.name, '') = l.room_name
+              END
+          AND COALESCE(i.ffe_category, 'Uncategorized') = l.category
+      ), 0) AS scheduled,
+      COALESCE((
+        SELECT SUM(a.client_line_total_cents)
+        FROM public.furnishing_authorization_items a
+        JOIN public.project_commercial_documents d ON d.id = a.commercial_document_id
+        JOIN public.proposals p ON p.id = d.proposal_id
+        WHERE d.project_id = p_project_id
+          AND d.executed_at IS NOT NULL
+          AND p.commercial_state = 'executed'
+          AND CASE
+                WHEN l.project_room_id IS NOT NULL AND a.project_room_id IS NOT NULL
+                  THEN a.project_room_id = l.project_room_id
+                ELSE COALESCE(a.room_name, '') = l.room_name
+              END
+          AND COALESCE(a.category, 'Uncategorized') = l.category
+      ), 0) AS authorized
+    FROM public.project_budget_lines l
+    WHERE l.budget_version_id = p_version_id
+  LOOP
+    UPDATE public.project_budget_lines SET
+      scheduled_cents = public._cents_to_int4(v_stamp.scheduled,
+        format('the scheduled rollup for %s · %s', v_stamp.room_name, v_stamp.category)),
+      authorized_cents = public._cents_to_int4(v_stamp.authorized,
+        format('the authorized rollup for %s · %s', v_stamp.room_name, v_stamp.category))
+    WHERE id = v_stamp.line_id;
+  END LOOP;
+
+  SELECT sum(low_cents), sum(target_cents), sum(high_cents)
+  INTO v_low, v_target, v_high
+  FROM public.project_budget_lines WHERE budget_version_id = p_version_id;
+
+  PERFORM set_config('app.budget_publish_id', p_version_id::text, true);
+  UPDATE public.project_budget_versions SET
+    low_total_cents = public._cents_to_int4(v_low, 'this budget version''s low total'),
+    target_total_cents = public._cents_to_int4(v_target, 'this budget version''s target total'),
+    high_total_cents = public._cents_to_int4(v_high, 'this budget version''s high total'),
+    status = 'published', published_at = now()
+  WHERE id = p_version_id RETURNING * INTO v_version;
+  v_fingerprint := public._budget_version_fingerprint(p_version_id);
+
+  INSERT INTO public.project_budget_checkpoints (
+    project_id, budget_version_id, checkpoint_code, snapshot_fingerprint,
+    published_by, published_at
+  ) VALUES (
+    p_project_id, p_version_id, 'B-' || lpad(v_version.version::text, 3, '0'),
+    v_fingerprint, v_actor, v_version.published_at
+  ) RETURNING * INTO v_checkpoint;
+  PERFORM set_config('app.budget_publish_id', COALESCE(v_previous_publish, ''), true);
+
+  RETURN jsonb_build_object(
+    'checkpointId', v_checkpoint.id,
+    'projectId', p_project_id,
+    'versionId', p_version_id,
+    'checkpointCode', v_checkpoint.checkpoint_code,
+    'status', v_checkpoint.status,
+    'snapshotFingerprint', v_checkpoint.snapshot_fingerprint,
+    'publishedAt', v_checkpoint.published_at
+  );
+EXCEPTION WHEN OTHERS THEN
+  PERFORM set_config('app.budget_publish_id', COALESCE(v_previous_publish, ''), true);
+  RAISE;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.publish_budget_checkpoint(uuid, uuid)
+  FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.publish_budget_checkpoint(uuid, uuid)
+  TO authenticated;
+
+COMMENT ON FUNCTION public.publish_budget_checkpoint(uuid, uuid) IS
+  'Freezes a draft budget version into an acknowledged-able checkpoint, stamping each line''s scheduled and authorized rollups first. The scheduled rollup counts furnishings only — trade scope presence lines are excluded.';

@@ -15,13 +15,19 @@
 --     CLIENT and only reach them from substantial completion;
 --   · the trade's presence in the schedule must never become procurement. A
 --     presence line is not furniture, and a purchase order raised against it
---     would bill the same work twice from both ends.
+--     would bill the same work twice from both ends — nor may it become
+--     FURNISHING BUDGET, which is the same rule read from the money's end
+--     (section 10A).
 --
 -- FALSIFIABILITY. Five core guards are proven to BITE, not merely to be
 -- present: each refusal is re-run inside a SAVEPOINT with the guard's trigger
 -- disabled, asserting the operation then SUCCEEDS, before rolling the savepoint
 -- back (which restores both the data and the trigger). Those blocks are marked
 -- FALSIFY. Without them a passing assertion only proves that SOMETHING refused.
+--
+-- Section 10A falsifies differently, because what it tests is not a guard but a
+-- predicate inside two function bodies: it strips the predicate out of each live
+-- definition and asserts the leak returns. Same principle, different seam.
 --
 -- A few blocks use the same DISABLE TRIGGER idiom in the other direction — to
 -- CONSTRUCT a state a guard normally prevents, so a second, independent seam can
@@ -1518,6 +1524,226 @@ BEGIN
     format('FALSIFY: unexpected second refusal — %L', v_err);
 END $$;
 ROLLBACK TO SAVEPOINT falsify_po;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (10A) BUDGET PURITY. The working budget is a FURNISHING budget. Goods and
+--       trade never share an instrument, and they must not share a budget line
+--       either — a trade scope's money lives on the trade scope: its client
+--       price, its draws, its invoices.
+--
+--       The phase-2 acceptance walk found the leak. The reasoning that said the
+--       presence lines were already invisible was self-defeating:
+--       publish_budget_checkpoint's `scheduled` sum matches a schedule line to a
+--       budget line on room AND category, and it is true that no budget line
+--       carries 'trade work' — until derive_working_budget_draft, which rolls up
+--       EVERY schedule row by room × category, MINTS one. Then the match
+--       succeeds and the trade price is stamped into the checkpoint the client
+--       acknowledges, and read back on their plan grid as furnishing budget.
+--
+--       Everything here runs inside a savepoint: it publishes a second budget
+--       version, and the sections below are entitled to the state section 10
+--       left them.
+-- ═══════════════════════════════════════════════════════════════════════════
+SAVEPOINT budget_purity;
+
+-- (a) DERIVE. Two engaged presence lines are on this project's schedule — one
+--     in the Kitchen for 600000, one in the Primary bath for 300000 — and the
+--     Primary bath holds NOTHING else. So the bath is the sharp test: post-fix
+--     it contributes no budget line at all, where pre-fix it contributed a
+--     'trade work' line for the whole of its allocation.
+DO $$
+DECLARE
+  v_project uuid := (SELECT value FROM trade_ids WHERE key = 'project');
+  v_bath uuid := (SELECT value FROM trade_ids WHERE key = 'bath');
+  v_kitchen uuid := (SELECT value FROM trade_ids WHERE key = 'kitchen');
+  v_budget jsonb;
+  v_version uuid;
+BEGIN
+  -- The fixture the assertions below rest on, stated rather than assumed.
+  ASSERT (SELECT sum(line_total_cents) FROM public.project_ffe_items
+          WHERE project_id = v_project AND trade_scope_document_id IS NOT NULL) = 900000,
+    'fixture: the engaged presence lines carry the whole client price';
+  ASSERT (SELECT count(*) FROM public.project_ffe_items
+          WHERE project_id = v_project AND project_room_id = v_bath
+            AND trade_scope_document_id IS NULL) = 0,
+    'fixture: the Primary bath holds nothing but trade work, so any bath budget line is a leak';
+
+  v_budget := public.derive_working_budget_draft(v_project);
+  v_version := (v_budget->'version'->>'id')::uuid;
+  PERFORM set_config('trade.purity_version', v_version::text, true);
+
+  ASSERT (SELECT status FROM public.project_budget_versions WHERE id = v_version) = 'draft',
+    'derive must open a fresh draft version over the published one';
+
+  -- THE FIX, stated directly.
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.project_budget_lines
+    WHERE budget_version_id = v_version AND category = 'trade work'),
+    'derive must mint no trade-work budget line — the budget is a furnishing budget';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.project_budget_lines
+    WHERE budget_version_id = v_version AND project_room_id = v_bath),
+    'a room holding only trade work must contribute no budget line at all';
+
+  -- ...and the exclusion is a TRADE rule, not a rollup that stopped working.
+  ASSERT (SELECT target_cents FROM public.project_budget_lines
+          WHERE budget_version_id = v_version
+            AND project_room_id = v_kitchen AND category = 'Seating') = 120000,
+    'REGRESSION: the furnishings rollup must still mint its lines';
+  ASSERT (SELECT target_cents FROM public.project_budget_lines
+          WHERE budget_version_id = v_version
+            AND project_room_id = v_kitchen AND category = 'Lighting') = 90000,
+    'REGRESSION: every furnishings room×category must still be minted';
+  ASSERT (SELECT count(*) FROM public.project_budget_lines
+          WHERE budget_version_id = v_version) = 2,
+    'the derived version is exactly the two furnishings pairs and nothing else';
+END $$;
+
+-- (b) PUBLISH. The derive exclusion is not the only one that has to hold. A
+--     'trade work' budget line can exist without derive ever minting one — a
+--     studio can type any category by hand, and a version derived before this
+--     migration already carries one. So the scheduled stamp refuses the presence
+--     lines on its own account, and this block plants exactly such a line to
+--     prove it: same room as the bath presence line, same category, so the
+--     room×category match that leaked before would succeed here if it could.
+DO $$
+DECLARE
+  v_project uuid := (SELECT value FROM trade_ids WHERE key = 'project');
+  v_version uuid := current_setting('trade.purity_version')::uuid;
+  v_bath uuid := (SELECT value FROM trade_ids WHERE key = 'bath');
+  v_kitchen uuid := (SELECT value FROM trade_ids WHERE key = 'kitchen');
+  v_planted uuid;
+  v_published jsonb;
+  v_read jsonb;
+  v_furnishings_authorized bigint;
+BEGIN
+  INSERT INTO public.project_budget_lines (
+    budget_version_id, project_room_id, room_name, category,
+    low_cents, target_cents, high_cents, sort_order
+  ) VALUES (
+    v_version, v_bath, 'Primary bath', 'trade work', 0, 0, 0, 99
+  ) RETURNING id INTO v_planted;
+
+  v_published := public.publish_budget_checkpoint(v_project, v_version);
+  ASSERT v_published->>'checkpointId' IS NOT NULL, 'the second checkpoint published';
+
+  -- THE FIX, on the publish side.
+  ASSERT (SELECT scheduled_cents FROM public.project_budget_lines WHERE id = v_planted) = 0,
+    'the scheduled stamp must not see a trade presence line, whatever category a budget line claims';
+  ASSERT (SELECT authorized_cents FROM public.project_budget_lines WHERE id = v_planted) = 0,
+    'nor may trade money reach the authorized stamp';
+
+  -- ...and the stamp still counts furnishings, so the zero above is the trade
+  -- exclusion and not a stamp that stopped stamping.
+  ASSERT (SELECT scheduled_cents FROM public.project_budget_lines
+          WHERE budget_version_id = v_version
+            AND project_room_id = v_kitchen AND category = 'Seating') = 120000,
+    'REGRESSION: the scheduled stamp must still count furnishings';
+  ASSERT (SELECT scheduled_cents FROM public.project_budget_lines
+          WHERE budget_version_id = v_version
+            AND project_room_id = v_kitchen AND category = 'Lighting') = 90000,
+    'REGRESSION: every furnishings pair must still be stamped';
+  ASSERT (SELECT sum(scheduled_cents) FROM public.project_budget_lines
+          WHERE budget_version_id = v_version) = 210000,
+    'the whole scheduled rollup is the furnishings schedule — the 900000 of trade work is nowhere in it';
+
+  -- THE AUTHORIZED ROLLUPS were already clean, and this is the proof rather
+  -- than the claim. Section 10 executed a real furnishings authorization, so
+  -- there is something non-zero for the stamp to find; a trade presence line can
+  -- never become a furnishing_authorization_items snapshot, because PART 5
+  -- refuses to release one and the table edge refuses to let it hold a purchase
+  -- order — both proven above.
+  SELECT COALESCE(SUM(a.client_line_total_cents), 0) INTO v_furnishings_authorized
+  FROM public.furnishing_authorization_items a
+  JOIN public.project_commercial_documents d ON d.id = a.commercial_document_id
+  JOIN public.proposals p ON p.id = d.proposal_id
+  WHERE d.project_id = v_project AND d.executed_at IS NOT NULL
+    AND p.commercial_state = 'executed';
+  ASSERT v_furnishings_authorized > 0,
+    'fixture: an executed furnishings authorization must exist, or the authorized assertions prove nothing';
+  ASSERT (SELECT sum(authorized_cents) FROM public.project_budget_lines
+          WHERE budget_version_id = v_version) = v_furnishings_authorized,
+    'the authorized stamp is exactly the executed furnishings snapshots';
+
+  -- And the same figure read back through the client-facing surface.
+  v_read := public.get_project_working_budget(v_project);
+  ASSERT (v_read->'version'->>'liveAuthorizedTotalCents')::bigint = v_furnishings_authorized,
+    'liveAuthorizedTotalCents sums furnishing_authorization_items and cannot see a presence line';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM jsonb_array_elements(v_read->'lines') l
+    WHERE (l->>'scheduledCents')::bigint = 300000
+       OR (l->>'scheduledCents')::bigint = 600000
+       OR (l->>'liveAuthorizedCents')::bigint > 0
+          AND (l->>'category') = 'trade work'),
+    'no line the client reads carries a trade allocation as furnishing money';
+END $$;
+
+-- FALSIFY (BUDGET PURITY) — the walk's leak, reproduced and then refuted. Both exclusions
+-- are stripped out of the live function bodies (by rewriting each definition
+-- from pg_get_functiondef with the predicate removed, so what runs is this
+-- migration's body MINUS exactly the delta and nothing else), and the leak comes
+-- straight back: derive mints a 'trade work' line for the bath's whole
+-- allocation, and publish stamps it into the checkpoint. Rolling the savepoint
+-- back restores both definitions, because DDL is transactional.
+SAVEPOINT purity_falsify;
+DO $$
+DECLARE
+  v_derive text := pg_get_functiondef('public.derive_working_budget_draft(uuid)'::regprocedure);
+  v_publish text := pg_get_functiondef('public.publish_budget_checkpoint(uuid,uuid)'::regprocedure);
+  v_derive_pre text;
+  v_publish_pre text;
+BEGIN
+  v_derive_pre := replace(v_derive, 'AND item.trade_scope_document_id IS NULL', '');
+  v_publish_pre := replace(v_publish, 'AND i.trade_scope_document_id IS NULL', '');
+  ASSERT v_derive_pre <> v_derive,
+    'FALSIFY: the derive exclusion must actually be in the shipped body, or there is nothing to strip';
+  ASSERT v_publish_pre <> v_publish,
+    'FALSIFY: the publish exclusion must actually be in the shipped body';
+  EXECUTE v_derive_pre;
+  EXECUTE v_publish_pre;
+END $$;
+
+DO $$
+DECLARE
+  v_project uuid := (SELECT value FROM trade_ids WHERE key = 'project');
+  v_bath uuid := (SELECT value FROM trade_ids WHERE key = 'bath');
+  v_budget jsonb;
+  v_version uuid;
+  v_leaked uuid;
+BEGIN
+  v_budget := public.derive_working_budget_draft(v_project);
+  v_version := (v_budget->'version'->>'id')::uuid;
+  SELECT id INTO v_leaked FROM public.project_budget_lines
+  WHERE budget_version_id = v_version AND project_room_id = v_bath
+    AND category = 'trade work';
+  ASSERT v_leaked IS NOT NULL,
+    'FALSIFY: without the derive exclusion the trade-work budget line must reappear, proving that predicate is what suppressed it';
+  ASSERT (SELECT target_cents FROM public.project_budget_lines WHERE id = v_leaked) = 300000,
+    'FALSIFY: and it carries the bath allocation — trade money, minted as furnishing budget';
+
+  PERFORM public.publish_budget_checkpoint(v_project, v_version);
+  ASSERT (SELECT scheduled_cents FROM public.project_budget_lines WHERE id = v_leaked) = 300000,
+    'FALSIFY: without the publish exclusion the stamp freezes trade money into the checkpoint the client acknowledges — the walk''s leak, exactly';
+END $$;
+ROLLBACK TO SAVEPOINT purity_falsify;
+
+-- The rollback really did put the shipped bodies back — otherwise every
+-- assertion above this line would be describing a database that no longer
+-- exists by the time anything else runs.
+DO $$
+DECLARE
+  v_project uuid := (SELECT value FROM trade_ids WHERE key = 'project');
+  v_budget jsonb;
+BEGIN
+  v_budget := public.derive_working_budget_draft(v_project);
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.project_budget_lines
+    WHERE budget_version_id = (v_budget->'version'->>'id')::uuid
+      AND category = 'trade work'),
+    'the savepoint rollback must restore the shipped derive body';
+END $$;
+
+ROLLBACK TO SAVEPOINT budget_purity;
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- (11) PRIVACY. The client's document says one price. What the studio was

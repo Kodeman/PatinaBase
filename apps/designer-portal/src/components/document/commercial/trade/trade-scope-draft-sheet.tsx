@@ -552,7 +552,7 @@ export function TradeScopeDraftSheet({
               disabled={busy}
               onClick={() => void release()}
             >
-              Release for authorization
+              Release the trade scope
             </DocumentAction>
           </DocumentActionGroup>
           <p className="mt-1 text-right text-[10px] italic text-[var(--text-muted)]">

@@ -226,7 +226,7 @@ describe('TradeScopeDraftSheet', () => {
     renderSheet();
 
     fireEvent.click(
-      screen.getByRole('button', { name: 'Release for authorization' }),
+      screen.getByRole('button', { name: 'Release the trade scope' }),
     );
     await waitFor(() =>
       expect(screen.getByRole('alert')).toHaveTextContent(
@@ -239,7 +239,7 @@ describe('TradeScopeDraftSheet', () => {
   it('saves and then sends when the scope is whole', async () => {
     renderSheet();
     fireEvent.click(
-      screen.getByRole('button', { name: 'Release for authorization' }),
+      screen.getByRole('button', { name: 'Release the trade scope' }),
     );
 
     await waitFor(() => expect(sendScope).toHaveBeenCalledWith('proposal-1'));
@@ -260,7 +260,7 @@ describe('TradeScopeDraftSheet', () => {
     renderSheet({ onClose });
 
     fireEvent.click(
-      screen.getByRole('button', { name: 'Release for authorization' }),
+      screen.getByRole('button', { name: 'Release the trade scope' }),
     );
     await waitFor(() =>
       expect(screen.getByRole('alert')).toHaveTextContent('the fingerprint moved'),

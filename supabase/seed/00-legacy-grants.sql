@@ -8501,3 +8501,27 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.list_trade_scopes(uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.derive_working_budget_draft(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.derive_working_budget_draft(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.publish_budget_checkpoint(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00423_trade_scope_instrument.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.publish_budget_checkpoint(uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

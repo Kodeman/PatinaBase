@@ -1478,9 +1478,9 @@ export function useSelectTradeBid(projectId: string) {
 }
 
 /**
- * "Release for authorization" — the same verb, the same ceremony, the same
- * send rail as a furnishings authorization (useSendFurnishingsAuthorization):
- * snapshot fingerprint → send_commercial_document → proposal-send.
+ * "Release the trade scope" — the same ceremony, the same send rail as a
+ * furnishings authorization (useSendFurnishingsAuthorization): snapshot
+ * fingerprint → send_commercial_document → proposal-send.
  */
 export function useSendTradeScope(projectId: string) {
   const queryClient = useQueryClient();

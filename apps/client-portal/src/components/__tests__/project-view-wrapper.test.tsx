@@ -57,7 +57,11 @@ describe('ProjectViewWrapper', () => {
   });
 
   it('mounts today’s legacy tree — BudgetOverview, FFEStatus, and the FF&E pipeline panel — byte-identical when origin is legacy', () => {
-    mockUseClientSelections.mockReturnValue({ data: { origin: 'legacy', selections: [] } });
+    mockUseClientSelections.mockReturnValue({
+      data: { origin: 'legacy', selections: [] },
+      isPending: false,
+      isError: false,
+    });
     render(
       <ProjectViewWrapper projectId="project-1" project={{}} milestones={[]} showOverview />,
     );
@@ -73,21 +77,50 @@ describe('ProjectViewWrapper', () => {
     expect(screen.queryByTestId('awaiting-signature-cards')).not.toBeInTheDocument();
     expect(screen.queryByTestId('client-plan-grid')).not.toBeInTheDocument();
     expect(screen.queryByTestId('client-selections')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('origin-pending')).not.toBeInTheDocument();
   });
 
-  it('keeps the legacy tree while the origin is still loading (fail closed, no flash into the new UI)', () => {
-    mockUseClientSelections.mockReturnValue({ data: undefined });
+  it('shows a quiet loading posture — neither tree — while the origin is still pending', () => {
+    mockUseClientSelections.mockReturnValue({ data: undefined, isPending: true, isError: false });
+    render(
+      <ProjectViewWrapper projectId="project-1" project={{}} milestones={[]} showOverview />,
+    );
+
+    expect(screen.getByTestId('origin-pending')).toBeInTheDocument();
+
+    expect(screen.queryByTestId('budget-overview')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('ffe-status')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('ffe-pipeline-panel')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('awaiting-signature-cards')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('client-plan-grid')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('client-selections')).not.toBeInTheDocument();
+
+    // Origin-independent parts of the page still render while pending.
+    expect(screen.getByTestId('project-overview')).toBeInTheDocument();
+    expect(screen.getByTestId('project-commercial-summary')).toBeInTheDocument();
+    expect(screen.getByTestId('project-scope-details')).toBeInTheDocument();
+    expect(screen.getByTestId('project-invoices-summary')).toBeInTheDocument();
+  });
+
+  it('falls back to the legacy tree on an errored origin fetch (fail closed on error)', () => {
+    mockUseClientSelections.mockReturnValue({ data: undefined, isPending: false, isError: true });
     render(
       <ProjectViewWrapper projectId="project-1" project={{}} milestones={[]} showOverview />,
     );
 
     expect(screen.getByTestId('budget-overview')).toBeInTheDocument();
     expect(screen.getByTestId('ffe-status')).toBeInTheDocument();
+    expect(screen.getByTestId('ffe-pipeline-panel')).toBeInTheDocument();
+    expect(screen.queryByTestId('origin-pending')).not.toBeInTheDocument();
     expect(screen.queryByTestId('client-selections')).not.toBeInTheDocument();
   });
 
   it('swaps in the commercial rail — awaiting signatures, the plan grid, and selections — in place of BudgetOverview/FFEStatus/pipeline when origin is commercial', () => {
-    mockUseClientSelections.mockReturnValue({ data: { origin: 'commercial', selections: [] } });
+    mockUseClientSelections.mockReturnValue({
+      data: { origin: 'commercial', selections: [] },
+      isPending: false,
+      isError: false,
+    });
     render(
       <ProjectViewWrapper projectId="project-1" project={{}} milestones={[]} showOverview />,
     );
@@ -99,6 +132,7 @@ describe('ProjectViewWrapper', () => {
     expect(screen.queryByTestId('budget-overview')).not.toBeInTheDocument();
     expect(screen.queryByTestId('ffe-status')).not.toBeInTheDocument();
     expect(screen.queryByTestId('ffe-pipeline-panel')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('origin-pending')).not.toBeInTheDocument();
 
     // Kept on both branches per spec.
     expect(screen.getByTestId('project-commercial-summary')).toBeInTheDocument();
@@ -106,7 +140,11 @@ describe('ProjectViewWrapper', () => {
   });
 
   it('renders nothing from either overview tree when showOverview is false', () => {
-    mockUseClientSelections.mockReturnValue({ data: { origin: 'commercial', selections: [] } });
+    mockUseClientSelections.mockReturnValue({
+      data: { origin: 'commercial', selections: [] },
+      isPending: false,
+      isError: false,
+    });
     render(<ProjectViewWrapper projectId="project-1" project={{}} milestones={[]} />);
 
     expect(screen.queryByTestId('project-overview')).not.toBeInTheDocument();

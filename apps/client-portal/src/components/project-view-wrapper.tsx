@@ -48,12 +48,18 @@ export function ProjectViewWrapper({
 
   // The commercial rail (design-services + furnishings authority) replaces
   // the legacy FF&E/budget mounts below with the plan grid and room-grouped
-  // selections. Fail closed to the legacy tree — today's byte-identical
-  // mounts — until origin === 'commercial' is confirmed; a mid-load flash
-  // into the new UI, or a permanent stall on an errored fetch, is worse than
-  // a beat of the familiar mounts.
-  const { data: selectionsData } = useClientSelections(projectId);
-  const isCommercial = selectionsData?.origin === 'commercial';
+  // selections. origin has three effective states, not two: PENDING (the
+  // query hasn't resolved yet) gets a quiet loading posture in place of the
+  // origin-dependent region — never a fully-rendered tree, because that tree
+  // would be a guess and a client watching the page assemble sees it as
+  // "broken" rather than "loading". Once resolved, ERROR and a non-commercial
+  // origin (legacy, or anything else) both fail closed to the legacy tree —
+  // today's byte-identical mounts. Only a confirmed origin === 'commercial'
+  // renders the commercial rail.
+  const { data: selectionsData, isPending: originPending, isError: originErrored } =
+    useClientSelections(projectId);
+  const isCommercial = !originPending && !originErrored && selectionsData?.origin === 'commercial';
+  const showLegacyOriginTree = !originPending && !isCommercial;
 
   useProjectPhaseRealtime(projectId, realtimeEnabled);
 
@@ -74,17 +80,21 @@ export function ProjectViewWrapper({
 
       {showOverview && <ProjectScopeDetails projectId={projectId} />}
 
+      {showOverview && originPending && (
+        <div className="mt-8 h-28 animate-pulse rounded bg-[var(--color-pearl)]" data-testid="origin-pending" />
+      )}
+
       {showOverview && isCommercial && <AwaitingSignatureCards projectId={projectId} />}
       {showOverview && isCommercial && <ClientPlanGrid projectId={projectId} />}
       {showOverview && isCommercial && <ClientSelections projectId={projectId} />}
 
-      {showOverview && !isCommercial && <BudgetOverview projectId={projectId} />}
+      {showOverview && showLegacyOriginTree && <BudgetOverview projectId={projectId} />}
 
       {showOverview && <ProjectInvoicesSummary projectId={projectId} />}
 
-      {showOverview && !isCommercial && <FFEStatus projectId={projectId} />}
+      {showOverview && showLegacyOriginTree && <FFEStatus projectId={projectId} />}
 
-      {showOverview && !isCommercial && (
+      {showOverview && showLegacyOriginTree && (
         <div className="mt-8">
           <FFEPipelinePanel projectId={projectId} />
         </div>
