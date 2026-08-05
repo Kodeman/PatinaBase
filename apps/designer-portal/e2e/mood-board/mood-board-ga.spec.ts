@@ -281,6 +281,77 @@ async function dragRailSourceTo(
   }
 }
 
+/**
+ * Records every mainframe navigation (a full document reload, or a
+ * client-side route change) from the moment it's armed, and returns a
+ * function that asserts none occurred. A navigation away from an open board
+ * mid-gesture is always a defect here — this is the test-shaped version of
+ * the P0 reload bug: a silent 401 mistaken for session expiry triggered a
+ * `window.location.assign` redirect, the middleware saw the still-valid
+ * cookie and bounced straight back, and the dedupe flag guarding it was
+ * module-level — so it reloaded again on the very next pin selection,
+ * forever.
+ */
+function armNavigationSentinel(page: AuthenticatedPage): () => void {
+  const events: string[] = [];
+  const mainFrame = page.mainFrame();
+  const onFrameNavigated = (frame: typeof mainFrame) => {
+    if (frame === mainFrame) events.push(`framenavigated -> ${frame.url()}`);
+  };
+  const onLoad = () => events.push(`load -> ${page.url()}`);
+  page.on("framenavigated", onFrameNavigated);
+  page.on("load", onLoad);
+  return () => {
+    page.off("framenavigated", onFrameNavigated);
+    page.off("load", onLoad);
+    expect(
+      events,
+      "expected no mainframe navigation while the board was mounted",
+    ).toEqual([]);
+  };
+}
+
+/**
+ * A genuine cursor-driven HTML5 drag — mousedown, move past the browser's
+ * own native drag threshold, move to the release point, mouseup — as
+ * opposed to dragRailSourceTo's synthetic dispatchEvent sequence above. Only
+ * a real drag session lets the browser's own default drop action (e.g.
+ * navigating the tab to the dropped resource) fire when nothing claims the
+ * drop first; a dispatchEvent("drop", ...) never invokes that default.
+ */
+async function mouseDragRailSourceTo(
+  page: AuthenticatedPage,
+  source: ReturnType<AuthenticatedPage["locator"]>,
+  release: { x: number; y: number },
+): Promise<void> {
+  const box = await source.boundingBox();
+  expect(box).not.toBeNull();
+  const start = { x: box!.x + box!.width / 2, y: box!.y + box!.height / 2 };
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(start.x + 12, start.y + 12, { steps: 5 });
+  await page.mouse.move(release.x, release.y, { steps: 12 });
+  await page.mouse.up();
+}
+
+/** Dispatches a `drop` carrying a file-bearing DataTransfer at `target` — a
+ *  stray OS-level file drop the canvas never opted into via dragover. */
+async function dispatchFileDrop(
+  page: AuthenticatedPage,
+  target: ReturnType<AuthenticatedPage["locator"]>,
+): Promise<void> {
+  const dataTransfer = await page.evaluateHandle(() => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File(["stray"], "stray-drop.png", { type: "image/png" }));
+    return transfer;
+  });
+  try {
+    await target.dispatchEvent("drop", { dataTransfer });
+  } finally {
+    await dataTransfer.dispose();
+  }
+}
+
 test.describe.configure({ mode: "serial" });
 
 test.describe("MoodBoard GA browser acceptance", () => {
@@ -839,5 +910,280 @@ test.describe("MoodBoard GA browser acceptance", () => {
           : false;
       })
       .toBe(true);
+  });
+
+  test("selecting an image pin survives a 401 from the background-removal capability probe", async ({
+    authenticatedPage: page,
+  }) => {
+    await openBoard(page);
+    const assertNoNavigation = armNavigationSentinel(page);
+
+    // Pre-fix, this exact 401 was read as session expiry and hard-reloaded
+    // the page via window.location.assign on every pin selection, forever.
+    await page.route(
+      "**/api/media/boards/*/background-removal-capability",
+      (route) =>
+        route.fulfill({
+          status: 401,
+          contentType: "application/json",
+          body: JSON.stringify({
+            error: "Invalid or expired authentication token",
+          }),
+        }),
+    );
+
+    const probe = page.waitForResponse(
+      (response) =>
+        response.url().includes("background-removal-capability") &&
+        response.status() === 401,
+    );
+    const product = page.getByRole("button", {
+      name: "product item",
+      exact: true,
+    });
+    // Selecting a product/image/capture pin mounts BoardImageInspectorActions,
+    // which fires the capability probe this route intercepts.
+    await product.click();
+    await probe;
+
+    await expect(product).toHaveAttribute("aria-pressed", "true");
+    await expect(
+      page.getByRole("complementary", {
+        name: "Selected board item inspector",
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("main", {
+        name: "GA browser acceptance board mood board room",
+      }),
+    ).toBeVisible();
+
+    assertNoNavigation();
+  });
+
+  test("stray drops that land outside the canvas never escape the board, in Edit or Present", async ({
+    authenticatedPage: page,
+  }) => {
+    await openBoard(page);
+    const assertNoNavigation = armNavigationSentinel(page);
+
+    await page.getByRole("tab", { name: "palettes", exact: true }).click();
+    const source = page.getByRole("button", { name: /GA rail palette/i });
+    await expect(source).toBeVisible();
+    const header = page.locator("header");
+    const headerBox = await header.boundingBox();
+    expect(headerBox).not.toBeNull();
+    const overHeader = {
+      x: headerBox!.x + headerBox!.width / 2,
+      y: headerBox!.y + headerBox!.height / 2,
+    };
+
+    // Pre-fix, a drop the canvas never claims (defaultPrevented stays false)
+    // fell through to the browser's own default action for the dragged
+    // resource, off the board and into a fresh navigation.
+    await mouseDragRailSourceTo(page, source, overHeader);
+    await expect(page.locator("[data-board-item-id]")).toHaveCount(6);
+
+    const room = page.getByRole("main", {
+      name: "GA browser acceptance board mood board room",
+    });
+    await dispatchFileDrop(page, room);
+    await expect(page.locator("[data-board-item-id]")).toHaveCount(6);
+
+    // Present mode unmounts the add-rail and the edit canvas outright, so
+    // the room's only remaining chrome is the read-only composition canvas —
+    // which, per the fix, "prevents nothing" on drop itself; window-level
+    // containment has to hold with neither rail nor edit canvas in the tree.
+    await page.getByRole("button", { name: "Present", exact: true }).click();
+    const presentCanvas = page.locator(
+      '[data-board-composition-canvas="true"]',
+    );
+    await expect(presentCanvas).toBeVisible();
+    await dispatchFileDrop(page, room);
+    await expect(presentCanvas.locator("[data-board-item-id]")).toHaveCount(6);
+
+    assertNoNavigation();
+  });
+
+  test("drags the resize handle to change and persist an item's width", async ({
+    authenticatedPage: page,
+  }) => {
+    await openBoard(page);
+    const assertNoNavigation = armNavigationSentinel(page);
+
+    const product = page.getByRole("button", {
+      name: "product item",
+      exact: true,
+    });
+    await product.click();
+    await expect(product).toHaveAttribute("aria-pressed", "true");
+
+    const handle = page.getByRole("button", { name: "Resize se", exact: true });
+    await expect(handle).toBeVisible();
+    const box = await handle.boundingBox();
+    expect(box).not.toBeNull();
+    const start = { x: box!.x + box!.width / 2, y: box!.y + box!.height / 2 };
+    const widthBefore = Number(boardItemScalar("width::text", PRODUCT_ID));
+
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(start.x + 40, start.y + 40, { steps: 8 });
+    await page.mouse.up();
+
+    await expect
+      .poll(() => Number(boardItemScalar("width::text", PRODUCT_ID)), {
+        timeout: 15_000,
+      })
+      .not.toBe(widthBefore);
+    const widthAfterDrag = Number(boardItemScalar("width::text", PRODUCT_ID));
+    assertNoNavigation();
+
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("board-room-canvas")).toBeVisible();
+    expect(Number(boardItemScalar("width::text", PRODUCT_ID))).toBe(
+      widthAfterDrag,
+    );
+  });
+
+  test("drags the rotate handle to change and persist an item's rotation", async ({
+    authenticatedPage: page,
+  }) => {
+    await openBoard(page);
+    const assertNoNavigation = armNavigationSentinel(page);
+
+    const product = page.getByRole("button", {
+      name: "product item",
+      exact: true,
+    });
+    await product.click();
+    await expect(product).toHaveAttribute("aria-pressed", "true");
+
+    const handle = page.getByRole("button", { name: "Rotate item", exact: true });
+    await expect(handle).toBeVisible();
+    const box = await handle.boundingBox();
+    expect(box).not.toBeNull();
+    const start = { x: box!.x + box!.width / 2, y: box!.y + box!.height / 2 };
+    const rotationBefore = Number(
+      boardItemScalar("rotation::text", PRODUCT_ID),
+    );
+
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(start.x + 40, start.y, { steps: 8 });
+    await page.mouse.up();
+
+    await expect
+      .poll(() => Number(boardItemScalar("rotation::text", PRODUCT_ID)), {
+        timeout: 15_000,
+      })
+      .not.toBe(rotationBefore);
+    const rotationAfterDrag = Number(
+      boardItemScalar("rotation::text", PRODUCT_ID),
+    );
+    assertNoNavigation();
+
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("board-room-canvas")).toBeVisible();
+    expect(Number(boardItemScalar("rotation::text", PRODUCT_ID))).toBe(
+      rotationAfterDrag,
+    );
+  });
+
+  test("dragging a multi-selection moves every selected item by the same delta", async ({
+    authenticatedPage: page,
+  }) => {
+    await openBoard(page);
+    const assertNoNavigation = armNavigationSentinel(page);
+
+    const product = page.getByRole("button", {
+      name: "product item",
+      exact: true,
+    });
+    const note = page.getByRole("button", { name: "note item", exact: true });
+    await product.click();
+    await note.click({ modifiers: ["Shift"] });
+    await expect(product).toHaveAttribute("aria-pressed", "true");
+    await expect(note).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByTestId("multi-selection-bounds")).toBeVisible();
+
+    const productBefore = {
+      x: Number(boardItemScalar("x::text", PRODUCT_ID)),
+      y: Number(boardItemScalar("y::text", PRODUCT_ID)),
+    };
+    const noteBefore = {
+      x: Number(boardItemScalar("x::text", NOTE_ID)),
+      y: Number(boardItemScalar("y::text", NOTE_ID)),
+    };
+
+    // The multi-selection-bounds overlay itself is pointer-events-none (it's
+    // a decorative outline); grabbing any already-selected pin without Shift
+    // drags the whole selection together — this starts from inside that
+    // bounds rectangle, on the product pin.
+    const box = await product.boundingBox();
+    expect(box).not.toBeNull();
+    const start = { x: box!.x + box!.width / 2, y: box!.y + box!.height / 2 };
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(start.x + 50, start.y + 35, { steps: 8 });
+    await page.mouse.up();
+
+    await expect
+      .poll(() => Number(boardItemScalar("x::text", PRODUCT_ID)), {
+        timeout: 15_000,
+      })
+      .not.toBe(productBefore.x);
+
+    const productAfter = {
+      x: Number(boardItemScalar("x::text", PRODUCT_ID)),
+      y: Number(boardItemScalar("y::text", PRODUCT_ID)),
+    };
+    const noteAfter = {
+      x: Number(boardItemScalar("x::text", NOTE_ID)),
+      y: Number(boardItemScalar("y::text", NOTE_ID)),
+    };
+    const productDelta = {
+      x: productAfter.x - productBefore.x,
+      y: productAfter.y - productBefore.y,
+    };
+    const noteDelta = {
+      x: noteAfter.x - noteBefore.x,
+      y: noteAfter.y - noteBefore.y,
+    };
+    expect(noteDelta).toEqual(productDelta);
+    assertNoNavigation();
+
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("board-room-canvas")).toBeVisible();
+    expect({
+      x: Number(boardItemScalar("x::text", PRODUCT_ID)),
+      y: Number(boardItemScalar("y::text", PRODUCT_ID)),
+    }).toEqual(productAfter);
+    expect({
+      x: Number(boardItemScalar("x::text", NOTE_ID)),
+      y: Number(boardItemScalar("y::text", NOTE_ID)),
+    }).toEqual(noteAfter);
+  });
+
+  test("Escape once arms an exit guard, Escape twice leaves the board", async ({
+    authenticatedPage: page,
+  }) => {
+    await openBoard(page);
+
+    const room = page.getByRole("main", {
+      name: "GA browser acceptance board mood board room",
+    });
+
+    // Empty selection: first Escape only arms the guard, it must not exit.
+    await page.keyboard.press("Escape");
+    await expect(
+      page.getByText("Press Escape again to leave the board"),
+    ).toBeVisible();
+    await expect(page).toHaveURL(/\/board\//, { timeout: 15_000 });
+    await expect(room).toBeVisible();
+
+    // Second Escape, thrown quickly after the first, actually leaves — the
+    // room resolves its exit target from openBoard's `from=%2Fdesk`.
+    await page.keyboard.press("Escape");
+    await expect(page).toHaveURL(/\/desk/, { timeout: 15_000 });
   });
 });
