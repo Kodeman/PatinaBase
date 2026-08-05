@@ -1,27 +1,50 @@
-import { safeCallbackPath } from './portal-access';
+import {
+  AuthFlowError,
+  buildAuthCallbackUrl,
+  buildSignInPath,
+  buildVerifyOtpPath,
+  safeAuthReturnPath,
+} from '@patina/supabase/auth';
 
-/** One sanitizer shared by password, OAuth, magic-link, and OTP flows. */
-export function resolveAuthReturnPath(raw: string | null): string {
-  return safeCallbackPath(raw) ?? '/';
+export const CLIENT_AUTH_DESTINATION = '/projects';
+
+/** Keep every client auth method on the shared, encoded-open-redirect-safe policy. */
+export function resolveAuthReturnPath(raw: string | null | undefined): string {
+  return safeAuthReturnPath(raw, CLIENT_AUTH_DESTINATION);
 }
 
-export function buildAuthCallbackUrl(origin: string, callbackPath: string): string {
-  const url = new URL('/auth/callback', origin);
-  url.searchParams.set('callbackUrl', resolveAuthReturnPath(callbackPath));
-  return url.toString();
+export { buildAuthCallbackUrl, buildSignInPath, buildVerifyOtpPath };
+
+interface SessionReader {
+  auth: {
+    getSession: () => Promise<{
+      data: { session: unknown | null };
+      error: unknown | null;
+    }>;
+  };
 }
 
-export function buildVerifyOtpPath(email: string, callbackPath: string): string {
-  const params = new URLSearchParams({
-    email,
-    callbackUrl: resolveAuthReturnPath(callbackPath),
-  });
-  return `/auth/verify-otp?${params.toString()}`;
+/** Confirm that Supabase has persisted a browser session before showing success. */
+export async function confirmBrowserSession(
+  client: SessionReader,
+): Promise<void> {
+  const { data, error } = await client.auth.getSession();
+  if (error || !data.session) {
+    throw new AuthFlowError(
+      error ?? new Error('Session unavailable'),
+      'session',
+    );
+  }
 }
 
-export function buildSignInPath(callbackPath: string, error?: string): string {
-  const params = new URLSearchParams();
-  if (error) params.set('error', error);
-  params.set('callbackUrl', resolveAuthReturnPath(callbackPath));
-  return `/auth/signin?${params.toString()}`;
+interface ReplaceLocation {
+  replace(url: string): void;
+}
+
+/** Hard navigation avoids a stale App Router auth cache after session mutation. */
+export function replaceAuthDestination(
+  destination: string | null | undefined,
+  location: ReplaceLocation = window.location,
+): void {
+  location.replace(resolveAuthReturnPath(destination));
 }
