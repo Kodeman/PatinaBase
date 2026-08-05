@@ -18,8 +18,10 @@ import {
 import { Button } from "@/components/ui/controls";
 import {
   useAuthorizationLineDrift,
+  useCommercialDocument,
   useSendFurnishingsAuthorization,
 } from "@/hooks/use-commercial-documents";
+import { SIGNED_ON_PAPER_NOTE } from "@/lib/document/commercial-documents";
 import {
   furnishingsDepositPosture,
   money,
@@ -28,6 +30,7 @@ import {
   type ProjectInstrumentView,
 } from "@/lib/document/project-commerce";
 import { DocSheet } from "../overlays/doc-sheet";
+import { RecordOnPaperSheet } from "./record-on-paper-sheet";
 import { VoidAct } from "./void-supersede-act";
 
 const depositCopy: Record<
@@ -186,6 +189,7 @@ export function AuthorizationDetail({
 }) {
   const sendAuthorization = useSendFurnishingsAuthorization(projectId);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [recordOnPaperOpen, setRecordOnPaperOpen] = useState(false);
 
   const ffeItemIds = useMemo(
     () =>
@@ -196,6 +200,19 @@ export function AuthorizationDetail({
   );
   const driftQuery = useAuthorizationLineDrift(ffeItemIds, open);
   const drift = driftQuery.data;
+  // The paper tell for THIS instrument's own execution — read off the same
+  // client signature the bundle already carries for design-services
+  // (commercial-documents.ts's SIGNED_ON_PAPER_NOTE), rather than a second
+  // field on the list RPC's ProjectInstrumentView. Only worth fetching once
+  // the instrument is actually executed; there is nothing to have been
+  // paper before that.
+  const bundle = useCommercialDocument(
+    instrument?.proposalId ?? "",
+    open && instrument?.state === "executed",
+  );
+  const executedOnPaper = bundle.data?.signatures.some(
+    (signature) => signature.party === "client" && signature.executedOnPaper,
+  );
 
   if (!instrument) return null;
 
@@ -245,6 +262,16 @@ export function AuthorizationDetail({
             Send for signature
           </Button>
         )}
+        {instrument.state === "sent" && (
+          <Button
+            className="mt-3"
+            size="sm"
+            variant="secondary"
+            onClick={() => setRecordOnPaperOpen(true)}
+          >
+            Record executed on paper
+          </Button>
+        )}
         {sendError && (
           <p role="alert" className="mt-2 text-[11px] text-[var(--color-terracotta)]">
             {sendError}
@@ -267,6 +294,12 @@ export function AuthorizationDetail({
         </p>
 
         <DispatchRetryBand instrument={instrument} />
+
+        {instrument.state === "executed" && executedOnPaper && (
+          <p className="mt-2 text-[10.5px] italic text-[var(--text-muted)]">
+            {SIGNED_ON_PAPER_NOTE}
+          </p>
+        )}
 
         <div className="mt-5">
           <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
@@ -325,6 +358,15 @@ export function AuthorizationDetail({
           </div>
         )}
       </div>
+
+      <RecordOnPaperSheet
+        kind="furnishings"
+        proposalId={instrument.proposalId}
+        projectId={projectId}
+        open={recordOnPaperOpen}
+        onClose={() => setRecordOnPaperOpen(false)}
+        onRecorded={() => setRecordOnPaperOpen(false)}
+      />
     </DocSheet>
   );
 }

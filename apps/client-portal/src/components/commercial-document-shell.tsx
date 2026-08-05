@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
-import { CheckCircle2, Clock3, ReceiptText } from 'lucide-react';
+import { CheckCircle2, Clock3, FileText, ReceiptText } from 'lucide-react';
+import { createBrowserClient } from '@patina/supabase';
 import {
   Button,
   Dialog,
@@ -16,6 +17,8 @@ import type {
   CommercialDocumentKind,
   FurnishingsAuthorizationItem,
 } from '@/lib/commercial-documents';
+
+const SIGNED_ON_PAPER_NOTE = 'Signed on paper · recorded by the studio.';
 
 const KIND_LABEL: Record<Exclude<CommercialDocumentKind, 'legacy'>, string> = {
   design_services: 'Design services agreement',
@@ -54,6 +57,11 @@ export function CommercialDocumentShell({ bundle }: { bundle: CommercialDocument
   const { document } = bundle;
   if (document.kind === 'legacy') return null;
 
+  const clientSignedOnPaper = bundle.signatures.some(
+    (signature) => signature.party === 'client' && signature.signedOnPaper,
+  );
+  const anySignedOnPaper = bundle.signatures.some((signature) => signature.signedOnPaper);
+
   return (
     <article
       className="proposal-print-area mx-auto rounded-lg bg-white"
@@ -81,8 +89,9 @@ export function CommercialDocumentShell({ bundle }: { bundle: CommercialDocument
       {document.state === 'client_signed' && (
         <div className="mt-6 border-l-2 border-patina-aged-oak bg-patina-aged-oak/5 px-4 py-3">
           <p className="type-body-small text-[var(--text-primary)]">
-            Your signature is recorded. This document is awaiting the studio countersignature and
-            is not yet effective.
+            {clientSignedOnPaper
+              ? 'Your studio recorded your signed paper original. This document is awaiting the studio countersignature and is not yet effective.'
+              : 'Your signature is recorded. This document is awaiting the studio countersignature and is not yet effective.'}
           </p>
         </div>
       )}
@@ -92,6 +101,7 @@ export function CommercialDocumentShell({ bundle }: { bundle: CommercialDocument
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-patina-sage" />
           <p className="type-body-small text-[var(--text-primary)]">
             Fully executed{document.executedAt ? ` on ${date(document.executedAt)}` : ''}.
+            {anySignedOnPaper ? ` ${SIGNED_ON_PAPER_NOTE}` : ''}
           </p>
         </div>
       )}
@@ -434,12 +444,102 @@ function TradeScopeBody({ bundle }: { bundle: CommercialDocumentBundle }) {
         </div>
       </section>
 
+      {scope.progress.acceptedAt && (
+        <section
+          className="border-l-2 border-patina-sage bg-patina-sage/5 px-4 py-3"
+          data-testid="trade-scope-acceptance"
+        >
+          <h2 className="type-section-head">Acceptance</h2>
+          <p className="type-body-small mt-2 text-[var(--text-primary)]">
+            {`Accepted by ${scope.progress.acceptedSignedName || 'you'} on ${date(scope.progress.acceptedAt)}.`}
+            {scope.progress.acceptedOnPaper
+              ? ' Recorded by your studio from a signed paper original.'
+              : ''}
+          </p>
+          {scope.progress.acceptedOnPaper && scope.progress.acceptanceScanDocumentId && (
+            <PaperScanLink
+              proposalId={bundle.document.id}
+              documentId={scope.progress.acceptanceScanDocumentId}
+            />
+          )}
+        </section>
+      )}
+
       <p className="border-l-2 border-patina-dusty-blue bg-patina-dusty-blue/5 px-4 py-3 type-body-small">
         Signing authorizes this trade to begin the work described above, at the price shown. The
         deposit draw is due on signature; each remaining draw is billed as the work reaches that
         stage. Accepting the finished work later releases the final draw.
       </p>
     </div>
+  );
+}
+
+/**
+ * "View the signed original" — a client_visible paper scan is Folio storage
+ * (project-documents/{proposalId}/…, 00252), and that bucket is private, so
+ * the file is only reachable via a time-boxed signed URL, never a public
+ * one. Mirrors the mechanics of documentSignedUrl
+ * (apps/client-portal/src/hooks/use-documents-client.ts) but looks the row
+ * up by id + proposal_id rather than by project_id — a commercial paper
+ * scan is proposal-anchored (project_documents.proposal_id), the same leg
+ * "Clients view flagged proposal folio" / "Clients read flagged proposal
+ * folio objects" (00252) already opens for the client on their own
+ * client_visible files. Fetched on demand rather than eagerly, so a
+ * document with no scan attached never pays for a lookup that would 404.
+ */
+function PaperScanLink({
+  proposalId,
+  documentId,
+}: {
+  proposalId: string;
+  documentId: string;
+}) {
+  const [state, setState] = useState<'idle' | 'loading' | 'error'>('idle');
+
+  async function open() {
+    if (state === 'loading') return;
+    setState('loading');
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = createBrowserClient() as any;
+      const { data: row, error } = await supabase
+        .from('project_documents')
+        .select('storage_path')
+        .eq('id', documentId)
+        .eq('proposal_id', proposalId)
+        .eq('client_visible', true)
+        .maybeSingle();
+      if (error || !row?.storage_path) {
+        setState('error');
+        return;
+      }
+      const { data: signed, error: signError } = await supabase.storage
+        .from('project-documents')
+        .createSignedUrl(row.storage_path, 3600);
+      if (signError || !signed?.signedUrl) {
+        setState('error');
+        return;
+      }
+      setState('idle');
+      window.open(signed.signedUrl, '_blank', 'noopener,noreferrer');
+    } catch {
+      setState('error');
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={open}
+      disabled={state === 'loading'}
+      className="type-meta-small mt-1.5 inline-flex items-center gap-1 text-[var(--accent-primary)] underline underline-offset-2 disabled:opacity-60"
+    >
+      <FileText className="h-3 w-3" />
+      {state === 'loading' ? 'Opening the scan…' : 'View the signed original'}
+      {state === 'error' && (
+        <span className="text-patina-terracotta">· unavailable right now</span>
+      )}
+    </button>
   );
 }
 
@@ -453,7 +553,16 @@ function SignatureLedger({ bundle }: { bundle: CommercialDocumentBundle }) {
           <div key={`${signature.party}-${signature.signedAt}`} className="border-b border-[var(--border-default)] pb-3">
             <p className="type-meta capitalize">{signature.party}</p>
             <p className="font-heading text-lg">{signature.signerName}</p>
-            <p className="type-meta-small mt-1">Signed {date(signature.signedAt)}</p>
+            <p className="type-meta-small mt-1">
+              Signed {date(signature.signedAt)}
+              {signature.signedOnPaper && ' · Signed on paper'}
+            </p>
+            {signature.signedOnPaper && signature.paperScanDocumentId && (
+              <PaperScanLink
+                proposalId={bundle.document.id}
+                documentId={signature.paperScanDocumentId}
+              />
+            )}
           </div>
         ))}
         {bundle.document.kind !== 'furnishings_authorization' &&

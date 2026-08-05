@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 const mockCountersign = jest.fn();
 const mockReplay = jest.fn();
+const mockRecordPaperSignature = jest.fn();
 let mockDocumentState = "executed";
 
 jest.mock("next/navigation", () => ({
@@ -32,6 +33,26 @@ jest.mock("@/hooks/use-commercial-documents", () => ({
     mutateAsync: mockReplay,
     isPending: false,
   }),
+  // RecordOnPaperSheet mounts unconditionally (open/onClose toggles
+  // visibility) and calls all four paper hooks up front regardless of
+  // `kind` — stub every one so mounting it here doesn't throw.
+  useRecordPaperClientSignature: () => ({
+    mutateAsync: mockRecordPaperSignature,
+    isPending: false,
+  }),
+  useExecuteFurnishingsAuthorizationOnPaper: () => ({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  }),
+  useExecuteTradeScopeOnPaper: () => ({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  }),
+  useRecordPaperTradeAcceptance: () => ({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  }),
+  uploadPaperScanDocument: jest.fn(),
 }));
 
 jest.mock("@/lib/analytics/document-events", () => ({
@@ -47,6 +68,7 @@ describe("ServiceAgreementInstruments notification recovery", () => {
   beforeEach(() => {
     mockCountersign.mockReset();
     mockReplay.mockReset();
+    mockRecordPaperSignature.mockReset();
     mockDocumentState = "executed";
   });
 
@@ -97,6 +119,40 @@ describe("ServiceAgreementInstruments notification recovery", () => {
 
     expect(
       await screen.findByText(/agreement executed.*execution notice is pending/i),
+    ).toBeVisible();
+  });
+
+  it("records a paper signature while the agreement is with the client, prefilled with the client's name", async () => {
+    mockDocumentState = "sent";
+    mockRecordPaperSignature.mockResolvedValue({
+      notificationDelivery: "delivered",
+    });
+    render(
+      <ServiceAgreementInstruments
+        proposal={{ id: "agreement-1", client: {} }}
+        clientName="Avery Client"
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Record signed on paper" }),
+    );
+
+    const nameField = await screen.findByLabelText("Signed by");
+    expect(nameField).toHaveValue("Avery Client");
+
+    fireEvent.click(screen.getByRole("button", { name: "Record signed" }));
+
+    await waitFor(() =>
+      expect(mockRecordPaperSignature).toHaveBeenCalledWith(
+        expect.objectContaining({
+          signedName: "Avery Client",
+          scanDocumentId: null,
+        }),
+      ),
+    );
+    expect(
+      await screen.findByText(/paper signature recorded/i),
     ).toBeVisible();
   });
 });

@@ -764,6 +764,19 @@ export interface TradeScopeTermsView {
   substantialCompletionAt: string | null;
   acceptedAt: string | null;
   acceptedSignedName: string | null;
+  /** True when the client's acceptance was recorded by the studio from a
+   *  signed printed copy rather than taken in the client portal (00425's
+   *  trade_scope_terms.accepted_on_paper). */
+  acceptedOnPaper: boolean;
+  /** Display name of the studio member who recorded the paper acceptance
+   *  (00425's acceptance_recorded_by, resolved via a profiles embed). Null
+   *  on a portal acceptance, or when the recording member has no name on
+   *  file. */
+  acceptanceRecordedByName: string | null;
+  /** The project_documents.id of the accepted paper's scan, when the studio
+   *  attached one at record time (00425's acceptance_scan_document_id) —
+   *  distinct from either execution signature's own scan pointer. */
+  acceptanceScanDocumentId: string | null;
 }
 
 export interface TradeScopeWorkspaceView {
@@ -865,6 +878,16 @@ export function mapTradeScopeWorkspace(payload: {
           acceptedAt: nullableText(termsRow.accepted_at ?? termsRow.acceptedAt),
           acceptedSignedName: nullableText(
             termsRow.accepted_signed_name ?? termsRow.acceptedSignedName,
+          ),
+          acceptedOnPaper:
+            (termsRow.accepted_on_paper ?? termsRow.acceptedOnPaper) === true,
+          acceptanceRecordedByName: nullableText(
+            termsRow.acceptance_recorded_by_name ??
+              termsRow.acceptanceRecordedByName,
+          ),
+          acceptanceScanDocumentId: nullableText(
+            termsRow.acceptance_scan_document_id ??
+              termsRow.acceptanceScanDocumentId,
           ),
         }
       : null,

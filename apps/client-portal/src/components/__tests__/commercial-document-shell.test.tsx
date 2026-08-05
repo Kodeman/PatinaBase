@@ -105,6 +105,7 @@ function tradeScopeBundle(): CommercialDocumentBundle {
       progress: {
         state: 'in_progress', engagedAt: '2026-07-01T00:00:00Z',
         substantialCompletionAt: null, acceptedAt: null, acceptedSignedName: null,
+        acceptedOnPaper: false, acceptanceScanDocumentId: null,
       },
       depositInvoiceId: 'inv-1',
     },
@@ -124,10 +125,49 @@ describe('CommercialDocumentShell', () => {
   it('states that a client-signed agreement is still awaiting studio countersignature', () => {
     render(<CommercialDocumentShell bundle={bundle({
       document: { ...bundle().document, state: 'client_signed' },
-      signatures: [{ party: 'client', signerName: 'Sarah Whitfield', signedAt: '2026-08-02', consentVersion: 'v1', documentFingerprint: 'f1' }],
+      signatures: [{
+        party: 'client', signerName: 'Sarah Whitfield', signedAt: '2026-08-02', consentVersion: 'v1',
+        documentFingerprint: 'f1', signedOnPaper: false, paperScanDocumentId: null,
+      }],
     })} />);
     expect(screen.getByText(/awaiting the studio countersignature and is not yet effective/i)).toBeInTheDocument();
     expect(screen.getByText(/awaiting countersignature/i)).toBeInTheDocument();
+  });
+
+  it('states that a paper client signature is still awaiting studio countersignature, in paper-aware copy', () => {
+    render(<CommercialDocumentShell bundle={bundle({
+      document: { ...bundle().document, state: 'client_signed' },
+      signatures: [{
+        party: 'client', signerName: 'Sarah Whitfield', signedAt: '2026-08-02', consentVersion: 'v1',
+        documentFingerprint: 'f1', signedOnPaper: true, paperScanDocumentId: null,
+      }],
+    })} />);
+    expect(
+      screen.getByText(/studio recorded your signed paper original/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Signed on paper/i)).toBeInTheDocument();
+  });
+
+  it('states a fully executed document was signed on paper, and links the signed original when a scan is attached', () => {
+    render(<CommercialDocumentShell bundle={bundle({
+      document: { ...bundle().document, state: 'executed', executedAt: '2026-08-03T00:00:00Z' },
+      signatures: [
+        {
+          party: 'client', signerName: 'Sarah Whitfield', signedAt: '2026-08-02', consentVersion: 'v1',
+          documentFingerprint: 'f1', signedOnPaper: true, paperScanDocumentId: 'doc-scan-1',
+        },
+        {
+          party: 'studio', signerName: 'Morgan Designer', signedAt: '2026-08-03', consentVersion: 'v1',
+          documentFingerprint: 'f2', signedOnPaper: false, paperScanDocumentId: null,
+        },
+      ],
+    })} />);
+    expect(screen.getByText(/^Fully executed/)).toHaveTextContent(
+      'Signed on paper · recorded by the studio.',
+    );
+    expect(
+      screen.getByRole('button', { name: /view the signed original/i }),
+    ).toBeInTheDocument();
   });
 
   it('renders a named FF&E authorization and deposit handoff without reopening design services', () => {
@@ -275,6 +315,77 @@ describe('CommercialDocumentShell', () => {
   it('never renders a bid ledger on a trade scope', () => {
     render(<CommercialDocumentShell bundle={tradeScopeBundle()} />);
     expect(screen.queryByText(/bid/i)).not.toBeInTheDocument();
+  });
+
+  it('renders no acceptance section before the client has accepted', () => {
+    render(<CommercialDocumentShell bundle={tradeScopeBundle()} />);
+    expect(screen.queryByTestId('trade-scope-acceptance')).not.toBeInTheDocument();
+  });
+
+  it('states who accepted the finished work and when, once accepted online', () => {
+    const base = tradeScopeBundle();
+    render(<CommercialDocumentShell bundle={{
+      ...base,
+      tradeScope: {
+        ...base.tradeScope!,
+        progress: {
+          ...base.tradeScope!.progress,
+          state: 'accepted',
+          acceptedAt: '2026-08-01T00:00:00Z',
+          acceptedSignedName: 'Sarah Whitfield',
+        },
+      },
+    }} />);
+    const acceptance = screen.getByTestId('trade-scope-acceptance');
+    expect(acceptance).toHaveTextContent(/^AcceptanceAccepted by Sarah Whitfield on .+, 2026\.$/);
+    expect(acceptance).not.toHaveTextContent('Recorded by your studio');
+  });
+
+  it('states a paper-recorded acceptance was recorded by the studio, and links the signed original when a scan is attached', () => {
+    const base = tradeScopeBundle();
+    render(<CommercialDocumentShell bundle={{
+      ...base,
+      tradeScope: {
+        ...base.tradeScope!,
+        progress: {
+          ...base.tradeScope!.progress,
+          state: 'accepted',
+          acceptedAt: '2026-08-01T00:00:00Z',
+          acceptedSignedName: 'Sarah Whitfield',
+          acceptedOnPaper: true,
+          acceptanceScanDocumentId: 'scan-doc-9',
+        },
+      },
+    }} />);
+    const acceptance = screen.getByTestId('trade-scope-acceptance');
+    expect(acceptance).toHaveTextContent(
+      /^AcceptanceAccepted by Sarah Whitfield on .+, 2026\. Recorded by your studio from a signed paper original\./,
+    );
+    expect(
+      screen.getByRole('button', { name: /view the signed original/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('states a paper-recorded acceptance without a scan link when no scan was attached', () => {
+    const base = tradeScopeBundle();
+    render(<CommercialDocumentShell bundle={{
+      ...base,
+      tradeScope: {
+        ...base.tradeScope!,
+        progress: {
+          ...base.tradeScope!.progress,
+          state: 'accepted',
+          acceptedAt: '2026-08-01T00:00:00Z',
+          acceptedSignedName: 'Sarah Whitfield',
+          acceptedOnPaper: true,
+          acceptanceScanDocumentId: null,
+        },
+      },
+    }} />);
+    expect(screen.getByTestId('trade-scope-acceptance')).toHaveTextContent('Recorded by your studio');
+    expect(
+      screen.queryByRole('button', { name: /view the signed original/i }),
+    ).not.toBeInTheDocument();
   });
 
   it('guides superseded documents to their replacement', () => {

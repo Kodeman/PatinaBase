@@ -20,6 +20,7 @@
 import { useState } from 'react';
 import { Hammer } from 'lucide-react';
 import {
+  useCommercialDocument,
   useEngageTradeScope,
   useIssueTradeDrawInvoice,
   useMarkTradeScopeInProgress,
@@ -27,6 +28,7 @@ import {
   useTradeScopeWorkspace,
   useVoidTradeScope,
 } from '@/hooks/use-commercial-documents';
+import { SIGNED_ON_PAPER_NOTE } from '@/lib/document/commercial-documents';
 import {
   drawIsLiveBilled,
   drawIsPaid,
@@ -40,6 +42,7 @@ import {
 } from '@/lib/document/project-commerce';
 import { DocSheet } from '../../overlays/doc-sheet';
 import { DocumentAction, DocumentActionGroup } from '../../document-action';
+import { RecordOnPaperSheet } from '../record-on-paper-sheet';
 import { WorkOrderSheet } from './work-order-sheet';
 
 function Figure({ label, value }: { label: string; value: string }) {
@@ -267,8 +270,23 @@ export function TradeScopeDetail({
   const markInProgress = useMarkTradeScopeInProgress(projectId);
   const recordCompletion = useRecordSubstantialCompletion(projectId);
   const issueDraw = useIssueTradeDrawInvoice(projectId);
+  // The paper tell for THIS scope's own execution — same source as
+  // AuthorizationDetail's (the client signature's executedOnPaper), only
+  // worth fetching once the scope is actually executed. The acceptance leg
+  // is a different act with its own tell and reads straight off `terms`
+  // below (00425's trade_scope_terms.accepted_on_paper).
+  const bundle = useCommercialDocument(
+    scope?.proposalId ?? '',
+    open && scope?.state === 'executed',
+  );
+  const executedOnPaper = bundle.data?.signatures.some(
+    (signature) => signature.party === 'client' && signature.executedOnPaper,
+  );
   const [error, setError] = useState<string | null>(null);
   const [workOrderOpen, setWorkOrderOpen] = useState(false);
+  const [paperAct, setPaperAct] = useState<'execution' | 'acceptance' | null>(
+    null,
+  );
 
   if (!scope) return null;
 
@@ -314,6 +332,11 @@ export function TradeScopeDetail({
             .filter(Boolean)
             .join(' · ')}
         </p>
+        {scope.state === 'executed' && executedOnPaper && (
+          <p className="mt-1 text-[10.5px] italic text-[var(--text-muted)]">
+            {SIGNED_ON_PAPER_NOTE}
+          </p>
+        )}
 
         <JourneyBand scope={scope} />
 
@@ -378,6 +401,17 @@ export function TradeScopeDetail({
               )
             }
           />
+          {scope.state === 'sent' && (
+            <DocumentAction
+              actionKey="open-record-trade-scope-on-paper"
+              surfaceKey="trade-scope"
+              regionKey="progress-acts"
+              variant="secondary"
+              onClick={() => setPaperAct('execution')}
+            >
+              Record executed on paper
+            </DocumentAction>
+          )}
           <DocumentAction
             actionKey="open-trade-work-order"
             variant="tertiary"
@@ -388,9 +422,32 @@ export function TradeScopeDetail({
         </DocumentActionGroup>
 
         {scope.progressState !== 'accepted' && scope.state === 'executed' && (
-          <p className="mt-2 text-[10.5px] italic text-[var(--text-muted)]">
-            Acceptance is the client&rsquo;s — they close the scope from their
-            copy, and the final draw follows.
+          <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <p className="text-[10.5px] italic text-[var(--text-muted)]">
+              Acceptance is the client&rsquo;s — they close the scope from
+              their copy, and the final draw follows. For a client who
+              accepted a printed copy instead, record it here.
+            </p>
+            {scope.progressState === 'substantially_complete' && (
+              <DocumentAction
+                actionKey="open-record-trade-acceptance-on-paper"
+                surfaceKey="trade-scope"
+                regionKey="progress-acts"
+                variant="tertiary"
+                onClick={() => setPaperAct('acceptance')}
+              >
+                Record accepted on paper
+              </DocumentAction>
+            )}
+          </div>
+        )}
+
+        {scope.progressState === 'accepted' && terms?.acceptedOnPaper && (
+          <p className="mt-2 text-[10.5px] italic text-[var(--text-muted)]" data-testid="trade-acceptance-paper-note">
+            {SIGNED_ON_PAPER_NOTE}
+            {terms.acceptanceRecordedByName
+              ? ` Recorded by ${terms.acceptanceRecordedByName}.`
+              : ''}
           </p>
         )}
 
@@ -537,6 +594,23 @@ export function TradeScopeDetail({
         title={scope.title}
         terms={terms}
         sections={sections}
+      />
+
+      <RecordOnPaperSheet
+        kind="trade-execution"
+        proposalId={scope.proposalId}
+        projectId={projectId}
+        open={paperAct === 'execution'}
+        onClose={() => setPaperAct(null)}
+        onRecorded={() => setPaperAct(null)}
+      />
+      <RecordOnPaperSheet
+        kind="trade-acceptance"
+        proposalId={scope.proposalId}
+        projectId={projectId}
+        open={paperAct === 'acceptance'}
+        onClose={() => setPaperAct(null)}
+        onRecorded={() => setPaperAct(null)}
       />
     </DocSheet>
   );

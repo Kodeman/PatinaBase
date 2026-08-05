@@ -9,17 +9,28 @@ const markInProgress = jest.fn();
 const recordCompletion = jest.fn();
 const issueDraw = jest.fn();
 const voidScope = jest.fn();
+const executeTradeScopeOnPaper = jest.fn();
+const recordTradeAcceptanceOnPaper = jest.fn();
 let mockWorkspace: Record<string, unknown> = { data: null };
+let mockCommercialDocument: Record<string, unknown> = { data: undefined, isLoading: false };
 
 const mutation = (fn: jest.Mock) => ({ mutateAsync: fn, isPending: false });
 
 jest.mock('@/hooks/use-commercial-documents', () => ({
   useTradeScopeWorkspace: () => mockWorkspace,
+  useCommercialDocument: () => mockCommercialDocument,
   useEngageTradeScope: () => mutation(engage),
   useMarkTradeScopeInProgress: () => mutation(markInProgress),
   useRecordSubstantialCompletion: () => mutation(recordCompletion),
   useIssueTradeDrawInvoice: () => mutation(issueDraw),
   useVoidTradeScope: () => mutation(voidScope),
+  // RecordOnPaperSheet mounts unconditionally and calls all four paper
+  // hooks up front regardless of `kind` — stub every one.
+  useRecordPaperClientSignature: () => mutation(jest.fn()),
+  useExecuteFurnishingsAuthorizationOnPaper: () => mutation(jest.fn()),
+  useExecuteTradeScopeOnPaper: () => mutation(executeTradeScopeOnPaper),
+  useRecordPaperTradeAcceptance: () => mutation(recordTradeAcceptanceOnPaper),
+  uploadPaperScanDocument: jest.fn(),
 }));
 
 import { TradeScopeDetail } from './trade-scope-detail';
@@ -115,7 +126,10 @@ describe('TradeScopeDetail', () => {
     recordCompletion.mockReset().mockResolvedValue({});
     issueDraw.mockReset().mockResolvedValue({});
     voidScope.mockReset().mockResolvedValue({});
+    executeTradeScopeOnPaper.mockReset().mockResolvedValue({});
+    recordTradeAcceptanceOnPaper.mockReset().mockResolvedValue({});
     mockWorkspace = { data: workspaceData };
+    mockCommercialDocument = { data: undefined, isLoading: false };
   });
 
   it('walks the journey band and states the figures', () => {
@@ -179,6 +193,112 @@ describe('TradeScopeDetail', () => {
       screen.queryByRole('button', { name: /Accept the work/ }),
     ).not.toBeInTheDocument();
     expect(screen.getByText(/Acceptance is the client/)).toBeVisible();
+  });
+
+  it("shows the paper tell for the scope's own execution, once executed, from the client signature", () => {
+    mockCommercialDocument = {
+      data: {
+        signatures: [
+          { party: 'client', signerName: 'Jamie Client', executedOnPaper: true, paperScanDocumentId: null },
+        ],
+      },
+      isLoading: false,
+    };
+    renderDetail(scope());
+    expect(screen.getByText('Signed on paper · recorded by the studio.')).toBeVisible();
+  });
+
+  it('shows the acceptance note and recorder name once a paper acceptance is on record', () => {
+    mockWorkspace = {
+      data: {
+        ...workspaceData,
+        terms: {
+          ...workspaceData.terms,
+          progressState: 'accepted',
+          acceptedAt: '2026-08-01T00:00:00Z',
+          acceptedSignedName: 'Jamie Client',
+          acceptedOnPaper: true,
+          acceptanceRecordedByName: 'Morgan Designer',
+        },
+      },
+    };
+    renderDetail(scope({ progressState: 'accepted' }));
+    expect(
+      screen.getByTestId('trade-acceptance-paper-note'),
+    ).toHaveTextContent('Signed on paper · recorded by the studio. Recorded by Morgan Designer.');
+  });
+
+  it('shows no acceptance paper note for an online acceptance', () => {
+    mockWorkspace = {
+      data: {
+        ...workspaceData,
+        terms: {
+          ...workspaceData.terms,
+          progressState: 'accepted',
+          acceptedAt: '2026-08-01T00:00:00Z',
+          acceptedSignedName: 'Jamie Client',
+          acceptedOnPaper: false,
+        },
+      },
+    };
+    renderDetail(scope({ progressState: 'accepted' }));
+    expect(screen.queryByTestId('trade-acceptance-paper-note')).not.toBeInTheDocument();
+  });
+
+  it('offers to record executed on paper only while sent, and records it', async () => {
+    const { unmount } = renderDetail(scope());
+    expect(
+      screen.queryByRole('button', { name: 'Record executed on paper' }),
+    ).not.toBeInTheDocument();
+    unmount();
+
+    renderDetail(scope({ state: 'sent', progressState: 'none' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Record executed on paper' }),
+    );
+
+    fireEvent.change(await screen.findByLabelText('Signed by'), {
+      target: { value: 'Harper Vale' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Record & execute' }));
+
+    await waitFor(() =>
+      expect(executeTradeScopeOnPaper).toHaveBeenCalledWith(
+        expect.objectContaining({
+          proposalId: 'proposal-1',
+          signedName: 'Harper Vale',
+        }),
+      ),
+    );
+  });
+
+  it('offers to record a paper acceptance only once substantially complete, and records it', async () => {
+    const { unmount } = renderDetail(scope({ progressState: 'in_progress' }));
+    expect(
+      screen.queryByRole('button', { name: 'Record accepted on paper' }),
+    ).not.toBeInTheDocument();
+    unmount();
+
+    renderDetail(scope({ progressState: 'substantially_complete' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Record accepted on paper' }),
+    );
+
+    fireEvent.change(await screen.findByLabelText('Accepted by'), {
+      target: { value: 'Harper Vale' },
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Record accepted' }),
+    );
+
+    await waitFor(() =>
+      expect(recordTradeAcceptanceOnPaper).toHaveBeenCalledWith(
+        expect.objectContaining({
+          proposalId: 'proposal-1',
+          signedName: 'Harper Vale',
+        }),
+      ),
+    );
   });
 
   it('holds the final draw until the client has accepted', () => {

@@ -255,6 +255,46 @@ describe("mapTradeScopeWorkspace", () => {
     expect(workspace.terms).toBeNull();
     expect(workspace.sections).toEqual([]);
   });
+
+  it("maps the paper-acceptance tell, recorder name, and its own scan pointer off their snake_case columns", () => {
+    const workspace = mapTradeScopeWorkspace({
+      proposalId: "proposal-1",
+      terms: {
+        proposal_id: "proposal-1",
+        client_price_cents: 680_000,
+        progress_state: "accepted",
+        accepted_at: "2026-08-01T00:00:00Z",
+        accepted_signed_name: "Jamie Client",
+        accepted_on_paper: true,
+        acceptance_recorded_by_name: "Morgan Designer",
+        acceptance_scan_document_id: "scan-doc-9",
+      },
+    });
+
+    expect(workspace.terms).toMatchObject({
+      acceptedOnPaper: true,
+      acceptanceRecordedByName: "Morgan Designer",
+      acceptanceScanDocumentId: "scan-doc-9",
+    });
+  });
+
+  it("defaults acceptedOnPaper to false and the paper-only fields to null for a portal acceptance", () => {
+    const workspace = mapTradeScopeWorkspace({
+      proposalId: "proposal-1",
+      terms: {
+        proposal_id: "proposal-1",
+        progress_state: "accepted",
+        accepted_at: "2026-08-01T00:00:00Z",
+        accepted_signed_name: "Jamie Client",
+      },
+    });
+
+    expect(workspace.terms).toMatchObject({
+      acceptedOnPaper: false,
+      acceptanceRecordedByName: null,
+      acceptanceScanDocumentId: null,
+    });
+  });
 });
 
 describe("draw arithmetic", () => {

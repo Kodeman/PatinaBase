@@ -605,6 +605,87 @@ describe('commercial document client adapter', () => {
       });
       expect(bundle?.tradeScope).toBeNull();
     });
+
+    it('reads a paper-recorded trade acceptance, and its own scan pointer, off the progress block', () => {
+      const bundle = adaptCommercialDocumentBundle({
+        document: { id: 'trade-4', documentKind: 'trade_scope', commercialState: 'executed' },
+        tradeScope: {
+          partyDisplayName: 'Marcus Hale',
+          clientPriceCents: 800_000,
+          sections: [],
+          draws: [],
+          progress: {
+            state: 'accepted',
+            engagedAt: '2026-07-01T00:00:00Z',
+            substantialCompletionAt: '2026-07-20T00:00:00Z',
+            acceptedAt: '2026-07-25T00:00:00Z',
+            acceptedSignedName: 'Jamie Client',
+            acceptedOnPaper: true,
+            acceptanceScanDocumentId: 'scan-doc-9',
+          },
+        },
+      });
+      expect(bundle?.tradeScope?.progress).toMatchObject({
+        state: 'accepted',
+        acceptedOnPaper: true,
+        acceptanceScanDocumentId: 'scan-doc-9',
+      });
+    });
+
+    it('defaults acceptedOnPaper to false and acceptanceScanDocumentId to null when the RPC omits them', () => {
+      const bundle = adaptCommercialDocumentBundle({
+        document: { id: 'trade-5', documentKind: 'trade_scope', commercialState: 'executed' },
+        tradeScope: {
+          partyDisplayName: 'Marcus Hale',
+          clientPriceCents: 800_000,
+          sections: [],
+          draws: [],
+          progress: { state: 'engaged', engagedAt: '2026-07-01T00:00:00Z' },
+        },
+      });
+      expect(bundle?.tradeScope?.progress.acceptedOnPaper).toBe(false);
+      expect(bundle?.tradeScope?.progress.acceptanceScanDocumentId).toBeNull();
+    });
+  });
+});
+
+describe('signature provenance (paper vs. on-screen)', () => {
+  it('reads signedOnPaper and paperScanDocumentId off each signature, and defaults both when absent', () => {
+    const bundle = adaptCommercialDocumentBundle({
+      document: {
+        id: 'ds-paper-1', documentKind: 'design_services', commercialState: 'client_signed',
+      },
+      signatures: [
+        {
+          party: 'client', signerName: 'Jamie Client', signedAt: '2026-08-02T00:00:00Z',
+          consentVersion: 'v1', documentFingerprint: 'fp-1',
+          signedOnPaper: true, paperScanDocumentId: 'doc-scan-1',
+        },
+        {
+          party: 'studio', signerName: 'Morgan Designer', signedAt: '2026-08-03T00:00:00Z',
+          consentVersion: 'v1', documentFingerprint: 'fp-2',
+        },
+      ],
+    });
+
+    expect(bundle?.signatures).toEqual([
+      expect.objectContaining({ party: 'client', signedOnPaper: true, paperScanDocumentId: 'doc-scan-1' }),
+      expect.objectContaining({ party: 'studio', signedOnPaper: false, paperScanDocumentId: null }),
+    ]);
+  });
+
+  it('never surfaces a scan pointer the RPC did not send, even when signedOnPaper is true', () => {
+    // Mirrors the RPC's own rule: paperScanDocumentId is omitted unless that
+    // project_documents row is client_visible — a signature can be paper
+    // with no attached scan at all.
+    const bundle = adaptCommercialDocumentBundle({
+      document: { id: 'ds-paper-2', documentKind: 'design_services', commercialState: 'client_signed' },
+      signatures: [{
+        party: 'client', signerName: 'Jamie Client', signedAt: '2026-08-02T00:00:00Z',
+        consentVersion: 'v1', documentFingerprint: 'fp-1', signedOnPaper: true,
+      }],
+    });
+    expect(bundle?.signatures[0]).toMatchObject({ signedOnPaper: true, paperScanDocumentId: null });
   });
 });
 

@@ -236,6 +236,16 @@ function mapSignature(row: any): CommercialSignature {
     documentFingerprint: String(
       row.evidence_fingerprint ?? row.document_fingerprint ?? "",
     ),
+    // The paper RPCs write metadata.executedOnPaper/paperScanDocumentId
+    // (00412 shared provenance contract). The designer's own read of
+    // commercial_document_signatures selects `metadata` directly (studio
+    // RLS covers the whole row, unlike the client bundle RPC's allowlist),
+    // so this reads it straight rather than waiting on a server projection.
+    executedOnPaper: metadata.executedOnPaper === true,
+    paperScanDocumentId:
+      typeof metadata.paperScanDocumentId === "string"
+        ? metadata.paperScanDocumentId
+        : null,
   };
 }
 
@@ -413,13 +423,49 @@ export function useCountersignDesignServicesAgreement(proposalId: string) {
       );
       if (error) throw error;
       const result = mapCountersignResult(data);
-      const notificationDelivery =
-        result.commercialState === "executed"
-          ? await invokeCommercialNotification(supabase, {
-              documentId: proposalId,
-              transition: "executed",
-            })
-          : "not_requested";
+      let notificationDelivery: CommercialNotificationDelivery = "not_requested";
+      if (result.commercialState === "executed") {
+        // EXECUTED-ON-PAPER: record_paper_client_signature only ever moves a
+        // design services document to client_signed — execution itself still
+        // happens through THIS countersign, unchanged. What changes is the
+        // notice: a client signature recorded from a paper original needs the
+        // paper-notify route (apps/designer-portal/src/app/api/commercial/
+        // [id]/paper-notify/route.ts — its own docstring names "countersign's
+        // paper leg" as one of its three callers), because that route is what
+        // computes hasScan and sends the paper-variant copy. A signature
+        // signed on screen keeps the direct, unchanged notify call — 'executed'
+        // is a STUDIO_TRANSITION (commercial-document-notify/policy.ts), so
+        // the caller's own session is already allowed to fire it.
+        //
+        // A FAILED read here must never be read as "not paper" — that would
+        // silently downgrade a genuinely paper-signed document to the online
+        // notice, telling the client the wrong story about their own
+        // signature. Fail the notice as pending_retry instead; the countersign
+        // itself already committed above, so this never blocks it.
+        const { data: clientSignature, error: clientSignatureError } = await supabase
+          .from("commercial_document_signatures")
+          .select("metadata")
+          .eq("proposal_id", proposalId)
+          .eq("party_role", "client")
+          .maybeSingle();
+        if (clientSignatureError) {
+          console.warn("commercial notification pending retry", {
+            documentId: proposalId,
+            transition: "executed",
+            error: clientSignatureError.message ?? "paper_detection_read_failed",
+          });
+          notificationDelivery = "pending_retry";
+        } else {
+          const clientSignedOnPaper =
+            clientSignature?.metadata?.executedOnPaper === true;
+          notificationDelivery = clientSignedOnPaper
+            ? await postPaperNotify(proposalId, "executed")
+            : await invokeCommercialNotification(supabase, {
+                documentId: proposalId,
+                transition: "executed",
+              });
+        }
+      }
       return { ...result, notificationDelivery };
     },
     onSuccess: (result) => {
@@ -1188,7 +1234,12 @@ export async function fetchTradeScopeWorkspace(
     await Promise.all([
       supabase
         .from("trade_scope_terms")
-        .select("*")
+        // The paper-acceptance recorder's display name rides along as a
+        // profiles embed (00425's acceptance_recorded_by) — the same
+        // pattern use-time-tracking.ts uses for "who logged this". Read
+        // once here rather than a second query, since it is only ever
+        // shown alongside the rest of this same terms row.
+        .select("*, acceptance_recorded_by_profile:profiles!acceptance_recorded_by(full_name)")
         .eq("proposal_id", proposalId)
         .maybeSingle(),
       supabase
@@ -1213,9 +1264,21 @@ export async function fetchTradeScopeWorkspace(
   if (bidsResult.error) throw bidsResult.error;
   if (drawsResult.error) throw drawsResult.error;
 
+  // Flatten the embed to a plain key before handing off to the mapper, so
+  // mapTradeScopeWorkspace stays a pure function of flat rows (same
+  // discipline every other mapper in project-commerce.ts follows) rather
+  // than needing to know PostgREST's embed shape.
+  const termsRow = termsResult.data
+    ? {
+        ...(termsResult.data as Record<string, unknown>),
+        acceptance_recorded_by_name:
+          (termsResult.data as any)?.acceptance_recorded_by_profile?.full_name ?? null,
+      }
+    : termsResult.data;
+
   return mapTradeScopeWorkspace({
     proposalId,
-    terms: termsResult.data,
+    terms: termsRow,
     sections: sectionsResult.data,
     bids: bidsResult.data,
     draws: drawsResult.data,
@@ -1925,6 +1988,392 @@ export function useSendTradeRfq(scopeId: string) {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: tradeRfqKeys.list(scopeId) });
+    },
+  });
+}
+
+/* ── Executed on paper (the studio records a printed original) ──────────────
+ *
+ * Four RPCs share one honest shape (00412's shared provenance contract): the
+ * studio was handed a signed or accepted paper original instead of an
+ * on-screen act, and records it as the client's own — same effects as the
+ * matching online act, signed_ip NULL (the paper tell), and an evidence
+ * fingerprint taken at record time.
+ *
+ * Notify wiring is NOT uniform across the four — it follows exactly what the
+ * paper-notify route (apps/designer-portal/src/app/api/commercial/[id]/
+ * paper-notify/route.ts) actually accepts, per its own ALLOWED_TRANSITIONS:
+ *   - record_paper_client_signature → 'client_signed'. The route 400s this
+ *     transition on purpose (its docstring: "client_signed has no paper
+ *     analog on the studio side — recording the paper client signature
+ *     triggers countersign, which itself fires 'executed'"), so this mutation
+ *     never calls it. The client-signed→executed leg is instead handled
+ *     inside useCountersignDesignServicesAgreement below.
+ *   - execute_furnishings_authorization_on_paper / execute_trade_scope_on_
+ *     paper → 'furnishings_executed' / 'trade_scope_executed', THEN
+ *     'deposit_ready' when the RPC's own response carries a depositInvoiceId
+ *     — mirroring the client-portal sign route's post-execute notification
+ *     block (apps/client-portal/src/app/api/proposals/[id]/sign/route.ts).
+ *     Both transitions live in commercial-document-notify's CLIENT_TRANSITIONS
+ *     (policy.ts) — a plain studio-session call would 403, which is exactly
+ *     why the route exists (it re-authorizes from the caller's session, then
+ *     invokes the notify function as the service actor).
+ *   - record_paper_trade_acceptance → 'trade_scope_accepted'. RULING
+ *     ADJUSTMENT (supersedes the original "suppressed for paper" decision):
+ *     a paper acceptance now sends the client a paper-variant notice of its
+ *     own — the studio recorded their acceptance and the final payment
+ *     follows (core.ts). The route allows this transition exactly like the
+ *     two execute acts above.
+ *
+ * A failed notify never rolls back a recorded signature — it degrades to
+ * `notificationDelivery: 'pending_retry'`, the same posture every other
+ * commerce notify in this file already takes.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+type PaperNotifyTransition =
+  | "executed"
+  | "furnishings_executed"
+  | "trade_scope_executed"
+  | "deposit_ready"
+  | "trade_scope_accepted";
+
+/**
+ * POSTs to the designer-portal's paper-notify route. The route re-
+ * authorizes the caller from their own session, reads whether a scan was
+ * attached, and invokes commercial-document-notify as the service actor
+ * (bypassing the CLIENT_TRANSITIONS actor gate a studio session would trip on
+ * its own). Non-blocking: a transport or route failure degrades to
+ * 'pending_retry' rather than throwing back into the mutation — callers
+ * always get a signature/execution recorded even if the notice lags.
+ */
+async function postPaperNotify(
+  proposalId: string,
+  transition: PaperNotifyTransition,
+): Promise<CommercialNotificationDelivery> {
+  try {
+    const response = await fetch(`/api/commercial/${proposalId}/paper-notify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ transition }),
+    });
+    const data = await response.json().catch(() => null);
+    if (response.ok && data?.ok === true) return "delivered";
+    console.warn("paper commercial notification pending retry", {
+      proposalId,
+      transition,
+      error: data?.error ?? `http_${response.status}`,
+    });
+    return "pending_retry";
+  } catch (error) {
+    console.warn("paper commercial notification pending retry", {
+      proposalId,
+      transition,
+      error: error instanceof Error ? error.message : "transport_error",
+    });
+    return "pending_retry";
+  }
+}
+
+/**
+ * Uploads the paper original's scan onto the Folio's proposal leg
+ * (project-documents/{proposalId}/…, 00252 — same storage mechanics as
+ * useUploadProposalFolioFile in @/hooks/use-folio), except `client_visible`
+ * defaults TRUE here: a scan the studio attaches to a paper record is
+ * evidence the client is entitled to see, not a private working file. Not a
+ * version chain — each paper record's scan is a fresh attachment tied to
+ * that one act, not a re-upload of a prior file. Returns the new
+ * project_documents row's id, which the paper RPCs validate belongs to this
+ * proposal before accepting it as `p_scan_document_id`.
+ */
+export async function uploadPaperScanDocument(
+  proposalId: string,
+  file: File,
+): Promise<string> {
+  const supabase = getSupabase();
+  const { data: auth } = await supabase.auth.getUser();
+
+  const safeName = file.name.replace(/[^\w.-]+/g, "_");
+  const storagePath = `${proposalId}/${Date.now()}-${safeName}`;
+  const { error: uploadError } = await supabase.storage
+    .from("project-documents")
+    .upload(storagePath, file, { contentType: file.type || undefined });
+  if (uploadError) throw uploadError;
+
+  const docType = file.type === "application/pdf"
+    ? "pdf"
+    : file.type.startsWith("image/")
+      ? "img"
+      : "doc";
+
+  const { data, error } = await supabase
+    .from("project_documents")
+    .insert({
+      project_id: null,
+      proposal_id: proposalId,
+      title: file.name,
+      doc_type: docType,
+      storage_path: storagePath,
+      size_bytes: file.size,
+      uploaded_by: auth?.user?.id ?? null,
+      // 'proposal' — the same section_key useUploadProposalFolioFile writes;
+      // the CHECK constraint (project_documents_section_key_check, 00380)
+      // does not carry a dedicated value for a commercial paper scan.
+      anchor_kind: "section",
+      section_key: "proposal",
+      client_visible: true,
+    })
+    .select("id")
+    .single();
+  if (error) throw error;
+  const id = data?.id;
+  if (!id) throw new Error("The scan could not be filed.");
+  return String(id);
+}
+
+export interface RecordPaperClientSignatureInput {
+  signedName: string;
+  paperSignedOn: string;
+  scanDocumentId?: string | null;
+}
+
+export interface PaperRecordResult {
+  notificationDelivery: CommercialNotificationDelivery;
+  [key: string]: unknown;
+}
+
+/**
+ * "Record signed on paper" for a design services agreement / addendum —
+ * `record_paper_client_signature` (sent → client_signed only; execution
+ * remains the studio's separate, unchanged countersign act below).
+ */
+export function useRecordPaperClientSignature(proposalId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: ["record-paper-client-signature", proposalId],
+    mutationFn: async (
+      input: RecordPaperClientSignatureInput,
+    ): Promise<PaperRecordResult> => {
+      const supabase = getSupabase();
+      const { data, error } = await supabase.rpc(
+        "record_paper_client_signature",
+        {
+          p_proposal_id: proposalId,
+          p_signed_name: input.signedName.trim(),
+          p_paper_signed_on: input.paperSignedOn,
+          p_scan_document_id: input.scanDocumentId ?? null,
+        },
+      );
+      if (error) throw error;
+      // No notify here — see the section note above. record_paper_client_
+      // signature only reaches client_signed; the paper-notify route 400s
+      // that transition on purpose, and the real "executed" notice fires
+      // from useCountersignDesignServicesAgreement once the studio
+      // countersigns. 'not_requested' keeps this mutation's return shape
+      // identical to the other three (all PaperRecordResult).
+      return { ...(data ?? {}), notificationDelivery: "not_requested" };
+    },
+    onSuccess: async (_data, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: commercialDocumentKeys.bundle(proposalId),
+        }),
+        queryClient.invalidateQueries({ queryKey: ["proposal", proposalId] }),
+        queryClient.invalidateQueries({ queryKey: ["document-state"] }),
+        queryClient.invalidateQueries({ queryKey: ["desk-engagements"] }),
+        // A scan attached at record time lands in the same Folio bucket the
+        // proposal-folio strip reads (project-documents/{proposalId}/…,
+        // 00252) — invalidate so it actually shows up there without a
+        // manual refresh.
+        ...(variables.scanDocumentId
+          ? [queryClient.invalidateQueries({ queryKey: ["proposal-folio", proposalId] })]
+          : []),
+      ]);
+    },
+  });
+}
+
+export interface ExecuteOnPaperInput {
+  proposalId: string;
+  signedName: string;
+  paperSignedOn: string;
+  scanDocumentId?: string | null;
+}
+
+/**
+ * "Record & execute" for a furnishings authorization — execute_furnishings_
+ * authorization_on_paper (sent → executed, in one act, ALL the online
+ * execution's effects preserved: schedule lines apply, the deposit invoice
+ * follows).
+ */
+export function useExecuteFurnishingsAuthorizationOnPaper(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: ["execute-furnishings-authorization-on-paper", projectId],
+    mutationFn: async (
+      input: ExecuteOnPaperInput,
+    ): Promise<PaperRecordResult> => {
+      const supabase = getSupabase();
+      const { data, error } = await supabase.rpc(
+        "execute_furnishings_authorization_on_paper",
+        {
+          p_proposal_id: input.proposalId,
+          p_signed_name: input.signedName.trim(),
+          p_paper_signed_on: input.paperSignedOn,
+          p_scan_document_id: input.scanDocumentId ?? null,
+        },
+      );
+      if (error) throw error;
+      const notificationDelivery = await postPaperNotify(
+        input.proposalId,
+        "furnishings_executed",
+      );
+      // Mirrors the client-portal sign route: fire deposit_ready right after
+      // execution whenever this act actually raised a deposit invoice.
+      const depositInvoiceId =
+        (data as Record<string, unknown> | null)?.depositInvoiceId ??
+        (data as Record<string, unknown> | null)?.deposit_invoice_id;
+      const depositNotificationDelivery: CommercialNotificationDelivery =
+        depositInvoiceId
+          ? await postPaperNotify(input.proposalId, "deposit_ready")
+          : "not_requested";
+      return { ...(data ?? {}), notificationDelivery, depositNotificationDelivery };
+    },
+    onSuccess: async (_data, variables) => {
+      await Promise.all([
+        invalidateProjectCommerce(queryClient, projectId),
+        queryClient.invalidateQueries({
+          queryKey: commercialDocumentKeys.bundle(variables.proposalId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["proposal", variables.proposalId],
+        }),
+        // See useRecordPaperClientSignature's onSuccess for why: a scan
+        // attached at record time needs the Folio strip's query invalidated
+        // to actually show up there.
+        ...(variables.scanDocumentId
+          ? [
+              queryClient.invalidateQueries({
+                queryKey: ["proposal-folio", variables.proposalId],
+              }),
+            ]
+          : []),
+      ]);
+    },
+  });
+}
+
+/**
+ * "Record & execute" for a trade scope — execute_trade_scope_on_paper (sent →
+ * executed, ALL the online execution's effects preserved: first-draw gate,
+ * the deposit draw auto-issues, the RFQ sweep closes out open asks).
+ */
+export function useExecuteTradeScopeOnPaper(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: ["execute-trade-scope-on-paper", projectId],
+    mutationFn: async (
+      input: ExecuteOnPaperInput,
+    ): Promise<PaperRecordResult> => {
+      const supabase = getSupabase();
+      const { data, error } = await supabase.rpc(
+        "execute_trade_scope_on_paper",
+        {
+          p_proposal_id: input.proposalId,
+          p_signed_name: input.signedName.trim(),
+          p_paper_signed_on: input.paperSignedOn,
+          p_scan_document_id: input.scanDocumentId ?? null,
+        },
+      );
+      if (error) throw error;
+      const notificationDelivery = await postPaperNotify(
+        input.proposalId,
+        "trade_scope_executed",
+      );
+      // Mirrors the client-portal sign route: fire deposit_ready right after
+      // execution whenever this act auto-issued the first draw invoice.
+      const depositInvoiceId =
+        (data as Record<string, unknown> | null)?.depositInvoiceId ??
+        (data as Record<string, unknown> | null)?.deposit_invoice_id;
+      const depositNotificationDelivery: CommercialNotificationDelivery =
+        depositInvoiceId
+          ? await postPaperNotify(input.proposalId, "deposit_ready")
+          : "not_requested";
+      return { ...(data ?? {}), notificationDelivery, depositNotificationDelivery };
+    },
+    onSuccess: async (_data, variables) => {
+      await Promise.all([
+        invalidateProjectCommerce(queryClient, projectId),
+        invalidateTradeScope(queryClient, projectId, variables.proposalId),
+        queryClient.invalidateQueries({
+          queryKey: commercialDocumentKeys.bundle(variables.proposalId),
+        }),
+        ...(variables.scanDocumentId
+          ? [
+              queryClient.invalidateQueries({
+                queryKey: ["proposal-folio", variables.proposalId],
+              }),
+            ]
+          : []),
+      ]);
+    },
+  });
+}
+
+export interface RecordPaperTradeAcceptanceInput {
+  proposalId: string;
+  signedName: string;
+  paperSignedOn: string;
+  /** 00425: the acceptance's own scan pointer (acceptance_scan_document_id)
+   *  — a separate attachment from either execution signature's scan, since
+   *  it is a different act on a different date. */
+  scanDocumentId?: string | null;
+}
+
+/**
+ * "Record accepted on paper" — record_paper_trade_acceptance. Requires
+ * progress_state='substantially_complete' server-side and is idempotent
+ * once accepted. It issues nothing of its own on the money side — the final
+ * draw is still a separate "Issue draw" act once the schedule allows it —
+ * but RULING ADJUSTMENT (supersedes "suppressed for paper"): it DOES notify
+ * the client that their acceptance was recorded, through the same
+ * paper-notify route the two execute acts use.
+ */
+export function useRecordPaperTradeAcceptance(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: ["record-paper-trade-acceptance", projectId],
+    mutationFn: async (
+      input: RecordPaperTradeAcceptanceInput,
+    ): Promise<PaperRecordResult> => {
+      const supabase = getSupabase();
+      const { data, error } = await supabase.rpc(
+        "record_paper_trade_acceptance",
+        {
+          p_proposal_id: input.proposalId,
+          p_signed_name: input.signedName.trim(),
+          p_paper_signed_on: input.paperSignedOn,
+          p_scan_document_id: input.scanDocumentId ?? null,
+        },
+      );
+      if (error) throw error;
+      const notificationDelivery = await postPaperNotify(
+        input.proposalId,
+        "trade_scope_accepted",
+      );
+      return { ...(data ?? {}), notificationDelivery };
+    },
+    onSuccess: async (_data, variables) => {
+      await Promise.all([
+        invalidateProjectCommerce(queryClient, projectId),
+        invalidateTradeScope(queryClient, projectId, variables.proposalId),
+        ...(variables.scanDocumentId
+          ? [
+              queryClient.invalidateQueries({
+                queryKey: ["proposal-folio", variables.proposalId],
+              }),
+            ]
+          : []),
+      ]);
     },
   });
 }

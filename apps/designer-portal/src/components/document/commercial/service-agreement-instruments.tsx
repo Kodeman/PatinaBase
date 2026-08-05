@@ -12,6 +12,7 @@ import { commercialStatusView } from "@/lib/document/commercial-documents";
 import { rememberRoomOrigin } from "@/lib/document/room-origin";
 import { DocumentAction, DocumentActionGroup } from "../document-action";
 import { DocSheet } from "../overlays/doc-sheet";
+import { RecordOnPaperSheet } from "./record-on-paper-sheet";
 import { ServiceAgreementPreview } from "./service-agreement-preview";
 import { ServiceAgreementSendSheet } from "./service-agreement-send-sheet";
 
@@ -38,6 +39,7 @@ export function ServiceAgreementInstruments({
   const replayNotification = useReplayCommercialNotification();
   const [previewOpen, setPreviewOpen] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
+  const [recordOnPaperOpen, setRecordOnPaperOpen] = useState(false);
   const [signerName, setSignerName] = useState("");
   const [resultProjectId, setResultProjectId] = useState<string | null>(null);
   const [resultMessage, setResultMessage] = useState<string | null>(null);
@@ -58,7 +60,10 @@ export function ServiceAgreementInstruments({
   }
 
   const { document, terms, rates, signatures } = bundle.data;
-  const status = commercialStatusView(document.state);
+  const clientSignedOnPaper = signatures.some(
+    (signature) => signature.party === "client" && signature.executedOnPaper,
+  );
+  const status = commercialStatusView(document.state, { clientSignedOnPaper });
   const projectId = resultProjectId ?? document.projectId;
   const clientEmail =
     typeof proposal.client?.email === "string" ? proposal.client.email : null;
@@ -176,6 +181,27 @@ export function ServiceAgreementInstruments({
             </div>
           </div>
 
+          {document.state === "sent" && (
+            <div className="mt-4 border-t border-[var(--doc-ink-border)] pt-3">
+              <p className="font-heading text-[1rem] italic text-[var(--color-charcoal)]">
+                Record a paper signature
+              </p>
+              <p className="mt-1 text-[11.5px] text-[var(--text-muted)]">
+                For a client who signed a printed copy instead of signing
+                here — countersign as usual once it&rsquo;s recorded.
+              </p>
+              <div className="mt-3">
+                <DocumentAction
+                  actionKey="open-record-design-agreement-on-paper"
+                  variant="secondary"
+                  onClick={() => setRecordOnPaperOpen(true)}
+                >
+                  Record signed on paper
+                </DocumentAction>
+              </div>
+            </div>
+          )}
+
           {status.canCountersign && (
             <div className="mt-4 border-t border-[var(--doc-ink-border)] pt-3">
               <p className="font-heading text-[1rem] italic text-[var(--color-charcoal)]">
@@ -250,6 +276,20 @@ export function ServiceAgreementInstruments({
           />
         </>
       )}
+
+      <RecordOnPaperSheet
+        kind="design-services"
+        proposalId={proposalId}
+        clientName={clientName}
+        open={recordOnPaperOpen}
+        onClose={() => setRecordOnPaperOpen(false)}
+        onRecorded={() => {
+          setRecordOnPaperOpen(false);
+          setResultMessage(
+            "Paper signature recorded. Countersign it above once you’re ready.",
+          );
+        }}
+      />
     </>
   );
 }

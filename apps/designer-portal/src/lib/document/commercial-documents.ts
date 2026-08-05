@@ -81,6 +81,13 @@ export interface CommercialSignature {
   signedAt: string;
   consentVersion: number;
   documentFingerprint: string;
+  /** True when this signature was recorded from a printed original the
+   *  studio countersigned/executed on the client's behalf (00412's paper
+   *  RPCs), rather than signed on screen. */
+  executedOnPaper: boolean;
+  /** The project_documents.id of the paper original's scan, when the studio
+   *  attached one at record time. Null when no scan was attached. */
+  paperScanDocumentId: string | null;
 }
 
 export interface ProjectBillingAuthority {
@@ -258,6 +265,8 @@ export interface ServiceAgreementPreview {
     party: "client" | "studio";
     signerName: string;
     signedAt: string;
+    executedOnPaper: boolean;
+    paperScanDocumentId: string | null;
   }>;
 }
 
@@ -296,6 +305,8 @@ export function buildServiceAgreementPreview({
       party: signature.party,
       signerName: signature.signerName,
       signedAt: signature.signedAt,
+      executedOnPaper: signature.executedOnPaper,
+      paperScanDocumentId: signature.paperScanDocumentId,
     })),
   };
 }
@@ -309,77 +320,103 @@ export interface CommercialStatusView {
   isTerminal: boolean;
 }
 
+/** The exact phrase every paper-provenance surface uses — the preview's
+ *  signature blocks, and commercialStatusView's description below, print
+ *  this same sentence rather than each inventing their own wording. */
+export const SIGNED_ON_PAPER_NOTE = "Signed on paper · recorded by the studio.";
+
 export function commercialStatusView(
   state: CommercialState,
+  options?: {
+    /** True when the client's own signature on this document was recorded
+     *  from a printed original (record_paper_client_signature) rather than
+     *  signed on screen. Appends {@link SIGNED_ON_PAPER_NOTE} to the
+     *  description once consent exists to describe (client_signed onward) —
+     *  never for draft/sent, where there is nothing yet to have been paper. */
+    clientSignedOnPaper?: boolean;
+  },
 ): CommercialStatusView {
-  switch (state) {
-    case "draft":
-      return {
-        label: "DRAFT",
-        description: "The agreement is still in the studio’s hands.",
-        tone: "quiet",
-        canCountersign: false,
-        isExecuted: false,
-        isTerminal: false,
-      };
-    case "sent":
-      return {
-        label: "WITH CLIENT",
-        description:
-          "Sent for the client’s signature. No work is authorized yet.",
-        tone: "clay",
-        canCountersign: false,
-        isExecuted: false,
-        isTerminal: false,
-      };
-    case "client_signed":
-      return {
-        label: "CLIENT SIGNED",
-        description:
-          "Client consent is preserved. The agreement is awaiting the studio countersignature; work is not yet authorized.",
-        tone: "golden",
-        canCountersign: true,
-        isExecuted: false,
-        isTerminal: false,
-      };
-    case "executed":
-      return {
-        label: "EXECUTED",
-        description:
-          "Both signatures are recorded and design work is authorized.",
-        tone: "sage",
-        canCountersign: false,
-        isExecuted: true,
-        isTerminal: false,
-      };
-    case "declined":
-      return {
-        label: "DECLINED",
-        description: "The client declined this agreement.",
-        tone: "terracotta",
-        canCountersign: false,
-        isExecuted: false,
-        isTerminal: true,
-      };
-    case "expired":
-      return {
-        label: "EXPIRED",
-        description: "This agreement expired without execution.",
-        tone: "quiet",
-        canCountersign: false,
-        isExecuted: false,
-        isTerminal: true,
-      };
-    case "superseded":
-      return {
-        label: "SUPERSEDED",
-        description: "A newer commercial edition replaced this agreement.",
-        tone: "quiet",
-        canCountersign: false,
-        isExecuted: false,
-        isTerminal: true,
-      };
+  const base = ((): CommercialStatusView => {
+    switch (state) {
+      case "draft":
+        return {
+          label: "DRAFT",
+          description: "The agreement is still in the studio’s hands.",
+          tone: "quiet",
+          canCountersign: false,
+          isExecuted: false,
+          isTerminal: false,
+        };
+      case "sent":
+        return {
+          label: "WITH CLIENT",
+          description:
+            "Sent for the client’s signature. No work is authorized yet.",
+          tone: "clay",
+          canCountersign: false,
+          isExecuted: false,
+          isTerminal: false,
+        };
+      case "client_signed":
+        return {
+          label: "CLIENT SIGNED",
+          description:
+            "Client consent is preserved. The agreement is awaiting the studio countersignature; work is not yet authorized.",
+          tone: "golden",
+          canCountersign: true,
+          isExecuted: false,
+          isTerminal: false,
+        };
+      case "executed":
+        return {
+          label: "EXECUTED",
+          description:
+            "Both signatures are recorded and design work is authorized.",
+          tone: "sage",
+          canCountersign: false,
+          isExecuted: true,
+          isTerminal: false,
+        };
+      case "declined":
+        return {
+          label: "DECLINED",
+          description: "The client declined this agreement.",
+          tone: "terracotta",
+          canCountersign: false,
+          isExecuted: false,
+          isTerminal: true,
+        };
+      case "expired":
+        return {
+          label: "EXPIRED",
+          description: "This agreement expired without execution.",
+          tone: "quiet",
+          canCountersign: false,
+          isExecuted: false,
+          isTerminal: true,
+        };
+      case "superseded":
+        return {
+          label: "SUPERSEDED",
+          description: "A newer commercial edition replaced this agreement.",
+          tone: "quiet",
+          canCountersign: false,
+          isExecuted: false,
+          isTerminal: true,
+        };
+    }
+  })();
+
+  if (
+    options?.clientSignedOnPaper &&
+    (state === "client_signed" || state === "executed")
+  ) {
+    return {
+      ...base,
+      description: `${base.description} ${SIGNED_ON_PAPER_NOTE}`,
+    };
   }
+  return base;
 }
 
 export function asCommercialDocumentKind(

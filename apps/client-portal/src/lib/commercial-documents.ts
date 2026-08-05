@@ -53,7 +53,18 @@ export type CommercialRate = Pick<
 export type CommercialSignature = Pick<
   CommercialSignatureReceipt,
   'party' | 'signerName' | 'signedAt' | 'consentVersion' | 'documentFingerprint'
->;
+> & {
+  /** True when this signature was recorded from a printed original the
+   *  studio countersigned/executed, rather than signed on screen (00412's
+   *  paper RPCs). The bundle RPC projects this only from the signature's own
+   *  metadata — never raw metadata itself. */
+  signedOnPaper: boolean;
+  /** The project_documents.id of the paper original's scan. Present only
+   *  when the studio attached one AND that file is client_visible — the RPC
+   *  omits it otherwise, so this is never a pointer to a file the client
+   *  isn't allowed to open. */
+  paperScanDocumentId: string | null;
+};
 
 export type DesignServicesTerms = Omit<
   Pick<
@@ -135,6 +146,15 @@ export interface TradeScopeProgress {
   substantialCompletionAt: string | null;
   acceptedAt: string | null;
   acceptedSignedName: string | null;
+  /** True when the client's acceptance was recorded from a printed original
+   *  (record_paper_trade_acceptance) rather than accepted in the portal. */
+  acceptedOnPaper: boolean;
+  /** The project_documents.id of the accepted paper's scan, when the studio
+   *  attached one at record time (00425's acceptance_scan_document_id) —
+   *  present only when that folio row is client_visible, same discipline as
+   *  a signature's paperScanDocumentId below. Null when there is no scan, or
+   *  the acceptance was not on paper. */
+  acceptanceScanDocumentId: string | null;
 }
 
 /**
@@ -378,6 +398,10 @@ function adaptTradeScopeProgress(value: unknown): TradeScopeProgress {
     substantialCompletionAt: nullableText(first(row, 'substantialCompletionAt', 'substantial_completion_at')),
     acceptedAt: nullableText(first(row, 'acceptedAt', 'accepted_at')),
     acceptedSignedName: nullableText(first(row, 'acceptedSignedName', 'accepted_signed_name')),
+    acceptedOnPaper: first(row, 'acceptedOnPaper', 'accepted_on_paper') === true,
+    acceptanceScanDocumentId: nullableText(
+      first(row, 'acceptanceScanDocumentId', 'acceptance_scan_document_id'),
+    ),
   };
 }
 
@@ -517,6 +541,8 @@ export function adaptCommercialDocumentBundle(value: unknown): CommercialDocumen
         signedAt,
         consentVersion: text(first(row, 'consentVersion', 'consent_version')),
         documentFingerprint,
+        signedOnPaper: first(row, 'signedOnPaper', 'signed_on_paper') === true,
+        paperScanDocumentId: nullableText(first(row, 'paperScanDocumentId', 'paper_scan_document_id')),
       }];
     }) : [],
     furnishings: Object.keys(furnishingRaw).length === 0 ? null : {

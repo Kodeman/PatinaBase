@@ -151,6 +151,31 @@ describe('POST /api/proposals/[id]/notifications/replay', () => {
     });
   });
 
+  it('never asserts a channel on the invoke body — a replay of a paper execution must render paper copy through the fn\'s own server-side evidence derivation, not a client-portal guess', async () => {
+    rpc.mockResolvedValue({
+      data: {
+        document: {
+          documentKind: 'design_services',
+          commercialState: 'executed',
+        },
+      },
+      error: null,
+    });
+
+    await POST(request, context);
+
+    const [, options] = invoke.mock.calls[0];
+    expect(options.body).not.toHaveProperty('channel');
+    expect(options.body).not.toHaveProperty('hasScan');
+    // commercial-document-notify/index.ts derives channel/hasScan itself from
+    // the client's own commercial_document_signatures row (or
+    // trade_scope_terms.accepted_on_paper for trade_scope_accepted) whenever
+    // the caller omits `channel` — see its channel/hasScan derivation block
+    // and lib.test.ts / core.test.ts for the paper-copy assertions this
+    // relies on. This route intentionally never computes or asserts a
+    // channel of its own.
+  });
+
   it('rejects documents without a committed client-owned transition', async () => {
     rpc.mockResolvedValue({
       data: {

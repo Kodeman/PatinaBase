@@ -1,8 +1,10 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ProjectInstrumentView } from "@/lib/document/project-commerce";
 
 const sendAuthorization = jest.fn();
+const executeFurnishingsOnPaper = jest.fn();
 let mockDrift: Record<string, unknown> = { data: new Map(), isLoading: false };
+let mockCommercialDocument: Record<string, unknown> = { data: undefined, isLoading: false };
 
 jest.mock("@patina/supabase", () => ({
   useProposalSendDispatchStatus: () => ({
@@ -19,6 +21,26 @@ jest.mock("@/hooks/use-commercial-documents", () => ({
     isPending: false,
   }),
   useAuthorizationLineDrift: () => mockDrift,
+  useCommercialDocument: () => mockCommercialDocument,
+  // RecordOnPaperSheet mounts unconditionally and calls all four paper
+  // hooks up front regardless of `kind` — stub every one.
+  useRecordPaperClientSignature: () => ({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  }),
+  useExecuteFurnishingsAuthorizationOnPaper: () => ({
+    mutateAsync: executeFurnishingsOnPaper,
+    isPending: false,
+  }),
+  useExecuteTradeScopeOnPaper: () => ({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  }),
+  useRecordPaperTradeAcceptance: () => ({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  }),
+  uploadPaperScanDocument: jest.fn(),
 }));
 
 jest.mock("./void-supersede-act", () => ({
@@ -79,7 +101,9 @@ const baseInstrument: ProjectInstrumentView = {
 describe("AuthorizationDetail", () => {
   beforeEach(() => {
     sendAuthorization.mockReset();
+    executeFurnishingsOnPaper.mockReset();
     mockDrift = { data: new Map(), isLoading: false };
+    mockCommercialDocument = { data: undefined, isLoading: false };
   });
 
   it("renders nothing when there is no instrument to show", () => {
@@ -125,6 +149,46 @@ describe("AuthorizationDetail", () => {
       />,
     );
     expect(screen.getByText("lines PO-ready").nextSibling).toHaveTextContent("0");
+  });
+
+  it("shows the paper tell once executed, when the client's signature was recorded from a printed original", () => {
+    mockCommercialDocument = {
+      data: {
+        signatures: [
+          { party: "client", signerName: "Jamie Client", executedOnPaper: true, paperScanDocumentId: null },
+        ],
+      },
+      isLoading: false,
+    };
+    render(
+      <AuthorizationDetail
+        projectId="project-1"
+        instrument={baseInstrument}
+        open
+        onClose={jest.fn()}
+      />,
+    );
+    expect(screen.getByText("Signed on paper · recorded by the studio.")).toBeVisible();
+  });
+
+  it("shows no paper tell for an ordinary online signature", () => {
+    mockCommercialDocument = {
+      data: {
+        signatures: [
+          { party: "client", signerName: "Jamie Client", executedOnPaper: false, paperScanDocumentId: null },
+        ],
+      },
+      isLoading: false,
+    };
+    render(
+      <AuthorizationDetail
+        projectId="project-1"
+        instrument={baseInstrument}
+        open
+        onClose={jest.fn()}
+      />,
+    );
+    expect(screen.queryByText("Signed on paper · recorded by the studio.")).not.toBeInTheDocument();
   });
 
   it("groups the what-was-signed table by room and shows the deposit invoice line, never a raw id", () => {
@@ -222,6 +286,49 @@ describe("AuthorizationDetail", () => {
     expect(
       screen.queryByRole("button", { name: "Send for signature" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("offers to record executed on paper only while sent, and records it", async () => {
+    executeFurnishingsOnPaper.mockResolvedValue({
+      notificationDelivery: "delivered",
+    });
+    const { rerender } = render(
+      <AuthorizationDetail
+        projectId="project-1"
+        instrument={{ ...baseInstrument, state: "draft" }}
+        open
+        onClose={jest.fn()}
+      />,
+    );
+    expect(
+      screen.queryByRole("button", { name: "Record executed on paper" }),
+    ).not.toBeInTheDocument();
+
+    rerender(
+      <AuthorizationDetail
+        projectId="project-1"
+        instrument={{ ...baseInstrument, state: "sent" }}
+        open
+        onClose={jest.fn()}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Record executed on paper" }),
+    );
+
+    fireEvent.change(await screen.findByLabelText("Signed by"), {
+      target: { value: "Harper Vale" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Record & execute" }));
+
+    await waitFor(() =>
+      expect(executeFurnishingsOnPaper).toHaveBeenCalledWith(
+        expect.objectContaining({
+          proposalId: "proposal-1",
+          signedName: "Harper Vale",
+        }),
+      ),
+    );
   });
 
   it("renders the Void act only while draft or sent — voiding an executed, declined, or superseded instrument is refused server-side", () => {
