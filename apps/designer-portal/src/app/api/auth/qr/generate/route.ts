@@ -11,6 +11,13 @@ const QR_SESSION_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const QR_RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const QR_RATE_LIMIT_MAX = 10;
 
+function responseHeaders(request: NextRequest): Record<string, string> {
+  return {
+    ...corsHeaders(request),
+    'Cache-Control': 'no-store',
+  };
+}
+
 function hashSecret(secret: string): string {
   return crypto.createHash('sha256').update(secret).digest('hex');
 }
@@ -89,7 +96,7 @@ async function createQrAuthSession(
         console.error('Failed to check QR rate limit:', countError);
         return NextResponse.json(
           { error: 'Unable to create session' },
-          { status: 503, headers: corsHeaders(request) }
+          { status: 503, headers: responseHeaders(request) }
         );
       }
 
@@ -99,7 +106,7 @@ async function createQrAuthSession(
           {
             status: 429,
             headers: {
-              ...corsHeaders(request),
+              ...responseHeaders(request),
               'Retry-After': '60',
               'Cache-Control': 'no-store',
             },
@@ -125,7 +132,7 @@ async function createQrAuthSession(
       console.error('Failed to create QR session:', error);
       return NextResponse.json(
         { error: 'Failed to create session' },
-        { status: 500, headers: corsHeaders(request) }
+        { status: 500, headers: responseHeaders(request) }
       );
     }
 
@@ -137,12 +144,12 @@ async function createQrAuthSession(
       sessionToken: pollSecret,
       qrUrl,
       expiresAt: expiresAt.toISOString(),
-    }, { headers: corsHeaders(request) });
+    }, { headers: responseHeaders(request) });
   } catch (err) {
     console.error('QR generate error:', err);
     return NextResponse.json(
       { error: 'Internal server error' },
-      { status: 500, headers: corsHeaders(request) }
+      { status: 500, headers: responseHeaders(request) }
     );
   }
 }
@@ -183,7 +190,7 @@ export async function POST(request: NextRequest) {
     } catch {
       return NextResponse.json(
         { error: 'Invalid JSON body' },
-        { status: 400, headers: corsHeaders(request) }
+        { status: 400, headers: responseHeaders(request) }
       );
     }
   }

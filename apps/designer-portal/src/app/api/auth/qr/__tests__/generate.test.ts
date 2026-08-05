@@ -52,6 +52,7 @@ describe('POST /api/auth/qr/generate', () => {
     const res = await POST(req);
 
     expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('no-store');
 
     const data = await res.json();
     expect(Object.keys(data).sort()).toEqual(['expiresAt', 'qrUrl', 'sessionToken']);
