@@ -26,6 +26,10 @@ const TRANSITIONS = new Set<CommercialTransition>([
   'furnishings_sent',
   'furnishings_executed',
   'deposit_ready',
+  'trade_scope_sent',
+  'trade_scope_executed',
+  'trade_scope_accepted',
+  'trade_draw_ready',
 ]);
 
 const corsHeaders = {
@@ -219,6 +223,48 @@ Deno.serve(async (req: Request) => {
     invoiceRow = invoice;
   }
 
+  let tradeScopeTermsRow: any = null;
+  if (transition === 'trade_scope_accepted') {
+    const { data: termsRow, error: termsError } = await admin
+      .from('trade_scope_terms')
+      .select('accepted_at, accepted_signed_name')
+      .eq('proposal_id', documentId)
+      .maybeSingle();
+    if (termsError) {
+      console.error('commercial-document-notify: trade scope terms lookup failed', termsError);
+      return json({ error: 'lookup_failed' }, 500);
+    }
+    tradeScopeTermsRow = termsRow;
+  }
+
+  let tradeScopeDrawRow: any = null;
+  let tradeScopeDrawInvoiceRow: any = null;
+  if (transition === 'trade_draw_ready' && eventId) {
+    const { data: drawRow, error: drawError } = await admin
+      .from('trade_scope_draws')
+      .select('id, invoice_id')
+      .eq('id', eventId)
+      .eq('proposal_id', documentId)
+      .maybeSingle();
+    if (drawError) {
+      console.error('commercial-document-notify: trade scope draw lookup failed', drawError);
+      return json({ error: 'lookup_failed' }, 500);
+    }
+    tradeScopeDrawRow = drawRow;
+    if ((drawRow as any)?.invoice_id) {
+      const { data: drawInvoice, error: drawInvoiceError } = await admin
+        .from('invoices')
+        .select('id, status')
+        .eq('id', (drawRow as any).invoice_id)
+        .maybeSingle();
+      if (drawInvoiceError) {
+        console.error('commercial-document-notify: trade scope draw invoice lookup failed', drawInvoiceError);
+        return json({ error: 'lookup_failed' }, 500);
+      }
+      tradeScopeDrawInvoiceRow = drawInvoice;
+    }
+  }
+
   const signatures = new Set((signatureRows ?? []).map((row: any) => row.party_role));
   const evidence: CommercialTransitionEvidence = {
     clientSignature: signatures.has('client'),
@@ -248,6 +294,15 @@ Deno.serve(async (req: Request) => {
           status: String(invoiceRow.status),
         }
       : null,
+    tradeScopeTerms: tradeScopeTermsRow
+      ? { acceptedAt: (tradeScopeTermsRow as any).accepted_at ?? null }
+      : null,
+    tradeScopeDraw: tradeScopeDrawRow
+      ? {
+          id: String((tradeScopeDrawRow as any).id),
+          invoiceStatus: tradeScopeDrawInvoiceRow?.status ?? null,
+        }
+      : null,
   };
   const policy = assessCommercialTransition({
     actorRole,
@@ -269,12 +324,16 @@ Deno.serve(async (req: Request) => {
     .maybeSingle();
 
   const audiences: Array<'client' | 'studio'> =
-    transition === 'client_signed' || transition === 'furnishings_executed'
+    transition === 'client_signed' ||
+      transition === 'furnishings_executed' ||
+      transition === 'trade_scope_executed'
       ? ['client', 'studio']
       : transition === 'executed' ||
           transition === 'budget_published' ||
           transition === 'furnishings_sent' ||
-          transition === 'deposit_ready'
+          transition === 'deposit_ready' ||
+          transition === 'trade_scope_sent' ||
+          transition === 'trade_draw_ready'
         ? ['client']
         : ['studio'];
   const results: Record<string, unknown> = {};
@@ -290,15 +349,18 @@ Deno.serve(async (req: Request) => {
         ? `${DESIGNER_PORTAL_URL}/doc/${documentId}`
         : transition === 'budget_published'
           ? `${CLIENT_PORTAL_URL}/budget`
-          : transition === 'deposit_ready'
+          : transition === 'deposit_ready' || transition === 'trade_draw_ready'
             ? `${CLIENT_PORTAL_URL}/invoices`
             : `${CLIENT_PORTAL_URL}/proposals/${documentId}`;
+    const signerName = transition === 'trade_scope_accepted'
+      ? ((tradeScopeTermsRow as any)?.accepted_signed_name ?? proposal.signed_by_name)
+      : proposal.signed_by_name;
     const rendered = renderCommercialEmail({
       transition,
       audience,
       documentTitle: proposal.title,
       documentKind: proposal.document_kind,
-      signerName: proposal.signed_by_name,
+      signerName,
       recipientName: recipient.full_name,
       counterpartyName: audience === 'client' ? proposal.designer?.full_name : proposal.client?.full_name,
       portalUrl,

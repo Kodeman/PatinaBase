@@ -38,6 +38,18 @@ Deno.test('furnishings send copy describes snapshot-limited authority', () => {
   assertStringIncludes(rendered.html, 'Review authorization');
 });
 
+Deno.test('trade scope send copy states the signing boundary', () => {
+  const rendered = renderProposalEmail(
+    { ...base, documentKind: 'trade_scope' },
+    'https://client.patina.cloud',
+  );
+
+  assertStringIncludes(rendered.subject, 'sent you a trade scope');
+  assertStringIncludes(rendered.html, 'draw schedule');
+  assertStringIncludes(rendered.html, 'Signing authorizes only the work and draws described inside');
+  assertStringIncludes(rendered.html, 'Review trade scope');
+});
+
 Deno.test('legacy proposal send copy is unchanged', () => {
   const rendered = renderProposalEmail(
     { ...base, documentKind: 'legacy' },

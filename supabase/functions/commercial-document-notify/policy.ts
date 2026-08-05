@@ -24,6 +24,13 @@ export interface CommercialTransitionEvidence {
     projectId: string;
     status: string;
   } | null;
+  tradeScopeTerms: {
+    acceptedAt: string | null;
+  } | null;
+  tradeScopeDraw: {
+    id: string;
+    invoiceStatus: string | null;
+  } | null;
 }
 
 export interface CommercialTransitionPolicyInput {
@@ -47,15 +54,45 @@ const STUDIO_TRANSITIONS = new Set<CommercialTransition>([
   "executed",
   "budget_published",
   "furnishings_sent",
+  "trade_scope_sent",
+  "trade_draw_ready",
 ]);
 
 const CLIENT_TRANSITIONS = new Set<CommercialTransition>([
   "client_signed",
   "furnishings_executed",
   "deposit_ready",
+  "trade_scope_executed",
+  "trade_scope_accepted",
 ]);
 
 const SERVICES_KINDS = new Set(["design_services", "service_addendum"]);
+
+const SERVICES_TRANSITIONS = new Set<CommercialTransition>([
+  "client_signed",
+  "executed",
+  "budget_published",
+]);
+
+const FURNISHINGS_ONLY_TRANSITIONS = new Set<CommercialTransition>([
+  "furnishings_sent",
+  "furnishings_executed",
+]);
+
+const TRADE_SCOPE_ONLY_TRANSITIONS = new Set<CommercialTransition>([
+  "trade_scope_sent",
+  "trade_scope_executed",
+  "trade_scope_accepted",
+  "trade_draw_ready",
+]);
+
+/** Transitions whose idempotency/evidence key is a sub-document event id
+ * rather than the commercial document id itself (mirrors budget_published's
+ * checkpoint-id keying). */
+const EVENT_SCOPED_TRANSITIONS = new Set<CommercialTransition>([
+  "budget_published",
+  "trade_draw_ready",
+]);
 
 export function actorCanNotify(
   actorRole: CommercialActorRole,
@@ -71,25 +108,33 @@ export function documentKindCanNotify(
   documentKind: string,
   transition: CommercialTransition,
 ): boolean {
-  if (
-    transition === "client_signed" ||
-    transition === "executed" ||
-    transition === "budget_published"
-  ) {
+  if (SERVICES_TRANSITIONS.has(transition)) {
     return SERVICES_KINDS.has(documentKind);
   }
-  return documentKind === "furnishings_authorization";
+  if (FURNISHINGS_ONLY_TRANSITIONS.has(transition)) {
+    return documentKind === "furnishings_authorization";
+  }
+  if (TRADE_SCOPE_ONLY_TRANSITIONS.has(transition)) {
+    return documentKind === "trade_scope";
+  }
+  if (transition === "deposit_ready") {
+    return documentKind === "furnishings_authorization" ||
+      documentKind === "trade_scope";
+  }
+  return false;
 }
 
-/** Non-budget transitions are document-scoped. Rejecting a caller-supplied
- * event id prevents arbitrary UUIDs from manufacturing another idempotency
- * key for the same committed act. */
+/** Document-scoped transitions are, well, document-scoped. Rejecting a
+ * caller-supplied event id prevents arbitrary UUIDs from manufacturing
+ * another idempotency key for the same committed act. Event-scoped
+ * transitions (a budget checkpoint, a trade draw) key off that sub-document
+ * event id instead. */
 export function commercialNotificationEventKey(
   transition: CommercialTransition,
   documentId: string,
   eventId: string | null,
 ): string | null {
-  if (transition === "budget_published") return eventId || null;
+  if (EVENT_SCOPED_TRANSITIONS.has(transition)) return eventId || null;
   return eventId === null ? documentId : null;
 }
 
@@ -122,6 +167,16 @@ function hasBoundFurnishingsEvidence(
     Boolean(checkpoint.publishedAt) &&
     (checkpoint.status === "acknowledged" || checkpoint.status === "overridden")
   );
+}
+
+/** Trade scope has no working-budget checkpoint to bind against — the
+ * project_commercial_documents row itself, scoped to this proposal by the
+ * caller, is the whole of the binding. */
+function hasBoundTradeScopeEvidence(
+  input: CommercialTransitionPolicyInput,
+): boolean {
+  const document = input.evidence.projectDocument;
+  return document !== null && document.documentKind === "trade_scope";
 }
 
 export function assessCommercialTransition(
@@ -175,15 +230,53 @@ export function assessCommercialTransition(
     case "deposit_ready": {
       const document = evidence.projectDocument;
       const invoice = evidence.depositInvoice;
+      const bound = document?.documentKind === "furnishings_authorization"
+        ? hasBoundFurnishingsEvidence(input)
+        : document?.documentKind === "trade_scope"
+          ? hasBoundTradeScopeEvidence(input)
+          : false;
       return input.commercialState === "executed" &&
         evidence.clientSignature &&
         Boolean(document?.executedAt) &&
-        hasBoundFurnishingsEvidence(input) &&
+        bound &&
         document !== null &&
         invoice !== null &&
         invoice.id === document.depositInvoiceId &&
         invoice.projectId === document.projectId &&
         (invoice.status === "sent" || invoice.status === "partially_paid")
+        ? { allowed: true }
+        : { allowed: false, reason: "transition_not_committed" };
+    }
+    case "trade_scope_sent":
+      return input.commercialState === "sent" &&
+        hasBoundTradeScopeEvidence(input)
+        ? { allowed: true }
+        : { allowed: false, reason: "transition_not_committed" };
+    case "trade_scope_executed":
+      return input.commercialState === "executed" &&
+        evidence.clientSignature &&
+        Boolean(evidence.projectDocument?.executedAt) &&
+        hasBoundTradeScopeEvidence(input)
+        ? { allowed: true }
+        : { allowed: false, reason: "transition_not_committed" };
+    case "trade_scope_accepted": {
+      const terms = evidence.tradeScopeTerms;
+      return input.commercialState === "executed" &&
+        Boolean(evidence.projectDocument?.executedAt) &&
+        hasBoundTradeScopeEvidence(input) &&
+        terms !== null &&
+        Boolean(terms.acceptedAt)
+        ? { allowed: true }
+        : { allowed: false, reason: "transition_not_committed" };
+    }
+    case "trade_draw_ready": {
+      const draw = evidence.tradeScopeDraw;
+      return input.commercialState === "executed" &&
+        hasBoundTradeScopeEvidence(input) &&
+        Boolean(input.eventId) &&
+        draw !== null &&
+        draw.id === input.eventId &&
+        (draw.invoiceStatus === "sent" || draw.invoiceStatus === "partially_paid")
         ? { allowed: true }
         : { allowed: false, reason: "transition_not_committed" };
     }

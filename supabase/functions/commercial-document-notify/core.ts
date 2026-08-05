@@ -14,7 +14,11 @@ export type CommercialTransition =
   | 'budget_published'
   | 'furnishings_sent'
   | 'furnishings_executed'
-  | 'deposit_ready';
+  | 'deposit_ready'
+  | 'trade_scope_sent'
+  | 'trade_scope_executed'
+  | 'trade_scope_accepted'
+  | 'trade_draw_ready';
 
 export interface CommercialEmailInput {
   transition: CommercialTransition;
@@ -116,6 +120,47 @@ export function renderCommercialEmail(input: CommercialEmailInput): RenderedComm
       body = `The deposit for &ldquo;<strong>${title}</strong>&rdquo; is ready. Purchasing remains locked until Patina records the required payment against the internal invoice.`;
       cta = 'Review deposit';
       message = `The required deposit for ${input.documentTitle} is ready.`;
+      break;
+    case 'trade_scope_sent':
+      subject = `Trade scope ready for review: ${input.documentTitle}`;
+      eyebrow = 'Trade scope';
+      headline = 'Review this trade scope';
+      body = `${counterparty} prepared &ldquo;<strong>${title}</strong>&rdquo; for your review. Signing authorizes the scope of work, draws, and pricing described inside &mdash; nothing more.`;
+      cta = 'Review trade scope';
+      message = `${input.documentTitle} is ready for your review and signature.`;
+      break;
+    case 'trade_scope_executed':
+      if (input.audience === 'client') {
+        subject = `Trade scope authorized: ${input.documentTitle}`;
+        eyebrow = 'Trade scope authorized';
+        headline = 'Your trade scope is signed and active';
+        body = `&ldquo;<strong>${title}</strong>&rdquo; is signed and executed. The first draw invoice is on its way &mdash; the trade begins once it is paid.`;
+        cta = 'View trade scope';
+        message = `${input.documentTitle} is executed; the deposit draw is being issued.`;
+      } else {
+        subject = `Trade scope executed: ${input.documentTitle}`;
+        eyebrow = 'Trade scope executed';
+        headline = 'Client authorization is in';
+        body = `${signer} signed &ldquo;<strong>${title}</strong>&rdquo;. The deposit draw invoice has been issued &mdash; the trade is cleared to begin once it is paid.`;
+        cta = 'View trade scope';
+        message = `${input.documentTitle} is executed and the deposit draw invoice is out.`;
+      }
+      break;
+    case 'trade_scope_accepted':
+      subject = `Trade scope accepted: ${input.documentTitle}`;
+      eyebrow = 'Substantial completion accepted';
+      headline = 'The client signed off on this trade';
+      body = `${signer} accepted &ldquo;<strong>${title}</strong>&rdquo; as substantially complete. The final draw is ready to invoice.`;
+      cta = 'View trade scope';
+      message = `${input.documentTitle} was accepted by the client; the final draw can now be invoiced.`;
+      break;
+    case 'trade_draw_ready':
+      subject = `Draw invoice ready: ${input.documentTitle}`;
+      eyebrow = 'Payment required';
+      headline = 'A trade draw is ready to pay';
+      body = `The next draw for &ldquo;<strong>${title}</strong>&rdquo; is ready. The trade continues once Patina records the required payment against the internal invoice.`;
+      cta = 'Review draw';
+      message = `A trade scope draw invoice for ${input.documentTitle} is ready.`;
       break;
   }
 

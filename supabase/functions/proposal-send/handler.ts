@@ -46,7 +46,8 @@ export interface ProposalSendSnapshot {
     | 'legacy'
     | 'design_services'
     | 'furnishings_authorization'
-    | 'service_addendum';
+    | 'service_addendum'
+    | 'trade_scope';
   personalMessage?: string;
   ccEmail?: string;
   validUntil?: string;
@@ -237,18 +238,23 @@ export function renderProposalEmail(
   const isServices = dispatch.documentKind === 'design_services' ||
     dispatch.documentKind === 'service_addendum';
   const isFurnishings = dispatch.documentKind === 'furnishings_authorization';
+  const isTradeScope = dispatch.documentKind === 'trade_scope';
   const documentLabel = isServices
     ? 'design services agreement'
     : isFurnishings
       ? 'furnishings authorization'
-      : 'proposal';
+      : isTradeScope
+        ? 'trade scope'
+        : 'proposal';
   const subject =
     `${dispatch.senderName} sent you a ${documentLabel}: "${dispatch.proposalTitle}"`;
   const description = isServices
     ? 'Review the professional services, role-based rates, retainer policy, billing cadence, ceiling, and terms. Furnishings and permission to purchase are not included.'
     : isFurnishings
       ? 'Review the named furnishings wave. Only its listed items, quantities, and client prices become purchasing authority after signature and execution.'
-      : `${escapeHtml(dispatch.designerName)} has prepared a design proposal for you: <strong>${escapeHtml(dispatch.proposalTitle)}</strong>.`;
+      : isTradeScope
+        ? 'Review the named trade scope &mdash; its scope of work, draw schedule, and price. Signing authorizes only the work and draws described inside.'
+        : `${escapeHtml(dispatch.designerName)} has prepared a design proposal for you: <strong>${escapeHtml(dispatch.proposalTitle)}</strong>.`;
   const html = renderBrandedShell({
     title: subject,
     preview: `${dispatch.designerName} has prepared a ${documentLabel} for you.`,
@@ -256,7 +262,9 @@ export function renderProposalEmail(
       ? 'Design services'
       : isFurnishings
         ? 'FF&E authorization'
-        : 'Proposal',
+        : isTradeScope
+          ? 'Trade scope'
+          : 'Proposal',
     studioName: dispatch.studioName,
     studioLogoUrl: dispatch.studioLogoUrl,
     body: [
@@ -264,7 +272,9 @@ export function renderProposalEmail(
         ? 'Your design agreement is ready'
         : isFurnishings
           ? 'Your furnishings authorization is ready'
-          : 'Your proposal is ready'),
+          : isTradeScope
+            ? 'Your trade scope is ready'
+            : 'Your proposal is ready'),
       paragraph(`Hi ${escapeHtml(clientName)},`),
       paragraph(description),
       personalBlock,
@@ -277,7 +287,9 @@ export function renderProposalEmail(
           ? 'Review agreement'
           : isFurnishings
             ? 'Review authorization'
-            : 'Review proposal',
+            : isTradeScope
+              ? 'Review trade scope'
+              : 'Review proposal',
         'ink',
       ),
       spacer(),

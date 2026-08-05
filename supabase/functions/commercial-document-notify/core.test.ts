@@ -69,3 +69,70 @@ Deno.test('furnishings and deposit transitions remain distinct', () => {
   assertStringIncludes(deposit.html, 'Purchasing remains locked');
   assertEquals(deposit.subject, 'Deposit ready: Living Room Wave');
 });
+
+Deno.test('trade scope sent copy asks the client to review, not just sign', () => {
+  const email = renderCommercialEmail({
+    transition: 'trade_scope_sent',
+    audience: 'client',
+    documentTitle: 'Kitchen Millwork',
+    documentKind: 'trade_scope',
+    counterpartyName: 'Morgan Studio',
+    portalUrl: 'https://client.patina.cloud/proposals/trade-1',
+  });
+
+  assertStringIncludes(email.subject, 'Trade scope ready for review');
+  assertStringIncludes(email.html, 'draws, and pricing');
+  assertStringIncludes(email.html, 'Review trade scope');
+});
+
+Deno.test('trade scope executed copy differs by audience but never conflates deposit payment', () => {
+  const clientCopy = renderCommercialEmail({
+    transition: 'trade_scope_executed',
+    audience: 'client',
+    documentTitle: 'Kitchen Millwork',
+    documentKind: 'trade_scope',
+    portalUrl: 'https://client.patina.cloud/proposals/trade-1',
+  });
+  const studioCopy = renderCommercialEmail({
+    transition: 'trade_scope_executed',
+    audience: 'studio',
+    documentTitle: 'Kitchen Millwork',
+    documentKind: 'trade_scope',
+    signerName: 'Jamie Client',
+    portalUrl: 'https://app.patina.cloud/doc/trade-1',
+  });
+
+  assertStringIncludes(clientCopy.subject, 'Trade scope authorized');
+  assertStringIncludes(clientCopy.html, 'signed and active');
+  assertStringIncludes(studioCopy.subject, 'Trade scope executed');
+  assertStringIncludes(studioCopy.html, 'Jamie Client signed');
+  assert(!clientCopy.html.includes('Complete the required deposit'));
+});
+
+Deno.test('trade scope accepted copy signals the final draw, not payment itself', () => {
+  const email = renderCommercialEmail({
+    transition: 'trade_scope_accepted',
+    audience: 'studio',
+    documentTitle: 'Kitchen Millwork',
+    documentKind: 'trade_scope',
+    signerName: 'Jamie Client',
+    portalUrl: 'https://app.patina.cloud/doc/trade-1',
+  });
+
+  assertStringIncludes(email.subject, 'Trade scope accepted');
+  assertStringIncludes(email.html, 'Jamie Client accepted');
+  assertStringIncludes(email.html, 'final draw is ready to invoice');
+});
+
+Deno.test('trade draw ready copy mirrors deposit-ready payment framing', () => {
+  const email = renderCommercialEmail({
+    transition: 'trade_draw_ready',
+    audience: 'client',
+    documentTitle: 'Kitchen Millwork',
+    documentKind: 'trade_scope',
+    portalUrl: 'https://client.patina.cloud/invoices',
+  });
+
+  assertStringIncludes(email.subject, 'Draw invoice ready');
+  assertStringIncludes(email.html, 'Patina records the required payment');
+});
