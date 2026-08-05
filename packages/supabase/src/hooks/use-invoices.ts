@@ -9,6 +9,9 @@
 import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import type { OnlinePaymentMethod } from '@patina/shared/invoice';
+
+export type { OnlinePaymentMethod };
 
 // Lazy client getter to avoid module-level initialization during SSR
 const getSupabase = () => createBrowserClient();
@@ -67,6 +70,13 @@ export interface InvoicePayment {
   received_at: string | null;
   created_at: string;
   updated_at: string;
+  /** Fee charged on top of amount_cents (migration 00428). Optional: absent
+   *  on rows read before the column existed / before types are regenerated. */
+  surcharge_cents?: number;
+  /** Settle-stamped Stripe payment method type (migration 00428); NULL for a
+   *  legacy stripe payment or a non-stripe method. Optional for the same
+   *  pre-regen reason as surcharge_cents. */
+  stripe_payment_method_type?: 'card' | 'us_bank_account' | null;
 }
 
 export interface InvoiceCheckoutReceipt {
@@ -77,6 +87,12 @@ export interface InvoiceCheckoutReceipt {
   payment_id: string;
   session_id: string;
   reused: boolean;
+  /** Fee cents on this attempt (migration 00428); 0/absent on a legacy or
+   *  no-surcharge attempt. */
+  surcharge_cents?: number;
+  /** The method this session was restricted to (migration 00428); NULL on a
+   *  legacy attempt that offers both card and ACH. */
+  payment_method?: 'card' | 'us_bank_account' | null;
 }
 
 export interface InvoiceCheckoutEvidence {
@@ -149,6 +165,28 @@ function parseInvoiceCheckoutReceipt(value: unknown): InvoiceCheckoutReceipt {
     throw new InvoiceCheckoutError(
       'checkout_malformed_response',
       'Checkout returned an incomplete response. No redirect was started.',
+      checkoutEvidence(row),
+    );
+  }
+  // Lenient additions (migration 00428, payment-method chooser) — validate
+  // ONLY when the key is present, so a legacy/no-method response (both keys
+  // absent) keeps parsing exactly as it did before this wave.
+  if (row.surcharge_cents !== undefined && !Number.isInteger(row.surcharge_cents)) {
+    throw new InvoiceCheckoutError(
+      'checkout_malformed_response',
+      'Checkout returned a malformed surcharge. No redirect was started.',
+      checkoutEvidence(row),
+    );
+  }
+  if (
+    row.payment_method !== undefined &&
+    row.payment_method !== null &&
+    row.payment_method !== 'card' &&
+    row.payment_method !== 'us_bank_account'
+  ) {
+    throw new InvoiceCheckoutError(
+      'checkout_malformed_response',
+      'Checkout returned an unrecognized payment method. No redirect was started.',
       checkoutEvidence(row),
     );
   }
@@ -988,13 +1026,25 @@ export function useChaseInvoice(options?: { errorSurface?: 'inline' }) {
  * automatically; the function verifies the caller is the invoice's client,
  * claims one exact attempt/payment pair, and reuses its stable Stripe session.
  * The typed receipt and typed failures preserve that exact attempt identity.
+ *
+ * `paymentMethod` ('card' | 'us_bank_account') restricts the session to one
+ * method with the surcharge broken out as its own line item (migration
+ * 00428). Leaving it undefined OMITS `payment_method` from the body entirely
+ * — not a null — which is exactly what iOS (InvoicesAPIClient.swift) has
+ * always sent, and claims the legacy both-methods session (invariant #3).
  */
 export function useStartCheckout() {
   return useMutation({
-    mutationFn: async ({ invoiceId }: { invoiceId: string }): Promise<InvoiceCheckoutReceipt> => {
+    mutationFn: async ({
+      invoiceId,
+      paymentMethod,
+    }: {
+      invoiceId: string;
+      paymentMethod?: OnlinePaymentMethod;
+    }): Promise<InvoiceCheckoutReceipt> => {
       const supabase = getSupabase() as any;
       const { data, error } = await supabase.functions.invoke('create-checkout-session', {
-        body: { invoiceId },
+        body: paymentMethod ? { invoiceId, payment_method: paymentMethod } : { invoiceId },
       });
       if (error) {
         // FunctionsHttpError carries the response. Preserve the stable code and
@@ -1023,6 +1073,109 @@ export function useStartCheckout() {
         );
       }
       return parseInvoiceCheckoutReceipt(data);
+    },
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PAYMENT-METHOD CHOOSER (migration 00428 — ACH / Card / Check)
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface InvoicePaymentOptions {
+  card_surcharge_bps: number;
+  check_remit_to: string | null;
+}
+
+const DEFAULT_INVOICE_PAYMENT_OPTIONS: InvoicePaymentOptions = {
+  card_surcharge_bps: 300,
+  check_remit_to: null,
+};
+
+/**
+ * Per-studio payment surcharge config for the client-portal payment-method
+ * chooser, via the get_invoice_payment_options RPC (migration 00428,
+ * SECURITY DEFINER — the invoice's client or a studio co-member only; a
+ * draft invoice or a stranger raises `invoice_not_found` server-side). ANY
+ * failure — RPC error, no settings row, a malformed/empty response — falls
+ * back to the platform defaults (300 bps, no remit-to) rather than throwing:
+ * a config read must never block the pay path.
+ */
+export function useInvoicePaymentOptions(invoiceId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['invoice-payment-options', invoiceId],
+    queryFn: async (): Promise<InvoicePaymentOptions> => {
+      const supabase = getSupabase() as any;
+      try {
+        const { data, error } = await supabase.rpc('get_invoice_payment_options', {
+          p_invoice_id: invoiceId,
+        });
+        if (error || !data || typeof data !== 'object' || Array.isArray(data)) {
+          return DEFAULT_INVOICE_PAYMENT_OPTIONS;
+        }
+        const row = data as Record<string, unknown>;
+        return {
+          card_surcharge_bps: Number.isInteger(row.card_surcharge_bps)
+            ? (row.card_surcharge_bps as number)
+            : DEFAULT_INVOICE_PAYMENT_OPTIONS.card_surcharge_bps,
+          check_remit_to: typeof row.check_remit_to === 'string' ? row.check_remit_to : null,
+        };
+      } catch {
+        return DEFAULT_INVOICE_PAYMENT_OPTIONS;
+      }
+    },
+    enabled: !!invoiceId,
+  });
+}
+
+export interface NotifyCheckIntentResult {
+  ok: boolean;
+  /** True when a prior notification within the idempotency window absorbed
+   *  this call — no second designer notification/email was sent. */
+  alreadyNotified: boolean;
+}
+
+/**
+ * Tells the designer the client intends to mail a check, via the
+ * invoice-check-intent edge function (caller JWT goes along automatically;
+ * the function verifies the caller is the invoice's client). Pure
+ * notification — no ledger row; the designer still records the actual
+ * receipt via useRecordPayment once the check arrives. Idempotent
+ * server-side (a 24h window collapses a double-click to one notification),
+ * so this never needs client-side de-dup beyond the normal pending guard.
+ *
+ * Error unwrap mirrors useSendInvoice (R83): a FunctionsHttpError's JSON body
+ * carries the stable `detail`/`error` code, preferred over the generic
+ * transport message.
+ */
+export function useNotifyCheckIntent() {
+  return useMutation({
+    mutationFn: async ({
+      invoiceId,
+    }: {
+      invoiceId: string;
+    }): Promise<NotifyCheckIntentResult> => {
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.functions.invoke('invoice-check-intent', {
+        body: { invoiceId },
+      });
+      if (error) {
+        let detail: string | undefined;
+        try {
+          const body = await (error as { context?: Response }).context?.json();
+          detail = body?.detail ?? body?.error;
+        } catch {
+          /* fall through to the generic message */
+        }
+        throw new Error(detail ?? error.message ?? 'Failed to notify the designer');
+      }
+      if (data?.error) throw new Error(data.detail ?? data.error);
+      return {
+        ok: !!data?.ok,
+        // The edge function answers camelCase (`alreadyNotified`); the snake
+        // form is a tolerated fallback only, so an older/replayed body shape
+        // can never silently read as "not yet notified" and re-notify.
+        alreadyNotified: !!(data?.alreadyNotified ?? data?.already_notified),
+      };
     },
   });
 }

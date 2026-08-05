@@ -1349,6 +1349,8 @@ export {
   useRecordPayment,
   useStartCheckout,
   InvoiceCheckoutError,
+  useInvoicePaymentOptions,
+  useNotifyCheckIntent,
   useVoidInvoice,
   useArAging,
   useFfeInvoiceCoverage,
@@ -1376,7 +1378,20 @@ export type {
   FfeCoverageState,
   FfeItemCoverage,
   FfeInvoiceCoverageMap,
+  OnlinePaymentMethod,
+  InvoicePaymentOptions,
+  NotifyCheckIntentResult,
 } from './use-invoices';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Studio billing settings (invoice payment-method surcharge config —
+// migration 00428)
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  useStudioBillingSettings,
+  useUpdateStudioBillingSettings,
+} from './use-studio-billing';
+export type { StudioBillingSettings } from './use-studio-billing';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Direct orders — client "buy now" on Patina-managed products, the third

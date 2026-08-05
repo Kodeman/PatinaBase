@@ -165,3 +165,84 @@ export function invoiceBalanceCents(invoice: {
 }): number {
   return Math.max((invoice.total_cents || 0) - (invoice.amount_paid_cents || 0), 0);
 }
+
+// ── Online payment surcharge (ACH / Card chooser — migration 00428) ─────────
+// Client-side preview of the fee Stripe will actually charge, so the totals
+// stack updates the instant the client toggles a method — before any round
+// trip. Rounding mirrors the invoice_payment_surcharge_cents SQL fn exactly:
+// ((cents::bigint * bps + 5000) / 10000)::integer, ACH additionally capped at
+// ACH_SURCHARGE_CAP_CENTS. Keep these in lockstep — a drift here means the
+// number the client previews disagrees with what Stripe collects.
+
+export type OnlinePaymentMethod = 'card' | 'us_bank_account';
+
+/** ACH passthrough: 0.8% of the charge — the platform's actual bank-debit cost. */
+export const ACH_SURCHARGE_BPS = 80;
+
+/** ACH surcharge never exceeds $5, regardless of invoice size. */
+export const ACH_SURCHARGE_CAP_CENTS = 500;
+
+/** Fallback card bps when a studio hasn't configured one (network cap 3%). */
+export const DEFAULT_CARD_SURCHARGE_BPS = 300;
+
+/** Shown for the check panel when a studio has no check_remit_to configured. */
+export const CHECK_REMIT_FALLBACK = 'Contact your designer for mailing details';
+
+/** ((cents * bps + 5000) / 10000) floored — exact integer half-up, SQL's twin. */
+function surchargeFormula(amountCents: number, bps: number): number {
+  return Math.floor((amountCents * bps + 5000) / 10000);
+}
+
+/** ACH surcharge: 0.8% of amountCents, capped at $5. Zero for amountCents <= 0. */
+export function achSurchargeCents(amountCents: number): number {
+  if (!(amountCents > 0)) return 0;
+  return Math.min(surchargeFormula(amountCents, ACH_SURCHARGE_BPS), ACH_SURCHARGE_CAP_CENTS);
+}
+
+/**
+ * Card surcharge at the given bps (a studio's configured card_surcharge_bps,
+ * or DEFAULT_CARD_SURCHARGE_BPS when unconfigured). Zero for amountCents <= 0
+ * or bps <= 0.
+ */
+export function cardSurchargeCents(
+  amountCents: number,
+  cardBps: number = DEFAULT_CARD_SURCHARGE_BPS
+): number {
+  if (!(amountCents > 0)) return 0;
+  return surchargeFormula(amountCents, cardBps);
+}
+
+/** Dispatches to the ACH or card formula by the chosen online method. */
+export function onlineSurchargeCents(
+  method: OnlinePaymentMethod,
+  amountCents: number,
+  cardBps: number = DEFAULT_CARD_SURCHARGE_BPS
+): number {
+  return method === 'us_bank_account'
+    ? achSurchargeCents(amountCents)
+    : cardSurchargeCents(amountCents, cardBps);
+}
+
+/** Minimal payment shape the label matrix needs (mirrors invoice_payments columns). */
+export interface InvoicePaymentMethodLabelInput {
+  method: InvoicePaymentMethod;
+  /** Settle-stamped (migration 00428); NULL/undefined pre-wave or non-stripe. */
+  stripe_payment_method_type?: 'card' | 'us_bank_account' | null;
+}
+
+/**
+ * Payment method label for the payments list / folio. A `stripe` payment
+ * disambiguates by the settle-stamped `stripe_payment_method_type`: ACH reads
+ * "Bank transfer (ACH)", card reads "Card", and a `stripe` payment recorded
+ * before that column existed (NULL/undefined) keeps the legacy "Card
+ * (Stripe)" copy — so history never re-labels itself under a reader. Every
+ * other method falls through to INVOICE_PAYMENT_METHOD_LABELS unchanged.
+ */
+export function invoicePaymentMethodLabel(payment: InvoicePaymentMethodLabelInput): string {
+  if (payment.method === 'stripe') {
+    if (payment.stripe_payment_method_type === 'us_bank_account') return 'Bank transfer (ACH)';
+    if (payment.stripe_payment_method_type === 'card') return 'Card';
+    return INVOICE_PAYMENT_METHOD_LABELS.stripe;
+  }
+  return INVOICE_PAYMENT_METHOD_LABELS[payment.method];
+}

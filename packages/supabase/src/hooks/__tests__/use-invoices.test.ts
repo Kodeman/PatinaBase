@@ -36,6 +36,8 @@ import {
   useDeleteLineItem,
   useIssueInvoice,
   useStartCheckout,
+  useInvoicePaymentOptions,
+  useNotifyCheckIntent,
   useRecordPayment,
   useVoidInvoice,
   type DraftLineInput,
@@ -391,5 +393,264 @@ describe('useStartCheckout exact receipt', () => {
     await expect(config.mutationFn({ invoiceId: 'invoice-1' })).rejects.toMatchObject({
       code: 'checkout_malformed_response',
     });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useStartCheckout — payment_method pass-through (migration 00428)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useStartCheckout payment_method body', () => {
+  type CheckoutConfig = {
+    mutationFn: (input: {
+      invoiceId: string;
+      paymentMethod?: 'card' | 'us_bank_account';
+    }) => Promise<unknown>;
+  };
+
+  const legacyReceipt = {
+    url: 'https://checkout.stripe.test/cs_1',
+    amount_cents: 12_345,
+    currency: 'usd',
+    checkout_attempt_id: 'attempt-1',
+    payment_id: 'payment-1',
+    session_id: 'cs_1',
+    reused: false,
+  };
+
+  it('includes payment_method in the body when paymentMethod is passed', async () => {
+    supabaseClient.functions.invoke.mockResolvedValue({ data: legacyReceipt, error: null });
+    const config = useStartCheckout() as unknown as CheckoutConfig;
+
+    await config.mutationFn({ invoiceId: 'invoice-1', paymentMethod: 'us_bank_account' });
+
+    expect(supabaseClient.functions.invoke).toHaveBeenCalledWith('create-checkout-session', {
+      body: { invoiceId: 'invoice-1', payment_method: 'us_bank_account' },
+    });
+  });
+
+  it('omits the payment_method KEY entirely when paymentMethod is undefined (invariant #3, iOS legacy)', async () => {
+    supabaseClient.functions.invoke.mockResolvedValue({ data: legacyReceipt, error: null });
+    const config = useStartCheckout() as unknown as CheckoutConfig;
+
+    await config.mutationFn({ invoiceId: 'invoice-1' });
+
+    const [, callArgs] = supabaseClient.functions.invoke.mock.calls[0];
+    expect(callArgs.body).toEqual({ invoiceId: 'invoice-1' });
+    expect('payment_method' in callArgs.body).toBe(false);
+  });
+
+  it('round-trips a receipt carrying valid surcharge_cents + payment_method extras', async () => {
+    supabaseClient.functions.invoke.mockResolvedValue({
+      data: { ...legacyReceipt, surcharge_cents: 375, payment_method: 'card' },
+      error: null,
+    });
+    const config = useStartCheckout() as unknown as CheckoutConfig;
+
+    await expect(
+      config.mutationFn({ invoiceId: 'invoice-1', paymentMethod: 'card' })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        surcharge_cents: 375,
+        payment_method: 'card',
+        amount_cents: 12_345,
+      })
+    );
+  });
+
+  it('rejects with checkout_malformed_response when surcharge_cents is present but not an integer', async () => {
+    supabaseClient.functions.invoke.mockResolvedValue({
+      data: { ...legacyReceipt, surcharge_cents: 3.5 },
+      error: null,
+    });
+    const config = useStartCheckout() as unknown as CheckoutConfig;
+
+    await expect(config.mutationFn({ invoiceId: 'invoice-1' })).rejects.toMatchObject({
+      code: 'checkout_malformed_response',
+    });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useInvoicePaymentOptions (migration 00428)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useInvoicePaymentOptions', () => {
+  interface OptionsConfig {
+    queryKey: unknown[];
+    queryFn: () => Promise<{ card_surcharge_bps: number; check_remit_to: string | null }>;
+    enabled: boolean;
+  }
+
+  it('uses the ["invoice-payment-options", invoiceId] query key and is enabled only with an id', () => {
+    const config = useInvoicePaymentOptions('invoice-1') as unknown as OptionsConfig;
+    expect(config.queryKey).toEqual(['invoice-payment-options', 'invoice-1']);
+    expect(config.enabled).toBe(true);
+    expect((useInvoicePaymentOptions(null) as unknown as OptionsConfig).enabled).toBe(false);
+    expect((useInvoicePaymentOptions(undefined) as unknown as OptionsConfig).enabled).toBe(false);
+  });
+
+  it('calls get_invoice_payment_options with p_invoice_id and passes through a valid row', async () => {
+    supabaseClient.rpc.mockResolvedValue({
+      data: { card_surcharge_bps: 250, check_remit_to: '123 Studio Way' },
+      error: null,
+    });
+    const config = useInvoicePaymentOptions('invoice-1') as unknown as OptionsConfig;
+
+    await expect(config.queryFn()).resolves.toEqual({
+      card_surcharge_bps: 250,
+      check_remit_to: '123 Studio Way',
+    });
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('get_invoice_payment_options', {
+      p_invoice_id: 'invoice-1',
+    });
+  });
+
+  it('falls back to platform defaults on an RPC error — never throws into the pay path', async () => {
+    supabaseClient.rpc.mockResolvedValue({ data: null, error: new Error('permission denied') });
+    const config = useInvoicePaymentOptions('invoice-1') as unknown as OptionsConfig;
+
+    await expect(config.queryFn()).resolves.toEqual({
+      card_surcharge_bps: 300,
+      check_remit_to: null,
+    });
+  });
+
+  it('falls back to platform defaults on an empty/null response', async () => {
+    supabaseClient.rpc.mockResolvedValue({ data: null, error: null });
+    const config = useInvoicePaymentOptions('invoice-1') as unknown as OptionsConfig;
+
+    await expect(config.queryFn()).resolves.toEqual({
+      card_surcharge_bps: 300,
+      check_remit_to: null,
+    });
+  });
+
+  it('falls back to platform defaults when the RPC throws synchronously', async () => {
+    supabaseClient.rpc.mockImplementation(() => {
+      throw new Error('network down');
+    });
+    const config = useInvoicePaymentOptions('invoice-1') as unknown as OptionsConfig;
+
+    await expect(config.queryFn()).resolves.toEqual({
+      card_surcharge_bps: 300,
+      check_remit_to: null,
+    });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useNotifyCheckIntent (migration 00428)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useNotifyCheckIntent', () => {
+  type IntentConfig = {
+    mutationFn: (input: { invoiceId: string }) => Promise<unknown>;
+  };
+
+  // The wire shape is the edge function's actual 200 body:
+  //   { ok, invoiceId, alreadyNotified, emailSent, suppressed }  — camelCase.
+  it('invokes invoice-check-intent with { invoiceId } and maps a fresh notification', async () => {
+    supabaseClient.functions.invoke.mockResolvedValue({
+      data: {
+        ok: true,
+        invoiceId: 'invoice-1',
+        alreadyNotified: false,
+        emailSent: true,
+        suppressed: false,
+      },
+      error: null,
+    });
+    const config = useNotifyCheckIntent() as unknown as IntentConfig;
+
+    await expect(config.mutationFn({ invoiceId: 'invoice-1' })).resolves.toEqual({
+      ok: true,
+      alreadyNotified: false,
+    });
+    expect(supabaseClient.functions.invoke).toHaveBeenCalledWith('invoice-check-intent', {
+      body: { invoiceId: 'invoice-1' },
+    });
+  });
+
+  it('maps an idempotent hit (alreadyNotified: true)', async () => {
+    supabaseClient.functions.invoke.mockResolvedValue({
+      data: {
+        ok: true,
+        invoiceId: 'invoice-1',
+        alreadyNotified: true,
+        emailSent: false,
+        suppressed: false,
+      },
+      error: null,
+    });
+    const config = useNotifyCheckIntent() as unknown as IntentConfig;
+
+    await expect(config.mutationFn({ invoiceId: 'invoice-1' })).resolves.toEqual({
+      ok: true,
+      alreadyNotified: true,
+    });
+  });
+
+  // Tolerated fallback: a snake_case body (an older deploy, a replayed
+  // fixture) must still read as "already notified" rather than silently
+  // inviting a second notification.
+  it('falls back to a snake_case already_notified body', async () => {
+    supabaseClient.functions.invoke.mockResolvedValue({
+      data: { ok: true, already_notified: true },
+      error: null,
+    });
+    const config = useNotifyCheckIntent() as unknown as IntentConfig;
+
+    await expect(config.mutationFn({ invoiceId: 'invoice-1' })).resolves.toEqual({
+      ok: true,
+      alreadyNotified: true,
+    });
+  });
+
+  it('unwraps a FunctionsHttpError JSON body (detail preferred over error code)', async () => {
+    supabaseClient.functions.invoke.mockResolvedValue({
+      data: null,
+      error: {
+        message: 'Edge Function returned a non-2xx status code',
+        context: {
+          json: vi.fn().mockResolvedValue({
+            error: 'invoice_not_payable',
+            detail: 'This invoice is void.',
+          }),
+        },
+      },
+    });
+    const config = useNotifyCheckIntent() as unknown as IntentConfig;
+
+    await expect(config.mutationFn({ invoiceId: 'invoice-1' })).rejects.toThrow(
+      'This invoice is void.'
+    );
+  });
+
+  it('falls back to the error code, then the generic message, when the body has no detail', async () => {
+    supabaseClient.functions.invoke.mockResolvedValue({
+      data: null,
+      error: {
+        message: 'transport failure',
+        context: { json: vi.fn().mockResolvedValue({ error: 'invoice_not_payable' }) },
+      },
+    });
+    const config = useNotifyCheckIntent() as unknown as IntentConfig;
+
+    await expect(config.mutationFn({ invoiceId: 'invoice-1' })).rejects.toThrow(
+      'invoice_not_payable'
+    );
+  });
+
+  it('throws on a nominal-success payload carrying an error field', async () => {
+    supabaseClient.functions.invoke.mockResolvedValue({
+      data: { error: 'invoice_not_found', detail: 'No such invoice.' },
+      error: null,
+    });
+    const config = useNotifyCheckIntent() as unknown as IntentConfig;
+
+    await expect(config.mutationFn({ invoiceId: 'invoice-1' })).rejects.toThrow(
+      'No such invoice.'
+    );
   });
 });
