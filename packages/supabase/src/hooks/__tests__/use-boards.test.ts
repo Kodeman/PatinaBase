@@ -236,7 +236,7 @@ describe('useApplyBoardRoomState', () => {
 
     await expect(config.mutationFn(input)).rejects.toThrow('transaction rolled back');
     await config.onSettled(undefined, new Error('transaction rolled back'), input);
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['board', 'board-1'] });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['board', 'board-1'], refetchType: 'none' });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['project-owned-boards', 'project-1'] });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['project-owned-boards-with-items', 'project-1'] });
   });

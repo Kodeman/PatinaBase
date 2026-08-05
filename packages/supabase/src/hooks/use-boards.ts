@@ -545,7 +545,10 @@ export function useUpsertBoard() {
       if (owner?.kind === 'proposal') {
         await invalidateProposalClientQueries(queryClient, owner.id);
       }
-      queryClient.invalidateQueries({ queryKey: ['board', board.id] });
+      // While the board room is open it's the source of truth for editing and
+      // discards refetch results (initializedIdentityRef guard) — so a full
+      // refetch here is pure churn. Stale-marking is enough for the next mount.
+      queryClient.invalidateQueries({ queryKey: ['board', board.id], refetchType: 'none' });
     },
   });
 }
@@ -731,7 +734,7 @@ export function useUpdateBoardItem() {
       return data as ProposalBoardItem;
     },
     onSuccess: async (_item, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['board', variables.boardId] });
+      queryClient.invalidateQueries({ queryKey: ['board', variables.boardId], refetchType: 'none' });
       const owner = mutationOwner(variables);
       if (owner) {
         queryClient.invalidateQueries({ queryKey: boardOwnerQueryKeys.withItems(owner) });
@@ -770,7 +773,7 @@ export function useDeleteBoardItem() {
       if (error) throw error;
     },
     onSuccess: async (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['board', variables.boardId] });
+      queryClient.invalidateQueries({ queryKey: ['board', variables.boardId], refetchType: 'none' });
       const owner = mutationOwner(variables);
       if (owner) {
         queryClient.invalidateQueries({ queryKey: boardOwnerQueryKeys.list(owner) });
@@ -811,7 +814,7 @@ export function useApplyBoardRoomState() {
       if (error) throw error;
     },
     onSettled: async (_data, _error, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['board', variables.boardId] });
+      queryClient.invalidateQueries({ queryKey: ['board', variables.boardId], refetchType: 'none' });
       queryClient.invalidateQueries({ queryKey: boardOwnerQueryKeys.list(variables.owner) });
       queryClient.invalidateQueries({ queryKey: boardOwnerQueryKeys.withItems(variables.owner) });
       if (variables.owner.kind === 'proposal') {
@@ -876,7 +879,7 @@ export function useSaveBoardLayout() {
       if (error) throw error;
     },
     onSuccess: async (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['board', variables.boardId] });
+      queryClient.invalidateQueries({ queryKey: ['board', variables.boardId], refetchType: 'none' });
       const owner = mutationOwner(variables);
       if (owner) {
         queryClient.invalidateQueries({ queryKey: boardOwnerQueryKeys.withItems(owner) });
