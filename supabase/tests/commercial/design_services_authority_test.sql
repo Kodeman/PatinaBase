@@ -1,4 +1,7 @@
 -- 00412 design-services commercial authority integration test.
+-- 00422: the furnishing-wave sections now walk the Authorized Schedule
+-- ceremony — create_furnishings_authorization_from_schedule over existing
+-- project_ffe_items — because the re-authoring RPC it used to call is retired.
 -- Runner: plain psql, ON_ERROR_STOP=1. The transaction rolls back.
 -- Run:
 --   docker exec -i supabase_db_supabase psql -U postgres -d postgres \
@@ -371,6 +374,11 @@ END;
 $$;
 
 -- Budget acknowledgement is planning truth only.
+-- 00422: a budget line carries the room it budgets, because a furnishings
+-- release proves coverage room by room against exactly these lines.
+INSERT INTO public.project_rooms (id, project_id, name, sort_order)
+SELECT 'd5600000-0000-4000-8000-000000000001', p.id, 'Living room', 0
+FROM public.projects p WHERE p.proposal_id = 'd5300000-0000-4000-8000-000000000001';
 INSERT INTO public.project_budget_versions (
   id, project_id, version, note, created_by
 ) SELECT 'd5500000-0000-4000-8000-000000000001', p.id, 1,
@@ -378,9 +386,12 @@ INSERT INTO public.project_budget_versions (
   'd5000000-0000-4000-8000-000000000001'
 FROM public.projects p WHERE p.proposal_id = 'd5300000-0000-4000-8000-000000000001';
 INSERT INTO public.project_budget_lines (
-  budget_version_id, room_name, category, low_cents, target_cents, high_cents
+  budget_version_id, project_room_id, room_name, category,
+  low_cents, target_cents, high_cents
 ) VALUES (
-  'd5500000-0000-4000-8000-000000000001', 'Living room', 'Seating', 100000, 150000, 200000
+  'd5500000-0000-4000-8000-000000000001',
+  'd5600000-0000-4000-8000-000000000001',
+  'Living room', 'Seating', 100000, 150000, 200000
 );
 SELECT public.publish_budget_checkpoint(
   (SELECT id FROM public.projects WHERE proposal_id = 'd5300000-0000-4000-8000-000000000001'),
@@ -395,10 +406,15 @@ DECLARE v_budget jsonb;
 BEGIN
   ASSERT (SELECT status FROM public.project_budget_checkpoints WHERE budget_version_id = 'd5500000-0000-4000-8000-000000000001') = 'acknowledged',
     'budget acknowledgement';
+  -- 00422: the schedule may exist long before any authorization — it is the
+  -- studio's working surface. What acknowledgement must not do is authorize
+  -- any of it.
   ASSERT NOT EXISTS (
     SELECT 1 FROM public.project_ffe_items i
     JOIN public.projects p ON p.id = i.project_id
     WHERE p.proposal_id = 'd5300000-0000-4000-8000-000000000001'
+      AND (i.source_commercial_document_id IS NOT NULL
+           OR i.source_authorization_item_id IS NOT NULL)
   ), 'budget acknowledgement must not authorize purchases';
   v_budget := public.get_project_working_budget(
     (SELECT id FROM public.projects WHERE proposal_id = 'd5300000-0000-4000-8000-000000000001')
@@ -451,56 +467,53 @@ INSERT INTO public.projects (
   'd5000000-0000-4000-8000-000000000001',
   'd5000000-0000-4000-8000-000000000002'
 );
-INSERT INTO public.proposals (
-  id, designer_id, designer_client_id, client_id, project_id,
-  title, total_amount, status
+-- 00422: a release cites SCHEDULE lines, so the cross-project probe is a
+-- schedule line filed on another project of the same client.
+INSERT INTO public.project_rooms (id, project_id, name, sort_order)
+VALUES ('d5600000-0000-4000-8000-000000000002',
+        'd5730000-0000-4000-8000-000000000001', 'Other living room', 0);
+INSERT INTO public.project_ffe_items (
+  id, project_id, project_room_id, name, ffe_category, item_type, status,
+  quantity, unit_price_cents, trade_price_cents, markup_percent,
+  line_total_cents, vendor_id, vendor_name, sort_order
 ) VALUES (
-  'd5740000-0000-4000-8000-000000000001',
-  'd5000000-0000-4000-8000-000000000001',
-  'd5200000-0000-4000-8000-000000000001',
-  'd5000000-0000-4000-8000-000000000002',
+  'd5720000-0000-4000-8000-000000000002',
   'd5730000-0000-4000-8000-000000000001',
-  'Cross-project furnishings source', 0, 'draft'
+  'd5600000-0000-4000-8000-000000000002',
+  'Cross-project chair', 'Seating', 'fixed', 'specified', 1, 100000, 60000,
+  66.67, 100000, 'd5710000-0000-4000-8000-000000000001',
+  'Commercial Test Vendor', 0
 );
 DO $$
-DECLARE v_project_id uuid;
+DECLARE v_project_id uuid; v_err text;
 BEGIN
   SELECT id INTO v_project_id FROM public.projects
   WHERE proposal_id = 'd5300000-0000-4000-8000-000000000001';
   BEGIN
-    PERFORM public.create_furnishings_authorization(
-      v_project_id, 'Cross-project wave',
-      'd5740000-0000-4000-8000-000000000001'
+    PERFORM public.create_furnishings_authorization_from_schedule(
+      v_project_id, 'Cross-project release',
+      ARRAY['d5720000-0000-4000-8000-000000000002'::uuid], NULL
     );
-    ASSERT false, 'same-client source from another project should fail';
-  EXCEPTION WHEN check_violation THEN NULL;
+    ASSERT false, 'a same-client schedule line from another project should fail';
+  EXCEPTION WHEN check_violation THEN v_err := SQLERRM;
   END;
+  ASSERT v_err LIKE '%does not belong to project%',
+    format('cross-project release blocked by the wrong guard: %L', v_err);
 END;
 $$;
-INSERT INTO public.proposals (
-  id, designer_id, designer_client_id, client_id, project_id, title, description,
-  subtotal, total_amount, deposit_percent, status, valid_until
+-- The line the whole wave walk below is drawn over.
+INSERT INTO public.project_ffe_items (
+  id, project_id, project_room_id, name, ffe_category, item_type, status,
+  quantity, unit_price_cents, trade_price_cents, markup_percent,
+  line_total_cents, vendor_id, vendor_name, sort_order
 ) SELECT
-  'd5700000-0000-4000-8000-000000000001',
-  'd5000000-0000-4000-8000-000000000001',
-  'd5200000-0000-4000-8000-000000000001',
-  'd5000000-0000-4000-8000-000000000002',
-  p.id,
-  'Living floor furnishings source', 'One authorized furnishing item.',
-  100000, 100000, 50, 'draft', now() + interval '30 days'
+  'd5720000-0000-4000-8000-000000000001', p.id,
+  'd5600000-0000-4000-8000-000000000001',
+  'Test lounge chair', 'Seating', 'fixed', 'specified', 1, 100000, 60000,
+  66.67, 100000, 'd5710000-0000-4000-8000-000000000001',
+  'Commercial Test Vendor', 0
 FROM public.projects p
 WHERE p.proposal_id = 'd5300000-0000-4000-8000-000000000001';
-INSERT INTO public.proposal_items (
-  id, proposal_id, name, room, category, quantity, unit_price,
-  markup_percent, unit_sell_price, line_total_cents, vendor_id,
-  vendor_name, position, item_type, ffe_category
-) VALUES (
-  'd5720000-0000-4000-8000-000000000001',
-  'd5700000-0000-4000-8000-000000000001', 'Test lounge chair',
-  'Living room', 'Seating', 1, 60000, 66.67, 100000, 100000,
-  'd5710000-0000-4000-8000-000000000001', 'Commercial Test Vendor',
-  0, 'fixed', 'furniture'
-);
 
 -- An older acknowledgement cannot authorize a wave after a newer checkpoint
 -- is published. The newest checkpoint itself must be acknowledged/overridden.
@@ -510,9 +523,12 @@ INSERT INTO public.project_budget_versions (
   'd5000000-0000-4000-8000-000000000001'
 FROM public.projects p WHERE p.proposal_id = 'd5300000-0000-4000-8000-000000000001';
 INSERT INTO public.project_budget_lines (
-  budget_version_id, room_name, category, low_cents, target_cents, high_cents
+  budget_version_id, project_room_id, room_name, category,
+  low_cents, target_cents, high_cents
 ) VALUES (
-  'd5500000-0000-4000-8000-000000000002', 'Living room', 'Seating', 110000, 160000, 210000
+  'd5500000-0000-4000-8000-000000000002',
+  'd5600000-0000-4000-8000-000000000001',
+  'Living room', 'Seating', 110000, 160000, 210000
 );
 SELECT public.publish_budget_checkpoint(
   (SELECT id FROM public.projects WHERE proposal_id = 'd5300000-0000-4000-8000-000000000001'),
@@ -524,9 +540,9 @@ BEGIN
   SELECT id INTO v_project_id FROM public.projects
   WHERE proposal_id = 'd5300000-0000-4000-8000-000000000001';
   BEGIN
-    PERFORM public.create_furnishings_authorization(
+    PERFORM public.create_furnishings_authorization_from_schedule(
       v_project_id, 'Blocked by newer checkpoint',
-      'd5700000-0000-4000-8000-000000000001'
+      ARRAY['d5720000-0000-4000-8000-000000000001'::uuid], NULL
     );
     ASSERT false, 'older acknowledgement must not bypass newer open checkpoint';
   EXCEPTION WHEN check_violation THEN NULL;
@@ -552,11 +568,13 @@ DECLARE
 BEGIN
   SELECT id INTO v_project_id FROM public.projects
   WHERE proposal_id = 'd5300000-0000-4000-8000-000000000001';
-  v_wave := public.create_furnishings_authorization(
+  v_wave := public.create_furnishings_authorization_from_schedule(
     v_project_id, 'Living floor wave',
-    'd5700000-0000-4000-8000-000000000001'
+    ARRAY['d5720000-0000-4000-8000-000000000001'::uuid], NULL
   );
   v_wave_proposal_id := (v_wave->>'proposalId')::uuid;
+  ASSERT (SELECT deposit_percent FROM public.proposals WHERE id = v_wave_proposal_id) = 50,
+    'an engagement with no furnishings deposit term must fall to the 50% default';
   v_snapshot := public.get_commercial_document_send_snapshot(v_wave_proposal_id);
   PERFORM public.send_commercial_document(
     v_wave_proposal_id, v_snapshot->>'documentFingerprint', NULL,
@@ -651,8 +669,10 @@ BEGIN
   ASSERT (SELECT count(*) FROM public.project_ffe_items
           WHERE project_id = v_project_id) = 0,
     'client directly read commercial-origin FF&E';
-  ASSERT (SELECT count(*) FROM public.project_ffe_items
-          WHERE project_id = 'd5730000-0000-4000-8000-000000000001') = 1,
+  -- Named rather than counted: the legacy-origin project also carries the
+  -- 00422 cross-project probe line, and both are legitimately client-visible.
+  ASSERT EXISTS (SELECT 1 FROM public.project_ffe_items
+                 WHERE id = 'd5750000-0000-4000-8000-000000000001'),
     'legacy client FF&E visibility regressed';
   ASSERT (SELECT count(*) FROM public.commercial_document_signatures
           WHERE proposal_id = 'd5300000-0000-4000-8000-000000000001') = 0,

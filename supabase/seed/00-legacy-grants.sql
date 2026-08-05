@@ -7979,3 +7979,213 @@ DO $g$ BEGIN
   GRANT SELECT ON public.v_project_roster TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._commercial_document_fingerprint(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._budget_version_fingerprint(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._cents_to_int4(bigint, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_furnishings_authorization_from_schedule(uuid, text, uuid[], numeric) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_furnishings_authorization_from_schedule(uuid, text, uuid[], numeric) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.void_furnishings_authorization(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.void_furnishings_authorization(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.derive_working_budget_draft(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.derive_working_budget_draft(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.publish_budget_checkpoint(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.publish_budget_checkpoint(uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_working_budget(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_working_budget(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._execute_furnishings_authorization_authorized(uuid, text, uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_project_ffe_purchase_authority() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_ffe_schedule_soft_lock() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.guard_project_ffe_configuration_integrity() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.upsert_design_services_draft(uuid, jsonb, jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.upsert_design_services_draft(uuid, jsonb, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_service_addendum(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_service_addendum(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_client_commercial_document_bundle(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_client_commercial_document_bundle(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.list_furnishings_authorizations(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.list_furnishings_authorizations(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_client_project_selections(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_client_project_selections(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.list_client_proposals() FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.list_client_proposals() TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_authority_summary(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_authority_summary(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_furnishings_authorization(uuid, text, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_furnishings_authorization(uuid, text, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_furnishing_wave_draft(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00422_authorized_schedule_phase1.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_furnishing_wave_draft(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

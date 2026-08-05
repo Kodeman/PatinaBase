@@ -6711,11 +6711,13 @@ export type Database = {
           markup_percent: number | null
           name: string
           product_id: string | null
+          project_room_id: string | null
           quantity: number
           room_name: string | null
           snapshot: Json
           sort_order: number
-          source_proposal_item_id: string
+          source_ffe_item_id: string | null
+          source_proposal_item_id: string | null
           trade_unit_cost_cents: number | null
           vendor_id: string | null
           vendor_name: string | null
@@ -6731,11 +6733,13 @@ export type Database = {
           markup_percent?: number | null
           name: string
           product_id?: string | null
+          project_room_id?: string | null
           quantity: number
           room_name?: string | null
           snapshot?: Json
           sort_order?: number
-          source_proposal_item_id: string
+          source_ffe_item_id?: string | null
+          source_proposal_item_id?: string | null
           trade_unit_cost_cents?: number | null
           vendor_id?: string | null
           vendor_name?: string | null
@@ -6751,11 +6755,13 @@ export type Database = {
           markup_percent?: number | null
           name?: string
           product_id?: string | null
+          project_room_id?: string | null
           quantity?: number
           room_name?: string | null
           snapshot?: Json
           sort_order?: number
-          source_proposal_item_id?: string
+          source_ffe_item_id?: string | null
+          source_proposal_item_id?: string | null
           trade_unit_cost_cents?: number | null
           vendor_id?: string | null
           vendor_name?: string | null
@@ -6802,6 +6808,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_promotion_candidates"
             referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "furnishing_authorization_items_project_room_id_fkey"
+            columns: ["project_room_id"]
+            isOneToOne: false
+            referencedRelation: "project_rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "furnishing_authorization_items_source_ffe_item_id_fkey"
+            columns: ["source_ffe_item_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "furnishing_authorization_items_source_proposal_item_id_fkey"
@@ -11812,6 +11832,7 @@ export type Database = {
       }
       project_budget_lines: {
         Row: {
+          authorized_cents: number | null
           budget_version_id: string
           category: string
           created_at: string
@@ -11820,22 +11841,26 @@ export type Database = {
           low_cents: number
           project_room_id: string | null
           room_name: string
+          scheduled_cents: number | null
           sort_order: number
           target_cents: number
         }
         Insert: {
+          authorized_cents?: number | null
           budget_version_id: string
           category: string
           created_at?: string
-          high_cents: number
+          high_cents?: number
           id?: string
-          low_cents: number
+          low_cents?: number
           project_room_id?: string | null
           room_name: string
+          scheduled_cents?: number | null
           sort_order?: number
           target_cents: number
         }
         Update: {
+          authorized_cents?: number | null
           budget_version_id?: string
           category?: string
           created_at?: string
@@ -11844,6 +11869,7 @@ export type Database = {
           low_cents?: number
           project_room_id?: string | null
           room_name?: string
+          scheduled_cents?: number | null
           sort_order?: number
           target_cents?: number
         }
@@ -15255,6 +15281,7 @@ export type Database = {
           current_rate_version: number
           deliverables: Json
           exclusions: Json
+          furnishings_deposit_percent: number | null
           proposal_id: string
           retainer_activation_policy: string
           retainer_amount_cents: number
@@ -15270,6 +15297,7 @@ export type Database = {
           current_rate_version?: number
           deliverables?: Json
           exclusions?: Json
+          furnishings_deposit_percent?: number | null
           proposal_id: string
           retainer_activation_policy?: string
           retainer_amount_cents?: number
@@ -15285,6 +15313,7 @@ export type Database = {
           current_rate_version?: number
           deliverables?: Json
           exclusions?: Json
+          furnishings_deposit_percent?: number | null
           proposal_id?: string
           retainer_activation_policy?: string
           retainer_amount_cents?: number
@@ -23437,6 +23466,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      _cents_to_int4: {
+        Args: { p_value: number; p_what: string }
+        Returns: number
+      }
       _clone_proposal_legacy_00399: {
         Args: {
           p_mode?: string
@@ -25037,6 +25070,15 @@ export type Database = {
         }
         Returns: Json
       }
+      create_furnishings_authorization_from_schedule: {
+        Args: {
+          p_deposit_percent?: number
+          p_ffe_item_ids: string[]
+          p_name: string
+          p_project_id: string
+        }
+        Returns: Json
+      }
       create_project_phase: {
         Args: {
           p_anchor_date?: string
@@ -25242,6 +25284,10 @@ export type Database = {
       demote_to_personal: { Args: { p_product_id: string }; Returns: string }
       derive_signature_biases: {
         Args: { p_designer_id: string }
+        Returns: Json
+      }
+      derive_working_budget_draft: {
+        Args: { p_project_id: string }
         Returns: Json
       }
       dismiss_field_capture: { Args: { p_capture_id: string }; Returns: Json }
@@ -25902,6 +25948,10 @@ export type Database = {
       }
       get_client_commercial_document_bundle: {
         Args: { p_proposal_id: string }
+        Returns: Json
+      }
+      get_client_project_selections: {
+        Args: { p_project_id: string }
         Returns: Json
       }
       get_client_proposal_bundle: {
@@ -28277,6 +28327,10 @@ export type Database = {
       vec_lerp: { Args: { a: string; b: string; w: number }; Returns: string }
       vec_normalize: { Args: { v: string }; Returns: string }
       vec_scale: { Args: { k: number; v: string }; Returns: string }
+      void_furnishings_authorization: {
+        Args: { p_proposal_id: string; p_reason: string }
+        Returns: Json
+      }
       void_invoice: {
         Args: { p_invoice_id: string; p_reason: string }
         Returns: {

@@ -9,6 +9,12 @@
 -- could still reach commercial authority, where a commercial edition could
 -- still leave through the legacy send, where the authority ledgers were only
 -- guarded by RLS, and where client reads carried more than a client should see.
+--
+-- 00422 (the Authorized Schedule) re-aimed every furnishing act in this suite:
+-- a release cites SCHEDULE lines instead of a re-authored proposal, so the
+-- fixtures below carry a room, real project_ffe_items, and a budget line that
+-- names the room it budgets. The authoring-vehicle section became a retirement
+-- assertion. What the suite is FOR is unchanged.
 
 BEGIN;
 
@@ -163,17 +169,28 @@ INSERT INTO public.proposal_items (
   'd6300000-0000-4000-8000-000000000006', 'Unauthorized chair',
   'Den', 'Seating', 1, 30000, 66.67, 50000, 50000, 0, 'fixed'
 );
+-- 00422: the release ceremony reads the SCHEDULE, so the probe names a real
+-- schedule line the legacy activation produced. The origin precondition is
+-- checked before any line is looked at, which is the point: no amount of
+-- well-formed schedule earns furnishing authority on its own.
 DO $$
-DECLARE v_project uuid := (SELECT value FROM gap_ids WHERE key = 'legacy_project');
+DECLARE
+  v_project uuid := (SELECT value FROM gap_ids WHERE key = 'legacy_project');
+  v_line uuid;
+  v_err text;
 BEGIN
+  SELECT id INTO v_line FROM public.project_ffe_items
+  WHERE project_id = v_project AND name = 'Legacy console';
+  ASSERT v_line IS NOT NULL, 'fixture: legacy activation must have carried FF&E';
   BEGIN
-    PERFORM public.create_furnishings_authorization(
-      v_project, 'Wave without authority',
-      'd6300000-0000-4000-8000-000000000006'
+    PERFORM public.create_furnishings_authorization_from_schedule(
+      v_project, 'Release without authority', ARRAY[v_line], NULL
     );
-    ASSERT false, 'legacy project must not authorize a furnishing wave';
-  EXCEPTION WHEN check_violation THEN NULL;
+    ASSERT false, 'legacy project must not authorize a furnishing release';
+  EXCEPTION WHEN check_violation THEN v_err := SQLERRM;
   END;
+  ASSERT v_err LIKE '%no executed design-services origin%',
+    format('legacy release blocked by the wrong guard: %L', v_err);
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -404,8 +421,32 @@ BEGIN
   INSERT INTO gap_ids VALUES ('services_project', (v_executed->>'projectId')::uuid);
 END $$;
 
+-- ── Fixture: the schedule every 00422 release below is drawn over ─────────
+-- The instrument cites schedule lines, and coverage is proven room by room
+-- against the checkpoint's budget lines — so the room, the lines, and the
+-- budget line's project_room_id all have to be real.
+INSERT INTO public.project_rooms (id, project_id, name, sort_order)
+SELECT 'd6600000-0000-4000-8000-000000000001', value, 'Living room', 0
+FROM gap_ids WHERE key = 'services_project';
+INSERT INTO public.project_ffe_items (
+  id, project_id, project_room_id, name, ffe_category, item_type, status,
+  quantity, unit_price_cents, trade_price_cents, markup_percent,
+  line_total_cents, vendor_id, vendor_name, sort_order
+)
+SELECT x.id, g.value, 'd6600000-0000-4000-8000-000000000001', x.name, x.category,
+  'fixed', 'specified', x.quantity, x.unit_price, x.trade_price, 66.67,
+  x.line_total, 'd6710000-0000-4000-8000-000000000001', 'Gap Test Vendor', x.sort_order
+FROM gap_ids g,
+  (VALUES
+    ('d6620000-0000-4000-8000-000000000001'::uuid, 'Wave one sofa', 'Seating', 1, 100000, 60000, 100000, 0),
+    ('d6620000-0000-4000-8000-000000000002'::uuid, 'Wave two rug', 'Textiles', 1, 50000, 30000, 50000, 1),
+    ('d6620000-0000-4000-8000-000000000003'::uuid, 'Wave three lamp', 'Lighting', 2, 15000, 9000, 30000, 2),
+    ('d6620000-0000-4000-8000-000000000004'::uuid, 'Wave four mirror', 'Decor', 1, 20000, 12000, 20000, 3)
+  ) AS x(id, name, category, quantity, unit_price, trade_price, line_total, sort_order)
+WHERE g.key = 'services_project';
+
 -- ═══════════════════════════════════════════════════════════════════════════
--- (6) An audited override is authority too: a wave may be built on an
+-- (6) An audited override is authority too: a release may be built on an
 --     overridden checkpoint, not only an acknowledged one.
 -- ═══════════════════════════════════════════════════════════════════════════
 INSERT INTO public.project_budget_versions (id, project_id, version, note, created_by)
@@ -414,16 +455,18 @@ SELECT 'd6500000-0000-4000-8000-000000000001', value, 1,
   'd6000000-0000-4000-8000-000000000001'
 FROM gap_ids WHERE key = 'services_project';
 INSERT INTO public.project_budget_lines (
-  budget_version_id, room_name, category, low_cents, target_cents, high_cents
+  budget_version_id, project_room_id, room_name, category,
+  low_cents, target_cents, high_cents
 ) VALUES (
-  'd6500000-0000-4000-8000-000000000001', 'Living room', 'Seating', 100000, 150000, 200000
+  'd6500000-0000-4000-8000-000000000001',
+  'd6600000-0000-4000-8000-000000000001',
+  'Living room', 'Seating', 100000, 150000, 200000
 );
 DO $$
 DECLARE
   v_project uuid := (SELECT value FROM gap_ids WHERE key = 'services_project');
   v_published jsonb;
   v_override jsonb;
-  v_draft jsonb;
   v_wave jsonb;
 BEGIN
   v_published := public.publish_budget_checkpoint(
@@ -438,27 +481,12 @@ BEGIN
      AND (v_override->>'newlyOverridden')::boolean,
     'audited override must open the checkpoint';
 
-  v_draft := public.create_furnishing_wave_draft(v_project, 'Wave one authoring');
-  INSERT INTO gap_ids VALUES ('wave1_draft', (v_draft->>'proposalId')::uuid);
-  INSERT INTO public.proposal_items (
-    proposal_id, name, room, category, quantity, unit_price,
-    markup_percent, unit_sell_price, line_total_cents, vendor_id,
-    vendor_name, position, item_type, ffe_category
-  ) VALUES (
-    (v_draft->>'proposalId')::uuid, 'Wave one sofa', 'Living room', 'Seating',
-    1, 60000, 66.67, 100000, 100000,
-    'd6710000-0000-4000-8000-000000000001', 'Gap Test Vendor', 0, 'fixed', 'furniture'
-  );
-  UPDATE public.proposals
-  SET subtotal = 100000, total_amount = 100000, deposit_percent = 0
-  WHERE id = (v_draft->>'proposalId')::uuid;
-
-  v_wave := public.create_furnishings_authorization(
-    v_project, 'Wave one', (v_draft->>'proposalId')::uuid
+  v_wave := public.create_furnishings_authorization_from_schedule(
+    v_project, 'Wave one', ARRAY['d6620000-0000-4000-8000-000000000001'::uuid], 0
   );
   ASSERT v_wave->>'commercialState' = 'draft'
      AND (v_wave->>'itemCount')::integer = 1,
-    'overridden checkpoint must authorize a wave';
+    'overridden checkpoint must authorize a release';
   INSERT INTO gap_ids VALUES ('wave1', (v_wave->>'proposalId')::uuid);
 END $$;
 
@@ -558,20 +586,9 @@ BEGIN
     v_snapshot->>'documentFingerprint', NULL, now() - interval '1 day'
   );
 
-  -- An expired furnishing wave, built off the same overridden checkpoint.
-  v_draft := public.create_furnishing_wave_draft(v_project, 'Wave two authoring');
-  INSERT INTO public.proposal_items (
-    proposal_id, name, room, category, quantity, unit_price,
-    markup_percent, unit_sell_price, line_total_cents, position, item_type, ffe_category
-  ) VALUES (
-    (v_draft->>'proposalId')::uuid, 'Wave two rug', 'Living room', 'Textiles',
-    1, 30000, 66.67, 50000, 50000, 0, 'fixed', 'rugs'
-  );
-  UPDATE public.proposals
-  SET subtotal = 50000, total_amount = 50000, deposit_percent = 0
-  WHERE id = (v_draft->>'proposalId')::uuid;
-  v_wave := public.create_furnishings_authorization(
-    v_project, 'Wave two', (v_draft->>'proposalId')::uuid
+  -- An expired furnishing release, built off the same overridden checkpoint.
+  v_wave := public.create_furnishings_authorization_from_schedule(
+    v_project, 'Wave two', ARRAY['d6620000-0000-4000-8000-000000000002'::uuid], 0
   );
   INSERT INTO gap_ids VALUES ('wave2', (v_wave->>'proposalId')::uuid);
   v_snapshot := public.get_commercial_document_send_snapshot(
@@ -612,19 +629,8 @@ DECLARE
   v_wave jsonb;
   v_snapshot jsonb;
 BEGIN
-  v_draft := public.create_furnishing_wave_draft(v_project, 'Wave three authoring');
-  INSERT INTO public.proposal_items (
-    proposal_id, name, room, category, quantity, unit_price,
-    markup_percent, unit_sell_price, line_total_cents, position, item_type, ffe_category
-  ) VALUES (
-    (v_draft->>'proposalId')::uuid, 'Wave three lamp', 'Living room', 'Lighting',
-    2, 10000, 50, 15000, 30000, 0, 'fixed', 'lighting'
-  );
-  UPDATE public.proposals
-  SET subtotal = 30000, total_amount = 30000, deposit_percent = 0
-  WHERE id = (v_draft->>'proposalId')::uuid;
-  v_wave := public.create_furnishings_authorization(
-    v_project, 'Wave three', (v_draft->>'proposalId')::uuid
+  v_wave := public.create_furnishings_authorization_from_schedule(
+    v_project, 'Wave three', ARRAY['d6620000-0000-4000-8000-000000000003'::uuid], 0
   );
   INSERT INTO gap_ids VALUES ('wave3', (v_wave->>'proposalId')::uuid);
   v_snapshot := public.get_commercial_document_send_snapshot(
@@ -860,8 +866,10 @@ BEGIN
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- (14) Two send seams, one per rail — and the authoring vehicle that makes the
---      furnishing seam usable without hand-making a project-bound draft.
+-- (14) Two send seams, one per rail. 00422 retired the authoring vehicle that
+--      used to sit behind the furnishing seam — the schedule is the vehicle now
+--      — so this section keeps the legacy-send half intact and replaces the
+--      vehicle half with the retirement it became.
 -- ═══════════════════════════════════════════════════════════════════════════
 SELECT pg_temp.assume_user('d6000000-0000-4000-8000-000000000001');
 INSERT INTO public.proposals (
@@ -918,24 +926,27 @@ BEGIN
           WHERE id = 'd6300000-0000-4000-8000-000000000005'),
     'rejected legacy send moved the commercial edition';
 
-  -- The authoring vehicle: minted by RPC, project-bound, and unsendable.
-  v_draft := public.create_furnishing_wave_draft(v_project, 'Wave four authoring');
-  ASSERT (v_draft->>'projectId')::uuid = v_project, 'wave draft must bind the project';
-  ASSERT (SELECT document_kind = 'legacy' AND commercial_state IS NULL
-                 AND status = 'draft' AND project_id = v_project
-          FROM public.proposals WHERE id = (v_draft->>'proposalId')::uuid),
-    'wave draft must be an internal legacy vehicle bound to the project';
+  -- 00422: the authoring vehicle is retired. There is nothing left to hand-make
+  -- and nothing left to refuse a send on — the ceremony reads the schedule.
   BEGIN
-    PERFORM public.send_proposal(
-      (v_draft->>'proposalId')::uuid, NULL::text, NULL::text, NULL::timestamptz
-    );
-    ASSERT false, 'project-bound furnishing draft must not send through send_proposal';
-  EXCEPTION WHEN check_violation THEN v_err := SQLERRM;
+    PERFORM public.create_furnishing_wave_draft(v_project, 'Wave four authoring');
+    ASSERT false, 'create_furnishing_wave_draft must be retired';
+  EXCEPTION WHEN feature_not_supported THEN v_err := SQLERRM;
   END;
-  ASSERT v_err LIKE 'project-bound furnishing drafts are internal%',
-    format('wave-vehicle send blocked by the wrong guard: %L', v_err);
+  ASSERT v_err LIKE '%is retired; release from the schedule%',
+    format('wave draft retirement message: %L', v_err);
+  BEGIN
+    PERFORM public.create_furnishings_authorization(
+      v_project, 'Wave four', 'd6300000-0000-4000-8000-000000000005'
+    );
+    ASSERT false, 'create_furnishings_authorization must be retired';
+  EXCEPTION WHEN feature_not_supported THEN v_err := SQLERRM;
+  END;
+  ASSERT v_err LIKE '%is retired; release from the schedule%',
+    format('wave retirement message: %L', v_err);
 
-  -- The vehicle refusal names legacy DRAFTS only. An activated legacy
+  -- The 00414 vehicle refusal in send_proposal is left standing for the shape
+  -- it names: it answers for legacy DRAFTS only. An activated legacy
   -- proposal carries a project back-link too (activate_proposal_as_project
   -- writes it), and must reach the base body's own status answer instead of
   -- being told it is an authoring vehicle.
@@ -956,41 +967,50 @@ BEGIN
   ASSERT v_err = 'proposal must be in draft status before sending',
     format('activated legacy send blocked by the wrong guard: %L', v_err);
 
-  INSERT INTO public.proposal_items (
-    proposal_id, name, room, category, quantity, unit_price,
-    markup_percent, unit_sell_price, line_total_cents, position, item_type, ffe_category
-  ) VALUES (
-    (v_draft->>'proposalId')::uuid, 'Wave four mirror', 'Entry', 'Decor',
-    1, 12000, 66.67, 20000, 20000, 0, 'fixed', 'accessories'
-  );
-  UPDATE public.proposals
-  SET subtotal = 20000, total_amount = 20000, deposit_percent = 0
-  WHERE id = (v_draft->>'proposalId')::uuid;
-  v_wave := public.create_furnishings_authorization(
-    v_project, 'Wave four', (v_draft->>'proposalId')::uuid
+  -- The replacement ceremony still works, off the same schedule and checkpoint.
+  v_wave := public.create_furnishings_authorization_from_schedule(
+    v_project, 'Wave four', ARRAY['d6620000-0000-4000-8000-000000000004'::uuid], 0
   );
   ASSERT (v_wave->>'itemCount')::integer = 1
      AND v_wave->>'commercialState' = 'draft',
-    'create_furnishings_authorization must accept the minted draft as its source';
+    'the from-schedule release must stand where the wave draft used to';
+  -- A furnishing edition still refuses the legacy seam.
+  v_err := NULL;
+  BEGIN
+    PERFORM public.send_proposal(
+      (v_wave->>'proposalId')::uuid, NULL::text, NULL::text, NULL::timestamptz
+    );
+    ASSERT false, 'a furnishing edition must not send through send_proposal';
+  EXCEPTION WHEN check_violation THEN v_err := SQLERRM;
+  END;
+  ASSERT v_err = 'commercial documents send through send_commercial_document',
+    format('furnishing edition send blocked by the wrong guard: %L', v_err);
 
   BEGIN
-    PERFORM public.create_furnishing_wave_draft(v_project, 'x');
-    ASSERT false, 'wave draft must require a real title';
+    PERFORM public.create_furnishings_authorization_from_schedule(
+      v_project, 'x', ARRAY['d6620000-0000-4000-8000-000000000004'::uuid], 0
+    );
+    ASSERT false, 'a release must require a real name';
   EXCEPTION WHEN check_violation THEN NULL;
   END;
 END $$;
 DO $$
 DECLARE
   v_legacy uuid := (SELECT value FROM gap_ids WHERE key = 'legacy_project');
+  v_line uuid;
   v_err text;
 BEGIN
+  SELECT id INTO v_line FROM public.project_ffe_items
+  WHERE project_id = v_legacy AND name = 'Legacy console';
   BEGIN
-    PERFORM public.create_furnishing_wave_draft(v_legacy, 'Legacy wave attempt');
-    ASSERT false, 'wave draft must require an executed design-services origin';
+    PERFORM public.create_furnishings_authorization_from_schedule(
+      v_legacy, 'Legacy release attempt', ARRAY[v_line], NULL
+    );
+    ASSERT false, 'a release must require an executed design-services origin';
   EXCEPTION WHEN check_violation THEN v_err := SQLERRM;
   END;
   ASSERT v_err LIKE '%no executed design-services origin%',
-    format('wave draft blocked by the wrong guard: %L', v_err);
+    format('legacy release blocked by the wrong guard: %L', v_err);
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -1133,9 +1153,9 @@ END $$;
 -- (18) Minting a proposal row is an authoring act, not a shared-workspace act.
 --      is_studio_comember accepts co-membership in ANY organization; the
 --      proposals INSERT policy and every sibling authoring RPC require an
---      active design_studio. create_furnishing_wave_draft is SECURITY DEFINER,
---      so only the helper it names stands between a contractor co-member and a
---      draft attributed to the designer.
+--      active design_studio. 00422's release ceremony is SECURITY DEFINER and
+--      mints a client-facing edition, so only the helper it names stands
+--      between a contractor co-member and a document attributed to the designer.
 -- ═══════════════════════════════════════════════════════════════════════════
 SELECT pg_temp.assume_user('d6000000-0000-4000-8000-000000000001', 'service_role');
 INSERT INTO public.organizations (id, type, name, slug, status)
@@ -1164,15 +1184,18 @@ BEGIN
   SELECT count(*) INTO v_before FROM public.proposals
   WHERE designer_id = 'd6000000-0000-4000-8000-000000000001';
   BEGIN
-    PERFORM public.create_furnishing_wave_draft(v_project, 'Contractor authoring attempt');
-    ASSERT false, 'a contractor co-member minted a proposal through the wave draft RPC';
+    PERFORM public.create_furnishings_authorization_from_schedule(
+      v_project, 'Contractor authoring attempt',
+      ARRAY['d6620000-0000-4000-8000-000000000001'::uuid], NULL
+    );
+    ASSERT false, 'a contractor co-member minted a proposal through the release RPC';
   EXCEPTION WHEN insufficient_privilege THEN v_err := SQLERRM;
   END;
   ASSERT v_err LIKE '%not found or access denied%',
-    format('wave draft blocked by the wrong guard: %L', v_err);
+    format('release blocked by the wrong guard: %L', v_err);
   ASSERT (SELECT count(*) FROM public.proposals
           WHERE designer_id = 'd6000000-0000-4000-8000-000000000001') = v_before,
-    'refused wave draft still wrote a proposal row';
+    'refused release still wrote a proposal row';
 END $$;
 
 ROLLBACK;
