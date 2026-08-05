@@ -8735,3 +8735,27 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.get_client_commercial_document_bundle(uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00427_atomic_qr_auth_rate_limit.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.qr_auth_rate_limits FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00427_atomic_qr_auth_rate_limit.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.qr_auth_rate_limits TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00427_atomic_qr_auth_rate_limit.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.enforce_qr_auth_session_rate_limit() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00427_atomic_qr_auth_rate_limit.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.enforce_qr_auth_session_rate_limit() TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
