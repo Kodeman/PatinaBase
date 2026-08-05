@@ -1,7 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { posthog, isAnalyticsEnabled } from '@/lib/analytics/posthog';
+import {
+  posthog,
+  isAnalyticsEnabled,
+  isAnalyticsPossible,
+  onAnalyticsInit,
+} from '@/lib/analytics/posthog';
 
 /**
  * Resolved state for a PostHog feature flag.
@@ -72,12 +77,33 @@ export function parseFlagOverride(flagName: string): boolean | undefined {
  *     deep-linking into a gated route should render a brief skeleton (or
  *     null) until loading resolves rather than seeing a fail-closed
  *     "Coming soon" flash.
- *   - When PostHog is not initialized (no key, dev mode, or DNT), the
- *     callback never fires; in that case `isLoading` is forced to false
- *     immediately so consumers don't hang on a skeleton forever — the
- *     stable state is `{ value: false, isLoading: false }`.
+ *   - When PostHog can never initialize in this environment (no key, or dev
+ *     mode without `NEXT_PUBLIC_POSTHOG_ENABLE_IN_DEV`), the callback would
+ *     never fire; in that case `isLoading` is forced to false immediately so
+ *     consumers don't hang on a skeleton forever — the stable state is
+ *     `{ value: false, isLoading: false }`.
  *   - SSR-safe: returns `{ value: false, isLoading: true }` on the server.
  *     The first effect on the client resolves the loading state.
+ *
+ * ## The init race (fixed 2026-08)
+ *
+ * `initPostHog()` runs in an effect at the very top of the tree
+ * (`PostHogAnalyticsProvider`), and React runs child effects *before* parent
+ * effects. Any consumer mounted in the layout — the account sheet's
+ * `studio-workspaces` gate, the desk whisper — therefore runs this effect
+ * while PostHog is still uninitialized. The old code read that as "PostHog is
+ * disabled here", called `setIsLoading(false)`, and returned without
+ * subscribing. Nothing ever re-ran it: the deps (`flagName`, `override`)
+ * never change and layout components never remount, so the flag stayed
+ * permanently false for the whole session. Flags mounted *after* init (routes,
+ * sheets opened later) worked fine, which is what masked it — the Studio tab
+ * was dead on every cold load in prod.
+ *
+ * The fix distinguishes "not enabled *yet*" from "never enabled here":
+ * `isAnalyticsPossible()` is the terminal answer (settle fail-closed), and
+ * anything else waits on `onAnalyticsInit()` and then does exactly what the
+ * already-initialized path does — immediate check plus `onFeatureFlags`
+ * subscription. Cleanup unsubscribes from both.
  *
  * The dossier §6 spec calls for a fail-open default. For the
  * procurement-workspace pilot the desired UX is to hide the zone for the
@@ -97,34 +123,54 @@ export function useFeatureFlag(flagName: string): FeatureFlagState {
     if (override !== undefined) return;
     if (typeof window === 'undefined') return;
 
-    if (!isAnalyticsEnabled()) {
-      // PostHog will never resolve in this environment — stop loading
-      // immediately so consumers render the fail-closed default rather
-      // than hanging on a skeleton forever.
+    let unsubscribeFlags: (() => void) | undefined;
+
+    // Everything the initialized path does. Called either straight away (
+    // PostHog was already up when we mounted) or later, from onAnalyticsInit.
+    const readAndSubscribe = () => {
+      // Check immediately in case flags are already loaded from a previous
+      // session (PostHog persists flag values across page loads). If the SDK
+      // can answer right away, we're no longer loading.
+      const immediate = posthog.isFeatureEnabled(flagName);
+      if (immediate !== undefined) {
+        setValue(immediate === true);
+        setIsLoading(false);
+      }
+
+      // Subscribe to flag-change events. The returned value is the unsubscribe
+      // function in posthog-js >= 1.x; older versions return void, hence the
+      // typeof check.
+      const unsubscribe = posthog.onFeatureFlags(() => {
+        const next = posthog.isFeatureEnabled(flagName);
+        setValue(next === true);
+        setIsLoading(false);
+      });
+      if (typeof unsubscribe === 'function') unsubscribeFlags = unsubscribe;
+    };
+
+    if (isAnalyticsEnabled()) {
+      readAndSubscribe();
+      return () => {
+        unsubscribeFlags?.();
+      };
+    }
+
+    if (!isAnalyticsPossible()) {
+      // PostHog will never initialize in this environment (no key, or dev
+      // without the opt-in) — stop loading immediately so consumers render
+      // the fail-closed default rather than hanging on a skeleton forever.
       setIsLoading(false);
       return;
     }
 
-    // Check immediately in case flags are already loaded from a previous
-    // session (PostHog persists flag values across page loads). If the SDK
-    // can answer right away, we're no longer loading.
-    const immediate = posthog.isFeatureEnabled(flagName);
-    if (immediate !== undefined) {
-      setValue(immediate === true);
-      setIsLoading(false);
-    }
-
-    // Subscribe to flag-change events. The returned value is the unsubscribe
-    // function in posthog-js >= 1.x; older versions return void, hence the
-    // typeof check in the cleanup.
-    const unsubscribe = posthog.onFeatureFlags(() => {
-      const next = posthog.isFeatureEnabled(flagName);
-      setValue(next === true);
-      setIsLoading(false);
-    });
+    // Analytics is coming but hasn't initialized yet — we mounted above
+    // initPostHog() in effect order (see the race note above). Wait for it
+    // instead of settling permanently false.
+    const unsubscribeInit = onAnalyticsInit(readAndSubscribe);
 
     return () => {
-      if (typeof unsubscribe === 'function') unsubscribe();
+      unsubscribeInit();
+      unsubscribeFlags?.();
     };
   }, [flagName, override]);
 
