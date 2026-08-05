@@ -16,10 +16,15 @@ function attempt(overrides: Partial<InvoiceCheckoutAttempt> = {}): InvoiceChecko
     payerId: 'client-1',
     stripeCustomerId: 'cus_client_1',
     amountCents: 12_500,
+    // Defaults describe a LEGACY attempt: no rail, no fee. Every pre-surcharge
+    // assertion below must keep passing untouched against these defaults.
+    surchargeCents: 0,
+    paymentMethod: null,
     currency: 'usd',
     state: 'claimed',
     stripeIdempotencyKey: 'invoice-checkout:attempt-1',
     stripeCheckoutSessionId: null,
+    supersededSessionId: null,
     ...overrides,
   };
 }
@@ -33,7 +38,8 @@ function sessionFor(
     status: 'open',
     paymentStatus: 'unpaid',
     url: 'https://checkout.stripe.test/cs_attempt_1',
-    amountTotal: claimed.amountCents,
+    // Stripe bills the gross: claimed balance + rail fee.
+    amountTotal: claimed.amountCents + claimed.surchargeCents,
     currency: claimed.currency,
     customerId: claimed.stripeCustomerId,
     metadata: {
@@ -41,6 +47,14 @@ function sessionFor(
       invoice_id: claimed.invoiceId,
       checkout_attempt_id: claimed.attemptId,
       payer_id: claimed.payerId,
+      // A legacy attempt stamps no rail keys at all — the session stays byte
+      // identical to the pre-surcharge one.
+      ...(claimed.paymentMethod
+        ? {
+            payment_method: claimed.paymentMethod,
+            surcharge_cents: String(claimed.surchargeCents),
+          }
+        : {}),
     },
     ...overrides,
   };
@@ -222,6 +236,155 @@ Deno.test('invoice Checkout: amount/currency drift fails closed', async () => {
     'authoritative claimed invoice balance'
   );
 });
+
+// ── Surcharge (00428) ───────────────────────────────────────────────────────
+// The rail chooser charges balance + fee. The three checkpoints that used to
+// assert "session total == claimed balance" now assert "== balance + fee", and
+// a rail-bound attempt additionally pins the rail into the session metadata.
+
+Deno.test('invoice Checkout: a card-surcharged session matches at the gross amount', async () => {
+  // $125.00 balance @ 300 bps → $3.75 fee → $128.75 charged.
+  const claimed = attempt({
+    surchargeCents: 375,
+    paymentMethod: 'card',
+    stripeCheckoutSessionId: 'cs_attempt_1',
+    state: 'session_created',
+  });
+  const result = await runInvoiceCheckout({
+    claim: async () => claimed,
+    retrieveSession: async () => sessionFor(claimed),
+    createSession: async () => {
+      throw new Error('must reuse');
+    },
+    finalize: async () => {
+      throw new Error('already finalized');
+    },
+    failExpired: async () => {},
+  });
+  assertEquals(result.kind, 'ready');
+  if (result.kind === 'ready') {
+    assertEquals(result.session.amountTotal, 12_875);
+    // The invoice-applied amount stays the pure balance — the fee never
+    // inflates what the ledger will book.
+    assertEquals(result.attempt.amountCents, 12_500);
+    assertEquals(result.attempt.surchargeCents, 375);
+  }
+});
+
+Deno.test('invoice Checkout: a session billed net-only on a surcharged attempt fails closed', async () => {
+  const claimed = attempt({
+    surchargeCents: 375,
+    paymentMethod: 'card',
+    stripeCheckoutSessionId: 'cs_attempt_1',
+    state: 'session_created',
+  });
+  for (const amountTotal of [
+    12_500, // the fee was silently dropped
+    13_250, // the fee was applied twice-over / a stale rate
+  ]) {
+    await assertRejects(
+      () =>
+        runInvoiceCheckout({
+          claim: async () => claimed,
+          retrieveSession: async () => sessionFor(claimed, { amountTotal }),
+          createSession: async () => sessionFor(claimed),
+          finalize: async (value) => value,
+          failExpired: async () => {},
+        }),
+      InvoiceCheckoutIntegrityError,
+      'authoritative claimed invoice balance'
+    );
+  }
+});
+
+Deno.test('invoice Checkout: an ACH-capped attempt matches at balance + $5', async () => {
+  // Above the $625 cap point, ACH is a flat $5 — the assertion follows the DB,
+  // it does not recompute the formula.
+  const claimed = attempt({
+    amountCents: 1_000_000,
+    surchargeCents: 500,
+    paymentMethod: 'us_bank_account',
+    stripeCheckoutSessionId: 'cs_attempt_1',
+    state: 'session_created',
+  });
+  const result = await runInvoiceCheckout({
+    claim: async () => claimed,
+    retrieveSession: async () => sessionFor(claimed),
+    createSession: async () => {
+      throw new Error('must reuse');
+    },
+    finalize: async () => {
+      throw new Error('already finalized');
+    },
+    failExpired: async () => {},
+  });
+  assertEquals(result.kind, 'ready');
+  if (result.kind === 'ready') assertEquals(result.session.amountTotal, 1_000_500);
+});
+
+Deno.test('invoice Checkout: a tampered rail in session metadata is never reused', async () => {
+  const claimed = attempt({
+    surchargeCents: 375,
+    paymentMethod: 'card',
+    stripeCheckoutSessionId: 'cs_attempt_1',
+    state: 'session_created',
+  });
+  // Swapping the stamped rail (or dropping it) would let an ACH-priced session
+  // be presented for a card-priced claim.
+  for (const badMetadata of [
+    { ...sessionFor(claimed).metadata, payment_method: 'us_bank_account' },
+    (() => {
+      const meta = { ...sessionFor(claimed).metadata };
+      delete meta.payment_method;
+      return meta;
+    })(),
+  ]) {
+    await assertRejects(
+      () =>
+        runInvoiceCheckout({
+          claim: async () => claimed,
+          retrieveSession: async () => sessionFor(claimed, { metadata: badMetadata }),
+          createSession: async () => sessionFor(claimed),
+          finalize: async (value) => value,
+          failExpired: async () => {},
+        }),
+      InvoiceCheckoutIntegrityError,
+      'does not belong'
+    );
+  }
+});
+
+Deno.test(
+  'invoice Checkout: a legacy attempt ignores rail metadata Stripe may carry',
+  async () => {
+    // No rail claimed ⇒ the payment_method comparison drops out entirely, so an
+    // extra key (an old session, a Stripe-side addition) cannot break reuse.
+    const claimed = attempt({
+      stripeCheckoutSessionId: 'cs_attempt_1',
+      state: 'session_created',
+    });
+    const result = await runInvoiceCheckout({
+      claim: async () => claimed,
+      retrieveSession: async () =>
+        sessionFor(claimed, {
+          metadata: {
+            ...sessionFor(claimed).metadata,
+            payment_method: 'card',
+            some_future_key: 'whatever',
+          },
+        }),
+      createSession: async () => {
+        throw new Error('must reuse');
+      },
+      finalize: async () => {
+        throw new Error('already finalized');
+      },
+      failExpired: async () => {},
+    });
+    assertEquals(result.kind, 'ready');
+    if (result.kind === 'ready') assertEquals(result.session.amountTotal, 12_500);
+  }
+);
 
 Deno.test('invoice Checkout: persistence failure never returns a usable Stripe URL', async () => {
   const claimed = attempt();

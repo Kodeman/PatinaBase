@@ -7,17 +7,34 @@
  * persistence entirely with deterministic fakes.
  */
 
+/** The two online rails a client may be steered onto. NULL = legacy (both). */
+export type InvoiceCheckoutPaymentMethod = 'card' | 'us_bank_account';
+
 export interface InvoiceCheckoutAttempt {
   attemptId: string;
   paymentId: string;
   invoiceId: string;
   payerId: string;
   stripeCustomerId: string;
+  /** The authoritative claimed invoice balance — NET, never including the fee. */
   amountCents: number;
+  /**
+   * Processing fee charged ON TOP of amountCents. Stripe's amount_total must
+   * equal amountCents + surchargeCents. Legacy/no-method attempts carry 0, so
+   * every assertion below reduces to its pre-surcharge form byte for byte.
+   */
+  surchargeCents: number;
+  /** null = legacy attempt: both rails offered, no fee, no metadata key. */
+  paymentMethod: InvoiceCheckoutPaymentMethod | null;
   currency: string;
   state: 'claimed' | 'session_created' | 'processing';
   stripeIdempotencyKey: string;
   stripeCheckoutSessionId: string | null;
+  /**
+   * The Stripe session id of an attempt this claim just superseded (rail or fee
+   * changed). Best-effort expiry only — never load-bearing.
+   */
+  supersededSessionId: string | null;
 }
 
 export interface InvoiceCheckoutSession {
@@ -89,7 +106,10 @@ export function assertInvoiceSessionIdentity(
     metadata.payable_type !== 'invoice' ||
     metadata.invoice_id !== attempt.invoiceId ||
     metadata.checkout_attempt_id !== attempt.attemptId ||
-    metadata.payer_id !== attempt.payerId
+    metadata.payer_id !== attempt.payerId ||
+    // A rail-bound attempt must meet a session stamped with the same rail. A
+    // legacy attempt (null) stamps no key and this term drops out entirely.
+    (attempt.paymentMethod !== null && metadata.payment_method !== attempt.paymentMethod)
   ) {
     throw new InvoiceCheckoutIntegrityError(
       'checkout_session_identity_mismatch',
@@ -97,8 +117,9 @@ export function assertInvoiceSessionIdentity(
     );
   }
 
+  // Stripe charges the gross: the claimed balance plus the rail's fee.
   if (
-    session.amountTotal !== attempt.amountCents ||
+    session.amountTotal !== attempt.amountCents + attempt.surchargeCents ||
     session.currency?.toLowerCase() !== attempt.currency.toLowerCase()
   ) {
     throw new InvoiceCheckoutIntegrityError(

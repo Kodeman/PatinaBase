@@ -138,7 +138,13 @@ export function buildInvoiceSentEmail(params: InvoiceSentEmailParams): RenderedI
       paragraph(
         `<strong>Amount due:</strong> ${formatInvoiceCurrency(params.totalCents, params.currency)}`,
       ) +
-      dueLine,
+      dueLine +
+      // Fee steering: the portal offers bank transfer, card, and mail-a-check.
+      // No dollar figures here — the surcharge depends on the studio's rate and
+      // the balance at click time, and a stale number in an email would lie.
+      muted(
+        `Pay by bank transfer to keep fees lowest — card payments add a processing fee.`,
+      ),
     params.portalUrl,
     "View invoice",
     {
@@ -655,6 +661,57 @@ export function buildPaymentFailedEmail(
       studioName: params.studioName,
       studioLogoUrl: params.studioLogoUrl,
     },
+  );
+
+  return { subject, html };
+}
+
+export interface CheckIntentEmailParams {
+  invoiceNumber: string;
+  projectName: string;
+  /** Greeting name for the designer (this email is designer-facing). */
+  designerName?: string | null;
+  /** Who said they're mailing a check. */
+  clientName?: string | null;
+  /** The balance the client intends to cover. */
+  balanceCents: number;
+  /** Absolute designer-portal link to the invoice's folio. */
+  portalUrl: string;
+  currency?: string;
+}
+
+/**
+ * Designer-facing heads-up that a client chose "mail a check" on the client
+ * portal. Pure notification — no ledger row is written anywhere. The designer
+ * records the money when it actually arrives, through the existing
+ * record_invoice_payment path, which is why the copy says the invoice is
+ * unchanged. Consumed by the invoice-check-intent edge function; frame cloned
+ * from buildPaymentFailedEmail.
+ */
+export function buildCheckIntentEmail(
+  params: CheckIntentEmailParams,
+): RenderedInvoiceEmail {
+  const designerName = params.designerName?.trim() || "there";
+  const clientLabel = params.clientName?.trim() || "Your client";
+  const balanceLabel = formatInvoiceCurrency(params.balanceCents, params.currency);
+  const subject = `A check is on the way — invoice ${params.invoiceNumber}`;
+
+  const html = wrap(
+    paragraph(`Hi ${escapeHtml(designerName)},`) +
+      paragraph(
+        `${escapeHtml(clientLabel)} let you know they&rsquo;re mailing a check for <strong>${balanceLabel}</strong> toward invoice <strong>${escapeHtml(
+          params.invoiceNumber,
+        )}</strong> for ${escapeHtml(params.projectName)}.`,
+      ) +
+      paragraph(
+        `Nothing has changed on the invoice yet — it stays open until the check lands. When it does, record the payment on the invoice and the balance will settle.`,
+      ) +
+      muted(
+        `<em>If your remit-to address isn&rsquo;t set, add it in Account &rsaquo; Studio &rsaquo; Billing so the next client sees where to send it.</em>`,
+      ),
+    params.portalUrl,
+    "View invoice",
+    { eyebrow: "Check incoming", title: subject },
   );
 
   return { subject, html };

@@ -80,8 +80,12 @@ import {
 } from './reconcile-emit.ts';
 import {
   type ClaimedCheckoutAttempt,
+  isFullCapturedRefund,
+  isFullInvoiceRefund,
   persistSignedSessionEvidence,
+  type RefundChargeShape,
   resolveExactClaimedPayment,
+  usedPaymentMethodType,
 } from './invoice-checkout-integrity.ts';
 // BOH fulfillment intake emission (S0) — additive, one new call site below.
 import { enqueueAgentTask, type RpcClient } from '../_shared/agent-queue.ts';
@@ -113,13 +117,17 @@ function json(body: unknown, status = 200): Response {
 interface PaymentRow {
   id: string;
   invoice_id: string;
+  /** NET — the amount applied to the invoice. Stripe charged this + surcharge. */
   amount_cents: number;
+  /** Rail processing fee charged on top. 0 for legacy/no-method payments. */
+  surcharge_cents: number;
   method: string;
   status: string;
   checkout_attempt_id: string | null;
   recorded_by: string | null;
   stripe_checkout_session_id: string | null;
   stripe_payment_intent_id: string | null;
+  stripe_payment_method_type: string | null;
 }
 
 interface InvoiceJoined {
@@ -146,7 +154,7 @@ interface InvoiceJoined {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const PAYMENT_COLS =
-  'id, invoice_id, amount_cents, method, status, checkout_attempt_id, recorded_by, stripe_checkout_session_id, stripe_payment_intent_id';
+  'id, invoice_id, amount_cents, surcharge_cents, method, status, checkout_attempt_id, recorded_by, stripe_checkout_session_id, stripe_payment_intent_id, stripe_payment_method_type';
 
 function stripeObjectId(value: string | { id: string } | null): string | null {
   return typeof value === 'string' ? value : (value?.id ?? null);
@@ -175,7 +183,7 @@ async function resolveClaimedPaymentRow(
         const { data, error } = await admin
           .from('invoice_checkout_attempts')
           .select(
-            'id, invoice_id, payer_id, stripe_customer_id, amount_cents, currency, state, stripe_checkout_session_id, stripe_payment_intent_id'
+            'id, invoice_id, payer_id, stripe_customer_id, amount_cents, surcharge_cents, payment_method, currency, state, stripe_checkout_session_id, stripe_payment_intent_id'
           )
           .eq('id', attemptId)
           .maybeSingle();
@@ -327,21 +335,27 @@ function designerDisplayName(invoice: InvoiceJoined): string {
 
 /**
  * Settle through the DB money boundary. It locks the invoice, verifies the
- * Stripe-reported amount, and returns requires_refund rather than applying an
- * overpayment. Side effects fire only for a fresh, safely-applied success.
+ * Stripe-reported GROSS amount (claimed balance + rail fee), and returns
+ * requires_refund rather than applying an overpayment. Side effects fire only
+ * for a fresh, safely-applied success.
+ *
+ * `paymentMethodType` is the rail Stripe actually used; null lets the RPC fall
+ * back to the rail the attempt claimed.
  */
 async function markSucceeded(
   admin: SupabaseClient,
   row: PaymentRow,
   eventId: string,
   paymentIntentId: string | null,
-  reportedAmountCents: number | null
+  reportedAmountCents: number | null,
+  paymentMethodType: string | null
 ): Promise<'succeeded' | 'requires_refund' | 'unchanged'> {
   const { data, error } = await admin.rpc('settle_invoice_checkout_payment', {
     p_payment_id: row.id,
     p_stripe_event_id: eventId,
     p_stripe_payment_intent_id: paymentIntentId,
     p_reported_amount_cents: reportedAmountCents,
+    p_stripe_payment_method_type: paymentMethodType,
   });
   if (error) {
     throw new Error(`failed to settle payment ${row.id}: ${error.message}`);
@@ -367,7 +381,12 @@ async function sendSuccessSideEffects(admin: SupabaseClient, row: PaymentRow): P
     const designerName = designerDisplayName(invoice);
     const balanceCents = invoice.total_cents - invoice.amount_paid_cents;
     const portalUrl = `${CLIENT_PORTAL_URL}/invoices/${invoice.id}`;
+    // Two amounts, deliberately: the client is told what their card/bank was
+    // actually charged (balance + rail fee), the designer is told what landed
+    // on the invoice (net). A legacy payment has no fee and the two coincide.
     const amountLabel = formatInvoiceCurrency(row.amount_cents, invoice.currency);
+    const chargedCents = row.amount_cents + (row.surcharge_cents ?? 0);
+    const chargedLabel = formatInvoiceCurrency(chargedCents, invoice.currency);
 
     // Receipt to the client (operational → suppression check, rate cap,
     // notification_log row that doubles as their in-app inbox entry).
@@ -385,7 +404,7 @@ async function sendSuccessSideEffects(admin: SupabaseClient, row: PaymentRow): P
         projectName,
         designerName,
         clientName: recipient.name,
-        amountPaidCents: row.amount_cents,
+        amountPaidCents: chargedCents,
         balanceCents,
         portalUrl,
         currency: invoice.currency,
@@ -404,9 +423,10 @@ async function sendSuccessSideEffects(admin: SupabaseClient, row: PaymentRow): P
           invoice_id: invoice.id,
           project_id: invoice.project_id,
           invoice_payment_id: row.id,
-          amount_cents: row.amount_cents,
+          amount_cents: chargedCents,
+          surcharge_cents: row.surcharge_cents ?? 0,
           subject: rendered.subject,
-          message: `Your payment of ${amountLabel} toward ${invoiceNumber} was received.`,
+          message: `Your payment of ${chargedLabel} toward ${invoiceNumber} was received.`,
           deep_link: `/invoices/${invoice.id}`,
         },
       });
@@ -604,7 +624,8 @@ async function handleSessionCompleted(admin: SupabaseClient, event: Stripe.Event
       row,
       event.id,
       paymentIntentId,
-      session.amount_total
+      session.amount_total,
+      usedPaymentMethodType(session, event.type)
     );
     if (outcome === 'succeeded') await sendSuccessSideEffects(admin, row);
   } else if (paymentIntentId && !row.stripe_payment_intent_id) {
@@ -650,7 +671,14 @@ async function handleAsyncPaymentSucceeded(
     console.warn('stripe-webhook: async_payment_succeeded with no payment row', sessionId);
     return;
   }
-  const outcome = await markSucceeded(admin, row, event.id, paymentIntentId, session.amount_total);
+  const outcome = await markSucceeded(
+    admin,
+    row,
+    event.id,
+    paymentIntentId,
+    session.amount_total,
+    usedPaymentMethodType(session, event.type)
+  );
   if (outcome === 'succeeded') await sendSuccessSideEffects(admin, row);
 }
 
@@ -749,7 +777,11 @@ async function handlePaymentIntentSettled(
       row,
       event.id,
       pi.id,
-      pi.amount_received || pi.amount
+      pi.amount_received || pi.amount,
+      // A PaymentIntent carries payment_method_types but no payment_status, so
+      // only the single-entry rule can fire here — never the completed+paid
+      // card guess. Anything ambiguous stays null and the RPC uses the attempt.
+      usedPaymentMethodType({ payment_method_types: pi.payment_method_types }, event.type)
     );
     if (settlement === 'succeeded') await sendSuccessSideEffects(admin, row);
   } else {
@@ -1484,7 +1516,10 @@ async function handleDirectOrderPaymentIntentSettled(
 // order (invoice_payments → po_payments → direct_orders). FULL refunds flip the
 // payable's state guarded on its settled value — the 00277 trigger owns invoice
 // rollup/status/earnings-reversal/milestone-unpay for invoices; po/direct_order
-// carry their own state column. PARTIAL refunds flip NO row (partial accounting
+// carry their own state column. "Full" is measured against the money Patina
+// actually booked: the NET applied amount for an invoice payment (00428 put the
+// surcharge beside it, so Stripe's captured is gross), and the captured amount
+// for po/direct_order, where no surcharge exists. PARTIAL refunds flip NO row (partial accounting
 // is still v2) — they only log + notify. Unmatched PI → log + 200 (a refund for
 // a charge Patina never recorded must not error-loop Stripe's retries).
 //
@@ -1493,21 +1528,22 @@ async function handleDirectOrderPaymentIntentSettled(
 // row already non-settled and the guarded UPDATE no-ops → no double side effect).
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Full vs partial refund on the pinned API version's Charge shape. */
-function isFullRefund(charge: Stripe.Charge): {
-  full: boolean;
-  refunded: number;
-  captured: number;
-} {
-  // amount_captured is the actually-charged amount (== amount for a fully
-  // captured charge); fall back to amount if absent. amount_refunded is the
-  // running total refunded across all refunds on the charge.
-  const captured = charge.amount_captured ?? charge.amount ?? 0;
-  const refunded = charge.amount_refunded ?? 0;
-  // charge.refunded is Stripe's own "fully refunded" boolean; the amount check
-  // is the robust belt-and-suspenders (and covers a zero-captured edge).
-  const full = charge.refunded === true || (captured > 0 && refunded >= captured);
-  return { full, refunded, captured };
+/**
+ * The pinned API version's Charge reduced to the three numbers refund
+ * classification needs. Classification itself lives in
+ * invoice-checkout-integrity.ts (Stripe-free, unit-tested): an invoice payment
+ * classifies against its NET applied amount, po/direct_order against captured.
+ */
+function chargeRefundShape(charge: Stripe.Charge): RefundChargeShape {
+  return {
+    // Stripe's own "fully refunded" boolean.
+    refunded: charge.refunded === true,
+    // Running total refunded across all refunds on the charge.
+    amountRefundedCents: charge.amount_refunded ?? 0,
+    // amount_captured is the actually-charged amount (== amount for a fully
+    // captured charge); fall back to amount if absent.
+    amountCapturedCents: charge.amount_captured ?? charge.amount ?? 0,
+  };
 }
 
 /** Designer email + in_app notification after an invoice payment refund. Never throws. */
@@ -1613,8 +1649,10 @@ async function handleInvoiceRefund(
 ): Promise<void> {
   if (!full) {
     // PARTIAL: change no row (partial accounting is v2). Log + notify.
+    // "Partial" here means the refund did not cover the NET applied amount —
+    // e.g. a fee-only refund on a surcharged charge.
     console.log(
-      `stripe-webhook: partial refund ${refundedAmount} on invoice_payment ${row.id} (captured ${capturedAmount}) — no state change (v2)`
+      `stripe-webhook: partial refund ${refundedAmount} on invoice_payment ${row.id} (net applied ${row.amount_cents}, captured ${capturedAmount}) — no state change (v2)`
     );
     await sendInvoiceRefundSideEffects(admin, row, {
       partial: true,
@@ -1781,7 +1819,9 @@ async function handleChargeRefunded(admin: SupabaseClient, event: Stripe.Event):
     return;
   }
 
-  const { full, refunded, captured } = isFullRefund(charge);
+  const shape = chargeRefundShape(charge);
+  const refunded = shape.amountRefundedCents;
+  const captured = shape.amountCapturedCents;
 
   // Resolve across the three payable tables in order.
   const { data: invPay, error: invPayError } = await admin
@@ -1795,7 +1835,26 @@ async function handleChargeRefunded(admin: SupabaseClient, event: Stripe.Event):
     );
   }
   if (invPay) {
-    return handleInvoiceRefund(admin, invPay as PaymentRow, full, refunded, captured);
+    const invoiceRow = invPay as PaymentRow;
+    // NET-based for an APPLIED payment: refunding the invoice-applied amount
+    // (the only figure Patina shows a designer) fully reverses everything
+    // Patina booked. See isFullInvoiceRefund.
+    //
+    // EXCEPT for a requires_refund row: that money was never applied to the
+    // invoice, so Patina booked nothing to reverse and the client is owed the
+    // whole GROSS Stripe captured — net AND surcharge. Classifying it against
+    // net would mark a net-only refund "full" while the client is still short
+    // the fee, so a requires_refund row is measured against captured.
+    return handleInvoiceRefund(
+      admin,
+      invoiceRow,
+      isFullInvoiceRefund(
+        shape,
+        invoiceRow.status === 'requires_refund' ? shape.amountCapturedCents : invoiceRow.amount_cents
+      ),
+      refunded,
+      captured
+    );
   }
 
   const { data: poPay, error: poPayError } = await admin
@@ -1809,7 +1868,15 @@ async function handleChargeRefunded(admin: SupabaseClient, event: Stripe.Event):
     );
   }
   if (poPay) {
-    return handlePoRefund(admin, poPay as PoPaymentRow, full, refunded, captured);
+    // Captured == the payable amount on this rail (no surcharge exists) —
+    // unchanged 00277 behavior.
+    return handlePoRefund(
+      admin,
+      poPay as PoPaymentRow,
+      isFullCapturedRefund(shape),
+      refunded,
+      captured
+    );
   }
 
   const { data: directOrd, error: directOrdError } = await admin
@@ -1823,7 +1890,14 @@ async function handleChargeRefunded(admin: SupabaseClient, event: Stripe.Event):
     );
   }
   if (directOrd) {
-    return handleDirectOrderRefund(admin, directOrd as DirectOrderRow, full, refunded, captured);
+    // Same as po_payments: captured == the payable amount.
+    return handleDirectOrderRefund(
+      admin,
+      directOrd as DirectOrderRow,
+      isFullCapturedRefund(shape),
+      refunded,
+      captured
+    );
   }
 
   // Unmatched refund (e.g. a charge Patina never recorded) — acknowledge, don't loop.

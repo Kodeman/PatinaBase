@@ -921,3 +921,477 @@ Deno.test('payable_type dispatch — invoice back-compat + po_payment', async (t
     await cleanup();
   }
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Payment-method chooser + inline surcharge (00428)
+//
+// Self-contained: its own fixtures, its own cleanup, no coupling to the
+// payable_type walk above. The sibling `invoice_surcharge.assert.sql` proves the
+// same money contract in pure SQL inside a rolled-back transaction; what is
+// added HERE is the part only a running stack can show — the served
+// stripe-webhook settling a GROSS Stripe amount through the real signature path,
+// and the invoice-check-intent function's idempotency.
+//
+// Steps marked (DB) need only the local Supabase stack. Steps marked (SERVE)
+// additionally need `supabase functions serve` (see run.sh).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SUR = {
+  studio: '',
+  designer: '',
+  client: '',
+  stranger: '',
+  project: '',
+  invoice: '', // $1,000.00 — card @250bps, the settle walk
+  invoiceBig: '', // $10,000.00 — ACH cap
+  attemptCard: '',
+  paymentCard: '',
+  attemptBig: '',
+  invoiceLegacy: '', // $1,000.00 — claimed with NO method (the iOS path)
+  intentInvoice: '', // untouched invoice for the check-intent steps
+};
+const SUR_MARKER = `SURCHARGE_RAIL_${RUN}`;
+const SUR_EVT = {
+  gross: `evt_sur_gross_${RUN}`,
+  net: `evt_sur_net_${RUN}`,
+  legacy: `evt_sur_legacy_${RUN}`,
+};
+const CHECK_INTENT_URL = `${SB_URL}/functions/v1/invoice-check-intent`;
+
+/** The studio charges 2.5% on cards — deliberately NOT the 300bps default. */
+const SUR_CARD_BPS = 250;
+
+async function surchargeSeed() {
+  SUR.designer = await createUser(`surcharge-designer-${RUN}@example.test`);
+  SUR.client = await createUser(`surcharge-client-${RUN}@example.test`);
+  SUR.stranger = await createUser(`surcharge-stranger-${RUN}@example.test`);
+
+  SUR.studio = await insert('organizations', {
+    type: 'design_studio',
+    name: `${SUR_MARKER} Studio`,
+    slug: `surcharge-rail-${RUN}`,
+  });
+  await admin.from('organization_members').insert({
+    user_id: SUR.designer,
+    organization_id: SUR.studio,
+    role: 'owner',
+    status: 'active',
+  });
+  await admin.from('studio_billing_settings').insert({
+    studio_id: SUR.studio,
+    card_surcharge_bps: SUR_CARD_BPS,
+    check_remit_to: `${SUR_MARKER}\n1 Remit Way\nDes Moines, IA 50309`,
+  });
+
+  // The claim RPC binds the attempt to the payer's canonical Stripe customer;
+  // without this it raises invoice_checkout_customer_mismatch.
+  await admin
+    .from('profiles')
+    .update({ stripe_customer_id: `cus_sur_${RUN}` })
+    .eq('id', SUR.client);
+
+  SUR.project = await insert('projects', {
+    name: `${SUR_MARKER} Project`,
+    created_by: SUR.designer,
+    designer_id: SUR.designer,
+    client_id: SUR.client,
+    studio_id: SUR.studio,
+  });
+
+  const invoice = (number: string, totalCents: number) =>
+    insert('invoices', {
+      project_id: SUR.project,
+      designer_id: SUR.designer,
+      client_id: SUR.client,
+      studio_id: SUR.studio,
+      invoice_number: number,
+      status: 'sent',
+      currency: 'USD',
+      subtotal_cents: totalCents,
+      tax_cents: 0,
+      total_cents: totalCents,
+      amount_paid_cents: 0,
+    });
+
+  SUR.invoice = await invoice(`SUR-${RUN}-A`, 100_000);
+  SUR.invoiceBig = await invoice(`SUR-${RUN}-B`, 1_000_000);
+  SUR.intentInvoice = await invoice(`SUR-${RUN}-C`, 100_000);
+  SUR.invoiceLegacy = await invoice(`SUR-${RUN}-D`, 100_000);
+}
+
+async function surchargeCleanup() {
+  const invoiceIds = [
+    SUR.invoice,
+    SUR.invoiceBig,
+    SUR.intentInvoice,
+    SUR.invoiceLegacy,
+  ].filter(Boolean);
+  if (invoiceIds.length) {
+    await admin.from('designer_earnings').delete().in('invoice_id', invoiceIds);
+    await admin.from('invoice_payments').delete().in('invoice_id', invoiceIds);
+    await admin.from('invoice_checkout_attempts').delete().in('invoice_id', invoiceIds);
+    await admin.from('invoices').delete().in('id', invoiceIds);
+  }
+  if (SUR.project) await admin.from('projects').delete().eq('id', SUR.project);
+  if (SUR.studio) {
+    await admin.from('studio_billing_settings').delete().eq('studio_id', SUR.studio);
+    await admin.from('organization_members').delete().eq('organization_id', SUR.studio);
+    await admin.from('organizations').delete().eq('id', SUR.studio);
+  }
+  await admin
+    .from('stripe_webhook_events')
+    .delete()
+    .in('id', [SUR_EVT.gross, SUR_EVT.net, SUR_EVT.legacy]);
+  for (const userId of [SUR.designer, SUR.client, SUR.stranger].filter(Boolean)) {
+    await admin.auth.admin.deleteUser(userId).catch(() => {});
+  }
+}
+
+async function claim(invoiceId: string, payerId: string, method: string | null) {
+  const { data, error } = await admin.rpc('claim_invoice_checkout_attempt', {
+    p_invoice_id: invoiceId,
+    p_payer_id: payerId,
+    p_stripe_customer_id: `cus_sur_${RUN}`,
+    p_allow_designer_test: false,
+    p_payment_method: method,
+  });
+  if (error) throw new Error(`claim failed: ${error.message}`);
+  return data as Record<string, unknown>;
+}
+
+async function attemptRow(id: string) {
+  const { data, error } = await admin
+    .from('invoice_checkout_attempts')
+    .select('id, state, amount_cents, surcharge_cents, payment_method, failure_reason')
+    .eq('id', id)
+    .single();
+  if (error) throw new Error(error.message);
+  return data as {
+    state: string;
+    amount_cents: number;
+    surcharge_cents: number;
+    payment_method: string | null;
+    failure_reason: string | null;
+  };
+}
+
+async function paymentRow(id: string) {
+  const { data, error } = await admin
+    .from('invoice_payments')
+    .select('id, status, amount_cents, surcharge_cents, stripe_payment_method_type, note')
+    .eq('id', id)
+    .single();
+  if (error) throw new Error(error.message);
+  return data as {
+    status: string;
+    amount_cents: number;
+    surcharge_cents: number;
+    stripe_payment_method_type: string | null;
+    note: string | null;
+  };
+}
+
+/** Signed-in RPC as a specific user (auth.uid() is the whole authorization). */
+async function rpcAs(email: string, fn: string, args: Record<string, unknown>) {
+  const token = await signIn(email);
+  const asUser = createClient(SB_URL, ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  });
+  return await asUser.rpc(fn, args);
+}
+
+Deno.test('invoice surcharge rail — claim, supersede, gross settle, check intent', async (t) => {
+  await surchargeSeed();
+  try {
+    // (a) DB — a card claim prices the studio's 2.5%, and leaves amount_cents
+    //     as the pure balance. $1,000.00 × 250bps = $25.00.
+    await t.step('(DB) card claim carries the studio fee, not a fatter balance', async () => {
+      const claimed = await claim(SUR.invoice, SUR.client, 'card');
+      SUR.attemptCard = claimed.attempt_id as string;
+      SUR.paymentCard = claimed.payment_id as string;
+      assertEquals(claimed.amount_cents, 100_000);
+      assertEquals(claimed.surcharge_cents, 2_500);
+      assertEquals(claimed.payment_method, 'card');
+      assertEquals(claimed.superseded_session_id, null);
+
+      const pending = await paymentRow(SUR.paymentCard);
+      assertEquals(pending.status, 'pending');
+      assertEquals(pending.amount_cents, 100_000); // the ledger books the balance
+      assertEquals(pending.surcharge_cents, 2_500); // the fee rides alongside
+    });
+
+    // (b) DB — switching rails supersedes the live card attempt and hands back
+    //     its session id so create-checkout-session can expire it in Stripe.
+    await t.step('(DB) re-claiming on ACH supersedes with payment_method_changed', async () => {
+      // Give the card attempt a session pointer, as finalize would.
+      await admin
+        .from('invoice_checkout_attempts')
+        .update({ state: 'session_created', stripe_checkout_session_id: `cs_sur_card_${RUN}` })
+        .eq('id', SUR.attemptCard);
+      await admin
+        .from('invoice_payments')
+        .update({ stripe_checkout_session_id: `cs_sur_card_${RUN}` })
+        .eq('id', SUR.paymentCard);
+
+      const claimed = await claim(SUR.invoice, SUR.client, 'us_bank_account');
+      assertEquals(claimed.payment_method, 'us_bank_account');
+      // $1,000.00 is above the $625.00 ACH cap point → flat $5.00.
+      assertEquals(claimed.surcharge_cents, 500);
+      assertEquals(claimed.superseded_session_id, `cs_sur_card_${RUN}`);
+
+      const superseded = await attemptRow(SUR.attemptCard);
+      assertEquals(superseded.state, 'superseded');
+      assertEquals(superseded.failure_reason, 'payment_method_changed');
+      // Its pending payment row is failed in the same transaction, so the old
+      // rail's money can never be applied twice.
+      assertEquals((await paymentRow(SUR.paymentCard)).status, 'failed');
+
+      // Re-claim back onto card so the settle steps below run the card rail.
+      const back = await claim(SUR.invoice, SUR.client, 'card');
+      SUR.attemptCard = back.attempt_id as string;
+      SUR.paymentCard = back.payment_id as string;
+      assertEquals(back.surcharge_cents, 2_500);
+    });
+
+    // (c) DB — the ACH cap is flat above $625.00 regardless of invoice size.
+    await t.step('(DB) ACH is capped at $5.00 on a $10,000 invoice', async () => {
+      const claimed = await claim(SUR.invoiceBig, SUR.client, 'us_bank_account');
+      SUR.attemptBig = claimed.attempt_id as string;
+      assertEquals(claimed.amount_cents, 1_000_000);
+      assertEquals(claimed.surcharge_cents, 500);
+    });
+
+    // (d) DB — the client sees the fee they're about to pay; a stranger cannot
+    //     even learn the invoice exists.
+    await t.step('(DB) get_invoice_payment_options: client yes, stranger 404', async () => {
+      const asClient = await rpcAs(`surcharge-client-${RUN}@example.test`, 'get_invoice_payment_options', {
+        p_invoice_id: SUR.invoice,
+      });
+      assertEquals(asClient.error, null);
+      const opts = asClient.data as { card_surcharge_bps: number; check_remit_to: string | null };
+      assertEquals(opts.card_surcharge_bps, SUR_CARD_BPS);
+      assert(opts.check_remit_to?.includes('1 Remit Way'), 'remit-to reaches the client');
+
+      const asStranger = await rpcAs(
+        `surcharge-stranger-${RUN}@example.test`,
+        'get_invoice_payment_options',
+        { p_invoice_id: SUR.invoice },
+      );
+      assert(asStranger.error, 'a stranger must be refused');
+      assert(
+        asStranger.error!.message.includes('invoice_not_found'),
+        `expected invoice_not_found, got ${asStranger.error!.message}`,
+      );
+    });
+
+    // (e) SERVE — the money moment. Stripe reports the GROSS ($1,025.00); the
+    //     invoice must settle at the NET ($1,000.00) with the rail stamped.
+    await t.step('(SERVE) signed completed at the gross amount settles + stamps the rail', async () => {
+      const sessionId = `cs_sur_settle_${RUN}`;
+      await admin
+        .from('invoice_checkout_attempts')
+        .update({ state: 'session_created', stripe_checkout_session_id: sessionId })
+        .eq('id', SUR.attemptCard);
+      await admin
+        .from('invoice_payments')
+        .update({ stripe_checkout_session_id: sessionId })
+        .eq('id', SUR.paymentCard);
+
+      const res = await postSigned(
+        WEBHOOK_URL,
+        stripeEvent(SUR_EVT.gross, 'checkout.session.completed', {
+          id: sessionId,
+          object: 'checkout.session',
+          payment_status: 'paid',
+          amount_total: 102_500, // balance + the 2.5% card fee
+          currency: 'usd',
+          customer: `cus_sur_${RUN}`,
+          payment_intent: `pi_sur_gross_${RUN}`,
+          payment_method_types: ['card'],
+          metadata: {
+            payable_type: 'invoice',
+            invoice_id: SUR.invoice,
+            checkout_attempt_id: SUR.attemptCard,
+            payer_id: SUR.client,
+            payment_method: 'card',
+            surcharge_cents: '2500',
+          },
+        }),
+      );
+      assertEquals(res.status, 200);
+      await res.body?.cancel();
+
+      const settled = await paymentRow(SUR.paymentCard);
+      assertEquals(settled.status, 'succeeded');
+      assertEquals(settled.amount_cents, 100_000);
+      assertEquals(settled.surcharge_cents, 2_500);
+      assertEquals(settled.stripe_payment_method_type, 'card');
+      // Only the balance touches the invoice — the fee is a payment cost.
+      assertEquals((await invoiceRow(SUR.invoice)).amount_paid_cents, 100_000);
+    });
+
+    // (f) SERVE — the same event billed NET-ONLY is a mismatch. On the CLAIMED
+    //     rail the exact-identity gate refuses it before settlement is even
+    //     attempted: the webhook 500s (releasing its idempotency claim so Stripe
+    //     retries) and nothing is applied to the invoice. requires_refund is the
+    //     settle RPC's answer for the un-gated paths — proven in the sibling
+    //     invoice_surcharge.assert.sql (S5), not reachable from here.
+    await t.step('(SERVE) a net-only amount_total never reaches the invoice', async () => {
+      const claimed = await claim(SUR.invoiceBig, SUR.client, 'card');
+      const attemptId = claimed.attempt_id as string;
+      const paymentId = claimed.payment_id as string;
+      assertEquals(claimed.surcharge_cents, 25_000); // $10,000 × 250bps
+      const sessionId = `cs_sur_net_${RUN}`;
+      await admin
+        .from('invoice_checkout_attempts')
+        .update({ state: 'session_created', stripe_checkout_session_id: sessionId })
+        .eq('id', attemptId);
+      await admin
+        .from('invoice_payments')
+        .update({ stripe_checkout_session_id: sessionId })
+        .eq('id', paymentId);
+
+      const res = await postSigned(
+        WEBHOOK_URL,
+        stripeEvent(SUR_EVT.net, 'checkout.session.completed', {
+          id: sessionId,
+          object: 'checkout.session',
+          payment_status: 'paid',
+          amount_total: 1_000_000, // the fee never made it onto the session
+          currency: 'usd',
+          customer: `cus_sur_${RUN}`,
+          payment_intent: `pi_sur_net_${RUN}`,
+          payment_method_types: ['card'],
+          metadata: {
+            payable_type: 'invoice',
+            invoice_id: SUR.invoiceBig,
+            checkout_attempt_id: attemptId,
+            payer_id: SUR.client,
+            payment_method: 'card',
+            surcharge_cents: '25000',
+          },
+        }),
+      );
+      // Fail closed: the handler throws, the idempotency claim is released, and
+      // Stripe is told to retry rather than being silently accepted.
+      assertEquals(res.status, 500);
+      await res.body?.cancel();
+      assertEquals((await paymentRow(paymentId)).status, 'pending');
+      assertEquals((await invoiceRow(SUR.invoiceBig)).amount_paid_cents, 0);
+      // The claim row was deleted, so a corrected redelivery can still land.
+      const { count: claims } = await admin
+        .from('stripe_webhook_events')
+        .select('id', { count: 'exact', head: true })
+        .eq('id', SUR_EVT.net);
+      assertEquals(claims ?? 0, 0);
+    });
+
+    // (g) SERVE — the legacy path (iOS calls create-checkout-session with only
+    //     an invoiceId) must be untouched: no rail, no fee, and Stripe's
+    //     amount_total is the bare balance exactly as it was before 00428.
+    await t.step('(SERVE) a no-method claim still settles at the bare balance', async () => {
+      const claimed = await claim(SUR.invoiceLegacy, SUR.client, null);
+      assertEquals(claimed.payment_method, null);
+      assertEquals(claimed.surcharge_cents, 0);
+      const attemptId = claimed.attempt_id as string;
+      const paymentId = claimed.payment_id as string;
+      const sessionId = `cs_sur_legacy_${RUN}`;
+      await admin
+        .from('invoice_checkout_attempts')
+        .update({ state: 'session_created', stripe_checkout_session_id: sessionId })
+        .eq('id', attemptId);
+      await admin
+        .from('invoice_payments')
+        .update({ stripe_checkout_session_id: sessionId })
+        .eq('id', paymentId);
+
+      const res = await postSigned(
+        WEBHOOK_URL,
+        stripeEvent(SUR_EVT.legacy, 'checkout.session.completed', {
+          id: sessionId,
+          object: 'checkout.session',
+          payment_status: 'paid',
+          amount_total: 100_000, // no fee — the pre-surcharge contract
+          currency: 'usd',
+          customer: `cus_sur_${RUN}`,
+          payment_intent: `pi_sur_legacy_${RUN}`,
+          // A legacy session offers both rails and stamps no payment_method.
+          payment_method_types: ['card', 'us_bank_account'],
+          metadata: {
+            payable_type: 'invoice',
+            invoice_id: SUR.invoiceLegacy,
+            checkout_attempt_id: attemptId,
+            payer_id: SUR.client,
+          },
+        }),
+      );
+      assertEquals(res.status, 200);
+      await res.body?.cancel();
+
+      const settled = await paymentRow(paymentId);
+      assertEquals(settled.status, 'succeeded');
+      assertEquals(settled.amount_cents, 100_000);
+      assertEquals(settled.surcharge_cents, 0);
+      // Nothing was claimed, so the rail is inferred: an immediately-paid
+      // completion on a card+ACH session was a card.
+      assertEquals(settled.stripe_payment_method_type, 'card');
+      assertEquals((await invoiceRow(SUR.invoiceLegacy)).amount_paid_cents, 100_000);
+    });
+
+    // (h) SERVE — "a check is coming" notifies the designer exactly once a day,
+    //     writes no ledger row, and stays invisible to anyone but the client.
+    await t.step('(SERVE) invoice-check-intent notifies once and is idempotent', async () => {
+      const clientToken = await signIn(`surcharge-client-${RUN}@example.test`);
+      const post = (token: string) =>
+        fetch(CHECK_INTENT_URL, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            apikey: ANON_KEY,
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ invoiceId: SUR.intentInvoice }),
+        });
+
+      const first = await post(clientToken);
+      assertEquals(first.status, 200);
+      const firstBody = await first.json();
+      assertEquals(firstBody.ok, true);
+      assertEquals(firstBody.alreadyNotified, false);
+
+      const second = await post(clientToken);
+      assertEquals(second.status, 200);
+      const secondBody = await second.json();
+      assertEquals(secondBody.alreadyNotified, true);
+
+      // Exactly one in_app notice for the designer, and no money booked.
+      const { data: notices } = await admin
+        .from('notification_log')
+        .select('metadata')
+        .eq('user_id', SUR.designer)
+        .eq('type', 'invoice_check_intent')
+        .eq('channel', 'in_app');
+      assertEquals(
+        (notices as { metadata: Record<string, unknown> }[]).filter(
+          (r) => r.metadata?.invoice_id === SUR.intentInvoice,
+        ).length,
+        1,
+      );
+      const { count: payments } = await admin
+        .from('invoice_payments')
+        .select('id', { count: 'exact', head: true })
+        .eq('invoice_id', SUR.intentInvoice);
+      assertEquals(payments ?? 0, 0);
+      assertEquals((await invoiceRow(SUR.intentInvoice)).status, 'sent');
+
+      // A stranger is told nothing at all.
+      const strangerToken = await signIn(`surcharge-stranger-${RUN}@example.test`);
+      const denied = await post(strangerToken);
+      assertEquals(denied.status, 404);
+      assertEquals((await denied.json()).error, 'invoice_not_found');
+    });
+  } finally {
+    await surchargeCleanup();
+  }
+});

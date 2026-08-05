@@ -525,6 +525,16 @@ verify_jwt = true
 [functions.trade-rfq-send]
 verify_jwt = true
 
+# Invoice "mail a check" intent (00428). Client-facing and browser-called, so
+# the gateway must verify the caller's JWT; the function then re-derives the
+# caller with auth.getUser and requires them to be THAT invoice's client
+# (invoices.client_id, falling back to project.client_id) before it will notify
+# the designer. It moves no money and writes no ledger row — the only effect is
+# a designer notification — but the caller identity is still the whole
+# authorization, so this is explicitly NOT a verify_jwt=false candidate.
+[functions.invoice-check-intent]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327

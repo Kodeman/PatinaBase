@@ -14,6 +14,15 @@
 //   { direct_order_id }  — a client "buy now" order for a Patina-managed
 //                          product (client pays). `directOrderId` alias.
 //
+// Optional (INVOICES ONLY, ignored for po_payment / direct_order):
+//   { payment_method }   — 'card' | 'us_bank_account'. `paymentMethod` alias.
+//                          Restricts Checkout to that one rail and applies the
+//                          rail's processing fee as a SECOND line item on top of
+//                          the invoice balance. Omitted (the iOS client, and any
+//                          legacy caller) ⇒ NULL claim ⇒ both rails, no fee, a
+//                          byte-identical session to before. Any other value is
+//                          rejected 400 invalid_payment_method.
+//
 // Shared flow (per payable):
 //   1. Auth: resolve the caller from the Authorization header.
 //   2. Load + authorize the payable (service role). Type-specific:
@@ -52,6 +61,7 @@ import { resolveStudioIdentity } from '../_shared/studio-identity.ts';
 import {
   type InvoiceCheckoutAttempt,
   InvoiceCheckoutIntegrityError,
+  type InvoiceCheckoutPaymentMethod,
   type InvoiceCheckoutSession,
   invoiceCheckoutReturnUrl,
   runInvoiceCheckout,
@@ -676,6 +686,10 @@ function mapInvoiceAttempt(data: any): InvoiceCheckoutAttempt {
     !data?.payer_id ||
     !data?.stripe_customer_id ||
     !Number.isInteger(data?.amount_cents) ||
+    // The fee is money: a non-integer here would silently mis-charge, so it is
+    // as load-bearing as the balance. The claim RPC always returns it (0 for a
+    // legacy/no-method attempt).
+    !Number.isInteger(data?.surcharge_cents) ||
     !data?.currency ||
     !data?.stripe_idempotency_key
   ) {
@@ -688,16 +702,31 @@ function mapInvoiceAttempt(data: any): InvoiceCheckoutAttempt {
     payerId: data.payer_id,
     stripeCustomerId: data.stripe_customer_id,
     amountCents: data.amount_cents,
+    surchargeCents: data.surcharge_cents,
+    // The DB CHECK already constrains this to card | us_bank_account | NULL;
+    // `?? null` normalizes the JSON-null the reused-attempt branch returns.
+    paymentMethod: (data.payment_method ?? null) as InvoiceCheckoutPaymentMethod | null,
     currency: data.currency,
     state: data.state,
     stripeIdempotencyKey: data.stripe_idempotency_key,
     stripeCheckoutSessionId: data.stripe_checkout_session_id ?? null,
+    supersededSessionId: data.superseded_session_id ?? null,
   };
 }
+
+/** Fee line-item label per rail. Mirrors the client portal's totals rows. */
+const SURCHARGE_LINE_LABEL: Record<InvoiceCheckoutPaymentMethod, string> = {
+  card: 'Card processing fee',
+  us_bank_account: 'Bank transfer fee',
+};
 
 function invoiceAttemptFields(attempt: InvoiceCheckoutAttempt, sessionId?: string | null) {
   return {
     amount_cents: attempt.amountCents,
+    // Additive: existing clients ignore unknown keys, the client portal reads
+    // them to reconcile what was actually charged.
+    surcharge_cents: attempt.surchargeCents,
+    payment_method: attempt.paymentMethod,
     currency: attempt.currency,
     checkout_attempt_id: attempt.attemptId,
     payment_id: attempt.paymentId,
@@ -709,7 +738,8 @@ async function startInvoiceCheckout(
   admin: SupabaseClient,
   stripe: Stripe,
   caller: CallerUser,
-  payable: Payable
+  payable: Payable,
+  paymentMethod: InvoiceCheckoutPaymentMethod | null
 ): Promise<Response> {
   const customerResult = await ensureStripeCustomer(admin, stripe, caller);
   if (customerResult instanceof Response) return customerResult;
@@ -725,29 +755,59 @@ async function startInvoiceCheckout(
           p_payer_id: caller.id,
           p_stripe_customer_id: customerId,
           p_allow_designer_test: INVOICE_CHECKOUT_DESIGNER_TEST_MODE,
+          p_payment_method: paymentMethod,
         });
         if (error) throw error;
-        lastAttempt = mapInvoiceAttempt(data);
-        return lastAttempt;
+        const claimed = mapInvoiceAttempt(data);
+        lastAttempt = claimed;
+        // The claim superseded a live session on the other rail (or at the old
+        // fee). Close it so the client can't wander back and pay the wrong
+        // amount. Best-effort only — the DB already failed that attempt, so a
+        // Stripe hiccup here must not break the fresh checkout (mirrors the
+        // stale-session expire in startCheckout).
+        if (claimed.supersededSessionId) {
+          try {
+            await stripe.checkout.sessions.expire(claimed.supersededSessionId);
+          } catch (err) {
+            console.warn('create-checkout-session: superseded session expire failed', err);
+          }
+        }
+        return claimed;
       },
       async retrieveSession(sessionId) {
         return stripeSessionView(await stripe.checkout.sessions.retrieve(sessionId));
       },
       async createSession(attempt) {
+        // A legacy (null-rail) attempt must produce the pre-surcharge session
+        // byte for byte: both rails, no fee line, no extra metadata keys.
+        const rails: Array<'card' | 'us_bank_account'> = attempt.paymentMethod
+          ? [attempt.paymentMethod]
+          : ['card', 'us_bank_account'];
+        const offersAch = rails.includes('us_bank_account');
         const metadata = {
           payable_type: 'invoice',
           invoice_id: attempt.invoiceId,
           checkout_attempt_id: attempt.attemptId,
           payer_id: attempt.payerId,
+          ...(attempt.paymentMethod
+            ? {
+                payment_method: attempt.paymentMethod,
+                surcharge_cents: String(attempt.surchargeCents),
+              }
+            : {}),
         };
         const session = await stripe.checkout.sessions.create(
           {
             mode: 'payment',
             customer: attempt.stripeCustomerId,
-            payment_method_types: ['card', 'us_bank_account'],
-            payment_method_options: {
-              us_bank_account: { verification_method: 'automatic' },
-            },
+            payment_method_types: rails,
+            ...(offersAch
+              ? {
+                  payment_method_options: {
+                    us_bank_account: { verification_method: 'automatic' as const },
+                  },
+                }
+              : {}),
             line_items: [
               {
                 quantity: 1,
@@ -757,6 +817,23 @@ async function startInvoiceCheckout(
                   product_data: { name: payable.lineItemName },
                 },
               },
+              // Stripe "Pattern A": the fee is its own line, so amount_total is
+              // exactly balance + fee (no tax/shipping on this session config)
+              // and the client sees what they're paying for.
+              ...(attempt.surchargeCents > 0 && attempt.paymentMethod
+                ? [
+                    {
+                      quantity: 1,
+                      price_data: {
+                        currency: attempt.currency,
+                        unit_amount: attempt.surchargeCents,
+                        product_data: {
+                          name: SURCHARGE_LINE_LABEL[attempt.paymentMethod],
+                        },
+                      },
+                    },
+                  ]
+                : []),
             ],
             metadata,
             payment_intent_data: { metadata },
@@ -814,6 +891,12 @@ async function startInvoiceCheckout(
 
     if (dbMessage.includes('invoice_checkout_payer_not_allowed')) {
       return json({ error: 'invoice_not_found' }, 404);
+    }
+    // Colon-suffixed (`…bad_payment_method:<value>`) like the other 00397 error
+    // idioms — match by prefix, never equality. Only reachable if the DB
+    // vocabulary drifts ahead of this function's validation.
+    if (dbMessage.includes('invoice_checkout_bad_payment_method')) {
+      return json({ error: 'invalid_payment_method', detail, ...fields }, 400);
     }
     if (dbMessage.includes('invoice_checkout_reconciliation_required')) {
       return json(
@@ -969,6 +1052,24 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'payable_id_required' }, 400);
   }
 
+  // Rail choice — invoices only. Absent/null ⇒ legacy path (both rails, no fee).
+  // An unrecognized value is refused rather than silently downgraded to legacy,
+  // so a client bug can never charge the wrong amount.
+  const rawPaymentMethod = body?.payment_method ?? body?.paymentMethod;
+  let paymentMethod: InvoiceCheckoutPaymentMethod | null = null;
+  if (rawPaymentMethod !== undefined && rawPaymentMethod !== null) {
+    if (rawPaymentMethod !== 'card' && rawPaymentMethod !== 'us_bank_account') {
+      return json(
+        {
+          error: 'invalid_payment_method',
+          detail: "payment_method must be 'card' or 'us_bank_account'.",
+        },
+        400
+      );
+    }
+    paymentMethod = rawPaymentMethod;
+  }
+
   const caller = await getCallerUser(req);
   if (!caller) {
     return json({ error: 'unauthorized' }, 401);
@@ -996,7 +1097,9 @@ Deno.serve(async (req: Request) => {
     httpClient: Stripe.createFetchHttpClient(),
   });
 
+  // paymentMethod is deliberately dropped for po_payment / direct_order — those
+  // rails carry no surcharge model and keep offering card + ACH together.
   return payableResult.payableType === 'invoice'
-    ? startInvoiceCheckout(admin, stripe, caller, payableResult)
+    ? startInvoiceCheckout(admin, stripe, caller, payableResult, paymentMethod)
     : startCheckout(admin, stripe, caller, payableResult);
 });
