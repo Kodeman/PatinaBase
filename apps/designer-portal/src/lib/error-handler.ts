@@ -93,6 +93,13 @@ function getUserFriendlyMessage(code: string, fallback: string): string {
     // Rate limiting
     RATE_LIMIT_EXCEEDED: 'Too many requests. Please try again later',
 
+    // An expiry-*shaped* error whose session turned out to be alive (see
+    // `toLiveSessionError`). Telling this user to sign in again would be a lie
+    // and a loop — middleware honours the good cookie and bounces them right
+    // back. Say what is actually true: the request failed, the session didn't.
+    REQUEST_FAILED_SESSION_ALIVE:
+      "That didn't go through. You're still signed in — try again.",
+
     // Generic
     UNKNOWN_ERROR: 'An unexpected error occurred',
   };
@@ -183,10 +190,12 @@ function readErrorParts(error: unknown): {
 }
 
 /**
- * Check if an error specifically indicates an expired / invalid Supabase
- * session (JWT expired, missing refresh token, PostgREST 401). This is the
- * precise signal that the user must sign in again — distinct from a generic
- * 403 "you lack permission" which should NOT bounce the user to sign-in.
+ * Check if an error is *expiry-shaped* — a 401, a PostgREST JWT rejection, a
+ * missing refresh token. These are candidates, not verdicts: a server-side JWT
+ * misconfiguration answers 401 too while the browser still holds a perfectly
+ * good session. Distinct from a generic 403 "you lack permission", which is
+ * never a candidate. `handleAuthExpiry` arbitrates a candidate against the live
+ * session before anyone is sent to sign-in.
  */
 export function isSessionExpiredError(error: unknown): boolean {
   const { code, status, message } = readErrorParts(error);
@@ -198,6 +207,100 @@ export function isSessionExpiredError(error: unknown): boolean {
   return SESSION_EXPIRED_MESSAGE_FRAGMENTS.some((fragment) =>
     lower.includes(fragment)
   );
+}
+
+/**
+ * GoTrue error codes that are the server's *verdict on the session* rather than
+ * a transport hiccup. Used only by the liveness probe — an error carrying one
+ * of these is the auth server saying "this session is not valid", which is the
+ * one thing that may end in a hard redirect.
+ */
+const AUTHORITATIVE_AUTH_ERROR_CODES = new Set([
+  'session_not_found',
+  'session_expired',
+  'refresh_token_not_found',
+  'refresh_token_already_used',
+  'bad_jwt',
+  'no_authorization',
+  'user_not_found',
+  'invalid_claim',
+]);
+
+/**
+ * Message fingerprints of a request that never reached an answer. Offline, DNS
+ * flap, aborted fetch, dead socket — the session's validity is simply unknown.
+ */
+const TRANSPORT_ERROR_MESSAGE_FRAGMENTS = [
+  'failed to fetch',
+  'network request failed',
+  'networkerror',
+  'load failed', // Safari's wording for a fetch that never landed
+  'network error',
+  'econnrefused',
+  'econnreset',
+  'enotfound',
+  'etimedout',
+  'socket hang up',
+  'timed out',
+  'timeout',
+  'aborted',
+];
+
+type AuthProbeErrorClass = 'authoritative' | 'transport';
+
+/**
+ * Decide whether an error handed back by `getSession()` / `getUser()` is the
+ * auth server *rejecting the session* or merely a failure to ask it.
+ *
+ * This distinction is load-bearing: auth-js RETURNS its errors on
+ * `{ data, error }` rather than throwing, so an offline `getUser()` resolves
+ * with `{ user: null, error: AuthRetryableFetchError }` — indistinguishable
+ * from a real rejection unless you look. Treating that as death hard-redirects
+ * a perfectly live session the moment the network hiccups.
+ *
+ * Detection is duck-typed rather than importing `isAuthRetryableFetchError`
+ * from `@supabase/supabase-js`: this module is loaded from plain utility paths
+ * and deliberately pulls the Supabase SDK in only via dynamic import (see
+ * `probeSessionLiveness`). The marker is the SDK's own public contract —
+ * `isAuthRetryableFetchError` is itself just `error.name ===
+ * 'AuthRetryableFetchError'`.
+ *
+ * Unknown shapes classify as `transport`. Surfacing an error over a live
+ * session is a nuisance; booting a live session loses the user's work.
+ */
+function classifyAuthProbeError(error: unknown): AuthProbeErrorClass {
+  const name =
+    error && typeof error === 'object'
+      ? (error as { name?: unknown }).name
+      : undefined;
+
+  // auth-js already decided this one was retryable transport.
+  if (name === 'AuthRetryableFetchError') return 'transport';
+
+  const { code, status, message } = readErrorParts(error);
+
+  // The server declining to answer (rate limit, outage, gateway) says nothing
+  // about the session. `status: 0` is auth-js's stand-in for "fetch never
+  // landed".
+  if (typeof status === 'number') {
+    if (status === 0 || status === 429 || status >= 500) return 'transport';
+    // 4xx with auth semantics: the server looked at the token and said no.
+    if (status === 400 || status === 401 || status === 403) {
+      return 'authoritative';
+    }
+  }
+
+  if (code && AUTHORITATIVE_AUTH_ERROR_CODES.has(code)) return 'authoritative';
+
+  const lower = message.toLowerCase();
+  if (TRANSPORT_ERROR_MESSAGE_FRAGMENTS.some((fragment) => lower.includes(fragment))) {
+    return 'transport';
+  }
+  if (SESSION_EXPIRED_MESSAGE_FRAGMENTS.some((fragment) => lower.includes(fragment))) {
+    return 'authoritative';
+  }
+
+  return 'transport';
 }
 
 /**
@@ -230,14 +333,66 @@ export function isAuthError(error: unknown): boolean {
  *  - no-op on the server (no `window`),
  *  - no-op if we're already on an `/auth/*` page (prevents redirect loops),
  *  - de-duped via a module-level flag so a burst of failing queries triggers
- *    exactly one navigation.
+ *    exactly one navigation,
+ *  - rate-limited by a `sessionStorage` stamp. The module flag dies with the
+ *    page, so a bounce back from middleware (valid cookie, misconfigured
+ *    verifier) would otherwise reload forever. The stamp survives the reload
+ *    and bounds any pathological bounce to one navigation per 30s per tab.
+ *
+ * Returns `true` when the page is being replaced (navigation fired, or one is
+ * already in flight) and `false` when a guard declined. Callers must read it:
+ * "we redirected" is the only justification for throwing away a pending error
+ * surface, and every guard above is a way for that justification to be false.
  */
 let signInRedirectInFlight = false;
 
-export function redirectToSignIn(reason?: string): void {
-  if (typeof window === 'undefined') return;
-  if (window.location.pathname.startsWith('/auth')) return;
-  if (signInRedirectInFlight) return;
+const AUTH_REDIRECT_STAMP_KEY = 'patina:auth-redirect-at';
+const AUTH_REDIRECT_MIN_INTERVAL_MS = 30_000;
+
+function readAuthRedirectStamp(): number | null {
+  try {
+    const raw = window.sessionStorage.getItem(AUTH_REDIRECT_STAMP_KEY);
+    if (!raw) return null;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : null;
+  } catch {
+    // Private mode / storage disabled — fall back to the module-level flag,
+    // which still de-dupes within a single page load.
+    return null;
+  }
+}
+
+function writeAuthRedirectStamp(at: number): void {
+  try {
+    window.sessionStorage.setItem(AUTH_REDIRECT_STAMP_KEY, String(at));
+  } catch {
+    // See readAuthRedirectStamp — storage being unavailable is not fatal.
+  }
+}
+
+export function redirectToSignIn(reason?: string): boolean {
+  if (typeof window === 'undefined') return false;
+  // Already on the sign-in surface — nothing to navigate to. Note that
+  // `/auth/accept-invite` is an *authenticated* page under this prefix, so this
+  // branch is reached by real working pages, not just the sign-in form.
+  if (window.location.pathname.startsWith('/auth')) return false;
+  // A navigation is already scheduled from this page load; the document is on
+  // its way out either way.
+  if (signInRedirectInFlight) return true;
+
+  const now = Date.now();
+  const lastRedirectAt = readAuthRedirectStamp();
+  if (
+    lastRedirectAt !== null &&
+    now - lastRedirectAt < AUTH_REDIRECT_MIN_INTERVAL_MS
+  ) {
+    console.warn(
+      '[auth] Suppressing sign-in redirect — one already fired within the last 30s (possible redirect loop)'
+    );
+    return false;
+  }
+  writeAuthRedirectStamp(now);
+
   signInRedirectInFlight = true;
 
   if (reason) {
@@ -248,18 +403,250 @@ export function redirectToSignIn(reason?: string): void {
   window.location.assign(
     `/auth/signin?callbackUrl=${encodeURIComponent(callbackUrl)}`
   );
+  return true;
 }
 
 /**
- * If the given error is an expired/invalid session, redirect to sign-in and
- * return `true`. Otherwise return `false` so the caller can fall through to
- * normal error handling (toast, inline error state, etc.). Centralizing the
- * "expired → sign-in" decision here keeps the query cache, mutation cache, and
- * any page-level guard consistent.
+ * Ask Supabase whether the session is actually dead before booting the user.
+ *
+ * An expiry-shaped error is only a nomination: a server-side JWT verification
+ * misconfiguration answers 401 with the browser's session perfectly alive, and
+ * hard-navigating on that produces a reload loop (middleware bounces the valid
+ * cookie straight back, and the module-level de-dupe flag resets on reload).
+ *
+ * De-duped via an in-flight promise so a burst of 401s runs exactly one probe.
  */
-export function handleAuthExpiry(error: unknown): boolean {
+let sessionLivenessProbe: Promise<void> | null = null;
+
+/**
+ * The surfaces folded into the current in-flight probe. A burst of 401s is a
+ * burst of *distinct* surfaces (one query, one mutation, two pages), and each
+ * one gave up its own error display on the strength of `handleAuthExpiry`
+ * returning `true`. Unless the page is actually being replaced, every one of
+ * them is owed its surface back — not just the first. Drained when the probe
+ * settles, with the verdict, so each surface can say something true.
+ */
+let pendingSurfaceRestorers: Array<(outcome: SessionLivenessVerdict) => void> =
+  [];
+
+/** How long the whole probe may take before we stop waiting on it. */
+const SESSION_LIVENESS_PROBE_TIMEOUT_MS = 6_000;
+
+export type SessionLivenessVerdict = 'dead' | 'alive' | 'inconclusive';
+
+function restorePendingSurfaces(outcome: SessionLivenessVerdict): void {
+  const restorers = pendingSurfaceRestorers;
+  pendingSurfaceRestorers = [];
+  for (const restore of restorers) {
+    try {
+      restore(outcome);
+    } catch (callbackError) {
+      // One surface throwing must not rob the others of theirs.
+      console.error('[auth] restoring an error surface failed', callbackError);
+    }
+  }
+}
+
+/**
+ * Turn an error returned/thrown by a probe call into a verdict. Only an
+ * authoritative rejection is death; everything else leaves the question open,
+ * and an open question never navigates.
+ */
+function verdictFromProbeError(error: unknown): SessionLivenessVerdict {
+  return classifyAuthProbeError(error) === 'authoritative'
+    ? 'dead'
+    : 'inconclusive';
+}
+
+async function probeSessionLiveness(): Promise<SessionLivenessVerdict> {
+  // Dynamic import: this module is deliberately non-React and imported from
+  // plain utility paths, so it must not pull the Supabase client in at load
+  // time (or risk an import cycle). `createBrowserClient` is a singleton —
+  // same precedent as `src/hooks/use-auth.ts`.
+  const { createBrowserClient } = await import('@patina/supabase');
+  const supabase = createBrowserClient();
+
+  // Stage 1 — the cheap, local read. getSession() transparently refreshes an
+  // expired access token; a refresh the server *rejects* yields
+  // `session: null`, but a refresh that never reached the server yields an
+  // `AuthRetryableFetchError` — which is a question, not an answer.
+  const { data, error } = await supabase.auth.getSession();
+
+  if (error) return verdictFromProbeError(error);
+
+  // A cleanly absent session — the server was asked (or nothing was ever
+  // stored) and there is simply nothing to authenticate with. This is the ONE
+  // verdict stage 1 may call on its own.
+  //
+  // Note what is deliberately absent: no `expires_at <= Date.now()` check. That
+  // reads the *client's* clock, and a workstation running a few minutes fast
+  // makes every freshly issued token look expired — hard-redirecting a live
+  // session without one network call. When a session object exists, getUser()
+  // is the arbiter, full stop.
+  if (!data?.session) return 'dead';
+
+  // Stage 2 — the authoritative check. getSession() only reads local storage,
+  // so a session revoked server-side (admin revoke, global sign-out, deleted
+  // account) reads "alive" until the access token's own expiry. Only getUser()
+  // actually asks the server, so it — not stage 1 — is the arbiter.
+  //
+  // auth-js RETURNS its errors rather than throwing, so `userError` covers both
+  // "the server rejected this token" and "we never reached the server"; only
+  // the former is death.
+  try {
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError) return verdictFromProbeError(userError);
+    // No error and no user is the server answering "nobody" — authoritative.
+    return userData?.user ? 'alive' : 'dead';
+  } catch (thrown) {
+    return verdictFromProbeError(thrown);
+  }
+}
+
+/**
+ * Race the probe against a deadline. Without it a hung getSession/getUser holds
+ * the de-dupe promise forever, every later 401 folds into it, and a genuinely
+ * dead session can never redirect.
+ */
+function probeSessionLivenessWithTimeout(): Promise<SessionLivenessVerdict> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<SessionLivenessVerdict>((resolve) => {
+    timer = setTimeout(
+      () => resolve('inconclusive'),
+      SESSION_LIVENESS_PROBE_TIMEOUT_MS
+    );
+  });
+
+  return Promise.race([probeSessionLiveness(), deadline]).finally(() => {
+    if (timer !== undefined) clearTimeout(timer);
+  });
+}
+
+function confirmExpiredSessionThenRedirect(
+  options?: AuthExpiryOptions
+): Promise<void> | void {
+  // Server-side there is no browser session to probe and nowhere to navigate.
+  // The caller still gets `true` from handleAuthExpiry — the shape claim holds.
+  if (typeof window === 'undefined') return;
+
+  if (options?.restoreErrorSurface) {
+    pendingSurfaceRestorers.push(options.restoreErrorSurface);
+  }
+  if (sessionLivenessProbe) return sessionLivenessProbe;
+
+  sessionLivenessProbe = (async () => {
+    const verdict = await probeSessionLivenessWithTimeout().catch(
+      // The probe itself failed (offline, transport error). A network blip must
+      // never boot the user.
+      (): SessionLivenessVerdict => 'inconclusive'
+    );
+
+    if (verdict === 'dead') {
+      // Redirect FIRST, then decide what to do with the collected surfaces —
+      // because `redirectToSignIn` can decline (already on an /auth page, a
+      // navigation loop-bounded by the 30s stamp). Dropping the surfaces before
+      // asking left the declined case with no toast, no navigation, and no
+      // retry (auth errors are never retried): a button that does nothing at
+      // all. `/auth/accept-invite` is an authenticated page, so that case is
+      // real, not theoretical.
+      if (redirectToSignIn('session expired (confirmed dead)')) {
+        // The page is about to be replaced — the collected surfaces are dropped
+        // rather than flashing a toast over a navigating document.
+        pendingSurfaceRestorers = [];
+        return;
+      }
+
+      console.warn(
+        '[auth] session confirmed dead but the sign-in redirect declined (already on /auth, or loop-bounded) — surfacing the expiry error instead of leaving the caller silent'
+      );
+      // The session really is dead here, so the honest surface is the original
+      // expiry copy — "sign in again" is true advice on this branch.
+      restorePendingSurfaces('dead');
+      return;
+    }
+
+    console.warn(
+      verdict === 'alive'
+        ? '[auth] auth-shaped error but session is alive — not redirecting (check server-side JWT verification config)'
+        : '[auth] session liveness probe was inconclusive — not redirecting; surfacing the original error'
+    );
+    restorePendingSurfaces(verdict);
+  })().finally(() => {
+    // Cleared unconditionally so a later 401 can re-probe — including after an
+    // inconclusive verdict, which is the only way a hung probe stops blocking
+    // a genuinely dead session from redirecting.
+    sessionLivenessProbe = null;
+  });
+
+  return sessionLivenessProbe;
+}
+
+/**
+ * What a caller hands `handleAuthExpiry` alongside the error.
+ */
+export interface AuthExpiryOptions {
+  /**
+   * Restores the caller's own error surface whenever the user is going to stay
+   * on this page — the session is demonstrably alive, the probe was
+   * inconclusive, or the session is dead but the redirect declined. Mandatory
+   * in spirit: the caller suppressed its toast/band on the strength of `true`,
+   * and auth errors are never retried, so without this a 401 is a button that
+   * does nothing at all.
+   *
+   * The verdict is passed because it changes what is *true* to say. On `dead`
+   * the expiry copy is honest ("sign in again"). On `alive` / `inconclusive`
+   * it is the exact opposite of the verdict — pass the error through
+   * `toLiveSessionError` for neutral copy instead.
+   */
+  restoreErrorSurface?: (outcome: SessionLivenessVerdict) => void;
+}
+
+/**
+ * Derive the surface to show for an expiry-*shaped* error whose session turned
+ * out to be fine.
+ *
+ * Every error that reaches the arbiter is expiry-shaped by construction, so
+ * `handleApiError` maps it to TOKEN_EXPIRED/UNAUTHORIZED and the toast reads
+ * "Your session has expired. Please sign in again" — the opposite of the
+ * verdict. A user who obeys it gets bounced straight back by middleware, which
+ * still sees a perfectly good cookie. This keeps the original code and message
+ * in `details` for logs, and overrides only what the user reads.
+ */
+export function toLiveSessionError(error: unknown): AppError {
+  const original = handleApiError(error);
+  return new AppError(
+    {
+      code: 'REQUEST_FAILED_SESSION_ALIVE',
+      message: getUserFriendlyMessage('REQUEST_FAILED_SESSION_ALIVE', ''),
+      details: {
+        originalCode: original.code,
+        originalMessage: original.message,
+        originalDetails: original.details,
+      },
+      requestId: original.requestId,
+      traceId: original.traceId,
+    },
+    original.statusCode
+  );
+}
+
+/**
+ * If the given error is expiry-shaped, start the liveness probe and return
+ * `true` so the caller suppresses its own error surface. `true` is a claim
+ * about the error's *shape*, not a promise that we navigated — navigation
+ * happens only if the probe proves the session dead AND the redirect guards
+ * allow it; in every other case the caller's `restoreErrorSurface` puts its
+ * surface back. Otherwise return `false` so
+ * the caller falls through to normal error handling (toast, inline error
+ * state, etc.). Centralizing the decision here keeps the query cache, mutation
+ * cache, and any page-level guard consistent.
+ */
+export function handleAuthExpiry(
+  error: unknown,
+  options?: AuthExpiryOptions
+): boolean {
   if (!isSessionExpiredError(error)) return false;
-  redirectToSignIn('session expired');
+  void confirmExpiredSessionThenRedirect(options);
   return true;
 }
 

@@ -6,6 +6,7 @@ import {
   isAuthError,
   isNetworkError,
   handleAuthExpiry,
+  toLiveSessionError,
 } from './error-handler';
 
 /**
@@ -52,10 +53,31 @@ const queryCache = new QueryCache({
     // Handle auth errors. An *expired session* must route to sign-in —
     // otherwise queries like useDecisionMetrics silently return undefined and
     // the dashboard renders a misleading "0 open / 100%" healthy state.
-    // `handleAuthExpiry` is idempotent (de-duped + already-on-/auth guard), so
-    // a burst of failing queries triggers exactly one navigation.
+    // `handleAuthExpiry` returns true for any expiry-*shaped* error and takes
+    // ownership of the surface; it does not navigate on the spot — it probes
+    // the live session first and only redirects once the session is confirmed
+    // dead (a server-side JWT misconfig 401s with a perfectly good session).
+    // The probe is de-duped, and the redirect itself is loop-bounded via a
+    // sessionStorage stamp, so a burst of failing queries costs one probe and
+    // at most one navigation.
+    //
+    // Whenever the user is staying on this page, `restoreErrorSurface` hands
+    // this query its default surface back — auth errors are excluded from
+    // retry, so without it a 401 would leave the user with nothing. The copy
+    // depends on the verdict: only a confirmed-dead session may be told its
+    // session expired (see `toLiveSessionError`).
     if (isAuthError(appError)) {
-      if (handleAuthExpiry(error)) {
+      if (
+        handleAuthExpiry(error, {
+          restoreErrorSurface: (outcome) => {
+            if (query.meta?.errorSurface === 'silent') return;
+            if (isNetworkError(appError)) return;
+            showErrorToast(
+              outcome === 'dead' ? appError : toLiveSessionError(appError)
+            );
+          },
+        })
+      ) {
         return;
       }
       // Auth-shaped but not a clear session-expiry (e.g. a 403 forbidden).
@@ -94,9 +116,26 @@ const mutationCache = new MutationCache({
 
     // Handle auth errors. An expired session routes to sign-in (so a failed
     // write doesn't leave the user staring at a generic toast on a dead
-    // session); other auth-shaped errors surface a sign-in prompt.
+    // session); other auth-shaped errors surface a sign-in prompt. As in the
+    // query cache above, `handleAuthExpiry` claims the surface for any
+    // expiry-shaped error but navigates only after the session is confirmed
+    // dead, and the redirect is loop-bounded via sessionStorage. Whenever the
+    // user stays on this page, `restoreErrorSurface` restores this cache's own
+    // surface — a mutation that silently does nothing is the worst outcome of
+    // all. That includes the confirmed-dead-but-redirect-declined case, which
+    // is exactly how `/auth/accept-invite`'s Accept button used to fail in
+    // total silence.
     if (isAuthError(appError)) {
-      if (handleAuthExpiry(error)) {
+      if (
+        handleAuthExpiry(error, {
+          restoreErrorSurface: (outcome) => {
+            if (inlineErrorSurface) return;
+            showErrorToast(
+              outcome === 'dead' ? appError : toLiveSessionError(appError)
+            );
+          },
+        })
+      ) {
         return;
       }
       if (
