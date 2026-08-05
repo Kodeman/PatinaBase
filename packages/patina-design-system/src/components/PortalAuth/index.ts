@@ -1,5 +1,6 @@
 export {
   PORTAL_AUTH_TAGLINE,
+  PORTAL_AUTH_A11Y_COLORS,
   PortalAuthNotice,
   PortalAuthShell,
   PortalAuthSuccess,
