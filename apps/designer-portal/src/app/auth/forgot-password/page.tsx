@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AuthForm, type AuthFormField } from '@patina/design-system';
 import Link from 'next/link';
+import { normalizeAuthError } from '@patina/supabase';
+import { DesignerAuthShell } from '../auth-shell';
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
@@ -66,18 +68,17 @@ export default function ForgotPasswordPage() {
         }, 3000);
       }
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'An error occurred. Please try again later.'
-      );
+      setError(normalizeAuthError(err, 'unknown').message);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
+    <DesignerAuthShell>
+      <div className="w-full">
       <div className="w-full max-w-md">
-        <div className="rounded-lg bg-card p-8 shadow-lg border">
+        <div className="border border-[#6d726b] bg-white p-6">
           <AuthForm
             title="Reset Your Password"
             description="Enter your email address and we'll send you a link to reset your password"
@@ -107,7 +108,7 @@ export default function ForgotPasswordPage() {
         </div>
 
         {/* Help Text */}
-        <div className="mt-6 rounded-lg bg-muted p-4 text-center">
+        <div className="mt-6 border border-[#6d726b] bg-[#f3f0e8] p-4 text-center">
           <p className="text-sm text-muted-foreground">
             Need immediate help?{' '}
             <Link href="/support" className="text-primary font-medium hover:underline">
@@ -116,6 +117,7 @@ export default function ForgotPasswordPage() {
           </p>
         </div>
       </div>
-    </div>
+      </div>
+    </DesignerAuthShell>
   );
 }

@@ -26,6 +26,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { createBrowserClient, useAcceptInvitation } from '@patina/supabase';
 import { StrataSweep } from '@/components/ui/strata-sweep';
 import { studioEvents } from '@/lib/analytics/studio-events';
+import { DesignerAuthShell } from '../auth-shell';
 
 type Status = 'polling' | 'accepting' | 'success' | 'error';
 
@@ -61,6 +62,12 @@ function AcceptInviteContent() {
   const [studioName, setStudioName] = useState<string | null>(null);
 
   const acceptInvitation = useAcceptInvitation();
+
+  useEffect(() => {
+    if (status !== 'success') return;
+    const timer = window.setTimeout(() => window.location.replace('/desk'), 350);
+    return () => window.clearTimeout(timer);
+  }, [status]);
 
   useEffect(() => {
     if (started.current) return;
@@ -99,7 +106,6 @@ function AcceptInviteContent() {
           studioEvents.invitationAccepted();
           setStudioName(result.organization_name);
           setStatus('success');
-          router.replace('/desk');
         },
         onError: (error) => {
           if (cancelled) return;
@@ -119,7 +125,7 @@ function AcceptInviteContent() {
 
   if (status === 'error') {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-6">
+      <DesignerAuthShell>
         <div className="max-w-sm space-y-4 text-center">
           <h1 className="font-heading text-xl text-[var(--color-charcoal)]">
             Invite not accepted
@@ -134,12 +140,12 @@ function AcceptInviteContent() {
             Sign in
           </a>
         </div>
-      </div>
+      </DesignerAuthShell>
     );
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
+    <DesignerAuthShell>
       <div className="space-y-4 text-center">
         <div className="mx-auto mb-1 flex justify-center">
           <StrataSweep size="sm" label="Joining your studio" />
@@ -150,7 +156,7 @@ function AcceptInviteContent() {
             : 'Joining your studio…'}
         </p>
       </div>
-    </div>
+    </DesignerAuthShell>
   );
 }
 
@@ -158,14 +164,14 @@ export default function AcceptInvitePage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-background">
+        <DesignerAuthShell>
           <div className="space-y-4 text-center">
             <div className="mx-auto mb-1 flex justify-center">
               <StrataSweep size="sm" label="Loading" />
             </div>
             <p className="text-sm text-muted-foreground">Loading…</p>
           </div>
-        </div>
+        </DesignerAuthShell>
       }
     >
       <AcceptInviteContent />

@@ -1,112 +1,48 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { createBrowserClient } from '@patina/supabase';
-import { Suspense } from 'react';
-import { StrataSweep } from '@/components/ui/strata-sweep';
-import { safeInternalPath } from '@/lib/safe-internal-path';
+import { Suspense, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { buildSignInPath, createBrowserClient, finalizeAuthCallback } from '@patina/supabase';
+import { PortalAuthNotice, PortalAuthSuccess } from '@patina/design-system';
+import { DesignerAuthShell } from '../auth-shell';
+import { callbackDestination } from '../auth-journey';
 
-/**
- * OAuth callback page.
- * Handles the client-side redirect after OAuth authentication.
- * For fragment-based responses (e.g., Apple Sign In with response_mode=fragment),
- * the token is in the URL hash and needs client-side processing.
- * For code-based responses, the route handler (route.ts) handles the exchange.
- */
 function CallbackContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const processed = useRef(false);
+  const handled = useRef(false);
+  const [result, setResult] = useState<'working' | 'success' | 'failed'>('working');
+  const [error, setError] = useState<string | null>(null);
+  const destination = callbackDestination({ callbackUrl: searchParams.get('callbackUrl'), next: searchParams.get('next'), type: searchParams.get('type') });
 
   useEffect(() => {
-    if (processed.current) return;
-    processed.current = true;
+    if (handled.current) return;
+    handled.current = true;
+    const controller = new AbortController();
+    void finalizeAuthCallback({ supabase: createBrowserClient(), code: searchParams.get('code'), signal: controller.signal })
+      .then((callback) => {
+        if (controller.signal.aborted) return;
+        if (callback.status === 'failed') { setError(callback.failure.message); setResult('failed'); return; }
+        setResult('success');
+      })
+      .catch((cause) => { if (!controller.signal.aborted) { setError('We could not finish opening your session. Please try again.'); setResult('failed'); } });
+    return () => controller.abort();
+  }, [searchParams]);
 
-    const handleCallback = async () => {
-      const supabase = createBrowserClient();
-      const code = searchParams.get('code');
-      // An OAuth provider round-trips whatever it was handed, so this value is
-      // the least trustworthy of the four legs. Same guard as the middleware
-      // and the other two auth pages (@/lib/safe-internal-path).
-      const next = safeInternalPath(
-        searchParams.get('callbackUrl') || searchParams.get('next'),
-      );
+  useEffect(() => {
+    if (result !== 'success') return;
+    const timer = window.setTimeout(() => window.location.replace(destination), 350);
+    return () => window.clearTimeout(timer);
+  }, [destination, result]);
 
-      try {
-        // PKCE flow: GoTrue redirected back with `?code=` — exchange it
-        // explicitly. Relying on supabase-js auto-detect alone races the 5s
-        // timeout below, so we drive the exchange here.
-        if (code) {
-          const { error } = await supabase.auth.exchangeCodeForSession(code);
-          if (error) {
-            console.error('[Auth Callback Page] exchangeCodeForSession:', error.message);
-            router.replace('/auth/signin?error=OAuthCallback');
-            return;
-          }
-          router.replace(next);
-          return;
-        }
+  useEffect(() => {
+    if (result !== 'failed') return;
+    const timer = window.setTimeout(() => window.location.replace(buildSignInPath(destination, 'oauth')), 900);
+    return () => window.clearTimeout(timer);
+  }, [destination, result]);
 
-        // Fragment flow (legacy implicit, or Apple response_mode=fragment):
-        // tokens land in the URL hash; supabase-js parses them on init and
-        // fires SIGNED_IN. We poll briefly via getSession + a state listener.
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (error) {
-          console.error('[Auth Callback Page] Session error:', error.message);
-          router.replace('/auth/signin?error=OAuthCallback');
-          return;
-        }
-        if (session) {
-          router.replace(next);
-          return;
-        }
-
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(
-          (event, session) => {
-            if (event === 'SIGNED_IN' && session) {
-              subscription.unsubscribe();
-              router.replace(next);
-            }
-          }
-        );
-
-        setTimeout(() => {
-          subscription.unsubscribe();
-          router.replace('/auth/signin?error=OAuthCallback');
-        }, 5000);
-      } catch (err) {
-        console.error('[Auth Callback Page] Exception:', err);
-        router.replace('/auth/signin?error=OAuthCallback');
-      }
-    };
-
-    handleCallback();
-  }, [router, searchParams]);
-
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center space-y-4">
-        <div className="mx-auto mb-1 flex justify-center"><StrataSweep size="sm" label="Completing sign in" /></div>
-        <p className="text-sm text-muted-foreground">Completing sign in...</p>
-      </div>
-    </div>
-  );
+  return <DesignerAuthShell>{result === 'success' ? <PortalAuthSuccess destinationHref={destination} onContinue={() => window.location.replace(destination)} /> : <PortalAuthNotice tone={result === 'failed' ? 'error' : 'info'} title={result === 'failed' ? 'Sign-in needs another try.' : 'Completing sign in'}>{error ?? 'Confirming your secure session.'}</PortalAuthNotice>}</DesignerAuthShell>;
 }
 
 export default function AuthCallbackPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="flex min-h-screen items-center justify-center bg-background">
-          <div className="text-center space-y-4">
-            <div className="mx-auto mb-1 flex justify-center"><StrataSweep size="sm" label="Completing sign in" /></div>
-            <p className="text-sm text-muted-foreground">Loading...</p>
-          </div>
-        </div>
-      }
-    >
-      <CallbackContent />
-    </Suspense>
-  );
+  return <Suspense fallback={<DesignerAuthShell><PortalAuthNotice title="Completing sign in">Loading your secure callback.</PortalAuthNotice></DesignerAuthShell>}><CallbackContent /></Suspense>;
 }

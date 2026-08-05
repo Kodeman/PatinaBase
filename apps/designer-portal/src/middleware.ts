@@ -66,6 +66,10 @@ export async function middleware(req: NextRequest) {
   // treat it like any other /auth page and bounce the user to /desk or
   // /unauthorized before the RPC ever runs.
   const isAcceptInvitePage = req.nextUrl.pathname.startsWith('/auth/accept-invite');
+  // Recovery links establish a short-lived Supabase session before rendering
+  // the reset form. Do not bounce that session to /desk before the password
+  // can be updated.
+  const isPasswordRecoveryPage = req.nextUrl.pathname.startsWith('/auth/reset-password');
 
   // Get the actual host from headers (handles proxy scenarios)
   const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || 'localhost:3000';
@@ -132,7 +136,7 @@ export async function middleware(req: NextRequest) {
   // with no designer/admin role would be redirected to `/`, then bounced back
   // to `/unauthorized` from a deeper protected route — the round trip causes
   // the QR signin page to re-render mid-flight and looks like a reload loop.
-  if (isAuthenticated && isAuthPage && !isAcceptInvitePage) {
+  if (isAuthenticated && isAuthPage && !isAcceptInvitePage && !isPasswordRecoveryPage) {
     if (!(await userHasDesignerPortalRole(user!.id))) {
       return redirectWithCookies(new URL('/unauthorized', baseUrl));
     }

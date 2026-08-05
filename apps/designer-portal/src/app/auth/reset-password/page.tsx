@@ -2,9 +2,10 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { createBrowserClient } from '@patina/supabase';
+import { createBrowserClient, normalizeAuthError } from '@patina/supabase';
 import { AuthForm, type AuthFormField, Alert } from '@patina/design-system';
 import Link from 'next/link';
+import { DesignerAuthShell } from '../auth-shell';
 
 function ResetPasswordContent() {
   const router = useRouter();
@@ -16,15 +17,30 @@ function ResetPasswordContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [tokenValid, setTokenValid] = useState(true);
+  const [tokenValid, setTokenValid] = useState<boolean | null>(null);
 
   useEffect(() => {
-    // Validate token on mount
-    if (!token) {
-      setTokenValid(false);
-      setError('Invalid or missing reset token');
+    // Legacy reset links have a token query. Supabase recovery links arrive
+    // through /auth/callback with a real session instead, so accept either.
+    if (token) {
+      setTokenValid(true);
+      return;
     }
-  }, [token]);
+    void supabase.auth.getSession().then(({ data, error: sessionError }) => {
+      if (sessionError || !data.session) {
+        setTokenValid(false);
+        setError('This password reset link is invalid or has expired.');
+      } else {
+        setTokenValid(true);
+      }
+    });
+  }, [supabase, token]);
+
+  useEffect(() => {
+    if (!success) return;
+    const timer = window.setTimeout(() => window.location.replace('/auth/signin?reset=success'), 500);
+    return () => window.clearTimeout(timer);
+  }, [success]);
 
   const fields: AuthFormField[] = [
     {
@@ -72,33 +88,28 @@ function ResetPasswordContent() {
         password: data.password,
       });
 
-      if (updateError) {
-        throw new Error(updateError.message || 'Failed to reset password');
-      }
+      if (updateError) throw updateError;
 
-      setSuccess('Password reset successful! Redirecting to sign in...');
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session) throw new Error('No session after password reset');
 
-      // Sign out after password reset so user can sign in with new password
-      await supabase.auth.signOut();
-
-      // Redirect to sign in page after 2 seconds
-      setTimeout(() => {
-        router.push('/auth/signin?reset=success');
-      }, 2000);
+      setSuccess('Your password has been updated. Taking you back to sign in.');
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'An error occurred. Please try again later.'
-      );
+      setError(normalizeAuthError(err, 'session').message);
     } finally {
       setIsLoading(false);
     }
   };
 
+  if (tokenValid === null) {
+    return <DesignerAuthShell><p className="text-sm text-[#4f554f]">Checking your reset link.</p></DesignerAuthShell>;
+  }
+
   if (!tokenValid) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
+      <DesignerAuthShell>
         <div className="w-full max-w-md space-y-4">
-          <div className="rounded-lg bg-card p-8 shadow-lg border">
+          <div className="border border-[#6d726b] bg-white p-8">
             <div className="text-center mb-6">
               <div className="mx-auto h-12 w-12 text-destructive mb-4">
                 <svg
@@ -139,14 +150,14 @@ function ResetPasswordContent() {
             </div>
           </div>
         </div>
-      </div>
+      </DesignerAuthShell>
     );
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
+    <DesignerAuthShell>
       <div className="w-full max-w-md">
-        <div className="rounded-lg bg-card p-8 shadow-lg border">
+        <div className="border border-[#6d726b] bg-white p-8">
           <AuthForm
             title="Set New Password"
             description="Enter your new password below"
@@ -170,7 +181,7 @@ function ResetPasswordContent() {
         </div>
 
         {/* Password Requirements */}
-        <div className="mt-4 rounded-lg bg-muted p-4">
+        <div className="mt-4 border border-[#6d726b] bg-[#f3f0e8] p-4">
           <h3 className="text-sm font-medium text-foreground mb-2">Password Requirements:</h3>
           <ul className="text-xs text-muted-foreground space-y-1">
             <li>• At least 8 characters long</li>
@@ -179,15 +190,15 @@ function ResetPasswordContent() {
           </ul>
         </div>
       </div>
-    </div>
+    </DesignerAuthShell>
   );
 }
 
 function ResetPasswordLoadingFallback() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
+    <DesignerAuthShell>
       <div className="w-full max-w-md">
-        <div className="rounded-lg bg-card p-8 shadow-lg border">
+        <div className="border border-[#6d726b] bg-white p-8">
           <div className="text-center">
             <div className="mx-auto h-12 w-12 text-primary mb-4 animate-pulse">
               <svg
@@ -209,7 +220,7 @@ function ResetPasswordLoadingFallback() {
           </div>
         </div>
       </div>
-    </div>
+    </DesignerAuthShell>
   );
 }
 
