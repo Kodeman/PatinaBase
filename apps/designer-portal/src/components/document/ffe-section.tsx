@@ -44,10 +44,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   deriveLineStamp,
   type LineStamp,
+  type TradeLineProgress,
 } from '@/lib/document/stamp-derivation';
 import {
   buildInstrumentIndex,
+  buildTradeScopeIndex,
   deriveLineAuthorization,
+  deriveTradeLineHold,
   eligibility,
   releaseSummary,
   scheduledContributionCents,
@@ -57,6 +60,7 @@ import {
   type LineEligibility,
   type ReleaseLine,
   type RoomTriState,
+  type TradeLineHold,
 } from '@/lib/document/authorization-derivation';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { Stamp } from './stamp';
@@ -72,6 +76,7 @@ import {
 import {
   useProjectBillingAuthority,
   useProjectInstruments,
+  useTradeScopes,
 } from '@/hooks/use-commercial-documents';
 import { AuthorizationStamp } from './schedule/authorization-stamp';
 import { AddLineSheet } from './schedule/add-line-sheet';
@@ -106,6 +111,36 @@ function stampProps(stamp: LineStamp): {
   ink?: string;
 } {
   switch (stamp.kind) {
+    // Act IV — trade work is judged, not delivered. Aged oak while it is only
+    // committed, golden hour while hands are on it, clay when it waits on the
+    // client's judgement, sage when they have given it.
+    case 'trade_engaged':
+      return {
+        label: 'Engaged',
+        color: 'var(--color-aged-oak)',
+        ink: '#8B7355',
+      };
+    case 'trade_in_progress':
+      return {
+        label: 'In progress',
+        color: 'var(--color-golden-hour)',
+        ink: '#B89A2E',
+      };
+    case 'trade_substantially_complete':
+      return {
+        label: 'Substantially complete',
+        color: 'var(--color-clay)',
+        ink: '#A8895E',
+      };
+    case 'trade_accepted':
+      return { label: 'Accepted', color: 'var(--color-sage)', ink: '#85947C' };
+    // Never actually rendered — the line below skips <Stamp> entirely for
+    // this kind, so a line whose real progress is not yet known stays quiet
+    // rather than guessing. Kept exhaustive/safe rather than falling into
+    // STAGE_CONFIG (keyed by FFEStageKey, not LineStampKind — it has no
+    // 'trade_pending' entry and would throw).
+    case 'trade_pending':
+      return { label: '', color: 'var(--color-aged-oak)' };
     case 'decision_due':
       return {
         label: stamp.dueDate
@@ -146,6 +181,13 @@ const UNDERWAY = new Set([
   'received',
   'partial',
   'installed',
+  // A trade presence line only exists because the client signed and the studio
+  // engaged, so every trade stamp is committed work by construction.
+  'trade_engaged',
+  'trade_in_progress',
+  'trade_substantially_complete',
+  'trade_accepted',
+  'trade_pending',
 ]);
 const COMMITTED = UNDERWAY;
 
@@ -172,6 +214,26 @@ interface LineRow {
   stamp: LineStamp;
   auth: LineAuthorization;
   eligible: LineEligibility;
+  tradeHold: TradeLineHold;
+}
+
+/**
+ * The authorization column for a trade presence line. A trade scope is its own
+ * instrument, so it wears its own mark (TS1) rather than borrowing the
+ * furnishings A-numbers — and it is always authorized, because the line only
+ * exists once the client has signed for the work.
+ */
+function TradeAuthorizationStamp({ hold }: { hold: TradeLineHold }) {
+  if (!hold.onTradeScope) return null;
+  return (
+    <span data-authorization-track="trade" className="inline-block">
+      <Stamp
+        label={hold.number ? `On trade scope · TS${hold.number}` : 'On trade scope'}
+        color="var(--color-sage)"
+        ink="#85947C"
+      />
+    </span>
+  );
 }
 
 /** R76 — the line's billing truth (00187), a quiet mono note: SAGE paid,
@@ -225,6 +287,7 @@ function FFELine({
   stamp,
   auth,
   eligible,
+  tradeHold,
   projectId,
   projectName,
   highlightId,
@@ -293,10 +356,15 @@ function FFELine({
         <span className="whitespace-nowrap font-mono text-[9px] lowercase tracking-[0.04em] text-[var(--text-muted)]">
           {eligible.reason}
         </span>
-      ) : (
+      ) : stamp.kind === 'trade_pending' ? null : (
         <Stamp label={sp.label} color={sp.color} ink={sp.ink} />
       )}
-      {showAuthorization && <AuthorizationStamp auth={auth} />}
+      {showAuthorization &&
+        (tradeHold.onTradeScope ? (
+          <TradeAuthorizationStamp hold={tradeHold} />
+        ) : (
+          <AuthorizationStamp auth={auth} />
+        ))}
       <span className="whitespace-nowrap text-right font-heading text-[13px] font-medium text-[var(--color-charcoal)]">
         {price}
       </span>
@@ -614,11 +682,29 @@ function FFESectionBody({
   // mutation that moves money, so the stamps stay honest without a poll.
   const { data: coverage } = useFfeInvoiceCoverage(projectId);
   const authority = useProjectBillingAuthority(projectId);
+  const { data: tradeScopes, isPending: tradeScopesPending } = useTradeScopes(
+    projectId,
+    mode === 'project',
+  );
+  // Whether a trade line's REAL progress is actually known right now.
+  // `isPending` (not `isLoading`) also covers install mode, where the query
+  // is disabled outright — a disabled query in TanStack v5 sits at
+  // isPending:true / isLoading:false forever, so isLoading alone would miss
+  // it and every trade line in install mode would keep reading a guessed
+  // "Engaged" for good.
+  const tradeProgressKnown = mode === 'project' && !tradeScopesPending;
   const ceremony = useReleaseCeremony();
 
   const instrumentIndex = useMemo(
     () => buildInstrumentIndex(instruments),
     [instruments],
+  );
+  // Act IV: a presence line names the trade scope it belongs to; the scope
+  // carries the number the stamp says and the progress the logistics stamp
+  // reads. One index, resolved once per render.
+  const tradeIndex = useMemo(
+    () => buildTradeScopeIndex(tradeScopes ?? []),
+    [tradeScopes],
   );
 
   // A commercial job is one with an executed agreement behind it. Only there
@@ -634,11 +720,20 @@ function FFESectionBody({
 
   const rows: LineRow[] = (items ?? []).map((item) => {
     const auth = deriveLineAuthorization(item, instrumentIndex);
+    const tradeHold = deriveTradeLineHold(item, tradeIndex);
     return {
       item,
-      stamp: deriveLineStamp(item),
+      stamp: deriveLineStamp(
+        item,
+        tradeHold.onTradeScope
+          ? tradeProgressKnown
+            ? (tradeHold.progressState as TradeLineProgress)
+            : null
+          : null,
+      ),
       auth,
-      eligible: eligibility(item, auth),
+      eligible: eligibility(item, auth, tradeHold),
+      tradeHold,
     };
   });
   const total = rows.length;

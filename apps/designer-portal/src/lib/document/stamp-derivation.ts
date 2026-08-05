@@ -38,7 +38,20 @@ export type LineStampKind =
   | 'received' // derived: delivered + inspection logged at full count
   | 'partial' // derived: delivered + inspected short (R18/W5-T2 — surfaced, not invented)
   | 'damaged' // derived: OPEN claim attributed to this item (00196)
-  | 'decision_due'; // derived: blocked by a pending blocking decision
+  | 'decision_due' // derived: blocked by a pending blocking decision
+  // Trade work runs its own journey (Act IV): goods arrive, work is judged.
+  // A trade line's logistics stamp is its scope's progress state, because
+  // "ordered / shipped / delivered" says nothing true about tile setting.
+  | 'trade_engaged'
+  | 'trade_in_progress'
+  | 'trade_substantially_complete'
+  | 'trade_accepted'
+  // The line IS on a trade scope, but the caller does not yet have that
+  // scope's real progress (its query is still loading, or is disabled for
+  // this view — e.g. install mode). Renders quiet: no badge is better than a
+  // guessed one, because 'Engaged' can be flatly wrong for a line that is
+  // actually substantially complete or accepted.
+  | 'trade_pending';
 
 export interface LineStampInput {
   status: string;
@@ -49,7 +62,29 @@ export interface LineStampInput {
   blocking_decision?: { status: string; due_date: string | null } | null;
   /** damage_claims rows FK'd to this item (damage_claims!ffe_item_id embed). */
   item_claims?: { state: string }[] | null;
+  /** Set on a trade scope's presence lines — the pcd this line belongs to. */
+  trade_scope_document_id?: string | null;
 }
+
+/**
+ * Where a trade scope's work has got to, as the schedule needs to read it.
+ * The caller resolves this from the project's trade scopes (the schedule row
+ * carries the document id; the progress lives on the scope's terms).
+ */
+export type TradeLineProgress =
+  | 'none'
+  | 'engaged'
+  | 'in_progress'
+  | 'substantially_complete'
+  | 'accepted';
+
+const TRADE_STAMP: Record<TradeLineProgress, LineStampKind> = {
+  none: 'trade_engaged',
+  engaged: 'trade_engaged',
+  in_progress: 'trade_in_progress',
+  substantially_complete: 'trade_substantially_complete',
+  accepted: 'trade_accepted',
+};
 
 export interface LineStamp {
   kind: LineStampKind;
@@ -59,13 +94,31 @@ export interface LineStamp {
 
 const OPEN_CLAIM_STATES = new Set(['drafted', 'vendor_notified']);
 
-export function deriveLineStamp(item: LineStampInput): LineStamp {
+export function deriveLineStamp(
+  item: LineStampInput,
+  /** The scope's progress, for a trade presence line. Omitted elsewhere. */
+  tradeProgress?: TradeLineProgress | null,
+): LineStamp {
   if (item.blocked && item.blocking_decision?.status === 'pending') {
     return { kind: 'decision_due', dueDate: item.blocking_decision.due_date ?? null };
   }
 
   if ((item.item_claims ?? []).some((c) => OPEN_CLAIM_STATES.has(c.state))) {
     return { kind: 'damaged', dueDate: null };
+  }
+
+  // A presence line exists because a scope was ENGAGED, so it never reads as
+  // "specified" — the earliest truthful thing it can say is Engaged. A line
+  // whose scope cannot be resolved (the caller never tracks trade progress
+  // — omitted, `undefined`) falls back to the same word rather than
+  // borrowing the goods machine's vocabulary. A caller that DOES track trade
+  // progress but does not have it resolved YET must say so explicitly with
+  // `null`, which reads quiet rather than guessing Engaged.
+  if (item.trade_scope_document_id) {
+    if (tradeProgress === null) {
+      return { kind: 'trade_pending', dueDate: null };
+    }
+    return { kind: TRADE_STAMP[tradeProgress ?? 'none'], dueDate: null };
   }
 
   if (item.status === 'delivered') {

@@ -5,9 +5,15 @@ let mockInstruments: Record<string, unknown> = {
   error: null,
   data: [],
 };
+let mockTradeScopes: Record<string, unknown> = {
+  isLoading: false,
+  error: null,
+  data: [],
+};
 
 jest.mock("@/hooks/use-commercial-documents", () => ({
   useProjectInstruments: () => mockInstruments,
+  useTradeScopes: () => mockTradeScopes,
 }));
 
 jest.mock("./authorization-detail", () => ({
@@ -19,6 +25,29 @@ jest.mock("./authorization-detail", () => ({
     instrument: { name: string } | null;
   }) =>
     open ? <div data-testid="authorization-detail">{instrument?.name}</div> : null,
+}));
+
+jest.mock("./trade/trade-scope-detail", () => ({
+  TradeScopeDetail: ({
+    open,
+    scope,
+  }: {
+    open: boolean;
+    scope: { title: string } | null;
+  }) => (open ? <div data-testid="trade-scope-detail">{scope?.title}</div> : null),
+}));
+
+jest.mock("./trade/trade-scope-draft-sheet", () => ({
+  TradeScopeDraftSheet: ({
+    open,
+    proposalId,
+  }: {
+    open: boolean;
+    proposalId: string | null;
+  }) =>
+    open ? (
+      <div data-testid="trade-scope-draft">{proposalId ?? "new"}</div>
+    ) : null,
 }));
 
 import { AuthorizationsLedger } from "./authorizations-ledger";
@@ -46,12 +75,34 @@ const instrument = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+const tradeScope = (overrides: Record<string, unknown> = {}) => ({
+  documentId: "pcd-1",
+  proposalId: "trade-proposal-1",
+  number: 1,
+  title: "Drapery fabrication & install",
+  state: "executed",
+  progressState: "in_progress",
+  partyDisplayName: "Atelier Marchand",
+  clientPriceCents: 680_000,
+  currency: "USD",
+  depositInvoiceId: "invoice-1",
+  depositPaid: true,
+  draws: [],
+  drawCount: 2,
+  drawsIssued: 1,
+  drawsPaid: 1,
+  sectionRoomIds: ["room-1", "room-2"],
+  sectionCount: 2,
+  ...overrides,
+});
+
 describe("AuthorizationsLedger", () => {
   beforeEach(() => {
     mockInstruments = { isLoading: false, error: null, data: [] };
+    mockTradeScopes = { isLoading: false, error: null, data: [] };
   });
 
-  it("shows the empty state when there are no authorizations yet", () => {
+  it("shows the empty state when there are no instruments yet", () => {
     render(<AuthorizationsLedger projectId="project-1" />);
     expect(screen.getByText("No furnishings authorizations yet.")).toBeVisible();
   });
@@ -67,6 +118,7 @@ describe("AuthorizationsLedger", () => {
     expect(
       screen.getByText("Authorization № 1 · Living Room Essentials"),
     ).toBeVisible();
+    expect(screen.getByText("A1")).toBeVisible(); // kind mark
     expect(screen.getByText("3")).toBeVisible(); // lines
     expect(screen.getByText("$2,000")).toBeVisible(); // total
     expect(screen.getByText("Sent")).toBeVisible(); // state
@@ -98,6 +150,112 @@ describe("AuthorizationsLedger", () => {
     );
     expect(screen.getByTestId("authorization-detail")).toHaveTextContent(
       "Bedroom Lighting",
+    );
+  });
+
+  it("carries trade scopes on the same ledger under their own TS marks", () => {
+    mockInstruments = { isLoading: false, error: null, data: [instrument()] };
+    mockTradeScopes = { isLoading: false, error: null, data: [tradeScope()] };
+    render(<AuthorizationsLedger projectId="project-1" />);
+
+    expect(screen.getByText("A1")).toBeVisible();
+    expect(screen.getByText("TS1")).toBeVisible();
+    expect(
+      screen.getByText("Trade scope № 1 · Drapery fabrication & install"),
+    ).toBeVisible();
+    expect(screen.getByText("$6,800")).toBeVisible();
+    expect(screen.getByText("Authorized")).toBeVisible();
+    expect(screen.getByText(/In progress/)).toBeVisible();
+  });
+
+  // A section names a room, not the reverse — a scope can carry more
+  // sections than distinct rooms (two sections in the same room) or a
+  // section naming no room at all. "Lines" must read the section count, not
+  // the deduped room list, or a multi-section scope understates itself.
+  it("shows the section count as Lines, not the deduped room count", () => {
+    mockTradeScopes = {
+      isLoading: false,
+      error: null,
+      data: [
+        tradeScope({
+          sectionRoomIds: ["room-1", "room-2"], // 2 distinct rooms
+          sectionCount: 3, // but 3 sections (two of them share room-1)
+        }),
+      ],
+    };
+    render(<AuthorizationsLedger projectId="project-1" />);
+
+    expect(screen.getByText("TS1")).toBeVisible();
+    expect(screen.getByText("3")).toBeVisible();
+    expect(screen.queryByText("2")).not.toBeInTheDocument();
+  });
+
+  it("opens the live trade document for a released scope", () => {
+    mockTradeScopes = { isLoading: false, error: null, data: [tradeScope()] };
+    render(<AuthorizationsLedger projectId="project-1" />);
+
+    fireEvent.click(
+      screen.getByText("Trade scope № 1 · Drapery fabrication & install"),
+    );
+    expect(screen.getByTestId("trade-scope-detail")).toHaveTextContent(
+      "Drapery fabrication & install",
+    );
+    expect(screen.queryByTestId("trade-scope-draft")).not.toBeInTheDocument();
+  });
+
+  it("opens the draft sheet for a scope still being written", () => {
+    mockTradeScopes = {
+      isLoading: false,
+      error: null,
+      data: [tradeScope({ state: "draft", progressState: "none" })],
+    };
+    render(<AuthorizationsLedger projectId="project-1" />);
+
+    fireEvent.click(
+      screen.getByText("Trade scope № 1 · Drapery fabrication & install"),
+    );
+    expect(screen.getByTestId("trade-scope-draft")).toHaveTextContent(
+      "trade-proposal-1",
+    );
+    expect(screen.queryByTestId("trade-scope-detail")).not.toBeInTheDocument();
+  });
+
+  it("drafts a new trade scope from the head act", () => {
+    render(<AuthorizationsLedger projectId="project-1" />);
+
+    expect(screen.queryByTestId("trade-scope-draft")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("Draft a trade scope"));
+    expect(screen.getByTestId("trade-scope-draft")).toHaveTextContent("new");
+  });
+
+  it("lets the two reads fail independently, and says so independently", () => {
+    mockInstruments = { isLoading: false, error: null, data: [instrument()] };
+    mockTradeScopes = {
+      isLoading: false,
+      error: new Error("no such function"),
+      data: undefined,
+    };
+    render(<AuthorizationsLedger projectId="project-1" />);
+
+    // The furnishings ledger still reads, because it still answered.
+    expect(
+      screen.getByText("Authorization № 1 · Living Room Essentials"),
+    ).toBeVisible();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Trade scopes are unavailable.",
+    );
+    expect(screen.queryByText("Authorizations are unavailable.")).toBeNull();
+  });
+
+  it("says authorizations are unavailable when that read fails", () => {
+    mockInstruments = {
+      isLoading: false,
+      error: new Error("nope"),
+      data: undefined,
+    };
+    render(<AuthorizationsLedger projectId="project-1" />);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Authorizations are unavailable.",
     );
   });
 });

@@ -3,6 +3,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 let mockItems: Record<string, unknown>[] = [];
 let mockRooms: Record<string, unknown>[] = [];
 let mockInstruments: Record<string, unknown>[] = [];
+let mockTradeScopes: Record<string, unknown>[] = [];
 let mockAuthority: { data: unknown } = { data: null };
 
 jest.mock('@/lib/analytics/document-events', () => ({
@@ -28,6 +29,7 @@ jest.mock('@/hooks/use-document-rooms', () => ({
 jest.mock('@/hooks/use-commercial-documents', () => ({
   commercialDocumentKeys: { budget: (id: string) => ['working-budget', id] },
   useProjectInstruments: () => ({ data: mockInstruments }),
+  useTradeScopes: () => ({ data: mockTradeScopes }),
   useProjectBillingAuthority: () => mockAuthority,
   useWorkingBudget: () => ({ isLoading: false, data: null }),
   useReleaseForAuthorization: () => ({ mutateAsync: jest.fn(), isPending: false }),
@@ -123,6 +125,7 @@ describe('the schedule ceremony', () => {
         items: [{ sourceFfeItemId: 'line-2', clientLineTotalCents: 390000 }],
       },
     ];
+    mockTradeScopes = [];
     mockAuthority = { data: { state: 'active', agreementId: 'agreement-1' } };
   });
 

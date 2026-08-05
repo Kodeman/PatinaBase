@@ -15,8 +15,12 @@ import {
 import {
   isValidBudgetTargetCents,
   mapProjectInstruments,
+  mapTradeScopeWorkspace,
+  mapTradeScopes,
   mapWorkingBudget,
   type ProjectInstrumentView,
+  type TradeScopeView,
+  type TradeScopeWorkspaceView,
   type WorkingBudgetView,
 } from "@/lib/document/project-commerce";
 
@@ -39,6 +43,12 @@ export const commercialDocumentKeys = {
   instruments: (projectId: string) =>
     commercialKeys?.instruments?.(projectId) ??
     (["furnishings-authorizations", projectId] as const),
+  // Trade scopes keep their own key rather than joining the instruments one:
+  // they are a different instrument with a different RPC, and folding them
+  // into ['furnishings-authorizations'] would make every trade act refetch a
+  // list that never carried it.
+  tradeScopes: (projectId: string) => ["trade-scopes", projectId] as const,
+  tradeScope: (proposalId: string) => ["trade-scope", proposalId] as const,
 };
 
 export type CommercialNotificationDelivery =
@@ -48,7 +58,11 @@ export type CommercialNotificationDelivery =
 
 type StudioCommercialNotificationInput = {
   documentId: string;
-  transition: "executed" | "budget_published";
+  transition:
+    | "executed"
+    | "budget_published"
+    | "trade_scope_sent"
+    | "trade_draw_ready";
   eventId?: string;
 };
 
@@ -711,6 +725,11 @@ function invalidateProjectCommerce(
       queryKey: commercialDocumentKeys.authority(projectId),
     }),
     queryClient.invalidateQueries({ queryKey: ["project-v2", projectId] }),
+    // Trade scopes ride the same choke point: they share the project's money
+    // (a draw invoice is the project's receivable) and the same schedule.
+    queryClient.invalidateQueries({
+      queryKey: commercialDocumentKeys.tradeScopes(projectId),
+    }),
     // AuthorizationDetail's per-line delta glyphs (useAuthorizationLineDrift)
     // — not project-scoped (its key is the sorted ffe item ids), so this
     // invalidates every such query rather than one project's. Without this
@@ -1125,6 +1144,575 @@ export function useSendFurnishingsAuthorization(projectId: string) {
         }),
         queryClient.invalidateQueries({
           queryKey: ["proposal", proposalId],
+        }),
+      ]);
+    },
+  });
+}
+
+/* ── Trade scopes (Act IV) ───────────────────────────────────────────────────
+ *
+ * A trade scope is drafted, bid, released, signed, engaged, worked, and
+ * accepted. The RPCs below own every rule that matters — the hooks are a thin,
+ * honest wire to them, and the two direct table paths (the draft body and the
+ * bid ledger) exist because studio RLS covers them and the guards enforce
+ * draft-only editing at the row.
+ *
+ * Every trade mutation refreshes the scope's own workspace AND the project's
+ * trade-scope list. Engagement and voiding also move the schedule — they write
+ * or retire presence lines — so those two additionally invalidate the FF&E key.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+async function fetchTradeScopes(projectId: string): Promise<TradeScopeView[]> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase.rpc("list_trade_scopes", {
+    p_project_id: projectId,
+  });
+  if (error) throw error;
+  return mapTradeScopes(data);
+}
+
+export function useTradeScopes(projectId: string, enabled = true) {
+  return useQuery({
+    queryKey: commercialDocumentKeys.tradeScopes(projectId),
+    enabled: enabled && Boolean(projectId),
+    queryFn: () => fetchTradeScopes(projectId),
+  });
+}
+
+export async function fetchTradeScopeWorkspace(
+  proposalId: string,
+): Promise<TradeScopeWorkspaceView> {
+  const supabase = getSupabase();
+  const [termsResult, sectionsResult, bidsResult, drawsResult] =
+    await Promise.all([
+      supabase
+        .from("trade_scope_terms")
+        .select("*")
+        .eq("proposal_id", proposalId)
+        .maybeSingle(),
+      supabase
+        .from("trade_scope_sections")
+        .select("*")
+        .eq("proposal_id", proposalId)
+        .order("sort_order", { ascending: true }),
+      supabase
+        .from("trade_scope_bids")
+        .select("*")
+        .eq("proposal_id", proposalId)
+        .order("amount_cents", { ascending: true }),
+      supabase
+        .from("trade_scope_draws")
+        .select("*")
+        .eq("proposal_id", proposalId)
+        .order("sort_order", { ascending: true }),
+    ]);
+
+  if (termsResult.error) throw termsResult.error;
+  if (sectionsResult.error) throw sectionsResult.error;
+  if (bidsResult.error) throw bidsResult.error;
+  if (drawsResult.error) throw drawsResult.error;
+
+  return mapTradeScopeWorkspace({
+    proposalId,
+    terms: termsResult.data,
+    sections: sectionsResult.data,
+    bids: bidsResult.data,
+    draws: drawsResult.data,
+  });
+}
+
+/** The studio drawer behind one scope: terms, prose, bids, draws. */
+export function useTradeScopeWorkspace(
+  proposalId: string | null,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: commercialDocumentKeys.tradeScope(proposalId ?? ""),
+    enabled: enabled && Boolean(proposalId),
+    queryFn: () => fetchTradeScopeWorkspace(proposalId as string),
+  });
+}
+
+export interface CreateTradeScopeResult {
+  proposalId: string;
+  documentId: string;
+  projectId: string;
+}
+
+function mapCreateTradeScopeResult(value: any): CreateTradeScopeResult {
+  const row = Array.isArray(value) ? value[0] : value;
+  const proposalId = row?.proposalId ?? row?.proposal_id;
+  const documentId = row?.documentId ?? row?.document_id ?? proposalId;
+  const projectId = row?.projectId ?? row?.project_id;
+  if (!proposalId || !documentId || !projectId) {
+    throw new Error("The trade scope was created but its record came back incomplete.");
+  }
+  return {
+    proposalId: String(proposalId),
+    documentId: String(documentId),
+    projectId: String(projectId),
+  };
+}
+
+export function useCreateTradeScope(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: ["create-trade-scope", projectId],
+    mutationFn: async (title: string) => {
+      const trimmed = title.trim();
+      if (trimmed.length < 2) {
+        throw new Error("Name this scope of work.");
+      }
+      const { data, error } = await getSupabase().rpc("create_trade_scope", {
+        p_project_id: projectId,
+        p_title: trimmed,
+      });
+      if (error) throw error;
+      return mapCreateTradeScopeResult(data);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: commercialDocumentKeys.tradeScopes(projectId),
+      });
+      void queryClient.invalidateQueries({ queryKey: ["document-state"] });
+    },
+  });
+}
+
+function invalidateTradeScope(
+  queryClient: ReturnType<typeof useQueryClient>,
+  projectId: string,
+  proposalId: string,
+) {
+  return Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: commercialDocumentKeys.tradeScopes(projectId),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: commercialDocumentKeys.tradeScope(proposalId),
+    }),
+  ]);
+}
+
+export interface SaveTradeScopeDraftInput {
+  proposalId: string;
+  clientPriceCents: number;
+  terms?: string;
+  sections: readonly {
+    projectRoomId: string | null;
+    roomName: string;
+    prose: string;
+    allocationCents: number | null;
+  }[];
+  draws: readonly {
+    label: string;
+    percentage: number | null;
+    amountCents: number;
+    gatesOnAcceptance: boolean;
+  }[];
+}
+
+/**
+ * The draft body, written straight to its three tables (studio RLS, guards
+ * enforcing draft-only). Sections and draws are replaced wholesale rather than
+ * diffed: the sheet holds the whole schedule in one editor, so a partial
+ * reconciliation would only invent a second source of truth.
+ */
+export function useSaveTradeScopeDraft(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: ["save-trade-scope-draft", projectId],
+    mutationFn: async (input: SaveTradeScopeDraftInput) => {
+      const supabase = getSupabase();
+      const { proposalId } = input;
+
+      const termsUpdate = await supabase
+        .from("trade_scope_terms")
+        .update({
+          client_price_cents: Math.round(input.clientPriceCents),
+          ...(input.terms === undefined ? {} : { terms: input.terms.trim() }),
+        })
+        .eq("proposal_id", proposalId);
+      if (termsUpdate.error) throw termsUpdate.error;
+
+      const clearSections = await supabase
+        .from("trade_scope_sections")
+        .delete()
+        .eq("proposal_id", proposalId);
+      if (clearSections.error) throw clearSections.error;
+
+      const sectionRows = input.sections
+        .filter((section) => section.prose.trim())
+        .map((section, index) => ({
+          proposal_id: proposalId,
+          project_room_id: section.projectRoomId,
+          room_name: section.roomName.trim(),
+          prose: section.prose.trim(),
+          allocation_cents:
+            section.allocationCents === null
+              ? null
+              : Math.round(section.allocationCents),
+          sort_order: index,
+        }));
+      if (sectionRows.length > 0) {
+        const insertSections = await supabase
+          .from("trade_scope_sections")
+          .insert(sectionRows);
+        if (insertSections.error) throw insertSections.error;
+      }
+
+      const clearDraws = await supabase
+        .from("trade_scope_draws")
+        .delete()
+        .eq("proposal_id", proposalId);
+      if (clearDraws.error) throw clearDraws.error;
+
+      const drawRows = input.draws.map((draw, index) => ({
+        proposal_id: proposalId,
+        label: draw.label.trim(),
+        percentage: draw.percentage,
+        amount_cents: Math.round(draw.amountCents),
+        sort_order: index,
+        gates_on_acceptance: draw.gatesOnAcceptance,
+      }));
+      if (drawRows.length > 0) {
+        const insertDraws = await supabase
+          .from("trade_scope_draws")
+          .insert(drawRows);
+        if (insertDraws.error) throw insertDraws.error;
+      }
+
+      return { proposalId };
+    },
+    onSuccess: (result) =>
+      invalidateTradeScope(queryClient, projectId, result.proposalId),
+  });
+}
+
+export interface SetTradeScopePartyInput {
+  proposalId: string;
+  partyId: string;
+}
+
+export function useSetTradeScopeParty(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: ["set-trade-scope-party", projectId],
+    mutationFn: async ({ proposalId, partyId }: SetTradeScopePartyInput) => {
+      const { data, error } = await getSupabase().rpc("set_trade_scope_party", {
+        p_proposal_id: proposalId,
+        p_party_id: partyId,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_data, variables) =>
+      invalidateTradeScope(queryClient, projectId, variables.proposalId),
+  });
+}
+
+export interface RecordTradeBidInput {
+  proposalId: string;
+  partyId: string;
+  partyDisplayName: string;
+  amountCents: number;
+  note?: string | null;
+}
+
+/**
+ * A recorded bid — a number the designer already has, typed in (Phase 1,
+ * ruling R3). A response that lands from a sent request writes the same row
+ * with source 'party_response'; the ledger renders both the same way.
+ */
+export function useRecordTradeBid(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: ["record-trade-bid", projectId],
+    mutationFn: async (input: RecordTradeBidInput) => {
+      if (!input.partyId) throw new Error("Choose whose number this is.");
+      if (!Number.isFinite(input.amountCents) || input.amountCents <= 0) {
+        throw new Error("Record what they quoted.");
+      }
+      const { data, error } = await getSupabase()
+        .from("trade_scope_bids")
+        .insert({
+          proposal_id: input.proposalId,
+          party_id: input.partyId,
+          party_display_name: input.partyDisplayName.trim(),
+          amount_cents: Math.round(input.amountCents),
+          status: "quoted",
+          source: "recorded",
+          note: input.note?.trim() || null,
+          noted_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_data, variables) =>
+      invalidateTradeScope(queryClient, projectId, variables.proposalId),
+  });
+}
+
+export interface SelectTradeBidInput {
+  proposalId: string;
+  bidId: string;
+}
+
+export function useSelectTradeBid(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: ["select-trade-bid", projectId],
+    mutationFn: async ({ bidId }: SelectTradeBidInput) => {
+      const { data, error } = await getSupabase().rpc("select_trade_bid", {
+        p_bid_id: bidId,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_data, variables) =>
+      invalidateTradeScope(queryClient, projectId, variables.proposalId),
+  });
+}
+
+/**
+ * "Release for authorization" — the same verb, the same ceremony, the same
+ * send rail as a furnishings authorization (useSendFurnishingsAuthorization):
+ * snapshot fingerprint → send_commercial_document → proposal-send.
+ */
+export function useSendTradeScope(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: ["send-trade-scope", projectId],
+    mutationFn: async (proposalId: string) => {
+      const supabase = getSupabase();
+      const fingerprint =
+        await fetchCommercialDocumentSendFingerprint(proposalId);
+      const { data, error } = await supabase.rpc("send_commercial_document", {
+        p_proposal_id: proposalId,
+        p_expected_fingerprint: fingerprint,
+        p_personal_message: null,
+        p_valid_until: null,
+      });
+      if (error) throw error;
+
+      const sentAt = data?.sentAt ?? data?.sent_at;
+      const dispatchId =
+        data?.proposalSendDispatchId ?? data?.proposal_send_dispatch_id;
+      if (!sentAt || !dispatchId) {
+        return {
+          ...data,
+          _emailDispatched: false,
+          _emailDeliveryState: "pending",
+          _emailRetryable: false,
+          _emailDispatchDetail:
+            "The trade scope send instance is incomplete. Refresh before retrying.",
+        };
+      }
+
+      try {
+        const delivery = await supabase.functions.invoke("proposal-send", {
+          body: { proposalId, sentAt, dispatchId },
+        });
+        const deliveryState =
+          typeof delivery.data?.delivery_state === "string"
+            ? delivery.data.delivery_state
+            : "pending";
+        if (delivery.error && deliveryState === "pending") {
+          console.warn("trade scope email pending retry", {
+            proposalId,
+            error: delivery.error.message,
+          });
+        }
+        // The DB-side send already committed regardless of the client email's
+        // fate above — non-blocking, mirrors executed/budget_published's
+        // pending_retry posture rather than failing the mutation.
+        const notificationDelivery = await invokeCommercialNotification(
+          supabase,
+          { documentId: proposalId, transition: "trade_scope_sent" },
+        );
+        return {
+          ...data,
+          proposalSendDispatchId: dispatchId,
+          sentAt,
+          _emailDispatched: deliveryState === "delivered",
+          _emailDeliveryState: deliveryState,
+          _emailRetryable:
+            typeof delivery.data?.retryable === "boolean"
+              ? delivery.data.retryable
+              : deliveryState === "pending" || deliveryState === "in_flight",
+          notificationDelivery,
+        };
+      } catch (error) {
+        console.warn("trade scope email pending retry", {
+          proposalId,
+          error: error instanceof Error ? error.message : "transport_error",
+        });
+        const notificationDelivery = await invokeCommercialNotification(
+          supabase,
+          { documentId: proposalId, transition: "trade_scope_sent" },
+        );
+        return {
+          ...data,
+          proposalSendDispatchId: dispatchId,
+          sentAt,
+          _emailDispatched: false,
+          _emailDeliveryState: "pending",
+          _emailRetryable: true,
+          notificationDelivery,
+        };
+      }
+    },
+    onSuccess: async (_data, proposalId) => {
+      await Promise.all([
+        invalidateTradeScope(queryClient, projectId, proposalId),
+        queryClient.invalidateQueries({
+          queryKey: commercialDocumentKeys.bundle(proposalId),
+        }),
+        queryClient.invalidateQueries({ queryKey: ["proposal", proposalId] }),
+      ]);
+    },
+  });
+}
+
+/**
+ * "Engage {party}" — the studio's act, after the client's signature and the
+ * deposit. It writes one presence line per section into the schedule, so this
+ * is one of the two trade mutations that must move the FF&E key.
+ */
+export function useEngageTradeScope(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: ["engage-trade-scope", projectId],
+    mutationFn: async (proposalId: string) => {
+      const { data, error } = await getSupabase().rpc("engage_trade_scope", {
+        p_proposal_id: proposalId,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: async (_data, proposalId) => {
+      await Promise.all([
+        invalidateProjectCommerce(queryClient, projectId),
+        invalidateTradeScope(queryClient, projectId, proposalId),
+        queryClient.invalidateQueries({
+          queryKey: ["project-ffe-items", projectId],
+        }),
+      ]);
+    },
+  });
+}
+
+export function useMarkTradeScopeInProgress(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: ["mark-trade-scope-in-progress", projectId],
+    mutationFn: async (proposalId: string) => {
+      const { data, error } = await getSupabase().rpc(
+        "mark_trade_scope_in_progress",
+        { p_proposal_id: proposalId },
+      );
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: async (_data, proposalId) => {
+      await Promise.all([
+        invalidateTradeScope(queryClient, projectId, proposalId),
+        queryClient.invalidateQueries({
+          queryKey: ["project-ffe-items", projectId],
+        }),
+      ]);
+    },
+  });
+}
+
+export function useRecordSubstantialCompletion(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: ["record-trade-substantial-completion", projectId],
+    mutationFn: async (proposalId: string) => {
+      const { data, error } = await getSupabase().rpc(
+        "record_trade_scope_substantial_completion",
+        { p_proposal_id: proposalId },
+      );
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: async (_data, proposalId) => {
+      await Promise.all([
+        invalidateTradeScope(queryClient, projectId, proposalId),
+        queryClient.invalidateQueries({
+          queryKey: ["project-ffe-items", projectId],
+        }),
+      ]);
+    },
+  });
+}
+
+export interface IssueTradeDrawInput {
+  proposalId: string;
+  drawId: string;
+}
+
+export function useIssueTradeDrawInvoice(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: ["issue-trade-draw-invoice", projectId],
+    mutationFn: async ({ drawId, proposalId }: IssueTradeDrawInput) => {
+      const supabase = getSupabase();
+      const { data, error } = await supabase.rpc(
+        "issue_trade_draw_invoice",
+        { p_draw_id: drawId },
+      );
+      if (error) throw error;
+      // Event-scoped like budget_published's checkpointId — eventId is the
+      // draw itself, so a second draw on the same scope mints its own
+      // idempotency key rather than colliding on the proposal id.
+      const notificationDelivery = await invokeCommercialNotification(
+        supabase,
+        { documentId: proposalId, transition: "trade_draw_ready", eventId: drawId },
+      );
+      return { ...data, notificationDelivery };
+    },
+    onSuccess: async (_data, variables) => {
+      await Promise.all([
+        invalidateProjectCommerce(queryClient, projectId),
+        invalidateTradeScope(queryClient, projectId, variables.proposalId),
+        queryClient.invalidateQueries({ queryKey: ["invoices", projectId] }),
+      ]);
+    },
+  });
+}
+
+export interface VoidTradeScopeInput {
+  proposalId: string;
+  reason: string;
+}
+
+export function useVoidTradeScope(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: ["void-trade-scope", projectId],
+    mutationFn: async ({ proposalId, reason }: VoidTradeScopeInput) => {
+      const trimmedReason = reason.trim();
+      if (trimmedReason.length < 5) {
+        throw new Error("Record a meaningful reason for voiding this scope.");
+      }
+      const { data, error } = await getSupabase().rpc("void_trade_scope", {
+        p_proposal_id: proposalId,
+        p_reason: trimmedReason,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: async (_data, variables) => {
+      await Promise.all([
+        invalidateProjectCommerce(queryClient, projectId),
+        invalidateTradeScope(queryClient, projectId, variables.proposalId),
+        queryClient.invalidateQueries({
+          queryKey: ["project-ffe-items", projectId],
         }),
       ]);
     },

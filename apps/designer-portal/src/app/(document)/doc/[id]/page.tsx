@@ -684,7 +684,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
                     projectId={row.project_id}
                     allowAddendum
                   />
-                  <ProjectCommerceSection projectId={row.project_id} />
+                  <ProjectCommerceSection projectId={row.project_id} projectName={row.title} />
                 {/* Track 5 — the coordination band (ball-in-court + dependency web).
                     The band resolves designerClientId itself from clientUserId
                     (work-block.tsx pattern); the page passes clientUserId, never a

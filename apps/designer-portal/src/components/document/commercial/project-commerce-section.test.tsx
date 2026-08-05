@@ -7,8 +7,16 @@ jest.mock("./derived-budget-grid", () => ({
 }));
 
 jest.mock("./authorizations-ledger", () => ({
-  AuthorizationsLedger: ({ projectId }: { projectId: string }) => (
-    <div data-testid="authorizations-ledger">{projectId}</div>
+  AuthorizationsLedger: ({
+    projectId,
+    projectName,
+  }: {
+    projectId: string;
+    projectName?: string;
+  }) => (
+    <div data-testid="authorizations-ledger" data-project-name={projectName}>
+      {projectId}
+    </div>
   ),
 }));
 
@@ -27,6 +35,17 @@ describe("ProjectCommerceSection", () => {
     expect(
       grid.compareDocumentPosition(ledger) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+  });
+
+  // Without this, AuthorizationsLedger's default projectName='' flowed all
+  // the way to a trade scope's work order, which printed the party's name
+  // with no project heading — this is the wiring that closes that gap.
+  it("forwards projectName to the authorizations ledger, for the work order header", () => {
+    render(<ProjectCommerceSection projectId="project-1" projectName="Whitfield Residence" />);
+    expect(screen.getByTestId("authorizations-ledger")).toHaveAttribute(
+      "data-project-name",
+      "Whitfield Residence",
+    );
   });
 
   it("names the section for assistive tech", () => {

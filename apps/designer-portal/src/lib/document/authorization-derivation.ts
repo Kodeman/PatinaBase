@@ -54,6 +54,56 @@ export interface ScheduleLineInput {
   budget_max_cents?: number | null;
   status?: string | null;
   blocked?: boolean | null;
+  /** Set on a trade scope's presence lines — the trade instrument that owns
+   *  this line. Such a line is already bought, on other paper. */
+  trade_scope_document_id?: string | null;
+}
+
+/** A trade scope, as the schedule needs to read it. */
+export interface TradeScopeLike {
+  documentId: string;
+  number?: number | null;
+  progressState?: string | null;
+}
+
+/** pcd document id → the trade scope holding it. */
+export type TradeScopeIndex = Map<string, { number: number; progressState: string }>;
+
+export type TradeLineHold =
+  | { onTradeScope: false }
+  | { onTradeScope: true; number: number; progressState: string };
+
+export function buildTradeScopeIndex(
+  scopes: readonly TradeScopeLike[] | null | undefined,
+): TradeScopeIndex {
+  const index: TradeScopeIndex = new Map();
+  for (const scope of scopes ?? []) {
+    if (!scope?.documentId) continue;
+    index.set(scope.documentId, {
+      number: Math.max(0, Math.round(num(scope.number) ?? 0)),
+      progressState: String(scope.progressState ?? 'none'),
+    });
+  }
+  return index;
+}
+
+/**
+ * Whether this line is a trade scope's presence line, and whose. A line whose
+ * scope is not in the index is still a trade line — it just cannot say which
+ * number, which is why the ineligibility copy below reads without one.
+ */
+export function deriveTradeLineHold(
+  item: ScheduleLineInput,
+  index: TradeScopeIndex,
+): TradeLineHold {
+  const documentId = item.trade_scope_document_id;
+  if (!documentId) return { onTradeScope: false };
+  const held = index.get(documentId);
+  return {
+    onTradeScope: true,
+    number: held?.number ?? 0,
+    progressState: held?.progressState ?? 'none',
+  };
 }
 
 export type LineAuthorization =
@@ -246,7 +296,20 @@ export function deriveLineAuthorization(
 export function eligibility(
   item: ScheduleLineInput,
   lineAuth: LineAuthorization,
+  /** The trade scope holding this line, when one does. */
+  tradeHold: TradeLineHold = { onTradeScope: false },
 ): LineEligibility {
+  // Trade work is bought on its own instrument. A presence line is the
+  // schedule's record of work already authorized — it can never join a
+  // furnishings release, and the reason says which paper holds it.
+  if (tradeHold.onTradeScope) {
+    return {
+      eligible: false,
+      reason: tradeHold.number
+        ? `on trade scope · № ${tradeHold.number}`
+        : 'on trade scope',
+    };
+  }
   if (lineAuth.track === 'authorized' || lineAuth.track === 'draft') {
     return { eligible: false, reason: `in authorization № ${lineAuth.number}` };
   }
@@ -277,7 +340,17 @@ export function poGate(
   item: ScheduleLineInput,
   lineAuth: LineAuthorization,
   isCommercialOrigin: boolean,
+  tradeHold: TradeLineHold = { onTradeScope: false },
 ): PoGate {
+  // The DB refuses outright ("trade scope lines are not purchase-orderable"),
+  // so the schedule must not offer the act. Work is engaged, not ordered.
+  if (tradeHold.onTradeScope || item.trade_scope_document_id) {
+    return {
+      orderable: false,
+      sentence: 'Trade work is engaged on its scope, not purchase-ordered',
+    };
+  }
+
   const stageAllows =
     ORDERABLE_STAGES.has(String(item.status ?? '')) && !item.blocked;
 
