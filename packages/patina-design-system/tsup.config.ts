@@ -21,10 +21,12 @@ export default defineConfig({
   // Inject "use client" directive after build
   // esbuild strips directives during bundling, so we re-inject them
   async onSuccess() {
-    // Only inject into main index files (not tokens)
+    // Inject into client-component entry points (not the server-safe tokens entry)
     const filesToPatch = [
       'dist/index.js',
       'dist/index.cjs',
+      'dist/components/PortalAuth/index.js',
+      'dist/components/PortalAuth/index.cjs',
     ]
 
     for (const file of filesToPatch) {
