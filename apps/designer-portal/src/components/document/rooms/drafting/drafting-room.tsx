@@ -23,9 +23,9 @@
  *
  * Legacy retirement: no new legacy sending. This Room stays live for facet
  * editing only — a project-bound draft is a furnishing draft (it reaches the
- * client only inside a named furnishings authorization wave); an orphan
- * legacy draft has no client-facing send path here at all. The head act is a
- * quiet exit, not a send.
+ * client only inside a named furnishings authorization released from the
+ * schedule); an orphan legacy draft has no client-facing send path here at
+ * all. The head act is a quiet exit, not a send.
  *
  * A Room — full-bleed paper, zero shadows (D4); reuses RoomShell's physics.
  */
@@ -179,7 +179,7 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
 
   if (experience === 'commercial_readonly') {
     return (
-      <DraftingRoomGateMessage message="This commercial edition is read-only in Wave 1. Returning to its document…" />
+      <DraftingRoomGateMessage message="This commercial edition is read-only here. Returning to its document…" />
     );
   }
 
@@ -359,9 +359,9 @@ function DraftingRoomEditor({
 
   // Legacy retirement: the Room's head act is a quiet exit, not a send — this
   // Drafting Room stays for facet editing only (a project-bound furnishing
-  // draft reaches the client via a named furnishings authorization wave; an
-  // orphan legacy draft has no new client-facing send path). No mobile
-  // primary action to promote here.
+  // draft reaches the client via a named furnishings authorization released
+  // from the schedule; an orphan legacy draft has no new client-facing send
+  // path). No mobile primary action to promote here.
   useMobilePrimaryAction(null);
 
   // RoomShell already renders the way out as its own head word (I107 — "the

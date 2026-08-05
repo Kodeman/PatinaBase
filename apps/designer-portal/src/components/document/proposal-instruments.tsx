@@ -55,7 +55,8 @@ export function ProposalInstruments({
   if (experience === 'commercial_readonly') {
     return (
       <p className="mt-2 border-l-2 border-[var(--color-aged-oak)] pl-3 text-[12px] text-[var(--text-muted)]">
-        This commercial edition is read-only in Wave 1.
+        This commercial edition is read-only here — open it from the
+        project&rsquo;s authorizations ledger.
       </p>
     );
   }
@@ -152,11 +153,12 @@ function LegacyProposalInstruments({
 
   // Legacy retirement: no new legacy sending. A draft here is either a
   // project-bound furnishing draft (it reaches the client only inside a
-  // named furnishings authorization wave, see project-commerce) or an
-  // orphan legacy draft that stays editable but is no longer sendable —
-  // new client-facing agreements start as design agreements.
+  // named furnishings authorization released from the schedule, see
+  // project-commerce) or an orphan legacy draft that stays editable but is
+  // no longer sendable — new client-facing agreements start as design
+  // agreements.
   const modelNote = proposal?.project_id
-    ? 'This selection reaches your client as part of a furnishing wave from the project page.'
+    ? 'This selection reaches your client as part of a furnishings authorization from the project page.'
     : 'New client work begins with a design agreement — this earlier-format draft stays for your records.';
 
   // Draft — the Direction WORK BAND (R68): a draft is the work to be done, so it

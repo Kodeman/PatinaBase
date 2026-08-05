@@ -5,6 +5,12 @@
  * with the existing Order Assistant and LogInspectionDrawer mounted in
  * place (both are portal-local shadow-free panels — R3-clean). Prototype
  * v0.4 .line-detail recipe: clay left border, three-column grid.
+ *
+ * The Authorized Schedule (Act III, slide 9): on a commercial job the unfold
+ * carries the purchase-order sentence — the one thing authorization buys a
+ * studio, because the signed row and the schedule row are now one row. A line
+ * that has been released is softly locked: the price the client signed stands,
+ * and changing it means voiding the instrument and superseding it.
  */
 
 import { useEffect, useState } from 'react';
@@ -25,10 +31,17 @@ import {
   useDocumentRooms,
 } from '@/hooks/use-document-rooms';
 import { deriveLineStamp } from '@/lib/document/stamp-derivation';
-import { fmtDay } from '@/lib/document/format';
+import { poGate, type LineAuthorization } from '@/lib/document/authorization-derivation';
+import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { DocumentAction, DocumentActionGroup } from './document-action';
 
 type FFERow = any;
+
+/** A released line is softly locked — the same sentence everywhere it bites. */
+const softLockSentence = (auth: LineAuthorization) =>
+  auth.track === 'none'
+    ? null
+    : `on authorization № ${auth.number} — void & supersede to change`;
 
 function Cell({
   label,
@@ -284,12 +297,21 @@ export function LineUnfold({
   projectName,
   onAddNote,
   onFold,
+  auth = { track: 'none' },
+  isCommercialOrigin = false,
+  onIncludeInRelease,
 }: {
   item: FFERow;
   projectId: string;
   projectName: string;
   onAddNote: (lineId: string) => void;
   onFold: () => void;
+  /** This line's second stamp — which instrument holds it, if any. */
+  auth?: LineAuthorization;
+  /** A project with an executed agreement behind it. */
+  isCommercialOrigin?: boolean;
+  /** Enter the release ceremony with this line already ticked. */
+  onIncludeInRelease?: () => void;
 }) {
   const stamp = deriveLineStamp(item);
   const po = item.purchase_order ?? null;
@@ -304,7 +326,23 @@ export function LineUnfold({
   const { data: rooms } = useDocumentRooms(projectId);
   const assignRoom = useAssignLineRoom(projectId);
 
-  const orderable = ORDERABLE.has(item.status) && !item.blocked;
+  // On a commercial job the purchase order waits on the instrument, not just
+  // the stage. Elsewhere the schedule keeps its old predicate and says nothing.
+  const gate = poGate(item, auth, isCommercialOrigin);
+  const orderable = isCommercialOrigin
+    ? gate.orderable
+    : ORDERABLE.has(item.status) && !item.blocked;
+  const softLock = softLockSentence(
+    auth.track === 'awaiting' || auth.track === 'authorized'
+      ? auth
+      : { track: 'none' },
+  );
+  const delta =
+    auth.track === 'authorized' && auth.deltaCents !== null
+      ? `authorized ${fmtUsd(auth.signedLineTotalCents)} · now ${fmtUsd(
+          auth.signedLineTotalCents + auth.deltaCents,
+        )}`
+      : null;
   const inspectable =
     Boolean(po) && (item.status === 'shipped' || item.status === 'delivered');
   // R18: sending one PO while working its line is engagement work — the
@@ -363,6 +401,37 @@ export function LineUnfold({
         <Cell label="Receiving" value={receivingValue} />
       </div>
 
+      {/* The authorization strip — what was signed, and what that permits. */}
+      {isCommercialOrigin && (
+        <div
+          data-testid="line-authorization-strip"
+          className="mb-2.5 border-l-[2px] border-[var(--color-sage)] pl-2.5"
+        >
+          {auth.track === 'authorized' && (
+            <p className="font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+              signed price {fmtUsd(auth.signedLineTotalCents)} ·{' '}
+              {auth.depositClear ? 'deposit clear' : 'deposit not yet clear'}
+            </p>
+          )}
+          {delta && (
+            // The signed price stands; the drift is stated, never silent.
+            <p className="font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--color-terracotta)]">
+              {delta}
+            </p>
+          )}
+          {gate.sentence && (
+            <p className="text-[11px] text-[var(--color-charcoal)]">
+              {gate.sentence}
+            </p>
+          )}
+          {softLock && (
+            <p className="mt-px font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+              {softLock}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* PRC-11: walk the line's open claims forward — notify · resolve. */}
       {openClaims.length > 0 && (
         <ClaimActs claims={openClaims as { id: string; state: string }[]} />
@@ -376,6 +445,8 @@ export function LineUnfold({
           </span>
           <select
             value={item.project_room_id ?? ''}
+            disabled={Boolean(softLock)}
+            title={softLock ?? undefined}
             onChange={(e) =>
               assignRoom.mutate({
                 itemId: item.id,
@@ -383,7 +454,7 @@ export function LineUnfold({
               })
             }
             aria-label="Assign to room"
-            className="bg-transparent text-[10.5px] text-[var(--color-charcoal)] outline-none"
+            className="bg-transparent text-[10.5px] text-[var(--color-charcoal)] outline-none disabled:opacity-60"
           >
             <option value="">Throughout · unassigned</option>
             {(rooms ?? []).map((r) => (
@@ -392,6 +463,11 @@ export function LineUnfold({
               </option>
             ))}
           </select>
+          {softLock && (
+            <span className="font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+              {softLock}
+            </span>
+          )}
         </div>
       )}
 
@@ -443,6 +519,17 @@ export function LineUnfold({
         >
           Bill
         </DocumentAction>
+        {/* Nothing is created here — it opens the ceremony with this line
+            already ticked. */}
+        {isCommercialOrigin && auth.track === 'none' && onIncludeInRelease && (
+          <DocumentAction
+            actionKey="include-line-in-next-release"
+            variant="tertiary"
+            onClick={onIncludeInRelease}
+          >
+            Include in the next release
+          </DocumentAction>
+        )}
         <DocumentAction
           actionKey="add-ffe-line-note"
           variant="secondary"

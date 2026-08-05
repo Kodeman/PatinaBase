@@ -2,7 +2,6 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { commercialKeys, createBrowserClient } from "@patina/supabase";
-import type { WorkingBudgetVersion } from "@patina/types";
 import {
   asCommercialDocumentKind,
   asCommercialState,
@@ -14,12 +13,10 @@ import {
   type ServiceRate,
 } from "@/lib/document/commercial-documents";
 import {
-  mapFurnishingsWaves,
+  isValidBudgetTargetCents,
+  mapProjectInstruments,
   mapWorkingBudget,
-  validateWorkingBudgetLines,
-  workingBudgetTotals,
-  type FurnishingsWaveView,
-  type WorkingBudgetLineDraft,
+  type ProjectInstrumentView,
   type WorkingBudgetView,
 } from "@/lib/document/project-commerce";
 
@@ -35,8 +32,12 @@ export const commercialDocumentKeys = {
   budget: (projectId: string) =>
     commercialKeys?.budget?.(projectId) ??
     (["working-budget", projectId] as const),
-  waves: (projectId: string) =>
-    commercialKeys?.waves?.(projectId) ??
+  // Accessor renamed from `waves` — the underlying key string stays
+  // ['furnishings-authorizations', projectId] for cache continuity with the
+  // packages/supabase `commercialKeys.waves`/`commercialKeys.instruments`
+  // aliases (see that module for why both still exist).
+  instruments: (projectId: string) =>
+    commercialKeys?.instruments?.(projectId) ??
     (["furnishings-authorizations", projectId] as const),
 };
 
@@ -101,6 +102,15 @@ export interface CommercialDocumentBundle {
 const finiteCents = (value: unknown) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.round(parsed) : 0;
+};
+
+// Like finiteCents, but preserves "unset" as null instead of coercing it to
+// 0 — for fields (R8's furnishingsDepositPercent) where 0 and "never set"
+// are meaningfully different values, not the same one written two ways.
+const nullableFiniteCents = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.round(parsed) : null;
 };
 
 const stringList = (value: unknown): string[] => {
@@ -172,6 +182,14 @@ function mapTerms(
     terms: String(row.terms ?? ""),
     currentRateVersion: Number(row.current_rate_version ?? currentRateVersion),
     updatedAt: typeof row.updated_at === "string" ? row.updated_at : null,
+    // R8: reads either casing defensively. Nullable by design (00422) — an
+    // unset term is preserved as null rather than coerced to 0, so it stays
+    // distinguishable from an explicit 0% and the release RPC's 50% house
+    // default (create_furnishings_authorization_from_schedule) can actually
+    // apply.
+    furnishingsDepositPercent: nullableFiniteCents(
+      row.furnishingsDepositPercent ?? row.furnishings_deposit_percent,
+    ),
   };
 }
 
@@ -307,6 +325,14 @@ export function useSaveServiceAgreement(proposalId: string) {
           currency: terms.currency,
           terms: terms.terms.trim(),
           currentRateVersion: terms.currentRateVersion,
+          // R8 — nullable by design (00422's upsert_design_services_draft
+          // reads NULLIF(...) so an omitted/null value stays NULL rather
+          // than getting coerced to 0, letting the release RPC's 50% house
+          // default actually apply).
+          furnishingsDepositPercent:
+            terms.furnishingsDepositPercent === null
+              ? null
+              : Math.round(terms.furnishingsDepositPercent),
         },
         p_rates: rates
           .filter((rate) => rate.roleName.trim() && rate.hourlyRateCents > 0)
@@ -557,6 +583,13 @@ export function adaptProjectBillingAuthority(
               : null,
         }))
       : [],
+    // R8: null until get_project_authority_summary carries the executed
+    // agreement's furnishings deposit term — never fabricate a default here.
+    furnishingsDepositPercent:
+      typeof (row.furnishingsDepositPercent ?? row.furnishings_deposit_percent) ===
+      "number"
+        ? (row.furnishingsDepositPercent ?? row.furnishings_deposit_percent)
+        : null,
   };
 }
 
@@ -633,53 +666,6 @@ export function useCreateServiceAddendum(projectId: string) {
   });
 }
 
-export interface CreateFurnishingDraftResult {
-  proposalId: string;
-  projectId: string;
-}
-
-function mapCreateFurnishingDraftResult(
-  value: any,
-): CreateFurnishingDraftResult {
-  const row = Array.isArray(value) ? value[0] : value;
-  const proposalId = row?.proposalId ?? row?.proposal_id;
-  const projectId = row?.projectId ?? row?.project_id;
-  if (!proposalId || !projectId) {
-    throw new Error("The furnishing draft result was incomplete.");
-  }
-  return {
-    proposalId: String(proposalId),
-    projectId: String(projectId),
-  };
-}
-
-// Legacy retirement (item 4 / R85 successor): the furnishing-draft opener for
-// a project that already has a working relationship — mirrors
-// useCreateServiceAddendum's shape, but seeds a furnishing (FF&E) draft
-// rather than a services addendum. R83: errors render inline at the act.
-export function useCreateFurnishingDraft(projectId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationKey: ["create-furnishing-draft", projectId],
-    meta: { errorSurface: "inline" },
-    mutationFn: async (title: string) => {
-      const { data, error } = await getSupabase().rpc(
-        "create_furnishing_wave_draft",
-        {
-          p_project_id: projectId,
-          p_title: title.trim(),
-        },
-      );
-      if (error) throw error;
-      return mapCreateFurnishingDraftResult(data);
-    },
-    onSuccess: async (result) => {
-      await invalidateProjectCommerce(queryClient, result.projectId);
-      void queryClient.invalidateQueries({ queryKey: ["proposals"] });
-    },
-  });
-}
-
 export function useProjectBillingAuthority(projectId: string, enabled = true) {
   return useQuery({
     queryKey: commercialDocumentKeys.authority(projectId),
@@ -707,105 +693,9 @@ export function useWorkingBudget(projectId: string, enabled = true) {
   });
 }
 
-export interface SaveWorkingBudgetDraftInput {
-  projectId: string;
-  version: WorkingBudgetVersion | null;
-  note: string;
-  lines: WorkingBudgetLineDraft[];
-}
-
-async function saveWorkingBudgetDraft({
-  projectId,
-  version,
-  note,
-  lines,
-}: SaveWorkingBudgetDraftInput): Promise<WorkingBudgetView> {
-  const validation = validateWorkingBudgetLines(lines);
-  if (!validation.valid) {
-    throw new Error(Object.values(validation.errors)[0]);
-  }
-
-  const supabase = getSupabase();
-  const { data: authData, error: authError } = await supabase.auth.getUser();
-  if (authError) throw authError;
-  if (!authData.user?.id) throw new Error("Sign in before saving this budget.");
-
-  const totals = workingBudgetTotals(lines);
-  let draftId = version?.state === "draft" ? version.id : null;
-  let createdDraft = false;
-
-  if (!draftId) {
-    const { data, error } = await supabase
-      .from("project_budget_versions")
-      .insert({
-        project_id: projectId,
-        version: (version?.version ?? 0) + 1,
-        status: "draft",
-        low_total_cents: totals.lowCents,
-        target_total_cents: totals.targetCents,
-        high_total_cents: totals.highCents,
-        note: note.trim() || null,
-        created_by: authData.user.id,
-      })
-      .select("id")
-      .single();
-    if (error) throw error;
-    draftId = String(data.id);
-    createdDraft = true;
-  }
-
-  const rows = lines.map((line, sortOrder) => ({
-    id: line.id,
-    budget_version_id: draftId,
-    project_room_id: line.roomId,
-    room_name: line.roomName.trim(),
-    category: line.category.trim(),
-    low_cents: Math.round(line.lowCents),
-    target_cents: Math.round(line.targetCents),
-    high_cents: Math.round(line.highCents),
-    sort_order: sortOrder,
-  }));
-
-  const { error: upsertError } = await supabase
-    .from("project_budget_lines")
-    .upsert(rows, { onConflict: "id" });
-  if (upsertError) {
-    if (createdDraft) {
-      await supabase.from("project_budget_versions").delete().eq("id", draftId);
-    }
-    throw upsertError;
-  }
-
-  if (version?.state === "draft") {
-    const retained = new Set(lines.map((line) => line.id));
-    const removed = version.lines
-      .map((line) => line.id)
-      .filter((lineId) => !retained.has(lineId));
-    if (removed.length > 0) {
-      const { error } = await supabase
-        .from("project_budget_lines")
-        .delete()
-        .in("id", removed)
-        .eq("budget_version_id", draftId);
-      if (error) throw error;
-    }
-  }
-
-  const { error: versionError } = await supabase
-    .from("project_budget_versions")
-    .update({
-      low_total_cents: totals.lowCents,
-      target_total_cents: totals.targetCents,
-      high_total_cents: totals.highCents,
-      note: note.trim() || null,
-    })
-    .eq("id", draftId)
-    .eq("status", "draft");
-  if (versionError) throw versionError;
-
-  return fetchWorkingBudget(projectId);
-}
-
+// The single choke point: every commerce mutation below invalidates through
+// this, so instruments + working budget + authority + the project-v2 read
+// model never drift from one another.
 function invalidateProjectCommerce(
   queryClient: ReturnType<typeof useQueryClient>,
   projectId: string,
@@ -815,26 +705,94 @@ function invalidateProjectCommerce(
       queryKey: commercialDocumentKeys.budget(projectId),
     }),
     queryClient.invalidateQueries({
-      queryKey: commercialDocumentKeys.waves(projectId),
+      queryKey: commercialDocumentKeys.instruments(projectId),
     }),
     queryClient.invalidateQueries({
       queryKey: commercialDocumentKeys.authority(projectId),
     }),
     queryClient.invalidateQueries({ queryKey: ["project-v2", projectId] }),
+    // AuthorizationDetail's per-line delta glyphs (useAuthorizationLineDrift)
+    // — not project-scoped (its key is the sorted ffe item ids), so this
+    // invalidates every such query rather than one project's. Without this
+    // the ▲/▼ glyphs go stale across a send/void/execute even though every
+    // other commerce read refreshes.
+    queryClient.invalidateQueries({
+      queryKey: ["authorization-line-drift"],
+    }),
   ]);
 }
 
-export function useSaveWorkingBudgetDraft(projectId: string) {
+export interface SetBudgetTargetInput {
+  /** Guards the write to the draft version's own rows — a stale versionId
+   *  (e.g. a checkpoint published mid-edit) simply matches no row rather
+   *  than silently writing into the wrong version. */
+  versionId: string;
+  lineId: string;
+  targetCents: number;
+}
+
+async function setBudgetTarget(
+  projectId: string,
+  { versionId, lineId, targetCents }: SetBudgetTargetInput,
+): Promise<WorkingBudgetView> {
+  if (!isValidBudgetTargetCents(targetCents)) {
+    throw new Error("Enter a target of zero or more.");
+  }
+  const supabase = getSupabase();
+  const { error } = await supabase
+    .from("project_budget_lines")
+    .update({ target_cents: Math.round(targetCents) })
+    .eq("id", lineId)
+    .eq("budget_version_id", versionId);
+  if (error) throw error;
+  return fetchWorkingBudget(projectId);
+}
+
+/**
+ * DerivedBudgetGrid's clay-editable Target cell. Room, category, low/high,
+ * and row add/remove are retired with manual line entry — the grid's rows
+ * are schedule-derived (useDeriveWorkingBudget); Target is the one figure
+ * the studio still sets by hand, on the draft version's existing rows
+ * (studio RLS permits the direct write; validation stays minimal per the
+ * build note — non-negative only).
+ */
+export function useSetBudgetTargets(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationKey: ["save-working-budget", projectId],
-    mutationFn: saveWorkingBudgetDraft,
+    mutationKey: ["set-budget-targets", projectId],
+    mutationFn: (input: SetBudgetTargetInput) =>
+      setBudgetTarget(projectId, input),
     onSuccess: (budget) => {
       queryClient.setQueryData(
         commercialDocumentKeys.budget(projectId),
         budget,
       );
       void invalidateProjectCommerce(queryClient, projectId);
+    },
+  });
+}
+
+/**
+ * "Sync from the schedule" — replaces the working budget's draft version
+ * with a fresh one derived from the live FF&E schedule (room × category
+ * rows, Scheduled figures stamped in). Target is the studio's to set
+ * afterward via useSetBudgetTargets; this call does not take one.
+ */
+export function useDeriveWorkingBudget(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: ["derive-working-budget", projectId],
+    mutationFn: async () => {
+      const supabase = getSupabase();
+      const { data, error } = await supabase.rpc(
+        "derive_working_budget_draft",
+        { p_project_id: projectId },
+      );
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: async () => {
+      await invalidateProjectCommerce(queryClient, projectId);
     },
   });
 }
@@ -902,60 +860,187 @@ export function useOverrideBudgetCheckpoint(projectId: string) {
   });
 }
 
-async function fetchFurnishingsWaves(
+async function fetchProjectInstruments(
   projectId: string,
-): Promise<FurnishingsWaveView[]> {
+): Promise<ProjectInstrumentView[]> {
   const supabase = getSupabase();
   const { data, error } = await supabase.rpc(
     "list_furnishings_authorizations",
     { p_project_id: projectId },
   );
   if (error) throw error;
-  return mapFurnishingsWaves(data);
+  return mapProjectInstruments(data);
 }
 
-export function useFurnishingsAuthorizations(
-  projectId: string,
-  enabled = true,
-) {
+export function useProjectInstruments(projectId: string, enabled = true) {
   return useQuery({
-    queryKey: commercialDocumentKeys.waves(projectId),
+    queryKey: commercialDocumentKeys.instruments(projectId),
     enabled: enabled && Boolean(projectId),
-    queryFn: () => fetchFurnishingsWaves(projectId),
+    queryFn: () => fetchProjectInstruments(projectId),
   });
 }
 
-export function useCreateFurnishingsAuthorization(projectId: string) {
+export interface ReleaseForAuthorizationInput {
+  name: string;
+  ffeItemIds: string[];
+  depositPercent?: number;
+}
+
+export interface ReleaseForAuthorizationResult {
+  proposalId: string;
+  documentId: string;
+  itemCount: number;
+}
+
+function mapReleaseForAuthorizationResult(
+  value: any,
+): ReleaseForAuthorizationResult {
+  const row = Array.isArray(value) ? value[0] : value;
+  const proposalId = row?.proposalId ?? row?.proposal_id;
+  const documentId = row?.documentId ?? row?.document_id ?? proposalId;
+  if (!proposalId || !documentId) {
+    throw new Error("The authorization release result was incomplete.");
+  }
+  return {
+    proposalId: String(proposalId),
+    documentId: String(documentId),
+    itemCount: Number(row?.itemCount ?? row?.item_count ?? 0),
+  };
+}
+
+/**
+ * "Release for authorization" — names a fresh furnishings authorization
+ * straight from a set of FF&E schedule items (no source proposal snapshot
+ * step). Replaces useCreateFurnishingsAuthorization's "name a wave, pick a
+ * source draft" flow.
+ */
+export function useReleaseForAuthorization(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationKey: ["create-furnishings-authorization", projectId],
+    mutationKey: ["release-for-authorization", projectId],
     mutationFn: async ({
-      waveName,
-      sourceProposalId,
-    }: {
-      waveName: string;
-      sourceProposalId: string;
-    }) => {
-      const trimmedName = waveName.trim();
+      name,
+      ffeItemIds,
+      depositPercent,
+    }: ReleaseForAuthorizationInput) => {
+      const trimmedName = name.trim();
       if (trimmedName.length < 2) {
-        throw new Error("Name this furnishings authorization wave.");
+        throw new Error("Name this authorization.");
       }
-      if (!sourceProposalId) {
-        throw new Error("Choose a draft furnishing proposal to snapshot.");
+      if (ffeItemIds.length === 0) {
+        throw new Error("Choose at least one schedule item to release.");
       }
       const supabase = getSupabase();
       const { data, error } = await supabase.rpc(
-        "create_furnishings_authorization",
+        "create_furnishings_authorization_from_schedule",
         {
           p_project_id: projectId,
-          p_wave_name: trimmedName,
-          p_source_proposal_id: sourceProposalId,
+          p_name: trimmedName,
+          p_ffe_item_ids: ffeItemIds,
+          p_deposit_percent:
+            typeof depositPercent === "number"
+              ? Math.round(depositPercent)
+              : null,
+        },
+      );
+      if (error) throw error;
+      return mapReleaseForAuthorizationResult(data);
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        invalidateProjectCommerce(queryClient, projectId),
+        // Released items leave the open schedule for this authorization —
+        // the schedule (ceremony agent's ffe-section.tsx) reads this key.
+        queryClient.invalidateQueries({
+          queryKey: ["project-ffe-items", projectId],
+        }),
+      ]);
+    },
+  });
+}
+
+export interface VoidAuthorizationInput {
+  proposalId: string;
+  reason: string;
+}
+
+export function useVoidAuthorization(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: ["void-authorization", projectId],
+    mutationFn: async ({ proposalId, reason }: VoidAuthorizationInput) => {
+      const trimmedReason = reason.trim();
+      if (trimmedReason.length < 5) {
+        throw new Error("Record a meaningful reason for voiding this authorization.");
+      }
+      const supabase = getSupabase();
+      const { data, error } = await supabase.rpc(
+        "void_furnishings_authorization",
+        {
+          p_proposal_id: proposalId,
+          p_reason: trimmedReason,
         },
       );
       if (error) throw error;
       return data;
     },
-    onSuccess: () => invalidateProjectCommerce(queryClient, projectId),
+    onSuccess: async () => {
+      await Promise.all([
+        invalidateProjectCommerce(queryClient, projectId),
+        queryClient.invalidateQueries({
+          queryKey: ["project-ffe-items", projectId],
+        }),
+      ]);
+    },
+  });
+}
+
+export interface AuthorizationLineDrift {
+  ffeItemId: string;
+  currentLineTotalCents: number | null;
+  currentStatus: string | null;
+}
+
+async function fetchAuthorizationLineDrift(
+  ffeItemIds: string[],
+): Promise<Map<string, AuthorizationLineDrift>> {
+  const ids = Array.from(new Set(ffeItemIds.filter(Boolean)));
+  const map = new Map<string, AuthorizationLineDrift>();
+  if (ids.length === 0) return map;
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("project_ffe_items")
+    .select("id, line_total_cents, status")
+    .in("id", ids);
+  if (error) throw error;
+  for (const row of data ?? []) {
+    map.set(String(row.id), {
+      ffeItemId: String(row.id),
+      currentLineTotalCents:
+        typeof row.line_total_cents === "number" ? row.line_total_cents : null,
+      currentStatus: typeof row.status === "string" ? row.status : null,
+    });
+  }
+  return map;
+}
+
+/**
+ * AuthorizationDetail's per-line delta glyph — a light, targeted read (only
+ * the ids this one instrument's items point at) comparing what was signed
+ * against the schedule's CURRENT line total for the same project_ffe_items
+ * row, so a studio member can see at a glance whether the schedule has
+ * moved since the client signed. Degrades to no glyph (empty map) for items
+ * with no sourceFfeItemId yet, or when the ids list is empty.
+ */
+export function useAuthorizationLineDrift(
+  ffeItemIds: string[],
+  enabled = true,
+) {
+  const key = [...ffeItemIds].sort().join(",");
+  return useQuery({
+    queryKey: ["authorization-line-drift", key],
+    queryFn: () => fetchAuthorizationLineDrift(ffeItemIds),
+    enabled: enabled && ffeItemIds.length > 0,
   });
 }
 

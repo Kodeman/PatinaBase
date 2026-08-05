@@ -1,0 +1,250 @@
+import { render, screen } from "@testing-library/react";
+import type { ProjectInstrumentView } from "@/lib/document/project-commerce";
+
+const sendAuthorization = jest.fn();
+let mockDrift: Record<string, unknown> = { data: new Map(), isLoading: false };
+
+jest.mock("@patina/supabase", () => ({
+  useProposalSendDispatchStatus: () => ({
+    isLoading: false,
+    isError: false,
+    data: null,
+  }),
+  useRetryProposalSend: () => ({ mutateAsync: jest.fn(), isPending: false }),
+}));
+
+jest.mock("@/hooks/use-commercial-documents", () => ({
+  useSendFurnishingsAuthorization: () => ({
+    mutateAsync: sendAuthorization,
+    isPending: false,
+  }),
+  useAuthorizationLineDrift: () => mockDrift,
+}));
+
+jest.mock("./void-supersede-act", () => ({
+  VoidAct: ({ instrument }: { instrument: { number: number } }) => (
+    <div data-testid="void-act">Void act for № {instrument.number}</div>
+  ),
+}));
+
+import { AuthorizationDetail } from "./authorization-detail";
+
+const baseInstrument: ProjectInstrumentView = {
+  documentId: "doc-1",
+  proposalId: "proposal-1",
+  number: 2,
+  name: "Bedroom Lighting",
+  kind: "furnishings_authorization",
+  state: "executed",
+  totalAmountCents: 300_000,
+  depositPercent: 50,
+  depositRequiredCents: 150_000,
+  depositInvoiceId: "invoice-1",
+  depositPaid: true,
+  checkpointId: "checkpoint-1",
+  coveredRoomIds: ["room-1"],
+  executedAt: "2026-08-01T00:00:00Z",
+  sentAt: "2026-07-30T00:00:00Z",
+  proposalSendDispatchId: "dispatch-1",
+  supersededByNumber: null,
+  itemCount: 2,
+  items: [
+    {
+      id: "item-1",
+      sourceFfeItemId: "ffe-1",
+      projectRoomId: "room-1",
+      roomName: "Bedroom",
+      name: "Pendant light",
+      quantity: 2,
+      clientUnitPriceCents: 100_000,
+      clientLineTotalCents: 200_000,
+      itemType: "lighting",
+      sortOrder: 0,
+    },
+    {
+      id: "item-2",
+      sourceFfeItemId: "ffe-2",
+      projectRoomId: "room-1",
+      roomName: "Bedroom",
+      name: "Table lamp",
+      quantity: 1,
+      clientUnitPriceCents: 100_000,
+      clientLineTotalCents: 100_000,
+      itemType: "lighting",
+      sortOrder: 1,
+    },
+  ],
+};
+
+describe("AuthorizationDetail", () => {
+  beforeEach(() => {
+    sendAuthorization.mockReset();
+    mockDrift = { data: new Map(), isLoading: false };
+  });
+
+  it("renders nothing when there is no instrument to show", () => {
+    const { container } = render(
+      <AuthorizationDetail
+        projectId="project-1"
+        instrument={null}
+        open={false}
+        onClose={jest.fn()}
+      />,
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("renders the figure band: authorized / deposit due / deposit paid / lines PO-ready", () => {
+    render(
+      <AuthorizationDetail
+        projectId="project-1"
+        instrument={baseInstrument}
+        open
+        onClose={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText("authorized")).toBeVisible();
+    expect(screen.getByText("$3,000")).toBeVisible();
+    expect(screen.getByText("deposit due")).toBeVisible();
+    expect(screen.getByText("$1,500")).toBeVisible();
+    expect(screen.getByText("deposit paid")).toBeVisible();
+    expect(screen.getByText("Yes")).toBeVisible();
+    expect(screen.getByText("lines PO-ready")).toBeVisible();
+    // executed → both items are PO-ready
+    expect(screen.getByText("lines PO-ready").nextSibling).toHaveTextContent("2");
+  });
+
+  it("counts zero lines PO-ready before the authorization is executed", () => {
+    render(
+      <AuthorizationDetail
+        projectId="project-1"
+        instrument={{ ...baseInstrument, state: "sent" }}
+        open
+        onClose={jest.fn()}
+      />,
+    );
+    expect(screen.getByText("lines PO-ready").nextSibling).toHaveTextContent("0");
+  });
+
+  it("groups the what-was-signed table by room and shows the deposit invoice line, never a raw id", () => {
+    render(
+      <AuthorizationDetail
+        projectId="project-1"
+        instrument={baseInstrument}
+        open
+        onClose={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Bedroom")).toBeVisible();
+    expect(screen.getByText("Pendant light")).toBeVisible();
+    expect(screen.getByText("Table lamp")).toBeVisible();
+    expect(screen.getByText(/deposit invoice on file/i)).toBeVisible();
+    expect(screen.getByText(/linked to a budget checkpoint/i)).toBeVisible();
+    expect(screen.queryByText(/invoice-1/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/checkpoint-1/)).not.toBeInTheDocument();
+  });
+
+  it("shows an up delta glyph when the schedule's current total exceeds what was signed", () => {
+    mockDrift = {
+      data: new Map([
+        ["ffe-1", { ffeItemId: "ffe-1", currentLineTotalCents: 250_000, currentStatus: "specified" }],
+      ]),
+      isLoading: false,
+    };
+    render(
+      <AuthorizationDetail
+        projectId="project-1"
+        instrument={baseInstrument}
+        open
+        onClose={jest.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByLabelText(/schedule now reads \$500 higher/i),
+    ).toBeVisible();
+  });
+
+  it("shows a down delta glyph when the schedule's current total is lower than what was signed", () => {
+    mockDrift = {
+      data: new Map([
+        ["ffe-2", { ffeItemId: "ffe-2", currentLineTotalCents: 80_000, currentStatus: "specified" }],
+      ]),
+      isLoading: false,
+    };
+    render(
+      <AuthorizationDetail
+        projectId="project-1"
+        instrument={baseInstrument}
+        open
+        onClose={jest.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByLabelText(/schedule now reads \$200 lower/i),
+    ).toBeVisible();
+  });
+
+  it("renders no glyph for an item with no drift-comparable schedule row", () => {
+    render(
+      <AuthorizationDetail
+        projectId="project-1"
+        instrument={baseInstrument}
+        open
+        onClose={jest.fn()}
+      />,
+    );
+    expect(screen.queryByLabelText(/schedule now reads/i)).not.toBeInTheDocument();
+  });
+
+  it("offers Send for signature only while the authorization is a draft", () => {
+    const { rerender } = render(
+      <AuthorizationDetail
+        projectId="project-1"
+        instrument={{ ...baseInstrument, state: "draft" }}
+        open
+        onClose={jest.fn()}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Send for signature" })).toBeVisible();
+
+    rerender(
+      <AuthorizationDetail
+        projectId="project-1"
+        instrument={baseInstrument}
+        open
+        onClose={jest.fn()}
+      />,
+    );
+    expect(
+      screen.queryByRole("button", { name: "Send for signature" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders the Void act only while draft or sent — voiding an executed, declined, or superseded instrument is refused server-side", () => {
+    const { rerender } = render(
+      <AuthorizationDetail
+        projectId="project-1"
+        instrument={{ ...baseInstrument, state: "sent" }}
+        open
+        onClose={jest.fn()}
+      />,
+    );
+    expect(screen.getByTestId("void-act")).toHaveTextContent("№ 2");
+
+    for (const state of ["executed", "declined", "superseded"] as const) {
+      rerender(
+        <AuthorizationDetail
+          projectId="project-1"
+          instrument={{ ...baseInstrument, state }}
+          open
+          onClose={jest.fn()}
+        />,
+      );
+      expect(screen.queryByTestId("void-act")).not.toBeInTheDocument();
+    }
+  });
+});

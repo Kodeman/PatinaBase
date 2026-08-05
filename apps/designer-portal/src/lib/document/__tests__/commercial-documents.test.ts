@@ -35,6 +35,7 @@ const terms: ServiceAgreementTerms = {
   terms: "Actual time is billed up to the authorization ceiling.",
   currentRateVersion: 1,
   updatedAt: "2026-08-03T12:00:00.000Z",
+  furnishingsDepositPercent: 25,
 };
 
 const rates: ServiceRate[] = [
@@ -74,7 +75,7 @@ describe("service agreement send readiness", () => {
         rates,
         recipientEmail: "sarah@example.com",
       }),
-    ).toEqual({ ready: true, blockers: [] });
+    ).toEqual({ ready: true, blockers: [], notes: [] });
 
     const result = assessServiceAgreementReadiness({
       document,
@@ -104,6 +105,52 @@ describe("service agreement send readiness", () => {
     );
   });
 
+  it("treats a zero furnishings deposit percent as valid, but rejects an out-of-range one", () => {
+    expect(
+      assessServiceAgreementReadiness({
+        document,
+        terms: { ...terms, furnishingsDepositPercent: 0 },
+        rates,
+        recipientEmail: "sarah@example.com",
+      }).ready,
+    ).toBe(true);
+
+    expect(
+      assessServiceAgreementReadiness({
+        document,
+        terms: { ...terms, furnishingsDepositPercent: 150 },
+        rates,
+        recipientEmail: "sarah@example.com",
+      }).blockers,
+    ).toContain(
+      "Set the furnishings deposit percent, including zero when none is due.",
+    );
+  });
+
+  it("notes an unset furnishings deposit percent as advisory, never a blocker — it is nullable by design and the release RPC defaults to 50%", () => {
+    const result = assessServiceAgreementReadiness({
+      document,
+      terms: { ...terms, furnishingsDepositPercent: null },
+      rates,
+      recipientEmail: "sarah@example.com",
+    });
+    expect(result.ready).toBe(true);
+    expect(result.blockers).toEqual([]);
+    expect(result.notes).toContain(
+      "No furnishings deposit set — authorizations will default to 50%.",
+    );
+  });
+
+  it("adds no deposit note at all when terms have not loaded (already covered by its own blockers)", () => {
+    const result = assessServiceAgreementReadiness({
+      document,
+      terms: null,
+      rates,
+      recipientEmail: "sarah@example.com",
+    });
+    expect(result.notes).toEqual([]);
+  });
+
   it("allows a draft services addendum through the existing agreement review", () => {
     expect(
       assessServiceAgreementReadiness({
@@ -112,7 +159,7 @@ describe("service agreement send readiness", () => {
         rates,
         recipientEmail: "sarah@example.com",
       }),
-    ).toEqual({ ready: true, blockers: [] });
+    ).toEqual({ ready: true, blockers: [], notes: [] });
   });
 });
 

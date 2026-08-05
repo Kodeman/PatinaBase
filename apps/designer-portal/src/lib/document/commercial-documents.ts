@@ -57,6 +57,13 @@ export interface ServiceAgreementTerms {
   terms: string;
   currentRateVersion: number;
   updatedAt: string | null;
+  /** R8: the deposit percent the studio commits to on EACH furnishings
+   *  authorization released under this agreement (0–100). A term of the
+   *  design services agreement, not of any one authorization — chips in the
+   *  drafting room offer 0/25/50/100/other. Nullable by design — the studio
+   *  may leave it unset, and create_furnishings_authorization_from_schedule
+   *  (00422) falls back to a 50% house default at release time. */
+  furnishingsDepositPercent: number | null;
 }
 
 export interface ServiceRate {
@@ -94,6 +101,10 @@ export interface ProjectBillingAuthority {
   activeRateVersion: number;
   billingThrough: string | null;
   rates: ServiceRate[];
+  /** R8: the executed agreement's furnishings deposit term, carried onto the
+   *  authority so a new release can default to it. Null until the server
+   *  adds it to get_project_authority_summary's envelope. */
+  furnishingsDepositPercent: number | null;
 }
 
 export interface CountersignDesignServicesResult {
@@ -129,6 +140,8 @@ export function commercialDocumentExperience(
 export interface ServiceAgreementReadiness {
   ready: boolean;
   blockers: string[];
+  /** Advisory only — never gates "ready". */
+  notes: string[];
 }
 
 export function assessServiceAgreementReadiness({
@@ -143,6 +156,7 @@ export function assessServiceAgreementReadiness({
   recipientEmail: string | null | undefined;
 }): ServiceAgreementReadiness {
   const blockers: string[] = [];
+  const notes: string[] = [];
 
   if (
     document.kind !== "design_services" &&
@@ -193,6 +207,24 @@ export function assessServiceAgreementReadiness({
   if (!terms?.retainerActivationPolicy) {
     blockers.push("Choose when the agreement becomes active.");
   }
+  // Nullable by design (00422) — unset is not a defect, it's a decision the
+  // studio hasn't made yet, and the release RPC falls back to 50% on its
+  // own. Only a value that IS present and out of bounds blocks the send.
+  if (terms && terms.furnishingsDepositPercent !== null) {
+    if (
+      !Number.isFinite(terms.furnishingsDepositPercent) ||
+      terms.furnishingsDepositPercent < 0 ||
+      terms.furnishingsDepositPercent > 100
+    ) {
+      blockers.push(
+        "Set the furnishings deposit percent, including zero when none is due.",
+      );
+    }
+  } else if (terms) {
+    notes.push(
+      "No furnishings deposit set — authorizations will default to 50%.",
+    );
+  }
   if (!terms?.billingCadence) {
     blockers.push("Choose a billing cadence.");
   }
@@ -203,7 +235,7 @@ export function assessServiceAgreementReadiness({
     blockers.push("Link a client with an email address.");
   }
 
-  return { ready: blockers.length === 0, blockers };
+  return { ready: blockers.length === 0, blockers, notes };
 }
 
 /** The exact, allowlisted client-facing service agreement model. */
@@ -220,6 +252,7 @@ export interface ServiceAgreementPreview {
   billingCadence: BillingCadence;
   currency: string;
   terms: string;
+  furnishingsDepositPercent: number | null;
   rates: Array<{ roleName: string; hourlyRateCents: number }>;
   signatures: Array<{
     party: "client" | "studio";
@@ -252,6 +285,7 @@ export function buildServiceAgreementPreview({
     billingCadence: terms.billingCadence,
     currency: terms.currency,
     terms: terms.terms,
+    furnishingsDepositPercent: terms.furnishingsDepositPercent,
     rates: rates
       .filter((rate) => rate.roleName.trim() && rate.hourlyRateCents > 0)
       .map((rate) => ({

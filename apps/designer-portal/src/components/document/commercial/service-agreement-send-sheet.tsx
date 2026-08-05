@@ -87,6 +87,29 @@ export function ServiceAgreementSendSheet({
           </p>
         </div>
 
+        {terms && (
+          <div className="mt-3 rounded-[4px] border border-[var(--doc-ink-border)] px-4 py-3">
+            <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+              Furnishings deposit
+            </p>
+            <p className="mt-1 text-[12.5px] text-[var(--color-charcoal)]">
+              {terms.furnishingsDepositPercent === null
+                ? "No furnishings deposit set — authorizations will default to 50%."
+                : `Furnishings deposit · ${terms.furnishingsDepositPercent}% on each authorization`}
+            </p>
+          </div>
+        )}
+
+        {readiness.notes.length > 0 && (
+          <div className="mt-3 border-l-2 border-[var(--color-golden-hour)] pl-3">
+            <ul className="space-y-1 text-[11.5px] text-[var(--color-mocha)]">
+              {readiness.notes.map((note) => (
+                <li key={note}>{note}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {readiness.ready ? (
           <p className="mt-4 border-l-2 border-[var(--color-sage)] pl-3 text-[12px] text-[var(--color-mocha)]">
             Ready to send · every contractual facet is present.

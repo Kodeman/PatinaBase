@@ -74,7 +74,8 @@ export function ProposalBlocksReadOnly({ proposalId }: { proposalId: string }) {
   if (experience === 'commercial_readonly') {
     return (
       <p className="py-3 text-[11.5px] text-[var(--text-muted)]">
-        This commercial edition is read-only in Wave 1.
+        This furnishings authorization opens from the Authorizations Ledger —
+        it doesn&rsquo;t unfold here.
       </p>
     );
   }

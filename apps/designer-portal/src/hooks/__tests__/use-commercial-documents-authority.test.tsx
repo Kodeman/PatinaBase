@@ -57,6 +57,19 @@ describe("project billing authority RPC adapter", () => {
     });
     expect(result).not.toHaveProperty("activitySummaries");
     expect(JSON.stringify(result)).not.toContain("internal activity");
+    // R8: never fabricated — absent from the payload means null, not 0.
+    expect(result?.furnishingsDepositPercent).toBeNull();
+  });
+
+  it("reads the furnishings deposit percent once the summary carries it", () => {
+    const result = adaptProjectBillingAuthority({
+      id: "authority-1",
+      projectId: "project-1",
+      agreementId: "agreement-1",
+      state: "active",
+      furnishings_deposit_percent: 50,
+    });
+    expect(result?.furnishingsDepositPercent).toBe(50);
   });
 
   it("fails closed on an unknown authority state", () => {

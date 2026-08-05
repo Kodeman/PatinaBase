@@ -37,8 +37,11 @@ function emptyTerms(proposalId: string): ServiceAgreementTerms {
     terms: "",
     currentRateVersion: 1,
     updatedAt: null,
+    furnishingsDepositPercent: null,
   };
 }
+
+const DEPOSIT_CHIPS = [0, 25, 50, 100] as const;
 
 const dollars = (cents: number) => (cents / 100).toString();
 const cents = (value: string) => {
@@ -355,19 +358,78 @@ function ServiceAgreementEditor({
               title="Rates & ceiling"
               hint="Actual time may accrue, but invoicing cannot cross this signed ceiling."
             >
-              <label className={labelClass}>
-                Design authorization ceiling · dollars
-                <Input
-                  className="mt-2"
-                  inputMode="decimal"
-                  value={dollars(terms.billingCeilingCents)}
-                  onChange={(event) =>
-                    changeTerms({
-                      billingCeilingCents: cents(event.target.value),
-                    })
-                  }
-                />
-              </label>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className={labelClass}>
+                  Design authorization ceiling · dollars
+                  <Input
+                    className="mt-2"
+                    inputMode="decimal"
+                    value={dollars(terms.billingCeilingCents)}
+                    onChange={(event) =>
+                      changeTerms({
+                        billingCeilingCents: cents(event.target.value),
+                      })
+                    }
+                  />
+                </label>
+                <div className={labelClass}>
+                  Furnishings deposit · on each authorization
+                  <div className="mt-2 flex flex-wrap items-center gap-2 normal-case tracking-normal">
+                    {DEPOSIT_CHIPS.map((chip) => (
+                      <button
+                        key={chip}
+                        type="button"
+                        onClick={() =>
+                          changeTerms({ furnishingsDepositPercent: chip })
+                        }
+                        aria-pressed={terms.furnishingsDepositPercent === chip}
+                        className={`rounded-[3px] border px-3 py-1.5 text-[12px] transition-colors ${
+                          terms.furnishingsDepositPercent === chip
+                            ? "border-[var(--color-clay)] bg-[var(--color-clay)] text-white"
+                            : "border-[var(--doc-ink-border)] text-[var(--color-charcoal)] hover:border-[var(--color-clay)]"
+                        }`}
+                      >
+                        {chip}%
+                      </button>
+                    ))}
+                    <label className="flex items-center gap-1.5 text-[12px] text-[var(--color-charcoal)]">
+                      <span>Other</span>
+                      <Input
+                        className="w-20"
+                        inputMode="numeric"
+                        aria-label="Other furnishings deposit percent"
+                        value={
+                          terms.furnishingsDepositPercent === null ||
+                          DEPOSIT_CHIPS.includes(
+                            terms.furnishingsDepositPercent as (typeof DEPOSIT_CHIPS)[number],
+                          )
+                            ? ""
+                            : String(terms.furnishingsDepositPercent)
+                        }
+                        onChange={(event) => {
+                          if (event.target.value.trim() === "") {
+                            changeTerms({ furnishingsDepositPercent: null });
+                            return;
+                          }
+                          const parsed = Number(event.target.value);
+                          changeTerms({
+                            furnishingsDepositPercent: Number.isFinite(parsed)
+                              ? Math.min(100, Math.max(0, Math.round(parsed)))
+                              : null,
+                          });
+                        }}
+                        placeholder="Unset · defaults to 50%"
+                      />
+                    </label>
+                  </div>
+                  {terms.furnishingsDepositPercent === null && (
+                    <p className="mt-1.5 text-[10.5px] normal-case tracking-normal text-[var(--text-muted)]">
+                      No furnishings deposit set — authorizations will
+                      default to 50%.
+                    </p>
+                  )}
+                </div>
+              </div>
             </AgreementFacet>
 
             <AgreementFacet

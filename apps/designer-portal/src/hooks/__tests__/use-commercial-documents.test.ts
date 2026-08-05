@@ -1,6 +1,7 @@
 const rpc = jest.fn();
 const invoke = jest.fn();
 const invalidateQueries = jest.fn();
+const fromMock = jest.fn();
 
 jest.mock('@patina/supabase', () => ({
   commercialKeys: {
@@ -9,8 +10,9 @@ jest.mock('@patina/supabase', () => ({
     authority: (id: string) => ['project-authority', id],
     budget: (id: string) => ['working-budget', id],
     waves: (id: string) => ['furnishings-authorizations', id],
+    instruments: (id: string) => ['furnishings-authorizations', id],
   },
-  createBrowserClient: () => ({ rpc, functions: { invoke } }),
+  createBrowserClient: () => ({ rpc, functions: { invoke }, from: fromMock }),
 }));
 
 jest.mock('@tanstack/react-query', () => ({
@@ -21,12 +23,14 @@ jest.mock('@tanstack/react-query', () => ({
 
 import {
   useCountersignDesignServicesAgreement,
-  useCreateFurnishingDraft,
-  useCreateFurnishingsAuthorization,
+  useDeriveWorkingBudget,
   useOverrideBudgetCheckpoint,
   usePublishBudgetCheckpoint,
+  useReleaseForAuthorization,
   useReplayCommercialNotification,
   useSendFurnishingsAuthorization,
+  useSetBudgetTargets,
+  useVoidAuthorization,
 } from '../use-commercial-documents';
 
 describe('designer commercial document hooks', () => {
@@ -34,6 +38,7 @@ describe('designer commercial document hooks', () => {
     rpc.mockReset();
     invoke.mockReset();
     invalidateQueries.mockReset();
+    fromMock.mockReset();
   });
 
   it('accepts the canonical camelCase countersign receipt and notifies once', async () => {
@@ -221,33 +226,46 @@ describe('designer commercial document hooks', () => {
     });
   });
 
-  it('creates a project-bound furnishing draft and invalidates project commerce + proposals', async () => {
+  it('releases FF&E schedule items into a fresh authorization and invalidates project commerce + the schedule', async () => {
     rpc.mockResolvedValue({
-      data: { proposalId: 'furnishing-draft-1', projectId: 'project-1' },
+      data: {
+        proposalId: 'authorization-1',
+        documentId: 'authorization-doc-1',
+        itemCount: 2,
+      },
       error: null,
     });
-    const mutation = useCreateFurnishingDraft('project-1') as unknown as {
-      mutationFn: (
-        title: string
-      ) => Promise<{ proposalId: string; projectId: string }>;
-      onSuccess: (result: {
-        proposalId: string;
-        projectId: string;
-      }) => void | Promise<void>;
+    const mutation = useReleaseForAuthorization('project-1') as unknown as {
+      mutationFn: (input: {
+        name: string;
+        ffeItemIds: string[];
+        depositPercent?: number;
+      }) => Promise<{ proposalId: string; documentId: string; itemCount: number }>;
+      onSuccess: () => void | Promise<void>;
     };
 
-    const result = await mutation.mutationFn('Furnishing selection');
-
-    expect(rpc).toHaveBeenCalledWith('create_furnishing_wave_draft', {
-      p_project_id: 'project-1',
-      p_title: 'Furnishing selection',
+    const result = await mutation.mutationFn({
+      name: 'Living Room Essentials',
+      ffeItemIds: ['ffe-1', 'ffe-2'],
+      depositPercent: 50,
     });
+
+    expect(rpc).toHaveBeenCalledWith(
+      'create_furnishings_authorization_from_schedule',
+      {
+        p_project_id: 'project-1',
+        p_name: 'Living Room Essentials',
+        p_ffe_item_ids: ['ffe-1', 'ffe-2'],
+        p_deposit_percent: 50,
+      },
+    );
     expect(result).toEqual({
-      proposalId: 'furnishing-draft-1',
-      projectId: 'project-1',
+      proposalId: 'authorization-1',
+      documentId: 'authorization-doc-1',
+      itemCount: 2,
     });
 
-    await mutation.onSuccess(result);
+    await mutation.onSuccess();
 
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ['working-budget', 'project-1'],
@@ -262,51 +280,119 @@ describe('designer commercial document hooks', () => {
       queryKey: ['project-v2', 'project-1'],
     });
     expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ['proposals'],
+      queryKey: ['project-ffe-items', 'project-1'],
     });
   });
 
-  it('trims the title before minting the furnishing draft rpc call', async () => {
-    rpc.mockResolvedValue({
-      data: { proposalId: 'furnishing-draft-2', projectId: 'project-1' },
-      error: null,
-    });
-    const mutation = useCreateFurnishingDraft('project-1') as unknown as {
-      mutationFn: (title: string) => Promise<unknown>;
+  it('rejects releasing for authorization with no chosen schedule items', async () => {
+    const mutation = useReleaseForAuthorization('project-1') as unknown as {
+      mutationFn: (input: {
+        name: string;
+        ffeItemIds: string[];
+      }) => Promise<unknown>;
     };
 
-    await mutation.mutationFn('  Furnishing selection  ');
+    await expect(
+      mutation.mutationFn({ name: 'Living Room Essentials', ffeItemIds: [] }),
+    ).rejects.toThrow('Choose at least one schedule item');
+    expect(rpc).not.toHaveBeenCalled();
+  });
 
-    expect(rpc).toHaveBeenCalledWith('create_furnishing_wave_draft', {
-      p_project_id: 'project-1',
-      p_title: 'Furnishing selection',
+  it('requires a meaningful reason to void an authorization, then invalidates the schedule too', async () => {
+    rpc.mockResolvedValue({ data: { voided: true }, error: null });
+    const mutation = useVoidAuthorization('project-1') as unknown as {
+      mutationFn: (input: {
+        proposalId: string;
+        reason: string;
+      }) => Promise<unknown>;
+      onSuccess: () => void | Promise<void>;
+    };
+
+    await expect(
+      mutation.mutationFn({ proposalId: 'authorization-1', reason: 'no' }),
+    ).rejects.toThrow('meaningful reason');
+    expect(rpc).not.toHaveBeenCalled();
+
+    await mutation.mutationFn({
+      proposalId: 'authorization-1',
+      reason: 'Client requested fewer pieces on the call.',
+    });
+    expect(rpc).toHaveBeenCalledWith('void_furnishings_authorization', {
+      p_proposal_id: 'authorization-1',
+      p_reason: 'Client requested fewer pieces on the call.',
+    });
+
+    await mutation.onSuccess();
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['furnishings-authorizations', 'project-1'],
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['project-ffe-items', 'project-1'],
     });
   });
 
-  it('creates a draft wave without notifying the client', async () => {
-    rpc.mockResolvedValue({
-      data: {
-        proposalId: 'wave-proposal-1',
-        documentId: 'wave-document-1',
-        commercialState: 'draft',
-      },
-      error: null,
+  it('derives a fresh working-budget draft from the live schedule', async () => {
+    rpc.mockResolvedValue({ data: { versionId: 'version-2' }, error: null });
+    const mutation = useDeriveWorkingBudget('project-1') as unknown as {
+      mutationFn: () => Promise<unknown>;
+      onSuccess: () => void | Promise<void>;
+    };
+
+    await mutation.mutationFn();
+    expect(rpc).toHaveBeenCalledWith('derive_working_budget_draft', {
+      p_project_id: 'project-1',
     });
-    const mutation = useCreateFurnishingsAuthorization('project-1') as unknown as {
-      mutationFn: (input: { waveName: string; sourceProposalId: string }) => Promise<unknown>;
+
+    await mutation.onSuccess();
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['working-budget', 'project-1'],
+    });
+  });
+
+  it('writes a single target cell directly onto the draft version\'s own rows', async () => {
+    const eq2 = jest.fn().mockResolvedValue({ error: null });
+    const eq1 = jest.fn(() => ({ eq: eq2 }));
+    const update = jest.fn(() => ({ eq: eq1 }));
+    fromMock.mockReturnValue({ update });
+    rpc.mockResolvedValue({ data: { version: { id: 'version-1' } }, error: null });
+
+    const mutation = useSetBudgetTargets('project-1') as unknown as {
+      mutationFn: (input: {
+        versionId: string;
+        lineId: string;
+        targetCents: number;
+      }) => Promise<unknown>;
     };
 
     await mutation.mutationFn({
-      waveName: 'Living Room Essentials',
-      sourceProposalId: 'source-proposal-1',
+      versionId: 'version-1',
+      lineId: 'line-1',
+      targetCents: 150_000,
     });
 
-    expect(rpc).toHaveBeenCalledWith('create_furnishings_authorization', {
-      p_project_id: 'project-1',
-      p_wave_name: 'Living Room Essentials',
-      p_source_proposal_id: 'source-proposal-1',
-    });
-    expect(invoke).not.toHaveBeenCalled();
+    expect(fromMock).toHaveBeenCalledWith('project_budget_lines');
+    expect(update).toHaveBeenCalledWith({ target_cents: 150_000 });
+    expect(eq1).toHaveBeenCalledWith('id', 'line-1');
+    expect(eq2).toHaveBeenCalledWith('budget_version_id', 'version-1');
+  });
+
+  it('rejects a negative budget target before writing anything', async () => {
+    const mutation = useSetBudgetTargets('project-1') as unknown as {
+      mutationFn: (input: {
+        versionId: string;
+        lineId: string;
+        targetCents: number;
+      }) => Promise<unknown>;
+    };
+
+    await expect(
+      mutation.mutationFn({
+        versionId: 'version-1',
+        lineId: 'line-1',
+        targetCents: -1,
+      }),
+    ).rejects.toThrow('zero or more');
+    expect(fromMock).not.toHaveBeenCalled();
   });
 
   it('uses proposal-send as the single client delivery for a sent wave', async () => {

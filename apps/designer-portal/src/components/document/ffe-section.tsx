@@ -21,6 +21,13 @@
  * its 00187 coverage truth (invoiced · N° / paid / unpriced) as a quiet
  * mono note under the maker line. (The per-line Bill act rides the line
  * unfold — Track 11-M's surface — wired post-merge.)
+ *
+ * The Authorized Schedule (Act III): the schedule gains a SECOND STAMP —
+ * where a piece is in the world stays on the left, whether the client has
+ * agreed to buy it reads on the right. The head act turns the same table into
+ * a selection surface: ticks on lines and rooms, reasons (never refusals) on
+ * the lines that cannot go, and a composition bar underneath that counts what
+ * is held. Nothing is created until the review sheet commits.
  */
 
 import Link from 'next/link';
@@ -33,11 +40,24 @@ import { openInvoiceComposer } from './accounts/invoice-overlays';
 import { MobileMarginChips } from './mobile/mobile-margin-chips';
 import { STAGE_CONFIG } from '@/components/portal/ffe/stages';
 import type { FFEStageKey } from '@patina/types';
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   deriveLineStamp,
   type LineStamp,
 } from '@/lib/document/stamp-derivation';
+import {
+  buildInstrumentIndex,
+  deriveLineAuthorization,
+  eligibility,
+  releaseSummary,
+  scheduledContributionCents,
+  signableCents,
+  type InstrumentLike,
+  type LineAuthorization,
+  type LineEligibility,
+  type ReleaseLine,
+  type RoomTriState,
+} from '@/lib/document/authorization-derivation';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { Stamp } from './stamp';
 import { LineUnfold } from './line-unfold';
@@ -49,6 +69,18 @@ import {
   useAddDocumentRoom,
   useDocumentRooms,
 } from '@/hooks/use-document-rooms';
+import {
+  useProjectBillingAuthority,
+  useProjectInstruments,
+} from '@/hooks/use-commercial-documents';
+import { AuthorizationStamp } from './schedule/authorization-stamp';
+import { AddLineSheet } from './schedule/add-line-sheet';
+import { CompositionBar } from './schedule/composition-bar';
+import { ReviewReleaseSheet } from './schedule/review-release-sheet';
+import {
+  ReleaseCeremonyProvider,
+  useReleaseCeremony,
+} from './schedule/release-ceremony-context';
 import type { SectionKey } from '@/lib/document/desk-derivation';
 import { DocumentAction } from './document-action';
 
@@ -60,6 +92,13 @@ const STAGE_INK: Partial<Record<FFEStageKey, string>> = {
   delivered: '#85947C',
   installed: '#85947C',
 };
+
+/** The authority states that can still put work in front of a client. */
+const RELEASING_AUTHORITY = new Set([
+  'active',
+  'retainer_pending',
+  'exhausted',
+]);
 
 function stampProps(stamp: LineStamp): {
   label: string;
@@ -131,6 +170,8 @@ function vendorLine(item: FFERow, stamp: LineStamp, showRoom = false): string {
 interface LineRow {
   item: FFERow;
   stamp: LineStamp;
+  auth: LineAuthorization;
+  eligible: LineEligibility;
 }
 
 /** R76 — the line's billing truth (00187), a quiet mono note: SAGE paid,
@@ -153,9 +194,37 @@ function coverageNote(
   return null;
 }
 
+/** A tick that can hold three answers — none, some, all of a room. */
+function TriStateTick({
+  state,
+  label,
+  onChange,
+}: {
+  state: RoomTriState;
+  label: string;
+  onChange: (next: boolean) => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = state === 'some';
+  }, [state]);
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      aria-label={label}
+      checked={state === 'all'}
+      onChange={(event) => onChange(event.target.checked)}
+      className="h-3.5 w-3.5 shrink-0 accent-[var(--color-clay)]"
+    />
+  );
+}
+
 function FFELine({
   item,
   stamp,
+  auth,
+  eligible,
   projectId,
   projectName,
   highlightId,
@@ -164,6 +233,12 @@ function FFELine({
   onAddNote,
   showRoom = false,
   coverage,
+  showAuthorization,
+  isCommercialOrigin,
+  selecting,
+  selected,
+  onSelectToggle,
+  onIncludeInRelease,
 }: LineRow & {
   projectId: string;
   projectName: string;
@@ -173,55 +248,106 @@ function FFELine({
   onAddNote: (lineId: string) => void;
   showRoom?: boolean;
   coverage?: FfeItemCoverage;
+  showAuthorization: boolean;
+  isCommercialOrigin: boolean;
+  selecting: boolean;
+  selected: boolean;
+  onSelectToggle: () => void;
+  onIncludeInRelease: () => void;
 }) {
   const sp = stampProps(stamp);
   const line = vendorLine(item, stamp, showRoom);
   const billing = coverageNote(item, coverage);
+  const price =
+    item.line_total_cents != null ? fmtUsd(item.line_total_cents) : '—';
+
+  const body = (
+    <>
+      <div>
+        <p className="text-[12.5px] font-medium leading-snug text-[var(--color-charcoal)]">
+          {item.name}
+          {item.quantity > 1 ? ` · ×${item.quantity}` : ''}
+        </p>
+        {line && (
+          <p className="mt-px text-[10.5px] text-[var(--text-muted)]">{line}</p>
+        )}
+        {/* R76: the coverage stamp — the 00187 bridge's per-line truth. */}
+        {billing && (
+          <p
+            className="mt-px font-mono text-[8px] uppercase tracking-[0.08em]"
+            style={{ color: billing.color }}
+          >
+            {billing.text}
+          </p>
+        )}
+        {/* R38: the quiet, honest footprint of a piece the Engine placed. */}
+        {item.added_via === 'engine' && (
+          <p className="mt-px font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-clay)] opacity-70">
+            via the Engine
+          </p>
+        )}
+      </div>
+      {/* Ineligibility is a reason, not a refusal — lowercase mono, exactly
+          where the logistics stamp sits. */}
+      {selecting && !eligible.eligible ? (
+        <span className="whitespace-nowrap font-mono text-[9px] lowercase tracking-[0.04em] text-[var(--text-muted)]">
+          {eligible.reason}
+        </span>
+      ) : (
+        <Stamp label={sp.label} color={sp.color} ink={sp.ink} />
+      )}
+      {showAuthorization && <AuthorizationStamp auth={auth} />}
+      <span className="whitespace-nowrap text-right font-heading text-[13px] font-medium text-[var(--color-charcoal)]">
+        {price}
+      </span>
+    </>
+  );
+
+  const gridClass = `grid w-full items-center gap-3 px-2 py-2.5 text-left transition-colors duration-150 ${
+    selecting
+      ? showAuthorization
+        ? 'grid-cols-[auto_1fr_auto_auto_auto]'
+        : 'grid-cols-[auto_1fr_auto_auto]'
+      : showAuthorization
+        ? 'grid-cols-[1fr_auto_auto_auto]'
+        : 'grid-cols-[1fr_auto_auto]'
+  } ${
+    item.id === highlightId
+      ? 'bg-[rgba(196,165,123,0.08)]'
+      : stamp.kind === 'decision_due'
+        ? 'bg-[rgba(232,197,71,0.05)]'
+        : 'hover:bg-[rgba(196,165,123,0.04)]'
+  }`;
+
   return (
     <li className="border-b border-[var(--color-pearl)]">
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={unfolded}
-        className={`grid w-full grid-cols-[1fr_auto_auto] items-center gap-3 px-2 py-2.5 text-left transition-colors duration-150 ${
-          item.id === highlightId
-            ? 'bg-[rgba(196,165,123,0.08)]'
-            : stamp.kind === 'decision_due'
-              ? 'bg-[rgba(232,197,71,0.05)]'
-              : 'hover:bg-[rgba(196,165,123,0.04)]'
-        }`}
-      >
-        <div>
-          <p className="text-[12.5px] font-medium leading-snug text-[var(--color-charcoal)]">
-            {item.name}
-            {item.quantity > 1 ? ` · ×${item.quantity}` : ''}
-          </p>
-          {line && (
-            <p className="mt-px text-[10.5px] text-[var(--text-muted)]">
-              {line}
-            </p>
-          )}
-          {/* R76: the coverage stamp — the 00187 bridge's per-line truth. */}
-          {billing && (
-            <p
-              className="mt-px font-mono text-[8px] uppercase tracking-[0.08em]"
-              style={{ color: billing.color }}
-            >
-              {billing.text}
-            </p>
-          )}
-          {/* R38: the quiet, honest footprint of a piece the Engine placed. */}
-          {item.added_via === 'engine' && (
-            <p className="mt-px font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-clay)] opacity-70">
-              via the Engine
-            </p>
-          )}
-        </div>
-        <Stamp label={sp.label} color={sp.color} ink={sp.ink} />
-        <span className="whitespace-nowrap text-right font-heading text-[13px] font-medium text-[var(--color-charcoal)]">
-          {item.line_total_cents != null ? fmtUsd(item.line_total_cents) : '—'}
-        </span>
-      </button>
+      {selecting ? (
+        // The whole row is the tick while the schedule is a selection surface.
+        <label
+          className={`${gridClass} ${
+            eligible.eligible ? 'cursor-pointer' : 'cursor-default opacity-70'
+          }`}
+        >
+          <input
+            type="checkbox"
+            checked={selected}
+            disabled={!eligible.eligible}
+            onChange={onSelectToggle}
+            aria-label={`Include ${item.name} in this release`}
+            className="h-3.5 w-3.5 shrink-0 accent-[var(--color-clay)]"
+          />
+          {body}
+        </label>
+      ) : (
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={unfolded}
+          className={gridClass}
+        >
+          {body}
+        </button>
+      )}
       {/* D13: this line's margin items as chips beneath it (mobile). */}
       <MobileMarginChips
         projectId={projectId}
@@ -229,13 +355,16 @@ function FFELine({
         anchorKind="line"
         anchorId={item.id}
       />
-      {unfolded && (
+      {unfolded && !selecting && (
         <LineUnfold
           item={item}
           projectId={projectId}
           projectName={projectName}
           onAddNote={onAddNote}
           onFold={onToggle}
+          auth={auth}
+          isCommercialOrigin={isCommercialOrigin}
+          onIncludeInRelease={onIncludeInRelease}
         />
       )}
     </li>
@@ -250,11 +379,25 @@ function RoomHeading({
   roomId,
   budgetCents,
   rows,
+  showAuthorization,
+  selecting,
+  roomState,
+  onRoomToggle,
+  eligibleCount,
+  selectedCount,
+  onAddLine,
 }: {
   name: string;
   roomId?: string;
   budgetCents: number;
   rows: LineRow[];
+  showAuthorization: boolean;
+  selecting: boolean;
+  roomState: RoomTriState;
+  onRoomToggle: (next: boolean) => void;
+  eligibleCount: number;
+  selectedCount: number;
+  onAddLine?: () => void;
 }) {
   const committed = rows
     .filter((r) => COMMITTED.has(r.stamp.kind))
@@ -268,16 +411,30 @@ function RoomHeading({
         ? 'active'
         : 'future';
 
+  const releasedCents = rows
+    .filter((r) => r.auth.track !== 'none')
+    .reduce((s, r) => s + (r.item.line_total_cents ?? 0), 0);
+  const notYetCents = rows
+    .filter((r) => r.auth.track === 'none')
+    .reduce((s, r) => s + (r.item.line_total_cents ?? 0), 0);
+
   // R33 F5 — one schedule, one vocabulary: rooms speak the section's word.
   // "Placed" retires until it can truthfully mean installed.
-  const meta = [
-    budgetCents > 0
-      ? `committed ${fmtUsd(committed)} of ${fmtUsd(budgetCents)}`
-      : null,
-    rows.length > 0 ? `${underway} of ${rows.length} underway` : 'no lines yet',
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  const meta = selecting
+    ? `${selectedCount} of ${eligibleCount}`
+    : [
+        budgetCents > 0
+          ? `committed ${fmtUsd(committed)} of ${fmtUsd(budgetCents)}`
+          : null,
+        rows.length > 0
+          ? `${underway} of ${rows.length} underway`
+          : 'no lines yet',
+        showAuthorization && rows.length > 0
+          ? `${fmtUsd(releasedCents)} released · ${fmtUsd(notYetCents)} not yet`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(' · ');
 
   return (
     <div
@@ -285,7 +442,15 @@ function RoomHeading({
       className="mt-4 scroll-mt-16"
     >
       <div className="flex items-baseline gap-2.5 pb-1">
-        <StrataMark size="sm" state={state} />
+        {selecting ? (
+          <TriStateTick
+            state={roomState}
+            label={`Include every eligible line in ${name}`}
+            onChange={onRoomToggle}
+          />
+        ) : (
+          <StrataMark size="sm" state={state} />
+        )}
         <h3 className="font-heading text-[13.5px] font-medium italic text-[var(--color-charcoal)]">
           {name}
         </h3>
@@ -295,6 +460,17 @@ function RoomHeading({
       </div>
       {/* The Strata mini-rule divides the room from its lines (HTML §3). */}
       <StrataMiniRule className="mb-0.5 ml-[3px]" />
+      {onAddLine && !selecting && (
+        <DocumentAction
+          actionKey="open-add-schedule-line"
+          surfaceKey="project"
+          regionKey="room-lines"
+          variant="tertiary"
+          onClick={onAddLine}
+        >
+          Add a line
+        </DocumentAction>
+      )}
     </div>
   );
 }
@@ -374,19 +550,7 @@ function AddRoomInline({ projectId }: { projectId: string }) {
   );
 }
 
-export function FFESection({
-  projectId,
-  projectName = '',
-  mode,
-  highlightId = null,
-  onAddNote = () => {},
-  sectionKey = null,
-  clientUserId = null,
-  clientName = '',
-  folioDrop = null,
-  onFolioDropConsumed = () => {},
-  sectionDragOver = false,
-}: {
+interface FFESectionProps {
   projectId: string;
   projectName?: string;
   mode: 'project' | 'install';
@@ -403,8 +567,42 @@ export function FFESection({
   folioDrop?: File[] | null;
   onFolioDropConsumed?: () => void;
   sectionDragOver?: boolean;
-}) {
+}
+
+/**
+ * The schedule, wrapped in its own ceremony. The provider is section-local by
+ * design: releasing is the schedule's act, not the document's.
+ */
+export function FFESection(props: FFESectionProps) {
+  const { data: instruments } = useProjectInstruments(props.projectId) as {
+    data: InstrumentLike[] | undefined;
+  };
+  return (
+    <ReleaseCeremonyProvider instruments={instruments ?? []}>
+      <FFESectionBody {...props} instruments={instruments ?? []} />
+    </ReleaseCeremonyProvider>
+  );
+}
+
+function FFESectionBody({
+  projectId,
+  projectName = '',
+  mode,
+  highlightId = null,
+  onAddNote = () => {},
+  sectionKey = null,
+  clientUserId = null,
+  clientName = '',
+  folioDrop = null,
+  onFolioDropConsumed = () => {},
+  sectionDragOver = false,
+  instruments,
+}: FFESectionProps & { instruments: InstrumentLike[] }) {
   const [openLineId, setOpenLineId] = useState<string | null>(null);
+  const [addLineRoom, setAddLineRoom] = useState<{
+    id: string | null;
+    name: string;
+  } | null>(null);
   const { data: items, isLoading } = useProjectFFEItems(projectId) as {
     data: FFERow[] | undefined;
     isLoading: boolean;
@@ -415,11 +613,34 @@ export function FFESection({
   // R76 — per-line billing truth (00187 bridge). Invalidated by every invoice
   // mutation that moves money, so the stamps stay honest without a poll.
   const { data: coverage } = useFfeInvoiceCoverage(projectId);
+  const authority = useProjectBillingAuthority(projectId);
+  const ceremony = useReleaseCeremony();
 
-  const rows: LineRow[] = (items ?? []).map((item) => ({
-    item,
-    stamp: deriveLineStamp(item),
-  }));
+  const instrumentIndex = useMemo(
+    () => buildInstrumentIndex(instruments),
+    [instruments],
+  );
+
+  // A commercial job is one with an executed agreement behind it. Only there
+  // does authorization gate a purchase order.
+  const isCommercialOrigin = Boolean(authority.data);
+  const showAuthorization =
+    mode === 'project' && (isCommercialOrigin || instruments.length > 0);
+  const canRelease =
+    mode === 'project' &&
+    Boolean(authority.data) &&
+    RELEASING_AUTHORITY.has(String(authority.data?.state ?? ''));
+  const selecting = ceremony?.phase === 'selecting';
+
+  const rows: LineRow[] = (items ?? []).map((item) => {
+    const auth = deriveLineAuthorization(item, instrumentIndex);
+    return {
+      item,
+      stamp: deriveLineStamp(item),
+      auth,
+      eligible: eligibility(item, auth),
+    };
+  });
   const total = rows.length;
   const underway = rows.filter((r) => UNDERWAY.has(r.stamp.kind)).length;
   const installed = rows.filter((r) => r.stamp.kind === 'installed').length;
@@ -432,6 +653,30 @@ export function FFESection({
     const cov = coverage?.[it.id];
     return !cov || cov.coverage === 'uninvoiced';
   });
+
+  const releaseLines: ReleaseLine[] = ceremony
+    ? rows
+        .filter((row) => ceremony.isSelected(row.item.id))
+        .map((row) => ({
+          id: row.item.id,
+          name: row.item.name,
+          roomId: row.item.project_room_id ?? null,
+          roomName: row.item.room?.name ?? 'Throughout',
+          quantity: row.item.quantity ?? 1,
+          // The same predicate that decided eligibility (signableCents):
+          // an allowance signs at its ceiling (budget_max_cents), not its
+          // line total — so the figure a designer reviews here is the
+          // figure that gets released and signed, never a lower one.
+          clientLineTotalCents:
+            signableCents(row.item) ?? row.item.line_total_cents ?? 0,
+        }))
+    : [];
+  // Counted the way publish_budget_checkpoint counts, so the drift read on
+  // the release sheet compares like with like.
+  const currentScheduledCents = rows.reduce(
+    (sum, row) => sum + scheduledContributionCents(row.item),
+    0,
+  );
 
   const meta =
     mode === 'install'
@@ -448,6 +693,9 @@ export function FFESection({
       ? 'Install'
       : 'Project';
 
+  const eligibleIds = (group: LineRow[]) =>
+    group.filter((row) => row.eligible.eligible).map((row) => row.item.id);
+
   const lineProps = (row: LineRow) => ({
     ...row,
     projectId,
@@ -459,7 +707,28 @@ export function FFESection({
     onAddNote,
     showRoom: !groupByRoom,
     coverage: coverage?.[row.item.id],
+    showAuthorization,
+    isCommercialOrigin,
+    selecting: Boolean(selecting),
+    selected: Boolean(ceremony?.isSelected(row.item.id)),
+    onSelectToggle: () => ceremony?.toggleLine(row.item.id),
+    onIncludeInRelease: () => {
+      setOpenLineId(null);
+      ceremony?.begin([row.item.id]);
+    },
   });
+
+  const roomHeadingProps = (group: LineRow[]) => {
+    const ids = eligibleIds(group);
+    return {
+      showAuthorization,
+      selecting: Boolean(selecting),
+      roomState: ceremony?.roomState(ids) ?? ('none' as RoomTriState),
+      onRoomToggle: (next: boolean) => ceremony?.setRoom(ids, next),
+      eligibleCount: ids.length,
+      selectedCount: ids.filter((id) => ceremony?.isSelected(id)).length,
+    };
+  };
 
   // R25 grouping (project mode): rooms in sort order, then Throughout.
   const groupByRoom = mode === 'project' && (rooms ?? []).length > 0;
@@ -477,51 +746,92 @@ export function FFESection({
       )
     : rows;
 
+  const composition = releaseSummary(releaseLines);
+
   return (
     <section>
       <div className="mb-1.5 mt-5 flex items-baseline justify-between gap-3">
         <h2 className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]">
-          {mode === 'install' ? 'Install' : 'Project · FF&E'}
+          {selecting
+            ? 'Choose what to release'
+            : mode === 'install'
+              ? 'Install'
+              : 'Project · FF&E'}
         </h2>
         <span className="flex items-baseline gap-3">
-          {meta && (
+          {!selecting && meta && (
             <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
               {meta}
             </span>
           )}
-          {mode === 'project' && (
-            <Link
-              href={`/doc/${projectId}/spec-book`}
-              className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:text-[var(--color-charcoal)]"
-            >
-              Spec book →
-            </Link>
-          )}
-          {/* R76 — bill the schedule: the composer opens FF&E-prefilled with
-              every uninvoiced priced line ticked (untick there to narrow). */}
-          {billableUninvoiced.length > 0 && (
+          {selecting ? (
             <DocumentAction
-              actionKey="bill-project-ffe"
+              actionKey="put-back-release-ceremony"
               surfaceKey="project"
               regionKey="ffe-head"
-              variant="primary"
-              onClick={() =>
-                openInvoiceComposer({
-                  projectId,
-                  initialFfeItemIds: billableUninvoiced.map(
-                    (it) => it.id as string,
-                  ),
-                })
-              }
+              variant="tertiary"
+              onClick={() => ceremony?.putBack()}
             >
-              Bill {billableUninvoiced.length} uninvoiced
+              Put back · Esc
             </DocumentAction>
+          ) : (
+            <>
+              {mode === 'project' && (
+                <Link
+                  href={`/doc/${projectId}/spec-book`}
+                  className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:text-[var(--color-charcoal)]"
+                >
+                  Spec book →
+                </Link>
+              )}
+              {/* R76 — bill the schedule: the composer opens FF&E-prefilled
+                  with every uninvoiced priced line ticked (untick there to
+                  narrow). */}
+              {billableUninvoiced.length > 0 && (
+                <DocumentAction
+                  actionKey="bill-project-ffe"
+                  surfaceKey="project"
+                  regionKey="ffe-head"
+                  variant={canRelease ? 'secondary' : 'primary'}
+                  onClick={() =>
+                    openInvoiceComposer({
+                      projectId,
+                      initialFfeItemIds: billableUninvoiced.map(
+                        (it) => it.id as string,
+                      ),
+                    })
+                  }
+                >
+                  Bill {billableUninvoiced.length} uninvoiced
+                </DocumentAction>
+              )}
+              {/* The head act is a verb: there is no "new proposal" here,
+                  because there is no new document to make. */}
+              {canRelease && (
+                <DocumentAction
+                  actionKey="release-for-authorization"
+                  surfaceKey="project"
+                  regionKey="ffe-head"
+                  variant="primary"
+                  onClick={() => ceremony?.begin()}
+                >
+                  Release for authorization
+                </DocumentAction>
+              )}
+            </>
           )}
         </span>
       </div>
 
+      {selecting && (
+        <p className="mb-2 text-[11.5px] text-[var(--text-muted)]">
+          Tick the lines the client is being asked to authorize. Prices lock
+          when you release.
+        </p>
+      )}
+
       {/* R23: the quiet work block under the section head. */}
-      {sectionKey && (
+      {sectionKey && !selecting && (
         <WorkBlock
           projectId={projectId}
           sectionKey={sectionKey}
@@ -532,7 +842,7 @@ export function FFESection({
       )}
 
       {/* R24: the section's folio strip — drops on the section land here. */}
-      {sectionKey && (
+      {sectionKey && !selecting && (
         <FolioStrip
           projectId={projectId}
           anchor={{ kind: 'section', sectionKey }}
@@ -563,6 +873,10 @@ export function FFESection({
                 roomId={room.id}
                 budgetCents={room.budget_cents}
                 rows={roomRows}
+                onAddLine={() =>
+                  setAddLineRoom({ id: room.id, name: room.name })
+                }
+                {...roomHeadingProps(roomRows)}
               />
               <ul>
                 {roomRows.map((row) => (
@@ -577,6 +891,10 @@ export function FFESection({
                 name="Throughout · unassigned"
                 budgetCents={0}
                 rows={unassigned}
+                onAddLine={() =>
+                  setAddLineRoom({ id: null, name: 'Throughout' })
+                }
+                {...roomHeadingProps(unassigned)}
               />
               <ul>
                 {unassigned.map((row) => (
@@ -585,7 +903,9 @@ export function FFESection({
               </ul>
             </div>
           )}
-          {mode === 'project' && <AddRoomInline projectId={projectId} />}
+          {mode === 'project' && !selecting && (
+            <AddRoomInline projectId={projectId} />
+          )}
         </>
       ) : (
         <>
@@ -594,8 +914,44 @@ export function FFESection({
               <FFELine key={row.item.id} {...lineProps(row)} />
             ))}
           </ul>
-          {mode === 'project' && <AddRoomInline projectId={projectId} />}
+          {mode === 'project' && !selecting && (
+            <AddRoomInline projectId={projectId} />
+          )}
         </>
+      )}
+
+      {/* The bar counts what is held, under the schedule, while choosing. */}
+      {ceremony && selecting && composition.lineCount > 0 && (
+        <CompositionBar
+          projectId={projectId}
+          lines={releaseLines}
+          onReview={ceremony.review}
+          onPutBack={ceremony.putBack}
+        />
+      )}
+
+      {ceremony && ceremony.phase === 'reviewing' && (
+        <ReviewReleaseSheet
+          open
+          projectId={projectId}
+          projectName={projectName}
+          clientName={clientName}
+          instrumentNumber={ceremony.provisionalNumber}
+          lines={releaseLines}
+          currentScheduledCents={currentScheduledCents}
+          onClose={ceremony.backToSelecting}
+          onReleased={ceremony.putBack}
+        />
+      )}
+
+      {addLineRoom && (
+        <AddLineSheet
+          open
+          projectId={projectId}
+          roomId={addLineRoom.id}
+          roomName={addLineRoom.name}
+          onClose={() => setAddLineRoom(null)}
+        />
       )}
     </section>
   );

@@ -156,6 +156,16 @@ export function ServiceAgreementPreview({
             {cadenceLabel[preview.billingCadence]}
           </p>
         </div>
+        <div className="sm:col-span-2">
+          <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+            Furnishings deposit
+          </p>
+          <p className="mt-1 text-[12.5px] text-[var(--color-charcoal)]">
+            {preview.furnishingsDepositPercent === null
+              ? "No furnishings deposit set — authorizations will default to 50%."
+              : `Furnishings deposit · ${preview.furnishingsDepositPercent}% on each authorization`}
+          </p>
+        </div>
       </section>
 
       <section>
