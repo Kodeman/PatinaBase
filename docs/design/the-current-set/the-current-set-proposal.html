@@ -1,0 +1,2411 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Current Set — Patina</title>
+<style>
+/* THE CURRENT SET — a plan room for Patina.
+
+ Thesis. Patina has learned to version everything except the drawings. Folios
+ chain versions, proposals supersede on send, the Spec Book keeps an immutable
+ issue ledger with checksums and audiences — and the one artifact a trade
+ actually builds from, the sheet set, arrives as a PDF on an email thread with
+ a filename ending in _FINAL2. Nobody owns the pointer to current. This deck
+ draws the plan room that would: sheets, prints, revisions, issues, and
+ transmittals, with one server-held pointer per sheet saying which print is
+ true. Three directions for where that room lives, and a recommendation.
+
+ Fixture. Every mock renders one canonical fictional job — the Whitlock
+ residence, stated in full as a CONTRACT at the top of the body. Same data in
+ every screen; the differences you see are the direction, not the data.
+
+ Lineage. The house shell — tokens, slide machinery, mock scopes, scored ink,
+ stamps, the annotation rail, the compared matrix, the ruling grammar — is
+ inherited from the-single-pane-four-directions.html by way of
+ the-authorized-schedule-proposal.html and the-call-sheet-ui-proposal.html.
+ Deck chrome is drafting ink on bone paper with verdigris, brass, and oxblood.
+ The .doc scope carries the portal's real tokens and draws PROPOSED portal UI;
+ the .exhibit scope carries the deck's own tones and draws the world as it is
+ today, so a drawing of the wound is never mistaken for a drawing of the cure.
+
+ Rules of the house. Self-contained: no external fonts, scripts, images, or
+ requests of any kind, and no embedded data payloads — every picture in this
+ file is drawn in CSS. No shadows anywhere — not one shadow property in the
+ stylesheet: depth is flat stacked-paper
+ offsets, 1px rules, and value contrast. Actions inside mocks are scored ink,
+ never filled buttons. Per-mock CSS is namespaced with a short prefix per
+ slide; shared shell classes are USED, never restyled. */
+
+:root{
+ --paper:#E7E9E3;
+ --paper-2:#F3F4F0;
+ --card:#FBFBF8;
+ --ink:#16202B;
+ --ink-2:#33404E;
+ --slate:#5D6773;
+ --rule:rgba(22,32,43,.14);
+ --rule-2:rgba(22,32,43,.28);
+ --verdigris:#2F6F63;
+ --verdigris-soft:rgba(47,111,99,.10);
+ --brass:#9A6B1F;
+ --brass-soft:rgba(154,107,31,.10);
+ --oxblood:#8A3A32;
+ --oxblood-soft:rgba(138,58,50,.09);
+ --grid:rgba(22,32,43,.045);
+
+ --display:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+ --body:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,Roboto,"Helvetica Neue",Arial,sans-serif;
+ --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+
+@media (prefers-color-scheme: dark){
+ :root[data-theme="auto"]{
+  --paper:#111820; --paper-2:#161E27; --card:#1B252F;
+  --ink:#E6E9E5; --ink-2:#C3CBD2; --slate:#8C98A4;
+  --rule:rgba(230,233,229,.14); --rule-2:rgba(230,233,229,.3);
+  --verdigris:#7CC7B6; --verdigris-soft:rgba(124,199,182,.12);
+  --brass:#D5A24C; --brass-soft:rgba(213,162,76,.12);
+  --oxblood:#DE8478; --oxblood-soft:rgba(222,132,120,.12);
+  --grid:rgba(230,233,229,.04);
+ }
+}
+:root[data-theme="dark"]{
+ --paper:#111820; --paper-2:#161E27; --card:#1B252F;
+ --ink:#E6E9E5; --ink-2:#C3CBD2; --slate:#8C98A4;
+ --rule:rgba(230,233,229,.14); --rule-2:rgba(230,233,229,.3);
+ --verdigris:#7CC7B6; --verdigris-soft:rgba(124,199,182,.12);
+ --brass:#D5A24C; --brass-soft:rgba(213,162,76,.12);
+ --oxblood:#DE8478; --oxblood-soft:rgba(222,132,120,.12);
+ --grid:rgba(230,233,229,.04);
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+html{-webkit-text-size-adjust:100%}
+
+body{
+ background:var(--paper);
+ color:var(--ink);
+ font-family:var(--body);
+ font-size:16px;
+ line-height:1.55;
+ overflow-x:hidden;
+ background-image:
+  linear-gradient(var(--grid) 1px, transparent 1px),
+  linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+ background-size:28px 28px, 28px 28px;
+}
+
+/* ---------- deck shell ---------- */
+#deck{
+ height:100dvh;
+ overflow-y:auto;
+ overflow-x:hidden;
+ scroll-snap-type:y proximity;
+}
+.slide{
+ min-height:100dvh;
+ scroll-snap-align:start;
+ display:flex;
+ align-items:center;
+ padding:clamp(24px,4.5vh,58px) clamp(18px,4.4vw,72px);
+ border-bottom:1px solid var(--rule);
+ position:relative;
+}
+.inner{
+ width:100%;
+ max-width:1180px;
+ margin:0 auto;
+ display:grid;
+ grid-template-columns:126px minmax(0,1fr);
+ gap:clamp(16px,2.6vw,40px);
+ align-items:start;
+}
+@media (max-width:880px){ .inner{grid-template-columns:minmax(0,1fr);gap:14px} }
+.gutter{position:sticky;top:0;padding-top:.4rem}
+.main{min-width:0}
+
+.slide.wide .inner{grid-template-columns:minmax(0,1fr);max-width:1340px;gap:0}
+.slide.wide .gutter{position:static;padding:0;display:flex;align-items:center;gap:12px;margin-bottom:.25rem}
+.slide.wide .gutter .num{margin-top:0}
+.slide.wide .gutter .tick{display:none}
+
+.slide.ink{
+ --paper:#111820; --paper-2:#161E27; --card:#1B252F;
+ --ink:#E6E9E5; --ink-2:#C3CBD2; --slate:#8C98A4;
+ --rule:rgba(230,233,229,.14); --rule-2:rgba(230,233,229,.3);
+ --verdigris:#7CC7B6; --verdigris-soft:rgba(124,199,182,.12);
+ --brass:#D5A24C; --brass-soft:rgba(213,162,76,.12);
+ --oxblood:#DE8478; --oxblood-soft:rgba(222,132,120,.12);
+ background:#111820; color:#E6E9E5;
+ background-image:
+  linear-gradient(rgba(230,233,229,.04) 1px, transparent 1px),
+  linear-gradient(90deg, rgba(230,233,229,.04) 1px, transparent 1px);
+ background-size:28px 28px, 28px 28px;
+}
+
+/* ---------- deck type ---------- */
+.eyebrow{
+ font-family:var(--mono);font-size:11px;letter-spacing:.14em;
+ text-transform:uppercase;color:var(--slate);display:block;
+}
+.gutter .num{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--verdigris);display:block;margin-top:6px}
+.gutter .tick{display:block;width:34px;height:2px;background:var(--verdigris);margin-top:12px;opacity:.55}
+@media (max-width:880px){ .gutter .tick{display:none} .gutter{position:static} }
+
+h1,h2,h3{font-family:var(--display);font-weight:600;letter-spacing:-.012em;margin:0}
+h1{font-size:clamp(2.3rem,6vw,4.3rem);line-height:1.03}
+h2{font-size:clamp(1.5rem,3.1vw,2.5rem);line-height:1.1;margin-bottom:.4rem}
+h3{font-size:clamp(1rem,1.55vw,1.22rem);line-height:1.25}
+.lede{font-size:clamp(.96rem,1.35vw,1.12rem);color:var(--ink-2);max-width:70ch;margin:.7rem 0 0}
+p{margin:.65rem 0;max-width:70ch}
+.small{font-size:.84rem;color:var(--slate);line-height:1.5}
+strong{font-weight:650;color:var(--ink)}
+code,.mono{font-family:var(--mono);font-size:.82em}
+code{background:var(--verdigris-soft);color:var(--verdigris);padding:.08em .38em;border-radius:3px;word-break:break-word}
+
+/* ---------- cover ---------- */
+.cover .inner{grid-template-columns:minmax(0,1fr)}
+.wordmark{display:flex;align-items:center;gap:10px;margin-bottom:clamp(18px,4.5vh,44px)}
+.wordmark span{font-family:var(--mono);font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--slate)}
+.cover-quote{
+ font-family:var(--display);font-size:clamp(1.3rem,2.6vw,1.9rem);line-height:1.25;
+ color:var(--ink-2);font-style:italic;border-left:3px solid var(--verdigris);
+ padding-left:clamp(14px,2vw,24px);margin:clamp(20px,3.6vh,36px) 0 0;max-width:34ch;
+}
+.cover-quote .attr{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--slate);margin-top:14px;font-style:normal}
+.cover-meta{
+ margin-top:clamp(24px,4.6vh,48px);display:flex;flex-wrap:wrap;gap:10px 26px;
+ font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+ color:var(--slate);border-top:1px solid var(--rule);padding-top:16px;
+}
+.cover-meta b{color:var(--ink);font-weight:500}
+
+/* ---------- cards ---------- */
+.grid{display:grid;gap:13px;margin-top:1rem}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:960px){ .g3,.g4{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media (max-width:640px){ .g2,.g3,.g4{grid-template-columns:minmax(0,1fr)} }
+.card{background:var(--card);border:1px solid var(--rule);border-radius:6px;padding:14px 16px;min-width:0}
+.card h3{margin-bottom:.3rem}
+.card p{margin:.35rem 0}
+.card.accent{border-left:3px solid var(--verdigris)}
+.card.warn{border-left:3px solid var(--brass)}
+.card.bad{border-left:3px solid var(--oxblood)}
+.card.tight{padding:10px 12px}
+.card.tight p{font-size:.82rem;color:var(--slate);line-height:1.45;margin:.2rem 0 0}
+.kicker{font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--slate);display:block;margin-bottom:.3rem}
+.quote{border-left:3px solid var(--verdigris);padding:2px 0 2px 16px;margin:14px 0}
+.quote p{font-family:var(--display);font-style:italic;font-size:clamp(1rem,1.4vw,1.14rem);line-height:1.4;color:var(--ink);margin:0}
+.quote .attr{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate);margin-top:8px;display:block}
+.callout{border:1px solid var(--verdigris);background:var(--verdigris-soft);border-radius:6px;padding:12px 15px;margin-top:1rem}
+.callout p{margin:0;font-size:.92rem;color:var(--ink);max-width:none}
+.callout .kicker{color:var(--verdigris)}
+.note{border:1px dashed var(--rule-2);border-radius:6px;padding:11px 14px;margin-top:.9rem;background:var(--paper-2)}
+.note p{margin:.25rem 0;font-size:.84rem;color:var(--slate);max-width:84ch}
+.note .kicker{color:var(--brass)}
+ul.plain{list-style:none;padding:0;margin:.55rem 0}
+ul.plain li{padding-left:19px;position:relative;margin:.38rem 0;max-width:72ch;font-size:.9rem;color:var(--ink-2)}
+ul.plain li::before{content:"";position:absolute;left:2px;top:.62em;width:7px;height:1.5px;background:var(--verdigris)}
+ul.plain li strong{color:var(--ink)}
+ul.plain.tight li{font-size:.83rem;margin:.28rem 0}
+ul.plain.ox li::before{background:var(--oxblood)}
+.tablewrap{overflow-x:auto;margin-top:1rem;border:1px solid var(--rule);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;min-width:720px;font-size:.78rem}
+th,td{text-align:left;padding:7px 12px;border-bottom:1px solid var(--rule);vertical-align:top;line-height:1.35}
+th{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate);font-weight:500;background:var(--paper-2)}
+tr:last-child td{border-bottom:none}
+td.lead{color:var(--ink);font-weight:600;font-family:var(--display);font-size:.94rem}
+td.where{font-family:var(--mono);font-size:.7rem;letter-spacing:.05em;color:var(--brass)}
+td.gone{font-family:var(--mono);font-size:.7rem;letter-spacing:.05em;color:var(--oxblood)}
+.figcap{font-size:.79rem;color:var(--slate);margin:.6rem 0 0;max-width:88ch;line-height:1.5}
+.figcap b{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--verdigris);font-weight:500}
+
+/* ============================================================
+ MOCK SCOPE — The Document's real design language
+ ============================================================ */
+.doc{
+ --d-page:#FAF7F2;
+ --d-paper:#FCFAF6;
+ --d-p2:#F7F2EB;
+ --d-p3:#F1EBE2;
+ --d-card:#FFFFFF;
+ --d-pearl:#E5E2DD;
+ --d-rule:rgba(44,41,38,.18);
+ --d-char:#2C2926;
+ --d-mocha:#5C4A3C;
+ --d-quiet:#65594E;
+ --d-clay:#C4A57B;
+ --d-oak:#8B7355;
+ --d-sage:#A8B5A0;
+ --d-blue:#8B9CAD;
+ --d-terra:#D4A090;
+ --d-gold:#E8C547;
+ --d-sheet:#D8CCB8;
+ font-family:var(--body);
+ color:var(--d-char);
+ line-height:1.4;
+}
+/* the deck's global strong{color:var(--ink)} would otherwise reach inside a mock
+   and paint emphasis in DECK ink — near-white in the dark theme, on paper that
+   stays light. Inside a mock scope, emphasis inherits the paper's own ink. */
+.doc strong{color:inherit}
+.scroller{overflow-x:auto;overflow-y:hidden;padding-bottom:8px;margin-top:12px}
+.frame{border:1px solid var(--d-pearl);border-radius:8px;overflow:hidden;background:var(--d-page)}
+.scroller .frame{min-width:920px}
+.scroller.narrow .frame{min-width:660px}
+/* per-mock widths are modifier CLASSES, never inline styles — an inline
+ min-width outranks the print reset below and the mock prints clipped. */
+.scroller .frame.w480{min-width:480px}
+.scroller .frame.w560{min-width:560px}
+.scroller .frame.w680{min-width:680px}
+.scroller .frame.w940{min-width:940px}
+.scroller .frame.w960{min-width:960px}
+.scroller .frame.w980{min-width:980px}
+.fbar{display:flex;align-items:center;gap:10px;padding:7px 12px;background:var(--d-p3);border-bottom:1px solid var(--d-pearl)}
+.fdots{display:flex;gap:5px;flex:0 0 auto}
+.fdots i{width:8px;height:8px;border-radius:50%;background:rgba(44,41,38,.16);display:block}
+.furl{font-family:var(--mono);font-size:10px;letter-spacing:.05em;color:var(--d-quiet);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.furl b{color:var(--d-mocha);font-weight:500}
+.screen{position:relative;background:var(--d-page);padding:18px 22px 22px;min-height:120px}
+
+/* stacked flat paper depth — no shadows */
+.stack{position:relative;z-index:4;max-width:640px;margin:0 auto}
+.stack.w760{max-width:760px}
+.stack::before,.stack::after{content:"";position:absolute;border:1px solid var(--d-pearl);border-radius:5px;background:var(--d-p3);z-index:0}
+.stack::before{left:10px;top:10px;right:-10px;bottom:-10px}
+.stack::after{left:5px;top:5px;right:-5px;bottom:-5px;background:var(--d-p2)}
+.sheet{position:relative;z-index:2;background:var(--d-paper);border:1px solid var(--d-sheet);border-radius:5px;padding:16px 20px 18px}
+.shead{display:flex;align-items:baseline;justify-content:space-between;gap:16px;border-bottom:1px solid var(--d-pearl);padding-bottom:9px}
+.shead .st{font-family:var(--mono);font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--d-char)}
+.shead .sx{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--d-quiet);white-space:nowrap}
+.ssub{font-family:var(--display);font-style:italic;font-size:14px;color:var(--d-mocha);margin:11px 0 0}
+.vitals{font-family:var(--mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--d-quiet);margin-top:7px}
+
+/* scored ink */
+.si{position:relative;display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--d-char);font-weight:500;padding-bottom:9px;line-height:1;white-space:nowrap}
+.si::before{content:"";position:absolute;left:0;right:0;bottom:4.5px;height:1px;background:var(--d-char)}
+.si::after{content:"";position:absolute;left:0;right:0;bottom:1px;height:1px;background:var(--d-clay)}
+.si.sec{color:var(--d-mocha);font-weight:400}
+.si.sec::before{background:rgba(92,74,60,.5)}
+.si.sec::after{display:none}
+.si.ter{color:var(--d-quiet);font-weight:400}
+.si.ter::before{background:rgba(101,89,78,.32)}
+.si.ter::after{display:none}
+.si.dgr::before{background:var(--d-terra)}
+.si.dgr::after{background:var(--d-terra)}
+.si.dead{color:rgba(101,89,78,.34)}
+.si.dead::before{background:rgba(101,89,78,.16)}
+.si.dead::after{display:none}
+.si.lg{font-size:12px;padding-bottom:11px}
+.si.lg::before{bottom:5.5px}
+.si.lg::after{bottom:1.5px}
+.acts{display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-top:12px}
+
+/* the section-label recipe — aged oak over a quiet sub */
+.seclab{margin:16px 0 8px}
+.seclab b{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--d-oak);font-weight:500}
+.seclab i{display:block;font-style:normal;font-size:11px;color:var(--d-quiet);margin-top:3px;line-height:1.35}
+.seclab.row{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.seclab.row .acts{margin-top:0}
+
+/* ticks + fields */
+.tick{width:18px;height:18px;border-radius:2px;border:1.5px solid rgba(101,89,78,.42);position:relative;background:transparent}
+.tick.done{background:var(--d-sage);border-color:var(--d-sage)}
+.tick.done::after{content:"";position:absolute;left:5.5px;top:2px;width:5px;height:9px;border:solid #fff;border-width:0 1.7px 1.7px 0;transform:rotate(42deg)}
+.cbx{width:15px;height:15px;border-radius:2px;border:1.5px solid rgba(101,89,78,.42);position:relative;display:block;background:transparent;flex:0 0 auto}
+.cbx.on{background:var(--d-clay);border-color:var(--d-clay)}
+.cbx.on::after{content:"";position:absolute;left:4.4px;top:1px;width:4px;height:8px;border:solid #fff;border-width:0 1.6px 1.6px 0;transform:rotate(42deg)}
+.cbx.off{border-color:rgba(101,89,78,.16)}
+.fld{margin-top:13px}
+.flab{font-family:var(--mono);font-size:8.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--d-quiet);display:block;margin-bottom:3px}
+.uin{border-bottom:1px solid rgba(44,41,38,.28);padding:5px 0 7px;font-size:14px;color:var(--d-char);display:flex;align-items:center;justify-content:space-between;gap:10px}
+.uin .car{font-family:var(--mono);font-size:10px;color:var(--d-quiet)}
+.tchips{display:flex;gap:8px;flex-wrap:wrap;margin-top:5px}
+.tchip{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;border:1px solid var(--d-pearl);border-radius:16px;padding:4px 12px;color:var(--d-quiet);background:var(--d-card)}
+.tchip.on{border-color:var(--d-clay);background:rgba(196,165,123,.2);color:#7a6034;font-weight:600}
+.hint{font-size:11.5px;color:var(--d-quiet);margin-top:6px;font-family:var(--display);font-style:italic}
+
+/* bands + empty states */
+.band{border:1px solid var(--d-pearl);background:var(--d-p2);border-radius:3px;padding:10px 14px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.band p{font-family:var(--display);font-style:italic;font-size:13.5px;color:var(--d-mocha);margin:0;max-width:none}
+.band.ok{background:rgba(168,181,160,.15);border-color:rgba(168,181,160,.55)}
+.band.ok p{color:#55684f}
+.band.hold{background:rgba(196,165,123,.14);border-color:var(--d-clay)}
+.band.hold p{color:#7a6034}
+
+/* letterhead / instruments */
+.letter{border-bottom:1px solid var(--d-pearl);padding-bottom:12px}
+.lname{font-family:var(--display);font-size:26px;color:var(--d-char);line-height:1.1}
+.astp{font-family:var(--mono);font-size:7.5px;letter-spacing:.11em;text-transform:uppercase;padding:2px 8px;border-radius:16px;border:1px solid;white-space:nowrap;display:inline-block;line-height:1.5}
+.astp.draft{color:var(--d-quiet);border-color:var(--d-pearl);background:var(--d-p2)}
+.astp.wait{color:#a1834f;border-color:var(--d-clay);background:rgba(196,165,123,.16)}
+.astp.auth{color:#5f7357;border-color:var(--d-sage);background:rgba(168,181,160,.2)}
+.astp.void{color:#b0785f;border-color:var(--d-terra);background:rgba(212,160,144,.14)}
+.astp.absent{border-color:transparent;background:transparent;color:rgba(101,89,78,.3)}
+
+/* ---- authority figures ---- */
+.figband{border-left:2px solid var(--d-sage);padding:3px 0 3px 15px;display:flex;gap:28px;flex-wrap:wrap;margin-top:13px}
+.fg b{display:block;font-family:var(--mono);font-size:8px;letter-spacing:.14em;text-transform:lowercase;color:var(--d-quiet);font-weight:400}
+.fg i{display:block;font-family:var(--display);font-style:normal;font-size:17px;color:var(--d-char);margin-top:3px;line-height:1.1}
+.fg i.q{color:var(--d-quiet)}
+.fg i.ok{color:#5f7357}
+
+/* ---- journey stepper ---- */
+.jstep{display:flex;align-items:center;flex-wrap:wrap;margin-top:8px}
+.jstep span{font-family:var(--mono);font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:rgba(101,89,78,.48);white-space:nowrap;margin:2px 0}
+.jstep span.done{color:var(--d-mocha)}
+.jstep span.now{color:#5f7357;font-weight:700}
+.jstep i{display:block;width:14px;height:1px;background:var(--d-pearl);margin:0 7px;flex:0 0 auto}
+.jstep i.done{background:var(--d-sage)}
+
+/* ---- ledger grid ---- */
+.doc table{min-width:0}
+.bg{width:100%;border-collapse:collapse;font-size:12.5px;min-width:0}
+.bg th{font-family:var(--mono);font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--d-quiet);font-weight:500;text-align:left;padding:6px 10px;border-bottom:1px solid var(--d-rule);background:transparent;vertical-align:bottom}
+.bg th.r{text-align:right}
+.bg td{padding:6px 10px;border-bottom:1px solid rgba(44,41,38,.08);color:var(--d-char);vertical-align:middle;line-height:1.35}
+.bg td.n{font-family:var(--mono);font-size:11px;text-align:right;white-space:nowrap}
+.bg td.n.der{color:var(--d-quiet)}
+.bg td.n.tgt{color:#7a6034;background:rgba(196,165,123,.12);border-bottom:1px solid var(--d-clay)}
+.bg td.rm{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--d-oak)}
+.bg tr.tot td{border-bottom:none;border-top:1px solid var(--d-rule);font-weight:600;padding-top:8px}
+.bg tr.tot td.n{color:var(--d-char)}
+
+/* annotations */
+.anno{position:absolute;z-index:6;display:flex;align-items:center}
+.anno .dot,.mnote .dot{width:17px;height:17px;border-radius:50%;background:var(--d-clay);color:#fff;font-family:var(--mono);font-size:9.5px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;line-height:1}
+.anno .ldr{height:1px;background:rgba(44,41,38,.4)}
+.anno.onveil .ldr{background:rgba(250,247,242,.5)}
+.mockgrid{display:grid;grid-template-columns:minmax(0,1fr) 216px;gap:20px;align-items:start}
+@media (max-width:1040px){ .mockgrid{grid-template-columns:minmax(0,1fr)} }
+.mnotes{display:flex;flex-direction:column;gap:12px;padding-top:14px}
+.mnote{display:grid;grid-template-columns:17px minmax(0,1fr);gap:9px;align-items:start}
+.mnote .dot{margin-top:1px}
+.mnote p{font-size:.77rem;color:var(--slate);margin:0;line-height:1.45;max-width:none}
+.mnote p b{color:var(--ink);font-weight:600}
+
+/* EXHIBIT SCOPE — a mock drawn in DECK tones instead of portal tones.
+ Same .frame / .fbar / .screen / .band machinery as .doc; bone and slate
+ instead of clay and oak, so a drawing of today's world never gets mistaken
+ for a drawing of the proposal. */
+.exhibit{
+ --d-page:var(--paper-2);
+ --d-paper:var(--card);
+ --d-p2:var(--paper-2);
+ --d-p3:var(--paper);
+ --d-card:var(--card);
+ --d-pearl:var(--rule-2);
+ --d-rule:var(--rule);
+ --d-char:var(--ink);
+ --d-mocha:var(--ink-2);
+ --d-quiet:var(--slate);
+ --d-clay:var(--slate);
+ --d-oak:var(--slate);
+ --d-sage:var(--slate);
+ --d-terra:var(--oxblood);
+ --d-sheet:var(--rule-2);
+ font-family:var(--body);color:var(--ink);line-height:1.4;
+}
+.exhibit .anno .dot{background:var(--oxblood)}
+.exhibit .anno .ldr{background:var(--rule-2)}
+/* the annotation rail sits OUTSIDE .doc, so give it its own dot fill */
+.mnotes{--d-clay:var(--brass)}
+
+/* the compared matrix */
+table.matrix{min-width:820px}
+.matrix td{height:38px;vertical-align:middle}
+.matrix td.crit{font-family:var(--display);font-size:.95rem;color:var(--ink);font-weight:600;width:26%}
+.matrix .dg{font-size:13px;color:var(--verdigris);margin-right:9px;line-height:1}
+.matrix .vw{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--slate)}
+.mlegend{display:flex;flex-wrap:wrap;gap:8px 24px;margin-top:12px;font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate)}
+.mlegend b{color:var(--verdigris);font-weight:500}
+
+/* the ruling */
+.qs{display:grid;gap:11px;margin-top:1rem}
+.q{display:grid;grid-template-columns:24px minmax(0,1fr);gap:12px;align-items:start;border-top:1px solid var(--rule);padding-top:11px}
+.qn{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--verdigris);padding-top:4px}
+.q h3{font-size:1.02rem}
+.q p{margin:.25rem 0 0;font-size:.84rem;color:var(--slate)}
+.closing{border-top:1px solid var(--rule-2);margin-top:1.5rem;padding-top:15px}
+.closing p{font-family:var(--display);font-size:clamp(1.2rem,2.2vw,1.6rem);color:var(--ink);margin:0;max-width:none}
+.closing span{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--slate);display:block;margin-top:9px}
+
+/* DRAWN SURFACES — every picture in this deck is CSS. These are deck-level
+ additions shared by several mocks (the house's .tex / .thumb / .photo grown a
+ drawing sheet); they live inside a mock scope and read its tokens. */
+.tex{border-radius:4px;border:1px solid var(--d-pearl)}
+.tex.linen{background-color:#E7E0D5;background-image:repeating-linear-gradient(90deg,rgba(139,115,85,.16) 0 1px,transparent 1px 4px),repeating-linear-gradient(0deg,rgba(139,115,85,.12) 0 1px,transparent 1px 4px)}
+.tex.oak{background-color:#D8CCB8;background-image:repeating-linear-gradient(96deg,rgba(92,74,60,.20) 0 1px,transparent 1px 7px),repeating-linear-gradient(96deg,rgba(92,74,60,.09) 0 3px,transparent 3px 13px)}
+.tex.clay{background-color:#DED6C9;background-image:repeating-linear-gradient(0deg,rgba(196,165,123,.30) 0 1px,transparent 1px 5px)}
+.thumb{width:64px;height:64px;border-radius:8px;flex:0 0 auto;border:1px solid var(--d-pearl)}
+.thumb.a{background:#E5E2DD}.thumb.b{background:#D8CCB8}.thumb.c{background:#DED6C9}
+.thumb.d{background:#CFC7BA}.thumb.e{background:#E7E0D5}.thumb.f{background:#DAD3C6}
+
+/* a drawn drawing — a plotted sheet, at any size */
+.dw-pg{display:block;position:relative;background:var(--d-paper);border:1px solid var(--d-sheet);border-radius:2px;overflow:hidden}
+.dw-pg::before{content:"";position:absolute;inset:3px;border:1px solid rgba(44,41,38,.16)}
+.dw-pg i.dw-tb{position:absolute;right:4px;bottom:4px;width:34%;height:16px;border:1px solid rgba(44,41,38,.3);background:var(--d-p2)}
+.dw-pg.plan::after{content:"";position:absolute;left:8px;right:8px;top:8px;bottom:24px;background-image:
+ repeating-linear-gradient(90deg,rgba(44,41,38,.26) 0 1px,transparent 1px 15px),
+ repeating-linear-gradient(0deg,rgba(44,41,38,.14) 0 1px,transparent 1px 11px)}
+.dw-pg.elev::after{content:"";position:absolute;left:9px;right:9px;top:16px;bottom:22px;border-top:1.5px solid rgba(44,41,38,.42);border-bottom:1.5px solid rgba(44,41,38,.42);background-image:
+ repeating-linear-gradient(90deg,rgba(44,41,38,.34) 0 1.2px,transparent 1.2px 21px),
+ repeating-linear-gradient(0deg,rgba(44,41,38,.16) 0 1px,transparent 1px 9px)}
+.dw-pg.det::after{content:"";position:absolute;left:8px;right:8px;top:9px;bottom:24px;background-image:
+ repeating-linear-gradient(52deg,rgba(44,41,38,.2) 0 1px,transparent 1px 5px),
+ repeating-linear-gradient(0deg,rgba(44,41,38,.24) 0 1px,transparent 1px 19px)}
+.dw-pg.rcp::after{content:"";position:absolute;left:9px;right:9px;top:10px;bottom:24px;background-image:
+ repeating-linear-gradient(0deg,rgba(44,41,38,.18) 0 1px,transparent 1px 13px),
+ repeating-radial-gradient(circle at 22% 30%,rgba(44,41,38,.3) 0 1px,transparent 1px 9px)}
+.dw-pg.loose::after{content:"";position:absolute;left:8px;right:8px;top:10px;bottom:12px;background-image:
+ repeating-linear-gradient(0deg,rgba(44,41,38,.13) 0 2px,transparent 2px 8px)}
+.dw-pg.loose i.dw-tb{display:none}
+
+/* a rev letter, worn on the face of a print */
+.dw-rev{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border:1px solid var(--d-oak);border-radius:2px;font-family:var(--mono);font-size:10.5px;font-weight:600;color:var(--d-oak);flex:0 0 auto;line-height:1}
+.dw-rev.cur{border-color:var(--d-char);color:var(--d-char);background:var(--d-card)}
+.dw-rev.old{border-color:rgba(101,89,78,.3);color:rgba(101,89,78,.45)}
+.dw-rev.lg{width:26px;height:26px;font-size:14px}
+
+/* the SUPERSEDED stamp — burned in at serve time (viewer, token view, download),
+   never written into the stored print */
+.dw-stamp{position:relative;display:inline-block;border:1.5px solid currentColor;border-radius:2px;padding:4px 10px 3px;text-align:center;white-space:nowrap;opacity:.72;color:#B0785F;transform:rotate(-4.5deg)}
+.dw-stamp::before{content:"";position:absolute;inset:2.5px;border:1px solid currentColor;border-radius:1px;opacity:.42}
+.dw-stamp b{display:block;font-family:var(--mono);font-size:8.5px;letter-spacing:.2em;text-transform:uppercase;font-weight:700}
+.dw-stamp i{display:block;font-family:var(--mono);font-size:6.5px;letter-spacing:.14em;text-transform:uppercase;font-style:normal;margin-top:3px;padding-top:3px;border-top:1px solid currentColor;opacity:.85}
+.dw-stamp.t2{transform:rotate(2.8deg)}
+.dw-stamp.iss{color:#5f7357}
+
+/* ---------- chrome ---------- */
+#progress{position:fixed;top:0;left:0;height:2px;background:var(--verdigris);width:0;z-index:60;transition:width .18s linear}
+@media (prefers-reduced-motion: reduce){ #progress{transition:none} }
+#chrome{
+ position:fixed;right:clamp(12px,2.4vw,26px);bottom:clamp(12px,2.4vh,24px);
+ z-index:60;display:flex;align-items:center;gap:8px;
+ background:var(--card);border:1px solid var(--rule-2);border-radius:999px;padding:5px 6px 5px 13px;
+}
+#counter{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--slate);min-width:52px}
+#counter b{color:var(--ink);font-weight:600}
+.navbtn{
+ appearance:none;border:1px solid var(--rule);background:var(--paper-2);color:var(--ink);
+ width:28px;height:28px;border-radius:999px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
+ font-size:13px;line-height:1;font-family:var(--mono);padding:0;
+}
+.navbtn:hover{border-color:var(--verdigris);color:var(--verdigris)}
+.navbtn:focus-visible,#themebtn:focus-visible{outline:2px solid var(--verdigris);outline-offset:2px}
+#themebtn{
+ appearance:none;border:1px solid var(--rule);background:var(--paper-2);color:var(--slate);
+ height:28px;border-radius:999px;cursor:pointer;padding:0 11px;
+ font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+}
+#themebtn:hover{border-color:var(--verdigris);color:var(--verdigris)}
+#hint{
+ position:fixed;left:clamp(12px,2.4vw,26px);bottom:clamp(12px,2.4vh,24px);z-index:60;
+ font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate);opacity:.75;
+}
+@media (max-width:700px){ #hint{display:none} }
+
+/* reveal — opt-IN, never opt-out. The pre-reveal state is gated behind html.js,
+ which the deck script sets itself, synchronously, immediately before it installs
+ the observer that can take it off again. If JS is disabled, blocked by CSP, or
+ throws before that line, the class is never set and every slide renders at full
+ opacity. Content is never hidden by a script that did not run. */
+html.js .slide .main > *, html.js .slide .gutter > *{opacity:0;transform:translateY(8px);transition:opacity .5s ease, transform .5s ease}
+html.js .slide.seen .main > *, html.js .slide.seen .gutter > *{opacity:1;transform:none}
+.slide.seen .main > *:nth-child(2){transition-delay:.06s}
+.slide.seen .main > *:nth-child(3){transition-delay:.12s}
+.slide.seen .main > *:nth-child(4){transition-delay:.17s}
+@media (prefers-reduced-motion: reduce){
+ html.js .slide .main > *, html.js .slide .gutter > *{opacity:1;transform:none;transition:none}
+}
+
+/* ================= 02 · THE WOUND (.wd-) ================= */
+/* THE WOUND. Drawn in the EXHIBIT scope — deck tones — because this is the
+ world as it stands today, not the proposal. Every selector is wd-prefixed and
+ sits under .exhibit; shell classes (frame, fbar, furl, screen, band, anno) are
+ used, never restyled. No shadows. */
+.wd-tri{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+@media (max-width:1100px){ .wd-tri{grid-template-columns:minmax(0,1fr)} }
+.wd-lab{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--slate);margin-bottom:6px}
+.exhibit .wd-scr{padding:14px 15px 16px;min-height:236px}
+/* (a) the plots folder */
+.exhibit .wd-files{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px 9px;margin-top:4px}
+.exhibit .wd-f{text-align:center;min-width:0}
+.exhibit .wd-ico{display:block;position:relative;width:40px;height:52px;margin:0 auto 6px;border:1px solid var(--rule-2);border-radius:2px;background:var(--card)}
+.exhibit .wd-ico::before{content:"";position:absolute;right:0;top:0;width:0;height:0;border-top:10px solid var(--paper);border-left:10px solid transparent}
+.exhibit .wd-ico::after{content:"";position:absolute;left:6px;right:6px;top:14px;bottom:7px;background-image:repeating-linear-gradient(0deg,var(--rule) 0 1px,transparent 1px 6px)}
+.exhibit .wd-fn{display:block;font-family:var(--mono);font-size:7.5px;letter-spacing:.02em;color:var(--slate);line-height:1.5;word-break:break-all}
+.exhibit .wd-f.wd-hot .wd-ico{border-color:var(--oxblood)}
+.exhibit .wd-f.wd-hot .wd-fn{color:var(--oxblood)}
+.exhibit .wd-f.wd-hot .wd-fn b{color:var(--oxblood);font-weight:700}
+.exhibit .wd-when{display:block;font-family:var(--mono);font-size:7px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate);opacity:.7;margin-top:3px}
+/* (b) the thread */
+.exhibit .wd-sub{font-family:var(--display);font-size:14.5px;color:var(--ink);line-height:1.25}
+.exhibit .wd-msg{display:grid;grid-template-columns:9px minmax(0,1fr);gap:10px;padding:9px 0;border-bottom:1px solid var(--rule)}
+.exhibit .wd-msg:last-child{border-bottom:none}
+.exhibit .wd-udot{width:7px;height:7px;border-radius:50%;border:1px solid var(--rule-2);margin-top:5px}
+.exhibit .wd-msg.wd-unread .wd-udot{background:var(--oxblood);border-color:var(--oxblood)}
+.exhibit .wd-who{display:block;font-size:11.5px;color:var(--ink);line-height:1.3}
+.exhibit .wd-msg.wd-unread .wd-who{font-weight:700}
+.exhibit .wd-body{display:block;font-size:11px;color:var(--slate);margin-top:3px;line-height:1.45}
+.exhibit .wd-att{display:inline-block;font-family:var(--mono);font-size:8px;letter-spacing:.06em;color:var(--slate);border:1px solid var(--rule-2);border-radius:3px;padding:2px 7px;margin-top:5px}
+.exhibit .wd-att.wd-hot{color:var(--oxblood);border-color:var(--oxblood)}
+/* (c) the folio fork */
+.exhibit .wd-src{border:1px solid var(--rule-2);border-radius:4px;background:var(--card);padding:8px 11px;font-family:var(--mono);font-size:8.5px;letter-spacing:.03em;color:var(--ink);text-align:center;word-break:break-all}
+.exhibit .wd-tee{position:relative;height:15px;margin:0 26%}
+.exhibit .wd-tee::before{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--rule-2)}
+.exhibit .wd-tee::after{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--rule-2)}
+.exhibit .wd-legs{position:relative;height:9px;margin:0 26%}
+.exhibit .wd-legs::before,.exhibit .wd-legs::after{content:"";position:absolute;top:0;width:1px;height:9px;background:var(--rule-2)}
+.exhibit .wd-legs::before{left:0}
+.exhibit .wd-legs::after{right:0}
+.exhibit .wd-chips{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.exhibit .wd-chip{border:1px solid var(--oxblood);border-radius:5px;background:var(--oxblood-soft);padding:9px 10px}
+.exhibit .wd-cn{display:block;font-family:var(--mono);font-size:8.5px;letter-spacing:.01em;color:var(--ink);line-height:1.45;word-break:break-all}
+.exhibit .wd-cm{display:block;font-family:var(--mono);font-size:7.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--oxblood);margin-top:5px}
+.exhibit .wd-band{position:relative;margin-top:14px;border-color:var(--oxblood);background:var(--oxblood-soft)}
+.exhibit .wd-band p,.exhibit .wd-band p strong{color:var(--oxblood)}
+.exhibit .wd-cost{margin-top:12px;border-top:1px solid var(--oxblood);padding-top:9px;display:flex;gap:8px 22px;flex-wrap:wrap;font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--oxblood)}
+.exhibit .wd-cost b{color:var(--oxblood);font-weight:700}
+
+/* ================= 06 · THE LIGHT TABLE (.lt-) ================= */
+/* THE LIGHT TABLE. Root .doc.lt — proposed portal UI, portal tokens. Every
+ rule is lt-prefixed; shell classes (frame, screen, seclab, si, cbx, band,
+ vitals, anno) are used, never restyled. Pictures are .dw-pg drawings. */
+.doc.lt .lt-top{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;border-bottom:1px solid var(--d-pearl);padding-bottom:11px}
+.doc.lt .lt-drop{font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--d-char)}
+.doc.lt .lt-drop b{color:var(--d-mocha);font-weight:600}
+.doc.lt .lt-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:13px}
+.doc.lt .lt-card{position:relative;border:1px solid var(--d-pearl);border-radius:5px;background:var(--d-card);padding:11px 12px 12px;display:grid;grid-template-columns:52px minmax(0,1fr);gap:12px;align-items:start;min-width:0}
+.doc.lt .lt-card.lt-hero{border-color:var(--d-clay);background:rgba(196,165,123,.12);grid-column:1/span 2;grid-template-columns:82px minmax(0,1fr)}
+.doc.lt .lt-card.lt-new{border-style:dashed;border-color:var(--d-oak)}
+.doc.lt .lt-pg{height:66px;width:100%}
+.doc.lt .lt-hero .lt-pg{height:104px}
+.doc.lt .lt-pn{display:block;font-family:var(--mono);font-size:8px;letter-spacing:.16em;text-transform:uppercase;color:var(--d-quiet);margin-top:5px;text-align:center}
+.doc.lt .lt-arrow{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--d-oak);display:block}
+.doc.lt .lt-sn{font-family:var(--display);font-size:14px;color:var(--d-char);line-height:1.25;margin-top:3px;display:block}
+.doc.lt .lt-hero .lt-sn{font-size:18px}
+.doc.lt .lt-say{font-size:11px;color:var(--d-quiet);margin-top:5px;line-height:1.45;max-width:none}
+.doc.lt .lt-say b{color:var(--d-char);font-weight:600}
+.doc.lt .lt-becomes{display:inline-flex;align-items:center;gap:7px;margin-top:7px;font-family:var(--mono);font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:#7a6034;border:1px solid var(--d-clay);border-radius:3px;padding:3px 9px;background:var(--d-card)}
+.doc.lt .lt-keeps{display:inline-block;margin-top:7px;font-family:var(--mono);font-size:8.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--d-quiet)}
+.doc.lt .lt-hist{display:block;font-family:var(--mono);font-size:8px;letter-spacing:.13em;text-transform:uppercase;color:var(--d-quiet);margin-top:8px;border-top:1px solid var(--d-pearl);padding-top:6px}
+.doc.lt .lt-fork{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.doc.lt .lt-opt{font-family:var(--mono);font-size:8.5px;letter-spacing:.11em;text-transform:uppercase;border:1px solid var(--d-pearl);border-radius:3px;padding:4px 9px;color:var(--d-quiet);background:var(--d-card)}
+.doc.lt .lt-opt.on{border-color:var(--d-oak);color:var(--d-char);font-weight:600;background:var(--d-p2)}
+.doc.lt .lt-rest{font-family:var(--mono);font-size:8.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--d-quiet);border:1px dashed var(--d-pearl);border-radius:4px;padding:9px 12px;margin-top:12px;text-align:center}
+.doc.lt .lt-tray{position:relative;margin-top:15px;border-top:1px solid var(--d-rule);padding-top:12px}
+.doc.lt .lt-loose{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px}
+.doc.lt .lt-lp{width:118px}
+.doc.lt .lt-lp .lt-pg{height:52px}
+.doc.lt .lt-lt{display:block;font-size:10.5px;color:var(--d-quiet);margin-top:5px;line-height:1.35}
+.doc.lt .lt-bar{margin-top:16px;border-top:1px solid var(--d-rule);padding-top:13px;display:flex;align-items:center;gap:22px;flex-wrap:wrap}
+.doc.lt .lt-count{font-family:var(--mono);font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--d-quiet)}
+.doc.lt .lt-count b{color:var(--d-char);font-weight:600}
+@media (max-width:1040px){ .doc.lt .lt-grid{grid-template-columns:repeat(2,minmax(0,1fr))} }
+
+/* ================= 07 · THE PLAN ROOM (.pr-) ================= */
+/* THE PLAN ROOM / drawing log. Root .doc.pr. Every rule pr-prefixed; shell
+ classes (frame, screen, seclab, band.hold, si, vitals, bg table, astp, anno)
+ used, never restyled. The SUPERSEDED stamp is the shared .dw-stamp. */
+.doc.pr .pr-mast{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;border-bottom:1px solid var(--d-rule);padding-bottom:12px}
+.doc.pr .pr-cur{font-family:var(--mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--d-quiet);text-align:right;line-height:1.7}
+.doc.pr .pr-cur b{display:block;color:var(--d-char);font-weight:600}
+.doc.pr .pr-set{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:12px;align-items:start}
+@media (max-width:1040px){ .doc.pr .pr-set{grid-template-columns:repeat(2,minmax(0,1fr))} }
+.doc.pr .pr-card{position:relative;border:1px solid var(--d-pearl);border-radius:5px;background:var(--d-card);padding:10px 11px 11px;min-width:0}
+.doc.pr .pr-card.pr-open{grid-column:1/span 2;border-color:var(--d-clay);background:var(--d-p2)}
+.doc.pr .pr-no{display:flex;align-items:center;justify-content:space-between;gap:9px}
+.doc.pr .pr-num{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--d-char);font-weight:600}
+.doc.pr .pr-ti{display:block;font-size:11.5px;color:var(--d-char);line-height:1.35;margin-top:6px;min-height:31px}
+.doc.pr .pr-st{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;border-top:1px solid var(--d-pearl);padding-top:7px}
+.doc.pr .pr-holds{display:block;font-family:var(--mono);font-size:7.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--d-quiet);margin-top:6px;line-height:1.6}
+.doc.pr .pr-holds.pr-amber{color:#8a6f18}
+.doc.pr .pr-bay{display:block;font-style:normal;font-family:var(--mono);font-size:8px;letter-spacing:.13em;text-transform:uppercase;color:#8a6f18;margin-top:5px}
+.doc.pr .pr-stack{margin-top:11px;border-top:1px solid var(--d-rule);padding-top:10px}
+.doc.pr .pr-print{display:grid;grid-template-columns:44px 26px minmax(0,1fr) auto;gap:11px;align-items:center;padding:8px 0;border-bottom:1px solid rgba(44,41,38,.08)}
+.doc.pr .pr-print:last-child{border-bottom:none}
+.doc.pr .pr-thumb{height:54px;width:44px}
+.doc.pr .pr-pl{font-size:12px;color:var(--d-char);line-height:1.3}
+.doc.pr .pr-pl i{display:block;font-style:normal;font-family:var(--mono);font-size:8px;letter-spacing:.13em;text-transform:uppercase;color:var(--d-quiet);margin-top:4px}
+.doc.pr .pr-print.pr-old .pr-pl{color:var(--d-quiet)}
+.doc.pr .pr-log{position:relative;margin-top:16px}
+.doc.pr .pr-flag{position:relative}
+.doc.pr .pr-ev{font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase}
+.doc.pr .pr-ev.pr-filed{color:var(--d-oak)}
+.doc.pr .pr-ev.pr-flip{color:#5f7357}
+.doc.pr .pr-ev.pr-iss{color:var(--d-mocha)}
+.doc.pr .pr-ev.pr-tx{color:var(--d-blue);filter:saturate(1.4) brightness(.8)}
+.doc.pr .pr-who{font-family:var(--mono);font-size:10px;color:var(--d-quiet)}
+
+/* ================= 08 · THE SHEET (.sh-) ================= */
+/* THE SHEET · ID-401. Root .doc.sh. Every rule sh-prefixed; shell classes
+ (frame, screen, stack, sheet, shead, vitals, si, seclab, anno) used, never
+ restyled. The compare is two prints of one sheet — Rev B in red under Rev C
+ in blue — drawn entirely in borders. No shadows. */
+.doc.sh{--sh-red:#9C4238;--sh-blue:#41627F}
+.doc.sh .sh-page{display:grid;grid-template-columns:186px minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:1040px){ .doc.sh .sh-page{grid-template-columns:minmax(0,1fr)} }
+.doc.sh .sh-rail{position:relative;border-right:1px solid var(--d-pearl);padding-right:16px}
+.doc.sh .sh-rr{display:grid;grid-template-columns:26px minmax(0,1fr);gap:10px;align-items:start;padding:10px 0;border-bottom:1px solid rgba(44,41,38,.08)}
+.doc.sh .sh-rr:last-child{border-bottom:none}
+.doc.sh .sh-rl{font-size:11.5px;color:var(--d-char);line-height:1.35}
+.doc.sh .sh-rl i{display:block;font-style:normal;font-family:var(--mono);font-size:8px;letter-spacing:.13em;text-transform:uppercase;color:var(--d-quiet);margin-top:4px}
+.doc.sh .sh-rr.sh-past .sh-rl{color:var(--d-quiet)}
+.doc.sh .sh-tb{border:1px solid var(--d-rule);border-radius:3px;background:var(--d-card);padding:10px 12px 11px}
+.doc.sh .sh-tbn{font-family:var(--mono);font-size:13px;letter-spacing:.12em;color:var(--d-char);font-weight:600}
+.doc.sh .sh-tbt{font-family:var(--display);font-size:15px;color:var(--d-char);line-height:1.25;margin-top:5px}
+.doc.sh .sh-face{position:relative;border:1px solid var(--d-sheet);border-radius:3px;background:var(--d-paper);padding:15px 18px 16px}
+.doc.sh .sh-lab{display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-family:var(--mono);font-size:8.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--d-quiet)}
+.doc.sh .sh-lab .sh-key{display:inline-flex;align-items:center;gap:6px}
+.doc.sh .sh-key i{display:block;width:16px;height:2px;background:var(--sh-blue)}
+.doc.sh .sh-key.sh-was i{background:var(--sh-red)}
+.doc.sh .sh-elev{position:relative;margin-top:13px;display:grid;grid-template-columns:1.06fr 1fr 1fr;border-top:2px solid rgba(44,41,38,.5);border-bottom:2px solid rgba(44,41,38,.5)}
+.doc.sh .sh-bay{position:relative;height:158px;border-left:1px solid rgba(44,41,38,.44);border-right:1px solid rgba(44,41,38,.44);margin-right:-1px;display:flex;flex-direction:column;justify-content:space-evenly;padding:9px 8px}
+.doc.sh .sh-bay:last-child{margin-right:0}
+.doc.sh .sh-shelf{display:block;height:1px;background:rgba(44,41,38,.4)}
+.doc.sh .sh-bn{position:absolute;left:0;right:0;bottom:5px;text-align:center;font-family:var(--mono);font-size:7.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--d-quiet)}
+.doc.sh .sh-west{border-right-color:var(--sh-red);border-right-width:1.5px}
+.doc.sh .sh-new{position:absolute;top:-9px;bottom:-9px;right:13px;width:1.5px;background:var(--sh-blue)}
+.doc.sh .sh-gap{position:absolute;top:0;bottom:0;right:0;width:13px;background-image:repeating-linear-gradient(45deg,rgba(156,66,56,.22) 0 1.5px,transparent 1.5px 6px)}
+.doc.sh .sh-chase{position:absolute;top:-9px;bottom:-9px;right:-1px;width:14px;border-left:1px dashed var(--sh-red)}
+.doc.sh .sh-dims{display:grid;grid-template-columns:1.06fr 1fr 1fr;margin-top:11px}
+.doc.sh .sh-dim{text-align:center;font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--d-quiet)}
+.doc.sh .sh-dim .sh-was{display:block;color:var(--sh-red);text-decoration:line-through}
+.doc.sh .sh-dim .sh-is{display:inline-block;margin-top:6px;color:var(--sh-blue);border:1px solid var(--sh-blue);border-radius:999px;padding:3px 11px;font-weight:600}
+.doc.sh .sh-pin{position:absolute;right:16px;top:74px;width:206px;border:1px solid var(--d-clay);border-left:2px solid var(--d-clay);border-radius:3px;background:var(--d-card);padding:9px 11px 10px;z-index:5}
+.doc.sh .sh-pk{display:block;font-family:var(--mono);font-size:7.5px;letter-spacing:.16em;text-transform:uppercase;color:#8a6f18}
+.doc.sh .sh-pt{font-family:var(--display);font-style:italic;font-size:12.5px;color:var(--d-char);margin:6px 0 0;max-width:none;line-height:1.4}
+.doc.sh .sh-carry{display:block;font-family:var(--mono);font-size:7.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--d-quiet);margin-top:7px;border-top:1px solid var(--d-pearl);padding-top:6px}
+.doc.sh .sh-foot{margin-top:13px;border-top:1px solid var(--d-rule);padding-top:9px;display:flex;gap:10px 26px;flex-wrap:wrap;font-family:var(--mono);font-size:8.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--d-quiet)}
+.doc.sh .sh-foot b{color:var(--d-char);font-weight:600}
+@media (max-width:820px){ .doc.sh .sh-pin{position:static;width:auto;margin-top:12px} }
+
+/* ================= 09 · THE ISSUE CEREMONY (.is-) ================= */
+/* THE ISSUE. Root .doc.is. Every rule is-prefixed; shell classes (frame,
+ screen, seclab, fld, flab, uin, tchips, tchip, cbx, si, stack, sheet, shead,
+ vitals, anno) used, never restyled. No shadows. */
+.doc.is .is-steps{display:grid;grid-template-columns:1.05fr 1fr;gap:22px;align-items:start}
+@media (max-width:1040px){ .doc.is .is-steps{grid-template-columns:minmax(0,1fr)} }
+.doc.is .is-step{position:relative;border-top:1px solid var(--d-rule);padding-top:11px;margin-top:15px}
+.doc.is .is-step:first-child{border-top:none;margin-top:0;padding-top:0}
+.doc.is .is-n{font-family:var(--mono);font-size:8px;letter-spacing:.22em;text-transform:uppercase;color:var(--d-oak)}
+.doc.is .is-rows{margin-top:9px;border-top:1px solid var(--d-pearl)}
+.doc.is .is-row{display:grid;grid-template-columns:15px 44px minmax(0,1fr) auto;gap:11px;align-items:center;padding:7px 0;border-bottom:1px solid rgba(44,41,38,.08)}
+.doc.is .is-row.is-chg{background:rgba(196,165,123,.13)}
+.doc.is .is-sn{font-family:var(--mono);font-size:10px;color:var(--d-char);letter-spacing:.06em}
+.doc.is .is-tt{font-size:11.5px;color:var(--d-char);line-height:1.3;min-width:0}
+.doc.is .is-row.is-chg .is-tt{font-weight:600}
+.doc.is .is-chgw{font-family:var(--mono);font-size:7.5px;letter-spacing:.13em;text-transform:uppercase;color:#8a6f18;white-space:nowrap}
+.doc.is .is-aud{display:grid;grid-template-columns:15px minmax(0,1fr);gap:11px;align-items:start;padding:8px 0;border-bottom:1px solid rgba(44,41,38,.08)}
+.doc.is .is-an{font-size:12.5px;color:var(--d-char);line-height:1.3}
+.doc.is .is-aud.is-off .is-an{color:rgba(101,89,78,.45)}
+.doc.is .is-ar{display:block;font-family:var(--mono);font-size:8px;letter-spacing:.13em;text-transform:uppercase;color:var(--d-quiet);margin-top:4px}
+.doc.is .is-tx{margin-top:4px}
+.doc.is .is-txl{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;padding:7px 0;border-bottom:1px solid rgba(44,41,38,.08);font-size:12px;color:var(--d-char);align-items:center}
+.doc.is .is-txl:last-of-type{border-bottom:none}
+.doc.is .is-txl span{font-family:var(--mono);font-size:10px;color:var(--d-quiet);white-space:nowrap}
+.doc.is .is-tok{margin-top:11px;border:1px dashed var(--d-pearl);border-radius:3px;background:var(--d-p2);padding:8px 11px;font-family:var(--mono);font-size:9px;letter-spacing:.04em;color:var(--d-mocha);word-break:break-all}
+.doc.is .is-seal{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:12px}
+
+/* ================= 10 · THE FAR END (.fe-) ================= */
+/* WHAT ABEL SEES · WHAT MARGOT SEES. Root .doc.fe. Two frames side by side
+ plus one second-state inset. Every rule fe-prefixed; shell classes (scroller,
+ frame, fbar, furl, screen, band, si, vitals, seclab, astp) used, never
+ restyled. No shadows. */
+.fe-two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:start}
+@media (max-width:1180px){ .fe-two{grid-template-columns:minmax(0,1fr)} }
+.doc.fe .fe-hd{border-bottom:1px solid var(--d-rule);padding-bottom:11px}
+.doc.fe .fe-you{font-family:var(--display);font-size:17px;color:var(--d-char);line-height:1.3;margin:7px 0 0;max-width:none}
+.doc.fe .fe-you b{font-weight:700}
+.doc.fe .fe-list{margin-top:11px}
+.doc.fe .fe-s{display:grid;grid-template-columns:34px 26px minmax(0,1fr) auto;gap:11px;align-items:center;padding:7px 0;border-bottom:1px solid rgba(44,41,38,.08)}
+.doc.fe .fe-s:last-child{border-bottom:none}
+.doc.fe .fe-th{height:42px;width:34px}
+.doc.fe .fe-sn{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;color:var(--d-quiet);display:block}
+.doc.fe .fe-st{font-size:11.5px;color:var(--d-char);line-height:1.3;display:block;margin-top:3px}
+.doc.fe .fe-rd{display:block;font-family:var(--mono);font-size:7.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--d-quiet);margin-top:3px}
+.doc.fe .fe-stand{margin-top:12px;border-top:1px solid var(--d-rule);padding-top:10px;font-family:var(--display);font-style:italic;font-size:13px;color:var(--d-mocha)}
+.doc.fe .fe-grp{margin-top:13px}
+.doc.fe .fe-gh{font-family:var(--mono);font-size:8.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--d-oak);border-bottom:1px solid var(--d-pearl);padding-bottom:5px}
+.doc.fe .fe-cur{font-family:var(--mono);font-size:8px;letter-spacing:.13em;text-transform:uppercase;color:var(--d-quiet);white-space:nowrap}
+.fe-inset{margin-top:14px}
+.doc.fe .fe-amber{border:1px solid var(--d-clay);background:rgba(196,165,123,.16);border-radius:3px;padding:9px 12px}
+.doc.fe .fe-amber p{margin:0;font-family:var(--display);font-style:italic;font-size:12.5px;color:#7a6034;max-width:none}
+
+/* ================= 11 · THE LADDER (.ld-) ================= */
+/* THE LADDER. The three rungs (.ld-steps / .ld-step / .ld-when) are a deck-toned
+ diagram. The Print Tray and the CAD toolbar are proposed product, so they are
+ drawn in portal tokens and scoped to .doc rather than to one slide — slide 11
+ (.doc.ld) and slide 14 (.doc.ddc) render the identical tray from these rules,
+ and neither slide restyles it inline. Every rule ld-prefixed; no shell class
+ restyled. No shadows. */
+.ld-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:end;margin-top:1rem}
+@media (max-width:900px){ .ld-steps{grid-template-columns:minmax(0,1fr);align-items:stretch} }
+.ld-step{border:1px solid var(--rule);border-radius:6px 6px 0 0;background:var(--card);padding:14px 16px 16px;border-bottom:3px solid var(--verdigris)}
+.ld-step.ld-b{border-bottom-color:var(--brass)}
+.ld-step.ld-c{border-bottom-color:var(--rule-2);background:var(--paper-2)}
+.ld-step.ld-c h3,.ld-step.ld-c .ld-when{color:var(--slate)}
+.ld-a{margin-top:66px}
+.ld-b{margin-top:33px}
+@media (max-width:900px){ .ld-a,.ld-b{margin-top:0} }
+.ld-when{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--verdigris);margin-bottom:6px}
+.ld-step.ld-b .ld-when{color:var(--brass)}
+.ld-step p{font-size:.83rem;color:var(--slate);line-height:1.45;margin:.35rem 0 0}
+.doc.ld{margin-top:11px}
+.doc .ld-bar{display:flex;align-items:center;gap:9px;background:var(--d-p3);border:1px solid var(--d-pearl);border-radius:4px 4px 0 0;padding:4px 9px}
+.doc .ld-mk{display:flex;flex-direction:column;gap:2px;width:13px;flex:0 0 auto}
+.doc .ld-mk i{display:block;height:1.5px;border-radius:1px;background:var(--d-mocha)}
+.doc .ld-mk i:nth-child(2){background:var(--d-oak)}
+.doc .ld-mk i:nth-child(3){background:var(--d-clay)}
+.doc .ld-bt{font-family:var(--mono);font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:var(--d-quiet)}
+.doc .ld-menu{border:1px solid var(--d-pearl);border-top:none;border-radius:0 0 4px 4px;background:var(--d-card);padding:9px 11px 11px}
+.doc .ld-ml{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px solid rgba(44,41,38,.08);font-size:10.5px;color:var(--d-char)}
+.doc .ld-ml:last-child{border-bottom:none}
+.doc .ld-ml em{font-style:normal;font-family:var(--mono);font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--d-quiet);white-space:nowrap}
+.doc .ld-ml.ld-new{color:#7a6034}
+.doc .ld-watch{font-family:var(--mono);font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:var(--d-quiet);border-bottom:1px solid var(--d-pearl);padding-bottom:7px}
+.doc .ld-cad{border:1px solid var(--d-pearl);border-radius:4px;background:var(--d-p2);padding:7px 9px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.doc .ld-cb{font-family:var(--mono);font-size:8px;letter-spacing:.11em;text-transform:uppercase;color:var(--d-quiet);border:1px solid var(--d-pearl);border-radius:3px;padding:4px 8px;background:var(--d-card)}
+.doc .ld-cb.ld-on{color:var(--d-mocha);border-color:var(--d-oak)}
+
+/* ============ 12–14 · THE DIRECTION INSETS (.dda- .ddb- .ddc-) ============ */
+/* Three compact insets, one per direction. Roots .doc.dda / .doc.ddb /
+ .doc.ddc. Every rule prefixed; shell classes (stack, sheet, shead, vitals,
+ ssub, seclab, si, band, frame, screen, astp) used, never restyled. */
+.doc.dda .dda-shelf{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;border-top:1px solid var(--d-rule);border-bottom:1px solid var(--d-rule);padding:9px 0;margin-top:13px;font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--d-quiet)}
+.doc.dda .dda-shelf b{color:var(--d-char);font-weight:600}
+.doc.dda .dda-chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}
+.doc.dda .dda-chip{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--d-pearl);border-radius:16px;background:var(--d-card);padding:4px 11px;font-family:var(--mono);font-size:8.5px;letter-spacing:.09em;color:var(--d-quiet);white-space:nowrap}
+.doc.dda .dda-chip b{color:var(--d-char);font-weight:600}
+.doc.dda .dda-chip.dda-cur{border-color:var(--d-oak)}
+.doc.dda .dda-pap{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
+.doc.dda .dda-pchip{border:1px dashed var(--d-pearl);border-radius:16px;padding:4px 11px;font-family:var(--mono);font-size:8.5px;letter-spacing:.09em;color:rgba(101,89,78,.55)}
+
+.doc.ddb .ddb-thresh{border:1px solid var(--d-clay);border-radius:4px 4px 0 0;background:rgba(196,165,123,.14);padding:11px 14px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:13px}
+.doc.ddb .ddb-tl{font-family:var(--display);font-size:15px;color:var(--d-char);line-height:1.3}
+.doc.ddb .ddb-tv{display:block;font-family:var(--mono);font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:#8a6f18;margin-top:5px}
+.doc.ddb .ddb-drawer{border:1px solid var(--d-clay);border-top:none;border-radius:0 0 4px 4px;background:var(--d-card);padding:12px 14px 8px;position:relative;overflow:hidden;max-height:126px}
+.doc.ddb .ddb-drawer::after{content:"";position:absolute;left:0;right:0;bottom:0;height:34px;background:linear-gradient(180deg,rgba(255,255,255,0),var(--d-card))}
+.doc.ddb .ddb-row{display:grid;grid-template-columns:44px 24px minmax(0,1fr) auto;gap:11px;align-items:center;padding:6px 0;border-bottom:1px solid rgba(44,41,38,.08);font-size:11.5px;color:var(--d-char)}
+.doc.ddb .ddb-th{height:30px;width:44px}
+.doc.ddb .ddb-pull{position:absolute;left:50%;bottom:5px;transform:translateX(-50%);width:44px;height:3px;border-radius:2px;background:var(--d-clay);z-index:2}
+
+/* the inset needs its own paper ground: unlike A and B it is not inside a
+   .frame, so in the dark theme its captions would sit on deck ink. */
+.doc.ddc{background:var(--d-page);border:1px solid var(--d-pearl);border-radius:8px;padding:15px 17px 17px}
+.doc.ddc .ddc-two{display:grid;grid-template-columns:200px minmax(0,1fr);gap:14px;align-items:start;margin-top:13px}
+@media (max-width:760px){ .doc.ddc .ddc-two{grid-template-columns:minmax(0,1fr)} }
+.doc.ddc .ddc-flow{position:relative;border-left:1px dashed var(--d-clay);padding-left:14px}
+.doc.ddc .ddc-lt{border:1px solid var(--d-pearl);border-radius:4px;background:var(--d-card);padding:11px 13px 12px}
+.doc.ddc .ddc-r{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:11px;align-items:center;padding:6px 0;border-bottom:1px solid rgba(44,41,38,.08);font-size:11.5px;color:var(--d-char)}
+.doc.ddc .ddc-r:last-child{border-bottom:none}
+.doc.ddc .ddc-th{height:42px;width:34px}
+.doc.ddc .ddc-q{font-family:var(--mono);font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:var(--d-quiet);white-space:nowrap}
+
+/* ---------- print ---------- */
+@media print{
+ html,body{height:auto;background:#fff;color:#000;background-image:none}
+ #deck{height:auto;overflow:visible}
+ #chrome,#hint,#progress{display:none !important}
+ .slide{min-height:auto;height:auto;page-break-after:always;break-after:page;padding:12mm 10mm;border-bottom:none;display:block}
+ .slide.ink{background:#fff;background-image:none;color:#000}
+ .slide:last-child{page-break-after:auto;break-after:auto}
+ .slide .main > *,.slide .gutter > *{opacity:1 !important;transform:none !important}
+ .card,.frame,.tablewrap,.qs,.ld-step{break-inside:avoid}
+ .scroller{overflow:visible}
+ .scroller .frame,.scroller.narrow .frame{min-width:0 !important}
+ h1{font-size:28pt}h2{font-size:18pt}
+ .inner,.slide.wide .inner{max-width:none}
+ .ld-a,.ld-b{margin-top:0}
+}
+</style>
+</head>
+<body>
+
+<noscript><style>html .slide .main > *, html .slide .gutter > *{opacity:1 !important;transform:none !important}</style></noscript>
+
+<!--
+THE FIXTURE — one canonical fictional job. All mockups render this EXACT state. Values verbatim; never invent names, sheet numbers, dimensions, or dates.
+Job: the WHITLOCK RESIDENCE — a full-floor furnishing and millwork job. Client: Margot Whitlock. Designer: Nell Adair, Adair Studio (nell@adairstudio.com). Nell draws in AutoCAD LT on a Mac; her plots land in ~/Plots/Whitlock/.
+Trades: Abel Boone, Boone Millwork (millworker — the wound happens to him) - Otto Fenn, Fenn Metalworks (steel + brass, the study) - Vera Lindqvist, Lindqvist Upholstery (window seat, banquette) - Doug Merrill, Merrill Bros. Construction (GC, receives "for information").
+THE SHEET SET (7, with the rev letter each sheet stands at):
+ ID-001 Cover & Sheet Index (Rev B) - ID-101 Furniture Plan, Main Floor (Rev B) - ID-201 Reflected Ceiling Plan, Main Floor (Rev A) - ID-301 Finish Plan, Main Floor (Rev B) - ID-401 Millwork Elevations, Study (Rev C) - ID-402 Millwork Elevations, Banquette (Rev B) - ID-501 Millwork Details, Study Shelving (Rev C).
+THE REVISION EVENT: ID-401 Rev C narrows the study's WEST SHELVING BAY from 34 1/2" to 33 3/4" after a concealed steel column chase is found in the west wall on the 30 Jul site visit. ID-501 revises with it.
+TIMELINE (dated once, here): 8 Jul Rev A set issued for pricing to Boone, Fenn, Lindqvist - 22 Jul Rev B emailed to Abel "for production" on a thread titled "Re: Re: Fwd: Study millwork — UPDATED" - 30 Jul chase found on site - 1 Aug Nell plots Rev C as Whitlock_ID-401_RevC_FINAL.pdf, then Whitlock_ID-401_RevC_FINAL2.pdf an hour later - 2 Aug Rev C sent as a reply on the same thread; Abel never opens it - 4 Aug Abel cuts walnut uprights and case sides from Rev B, bays at 34 1/2" - 6 Aug dry-fit fails against the chase. Cost: $2,840 in walnut, nine working days, one apology call to Margot.
+IN THE PROPOSED WORLD: Rev C is uploaded and confirmed on the Light Table 1 Aug, and issued 4 Aug as "Production Set — 4 Aug 2026" to Boone Millwork FOR PRODUCTION. For the three days between, the drawing log shows Boone amber: "Boone Millwork holds Rev B."
+THE LEDGER THAT PRODUCES EVERY HOLDER LINE (bind to this; do not invent a transmittal):
+ 8 Jul 08:40 filed 7 prints at Rev A - 09:10 issued "Pricing Set — 8 Jul 2026" (7 sheets at Rev A) - 09:11 transmitted FOR PRICING to Boone Millwork, Fenn Metalworks, Lindqvist Upholstery.
+ 22 Jul 13:36 filed 6 prints at Rev B (ID-201 unchanged, stays Rev A) - 13:36 flipped those 6 to Rev B - 14:02 issued "Production Set — 22 Jul 2026" (6 sheets at Rev B, ID-201 at Rev A) - 14:03 transmitted FOR PRODUCTION to Boone Millwork - 14:04 transmitted FOR INFORMATION to Merrill Bros. Construction.
+ 1 Aug 11:57 filed 6 sheets from Whitlock_ID-Set_2026-08-01.pdf (2 new prints, 4 confirmed current) - 11:57 flipped ID-401 and ID-501 to Rev C.
+ THEREFORE, on 4 Aug before the issue goes out: Boone and Merrill hold Rev B - Fenn and Lindqvist hold Rev A (they were never sent the 22 Jul set) - ID-201 has never revised, so everyone holds its Rev A. No other transmittal exists.
+ Short hashes, kept distinct: print sha 9f3a... - set checksum sha c41d... - share token tk_7e28...
+FIXTURE CONTRACT — every full-bleed mock must visibly surface at least THREE of these five: (1) ID-401 - Millwork Elevations, Study; (2) the 34 1/2" -> 33 3/4" west bay; (3) rev letters A/B/C with dates 8 Jul / 22 Jul / 1 Aug; (4) "Production Set — 4 Aug 2026 - for production - Boone Millwork"; (5) the amber "Boone Millwork holds Rev B."
+Nothing here is built. No migration exists. The Whitlock residence is fictional and lives only in this file.
+-->
+
+<div id="progress" role="presentation"></div>
+
+<div id="deck" tabindex="-1">
+
+<!-- ============ 01 · COVER ============ -->
+<section class="slide cover ink" data-label="Cover">
+ <div class="inner">
+  <div class="main">
+   <div class="wordmark">
+    <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+    <line x1="2" y1="6.5" x2="20" y2="6.5" stroke="currentColor" stroke-width="1.5"/>
+    <line x1="2" y1="11" x2="20" y2="11" stroke="currentColor" stroke-width="1.5" opacity=".6"/>
+    <line x1="2" y1="15.5" x2="20" y2="15.5" stroke="currentColor" stroke-width="1.5" opacity=".32"/>
+    </svg>
+    <span>Patina &middot; The plan room</span>
+   </div>
+
+   <h1>The Current<br>Set.</h1>
+   <p class="lede">Every drawing the studio holds, and the one pointer that says which of them is true. A plan room for Patina &mdash; sheets, revisions, issues, and transmittals &mdash; so no one ever again builds from the print before this one.</p>
+
+   <blockquote class="cover-quote">No one owns the pointer to current.<span class="attr">the finding under every stale-drawing story</span></blockquote>
+
+   <div class="cover-meta">
+    <span>Deck <b>docs/design/the-current-set</b></span>
+    <span>Directions <b>3</b></span>
+    <span>Screens <b>5</b></span>
+    <span>Status <b>proposal, nothing built</b></span>
+    <span><b>6 August 2026</b></span>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 02 · THE WOUND ============ -->
+<section class="slide" data-label="The cut from Rev B">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act I &middot; The wound</span><span class="num">02</span><span class="tick"></span></div>
+  <div class="main">
+   <h2>The cut from Rev B.</h2>
+   <p class="lede">On 4 August Abel Boone cut walnut uprights and case sides for the Whitlock study at <strong>34 1/2"</strong>. The current drawing had said <strong>33 3/4"</strong> since the first of the month. Three surfaces stood between the change and his saw, and not one of them owned the word <em>current</em>. Drawn below in the deck&rsquo;s own tones, because this is the world as it stands &mdash; not as it is proposed.</p>
+
+   <div class="mockgrid">
+    <div class="exhibit">
+    <div class="wd-tri">
+
+     <div>
+     <span class="wd-lab">a &middot; the plots folder</span>
+     <div class="frame">
+      <div class="fbar"><span class="fdots"><i></i><i></i><i></i></span><span class="furl">~/Plots/<b>Whitlock</b></span></div>
+      <div class="screen wd-scr">
+      <div class="wd-files">
+       <div class="wd-f"><span class="wd-ico"></span><span class="wd-fn">Whitlock_ID-401_RevB.pdf</span><span class="wd-when">22 Jul</span></div>
+       <div class="wd-f wd-hot"><span class="wd-ico"></span><span class="wd-fn">Whitlock_ID-401_RevC_<b>FINAL</b>.pdf</span><span class="wd-when">1 Aug &middot; 10:42</span></div>
+       <div class="wd-f wd-hot"><span class="wd-ico"></span><span class="wd-fn">Whitlock_ID-401_RevC_<b>FINAL2</b>.pdf</span><span class="wd-when">1 Aug &middot; 11:51</span></div>
+       <div class="wd-f"><span class="wd-ico"></span><span class="wd-fn">Whitlock_ID-501_RevC.pdf</span><span class="wd-when">1 Aug</span></div>
+       <div class="wd-f"><span class="wd-ico"></span><span class="wd-fn">Whitlock_ID-Set_RevA.pdf</span><span class="wd-when">8 Jul</span></div>
+       <div class="wd-f"><span class="wd-ico"></span><span class="wd-fn">Whitlock_ID-Set_RevB.pdf</span><span class="wd-when">22 Jul</span></div>
+       <div class="wd-f"><span class="wd-ico"></span><span class="wd-fn">study_chase_photo.heic</span><span class="wd-when">30 Jul</span></div>
+      </div>
+      <span class="anno" style="right:8px;top:62px"><span class="ldr" style="width:20px"></span><span class="dot">1</span></span>
+      </div>
+     </div>
+     </div>
+
+     <div>
+     <span class="wd-lab">b &middot; the thread</span>
+     <div class="frame">
+      <div class="fbar"><span class="fdots"><i></i><i></i><i></i></span><span class="furl">mail &rarr; <b>abel@boonemillwork.com</b></span></div>
+      <div class="screen wd-scr">
+      <p class="wd-sub" style="margin:0">Re: Re: Fwd: Study millwork &mdash; UPDATED</p>
+      <div style="margin-top:9px">
+       <div class="wd-msg"><span class="wd-udot"></span><div><span class="wd-who">Nell Adair &middot; 8 Jul</span><span class="wd-body">Rev A set for pricing &mdash; three of you.</span><span class="wd-att">Whitlock_ID-Set_RevA.pdf</span></div></div>
+       <div class="wd-msg"><span class="wd-udot"></span><div><span class="wd-who">Nell Adair &middot; 22 Jul</span><span class="wd-body">Rev B &mdash; go ahead and put this into production.</span><span class="wd-att">Whitlock_ID-401_RevB.pdf</span></div></div>
+       <div class="wd-msg wd-unread"><span class="wd-udot"></span><div><span class="wd-who">Nell Adair &middot; 2 Aug</span><span class="wd-body">Sorry &mdash; one more. West bay tightened for a chase we found.</span><span class="wd-att wd-hot">Whitlock_ID-401_RevC_FINAL2.pdf</span></div></div>
+      </div>
+      <span class="anno" style="left:196px;top:150px"><span class="ldr" style="width:22px"></span><span class="dot">2</span></span>
+      </div>
+     </div>
+     </div>
+
+     <div>
+     <span class="wd-lab">c &middot; today&rsquo;s Folio</span>
+     <div class="frame">
+      <div class="fbar"><span class="fdots"><i></i><i></i><i></i></span><span class="furl">app.patina.cloud/doc/<b>whitlock</b> &rarr; folio</span></div>
+      <div class="screen wd-scr">
+      <div class="wd-src">ID-401 &middot; one sheet in the world</div>
+      <div class="wd-tee"></div>
+      <div class="wd-legs"></div>
+      <div class="wd-chips">
+       <div class="wd-chip"><span class="wd-cn">Whitlock_ID-401_RevC_FINAL.pdf</span><span class="wd-cm">v1 &middot; a chain of one</span></div>
+       <div class="wd-chip"><span class="wd-cn">Whitlock_ID-401_RevC_FINAL2.pdf</span><span class="wd-cm">v1 &middot; a chain of one</span></div>
+      </div>
+      <div class="wd-cost">
+       <span>two names, two chains, <b>no version anywhere</b> &mdash; the suffix is the version system</span>
+      </div>
+      <span class="anno" style="left:214px;top:118px"><span class="ldr" style="width:20px"></span><span class="dot">3</span></span>
+      <span class="anno" style="left:214px;top:186px"><span class="ldr" style="width:20px"></span><span class="dot">4</span></span>
+      </div>
+     </div>
+     </div>
+
+    </div>
+
+    <div class="band wd-band">
+     <p>6 August: the dry-fit fails against the chase. <strong>$2,840 in walnut &middot; nine working days &middot; one apology call to Margot.</strong></p>
+     <span class="anno" style="left:auto;right:14px;top:12px"><span class="ldr" style="width:18px"></span><span class="dot">5</span></span>
+    </div>
+    </div>
+
+    <div class="mnotes">
+    <div class="mnote"><span class="dot">1</span><p><b>The filename is the version system.</b> <code>_FINAL</code>, then <code>_FINAL2</code> an hour later. Nothing on the machine, and nothing in Patina, can say which of the two Nell meant.</p></div>
+    <div class="mnote"><span class="dot">2</span><p><b>The send is unrecorded.</b> Rev C went out as a reply on a thread three subjects deep. Patina holds no row saying Abel was sent it, and none saying he never opened it.</p></div>
+    <div class="mnote"><span class="dot">3</span><p><b>The Folio never sees a sheet at all.</b> Chaining is client-side and keys on an exact title match &mdash; filename to filename. Two names means two chains, each a v1 head of its own. Neither file is a version of anything, and nothing in the row says which is later.</p></div>
+    <div class="mnote"><span class="dot">4</span><p><b>Nobody owns the pointer to current.</b> Not the folder, not the thread, not the folio. Three surfaces each hold a candidate; none of them holds the answer.</p></div>
+    <div class="mnote"><span class="dot">5</span><p><b>The cost is not the drawing.</b> It is the walnut, the nine days, and the call &mdash; and it lands on the trade, who did exactly what the paper in his hand told him to do.</p></div>
+    </div>
+   </div>
+
+   <p class="figcap"><b>Exhibit</b> &nbsp;The Whitlock study, 1&ndash;6 August 2026, as the tools stand today. Nothing here is broken. The folder saved the file, the mail client sent the mail, the folio kept the upload. The wound is that no system was ever asked to answer <em>which print is current, and who has it</em>.</p>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 03 · THE INVENTORY ============ -->
+<section class="slide" data-label="The inventory">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act I &middot; The inventory</span><span class="num">03</span><span class="tick"></span></div>
+  <div class="main">
+   <h2>Patina has learned to version everything except the drawings.</h2>
+   <p class="lede">Five systems already in the house do a piece of this work. Each holds part of a plan room; none of them holds a plan room. Read the right column as a shopping list &mdash; it is the whole build.</p>
+
+   <div class="tablewrap">
+    <table>
+    <thead>
+    <tr><th style="width:20%">The system</th><th style="width:40%">What it already has</th><th>What it lacks</th></tr>
+    </thead>
+    <tbody>
+    <tr>
+     <td class="lead">Folio versions</td>
+     <td>A <code>version_of</code> chain on documents, a v{n} slide-out, and an upload path a designer already uses daily.</td>
+     <td class="gone">chaining is proposed client-side on a title match, so two filenames fork one sheet &middot; no head pointer &middot; no rev letters &middot; nothing states which version is current</td>
+    </tr>
+    <tr>
+     <td class="lead">Proposal supersede</td>
+     <td>Supersede-on-send: issuing a new revision retires the old one atomically, and the retired one says so.</td>
+     <td class="gone">bound to the proposal lifecycle &middot; one document per event, never a set &middot; no audience, no purpose, no re-issue to a subset</td>
+    </tr>
+    <tr>
+     <td class="lead">Spec Book issues</td>
+     <td>The grammar we want, already shipped: an immutable revision ledger, snapshots, sha256 per artifact, named audiences, drift detection.</td>
+     <td class="gone">it books specifications, not sheets &middot; no page-level identity &middot; no drawing viewer &middot; nothing a trade recognises as a print</td>
+    </tr>
+    <tr>
+     <td class="lead">Room Files</td>
+     <td>Append-only per-scan versions with checksums, produced by the scanner without a human touching a filename.</td>
+     <td class="gone">a private capture record, not a published set &middot; never issued, never transmitted, invisible to a trade</td>
+    </tr>
+    <tr>
+     <td class="lead"><code>document_shares</code></td>
+     <td>sha256 share tokens, 120-second signed URLs, guest routes with no account &mdash; the trade-facing rail already proven by <code>/field/spec-book</code>.</td>
+     <td class="gone">shares one document, not a set &middot; no purpose (&ldquo;for production&rdquo;) &middot; a view count, but no per-recipient record of who was sent what, or why &middot; nothing tells the guest whether what he holds still stands</td>
+    </tr>
+    </tbody>
+    </table>
+   </div>
+
+   <div class="callout">
+    <span class="kicker">The punchline</span>
+    <p>Every part of the plan room already exists once, somewhere in the house. <strong>What has never existed is the sheet</strong> &mdash; the identity that outlives its files and holds one pointer saying which print is true.</p>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 04 · THE LAWS ============ -->
+<section class="slide" data-label="The laws">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act II &middot; The laws</span><span class="num">04</span><span class="tick"></span></div>
+  <div class="main">
+   <h2>Six laws every direction obeys.</h2>
+   <p class="lede">These are not the differences. They are the floor. A drawing surface that fails one of them is not a plan room &mdash; it is a folder with better manners.</p>
+
+   <div class="grid g3">
+    <div class="card accent tight">
+    <span class="kicker">Law one</span>
+    <h3>One sheet, one identity.</h3>
+    <p>A file is a <em>print</em> of a sheet. ID-401 is the sheet; Rev A, Rev B, and Rev C are prints that stack behind it. Uploading a file never mints a sheet.</p>
+    </div>
+    <div class="card accent tight">
+    <span class="kicker">Law two</span>
+    <h3>The current set is the default truth.</h3>
+    <p>Every surface &mdash; studio, client, token &mdash; opens on the current set. History is one gesture away and never the front door.</p>
+    </div>
+    <div class="card accent tight">
+    <span class="kicker">Law three</span>
+    <h3>Nothing becomes current silently.</h3>
+    <p>Every promotion crosses the Light Table and a human hand. Uploaded is not published; the machine proposes, the designer confirms.</p>
+    </div>
+   </div>
+
+   <div class="grid g3">
+    <div class="card accent tight">
+    <span class="kicker">Law four</span>
+    <h3>An issue is a promise.</h3>
+    <p>What was sent never changes. Correcting an issue means minting a new one that supersedes it &mdash; never rewriting the old. <em>Inherited whole from the Spec Book.</em></p>
+    </div>
+    <div class="card accent tight">
+    <span class="kicker">Law five</span>
+    <h3>Superseded paper says so on its face.</h3>
+    <p>The stamp is on the paper wherever the house hands it to you &mdash; the portal, the token view, and the download, which burns it in as it serves. The stored print never changes, so its checksum keeps standing.</p>
+    </div>
+    <div class="card warn tight">
+    <span class="kicker">Law six</span>
+    <h3>The PDF is the word given; the DWG is the hand that wrote it.</h3>
+    <p>We version the word. The source file may ride along as an attachment &mdash; never synced, never parsed, never promised.</p>
+    </div>
+   </div>
+
+   <div class="note">
+    <span class="kicker">Why law six is a law and not a preference</span>
+    <p>Two-way CAD sync is the graveyard of this category. Procore built it, shipped it, and killed it in September 2022 &mdash; the failure mode is not a bug but a promise: once a platform claims to understand the drawing file, every mis-parse becomes the platform&rsquo;s liability, on a job site, against a saw. Patina versions the plot, which is what the trade builds from anyway.</p>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 05 · THE MODEL ============ -->
+<section class="slide" data-label="The model">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act II &middot; The model</span><span class="num">05</span><span class="tick"></span></div>
+  <div class="main">
+   <h2>The nouns, over the Whitlock set.</h2>
+   <p class="lede">Eight nouns, each one an extension of something already shipped. Nothing here is invented from nothing; the plan room is mostly a rearrangement of primitives the house already trusts.</p>
+
+   <div class="grid g4">
+    <div class="card accent tight">
+    <span class="kicker">The Sheet</span>
+    <h3>Identity.</h3>
+    <p><strong>ID-401 &middot; Millwork Elevations &mdash; Study.</strong> A number, a title, a discipline. Promotes today&rsquo;s fragile client-side title-match into a server-side noun.</p>
+    </div>
+    <div class="card accent tight">
+    <span class="kicker">The Print</span>
+    <h3>One file, one revision.</h3>
+    <p>Rev A &middot; 8 Jul, Rev B &middot; 22 Jul, Rev C &middot; 1 Aug. <code>version_of</code> hardened server-side; rev letters assigned at confirm, never parsed from a filename.</p>
+    </div>
+    <div class="card accent tight">
+    <span class="kicker">The Current Set</span>
+    <h3>The pointer.</h3>
+    <p>A server-held <code>current_print_id</code> per sheet. The seven pointers read together <em>are</em> the current set, and they are the default view everywhere.</p>
+    </div>
+    <div class="card accent tight">
+    <span class="kicker">The Light Table</span>
+    <h3>Uploaded &ne; published.</h3>
+    <p>Split, propose, confirm. The staging surface where a drop becomes prints, and where the whole set flips in one transaction or not at all.</p>
+    </div>
+   </div>
+
+   <div class="grid g4">
+    <div class="card accent tight">
+    <span class="kicker">The Issue</span>
+    <h3>A named, dated version set.</h3>
+    <p><strong>&ldquo;Production Set &mdash; 4 Aug 2026.&rdquo;</strong> The <code>spec_book_revisions</code> grammar verbatim: immutable ledger, snapshots, sha256, drift detection.</p>
+    </div>
+    <div class="card accent tight">
+    <span class="kicker">The Transmittal</span>
+    <h3>Who, what, when, for what purpose.</h3>
+    <p>Immutable. <code>document_shares</code> grows a <code>plan_set</code> kind; the guest route is <code>/plans/[token]</code>, no account, no new auth surface.</p>
+    </div>
+    <div class="card accent tight">
+    <span class="kicker">States</span>
+    <h3>Draft &rarr; Shared &rarr; Issued &rarr; Superseded.</h3>
+    <p>Four words on the face of every print. The model <em>can</em> retire <code>client_visible</code> as a separate toggle and derive client visibility from &ldquo;at least Shared&rdquo; &mdash; question three asks whether it should.</p>
+    </div>
+    <div class="card accent tight">
+    <span class="kicker">Notes</span>
+    <h3>They ride the sheet.</h3>
+    <p>An anchored note attaches to ID-401, not to Rev B. It promotes forward wearing <em>&ldquo;carried from Rev B &mdash; confirm placement.&rdquo;</em></p>
+    </div>
+   </div>
+
+   <div class="tablewrap">
+    <table>
+    <thead><tr><th style="width:22%">The noun</th><th style="width:34%">The primitive it extends</th><th>What has to be new</th></tr></thead>
+    <tbody>
+    <tr><td class="lead">The Sheet</td><td class="where">folio documents + the title-match heuristic</td><td>a <code>sheets</code> table: number, title, discipline, project &mdash; identity that outlives its files</td></tr>
+    <tr><td class="lead">The Print</td><td class="where">documents.version_of</td><td>server-side stacking behind an RPC, a single-chain-head trigger, rev letters assigned at confirm</td></tr>
+    <tr><td class="lead">The Current Set</td><td class="where">nothing &mdash; this is the missing noun</td><td><code>sheets.current_print_id</code>, flipped atomically for a whole set</td></tr>
+    <tr><td class="lead">The Light Table</td><td class="where">folio upload + the proposal review step</td><td>client-side PDF page split, sheet-number parse off the text layer, an explicit new-sheet / new-revision fork</td></tr>
+    <tr><td class="lead">The Issue</td><td class="where">spec_book_revisions</td><td>only its subject: sheets instead of specifications</td></tr>
+    <tr><td class="lead">The Transmittal</td><td class="where">document_shares + /field/spec-book guest route</td><td>a <code>plan_set</code> share kind, a purpose, and one row per recipient &mdash; who, what, when, why</td></tr>
+    <tr><td class="lead">States</td><td class="where">client_visible</td><td>a four-state word; whether client visibility derives from it, or the toggle survives beside it, is question three</td></tr>
+    <tr><td class="lead">Notes</td><td class="where">document annotations</td><td>an anchor on the sheet rather than the file, and a carried-forward flag</td></tr>
+    </tbody>
+    </table>
+   </div>
+
+   <div class="callout">
+    <span class="kicker">Two doors this model could open</span>
+    <p>Room Files <em>could</em> register as <strong>system-authored sheets</strong> &mdash; the scanner would become the first thing in Patina that publishes to the plan room, without a designer ever naming a file. And Spec Book issues <em>could</em> appear as <strong>lines of record in one project-wide transmittal ledger</strong>, so &ldquo;what has this trade been sent&rdquo; had a single answer instead of two. Neither is settled here: question one on slide 16 asks the first of them, and the second waits on it.</p>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 06 · MOCK 1 — THE LIGHT TABLE ============ -->
+<section class="slide wide" data-label="The Light Table">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act III &middot; Mock 1</span><span class="num">06</span></div>
+  <div class="main">
+   <h2>The Light Table.</h2>
+   <p class="lede">Nell drags one plot onto the page. The table splits it, reads the sheet numbers off the text layer, and <em>proposes</em> where each page belongs &mdash; a revision of a sheet she already has, a new sheet, or nothing it recognises. Nothing is current until she says so, and then all of it is, at once.</p>
+
+   <div class="mockgrid">
+   <div class="doc lt">
+   <div class="scroller">
+   <div class="frame w980">
+   <div class="fbar"><span class="fdots"><i></i><i></i><i></i></span><span class="furl">app.patina.cloud/doc/<b>whitlock</b> &rarr; the plan room &rarr; light table</span></div>
+   <div class="screen">
+
+    <div class="lt-top">
+    <div>
+     <div class="seclab" style="margin-top:0"><b>The Light Table</b><i>Uploaded, not published &mdash; every print here is a Draft until you confirm. Six proposals wait on your hand.</i></div>
+     <span class="lt-drop">dropped <b>Whitlock_ID-Set_2026-08-01.pdf</b> &middot; 24 pages &middot; 1 Aug, 11:54</span>
+    </div>
+    <span class="vitals" style="margin:0">Whitlock residence &middot; 7 sheets on file</span>
+    </div>
+    <span class="anno" style="right:22px;top:52px"><span class="ldr" style="width:22px"></span><span class="dot">1</span></span>
+
+    <div class="lt-grid">
+
+    <div class="lt-card lt-hero">
+     <div>
+     <span class="dw-pg elev lt-pg"><i class="dw-tb"></i></span>
+     <span class="lt-pn">p.9</span>
+     </div>
+     <div>
+     <span class="lt-arrow">proposed &rarr; a revision of a sheet you hold</span>
+     <span class="lt-sn">ID-401 &middot; Millwork Elevations &mdash; Study</span>
+     <span class="lt-becomes">becomes Rev C</span>
+     <p class="lt-say">current: <b>Rev B &middot; 22 Jul</b> &mdash; the west shelving bay reads <b>33 3/4"</b> on this page, against <b>34 1/2"</b> on the print in force.</p>
+     <span class="lt-hist">the stack behind it &middot; Rev B &middot; 22 Jul &middot; Rev A &middot; 8 Jul</span>
+     <div class="lt-fork">
+      <span class="lt-opt on">a revision of ID-401</span>
+      <span class="lt-opt">a new sheet</span>
+     </div>
+     </div>
+     <span class="anno" style="right:10px;bottom:10px"><span class="ldr" style="width:18px"></span><span class="dot">2</span></span>
+    </div>
+
+    <div class="lt-card">
+     <div>
+     <span class="dw-pg det lt-pg"><i class="dw-tb"></i></span>
+     <span class="lt-pn">p.11</span>
+     </div>
+     <div>
+     <span class="lt-arrow">proposed &rarr; revision</span>
+     <span class="lt-sn">ID-501 &middot; Millwork Details &mdash; Study Shelving</span>
+     <span class="lt-becomes">becomes Rev C</span>
+     <p class="lt-say">current: Rev B &middot; 22 Jul. Revises with ID-401.</p>
+     </div>
+    </div>
+
+    <div class="lt-card">
+     <div>
+     <span class="dw-pg loose lt-pg"><i class="dw-tb"></i></span>
+     <span class="lt-pn">p.1</span>
+     </div>
+     <div>
+     <span class="lt-arrow">proposed &rarr; matched</span>
+     <span class="lt-sn">ID-001 &middot; Cover &amp; Sheet Index</span>
+     <span class="lt-keeps">matches Rev B &middot; no new revision</span>
+     </div>
+    </div>
+
+    <div class="lt-card">
+     <div>
+     <span class="dw-pg plan lt-pg"><i class="dw-tb"></i></span>
+     <span class="lt-pn">p.3</span>
+     </div>
+     <div>
+     <span class="lt-arrow">proposed &rarr; matched</span>
+     <span class="lt-sn">ID-101 &middot; Furniture Plan &mdash; Main Floor</span>
+     <span class="lt-keeps">matches Rev B &middot; no new revision</span>
+     </div>
+    </div>
+
+    <div class="lt-card">
+     <div>
+     <span class="dw-pg plan lt-pg"><i class="dw-tb"></i></span>
+     <span class="lt-pn">p.7</span>
+     </div>
+     <div>
+     <span class="lt-arrow">proposed &rarr; matched</span>
+     <span class="lt-sn">ID-301 &middot; Finish Plan &mdash; Main Floor</span>
+     <span class="lt-keeps">matches Rev B &middot; no new revision</span>
+     </div>
+    </div>
+
+    <div class="lt-card lt-new">
+     <div>
+     <span class="dw-pg elev lt-pg"><i class="dw-tb"></i></span>
+     <span class="lt-pn">p.14</span>
+     </div>
+     <div>
+     <span class="lt-arrow">proposed &rarr; a new sheet</span>
+     <span class="lt-sn">ID-402 &middot; Millwork Elevations &mdash; Banquette</span>
+     <p class="lt-say">the title block parsed as <b>ID&#8209;4O2</b> &mdash; a letter O, not a zero. You hold an ID-402 at Rev B.</p>
+     <div class="lt-fork">
+      <span class="lt-opt">a new sheet</span>
+      <span class="lt-opt on">file to ID-402 &middot; no new revision</span>
+     </div>
+     </div>
+     <span class="anno" style="right:10px;bottom:10px"><span class="ldr" style="width:18px"></span><span class="dot">3</span></span>
+    </div>
+
+    </div>
+
+    <div class="lt-rest">16 further pages matched cleanly and are collapsed &middot; open them</div>
+
+    <div class="lt-tray">
+    <div class="seclab" style="margin-top:0"><b>Loose papers</b><i>Two pages carry no sheet number. They fall to the Folio, not the floor.</i></div>
+    <div class="lt-loose">
+     <div class="lt-lp"><span class="dw-pg loose lt-pg"></span><span class="lt-lt">p.22 &mdash; photograph of the west wall chase, 30 Jul</span></div>
+     <div class="lt-lp"><span class="dw-pg loose lt-pg"></span><span class="lt-lt">p.23 &mdash; Boone Millwork cut list, faxed</span></div>
+    </div>
+    <span class="anno" style="right:8px;top:4px"><span class="ldr" style="width:18px"></span><span class="dot">5</span></span>
+    </div>
+
+    <div class="lt-bar">
+    <span class="si lg">File 6 sheets &middot; 2 pointers move</span>
+    <span class="si ter">Save the table for later</span>
+    <span class="lt-count">nothing is current yet &middot; <b>2 sheets change rev</b> &middot; 4 confirmed current &middot; one transaction</span>
+    <span class="anno" style="right:22px;bottom:16px"><span class="ldr" style="width:20px"></span><span class="dot">4</span></span>
+    </div>
+
+   </div>
+   </div>
+   </div>
+   </div>
+
+   <div class="mnotes">
+    <div class="mnote"><span class="dot">1</span><p><b>Split by sheet number, off the PDF text layer.</b> No OCR in v1 &mdash; a plot from AutoCAD carries its title block as text. A miss just means Nell drags the page onto the right sheet.</p></div>
+    <div class="mnote"><span class="dot">2</span><p><b>The table proposes; it never files.</b> Rev letters are assigned here, at confirm, by the system &mdash; never read from <code>_FINAL2</code>. The filename is evidence, not authority.</p></div>
+    <div class="mnote"><span class="dot">3</span><p><b>New sheet or new revision is an explicit fork.</b> A parse typo cannot mint a phantom sheet, because minting one is a separate answer to a separate question. This is today&rsquo;s exact folio failure, made impossible.</p></div>
+    <div class="mnote"><span class="dot">4</span><p><b>Nothing is current yet.</b> Confirm moves ID-401 and ID-501 to Rev C and records the other four as confirmed current &mdash; one transaction, one log row each. There is no state in which half the Whitlock set is Rev C and half is not.</p></div>
+    <div class="mnote"><span class="dot">5</span><p><b>Unmatched pages fall to the Folio, not the floor.</b> A photograph and a faxed cut list are real paper; they land where loose paper already lives, and no one has to decide what sheet they are.</p></div>
+   </div>
+   </div>
+
+   <p class="figcap"><b>Route</b> &nbsp;app.patina.cloud/doc/whitlock &rarr; the plan room &rarr; light table. In the proposed world this screen is Nell&rsquo;s 1 August, 11:54 &mdash; three minutes of work that ends the story on slide 02.</p>
+  </div>
+ </div>
+</section>
+<!--
+ SHARED SHELL CLASSES USED (used, never restyled):
+ deck — slide, wide, inner, gutter, main, eyebrow, num, lede, figcap, mockgrid, mnotes, mnote, anno, ldr, dot
+ mock scope — doc, scroller, frame, w980, fbar, fdots, furl, screen
+ mock grammar — seclab, vitals, si, si.lg, si.ter
+ drawn surfaces — dw-pg (elev / plan / det / loose), dw-tb
+-->
+
+<!-- ============ 07 · MOCK 2 — THE PLAN ROOM / DRAWING LOG ============ -->
+<section class="slide wide" data-label="The Plan Room">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act III &middot; Mock 2</span><span class="num">07</span></div>
+  <div class="main">
+   <h2>The Plan Room, and its drawing log.</h2>
+   <p class="lede">The room&rsquo;s face is the current set: seven sheets, seven pointers, seven rev letters. Open one and its stack slides out &mdash; every print that ever stood, the retired ones wearing the stamp. Underneath, the log: one row per event, in the order it happened.</p>
+
+   <div class="mockgrid">
+   <div class="doc pr">
+   <div class="scroller">
+   <div class="frame w980">
+   <div class="fbar"><span class="fdots"><i></i><i></i><i></i></span><span class="furl">app.patina.cloud/doc/whitlock/<b>plans</b></span></div>
+   <div class="screen">
+
+    <div class="pr-mast">
+    <div>
+     <span class="lname">The plan room</span>
+     <div class="vitals">Whitlock residence &middot; Adair Studio &middot; 4 August 2026</div>
+    </div>
+    <span class="pr-cur">the current set<b>7 sheets &middot; flipped 1 Aug</b>2 issues to date</span>
+    </div>
+    <span class="anno" style="right:22px;top:74px"><span class="ldr" style="width:22px"></span><span class="dot">1</span></span>
+
+    <div class="pr-set">
+
+    <div class="pr-card">
+     <div class="pr-no"><span class="pr-num">ID-001</span><span class="dw-rev cur">B</span></div>
+     <span class="pr-ti">Cover &amp; Sheet Index</span>
+     <div class="pr-st"><span class="astp auth">Issued</span><span class="vitals" style="margin:0">22 Jul</span></div>
+     <span class="pr-holds">Boone, Merrill hold Rev B &middot; Fenn, Lindqvist hold Rev A</span>
+    </div>
+
+    <div class="pr-card">
+     <div class="pr-no"><span class="pr-num">ID-101</span><span class="dw-rev cur">B</span></div>
+     <span class="pr-ti">Furniture Plan &mdash; Main Floor</span>
+     <div class="pr-st"><span class="astp auth">Issued</span><span class="vitals" style="margin:0">22 Jul</span></div>
+     <span class="pr-holds">Boone, Merrill hold Rev B &middot; Fenn, Lindqvist hold Rev A</span>
+    </div>
+
+    <div class="pr-card">
+     <div class="pr-no"><span class="pr-num">ID-201</span><span class="dw-rev cur">A</span></div>
+     <span class="pr-ti">Reflected Ceiling Plan &mdash; Main Floor</span>
+     <div class="pr-st"><span class="astp auth">Issued</span><span class="vitals" style="margin:0">8 Jul</span></div>
+     <span class="pr-holds">never revised &middot; all four hold Rev A</span>
+    </div>
+
+    <div class="pr-card">
+     <div class="pr-no"><span class="pr-num">ID-301</span><span class="dw-rev cur">B</span></div>
+     <span class="pr-ti">Finish Plan &mdash; Main Floor</span>
+     <div class="pr-st"><span class="astp auth">Issued</span><span class="vitals" style="margin:0">22 Jul</span></div>
+     <span class="pr-holds">Boone, Merrill hold Rev B &middot; Fenn, Lindqvist hold Rev A</span>
+    </div>
+
+    <div class="pr-card pr-open">
+     <div class="pr-no"><span class="pr-num">ID-401</span><span class="dw-rev cur lg">C</span></div>
+     <span class="pr-ti">Millwork Elevations &mdash; Study<i class="pr-bay">west bay 34 1/2" &rarr; 33 3/4"</i></span>
+     <div class="pr-st"><span class="astp wait">Shared</span><span class="vitals" style="margin:0">Rev C &middot; 1 Aug &middot; not yet issued</span></div>
+
+     <span class="pr-holds pr-amber">Boone Millwork holds Rev B</span><span class="pr-holds">Merrill, Rev B &middot; Fenn, Lindqvist, Rev A</span>
+
+     <div class="pr-stack">
+     <div class="pr-print">
+      <span class="dw-pg elev pr-thumb"><i class="dw-tb"></i></span>
+      <span class="dw-rev cur">C</span>
+      <span class="pr-pl">Rev C &middot; current<i>filed 1 Aug from Whitlock_ID-Set_2026-08-01.pdf &middot; sha 9f3a&hellip;</i></span>
+      <span class="astp wait">Shared</span>
+     </div>
+     <div class="pr-print pr-old">
+      <span class="dw-pg elev pr-thumb"><i class="dw-tb"></i></span>
+      <span class="dw-rev old">B</span>
+      <span class="pr-pl">Rev B &middot; superseded<i>issued 22 Jul &middot; Boone, for production &middot; Merrill, for information</i></span>
+      <span class="dw-stamp"><b>Superseded</b><i>by Rev C &middot; 1 Aug</i></span>
+     </div>
+     <div class="pr-print pr-old">
+      <span class="dw-pg elev pr-thumb"><i class="dw-tb"></i></span>
+      <span class="dw-rev old">A</span>
+      <span class="pr-pl">Rev A &middot; superseded<i>issued for pricing 8 Jul &middot; Boone, Fenn, Lindqvist</i></span>
+      <span class="dw-stamp t2"><b>Superseded</b><i>by Rev B &middot; 22 Jul</i></span>
+     </div>
+     </div>
+     <span class="anno" style="right:14px;top:118px"><span class="ldr" style="width:20px"></span><span class="dot">3</span></span>
+     <span class="anno" style="right:14px;bottom:4px"><span class="ldr" style="width:20px"></span><span class="dot">4</span></span>
+    </div>
+
+    <div class="pr-card">
+     <div class="pr-no"><span class="pr-num">ID-402</span><span class="dw-rev cur">B</span></div>
+     <span class="pr-ti">Millwork Elevations &mdash; Banquette</span>
+     <div class="pr-st"><span class="astp auth">Issued</span><span class="vitals" style="margin:0">22 Jul</span></div>
+     <span class="pr-holds pr-amber">Lindqvist Upholstery holds Rev A</span><span class="pr-holds">Boone, Merrill hold Rev B</span>
+    </div>
+
+    <div class="pr-card">
+     <div class="pr-no"><span class="pr-num">ID-501</span><span class="dw-rev cur">C</span></div>
+     <span class="pr-ti">Millwork Details &mdash; Study Shelving</span>
+     <div class="pr-st"><span class="astp wait">Shared</span><span class="vitals" style="margin:0">Rev C &middot; 1 Aug &middot; not yet issued</span></div>
+     <span class="pr-holds pr-amber">Boone Millwork holds Rev B</span><span class="pr-holds">Merrill, Rev B &middot; Fenn, Lindqvist, Rev A</span>
+    </div>
+
+    </div>
+
+    <div class="band hold pr-flag" style="margin-top:14px">
+    <p><strong>Boone Millwork holds Rev B</strong> &middot; current is Rev C &middot; last sent 22 Jul</p>
+    <span class="si">Issue the current set to Boone</span>
+    <span class="anno" style="left:auto;right:16px;top:-22px"><span class="ldr" style="width:18px"></span><span class="dot">5</span></span>
+    </div>
+
+    <div class="pr-log">
+    <div class="seclab"><b>The drawing log</b><i>One row per event. Filed, flipped, issued, transmitted &mdash; in the order it happened. Every holder line above is read off these ten rows.</i></div>
+    <table class="bg">
+     <thead><tr><th style="width:13%">When</th><th style="width:13%">Event</th><th>What</th><th style="width:22%">Who</th></tr></thead>
+     <tbody>
+     <tr><td class="pr-who">8 Jul &middot; 08:40</td><td><span class="pr-ev pr-filed">filed</span></td><td>7 sheets from Whitlock_ID-Set_RevA.pdf &middot; 7 new prints, the set&rsquo;s first</td><td class="pr-who">Nell Adair</td></tr>
+     <tr><td class="pr-who">8 Jul &middot; 09:10</td><td><span class="pr-ev pr-iss">issued</span></td><td>Pricing Set &mdash; 8 Jul 2026 &middot; 7 sheets at Rev A</td><td class="pr-who">Nell Adair</td></tr>
+     <tr><td class="pr-who">8 Jul &middot; 09:11</td><td><span class="pr-ev pr-tx">transmitted</span></td><td>for pricing &middot; Boone Millwork, Fenn Metalworks, Lindqvist Upholstery &middot; all three opened</td><td class="pr-who">Nell Adair</td></tr>
+     <tr><td class="pr-who">22 Jul &middot; 13:36</td><td><span class="pr-ev pr-filed">filed</span></td><td>6 sheets from Whitlock_ID-Set_RevB.pdf &middot; 6 new prints &middot; ID-201 unchanged, stays at Rev A</td><td class="pr-who">Nell Adair</td></tr>
+     <tr><td class="pr-who">22 Jul &middot; 13:36</td><td><span class="pr-ev pr-flip">flipped</span></td><td>ID-001, ID-101, ID-301, ID-401, ID-402, ID-501 &rarr; Rev B &middot; one transaction</td><td class="pr-who">Nell Adair</td></tr>
+     <tr><td class="pr-who">22 Jul &middot; 14:02</td><td><span class="pr-ev pr-iss">issued</span></td><td>Production Set &mdash; 22 Jul 2026 &middot; 6 sheets at Rev B, ID-201 at Rev A</td><td class="pr-who">Nell Adair</td></tr>
+     <tr><td class="pr-who">22 Jul &middot; 14:03</td><td><span class="pr-ev pr-tx">transmitted</span></td><td>for production &middot; Boone Millwork &middot; opened 22 Jul, 14:40</td><td class="pr-who">Nell Adair</td></tr>
+     <tr><td class="pr-who">22 Jul &middot; 14:04</td><td><span class="pr-ev pr-tx">transmitted</span></td><td>for information &middot; Merrill Bros. Construction &middot; opened 22 Jul, 18:12</td><td class="pr-who">Nell Adair</td></tr>
+     <tr><td class="pr-who">1 Aug &middot; 11:57</td><td><span class="pr-ev pr-filed">filed</span></td><td>6 sheets from Whitlock_ID-Set_2026-08-01.pdf &middot; 2 new prints, 4 confirmed current</td><td class="pr-who">Nell Adair</td></tr>
+     <tr><td class="pr-who">1 Aug &middot; 11:57</td><td><span class="pr-ev pr-flip">flipped</span></td><td>ID-401 &rarr; Rev C &middot; ID-501 &rarr; Rev C &middot; one transaction</td><td class="pr-who">Nell Adair</td></tr>
+     </tbody>
+    </table>
+    <span class="anno" style="right:6px;top:2px"><span class="ldr" style="width:18px"></span><span class="dot">2</span></span>
+    </div>
+
+   </div>
+   </div>
+   </div>
+   </div>
+
+   <div class="mnotes">
+    <div class="mnote"><span class="dot">1</span><p><b>The default face is the current set.</b> Seven sheets, seven rev letters, nothing else. The log and the stacks are one gesture deeper &mdash; law two, drawn.</p></div>
+    <div class="mnote"><span class="dot">2</span><p><b>The pointer is server-held, and the holders are read off the log.</b> No line on this page is typed: who holds what is the last transmittal each recipient received. Fenn and Lindqvist were never sent the 22 July set, so they stand a whole revision back.</p></div>
+    <div class="mnote"><span class="dot">3</span><p><b>The stack is the folio&rsquo;s v{n} slide-out grown up.</b> The same motion the designer already knows, with a real ledger underneath instead of a title match.</p></div>
+    <div class="mnote"><span class="dot">4</span><p><b>The stamp is burned in at serve time, not stored.</b> The viewer, the token view, and the download all carry it; the stored print stays byte-identical to what was issued, so its checksum keeps standing.</p></div>
+    <div class="mnote"><span class="dot">5</span><p><b>The amber flag is the wound, made visible before it costs $2,840.</b> The room knows what Boone was sent and what stands now, and it says the difference out loud.</p></div>
+   </div>
+   </div>
+
+   <p class="figcap"><b>Route</b> &nbsp;app.patina.cloud/doc/whitlock/plans &mdash; 4 August 2026, before the issue goes out. ID-401 and ID-501 have stood at Rev C since the first; Boone has held Rev B since the twenty-second; Fenn and Lindqvist have held Rev A since the eighth. In today&rsquo;s Patina nothing anywhere makes any of those sentences sayable.</p>
+  </div>
+ </div>
+</section>
+<!--
+ SHARED SHELL CLASSES USED (used, never restyled):
+ slide.wide inner gutter eyebrow num main lede figcap mockgrid mnotes mnote anno ldr dot
+ doc scroller frame w980 fbar fdots furl screen lname vitals seclab si band band.hold
+ astp astp.auth astp.wait bg (thead/th/td) — drawn: dw-pg.elev dw-tb dw-rev dw-rev.cur/.old/.lg dw-stamp
+-->
+
+<!-- ============ 08 · MOCK 3 — THE SHEET · ID-401 ============ -->
+<section class="slide wide" data-label="The Sheet · ID-401">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act III &middot; Mock 3</span><span class="num">08</span></div>
+  <div class="main">
+   <h2>The sheet, as a paper artifact.</h2>
+   <p class="lede">One identity, one title block, three prints behind it. The face carries the current print; the rail carries the history; the compare lays Rev B under Rev C so the change announces itself instead of waiting to be found.</p>
+
+   <div class="mockgrid">
+   <div class="doc sh">
+   <div class="scroller">
+   <div class="frame w980">
+   <div class="fbar"><span class="fdots"><i></i><i></i><i></i></span><span class="furl">app.patina.cloud/doc/whitlock/plans/<b>id-401</b></span></div>
+   <div class="screen">
+   <div class="sh-page">
+
+    <div class="sh-rail">
+    <div class="sh-tb">
+     <div class="sh-tbn">ID-401</div>
+     <div class="sh-tbt">Millwork Elevations &mdash; Study</div>
+     <div class="vitals">Whitlock residence &middot; Adair Studio &middot; millwork</div>
+    </div>
+
+    <div class="seclab"><b>The prints</b><i>Three, oldest at the foot.</i></div>
+    <div class="sh-rr">
+     <span class="dw-rev cur">C</span>
+     <span class="sh-rl">Rev C &middot; current &middot; <span class="astp wait">Shared</span><i>filed 1 Aug &mdash; issues today as Production Set &mdash; 4 Aug 2026</i></span>
+    </div>
+    <div class="sh-rr sh-past">
+     <span class="dw-rev old">B</span>
+     <span class="sh-rl">Rev B &middot; <span class="astp void">Superseded</span><i>issued 22 Jul, for production &middot; Boone Millwork</i></span>
+    </div>
+    <div class="sh-rr sh-past">
+     <span class="dw-rev old">A</span>
+     <span class="sh-rl">Rev A &middot; <span class="astp void">Superseded</span><i>issued 8 Jul, for pricing &middot; Boone, Fenn, Lindqvist</i></span>
+    </div>
+    <div class="acts"><span class="si ter">Compare any two</span></div>
+    <span class="anno" style="right:-4px;top:150px"><span class="ldr" style="width:18px"></span><span class="dot">1</span></span>
+    </div>
+
+    <div>
+    <div class="seclab" style="margin-top:0"><b>Rev C over Rev B</b><i>The current print in blue; the print it retired in red, beneath it.</i></div>
+
+    <div class="sh-face">
+     <div class="sh-lab">
+     <span class="sh-key"><i></i>Rev C &middot; 1 Aug &middot; current</span>
+     <span class="sh-key sh-was"><i></i>Rev B &middot; 22 Jul &middot; superseded</span>
+     <span style="margin-left:auto">Study &mdash; west elevation &middot; shelving</span>
+     </div>
+
+     <div class="sh-elev">
+     <div class="sh-bay sh-west">
+      <i class="sh-shelf"></i><i class="sh-shelf"></i><i class="sh-shelf"></i><i class="sh-shelf"></i>
+      <span class="sh-gap"></span><span class="sh-chase"></span><span class="sh-new"></span>
+      <span class="sh-bn">west bay</span>
+     </div>
+     <div class="sh-bay">
+      <i class="sh-shelf"></i><i class="sh-shelf"></i><i class="sh-shelf"></i><i class="sh-shelf"></i>
+      <span class="sh-bn">center bay</span>
+     </div>
+     <div class="sh-bay">
+      <i class="sh-shelf"></i><i class="sh-shelf"></i><i class="sh-shelf"></i><i class="sh-shelf"></i>
+      <span class="sh-bn">east bay</span>
+     </div>
+     </div>
+
+     <div class="sh-dims">
+     <span class="sh-dim"><span class="sh-was">34 1/2"</span><span class="sh-is">33 3/4"</span></span>
+     <span class="sh-dim">36"<span style="display:block;margin-top:6px;opacity:.55">unchanged</span></span>
+     <span class="sh-dim">36"<span style="display:block;margin-top:6px;opacity:.55">unchanged</span></span>
+     </div>
+
+     <div class="sh-pin">
+     <span class="sh-pk">a note, pinned at the bay</span>
+     <p class="sh-pt">&ldquo;Chase found 30 Jul &mdash; bay narrows. Steel column in the west wall, full height.&rdquo;</p>
+     <span class="sh-carry">carried from Rev B &mdash; confirm placement</span>
+     </div>
+
+     <div class="sh-foot">
+     <span>print <b>Rev C</b></span>
+     <span>filed <b>1 Aug 2026</b></span>
+     <span>sha256 <b>9f3a&hellip;</b></span>
+     <span>to issue as <b>Production Set &mdash; 4 Aug 2026</b></span>
+     <span>for production &middot; <b>Boone Millwork</b></span>
+     </div>
+
+     <span class="anno" style="left:96px;top:196px"><span class="ldr" style="width:22px"></span><span class="dot">2</span></span>
+     <span class="anno" style="right:236px;top:110px"><span class="ldr" style="width:20px"></span><span class="dot">3</span></span>
+     <span class="anno" style="left:58px;bottom:78px"><span class="ldr" style="width:20px"></span><span class="dot">4</span></span>
+     <span class="anno" style="right:14px;bottom:14px"><span class="ldr" style="width:18px"></span><span class="dot">5</span></span>
+    </div>
+
+    <div class="acts">
+     <span class="si lg">Issue the current set</span>
+     <span class="si sec">Open the print</span>
+     <span class="si ter">Add a note</span>
+    </div>
+    </div>
+
+   </div>
+   </div>
+   </div>
+   </div>
+   </div>
+
+   <div class="mnotes">
+    <div class="mnote"><span class="dot">1</span><p><b>The identity holds the history.</b> The rail is <code>version_of</code> hardened and read as a ledger &mdash; three prints of one sheet, each with the date it stood and the purpose it stood for.</p></div>
+    <div class="mnote"><span class="dot">2</span><p><b>Compare is two prints of one sheet.</b> Red under blue, so the change announces itself. v1 draws the whole print at both revisions; computed change regions come later.</p></div>
+    <div class="mnote"><span class="dot">3</span><p><b>Notes ride the sheet, not the print.</b> The pin survived the flip from Rev B to Rev C and asks to be re-confirmed against the new geometry rather than quietly moving.</p></div>
+    <div class="mnote"><span class="dot">4</span><p><b>The ringed dimension is the exact wound.</b> 34 1/2" struck, 33 3/4" standing &mdash; the three-quarters of an inch Abel never saw, and the whole of the $2,840.</p></div>
+    <div class="mnote"><span class="dot">5</span><p><b>Every print carries its sha256 in the footer.</b> The checksum grammar the Spec Book already trusts, applied to a drawing &mdash; so &ldquo;the file I have&rdquo; and &ldquo;the file you sent&rdquo; are answerable questions.</p></div>
+   </div>
+   </div>
+
+   <p class="figcap"><b>Route</b> &nbsp;app.patina.cloud/doc/whitlock/plans/id-401 &mdash; 4 August, the same morning as the plan room and the ceremony: Rev C stands current and Shared, and has not gone out yet. The sheet, not the file. Rev A, Rev B, and Rev C are prints of this page; the page itself is what everything else in Patina points at.</p>
+  </div>
+ </div>
+</section>
+<!--
+ SHARED SHELL CLASSES USED (used, never restyled):
+ slide.wide inner gutter eyebrow num main lede figcap mockgrid mnotes mnote anno ldr dot
+ doc scroller frame w980 fbar fdots furl screen seclab vitals acts si si.lg si.sec si.ter
+ drawn — dw-rev dw-rev.cur/.old
+-->
+
+<!-- ============ 09 · MOCK 4 — THE ISSUE CEREMONY ============ -->
+<section class="slide wide" data-label="The Issue ceremony">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act III &middot; Mock 4</span><span class="num">09</span></div>
+  <div class="main">
+   <h2>The issue ceremony.</h2>
+   <p class="lede">Naming a set is the moment a pile of current prints becomes a promise. Three steps on one page &mdash; what it is called, what it is for, what is in it and who gets it &mdash; and then a record that will read the same in October as it does today.</p>
+
+   <div class="mockgrid">
+   <div class="doc is">
+   <div class="scroller">
+   <div class="frame w980">
+   <div class="fbar"><span class="fdots"><i></i><i></i><i></i></span><span class="furl">app.patina.cloud/doc/whitlock/plans/<b>issue</b></span></div>
+   <div class="screen">
+
+    <div class="seclab" style="margin-top:0"><b>Issue the current set</b><i>Whitlock residence &middot; 7 sheets stand current as of 1 August.</i></div>
+
+    <div class="is-steps">
+
+    <div>
+     <div class="is-step">
+     <span class="is-n">Step one &middot; name it</span>
+     <div class="fld"><span class="flab">The name of this issue</span><span class="uin">Production Set &mdash; 4 Aug 2026<span class="car">|</span></span></div>
+     <div class="fld"><span class="flab">Dated</span><span class="uin">4 August 2026<span class="car">today</span></span></div>
+     </div>
+
+     <div class="is-step">
+     <span class="is-n">Step two &middot; say what it is for</span>
+     <div class="tchips" style="margin-top:9px">
+      <span class="tchip">for pricing</span>
+      <span class="tchip on">for production</span>
+      <span class="tchip">for information</span>
+      <span class="tchip">for record</span>
+     </div>
+     <p class="hint">The purpose rides on the transmittal and on every page the recipient opens.</p>
+     <span class="anno" style="right:8px;top:26px"><span class="ldr" style="width:18px"></span><span class="dot">4</span></span>
+     </div>
+
+     <div class="is-step">
+     <span class="is-n">Step three &middot; the contents</span>
+     <div class="is-rows">
+      <div class="is-row"><span class="cbx on"></span><span class="is-sn">ID-001</span><span class="is-tt">Cover &amp; Sheet Index</span><span class="dw-rev cur">B</span></div>
+      <div class="is-row"><span class="cbx on"></span><span class="is-sn">ID-101</span><span class="is-tt">Furniture Plan &mdash; Main Floor</span><span class="dw-rev cur">B</span></div>
+      <div class="is-row"><span class="cbx on"></span><span class="is-sn">ID-201</span><span class="is-tt">Reflected Ceiling Plan &mdash; Main Floor</span><span class="dw-rev cur">A</span></div>
+      <div class="is-row"><span class="cbx on"></span><span class="is-sn">ID-301</span><span class="is-tt">Finish Plan &mdash; Main Floor</span><span class="dw-rev cur">B</span></div>
+      <div class="is-row is-chg"><span class="cbx on"></span><span class="is-sn">ID-401</span><span class="is-tt">Millwork Elevations &mdash; Study <span class="is-chgw">changed since last issue</span></span><span class="dw-rev cur">C</span></div>
+      <div class="is-row"><span class="cbx on"></span><span class="is-sn">ID-402</span><span class="is-tt">Millwork Elevations &mdash; Banquette</span><span class="dw-rev cur">B</span></div>
+      <div class="is-row is-chg"><span class="cbx on"></span><span class="is-sn">ID-501</span><span class="is-tt">Millwork Details &mdash; Study Shelving <span class="is-chgw">changed since last issue</span></span><span class="dw-rev cur">C</span></div>
+     </div>
+     <p class="hint">Two of seven changed since the Production Set of 22 July. The rest go along so the recipient holds a whole set, not a diff.</p>
+     <span class="anno" style="left:2px;bottom:26px"><span class="ldr" style="width:18px"></span><span class="dot">5</span></span>
+     </div>
+    </div>
+
+    <div>
+     <div class="is-step">
+     <span class="is-n">Who receives it</span>
+     <div style="margin-top:9px">
+      <div class="is-aud"><span class="cbx on"></span><div><span class="is-an">Abel Boone &middot; Boone Millwork</span><span class="is-ar">millwork &middot; last sent 22 Jul, for production &middot; holds Rev B</span></div></div>
+      <div class="is-aud is-off"><span class="cbx off"></span><div><span class="is-an">Otto Fenn &middot; Fenn Metalworks</span><span class="is-ar">steel &amp; brass, study &middot; last sent 8 Jul, for pricing &middot; holds Rev A</span></div></div>
+      <div class="is-aud is-off"><span class="cbx off"></span><div><span class="is-an">Vera Lindqvist &middot; Lindqvist Upholstery</span><span class="is-ar">window seat, banquette &middot; last sent 8 Jul, for pricing &middot; holds Rev A</span></div></div>
+      <div class="is-aud is-off"><span class="cbx off"></span><div><span class="is-an">Doug Merrill &middot; Merrill Bros. Construction</span><span class="is-ar">general contractor &middot; last sent 22 Jul, for information &middot; holds Rev B</span></div></div>
+     </div>
+     </div>
+
+     <div class="is-step">
+     <span class="is-n">The mint</span>
+     <div class="stack" style="max-width:none;margin:16px 10px 12px 0">
+      <div class="sheet">
+      <div class="shead"><span class="st">Transmittal &middot; preview</span><span class="sx">No. 3 &middot; mints on send</span></div>
+      <div class="lname" style="font-size:21px;margin-top:11px">Production Set &mdash; 4 Aug 2026</div>
+      <p class="ssub">Will read: sent to Abel Boone &middot; Boone Millwork &middot; 4 Aug 2026 &middot; for production.</p>
+      <div class="is-tx">
+       <div class="is-txl">Sheets issued<span>7</span></div>
+       <div class="is-txl">Changed since the last issue<span>ID-401 &middot; ID-501</span></div>
+       <div class="is-txl">Set checksum<span>sha c41d&hellip;</span></div>
+       <div class="is-txl">Sends<span>on issue &middot; today</span></div>
+      </div>
+      <div class="is-tok">patina.cloud/plans/tk_7e28&hellip; &middot; no account &middot; signed URLs, 120 seconds</div>
+      <div class="is-seal">
+       <span class="si lg">Issue &amp; send</span>
+       <span class="astp wait">Not yet minted</span>
+      </div>
+      <p class="hint">Nothing here is minted yet. Once it is, this record never changes &mdash; a correction is a new issue that supersedes it.</p>
+      </div>
+     </div>
+     <span class="anno" style="right:-4px;top:76px"><span class="ldr" style="width:16px"></span><span class="dot">1</span></span>
+     <span class="anno" style="right:-4px;top:152px"><span class="ldr" style="width:16px"></span><span class="dot">2</span></span>
+     <span class="anno" style="right:-4px;top:228px"><span class="ldr" style="width:16px"></span><span class="dot">3</span></span>
+     </div>
+    </div>
+
+    </div>
+
+   </div>
+   </div>
+   </div>
+   </div>
+
+   <div class="mnotes">
+    <div class="mnote"><span class="dot">1</span><p><b>An issue fixes hashes the moment it is minted.</b> Every print in it is snapshotted by sha256 &mdash; the <code>spec_book_revisions</code> ledger, extended from specifications to drawings.</p></div>
+    <div class="mnote"><span class="dot">2</span><p><b>The transmittal is the immutable who, what, when, and why.</b> It is the record the phone call reaches for: <em>&ldquo;you were sent Rev C for production on the fourth.&rdquo;</em></p></div>
+    <div class="mnote"><span class="dot">3</span><p><b>The link is the house token grammar.</b> <code>document_shares</code>, a sha256 token, short-lived signed URLs &mdash; the same rail <code>/field/spec-book</code> already runs on. No new auth surface.</p></div>
+    <div class="mnote"><span class="dot">4</span><p><b>Reissue supersedes; it never edits.</b> &ldquo;Rev C, for production, 4 Aug&rdquo; reads the same in October as it did the morning it went out, whatever happened after.</p></div>
+    <div class="mnote"><span class="dot">5</span><p><b>The bolded line is drift detection.</b> The ceremony says exactly what this issue promises that the last one did not &mdash; two sheets of seven, named on the face of the record.</p></div>
+   </div>
+   </div>
+
+   <p class="figcap"><b>Route</b> &nbsp;app.patina.cloud/doc/whitlock/plans/issue &mdash; 4 August 2026, the morning of the issue and a moment before it. The ceremony is short on purpose: three answers, one send, and a record that outlives the thread it replaces.</p>
+  </div>
+ </div>
+</section>
+<!--
+ SHARED SHELL CLASSES USED (used, never restyled):
+ slide.wide inner gutter eyebrow num main lede figcap mockgrid mnotes mnote anno ldr dot
+ doc scroller frame w980 fbar fdots furl screen seclab fld flab uin car tchips tchip tchip.on
+ cbx cbx.on cbx.off hint stack sheet shead st sx lname ssub si si.lg astp astp.wait — drawn: dw-rev
+-->
+
+<!-- ============ 10 · MOCK 5 — THE FAR END ============ -->
+<section class="slide wide" data-label="What Abel sees · what Margot sees">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act III &middot; Mock 5</span><span class="num">10</span></div>
+  <div class="main">
+   <h2>What Abel sees. What Margot sees.</h2>
+   <p class="lede">The plan room is only worth building if it reaches the far end of the wire. One token link for the trade, with no account and no password; one reborn documents page for the client. Both read the same seven pointers the studio does.</p>
+
+   <div class="mockgrid">
+   <div class="fe-two">
+
+    <div class="doc fe">
+    <span class="eyebrow" style="margin-bottom:7px">The trade &middot; no login</span>
+    <div class="scroller">
+    <div class="frame w480">
+    <div class="fbar"><span class="fdots"><i></i><i></i><i></i></span><span class="furl">patina.cloud/plans/<b>tk_7e28&hellip;</b></span></div>
+    <div class="screen">
+     <div class="fe-hd">
+     <span class="lname" style="font-size:19px">Boone Millwork</span>
+     <p class="fe-you">You were sent <b>Rev C for production on 4 Aug 2026</b> by Adair Studio.</p>
+     <div class="vitals">Whitlock residence &middot; Production Set &mdash; 4 Aug 2026 &middot; 7 sheets</div>
+     </div>
+
+     <div class="fe-list">
+     <div class="fe-s"><span class="dw-pg loose fe-th"></span><span class="dw-rev cur">B</span><span><span class="fe-sn">ID-001</span><span class="fe-st">Cover &amp; Sheet Index</span><span class="fe-rd">Rev B &middot; 22 Jul</span></span><span class="si ter">Open</span></div>
+     <div class="fe-s"><span class="dw-pg plan fe-th"></span><span class="dw-rev cur">B</span><span><span class="fe-sn">ID-101</span><span class="fe-st">Furniture Plan &mdash; Main Floor</span><span class="fe-rd">Rev B &middot; 22 Jul</span></span><span class="si ter">Open</span></div>
+     <div class="fe-s"><span class="dw-pg rcp fe-th"></span><span class="dw-rev cur">A</span><span><span class="fe-sn">ID-201</span><span class="fe-st">Reflected Ceiling Plan</span><span class="fe-rd">Rev A &middot; 8 Jul</span></span><span class="si ter">Open</span></div>
+     <div class="fe-s"><span class="dw-pg plan fe-th"></span><span class="dw-rev cur">B</span><span><span class="fe-sn">ID-301</span><span class="fe-st">Finish Plan &mdash; Main Floor</span><span class="fe-rd">Rev B &middot; 22 Jul</span></span><span class="si ter">Open</span></div>
+     <div class="fe-s"><span class="dw-pg elev fe-th"></span><span class="dw-rev cur">C</span><span><span class="fe-sn">ID-401</span><span class="fe-st">Millwork Elevations &mdash; Study</span><span class="fe-rd">Rev C &middot; 1 Aug</span></span><span class="si">Open</span></div>
+     <div class="fe-s"><span class="dw-pg elev fe-th"></span><span class="dw-rev cur">B</span><span><span class="fe-sn">ID-402</span><span class="fe-st">Millwork Elevations &mdash; Banquette</span><span class="fe-rd">Rev B &middot; 22 Jul</span></span><span class="si ter">Open</span></div>
+     <div class="fe-s"><span class="dw-pg det fe-th"></span><span class="dw-rev cur">C</span><span><span class="fe-sn">ID-501</span><span class="fe-st">Millwork Details &mdash; Study Shelving</span><span class="fe-rd">Rev C &middot; 1 Aug</span></span><span class="si ter">Open</span></div>
+     </div>
+
+     <p class="fe-stand">This set is current as of today.</p>
+     <span class="anno" style="right:14px;top:64px"><span class="ldr" style="width:18px"></span><span class="dot">1</span></span>
+     <span class="anno" style="left:74px;bottom:56px"><span class="ldr" style="width:18px"></span><span class="dot">3</span></span>
+    </div>
+    </div>
+    </div>
+
+    <div class="fe-inset">
+    <span class="eyebrow" style="margin-bottom:7px">The same page, hypothetically, on 19 August</span>
+    <div class="scroller">
+    <div class="frame w480">
+     <div class="fbar"><span class="fdots"><i></i><i></i><i></i></span><span class="furl">patina.cloud/plans/<b>tk_7e28&hellip;</b></span></div>
+     <div class="screen" style="padding-bottom:16px">
+     <div class="fe-amber">
+      <p>A newer set was issued 18 Aug &mdash; you are viewing the set you were sent.</p>
+      <div class="acts" style="margin-top:9px"><span class="si">Open the current set</span></div>
+     </div>
+     <p class="fe-you" style="font-size:14px">You were sent <b>Rev C for production on 4 Aug 2026</b> by Adair Studio.</p>
+     <div class="vitals">Production Set &mdash; 4 Aug 2026 &middot; superseded by Production Set &mdash; 18 Aug 2026</div>
+     <span class="anno" style="right:14px;top:16px"><span class="ldr" style="width:18px"></span><span class="dot">2</span></span>
+     </div>
+    </div>
+    </div>
+    </div>
+    </div>
+
+    <div class="doc fe">
+    <span class="eyebrow" style="margin-bottom:7px">The client &middot; signed in</span>
+    <div class="scroller">
+    <div class="frame w480">
+    <div class="fbar"><span class="fdots"><i></i><i></i><i></i></span><span class="furl">client.patina.cloud/<b>documents</b></span></div>
+    <div class="screen">
+     <div class="fe-hd">
+     <span class="lname" style="font-size:19px">Your drawings</span>
+     <p class="fe-you">The current set for the Whitlock residence, as it stands today.</p>
+     <div class="vitals">7 sheets &middot; current as of 4 Aug 2026 &middot; Adair Studio</div>
+     </div>
+
+     <div class="fe-grp">
+     <div class="fe-gh">Plans</div>
+     <div class="fe-list">
+      <div class="fe-s"><span class="dw-pg plan fe-th"></span><span class="dw-rev cur">B</span><span><span class="fe-sn">ID-101</span><span class="fe-st">Furniture Plan &mdash; Main Floor</span></span><span class="si ter">Open</span></div>
+      <div class="fe-s"><span class="dw-pg rcp fe-th"></span><span class="dw-rev cur">A</span><span><span class="fe-sn">ID-201</span><span class="fe-st">Reflected Ceiling Plan</span></span><span class="si ter">Open</span></div>
+      <div class="fe-s"><span class="dw-pg plan fe-th"></span><span class="dw-rev cur">B</span><span><span class="fe-sn">ID-301</span><span class="fe-st">Finish Plan &mdash; Main Floor</span></span><span class="si ter">Open</span></div>
+     </div>
+     </div>
+
+     <div class="fe-grp">
+     <div class="fe-gh">Millwork</div>
+     <div class="fe-list">
+      <div class="fe-s"><span class="dw-pg elev fe-th"></span><span class="dw-rev cur">C</span><span><span class="fe-sn">ID-401</span><span class="fe-st">Millwork Elevations &mdash; Study</span></span><span class="si ter">Open</span></div>
+      <div class="fe-s"><span class="dw-pg elev fe-th"></span><span class="dw-rev cur">B</span><span><span class="fe-sn">ID-402</span><span class="fe-st">Millwork Elevations &mdash; Banquette</span></span><span class="si ter">Open</span></div>
+      <div class="fe-s"><span class="dw-pg det fe-th"></span><span class="dw-rev cur">C</span><span><span class="fe-sn">ID-501</span><span class="fe-st">Millwork Details &mdash; Study Shelving</span></span><span class="si ter">Open</span></div>
+     </div>
+     </div>
+
+     <div class="fe-grp">
+     <div class="fe-gh">Cover</div>
+     <div class="fe-list">
+      <div class="fe-s"><span class="dw-pg loose fe-th"></span><span class="dw-rev cur">B</span><span><span class="fe-sn">ID-001</span><span class="fe-st">Cover &amp; Sheet Index</span></span><span class="si ter">Open</span></div>
+     </div>
+     </div>
+
+     <p class="fe-stand">No version archaeology. One Open per sheet, and the letter on its face says which one it is.</p>
+     <span class="anno" style="right:14px;top:92px"><span class="ldr" style="width:18px"></span><span class="dot">4</span></span>
+     <span class="anno" style="left:64px;bottom:44px"><span class="ldr" style="width:18px"></span><span class="dot">5</span></span>
+    </div>
+    </div>
+    </div>
+    </div>
+
+   </div>
+
+   <div class="mnotes">
+    <div class="mnote"><span class="dot">1</span><p><b>The trade sees two truths at once:</b> what he was sent, and whether it still stands. That second sentence is the one that would have saved the walnut.</p></div>
+    <div class="mnote"><span class="dot">2</span><p><b>No account, no password.</b> The <code>/field/spec-book</code> token grammar reused whole &mdash; a sha256 token, short-lived signed URLs, and a page that tells a superseded reader so on arrival.</p></div>
+    <div class="mnote"><span class="dot">3</span><p><b>The rev letter is on every print&rsquo;s face.</b> &ldquo;Which version do you have?&rdquo; stops being a phone call and becomes something Abel can read without opening anything.</p></div>
+    <div class="mnote"><span class="dot">4</span><p><b>The client reads the same seven pointers the studio does.</b> One current set, three audiences &mdash; not three copies of a set that can drift apart.</p></div>
+    <div class="mnote"><span class="dot">5</span><p><b>The share is a transmittal,</b> so the ledger knows whether Abel opened it on the fourth. That is precisely what feeds the amber flag back in the plan room.</p></div>
+   </div>
+   </div>
+
+   <p class="figcap"><b>Routes</b> &nbsp;patina.cloud/plans/tk_7e28&hellip; (guest, no account) and client.patina.cloud/documents (signed in). The 19 August inset is hypothetical &mdash; it exists to show what a superseded reader is told, which is the only state this deck cares about more than the current one.</p>
+  </div>
+ </div>
+</section>
+<!--
+ SHARED SHELL CLASSES USED ON THIS SLIDE (used, never restyled) — the exact set,
+ nothing aspirational: slide.wide, inner, gutter, eyebrow, num, main, lede,
+ figcap, mockgrid, mnotes, mnote, anno, ldr, dot, doc, scroller, frame.w480,
+ fbar, fdots, furl, screen, lname, vitals, acts, si, si.ter.
+ Drawn primitives: dw-pg (plan / elev / det / rcp / loose), dw-rev.cur.
+ This slide does NOT use band, seclab, astp, stack, sheet or the form controls.
+-->
+
+<!-- ============ 11 · THE LADDER ============ -->
+<section class="slide" data-label="The ladder">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act IV &middot; The ladder</span><span class="num">11</span><span class="tick"></span></div>
+  <div class="main">
+   <h2>How a plot gets from Nell&rsquo;s machine into the plan room.</h2>
+   <p class="lede">Three rungs, in the order they can be built. Each one shortens the walk between AutoCAD and the Light Table; none of them changes what happens once the pages arrive. The table still proposes, and Nell still confirms.</p>
+
+   <div class="ld-steps">
+
+    <div class="ld-step ld-a">
+    <span class="ld-when">rung one &middot; ships first</span>
+    <h3>The drop.</h3>
+    <p>Browser drag-and-drop onto the Light Table. No install, no agent, no platform. Nell plots as she does today, then drags the PDF onto the page.</p>
+    <p><strong>Cost:</strong> zero on her side. This is the rung that closes the wound.</p>
+    </div>
+
+    <div class="ld-step ld-b">
+    <span class="ld-when">rung two &middot; the next cut</span>
+    <h3>The Print Tray.</h3>
+    <p>A signed menu-bar agent watching a chosen plots folder. New PDFs queue through a checksummed, retrying outbox and arrive pre-staged on the Light Table.</p>
+
+    <div class="doc ld">
+     <div class="ld-bar">
+     <span class="ld-mk"><i></i><i></i><i></i></span>
+     <span class="ld-bt">Patina</span>
+     </div>
+     <div class="ld-menu">
+     <div class="ld-watch">watching ~/Plots/Whitlock</div>
+     <div class="ld-ml ld-new"><span>1 new print &mdash; Whitlock_ID-401_RevC_FINAL.pdf</span><em>sent to the light table</em></div>
+     <div class="ld-ml"><span>2 uploaded this week</span><em>all confirmed</em></div>
+     <div class="ld-ml"><span>Open the plan room</span><em></em></div>
+     </div>
+    </div>
+    <p class="small" style="margin-top:9px">The outbox discipline is already proven &mdash; it is the iOS scan outbox, checksums and retries and all, ported to the desktop.</p>
+    </div>
+
+    <div class="ld-step ld-c">
+    <span class="ld-when">rung three &middot; later, and greyer</span>
+    <h3>The plot command.</h3>
+    <p>A toolbar button inside AutoCAD: <em>Publish to Patina</em>. The plot never touches the filesystem; it goes straight to the Light Table.</p>
+
+    <div class="doc ld">
+     <div class="ld-cad">
+     <span class="ld-cb">Plot</span>
+     <span class="ld-cb">Publish</span>
+     <span class="ld-cb ld-on">Publish to Patina</span>
+     <span class="ld-cb">Batch</span>
+     </div>
+    </div>
+    <p class="small" style="margin-top:9px">Per-CAD-vendor work, per-version fragility, and a plugin review cycle. Worth wanting; not worth waiting for.</p>
+    </div>
+
+   </div>
+
+   <div class="note">
+    <span class="kicker">The grave we walk past</span>
+    <p>Procore built true two-way drawing sync and <strong>killed it in September 2022</strong> &mdash; Procore Sync, the two-way desktop client, was retired that month, and its replacement, Procore Drive, is bulk transfer rather than sync. Every rung above moves the <em>plot</em> &mdash; the PDF, the word given. Law six holds all the way up the ladder: the DWG may ride along as source, unread, unparsed, unsynced. The moment a platform promises to understand the CAD file, every mis-parse becomes its liability against somebody&rsquo;s saw.</p>
+   </div>
+
+   <p class="figcap"><b>Caption</b> &nbsp;Every rung feeds the same Light Table. The ladder changes how prints <em>arrive</em> &mdash; never what confirms them. A studio on rung one and a studio on rung three file identical sheets into identical sets, and both of them press the same confirm.</p>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 12 · DIRECTION A — THE DEEP FOLIO ============ -->
+<section class="slide" data-label="A · The Deep Folio">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act V &middot; Direction A</span><span class="num">12</span><span class="tick"></span></div>
+  <div class="main">
+   <h2>A &middot; The Deep Folio &mdash; one paper, deeper pockets.</h2>
+   <p class="lede">No new room. The folio unfold inside <code>/doc/[id]</code> grows a Drawings shelf; chips become sheet chips with rev letters on their faces; the shelf&rsquo;s face is the current set. The Light Table opens as an overlay when a drawing-shaped file lands, and issuing happens from the shelf. Ladder rung one only.</p>
+
+   <div class="grid g3">
+    <div class="card accent tight">
+    <span class="kicker">What it foregrounds</span>
+    <h3>R21&rsquo;s one-surface law, kept absolute.</h3>
+    <p>Days after the R21 dissolve spent itself removing surfaces, this adds none. The drawings live where every other paper on the job already lives.</p>
+    </div>
+    <div class="card accent tight">
+    <span class="kicker">Signature device</span>
+    <h3>The shelf line.</h3>
+    <p><em>&ldquo;The folio &middot; 12 papers &nbsp;&middot;&nbsp; The set &middot; 7 sheets &middot; current as of 4 Aug &middot; 2 issues.&rdquo;</em> One line that makes the set a first-class citizen of the paper.</p>
+    </div>
+    <div class="card warn tight">
+    <span class="kicker">What it risks</span>
+    <h3>A low ceiling, visible from here.</h3>
+    <p>A 24-sheet job inside a letterhead unfold. The log, the stacks, and the transmittal ledger have nowhere to breathe, and a chip is not a sheet.</p>
+    </div>
+   </div>
+
+   <div class="doc dda" style="margin-top:1.15rem">
+    <div class="scroller">
+    <div class="frame w680">
+    <div class="fbar"><span class="fdots"><i></i><i></i><i></i></span><span class="furl">app.patina.cloud/doc/<b>whitlock</b> &rarr; the folio, unfolded</span></div>
+    <div class="screen">
+     <div class="letter">
+     <span class="lname" style="font-size:22px">The Whitlock Residence</span>
+     <div class="vitals">Adair Studio &middot; full-floor furnishing &amp; millwork &middot; August 2026</div>
+     </div>
+
+     <div class="dda-shelf">
+     <span>the folio &middot; <b>12 papers</b></span>
+     <span>the set &middot; <b>7 sheets</b> &middot; current as of <b>4 Aug</b> &middot; <b>2 issues</b></span>
+     <span style="margin-left:auto"><span class="si ter">Issue the set</span></span>
+     </div>
+
+     <div class="seclab"><b>Drawings</b><i>The shelf&rsquo;s face is the current set. Older prints stack behind each chip.</i></div>
+     <div class="dda-chips">
+     <span class="dda-chip">ID-001 &middot; Cover &amp; Sheet Index <b>B</b></span>
+     <span class="dda-chip">ID-101 &middot; Furniture Plan <b>B</b></span>
+     <span class="dda-chip">ID-201 &middot; RCP <b>A</b></span>
+     <span class="dda-chip">ID-301 &middot; Finish Plan <b>B</b></span>
+     <span class="dda-chip dda-cur">ID-401 &middot; Millwork Elev. &mdash; Study <b>C</b></span>
+     <span class="dda-chip">ID-402 &middot; Millwork Elev. &mdash; Banquette <b>B</b></span>
+     <span class="dda-chip dda-cur">ID-501 &middot; Millwork Details <b>C</b></span>
+     </div>
+
+     <div class="seclab"><b>Papers</b><i>Everything else the job carries.</i></div>
+     <div class="dda-pap">
+     <span class="dda-pchip">Design agreement</span>
+     <span class="dda-pchip">FF&amp;E schedule</span>
+     <span class="dda-pchip">Chase photo &middot; 30 Jul</span>
+     <span class="dda-pchip">Boone cut list</span>
+     <span class="dda-pchip">+ 8 more</span>
+     </div>
+    </div>
+    </div>
+    </div>
+   </div>
+
+   <p class="figcap"><b>Inset</b> &nbsp;The folio unfold with the shelf line and sheet chips. Every fact of the fixture is reachable from here &mdash; but reachable is doing a great deal of work in that sentence.</p>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 13 · DIRECTION B — THE PLAN ROOM ============ -->
+<section class="slide" data-label="B · The Plan Room">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act V &middot; Direction B</span><span class="num">13</span><span class="tick"></span></div>
+  <div class="main">
+   <h2>B &middot; The Plan Room &mdash; the drawings get a room; the paper keeps its calm.</h2>
+   <p class="lede">A named room, reached <em>from</em> the paper. The project section of <code>/doc/[id]</code> carries a threshold band &mdash; <em>&ldquo;The plan room &middot; 7 sheets &middot; current as of 4 Aug &middot; Boone holds Rev B&rdquo;</em> &mdash; that opens <code>/doc/[id]/plans</code>, where the drawing log, the Light Table, the sheet detail, and the issue ceremony all live at full size. The Folio stays for loose papers; a drawing-shaped upload to the folio offers <em>&ldquo;file this to the plan room?&rdquo;</em> Ladder rung one ships; the Print Tray is designed and drawn, not built.</p>
+
+   <div class="grid g3">
+    <div class="card accent tight">
+    <span class="kicker">What it foregrounds</span>
+    <h3>The object at its true size.</h3>
+    <p>A sheet set is the one artifact in Patina that cannot live as a chip. It has pages, revisions, audiences, and a history &mdash; and every one of those needs room to be read.</p>
+    </div>
+    <div class="card accent tight">
+    <span class="kicker">Signature device</span>
+    <h3>The threshold.</h3>
+    <p>The room opens like a flat-file drawer and closes again. It is a band on the paper, not a tab in a nav &mdash; you are always somewhere in the job, never in a second application.</p>
+    </div>
+    <div class="card warn tight">
+    <span class="kicker">What it risks</span>
+    <h3>A second surface, days after the dissolve.</h3>
+    <p>R21 spent itself removing surfaces eight days ago. This adds one back. The discipline that saves it is that the room must stay a drawer off the paper &mdash; never a second desk.</p>
+    </div>
+   </div>
+
+   <div class="doc ddb" style="margin-top:1.15rem">
+    <div class="scroller">
+    <div class="frame w680">
+    <div class="fbar"><span class="fdots"><i></i><i></i><i></i></span><span class="furl">app.patina.cloud/doc/<b>whitlock</b> &mdash; the threshold, mid-open</span></div>
+    <div class="screen">
+     <div class="letter">
+     <span class="lname" style="font-size:22px">The Whitlock Residence</span>
+     <div class="vitals">Adair Studio &middot; full-floor furnishing &amp; millwork &middot; August 2026</div>
+     </div>
+
+     <div class="ddb-thresh">
+     <div>
+      <span class="ddb-tl">The plan room</span>
+      <span class="ddb-tv">7 sheets &middot; current as of 4 Aug &middot; Boone holds Rev B</span>
+     </div>
+     <span class="si lg">Open the room</span>
+     </div>
+     <div class="ddb-drawer">
+     <div class="ddb-row"><span class="dw-pg elev ddb-th"></span><span class="dw-rev cur">C</span><span>ID-401 &middot; Millwork Elevations &mdash; Study</span><span class="astp wait">Shared</span></div>
+     <div class="ddb-row"><span class="dw-pg det ddb-th"></span><span class="dw-rev cur">C</span><span>ID-501 &middot; Millwork Details &mdash; Study Shelving</span><span class="astp wait">Shared</span></div>
+     <div class="ddb-row"><span class="dw-pg plan ddb-th"></span><span class="dw-rev cur">B</span><span>ID-101 &middot; Furniture Plan &mdash; Main Floor</span><span class="astp auth">Issued</span></div>
+     <span class="ddb-pull"></span>
+     </div>
+
+     <div class="seclab"><b>The folio</b><i>Loose papers stay where they are. A drawing-shaped upload here asks whether to file it to the plan room.</i></div>
+     <div class="band" style="margin-top:8px">
+     <p>Whitlock_ID-401_RevC_FINAL.pdf looks like a drawing &mdash; file this to the plan room?</p>
+     <span class="si">File it</span>
+     <span class="si ter">Keep it loose</span>
+     </div>
+    </div>
+    </div>
+    </div>
+   </div>
+
+   <p class="figcap"><b>Inset</b> &nbsp;The threshold band inside /doc/whitlock, caught mid-open. The band is the whole argument: the paper still governs, and the drawings are one pull away with everything they need to be legible.</p>
+
+   <div class="callout">
+    <span class="kicker">The deck&rsquo;s recommendation</span>
+    <p>This is the direction the close argues for. The reasoning is on slide 16; the matrix that earned it is on slide 15.</p>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 14 · DIRECTION C — THE FLAT FILE ============ -->
+<section class="slide" data-label="C · The Flat File">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act V &middot; Direction C</span><span class="num">14</span><span class="tick"></span></div>
+  <div class="main">
+   <h2>C &middot; The Flat File &mdash; the room, plus the tray that fills it.</h2>
+   <p class="lede">Direction B&rsquo;s surface <em>and</em> the Print Tray, both in v1: a signed menu-bar agent watching a chosen plots folder, new PDFs queuing through a checksummed retrying outbox and arriving pre-staged on the Light Table. Nell confirms in the browser; she never opens one to file a plot. In-CAD publishing later.</p>
+
+   <div class="grid g3">
+    <div class="card accent tight">
+    <span class="kicker">What it foregrounds</span>
+    <h3>Friction.</h3>
+    <p>Nell never opens a browser to file a plot. And no competitor in this category has document identity at all, let alone a tray that fills it &mdash; this is the widest gap on the board.</p>
+    </div>
+    <div class="card accent tight">
+    <span class="kicker">Signature device</span>
+    <h3>The tray in the menu bar.</h3>
+    <p>Patina living quietly at the top of the designer&rsquo;s screen, counting prints. The first time the studio&rsquo;s software is present without being opened.</p>
+    </div>
+    <div class="card bad tight">
+    <span class="kicker">What it risks</span>
+    <h3>A new platform, on an unproven surface.</h3>
+    <p>Installers, updates, notarization, support &mdash; landing the same quarter as a room with no users yet. Procore built the two-way version and killed it. And the tray amplifies a habit the room has not yet created.</p>
+    </div>
+   </div>
+
+   <div class="doc ddc" style="margin-top:1.15rem">
+    <div class="ddc-two">
+    <div>
+     <span class="eyebrow" style="margin-bottom:7px">the tray</span>
+     <div class="ld-bar">
+     <span class="ld-mk"><i></i><i></i><i></i></span>
+     <span class="ld-bt">Patina</span>
+     </div>
+     <div class="ld-menu">
+     <div class="ld-watch">watching ~/Plots/Whitlock</div>
+     <div class="ld-ml ld-new"><span>1 new print</span><em>queued</em></div>
+     <div class="ld-ml"><span>Whitlock_ID-401_RevC_FINAL.pdf</span><em>sha 9f3a&hellip;</em></div>
+     <div class="ld-ml"><span>2 uploaded this week</span><em>confirmed</em></div>
+     </div>
+    </div>
+    <div class="ddc-flow">
+     <span class="eyebrow" style="margin-bottom:7px">&rarr; arrives pre-staged on the light table</span>
+     <div class="ddc-lt">
+     <div class="ddc-r"><span class="dw-pg elev ddc-th"></span><span>ID-401 &middot; Millwork Elevations &mdash; Study</span><span class="ddc-q">becomes Rev C</span></div>
+     <div class="ddc-r"><span class="dw-pg det ddc-th"></span><span>ID-501 &middot; Millwork Details &mdash; Study Shelving</span><span class="ddc-q">becomes Rev C</span></div>
+     <div class="ddc-r"><span class="dw-pg plan ddc-th"></span><span>ID-101 &middot; Furniture Plan &mdash; Main Floor</span><span class="ddc-q">matches Rev B</span></div>
+     <div class="acts"><span class="si lg">File 6 sheets &middot; 2 pointers move</span></div>
+     </div>
+     <p class="hint">The confirm never moves to the desktop. The tray carries paper; the table still asks.</p>
+    </div>
+    </div>
+   </div>
+
+   <p class="figcap"><b>Inset</b> &nbsp;The tray beside the Light Table. Note what does <em>not</em> change: the fork, the rev-letter assignment, and the confirm all stay in the browser, because law three is not negotiable by convenience.</p>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 15 · COMPARED ============ -->
+<section class="slide" data-label="Compared">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act VI &middot; Compared</span><span class="num">15</span><span class="tick"></span></div>
+  <div class="main">
+   <h2>No direction wins every row.</h2>
+   <p class="lede">Six criteria, three answers. Read the dot for the shape of the tradeoff and the word for what it costs.</p>
+
+   <div class="tablewrap">
+    <table class="matrix">
+    <thead>
+    <tr>
+    <th style="width:26%">Criterion</th>
+    <th>A &middot; The Deep Folio</th>
+    <th>B &middot; The Plan Room</th>
+    <th>C &middot; The Flat File</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+     <td class="crit">Closes the wound</td>
+     <td><span class="dg">&#9680;</span><span class="vw">cramped</span></td>
+     <td><span class="dg">&#9679;</span><span class="vw">owned</span></td>
+     <td><span class="dg">&#9679;</span><span class="vw">owned</span></td>
+    </tr>
+    <tr>
+     <td class="crit">Surface discipline &mdash; R21</td>
+     <td><span class="dg">&#9679;</span><span class="vw">absolute</span></td>
+     <td><span class="dg">&#9680;</span><span class="vw">a threshold</span></td>
+     <td><span class="dg">&#9680;</span><span class="vw">a threshold</span></td>
+    </tr>
+    <tr>
+     <td class="crit">Time to first sheet</td>
+     <td><span class="dg">&#9679;</span><span class="vw">a drop</span></td>
+     <td><span class="dg">&#9679;</span><span class="vw">a drop</span></td>
+     <td><span class="dg">&#9679;</span><span class="vw">a drop</span></td>
+    </tr>
+    <tr>
+     <td class="crit">Trade legibility</td>
+     <td><span class="dg">&#9680;</span><span class="vw">chips</span></td>
+     <td><span class="dg">&#9679;</span><span class="vw">a log</span></td>
+     <td><span class="dg">&#9679;</span><span class="vw">a log</span></td>
+    </tr>
+    <tr>
+     <td class="crit">Build effort</td>
+     <td><span class="dg">&#9680;</span><span class="vw">weeks</span></td>
+     <td><span class="dg">&#9680;</span><span class="vw">weeks</span></td>
+     <td><span class="dg">&#9675;</span><span class="vw">a quarter</span></td>
+    </tr>
+    <tr>
+     <td class="crit">Ladder headroom</td>
+     <td><span class="dg">&#9675;</span><span class="vw">capped</span></td>
+     <td><span class="dg">&#9679;</span><span class="vw">open</span></td>
+     <td><span class="dg">&#9680;</span><span class="vw">spent early</span></td>
+    </tr>
+    </tbody>
+    </table>
+   </div>
+
+   <div class="mlegend">
+    <span><b>&#9679;</b> filled &mdash; strong</span>
+    <span><b>&#9680;</b> half &mdash; mixed</span>
+    <span><b>&#9675;</b> open &mdash; weak</span>
+    <span>Build effort reads inverted: <b>&#9679;</b> light &nbsp; <b>&#9675;</b> heavy</span>
+   </div>
+
+   <p class="figcap"><b>Cell grammar</b> &nbsp;One dot glyph, then one word. The word is the verdict, not a hedge &mdash; &ldquo;a drop&rdquo;, &ldquo;an install&rdquo;, &ldquo;weeks&rdquo;, &ldquo;a quarter&rdquo;. A cell that needs a sentence belongs on the direction&rsquo;s own slide, not in this table.</p>
+
+   <div class="note">
+    <span class="kicker">How the verdicts were earned</span>
+    <p>Every cell was filled after all three directions were on paper, not before. No direction takes six filled dots. B and C tie on four rows &mdash; C contains B&rsquo;s surface, so it inherits the drop and the log &mdash; and separate only on build effort and on what the ladder has left to spend. A wins exactly one row, surface discipline, and it is the row this house takes most seriously, which is why the recommendation on the next slide has to answer it rather than wave at it.</p>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 16 · THE RULING ============ -->
+<section class="slide" data-label="The ruling">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Close &middot; The ruling</span><span class="num">16</span><span class="tick"></span></div>
+  <div class="main">
+   <h2>What the deck would do.</h2>
+   <p class="lede">A recommendation, the parts worth taking from the directions we do not build, and the three questions that decide it.</p>
+
+   <div class="grid g2">
+    <div class="card accent">
+    <span class="kicker">The deck&rsquo;s recommendation</span>
+    <h3>Build B &middot; The Plan Room.</h3>
+    <p><strong>The wound is ownership of the pointer, not upload friction.</strong> Nell already uploads &mdash; twice, on the first of August. Abel cut from Rev B because nothing owned the word <em>current</em> and nothing recorded the send.</p>
+    <p>The drop plus the Light Table closes that entire loop with zero installs. The tray is an amplifier for a habit the room must first create; building it in v1 stakes a new desktop platform on a surface with no users yet, over Procore&rsquo;s grave.</p>
+    <p class="small">And A cannot carry it. A 24-sheet job, a three-print stack, a drawing log, and a transmittal ledger do not fit inside a letterhead unfold &mdash; the ceiling is visible from the first mock.</p>
+    </div>
+    <div class="card warn">
+    <span class="kicker">Steal these, whatever wins</span>
+    <p>Take <strong>A&rsquo;s shelf line</strong> as the paper-side face of the room &mdash; the set should always be legible from the paper, even when the room is closed.</p>
+    <p>Take <strong>C&rsquo;s Print Tray</strong> and draw it into the roadmap as the very next cut. Its outbox discipline is already proven on iOS; it does not need inventing, only porting.</p>
+    <p>Take <strong>the Spec Book&rsquo;s issue law</strong> whole. Immutable ledger, snapshots, sha256, audiences, drift detection &mdash; do not re-litigate a grammar that already ships.</p>
+    </div>
+   </div>
+
+   <span class="eyebrow" style="margin-top:1.6rem">Three questions to shape the ruling</span>
+   <div class="qs">
+    <div class="q">
+    <span class="qn">1</span>
+    <div>
+    <h3>Does the Plan Room absorb the Room Files?</h3>
+    <p>The scanner already produces versioned, checksummed drawing sets. If they register as system-authored sheets, scan output and Nell&rsquo;s plots share one log and one current set. If not, the project carries two drawing surfaces from day one, and the second one is the one nobody was told about.</p>
+    </div>
+    </div>
+    <div class="q">
+    <span class="qn">2</span>
+    <div>
+    <h3>Can a transmittal ever be recalled?</h3>
+    <p>Two honest answers. <em>Reissue-plus-notice</em> &mdash; the record stands, amended, and the trade always sees what he was sent. Or <em>true token revoke</em> &mdash; the record admits erasure, and a link can go dark. The answer is the trust story we tell trades, and it should be chosen deliberately rather than fallen into.</p>
+    </div>
+    </div>
+    <div class="q">
+    <span class="qn">3</span>
+    <div>
+    <h3>Does the current set gate the client absolutely?</h3>
+    <p>Is Margot&rsquo;s portal only ever the issued set &mdash; retiring <code>client_visible</code> as an independent toggle inside the plan room &mdash; or does Shared survive as a middle state? One is calmer; the other is the toggle designers already know how to reach for.</p>
+    </div>
+    </div>
+   </div>
+
+   <div class="closing">
+    <p>For the ruling.</p>
+    <span>6 August 2026 &mdash; proposed: B &middot; The Plan Room, with A&rsquo;s shelf line and C&rsquo;s tray next in line.</span>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 17 · THE FIRST CUT ============ -->
+<section class="slide" data-label="The first cut">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Close &middot; The first cut</span><span class="num">17</span><span class="tick"></span></div>
+  <div class="main">
+   <h2>The first cut, and what it deliberately leaves out.</h2>
+   <p class="lede">Each line names the primitive it extends, because that is the whole argument for the timeline: almost nothing here is new machinery.</p>
+
+   <div class="grid g2">
+    <div class="card accent">
+    <span class="kicker">Ships first</span>
+    <ul class="plain tight">
+     <li><strong>The sheet, and server-side stacking.</strong> A <code>sheets</code> table; <code>version_of</code> hardened behind an RPC with a single-chain-head trigger; rev letters assigned at confirm, never parsed.</li>
+     <li><strong>The current-set pointer.</strong> <code>sheets.current_print_id</code>, server-held, flipped atomically for a whole set.</li>
+     <li><strong>The Light Table.</strong> Client-side PDF split and a sheet-number parse off the text layer; proposal only, human confirm, no OCR.</li>
+     <li><strong>The Plan Room view.</strong> The drawing log, the stacks, and SUPERSEDED stamps burned in at serve time &mdash; never rewriting the stored print.</li>
+     <li><strong>Client <code>/documents</code>, reborn as the current set.</strong> Which closes the proposal-anchor gap in passing: today a proposal-anchored document marked <code>client_visible</code> never reaches the client hub, because the hub queries by <code>project_id</code> alone.</li>
+     <li><strong>The Issue and the Transmittal.</strong> <code>document_shares</code> grows a <code>plan_set</code> kind; a <code>transmittals</code> ledger &mdash; issue, recipient, purpose, sent_at, opened_at; guest route <code>/plans/[token]</code>.</li>
+    </ul>
+    </div>
+    <div class="card warn">
+    <span class="kicker">Later, in rough order</span>
+    <ul class="plain tight">
+     <li>Set-flip notifications, and the amber <em>&ldquo;holds Rev B&rdquo;</em> digest.</li>
+     <li>The Print Tray &mdash; ladder rung two, the iOS outbox ported to the desktop.</li>
+     <li>Red/blue compare overlay. Needs a raster pass the folio pipeline does not have today.</li>
+     <li>Title-block OCR, for studios whose plots arrive without a text layer.</li>
+     <li>Drawn markups with promote-forward. <strong>v1 carries anchored note threads only.</strong></li>
+     <li>In-CAD <em>Publish to Patina</em> &mdash; ladder rung three.</li>
+    </ul>
+    </div>
+   </div>
+
+   <div class="card bad" style="margin-top:13px">
+    <span class="kicker">Never</span>
+    <ul class="plain tight ox">
+     <li><strong>DWG parsing.</strong> The source file may ride along as an attachment, unread.</li>
+     <li><strong>Bidirectional sync.</strong> Procore&rsquo;s grave, and we walk past it on purpose.</li>
+     <li><strong>Rewriting a stored print.</strong> What was sent never changes; a correction is a new issue that supersedes the old one. The supersede stamp is added on the way out, never on the way in.</li>
+    </ul>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 18 · COLOPHON ============ -->
+<section class="slide" data-label="Colophon">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Close &middot; Colophon</span><span class="num">18</span><span class="tick"></span></div>
+  <div class="main">
+   <h2>What happens next, and what has not happened.</h2>
+   <p class="lede">Three quiet paragraphs, so nobody has to guess how much of this is real.</p>
+
+   <div class="grid g3">
+    <div class="card accent">
+    <span class="kicker">If the ruling lands</span>
+    <p>The first cut is <strong>weeks, not months</strong> &mdash; every noun in the model extends a primitive that already ships. The room goes behind a feature flag; the folio keeps working exactly as it does today, and a job with no drawings never sees a threshold.</p>
+    <p class="small">The one genuinely new thing is the pointer, and the pointer is a column.</p>
+    </div>
+    <div class="card warn">
+    <span class="kicker">What this deck is not</span>
+    <p><strong>Nothing is built. No migration exists.</strong> No component was written, no route touched, no flag created. <strong>The Whitlock residence is fictional and lives only in this file.</strong></p>
+    <p class="small">Three directions are drawings. Two of them will not survive the ruling, and that is the point of drawing three.</p>
+    </div>
+    <div class="card">
+    <span class="kicker">Colophon</span>
+    <p>Self-contained &mdash; one file, no external fonts, scripts, images, or requests. No shadows anywhere; depth is flat paper offsets, rules, and value contrast. Every picture is drawn in CSS.</p>
+    <p class="small">Fixture: the Whitlock residence, 4 August 2026. Deck: <span class="mono">docs/design/the-current-set</span>. House shell inherited from the Single Pane by way of the Authorized Schedule and the Call Sheet.</p>
+    </div>
+   </div>
+
+   <div class="cover-meta" style="margin-top:20px">
+    <span>Deck <b>docs/design/the-current-set</b></span>
+    <span>Directions <b>3</b></span>
+    <span>Screens <b>5</b></span>
+    <span>Status <b>proposal, nothing built</b></span>
+    <span><b>6 August 2026</b></span>
+   </div>
+  </div>
+ </div>
+</section>
+
+</div><!-- /#deck -->
+
+<div id="chrome">
+ <span id="counter"><b>01</b> / 18</span>
+ <button class="navbtn" id="prev" type="button" aria-label="Previous slide">&#8592;</button>
+ <button class="navbtn" id="next" type="button" aria-label="Next slide">&#8594;</button>
+ <button id="themebtn" type="button" aria-label="Toggle colour theme">Theme</button>
+</div>
+<div id="hint">&#8592; &#8594; or space &middot; P to print</div>
+
+<script>
+(function(){
+ var deck = document.getElementById('deck');
+ var slides = Array.prototype.slice.call(deck.querySelectorAll('.slide'));
+ var counter = document.getElementById('counter');
+ var progress = document.getElementById('progress');
+ var current = 0;
+
+ function pad(n){ return (n < 10 ? '0' : '') + n; }
+
+ function setCurrent(i){
+  current = Math.max(0, Math.min(slides.length - 1, i));
+  counter.innerHTML = '<b>' + pad(current + 1) + '</b> / ' + slides.length;
+  progress.style.width = (((current + 1) / slides.length) * 100) + '%';
+ }
+
+ function go(i){
+  var t = Math.max(0, Math.min(slides.length - 1, i));
+  deck.scrollTop = deck.scrollTop + slides[t].getBoundingClientRect().top;
+  slides[t].classList.add('seen');
+  setCurrent(t);
+ }
+
+ /* Only now — with the deck, the slides, and the chrome all in hand — is it safe
+    to let CSS hide anything, because everything that can un-hide it is below. */
+ document.documentElement.className += ' js';
+
+ if ('IntersectionObserver' in window){
+  var io = new IntersectionObserver(function(entries){
+   entries.forEach(function(e){
+    if (e.isIntersecting){
+    e.target.classList.add('seen');
+    if (e.intersectionRatio > 0.5) setCurrent(slides.indexOf(e.target));
+    }
+   });
+  }, { threshold: [0.12, 0.55] });
+  slides.forEach(function(s){ io.observe(s); });
+ } else {
+  slides.forEach(function(s){ s.classList.add('seen'); });
+ }
+
+ deck.addEventListener('scroll', function(){
+  var mid = deck.scrollTop + deck.clientHeight * 0.4;
+  for (var i = 0; i < slides.length; i++){
+   if (slides[i].offsetTop <= mid) setCurrent(i);
+  }
+ }, { passive: true });
+
+ document.getElementById('prev').addEventListener('click', function(){ go(current - 1); });
+ document.getElementById('next').addEventListener('click', function(){ go(current + 1); });
+
+ document.addEventListener('keydown', function(e){
+  var tag = (e.target && e.target.tagName) || '';
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  switch (e.key){
+   case 'ArrowRight': case 'PageDown': go(current + 1); e.preventDefault(); break;
+   case 'ArrowLeft':  case 'PageUp':   go(current - 1); e.preventDefault(); break;
+   case ' ': go(current + (e.shiftKey ? -1 : 1)); e.preventDefault(); break;
+   case 'Home': go(0); e.preventDefault(); break;
+   case 'End': go(slides.length - 1); e.preventDefault(); break;
+   case 'p': case 'P': window.print(); break;
+  }
+ });
+
+ var root = document.documentElement;
+ var btn = document.getElementById('themebtn');
+ var order = ['auto','light','dark'];
+ var label = { auto: 'Theme', light: 'Light', dark: 'Dark' };
+ var stored = null;
+ try { stored = window.localStorage.getItem('patina-current-set-theme'); } catch (err) {}
+ if (stored && order.indexOf(stored) > -1){ root.setAttribute('data-theme', stored); btn.textContent = label[stored]; }
+ btn.addEventListener('click', function(){
+  var now = root.getAttribute('data-theme') || 'auto';
+  var nextTheme = order[(order.indexOf(now) + 1) % order.length];
+  root.setAttribute('data-theme', nextTheme);
+  btn.textContent = label[nextTheme];
+  try { window.localStorage.setItem('patina-current-set-theme', nextTheme); } catch (err) {}
+ });
+
+ setCurrent(0);
+})();
+</script>
+
+</body>
+</html>
