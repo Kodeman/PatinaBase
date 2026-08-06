@@ -129,7 +129,7 @@ export default async function InvitePage({ params }: InvitePageProps) {
       description={`${designerName} invited you to collaborate${projectName ? ` on “${projectName}”` : ''}.`}
     >
       {row.personal_message ? (
-        <blockquote className="mb-6 border-l-2 border-[#8FA18B] bg-[#f3f0e8] px-4 py-3 text-sm leading-6 text-[#252a25]">
+        <blockquote className="mb-6 border-l-2 border-[#8FA18B] bg-[#f3f0e8] px-4 py-3 text-sm leading-6 text-[#2C2926]">
           {row.personal_message}
         </blockquote>
       ) : null}

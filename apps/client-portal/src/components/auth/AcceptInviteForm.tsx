@@ -125,7 +125,7 @@ export function AcceptInviteForm({ email, token }: AcceptInviteFormProps) {
           type="email"
           value={email}
           readOnly
-          className="mt-2 h-12 w-full border border-[#6d726b] bg-[#f3f0e8] px-3 text-sm text-[#4f554f]"
+          className="mt-2 h-12 w-full border border-[#8B7355] bg-[#f3f0e8] px-3 text-sm text-[#65594E]"
         />
       </div>
       <div>
@@ -140,7 +140,7 @@ export function AcceptInviteForm({ email, token }: AcceptInviteFormProps) {
           minLength={8}
           value={password}
           onChange={(event) => setPassword(event.target.value)}
-          className="mt-2 h-12 w-full border border-[#6d726b] bg-white px-3 outline-none focus:border-[#252a25] focus:ring-2 focus:ring-[#252a25]"
+          className="mt-2 h-12 w-full border border-[#8B7355] bg-white px-3 outline-none focus:border-[#5C4A3C] focus:ring-2 focus:ring-[#5C4A3C]"
         />
       </div>
       <div>
@@ -155,7 +155,7 @@ export function AcceptInviteForm({ email, token }: AcceptInviteFormProps) {
           minLength={8}
           value={confirm}
           onChange={(event) => setConfirm(event.target.value)}
-          className="mt-2 h-12 w-full border border-[#6d726b] bg-white px-3 outline-none focus:border-[#252a25] focus:ring-2 focus:ring-[#252a25]"
+          className="mt-2 h-12 w-full border border-[#8B7355] bg-white px-3 outline-none focus:border-[#5C4A3C] focus:ring-2 focus:ring-[#5C4A3C]"
         />
       </div>
       {error ? (
@@ -169,7 +169,7 @@ export function AcceptInviteForm({ email, token }: AcceptInviteFormProps) {
       <button
         type="submit"
         disabled={submitting}
-        className="h-12 w-full bg-[#252a25] px-4 text-sm font-semibold text-white disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#252a25] focus:ring-offset-2"
+        className="h-12 w-full bg-[#1A1816] px-4 text-sm font-semibold text-[#FAF7F2] transition-colors duration-150 ease-[cubic-bezier(0.25,1,0.5,1)] hover:bg-[#2C2926] motion-reduce:transition-none disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#5C4A3C] focus:ring-offset-2"
         data-testid="accept-invite-submit"
       >
         {submitting ? 'Setting up…' : 'Create account and accept'}

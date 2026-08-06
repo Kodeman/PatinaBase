@@ -165,7 +165,7 @@ function CallbackContent() {
           </PortalAuthNotice>
           <a
             href={state.retryPath}
-            className="inline-flex min-h-11 items-center text-sm font-semibold underline underline-offset-4 focus:outline-none focus:ring-2 focus:ring-[#252a25]"
+            className="inline-flex min-h-11 items-center text-sm font-semibold underline underline-offset-4 focus:outline-none focus:ring-2 focus:ring-[#5C4A3C]"
           >
             {state.recovery ? 'Request a new reset link' : 'Return to sign in'}
           </a>

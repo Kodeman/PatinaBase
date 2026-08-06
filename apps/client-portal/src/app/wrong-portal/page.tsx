@@ -58,7 +58,7 @@ function WrongPortalContent() {
         </div>
 
         {home && (
-          <div className="border-l-2 border-patina-dusty-blue pl-4 text-left">
+          <div className="border-l-2 border-[#A8B5A0] pl-4 text-left">
             <p className="type-meta">Your workspace</p>
             <p className="mt-1 type-body-small text-[var(--text-muted)]">
               Continue to {home.label} to pick up where you left off.
@@ -70,7 +70,7 @@ function WrongPortalContent() {
           {home && (
             <a
               href={home.url}
-              className="rounded-[3px] bg-patina-charcoal px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
+              className="bg-[#1A1816] px-5 py-2.5 text-sm font-medium text-[#FAF7F2] transition hover:bg-[#2C2926]"
             >
               Continue to {home.label}
             </a>
@@ -78,7 +78,7 @@ function WrongPortalContent() {
           <button
             onClick={handleSwitchAccounts}
             disabled={isSigningOut}
-            className="rounded-[3px] border border-[var(--border-default)] px-5 py-2.5 text-sm font-medium text-[var(--text-primary)] transition hover:border-[var(--text-primary)] disabled:opacity-50"
+            className="border border-[var(--border-default)] px-5 py-2.5 text-sm font-medium text-[var(--text-primary)] transition hover:border-[var(--text-primary)] disabled:opacity-50"
           >
             {isSigningOut ? 'Signing out…' : 'Sign out and switch accounts'}
           </button>
