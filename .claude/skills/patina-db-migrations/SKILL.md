@@ -17,7 +17,7 @@ Last verified: 2026-07-09 (main @ c4de810d, migrations head 00284). Re-verify lo
    ```
    grep -rln "CREATE OR REPLACE FUNCTION[^(]*<name>" supabase/migrations/*.sql | sort | tail -1
    ```
-   Open THAT file, copy the function body verbatim, then graft your delta on top. Confirm no later file redefines it. High-churn monoliths: `activate_proposal_as_project` (head 00279, redefined ~19×), `clone_proposal` (head 00269), `apply_invoice_payment_effects` (head 00277). Do NOT trust doc claims of the "latest body" — supabase/CLAUDE.md still names 00262 for `activate_proposal_as_project`; grep says 00279. Grep wins.
+   Open THAT file, copy the function body verbatim, then graft your delta on top. Confirm no later file redefines it. High-churn monoliths: `activate_proposal_as_project` (redefined whole-body ~19×+, head moves constantly), `clone_proposal`, `apply_invoice_payment_effects`. Do NOT trust doc claims of the "latest body" — grep migrations for the live head and never trust a number remembered in any doc (supabase/CLAUDE.md now states the same rule). Grep wins.
 3. **Write the migration to the conventions in Quality bar** (banner header, idempotency, guarded crons, pinned search_path, explicit grants).
 4. **Apply locally** with `pnpm supabase:reset` (full replay + seeds) or `supabase migration up` (incremental, when the stack is already correct). Reset also loads the 15 seed files in `config.toml [db.seed] sql_paths` (the top-level `supabase/seed.sql` is NOT in that list — it is orphaned and never runs). The FIRST seed, `seed/00-legacy-grants.sql`, is GENERATED — it replays every migration GRANT/REVOKE to reconstruct ACLs after Supabase's 2026-05-30 grant-default flip. If your migration adds any GRANT/REVOKE, regenerate it: `python3 scripts/generate-legacy-grants.py`. Never hand-edit it.
 5. **Regenerate types if you touched the public schema.** `pnpm db:generate` writes `packages/supabase/src/database.types.ts`. That file is generated — never hand-edit. Proof of sync: `git diff --exit-code packages/supabase/src/database.types.ts` after regen (nonzero = you forgot to regen, or a schema change is uncommitted).
@@ -111,7 +111,7 @@ GRANT  EXECUTE ON FUNCTION public.do_widget_thing(uuid) TO authenticated;
 | Need a new migration file | `supabase migration new x` (timestamp name) | Hand-number `NNNNN_slug.sql`, next after `sort \| tail` |
 | Redefining an RPC | Paste an older/remembered body | `grep -rln "CREATE OR REPLACE FUNCTION[^(]*<name>" ... \| sort \| tail -1`, copy that body verbatim |
 | Finding a function's latest body | `grep "FUNCTION public.<name>"` | Anchor on `CREATE OR REPLACE FUNCTION[^(]*<name>` — bare-schema fns like `clone_proposal` lack `public.`, and REVOKE/COMMENT lines false-positive |
-| Trusting supabase/CLAUDE.md for "latest body" | Believe it (says 00262) | grep the migrations (00279); docs drift |
+| Trusting supabase/CLAUDE.md for "latest body" | Believe a doc's remembered head number (e.g. 00262/00279) | grep the migrations for the live head; docs drift |
 | Locking down a definer RPC | `REVOKE ... FROM PUBLIC` only | Also `REVOKE ... FROM anon` (default privs grant anon at creation) |
 | Adding an enum value and using it | Same migration/transaction | ADD VALUE in its own migration; use/backfill in a later one |
 | Inserting a personal-library product | Omit `layer` | Set `layer='personal', owner_user_id=<uid>` or the 00152 trigger files it as catalog and it vanishes |

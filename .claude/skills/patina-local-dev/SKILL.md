@@ -36,6 +36,11 @@ Port map (verified):
 
 Toolchain: pnpm `9.0.0` **exact** (`packageManager: pnpm@9.0.0`, corepack-pinned — not "any 9.x"), node ≥20. Install with `pnpm install`; use `pnpm install --frozen-lockfile` for a reproducible/CI install (`pnpm-lock.yaml` is committed).
 
+Env each layer needs (see the matching `.env.example`):
+- Portals: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and server-side `SUPABASE_SERVICE_ROLE_KEY`. `NEXT_PUBLIC_*` is inlined at dev start — a change needs a restart.
+- The three NestJS services: `DATABASE_URL` **with the `?schema=` suffix** (`svc_orders` / `svc_media` / `svc_projects` — schema isolation, no Prisma multiSchema; a missing/wrong `?schema=` silently targets `public`), `SUPABASE_JWT_SECRET` (local JWT validation via `@patina/auth`; Cloud validates via JWKS instead), and the Redis host/port/password.
+- Prisma clients are generated, not committed: run `pnpm prisma:generate` after a fresh clone or a pull that touched a service schema, or the services won't boot. `pnpm prisma:push` syncs a schema to the local DB (per-service: `npx prisma generate` / `npx prisma db push` inside `services/<svc>`; production schema changes use `npx prisma migrate dev --name <description>`).
+
 BEFORE any destructive local action (db reset, seed edits, bulk UI/hook-driven mutations), confirm the portal is pointed at LOCAL, not Strata prod:
 ```bash
 grep NEXT_PUBLIC_SUPABASE_URL apps/designer-portal/.env.local

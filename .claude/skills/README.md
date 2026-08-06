@@ -1,6 +1,6 @@
 # Patina skill library
 
-Eleven `patina-*` skills written 2026-07-08/09 by the outgoing operator session for the next operator (Opus 4.8 / Sonnet-class), from a 7-agent repo discovery plus the accumulated session-memory gotcha archive, then adversarially reviewed. Every load-bearing claim was repo-verified at authoring time; each skill carries a `Last verified:` stamp (currently `main @ c4de810d`, migrations head `00284`) — re-verify anything load-bearing if the repo has moved far past it.
+Eleven `patina-*` skills written 2026-07-08/09 by the outgoing operator session for the next operator (originally Opus 4.8 / Sonnet-class; retuned 2026-08-05 for the Claude 5 family — Fable 5 orchestrating, Opus 5 / Sonnet 5 / Haiku executing), from a 7-agent repo discovery plus the accumulated session-memory gotcha archive, then adversarially reviewed. Every load-bearing claim was repo-verified at authoring time; each skill carries a `Last verified:` stamp (currently `main @ c4de810d`, migrations head `00284`) — re-verify anything load-bearing if the repo has moved far past it.
 
 ## Inventory
 
@@ -51,4 +51,5 @@ top note before touching it).
 
 - When a skill turns out wrong or the repo moves under it, fix the skill in the same change as the code and refresh its `Last verified:` stamp — a stale skill is worse than none.
 - Keep descriptions trigger-only ("Use when …", no workflow summaries) — the description is what decides whether a future agent loads it.
+- Re-audit skills at each model release — instructions tuned to an older model's failure modes become counterproductive on the next one.
 - Known-unverified items (flagged in-skill): live `.workers.dev` reachability, `next lint` fallback behavior for admin/client, Strata's default-privilege posture post-flip, seed-marker exact values, iOS dark-mode re-walk status.
