@@ -121,6 +121,7 @@
     "embla-carousel-react": "^8.6.0",
     "framer-motion": "^12.23.22",
     "lucide-react": "^0.544.0",
+    "qrcode-generator": "^1.4.4",
     "react-day-picker": "^8.10.0",
     "react-dropzone": "^14.3.8",
     "react-rating-stars-component": "^2.2.0",

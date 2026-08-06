@@ -11,7 +11,12 @@ export type {
   PortalAuthNoticeProps,
   PortalAuthShellProps,
   PortalAuthSuccessProps,
+  PortalAuthQrPhase,
+  PortalAuthQrProps,
   PortalLoginProps,
   PortalLoginState,
   PortalOAuthAction,
 } from './PortalAuth'
+export { PortalAuthAmbientQr, formatQrCountdown } from './PortalAuthAmbientQr'
+export { buildQrMatrix, PINNED_QR_MODULE_COUNT } from './qr-matrix'
+export type { QrMatrix } from './qr-matrix'

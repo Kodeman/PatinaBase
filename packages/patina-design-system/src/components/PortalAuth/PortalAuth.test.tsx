@@ -11,6 +11,14 @@ const loginProps = {
   destinationHref: '/desk',
 }
 
+/** A live badge, so the shell's a11y is asserted with the QR actually mounted. */
+const liveQr = {
+  url: 'patina://auth?session=0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0',
+  secondsRemaining: 272,
+  totalSeconds: 300,
+  phase: 'live' as const,
+}
+
 function contrastRatio(foreground: string, background: string) {
   const luminance = (hex: string) => {
     const channels = hex.slice(1).match(/.{2}/g)!.map((channel) => parseInt(channel, 16) / 255)
@@ -26,8 +34,9 @@ describe('Portal auth components', () => {
   it('keeps the approved sign-in methods in their required order', () => {
     const { rerender } = render(<PortalLogin {...loginProps} state="email" oauthActions={[{ id: 'apple', label: 'Continue with Apple', onSelect: vi.fn() }, { id: 'google', label: 'Continue with Google', onSelect: vi.fn() }]} />)
     const content = document.body.textContent ?? ''
-    expect(content.indexOf('Email me a one-time code')).toBeLessThan(content.indexOf('Use a QR code'))
-    expect(content.indexOf('Use a QR code')).toBeLessThan(content.indexOf('Continue with Apple'))
+    // The QR left this pane for the brand-side badge: email → Apple → password.
+    expect(content).not.toContain('Use a QR code')
+    expect(content.indexOf('Email me a one-time code')).toBeLessThan(content.indexOf('Continue with Apple'))
     expect(content.indexOf('Continue with Apple')).toBeLessThan(content.indexOf('Use email and password instead'))
     expect(screen.queryByText('Continue with Google')).not.toBeInTheDocument()
 
@@ -54,11 +63,8 @@ describe('Portal auth components', () => {
     expect(onComplete).toHaveBeenCalledTimes(1)
   })
 
-  it('renders the QR expiry recovery and success fallback', () => {
-    const refresh = vi.fn()
-    const { rerender } = render(<PortalLogin {...loginProps} state="qr-expired" onRefreshQr={refresh} />)
-    expect(screen.getByText('That code has expired.')).toBeInTheDocument()
-    rerender(<PortalLogin {...loginProps} state="success" destinationHref="/projects" onContinue={vi.fn()} />)
+  it('renders the success fallback as a real destination link', () => {
+    render(<PortalLogin {...loginProps} state="success" destinationHref="/projects" onContinue={vi.fn()} />)
     expect(screen.getByRole('link', { name: 'Continue to your portal' })).toHaveAttribute('href', '/projects')
   })
 
@@ -94,13 +100,11 @@ describe('Portal auth components', () => {
     expect(appleAction).toBeDisabled()
     expect(appleAction).toHaveAttribute('aria-busy', 'true')
     expect(screen.getByLabelText('Email address')).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Use a QR code' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Use email and password instead' })).toBeDisabled()
   })
 
   it('locks competing disclosures while an authentication method is finishing', () => {
-    const { rerender } = render(<PortalLogin {...loginProps} state="qr" isSubmitting />)
-    expect(screen.getByRole('button', { name: 'Use a QR code' })).toBeDisabled()
+    const { rerender } = render(<PortalLogin {...loginProps} state="email" isSubmitting />)
     expect(screen.getByRole('button', { name: 'Use email and password instead' })).toBeDisabled()
     rerender(<PortalLogin {...loginProps} state="password" password="secret" isSubmitting />)
     expect(screen.getByLabelText('Password')).toBeDisabled()
@@ -117,7 +121,7 @@ describe('Portal auth components', () => {
   })
 
   it('preserves caller styles while keeping the configured accent authoritative', () => {
-    render(<PortalAuthShell eyebrow="The studio" title="Welcome back." description="Your work is waiting." accent="#c4a57b" supportEmail="support@patina.com" style={{ backgroundColor: 'rgb(1, 2, 3)', '--portal-auth-accent': '#000000' } as React.CSSProperties}><div /></PortalAuthShell>)
+    render(<PortalAuthShell eyebrow="The studio" title="Welcome back." description="Your work is waiting." accent="#c4a57b" supportEmail="support@patina.cloud" style={{ backgroundColor: 'rgb(1, 2, 3)', '--portal-auth-accent': '#000000' } as React.CSSProperties}><div /></PortalAuthShell>)
     const shell = screen.getByRole('main')
     expect(shell).toHaveStyle({ backgroundColor: 'rgb(1, 2, 3)' })
     expect(shell.style.getPropertyValue('--portal-auth-accent')).toBe('#c4a57b')
@@ -135,7 +139,8 @@ describe('Portal auth components', () => {
   })
 
   it('has no basic accessibility violations', async () => {
-    const { container } = render(<PortalAuthShell eyebrow="The studio" title="Welcome back." description="Your work is waiting." accent="#c4a57b" supportEmail="support@patina.com"><PortalLogin {...loginProps} state="email" /></PortalAuthShell>)
+    const { container } = render(<PortalAuthShell eyebrow="The studio" title="Welcome back." description="Your work is waiting." accent="#c4a57b" supportEmail="support@patina.cloud" qr={liveQr}><PortalLogin {...loginProps} state="email" /></PortalAuthShell>)
+    expect(screen.getByTestId('portal-auth-qr')).toBeInTheDocument()
     // Tailwind utilities are not loaded in Vitest/JSDOM, so contrast is asserted deterministically above.
     expect(await axe(container, { rules: { 'color-contrast': { enabled: false } } })).toHaveNoViolations()
   })

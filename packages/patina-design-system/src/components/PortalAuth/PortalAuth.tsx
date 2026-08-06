@@ -4,6 +4,10 @@ import * as React from 'react'
 import { Apple } from 'lucide-react'
 import { cn } from '../../utils/cn'
 import { StrataMark } from '../StrataMark'
+import { PortalAuthAmbientQr } from './PortalAuthAmbientQr'
+import type { PortalAuthQrProps } from './PortalAuthAmbientQr'
+
+export type { PortalAuthQrPhase, PortalAuthQrProps } from './PortalAuthAmbientQr'
 
 export const PORTAL_AUTH_TAGLINE = 'A workshop for interior designers, their clients, and the makers they trust.'
 
@@ -151,6 +155,7 @@ const RISE = {
   field: 'animate-[pa-auth-rise_1s_cubic-bezier(0.16,1,0.3,1)_0.36s_both] motion-reduce:animate-none',
   description: 'animate-[pa-auth-rise_1s_cubic-bezier(0.16,1,0.3,1)_0.42s_both] motion-reduce:animate-none',
   action: 'animate-[pa-auth-rise_1s_cubic-bezier(0.16,1,0.3,1)_0.44s_both] motion-reduce:animate-none',
+  qr: 'animate-[pa-auth-rise_1s_cubic-bezier(0.16,1,0.3,1)_0.48s_both] motion-reduce:animate-none',
   alt: 'animate-[pa-auth-rise_1s_cubic-bezier(0.16,1,0.3,1)_0.52s_both] motion-reduce:animate-none',
   foot: 'animate-[pa-auth-rise_1s_cubic-bezier(0.16,1,0.3,1)_0.54s_both] motion-reduce:animate-none',
   sill: 'animate-[pa-auth-rise_1s_cubic-bezier(0.16,1,0.3,1)_0.62s_both] motion-reduce:animate-none',
@@ -180,8 +185,6 @@ function PortalAuthRule({ className }: { className?: string }) {
 export type PortalLoginState =
   | 'email'
   | 'code'
-  | 'qr'
-  | 'qr-expired'
   | 'apple-pending'
   | 'password'
   | 'success'
@@ -202,6 +205,8 @@ export interface PortalAuthShellProps extends React.HTMLAttributes<HTMLDivElemen
   supportEmail: string
   children: React.ReactNode
   tagline?: string
+  /** The ambient countdown QR badge. Omitted, the pane renders exactly as before. */
+  qr?: PortalAuthQrProps
 }
 
 /** A flat, material-led frame shared by Patina portal sign-in experiences. */
@@ -212,6 +217,7 @@ export function PortalAuthShell({
   accent,
   supportEmail,
   tagline = PORTAL_AUTH_TAGLINE,
+  qr,
   children,
   className,
   style,
@@ -265,6 +271,24 @@ export function PortalAuthShell({
             </h1>
             <p className={cn('mt-[20px] max-w-[34ch] text-[14px] leading-[1.6] text-[#B8A999]', RISE.description)}>{description}</p>
           </div>
+          {/* The badge is a SIBLING of the sill block, never a wrapper around it:
+              the ground SVG below hangs on z-index:-1, and a transformed ancestor
+              (the entrance animation) would trap it inside this stacking context. */}
+          {/* Width alone is not enough room: the badge is ~300px of circle plus
+              two caption lines, and a short desktop window (a laptop with the
+              browser chrome and a dock) crushes the pane. The gate is height as
+              well as width, written as one literal arbitrary variant so all
+              four Tailwind builds compile it. */}
+          {qr && (
+            <div
+              className={cn(
+                'relative mt-[40px] hidden [@media(min-width:1024px)_and_(min-height:760px)]:block',
+                RISE.qr
+              )}
+            >
+              <PortalAuthAmbientQr {...qr} />
+            </div>
+          )}
           {/* The sill row, and the bedded ground hung off it — the section opens the
               same 18px under the light's own line at every width. The animated wrapper
               is inside, so the ground's z-index:-1 is never trapped in a transform. */}
@@ -432,11 +456,6 @@ export interface PortalLoginProps {
   resendInSeconds?: number
   onResendCode?: () => void
   error?: string | null
-  qrCode?: React.ReactNode
-  qrDescription?: string
-  onOpenQr?: () => void
-  onCloseQr?: () => void
-  onRefreshQr?: () => void
   oauthActions?: PortalOAuthAction[]
   password?: string
   onPasswordChange?: (password: string) => void
@@ -452,7 +471,11 @@ export interface PortalLoginProps {
   isSubmitting?: boolean
 }
 
-/** Controlled portal login form. Authentication, timers, navigation, and QR transport stay in portal adapters. */
+/**
+ * Controlled portal login form. Authentication, timers, and navigation stay in
+ * portal adapters — and so does the QR, which now lives in the brand pane's
+ * ambient badge rather than behind a disclosure on this side.
+ */
 export function PortalLogin({
   state,
   email,
@@ -464,11 +487,6 @@ export function PortalLogin({
   resendInSeconds = 0,
   onResendCode,
   error,
-  qrCode,
-  qrDescription = 'Use your signed-in phone to scan this code.',
-  onOpenQr,
-  onCloseQr,
-  onRefreshQr,
   oauthActions = [],
   password = '',
   onPasswordChange,
@@ -484,7 +502,6 @@ export function PortalLogin({
   const codeSubmissionInFlight = React.useRef(false)
   const interactionLocked = isSubmitting || state === 'apple-pending'
   const passwordOpen = passwordExpanded ?? state === 'password'
-  const showQr = state === 'qr' || state === 'qr-expired'
   const visibleOAuthActions = oauthActions.filter((action) =>
     action.id === 'apple' ? action.available !== false : action.available === true
   )
@@ -549,12 +566,6 @@ export function PortalLogin({
 
       {state !== 'code' && <div className={cn('space-y-[20px]', RISE.alt)}>
         <PortalAuthRule />
-        <div>
-          <button type="button" aria-expanded={showQr} aria-controls="portal-auth-qr-panel" onClick={showQr ? onCloseQr : onOpenQr} disabled={interactionLocked} className="flex min-h-[44px] w-full items-center justify-between gap-[12px] text-left text-[14px] font-semibold text-[#2C2926] transition-colors duration-150 ease-[cubic-bezier(0.25,1,0.5,1)] disabled:cursor-not-allowed disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#5C4A3C] focus:ring-offset-2 motion-reduce:transition-none"><span>Use a QR code</span><span aria-hidden="true" className="font-mono text-[15px] text-[#65594E]">{showQr ? '−' : '+'}</span></button>
-          {showQr && <div id="portal-auth-qr-panel" className="mt-[16px] border border-[#8B7355] bg-[#EFE9DD] p-[20px] text-center">
-            {state === 'qr-expired' ? <div role="status" aria-live="polite"><p className="font-heading text-[24px] font-medium leading-[1.15] text-[#2C2926]">That code has expired.</p><p className="mt-[8px] text-[14px] leading-[1.6] text-[#65594E]">Refresh for a new one, then scan with your phone.</p><button type="button" onClick={onRefreshQr} className="mt-[14px] min-h-[44px] text-[14px] font-semibold text-[#2C2926] underline decoration-[#8B7355] underline-offset-4 focus:outline-none focus:ring-2 focus:ring-[#5C4A3C]">Refresh QR code</button></div> : <><div className="mx-auto flex min-h-[160px] w-[160px] items-center justify-center bg-white p-[12px]">{qrCode ?? <span className="text-[14px] text-[#65594E]">Preparing QR code…</span>}</div><p className="mt-[14px] text-[14px] leading-[1.6] text-[#65594E]">{qrDescription}</p></>}
-          </div>}
-        </div>
         {visibleOAuthActions.map((action) => {
           const pending = action.pending || (action.id === 'apple' && state === 'apple-pending')
           return <button key={action.id} type="button" onClick={action.onSelect} disabled={pending || interactionLocked} aria-busy={pending || undefined} className="flex min-h-[48px] w-full items-center justify-center gap-[9px] border border-[#8B7355] bg-white px-[16px] text-[14px] font-semibold text-[#2C2926] transition-colors duration-150 ease-[cubic-bezier(0.25,1,0.5,1)] hover:border-[#2C2926] disabled:cursor-not-allowed disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#5C4A3C] motion-reduce:transition-none">{action.id === 'apple' && <Apple aria-hidden="true" className="h-[16px] w-[16px]" strokeWidth={1.75} />}{pending ? `Connecting to ${action.label.replace(/^Continue with /, '')}…` : action.label}</button>
