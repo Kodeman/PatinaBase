@@ -101,7 +101,7 @@ function AuthErrorContent() {
           <p className="text-sm leading-6 text-[#65594E]">
             Need help?{' '}
             <a
-              href="mailto:support@patina.com"
+              href="mailto:support@patina.cloud"
               className="font-semibold text-[#2C2926] underline decoration-[#8B7355] underline-offset-4 transition-colors hover:decoration-[#2C2926] focus:outline-none focus:ring-2 focus:ring-[#5C4A3C] focus:ring-offset-2 motion-reduce:transition-none"
             >
               Contact Support

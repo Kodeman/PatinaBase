@@ -63,7 +63,7 @@ export default function UnauthorizedPage() {
             tone="error"
             title="This account can’t open Patina Operations."
           >
-            Sign in with an administrator account, or contact support@patina.com
+            Sign in with an administrator account, or contact support@patina.cloud
             if you think this access should be restored.
           </PortalAuthNotice>
           {error && (

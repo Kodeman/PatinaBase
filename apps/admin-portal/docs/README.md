@@ -247,7 +247,7 @@ Found an error or want to improve the docs?
 
 ### Getting Help
 - **Slack**: #admin-portal
-- **Email**: support@patina.com
+- **Email**: support@patina.cloud
 - **Help Desk**: https://help.patina.com
 
 ---

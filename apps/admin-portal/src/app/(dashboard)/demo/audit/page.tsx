@@ -23,7 +23,7 @@ interface AuditLog {
 const mockAuditLogs: AuditLog[] = [
   { id: '1', action: 'designer.approved', actor: 'admin@patina.com', timestamp: new Date().toISOString(), result: 'success' },
   { id: '2', action: 'product.published', actor: 'admin@patina.com', timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(), result: 'success' },
-  { id: '3', action: 'user.suspended', actor: 'support@patina.com', timestamp: new Date(Date.now() - 1000 * 60 * 60).toISOString(), result: 'success' },
+  { id: '3', action: 'user.suspended', actor: 'support@patina.cloud', timestamp: new Date(Date.now() - 1000 * 60 * 60).toISOString(), result: 'success' },
   { id: '4', action: 'role.assigned', actor: 'admin@patina.com', timestamp: new Date(Date.now() - 1000 * 60 * 120).toISOString(), result: 'success' },
 ];
 

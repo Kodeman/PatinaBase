@@ -505,7 +505,7 @@ Status: Any
 - **FAQ**: [FAQ.md](./FAQ.md)
 - **Architecture**: [CATALOG_ARCHITECTURE.md](./CATALOG_ARCHITECTURE.md)
 - **API Reference**: [API_REFERENCE.md](./API_REFERENCE.md)
-- **Support**: support@patina.com
+- **Support**: support@patina.cloud
 - **Slack**: #admin-portal
 
 ---

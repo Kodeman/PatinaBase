@@ -11,17 +11,17 @@ const ERROR_DETAILS: Record<string, { title: string; description: string }> = {
   Configuration: {
     title: 'Patina Operations is not ready to sign in.',
     description:
-      'Contact support@patina.com so we can check the portal configuration.',
+      'Contact support@patina.cloud so we can check the portal configuration.',
   },
   AccessDenied: {
     title: 'This account cannot open Patina Operations.',
     description:
-      'Administrator access is required. Contact support@patina.com if your role should be updated.',
+      'Administrator access is required. Contact support@patina.cloud if your role should be updated.',
   },
   InsufficientPermissions: {
     title: 'This work needs a different administrator role.',
     description:
-      'Contact support@patina.com if you believe your permissions should be updated.',
+      'Contact support@patina.cloud if you believe your permissions should be updated.',
   },
   Verification: {
     title: 'That verification link is no longer ready.',
@@ -36,7 +36,7 @@ function ErrorContent() {
   const details = ERROR_DETAILS[error] ?? {
     title: 'Sign-in needs another try.',
     description:
-      'Return to sign in, or contact support@patina.com if the problem continues.',
+      'Return to sign in, or contact support@patina.cloud if the problem continues.',
   };
 
   return (

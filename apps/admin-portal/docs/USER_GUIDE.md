@@ -1041,7 +1041,7 @@ Master these shortcuts for faster catalog management:
 - FAQ
 
 **Support Channels:**
-- Email: support@patina.com
+- Email: support@patina.cloud
 - Slack: #admin-portal
 - Help Desk: https://help.patina.com
 
@@ -1049,7 +1049,7 @@ Master these shortcuts for faster catalog management:
 1. Note what you were trying to do
 2. Screenshot any error messages
 3. Note browser and OS version
-4. Email details to support@patina.com
+4. Email details to support@patina.cloud
 
 ---
 

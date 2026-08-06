@@ -94,7 +94,7 @@ export const PaymentReceipt: React.FC<PaymentReceiptProps> = ({
 
       <Text style={styles.smallText}>
         Keep this email for your records. If you have questions about
-        this payment, contact us at support@patina.com.
+        this payment, contact us at support@patina.cloud.
       </Text>
     </BaseEmailLayout>
   );

@@ -1051,7 +1051,7 @@ Furniture (Top Level)
 - **API Reference**: [API_REFERENCE.md](./API_REFERENCE.md) - API documentation
 
 ### Support Channels
-- **Email**: support@patina.com
+- **Email**: support@patina.cloud
 - **Slack**: #admin-portal channel
 - **Help Desk**: https://help.patina.com
 - **Office Hours**: Tuesdays 2-4pm PT (Zoom link in Slack)
