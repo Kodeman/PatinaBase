@@ -151,6 +151,12 @@ export {
   type PortalQrAuthState,
 } from './use-portal-qr-auth';
 export {
+  useAmbientQrAuth,
+  type AmbientQrAuthOptions,
+  type AmbientQrAuthResult,
+  type AmbientQrPhase,
+} from './use-ambient-qr-auth';
+export {
   // Designer Onboarding (Phase 3)
   useMyDesignerApplication,
   useSubmitDesignerApplication,

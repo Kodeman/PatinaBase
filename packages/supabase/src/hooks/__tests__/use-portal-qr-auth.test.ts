@@ -8,9 +8,10 @@ const session = {
   user: { id: 'qr-user' },
 } as Session;
 
-function response(body: unknown, ok = true): Response {
+function response(body: unknown, ok = true, status = ok ? 200 : 400): Response {
   return {
     ok,
+    status,
     json: vi.fn().mockResolvedValue(body),
   } as unknown as Response;
 }
@@ -21,6 +22,20 @@ function generateResponse(lifetimeMs = 60_000) {
     qrUrl: 'patina://auth/qr?session=session-secret',
     expiresAt: new Date(Date.now() + lifetimeMs).toISOString(),
   });
+}
+
+/** Answers generate and status by URL so tests can advance time freely. */
+function qrFetcher(status: unknown = { status: 'pending' }, lifetimeMs = 60_000) {
+  return vi.fn(async (input: RequestInfo | URL) =>
+    String(input).includes('/generate')
+      ? generateResponse(lifetimeMs)
+      : response(status),
+  );
+}
+
+function callsTo(fetcher: ReturnType<typeof qrFetcher>, path: string): number {
+  return fetcher.mock.calls.filter((call) => String(call[0]).includes(path))
+    .length;
 }
 
 function authClient(verifyResult: { session: Session | null } = { session }) {
@@ -85,6 +100,7 @@ describe('createPortalQrAuthController', () => {
       state: 'pending',
       qrUrl: 'patina://auth/qr?session=session-secret',
       secondsRemaining: 60,
+      totalSeconds: 60,
       failure: null,
     });
     expect(fetcher).toHaveBeenNthCalledWith(
@@ -351,6 +367,157 @@ describe('createPortalQrAuthController', () => {
       qrUrl: 'patina://auth/qr?session=new-session',
     });
     expect(vi.getTimerCount()).toBe(2);
+  });
+
+  it('reports the server lifetime as totalSeconds and clears it on stop', async () => {
+    const fetcher = qrFetcher({ status: 'pending' }, 300_000);
+    const controller = createPortalQrAuthController({ baseUrl: '', fetcher });
+
+    expect(controller.getSnapshot().totalSeconds).toBe(0);
+    await controller.start();
+    expect(controller.getSnapshot()).toMatchObject({
+      state: 'pending',
+      secondsRemaining: 300,
+      totalSeconds: 300,
+    });
+
+    // The ring reads a fixed total while the digits fall.
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(controller.getSnapshot()).toMatchObject({
+      secondsRemaining: 180,
+      totalSeconds: 300,
+    });
+
+    controller.stop();
+    expect(controller.getSnapshot()).toMatchObject({
+      state: 'idle',
+      secondsRemaining: 0,
+      totalSeconds: 0,
+    });
+  });
+
+  it('classifies a rate-limited generate instead of blaming the QR', async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(response({ error: 'slow down' }, false, 429));
+    const controller = createPortalQrAuthController({ baseUrl: '', fetcher });
+
+    await controller.start();
+    expect(controller.getSnapshot()).toMatchObject({
+      state: 'error',
+      failure: {
+        kind: 'rate_limit',
+        message: 'Too many attempts were made just now. Wait a minute, then try again.',
+        retryable: true,
+      },
+    });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('pauses polling while the countdown keeps running, then polls at once on resume', async () => {
+    const fetcher = qrFetcher();
+    const controller = createPortalQrAuthController({ baseUrl: '', fetcher });
+
+    await controller.start();
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(callsTo(fetcher, '/status')).toBe(1);
+
+    controller.pausePolling();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(callsTo(fetcher, '/status')).toBe(1);
+    expect(controller.getSnapshot()).toMatchObject({
+      state: 'pending',
+      secondsRemaining: 48,
+    });
+
+    controller.resumePolling();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(callsTo(fetcher, '/status')).toBe(2);
+    expect(fetcher).toHaveBeenLastCalledWith(
+      '/api/auth/qr/status',
+      expect.objectContaining({
+        headers: { Authorization: 'Bearer session-secret' },
+      }),
+    );
+
+    // Resume restores the normal cadence rather than a single shot.
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(callsTo(fetcher, '/status')).toBe(3);
+  });
+
+  it('never opens a second poll loop when a resume lands mid-request', async () => {
+    let releaseStatus: (() => void) | undefined;
+    let statusCalls = 0;
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes('/generate')) return generateResponse();
+      statusCalls += 1;
+      // Only the first status request is held open — long enough for a
+      // pause/resume pair to land while it is in flight.
+      if (statusCalls === 1) {
+        await new Promise<void>((resolve) => {
+          releaseStatus = resolve;
+        });
+      }
+      return response({ status: 'pending' });
+    });
+    const controller = createPortalQrAuthController({ baseUrl: '', fetcher });
+
+    await controller.start();
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(callsTo(fetcher, '/status')).toBe(1);
+
+    controller.pausePolling();
+    controller.resumePolling();
+    await vi.advanceTimersByTimeAsync(0);
+    // The request already on the wire re-arms the loop when it lands; a resume
+    // that fired its own would leave two loops racing on a limited endpoint.
+    expect(callsTo(fetcher, '/status')).toBe(1);
+
+    releaseStatus?.();
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(callsTo(fetcher, '/status')).toBe(2);
+    // A doubled loop would show up here as two calls per interval.
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(callsTo(fetcher, '/status')).toBe(3);
+  });
+
+  it('parks a paused session at its local expiry without polling', async () => {
+    const fetcher = qrFetcher();
+    const controller = createPortalQrAuthController({ baseUrl: '', fetcher });
+
+    await controller.start();
+    controller.pausePolling();
+    await vi.advanceTimersByTimeAsync(61_000);
+
+    expect(callsTo(fetcher, '/status')).toBe(0);
+    expect(controller.getSnapshot()).toMatchObject({
+      state: 'expired',
+      secondsRemaining: 0,
+    });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('drops the paused flag on stop and refuses to resume after disposal', async () => {
+    const fetcher = qrFetcher();
+    const controller = createPortalQrAuthController({ baseUrl: '', fetcher });
+
+    await controller.start();
+    controller.pausePolling();
+    controller.stop();
+    expect(vi.getTimerCount()).toBe(0);
+
+    // A fresh session must not inherit the previous pause.
+    await controller.start();
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(callsTo(fetcher, '/status')).toBe(1);
+
+    controller.pausePolling();
+    controller.dispose();
+    controller.resumePolling();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(callsTo(fetcher, '/status')).toBe(1);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('cleans timers and suppresses state updates after disposal', async () => {

@@ -40,6 +40,11 @@ export interface PortalQrAuthSnapshot {
   state: PortalQrAuthState;
   qrUrl: string | null;
   secondsRemaining: number;
+  /**
+   * Full lifetime of the code the server just issued, in seconds. The server
+   * stays the TTL owner; a countdown ring and its digits read one source.
+   */
+  totalSeconds: number;
   failure: PortalQrAuthFailure | null;
 }
 
@@ -48,6 +53,10 @@ export interface PortalQrAuthResult extends PortalQrAuthSnapshot {
   regenerate: () => Promise<void>;
   /** Synchronously invalidates any in-flight QR operation. */
   cancel: () => void;
+  /** Stops status polling only; the local countdown keeps running. */
+  pausePolling: () => void;
+  /** Resumes status polling, polling immediately when a code is pending. */
+  resumePolling: () => void;
 }
 
 interface GenerateResponse {
@@ -78,6 +87,8 @@ export interface PortalQrAuthController {
   subscribe(listener: () => void): () => void;
   start(): Promise<void>;
   regenerate(): Promise<void>;
+  pausePolling(): void;
+  resumePolling(): void;
   stop(): void;
   dispose(): void;
 }
@@ -86,6 +97,7 @@ const IDLE_SNAPSHOT: PortalQrAuthSnapshot = {
   state: 'idle',
   qrUrl: null,
   secondsRemaining: 0,
+  totalSeconds: 0,
   failure: null,
 };
 
@@ -127,7 +139,10 @@ export function createPortalQrAuthController({
   let expiresAt = 0;
   let operation = 0;
   let disposed = false;
+  let paused = false;
   let pollTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Operation id of a status request that has been sent and not yet settled. */
+  let inFlightPoll: number | undefined;
   let countdownTimer: ReturnType<typeof setInterval> | undefined;
   let abortController: AbortController | undefined;
   const listeners = new Set<() => void>();
@@ -143,6 +158,7 @@ export function createPortalQrAuthController({
     if (countdownTimer !== undefined) clearInterval(countdownTimer);
     pollTimer = undefined;
     countdownTimer = undefined;
+    paused = false;
     abortController?.abort();
     abortController = undefined;
   };
@@ -175,9 +191,43 @@ export function createPortalQrAuthController({
   };
 
   const schedulePoll = (currentOperation: number) => {
+    // A paused controller still counts down to its local expiry; it simply
+    // stops asking the server. A response that lands after the pause must not
+    // quietly re-arm the poll loop either.
+    if (paused) return;
     pollTimer = setTimeout(() => {
+      // Release the handle the instant the timer fires. While the fetch below
+      // is in flight there is no scheduled poll, and `resumePolling` decides
+      // whether to poll by reading exactly this handle — a stale one makes it
+      // believe a poll is pending and skip; a nulled one is the truth. The
+      // in-flight request itself re-arms the loop when it lands.
+      pollTimer = undefined;
       void poll(currentOperation);
     }, pollIntervalMs);
+  };
+
+  const pausePolling = () => {
+    if (disposed || paused) return;
+    paused = true;
+    if (pollTimer !== undefined) clearTimeout(pollTimer);
+    pollTimer = undefined;
+  };
+
+  const resumePolling = () => {
+    if (disposed || !paused) return;
+    paused = false;
+    // `pausePolling` always nulls the handle, so an unpaused controller with no
+    // timer has genuinely nothing scheduled — except when a request sent before
+    // the pause is still awaiting its response. That request re-arms the loop
+    // itself when it lands; starting another here would leave two loops racing,
+    // each re-scheduling the other, on an endpoint that is rate limited.
+    if (
+      snapshot.state === 'pending' &&
+      pollTimer === undefined &&
+      inFlightPoll !== operation
+    ) {
+      void poll(operation);
+    }
   };
 
   const isCurrentOperation = (
@@ -198,6 +248,7 @@ export function createPortalQrAuthController({
       return;
     }
 
+    inFlightPoll = currentOperation;
     try {
       const response = await fetcher(
         endpoint(baseUrl, '/api/auth/qr/status'),
@@ -330,6 +381,10 @@ export function createPortalQrAuthController({
       } else if (snapshot.state === 'verifying') {
         fail(error);
       }
+    } finally {
+      // Only this operation's own claim is released: a newer start() may have
+      // begun polling while an aborted request from the previous one unwound.
+      if (inFlightPoll === currentOperation) inFlightPoll = undefined;
     }
   };
 
@@ -360,7 +415,14 @@ export function createPortalQrAuthController({
       );
       if (disposed || currentOperation !== operation) return;
       if (!response.ok) {
-        fail(new Error('QR generation failed'));
+        // The QR endpoints are IP rate limited (10/min). Carrying the status
+        // through lets normalizeAuthError classify 429 as 'rate_limit' so an
+        // always-on badge can rest quietly instead of hammering the limiter.
+        fail(
+          Object.assign(new Error('QR generation failed'), {
+            status: response.status,
+          }),
+        );
         return;
       }
 
@@ -378,7 +440,12 @@ export function createPortalQrAuthController({
 
       sessionToken = data.sessionToken;
       expiresAt = parsedExpiry;
-      publish({ state: 'pending', qrUrl: data.qrUrl, failure: null });
+      publish({
+        state: 'pending',
+        qrUrl: data.qrUrl,
+        totalSeconds: Math.max(1, Math.ceil((parsedExpiry - now()) / 1_000)),
+        failure: null,
+      });
       updateCountdown();
       if (snapshot.state !== 'pending') return;
       countdownTimer = setInterval(updateCountdown, countdownIntervalMs);
@@ -406,6 +473,8 @@ export function createPortalQrAuthController({
     },
     start,
     regenerate: start,
+    pausePolling,
+    resumePolling,
     stop,
     dispose() {
       if (disposed) return;
@@ -451,6 +520,18 @@ export function usePortalQrAuth({
     [controller, enabled],
   );
   const cancel = useCallback(() => controller.stop(), [controller]);
+  const pausePolling = useCallback(() => controller.pausePolling(), [controller]);
+  const resumePolling = useCallback(
+    () => controller.resumePolling(),
+    [controller],
+  );
 
-  return { ...snapshot, start, regenerate, cancel };
+  return {
+    ...snapshot,
+    start,
+    regenerate,
+    cancel,
+    pausePolling,
+    resumePolling,
+  };
 }
