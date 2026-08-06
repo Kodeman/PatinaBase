@@ -20,7 +20,12 @@ describe('AppChrome', () => {
     mockPathname = '/projects';
   });
 
-  it.each(['/field/abc123', '/share/abc123', '/rfq/abc123'])(
+  it.each([
+    '/field/abc123',
+    '/share/abc123',
+    '/rfq/abc123',
+    `/plans/${'a'.repeat(64)}`,
+  ])(
     'renders no header (and never mounts ClientHeader) on the login-less guest path %s',
     (pathname) => {
       mockPathname = pathname;

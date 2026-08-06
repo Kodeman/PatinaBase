@@ -75,11 +75,12 @@ export function isAnalyticsPossible(): boolean {
 // rather than folding into the generic hex one below.
 const FIELD_BEARER_IN_URL = /\/field\/[A-Za-z0-9_-]{32,256}(?![A-Za-z0-9_-])/g;
 
-// /share, /rfq, and /evidence all mint the same 64-char lowercase-hex bearer
-// (sha256/gen_random_bytes idiom — document_shares, trade_rfq_tokens,
-// fulfillment_mint_evidence_token) — one generic pattern covers all three
-// while preserving which prefix gets redacted back into the URL.
-const HEX_BEARER_IN_URL = /\/(share|rfq|evidence)\/[0-9a-f]{64}(?![0-9a-f])/gi;
+// /share, /rfq, /evidence, and /plans all mint the same 64-char lowercase-hex
+// bearer (sha256/gen_random_bytes idiom — document_shares, trade_rfq_tokens,
+// fulfillment_mint_evidence_token, plan_transmittal_tokens) — one generic
+// pattern covers all four while preserving which prefix gets redacted back
+// into the URL.
+const HEX_BEARER_IN_URL = /\/(share|rfq|evidence|plans)\/[0-9a-f]{64}(?![0-9a-f])/gi;
 
 function redactBearerPaths(value: string): string {
   return value

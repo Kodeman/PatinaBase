@@ -15,6 +15,7 @@ const token = 'opaque_site_request_token_1234567890abcd';
 const shareToken = 'a'.repeat(64);
 const rfqToken = 'b'.repeat(64);
 const evidenceToken = 'c'.repeat(64);
+const plansToken = 'd'.repeat(64);
 const initMock = (posthog as unknown as { init: jest.Mock }).init;
 
 describe('PostHog Field bearer privacy boundary', () => {
@@ -134,5 +135,28 @@ describe('PostHog Field bearer privacy boundary', () => {
     expect(serialized).not.toContain(evidenceToken);
     expect(serialized.match(/\/evidence\/\[redacted\]/g)?.length).toBeGreaterThanOrEqual(4);
     expect(event.properties?.already_redacted).toBe('/evidence/[redacted]');
+  });
+
+  it('redacts plan-transmittal bearers from pageview, referrer, autocapture, and nested values', () => {
+    const event = sanitizePostHogEvent({
+      event: '$autocapture',
+      properties: {
+        $current_url: `https://client.patina.cloud/plans/${plansToken}?from=email`,
+        $referrer: `/plans/${plansToken}`,
+        $elements: [{
+          tag_name: 'a',
+          attributes: {
+            href: `/plans/${plansToken}/print/50000000-0000-4000-8000-000000000001`,
+            'data-source': JSON.stringify({ returnTo: `/plans/${plansToken}` }),
+          },
+        }],
+        already_redacted: '/plans/[redacted]',
+      },
+    });
+
+    const serialized = JSON.stringify(event);
+    expect(serialized).not.toContain(plansToken);
+    expect(serialized.match(/\/plans\/\[redacted\]/g)?.length).toBeGreaterThanOrEqual(4);
+    expect(event.properties?.already_redacted).toBe('/plans/[redacted]');
   });
 });

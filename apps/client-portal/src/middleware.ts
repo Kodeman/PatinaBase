@@ -120,6 +120,11 @@ export async function middleware(req: NextRequest) {
   // resolved server-side via fulfillment_evidence_token_context() — a client
   // tapping a link from a text/email has no reason to have a session.
   const isEvidencePage = req.nextUrl.pathname.startsWith('/evidence/');
+  // /plans/[token] is the same login-less pattern for a party holding a plan
+  // transmittal (Plan Room, 00429): the token is resolved server-side via
+  // resolve_plan_transmittal() — a sub or fabricator handed a drawing set has
+  // no Patina account and never will.
+  const isPlansPage = req.nextUrl.pathname.startsWith('/plans/');
   const isPublicPage =
     req.nextUrl.pathname === '/' ||
     req.nextUrl.pathname.startsWith('/demo') ||
@@ -128,7 +133,8 @@ export async function middleware(req: NextRequest) {
     isSharePage ||
     isFieldPage ||
     isRfqPage ||
-    isEvidencePage;
+    isEvidencePage ||
+    isPlansPage;
   const isApiRoute = req.nextUrl.pathname.startsWith('/api');
   // The wrong-portal interstitial is the redirect target for wrong-role users;
   // it must be exempt from the gate or a wrong-role user would loop. /unauthorized

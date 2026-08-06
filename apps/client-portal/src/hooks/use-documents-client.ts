@@ -30,37 +30,72 @@ const getSupabase = () => createBrowserClient() as any;
 
 export interface ClientDocument {
   id: string;
-  project_id: string;
+  project_id: string | null;
+  proposal_id: string | null;
   title: string;
   doc_type: string;
   category: string | null;
+  section_key: string | null;
   storage_path: string | null;
   size_bytes: number | null;
   client_visible: boolean;
   created_at: string;
 }
 
+export interface ClientDocumentsData {
+  documents: ClientDocument[];
+  /** proposal id → its activated project id (null while unactivated). */
+  proposalProjectIds: Record<string, string | null>;
+}
+
 /**
- * All client_visible project_documents rows across the given projects
- * (pass every id from useProjects()). Flat list — group with
- * groupDocumentsByProject (../app/documents/group.ts).
+ * All client_visible project_documents rows across the given projects PLUS
+ * rows anchored to the client's proposals (project_id null — e.g. a signed
+ * design agreement filed before activation). Proposal ids come from an
+ * RLS-scoped `proposals` read: the client only ever sees their own rows, so
+ * the id list is already the full visible universe. Flat list — group with
+ * groupDocumentsByProject (../app/documents/group.ts), which uses
+ * proposalProjectIds to fold proposal-anchored rows into their project.
  */
 export function useClientDocuments(projectIds: string[]) {
   const key = [...projectIds].sort();
-  return useQuery<ClientDocument[]>({
+  return useQuery<ClientDocumentsData>({
     queryKey: ['client-documents', key],
     enabled: projectIds.length > 0,
     queryFn: async () => {
-      const { data, error } = await getSupabase()
+      const supabase = getSupabase();
+      const { data: proposals, error: proposalsError } = await supabase
+        .from('proposals')
+        .select('id, project_id');
+      if (proposalsError) throw proposalsError;
+      const proposalRows = (proposals ?? []) as Array<{
+        id: string;
+        project_id: string | null;
+      }>;
+      const proposalIds = proposalRows.map((proposal) => proposal.id);
+
+      let query = supabase
         .from('project_documents')
         .select(
-          'id, project_id, title, doc_type, category, storage_path, size_bytes, client_visible, created_at',
+          'id, project_id, proposal_id, title, doc_type, category, section_key, storage_path, size_bytes, client_visible, created_at',
         )
-        .in('project_id', projectIds)
         .eq('client_visible', true)
         .order('created_at', { ascending: false });
+      query =
+        proposalIds.length > 0
+          ? query.or(
+              `project_id.in.(${projectIds.join(',')}),proposal_id.in.(${proposalIds.join(',')})`,
+            )
+          : query.in('project_id', projectIds);
+      const { data, error } = await query;
       if (error) throw error;
-      return (data ?? []) as ClientDocument[];
+
+      return {
+        documents: (data ?? []) as ClientDocument[],
+        proposalProjectIds: Object.fromEntries(
+          proposalRows.map((proposal) => [proposal.id, proposal.project_id ?? null]),
+        ),
+      };
     },
   });
 }

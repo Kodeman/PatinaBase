@@ -13,6 +13,7 @@ const PUBLIC_PREFIXES = [
   '/share',
   '/field',
   '/rfq',
+  '/plans',
   '/quiz',
   '/demo',
   '/wrong-portal',
