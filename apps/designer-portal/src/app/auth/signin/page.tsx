@@ -205,7 +205,7 @@ function SignInContent() {
         onResendCode={sendCode}
         error={visibleError}
         isSubmitting={isAuthSubmitting}
-        qrCode={qr.qrUrl ? <QRCodeSVG value={qr.qrUrl} size={144} level="M" bgColor="transparent" fgColor="#252a25" /> : undefined}
+        qrCode={qr.qrUrl ? <QRCodeSVG value={qr.qrUrl} size={144} level="M" bgColor="transparent" fgColor="#2C2926" /> : undefined}
         qrDescription={qrView.description}
         onOpenQr={() => { setQrExpanded(true); setError(null); }}
         onCloseQr={() => { cancelQr(); setQrExpanded(false); }}
@@ -221,7 +221,7 @@ function SignInContent() {
         onContinue={() => window.location.replace(destination)}
         destinationHref={destination}
       />
-      <div className="mt-6 space-y-3 text-center text-sm text-[#4f554f]">
+      <div className="mt-6 space-y-3 text-center text-sm text-[#65594E]">
         <p><Link className="underline underline-offset-4" href={`/auth/signup?callbackUrl=${encodeURIComponent(destination)}`}>Need an account? Ask to join your studio.</Link></p>
         {process.env.NODE_ENV === 'development' && <DevAccountsPanel accounts={getAccountsForPortal('designer')} onLogin={handleDevLogin} isLoading={isAuthSubmitting} error={devAuthError} defaultCollapsed />}
       </div>

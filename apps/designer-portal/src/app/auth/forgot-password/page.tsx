@@ -11,6 +11,21 @@ import {
 import { PortalAuthNotice } from '@patina/design-system';
 import { DESIGNER_AUTH_DESTINATION, DesignerAuthShell } from '../auth-shell';
 
+const EYEBROW =
+  'font-mono text-[11px] uppercase tracking-[0.25em] text-[#65594E]';
+const LABEL =
+  'block text-[11px] font-semibold uppercase leading-[1.4] tracking-[0.15em] text-[#65594E]';
+const SEAM =
+  "relative after:pointer-events-none after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-[38%] after:bg-[var(--portal-auth-accent)] after:transition-[width] after:duration-[320ms] after:ease-[cubic-bezier(0.25,1,0.5,1)] after:content-[''] focus-within:after:w-full motion-reduce:after:transition-none";
+const INPUT =
+  'h-12 w-full border border-[#8B7355] bg-white px-3 text-base text-[#2C2926] outline-none transition-colors placeholder:text-[#7A6A5B] focus:border-[#5C4A3C] focus:ring-2 focus:ring-[#5C4A3C] disabled:cursor-not-allowed disabled:opacity-55 motion-reduce:transition-none';
+const CTA =
+  'h-12 w-full bg-[#1A1816] px-4 text-sm font-semibold text-[#FAF7F2] transition-colors hover:bg-[#2C2926] focus:outline-none focus:ring-2 focus:ring-[#5C4A3C] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-55 motion-reduce:transition-none';
+const BACK_LINK =
+  'inline-flex min-h-11 items-center text-sm font-semibold text-[#2C2926] underline decoration-[#8B7355] underline-offset-4 transition-colors hover:decoration-[#2C2926] focus:outline-none focus:ring-2 focus:ring-[#5C4A3C] focus:ring-offset-2 motion-reduce:transition-none';
+const GILDED_RULE =
+  'h-px bg-[linear-gradient(90deg,rgba(196,162,101,0.8)_0%,rgba(139,115,85,0.3)_52%,rgba(139,115,85,0)_100%)]';
+
 function ForgotPasswordContent() {
   const searchParams = useSearchParams();
   const destination = safeAuthReturnPath(
@@ -59,13 +74,14 @@ function ForgotPasswordContent() {
         ) : (
           <form className="space-y-5" onSubmit={handleSubmit}>
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#4f554f]">
+              <p className={EYEBROW}>
                 Password recovery
               </p>
-              <h2 className="mt-2 font-serif text-3xl tracking-[-0.03em]">
+              <h2 className="mt-2 font-heading text-3xl leading-[1.1] tracking-[-0.03em] text-[#2C2926]">
                 Reset your password.
               </h2>
-              <p className="mt-2 text-sm leading-6 text-[#4f554f]">
+              <div aria-hidden="true" className={`mt-3.5 ${GILDED_RULE}`} />
+              <p className="mt-3 text-sm leading-6 text-[#65594E]">
                 We’ll email a private reset link to the address on your Patina account.
               </p>
             </div>
@@ -77,40 +93,39 @@ function ForgotPasswordContent() {
             )}
 
             <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="designer-recovery-email">
+              <label className={LABEL} htmlFor="designer-recovery-email">
                 Email address
               </label>
-              <input
-                id="designer-recovery-email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(event) => {
-                  setEmail(event.target.value);
-                  setError(null);
-                }}
-                aria-invalid={Boolean(error) || undefined}
-                className="h-12 w-full border border-[#6d726b] bg-white px-3 text-base outline-none placeholder:text-[#5b605a] focus:border-[#252a25] focus:ring-2 focus:ring-[#252a25]"
-                placeholder="you@studio.com"
-                disabled={isLoading}
-              />
+              <div className={SEAM}>
+                <input
+                  id="designer-recovery-email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={email}
+                  onChange={(event) => {
+                    setEmail(event.target.value);
+                    setError(null);
+                  }}
+                  aria-invalid={Boolean(error) || undefined}
+                  className={INPUT}
+                  placeholder="you@studio.com"
+                  disabled={isLoading}
+                />
+              </div>
             </div>
 
             <button
               type="submit"
               disabled={!email.trim() || isLoading}
-              className="h-12 w-full bg-[#252a25] px-4 text-sm font-semibold text-white hover:bg-[#343b34] disabled:cursor-not-allowed disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#252a25] focus:ring-offset-2"
+              className={CTA}
             >
               {isLoading ? 'Sending reset link…' : 'Email me a reset link'}
             </button>
           </form>
         )}
 
-        <Link
-          href={signInHref}
-          className="inline-flex min-h-11 items-center text-sm font-semibold underline decoration-[#6d726b] underline-offset-4 focus:outline-none focus:ring-2 focus:ring-[#252a25]"
-        >
+        <Link href={signInHref} className={BACK_LINK}>
           Back to sign in
         </Link>
       </div>

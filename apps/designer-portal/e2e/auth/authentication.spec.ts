@@ -132,9 +132,12 @@ test.describe('Error Handling', () => {
   test('should display error page for authentication errors', async ({ page }) => {
     await page.goto('/auth/error?error=AccessDenied');
 
-    await expect(page.getByRole('heading', { name: /Authentication Error/i })).toBeVisible();
-    await expect(page.getByText(/You do not have permission/i)).toBeVisible();
-    await expect(page.getByRole('button', { name: /Try Again/i })).toBeVisible();
+    // `?error=AccessDenied` selects its own entry in ERROR_CONFIGS (auth/error/page.tsx)
+    // — 'Access Denied', not the 'Authentication Error' default — and the way back
+    // is a link to /auth/signin, not a 'Try Again' button.
+    await expect(page.getByRole('heading', { name: /Access Denied/i })).toBeVisible();
+    await expect(page.getByText(/You do not have the required permissions/i)).toBeVisible();
+    await expect(page.getByRole('link', { name: /Back to Sign In/i })).toBeVisible();
   });
 
   test('should handle API 401 errors', async ({ page, context }) => {

@@ -14,6 +14,21 @@ import {
 } from '@patina/design-system';
 import { DESIGNER_AUTH_DESTINATION, DesignerAuthShell } from '../auth-shell';
 
+const EYEBROW =
+  'font-mono text-[11px] uppercase tracking-[0.25em] text-[#65594E]';
+const LABEL =
+  'block text-[11px] font-semibold uppercase leading-[1.4] tracking-[0.15em] text-[#65594E]';
+const SEAM =
+  "relative after:pointer-events-none after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-[38%] after:bg-[var(--portal-auth-accent)] after:transition-[width] after:duration-[320ms] after:ease-[cubic-bezier(0.25,1,0.5,1)] after:content-[''] focus-within:after:w-full motion-reduce:after:transition-none";
+const INPUT =
+  'h-12 w-full border border-[#8B7355] bg-white px-3 text-base text-[#2C2926] outline-none transition-colors placeholder:text-[#7A6A5B] focus:border-[#5C4A3C] focus:ring-2 focus:ring-[#5C4A3C] disabled:cursor-not-allowed disabled:opacity-55 motion-reduce:transition-none';
+const CTA =
+  'h-12 w-full bg-[#1A1816] px-4 text-sm font-semibold text-[#FAF7F2] transition-colors hover:bg-[#2C2926] focus:outline-none focus:ring-2 focus:ring-[#5C4A3C] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-55 motion-reduce:transition-none';
+const BACK_LINK =
+  'inline-flex min-h-11 items-center text-sm font-semibold text-[#2C2926] underline decoration-[#8B7355] underline-offset-4 transition-colors hover:decoration-[#2C2926] focus:outline-none focus:ring-2 focus:ring-[#5C4A3C] focus:ring-offset-2 motion-reduce:transition-none';
+const GILDED_RULE =
+  'h-px bg-[linear-gradient(90deg,rgba(196,162,101,0.8)_0%,rgba(139,115,85,0.3)_52%,rgba(139,115,85,0)_100%)]';
+
 type SessionStatus = 'checking' | 'ready' | 'invalid';
 
 function ResetPasswordContent() {
@@ -99,7 +114,7 @@ function ResetPasswordContent() {
           </PortalAuthNotice>
           <Link
             href={`/auth/forgot-password?callbackUrl=${encodeURIComponent(destination)}`}
-            className="inline-flex min-h-11 items-center text-sm font-semibold underline decoration-[#6d726b] underline-offset-4 focus:outline-none focus:ring-2 focus:ring-[#252a25]"
+            className={BACK_LINK}
           >
             Request a new reset link
           </Link>
@@ -121,13 +136,14 @@ function ResetPasswordContent() {
       ) : (
         <form className="space-y-5" onSubmit={handleSubmit}>
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#4f554f]">
+            <p className={EYEBROW}>
               Password recovery
             </p>
-            <h2 className="mt-2 font-serif text-3xl tracking-[-0.03em]">
+            <h2 className="mt-2 font-heading text-3xl leading-[1.1] tracking-[-0.03em] text-[#2C2926]">
               Choose a new password.
             </h2>
-            <p className="mt-2 text-sm leading-6 text-[#4f554f]">
+            <div aria-hidden="true" className={`mt-3.5 ${GILDED_RULE}`} />
+            <p className="mt-3 text-sm leading-6 text-[#65594E]">
               Use at least eight characters. A longer, unique phrase is easiest to remember and safest to keep.
             </p>
           </div>
@@ -139,49 +155,53 @@ function ResetPasswordContent() {
           )}
 
           <div className="space-y-2">
-            <label className="text-sm font-medium" htmlFor="designer-new-password">
+            <label className={LABEL} htmlFor="designer-new-password">
               New password
             </label>
-            <input
-              id="designer-new-password"
-              type="password"
-              autoComplete="new-password"
-              required
-              minLength={8}
-              value={password}
-              onChange={(event) => {
-                setPassword(event.target.value);
-                setError(null);
-              }}
-              className="h-12 w-full border border-[#6d726b] bg-white px-3 outline-none focus:border-[#252a25] focus:ring-2 focus:ring-[#252a25]"
-              disabled={isLoading}
-            />
+            <div className={SEAM}>
+              <input
+                id="designer-new-password"
+                type="password"
+                autoComplete="new-password"
+                required
+                minLength={8}
+                value={password}
+                onChange={(event) => {
+                  setPassword(event.target.value);
+                  setError(null);
+                }}
+                className={INPUT}
+                disabled={isLoading}
+              />
+            </div>
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium" htmlFor="designer-confirm-password">
+            <label className={LABEL} htmlFor="designer-confirm-password">
               Confirm new password
             </label>
-            <input
-              id="designer-confirm-password"
-              type="password"
-              autoComplete="new-password"
-              required
-              minLength={8}
-              value={confirmation}
-              onChange={(event) => {
-                setConfirmation(event.target.value);
-                setError(null);
-              }}
-              className="h-12 w-full border border-[#6d726b] bg-white px-3 outline-none focus:border-[#252a25] focus:ring-2 focus:ring-[#252a25]"
-              disabled={isLoading}
-            />
+            <div className={SEAM}>
+              <input
+                id="designer-confirm-password"
+                type="password"
+                autoComplete="new-password"
+                required
+                minLength={8}
+                value={confirmation}
+                onChange={(event) => {
+                  setConfirmation(event.target.value);
+                  setError(null);
+                }}
+                className={INPUT}
+                disabled={isLoading}
+              />
+            </div>
           </div>
 
           <button
             type="submit"
             disabled={!password || !confirmation || isLoading}
-            className="h-12 w-full bg-[#252a25] px-4 text-sm font-semibold text-white hover:bg-[#343b34] disabled:cursor-not-allowed disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#252a25] focus:ring-offset-2"
+            className={CTA}
           >
             {isLoading ? 'Updating password…' : 'Update password'}
           </button>

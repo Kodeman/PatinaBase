@@ -1,12 +1,34 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useState, Suspense, type FormEvent } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { buildAuthCallbackUrl, createBrowserClient, normalizeAuthError, safeAuthReturnPath } from '@patina/supabase';
-import { AuthForm, type AuthFormField } from '@patina/design-system';
+import { PortalAuthNotice, type AuthFormField } from '@patina/design-system';
 import Link from 'next/link';
 import { authEvents } from '@/lib/analytics/events';
 import { DESIGNER_AUTH_DESTINATION, DesignerAuthShell } from '../auth-shell';
+
+/**
+ * The fields are set here rather than through the legacy `AuthForm`: that
+ * component owns its own header logo, tinted alert cards, icon-led inputs and
+ * shadcn button, none of which can be reached from the outside. The handlers,
+ * the field list and every string are unchanged — only the vocabulary moved to
+ * the warm paper family the rest of portal auth speaks.
+ */
+const SEAM =
+  "relative after:pointer-events-none after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-[38%] after:bg-[var(--portal-auth-accent)] after:transition-[width] after:duration-[320ms] after:ease-[cubic-bezier(0.25,1,0.5,1)] after:content-[''] focus-within:after:w-full motion-reduce:after:transition-none";
+const LABEL =
+  'block text-[11px] font-semibold uppercase leading-[1.4] tracking-[0.15em] text-[#65594E]';
+const INPUT =
+  'h-12 w-full border bg-white px-3 text-base text-[#2C2926] outline-none transition-colors placeholder:text-[#7A6A5B] focus:border-[#5C4A3C] focus:ring-2 focus:ring-[#5C4A3C] disabled:cursor-not-allowed disabled:opacity-55 motion-reduce:transition-none';
+const CTA =
+  'h-12 w-full bg-[#1A1816] px-4 text-sm font-semibold text-[#FAF7F2] transition-colors hover:bg-[#2C2926] focus:outline-none focus:ring-2 focus:ring-[#5C4A3C] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-55 motion-reduce:transition-none';
+const INLINE_LINK =
+  'font-semibold text-[#2C2926] underline decoration-[#8B7355] underline-offset-4 transition-colors hover:decoration-[#2C2926] focus:outline-none focus:ring-2 focus:ring-[#5C4A3C] focus:ring-offset-2 motion-reduce:transition-none';
+const GILDED_RULE =
+  'h-px bg-[linear-gradient(90deg,rgba(196,162,101,0.8)_0%,rgba(139,115,85,0.3)_52%,rgba(139,115,85,0)_100%)]';
+
+const isValidEmail = (email: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
 function SignUpContent() {
   const searchParams = useSearchParams();
@@ -17,6 +39,8 @@ function SignUpContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [formData, setFormData] = useState<Record<string, string>>({});
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const fields: AuthFormField[] = [
     {
@@ -68,6 +92,38 @@ function SignUpContent() {
       autoComplete: 'new-password',
     },
   ];
+
+  const handleInputChange = (name: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    // Clear field error when user types
+    if (fieldErrors[name]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[name];
+        return next;
+      });
+    }
+  };
+
+  // Same rules the legacy AuthForm applied before it handed the data over.
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    fields.forEach((field) => {
+      const value = formData[field.name] || '';
+
+      if (field.required && !value.trim()) {
+        errors[field.name] = `${field.label} is required`;
+      } else if (field.pattern && value && !new RegExp(field.pattern).test(value)) {
+        errors[field.name] = `Invalid ${field.label.toLowerCase()}`;
+      } else if (field.type === 'email' && value && !isValidEmail(value)) {
+        errors[field.name] = 'Invalid email address';
+      }
+    });
+
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
   const handleSubmit = async (data: Record<string, string>) => {
     setIsLoading(true);
@@ -125,52 +181,91 @@ function SignUpContent() {
     }
   };
 
+  const onFormSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!validateForm()) return;
+    await handleSubmit(formData);
+  };
+
   return (
     <DesignerAuthShell>
-      <div className="w-full">
-      <div className="w-full max-w-md">
-        <div className="border border-[#6d726b] bg-white p-6">
-          <AuthForm
-            title="Create Designer Account"
-            description="Join Patina to start creating beautiful spaces"
-            fields={fields}
-            submitText="Create Account"
-            isLoading={isLoading}
-            error={error || undefined}
-            success={success || undefined}
-            onSubmit={handleSubmit}
-            footer={
-              <div className="space-y-3">
-                <p className="text-center text-xs text-muted-foreground">
-                  By creating an account, you agree to our{' '}
-                  <Link href="/terms" className="text-primary hover:underline">
-                    Terms of Service
-                  </Link>{' '}
-                  and{' '}
-                  <Link href="/privacy" className="text-primary hover:underline">
-                    Privacy Policy
-                  </Link>
-                </p>
-                <p className="text-center text-sm text-muted-foreground">
-                  Already have an account?{' '}
-                  <Link href={`/auth/signin?callbackUrl=${encodeURIComponent(callbackUrl)}`} className="text-primary font-medium hover:underline">
-                    Sign in
-                  </Link>
-                </p>
+      <div className="space-y-5">
+        <div>
+          <h2 className="font-heading text-3xl leading-[1.1] tracking-[-0.03em] text-[#2C2926]">
+            Create Designer Account
+          </h2>
+          <div aria-hidden="true" className={`mt-3.5 ${GILDED_RULE}`} />
+          <p className="mt-3 text-sm leading-6 text-[#65594E]">
+            Join Patina to start creating beautiful spaces
+          </p>
+        </div>
+
+        {error && <PortalAuthNotice tone="error">{error}</PortalAuthNotice>}
+        {success && <PortalAuthNotice tone="success">{success}</PortalAuthNotice>}
+
+        <form className="space-y-5" onSubmit={onFormSubmit}>
+          {fields.map((field) => {
+            const fieldError = fieldErrors[field.name] || field.error;
+            return (
+              <div key={field.name} className="space-y-2">
+                <label htmlFor={field.name} className={LABEL}>
+                  {field.label}
+                </label>
+                <div className={SEAM}>
+                  <input
+                    id={field.name}
+                    name={field.name}
+                    type={field.type}
+                    placeholder={field.placeholder}
+                    required={field.required}
+                    autoComplete={field.autoComplete}
+                    value={formData[field.name] || ''}
+                    onChange={(event) => handleInputChange(field.name, event.target.value)}
+                    disabled={isLoading}
+                    aria-invalid={Boolean(fieldError) || undefined}
+                    aria-describedby={fieldError ? `${field.name}-error` : undefined}
+                    className={`${INPUT} ${fieldError ? 'border-[#9C3D31]' : 'border-[#8B7355]'}`}
+                  />
+                </div>
+                {fieldError && (
+                  <p id={`${field.name}-error`} className="text-[13px] leading-5 text-[#65594E]">
+                    {fieldError}
+                  </p>
+                )}
               </div>
-            }
-          />
+            );
+          })}
+
+          <button type="submit" className={CTA} disabled={isLoading} aria-busy={isLoading || undefined}>
+            {isLoading ? 'Loading...' : 'Create Account'}
+          </button>
+        </form>
+
+        <div className="space-y-3 border-t border-[#8B7355] pt-4">
+          <p className="text-xs leading-5 text-[#65594E]">
+            By creating an account, you agree to our{' '}
+            <Link href="/terms" className={INLINE_LINK}>
+              Terms of Service
+            </Link>{' '}
+            and{' '}
+            <Link href="/privacy" className={INLINE_LINK}>
+              Privacy Policy
+            </Link>
+          </p>
+          <p className="text-sm leading-6 text-[#65594E]">
+            Already have an account?{' '}
+            <Link href={`/auth/signin?callbackUrl=${encodeURIComponent(callbackUrl)}`} className={INLINE_LINK}>
+              Sign in
+            </Link>
+          </p>
         </div>
 
         {/* Development Mode Notice */}
         {process.env.NODE_ENV === 'development' && (
-          <div className="mt-4 border border-[#6d726b] bg-[#f3f0e8] p-4 text-center">
-            <p className="text-xs text-yellow-800">
-              <strong>Development Mode:</strong> Account will be created automatically
-            </p>
-          </div>
+          <p className="border-t-2 border-t-[#8B7355] pt-4 text-xs leading-5 text-[#65594E]">
+            <strong className="font-semibold text-[#2C2926]">Development Mode:</strong> Account will be created automatically
+          </p>
         )}
-      </div>
       </div>
     </DesignerAuthShell>
   );
@@ -179,42 +274,13 @@ function SignUpContent() {
 function SignUpLoadingFallback() {
   return (
     <DesignerAuthShell>
-      <div className="w-full max-w-md">
-        <div className="border border-[#6d726b] bg-white p-6">
-          <div className="text-center">
-            <div className="mx-auto h-12 w-12 text-primary mb-4 animate-pulse">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-full w-full"
-              >
-                <path
-                  d="M12 2L2 7L12 12L22 7L12 2Z"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M2 17L12 22L22 17"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M2 12L12 17L22 12"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </div>
-            <h1 className="text-2xl font-bold text-foreground">Create Designer Account</h1>
-            <p className="mt-2 text-sm text-muted-foreground">Loading...</p>
-          </div>
+      <div className="space-y-5">
+        <div>
+          <h2 className="font-heading text-3xl leading-[1.1] tracking-[-0.03em] text-[#2C2926]">
+            Create Designer Account
+          </h2>
+          <div aria-hidden="true" className={`mt-3.5 ${GILDED_RULE}`} />
+          <p className="mt-3 text-sm leading-6 text-[#65594E]">Loading...</p>
         </div>
       </div>
     </DesignerAuthShell>

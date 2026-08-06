@@ -148,7 +148,7 @@ function CallbackContent() {
           {result === 'failed' && (
             <a
               href={retryHref}
-              className="inline-flex min-h-11 items-center text-sm font-semibold underline decoration-[#6d726b] underline-offset-4 focus:outline-none focus:ring-2 focus:ring-[#252a25]"
+              className="inline-flex min-h-11 items-center text-sm font-semibold underline decoration-[#8B7355] underline-offset-4 focus:outline-none focus:ring-2 focus:ring-[#5C4A3C]"
             >
               {isRecovery ? 'Request a new reset link' : 'Try sign in again'}
             </a>
