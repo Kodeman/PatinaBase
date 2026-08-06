@@ -75,6 +75,7 @@ infra/coolify/missing-coolify-vars.md
 # Local agent / scheduler state
 .claude/scheduled_tasks.lock
 .claude/worktrees/agent-*/
+.codex/worktrees/agent-*/
 
 # Recovery sidecars from git lost-found
 .recovery/

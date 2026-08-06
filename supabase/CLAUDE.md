@@ -33,11 +33,13 @@ Pre-00139 rows have `total_amount_cents` backfilled from `budget_cents` and may 
 
 ## Proposal → project activation
 
-`activate_proposal_as_project(p_proposal_id, p_start_date)` is the bridge. Lineage: 00140 richer carry → 00167 created_by fix → 00180 boards carry → 00185 dual pricing → 00199 vendor_id carry → 00262 doc_code carry → 00269 custom_fields carry → 00274 deposit autodraft → **00279 dual-pricing reconcile (head at last check)**. It is redefined whole-body (~19×) — this list WILL drift; before editing, find the live head and copy that body verbatim:
+`activate_proposal_as_project(p_proposal_id, p_start_date)` is the bridge. Historical lineage (illustrative only, NOT the current head — do not trust any number here or in any other doc): 00140 richer carry → 00167 created_by fix → 00180 boards carry → 00185 dual pricing → 00199 vendor_id carry → 00262 doc_code carry → 00269 custom_fields carry → 00274 deposit autodraft → 00279 dual-pricing reconcile. It is redefined whole-body (~19×+) — this list WILL drift. The rule: the latest body of any RPC is found by grepping migrations, never by trusting a doc's remembered number. Before editing, find the live head yourself and copy that body verbatim:
 
 ```bash
 grep -rln "CREATE OR REPLACE FUNCTION[^(]*activate_proposal_as_project" migrations/*.sql | sort | tail -1
-``` Preconditions: `proposals.status = 'accepted'` and `proposals.project_id IS NULL`.
+```
+
+Preconditions: `proposals.status = 'accepted'` and `proposals.project_id IS NULL`.
 
 Status transitions and side effects:
 
