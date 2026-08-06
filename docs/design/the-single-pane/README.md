@@ -1,6 +1,6 @@
 # The Single Pane — four directions for the client portal
 
-**Status: proposal — nothing built.** Written 5 August 2026. No migration was
+**Status: ruled.** Written 5 August 2026. No migration was
 minted, no component written, no route touched, no feature flag created. The
 deck exists to earn a ruling, not to document one.
 
@@ -53,12 +53,9 @@ the phase (Procurement).
 
 ## The ruling
 
-**Awaiting.** No R-number has been cut. Three questions shape it, and they are
-on slide 15:
-
-1. Is the pane a document or a feed?
-2. How much of today's route surface survives v1?
-3. Does the Document language arrive whole, or by degrees?
+**Ruled 5 Aug 2026 by Kody.** B · The Making, with A's letterhead, C's
+stamps, and D's standing sentence + voice. v1 builds behind a feature flag;
+every existing route keeps working; no schema work.
 
 ## Lineage
 
