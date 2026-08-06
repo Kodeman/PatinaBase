@@ -1,0 +1,2395 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Single Pane — Patina</title>
+<style>
+/* THE SINGLE PANE — four directions for the Patina client portal.
+
+ What this deck is. Harper Vale has one job in flight: her own house, in
+ procurement, with one signature waiting on her. The portal greets her with a
+ list, fifteen affordances across the top, and a dozen stacked sections below.
+ This deck draws four different shapes the client's single pane could take —
+ four ways to make a window into the work instead of a report about it.
+
+ Every direction renders one canonical fixture (the Vale residence, stated in
+ full at the top of the body). Same data, four shapes; the differences you see
+ are the direction, not the data.
+
+ Lineage. The house shell — tokens, slide machinery, mock scopes, scored ink,
+ annotation rail — is inherited from the-call-sheet-ui-proposal.html by way of
+ the-authorized-schedule-proposal.html. Deck chrome is drafting ink on bone
+ paper with verdigris, brass, and oxblood. The mock scope (.doc) carries the
+ portal's real tokens; the exhibit scope (.exhibit) carries the deck's, for
+ drawings of the portal as it stands today.
+
+ Rules. Self-contained: no external fonts, scripts, images, or requests of any
+ kind, and no embedded data payloads — every picture in this file is drawn in
+ CSS. No shadows anywhere: depth is flat stacked-paper offsets, 1px rules, and
+ value contrast. Actions inside mocks are scored ink, never filled buttons. */
+
+:root{
+ --paper:#E7E9E3;
+ --paper-2:#F3F4F0;
+ --card:#FBFBF8;
+ --ink:#16202B;
+ --ink-2:#33404E;
+ --slate:#5D6773;
+ --rule:rgba(22,32,43,.14);
+ --rule-2:rgba(22,32,43,.28);
+ --verdigris:#2F6F63;
+ --verdigris-soft:rgba(47,111,99,.10);
+ --brass:#9A6B1F;
+ --brass-soft:rgba(154,107,31,.10);
+ --oxblood:#8A3A32;
+ --oxblood-soft:rgba(138,58,50,.09);
+ --grid:rgba(22,32,43,.045);
+
+ --display:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+ --body:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,Roboto,"Helvetica Neue",Arial,sans-serif;
+ --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+
+@media (prefers-color-scheme: dark){
+ :root[data-theme="auto"]{
+  --paper:#111820; --paper-2:#161E27; --card:#1B252F;
+  --ink:#E6E9E5; --ink-2:#C3CBD2; --slate:#8C98A4;
+  --rule:rgba(230,233,229,.14); --rule-2:rgba(230,233,229,.3);
+  --verdigris:#7CC7B6; --verdigris-soft:rgba(124,199,182,.12);
+  --brass:#D5A24C; --brass-soft:rgba(213,162,76,.12);
+  --oxblood:#DE8478; --oxblood-soft:rgba(222,132,120,.12);
+  --grid:rgba(230,233,229,.04);
+ }
+}
+:root[data-theme="dark"]{
+ --paper:#111820; --paper-2:#161E27; --card:#1B252F;
+ --ink:#E6E9E5; --ink-2:#C3CBD2; --slate:#8C98A4;
+ --rule:rgba(230,233,229,.14); --rule-2:rgba(230,233,229,.3);
+ --verdigris:#7CC7B6; --verdigris-soft:rgba(124,199,182,.12);
+ --brass:#D5A24C; --brass-soft:rgba(213,162,76,.12);
+ --oxblood:#DE8478; --oxblood-soft:rgba(222,132,120,.12);
+ --grid:rgba(230,233,229,.04);
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+html{-webkit-text-size-adjust:100%}
+
+body{
+ background:var(--paper);
+ color:var(--ink);
+ font-family:var(--body);
+ font-size:16px;
+ line-height:1.55;
+ overflow-x:hidden;
+ background-image:
+  linear-gradient(var(--grid) 1px, transparent 1px),
+  linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+ background-size:28px 28px, 28px 28px;
+}
+
+/* ---------- deck shell ---------- */
+#deck{
+ height:100dvh;
+ overflow-y:auto;
+ overflow-x:hidden;
+ scroll-snap-type:y proximity;
+}
+.slide{
+ min-height:100dvh;
+ scroll-snap-align:start;
+ display:flex;
+ align-items:center;
+ padding:clamp(24px,4.5vh,58px) clamp(18px,4.4vw,72px);
+ border-bottom:1px solid var(--rule);
+ position:relative;
+}
+.inner{
+ width:100%;
+ max-width:1180px;
+ margin:0 auto;
+ display:grid;
+ grid-template-columns:126px minmax(0,1fr);
+ gap:clamp(16px,2.6vw,40px);
+ align-items:start;
+}
+@media (max-width:880px){ .inner{grid-template-columns:minmax(0,1fr);gap:14px} }
+.gutter{position:sticky;top:0;padding-top:.4rem}
+.main{min-width:0}
+
+.slide.wide .inner{grid-template-columns:minmax(0,1fr);max-width:1340px;gap:0}
+.slide.wide .gutter{position:static;padding:0;display:flex;align-items:center;gap:12px;margin-bottom:.25rem}
+.slide.wide .gutter .num{margin-top:0}
+.slide.wide .gutter .tick{display:none}
+
+.slide.ink{
+ --paper:#111820; --paper-2:#161E27; --card:#1B252F;
+ --ink:#E6E9E5; --ink-2:#C3CBD2; --slate:#8C98A4;
+ --rule:rgba(230,233,229,.14); --rule-2:rgba(230,233,229,.3);
+ --verdigris:#7CC7B6; --verdigris-soft:rgba(124,199,182,.12);
+ --brass:#D5A24C; --brass-soft:rgba(213,162,76,.12);
+ --oxblood:#DE8478; --oxblood-soft:rgba(222,132,120,.12);
+ background:#111820; color:#E6E9E5;
+ background-image:
+  linear-gradient(rgba(230,233,229,.04) 1px, transparent 1px),
+  linear-gradient(90deg, rgba(230,233,229,.04) 1px, transparent 1px);
+ background-size:28px 28px, 28px 28px;
+}
+
+/* ---------- deck type ---------- */
+.eyebrow{
+ font-family:var(--mono);font-size:11px;letter-spacing:.14em;
+ text-transform:uppercase;color:var(--slate);display:block;
+}
+.gutter .num{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--verdigris);display:block;margin-top:6px}
+.gutter .tick{display:block;width:34px;height:2px;background:var(--verdigris);margin-top:12px;opacity:.55}
+@media (max-width:880px){ .gutter .tick{display:none} .gutter{position:static} }
+
+h1,h2,h3{font-family:var(--display);font-weight:600;letter-spacing:-.012em;margin:0}
+h1{font-size:clamp(2.3rem,6vw,4.3rem);line-height:1.03}
+h2{font-size:clamp(1.5rem,3.1vw,2.5rem);line-height:1.1;margin-bottom:.4rem}
+h3{font-size:clamp(1rem,1.55vw,1.22rem);line-height:1.25}
+.lede{font-size:clamp(.96rem,1.35vw,1.12rem);color:var(--ink-2);max-width:70ch;margin:.7rem 0 0}
+p{margin:.65rem 0;max-width:70ch}
+.small{font-size:.84rem;color:var(--slate);line-height:1.5}
+strong{font-weight:650;color:var(--ink)}
+code,.mono{font-family:var(--mono);font-size:.82em}
+code{background:var(--verdigris-soft);color:var(--verdigris);padding:.08em .38em;border-radius:3px;word-break:break-word}
+
+/* ---------- cover ---------- */
+.cover .inner{grid-template-columns:minmax(0,1fr)}
+.wordmark{display:flex;align-items:center;gap:10px;margin-bottom:clamp(18px,4.5vh,44px)}
+.wordmark span{font-family:var(--mono);font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--slate)}
+.cover-quote{
+ font-family:var(--display);font-size:clamp(1.3rem,2.6vw,1.9rem);line-height:1.25;
+ color:var(--ink-2);font-style:italic;border-left:3px solid var(--verdigris);
+ padding-left:clamp(14px,2vw,24px);margin:clamp(20px,3.6vh,36px) 0 0;max-width:34ch;
+}
+.cover-meta{
+ margin-top:clamp(24px,4.6vh,48px);display:flex;flex-wrap:wrap;gap:10px 26px;
+ font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+ color:var(--slate);border-top:1px solid var(--rule);padding-top:16px;
+}
+.cover-meta b{color:var(--ink);font-weight:500}
+
+/* ---------- cards ---------- */
+.grid{display:grid;gap:13px;margin-top:1rem}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:960px){ .g3,.g4{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media (max-width:640px){ .g2,.g3,.g4{grid-template-columns:minmax(0,1fr)} }
+.card{background:var(--card);border:1px solid var(--rule);border-radius:6px;padding:14px 16px;min-width:0}
+.card h3{margin-bottom:.3rem}
+.card p{margin:.35rem 0}
+.card.accent{border-left:3px solid var(--verdigris)}
+.card.warn{border-left:3px solid var(--brass)}
+.card.bad{border-left:3px solid var(--oxblood)}
+.card.tight{padding:10px 12px}
+.card.tight p{font-size:.82rem;color:var(--slate);line-height:1.45;margin:.2rem 0 0}
+.kicker{font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--slate);display:block;margin-bottom:.3rem}
+.quote{border-left:3px solid var(--verdigris);padding:2px 0 2px 16px;margin:14px 0}
+.quote p{font-family:var(--display);font-style:italic;font-size:clamp(1rem,1.4vw,1.14rem);line-height:1.4;color:var(--ink);margin:0}
+.quote .attr{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate);margin-top:8px;display:block}
+.callout{border:1px solid var(--verdigris);background:var(--verdigris-soft);border-radius:6px;padding:12px 15px;margin-top:1rem}
+.callout p{margin:0;font-size:.92rem;color:var(--ink);max-width:none}
+.callout .kicker{color:var(--verdigris)}
+.note{border:1px dashed var(--rule-2);border-radius:6px;padding:11px 14px;margin-top:.9rem;background:var(--paper-2)}
+.note p{margin:.25rem 0;font-size:.84rem;color:var(--slate);max-width:84ch}
+.note .kicker{color:var(--brass)}
+ul.plain{list-style:none;padding:0;margin:.55rem 0}
+ul.plain li{padding-left:19px;position:relative;margin:.38rem 0;max-width:72ch;font-size:.9rem;color:var(--ink-2)}
+ul.plain li::before{content:"";position:absolute;left:2px;top:.62em;width:7px;height:1.5px;background:var(--verdigris)}
+ul.plain li strong{color:var(--ink)}
+ul.plain.tight li{font-size:.83rem;margin:.28rem 0}
+ul.plain.ox li::before{background:var(--oxblood)}
+.tablewrap{overflow-x:auto;margin-top:1rem;border:1px solid var(--rule);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;min-width:720px;font-size:.78rem}
+th,td{text-align:left;padding:7px 12px;border-bottom:1px solid var(--rule);vertical-align:top;line-height:1.35}
+th{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate);font-weight:500;background:var(--paper-2)}
+tr:last-child td{border-bottom:none}
+td.lead{color:var(--ink);font-weight:600;font-family:var(--display);font-size:.94rem}
+td.where{font-family:var(--mono);font-size:.7rem;letter-spacing:.05em;color:var(--brass)}
+td.gone{font-family:var(--mono);font-size:.7rem;letter-spacing:.05em;color:var(--oxblood)}
+.figcap{font-size:.79rem;color:var(--slate);margin:.6rem 0 0;max-width:88ch;line-height:1.5}
+.figcap b{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--verdigris);font-weight:500}
+
+/* deck-scope phase strip + lifecycle chain */
+.phases{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));border:1px solid var(--rule);border-radius:6px;overflow:hidden;margin-top:14px;background:var(--card)}
+.ph{padding:12px 13px 14px;border-right:1px solid var(--rule);min-width:0}
+.ph:last-child{border-right:none}
+.ph b{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--verdigris);display:block}
+.ph em{font-family:var(--mono);font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:var(--slate);font-style:normal;display:block;margin-top:5px}
+.ph p{font-size:.75rem;color:var(--slate);margin:.4rem 0 0;max-width:none;line-height:1.4}
+.ph.now{background:var(--verdigris-soft)}
+@media (max-width:1040px){ .phases{grid-template-columns:repeat(3,minmax(0,1fr))} .ph{border-bottom:1px solid var(--rule)} }
+@media (max-width:640px){ .phases{grid-template-columns:repeat(2,minmax(0,1fr))} }
+
+/* ============================================================
+ MOCK SCOPE — The Document's real design language
+ ============================================================ */
+.doc{
+ --d-page:#FAF7F2;
+ --d-paper:#FCFAF6;
+ --d-p2:#F7F2EB;
+ --d-p3:#F1EBE2;
+ --d-card:#FFFFFF;
+ --d-pearl:#E5E2DD;
+ --d-rule:rgba(44,41,38,.18);
+ --d-char:#2C2926;
+ --d-mocha:#5C4A3C;
+ --d-quiet:#65594E;
+ --d-clay:#C4A57B;
+ --d-oak:#8B7355;
+ --d-sage:#A8B5A0;
+ --d-blue:#8B9CAD;
+ --d-terra:#D4A090;
+ --d-gold:#E8C547;
+ --d-sheet:#D8CCB8;
+ font-family:var(--body);
+ color:var(--d-char);
+ line-height:1.4;
+}
+.scroller{overflow-x:auto;overflow-y:hidden;padding-bottom:8px;margin-top:12px}
+.frame{border:1px solid var(--d-pearl);border-radius:8px;overflow:hidden;background:var(--d-page)}
+.scroller .frame{min-width:920px}
+.scroller.narrow .frame{min-width:660px}
+/* per-mock widths are modifier CLASSES, never inline styles — an inline
+ min-width outranks the print reset below and the mock prints clipped. */
+.scroller .frame.w680{min-width:680px}
+.scroller .frame.w940{min-width:940px}
+.scroller .frame.w960{min-width:960px}
+.scroller .frame.w980{min-width:980px}
+.fbar{display:flex;align-items:center;gap:10px;padding:7px 12px;background:var(--d-p3);border-bottom:1px solid var(--d-pearl)}
+.fdots{display:flex;gap:5px;flex:0 0 auto}
+.fdots i{width:8px;height:8px;border-radius:50%;background:rgba(44,41,38,.16);display:block}
+.furl{font-family:var(--mono);font-size:10px;letter-spacing:.05em;color:var(--d-quiet);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.furl b{color:var(--d-mocha);font-weight:500}
+.screen{position:relative;background:var(--d-page);padding:18px 22px 22px;min-height:120px}
+
+/* stacked flat paper depth — no shadows */
+.stack{position:relative;z-index:4;max-width:640px;margin:0 auto}
+.stack.w760{max-width:760px}
+.stack::before,.stack::after{content:"";position:absolute;border:1px solid var(--d-pearl);border-radius:5px;background:var(--d-p3);z-index:0}
+.stack::before{left:10px;top:10px;right:-10px;bottom:-10px}
+.stack::after{left:5px;top:5px;right:-5px;bottom:-5px;background:var(--d-p2)}
+.sheet{position:relative;z-index:2;background:var(--d-paper);border:1px solid var(--d-sheet);border-radius:5px;padding:16px 20px 18px}
+.shead{display:flex;align-items:baseline;justify-content:space-between;gap:16px;border-bottom:1px solid var(--d-pearl);padding-bottom:9px}
+.shead .st{font-family:var(--mono);font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--d-char)}
+.shead .sx{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--d-quiet);white-space:nowrap}
+.ssub{font-family:var(--display);font-style:italic;font-size:14px;color:var(--d-mocha);margin:11px 0 0}
+.vitals{font-family:var(--mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--d-quiet);margin-top:7px}
+
+/* scored ink */
+.si{position:relative;display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--d-char);font-weight:500;padding-bottom:9px;line-height:1;white-space:nowrap}
+.si::before{content:"";position:absolute;left:0;right:0;bottom:4.5px;height:1px;background:var(--d-char)}
+.si::after{content:"";position:absolute;left:0;right:0;bottom:1px;height:1px;background:var(--d-clay)}
+.si.sec{color:var(--d-mocha);font-weight:400}
+.si.sec::before{background:rgba(92,74,60,.5)}
+.si.sec::after{display:none}
+.si.ter{color:var(--d-quiet);font-weight:400}
+.si.ter::before{background:rgba(101,89,78,.32)}
+.si.ter::after{display:none}
+.si.dgr::before{background:var(--d-terra)}
+.si.dgr::after{background:var(--d-terra)}
+.si.dead{color:rgba(101,89,78,.34)}
+.si.dead::before{background:rgba(101,89,78,.16)}
+.si.dead::after{display:none}
+.si.lg{font-size:12px;padding-bottom:11px}
+.si.lg::before{bottom:5.5px}
+.si.lg::after{bottom:1.5px}
+.acts{display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-top:12px}
+
+/* the section-label recipe — aged oak over a quiet sub */
+.seclab{margin:16px 0 8px}
+.seclab b{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--d-oak);font-weight:500}
+.seclab i{display:block;font-style:normal;font-size:11px;color:var(--d-quiet);margin-top:3px;line-height:1.35}
+.seclab.row{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.seclab.row .acts{margin-top:0}
+
+/* ticks + fields */
+.tick{width:18px;height:18px;border-radius:2px;border:1.5px solid rgba(101,89,78,.42);position:relative;background:transparent}
+.tick.done{background:var(--d-sage);border-color:var(--d-sage)}
+.tick.done::after{content:"";position:absolute;left:5.5px;top:2px;width:5px;height:9px;border:solid #fff;border-width:0 1.7px 1.7px 0;transform:rotate(42deg)}
+.cbx{width:15px;height:15px;border-radius:2px;border:1.5px solid rgba(101,89,78,.42);position:relative;display:block;background:transparent}
+.cbx.on{background:var(--d-clay);border-color:var(--d-clay)}
+.cbx.on::after{content:"";position:absolute;left:4.4px;top:1px;width:4px;height:8px;border:solid #fff;border-width:0 1.6px 1.6px 0;transform:rotate(42deg)}
+.cbx.off{border-color:rgba(101,89,78,.16)}
+.fld{margin-top:13px}
+.flab{font-family:var(--mono);font-size:8.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--d-quiet);display:block;margin-bottom:3px}
+.uin{border-bottom:1px solid rgba(44,41,38,.28);padding:5px 0 7px;font-size:14px;color:var(--d-char);display:flex;align-items:center;justify-content:space-between;gap:10px}
+.uin .car{font-family:var(--mono);font-size:10px;color:var(--d-quiet)}
+.tchips{display:flex;gap:8px;flex-wrap:wrap;margin-top:5px}
+.tchip{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;border:1px solid var(--d-pearl);border-radius:16px;padding:4px 12px;color:var(--d-quiet);background:var(--d-card)}
+.tchip.on{border-color:var(--d-clay);background:rgba(196,165,123,.2);color:#7a6034;font-weight:600}
+.hint{font-size:11.5px;color:var(--d-quiet);margin-top:6px;font-family:var(--display);font-style:italic}
+
+/* bands + empty states */
+.band{border:1px solid var(--d-pearl);background:var(--d-p2);border-radius:3px;padding:10px 14px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.band p{font-family:var(--display);font-style:italic;font-size:13.5px;color:var(--d-mocha);margin:0;max-width:none}
+.band.ok{background:rgba(168,181,160,.15);border-color:rgba(168,181,160,.55)}
+.band.ok p{color:#55684f}
+.band.hold{background:rgba(196,165,123,.14);border-color:var(--d-clay)}
+.band.hold p{color:#7a6034}
+
+/* letterhead / instruments */
+.letter{border-bottom:1px solid var(--d-pearl);padding-bottom:12px}
+.lname{font-family:var(--display);font-size:26px;color:var(--d-char);line-height:1.1}
+.astp{font-family:var(--mono);font-size:7.5px;letter-spacing:.11em;text-transform:uppercase;padding:2px 8px;border-radius:16px;border:1px solid;white-space:nowrap;display:inline-block;line-height:1.5}
+.astp.draft{color:var(--d-quiet);border-color:var(--d-pearl);background:var(--d-p2)}
+.astp.wait{color:#a1834f;border-color:var(--d-clay);background:rgba(196,165,123,.16)}
+.astp.auth{color:#5f7357;border-color:var(--d-sage);background:rgba(168,181,160,.2)}
+.astp.void{color:#b0785f;border-color:var(--d-terra);background:rgba(212,160,144,.14)}
+.astp.absent{border-color:transparent;background:transparent;color:rgba(101,89,78,.3)}
+
+/* ---- authority figures ---- */
+.figband{border-left:2px solid var(--d-sage);padding:3px 0 3px 15px;display:flex;gap:28px;flex-wrap:wrap;margin-top:13px}
+.fg b{display:block;font-family:var(--mono);font-size:8px;letter-spacing:.14em;text-transform:lowercase;color:var(--d-quiet);font-weight:400}
+.fg i{display:block;font-family:var(--display);font-style:normal;font-size:17px;color:var(--d-char);margin-top:3px;line-height:1.1}
+.fg i.q{color:var(--d-quiet)}
+.fg i.ok{color:#5f7357}
+
+/* ---- journey stepper ---- */
+.jstep{display:flex;align-items:center;flex-wrap:wrap;margin-top:8px}
+.jstep span{font-family:var(--mono);font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:rgba(101,89,78,.48);white-space:nowrap;margin:2px 0}
+.jstep span.done{color:var(--d-mocha)}
+.jstep span.now{color:#5f7357;font-weight:700}
+.jstep i{display:block;width:14px;height:1px;background:var(--d-pearl);margin:0 7px;flex:0 0 auto}
+.jstep i.done{background:var(--d-sage)}
+
+/* ---- budget grid ---- */
+.doc table{min-width:0}
+.bg{width:100%;border-collapse:collapse;font-size:12.5px;min-width:0}
+.bg th{font-family:var(--mono);font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--d-quiet);font-weight:500;text-align:left;padding:6px 10px;border-bottom:1px solid var(--d-rule);background:transparent;vertical-align:bottom}
+.bg th.r{text-align:right}
+.bg td{padding:6px 10px;border-bottom:1px solid rgba(44,41,38,.08);color:var(--d-char);vertical-align:middle;line-height:1.35}
+.bg td.n{font-family:var(--mono);font-size:11px;text-align:right;white-space:nowrap}
+.bg td.n.der{color:var(--d-quiet)}
+.bg td.n.tgt{color:#7a6034;background:rgba(196,165,123,.12);border-bottom:1px solid var(--d-clay)}
+.bg td.rm{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--d-oak)}
+.bg tr.tot td{border-bottom:none;border-top:1px solid var(--d-rule);font-weight:600;padding-top:8px}
+.bg tr.tot td.n{color:var(--d-char)}
+
+/* annotations */
+.anno{position:absolute;z-index:6;display:flex;align-items:center}
+.anno .dot,.mnote .dot{width:17px;height:17px;border-radius:50%;background:var(--d-clay);color:#fff;font-family:var(--mono);font-size:9.5px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;line-height:1}
+.anno .ldr{height:1px;background:rgba(44,41,38,.4)}
+.anno.onveil .ldr{background:rgba(250,247,242,.5)}
+.mockgrid{display:grid;grid-template-columns:minmax(0,1fr) 216px;gap:20px;align-items:start}
+@media (max-width:1040px){ .mockgrid{grid-template-columns:minmax(0,1fr)} }
+.mnotes{display:flex;flex-direction:column;gap:12px;padding-top:14px}
+.mnote{display:grid;grid-template-columns:17px minmax(0,1fr);gap:9px;align-items:start}
+.mnote .dot{margin-top:1px}
+.mnote p{font-size:.77rem;color:var(--slate);margin:0;line-height:1.45;max-width:none}
+.mnote p b{color:var(--ink);font-weight:600}
+
+/* client portal house style */
+.cp{font-family:var(--body);color:#2f2c29;line-height:1.45}
+.cp .cpscreen{background:#FBFAF8;padding:20px 24px 24px;position:relative}
+.cp .cphead{display:flex;align-items:center;gap:12px;padding-bottom:14px;border-bottom:1px solid #EEEAE4}
+.cp .cpmark{width:34px;height:34px;border-radius:12px;background:#E7E0D5;display:flex;align-items:center;justify-content:center;font-family:var(--display);font-size:14px;color:#6b5c4a}
+.cp .cpt{font-family:var(--display);font-size:19px;color:#2f2c29}
+.cp .cps{font-size:12px;color:#8a8078}
+.cp h4{font-family:var(--display);font-size:16px;margin:20px 0 9px;font-weight:600}
+.cp h4 small{font-weight:400;font-size:12px;color:#8a8078;margin-left:9px}
+.cp .cpcard{background:#fff;border:1px solid #EEEAE4;border-radius:14px;padding:12px 14px;display:flex;align-items:flex-start;gap:13px}
+.cp .cplist{display:flex;flex-direction:column;gap:9px}
+.cp .cpn{font-size:14.5px;font-weight:600;line-height:1.3}
+.cp .cpr{font-size:12.5px;color:#8a8078;margin-top:2px}
+.cp .cpp{font-size:13px;color:#2f2c29;margin-top:4px;font-weight:600}
+.cp .cpsign{border:1px solid #DCCFAE;background:#FBF6EA;border-radius:14px;padding:14px 16px}
+.cp .cpsign .cpn{font-size:15px}
+.cp .cpbtn{display:inline-block;border:1px solid #6b5c4a;border-radius:999px;padding:7px 18px;font-size:12.5px;color:#6b5c4a;margin-top:10px}
+.cp .cpbtn.solid{background:#6b5c4a;color:#fff}
+.cp .jstep span{font-family:var(--body);font-size:10px;letter-spacing:0;text-transform:none;color:#a9a099}
+.cp .jstep i{width:10px;margin:0 5px}
+.cp .jstep span.done{color:#6b5c4a}
+.cp .jstep span.now{color:#5f7357;font-weight:700}
+.cp .jstep i{background:#E5DFD6}
+.cp .jstep i.done{background:#A8B5A0}
+/* flat placeholder swatches — never an image */
+.sw{width:62px;height:62px;border-radius:10px;flex:0 0 auto;display:flex;align-items:flex-end;padding:6px 7px;font-family:var(--mono);font-size:7px;letter-spacing:.1em;text-transform:uppercase;color:rgba(60,52,44,.5)}
+.sw.a{background:#E5E2DD}.sw.b{background:#D8CCB8}.sw.c{background:#DED6C9}
+.sw.d{background:#CFC7BA}.sw.e{background:#E7E0D5}.sw.f{background:#DAD3C6}
+
+.ba{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:14px}
+@media (max-width:900px){ .ba{grid-template-columns:minmax(0,1fr)} }
+.balab{font-family:var(--mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--slate);display:block;margin-bottom:7px}
+.balab.now{color:var(--oxblood)}
+.balab.next{color:var(--verdigris)}
+
+/* ============================================================
+ SINGLE PANE ADDITIONS — what this deck adds to the house shell
+ ============================================================ */
+
+/* EXHIBIT SCOPE — a mock drawn in DECK tones instead of portal tones.
+ Same .frame / .fbar / .screen / .band machinery as .doc; bone and slate
+ instead of clay and oak, so a drawing of today's portal never gets mistaken
+ for a drawing of the proposal. */
+.exhibit{
+ --d-page:var(--paper-2);
+ --d-paper:var(--card);
+ --d-p2:var(--paper-2);
+ --d-p3:var(--paper);
+ --d-card:var(--card);
+ --d-pearl:var(--rule-2);
+ --d-rule:var(--rule);
+ --d-char:var(--ink);
+ --d-mocha:var(--ink-2);
+ --d-quiet:var(--slate);
+ --d-clay:var(--slate);
+ --d-oak:var(--slate);
+ --d-sage:var(--slate);
+ --d-terra:var(--oxblood);
+ --d-sheet:var(--rule-2);
+ font-family:var(--body);color:var(--ink);line-height:1.4;
+}
+.exhibit .anno .dot{background:var(--oxblood)}
+.exhibit .anno .ldr{background:var(--rule-2)}
+/* the annotation rail sits OUTSIDE .doc, so give it its own dot fill */
+.mnotes{--d-clay:var(--brass)}
+
+/* the affordance chip row — a header, counted */
+.chiprow{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chip{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;border:1px solid var(--rule-2);border-radius:16px;padding:3px 9px;color:var(--slate);background:var(--card);white-space:nowrap;line-height:1.55}
+.chip.mark{font-family:var(--display);font-size:12.5px;letter-spacing:0;text-transform:none;color:var(--ink);border-color:var(--rule);padding:2px 11px}
+.chip.away{color:var(--oxblood);border-color:var(--oxblood);background:var(--oxblood-soft)}
+.chip.sub{border-style:dashed}
+.chipcount{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--oxblood);margin-left:auto;white-space:nowrap}
+
+/* skeleton section bars — a page compressed to its stack */
+.skel{display:flex;flex-direction:column;gap:5px;margin-top:14px}
+.sbar{display:flex;align-items:center;gap:11px;border:1px solid var(--rule);border-radius:3px;background:var(--paper-2);padding:6px 11px}
+.sbar b{font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--slate);font-weight:500;white-space:nowrap}
+.sbar i{display:block;height:4px;border-radius:2px;background:var(--rule);flex:1 1 auto;min-width:24px}
+.sbar em{font-family:var(--mono);font-size:8px;letter-spacing:.08em;text-transform:lowercase;color:var(--oxblood);font-style:normal;white-space:nowrap}
+.sbar.dup{border-color:var(--oxblood);background:var(--oxblood-soft)}
+.sbar.dup b{color:var(--oxblood)}
+.sbar.dup i{background:rgba(138,58,50,.26)}
+.sbar.key{border-color:var(--verdigris);background:var(--verdigris-soft)}
+.sbar.key b{color:var(--verdigris)}
+.sbar.key em{color:var(--verdigris)}
+
+/* the numeric badge — a count where the studio would have named a state */
+.numbadge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:#8A3A32;color:#fff;font-family:var(--body);font-size:11px;font-weight:700;line-height:1;flex:0 0 auto}
+
+/* the compared matrix */
+table.matrix{min-width:780px}
+.matrix td{height:38px;vertical-align:middle}
+.matrix td.crit{font-family:var(--display);font-size:.95rem;color:var(--ink);font-weight:600;width:24%}
+.matrix .dg{font-size:13px;color:var(--verdigris);margin-right:9px;line-height:1}
+.matrix .vw{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--slate)}
+.mlegend{display:flex;flex-wrap:wrap;gap:8px 24px;margin-top:12px;font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate)}
+.mlegend b{color:var(--verdigris);font-weight:500}
+
+/* the ruling */
+.qs{display:grid;gap:11px;margin-top:1rem}
+.q{display:grid;grid-template-columns:24px minmax(0,1fr);gap:12px;align-items:start;border-top:1px solid var(--rule);padding-top:11px}
+.qn{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--verdigris);padding-top:4px}
+.q h3{font-size:1.02rem}
+.q p{margin:.25rem 0 0;font-size:.84rem;color:var(--slate)}
+.closing{border-top:1px solid var(--rule-2);margin-top:1.5rem;padding-top:15px}
+.closing p{font-family:var(--display);font-size:clamp(1.2rem,2.2vw,1.6rem);color:var(--ink);margin:0;max-width:none}
+.closing span{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--slate);display:block;margin-top:9px}
+.cover-quote .attr{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--slate);margin-top:14px;font-style:normal}
+
+/* DRAWN SURFACES — every picture in this deck is CSS.
+ These live inside a mock scope (.doc or .exhibit) and read its tokens. */
+.tex{border-radius:4px;border:1px solid var(--d-pearl)}
+.tex.linen{background-color:#E7E0D5;background-image:repeating-linear-gradient(90deg,rgba(139,115,85,.16) 0 1px,transparent 1px 4px),repeating-linear-gradient(0deg,rgba(139,115,85,.12) 0 1px,transparent 1px 4px)}
+.tex.oak{background-color:#D8CCB8;background-image:repeating-linear-gradient(96deg,rgba(92,74,60,.20) 0 1px,transparent 1px 7px),repeating-linear-gradient(96deg,rgba(92,74,60,.09) 0 3px,transparent 3px 13px)}
+.tex.clay{background-color:#DED6C9;background-image:repeating-linear-gradient(0deg,rgba(196,165,123,.30) 0 1px,transparent 1px 5px)}
+.photo{position:relative;border-radius:6px;border:1px solid var(--d-pearl);background-color:#DAD3C6;background-image:repeating-linear-gradient(0deg,rgba(92,74,60,.05) 0 2px,transparent 2px 6px);min-height:96px;display:flex;align-items:flex-end;padding:8px 10px}
+.photo .pc{font-family:var(--mono);font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:rgba(60,52,44,.62)}
+.thumb{width:64px;height:64px;border-radius:8px;flex:0 0 auto;border:1px solid var(--d-pearl)}
+.thumb.a{background:#E5E2DD}.thumb.b{background:#D8CCB8}.thumb.c{background:#DED6C9}
+.thumb.d{background:#CFC7BA}.thumb.e{background:#E7E0D5}.thumb.f{background:#DAD3C6}
+
+/* ---------- chrome ---------- */
+#progress{position:fixed;top:0;left:0;height:2px;background:var(--verdigris);width:0;z-index:60;transition:width .18s linear}
+@media (prefers-reduced-motion: reduce){ #progress{transition:none} }
+#chrome{
+ position:fixed;right:clamp(12px,2.4vw,26px);bottom:clamp(12px,2.4vh,24px);
+ z-index:60;display:flex;align-items:center;gap:8px;
+ background:var(--card);border:1px solid var(--rule-2);border-radius:999px;padding:5px 6px 5px 13px;
+}
+#counter{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--slate);min-width:52px}
+#counter b{color:var(--ink);font-weight:600}
+.navbtn{
+ appearance:none;border:1px solid var(--rule);background:var(--paper-2);color:var(--ink);
+ width:28px;height:28px;border-radius:999px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
+ font-size:13px;line-height:1;font-family:var(--mono);padding:0;
+}
+.navbtn:hover{border-color:var(--verdigris);color:var(--verdigris)}
+.navbtn:focus-visible,#themebtn:focus-visible{outline:2px solid var(--verdigris);outline-offset:2px}
+#themebtn{
+ appearance:none;border:1px solid var(--rule);background:var(--paper-2);color:var(--slate);
+ height:28px;border-radius:999px;cursor:pointer;padding:0 11px;
+ font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+}
+#themebtn:hover{border-color:var(--verdigris);color:var(--verdigris)}
+#hint{
+ position:fixed;left:clamp(12px,2.4vw,26px);bottom:clamp(12px,2.4vh,24px);z-index:60;
+ font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate);opacity:.75;
+}
+@media (max-width:700px){ #hint{display:none} }
+
+/* reveal — opt-IN, never opt-out. The pre-reveal state is gated behind html.js,
+ which the deck script sets itself, synchronously, immediately before it installs
+ the observer that can take it off again. If JS is disabled, blocked by CSP, or
+ throws before that line, the class is never set and every slide renders at full
+ opacity. Content is never hidden by a script that did not run. */
+html.js .slide .main > *, html.js .slide .gutter > *{opacity:0;transform:translateY(8px);transition:opacity .5s ease, transform .5s ease}
+html.js .slide.seen .main > *, html.js .slide.seen .gutter > *{opacity:1;transform:none}
+.slide.seen .main > *:nth-child(2){transition-delay:.06s}
+.slide.seen .main > *:nth-child(3){transition-delay:.12s}
+.slide.seen .main > *:nth-child(4){transition-delay:.17s}
+@media (prefers-reduced-motion: reduce){
+ html.js .slide .main > *, html.js .slide .gutter > *{opacity:1;transform:none;transition:none}
+}
+
+/* ================= DIRECTION A · THE HOUSE BOOK (slides 06–07) ================= */
+/* DIRECTION A · THE HOUSE BOOK. Every class is da-prefixed; every selector sits
+ under the mock root .doc.da or the vignette root .da-v. Shell classes are used,
+ never restyled — overrides are prefixed classes layered on top. No shadows. */
+
+.doc.da .da-page{display:grid;grid-template-columns:78px minmax(0,1fr)}
+.doc.da .da-rail{border-right:1px solid var(--d-pearl);padding:0 13px 30px 0;text-align:right}
+.doc.da .da-body{position:relative;min-width:0;padding:0 46px 30px 22px}
+.doc.da .da-rail:has(.da-rn),.doc.da .da-rail.da-last{padding-top:34px}
+.doc.da .da-rn,.doc.da .da-rd{display:block;font-family:var(--mono);letter-spacing:.14em;line-height:1.5}
+.doc.da .da-rn{font-size:11px;color:var(--d-oak)}
+.doc.da .da-rd{font-size:8px;text-transform:uppercase;color:rgba(101,89,78,.52);margin-top:4px}
+
+/* letterhead masthead */
+.doc.da .da-mast{padding-bottom:15px;border-bottom:1px solid var(--d-rule)}
+.doc.da .da-mark{display:flex;flex-direction:column;gap:4px;width:36px;margin-bottom:13px}
+.doc.da .da-mark i{display:block;height:2px;border-radius:1px;background:var(--d-mocha)}
+.doc.da .da-mark i:nth-child(2){background:var(--d-oak)}
+.doc.da .da-mark i:nth-child(3){background:var(--d-clay)}
+.doc.da .da-title{display:block;font-size:34px;line-height:1.05}
+
+.doc.da .da-c,.da-v .da-c,.doc.da .da-mat,.doc.da .da-fine,.doc.da .da-line,.doc.da .da-draw,.doc.da .da-good,.doc.da .da-room,.doc.da .da-per{border-bottom:1px solid rgba(44,41,38,.07)}
+.doc.da .da-c,.da-v .da-c,.doc.da .da-mat,.doc.da .da-fine,.doc.da .da-draw,.doc.da .da-room,.doc.da .da-per,.doc.da .da-sum{display:flex;align-items:baseline;gap:11px;padding:10px 0}
+.doc.da .da-c:last-child,.da-v .da-c:last-child,.doc.da .da-per:last-child{border-bottom:none}
+
+/* THE CONTENTS — the signature device: leaders that end in a state */
+.doc.da .da-contents,.da-v .da-contents{margin-top:14px}
+.doc.da .da-cn,.da-v .da-cn{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;color:var(--d-oak);width:24px;flex:0 0 auto}
+.doc.da .da-ldr,.da-v .da-ldr{flex:1 1 auto;min-width:14px;height:1px;align-self:flex-end;margin-bottom:4px;background-image:repeating-linear-gradient(90deg,rgba(44,41,38,.3) 0 1.5px,transparent 1.5px 5px)}
+.doc.da .da-cs,.da-v .da-cs{font-size:12.5px;color:var(--d-quiet);white-space:nowrap}
+.doc.da .da-cs b,.da-v .da-cs b{color:var(--d-mocha);font-weight:600}
+
+.doc.da .da-ct,.da-v .da-ct,.doc.da .da-cht,.doc.da .da-in,.doc.da .da-rnm{font-family:var(--display);color:var(--d-char)}
+.doc.da .da-ct{font-size:17px;white-space:nowrap}
+.doc.da .da-in{font-size:16.5px}
+.doc.da .da-cht{font-size:20px}
+.doc.da .da-rnm{font-size:15px;width:168px;flex:0 0 auto}
+.doc.da .da-say,.doc.da .da-colo p,.doc.da .da-note p{font-family:var(--display);font-style:italic;margin:0;line-height:1.5;max-width:74ch}
+.doc.da .da-say{font-size:13.5px;color:var(--d-mocha);margin-top:11px}
+.doc.da .da-colo p{font-size:13px;color:var(--d-quiet);line-height:1.6}
+.doc.da .da-note p{font-size:14px;color:var(--d-char);line-height:1.45}
+
+.doc.da .da-fx,.doc.da .da-ix,.doc.da .da-chx,.doc.da .da-dq,.doc.da .da-iv,.doc.da .da-chn,.doc.da .da-note span{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--d-quiet)}
+.doc.da .da-chn{letter-spacing:.24em;color:var(--d-oak)}
+.doc.da .da-chx{margin-left:auto}
+.doc.da .da-iv b{color:var(--d-char);font-weight:500}
+.doc.da .da-iv.da-due b,.doc.da .da-dq.da-hold{color:#7a6034}
+.doc.da .da-note span{display:block;margin-top:9px}
+
+/* the laid-in notice — a loose sheet resting on the book */
+.doc.da .da-laid{max-width:520px;margin:26px 0 6px;transform:rotate(-.5deg)}
+.doc.da .da-mno{font-family:var(--mono);font-size:9px;letter-spacing:.14em;color:var(--d-clay);flex:0 0 auto}
+.doc.da .da-mtx{font-size:13px;color:var(--d-char);line-height:1.45}
+.doc.da .da-mtx i{font-style:normal;color:var(--d-quiet)}
+
+.doc.da .da-ch{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin:32px 0 2px;padding-bottom:8px;border-bottom:1px solid var(--d-rule)}
+.doc.da .da-fnm{font-size:13.5px;color:var(--d-char)}
+.doc.da .da-inst{position:relative;border:1px solid var(--d-pearl);border-left:2px solid var(--d-clay);background:var(--d-card);border-radius:3px;padding:14px 17px 16px;margin-top:15px}
+.doc.da .da-inst.da-tr{border-left-color:var(--d-blue)}
+.doc.da .da-ihd{display:flex;align-items:baseline;justify-content:space-between;gap:14px;flex-wrap:wrap;padding-bottom:10px;border-bottom:1px solid var(--d-pearl)}
+.doc.da .da-line{display:grid;grid-template-columns:64px minmax(0,1fr) auto;gap:15px;align-items:center;padding:11px 0}
+.doc.da .da-lnm{display:block;font-size:13.5px;color:var(--d-char)}
+.doc.da .da-lsub,.doc.da .da-gm{display:block;font-size:11px;color:var(--d-quiet);margin-top:3px}
+.doc.da .da-amt{font-family:var(--mono);font-size:12px;color:var(--d-char);text-align:right;white-space:nowrap}
+.doc.da .da-amt.da-q,.doc.da .da-ghost{color:rgba(101,89,78,.42)}
+.doc.da .da-sum{justify-content:space-between;padding:11px 0 0;margin-top:2px;border-top:1px solid var(--d-rule);border-bottom:none}
+.doc.da .da-sum b{font-family:var(--mono);font-size:13px;font-weight:500}
+.doc.da .da-consent{display:flex;align-items:flex-start;gap:11px;margin-top:15px}
+.doc.da .da-consent p{margin:0;max-width:62ch;font-size:12px;line-height:1.5;color:var(--d-quiet)}
+.doc.da .da-dl{font-size:12.5px;color:var(--d-char);white-space:nowrap}
+.doc.da .da-dl b{font-family:var(--mono);font-size:11.5px;font-weight:500}
+
+.doc.da .da-inv{position:relative;display:flex;align-items:baseline;gap:13px 26px;flex-wrap:wrap;margin-top:22px;padding:13px 0;border-top:1px solid var(--d-rule);border-bottom:1px solid var(--d-rule)}
+.doc.da .da-push{margin-left:auto}
+.doc.da .da-pay{margin-top:13px;border:1px solid var(--d-pearl);border-radius:3px;background:var(--d-p2);overflow:hidden}
+.doc.da .da-opt{display:flex;align-items:flex-start;gap:11px;padding:10px 14px;border-bottom:1px solid var(--d-pearl)}
+.doc.da .da-opt:last-child{border-bottom:none}
+.doc.da .da-opt.da-sel{background:var(--d-card)}
+.doc.da .da-dial{position:relative;width:13px;height:13px;border-radius:50%;border:1.5px solid rgba(101,89,78,.4);flex:0 0 auto;margin-top:2px}
+.doc.da .da-opt.da-sel .da-dial{border-color:var(--d-clay)}
+.doc.da .da-opt.da-sel .da-dial::after{content:"";position:absolute;left:2.5px;top:2.5px;width:5px;height:5px;border-radius:50%;background:var(--d-clay)}
+.doc.da .da-on{display:block;font-size:12.5px;font-weight:600;color:var(--d-char)}
+.doc.da .da-os{display:block;font-size:11px;color:var(--d-quiet);margin-top:3px;line-height:1.45}
+.doc.da .da-os em{font-style:normal;font-family:var(--mono);font-size:9.5px;color:var(--d-mocha)}
+
+.doc.da .da-good{display:grid;grid-template-columns:64px minmax(0,1fr) 84px;gap:15px;align-items:center;padding:13px 0}
+.doc.da .da-room{gap:16px;padding:11px 0}
+.doc.da .da-rsay{flex:1 1 auto;min-width:0;font-size:12.5px;color:var(--d-quiet)}
+.doc.da .da-per{flex-wrap:wrap;padding:9px 0}
+.doc.da .da-pn{font-size:13.5px;font-weight:600;color:var(--d-char)}
+.doc.da .da-pr{font-size:11.5px;color:var(--d-quiet)}
+.doc.da .da-note{border-left:2px solid var(--d-clay);padding:2px 0 2px 16px;margin-top:17px}
+.doc.da .da-colo{margin-top:30px;padding-top:15px;border-top:1px solid var(--d-rule)}
+
+/* thesis vignette */
+.da-v{margin-top:1.15rem}
+.da-v .da-vrow{display:grid;grid-template-columns:392px minmax(0,1fr);gap:clamp(18px,2.5vw,36px);align-items:start}
+.da-v .da-vframe{max-width:392px}
+.da-v .da-vscreen{padding:15px 17px 17px}
+.da-v .da-c{padding:8px 0;gap:9px}
+.da-v .da-cn{width:19px;font-size:8.5px}
+.da-v .da-ct{font-size:13px;white-space:nowrap}
+.da-v .da-cs{font-size:10.5px}
+@media (max-width:880px){ .da-v .da-vrow{grid-template-columns:minmax(0,1fr)} }
+
+/* ================= DIRECTION B · THE MAKING (slides 08–09) ================= */
+/* DIRECTION B — THE MAKING. Every selector sits under .db (the mock root,
+ div.doc.db) or .db-v (the vignette). No shared shell class is redefined. */
+.db-v{max-width:612px;margin-top:14px}
+.db .db-when,.db .db-gk,.db .db-receipt,.db .db-here,.db .db-stop,.db .db-links span{font-family:var(--mono);text-transform:uppercase}
+.db .db-hi{color:var(--d-char);font-weight:500}
+.db .db-a{right:148px}
+.db .db-ldr{width:18px}
+/* masthead — the only chrome */
+.db .db-mast{display:flex;align-items:flex-start;gap:13px;padding-bottom:13px;border-bottom:1px solid var(--d-pearl)}
+.db .db-mt{flex:1 1 auto;min-width:0}
+.db .db-links{display:flex;gap:18px;flex:0 0 auto;padding-top:4px}
+.db .db-links span{font-size:8.5px;letter-spacing:.17em;color:var(--d-quiet);white-space:nowrap}
+/* the spine — one grid, four columns, every entry a row */
+.db .db-list{position:relative}
+.db .db-list::after{content:"";position:absolute;top:0;bottom:0;right:142px;width:1px;background:var(--d-pearl)}
+.db .db-row{display:grid;grid-template-columns:86px 20px minmax(0,1fr) 142px;position:relative}
+.db-v .db-row{grid-template-columns:62px 18px minmax(0,1fr)}
+.db .db-row>div:not([class]){grid-column:3}
+.db .db-when{grid-column:1;font-size:8.5px;letter-spacing:.15em;color:var(--d-quiet);text-align:right;padding:13px 14px 0 0;line-height:1.35}
+.db .db-when b{display:block;color:var(--d-char);font-weight:500}
+.db .db-rail{grid-column:4;padding:14px 0 16px 15px}
+.db .db-r0{margin-top:0}
+.db .db-rn{display:block;font-family:var(--mono);font-size:14.5px;color:var(--d-char);margin-top:4px}
+.db .db-rn.q{font-size:12px;color:var(--d-quiet)}
+.db .db-rnote{font-family:var(--display);font-style:italic;font-size:11px;color:var(--d-mocha);margin:12px 0 0;max-width:none;line-height:1.45}
+/* the segments, colored by phase; the node inherits the segment's ink */
+.db .db-seg{grid-column:2;position:relative;color:var(--d-pearl)}
+.db .db-seg::before{content:"";position:absolute;left:50%;margin-left:-1px;top:0;bottom:0;width:2px;background:currentColor}
+.db .db-blue{color:var(--d-blue)}
+.db .db-clay{color:var(--d-clay)}
+.db .db-oak{color:var(--d-oak)}
+.db .db-gold{color:var(--d-gold)}
+.db .db-gold::before{margin-left:-3px;width:6px}
+.db .db-gold.db-dim{color:rgba(232,197,71,.4)}
+.db .db-terra{color:var(--d-terra)}
+.db .db-sage{color:var(--d-sage)}
+.db .db-terra::before,.db .db-sage::before{background:repeating-linear-gradient(180deg,currentColor 0 5px,transparent 5px 11px)}
+.db .db-node{position:absolute;left:50%;margin-left:-6px;top:14px;width:12px;height:12px;border-radius:50%;background:var(--d-page);border:2px solid currentColor}
+.db .db-now{position:absolute;left:50%;margin-left:-9px;top:12px;width:18px;height:18px;border-radius:50%;background:var(--d-page);border:3px solid currentColor}
+/* the settled past, the marker, the sketched future */
+.db .db-receipt{font-size:10px;letter-spacing:.1em;color:var(--d-quiet);margin:0;padding:13px 0 13px 8px;border-bottom:1px solid rgba(44,41,38,.07);max-width:none;line-height:1.4}
+.db .db-receipt b{color:var(--d-char);font-weight:500}
+.db .db-receipt em{font-style:normal;color:var(--d-mocha)}
+.db .db-ahead{border-bottom:none;color:rgba(101,89,78,.62)}
+.db .db-ahead b{color:var(--d-mocha)}
+.db .db-here{font-size:12.5px;letter-spacing:.26em;color:var(--d-char);font-weight:600;margin:0;padding:16px 0 0 8px}
+.db .db-sub{font-family:var(--display);font-style:italic;font-size:13.5px;color:var(--d-mocha);margin:5px 0 15px;padding-left:8px;max-width:none}
+.db .db-foot{border-top:1px solid var(--d-rule);margin-top:12px;padding-top:13px}
+/* THE GATE — the line stops, the act sits in the gap, the line resumes lighter */
+.db .db-gate{grid-column:1/span 3;position:relative;background:var(--d-p2);border-top:1px solid rgba(232,197,71,.6);border-bottom:1px solid rgba(232,197,71,.32);padding:19px 22px 20px 106px;margin:3px 0}
+.db .db-gate::before{content:"";position:absolute;left:83px;top:-3px;width:26px;height:5px;background:var(--d-gold)}
+.db .db-gate::after{content:"";position:absolute;left:85px;bottom:-2px;width:22px;height:3px;background:rgba(232,197,71,.5)}
+.db-v .db-gate{padding:14px 15px 15px 80px}
+.db-v .db-gate::before{left:59px;width:24px}
+.db-v .db-gate::after{left:61px;width:20px}
+.db .db-gt{font-size:19px}
+.db .db-tt{font-size:20px}
+.db .db-gk{display:block;font-size:8.5px;letter-spacing:.2em;color:#8a6f18}
+.db .db-lines{margin:12px 0 0;border-top:1px solid var(--d-pearl);max-width:500px}
+.db .db-line{display:flex;justify-content:space-between;gap:18px;padding:6px 0;border-bottom:1px solid rgba(44,41,38,.08);font-size:13px;color:var(--d-char)}
+.db .db-line span{font-family:var(--mono);font-size:11px}
+.db .db-line.db-tot{border-bottom:none;padding-top:9px;font-weight:600}
+.db .db-line.db-tot span{font-size:13.5px}
+.db .db-consent{display:flex;align-items:flex-start;gap:9px;margin-top:11px;font-size:11.5px;color:var(--d-quiet);line-height:1.4;max-width:420px}
+.db .db-flds{display:flex;gap:30px;flex-wrap:wrap;align-items:flex-end}
+.db .db-flds>div{flex:1 1 236px}
+/* pieces in motion — parcel-grade rows */
+.db .db-track{display:grid;grid-template-columns:64px minmax(0,1fr);gap:14px;align-items:start;padding:13px 0 14px 8px;border-bottom:1px solid rgba(44,41,38,.07)}
+.db .db-th{height:64px;border-radius:8px}
+.db .db-tn{font-size:14px;font-weight:600;line-height:1.25;color:var(--d-char)}
+.db .db-dots{display:flex;align-items:center;margin-top:10px}
+.db .db-dots i{width:7px;height:7px;border-radius:50%;background:var(--d-pearl);flex:0 0 auto}
+.db .db-dots b{width:17px;height:1px;background:var(--d-pearl);flex:0 0 auto}
+.db .db-dots .f,.db .db-dots .f+b{background:var(--d-mocha)}
+.db .db-dots .at{width:12px;height:12px;background:var(--d-gold);border:2px solid var(--d-mocha)}
+.db .db-stop{font-size:9px;letter-spacing:.16em;color:var(--d-char);font-weight:600;margin-left:15px}
+.db .db-shop{display:flex;align-items:center;gap:11px;margin-top:11px}
+.db .db-shopimg{width:112px;height:46px;flex:0 0 auto}
+/* the toll */
+.db .db-toll{margin:12px 0 13px 8px;border:1px solid var(--d-pearl);border-radius:4px;background:var(--d-card);padding:13px 16px 15px}
+
+/* ================= DIRECTION C · THE WALKTHROUGH (slides 10–11) ================= */
+/* DIRECTION C — THE WALKTHROUGH. Every rule is a new prefixed class layered on
+the shell; nothing shared is overridden. Roots: div.doc.dc — vignette .dc-v. */
+.dc{--dc-gold:#96702A;--dc-blue:#63798E;--dc-sage:#5A6F52;--dc-quiet:#7A6E62;--dc-pencil:rgba(101,89,78,.34)}
+.dc .dc-body{padding-right:46px}
+.dc .dc-mast{border-bottom:1px solid var(--d-pearl);padding-bottom:9px;display:flex;align-items:baseline;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.dc .dc-house{font-family:var(--display);font-size:19px;line-height:1.15;color:var(--d-char)}
+.dc .dc-meta,.dc .dc-ceye,.dc .dc-pincap,.dc .dc-sline,.dc .dc-swhere,.dc .dc-person i{font-family:var(--mono);text-transform:uppercase}
+.dc .dc-meta{font-size:8.5px;letter-spacing:.19em;color:var(--d-quiet);white-space:nowrap}
+.dc .dc-meta b{color:var(--d-char);font-weight:500}
+.dc .dc-nav{position:sticky;top:0;z-index:2;background:var(--d-page);display:flex;gap:26px;flex-wrap:wrap;padding:9px 0;border-bottom:1px solid var(--d-pearl)}
+.dc .dc-room{position:relative;font-family:var(--mono);font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--d-quiet);padding-bottom:8px;line-height:1}
+.dc .dc-room.dc-on{color:var(--d-char);font-weight:500}
+.dc .dc-room.dc-on::before,.dc .dc-room.dc-on::after{content:"";position:absolute;left:0;right:0;height:1px}
+.dc .dc-room.dc-on::before{bottom:4px;background:var(--d-char)}
+.dc .dc-room.dc-on::after{bottom:1px;background:var(--d-clay)}
+.dc .dc-thresh{margin-top:13px;border-left:2px solid var(--d-pearl);padding:2px 0 2px 12px}
+.dc .dc-tline{font-size:11.5px;color:var(--d-quiet);margin:3px 0;max-width:none}
+.dc .dc-tline b{font-family:var(--mono);font-size:11px;color:var(--d-char);font-weight:500}
+.dc .dc-chapter{margin-top:22px}
+.dc .dc-ceye{display:block;font-size:8.5px;letter-spacing:.22em;color:var(--d-oak)}
+.dc .dc-rname{font-family:var(--display);font-size:27px;line-height:1.1;color:var(--d-char);margin-top:4px}
+.dc .dc-lt .dc-rname{font-size:20px}
+.dc .dc-state,.dc .dc-xref{font-family:var(--display);font-style:italic;color:var(--d-mocha)}
+.dc .dc-state{font-size:14px;margin-top:5px}
+.dc .dc-board{margin-top:14px;border:1px solid var(--d-pearl);border-radius:6px;padding:16px 18px;display:flex;gap:14px;align-items:flex-start;justify-content:space-between;background-color:#EDE7DD;background-image:repeating-linear-gradient(90deg,rgba(139,115,85,.10) 0 1px,transparent 1px 5px)}
+.dc .dc-pin{position:relative;background:var(--d-paper);border:1px solid var(--d-pearl);border-radius:2px;padding:6px 6px 5px}
+.dc .dc-pin::after{content:"";position:absolute;top:-4px;left:50%;transform:translateX(-50%);width:7px;height:7px;border-radius:50%;background:var(--d-oak);opacity:.5}
+.dc .dc-t1{transform:rotate(-1.1deg)}
+.dc .dc-pin.dc-t2{transform:rotate(.9deg)}
+.dc .dc-sw{display:block;width:100%;height:78px}
+.dc .dc-tall{height:96px}
+.dc .dc-pincap{display:block;font-size:7.5px;letter-spacing:.16em;color:var(--d-quiet);margin-top:6px}
+.dc .dc-pinacts{display:flex;gap:11px;margin-top:7px;border-top:1px solid var(--d-pearl);padding-top:7px}
+.dc .dc-piece{display:grid;grid-template-columns:64px minmax(0,1fr) auto;gap:14px;align-items:center;border-bottom:1px solid rgba(44,41,38,.09);padding:10px 0}
+.dc .dc-pname{font-size:14.5px;color:var(--d-char);line-height:1.25}
+.dc .dc-pmaker{font-size:11.5px;color:var(--d-quiet);margin-top:3px}
+.dc .dc-pprice{font-family:var(--mono);font-size:11px;color:var(--d-char);margin-top:5px}
+.dc .dc-stamp{position:relative;display:inline-block;border:1.5px solid currentColor;border-radius:2px;padding:6px 11px 5px;text-align:center;white-space:nowrap;opacity:.72;color:var(--dc-quiet);transform:rotate(-2.2deg)}
+.dc .dc-stamp.dc-t2{transform:rotate(1.6deg)}
+.dc .dc-stamp::before{content:"";position:absolute;inset:2.5px;border:1px solid currentColor;border-radius:1px;opacity:.42}
+.dc .dc-sline{display:block;font-size:9px;letter-spacing:.2em;font-weight:700;font-style:normal}
+.dc .dc-swhere{display:block;font-size:7px;letter-spacing:.15em;font-style:normal;margin-top:4px;padding-top:4px;border-top:1px solid currentColor;opacity:.85}
+.dc .dc-gold{color:var(--dc-gold)}
+.dc .dc-blue{color:var(--dc-blue)}
+.dc .dc-sage{color:var(--dc-sage)}
+.dc .dc-ghosts,.dc .dc-photos{display:grid;gap:14px}
+.dc .dc-ghosts{grid-template-columns:repeat(3,minmax(0,1fr))}
+.dc .dc-ghost{border:1px dashed var(--dc-pencil);border-radius:8px;padding:10px 12px;display:flex;gap:11px;align-items:center}
+.dc .dc-gthumb{width:64px;height:64px;border-radius:8px;flex:0 0 auto;border:1px dashed var(--dc-pencil);background-image:repeating-linear-gradient(46deg,rgba(101,89,78,.14) 0 1px,transparent 1px 6px)}
+.dc .dc-gname{font-size:13px;color:rgba(60,52,44,.62);line-height:1.25}
+.dc .dc-gprice{font-family:var(--mono);font-size:10.5px;color:rgba(60,52,44,.5);margin-top:5px}
+.dc .dc-brace{position:relative;height:11px;border-top:1px dashed var(--d-clay);margin:0 24px}
+.dc .dc-brace::before,.dc .dc-brace::after{content:"";position:absolute;top:0;width:1px;height:7px;background:var(--d-clay)}
+.dc .dc-brace::before{left:0}
+.dc .dc-brace::after{right:0}
+.dc .dc-sign{border:1px solid var(--d-clay);background:rgba(196,165,123,.09);border-radius:4px;padding:13px 16px 15px;margin:0 24px}
+.dc .dc-signhd{font-size:13.5px;color:var(--d-char)}
+.dc .dc-consent{display:flex;align-items:flex-start;gap:9px;margin-top:11px;font-size:11.5px;color:var(--d-quiet);line-height:1.35}
+.dc .dc-typed{color:rgba(60,52,44,.34);font-family:var(--display);font-style:italic;font-size:16px}
+.dc .dc-photos{grid-template-columns:repeat(2,minmax(0,1fr))}
+.dc .dc-release{display:flex;align-items:center;gap:22px;flex-wrap:wrap;margin-top:11px}
+.dc .dc-release p{margin:0;font-size:12.5px;color:var(--d-char);max-width:none}
+.dc .dc-foot{margin-top:13px;border-top:1px solid var(--d-rule);padding-top:8px;font-family:var(--mono);font-size:9px;letter-spacing:.09em;color:var(--d-quiet);line-height:1.6}
+.dc .dc-foot b{color:var(--d-char);font-weight:500}
+.dc .dc-xref{margin-top:12px;border-left:2px solid var(--d-clay);padding:3px 0 3px 12px;font-size:13px}
+.dc .dc-settled{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:12px}
+.dc .dc-note{margin-top:10px;font-size:11.5px;color:var(--d-quiet)}
+.dc .dc-band{margin-top:24px;border-top:1px solid var(--d-rule);padding-top:13px;display:flex;gap:26px;justify-content:space-between;flex-wrap:wrap;align-items:flex-end}
+.dc .dc-people,.dc .dc-links{display:flex;gap:26px;flex-wrap:wrap}
+.dc .dc-person{font-family:var(--display);font-size:13.5px;color:var(--d-char);line-height:1.2}
+.dc .dc-person i{display:block;font-style:normal;font-size:8px;letter-spacing:.16em;color:var(--d-quiet);margin-top:4px}
+.dc-v{background:var(--d-page);border:1px solid var(--d-pearl);border-radius:8px;padding:16px 18px 18px}
+.dc-v .dc-piece{border-bottom:none;padding:0;grid-template-columns:64px minmax(0,1fr)}
+.dc-v .dc-stampwrap{padding-left:78px}
+.dc-v .dc-stamp{padding:8px 14px 7px;opacity:.78;margin-top:13px;transform:rotate(-2.6deg)}
+.dc-v .dc-sline{font-size:10.5px}
+
+/* ================= DIRECTION D · THE CORRESPONDENCE (slides 12–13) ================= */
+/* DIRECTION D · THE CORRESPONDENCE — every selector dd-prefixed, rooted at
+ .dd-thesis, .doc.dd or .dd-v. No shell class restyled. No shadows. */
+
+.dd-thesis .dd-split{display:grid;grid-template-columns:minmax(0,1fr) 392px;gap:26px;align-items:start;margin-top:1rem}
+@media (max-width:1040px){ .dd-thesis .dd-split{grid-template-columns:minmax(0,1fr)} }
+
+/* the mono hand */
+.doc.dd .dd-mk,.doc.dd .dd-stand,.doc.dd .dd-mm,.doc.dd .dd-prev,.doc.dd .dd-when,.doc.dd .dd-from,.doc.dd .dd-ps,.doc.dd .dd-cabk,.doc.dd .dd-rs,.doc.dd .dd-fline,.doc.dd .dd-fold,.doc.dd .dd-lpx{font-family:var(--mono)}
+.doc.dd .dd-mk,.doc.dd .dd-stand,.doc.dd .dd-mm,.doc.dd .dd-prev,.doc.dd .dd-when,.doc.dd .dd-from,.doc.dd .dd-ps,.doc.dd .dd-cabk,.doc.dd .dd-rs{text-transform:uppercase}
+
+/* the masthead */
+.doc.dd .dd-page{max-width:640px;margin:0 auto}
+.doc.dd .dd-a{right:-62px}
+.doc.dd .dd-l{width:26px}
+.doc.dd .dd-mast{position:relative;border-bottom:1px solid var(--d-rule);padding-bottom:13px}
+.doc.dd .dd-mtop,.doc.dd .dd-meta,.doc.dd .dd-psrow,.doc.dd .dd-cab{display:flex;align-items:center;flex-wrap:wrap}
+.doc.dd .dd-ph3,.doc.dd .dd-rails{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+.doc.dd .dd-mtop{gap:10px}
+.doc.dd .dd-mk{font-size:9px;letter-spacing:.22em;color:var(--d-char)}
+.doc.dd .dd-stand{margin-left:auto;text-align:right;font-size:8.5px;letter-spacing:.15em;color:var(--d-oak);line-height:1.6}
+.doc.dd .dd-stand i{display:block;font-style:normal;color:var(--d-quiet)}
+.doc.dd .dd-say,.doc.dd .dd-hand,.doc.dd .dd-sig,.doc.dd .dd-tw{font-family:var(--display)}
+.doc.dd .dd-say{font-size:21px;line-height:1.44;color:var(--d-char);margin:14px 0 0;max-width:52ch}
+.doc.dd .dd-meta{gap:12px;margin-top:13px}
+.doc.dd .dd-mm{font-size:9px;letter-spacing:.17em;color:var(--d-mocha)}
+.doc.dd .dd-prev{margin-right:auto;font-size:8px;letter-spacing:.17em;color:rgba(101,89,78,.66);border-bottom:1px dotted rgba(101,89,78,.42);padding-bottom:2px}
+
+/* the stream */
+.doc.dd .dd-stream{margin-top:22px}
+.doc.dd .dd-lt{position:relative;display:grid;grid-template-columns:74px minmax(0,1fr);gap:16px;padding-bottom:26px}
+.doc.dd .dd-when{font-size:9px;letter-spacing:.16em;color:var(--d-quiet);text-align:right;padding-top:2px}
+.doc.dd .dd-from{display:block;font-size:9px;letter-spacing:.2em;color:var(--d-oak);font-weight:500}
+.doc.dd .dd-note{position:relative;z-index:3;background:var(--d-paper);border:1px solid var(--d-sheet);border-radius:5px;padding:14px 18px 15px;margin-top:9px}
+.doc.dd .dd-hand{font-size:15px;line-height:1.52;color:var(--d-char);margin:0;max-width:54ch}
+.doc.dd .dd-sig{display:block;font-style:italic;font-size:14px;color:var(--d-mocha);margin-top:9px}
+
+/* THE ENCLOSURE — paper drawn from behind the letter that asked for it */
+.doc.dd .dd-enc{position:relative;margin:17px 0 0 15px}
+.doc.dd .dd-enc::before,.doc.dd .dd-enc::after{content:"";position:absolute;border:1px solid var(--d-pearl);border-radius:5px}
+.doc.dd .dd-enc::before{left:-12px;top:-12px;right:12px;bottom:12px;background:#F1EBE2}
+.doc.dd .dd-enc::after{left:-6px;top:-6px;right:6px;bottom:6px;background:#F7F2EB}
+.doc.dd .dd-line{display:grid;grid-template-columns:64px minmax(0,1fr) auto;gap:14px;align-items:center;padding:9px 0;border-bottom:1px solid rgba(44,41,38,.08)}
+.doc.dd .dd-lnm{font-size:13.5px;color:var(--d-char);line-height:1.3}
+.doc.dd .dd-lpx{font-size:11.5px;color:var(--d-char)}
+.doc.dd .dd-consent{display:grid;grid-template-columns:15px minmax(0,1fr);gap:10px;align-items:start;margin-top:14px;font-size:12px;line-height:1.5;color:var(--d-quiet)}
+.doc.dd .dd-tw{font-style:italic;font-size:15px;color:rgba(101,89,78,.42)}
+.doc.dd .dd-cur{display:inline-block;width:1.5px;height:15px;background:var(--d-clay);vertical-align:-3px;margin-left:4px}
+
+/* drawn surfaces */
+.doc.dd .dd-brass{background-image:linear-gradient(148deg,#E8D4AA,#C9AA6E 52%,#A2854D),repeating-linear-gradient(90deg,rgba(92,74,60,.14) 0 1px,transparent 1px 6px)}
+.doc.dd .dd-kilim{background-color:#DED6C9;background-image:repeating-linear-gradient(58deg,rgba(212,160,144,.5) 0 4px,transparent 4px 9px),repeating-linear-gradient(-58deg,rgba(139,115,85,.34) 0 3px,transparent 3px 10px)}
+.doc.dd .dd-ph3{gap:9px;margin-top:12px}
+.doc.dd .dd-t1,.doc.dd .dd-t2,.doc.dd .dd-t3{background-color:var(--dd-tone,#E3DCCF);background-image:linear-gradient(var(--dd-light,158deg),rgba(255,253,248,.74),transparent 58%),repeating-linear-gradient(0deg,rgba(92,74,60,.045) 0 2px,transparent 2px 7px)}
+.doc.dd .dd-t2{--dd-tone:#D7CFC1;--dd-light:22deg}
+.doc.dd .dd-t3{--dd-tone:#EAE3D7;--dd-light:196deg}
+.doc.dd .dd-bench{min-height:128px}
+
+/* the fold — a crease drawn in value */
+.doc.dd .dd-ajar{position:relative;margin-top:9px;border:1px solid var(--d-pearl);border-radius:5px;background:#F7F2EB;padding:12px 15px 14px}
+.doc.dd .dd-crease{position:relative;height:1px;background:rgba(44,41,38,.15);margin-top:11px}
+.doc.dd .dd-crease::after{content:"";position:absolute;left:0;right:0;top:1px;height:2px;background:linear-gradient(180deg,rgba(255,253,249,.95),rgba(255,253,249,0))}
+.doc.dd .dd-fline{font-size:10px;letter-spacing:.1em;color:var(--d-mocha);line-height:1.5}
+.doc.dd .dd-psrow{gap:10px}
+.doc.dd .dd-ps{font-size:9px;letter-spacing:.14em;color:var(--d-quiet);margin-top:8px}
+
+/* the payment chooser */
+.doc.dd .dd-rails{gap:8px;margin-top:13px}
+.doc.dd .dd-rail{border:1px solid var(--d-pearl);border-radius:4px;background:var(--d-card);padding:9px 11px 10px}
+.doc.dd .dd-rail.dd-on{border-color:var(--d-clay);background:rgba(196,165,123,.16)}
+.doc.dd .dd-rn{display:block;font-size:12.5px;color:var(--d-char);font-weight:600;line-height:1.25}
+.doc.dd .dd-rs{display:block;font-size:8px;letter-spacing:.1em;color:var(--d-quiet);margin-top:5px;line-height:1.5}
+.doc.dd .dd-rail.dd-on .dd-rs{color:#7a6034}
+
+/* the settled ledger + the cabinet */
+.doc.dd .dd-set{padding-bottom:0;align-items:center}
+.doc.dd .dd-set .dd-when{padding-top:11px}
+.doc.dd .dd-fold{font-size:10px;letter-spacing:.09em;color:var(--d-quiet);padding:11px 0;border-top:1px solid rgba(44,41,38,.09);line-height:1.5}
+.doc.dd .dd-cab{position:relative;gap:22px;border-top:1px solid var(--d-rule);margin-top:24px;padding-top:15px}
+.doc.dd .dd-cabk{font-size:8.5px;letter-spacing:.2em;color:var(--d-oak)}
+
+/* the vignette */
+.dd-v .dd-lt{grid-template-columns:48px minmax(0,1fr);gap:11px;padding-bottom:0}
+.dd-v .dd-hand{font-size:13.5px;max-width:none}
+.dd-v .dd-enc{margin-left:13px}
+
+/* ---------- print ---------- */
+@media print{
+ html,body{height:auto;background:#fff;color:#000;background-image:none}
+ #deck{height:auto;overflow:visible}
+ #chrome,#hint,#progress{display:none !important}
+ .slide{min-height:auto;height:auto;page-break-after:always;break-after:page;padding:12mm 10mm;border-bottom:none;display:block}
+ .slide.ink{background:#fff;background-image:none;color:#000}
+ .slide:last-child{page-break-after:auto;break-after:auto}
+ .slide .main > *,.slide .gutter > *{opacity:1 !important;transform:none !important}
+ .card,.frame,.tablewrap,.phases,.qs{break-inside:avoid}
+ .scroller{overflow:visible}
+ .scroller .frame,.scroller.narrow .frame{min-width:0 !important}
+ h1{font-size:28pt}h2{font-size:18pt}
+ .inner,.slide.wide .inner{max-width:none}
+}
+</style>
+</head>
+<body>
+
+<noscript><style>html .slide .main > *, html .slide .gutter > *{opacity:1 !important;transform:none !important}</style></noscript>
+
+<!--
+THE FIXTURE — one canonical fictional job. All mockups render this EXACT state. Values verbatim; never invent names, amounts, or dates.
+Cast: Harper Vale (client, initials HV) - Nora Quist, principal, Quist Interiors, Des Moines (designer/studio, fictional) - Dan Okafor (General contractor) - Prairie Coat Painting (trade) - Harmon Bench Works, Dayton, Ohio (furniture maker).
+Project: the Vale residence, Des Moines. Rooms: Library & lounge - Entry & stair hall - Primary bedroom. "Today" inside the fixture = August 5, 2026.
+Phase: Procurement (4 of 6). Client-facing phase labels ONLY: Discovery (Mar) -> Design (Apr-May) -> Design Refinement (Jun) -> Procurement (Jul-Sep, current) -> Installation (week of Oct 12) -> Completion (late Oct).
+Back story — the three closed chapters, DATED ONCE HERE so no mock re-invents them: Mar 12 design services agreement countersigned (Discovery closed, brief agreed) - May 30 Harper signed the design set (Design signed off, three rooms concepted) - Jun 19 Design Refinement closed, 14 selections agreed, $61,400. Nothing dated in July may belong to a closed phase; July onward is Procurement.
+Money: $85,000 planned - $61,400 agreed so far. Library & lounge: $24,900 agreed against $23,800 planned - "about eleven hundred past its target, absorbed by the bedroom's headroom" (overage always in words, never red).
+Awaiting signature (THE one primary action in every mock): Furnishings authorization No. 7 - "Library & lounge: lighting & textiles" - $6,890 total = brass library sconces $2,340 + wool drapery $2,890 + kilim runner $1,660 - sent Aug 4 - typed-full-name + consent checkbox; the studio countersigns.
+Awaiting acceptance: trade scope, interior painting of the library & stair hall, Prairie Coat Painting, $7,200. Draws 1-3 paid; the final draw of $1,440 releases when Harper accepts the finished work (typed name). Substantially complete Aug 1.
+Invoice No. 4: Total $18,250 - Paid $9,125 - Balance $9,125, due Aug 15. Payment chooser: Bank transfer (ACH) "Preferred - lowest fee" / Card (+3% processing fee) / Mail a check (remit-to address + memo line "Vale — Inv 4").
+Goods in motion: walnut credenza $8,400 — In production at Harmon Bench Works, Dayton, Ohio, est. ready Aug 28 - pair of reading chairs — Shipped, arriving Aug 12 - kilim rug — Delivered Jul 29 to the ENTRY & STAIR HALL (not the library; the library's kilim RUNNER, $1,660, is a different object and is still unsigned inside FA-07). Two in motion, one delivered — three pieces total; no mock may state a house-wide inventory count, because this sheet does not carry one.
+Journey vocab: goods = Agreed - Ordered - In production - Shipped - Delivered - Installed. Trade = Agreed - Engaged - In progress - Complete.
+Latest note from Nora, Aug 4 (the FA-07 ask): "Three last pieces for the library — the sconces you loved, the drapery, the runner. Sign and I'll have them ordered by Friday."
+CONTRACT — every full-bleed mock must visibly surface all five: (1) the FA-07 signature ask UNMISSABLE — aimed at from the masthead, though a direction may site the ask itself where its argument puts it; (2) the credenza in production at Harmon Bench Works, Dayton; (3) the paintwork awaiting acceptance with the $1,440 release; (4) the money standing ($61,400 of $85,000; Invoice No. 4 balance $9,125 due Aug 15); (5) the phase (Procurement).
+-->
+
+<div id="progress" role="presentation"></div>
+
+<div id="deck" tabindex="-1">
+
+<!-- ============ 01 · COVER ============ -->
+<section class="slide cover ink" data-label="Cover">
+ <div class="inner">
+  <div class="main">
+   <div class="wordmark">
+    <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+    <line x1="2" y1="6.5" x2="20" y2="6.5" stroke="currentColor" stroke-width="1.5"/>
+    <line x1="2" y1="11" x2="20" y2="11" stroke="currentColor" stroke-width="1.5" opacity=".6"/>
+    <line x1="2" y1="15.5" x2="20" y2="15.5" stroke="currentColor" stroke-width="1.5" opacity=".32"/>
+    </svg>
+    <span>Patina · The client portal</span>
+   </div>
+
+   <h1>The Single<br>Pane.</h1>
+   <p class="lede">The client has one job. The portal should have one, too. Four directions for a client portal that is a window into the work — not a dashboard about it.</p>
+
+   <blockquote class="cover-quote">Keep the ritual and the editorial calm; make the underlying state brutally explicit.<span class="attr">journey audit, 31 Jul 2026</span></blockquote>
+
+   <div class="cover-meta">
+    <span>Deck <b>docs/design/the-single-pane</b></span>
+    <span>Directions <b>4</b></span>
+    <span>Screens <b>5</b></span>
+    <span>Status <b>proposal, nothing built</b></span>
+    <span><b>5 August 2026</b></span>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 02 · WHAT HARPER SEES TODAY ============ -->
+<section class="slide" data-label="What Harper sees today">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act I · The wound</span><span class="num">02</span><span class="tick"></span></div>
+  <div class="main">
+   <h2>What Harper sees today.</h2>
+   <p class="lede">One house. One signature waiting. She arrives at a list, then at a page that says everything at once and points at nothing. Drawn below in the deck&rsquo;s own tones, because this is the portal as it stands — not as it is proposed.</p>
+
+   <div class="mockgrid">
+    <div class="exhibit">
+    <div class="scroller narrow">
+    <div class="frame w680">
+    <div class="fbar">
+    <span class="fdots"><i></i><i></i><i></i></span>
+    <span class="furl">client.patina.cloud/<b>projects</b> &rarr; /projects/vale-residence</span>
+    </div>
+    <div class="screen">
+
+    <div class="chiprow">
+    <span class="chip mark">Patina</span>
+    <span class="chip away">Project switcher</span>
+    <span class="chip away">Today</span>
+    <span class="chip away">Decisions</span>
+    <span class="chip away">Proposals</span>
+    <span class="chip away">Invoices</span>
+    <span class="chip">More</span>
+    <span class="chip sub away">Budget</span>
+    <span class="chip sub away">Documents</span>
+    <span class="chip sub away">Orders</span>
+    <span class="chip">Approvals</span>
+    <span class="chip">Messages</span>
+    <span class="chip">Rooms</span>
+    <span class="chip away">Reviews</span>
+    <span class="chip">Notifications</span>
+    <span class="chip">Help</span>
+    <span class="chip mark">HV</span>
+    <span class="chipcount">15 affordances · 9 lead away</span>
+    </div>
+
+    <span class="anno" style="left:498px;top:16px"><span class="ldr" style="width:20px"></span><span class="dot">2</span></span>
+
+    <div class="band" style="margin-top:15px">
+    <p>Signed in &rarr; Your projects &rarr; 1 project &rarr; the Vale residence</p>
+    </div>
+
+    <span class="anno" style="left:474px;top:96px"><span class="ldr" style="width:26px"></span><span class="dot">1</span></span>
+
+    <div class="skel">
+    <div class="sbar"><b>Overview</b><i></i></div>
+    <div class="sbar"><b>Commercial record</b><i></i></div>
+    <div class="sbar"><b>Scope</b><i></i></div>
+    <div class="sbar key"><b>Awaiting signature</b><i></i><em>the one thing she came for, fourth</em></div>
+    <div class="sbar"><b>The plan</b><i></i></div>
+    <div class="sbar"><b>Your selections</b><i></i></div>
+    <div class="sbar"><b>Invoices</b><i></i></div>
+    <div class="sbar dup"><b>Activity feed</b><i></i><em>first of two</em></div>
+    <div class="sbar dup"><b>Team</b><i></i><em>first of two</em></div>
+    <div class="sbar dup"><b>Documents</b><i></i><em>also inside the commercial record</em></div>
+    <div class="sbar dup"><b>Activity feed, again</b><i></i><em>second of two</em></div>
+    <div class="sbar dup"><b>Team, again</b><i></i><em>second of two</em></div>
+    <div class="sbar"><b>Timeline</b><i></i></div>
+    </div>
+
+    <span class="anno" style="left:512px;top:214px"><span class="ldr" style="width:22px"></span><span class="dot">3</span></span>
+    <span class="anno" style="left:512px;top:392px"><span class="ldr" style="width:22px"></span><span class="dot">4</span></span>
+
+    </div>
+    </div>
+    </div>
+    </div>
+
+    <div class="mnotes">
+    <div class="mnote"><span class="dot">1</span><p><b>The list she does not need.</b> Signing in lands on a projects list even when there is exactly one project. Harper&rsquo;s first act in her own house is choosing it.</p></div>
+    <div class="mnote"><span class="dot">2</span><p><b>Fifteen affordances across the top,</b> nine of which lead away from the job in front of her. The mark and her own initials are not counted; every other chip is a route.</p></div>
+    <div class="mnote"><span class="dot">3</span><p><b>Twelve to fourteen stacked sections,</b> depending on the project&rsquo;s state. The feed, the team, and the documents each appear twice, in two different shapes.</p></div>
+    <div class="mnote"><span class="dot">4</span><p><b>Twenty-eight competing elements</b> — fifteen routes and thirteen sections — stand between the front door and the sentence that matters: <em>authorization No. 7 is waiting for your name.</em></p></div>
+    </div>
+   </div>
+
+   <p class="figcap"><b>Exhibit</b> &nbsp;client.patina.cloud as it ships today, compressed. Nothing here is broken — every section works. The wound is that nothing is <em>first</em>, and the one act that moves the house forward waits its turn behind a commercial record and a scope.</p>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 03 · THE PLAINER SUBSET ============ -->
+<section class="slide" data-label="The plainer subset">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act I · The missing language</span><span class="num">03</span><span class="tick"></span></div>
+  <div class="main">
+   <h2>The client got the palette, not the language.</h2>
+   <p class="lede">The studio&rsquo;s side of Patina reads like a letterhead: scored words, serif titles, a mono line of vitals, paper that stacks. The client&rsquo;s side ships the same off-white, the same pearl rules, the same mocha &mdash; and then spends them on a filled button and a count.</p>
+
+   <div class="ba">
+    <div>
+    <span class="balab next">The designer&rsquo;s Document</span>
+    <div class="doc" style="background:var(--d-page);border:1px solid var(--d-pearl);border-radius:8px;padding:16px 18px 30px">
+
+    <div class="acts" style="margin-top:0">
+    <span class="si lg">Sign</span>
+    <span class="si sec">Settle</span>
+    <span class="si ter">Accept the finished work</span>
+    </div>
+
+    <div class="letter" style="margin-top:22px">
+    <div style="display:flex;align-items:center;gap:11px;flex-wrap:wrap">
+    <svg width="18" height="18" viewBox="0 0 22 22" aria-hidden="true">
+    <line x1="2" y1="6.5" x2="20" y2="6.5" stroke="#5C4A3C" stroke-width="1.6"/>
+    <line x1="2" y1="11" x2="20" y2="11" stroke="#5C4A3C" stroke-width="1.6" opacity=".6"/>
+    <line x1="2" y1="15.5" x2="20" y2="15.5" stroke="#5C4A3C" stroke-width="1.6" opacity=".32"/>
+    </svg>
+    <span class="lname" style="font-size:21px">Vale Residence</span>
+    </div>
+    <div class="vitals">Quist Interiors · Des Moines · Procurement · No. 7 awaiting</div>
+    </div>
+
+    <div style="margin-top:26px;padding-right:14px">
+    <div class="stack" style="max-width:100%;margin:0">
+    <div class="sheet">
+    <div class="shead">
+    <span class="st">Furnishings authorization</span>
+    <span class="sx">No. 7 · sent 4 Aug</span>
+    </div>
+    <p class="ssub">Library &amp; lounge: lighting &amp; textiles</p>
+    <div class="vitals">Three lines · $6,890 · Quist Interiors countersigns</div>
+    </div>
+    </div>
+    </div>
+
+    </div>
+    </div>
+
+    <div>
+    <span class="balab now">The client&rsquo;s portal today</span>
+    <div class="cp" style="border:1px solid #EEEAE4;border-radius:8px;overflow:hidden">
+    <div class="cpscreen">
+
+    <div class="cphead">
+    <span class="cpmark">V</span>
+    <div style="flex:1 1 auto;min-width:0">
+    <div class="cpt">Vale Residence</div>
+    <div class="cps">Quist Interiors &middot; Procurement</div>
+    </div>
+    <span class="numbadge">3</span>
+    </div>
+
+    <h4>Awaiting your signature <small>1 item</small></h4>
+    <div class="cpsign">
+    <div class="cpn">Furnishings Authorization #7</div>
+    <div class="cpr">Library &amp; lounge: lighting &amp; textiles</div>
+    <div class="cpp">$6,890</div>
+    <span class="cpbtn solid">Sign Document</span>
+    <span class="cpbtn" style="margin-left:9px">View Details</span>
+    </div>
+
+    <h4>In progress</h4>
+    <div class="cplist">
+    <div class="cpcard">
+    <span class="sw b"></span>
+    <div style="min-width:0">
+    <div class="cpn">Walnut credenza</div>
+    <div class="cpr">Harmon Bench Works</div>
+    <div class="jstep"><span class="done">Agreed</span><i class="done"></i><span class="done">Ordered</span><i class="done"></i><span class="now">In production</span><i></i><span>Shipped</span></div>
+    </div>
+    </div>
+    </div>
+
+    </div>
+    </div>
+    </div>
+   </div>
+
+   <p class="figcap"><b>Caption</b> &nbsp;Right palette, missing language. The client&rsquo;s side already carries the brand &mdash; the off-white ground, the pearl rules, the mocha, the soft radii. What it does not carry is the <em>grammar</em>: a filled button where the studio scores a word, a red count where the studio names a state, a card where the studio lays a sheet, and no letterhead at all. The wound was never that the client&rsquo;s portal is ugly. It is that it has nothing to say.</p>
+
+   <div class="callout">
+    <span class="kicker">Where the four directions agree</span>
+    <p>All four repair the language — the same scored ink, the same letterhead, the same paper. <strong>They differ on shape:</strong> what the pane is, what it puts first, and how much of the house it is willing to show at once.</p>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 04 · GROUND RULES ============ -->
+<section class="slide" data-label="Shared principles">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act II · Ground rules</span><span class="num">04</span><span class="tick"></span></div>
+  <div class="main">
+   <h2>Five rules every direction obeys.</h2>
+   <p class="lede">These are not the differences. These are the floor — anything that fails one of them is not a direction, it is a redecoration.</p>
+
+   <div class="grid g3">
+    <div class="card accent tight">
+    <span class="kicker">One</span>
+    <h3>One job, no list.</h3>
+    <p>Signing in lands inside the Vale residence. A client with one active job never chooses it; a client with two gets a switch, not a lobby.</p>
+    </div>
+    <div class="card accent tight">
+    <span class="kicker">Two</span>
+    <h3>The state is brutally explicit.</h3>
+    <p>What awaits Harper is unmissable, countable, and dated. One signature, one acceptance, one balance — named, not implied by a badge.</p>
+    </div>
+    <div class="card accent tight">
+    <span class="kicker">Three</span>
+    <h3>The Document&rsquo;s language comes to the client.</h3>
+    <p>Scored ink, letterhead, stacked paper — tuned for a reader, not an operator. Fewer instruments, larger type, the same voice.</p>
+    </div>
+   </div>
+
+   <div class="grid g2">
+    <div class="card accent tight">
+    <span class="kicker">Four</span>
+    <h3>Editorial calm.</h3>
+    <p>One surface. Nothing duplicated. The feed appears once or not at all; the team appears where the work is, not in a second panel of its own.</p>
+    </div>
+    <div class="card accent tight">
+    <span class="kicker">Five</span>
+    <h3>Same data, four shapes.</h3>
+    <p>Every screen renders the identical fixture — the Vale residence, 5 August 2026. The differences you see are the direction, not the data.</p>
+    </div>
+   </div>
+
+   <div class="note">
+    <span class="kicker">How to read the mocks</span>
+    <p>Each direction is drawn twice: once as an argument, once as a full-bleed screen. Every full-bleed screen surfaces the same five facts — the signature ask, the credenza in production, the paintwork awaiting acceptance, the money standing, and the phase. If a direction hides one of the five, that is the direction&rsquo;s tradeoff, and it says so on the glass.</p>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 05 · THE FIXTURE ============ -->
+<section class="slide" data-label="The Vale residence">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act II · The fixture</span><span class="num">05</span><span class="tick"></span></div>
+  <div class="main">
+   <h2>The Vale residence, in full.</h2>
+   <p class="lede">One canonical job, stated once. Every screen in this deck renders exactly this state on exactly this day.</p>
+
+   <div class="cover-meta" style="margin-top:14px;padding-top:12px">
+    <span>Client <b>Harper Vale</b></span>
+    <span>Designer <b>Nora Quist · Quist Interiors, Des Moines</b></span>
+    <span>Contractor <b>Dan Okafor</b></span>
+    <span>Trade <b>Prairie Coat Painting</b></span>
+    <span>Maker <b>Harmon Bench Works, Dayton, Ohio</b></span>
+   </div>
+
+   <div class="phases">
+    <div class="ph"><b>Discovery</b><em>March</em><p>Done.</p></div>
+    <div class="ph"><b>Design</b><em>April &ndash; May</em><p>Done.</p></div>
+    <div class="ph"><b>Design Refinement</b><em>June</em><p>Done.</p></div>
+    <div class="ph now"><b>Procurement</b><em>July &ndash; September</em><p>Where the house is today, 5 August.</p></div>
+    <div class="ph"><b>Installation</b><em>week of Oct 12</em><p>Ahead.</p></div>
+    <div class="ph"><b>Completion</b><em>late October</em><p>Ahead.</p></div>
+   </div>
+
+   <div class="tablewrap">
+    <table>
+    <thead>
+    <tr><th style="width:22%">Fact</th><th>The canonical state, 5 August 2026</th></tr>
+    </thead>
+    <tbody>
+    <tr><td class="lead">The house</td><td>The Vale residence, Des Moines. Three rooms in play: <strong>Library &amp; lounge</strong>, <strong>Entry &amp; stair hall</strong>, <strong>Primary bedroom</strong>.</td></tr>
+    <tr><td class="lead">Phase</td><td>Procurement — the fourth of six. Client-facing phase names only; no internal stage vocabulary reaches this pane.</td></tr>
+    <tr><td class="lead">Money</td><td>$85,000 planned · $61,400 agreed so far. Library &amp; lounge stands at $24,900 agreed against $23,800 planned — <em>about eleven hundred past its target, absorbed by the bedroom&rsquo;s headroom</em>.</td></tr>
+    <tr><td class="lead">Awaiting signature</td><td><strong>Furnishings authorization No. 7 — &ldquo;Library &amp; lounge: lighting &amp; textiles,&rdquo; $6,890.</strong> Brass library sconces $2,340 · wool drapery $2,890 · kilim runner $1,660. Sent 4 August. Harper types her full name and ticks the consent line; the studio countersigns. <em>This is the one primary action in every mock.</em></td></tr>
+    <tr><td class="lead">Awaiting acceptance</td><td>Trade scope — interior painting of the library &amp; stair hall, Prairie Coat Painting, $7,200. Draws 1 through 3 paid. The final draw of <strong>$1,440</strong> releases when Harper accepts the finished work by typed name. Substantially complete 1 August.</td></tr>
+    <tr><td class="lead">Invoice No. 4</td><td>Total $18,250 · Paid $9,125 · <strong>Balance $9,125, due 15 August.</strong> Payment chooser: Bank transfer (ACH) — <em>preferred, lowest fee</em> · Card (+3% processing fee) · Mail a check (remit-to address and the memo line &ldquo;Vale — Inv 4&rdquo;).</td></tr>
+    <tr><td class="lead">Goods in motion</td><td>Walnut credenza $8,400 — <strong>in production at Harmon Bench Works, Dayton, Ohio</strong>, est. ready 28 August. Pair of reading chairs — shipped, arriving 12 August. Kilim rug — delivered 29 July to the entry &amp; stair hall. <em>Two in motion, one delivered; the library&rsquo;s kilim runner is a different object, still unsigned inside No.&nbsp;7.</em></td></tr>
+    <tr><td class="lead">Journey vocabulary</td><td>Goods: Agreed · Ordered · In production · Shipped · Delivered · Installed. &nbsp;Trade: Agreed · Engaged · In progress · Complete.</td></tr>
+    <tr><td class="lead">Latest note</td><td>Nora, 4 August: <em>&ldquo;Three last pieces for the library — the sconces you loved, the drapery, the runner. Sign and I&rsquo;ll have them ordered by Friday.&rdquo;</em></td></tr>
+    </tbody>
+    </table>
+   </div>
+
+   <div class="callout">
+    <span class="kicker">The sheet is binding</span>
+    <p><strong>Builders may not deviate from this sheet.</strong> Every screen that follows shows exactly this state — these names, these amounts, these dates. No invented rooms, no rounded totals, no second client. Where a direction cannot fit a fact, it drops it visibly and the annotation rail says so.</p>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 06 · DIRECTION A — THE HOUSE BOOK ============ -->
+<section class="slide" data-label="A · The House Book">
+ <div class="inner">
+ <div class="gutter"><span class="eyebrow">Act III · The House Book</span><span class="num">06</span><span class="tick"></span></div>
+ <div class="main">
+  <h2>Your home’s making, kept as one book — and the book is always current.</h2>
+  <p class="lede">The relationship is a matter of record. Direction A carries the Document across whole — letterhead, chapters, scored ink, laid-in paper — as a <strong>reader’s edition</strong>. Harper receives the record the studio keeps; she never operates it.</p>
+  <p>No tools, no compose, no filters, no feed. Two acts live in the book because they are genuinely hers to make: a name typed under authorization No.&nbsp;7, and an acceptance that releases a painter’s last draw. The rest is written down to be read.</p>
+
+  <div class="grid g3">
+   <div class="card accent tight"><span class="kicker">What it foregrounds</span><h3>The record.</h3><p>One continuous document — agreement, accounts, goods, rooms, people. Nothing is a tab, so nothing can hide behind one.</p></div>
+   <div class="card accent tight"><span class="kicker">Signature device</span><h3>The Contents.</h3><p>Five chapters, dotted leaders, and where a page number belongs, the live state of the house. The index <em>is</em> the standing.</p></div>
+   <div class="card warn tight"><span class="kicker">What it risks</span><h3>The least visual of the four.</h3><p>Ruled lines and set type. The credenza’s walnut and the library’s fresh paint live in words, not pictures — calm to one reader, austere to another.</p></div>
+  </div>
+
+  <div class="da-v">
+  <div class="da-vrow">
+   <div class="doc">
+   <div class="frame da-vframe">
+   <div class="fbar"><span class="fdots"><i></i><i></i><i></i></span><span class="furl">client.patina.cloud/<b>vale-residence</b>/book</span></div>
+   <div class="screen da-vscreen">
+    <div class="seclab" style="margin-top:0"><b>The Contents</b><i>Where a page number belongs, the state of the house.</i></div>
+    <div class="da-contents">
+    <div class="da-c"><span class="da-cn">I</span><span class="da-ct">The Agreement</span><span class="da-ldr"></span><span class="da-cs">one signature awaited</span><span class="si">Sign</span></div>
+    <div class="da-c"><span class="da-cn">II</span><span class="da-ct">The Plan &amp; the Accounts</span><span class="da-ldr"></span><span class="da-cs"><b>$61,400</b> of $85,000 agreed</span></div>
+    <div class="da-c"><span class="da-cn">III</span><span class="da-ct">The Goods</span><span class="da-ldr"></span><span class="da-cs">two in motion, one delivered</span></div>
+    <div class="da-c"><span class="da-cn">IV</span><span class="da-ct">The Rooms</span><span class="da-ldr"></span><span class="da-cs">paint drying in the library</span></div>
+    <div class="da-c"><span class="da-cn">V</span><span class="da-ct">The People &amp; the Record</span><span class="da-ldr"></span><span class="da-cs">a note from Nora, Aug 4</span></div>
+    </div>
+   </div>
+   </div>
+   </div>
+   <div>
+   <span class="eyebrow">The device, read closely</span>
+   <p>A table of contents is the oldest way to say <em>here is everything, and here is where it stands.</em> These leaders end in a state rather than a number, because nothing in the book is paginated — it is one scroll, and the Contents is both the only index and the only navigation. Chapter&nbsp;I is the only line that carries an act; the other four report, they do not ask.</p>
+   <div class="note"><span class="kicker">Reader’s edition</span><p>Nothing here composes, uploads, filters, or files. Where the studio’s Document offers an instrument, the client’s book offers a sentence — except at the two places where Harper’s hand is genuinely required.</p></div>
+   </div>
+  </div>
+  </div>
+
+  <p class="figcap"><b>Vignette</b> &nbsp;The Contents at reading size. Chapter I ends in scored ink because a signature is awaited; II through V end in plain words, because they are only true.</p>
+ </div>
+ </div>
+</section>
+
+<!-- ============ 07 · DIRECTION A — THE PANE ============ -->
+<section class="slide wide" data-label="A · The pane">
+ <div class="inner">
+ <div class="gutter"><span class="eyebrow">Act III · The House Book</span><span class="num">07</span></div>
+ <div class="main">
+  <h2>The Vale residence, bound as a book.</h2>
+  <p class="lede">One surface, read from the letterhead down. The Contents indexes it, a laid-in notice names what awaits her hand, and every chapter is the record itself — not a link to it.</p>
+
+  <div class="mockgrid">
+  <div class="doc da">
+  <div class="scroller">
+  <div class="frame w940">
+  <div class="fbar"><span class="fdots"><i></i><i></i><i></i></span><span class="furl">client.patina.cloud/<b>vale-residence</b>/book</span></div>
+  <div class="screen">
+  <div class="da-page">
+
+  <!-- masthead -->
+  <div class="da-rail"></div>
+  <div class="da-body">
+  <div class="da-mast">
+   <span class="da-mark"><i></i><i></i><i></i></span>
+   <span class="lname da-title">The Vale Residence</span>
+   <div class="vitals">Des Moines · Three rooms · Procurement · August 2026</div>
+   <p class="ssub">Prepared for Harper Vale by Quist Interiors.</p>
+   <div class="jstep"><span class="done">Discovery</span><i class="done"></i><span class="done">Design</span><i class="done"></i><span class="done">Design Refinement</span><i class="done"></i><span class="now">Procurement</span><i></i><span>Installation</span><i></i><span>Completion</span></div>
+   <div class="vitals">Fourth of six · July – September</div>
+  </div>
+  </div>
+
+  <!-- the contents -->
+  <div class="da-rail"><span class="da-rd">Contents</span></div>
+  <div class="da-body">
+  <div class="seclab"><b>The Contents</b><i>Five chapters. Where a page number belongs, the state of the house.</i></div>
+  <div class="da-contents">
+   <div class="da-c"><span class="da-cn">I</span><span class="da-ct">The Agreement</span><span class="da-ldr"></span><span class="da-cs">one signature awaited</span><span class="si">Sign</span></div>
+   <div class="da-c"><span class="da-cn">II</span><span class="da-ct">The Plan &amp; the Accounts</span><span class="da-ldr"></span><span class="da-cs"><b>$61,400</b> of $85,000 agreed</span></div>
+   <div class="da-c"><span class="da-cn">III</span><span class="da-ct">The Goods</span><span class="da-ldr"></span><span class="da-cs">two in motion, one delivered</span></div>
+   <div class="da-c"><span class="da-cn">IV</span><span class="da-ct">The Rooms</span><span class="da-ldr"></span><span class="da-cs">paint drying in the library</span></div>
+   <div class="da-c"><span class="da-cn">V</span><span class="da-ct">The People &amp; the Record</span><span class="da-ldr"></span><span class="da-cs">a note from Nora, Aug 4</span></div>
+  </div>
+  <span class="anno" style="right:0;top:64px"><span class="ldr" style="width:26px"></span><span class="dot">1</span></span>
+  </div>
+
+  <!-- the laid-in notice -->
+  <div class="da-rail"><span class="da-rd">Laid in<br>Aug 5</span></div>
+  <div class="da-body">
+  <div class="stack da-laid"><div class="sheet">
+   <div class="shead"><span class="st">A notice, laid in</span><span class="sx">5 August 2026</span></div>
+   <p class="ssub">Two matters await your hand.</p>
+   <div class="da-mat"><span class="da-mno">01</span><span class="da-mtx">Sign <strong>Furnishings authorization No.&nbsp;7</strong>, $6,890 — the library’s lighting and textiles. <i>Chapter I.</i></span></div>
+   <div class="da-mat"><span class="da-mno">02</span><span class="da-mtx">Accept the paintwork in the library and stair hall. <i>Your acceptance releases the final draw of $1,440 to Prairie Coat Painting.</i></span></div>
+   <div class="vitals">A balance of $9,125 stands open on Invoice No. 4, due Aug 15.</div>
+  </div></div>
+  <span class="anno" style="left:548px;top:34px"><span class="ldr" style="width:26px"></span><span class="dot">2</span></span>
+  </div>
+
+  <!-- chapter I -->
+  <div class="da-rail"><span class="da-rn">I</span><span class="da-rd">Mar 12<br>— Aug 4</span></div>
+  <div class="da-body">
+  <div class="da-ch"><span class="da-chn">Chapter I</span><span class="da-cht">The Agreement</span><span class="da-chx">One signature awaited</span></div>
+  <div class="da-fine"><span class="da-fnm">Design services agreement</span><span class="da-fx">Signed March 12 · countersigned</span><span class="astp auth">In force</span></div>
+
+  <div class="da-inst">
+   <div class="da-ihd"><span class="da-in">Furnishings authorization No.&nbsp;7 — Library &amp; lounge: lighting &amp; textiles</span><span class="da-ix">Sent Aug 4</span></div>
+   <div class="da-line"><span class="thumb tex clay"></span><span><span class="da-lnm">Brass library sconces</span><span class="da-lsub">A pair, for the reading wall.</span></span><span class="da-amt">$2,340</span></div>
+   <div class="da-line"><span class="thumb tex linen"></span><span><span class="da-lnm">Wool drapery</span><span class="da-lsub">Full height, both windows.</span></span><span class="da-amt">$2,890</span></div>
+   <div class="da-line"><span class="thumb d"></span><span><span class="da-lnm">Kilim runner</span><span class="da-lsub">Shelves to hearth.</span></span><span class="da-amt">$1,660</span></div>
+   <div class="da-sum"><span class="da-ix">Three lines, authorized together</span><b>$6,890</b></div>
+   <div class="da-consent"><span class="cbx on"></span><p>I have read authorization No.&nbsp;7 and I authorize Quist Interiors to place these three orders with the makers on my behalf.</p></div>
+   <div class="fld"><span class="flab">Type your full name</span><span class="uin"><span class="da-ghost">Harper Vale</span><span class="car">typed signature</span></span></div>
+   <div class="acts"><span class="si lg">Sign</span><span class="astp wait">Awaiting your name</span></div>
+   <p class="hint">Nora countersigns for the studio the moment your name lands.</p>
+   <span class="anno" style="right:-44px;bottom:22px"><span class="ldr" style="width:26px"></span><span class="dot">3</span></span>
+  </div>
+
+  <div class="da-inst da-tr">
+   <div class="da-ihd"><span class="da-in">Trade scope — interior painting, library &amp; stair hall</span><span class="da-ix">Prairie Coat Painting · $7,200</span></div>
+   <div class="jstep"><span class="done">Agreed</span><i class="done"></i><span class="done">Engaged</span><i class="done"></i><span class="now">In progress</span><i></i><span>Complete</span></div>
+   <div class="da-draw"><span class="da-dl">Draws 1 through 3</span><span class="da-ldr"></span><span class="da-dq">Settled</span></div>
+   <div class="da-draw"><span class="da-dl">The final draw — <b>$1,440</b></span><span class="da-ldr"></span><span class="da-dq da-hold">Releases on your acceptance</span></div>
+   <p class="hint">Substantially complete Aug 1. The draw waits on your word, not the calendar.</p>
+   <div class="acts"><span class="si">Accept the finished work</span><span class="si ter">Ask Nora to look again</span></div>
+  </div>
+  </div>
+
+  <!-- chapter II -->
+  <div class="da-rail"><span class="da-rn">II</span><span class="da-rd">Due<br>Aug 15</span></div>
+  <div class="da-body">
+  <div class="da-ch"><span class="da-chn">Chapter II</span><span class="da-cht">The Plan &amp; the Accounts</span><span class="da-chx">$61,400 agreed of $85,000 planned</span></div>
+  <table class="bg">
+   <thead><tr><th>Room</th><th>Category</th><th class="r">Planned (target)</th><th class="r">Agreed so far</th></tr></thead>
+   <tbody>
+    <tr><td>Library &amp; lounge</td><td class="rm">Lighting &amp; textiles</td><td class="n tgt">$23,800</td><td class="n">$24,900</td></tr>
+    <tr><td>Entry &amp; stair hall</td><td class="rm">Paint &amp; finishes</td><td class="n der" colspan="2">not yet itemised here</td></tr>
+    <tr><td>Primary bedroom</td><td class="rm">Furnishings</td><td class="n der" colspan="2">not yet itemised here</td></tr>
+    <tr class="tot"><td>The house</td><td class="rm">All three rooms</td><td class="n">$85,000</td><td class="n">$61,400</td></tr>
+   </tbody>
+  </table>
+  <p class="da-say">The library and lounge sit about eleven hundred past their target, absorbed by the bedroom’s headroom.</p>
+
+  <div class="da-inv">
+   <span class="da-iv">Invoice No. 4 · Total <b>$18,250</b></span>
+   <span class="da-iv">Paid <b>$9,125</b></span>
+   <span class="da-iv da-due">Balance <b>$9,125</b> · due Aug 15</span>
+   <span class="da-push"><span class="si">Settle</span></span>
+   <span class="anno" style="right:-44px;top:10px"><span class="ldr" style="width:26px"></span><span class="dot">4</span></span>
+  </div>
+  <div class="da-pay">
+   <div class="da-opt da-sel"><span class="da-dial"></span><span><span class="da-on">Bank transfer (ACH)</span><span class="da-os">Preferred — lowest fee.</span></span></div>
+   <div class="da-opt"><span class="da-dial"></span><span><span class="da-on">Card</span><span class="da-os">Adds a 3% processing fee.</span></span></div>
+   <div class="da-opt"><span class="da-dial"></span><span><span class="da-on">Mail a check</span><span class="da-os">Remit to Quist Interiors, Des Moines · memo line <em>Vale — Inv 4</em></span></span></div>
+  </div>
+  </div>
+
+  <!-- chapter III -->
+  <div class="da-rail"><span class="da-rn">III</span><span class="da-rd">Aug 12<br>— Aug 28</span></div>
+  <div class="da-body">
+  <div class="da-ch"><span class="da-chn">Chapter III</span><span class="da-cht">The Goods</span><span class="da-chx">Two in motion, one delivered</span></div>
+  <div class="da-good"><span class="thumb tex oak"></span><span><span class="da-lnm">Walnut credenza</span><span class="da-gm">Harmon Bench Works — Dayton, Ohio · est. ready Aug 28</span><span class="jstep"><span class="done">Agreed</span><i class="done"></i><span class="done">Ordered</span><i class="done"></i><span class="now">In production</span><i></i><span>Shipped</span><i></i><span>Delivered</span><i></i><span>Installed</span></span></span><span class="da-amt">$8,400</span></div>
+  <div class="da-good"><span class="thumb b"></span><span><span class="da-lnm">Pair of reading chairs</span><span class="da-gm">In transit · arriving Aug 12</span><span class="jstep"><span class="done">Agreed</span><i class="done"></i><span class="done">Ordered</span><i class="done"></i><span class="done">In production</span><i class="done"></i><span class="now">Shipped</span><i></i><span>Delivered</span><i></i><span>Installed</span></span></span><span class="da-amt da-q">—</span></div>
+  <div class="da-good"><span class="thumb tex clay"></span><span><span class="da-lnm">Kilim rug</span><span class="da-gm">At the house · nothing further until installation</span><span class="jstep"><span class="done">Agreed</span><i class="done"></i><span class="done">Ordered</span><i class="done"></i><span class="done">In production</span><i class="done"></i><span class="done">Shipped</span><i class="done"></i><span class="now">Delivered</span><i></i><span>Installed</span></span></span><span class="da-amt da-q">—</span></div>
+  </div>
+
+  <!-- chapter IV -->
+  <div class="da-rail"><span class="da-rn">IV</span><span class="da-rd">Aug 1</span></div>
+  <div class="da-body">
+  <div class="da-ch"><span class="da-chn">Chapter IV</span><span class="da-cht">The Rooms</span><span class="da-chx">An index, not a gallery</span></div>
+  <div class="da-room"><span class="da-rnm">Library &amp; lounge</span><span class="da-rsay">Paint drying since Aug 1; three pieces wait on your name.</span><span class="si ter">Read the room</span></div>
+  <div class="da-room"><span class="da-rnm">Entry &amp; stair hall</span><span class="da-rsay">Painted alongside the library. Nothing else in motion.</span><span class="si ter">Read the room</span></div>
+  <div class="da-room"><span class="da-rnm">Primary bedroom</span><span class="da-rsay">Quiet this month. Its headroom carries the library’s overage.</span><span class="si ter">Read the room</span></div>
+  <span class="anno" style="right:0;top:78px"><span class="ldr" style="width:26px"></span><span class="dot">5</span></span>
+  </div>
+
+  <!-- chapter V -->
+  <div class="da-rail"><span class="da-rn">V</span><span class="da-rd">Aug 4</span></div>
+  <div class="da-body">
+  <div class="da-ch"><span class="da-chn">Chapter V</span><span class="da-cht">The People &amp; the Record</span><span class="da-chx">Three hands on the house</span></div>
+  <div class="da-per"><span class="da-pn">Nora Quist</span><span class="da-pr">Principal, Quist Interiors — Des Moines</span></div>
+  <div class="da-per"><span class="da-pn">Dan Okafor</span><span class="da-pr">General contractor</span></div>
+  <div class="da-per"><span class="da-pn">Prairie Coat Painting</span><span class="da-pr">Trade — interior painting, library &amp; stair hall</span></div>
+  <div class="da-note"><p>“Three last pieces for the library — the sconces you loved, the drapery, the runner. Sign and I’ll have them ordered by Friday.”</p><span>Nora Quist · Aug 4</span></div>
+  <div class="acts"><span class="si ter">Write to the studio</span></div>
+  </div>
+
+  <!-- colophon -->
+  <div class="da-rail da-last"><span class="da-rd">Revised<br>Aug 5</span></div>
+  <div class="da-body">
+  <div class="da-colo"><p>This book records the Vale residence. $61,400 agreed of $85,000 planned. Two matters await Harper’s hand. Revised August 5, 2026.</p></div>
+  <span class="anno" style="right:0;top:44px"><span class="ldr" style="width:26px"></span><span class="dot">6</span></span>
+  </div>
+
+  </div>
+  </div>
+  </div>
+  </div>
+  </div>
+
+  <div class="mnotes">
+   <div class="mnote"><span class="dot">1</span><p><b>The Contents is the index and the standing.</b> Leaders end where a page number would — in the live state of each chapter. Chapter I is the only line that asks.</p></div>
+   <div class="mnote"><span class="dot">2</span><p><b>The only notification surface.</b> One loose sheet, two matters, one open balance. No badge, no bell, no count — when nothing awaits her, the sheet is not there.</p></div>
+   <div class="mnote"><span class="dot">3</span><p><b>Signing happens in the chapter.</b> The three lines, the consent sentence, and the name field sit inside the record they amend. No window opens.</p></div>
+   <div class="mnote"><span class="dot">4</span><p><b>Money reads as ledger lines, not tiles.</b> A plan grid, one invoice line, the chooser folded under it. The overage is stated in words, never in red.</p></div>
+   <div class="mnote"><span class="dot">5</span><p><b>The Rooms chapter is deliberately thin.</b> One sentence each and a scored word; object cards and imagery belong to another direction.</p></div>
+   <div class="mnote"><span class="dot">6</span><p><b>The colophon dates the book.</b> A record has to say when it was true — revised August 5, 2026, the day Harper opened it.</p></div>
+  </div>
+  </div>
+
+  <p class="figcap"><b>Route</b> &nbsp;client.patina.cloud/vale-residence/book — one bound record, read top to bottom. The Contents is the only index and the only navigation; the margin rail carries chapter numerals and dates the whole way down.</p>
+ </div>
+ </div>
+</section>
+
+<!--
+ SHARED SHELL CLASSES USED (used, never restyled):
+ deck — slide, wide, inner, gutter, main, eyebrow, num, tick, lede, figcap, grid, g3,
+   card, accent, warn, tight, kicker, note
+ mock scope — doc, scroller, frame, fbar, fdots, furl, screen
+ mock grammar — seclab, vitals, lname, ssub, hint, acts, si, si.lg, si.ter,
+   stack, sheet, shead, st, sx, fld, flab, uin, car, cbx, cbx.on,
+   astp, astp.auth, astp.wait, jstep (+ span.done, span.now, i.done),
+   bg (+ th.r, td.n, td.n.der, td.n.tgt, td.rm, tr.tot),
+   thumb, thumb.b, thumb.d, tex, tex.linen, tex.oak, tex.clay
+ annotation rail — mockgrid, mnotes, mnote, anno, ldr, dot
+-->
+<!-- 08 · the argument -->
+<section class="slide" data-label="B · The Making">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act IV · The Making</span><span class="num">08</span><span class="tick"></span></div>
+  <div class="main">
+   <h2>One line runs from the first meeting to installation day — and here is where we stand on it.</h2>
+   <p class="lede">The schedule <em>is</em> the surface — not a summary of the house with a timeline inside it, but the making itself drawn as one spine: closed chapters compressed to receipts, the open chapter in full, October sketched. Parcel-grade tracking applied to a whole engagement — system-set, terse, never in the first person.</p>
+   <div class="grid g3">
+ <div class="card accent tight">
+ <span class="kicker">Foregrounds</span>
+ <h3>Where we stand.</h3>
+ <p>Position, first. Harper reads the phase, the pieces in motion, and the two acts she owes before a single noun about design.</p>
+ </div>
+ <div class="card warn tight">
+ <span class="kicker">Signature device</span>
+ <h3>The Gate.</h3>
+ <p>The spine breaks where an act is required. The signature sits in the gap; the line resumes below in lighter ink. Her name restarts it.</p>
+ </div>
+ <div class="card bad tight">
+ <span class="kicker">Risks</span>
+ <h3>Weak as a reference surface.</h3>
+ <p>Time-ordered, so nothing sits where a room would put it. Asking what is in the bedroom means reading a chronology; a long job grows a long page.</p>
+ </div>
+   </div>
+   <div class="db-v">
+ <div class="doc db">
+ <div class="frame">
+ <div class="fbar"><span class="fdots"><i></i><i></i><i></i></span><span class="furl">client.patina.cloud/vale-residence/<b>the-making</b></span></div>
+ <div class="screen">
+ <div class="db-row"><div class="db-when"><b>Aug 5</b>Today</div><div class="db-seg db-gold"><i class="db-now"></i></div><div><p class="db-here">You are here</p><p class="db-sub">Procurement — the open chapter.</p></div></div>
+ <div class="db-row"><div class="db-gate"><span class="db-gk">A gate · the line stops until you sign</span><div class="lname db-gt">Furnishings authorization No. 7</div><div class="vitals">$6,890 · three pieces · sent August 4</div><div class="acts"><span class="si lg">Sign</span><span class="si ter">Read it in full</span></div></div></div>
+ <div class="db-row"><div class="db-when">Aug 12</div><div class="db-seg db-gold db-dim"></div><div><p class="db-receipt db-ahead">The line resumes &middot; two pieces in motion, one delivered</p></div></div>
+ </div>
+ </div>
+ </div>
+   </div>
+   <p class="figcap"><b>Vignette</b> &nbsp;Golden ink arrives from the settled past, is cut off square, and does not resume until the authorization is signed — then at forty percent ink.</p>
+  </div>
+ </div>
+</section>
+<!-- 09 · the pane -->
+<section class="slide wide" data-label="B · The pane">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act IV · The Making</span><span class="num">09</span></div>
+  <div class="main">
+   <h2>The making of the Vale residence, top to bottom.</h2>
+   <p class="lede">One spine, colored by phase: three receipts for what is closed, the open chapter in full, two gates where the line breaks, a dashed sketch of October; the right rail runs the money.</p>
+   <div class="mockgrid">
+ <div class="doc db">
+ <div class="scroller">
+ <div class="frame w960">
+ <div class="fbar"><span class="fdots"><i></i><i></i><i></i></span><span class="furl">client.patina.cloud/vale-residence/<b>the-making</b></span></div>
+ <div class="screen">
+ <div class="db-mast">
+ <svg width="20" height="20" viewBox="0 0 22 22" aria-hidden="true" style="margin-top:4px;flex:0 0 auto">
+ <line x1="2" y1="6.5" x2="20" y2="6.5" stroke="#5C4A3C" stroke-width="1.6"/>
+ <line x1="2" y1="11" x2="20" y2="11" stroke="#5C4A3C" stroke-width="1.6" opacity=".6"/>
+ <line x1="2" y1="15.5" x2="20" y2="15.5" stroke="#5C4A3C" stroke-width="1.6" opacity=".32"/>
+ </svg>
+ <div class="db-mt">
+ <div class="lname db-tt">The Making of the Vale Residence</div>
+ <div class="vitals"><b class="db-hi">Procurement</b> · two pieces in motion, one delivered · <b class="db-hi">2 gates await you</b></div>
+ </div>
+ <div class="db-links"><span>The plan</span><span>Correspondence</span><span>The papers</span></div>
+ </div>
+ <div class="db-list">
+ <div class="db-row"><div class="db-when"><b>Mar 12</b></div><div class="db-seg db-blue"><i class="db-node"></i></div><div><p class="db-receipt"><b>Discovery closed</b> · brief agreed</p></div>
+ <div class="db-rail"><div class="vitals db-r0">Agreed, running<br>against $85,000 planned</div></div>
+ <span class="anno db-a" style="top:8px"><span class="ldr db-ldr"></span><span class="dot">1</span></span></div>
+ <div class="db-row"><div class="db-when"><b>May 30</b></div><div class="db-seg db-clay"><i class="db-node"></i></div><div><p class="db-receipt"><b>Design signed off</b> · three rooms concepted</p></div></div>
+ <div class="db-row"><div class="db-when"><b>Jun 19</b></div><div class="db-seg db-oak"><i class="db-node"></i></div><div><p class="db-receipt"><b>Design refinement closed</b> · 14 selections agreed · <em>$61,400</em></p></div>
+ <div class="db-rail"><span class="db-rn">$61,400</span><div class="vitals">agreed of $85,000</div></div></div>
+ <div class="db-row"><div class="db-when"><b>Aug 5</b>Today</div><div class="db-seg db-gold"><i class="db-now"></i></div><div><p class="db-here">You are here</p><p class="db-sub">Procurement — the open chapter, July through September.</p></div>
+ <div class="db-rail"><div class="vitals db-r0">Phase 4 of 6</div><span class="db-rn q">Procurement</span></div>
+ <span class="anno db-a" style="top:18px"><span class="ldr db-ldr"></span><span class="dot">2</span></span></div>
+ <div class="db-row">
+ <div class="db-gate">
+ <span class="db-gk">A gate · the line stops until you sign</span>
+ <div class="lname db-gt">Furnishings authorization No. 7</div>
+ <div class="vitals">Library &amp; lounge: lighting &amp; textiles · sent August 4</div>
+ <div class="db-lines">
+ <div class="db-line">Brass library sconces<span>$2,340</span></div>
+ <div class="db-line">Wool drapery<span>$2,890</span></div>
+ <div class="db-line">Kilim runner<span>$1,660</span></div>
+ <div class="db-line db-tot">Total<span>$6,890</span></div>
+ </div>
+ <p class="ssub">Three pieces order the moment you sign.</p>
+ <div class="db-flds">
+ <div>
+ <div class="fld"><span class="flab">Type your full name</span><div class="uin">Harper Vale<span class="car">|</span></div></div>
+ <div class="db-consent"><span class="cbx on"></span><span>I authorize these three pieces. Quist Interiors countersigns.</span></div>
+ </div>
+ <div class="acts"><span class="si lg">Sign</span><span class="si ter">Read it in full</span></div>
+ </div>
+ </div>
+ <div class="db-rail"><div class="vitals db-r0">Awaiting your name</div><span class="db-rn">$6,890</span><div class="vitals">orders on signing</div>
+ <p class="db-rnote">Library &amp; lounge stands at $24,900 against $23,800 — about eleven hundred past its target, absorbed by the bedroom&rsquo;s headroom.</p></div>
+ <span class="anno db-a" style="top:16px"><span class="ldr db-ldr"></span><span class="dot">3</span></span></div>
+ <div class="db-row"><div class="db-seg db-gold db-dim"></div><div><div class="seclab"><b>Pieces in motion</b><i>Agreed · Ordered · In production · Shipped · Delivered · Installed</i></div></div></div>
+ <div class="db-row"><div class="db-when">Aug 12</div><div class="db-seg db-gold db-dim"></div><div><div class="db-track">
+ <span class="tex linen db-th"></span>
+ <div><div class="db-tn">Pair of reading chairs</div><div class="vitals">Arriving August 12</div>
+ <div class="db-dots"><i class="f"></i><b></b><i class="f"></i><b></b><i class="f"></i><b></b><i class="at"></i><b></b><i></i><b></b><i></i><span class="db-stop">Shipped</span></div>
+ </div></div></div></div>
+ <div class="db-row"><div class="db-when">Aug 28</div><div class="db-seg db-gold db-dim"></div><div><div class="db-track">
+ <span class="tex oak db-th"></span>
+ <div><div class="db-tn">Walnut credenza</div><div class="vitals">Harmon Bench Works · Dayton, Ohio · est. ready August 28</div>
+ <div class="db-dots"><i class="f"></i><b></b><i class="f"></i><b></b><i class="at"></i><b></b><i></i><b></b><i></i><b></b><i></i><span class="db-stop">In production</span></div>
+ <div class="db-shop"><span class="tex oak db-shopimg"></span><span class="vitals db-r0">From the bench, Dayton</span></div>
+ </div></div></div>
+ <div class="db-rail"><span class="db-rn q">$8,400</span><div class="vitals">with the maker</div></div>
+ <span class="anno db-a" style="top:14px"><span class="ldr db-ldr"></span><span class="dot">4</span></span></div>
+ <div class="db-row"><div class="db-when">Jul 29</div><div class="db-seg db-gold db-dim"></div><div><div class="db-track">
+ <span class="tex clay db-th"></span>
+ <div><div class="db-tn">Kilim rug</div><div class="vitals">In the entry &amp; stair hall, July 29</div>
+ <div class="db-dots"><i class="f"></i><b></b><i class="f"></i><b></b><i class="f"></i><b></b><i class="f"></i><b></b><i class="at"></i><b></b><i></i><span class="db-stop">Delivered</span></div>
+ </div></div></div></div>
+ <div class="db-row"><div class="db-when">Aug 15</div><div class="db-seg db-gold db-dim"></div><div><div class="db-toll">
+ <div class="shead"><span class="st">Invoice No. 4</span><span class="sx">A toll on the line · due August 15</span></div>
+ <div class="figband"><div class="fg"><b>total</b><i class="q">$18,250</i></div><div class="fg"><b>paid</b><i class="q">$9,125</i></div><div class="fg"><b>balance</b><i>$9,125</i></div></div>
+ <div class="tchips" style="margin-top:12px">
+ <span class="tchip on">Bank transfer (ACH) · preferred, lowest fee</span>
+ <span class="tchip">Card · +3% processing fee</span>
+ <span class="tchip">Mail a check · remit-to &amp; memo &ldquo;Vale — Inv 4&rdquo;</span>
+ </div>
+ <div class="acts"><span class="si">Settle the balance</span></div>
+ </div></div>
+ <div class="db-rail"><div class="vitals db-r0">Owed</div><span class="db-rn">$9,125</span><div class="vitals">due Aug 15</div></div>
+ <span class="anno db-a" style="top:12px"><span class="ldr db-ldr"></span><span class="dot">5</span></span></div>
+ <div class="db-row">
+ <div class="db-gate">
+ <span class="db-gk">A gate · the line stops until you accept</span>
+ <div class="lname db-gt">Accept the paintwork</div>
+ <div class="vitals">Prairie Coat Painting · library &amp; stair hall · $7,200 · substantially complete August 1</div>
+ <div class="db-dots" style="margin-top:12px"><i class="f"></i><b></b><i class="f"></i><b></b><i class="at"></i><b></b><i></i><span class="db-stop">In progress</span></div>
+ <p class="ssub">Draws 1 through 3 are paid. The final draw of $1,440 releases on your acceptance.</p>
+ <div class="db-flds">
+ <div><div class="fld"><span class="flab">Type your full name</span><div class="uin">Harper Vale<span class="car">|</span></div></div></div>
+ <div class="acts"><span class="si lg">Accept</span></div>
+ </div>
+ </div>
+ <div class="db-rail"><div class="vitals db-r0">Held back</div><span class="db-rn">$1,440</span><div class="vitals">releases on acceptance</div></div></div>
+ <div class="db-row"><div class="db-when">Week of<br>Oct 12</div><div class="db-seg db-terra"><i class="db-node"></i></div><div><p class="db-receipt db-ahead"><b>Installation</b> · three days · we will be there</p></div>
+ <span class="anno db-a" style="top:8px"><span class="ldr db-ldr"></span><span class="dot">6</span></span></div>
+ <div class="db-row"><div class="db-when">Late Oct</div><div class="db-seg db-sage"><i class="db-node"></i></div><div><p class="db-receipt db-ahead"><b>Completion</b> · the walkthrough · you accept the finished rooms</p></div>
+ <div class="db-rail"><div class="vitals db-r0">Planned</div><span class="db-rn q">$85,000</span></div></div>
+ </div>
+ <div class="db-foot"><p class="ssub db-r0">If nothing changes, we walk through your finished rooms the week of October 12.</p></div>
+ </div>
+ </div>
+ </div>
+ </div>
+ <div class="mnotes">
+ <div class="mnote"><span class="dot">1</span><p><b>Receipts compress the past.</b> Three closed chapters, one mono line each: dated, agreed, priced.</p></div>
+ <div class="mnote"><span class="dot">2</span><p><b>The spine is colored by phase.</b> Dusty blue, clay, aged oak — then Procurement in golden ink, three times as thick.</p></div>
+ <div class="mnote"><span class="dot">3</span><p><b>The gate breaks the line.</b> The spine is cut off square, the act sits in the gap, and it resumes below in lighter ink. Her signature restarts it.</p></div>
+ <div class="mnote"><span class="dot">4</span><p><b>Tracking rows are parcel-grade.</b> The piece, the maker, a six-stop micro-spine filled to where it stands. Credenza: on the bench in Dayton.</p></div>
+ <div class="mnote"><span class="dot">5</span><p><b>The toll sits on the spine</b> like anything else to clear — balance, date, three ways to settle it, folded inline.</p></div>
+ <div class="mnote"><span class="dot">6</span><p><b>The sketched future gives a finish line.</b> Hairline dashes, two dates, one sentence at the foot.</p></div>
+ </div>
+   </div>
+   <p class="figcap"><b>Route</b> &nbsp;client.patina.cloud/vale-residence/the-making — the engagement as one time-ordered spine, the two acts Harper owes drawn as breaks in the line, not cards beside it.</p>
+  </div>
+ </div>
+</section>
+<!-- SHARED SHELL CLASSES USED (none redefined; every override is a db- class):
+slide slide.wide inner gutter eyebrow num tick main h2 lede grid g3 figcap
+card card.accent card.warn card.bad card.tight kicker h3 mockgrid mnotes mnote dot anno ldr
+doc scroller frame fbar fdots furl screen lname vitals ssub seclab shead st sx
+figband fg fg i.q tchips tchip tchip.on acts si si.lg si.ter fld flab uin car cbx cbx.on
+tex tex.linen tex.oak tex.clay -->
+<!-- ============ 10 · DIRECTION C — THE ARGUMENT ============ -->
+<section class="slide" data-label="C · The Walkthrough">
+<div class="inner">
+<div class="gutter"><span class="eyebrow">Act V · The Walkthrough</span><span class="num">10</span><span class="tick"></span></div>
+<div class="main">
+<h2>Walk your own house; every piece in it tells you what it&rsquo;s doing.</h2>
+<p class="lede">Harper does not think in instruments. She thinks in rooms — and instruments happen <em>to</em> rooms. A signature is three things arriving in the library; a draw is paint drying on the stair hall wall. So the house becomes the surface: a walkthrough, chapter by room, a stamp on every object saying what it does today.</p>
+
+<div class="grid g3">
+<div class="card accent tight">
+ <span class="kicker">Foregrounds</span>
+ <h3>The home itself.</h3>
+ <p>Rooms are the nav and the outline both. The library is largest because that is where the work is; the bedroom a paragraph because it is settled. The page changes shape as the house does.</p>
+</div>
+<div class="card accent tight">
+ <span class="kicker">Signature device</span>
+ <h3>The status stamp.</h3>
+ <p>Every object carries an inspection tag, inked in its journey color and set a degree off square — golden hour for in production, slate for shipped, sage for delivered. State is a property of the thing, not a column.</p>
+</div>
+<div class="card warn tight">
+ <span class="kicker">Risks</span>
+ <h3>Money sits lowest; time is thinnest.</h3>
+ <p>Money is two quiet lines at the threshold — deliberate, and the weakest of the four for a client who wants the ledger first. Time fares worse: dates ride on stamps, so nowhere reads the season.</p>
+</div>
+</div>
+
+<div class="grid g2">
+<div>
+ <span class="kicker" style="display:block;margin-bottom:8px">The device, up close</span>
+ <div class="doc dc dc-v">
+ <div class="dc-piece">
+ <span class="thumb b"></span>
+ <div>
+ <div class="dc-pname">Walnut credenza</div>
+ <div class="dc-pmaker">Harmon Bench Works &middot; Dayton, Ohio</div>
+ <div class="dc-pprice">$8,400 agreed</div>
+ </div>
+ </div>
+ <div class="dc-stampwrap"><span class="dc-stamp dc-gold"><i class="dc-sline">In production</i><i class="dc-swhere">Dayton, Ohio &middot; est Aug 28</i></span></div>
+ </div>
+ <p class="figcap"><b>Specimen</b> &nbsp;One object, one tag, set a degree off square. The stamp carries the state everywhere else.</p>
+</div>
+<div>
+ <div class="quote">
+ <p>She should stand in her own library, on the page, and see that the chairs are on a truck and the credenza is still on a bench in Ohio.</p>
+ <span class="attr">The stance, in one sentence</span>
+ </div>
+ <div class="note">
+ <span class="kicker">What this direction gives up</span>
+ <p>A house-wide list. Nowhere says <em>everything waiting on you</em> — the masthead names where the signature is and aims her at that room; the rooms hold the rest.</p>
+ </div>
+</div>
+</div>
+</div>
+</div>
+</section>
+
+<!-- ============ 11 · DIRECTION C — THE FULL SCREEN ============ -->
+<section class="slide wide" data-label="C · The pane">
+<div class="inner">
+<div class="gutter"><span class="eyebrow">Act V · The Walkthrough</span><span class="num">11</span></div>
+<div class="main">
+<h2>The Walkthrough, drawn in full.</h2>
+<p class="lede">The Vale residence on 5 August: three room chapters, one threshold, a stamp on every object.</p>
+
+<div class="mockgrid">
+<div class="doc dc">
+<div class="scroller">
+<div class="frame w980">
+<div class="fbar">
+ <span class="fdots"><i></i><i></i><i></i></span>
+ <span class="furl">client.patina.cloud/<b>vale-residence</b>/rooms</span>
+</div>
+<div class="screen">
+<div class="dc-body">
+
+ <div class="dc-mast">
+ <span class="dc-house">The Vale Residence</span>
+ <span class="dc-meta">Three rooms &middot; <b>Procurement</b> &middot; <b>your signature waits in the library</b></span>
+ </div>
+ <div class="dc-nav">
+ <span class="dc-room dc-on">Library &amp; lounge</span>
+ <span class="dc-room">Entry &amp; stair hall</span>
+ <span class="dc-room">Primary bedroom</span>
+ <span class="dc-room">The house</span>
+ </div>
+
+ <div class="dc-thresh">
+ <p class="dc-tline">The house: <b>$61,400</b> agreed of <b>$85,000</b> planned</p>
+ <p class="dc-tline">Invoice No. 4 half settled — balance <b>$9,125</b>, due Aug 15 &nbsp;&nbsp;<span class="si sec">Settle</span></p>
+ </div>
+
+ <div class="dc-chapter">
+ <span class="dc-ceye">Room one of three</span>
+ <div class="dc-rname">Library &amp; lounge</div>
+ <div class="dc-state">The library waits on your signature; the paint is done and drying.</div>
+
+ <div class="dc-board">
+ <div class="dc-pin dc-t1" style="width:152px">
+ <span class="tex linen dc-sw dc-tall"></span><span class="dc-pincap">Brass</span>
+ <span class="dc-pinacts"><span class="si ter">Approve</span><span class="si ter">Flag</span><span class="si ter">Note</span></span>
+ </div>
+ <div class="dc-pin dc-t2" style="width:104px"><span class="tex oak dc-sw"></span><span class="dc-pincap">Walnut</span></div>
+ <div class="dc-pin dc-t1" style="width:152px">
+ <span class="tex clay dc-sw dc-tall"></span><span class="dc-pincap">Wool</span>
+ <span class="dc-pinacts"><span class="si ter">Approve</span><span class="si ter">Flag</span><span class="si ter">Note</span></span>
+ </div>
+ <div class="dc-pin dc-t1" style="width:112px"><span class="tex linen dc-sw"></span><span class="dc-pincap">Paint</span></div>
+ </div>
+ <div class="tchips"><span class="tchip">Walk the scan</span></div>
+
+ <div class="seclab"><b>The pieces</b><i>What is in this room, and what each one is doing today.</i></div>
+
+ <div class="dc-piece">
+ <span class="thumb b"></span>
+ <div>
+ <div class="dc-pname">Walnut credenza</div>
+ <div class="dc-pmaker">Harmon Bench Works &middot; Dayton, Ohio</div>
+ <div class="dc-pprice">$8,400 agreed</div>
+ </div>
+ <span class="dc-stamp dc-gold"><i class="dc-sline">In production</i><i class="dc-swhere">Dayton, Ohio &middot; est Aug 28</i></span>
+ </div>
+
+ <div class="dc-piece">
+ <span class="thumb d"></span>
+ <div>
+ <div class="dc-pname">Pair of reading chairs</div>
+ <div class="dc-pmaker">On the road to Des Moines</div>
+ </div>
+ <span class="dc-stamp dc-blue dc-t2"><i class="dc-sline">Shipped</i><i class="dc-swhere">Arriving Aug 12</i></span>
+ </div>
+
+ <div class="seclab"><b>The unsigned three</b><i>Drawn in pencil. They are not yours yet.</i></div>
+
+ <div class="dc-ghosts">
+ <div class="dc-ghost"><span class="dc-gthumb"></span><div><div class="dc-gname">Brass library sconces</div><div class="dc-gprice">$2,340</div></div></div>
+ <div class="dc-ghost"><span class="dc-gthumb"></span><div><div class="dc-gname">Wool drapery</div><div class="dc-gprice">$2,890</div></div></div>
+ <div class="dc-ghost"><span class="dc-gthumb"></span><div><div class="dc-gname">Kilim runner</div><div class="dc-gprice">$1,660</div></div></div>
+ </div>
+ <div class="dc-brace"></div>
+
+ <div class="dc-sign">
+ <div class="dc-signhd">These three become real when you sign. <b>Furnishings authorization No. 7 &middot; $6,890</b></div>
+ <p class="hint">Nora, Aug 4: &ldquo;Three last pieces for the library — the sconces you loved, the drapery, the runner. Sign and I&rsquo;ll have them ordered by Friday.&rdquo;</p>
+ <div class="fld">
+ <span class="flab">Type your full name</span>
+ <div class="uin"><span class="dc-typed">Harper Vale</span><span class="car">Aug 5, 2026</span></div>
+ </div>
+ <div class="dc-consent"><span class="cbx off"></span><span>I have read the three lines above and authorize Quist Interiors to order them. The studio countersigns.</span></div>
+ <div class="acts"><span class="si lg">Sign</span><span class="si ter">Read the whole authorization</span></div>
+ </div>
+
+ <div class="seclab"><b>The paintwork</b><i>Substantially complete &middot; Prairie Coat Painting</i></div>
+ <div class="dc-photos">
+ <div class="photo"><span class="pc">Library &middot; south wall &middot; Aug 1</span></div>
+ <div class="photo"><span class="pc">Stair hall &middot; Aug 1</span></div>
+ </div>
+ <div class="dc-release">
+ <p>Draws 1 through 3 are paid. The final draw of <b>$1,440</b> releases on your acceptance.</p>
+ <span class="si">Accept the finished work</span>
+ </div>
+
+ <div class="dc-foot">Library &amp; lounge: <b>$24,900</b> agreed against <b>$23,800</b> planned — about eleven hundred past its target, absorbed by the bedroom&rsquo;s headroom.</div>
+ </div>
+
+ <div class="dc-chapter dc-lt">
+ <span class="dc-ceye">Room two of three</span>
+ <div class="dc-rname">Entry &amp; stair hall</div>
+ <div class="dc-state">Quiet. One thing landed here, and the paint carries through.</div>
+ <div class="dc-piece">
+ <span class="thumb c"></span>
+ <div><div class="dc-pname">Kilim rug</div><div class="dc-pmaker">In the house</div></div>
+ <span class="dc-stamp dc-sage"><i class="dc-sline">Delivered</i></span>
+ </div>
+ <div class="dc-xref">The paintwork continues from the library — one acceptance covers both rooms.</div>
+ </div>
+
+ <div class="dc-chapter dc-lt">
+ <span class="dc-ceye">Room three of three</span>
+ <div class="dc-rname">Primary bedroom</div>
+ <div class="dc-state">Settled. Nothing here is waiting on you.</div>
+ <div class="dc-settled">
+ <span class="dc-stamp dc-sage"><i class="dc-sline">Delivered</i></span>
+ <span class="dc-stamp dc-t2"><i class="dc-sline">Agreed</i></span>
+ <span class="dc-note">Everything here is agreed, and most of it has landed.</span>
+ </div>
+ <div class="dc-note">It came in under its target — the headroom that absorbs the library&rsquo;s overage sits here.</div>
+ </div>
+
+ <div class="dc-band">
+ <div class="dc-people">
+ <span class="dc-person">Nora Quist<i>Principal &middot; Quist Interiors</i></span>
+ <span class="dc-person">Dan Okafor<i>General contractor</i></span>
+ <span class="dc-person">Prairie Coat Painting<i>Trade</i></span>
+ </div>
+ <div class="dc-links">
+ <span class="si ter">The plan</span><span class="si ter">The papers</span><span class="si ter">Write to the studio</span>
+ </div>
+ </div>
+
+</div>
+
+<span class="anno" style="right:20px;top:60px"><span class="ldr" style="width:14px"></span><span class="dot">1</span></span>
+<span class="anno" style="right:20px;top:117px"><span class="ldr" style="width:14px"></span><span class="dot">2</span></span>
+<span class="anno" style="right:20px;top:566px"><span class="ldr" style="width:14px"></span><span class="dot">3</span></span>
+<span class="anno" style="right:20px;top:792px"><span class="ldr" style="width:14px"></span><span class="dot">4</span></span>
+<span class="anno" style="right:20px;top:1228px"><span class="ldr" style="width:14px"></span><span class="dot">5</span></span>
+<span class="anno" style="right:20px;top:1468px"><span class="ldr" style="width:14px"></span><span class="dot">6</span></span>
+
+</div>
+</div>
+</div>
+</div>
+
+<div class="mnotes">
+ <div class="mnote"><span class="dot">1</span><p><b>The nav is three room names and the house.</b> No sections, no instruments, no switcher. The room index is the only navigation here, it follows her down, and the room she reads is scored. The masthead aims her before she scrolls: <em>your signature waits in the library</em>.</p></div>
+ <div class="mnote"><span class="dot">2</span><p><b>The threshold holds the residue.</b> House-level money — $61,400 of $85,000, Invoice No. 4&rsquo;s $9,125 balance due Aug 15 — is two small lines at the door. Real, reachable, not the page&rsquo;s point.</p></div>
+ <div class="mnote"><span class="dot">3</span><p><b>The stamp inks state onto the object.</b> Golden hour for the credenza on a bench in Dayton, slate for the chairs on the road, sage for what landed. One glance per piece, no status column.</p></div>
+ <div class="mnote"><span class="dot">4</span><p><b>The unsigned three are ghost objects,</b> not an inbox item. Sconces, drapery, runner drawn dashed and pale, bracketed to one line: they become real when she signs.</p></div>
+ <div class="mnote"><span class="dot">5</span><p><b>Acceptance sits beside the work it accepts.</b> Two photographs of the finished wall, the $1,440 release, the scored word. She accepts the paint she is looking at.</p></div>
+ <div class="mnote"><span class="dot">6</span><p><b>Cross-room instruments are drawn once.</b> The paintwork covers library and stair hall: drawn where the work is loudest, cross-referenced — never repeated — where it carries on.</p></div>
+</div>
+</div>
+
+<p class="figcap"><b>Route</b> &nbsp;client.patina.cloud/vale-residence/rooms — the house as three chapters. The ask is not a notice; it is three pencilled objects standing in the library.</p>
+</div>
+</div>
+</section>
+
+<!-- SHARED SHELL CLASSES USED (as-is, never restyled): slide · slide.wide · inner · gutter ·
+main · eyebrow · num · tick · lede · figcap · kicker · quote · attr · note · grid · g2 · g3 ·
+card (.accent .warn .tight) · mockgrid · mnotes · mnote · dot · anno · ldr · doc · scroller ·
+frame · fbar · fdots · furl · screen · si (.lg .sec .ter) · acts · seclab · tchips · tchip ·
+fld · flab · uin · car · cbx (.off) · hint · thumb (.b .c .d) · tex (.linen .oak .clay) ·
+photo · pc -->
+<!-- ============ 12 · D · THE CORRESPONDENCE ============ -->
+<section class="slide" data-label="D · The Correspondence">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act VI · The Correspondence</span><span class="num">12</span><span class="tick"></span></div>
+  <div class="main dd-thesis">
+   <h2>Everything that happens to your house arrives as a letter from us.</h2>
+   <p class="lede">And the letters are the record. The relationship is the product; the pane is the studio&rsquo;s voice. Every signature happens inside the letter that asked for it.</p>
+
+   <div class="dd-split">
+ <div>
+ <blockquote class="quote"><p>Nothing here speaks in a system voice. Every element is authored — dated, first-person, signed. The house is not reported to Harper; it is written to her.</p><span class="attr">The stance</span></blockquote>
+ <div class="grid">
+ <div class="card accent tight">
+ <span class="kicker">Foregrounds</span>
+ <h3>The studio&rsquo;s voice.</h3>
+ <p>Nora&rsquo;s hand is the whole surface. Warmth is load-bearing here, not decoration — the correspondence is the only thing Harper learns.</p>
+ </div>
+ <div class="card accent tight">
+ <span class="kicker">Signature device</span>
+ <h3>The enclosure.</h3>
+ <p>Every instrument arrives inside the letter that asked for it. The authorization is not a page you travel to — a sheet behind a note, drawn out and signed where you stand.</p>
+ </div>
+ <div class="card bad tight">
+ <span class="kicker">Risks</span>
+ <h3>Lives or dies on cadence and voice.</h3>
+ <p>A quiet fortnight reads as an empty house, and a letter written by the software rather than by Nora falls apart in a paragraph.</p>
+ </div>
+ </div>
+ <div class="note">
+ <span class="kicker">The rule this direction adds</span>
+ <p>Mail cannot arrive from the future: no letter in the stream is dated ahead of today. What is coming lives in one place — the standing sentence, rewritten when the house moves. A forward date may still be printed inside an enclosure, because that is the paper&rsquo;s own business, not the post&rsquo;s.</p>
+ </div>
+ </div>
+ <div>
+ <span class="eyebrow">The device, up close</span>
+ <div class="doc dd dd-v" style="margin-top:8px">
+ <div class="frame">
+ <div class="fbar"><span class="fdots"><i></i><i></i><i></i></span><span class="furl">client.patina.cloud/<b>vale-residence</b>/letters</span></div>
+ <div class="screen">
+ <div class="dd-lt">
+ <div class="dd-when">Aug 4</div>
+ <div>
+ <span class="dd-from">From Nora</span>
+ <div class="dd-note">
+ <p class="dd-hand">Three last pieces for the library &mdash; the sconces you loved, the drapery, the runner. Sign and I&rsquo;ll have them ordered by Friday.</p>
+ <span class="dd-sig">&mdash; N.</span>
+ </div>
+ <div class="dd-enc">
+ <div class="sheet">
+ <div class="shead"><span class="st">Enclosed</span><span class="sx">No. 7 &middot; 4 Aug</span></div>
+ <p class="ssub">Library &amp; lounge: lighting &amp; textiles</p>
+ <div class="vitals">Three lines &middot; $6,890 &middot; the studio countersigns</div>
+ <div class="acts"><span class="si">Sign</span></div>
+ </div>
+ </div>
+ <div class="acts"><span class="si ter">Write back</span></div>
+ </div>
+ </div>
+ </div>
+ </div>
+ </div>
+ </div>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 13 · D · THE PANE ============ -->
+<section class="slide wide" data-label="D · The pane">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act VI · The Correspondence</span><span class="num">13</span></div>
+  <div class="main">
+   <h2>The letters, newest first.</h2>
+   <p class="lede">One masthead sentence, always current, then the correspondence. A letter has two states and that is the entire interface: unfolded because it still needs Harper, folded to one settled line because it does not.</p>
+
+   <div class="mockgrid">
+ <div class="doc dd">
+ <div class="scroller">
+ <div class="frame w940">
+ <div class="fbar"><span class="fdots"><i></i><i></i><i></i></span><span class="furl">client.patina.cloud/<b>vale-residence</b>/letters</span></div>
+ <div class="screen">
+ <div class="dd-page">
+ <div class="dd-mast">
+ <div class="dd-mtop">
+ <svg width="17" height="17" viewBox="0 0 22 22" aria-hidden="true" stroke="#5C4A3C" stroke-width="1.6"><path d="M2 6.5h18"/><path d="M2 11h18" opacity=".6"/><path d="M2 15.5h18" opacity=".32"/></svg>
+ <span class="dd-mk">Correspondence &middot; The Vale residence</span>
+ <span class="dd-stand">Procurement &middot; the fourth of six<i>$61,400 agreed of $85,000 planned</i></span>
+ </div>
+ <p class="dd-say">It is the fifth of August. Your credenza is on the bench in Dayton and comes off it the twenty-eighth, the paint is drying, and two papers wait for your name. If nothing changes, we install the week of 12 October.</p>
+ <div class="dd-meta">
+ <span class="dd-mm">2 unanswered &middot; balance of $9,125 open</span>
+ <span class="dd-prev">Previously</span>
+ <span class="si ter">Write to the studio</span>
+ </div>
+ <span class="anno dd-a" style="top:52px"><span class="ldr dd-l"></span><span class="dot">1</span></span>
+ </div>
+ <div class="dd-stream">
+ <!-- 4 Aug -->
+ <div class="dd-lt">
+ <div class="dd-when">Aug 4</div>
+ <div>
+ <span class="dd-from">From Nora</span>
+ <div class="dd-note">
+ <p class="dd-hand">Three last pieces for the library &mdash; the sconces you loved, the drapery, the runner. Sign and I&rsquo;ll have them ordered by Friday.</p>
+ <span class="dd-sig">&mdash; N.</span>
+ </div>
+ <div class="dd-enc">
+ <div class="sheet">
+ <div class="shead"><span class="st">Enclosed &middot; furnishings authorization</span><span class="sx">No. 7 &middot; sent 4 August</span></div>
+ <p class="ssub">Library &amp; lounge: lighting &amp; textiles</p>
+ <div class="dd-line" style="margin-top:11px"><span class="thumb dd-brass"></span><span class="dd-lnm">Brass library sconces</span><span class="dd-lpx">$2,340</span></div>
+ <div class="dd-line"><span class="thumb tex linen"></span><span class="dd-lnm">Wool drapery</span><span class="dd-lpx">$2,890</span></div>
+ <div class="dd-line"><span class="thumb dd-kilim"></span><span class="dd-lnm">Kilim runner</span><span class="dd-lpx">$1,660</span></div>
+ <div class="figband"><div class="fg"><b>three lines, together</b><i>$6,890</i></div></div>
+ <label class="dd-consent"><span class="cbx"></span><span>I have read these three lines and I authorize Quist Interiors to order them. The studio countersigns.</span></label>
+ <div class="fld">
+ <span class="flab">Sign by typing your full name</span>
+ <div class="uin"><span class="dd-tw">Harper Vale<i class="dd-cur"></i></span><span class="car">full legal name</span></div>
+ </div>
+ <div class="acts"><span class="si lg">Sign</span></div>
+ </div>
+ <span class="anno dd-a" style="top:96px"><span class="ldr dd-l"></span><span class="dot">3</span></span>
+ </div>
+ <div class="acts"><span class="si ter">Write back</span></div>
+ </div>
+ <span class="anno dd-a" style="top:-2px"><span class="ldr dd-l"></span><span class="dot">2</span></span>
+ </div>
+ <!-- 1 Aug -->
+ <div class="dd-lt">
+ <div class="dd-when">Aug 1</div>
+ <div>
+ <span class="dd-from">From the site</span>
+ <div class="dd-note">
+ <p class="dd-hand">Prairie Coat finished the library and stair hall today; here&rsquo;s how the light hits it.</p>
+ <div class="dd-ph3">
+ <span class="photo dd-t1"><span class="pc">Library &amp; lounge</span></span>
+ <span class="photo dd-t2"><span class="pc">Stair hall</span></span>
+ <span class="photo dd-t3"><span class="pc">Library, morning</span></span>
+ </div>
+ </div>
+ <div class="dd-enc">
+ <div class="sheet">
+ <div class="shead"><span class="st">Enclosed &middot; acceptance</span><span class="sx">Prairie Coat Painting &middot; $7,200</span></div>
+ <p class="ssub">Interior painting &mdash; library &amp; stair hall</p>
+ <div class="vitals">Substantially complete 1 August &middot; draws 1, 2 and 3 paid</div>
+ <div class="jstep"><span class="done">Agreed</span><i class="done"></i><span class="done">Engaged</span><i class="done"></i><span class="now">In progress</span><i></i><span>Complete</span></div>
+ <div class="band hold" style="margin-top:12px"><p>The final draw of $1,440 releases when you accept the finished work.</p></div>
+ <div class="fld">
+ <span class="flab">Accept by typing your full name</span>
+ <div class="uin"><span class="dd-tw">Harper Vale<i class="dd-cur"></i></span><span class="car">full legal name</span></div>
+ </div>
+ <div class="acts"><span class="si">Accept the finished work</span></div>
+ </div>
+ </div>
+ <div class="acts"><span class="si ter">Write back</span></div>
+ </div>
+ </div>
+ <!-- 28 Jul -->
+ <div class="dd-lt">
+ <div class="dd-when">Jul 28</div>
+ <div>
+ <span class="dd-from">From the workshop</span>
+ <div class="dd-ajar">
+ <div class="dd-fline">The credenza went on the bench &middot; Harmon Bench Works, Dayton, Ohio</div>
+ <div class="dd-crease"></div>
+ <div class="photo tex oak dd-bench" style="margin-top:12px"><span class="pc">Walnut credenza &middot; on the bench &middot; Dayton, Ohio</span></div>
+ <div class="vitals">$8,400 &middot; est. ready 28 August</div>
+ <div class="dd-psrow">
+ <span class="dd-ps">P.S. &mdash;</span>
+ <div class="jstep"><span class="done">Agreed</span><i class="done"></i><span class="done">Ordered</span><i class="done"></i><span class="now">In production</span><i></i><span>Shipped</span><i></i><span>Delivered</span><i></i><span>Installed</span></div>
+ </div>
+ <span class="anno dd-a" style="top:14px"><span class="ldr dd-l"></span><span class="dot">4</span></span>
+ </div>
+ <div class="acts"><span class="si ter">Write back</span></div>
+ </div>
+ </div>
+ <!-- 22 Jul -->
+ <div class="dd-lt">
+ <div class="dd-when">Jul 22</div>
+ <div>
+ <span class="dd-from">From the studio</span>
+ <div class="dd-note"><p class="dd-hand">Invoice No. 4 covers the deposits for the pieces now in production.</p></div>
+ <div class="dd-enc">
+ <div class="sheet">
+ <div class="shead"><span class="st">Enclosed &middot; invoice No. 4</span><span class="sx">due 15 August</span></div>
+ <div class="figband">
+ <div class="fg"><b>total</b><i class="q">$18,250</i></div>
+ <div class="fg"><b>paid</b><i class="ok">$9,125</i></div>
+ <div class="fg"><b>balance, due 15 August</b><i>$9,125</i></div>
+ </div>
+ <div class="dd-rails">
+ <div class="dd-rail dd-on"><span class="dd-rn">Bank transfer</span><span class="dd-rs">Preferred &mdash; lowest fee</span></div>
+ <div class="dd-rail"><span class="dd-rn">Card</span><span class="dd-rs">+3% processing fee</span></div>
+ <div class="dd-rail"><span class="dd-rn">Mail a check</span><span class="dd-rs">Remit-to address &middot; memo &ldquo;Vale &mdash; Inv 4&rdquo;</span></div>
+ </div>
+ <div class="acts"><span class="si sec">Settle the balance</span></div>
+ <div class="dd-crease"></div>
+ <div class="dd-fline" style="margin-top:11px">The lines behind these figures stay folded &nbsp; <span class="si ter">Unfold the whole invoice</span></div>
+ </div>
+ </div>
+ <div class="acts"><span class="si ter">Write back</span></div>
+ </div>
+ </div>
+ <!-- folded, settled -->
+ <div class="dd-lt dd-set"><div class="dd-when">Jun 19</div><div class="dd-fold">We closed refinement &middot; fourteen selections agreed</div><span class="anno dd-a" style="top:8px"><span class="ldr dd-l"></span><span class="dot">5</span></span></div>
+ <div class="dd-lt dd-set"><div class="dd-when">May 30</div><div class="dd-fold">You signed the design set</div></div>
+ <div class="dd-lt dd-set"><div class="dd-when">Mar 12</div><div class="dd-fold">Our agreement, countersigned</div></div>
+ </div>
+ <div class="dd-cab">
+ <span class="dd-cabk">The cabinet</span>
+ <span class="si ter">The plan</span>
+ <span class="si ter">The papers</span>
+ <span class="si ter">The rooms</span>
+ <span class="si ter">The people</span>
+ <span class="anno dd-a" style="top:16px"><span class="ldr dd-l"></span><span class="dot">6</span></span>
+ </div>
+ </div>
+ </div>
+ </div>
+ </div>
+ </div>
+ <div class="mnotes">
+ <div class="mnote"><span class="dot">1</span><p><b>The standing sentence is the whole status system.</b> One serif line, rewritten whenever the house moves, phase and money beside it. <em>Previously</em> is there because a sentence that changes needs provenance.</p></div>
+ <div class="mnote"><span class="dot">2</span><p><b>No future mail.</b> The stream begins today and runs backward: <em>no letter</em> is dated ahead. Forward dates appear only inside the paper that carries them — the credenza&rsquo;s 28 August, on the enclosure — and in the standing sentence above, which is the one place the house says what is coming.</p></div>
+ <div class="mnote"><span class="dot">3</span><p><b>The enclosure wraps every instrument in the sentence that explains it.</b> The authorization is no destination — it comes from behind the note, signed where it was asked for.</p></div>
+ <div class="mnote"><span class="dot">4</span><p><b>Unfolded or folded — that is the interface.</b> This one is ajar. No read-dots, no unread state, no counts: if a letter still needs Harper it is open.</p></div>
+ <div class="mnote"><span class="dot">5</span><p><b>The folded stream is the ledger.</b> What the house has settled, compressed to one line each, in the order it happened — still spoken, never a log line: <em>we closed refinement; our agreement, countersigned.</em> The fold compresses a voice; it does not replace it. Unfolding is how you read one, and how you write back.</p></div>
+ <div class="mnote"><span class="dot">6</span><p><b>The cabinet holds what a stream is bad at.</b> Four scored words for the standing things. Messages have no page of their own — the stream is the thread.</p></div>
+ </div>
+   </div>
+
+   <p class="figcap"><b>Route</b> &nbsp;client.patina.cloud/vale-residence/letters — the whole client portal as one correspondence: a sentence always current, letters newest first, instruments enclosed where they were asked for.</p>
+  </div>
+ </div>
+</section>
+
+<!-- SHARED SHELL CLASSES USED — used, never restyled: slide · slide.wide · inner ·
+ gutter · eyebrow · num · tick · main · lede · figcap · quote · attr · kicker · note ·
+ grid · card(.accent/.bad/.tight) · mockgrid · mnotes · mnote · anno · ldr · dot · doc ·
+ scroller · frame · fbar · fdots · furl · screen · sheet · shead · st · sx · ssub ·
+ vitals · si(.sec/.ter/.lg) · acts · fld · flab · uin · car · cbx · band(.hold) ·
+ photo · pc · thumb · tex(.linen/.oak) · jstep(span.done/span.now/i.done) · figband ·
+ fg(i.q/i.ok) -->
+
+<!-- ============ 14 · THE FIELD, COMPARED ============ -->
+<section class="slide" data-label="Compared">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Act VII · The field, compared</span><span class="num">14</span><span class="tick"></span></div>
+  <div class="main">
+   <h2>No direction wins every row.</h2>
+   <p class="lede">Five criteria, four answers. Read the dots for the shape of the tradeoff and the word for what it costs.</p>
+
+   <div class="tablewrap">
+    <table class="matrix">
+    <thead>
+    <tr>
+    <th style="width:24%">Criterion</th>
+    <th>A · The House Book</th>
+    <th>B · The Making</th>
+    <th>C · The Walkthrough</th>
+    <th>D · The Correspondence</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td class="crit">First-glance clarity</td>
+    <td><span class="dg">&#9680;</span><span class="vw">typeset</span></td>
+    <td><span class="dg">&#9679;</span><span class="vw">immediate</span></td>
+    <td><span class="dg">&#9680;</span><span class="vw">roomwise</span></td>
+    <td><span class="dg">&#9679;</span><span class="vw">spoken</span></td>
+    </tr>
+    <tr>
+    <td class="crit">Calm</td>
+    <td><span class="dg">&#9679;</span><span class="vw">bound</span></td>
+    <td><span class="dg">&#9680;</span><span class="vw">eventful</span></td>
+    <td><span class="dg">&#9680;</span><span class="vw">abundant</span></td>
+    <td><span class="dg">&#9679;</span><span class="vw">postal</span></td>
+    </tr>
+    <tr>
+    <td class="crit">Patina-feel</td>
+    <td><span class="dg">&#9679;</span><span class="vw">the Document</span></td>
+    <td><span class="dg">&#9680;</span><span class="vw">instrumented</span></td>
+    <td><span class="dg">&#9680;</span><span class="vw">material</span></td>
+    <td><span class="dg">&#9679;</span><span class="vw">epistolary</span></td>
+    </tr>
+    <tr>
+    <td class="crit">Build effort</td>
+    <td><span class="dg">&#9680;</span><span class="vw">weeks</span></td>
+    <td><span class="dg">&#9680;</span><span class="vw">weeks</span></td>
+    <td><span class="dg">&#9675;</span><span class="vw">months</span></td>
+    <td><span class="dg">&#9675;</span><span class="vw">months</span></td>
+    </tr>
+    <tr>
+    <td class="crit">Risk</td>
+    <td><span class="dg">&#9680;</span><span class="vw">adjacent</span></td>
+    <td><span class="dg">&#9680;</span><span class="vw">adjacent</span></td>
+    <td><span class="dg">&#9675;</span><span class="vw">far</span></td>
+    <td><span class="dg">&#9675;</span><span class="vw">far</span></td>
+    </tr>
+    </tbody>
+    </table>
+   </div>
+
+   <div class="mlegend">
+    <span><b>&#9679;</b> filled &mdash; strong</span>
+    <span><b>&#9680;</b> half &mdash; mixed</span>
+    <span><b>&#9675;</b> open &mdash; weak</span>
+    <span>Build effort and Risk read the other way: <b>&#9679;</b> light / near &nbsp; <b>&#9675;</b> heavy / far</span>
+   </div>
+
+   <p class="figcap"><b>Cell grammar</b> &nbsp;One dot glyph, then one word. The word is the verdict, not a hedge — &ldquo;one look&rdquo;, &ldquo;one scroll&rdquo;, &ldquo;a week&rdquo;, &ldquo;a month&rdquo;. A cell that needs a sentence belongs in the direction&rsquo;s own slide, not in this table.</p>
+
+   <div class="note">
+    <span class="kicker">How the verdicts were earned</span>
+    <p>Every cell was filled after all four directions were on paper, not before. No direction takes five filled dots, and the two that read strongest at first glance — B and D — are the two that ask the most of the studio&rsquo;s cadence.</p>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 15 · THE RULING ============ -->
+<section class="slide" data-label="The ruling">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Close · The ruling</span><span class="num">15</span><span class="tick"></span></div>
+  <div class="main">
+   <h2>What the deck would do.</h2>
+   <p class="lede">A recommendation, the parts worth taking from the directions we do not build, and the three questions that decide it.</p>
+
+   <div class="grid g2">
+    <div class="card accent">
+    <span class="kicker">The deck&rsquo;s recommendation</span>
+    <h3>B &middot; The Making.</h3>
+    <p><strong>Build B &mdash; The Making &mdash; as the primary architecture:</strong> it answers the anxious weekly visitor&rsquo;s three questions &mdash; where are we, what&rsquo;s next, what needs my hand &mdash; in one glance, and in that order.</p>
+    <p>Its gates make every ask causal: the client sees exactly what her signature restarts.</p>
+    </div>
+    <div class="card warn">
+    <span class="kicker">Steal these, whatever wins</span>
+    <p>Take A&rsquo;s letterhead &mdash; the masthead ceremony.</p>
+    <p>Take C&rsquo;s status stamps &mdash; ink them on the tracking rows.</p>
+    <p>Take D&rsquo;s standing sentence, and its voice, for the state line and the gate captions.</p>
+    </div>
+   </div>
+
+   <span class="eyebrow" style="margin-top:1.6rem">Three questions to shape the ruling</span>
+   <div class="qs">
+    <div class="q">
+    <span class="qn">1</span>
+    <div>
+    <h3>Is the pane a document or a feed?</h3>
+    <p>A document is composed, dated, and finished — it reads the same on Tuesday as it did on Monday unless the house moved. A feed is ordered by recency and never finished. The answer decides whether Harper is reading her house or watching it.</p>
+    </div>
+    </div>
+    <div class="q">
+    <span class="qn">2</span>
+    <div>
+    <h3>How much of today&rsquo;s route surface survives v1?</h3>
+    <p>Fifteen affordances is the wound; one is not the cure. Which of Decisions, Proposals, Invoices, Budget, Documents, Orders, Rooms, and Reviews keeps its own route, and which becomes a region of the single pane?</p>
+    </div>
+    </div>
+    <div class="q">
+    <span class="qn">3</span>
+    <div>
+    <h3>Does the Document language arrive whole, or by degrees?</h3>
+    <p>Scored ink, letterhead, and stacked paper all at once is one ship and one shock. Arriving by degrees is kinder to the build and leaves the client with two dialects for a season.</p>
+    </div>
+    </div>
+   </div>
+
+   <div class="closing">
+    <p>Awaiting your ruling.</p>
+    <span>No R-number has been cut — this deck exists to earn one.</span>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 16 · COLOPHON ============ -->
+<section class="slide" data-label="Next steps">
+ <div class="inner">
+  <div class="gutter"><span class="eyebrow">Close · Colophon</span><span class="num">16</span><span class="tick"></span></div>
+  <div class="main">
+   <h2>What happens next, and what has not happened.</h2>
+   <p class="lede">Three quiet paragraphs, so nobody has to guess how much of this is real.</p>
+
+   <div class="grid g3">
+    <div class="card accent">
+    <span class="kicker">If the ruling lands</span>
+    <p>V1 reshapes two things: where signing in puts a client, and what the project page is. Both go behind a feature flag. <strong>Every existing route keeps working</strong> — Decisions, Proposals, Invoices, and the rest stay reachable at the addresses they already have, whether or not the pane surfaces them.</p>
+    <p class="small">No schema work is implied. The pane composes what the client portal already reads.</p>
+    </div>
+    <div class="card warn">
+    <span class="kicker">What this deck is not</span>
+    <p><strong>Nothing is built.</strong> No migration was minted, no component was written, no route was touched, no flag was created. The fixture is fictional and lives only in this file.</p>
+    <p class="small">The four directions are drawings. Two of them will not survive the ruling, and that is the point of drawing four.</p>
+    </div>
+    <div class="card">
+    <span class="kicker">Colophon</span>
+    <p>Self-contained — one file, no external fonts, scripts, images, or requests. No shadows anywhere; depth is flat paper offsets, rules, and value contrast.</p>
+    <p class="small">Fixture: the Vale residence, 5 August 2026. Deck: <span class="mono">docs/design/the-single-pane</span>. House shell inherited from the Call Sheet by way of the Authorized Schedule.</p>
+    </div>
+   </div>
+
+   <div class="cover-meta" style="margin-top:20px">
+    <span>Deck <b>docs/design/the-single-pane</b></span>
+    <span>Directions <b>4</b></span>
+    <span>Screens <b>5</b></span>
+    <span>Status <b>proposal, nothing built</b></span>
+    <span><b>5 August 2026</b></span>
+   </div>
+  </div>
+ </div>
+</section>
+
+</div><!-- /#deck -->
+
+<div id="chrome">
+ <span id="counter"><b>01</b> / 16</span>
+ <button class="navbtn" id="prev" type="button" aria-label="Previous slide">&#8592;</button>
+ <button class="navbtn" id="next" type="button" aria-label="Next slide">&#8594;</button>
+ <button id="themebtn" type="button" aria-label="Toggle colour theme">Theme</button>
+</div>
+<div id="hint">← → or space · P to print</div>
+
+<script>
+(function(){
+ var deck = document.getElementById('deck');
+ var slides = Array.prototype.slice.call(deck.querySelectorAll('.slide'));
+ var counter = document.getElementById('counter');
+ var progress = document.getElementById('progress');
+ var current = 0;
+
+ function pad(n){ return (n < 10 ? '0' : '') + n; }
+
+ function setCurrent(i){
+  current = Math.max(0, Math.min(slides.length - 1, i));
+  counter.innerHTML = '<b>' + pad(current + 1) + '</b> / ' + slides.length;
+  progress.style.width = (((current + 1) / slides.length) * 100) + '%';
+ }
+
+ function go(i){
+  var t = Math.max(0, Math.min(slides.length - 1, i));
+  deck.scrollTop = deck.scrollTop + slides[t].getBoundingClientRect().top;
+  slides[t].classList.add('seen');
+  setCurrent(t);
+ }
+
+ /* Only now — with the deck, the slides, and the chrome all in hand — is it safe
+    to let CSS hide anything, because everything that can un-hide it is below. */
+ document.documentElement.className += ' js';
+
+ if ('IntersectionObserver' in window){
+  var io = new IntersectionObserver(function(entries){
+   entries.forEach(function(e){
+    if (e.isIntersecting){
+    e.target.classList.add('seen');
+    if (e.intersectionRatio > 0.5) setCurrent(slides.indexOf(e.target));
+    }
+   });
+  }, { threshold: [0.12, 0.55] });
+  slides.forEach(function(s){ io.observe(s); });
+ } else {
+  slides.forEach(function(s){ s.classList.add('seen'); });
+ }
+
+ deck.addEventListener('scroll', function(){
+  var mid = deck.scrollTop + deck.clientHeight * 0.4;
+  for (var i = 0; i < slides.length; i++){
+   if (slides[i].offsetTop <= mid) setCurrent(i);
+  }
+ }, { passive: true });
+
+ document.getElementById('prev').addEventListener('click', function(){ go(current - 1); });
+ document.getElementById('next').addEventListener('click', function(){ go(current + 1); });
+
+ document.addEventListener('keydown', function(e){
+  var tag = (e.target && e.target.tagName) || '';
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  switch (e.key){
+   case 'ArrowRight': case 'PageDown': go(current + 1); e.preventDefault(); break;
+   case 'ArrowLeft':  case 'PageUp':   go(current - 1); e.preventDefault(); break;
+   case ' ': go(current + (e.shiftKey ? -1 : 1)); e.preventDefault(); break;
+   case 'Home': go(0); e.preventDefault(); break;
+   case 'End': go(slides.length - 1); e.preventDefault(); break;
+   case 'p': case 'P': window.print(); break;
+  }
+ });
+
+ var root = document.documentElement;
+ var btn = document.getElementById('themebtn');
+ var order = ['auto','light','dark'];
+ var label = { auto: 'Theme', light: 'Light', dark: 'Dark' };
+ var stored = null;
+ try { stored = window.localStorage.getItem('patina-single-pane-theme'); } catch (err) {}
+ if (stored && order.indexOf(stored) > -1){ root.setAttribute('data-theme', stored); btn.textContent = label[stored]; }
+ btn.addEventListener('click', function(){
+  var now = root.getAttribute('data-theme') || 'auto';
+  var nextTheme = order[(order.indexOf(now) + 1) % order.length];
+  root.setAttribute('data-theme', nextTheme);
+  btn.textContent = label[nextTheme];
+  try { window.localStorage.setItem('patina-single-pane-theme', nextTheme); } catch (err) {}
+ });
+
+ setCurrent(0);
+})();
+</script>
+
+</body>
+</html>
