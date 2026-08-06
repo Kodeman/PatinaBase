@@ -99,6 +99,14 @@ export async function loadPdfPages(file: File): Promise<LoadedPdf> {
   return { bytes, pageCount, pages };
 }
 
+/**
+ * A page that will not draw must SAY so rather than sit on the placeholder, so
+ * a render that never settles is cut off here and reported as a failure. Ten
+ * seconds is far outside honest work: a 102-page set drawn end to end measures
+ * ~120ms a page.
+ */
+export const THUMBNAIL_RENDER_TIMEOUT_MS = 10_000;
+
 /** A display-only thumbnail. The caller owns the blob URL and revokes it. */
 export async function renderPageThumbnail(
   bytes: Uint8Array,
@@ -118,7 +126,23 @@ export async function renderPageThumbnail(
     canvas.height = Math.max(1, Math.floor(viewport.height));
     const context = canvas.getContext('2d');
     if (!context) throw new Error('no 2d context for the thumbnail');
-    await page.render({ canvas, canvasContext: context, viewport }).promise;
+    const task = page.render({ canvas, canvasContext: context, viewport });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        task.promise,
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => {
+            // Stop the abandoned task rather than leave it drawing behind a
+            // card that has already given up on it.
+            task.cancel();
+            reject(new Error('the page took too long to draw'));
+          }, THUMBNAIL_RENDER_TIMEOUT_MS);
+        }),
+      ]);
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
     page.cleanup();
     const blob = await new Promise<Blob | null>((resolve) =>
       canvas.toBlob(resolve, 'image/png'),

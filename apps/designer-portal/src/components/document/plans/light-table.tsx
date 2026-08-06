@@ -53,8 +53,12 @@ export interface StagedTable {
   proposals: LightTableProposal[];
   /** True when not one page in the drop carried a readable text layer. */
   noTextLayer: boolean;
-  /** Display only, by page index. Lifted so a return trip needs no redraw. */
-  thumbnails: Record<number, Blob | null>;
+  /**
+   * Display only, by page index. Lifted so a return trip needs no redraw.
+   * A MISSING key is a page not drawn yet; a key set to null is a page the
+   * table tried to draw and could not. The card reads the difference.
+   */
+  thumbnails: Record<number, Blob | null | undefined>;
 }
 
 type ReadStage = 'reading' | 'proposing' | 'drawing';
@@ -241,7 +245,7 @@ export function LightTable({
     <LightTableCard
       key={proposal.pageIndex}
       proposal={proposal}
-      thumbnail={thumbnails[proposal.pageIndex] ?? null}
+      thumbnail={thumbnails[proposal.pageIndex]}
       currentRev={
         proposal.sheetId ? (currentRevBySheet.get(proposal.sheetId) ?? null) : null
       }

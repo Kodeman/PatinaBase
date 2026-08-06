@@ -216,4 +216,39 @@ describe('LightTableCard', () => {
       document.querySelector('[data-plan-card]')!.getAttribute('data-conflicted'),
     ).toBe('true');
   });
+
+  // A page that failed to draw and a page still being drawn used to share one
+  // state, so a failure read as work in progress and the placeholder never
+  // ended. The two states are now distinct and the card says which it is.
+  it('says the page is being drawn while no attempt has finished', () => {
+    render(
+      <LightTableCard
+        proposal={base}
+        thumbnail={undefined}
+        currentRev="B"
+        sheets={SHEETS}
+        conflict={null}
+        onChange={jest.fn()}
+      />,
+    );
+    expect(screen.getByText('Drawing the page…')).toBeInTheDocument();
+    expect(screen.queryByText('No preview')).not.toBeInTheDocument();
+  });
+
+  it('says there is no preview once the drawing has failed', () => {
+    render(
+      <LightTableCard
+        proposal={base}
+        thumbnail={null}
+        currentRev="B"
+        sheets={SHEETS}
+        conflict={null}
+        onChange={jest.fn()}
+      />,
+    );
+    expect(screen.getByText('No preview')).toBeInTheDocument();
+    expect(screen.queryByText('Drawing the page…')).not.toBeInTheDocument();
+    // The picture is what is missing — the page is still placeable.
+    expect(screen.getByText('becomes Rev C')).toBeInTheDocument();
+  });
 });

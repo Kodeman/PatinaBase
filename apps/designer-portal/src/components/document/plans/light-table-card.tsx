@@ -39,8 +39,13 @@ const FORK_CLASS =
 
 export interface LightTableCardProps {
   proposal: LightTableProposal;
-  /** Display only — the card owns the object URL and revokes it on unmount. */
-  thumbnail: Blob | null;
+  /**
+   * Display only — the card owns the object URL and revokes it on unmount.
+   * `undefined` is a page still being drawn; `null` is a page the table TRIED
+   * to draw and could not. The two must not share a state: a failure that
+   * looks like work in progress is a placeholder that never ends.
+   */
+  thumbnail: Blob | null | undefined;
   /** The matched sheet's current revision, for the "becomes Rev x" preview. */
   currentRev: string | null;
   /** Every sheet the room holds, for the file-to-an-existing-sheet chooser. */
@@ -154,6 +159,11 @@ export function LightTableCard({
             aria-hidden
             className="max-h-full max-w-full object-contain"
           />
+        ) : thumbnail === null ? (
+          // The page is still placeable — only its picture is missing.
+          <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+            No preview
+          </span>
         ) : (
           <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
             Drawing the page…
