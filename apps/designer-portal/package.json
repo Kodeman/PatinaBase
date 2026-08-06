@@ -4,6 +4,9 @@
   "private": true,
   "description": "Patina Designer Portal - Designer onboarding, catalog management, and project collaboration",
   "scripts": {
+    "sync-pdf-worker": "node scripts/sync-pdf-worker.mjs",
+    "predev": "pnpm run sync-pdf-worker",
+    "prebuild": "pnpm run sync-pdf-worker",
     "dev": "next dev --webpack -p 3000",
     "dev:network": "HOST=0.0.0.0 next dev --webpack",
     "dev:network-setup": "../../scripts/setup-network-dev.sh && npm run dev:network",
@@ -64,6 +67,8 @@
     "lucide-react": "^0.544.0",
     "modern-screenshot": "^4.7.0",
     "next": "~16.2.6",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^5.4.296",
     "posthog-js": "^1.359.1",
     "qrcode.react": "^4.2.0",
     "react": "^19.0.0",

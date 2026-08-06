@@ -635,6 +635,10 @@ export const SurfaceKeys = {
       // reusing that key would have made the call sheet's registry blurb
       // show up as the intro on the ball-in-court panel too.
       CallSheet:       'designer-portal/document/call-sheet',
+      // The Plan Room — /doc/[id]/plans. Its own key: the drawings are their
+      // own room, and the help copy there is about sets and revisions, not
+      // about the document the band sits on.
+      Plans:           'designer-portal/document/plans',
     },
   },
   /**

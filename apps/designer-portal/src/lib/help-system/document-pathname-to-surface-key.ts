@@ -16,6 +16,7 @@
  * ancestor-or-equal match keeps showing Library copy there too):
  *   /desk                  → …/document/desk
  *   /doc/[id]              → …/document/doc
+ *   /doc/[id]/plans        → …/document/plans   (the Plan Room is its own room)
  *   /library               → …/document/library
  *   /library/judgments     → …/document/library   (a Room off the Library, not a Piece)
  *   /library/[id]          → …/document/library/piece
@@ -37,7 +38,11 @@ export function documentPathnameToSurfaceKey(pathname: string): string {
     case 'desk':
       return DOCUMENT_SURFACE_KEYS.desk;
     case 'doc':
-      return DOCUMENT_SURFACE_KEYS.doc;
+      // /doc/[id]/plans is the Plan Room — a room off the document, with its
+      // own help copy. Every other deeper segment stays the document itself.
+      return segments[2] === 'plans'
+        ? DOCUMENT_SURFACE_KEYS.plans
+        : DOCUMENT_SURFACE_KEYS.doc;
     case 'library':
       // /library/[id] is the Piece — its own surface (still library-prefixed).
       // /library/judgments is a static Room the R21 dissolve rehoused off the

@@ -48,6 +48,9 @@ export const DOCUMENT_SURFACE_KEYS = {
   // Wave 3 — the Call Sheet's own key (distinct from `coordination`, which
   // court-bar.tsx already owns for the ball-in-court help panel).
   callSheet:       'designer-portal/document/call-sheet',
+  // /doc/[id]/plans — the Plan Room (the current set, the light table, the
+  // drawing log, the issue ceremony).
+  plans:           'designer-portal/document/plans',
 } as const;
 
 export type DocumentSurfaceKey =

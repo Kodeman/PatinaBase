@@ -35,10 +35,15 @@ async function setupAuthentication(page: Page): Promise<void> {
         return;
       }
 
-      // Wait for React hydration so the disclosure click handler is bound.
-      const disclosure = page.getByRole('button', { name: /sign in with email/i });
-      await disclosure.waitFor({ state: 'visible', timeout: 15_000 });
-      await disclosure.click();
+      // Open the password panel. The golden-hour auth restyle (2026-08-06)
+      // made sign-in email-first and renamed this disclosure from "Sign in
+      // with email" to "Use email and password instead" (PortalAuth.tsx); both
+      // spellings are matched so the fixture spans the change.
+      const disclosure = page.getByRole('button', {
+        name: /sign in with email|use email and password instead/i,
+      });
+      await disclosure.first().waitFor({ state: 'visible', timeout: 15_000 });
+      await disclosure.first().click();
 
       const emailInput = page.getByLabel(/email/i).first();
       await emailInput.waitFor({ state: 'visible', timeout: 10_000 });

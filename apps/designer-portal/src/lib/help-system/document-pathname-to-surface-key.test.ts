@@ -27,6 +27,22 @@ describe('documentPathnameToSurfaceKey', () => {
     expect(documentPathnameToSurfaceKey('/compose')).toBe(DOCUMENT_SURFACE_KEYS.compose);
   });
 
+  it('resolves /doc/[id]/plans (the Plan Room) to its own surface', () => {
+    expect(documentPathnameToSurfaceKey('/doc/abc-123/plans')).toBe(
+      DOCUMENT_SURFACE_KEYS.plans,
+    );
+    expect(documentPathnameToSurfaceKey('/doc/abc-123/plans/')).toBe(
+      DOCUMENT_SURFACE_KEYS.plans,
+    );
+    expect(documentPathnameToSurfaceKey('/doc/abc-123/plans?sheet=ID-401')).toBe(
+      DOCUMENT_SURFACE_KEYS.plans,
+    );
+    // Every OTHER deeper segment still collapses to the document itself.
+    expect(documentPathnameToSurfaceKey('/doc/abc-123/spec-book')).toBe(
+      DOCUMENT_SURFACE_KEYS.doc,
+    );
+  });
+
   it('collapses dynamic + deeper segments to the section key', () => {
     // Deep-links and query/hash never change the section the panel scopes to.
     expect(documentPathnameToSurfaceKey('/doc/abc/anything')).toBe(DOCUMENT_SURFACE_KEYS.doc);

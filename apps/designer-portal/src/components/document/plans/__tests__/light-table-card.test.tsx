@@ -1,0 +1,149 @@
+import { fireEvent, render, screen } from '@testing-library/react';
+import type { LightTableProposal } from '@/lib/plans/model';
+import { LightTableCard } from '../light-table-card';
+
+const base: LightTableProposal = {
+  pageIndex: 1,
+  parsedNumber: 'ID-4O2',
+  textSha256: 'x',
+  kind: 'revision',
+  sheetId: 's402',
+  sheetNumber: 'ID-402',
+  sheetTitle: 'Millwork Elevations — Banquette',
+  discipline: 'ID',
+  nearMiss: { parsed: 'ID-4O2', canonical: 'ID-402' },
+  fork: null,
+  requiresFork: true,
+};
+
+describe('LightTableCard', () => {
+  it('states the near miss in the studio’s own words', () => {
+    render(
+      <LightTableCard
+        proposal={base}
+        thumbnail={null}
+        currentRev="B"
+        onChange={jest.fn()}
+      />,
+    );
+    expect(
+      screen.getByText(
+        /parsed ID-4O2 — a letter O, not a zero\. You hold an ID-402\./,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText('becomes Rev C')).toBeInTheDocument();
+  });
+
+  it('holds the card unresolved until a fork is answered', () => {
+    const onChange = jest.fn();
+    const { rerender } = render(
+      <LightTableCard
+        proposal={base}
+        thumbnail={null}
+        currentRev="B"
+        onChange={onChange}
+      />,
+    );
+    const card = document.querySelector('[data-plan-card]')!;
+    expect(card.getAttribute('data-unresolved')).toBe('true');
+
+    const chips = screen.getAllByRole('button');
+    expect(chips).toHaveLength(3);
+    for (const chip of chips) {
+      expect(chip.getAttribute('aria-pressed')).toBe('false');
+      expect(chip.className).toContain('min-h-[44px]');
+    }
+    expect(
+      screen.getByRole('button', { name: 'a revision of ID-402' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'file to ID-402 · no new revision' }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'a new sheet' }));
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fork: 'new_sheet',
+        kind: 'new_sheet',
+        // A new sheet keeps the number the page's own ink carried.
+        sheetId: null,
+        sheetNumber: 'ID-4O2',
+      }),
+    );
+
+    const answered = { ...base, fork: 'revision' as const };
+    rerender(
+      <LightTableCard
+        proposal={answered}
+        thumbnail={null}
+        currentRev="B"
+        onChange={onChange}
+      />,
+    );
+    expect(
+      document.querySelector('[data-plan-card]')!.getAttribute('data-unresolved'),
+    ).toBeNull();
+  });
+
+  it('offers editable identity fields for a page the room has never held', () => {
+    const onChange = jest.fn();
+    render(
+      <LightTableCard
+        proposal={{
+          ...base,
+          parsedNumber: 'ID-501',
+          kind: 'new_sheet',
+          sheetId: null,
+          sheetNumber: 'ID-501',
+          sheetTitle: 'Millwork Details',
+          nearMiss: null,
+          fork: 'new_sheet',
+          requiresFork: false,
+        }}
+        thumbnail={null}
+        currentRev={null}
+        onChange={onChange}
+      />,
+    );
+
+    const number = screen.getByLabelText('Sheet number for page 2');
+    expect(number).toHaveValue('ID-501');
+    fireEvent.change(number, { target: { value: 'ID-502' } });
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ sheetNumber: 'ID-502' }),
+    );
+
+    fireEvent.change(screen.getByLabelText('Sheet title for page 2'), {
+      target: { value: 'Millwork Details — Study Shelving' },
+    });
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ sheetTitle: 'Millwork Details — Study Shelving' }),
+    );
+
+    expect(screen.getByLabelText('Discipline for page 2')).toHaveValue('ID');
+    // A brand new sheet's first print is Rev A — never a letter off a filename.
+    expect(screen.getByText('becomes Rev A')).toBeInTheDocument();
+  });
+
+  it('sends a numberless page to the loose papers rather than guessing', () => {
+    render(
+      <LightTableCard
+        proposal={{
+          ...base,
+          kind: 'unmatched',
+          parsedNumber: null,
+          sheetId: null,
+          sheetNumber: null,
+          nearMiss: null,
+          fork: null,
+          requiresFork: false,
+        }}
+        thumbnail={null}
+        currentRev={null}
+        onChange={jest.fn()}
+      />,
+    );
+    expect(screen.getByText(/It goes to the Folio as a loose paper/)).toBeInTheDocument();
+    expect(screen.queryByText(/becomes Rev/)).not.toBeInTheDocument();
+  });
+});

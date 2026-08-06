@@ -28,7 +28,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
-import { LifeBuoy } from 'lucide-react';
+import { LifeBuoy, Ruler } from 'lucide-react';
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
 import {
   usePeopleDirectory,
@@ -118,6 +118,8 @@ interface PaletteSection {
 const DRAW_INVOICE_ICON = STUDIO_VERBS.find((v) => v.key === 'draw-invoice')!.icon;
 const DRAFTING_ROOM_ICON = STUDIO_ROOMS.find((r) => r.key === 'drafting-room')!.icon;
 const CALL_SHEET_ICON = STUDIO_LEDGERS.find((l) => l.key === 'call-sheet')!.icon;
+/** The plan room has no registry entry (it is a route, not a drawer sheet). */
+const PLAN_ROOM_ICON = Ruler;
 
 /** Set true by {@link openCaptureLead} when the front door is invoked from a
  *  non-Desk surface; the Desk reads + clears it on mount so the sheet opens
@@ -522,6 +524,21 @@ export function CommandBar() {
           sub: 'this project · who is on the job',
           icon: CALL_SHEET_ICON,
           run: () => window.dispatchEvent(new CustomEvent('document:open-call-sheet')),
+          match: '',
+        });
+      }
+      // The plan room — document-scoped like the Call Sheet above: only ever a
+      // "This surface" row, never in the unfiltered Rooms & ledgers group, and
+      // only once a project doc is in hand. Unlike the Call Sheet it has a real
+      // destination, so it navigates rather than dispatching an open event.
+      if (inHandRow?.row.project_id) {
+        thisSurface.push({
+          kind: 'ledger',
+          key: 'plan-room-here',
+          label: 'The plan room',
+          sub: 'this project · the current set',
+          icon: PLAN_ROOM_ICON,
+          run: () => router.push(`/doc/${inHandRow.row.engagement_id}/plans`),
           match: '',
         });
       }

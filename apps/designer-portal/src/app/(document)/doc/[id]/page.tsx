@@ -59,6 +59,7 @@ import { LetterheadInstruments } from '@/components/document/letterhead-instrume
 import { CallSheetMount } from '@/components/document/roster/call-sheet-mount';
 import type { CallSheetOpenMode } from '@/components/document/roster/call-sheet';
 import { KickoffBand } from '@/components/document/roster/kickoff-band';
+import { PlanRoomBand } from '@/components/document/plans/plan-room-band';
 import { HouseholdChip } from '@/components/document/household-chip';
 import { ProposalInstruments } from '@/components/document/proposal-instruments';
 import { FolioLetterhead, ProposalFolioStrip } from '@/components/document/folio-strip';
@@ -477,7 +478,13 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
             (dismissal, retirement at 4 names), so this mount is unconditional
             for a project document. */}
         {row.engagement_kind === 'project' && row.project_id && (
-          <KickoffBand projectId={row.project_id} rows={rosterRows ?? []} />
+          <>
+            <KickoffBand projectId={row.project_id} rows={rosterRows ?? []} />
+            {/* The plan room's threshold band. It renders nothing until the
+                bundle resolves and never dismisses — a set nobody is current
+                on is not something to hide. */}
+            <PlanRoomBand routeId={id} projectId={row.project_id} />
+          </>
         )}
 
         {/* D13: letterhead-anchored margin items (Pulse, section items) as
