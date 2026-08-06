@@ -57,6 +57,14 @@ export interface ClientDocumentsData {
  * groupDocumentsByProject (../app/documents/group.ts), which uses
  * proposalProjectIds to fold proposal-anchored rows into their project.
  */
+// Both id lists are interpolated into a PostgREST `.or(...)` filter string,
+// whose grammar treats commas and parens as syntax. Every value is
+// server-derived (useProjects / an RLS proposals read) so this never fires
+// today — it exists so a future caller passing anything else cannot bend the
+// filter.
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function useClientDocuments(projectIds: string[]) {
   const key = [...projectIds].sort();
   return useQuery<ClientDocumentsData>({
@@ -72,7 +80,10 @@ export function useClientDocuments(projectIds: string[]) {
         id: string;
         project_id: string | null;
       }>;
-      const proposalIds = proposalRows.map((proposal) => proposal.id);
+      const safeProjectIds = projectIds.filter((id) => UUID_PATTERN.test(id));
+      const safeProposalIds = proposalRows
+        .map((proposal) => proposal.id)
+        .filter((id) => UUID_PATTERN.test(id));
 
       let query = supabase
         .from('project_documents')
@@ -82,11 +93,11 @@ export function useClientDocuments(projectIds: string[]) {
         .eq('client_visible', true)
         .order('created_at', { ascending: false });
       query =
-        proposalIds.length > 0
+        safeProposalIds.length > 0
           ? query.or(
-              `project_id.in.(${projectIds.join(',')}),proposal_id.in.(${proposalIds.join(',')})`,
+              `project_id.in.(${safeProjectIds.join(',')}),proposal_id.in.(${safeProposalIds.join(',')})`,
             )
-          : query.in('project_id', projectIds);
+          : query.in('project_id', safeProjectIds);
       const { data, error } = await query;
       if (error) throw error;
 

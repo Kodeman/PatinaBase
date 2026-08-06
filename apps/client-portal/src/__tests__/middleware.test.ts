@@ -50,6 +50,38 @@ describe('client middleware Universal Link exemption', () => {
     expect(createMiddlewareClient).not.toHaveBeenCalled();
   });
 
+  it('stamps no-store + noindex headers on the /plans bearer surface', async () => {
+    const response = (await middleware({
+      headers: new Headers({ host: 'localhost:3002' }),
+      nextUrl: {
+        origin: 'http://localhost:3002',
+        pathname: `/plans/${'a'.repeat(64)}`,
+        search: '',
+        searchParams: new URLSearchParams(),
+      },
+    } as never)) as unknown as { headers: Map<string, string> };
+
+    expect(NextResponse.redirect).not.toHaveBeenCalled();
+    expect(response.headers.get('Cache-Control')).toBe(
+      'private, no-store, max-age=0',
+    );
+    expect(response.headers.get('X-Robots-Tag')).toBe('noindex, nofollow');
+  });
+
+  it('does not stamp bearer-surface cache headers on ordinary public pages', async () => {
+    const response = (await middleware({
+      headers: new Headers({ host: 'localhost:3002' }),
+      nextUrl: {
+        origin: 'http://localhost:3002',
+        pathname: `/share/${'a'.repeat(64)}`,
+        search: '',
+        searchParams: new URLSearchParams(),
+      },
+    } as never)) as unknown as { headers: Map<string, string> };
+
+    expect(response.headers.get('Cache-Control')).toBeUndefined();
+  });
+
   it('lets an unauthenticated guest through to /rfq/[token] without a sign-in redirect', async () => {
     const response = await middleware({
       headers: new Headers({ host: 'localhost:3002' }),

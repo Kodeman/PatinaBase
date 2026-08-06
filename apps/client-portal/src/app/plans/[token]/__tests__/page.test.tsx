@@ -86,7 +86,7 @@ describe("/plans/[token]", () => {
       `/plans/${TOKEN}/print/${PRINT_ID}`,
     );
     expect(openLinks[0]).toHaveAttribute("target", "_blank");
-    expect(openLinks[0]).toHaveAttribute("rel", "noopener");
+    expect(openLinks[0]).toHaveAttribute("rel", "noopener noreferrer");
     // Current set: the foot line shows, the superseded band does not.
     expect(
       screen.getByText("This set is current as of today."),
@@ -126,7 +126,7 @@ describe("/plans/[token]", () => {
 
     const band = screen.getByTestId("plans-superseded-band");
     expect(band).toHaveTextContent(
-      "A newer set was issued August 5, 2026 — you are viewing the set you were sent.",
+      "The set has moved since this was sent — you are viewing the set you were sent. A newer issue went out August 5, 2026.",
     );
     // Deliberately no path to the newer set: no link in the band, and the
     // superseding issue's name appears nowhere.
@@ -138,7 +138,7 @@ describe("/plans/[token]", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("omits the superseded date from the band when the resolver has none", async () => {
+  it("claims no newer issue when the resolver names none (a re-filed sheet also moves the set)", async () => {
     jest.mocked(resolvePlanTransmittal).mockResolvedValue({
       ...transmittal,
       isCurrentSet: false,
@@ -149,9 +149,11 @@ describe("/plans/[token]", () => {
       }),
     );
 
-    expect(screen.getByTestId("plans-superseded-band")).toHaveTextContent(
-      "A newer set was issued — you are viewing the set you were sent.",
+    const band = screen.getByTestId("plans-superseded-band");
+    expect(band).toHaveTextContent(
+      "The set has moved since this was sent — you are viewing the set you were sent.",
     );
+    expect(band).not.toHaveTextContent(/newer issue went out/i);
   });
 
   // Every failure mode is the SAME calm dead link, byte for byte — a probing

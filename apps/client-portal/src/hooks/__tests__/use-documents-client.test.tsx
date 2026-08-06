@@ -69,19 +69,26 @@ function fakeSupabase({
 }
 
 describe('useClientDocuments', () => {
+  // Real UUIDs: the hook filters both id lists through a strict UUID regex
+  // before splicing them into the `.or(...)` filter string.
+  const PROJ_1 = '11111111-1111-1111-1111-111111111111';
+  const PROJ_2 = '22222222-2222-2222-2222-222222222222';
+  const PROP_1 = '33333333-3333-3333-3333-333333333333';
+  const PROP_2 = '44444444-4444-4444-4444-444444444444';
+
   it('reads client-visible rows across projects AND the client’s proposals', async () => {
     const supabase = fakeSupabase({
       proposals: {
         data: [
-          { id: 'prop-1', project_id: 'proj-1' },
-          { id: 'prop-2', project_id: null },
+          { id: PROP_1, project_id: PROJ_1 },
+          { id: PROP_2, project_id: null },
         ],
         error: null,
       },
     });
     mockCreateBrowserClient.mockReturnValue(supabase);
 
-    const { result } = renderHook(() => useClientDocuments(['proj-1', 'proj-2']), {
+    const { result } = renderHook(() => useClientDocuments([PROJ_1, PROJ_2]), {
       wrapper,
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -90,7 +97,7 @@ describe('useClientDocuments', () => {
     expect(supabase.proposalsQuery.select).toHaveBeenCalledWith('id, project_id');
     // The widened anchor: project_id OR proposal_id, with client_visible kept.
     expect(supabase.docs.calls.or).toEqual([
-      ['project_id.in.(proj-1,proj-2),proposal_id.in.(prop-1,prop-2)'],
+      [`project_id.in.(${PROJ_1},${PROJ_2}),proposal_id.in.(${PROP_1},${PROP_2})`],
     ]);
     expect(supabase.docs.calls.eq).toEqual([['client_visible', true]]);
     // section_key rides along — it is the loose-list discriminator.
@@ -99,7 +106,7 @@ describe('useClientDocuments', () => {
 
     expect(result.current.data).toEqual({
       documents: [documentRow],
-      proposalProjectIds: { 'prop-1': 'proj-1', 'prop-2': null },
+      proposalProjectIds: { [PROP_1]: PROJ_1, [PROP_2]: null },
     });
   });
 
@@ -107,12 +114,36 @@ describe('useClientDocuments', () => {
     const supabase = fakeSupabase();
     mockCreateBrowserClient.mockReturnValue(supabase);
 
-    const { result } = renderHook(() => useClientDocuments(['proj-1']), { wrapper });
+    const { result } = renderHook(() => useClientDocuments([PROJ_1]), { wrapper });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(supabase.docs.calls.or).toEqual([]);
-    expect(supabase.docs.calls.in).toEqual([['project_id', ['proj-1']]]);
+    expect(supabase.docs.calls.in).toEqual([['project_id', [PROJ_1]]]);
     expect(result.current.data?.proposalProjectIds).toEqual({});
+  });
+
+  it('drops non-UUID values instead of letting them bend the filter grammar', async () => {
+    const supabase = fakeSupabase({
+      proposals: {
+        data: [
+          { id: PROP_1, project_id: PROJ_1 },
+          { id: 'prop-2),client_visible.eq.false', project_id: null },
+        ],
+        error: null,
+      },
+    });
+    mockCreateBrowserClient.mockReturnValue(supabase);
+
+    const { result } = renderHook(
+      () => useClientDocuments([PROJ_1, 'proj-2),or(client_visible.eq.false)']),
+      { wrapper },
+    );
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    // Only the well-formed ids reach the filter string.
+    expect(supabase.docs.calls.or).toEqual([
+      [`project_id.in.(${PROJ_1}),proposal_id.in.(${PROP_1})`],
+    ]);
   });
 
   it('stays disabled with no projects', () => {

@@ -191,7 +191,12 @@ test.describe('plan transmittal guest link (Plan Room 00429)', () => {
     const minted = await mintTransmittal();
 
     // ── The holder opens the link (no auth) ──
-    await page.goto(`/plans/${minted.token}`);
+    const pageResponse = await page.goto(`/plans/${minted.token}`);
+    // The middleware stamps the bearer-URL HTML itself uncacheable/noindex —
+    // an intermediary caching the page keyed on the token URL would keep
+    // serving a revoked link's sheet list.
+    expect(pageResponse?.headers()['x-robots-tag']).toBe('noindex, nofollow');
+    expect(pageResponse?.headers()['cache-control']).toContain('no-store');
     await expect(
       page.getByRole('heading', { name: new RegExp(`Reyes Tile Co\\.`) }),
     ).toBeVisible({ timeout: 20000 });

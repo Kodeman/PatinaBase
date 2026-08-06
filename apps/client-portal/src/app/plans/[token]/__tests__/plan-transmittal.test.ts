@@ -110,6 +110,23 @@ describe("resolvePlanTransmittal", () => {
     expect(createServiceClient).not.toHaveBeenCalled();
   });
 
+  // Regression: printId validation must accept generic 8-4-4-4-12 hex, not
+  // just RFC-4122 v1–v5 — seed-convention ids (version/variant nibbles 0)
+  // once nulled the whole DTO and dead-linked every holder of the set.
+  it("accepts a seed-convention (non-RFC-4122) printId", async () => {
+    const seedPrintId = "a0000000-0000-0000-0000-000000000004";
+    const fake = serviceClient({
+      rpcData: {
+        ...resolvedTransmittal,
+        sheets: [{ ...resolvedTransmittal.sheets[0], printId: seedPrintId }],
+      },
+    });
+    jest.mocked(createServiceClient).mockReturnValue(fake.client as never);
+
+    const resolved = await resolvePlanTransmittal(TOKEN);
+    expect(resolved?.sheets[0]?.printId).toBe(seedPrintId);
+  });
+
   it("fails closed when the RPC answers with a miss", async () => {
     const fake = serviceClient({ rpcData: null });
     jest.mocked(createServiceClient).mockReturnValue(fake.client as never);
@@ -311,6 +328,13 @@ describe("signResolvedPlanPrint", () => {
       {
         ...readyRows,
         project_documents: { ...readyRows.project_documents, status: "processing" },
+      },
+    ],
+    [
+      "a document that is not a pdf",
+      {
+        ...readyRows,
+        project_documents: { ...readyRows.project_documents, doc_type: "dwg" },
       },
     ],
   ])("fails closed on %s without signing", async (_name, rows) => {

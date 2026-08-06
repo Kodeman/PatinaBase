@@ -125,6 +125,14 @@ export async function middleware(req: NextRequest) {
   // resolve_plan_transmittal() — a sub or fabricator handed a drawing set has
   // no Patina account and never will.
   const isPlansPage = req.nextUrl.pathname.startsWith('/plans/');
+  // Bearer-URL surfaces must never be cached by an intermediary: the HTML is
+  // keyed on the token URL, so a cached copy would keep serving a revoked
+  // link's sheet list. force-dynamic + meta tags govern Next and crawlers that
+  // read the document — these headers govern everything in between.
+  if (isPlansPage) {
+    res.headers.set('Cache-Control', 'private, no-store, max-age=0');
+    res.headers.set('X-Robots-Tag', 'noindex, nofollow');
+  }
   const isPublicPage =
     req.nextUrl.pathname === '/' ||
     req.nextUrl.pathname.startsWith('/demo') ||

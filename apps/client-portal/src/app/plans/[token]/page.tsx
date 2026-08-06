@@ -55,12 +55,15 @@ function PlanTransmittalView({
           className="mb-8 border-l-4 border-[var(--color-amber,#B8860B)] bg-[var(--color-amber-soft,#FBF3E2)] px-4 py-3"
           data-testid="plans-superseded-band"
         >
+          {/* isCurrentSet=false also covers a re-filed sheet with NO newer
+              issue, so the copy never asserts one; the issued date rides
+              along only when the resolver names a superseding issue. */}
           <p className="type-body-small text-[var(--text-primary)]">
-            A newer set was issued
+            The set has moved since this was sent — you are viewing the set you
+            were sent.
             {transmittal.supersededAt
-              ? ` ${formatLongDate(transmittal.supersededAt)}`
-              : ""}{" "}
-            — you are viewing the set you were sent.
+              ? ` A newer issue went out ${formatLongDate(transmittal.supersededAt)}.`
+              : ""}
           </p>
         </div>
       )}
@@ -113,7 +116,7 @@ function PlanTransmittalView({
                 className="type-body-small inline-flex min-h-11 items-center justify-center border border-[var(--border-strong)] px-4 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
                 href={`/plans/${token}/print/${sheet.printId}`}
                 target="_blank"
-                rel="noopener"
+                rel="noopener noreferrer"
               >
                 Open
               </a>

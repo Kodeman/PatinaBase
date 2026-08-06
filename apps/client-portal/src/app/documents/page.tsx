@@ -52,8 +52,11 @@ export default function ClientDocumentsPage() {
   const fetchesActive = projectIds.length > 0;
   const isLoading =
     projectsLoading || (fetchesActive && (documentsLoading || planSetLoading));
-  const isError =
-    projectsError || (fetchesActive && (documentsError || planSetError));
+  // A drawings-leg failure must not blank the page: contracts and other
+  // papers keep rendering, and the drawings register carries its own inline
+  // notice instead. Page-level error is reserved for the papers query itself.
+  const isError = projectsError || (fetchesActive && documentsError);
+  const planSetFailed = fetchesActive && planSetError;
 
   const documents = documentsData?.documents ?? [];
   const sheets = planSheets ?? [];
@@ -68,7 +71,10 @@ export default function ClientDocumentsPage() {
       sheets: sheets.filter((sheet) => sheet.projectId === project.id),
     }))
     .filter((section) => section.sheets.length > 0);
-  const isEmpty = groups.length === 0 && drawingSections.length === 0;
+  // With the drawings leg down we cannot claim "nothing shared yet" — the
+  // inline notice stands in for the register we could not read.
+  const isEmpty =
+    groups.length === 0 && drawingSections.length === 0 && !planSetFailed;
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-10">
@@ -95,6 +101,18 @@ export default function ClientDocumentsPage() {
         <div className="py-16 text-center" data-testid="documents-empty">
           <p className="type-body-small">Your designer hasn&rsquo;t shared any documents yet.</p>
         </div>
+      )}
+
+      {!isLoading && !isError && planSetFailed && (
+        <section className="mt-8" data-testid="plan-set-error">
+          <p className="type-meta text-[var(--text-muted)]">Your drawings</p>
+          <p
+            className="type-body-small mt-2"
+            style={{ color: 'var(--color-terracotta, #C77B6E)' }}
+          >
+            We couldn&rsquo;t load your drawings right now. Try refreshing the page.
+          </p>
+        </section>
       )}
 
       {!isLoading &&

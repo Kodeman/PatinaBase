@@ -116,10 +116,30 @@ describe('ClientDocumentsPage', () => {
     expect(screen.getByTestId('documents-error')).toBeInTheDocument();
   });
 
-  it('shows a page-level error when the plan-set fetch fails', () => {
+  it('keeps papers rendering with an inline drawings notice when the plan-set fetch fails', () => {
+    mockUseClientPlanSet.mockReturnValue({ data: undefined, isLoading: false, isError: true });
+    mockUseClientDocuments.mockReturnValue(
+      documentsResult([makeDocument({ title: 'Service Agreement.pdf' })]),
+    );
+    render(<ClientDocumentsPage />);
+
+    // A drawings-leg failure is NOT a page-level error…
+    expect(screen.queryByTestId('documents-error')).not.toBeInTheDocument();
+    // …the papers keep rendering…
+    expect(screen.getByText('Service Agreement.pdf')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: project1.name })).toBeInTheDocument();
+    // …and the drawings register carries its own inline notice.
+    expect(screen.getByTestId('plan-set-error')).toBeInTheDocument();
+    expect(screen.getByText(/couldn.t load your drawings/i)).toBeInTheDocument();
+  });
+
+  it('shows the inline drawings notice instead of the empty state when only the plan set fails', () => {
     mockUseClientPlanSet.mockReturnValue({ data: undefined, isLoading: false, isError: true });
     render(<ClientDocumentsPage />);
-    expect(screen.getByTestId('documents-error')).toBeInTheDocument();
+
+    expect(screen.getByTestId('plan-set-error')).toBeInTheDocument();
+    expect(screen.queryByTestId('documents-empty')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('documents-error')).not.toBeInTheDocument();
   });
 
   it('shows the empty state when the client has no client-visible documents', () => {

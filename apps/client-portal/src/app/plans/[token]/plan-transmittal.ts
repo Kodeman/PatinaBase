@@ -5,8 +5,11 @@ import { createServiceClient } from "@patina/supabase/server";
 export const PLAN_TRANSMITTAL_TOKEN_PATTERN = /^[0-9a-f]{64}$/;
 export const PLAN_SIGNED_URL_TTL_SECONDS = 120;
 
+// Generic 8-4-4-4-12 hex — NOT version/variant-pinned: seeded and imported
+// rows use convention ids (a0000000-…-0004) whose nibbles fail RFC-4122
+// v1–v5 checks, and one such printId would dead-link the whole transmittal.
 const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const REV_LETTER_PATTERN = /^[A-Z]{1,2}$/;
 const PLAN_PURPOSES = new Set([
@@ -280,6 +283,7 @@ export async function signResolvedPlanPrint(
       !document ||
       document.id !== print.project_document_id ||
       !document.storage_path ||
+      document.doc_type !== "pdf" ||
       document.status !== "ready"
     ) {
       return null;
