@@ -3,9 +3,6 @@
 import * as React from 'react'
 import { cn } from '../../utils/cn'
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '../Accordion'
-import { Button } from '../Button'
-import { Badge } from '../Badge'
-import { Alert } from '../Alert'
 import { Spinner } from '../Spinner'
 
 export interface DevAccount {
@@ -37,6 +34,10 @@ export interface DevAccountsPanelProps {
 /**
  * DevAccountsPanel - A collapsible panel showing dev test accounts with one-click login
  * Only renders in development mode (NODE_ENV !== 'production')
+ *
+ * It sits directly under the auth surface, so it speaks the same material: a
+ * square warm sheet on oak hairlines, mono for anything that is a label rather
+ * than a sentence, and no chrome — a scaffold should read as a scaffold.
  */
 export const DevAccountsPanel = React.forwardRef<HTMLDivElement, DevAccountsPanelProps>(
   (
@@ -67,32 +68,19 @@ export const DevAccountsPanel = React.forwardRef<HTMLDivElement, DevAccountsPane
       }
     }
 
-    const getRoleBadgeColor = (role: string): 'primary' | 'success' | 'warning' | 'error' | 'info' | 'neutral' => {
-      switch (role) {
-        case 'admin':
-          return 'error'
-        case 'designer':
-        case 'studio_manager':
-          return 'primary'
-        case 'client':
-          return 'success'
-        case 'manufacturer':
-          return 'info'
-        default:
-          return 'neutral'
-      }
-    }
-
     if (!serviceAvailable) {
       return (
         <div ref={ref} className={cn('mt-4', className)}>
-          <Alert
-            variant="error"
-            title="Dev Authentication Unavailable"
+          <div
+            role="alert"
+            className="grid gap-[5px] border-t-2 border-t-[#9C3D31] pt-[15px] text-[14px] leading-[1.5] text-[#65594E]"
           >
-            The user-management service is not responding. Please ensure it is running
-            (pnpm run dev:minimal) and try again.
-          </Alert>
+            <p className="font-semibold text-[#2C2926]">Dev Authentication Unavailable</p>
+            <div>
+              The user-management service is not responding. Please ensure it is running
+              (pnpm run dev:minimal) and try again.
+            </div>
+          </div>
         </div>
       )
     }
@@ -104,106 +92,74 @@ export const DevAccountsPanel = React.forwardRef<HTMLDivElement, DevAccountsPane
           collapsible
           defaultValue={defaultCollapsed ? undefined : 'dev-accounts'}
         >
-          <AccordionItem value="dev-accounts" variant="bordered">
-            <AccordionTrigger className="px-4 py-3 hover:no-underline">
-              <div className="flex items-center gap-2 text-sm">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="text-yellow-500"
-                >
-                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                </svg>
-                <span className="font-medium">Dev Accounts</span>
-                <Badge variant="outline" className="ml-2 text-xs">
+          <AccordionItem
+            value="dev-accounts"
+            variant="bordered"
+            className="rounded-none border-[#8B7355] bg-[#FCFAF6] px-0"
+          >
+            <AccordionTrigger className="px-[16px] py-[12px] hover:no-underline">
+              <div className="flex items-center gap-[10px]">
+                <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-[#65594E]">
+                  Dev Accounts
+                </span>
+                <span className="border border-[#8B7355] px-[6px] py-[2px] font-mono text-[10px] uppercase tracking-[0.14em] text-[#65594E]">
                   {accounts.length} available
-                </Badge>
+                </span>
               </div>
             </AccordionTrigger>
             <AccordionContent>
-              <div className="space-y-3 px-4 pb-4">
+              <div className="grid gap-[12px] px-[16px] pb-[16px]">
                 {error && (
-                  <Alert variant="error" title="Login Failed">
-                    {error}
-                  </Alert>
+                  <div
+                    role="alert"
+                    className="grid gap-[5px] border-t-2 border-t-[#9C3D31] pt-[15px] text-[14px] leading-[1.5] text-[#65594E]"
+                  >
+                    <p className="font-semibold text-[#2C2926]">Login Failed</p>
+                    <div>{error}</div>
+                  </div>
                 )}
 
-                <p className="text-xs text-muted-foreground">
+                <p className="text-[13px] leading-[1.5] text-[#65594E]">
                   Click any account to sign in instantly. These accounts are pre-seeded in
                   the development database.
                 </p>
 
-                <div className="grid gap-2">
+                <div className="grid gap-[8px]">
                   {accounts.map((account) => (
                     <div
                       key={account.id}
-                      className="flex items-center justify-between rounded-lg border border-border bg-card p-3"
+                      className="flex items-center justify-between gap-[12px] border border-[#E2DACA] bg-[#EFE9DD] p-[12px]"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            className="text-muted-foreground"
-                          >
-                            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-                            <circle cx="12" cy="7" r="4" />
-                          </svg>
+                      <div className="flex min-w-0 flex-col gap-[3px]">
+                        <div className="flex flex-wrap items-center gap-[8px]">
+                          <span className="text-[14px] font-semibold text-[#2C2926]">{account.name}</span>
+                          {account.roles.map((role) => (
+                            <span
+                              key={role}
+                              className="border border-[#8B7355] px-[5px] py-px font-mono text-[9px] uppercase tracking-[0.16em] text-[#65594E]"
+                            >
+                              {role}
+                            </span>
+                          ))}
                         </div>
-                        <div className="flex flex-col">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium">{account.name}</span>
-                            {account.roles.map((role) => (
-                              <Badge
-                                key={role}
-                                variant="subtle"
-                                color={getRoleBadgeColor(role)}
-                                size="sm"
-                              >
-                                {role}
-                              </Badge>
-                            ))}
-                          </div>
-                          <span className="text-xs text-muted-foreground">{account.email}</span>
-                        </div>
+                        <span className="truncate font-mono text-[11px] text-[#7A6A5B]">{account.email}</span>
                       </div>
-                      <Button
+                      <button
                         type="button"
-                        size="sm"
-                        variant="outline"
                         onClick={() => handleLogin(account)}
                         disabled={isLoading}
+                        className="inline-flex min-h-[36px] flex-none items-center justify-center border border-[#8B7355] bg-[#FCFAF6] px-[12px] text-[13px] font-semibold text-[#2C2926] transition-colors duration-150 ease-[cubic-bezier(0.25,1,0.5,1)] hover:border-[#2C2926] disabled:cursor-not-allowed disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#5C4A3C] focus:ring-offset-2 motion-reduce:transition-none"
                       >
-                        {loadingAccountId === account.id ? (
-                          <Spinner size="sm" />
-                        ) : (
-                          'Sign In'
-                        )}
-                      </Button>
+                        {loadingAccountId === account.id ? <Spinner size="sm" /> : 'Sign In'}
+                      </button>
                     </div>
                   ))}
                 </div>
 
-                <div className="mt-2 rounded-md border border-yellow-200 bg-yellow-50 p-2 dark:border-yellow-900 dark:bg-yellow-950">
-                  <p className="text-xs text-yellow-800 dark:text-yellow-200">
-                    <strong>Development Only:</strong> This panel is not visible in production
-                    builds.
-                  </p>
-                </div>
+                <p className="border-t border-[#E2DACA] pt-[10px] text-[12px] leading-[1.5] text-[#7A6A5B]">
+                  <strong className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#65594E]">Development Only:</strong> This panel is not visible in production
+                  builds.
+                </p>
               </div>
             </AccordionContent>
           </AccordionItem>

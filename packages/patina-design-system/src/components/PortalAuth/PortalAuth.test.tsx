@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { axe } from 'vitest-axe'
 import { describe, expect, it, vi } from 'vitest'
-import { PORTAL_AUTH_A11Y_COLORS, PortalAuthShell, PortalLogin } from './PortalAuth'
+import { PORTAL_AUTH_A11Y_COLORS, PORTAL_AUTH_A11Y_COLORS_BRAND, PortalAuthShell, PortalLogin } from './PortalAuth'
 
 const loginProps = {
   email: 'person@example.com',
@@ -128,6 +128,10 @@ describe('Portal auth components', () => {
     expect(contrastRatio(PORTAL_AUTH_A11Y_COLORS.placeholder, PORTAL_AUTH_A11Y_COLORS.surface)).toBeGreaterThanOrEqual(4.5)
     expect(contrastRatio(PORTAL_AUTH_A11Y_COLORS.border, PORTAL_AUTH_A11Y_COLORS.surface)).toBeGreaterThanOrEqual(3)
     expect(contrastRatio(PORTAL_AUTH_A11Y_COLORS.focus, PORTAL_AUTH_A11Y_COLORS.surface)).toBeGreaterThanOrEqual(3)
+    expect(contrastRatio(PORTAL_AUTH_A11Y_COLORS_BRAND.text, PORTAL_AUTH_A11Y_COLORS_BRAND.surface)).toBeGreaterThanOrEqual(4.5)
+    expect(contrastRatio(PORTAL_AUTH_A11Y_COLORS_BRAND.mutedText, PORTAL_AUTH_A11Y_COLORS_BRAND.surface)).toBeGreaterThanOrEqual(4.5)
+    expect(contrastRatio(PORTAL_AUTH_A11Y_COLORS_BRAND.focus, PORTAL_AUTH_A11Y_COLORS_BRAND.surface)).toBeGreaterThanOrEqual(3)
+    expect(contrastRatio(PORTAL_AUTH_A11Y_COLORS.surface, PORTAL_AUTH_A11Y_COLORS_BRAND.surface)).toBeGreaterThanOrEqual(4.5)
   })
 
   it('has no basic accessibility violations', async () => {

@@ -7,6 +7,7 @@ export default defineConfig({
     index: 'src/index.ts',
     'tokens/index': 'src/tokens/index.ts',
     'components/PortalAuth/index': 'src/components/PortalAuth/index.ts',
+    'components/StrataMark/index': 'src/components/StrataMark/index.ts',
   },
   format: ['esm', 'cjs'],
   dts: {
