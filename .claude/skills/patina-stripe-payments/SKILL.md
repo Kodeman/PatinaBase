@@ -72,7 +72,7 @@ node scripts/dev/sign-stripe-event.mjs --secret whsec_localdev --corrupt --url <
 Then confirm the `invoice_payments` / `po_payments` row flipped to the expected guarded status. The script reads `STRIPE_WEBHOOK_SECRET` from env if `--secret` is omitted.
 
 ## Money-path RPC discipline
-`activate_proposal_as_project` (redefined ~19×; live head body **`00279_ffe_pricing_reconciliation.sql`** as of this writing — NOT the `00262` that `supabase/CLAUDE.md` claims) and `apply_invoice_payment_effects` (`00178` → `00277`) are monolithic `CREATE OR REPLACE` functions. Before editing either, find the TRUE head body with the anchored grep: `grep -rln "CREATE OR REPLACE FUNCTION[^(]*<name>" supabase/migrations/*.sql | sort | tail -1` (a loose `grep 'FUNCTION .*<name>'` false-positives on REVOKE/GRANT/COMMENT lines), then read that file. Rebasing onto an older copy silently reverts later fixes. Full rule in patina-db-migrations.
+`activate_proposal_as_project` (redefined ~19×) and `apply_invoice_payment_effects` (`00178` → `00277`) are monolithic `CREATE OR REPLACE` functions. The live head must be grepped — never trust a remembered number: `grep -rln "CREATE OR REPLACE FUNCTION[^(]*activate_proposal_as_project" supabase/migrations/*.sql | sort | tail -1` (a loose `grep 'FUNCTION .*<name>'` false-positives on REVOKE/GRANT/COMMENT lines), then read that file. Rebasing onto an older copy silently reverts later fixes. Full rule in patina-db-migrations.
 
 ## Money conventions
 - **Integer cents everywhere**. No floats.

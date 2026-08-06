@@ -1,7 +1,7 @@
 # CLAUDE.md — The Document workstream
 
 > Placed here per the workstream instructions in `docs/design/the-document/CLAUDE.md` (Slice 0, 2026-06-11).
-> **Repo-reality corrections (repo wins on mechanics):** this monorepo is **patina-merged**, shared packages are **`@patina/*`** (not `@strata/*`), the stack is Next.js 16 + **React 19**, and brand tokens live in `apps/designer-portal/src/app/globals.css`. Companion files: `docs/design/the-document/{the-document-spec.md, DECISIONS.md, CODEBASE-MAP.md}`; prototype v0.3 is `docs/design/the-document/patina-the-document-prototype-v3.html` (no `prototypes/` subdir exists). See DECISIONS.md entry I3.
+> **Repo-reality corrections (repo wins on mechanics):** this monorepo is **patina-merged**, shared packages are **`@patina/*`** (not `@strata/*`), the stack is Next.js 16 + **React 19**, and brand tokens live in `apps/designer-portal/src/app/globals.css`. Companion files: `docs/design/the-document/{the-document-spec.md, DECISIONS.md, CODEBASE-MAP.md}`; prototype (canonical) is `docs/design/the-document/patina-the-document-prototype-v4.html` (no `prototypes/` subdir exists). See DECISIONS.md entry I3.
 
 ## Your role
 

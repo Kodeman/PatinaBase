@@ -31,16 +31,18 @@ Golden path for a flag-gated zone (verified against procurement):
 3. **Pages are `'use client'`; gate the loading skeleton on hydration.** `const hydrated = useHydrated()` from `@/hooks/use-hydrated`; `if (!hydrated || isLoading) return <Skeleton/>`.
    - Why: the app shares ONE module-level TanStack QueryClient (`src/lib/react-query.ts`); without the `!hydrated` gate a warm client cache diverges from the empty SSR cache → "Hydration failed" + shifted `useId`.
    - **All hooks must sit above every early return** — a conditional return reorders hooks and breaks hydration.
-4. **Supabase data via `@patina/supabase` hooks** (`packages/supabase/src/hooks/`, ~85 modules / 148 exports). Extend there and export from `hooks/index.ts`.
+4. **Supabase data via `@patina/supabase` hooks** (`packages/supabase/src/hooks/`, ~85 modules / 148 exports; `src/hooks/index.ts` is the authoritative list). Extend there and export from `hooks/index.ts`.
+   - Clients come from the same package: `createBrowserClient()` (components), `createServerClient()` (server components / route handlers), `createMiddlewareClient()` (middleware). Don't hand-roll a client.
+   - `packages/supabase/src/database.types.ts` is GENERATED — regenerate with `pnpm db:generate` after a schema change, never hand-edit (patina-db-migrations).
    - Query keys — lists: plural domain + params, `['purchase-orders', filters]`. Entities: singular + id, `['purchase-order', id]`.
    - Keep exactly ONE canonical key per entity — a dual-key split once left FF&E UI stale; now unified on `['project-ffe-items', id]`.
    - A mutation invalidates its list key AND every cross-domain key it touches. Example: `use-procurement.ts` invalidates `['project-ffe-items', projectId]`, `['projects', projectId]`, and `['procurement-items']` on a win.
 5. **NestJS-backed data (orders/media/projects services) via a proxy route.** Add `src/app/api/<x>/route.ts` using `createRouteHandler` + `proxyToBackend` from `@patina/api-routes`. Canonical: `apps/designer-portal/src/app/api/projects/route.ts`.
    - Config: `baseUrl` from an env var (e.g. `PROJECTS_SERVICE_URL`, falls back to `http://localhost:3016`), `requireAuth: true` (the default), `retry` with backoff, `timeout`, optional `cache`.
    - **Mutations are NOT retried by default** — the retry predicate sets `shouldRetryMutation: false`, so POST/PUT/PATCH/DELETE won't retry even with `maxRetries` set (a `maxRetries: 2` on a POST is inert unless you also pass `shouldRetryMutation: true`).
-   - **There is NO circuit breaker** — `proxy-to-backend.ts` documents "Intentionally no circuit breaker" (the in-process CB was removed); CLAUDE.md's circuit-breaker line is stale.
+   - **There is NO circuit breaker** — `proxy-to-backend.ts` documents "Intentionally no circuit breaker" (the in-process CB was removed); older docs claimed one; `proxy-to-backend.ts` is authoritative.
    - Portal-local hooks in `src/hooks/` call these routes via `@/lib/api-client` using the `queryKeys` factory in `@/lib/react-query`.
-6. **Controls.** App-local `@/components/ui/controls` (`button`, `input`, `select`, `textarea`, `status-badge`, `filter-pill`, `icon-button`; clay primary via `--accent-primary`; variants primary/secondary/ghost/danger). Richer components from `@patina/design-system`.
+6. **Controls.** Portal-canonical form controls are app-local at `apps/<portal>/src/components/ui/controls/`, NOT in the design-system package (`button`, `input`, `select`, `textarea`, `status-badge`, `filter-pill`, `icon-button`; clay primary via `--accent-primary`; variants primary/secondary/ghost/danger). Richer components (~128 Radix + Tailwind) from `@patina/design-system`.
    - TRAP: the app-local `Button` implements `asChild` with `React.cloneElement` → it accepts exactly ONE element child (a fragment or multiple children breaks it).
    - The `@patina/design-system` `Button` uses a real Radix `Slot` and handles multiple/complex children. Do not conflate the two.
 7. **Types.** Import domain types from `@patina/types` (barrel `packages/types/src/index.ts`). DB row shapes come from the generated `packages/supabase/src/database.types.ts`. Never redefine. CAUTION: `@patina/types` interfaces are hand-authored **camelCase domain shapes** (e.g. `Product`) — they are NOT the DB row (`products` Row is snake_case, e.g. `dimensions`, `match_score`). Before relying on a field for real data, confirm the column exists in `database.types.ts`.
@@ -68,6 +70,8 @@ Auth wiring:
 - App-local hooks (`use-auth`, `use-hydrated`, `use-feature-flag`, `use-projects`, ...) live PER-PORTAL under `apps/<portal>/src/hooks/` — each portal owns its copy. This is distinct from the shared data hooks in `@patina/supabase`.
 - Each portal's `src/hooks/use-auth.ts` is a thin RBAC adapter over `@patina/supabase` (`useSession`/`useProfile`) via `@/lib/rbac`; exports `useAuth`, `usePermissions`, `useRequireAuth`. Use these, not `supabase.auth` directly, in components.
 - Middleware already gates the portal shell. The designer role gate **fails open** when `SUPABASE_SERVICE_ROLE_KEY` is unset (returns "permitted") — env hygiene matters; a missing key silently disables the role check.
+- Server side: `@patina/api-routes` extracts the user from the Supabase JWT on proxy routes; NestJS services validate Supabase JWTs via `@patina/auth` guards. `@patina/auth`'s `PermissionsGuard` is a **no-op stub** — it authorizes nothing. Never treat it as a permission check; enforce in RLS or in the handler.
+- No SessionProvider needed — the Supabase hooks manage auth state internally; don't add one.
 
 Mock-fallback trap (designer portal):
 - `src/lib/mock-data.ts` `withMockData` + `NEXT_PUBLIC_DESIGNER_PORTAL_DATA_MODE` (default `auto`) silently serves mock data whenever the live call THROWS — a false-green hazard when QA-ing real data paths.

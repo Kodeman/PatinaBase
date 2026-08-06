@@ -25,7 +25,7 @@ Don't use when:
 ## Procedure
 
 1. **Orient before touching git.** Run `git rev-parse --show-toplevel`. If concurrent agents may be active and this prints the main repo path (not a `.claude/worktrees/...` path), stop — create/enter a worktree first. Never run git in the shared checkout while another session might too.
-2. **If the session model is Fable**: per root `CLAUDE.md` ("Using Fable"), Fable plans, orchestrates, and does the adversarial review — it does not execute directly. Dispatch Sonnet/Opus subagents to do the actual git/file work, each with an explicit scope, an assigned worktree, and a pathspec list; Fable reviews their output, then returns to the user or sends them further instructions.
+2. **If the session model is Fable**: per root `CLAUDE.md` ("Model dispatch (Fable orchestration)"), Fable plans, orchestrates, and does the adversarial review — it does not execute directly, even for tasks that look quick. Dispatch on the Claude 5 ladder: **Opus** for the hardest multi-file work where the first attempt must be right; **Sonnet** as the default executor for standard implementation, tests, and most git/file work — Sonnet follows briefs literally rather than generalizing intent, so state scope explicitly; **Haiku** for mechanical edits, renames, and bulk changes. Every subagent gets an explicit scope, an assigned worktree, and a pathspec list. Fable reviews their output before returning to the user or sending further instructions.
 3. **Create a worktree per concurrent agent**, named `agent-<id>` so `.gitignore`'s `.claude/worktrees/agent-*/` rule covers it automatically:
    ```
    git worktree add .claude/worktrees/agent-<id> -b <program>/<wave-or-slice>
@@ -47,6 +47,21 @@ Don't use when:
    Two prior "not merged" notes in project memory were wrong — both branches were already on `main`.
 10. **Clean up when done — mandatory, not optional.** The orchestrator MUST remove each agent worktree at task end, whether its work merged or was abandoned — don't leave it sitting "for later." Once a branch is confirmed merged, remove the worktree and delete the branch (see Commands); an abandoned worktree gets removed regardless of branch status. Use `scripts/repo-gc.sh` (dry-run by default; `--apply` to execute) to sweep any stragglers that slip through this discipline. Left unchecked these pile up fast: a 2026-07-29 sweep found 185 accumulated worktrees under `.claude/worktrees/`, consuming tens of GB in duplicated `node_modules`/`.next`/`.build` — 82 were removable outright. This policy exists to prevent that recurring.
 11. **End of task**: group changes into logical Conventional Commits and push to `origin`, including feature branches — not just `main`.
+
+## Standard subagent brief
+
+Every dispatched brief includes, verbatim or near-verbatim:
+- **Scope**: deliver exactly what this brief asks — no unrequested features, refactors, or abstractions. State coverage explicitly ("all N files", "only X") — Sonnet 5 follows briefs literally and will not generalize intent.
+- **Worktree + pathspecs**: the assigned worktree path and the explicit file list the agent may touch; commits (when authorized) use pathspec restriction, never `git add -A`.
+- **Comments**: code comments only for constraints the code can't show.
+- **Report back**: evidence-grounded — command output, diff stats, pass/fail counts; never a paraphrase.
+- For **Opus 5** briefs, do NOT add "verify/double-check your work" lines — the model self-verifies, and such lines cause over-verification. For review briefs, see below.
+
+## Adversarial review (split context)
+
+- The reviewer is always a separate subagent context; the implementer never reviews its own work.
+- Review every build item before the next stacks on it.
+- Reviewer briefs say: report every finding with confidence + severity; do not filter for importance — never "only report high-severity issues" (severity filters depress recall on Claude 5 models). Fable filters at synthesis.
 
 ## Commands
 
