@@ -7,7 +7,7 @@ const verifyOtp = jest.fn();
 const signInWithPassword = jest.fn();
 const signInWithOAuth = jest.fn();
 const getSession = jest.fn();
-const usePortalQrAuth = jest.fn();
+const useAmbientQrAuth = jest.fn();
 
 jest.mock('@patina/supabase', () => ({
   createBrowserClient: () => ({
@@ -16,7 +16,7 @@ jest.mock('@patina/supabase', () => ({
   isOAuthProviderEnabled: () => true,
   useSendEmailOtp: () => ({ mutateAsync: sendOtp, isPending: false }),
   useVerifyOtp: () => ({ mutateAsync: verifyOtp, isPending: false }),
-  usePortalQrAuth: (options: unknown) => usePortalQrAuth(options),
+  useAmbientQrAuth: (options: unknown) => useAmbientQrAuth(options),
 }));
 jest.mock('@/lib/analytics/events', () => ({
   authEvents: { login: jest.fn() },
@@ -26,20 +26,38 @@ jest.mock('@/lib/auth-redirect', () => {
   return { ...actual, replaceAuthDestination: jest.fn() };
 });
 
-const pendingQr = {
-  state: 'idle',
+// What useAmbientQrAuth reports while disabled (below `lg`, mid-password,
+// mid-submit) — the component treats this as "not shown".
+const idleQr = {
+  phase: 'refreshing' as const,
+  qrState: 'idle' as const,
   qrUrl: null,
   secondsRemaining: 0,
+  totalSeconds: 0,
   failure: null,
-  start: jest.fn(),
-  regenerate: jest.fn(),
+  wakeAvailable: true,
+  wake: jest.fn(),
   cancel: jest.fn(),
 };
+
+function mockViewport(matches: boolean) {
+  window.matchMedia = jest.fn().mockImplementation((query: string) => ({
+    matches,
+    media: query,
+    onchange: null,
+    addListener: jest.fn(),
+    removeListener: jest.fn(),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn(),
+    dispatchEvent: jest.fn(),
+  }));
+}
 
 describe('ClientPortalLogin', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    usePortalQrAuth.mockReturnValue(pendingQr);
+    mockViewport(false); // jsdom's honest default: no matched media query.
+    useAmbientQrAuth.mockReturnValue(idleQr);
     sendOtp.mockResolvedValue(undefined);
     verifyOtp.mockResolvedValue({ session: { access_token: 'otp' } });
     signInWithPassword.mockResolvedValue({ error: null });
@@ -50,33 +68,45 @@ describe('ClientPortalLogin', () => {
     });
   });
 
-  it('keeps QR lazy and presents email, QR, Apple, then password in order', () => {
+  it('presents email, Apple, then password in order, with no QR disclosure', () => {
     render(<ClientPortalLogin />);
-    expect(usePortalQrAuth).toHaveBeenLastCalledWith(
-      expect.objectContaining({ enabled: false }),
-    );
     const email = screen.getByRole('button', { name: /one-time code/i });
-    const qr = screen.getByRole('button', { name: /use a qr code/i });
     const apple = screen.getByRole('button', { name: /continue with apple/i });
     const password = screen.getByRole('button', {
       name: /email and password/i,
     });
     expect(
-      email.compareDocumentPosition(qr) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    expect(
-      qr.compareDocumentPosition(apple) & Node.DOCUMENT_POSITION_FOLLOWING,
+      email.compareDocumentPosition(apple) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(
       apple.compareDocumentPosition(password) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    fireEvent.click(qr);
-    expect(usePortalQrAuth).toHaveBeenLastCalledWith(
+    expect(
+      screen.queryByRole('button', { name: /use a qr code/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps the ambient QR lazy: disabled and unrendered under jsdom’s default viewport', () => {
+    render(<ClientPortalLogin />);
+    expect(useAmbientQrAuth).toHaveBeenLastCalledWith(
+      expect.objectContaining({ enabled: false }),
+    );
+    // qrState 'idle' is treated as "not shown" — the badge never mounts, so
+    // no request is even eligible to fire for a viewport that can't see it.
+    expect(screen.queryByTestId('portal-auth-qr')).not.toBeInTheDocument();
+  });
+
+  it('disables the ambient QR while the password panel is open, even on desktop', () => {
+    mockViewport(true);
+    render(<ClientPortalLogin />);
+    expect(useAmbientQrAuth).toHaveBeenLastCalledWith(
       expect.objectContaining({ enabled: true }),
     );
-    fireEvent.click(password);
-    expect(usePortalQrAuth).toHaveBeenLastCalledWith(
+    fireEvent.click(
+      screen.getByRole('button', { name: /email and password/i }),
+    );
+    expect(useAmbientQrAuth).toHaveBeenLastCalledWith(
       expect.objectContaining({ enabled: false }),
     );
   });
@@ -127,12 +157,85 @@ describe('ClientPortalLogin', () => {
   });
 
   it.each([
-    ['denied', 'Request declined'],
-    ['expired', 'That code has expired.'],
-  ])('renders a distinct %s QR state', (state, message) => {
-    usePortalQrAuth.mockReturnValue({ ...pendingQr, state });
+    ['denied', 'That request was declined.'],
+    ['expired', 'Tap for a fresh code'],
+  ] as const)(
+    'renders the %s ambient QR caption directly — no disclosure to click open',
+    (qrState, message) => {
+      mockViewport(true);
+      useAmbientQrAuth.mockReturnValue({
+        ...idleQr,
+        phase: 'resting',
+        qrState,
+        qrUrl: 'patina://auth?token=abc',
+      });
+      render(<ClientPortalLogin />);
+      expect(screen.getByTestId('portal-auth-qr')).toBeInTheDocument();
+      expect(screen.getByText(message)).toBeInTheDocument();
+    },
+  );
+
+  it('keeps the tap affordance under a declined status message', () => {
+    mockViewport(true);
+    useAmbientQrAuth.mockReturnValue({
+      ...idleQr,
+      phase: 'resting',
+      qrState: 'denied',
+      qrUrl: 'patina://auth?token=abc',
+    });
     render(<ClientPortalLogin />);
-    fireEvent.click(screen.getByRole('button', { name: /use a qr code/i }));
-    expect(screen.getByText(message)).toBeInTheDocument();
+    // The message replaces the countdown, never the way back to a fresh code.
+    expect(screen.getByText('That request was declined.')).toBeInTheDocument();
+    expect(screen.getByText('Tap for a fresh code')).toBeInTheDocument();
+    expect(screen.getByTestId('portal-auth-qr').tagName).toBe('BUTTON');
+  });
+
+  it('drops the button while a rate-limited generate is backing off', () => {
+    mockViewport(true);
+    useAmbientQrAuth.mockReturnValue({
+      ...idleQr,
+      phase: 'error',
+      qrState: 'error',
+      qrUrl: null,
+      wakeAvailable: false,
+    });
+    render(<ClientPortalLogin />);
+    expect(screen.getByTestId('portal-auth-qr').tagName).toBe('DIV');
+    expect(
+      screen.getByText('QR is resting. It will retry in a moment.'),
+    ).toBeInTheDocument();
+  });
+
+  it('draws a placeholder — not a code of the empty string — before the first generate', () => {
+    mockViewport(true);
+    useAmbientQrAuth.mockReturnValue({
+      ...idleQr,
+      phase: 'refreshing',
+      qrState: 'loading',
+      qrUrl: null,
+    });
+    render(<ClientPortalLogin />);
+    const modules = Array.from(
+      screen
+        .getByTestId('portal-auth-qr-matrix')
+        .querySelectorAll('circle[fill="#E5E2DD"]'),
+    );
+    expect(modules).toHaveLength(0);
+    expect(screen.getByText('Making a fresh code…')).toBeInTheDocument();
+  });
+
+  it('surfaces an approved QR as a status message and signs the session in', async () => {
+    mockViewport(true);
+    useAmbientQrAuth.mockReturnValue({
+      ...idleQr,
+      phase: 'live',
+      qrState: 'authenticated',
+      qrUrl: 'patina://auth?token=abc',
+      secondsRemaining: 120,
+      totalSeconds: 300,
+    });
+    render(<ClientPortalLogin />);
+    expect(screen.getByText('Approved — signing you in…')).toBeInTheDocument();
+    expect(await screen.findByText('You’re signed in.')).toBeInTheDocument();
   });
 });

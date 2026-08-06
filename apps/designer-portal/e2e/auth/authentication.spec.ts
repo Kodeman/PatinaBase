@@ -21,8 +21,35 @@ test.describe('Authentication Flow', () => {
     await expect(page.getByRole('heading', { name: /Welcome back to the studio/i })).toBeVisible();
     await expect(page.getByText(/their clients, and the makers they trust/i)).toBeVisible();
     await expect(page.getByRole('button', { name: /Email me a one-time code/i })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Use a QR code/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /Use email and password instead/i })).toBeVisible();
+    // The QR left the right pane for the brand pane's ambient badge.
+    await expect(page.getByRole('button', { name: /Use a QR code/i })).toHaveCount(0);
+  });
+
+  test('shows the ambient QR badge in the brand pane on a desktop viewport', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto('/auth/signin');
+
+    await expect(page.getByTestId('portal-auth-qr')).toBeVisible();
+  });
+
+  test('never renders or generates a QR below the lg breakpoint', async ({ page }) => {
+    // The viewport gate is folded into the hook's `enabled`, so the cost to the
+    // shared 10/min IP limiter on a phone must be exactly zero requests — not
+    // merely a badge hidden by CSS.
+    const generateRequests: string[] = [];
+    page.on('request', (request) => {
+      if (request.url().includes('/api/auth/qr/generate')) generateRequests.push(request.url());
+    });
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/auth/signin');
+    await expect(page.getByRole('button', { name: /Email me a one-time code/i })).toBeVisible();
+    // Give a hydrated media-query gate every chance to misfire before asserting.
+    await page.waitForTimeout(2_000);
+
+    await expect(page.getByTestId('portal-auth-qr')).toHaveCount(0);
+    expect(generateRequests).toEqual([]);
   });
 
   test('should display error messages on signin page', async ({ page }) => {
@@ -41,14 +68,13 @@ test.describe('Authentication Flow', () => {
 
     const labels = await page.getByRole('button').allTextContents();
     const emailIndex = labels.findIndex((label) => label.includes('Email me a one-time code'));
-    const qrIndex = labels.findIndex((label) => label.includes('Use a QR code'));
     const appleIndex = labels.findIndex((label) => label.includes('Continue with Apple'));
     const passwordIndex = labels.findIndex((label) => label.includes('Use email and password instead'));
 
     expect(emailIndex).toBeGreaterThanOrEqual(0);
-    expect(qrIndex).toBeGreaterThan(emailIndex);
-    if (appleIndex >= 0) expect(appleIndex).toBeGreaterThan(qrIndex);
-    expect(passwordIndex).toBeGreaterThan(appleIndex >= 0 ? appleIndex : qrIndex);
+    expect(labels.some((label) => label.includes('Use a QR code'))).toBe(false);
+    if (appleIndex >= 0) expect(appleIndex).toBeGreaterThan(emailIndex);
+    expect(passwordIndex).toBeGreaterThan(appleIndex >= 0 ? appleIndex : emailIndex);
   });
 });
 

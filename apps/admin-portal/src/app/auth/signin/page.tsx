@@ -2,14 +2,13 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { QRCodeSVG } from 'qrcode.react';
 import {
   buildAuthCallbackUrl,
   buildVerifyOtpPath,
   createBrowserClient,
   isOAuthProviderEnabled,
   normalizeAuthError,
-  usePortalQrAuth,
+  useAmbientQrAuth,
   useSendEmailOtp,
   useVerifyOtp,
 } from '@patina/supabase';
@@ -17,6 +16,8 @@ import {
   DevAccountsPanel,
   PortalAuthNotice,
   PortalLogin,
+  useMediaQuery,
+  type PortalAuthQrProps,
   type PortalLoginState,
 } from '@patina/design-system';
 import { getAccountsForPortal } from '@patina/types';
@@ -52,7 +53,6 @@ function SignInContent() {
     'email' | 'code' | 'password' | 'apple-pending' | 'success'
   >('email');
   const [passwordExpanded, setPasswordExpanded] = useState(false);
-  const [qrExpanded, setQrExpanded] = useState(false);
   const [error, setError] = useState<string | null>(() => {
     const queryError = searchParams.get('error');
     return queryError
@@ -66,15 +66,22 @@ function SignInContent() {
   const [devAuthError, setDevAuthError] = useState<string | null>(null);
   const completed = useRef(false);
   const redirected = useRef(false);
-  const qr = usePortalQrAuth({
+  // On a window too small in either dimension the badge is never even mounted
+  // by the shell, but the media query gate keeps the transport from starting
+  // there too — an always-on QR must not cost a generate call on a viewport
+  // that never renders it. This string is the JS twin of the badge's own
+  // arbitrary media variant; the two must be changed together.
+  const qrEligible = useMediaQuery('(min-width: 1024px) and (min-height: 760px)');
+  const qrEnabled =
+    qrEligible &&
+    phase === 'email' &&
+    !passwordExpanded &&
+    !sendOtp.isPending &&
+    !passwordSubmitting &&
+    !devSubmitting;
+  const qr = useAmbientQrAuth({
     baseUrl: QR_AUTH_BASE_URL,
-    enabled:
-      qrExpanded &&
-      phase === 'email' &&
-      !passwordExpanded &&
-      !sendOtp.isPending &&
-      !passwordSubmitting &&
-      !devSubmitting,
+    enabled: qrEnabled,
   });
   const cancelQr = qr.cancel;
 
@@ -111,14 +118,13 @@ function SignInContent() {
   }, [resendInSeconds]);
 
   useEffect(() => {
-    if (qr.state === 'authenticated') finish('qr');
-  }, [finish, qr.state]);
+    if (qr.qrState === 'authenticated') finish('qr');
+  }, [finish, qr.qrState]);
 
   const sendCode = useCallback(async () => {
     const normalizedEmail = email.trim();
     if (!normalizedEmail) return;
     cancelQr();
-    setQrExpanded(false);
     setError(null);
     try {
       await sendOtp.mutateAsync({
@@ -165,7 +171,6 @@ function SignInContent() {
   const signInWithPassword = useCallback(async () => {
     if (!email.trim() || !password) return;
     cancelQr();
-    setQrExpanded(false);
     setError(null);
     setPasswordSubmitting(true);
     try {
@@ -190,7 +195,6 @@ function SignInContent() {
 
   const signInWithApple = useCallback(async () => {
     cancelQr();
-    setQrExpanded(false);
     setError(null);
     setPhase('apple-pending');
     try {
@@ -215,7 +219,6 @@ function SignInContent() {
   const handleDevLogin = useCallback(
     async (devEmail: string, devPassword: string) => {
       cancelQr();
-      setQrExpanded(false);
       setDevSubmitting(true);
       setDevAuthError(null);
       try {
@@ -251,69 +254,48 @@ function SignInContent() {
           ? 'password'
           : phase === 'apple-pending'
             ? 'apple-pending'
-            : qrExpanded
-              ? qr.state === 'expired'
-                ? 'qr-expired'
-                : 'qr'
-              : 'email';
+            : 'email';
 
-  const qrCode =
-    qr.state === 'denied' ? (
-      <div role="status" className="space-y-3 text-sm text-[#65594E]">
-        <p className="font-semibold text-[#2C2926]">
-          That request was declined.
-        </p>
-        <button
-          type="button"
-          className="min-h-11 underline underline-offset-4"
-          onClick={() => void qr.regenerate()}
-        >
-          Make a new QR code
-        </button>
-      </div>
-    ) : qr.state === 'error' ? (
-      <div role="alert" className="space-y-3 text-sm text-[#65594E]">
-        <p>{qr.failure?.message ?? 'We could not prepare a QR code.'}</p>
-        <button
-          type="button"
-          className="min-h-11 underline underline-offset-4"
-          onClick={() => void qr.regenerate()}
-        >
-          Try QR again
-        </button>
-      </div>
-    ) : qr.qrUrl ? (
-      <QRCodeSVG
-        value={qr.qrUrl}
-        size={144}
-        level="M"
-        bgColor="transparent"
-        fgColor="#2C2926"
-      />
-    ) : undefined;
+  // The old right-pane disclosure's states relocate to the badge's own
+  // caption. Everything else (loading/refreshing/resting/expired-renewing)
+  // reads its default copy straight off `qr.phase`.
+  const qrStatusMessage =
+    qr.qrState === 'verifying' || qr.qrState === 'authenticated'
+      ? 'Approved — signing you in…'
+      : qr.qrState === 'denied'
+        ? 'That request was declined.'
+        : undefined;
 
-  const qrDescription =
-    qr.state === 'loading'
-      ? 'Preparing a private code for your phone.'
-      : qr.state === 'verifying'
-        ? 'Your phone approved this code. Confirming your session now.'
-        : qr.state === 'denied'
-          ? 'No session was opened. You can make a new code or use email.'
-          : qr.state === 'error'
-            ? 'Use email while the QR connection is unavailable.'
-            : qr.state === 'pending'
-              ? `Scan with the Patina app. Expires in ${qr.secondsRemaining}s.`
-              : 'Use your signed-in phone to scan this code.';
   const isAuthSubmitting =
     sendOtp.isPending ||
     verifyOtp.isPending ||
     passwordSubmitting ||
     devSubmitting ||
     phase === 'apple-pending' ||
-    qr.state === 'verifying';
+    qr.qrState === 'verifying';
+
+  /**
+   * Shown whenever the transport is doing something or still holds a code —
+   * identical in all three portals, so a password toggle cannot make the badge
+   * pop in and out. `url` is passed through as-is: null means "no code yet",
+   * which the badge draws as a placeholder rather than a QR of the empty
+   * string. `onWake` is withheld inside the rate-limit backoff so the badge
+   * never offers a tap that would be swallowed.
+   */
+  const qrBadge: PortalAuthQrProps | undefined =
+    qrEligible && (qr.qrState !== 'idle' || qr.qrUrl !== null)
+      ? {
+          url: qr.qrUrl,
+          secondsRemaining: qr.secondsRemaining,
+          totalSeconds: qr.totalSeconds,
+          phase: qr.phase,
+          statusMessage: qrStatusMessage,
+          onWake: qr.wakeAvailable ? qr.wake : undefined,
+        }
+      : undefined;
 
   return (
-    <AdminAuthShell>
+    <AdminAuthShell qr={qrBadge}>
       <PortalLogin
         state={loginState}
         email={email}
@@ -332,17 +314,6 @@ function SignInContent() {
         onResendCode={sendCode}
         error={error}
         isSubmitting={isAuthSubmitting}
-        qrCode={qrCode}
-        qrDescription={qrDescription}
-        onOpenQr={() => {
-          setQrExpanded(true);
-          setError(null);
-        }}
-        onCloseQr={() => {
-          cancelQr();
-          setQrExpanded(false);
-        }}
-        onRefreshQr={() => void qr.regenerate()}
         oauthActions={[
           {
             id: 'apple',
@@ -361,10 +332,7 @@ function SignInContent() {
         passwordExpanded={passwordExpanded}
         onPasswordExpandedChange={(expanded) => {
           setPasswordExpanded(expanded);
-          if (expanded) {
-            cancelQr();
-            setQrExpanded(false);
-          }
+          if (expanded) cancelQr();
           setPhase(expanded ? 'password' : 'email');
           setError(null);
         }}

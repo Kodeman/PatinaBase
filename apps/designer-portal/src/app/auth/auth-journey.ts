@@ -1,5 +1,4 @@
-import { safeAuthReturnPath, type PortalQrAuthState } from '@patina/supabase';
-import type { PortalLoginState } from '@patina/design-system';
+import { safeAuthReturnPath } from '@patina/supabase';
 import { DESIGNER_AUTH_DESTINATION } from './auth-shell';
 
 export type DesignerLoginPhase =
@@ -9,10 +8,15 @@ export type DesignerLoginPhase =
   | 'apple-pending'
   | 'success';
 
-/** Product order; the shared component renders this exact sequence. */
+/**
+ * Product order; the shared component renders this exact sequence.
+ *
+ * QR is no longer one of them: it left the right-pane disclosure for the
+ * always-visible ambient badge in the brand pane, so it is a surface, not a
+ * method the form offers.
+ */
 export const DESIGNER_SIGNIN_METHODS = [
   'email-otp',
-  'qr',
   'apple',
   'password',
 ] as const;
@@ -96,43 +100,4 @@ export function callbackDestination({
 
 export function confirmedSession(...sessions: Array<unknown>): boolean {
   return sessions.some((session) => Boolean(session && typeof session === 'object'));
-}
-
-/** QR transport is opt-in: the hook must never create or poll a code while collapsed. */
-export function shouldActivateQr(
-  expanded: boolean,
-  phase: DesignerLoginPhase = 'email',
-  passwordExpanded = false,
-  submitting = false,
-): boolean {
-  return expanded && phase === 'email' && !passwordExpanded && !submitting;
-}
-
-export function designerLoginState(
-  phase: DesignerLoginPhase,
-  qrExpanded: boolean,
-  qrState: PortalQrAuthState,
-): PortalLoginState {
-  if (phase === 'success') return 'success';
-  if (phase === 'code') return 'code';
-  if (phase === 'password') return 'password';
-  if (phase === 'apple-pending') return 'apple-pending';
-  if (!qrExpanded) return 'email';
-  return qrState === 'expired' || qrState === 'denied'
-    ? 'qr-expired'
-    : 'qr';
-}
-
-export function qrPresentation(
-  state: PortalQrAuthState,
-  secondsRemaining: number,
-  failureMessage?: string,
-): { loginState: PortalLoginState; description: string } {
-  if (state === 'expired') return { loginState: 'qr-expired', description: 'That code has expired. Refresh it to try again.' };
-  if (state === 'denied') return { loginState: 'qr-expired', description: 'This code was declined. Refresh it to try again.' };
-  if (state === 'verifying') return { loginState: 'qr', description: 'Your phone approved this code. Confirming your session now.' };
-  if (state === 'loading') return { loginState: 'qr', description: 'Preparing a private code for your phone.' };
-  if (state === 'error') return { loginState: 'qr', description: failureMessage ?? 'We could not prepare a QR code. Refresh it or use email instead.' };
-  if (state === 'pending') return { loginState: 'qr', description: `Scan with the Patina app. Expires in ${secondsRemaining}s.` };
-  return { loginState: 'qr', description: 'Use your signed-in phone to scan this code.' };
 }

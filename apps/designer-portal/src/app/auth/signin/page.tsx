@@ -3,22 +3,35 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { QRCodeSVG } from 'qrcode.react';
 import {
   buildAuthCallbackUrl,
   buildVerifyOtpPath,
   createBrowserClient,
   isOAuthProviderEnabled,
   normalizeAuthError,
-  usePortalQrAuth,
+  useAmbientQrAuth,
   useSendEmailOtp,
   useVerifyOtp,
 } from '@patina/supabase';
-import { DevAccountsPanel, PortalAuthNotice, PortalLogin } from '@patina/design-system';
+import {
+  DevAccountsPanel,
+  PortalAuthNotice,
+  PortalLogin,
+  useMediaQuery,
+  type PortalAuthQrProps,
+} from '@patina/design-system';
 import { getAccountsForPortal } from '@patina/types';
 import { authEvents } from '@/lib/analytics/events';
 import { DESIGNER_AUTH_DESTINATION, DesignerAuthShell } from '../auth-shell';
-import { confirmedSession, designerDestination, designerLoginState, designerSignInNotice, qrPresentation, shouldActivateQr, type DesignerLoginPhase } from '../auth-journey';
+import { confirmedSession, designerDestination, designerSignInNotice, type DesignerLoginPhase } from '../auth-journey';
+
+/**
+ * The brand pane only carries the badge on a window that is both wide enough
+ * and tall enough for it — below either threshold nothing is generated either.
+ * This string is the JS twin of the badge's own arbitrary media variant; the
+ * two must be changed together.
+ */
+const QR_VIEWPORT = '(min-width: 1024px) and (min-height: 760px)';
 
 function SignInContent() {
   const searchParams = useSearchParams();
@@ -34,22 +47,26 @@ function SignInContent() {
   const [password, setPassword] = useState('');
   const [phase, setPhase] = useState<DesignerLoginPhase>('email');
   const [passwordExpanded, setPasswordExpanded] = useState(false);
-  const [qrExpanded, setQrExpanded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resendInSeconds, setResendInSeconds] = useState(0);
   const [passwordSubmitting, setPasswordSubmitting] = useState(false);
   const [devSubmitting, setDevSubmitting] = useState(false);
   const [devAuthError, setDevAuthError] = useState<string | null>(null);
   const navigated = useRef(false);
-  const qr = usePortalQrAuth({
-    baseUrl: '',
-    enabled: shouldActivateQr(
-      qrExpanded,
-      phase,
-      passwordExpanded,
-      sendOtp.isPending || passwordSubmitting,
-    ),
-  });
+  /**
+   * The viewport gate is folded into `enabled`, not just into CSS: below `lg`
+   * the badge is never rendered AND the QR endpoints are never called, so a
+   * phone visiting sign-in costs the shared rate limiter nothing. The hook is
+   * SSR-safe (false until the effect runs), so the server renders no badge.
+   */
+  const qrEligible = useMediaQuery(QR_VIEWPORT);
+  const qrEnabled =
+    qrEligible &&
+    phase === 'email' &&
+    !passwordExpanded &&
+    !sendOtp.isPending &&
+    !passwordSubmitting;
+  const qr = useAmbientQrAuth({ baseUrl: '', enabled: qrEnabled });
   const cancelQr = qr.cancel;
 
   const finish = useCallback((method: string) => {
@@ -72,13 +89,12 @@ function SignInContent() {
   }, [resendInSeconds]);
 
   useEffect(() => {
-    if (qr.state === 'authenticated') finish('qr');
-  }, [finish, qr.state]);
+    if (qr.qrState === 'authenticated') finish('qr');
+  }, [finish, qr.qrState]);
 
   const sendCode = useCallback(async () => {
     if (!email.trim()) return;
     cancelQr();
-    setQrExpanded(false);
     setError(null);
     try {
       await sendOtp.mutateAsync({
@@ -114,7 +130,6 @@ function SignInContent() {
 
   const signInWithPassword = useCallback(async () => {
     cancelQr();
-    setQrExpanded(false);
     setError(null);
     setPasswordSubmitting(true);
     try {
@@ -133,7 +148,6 @@ function SignInContent() {
 
   const signInWithApple = useCallback(async () => {
     cancelQr();
-    setQrExpanded(false);
     setError(null);
     setPhase('apple-pending');
     try {
@@ -154,7 +168,6 @@ function SignInContent() {
 
   const handleDevLogin = useCallback(async (devEmail: string, devPassword: string) => {
     cancelQr();
-    setQrExpanded(false);
     setDevSubmitting(true);
     setDevAuthError(null);
     try {
@@ -171,30 +184,54 @@ function SignInContent() {
     }
   }, [cancelQr, finish]);
 
-  const qrState = designerLoginState(phase, qrExpanded, qr.state);
-  const qrView = qrPresentation(qr.state, qr.secondsRemaining, qr.failure?.message);
-  const visibleError = error || (qr.state === 'denied'
-    ? 'This QR code was declined. Refresh it for a new code, or use email instead.'
-    : qr.state === 'error'
-      ? qr.failure?.message ?? 'We could not prepare a QR code. Refresh it or use email instead.'
-      : null);
+  /**
+   * The QR's own outcomes are told in the badge now, not as a form error: an
+   * approval, a decline, and a failed generate all read in the brand pane, so
+   * the paper side only ever carries what the person typed.
+   */
+  const qrStatusMessage =
+    qr.qrState === 'verifying' || qr.qrState === 'authenticated'
+      ? 'Approved — signing you in…'
+      : qr.qrState === 'denied'
+        ? 'That request was declined.'
+        : undefined;
+  /**
+   * Shown whenever the transport is doing something or still holds a code —
+   * identical in all three portals, so a password toggle cannot make the badge
+   * pop in and out. `url` is passed through as-is: null means "no code yet",
+   * which the badge draws as a placeholder rather than a QR of the empty
+   * string. `onWake` is withheld inside the rate-limit backoff so the badge
+   * never offers a tap that would be swallowed.
+   */
+  const qrBadge: PortalAuthQrProps | undefined =
+    qrEligible && (qr.qrState !== 'idle' || qr.qrUrl !== null)
+      ? {
+          url: qr.qrUrl,
+          secondsRemaining: qr.secondsRemaining,
+          totalSeconds: qr.totalSeconds,
+          phase: qr.phase,
+          statusMessage: qrStatusMessage,
+          onWake: qr.wakeAvailable ? qr.wake : undefined,
+        }
+      : undefined;
+  const visibleError = error;
   const isAuthSubmitting =
     sendOtp.isPending ||
     verifyOtp.isPending ||
     passwordSubmitting ||
     devSubmitting ||
     phase === 'apple-pending' ||
-    qr.state === 'verifying';
+    qr.qrState === 'verifying';
 
   return (
-    <DesignerAuthShell>
+    <DesignerAuthShell qr={qrBadge}>
       {entryNotice && (
         <PortalAuthNotice tone={entryNotice.tone} title={entryNotice.title} className="mb-5">
           {entryNotice.description}
         </PortalAuthNotice>
       )}
       <PortalLogin
-        state={qrState}
+        state={phase}
         email={email}
         onEmailChange={(value) => { setEmail(value); setError(null); }}
         onSendCode={sendCode}
@@ -205,17 +242,12 @@ function SignInContent() {
         onResendCode={sendCode}
         error={visibleError}
         isSubmitting={isAuthSubmitting}
-        qrCode={qr.qrUrl ? <QRCodeSVG value={qr.qrUrl} size={144} level="M" bgColor="transparent" fgColor="#2C2926" /> : undefined}
-        qrDescription={qrView.description}
-        onOpenQr={() => { setQrExpanded(true); setError(null); }}
-        onCloseQr={() => { cancelQr(); setQrExpanded(false); }}
-        onRefreshQr={() => void qr.regenerate()}
         oauthActions={[{ id: 'apple', label: 'Continue with Apple', available: isOAuthProviderEnabled('apple'), pending: phase === 'apple-pending', onSelect: signInWithApple }]}
         password={password}
         onPasswordChange={(value) => { setPassword(value); setError(null); }}
         onPasswordSignIn={signInWithPassword}
         passwordExpanded={passwordExpanded}
-        onPasswordExpandedChange={(expanded) => { setPasswordExpanded(expanded); if (expanded) { cancelQr(); setQrExpanded(false); } setPhase(expanded ? 'password' : 'email'); setError(null); }}
+        onPasswordExpandedChange={(expanded) => { setPasswordExpanded(expanded); if (expanded) cancelQr(); setPhase(expanded ? 'password' : 'email'); setError(null); }}
         onForgotPassword={() => { cancelQr(); window.location.assign(`/auth/forgot-password?callbackUrl=${encodeURIComponent(destination)}`); }}
         onChangeMethod={() => { setPhase('email'); setCode(''); setError(null); }}
         onContinue={() => window.location.replace(destination)}

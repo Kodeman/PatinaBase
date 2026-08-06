@@ -1,18 +1,18 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { QRCodeSVG } from 'qrcode.react';
 import {
   createBrowserClient,
   isOAuthProviderEnabled,
-  usePortalQrAuth,
+  useAmbientQrAuth,
   useSendEmailOtp,
   useVerifyOtp,
 } from '@patina/supabase';
 import { normalizeAuthError } from '@patina/supabase/auth';
+import { useMediaQuery } from '@patina/design-system';
 import {
-  PortalAuthNotice,
   PortalLogin,
+  type PortalAuthQrProps,
   type PortalLoginState,
 } from '@patina/design-system/PortalAuth';
 import {
@@ -54,7 +54,6 @@ export function ClientPortalLogin({
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
   const [passwordExpanded, setPasswordExpanded] = useState(false);
-  const [qrExpanded, setQrExpanded] = useState(false);
   const [resendInSeconds, setResendInSeconds] = useState(0);
   const [error, setError] = useState<string | null>(
     initialError
@@ -65,10 +64,16 @@ export function ClientPortalLogin({
   const completingRef = useRef(false);
   const redirectingRef = useRef(false);
 
-  const qr = usePortalQrAuth({
+  // SSR-safe, defaults false: the ambient QR is hidden on a window too small in
+  // either dimension by the badge's own CSS, but it must not be GENERATED there
+  // either — an always-on QR costs a generate + a poll loop against the shared,
+  // rate-limited endpoint on every page view. This string is the JS twin of the
+  // badge's own arbitrary media variant; the two must be changed together.
+  const qrEligible = useMediaQuery('(min-width: 1024px) and (min-height: 760px)');
+  const qr = useAmbientQrAuth({
     baseUrl: QR_AUTH_BASE_URL,
     enabled:
-      qrExpanded &&
+      qrEligible &&
       state === 'email' &&
       !passwordExpanded &&
       !isSubmitting,
@@ -112,8 +117,8 @@ export function ClientPortalLogin({
   );
 
   useEffect(() => {
-    if (qr.state === 'authenticated') void finishAuthenticated('qr');
-  }, [finishAuthenticated, qr.state]);
+    if (qr.qrState === 'authenticated') void finishAuthenticated('qr');
+  }, [finishAuthenticated, qr.qrState]);
 
   useEffect(() => {
     if (state !== 'success') return;
@@ -127,7 +132,6 @@ export function ClientPortalLogin({
     const normalizedEmail = email.trim();
     if (!normalizedEmail) return;
     cancelQr();
-    setQrExpanded(false);
     setIsSubmitting(true);
     setError(null);
     try {
@@ -165,7 +169,6 @@ export function ClientPortalLogin({
   const signInWithPassword = async () => {
     if (!email.trim() || !password) return;
     cancelQr();
-    setQrExpanded(false);
     setIsSubmitting(true);
     setError(null);
     try {
@@ -186,7 +189,6 @@ export function ClientPortalLogin({
 
   const signInWithApple = async () => {
     cancelQr();
-    setQrExpanded(false);
     setState('apple-pending');
     setError(null);
     try {
@@ -204,70 +206,40 @@ export function ClientPortalLogin({
     }
   };
 
-  let loginState = state;
-  if (state !== 'code' && state !== 'apple-pending' && state !== 'success') {
-    loginState = qrExpanded
-      ? qr.state === 'expired'
-        ? 'qr-expired'
-        : 'qr'
-      : 'email';
-  }
+  // The right-pane QR disclosure is gone — its states relocate onto the
+  // ambient badge's caption. Everything else (live countdown, refreshing,
+  // resting, error) is drawn straight from `qr.phase` by the badge itself.
+  const qrStatusMessage =
+    qr.qrState === 'verifying' || qr.qrState === 'authenticated'
+      ? 'Approved — signing you in…'
+      : qr.qrState === 'denied'
+        ? 'That request was declined.'
+        : undefined;
 
-  let qrCode: React.ReactNode;
-  let qrDescription: string | undefined;
-  if (qr.state === 'denied') {
-    qrCode = (
-      <div className="space-y-3">
-        <PortalAuthNotice tone="error" title="Request declined">
-          Approve a new request from a signed-in phone, or choose another
-          sign-in method.
-        </PortalAuthNotice>
-        <button
-          type="button"
-          onClick={() => void qr.regenerate()}
-          className="min-h-11 text-sm font-semibold underline underline-offset-4"
-        >
-          Make a new QR code
-        </button>
-      </div>
-    );
-    qrDescription = 'This QR request was declined.';
-  } else if (qr.state === 'error') {
-    qrCode = (
-      <div className="space-y-3">
-        <PortalAuthNotice tone="error" title="QR unavailable">
-          {qr.failure?.message ?? 'We couldn’t prepare a QR code.'}
-        </PortalAuthNotice>
-        <button
-          type="button"
-          onClick={() => void qr.regenerate()}
-          className="min-h-11 text-sm font-semibold underline underline-offset-4"
-        >
-          Try another QR code
-        </button>
-      </div>
-    );
-    qrDescription = 'Refresh the QR code, or sign in another way.';
-  } else if (qr.qrUrl) {
-    qrCode = (
-      <QRCodeSVG
-        value={qr.qrUrl}
-        size={136}
-        title="Client portal sign-in QR code"
-      />
-    );
-    qrDescription =
-      qr.state === 'verifying'
-        ? 'Approved. Finishing your secure sign-in…'
-        : qr.state === 'authenticated'
-          ? 'Signed in. Opening your projects now…'
-          : `Scan with your signed-in phone. Expires in ${qr.secondsRemaining} seconds.`;
-  }
+  /**
+   * Shown whenever the transport is doing something or still holds a code —
+   * identical in all three portals, so a password toggle cannot make the badge
+   * pop in and out. `url` is passed through as-is: null means "no code yet",
+   * which the badge draws as a placeholder rather than a QR of the empty
+   * string. `onWake` is withheld inside the rate-limit backoff so the badge
+   * never offers a tap that would be swallowed.
+   */
+  const qrBadge: PortalAuthQrProps | undefined =
+    qrEligible && (qr.qrState !== 'idle' || qr.qrUrl !== null)
+      ? {
+          url: qr.qrUrl,
+          secondsRemaining: qr.secondsRemaining,
+          totalSeconds: qr.totalSeconds,
+          phase: qr.phase,
+          statusMessage: qrStatusMessage,
+          onWake: qr.wakeAvailable ? qr.wake : undefined,
+        }
+      : undefined;
 
   return (
-    <ClientAuthShell>
+    <ClientAuthShell qr={qrBadge}>
       <PortalLogin
-        state={loginState}
+        state={state}
         email={email}
         onEmailChange={setEmail}
         onSendCode={() => void sendCode()}
@@ -277,17 +249,6 @@ export function ClientPortalLogin({
         resendInSeconds={resendInSeconds}
         onResendCode={() => void sendCode()}
         error={error}
-        qrCode={qrCode}
-        qrDescription={qrDescription}
-        onOpenQr={() => {
-          setError(null);
-          setQrExpanded(true);
-        }}
-        onCloseQr={() => {
-          cancelQr();
-          setQrExpanded(false);
-        }}
-        onRefreshQr={() => void qr.regenerate()}
         oauthActions={[
           {
             id: 'apple',
@@ -302,11 +263,8 @@ export function ClientPortalLogin({
         onPasswordSignIn={() => void signInWithPassword()}
         passwordExpanded={passwordExpanded}
         onPasswordExpandedChange={(expanded) => {
+          if (expanded) cancelQr();
           setPasswordExpanded(expanded);
-          if (expanded) {
-            cancelQr();
-            setQrExpanded(false);
-          }
         }}
         onForgotPassword={() => {
           cancelQr();
@@ -324,7 +282,7 @@ export function ClientPortalLogin({
         isSubmitting={
           isSubmitting ||
           state === 'apple-pending' ||
-          qr.state === 'verifying'
+          qr.qrState === 'verifying'
         }
       />
     </ClientAuthShell>

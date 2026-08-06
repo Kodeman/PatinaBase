@@ -19,7 +19,7 @@ describe('ClientAuthShell', () => {
     ).toBeInTheDocument();
     expect(screen.getByText(/their clients/)).toBeInTheDocument();
     expect(
-      screen.getByRole('link', { name: /support@patina.com/ }),
-    ).toHaveAttribute('href', 'mailto:support@patina.com');
+      screen.getByRole('link', { name: /support@patina.cloud/ }),
+    ).toHaveAttribute('href', 'mailto:support@patina.cloud');
   });
 });
