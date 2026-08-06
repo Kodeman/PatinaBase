@@ -196,7 +196,15 @@ test.describe('plan transmittal guest link (Plan Room 00429)', () => {
     // an intermediary caching the page keyed on the token URL would keep
     // serving a revoked link's sheet list.
     expect(pageResponse?.headers()['x-robots-tag']).toBe('noindex, nofollow');
-    expect(pageResponse?.headers()['cache-control']).toContain('no-store');
+    // Middleware sets 'private, no-store, max-age=0'; Next's DEV server
+    // rewrites Cache-Control (only) on dynamically rendered page HTML to
+    // 'no-cache, must-revalidate' — which still forces revalidation, so a
+    // revoked token re-renders to the dead link. Accept any
+    // revalidation-mandating value and fail on anything cacheable; the exact
+    // prod header is verified by the post-deploy probe.
+    const cacheControl = pageResponse?.headers()['cache-control'] ?? '';
+    expect(cacheControl).toMatch(/no-store|no-cache/);
+    expect(cacheControl).not.toMatch(/public|s-maxage|max-age=[1-9]/);
     await expect(
       page.getByRole('heading', { name: new RegExp(`Reyes Tile Co\\.`) }),
     ).toBeVisible({ timeout: 20000 });
