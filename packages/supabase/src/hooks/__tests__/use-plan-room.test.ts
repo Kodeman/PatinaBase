@@ -72,6 +72,7 @@ type QueryConfig<T> = {
 
 type MutationConfig<TArgs, TData> = {
   retry?: boolean;
+  gcTime?: number;
   mutationFn: (args: TArgs) => Promise<TData>;
   onSuccess: () => void;
 };
@@ -224,11 +225,13 @@ describe('usePlanRoom', () => {
 });
 
 describe('usePlanRoomHoldings', () => {
-  it('calls get_plan_room_holdings with p_project_id', async () => {
+  it('calls get_plan_room_holdings with p_project_id and unwraps data', async () => {
+    const holdings = { parties: [{ partyDisplayName: 'Ada Mason' }] };
+    supabaseClient.rpc.mockResolvedValue({ data: holdings, error: null });
     const query = usePlanRoomHoldings('p1') as unknown as QueryConfig<unknown>;
     expect(query.queryKey).toEqual(['plan-room', 'holdings', 'p1']);
     expect(query.enabled).toBe(true);
-    await query.queryFn();
+    expect(await query.queryFn()).toEqual(holdings);
     expect(supabaseClient.rpc).toHaveBeenCalledWith('get_plan_room_holdings', {
       p_project_id: 'p1',
     });
@@ -236,12 +239,14 @@ describe('usePlanRoomHoldings', () => {
 });
 
 describe('usePlanIssuePreview', () => {
-  it('omits p_sheet_ids when sheetIds is null', async () => {
+  it('omits p_sheet_ids when sheetIds is null and unwraps data', async () => {
+    const preview = { checksumPreview: 'abc123', sheets: [], priorIssue: null };
+    supabaseClient.rpc.mockResolvedValue({ data: preview, error: null });
     const query = usePlanIssuePreview(
       'p1',
       null,
     ) as unknown as QueryConfig<unknown>;
-    await query.queryFn();
+    expect(await query.queryFn()).toEqual(preview);
     expect(supabaseClient.rpc).toHaveBeenCalledWith('preview_plan_issue', {
       p_project_id: 'p1',
     });
@@ -298,40 +303,59 @@ describe('useFilePlanPrints', () => {
     });
   });
 
-  it('invalidates exactly room, holdings and folio-files on success', () => {
+  it('invalidates exactly room, holdings, issue-preview prefix and folio-files on success', () => {
     config().onSuccess();
     expect(invalidateQueries.mock.calls).toEqual([
       [{ queryKey: ['plan-room', 'room', 'p1'] }],
       [{ queryKey: ['plan-room', 'holdings', 'p1'] }],
+      [{ queryKey: ['plan-room', 'issue-preview', 'p1'] }],
       [{ queryKey: ['folio-files', 'p1'] }],
     ]);
   });
 });
 
 describe('useSetPlanSheetState', () => {
-  it('calls set_plan_sheet_state with p_sheet_id and p_state', async () => {
-    const mutation = useSetPlanSheetState('p1') as unknown as MutationConfig<
+  const config = () =>
+    useSetPlanSheetState('p1') as unknown as MutationConfig<
       { sheetId: string; state: string },
       unknown
     >;
-    await mutation.mutationFn({ sheetId: 'sheet-1', state: 'shared' });
+
+  it('calls set_plan_sheet_state with p_sheet_id and p_state', async () => {
+    await config().mutationFn({ sheetId: 'sheet-1', state: 'shared' });
     expect(supabaseClient.rpc).toHaveBeenCalledWith('set_plan_sheet_state', {
       p_sheet_id: 'sheet-1',
       p_state: 'shared',
     });
   });
+
+  it('invalidates exactly room, issue-preview prefix and folio-files on success', () => {
+    config().onSuccess();
+    expect(invalidateQueries.mock.calls).toEqual([
+      [{ queryKey: ['plan-room', 'room', 'p1'] }],
+      [{ queryKey: ['plan-room', 'issue-preview', 'p1'] }],
+      [{ queryKey: ['folio-files', 'p1'] }],
+    ]);
+  });
 });
 
 describe('useDeletePlanSheet', () => {
+  const config = () =>
+    useDeletePlanSheet('p1') as unknown as MutationConfig<string, unknown>;
+
   it('calls delete_plan_sheet with p_sheet_id', async () => {
-    const mutation = useDeletePlanSheet('p1') as unknown as MutationConfig<
-      string,
-      unknown
-    >;
-    await mutation.mutationFn('sheet-1');
+    await config().mutationFn('sheet-1');
     expect(supabaseClient.rpc).toHaveBeenCalledWith('delete_plan_sheet', {
       p_sheet_id: 'sheet-1',
     });
+  });
+
+  it('invalidates exactly room and issue-preview prefix on success', () => {
+    config().onSuccess();
+    expect(invalidateQueries.mock.calls).toEqual([
+      [{ queryKey: ['plan-room', 'room', 'p1'] }],
+      [{ queryKey: ['plan-room', 'issue-preview', 'p1'] }],
+    ]);
   });
 });
 
@@ -365,6 +389,15 @@ describe('useCreatePlanIssue', () => {
       p_sheet_ids: ['sheet-1'],
     });
   });
+
+  it('invalidates exactly room, holdings and issue-preview prefix on success', () => {
+    config().onSuccess();
+    expect(invalidateQueries.mock.calls).toEqual([
+      [{ queryKey: ['plan-room', 'room', 'p1'] }],
+      [{ queryKey: ['plan-room', 'holdings', 'p1'] }],
+      [{ queryKey: ['plan-room', 'issue-preview', 'p1'] }],
+    ]);
+  });
 });
 
 describe('useCreatePlanTransmittal', () => {
@@ -381,9 +414,10 @@ describe('useCreatePlanTransmittal', () => {
       unknown
     >;
 
-  it('is non-retrying and calls create_plan_transmittal with the p_ args', async () => {
+  it('is non-retrying, evicts the token-bearing result immediately, and calls create_plan_transmittal with the p_ args', async () => {
     const mutation = config();
     expect(mutation.retry).toBe(false);
+    expect(mutation.gcTime).toBe(0);
 
     await mutation.mutationFn({ issueId: 'issue-1', purpose: 'construction' });
     expect(supabaseClient.rpc).toHaveBeenCalledWith('create_plan_transmittal', {
@@ -411,13 +445,31 @@ describe('useCreatePlanTransmittal', () => {
       },
     );
   });
+
+  it('invalidates exactly room and holdings on success', () => {
+    config().onSuccess();
+    expect(invalidateQueries.mock.calls).toEqual([
+      [{ queryKey: ['plan-room', 'room', 'p1'] }],
+      [{ queryKey: ['plan-room', 'holdings', 'p1'] }],
+    ]);
+  });
 });
 
 describe('transmittal link mutations', () => {
-  it('reissue calls reissue_plan_transmittal_link with p_transmittal_id', async () => {
-    const mutation = useReissuePlanTransmittalLink(
-      'p1',
-    ) as unknown as MutationConfig<string, unknown>;
+  const reissue = () =>
+    useReissuePlanTransmittalLink('p1') as unknown as MutationConfig<
+      string,
+      unknown
+    >;
+  const revoke = () =>
+    useRevokePlanTransmittalLink('p1') as unknown as MutationConfig<
+      string,
+      unknown
+    >;
+
+  it('reissue evicts the token-bearing result immediately and calls reissue_plan_transmittal_link with p_transmittal_id', async () => {
+    const mutation = reissue();
+    expect(mutation.gcTime).toBe(0);
     await mutation.mutationFn('tx-1');
     expect(supabaseClient.rpc).toHaveBeenCalledWith(
       'reissue_plan_transmittal_link',
@@ -425,15 +477,44 @@ describe('transmittal link mutations', () => {
     );
   });
 
+  it('reissue invalidates exactly room and holdings on success', () => {
+    reissue().onSuccess();
+    expect(invalidateQueries.mock.calls).toEqual([
+      [{ queryKey: ['plan-room', 'room', 'p1'] }],
+      [{ queryKey: ['plan-room', 'holdings', 'p1'] }],
+    ]);
+  });
+
   it('revoke calls revoke_plan_transmittal_link with p_transmittal_id', async () => {
-    const mutation = useRevokePlanTransmittalLink(
-      'p1',
-    ) as unknown as MutationConfig<string, unknown>;
-    await mutation.mutationFn('tx-1');
+    await revoke().mutationFn('tx-1');
     expect(supabaseClient.rpc).toHaveBeenCalledWith(
       'revoke_plan_transmittal_link',
       { p_transmittal_id: 'tx-1' },
     );
+  });
+
+  it('revoke invalidates exactly room and holdings on success', () => {
+    revoke().onSuccess();
+    expect(invalidateQueries.mock.calls).toEqual([
+      [{ queryKey: ['plan-room', 'room', 'p1'] }],
+      [{ queryKey: ['plan-room', 'holdings', 'p1'] }],
+    ]);
+  });
+});
+
+describe('rpc error propagation', () => {
+  it('throws when the rpc answers with an error', async () => {
+    supabaseClient.rpc.mockResolvedValue({
+      data: null,
+      error: new Error('rpc denied'),
+    });
+    const mutation = useDeletePlanSheet('p1') as unknown as MutationConfig<
+      string,
+      unknown
+    >;
+    await expect(mutation.mutationFn('sheet-1')).rejects.toThrow('rpc denied');
+    const query = usePlanRoomHoldings('p1') as unknown as QueryConfig<unknown>;
+    await expect(query.queryFn()).rejects.toThrow('rpc denied');
   });
 });
 
@@ -512,6 +593,15 @@ describe('useClientPlanSet', () => {
     expect(tables).not.toContain('plan_issue_prints');
     expect(tables).not.toContain('plan_print_batches');
     expect(builders['plan_sheets'].eq).toHaveBeenCalledWith('state', 'shared');
+    expect(builders['plan_sheets'].select).toHaveBeenCalledWith(
+      'id, project_id, sheet_number, title, discipline, state, current_print_id',
+    );
+    expect(builders['plan_prints'].select).toHaveBeenCalledWith(
+      'id, sheet_id, rev_letter, project_document_id, created_at',
+    );
+    expect(builders['project_documents'].select).toHaveBeenCalledWith(
+      'id, storage_path, size_bytes',
+    );
 
     expect(sheets).toEqual([
       {

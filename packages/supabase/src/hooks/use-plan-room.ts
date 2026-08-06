@@ -419,6 +419,11 @@ export function useFilePlanPrints(projectId: string) {
       void queryClient.invalidateQueries({
         queryKey: planRoomKeys.holdings(projectId),
       });
+      // Prefix match — clears every cached preview variant (any sheet-id
+      // selection) so the issue ceremony never shows a stale checksum.
+      void queryClient.invalidateQueries({
+        queryKey: ["plan-room", "issue-preview", projectId],
+      });
       void queryClient.invalidateQueries({
         queryKey: ["folio-files", projectId],
       });
@@ -448,6 +453,9 @@ export function useSetPlanSheetState(projectId: string) {
         queryKey: planRoomKeys.room(projectId),
       });
       void queryClient.invalidateQueries({
+        queryKey: ["plan-room", "issue-preview", projectId],
+      });
+      void queryClient.invalidateQueries({
         queryKey: ["folio-files", projectId],
       });
     },
@@ -467,6 +475,9 @@ export function useDeletePlanSheet(projectId: string) {
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: planRoomKeys.room(projectId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["plan-room", "issue-preview", projectId],
       });
     },
   });
@@ -501,6 +512,9 @@ export function useCreatePlanIssue(projectId: string) {
       void queryClient.invalidateQueries({
         queryKey: planRoomKeys.holdings(projectId),
       });
+      void queryClient.invalidateQueries({
+        queryKey: ["plan-room", "issue-preview", projectId],
+      });
     },
   });
 }
@@ -509,6 +523,9 @@ export function useCreatePlanTransmittal(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     retry: false,
+    // The result carries the raw token; gcTime: 0 evicts it from the
+    // MutationCache on unmount instead of the default five minutes.
+    gcTime: 0,
     mutationFn: async ({
       issueId,
       purpose,
@@ -555,6 +572,9 @@ export function useCreatePlanTransmittal(projectId: string) {
 export function useReissuePlanTransmittalLink(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    // The result carries the raw token; gcTime: 0 evicts it from the
+    // MutationCache on unmount instead of the default five minutes.
+    gcTime: 0,
     mutationFn: async (transmittalId: string) => {
       const { data, error } = await getSupabase().rpc(
         "reissue_plan_transmittal_link",
