@@ -9198,6 +9198,550 @@ export type Database = {
         }
         Relationships: []
       }
+      plan_issue_prints: {
+        Row: {
+          created_at: string
+          id: string
+          issue_id: string
+          print_id: string
+          rev_letter: string
+          sha256: string
+          sheet_id: string
+          sheet_number: string
+          sheet_title: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          issue_id: string
+          print_id: string
+          rev_letter: string
+          sha256: string
+          sheet_id: string
+          sheet_number: string
+          sheet_title: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          issue_id?: string
+          print_id?: string
+          rev_letter?: string
+          sha256?: string
+          sheet_id?: string
+          sheet_number?: string
+          sheet_title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_issue_prints_issue_id_fkey"
+            columns: ["issue_id"]
+            isOneToOne: false
+            referencedRelation: "plan_issues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_issue_prints_print_id_fkey"
+            columns: ["print_id"]
+            isOneToOne: false
+            referencedRelation: "plan_prints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_issue_prints_sheet_id_fkey"
+            columns: ["sheet_id"]
+            isOneToOne: false
+            referencedRelation: "plan_sheets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_issues: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          idempotency_key: string
+          issue_number: number
+          issued_at: string
+          name: string
+          prior_issue_id: string | null
+          project_id: string
+          request_hash: string
+          set_checksum: string
+          sheet_count: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          idempotency_key: string
+          issue_number: number
+          issued_at?: string
+          name: string
+          prior_issue_id?: string | null
+          project_id: string
+          request_hash: string
+          set_checksum: string
+          sheet_count: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          idempotency_key?: string
+          issue_number?: number
+          issued_at?: string
+          name?: string
+          prior_issue_id?: string | null
+          project_id?: string
+          request_hash?: string
+          set_checksum?: string
+          sheet_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_issues_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_issues_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_issues_prior_issue_id_fkey"
+            columns: ["prior_issue_id"]
+            isOneToOne: false
+            referencedRelation: "plan_issues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_issues_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "plan_issues_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_print_batches: {
+        Row: {
+          confirmed_sheet_ids: string[]
+          created_at: string
+          created_by: string | null
+          created_sheet_ids: string[]
+          flipped_sheet_ids: string[]
+          id: string
+          idempotency_key: string
+          item_count: number
+          project_id: string
+          request_hash: string
+          source_filename: string | null
+        }
+        Insert: {
+          confirmed_sheet_ids?: string[]
+          created_at?: string
+          created_by?: string | null
+          created_sheet_ids?: string[]
+          flipped_sheet_ids?: string[]
+          id?: string
+          idempotency_key: string
+          item_count: number
+          project_id: string
+          request_hash: string
+          source_filename?: string | null
+        }
+        Update: {
+          confirmed_sheet_ids?: string[]
+          created_at?: string
+          created_by?: string | null
+          created_sheet_ids?: string[]
+          flipped_sheet_ids?: string[]
+          id?: string
+          idempotency_key?: string
+          item_count?: number
+          project_id?: string
+          request_hash?: string
+          source_filename?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_print_batches_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_print_batches_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_print_batches_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "plan_print_batches_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_prints: {
+        Row: {
+          batch_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          page_index: number | null
+          print_number: number
+          project_document_id: string
+          rev_letter: string
+          sha256: string
+          sheet_id: string
+          source: string
+          source_filename: string | null
+          text_sha256: string | null
+        }
+        Insert: {
+          batch_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          page_index?: number | null
+          print_number: number
+          project_document_id: string
+          rev_letter: string
+          sha256: string
+          sheet_id: string
+          source?: string
+          source_filename?: string | null
+          text_sha256?: string | null
+        }
+        Update: {
+          batch_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          page_index?: number | null
+          print_number?: number
+          project_document_id?: string
+          rev_letter?: string
+          sha256?: string
+          sheet_id?: string
+          source?: string
+          source_filename?: string | null
+          text_sha256?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_prints_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "plan_print_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_prints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_prints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_prints_project_document_id_fkey"
+            columns: ["project_document_id"]
+            isOneToOne: true
+            referencedRelation: "project_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_prints_sheet_id_fkey"
+            columns: ["sheet_id"]
+            isOneToOne: false
+            referencedRelation: "plan_sheets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_sheets: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          current_print_id: string | null
+          current_print_number: number
+          discipline: string | null
+          id: string
+          project_id: string
+          sheet_number: string
+          sort_order: number
+          state: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          current_print_id?: string | null
+          current_print_number?: number
+          discipline?: string | null
+          id?: string
+          project_id: string
+          sheet_number: string
+          sort_order?: number
+          state?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          current_print_id?: string | null
+          current_print_number?: number
+          discipline?: string | null
+          id?: string
+          project_id?: string
+          sheet_number?: string
+          sort_order?: number
+          state?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_sheets_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_sheets_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_sheets_current_print_id_fkey"
+            columns: ["current_print_id"]
+            isOneToOne: false
+            referencedRelation: "plan_prints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_sheets_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "plan_sheets_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_transmittal_tokens: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          expires_at: string
+          first_opened_at: string | null
+          id: string
+          last_used_at: string | null
+          project_id: string
+          status: string
+          token_hash: string
+          transmittal_id: string
+          updated_at: string
+          view_count: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          first_opened_at?: string | null
+          id?: string
+          last_used_at?: string | null
+          project_id: string
+          status?: string
+          token_hash: string
+          transmittal_id: string
+          updated_at?: string
+          view_count?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          first_opened_at?: string | null
+          id?: string
+          last_used_at?: string | null
+          project_id?: string
+          status?: string
+          token_hash?: string
+          transmittal_id?: string
+          updated_at?: string
+          view_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_transmittal_tokens_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_transmittal_tokens_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_transmittal_tokens_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "plan_transmittal_tokens_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_transmittal_tokens_transmittal_id_fkey"
+            columns: ["transmittal_id"]
+            isOneToOne: false
+            referencedRelation: "plan_transmittals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_transmittals: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          issue_id: string
+          message: string | null
+          party_company: string | null
+          party_display_name: string
+          party_email: string | null
+          party_id: string | null
+          project_id: string
+          purpose: string
+          sent_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          issue_id: string
+          message?: string | null
+          party_company?: string | null
+          party_display_name: string
+          party_email?: string | null
+          party_id?: string | null
+          project_id: string
+          purpose: string
+          sent_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          issue_id?: string
+          message?: string | null
+          party_company?: string | null
+          party_display_name?: string
+          party_email?: string | null
+          party_id?: string | null
+          project_id?: string
+          purpose?: string
+          sent_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_transmittals_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_transmittals_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_transmittals_issue_id_fkey"
+            columns: ["issue_id"]
+            isOneToOne: false
+            referencedRelation: "plan_issues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_transmittals_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "project_parties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_transmittals_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "plan_transmittals_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       po_counters: {
         Row: {
           designer_id: string
@@ -24457,6 +25001,12 @@ export type Database = {
         }
         Returns: Json
       }
+      _plan_room_canonical_json: { Args: { p_value: Json }; Returns: string }
+      _plan_room_rev_letter: { Args: { p_n: number }; Returns: string }
+      _plan_room_set_doc_visibility: {
+        Args: { p_doc_id: string; p_visible: boolean }
+        Returns: undefined
+      }
       _prepare_legacy_proposal_phase_insert: {
         Args: { p_proposal_id: string; p_requested_follows_phase_id: string }
         Returns: {
@@ -25726,6 +26276,26 @@ export type Database = {
         }
         Returns: Json
       }
+      create_plan_issue: {
+        Args: {
+          p_idempotency_key: string
+          p_name: string
+          p_project_id: string
+          p_sheet_ids?: string[]
+        }
+        Returns: Json
+      }
+      create_plan_transmittal: {
+        Args: {
+          p_issue_id: string
+          p_message?: string
+          p_party_id?: string
+          p_purpose: string
+          p_recipient_company?: string
+          p_recipient_name?: string
+        }
+        Returns: Json
+      }
       create_project_phase: {
         Args: {
           p_anchor_date?: string
@@ -25928,6 +26498,7 @@ export type Database = {
         Args: { p_decision_id: string }
         Returns: Json
       }
+      delete_plan_sheet: { Args: { p_sheet_id: string }; Returns: Json }
       delete_project_phase: {
         Args: { p_phase_id: string; p_project_id: string }
         Returns: Json
@@ -26320,6 +26891,15 @@ export type Database = {
       field_capture_jsonb_text_array: {
         Args: { p_value: Json }
         Returns: string[]
+      }
+      file_plan_prints: {
+        Args: {
+          p_entries: Json
+          p_idempotency_key: string
+          p_project_id: string
+          p_source_filename?: string
+        }
+        Returns: Json
       }
       finalize_invoice_checkout_attempt: {
         Args: {
@@ -26783,6 +27363,7 @@ export type Database = {
           source: string
         }[]
       }
+      get_plan_room_holdings: { Args: { p_project_id: string }; Returns: Json }
       get_product_configuration: {
         Args: { p_configuration_id: string }
         Returns: Json
@@ -27383,6 +27964,10 @@ export type Database = {
         }
         Returns: Json
       }
+      preview_plan_issue: {
+        Args: { p_project_id: string; p_sheet_ids?: string[] }
+        Returns: Json
+      }
       preview_taste_update: { Args: { p_judgment_id: number }; Returns: Json }
       process_style_quiz: {
         Args: { quiz_answers: Json; timings?: Json }
@@ -27636,6 +28221,10 @@ export type Database = {
       }
       refresh_product_behavior_stats: { Args: never; Returns: undefined }
       refresh_style_centroids: { Args: never; Returns: number }
+      reissue_plan_transmittal_link: {
+        Args: { p_transmittal_id: string }
+        Returns: Json
+      }
       release_proposal_send_dispatch: {
         Args: { p_claim_token: string; p_dispatch_id: string; p_error: string }
         Returns: Json
@@ -27923,6 +28512,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      resolve_plan_transmittal: { Args: { p_token: string }; Returns: Json }
       resolve_spec_book_share: { Args: { p_token: string }; Returns: Json }
       resolve_studio_identity: {
         Args: { p_designer_id?: string; p_project_id?: string }
@@ -28002,6 +28592,10 @@ export type Database = {
       }
       revoke_document_share: { Args: { p_share_id: string }; Returns: boolean }
       revoke_field_link: { Args: { p_token_id: string }; Returns: boolean }
+      revoke_plan_transmittal_link: {
+        Args: { p_transmittal_id: string }
+        Returns: Json
+      }
       revoke_role_from_user: {
         Args: { p_role_name: string; p_user_id: string }
         Returns: boolean
@@ -28351,6 +28945,10 @@ export type Database = {
           p_to_status: string
         }
         Returns: string
+      }
+      set_plan_sheet_state: {
+        Args: { p_sheet_id: string; p_state: string }
+        Returns: Json
       }
       set_project_operational_status: {
         Args: {

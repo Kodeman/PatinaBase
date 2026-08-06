@@ -8849,3 +8849,303 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.get_invoice_payment_options(uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00428_invoice_payment_method_surcharge.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sync_invoice_checkout_attempt() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00428_invoice_payment_method_surcharge.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.sync_invoice_checkout_attempt() TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._plan_room_immutable_row() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_plan_sheets_row() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_project_documents_plan_print() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._plan_room_rev_letter(integer) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._plan_room_canonical_json(jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._plan_room_set_doc_visibility(uuid, boolean) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.file_plan_prints(uuid, text, jsonb, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.file_plan_prints(uuid, text, jsonb, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_plan_sheet_state(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_plan_sheet_state(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.delete_plan_sheet(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.delete_plan_sheet(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.preview_plan_issue(uuid, uuid[]) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.preview_plan_issue(uuid, uuid[]) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_plan_issue(uuid, text, text, uuid[]) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_plan_issue(uuid, text, text, uuid[]) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_plan_transmittal(uuid, text, uuid, text, text, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_plan_transmittal(uuid, text, uuid, text, text, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.reissue_plan_transmittal_link(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.reissue_plan_transmittal_link(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.revoke_plan_transmittal_link(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.revoke_plan_transmittal_link(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.resolve_plan_transmittal(text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.resolve_plan_transmittal(text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_plan_room_holdings(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_plan_room_holdings(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.plan_sheets FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.plan_print_batches FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.plan_prints FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.plan_issues FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.plan_issue_prints FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.plan_transmittals FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.plan_transmittal_tokens FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.plan_sheets TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.plan_print_batches TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.plan_prints TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.plan_issues TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.plan_issue_prints TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.plan_transmittals TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  GRANT UPDATE (title, sheet_number, sort_order, discipline) ON public.plan_sheets TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  GRANT SELECT ( id, transmittal_id, project_id, status, expires_at, first_opened_at, view_count, last_used_at, created_at ) ON public.plan_transmittal_tokens TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.plan_sheets TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.plan_print_batches TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.plan_prints TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.plan_issues TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.plan_issue_prints TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.plan_transmittals TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00429_plan_room_foundation.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.plan_transmittal_tokens TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
