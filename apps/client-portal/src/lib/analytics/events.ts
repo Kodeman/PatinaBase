@@ -84,6 +84,82 @@ export const clientEvents = {
     track('client_check_intent_submitted', { invoice_id: p.invoiceId }),
 };
 
+// ---------------------------------------------------------------------------
+// makingEvents — The Making (single-pane client surface, flag `single-pane`).
+//
+// Three surface events (viewed / gate followed / toll followed) plus the two
+// taps the scored-ink control needs. The designer portal spends its action
+// telemetry through `document-events.ts`, which carries desk and command-bar
+// vocabulary that has no meaning here — so ScoredAction reports through this
+// block instead, on the client portal's own `client_*` + `project_id` idiom.
+//
+// Defined now, fired from the surface: the Surface agent wires viewed/gate/toll
+// as it builds each region. Property law is the portal's: identifiers, counts,
+// and amounts in cents — never a project name, a document title, or a piece of
+// client correspondence.
+// ---------------------------------------------------------------------------
+
+export type MakingGateKind =
+  | 'design_services'
+  | 'furnishings_authorization'
+  | 'service_addendum'
+  | 'trade_scope'
+  | 'trade_acceptance';
+
+export const makingEvents = {
+  /** The Making rendered for a project — with the shape of what it found. */
+  surfaceViewed: (p: {
+    projectId: string;
+    gateCount: number;
+    tollCount: number;
+    trackingCount: number;
+  }) =>
+    track('client_making_surface_viewed', {
+      project_id: p.projectId,
+      gate_count: p.gateCount,
+      toll_count: p.tollCount,
+      tracking_count: p.trackingCount,
+    }),
+
+  /** A gate's act was taken — the client followed a break in the spine. */
+  gateFollowed: (p: {
+    projectId: string;
+    proposalId: string;
+    kind: MakingGateKind;
+  }) =>
+    track('client_making_gate_followed', {
+      project_id: p.projectId,
+      proposal_id: p.proposalId,
+      kind: p.kind,
+    }),
+
+  /** A toll's act was taken — the client went to settle an open balance. */
+  tollFollowed: (p: { projectId: string; invoiceId: string; balanceCents: number }) =>
+    track('client_making_toll_followed', {
+      project_id: p.projectId,
+      invoice_id: p.invoiceId,
+      balance_cents: p.balanceCents,
+    }),
+
+  /** A scored action was mounted (once per action key + presentation). */
+  actionShown: (p: {
+    surface_key: string;
+    region_key: string;
+    action_key: string;
+    variant: string;
+    presentation: string;
+  }) => track('client_making_action_shown', { ...p }),
+
+  /** A scored action was pressed or followed. */
+  actionSelected: (p: {
+    surface_key: string;
+    region_key: string;
+    action_key: string;
+    variant: string;
+    presentation: string;
+  }) => track('client_making_action_selected', { ...p }),
+};
+
 export const navEvents = {
   ctaClick: (ctaText: string, location: string) =>
     track('nav_cta_click', { cta_text: ctaText, location, platform: 'client' }),

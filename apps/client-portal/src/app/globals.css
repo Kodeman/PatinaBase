@@ -26,6 +26,28 @@
   --border-subtle: rgba(229, 226, 221, 0.6);
   --accent-primary: var(--color-clay);
 
+  /* ── Scored Ink prerequisites (ported with the I107 grammar below) ────────
+     The designer portal's DocumentAction CSS reads these by name; they are
+     the designer's own values, verbatim, so a scored action inks identically
+     in both portals. --ink-x/--ink-y are set at runtime by ScoredAction. */
+  --color-quiet-ink: #65594E;
+  --bg-warm: #EEE6DB;
+  --color-error: #C77B6E;
+  --ease-editorial: cubic-bezier(0.22, 1, 0.36, 1);
+  --press-in: 70ms;
+  --press-out: 240ms;
+
+  /* ── Phase palette ────────────────────────────────────────────────────────
+     The spine colours the six client phases. Values mirror the designer
+     portal's --phase-* block; PHASE_DISPLAY_CONFIG in @patina/types names
+     these vars directly, so the keys must stay spelled exactly like this. */
+  --phase-consultation: #8B9CAD;
+  --phase-concept: #C4A57B;
+  --phase-refinement: #8B7355;
+  --phase-procurement: #E8C547;
+  --phase-installation: #D4A090;
+  --phase-walkthrough: #A8B5A0;
+
   /* Design system tokens (HSL) */
   --background: 40 33% 96.5%;
   --foreground: 26 7% 15.3%;
@@ -143,6 +165,394 @@ a:hover {
 
 .timeline-gradient {
   background: linear-gradient(180deg, rgba(196, 165, 123, 0.25) 0%, rgba(92, 74, 60, 0.4) 100%);
+}
+
+/* The Scored Ink (I107) — DocumentAction grammar. Proof Sheet No 001 Proof VI.
+   Interaction-triggered only (R15); no shadows (D4); .da-act owns the honest
+   44px target while .da-hit remains its invisible contract witness.
+
+   A proofreader never boxes a word — they rule under it, and the rule is the
+   instruction. One score marks the word for attention; two press harder. So
+   every action is a bare word with its scoring underneath: no border, no fill,
+   no plate, at any variant. Beneath the word lies the ink, clipped to nothing
+   until a finger asks for it, then flooding from the exact point of contact.
+
+   The stacking is the whole argument: the pool sits at z 0, the label and its
+   scores at z 1, so a charcoal flood swallows the charcoal score and leaves
+   the clay one riding on top of the ink. Depth here is value, never distance. */
+
+/* ── the control ─────────────────────────────────────────────────────────── */
+.da-act {
+  position: relative;
+  isolation: isolate;
+  min-width: 44px;
+  min-height: 44px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform var(--press-out) var(--ease-editorial),
+    color 150ms var(--ease-editorial);
+}
+
+/* ── the target witness · the parent is the real 44px interactive box ───── */
+.da-hit {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* ── the ink · floor of this control's own stacking context ──────────────── */
+.da-pool {
+  position: absolute;
+  /* Keep the visible ink close to the word while the parent owns an honest
+     44px target. The action remains a scored line, never a filled button. */
+  inset: 8px 2px;
+  z-index: 0;
+  border-radius: 2px;
+  pointer-events: none;
+  clip-path: circle(0px at var(--ink-x, 50%) var(--ink-y, 50%));
+  transition: clip-path 260ms var(--ease-editorial);
+}
+
+/* ── the word · z 1, and the scores ride with it above the ink ───────────── */
+.da-label {
+  position: relative;
+  z-index: 1;
+  display: inline-block;
+  line-height: 12px;
+}
+.da-label::before,
+.da-label::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  transform-origin: left center;
+  transition:
+    background-color 150ms linear,
+    height 150ms var(--ease-editorial),
+    transform 240ms var(--ease-editorial);
+}
+.da-label::before {
+  bottom: -4px;
+  height: 1.5px;
+}
+.da-label::after {
+  bottom: -7.5px;
+  height: 1px;
+}
+
+/* ── the glyphs · they ride above the ink too, and turn over with the word ── */
+.da-leading,
+.da-trailing {
+  position: relative;
+  z-index: 1;
+  /* the same 12px box the word keeps, so a glyph never lifts the control taller
+     than its unmarked neighbours and the scores stay on one line across a row */
+  line-height: 12px;
+  color: var(--color-quiet-ink);
+  transition:
+    color 120ms linear 60ms,
+    transform 150ms var(--ease-editorial);
+}
+
+/* ── PRIMARY · two scores, charcoal over clay; the ink is charcoal ─────────
+   under a flood the charcoal score melts into the pool and the clay score
+   stays legible on top of it: the scoring survives its own ink. */
+.da-primary {
+  color: var(--color-charcoal);
+}
+.da-primary .da-pool {
+  background-color: var(--color-charcoal);
+}
+.da-primary .da-label::before {
+  background-color: var(--color-charcoal);
+}
+.da-primary .da-label::after {
+  background-color: var(--color-clay);
+}
+.da-primary .da-leading,
+.da-primary .da-trailing {
+  color: var(--color-clay);
+}
+
+/* ── SECONDARY · one score, held back; the ink only warms the paper ──────── */
+.da-secondary {
+  color: var(--color-mocha);
+}
+.da-secondary .da-pool {
+  background-color: var(--bg-warm);
+}
+.da-secondary .da-label::before {
+  height: 1px;
+  background-color: rgba(44, 41, 38, 0.28);
+}
+.da-secondary .da-label::after {
+  content: none;
+}
+
+/* ── TERTIARY · unscored until asked, and never inked at all ──────────────
+   it carries no .da-pool in the markup; a whisper does not flood. */
+.da-tertiary {
+  color: var(--color-quiet-ink);
+}
+.da-tertiary .da-label::before {
+  height: 1px;
+  background-color: var(--color-quiet-ink);
+  transform: scaleX(0);
+  transition:
+    transform 300ms var(--ease-editorial),
+    background-color 150ms linear;
+}
+.da-tertiary .da-label::after {
+  content: none;
+}
+
+/* ── DANGER · both scores terracotta; the ink is terracotta ───────────────── */
+.da-danger {
+  color: var(--color-charcoal);
+}
+.da-danger .da-pool {
+  background-color: var(--color-terracotta);
+}
+.da-danger .da-label::before,
+.da-danger .da-label::after {
+  background-color: var(--color-terracotta);
+}
+
+/* ── hover · the scoring answers, and a 3.5px bead gathers under the finger ─ */
+.da-act:hover .da-pool {
+  clip-path: circle(3.5px at var(--ink-x, 50%) var(--ink-y, 50%));
+  transition-duration: 180ms;
+  transition-timing-function: var(--ease-editorial);
+}
+.da-primary:hover .da-label::after {
+  height: 2px;
+}
+.da-primary:hover .da-trailing {
+  transform: translateX(2px);
+}
+.da-secondary:hover {
+  color: var(--color-charcoal);
+}
+.da-secondary:hover .da-label::before {
+  background-color: var(--color-aged-oak);
+}
+.da-tertiary:hover {
+  color: var(--color-charcoal);
+}
+.da-tertiary:hover .da-label::before {
+  transform: scaleX(1);
+}
+.da-danger:hover {
+  color: var(--color-error);
+}
+
+/* ── press · the word drops a pixel, the ink opens from the contact point,
+   and the label turns over a beat later as the flood overtakes it ────────── */
+.da-act:active {
+  transform: translateY(1px);
+  transition-property: transform, color;
+  transition-duration: var(--press-in), 120ms;
+  transition-delay: 0s, 60ms;
+  transition-timing-function: linear, linear;
+}
+.da-act:active .da-pool {
+  clip-path: circle(140% at var(--ink-x, 50%) var(--ink-y, 50%));
+  transition-duration: 200ms;
+  transition-timing-function: cubic-bezier(0.3, 0.7, 0.2, 1);
+}
+.da-act:not(.da-tertiary):active .da-label::before,
+.da-act:not(.da-tertiary):active .da-label::after {
+  transform: translateY(-1px);
+  transition-duration: var(--press-in);
+  transition-timing-function: linear;
+}
+.da-primary:active,
+.da-danger:active {
+  color: var(--color-off-white);
+}
+.da-primary:active .da-leading,
+.da-primary:active .da-trailing,
+.da-danger:active .da-leading,
+.da-danger:active .da-trailing {
+  color: var(--color-off-white);
+}
+.da-secondary:active {
+  color: var(--color-charcoal);
+}
+.da-secondary:active .da-leading,
+.da-secondary:active .da-trailing {
+  color: var(--color-charcoal);
+}
+/* the tertiary has no ink to give: its press is a deepening of value alone,
+   taken on the in-clock so held reads as held */
+.da-tertiary:active {
+  color: var(--color-charcoal);
+  transition-duration: var(--press-in);
+  transition-delay: 0s;
+  transition-timing-function: linear;
+}
+.da-tertiary:active .da-label::before {
+  transform: scaleX(1);
+  transition-duration: var(--press-in);
+  transition-timing-function: linear;
+}
+
+/* ── focus · the proofreader's caret in the margin, and the scores turn clay.
+   No ring: the mark that says "here" is the mark a proofreader would make. ── */
+.da-act:focus-visible {
+  outline: none;
+}
+.da-act::before {
+  /* A caret is a mark, not a word. The `/ ''` alt text keeps the glyph out of
+     the accessible name — without it every action would announce as
+     "‸ capture a lead", because pseudo content joins name-from-content and
+     opacity:0 does not exempt it. */
+  content: '\2038' / '';
+  position: absolute;
+  left: 1px;
+  top: 50%;
+  z-index: 2;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--color-quiet-ink);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition: opacity 140ms linear;
+}
+.da-act:focus-visible::before {
+  opacity: 1;
+}
+.da-act:focus-visible .da-label::before,
+.da-act:focus-visible .da-label::after {
+  background-color: var(--color-clay);
+}
+
+/* ── stilled · the same room by the other door. No bead, no draw, no snap;
+   a held act inks at once, so held still reads as held. ─────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .da-act,
+  .da-act::before,
+  .da-pool,
+  .da-label,
+  .da-label::before,
+  .da-label::after,
+  .da-leading,
+  .da-trailing,
+  .da-tertiary .da-label::before {
+    transition: none;
+  }
+  .da-act:hover .da-pool {
+    clip-path: circle(0px at 50% 50%);
+    transition: none;
+  }
+  .da-act:active .da-pool {
+    clip-path: circle(140% at var(--ink-x, 50%) var(--ink-y, 50%));
+    transition: none;
+  }
+  /* :active re-declares the transition longhands at (0,2,0), which outranks the
+     blanket `.da-act { transition: none }` above — so the press clock has to be
+     stopped here too, or the label would still ease its colour over. */
+  .da-act:active {
+    transform: none;
+    transition: none;
+  }
+  /* motion spent is value gained: with the snap gone, the press is carried by a
+     thicker score (Proof VI). */
+  .da-act:active .da-label::before {
+    height: 3px;
+  }
+  .da-act:not(.da-tertiary):active .da-label::before,
+  .da-act:not(.da-tertiary):active .da-label::after {
+    transform: none;
+  }
+  .da-primary:hover .da-trailing {
+    transform: none;
+  }
+  .da-tertiary .da-label::before {
+    transform: none;
+    opacity: 0;
+  }
+  .da-tertiary:hover .da-label::before,
+  .da-tertiary:active .da-label::before {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* Scored Ink ad-hoc kit (I107 sweep) — score mechanics for non-DocumentAction controls.
+   DocumentAction owns the full grammar above; everywhere else a control still needs
+   to draw a hairline score under a hover or hold one steady when selected, and an
+   icon-only glyph still needs to darken without ever growing a box. Typography stays
+   whatever the call site already sets — this kit carries only the score and the
+   glyph state, nothing else. Ad-hoc controls take the standard 2px clay
+   focus-visible outline; the proofreader caret above stays DocumentAction-only. */
+
+/* ── da-score-hover · a hairline that draws in under a hover or a keyboard focus ──
+   the same underline the tertiary variant keeps above, on the same clock: unscored
+   until asked, scaleX(0) to scaleX(1), left-anchored so it opens like a rule drawn
+   under a word. ::after never touches layout — it's absolute, out of flow. ────── */
+.da-score-hover {
+  position: relative;
+}
+.da-score-hover::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -3px;
+  height: 1px;
+  background-color: var(--color-aged-oak);
+  transform-origin: left center;
+  transform: scaleX(0);
+  transition: transform 300ms var(--ease-editorial);
+}
+.da-score-hover:hover::after,
+.da-score-hover:focus-visible::after {
+  transform: scaleX(1);
+}
+
+/* ── da-score-on · the same rule held down, in charcoal — for a picker or toggle
+   that's already selected. Same specificity as the hover state above, declared
+   after it, so a selected control reads scored even with the pointer elsewhere;
+   combine as className="da-score-hover da-score-on". ───────────────────────── */
+.da-score-on::after {
+  transform: scaleX(1);
+  background-color: var(--color-charcoal);
+}
+
+/* ── da-glyph-btn · an icon-only control (×, +) with no word to score — just a
+   glyph that darkens on request. No fill, no border, no shadow; the 44px target
+   is the element's own box, kept invisible until focus asks for it. ─────────── */
+.da-glyph-btn {
+  background: none;
+  border: 0;
+  color: var(--color-aged-oak);
+  cursor: pointer;
+  transition: color 150ms linear;
+}
+.da-glyph-btn:hover,
+.da-glyph-btn:focus-visible {
+  color: var(--color-charcoal);
+}
+.da-glyph-btn:focus-visible {
+  outline: 2px solid var(--color-clay);
+  outline-offset: 2px;
+}
+
+/* ── stilled · the same room by the other door — draws land instant, no ease ── */
+@media (prefers-reduced-motion: reduce) {
+  .da-score-hover::after {
+    transition: none;
+  }
+  .da-glyph-btn {
+    transition: none;
+  }
 }
 
 /* Typography: now provided by @patina/design-system/styles/typography.css.

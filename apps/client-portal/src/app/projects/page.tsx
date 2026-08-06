@@ -7,6 +7,7 @@ import Link from 'next/link';
 // instead of "navigate" / "click."
 import { SectionIntro, SurfaceKeys } from '@patina/help-system';
 
+import { SinglePaneSoloRedirect } from '@/components/making/single-pane-solo-redirect';
 import { ProjectsEmptyState } from '@/components/projects/ProjectsEmptyState';
 import { StrataMark } from '@/components/strata-mark';
 import { fetchClientProjects } from '@/lib/data/projects';
@@ -17,6 +18,11 @@ export default async function ProjectsPage() {
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
       <main className="mx-auto flex w-full max-w-6xl flex-col px-6 py-12">
+        {/* Renders nothing. Under `single-pane`, a client with exactly one
+            project is sent straight to it — one job, no list. The list below
+            stays untouched and stays the answer for everyone else. */}
+        <SinglePaneSoloRedirect projectIds={projects.map((project) => project.id)} />
+
         {/* Hero */}
         <section>
           <p className="type-meta">Your projects</p>

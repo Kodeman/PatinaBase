@@ -45,6 +45,20 @@ const customJestConfig = {
     '/tests/*.spec.ts',  // Playwright tests
   ],
 
+  // Build outputs copy the whole workspace (packages/*/package.json and all)
+  // into this app's tree. testPathIgnorePatterns keeps Jest from RUNNING
+  // anything in there, but the haste map still SCANS it, finds three
+  // package.json files all naming `@patina/types`, and throws a duplicate-
+  // manifest error out of any module that imports one — which is every
+  // component test in this app once a portal build has been run locally.
+  // modulePathIgnorePatterns is the knob that feeds the haste map's own
+  // ignore pattern, so the artifacts stop existing as far as resolution is
+  // concerned. Both dirs are gitignored, rebuildable output.
+  modulePathIgnorePatterns: [
+    '<rootDir>/.next/',
+    '<rootDir>/.open-next/',
+  ],
+
   // Coverage configuration
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',

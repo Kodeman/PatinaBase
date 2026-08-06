@@ -30,6 +30,16 @@ interface ProjectViewWrapperProps {
   userId?: string;
   authToken?: string;
   showOverview?: boolean;
+  /**
+   * Fire `client_project_view` from here. Default true — this component has
+   * always been the emitter for today's project page.
+   *
+   * ProjectSurfaceSwitch passes false and emits once itself: it renders this
+   * tree while the single-pane flag resolves, so leaving the emitter here
+   * double-counted every flagged open (child effects run before the parent's,
+   * so this fires before the flag can flip).
+   */
+  emitProjectView?: boolean;
 }
 
 export function ProjectViewWrapper({
@@ -38,7 +48,8 @@ export function ProjectViewWrapper({
   milestones,
   userId,
   authToken,
-  showOverview = false
+  showOverview = false,
+  emitProjectView = true
 }: ProjectViewWrapperProps) {
   // Pull live session for WS auth — props may not be threaded from parent.
   const { session, user } = useAuth();
@@ -64,8 +75,9 @@ export function ProjectViewWrapper({
   useProjectPhaseRealtime(projectId, realtimeEnabled);
 
   useEffect(() => {
+    if (!emitProjectView) return;
     clientEvents.projectView(projectId);
-  }, [projectId]);
+  }, [emitProjectView, projectId]);
 
   return (
     <WebSocketProvider

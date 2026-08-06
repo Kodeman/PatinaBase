@@ -213,6 +213,13 @@ export async function invalidateSignedCommercialDocument(
       queryClient.invalidateQueries({ queryKey: commercialKeys.waves(projectId) }),
       queryClient.invalidateQueries({ queryKey: clientSelectionsKey(projectId) }),
       queryClient.invalidateQueries({ queryKey: clientPlanKey(projectId) }),
+      // Signing and accepting both RELEASE MONEY: a deposit becomes payable,
+      // a gated draw becomes an invoice. Without this the released invoice
+      // does not appear until a reload (staleTime 60s, no refetch on focus),
+      // so the client watches the ask disappear and nothing take its place —
+      // and on The Making the gate and the toll it releases sit on the same
+      // spine, inches apart.
+      queryClient.invalidateQueries({ queryKey: ['invoices', 'project', projectId] }),
     );
   }
   await Promise.all(invalidations);

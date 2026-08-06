@@ -8,6 +8,67 @@ declare global {
 
 let initialized = false;
 
+/**
+ * Subscribers waiting for `initPostHog()` to run.
+ *
+ * `initPostHog()` is called from an effect at the top of the React tree
+ * (`PostHogAnalyticsProvider`), and React runs *child* effects before *parent*
+ * effects — so every consumer mounted underneath it (the feature-flag hook in
+ * a page, the pageview and identify trackers) runs its first effect while
+ * `initialized` is still false. Consumers that treat "not enabled" as a
+ * terminal state settle permanently wrong. This queue is how they wait for
+ * init instead. Ported from the designer portal, where the same race left a
+ * layout-mounted flag dead for a whole session on every cold load.
+ */
+const initSubscribers = new Set<() => void>();
+
+/**
+ * Runs `callback` once analytics is live: immediately if `initPostHog()` has
+ * already run, otherwise when it does. Returns an unsubscribe function
+ * (idempotent, safe to call after the callback has already fired).
+ *
+ * If init never happens in this environment the callback never runs — check
+ * `isAnalyticsPossible()` first if you need a terminal answer.
+ */
+export function onAnalyticsInit(callback: () => void): () => void {
+  if (isAnalyticsEnabled()) {
+    callback();
+    return () => {};
+  }
+
+  initSubscribers.add(callback);
+  return () => {
+    initSubscribers.delete(callback);
+  };
+}
+
+/**
+ * True when `initPostHog()` will eventually succeed in this environment —
+ * i.e. "analytics is not enabled *yet*" rather than "analytics will never be
+ * enabled here". Mirrors initPostHog's own guards exactly; keep the two in
+ * sync.
+ *
+ * Consumers use this to distinguish the init race (wait via
+ * `onAnalyticsInit`) from a genuinely analytics-free environment (no key, or
+ * dev without the explicit opt-in), where waiting would hang forever.
+ */
+export function isAnalyticsPossible(): boolean {
+  if (typeof window === 'undefined') return false;
+
+  // Must stay a static `process.env.NEXT_PUBLIC_*` member expression so
+  // Next.js inlines it into the client bundle.
+  if (!process.env.NEXT_PUBLIC_POSTHOG_KEY) return false;
+
+  if (
+    process.env.NODE_ENV === 'development' &&
+    process.env.NEXT_PUBLIC_POSTHOG_ENABLE_IN_DEV !== 'true'
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
 // /field tokens are either a 64-hex field_link_tokens value OR an
 // `sr_`-prefixed site-request token (see field/[token]/site-request-types.ts)
 // — a broader URL-safe alphabet than plain hex, so it stays its own pattern
@@ -111,6 +172,20 @@ export function initPostHog(): void {
   posthog.register({ surface: 'client-web' });
 
   initialized = true;
+
+  // Release everyone who mounted before us. Drain first so a subscriber that
+  // re-subscribes during its own callback takes the immediate path instead of
+  // being re-queued, and isolate throws so one bad subscriber can't strand the
+  // rest mid-flush.
+  const waiting = Array.from(initSubscribers);
+  initSubscribers.clear();
+  for (const callback of waiting) {
+    try {
+      callback();
+    } catch (error) {
+      console.error('[analytics] init subscriber threw', error);
+    }
+  }
 }
 
 export function identifyUser(
