@@ -259,8 +259,8 @@ function SignInContent() {
 
   const qrCode =
     qr.state === 'denied' ? (
-      <div role="status" className="space-y-3 text-sm text-[#4f554f]">
-        <p className="font-semibold text-[#252a25]">
+      <div role="status" className="space-y-3 text-sm text-[#65594E]">
+        <p className="font-semibold text-[#2C2926]">
           That request was declined.
         </p>
         <button
@@ -272,7 +272,7 @@ function SignInContent() {
         </button>
       </div>
     ) : qr.state === 'error' ? (
-      <div role="alert" className="space-y-3 text-sm text-[#4f554f]">
+      <div role="alert" className="space-y-3 text-sm text-[#65594E]">
         <p>{qr.failure?.message ?? 'We could not prepare a QR code.'}</p>
         <button
           type="button"
@@ -288,7 +288,7 @@ function SignInContent() {
         size={144}
         level="M"
         bgColor="transparent"
-        fgColor="#252a25"
+        fgColor="#2C2926"
       />
     ) : undefined;
 

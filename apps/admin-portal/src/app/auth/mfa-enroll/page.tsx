@@ -192,13 +192,13 @@ function MfaEnrollContent() {
     <AdminAuthShell>
       <div className="space-y-5">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#4f554f]">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#65594E]">
             Account security
           </p>
-          <h2 className="mt-2 font-serif text-3xl tracking-[-0.03em]">
+          <h2 className="mt-2 font-heading text-3xl tracking-[-0.03em]">
             {isChallenge ? 'Confirm it’s you.' : 'Add an authenticator.'}
           </h2>
-          <p className="mt-2 text-sm leading-6 text-[#4f554f]">
+          <p className="mt-2 text-sm leading-6 text-[#65594E]">
             {isChallenge
               ? 'Enter the six-digit code from an authenticator already trusted by this account.'
               : 'Patina Operations requires a second check. Scan this code with your authenticator app, then enter its six-digit code.'}
@@ -246,7 +246,7 @@ function MfaEnrollContent() {
                   setCode('');
                   setError(null);
                 }}
-                className="flex min-h-12 w-full items-center border border-[#6d726b] bg-white px-3 text-left text-sm font-semibold aria-pressed:border-[#252a25] aria-pressed:bg-[#f3f0e8] focus:outline-none focus:ring-2 focus:ring-[#252a25]"
+                className="flex min-h-12 w-full items-center border border-[#8B7355] bg-white px-3 text-left text-sm font-semibold aria-pressed:border-[#2C2926] aria-pressed:bg-[#EFE9DD] focus:outline-none focus:ring-2 focus:ring-[#5C4A3C]"
               >
                 {factor.friendlyName}
               </button>
@@ -261,20 +261,20 @@ function MfaEnrollContent() {
         )}
 
         {!isChallenge && qrCode && (
-          <div className="border border-[#6d726b] bg-[#f3f0e8] p-5 text-center">
+          <div className="border border-[#8B7355] bg-[#EFE9DD] p-5 text-center">
             {/* Supabase supplies the enrollment QR as a data URL. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={qrCode}
               alt="Authenticator enrollment QR code"
-              className="mx-auto h-48 w-48 border border-[#6d726b] bg-white"
+              className="mx-auto h-48 w-48 border border-[#8B7355] bg-white"
             />
             {secret && (
               <details className="mt-4 text-left text-sm">
                 <summary className="min-h-11 cursor-pointer py-3 underline underline-offset-4">
                   Enter the setup key instead
                 </summary>
-                <code className="block break-all border border-[#6d726b] bg-white p-3 font-mono text-xs">
+                <code className="block break-all border border-[#8B7355] bg-white p-3 font-mono text-xs">
                   {secret}
                 </code>
               </details>
@@ -301,7 +301,7 @@ function MfaEnrollContent() {
                 }}
                 aria-invalid={Boolean(error) || undefined}
                 aria-describedby={error ? 'mfa-error' : undefined}
-                className="h-12 w-full border border-[#6d726b] bg-white px-3 text-center font-mono text-lg tracking-[0.35em] outline-none focus:border-[#252a25] focus:ring-2 focus:ring-[#252a25]"
+                className="h-12 w-full border border-[#8B7355] bg-white px-3 text-center font-mono text-lg tracking-[0.35em] outline-none focus:border-[#5C4A3C] focus:ring-2 focus:ring-[#5C4A3C]"
                 disabled={verifying}
                 autoFocus
               />
@@ -309,7 +309,7 @@ function MfaEnrollContent() {
             <button
               type="submit"
               disabled={verifying || code.length !== 6}
-              className="h-12 w-full bg-[#252a25] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#252a25] focus:ring-offset-2"
+              className="h-12 w-full bg-[#1A1816] px-4 text-sm font-semibold text-[#FAF7F2] transition-colors duration-150 ease-[cubic-bezier(0.25,1,0.5,1)] hover:bg-[#2C2926] motion-reduce:transition-none disabled:cursor-not-allowed disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#5C4A3C] focus:ring-offset-2"
             >
               {verifying ? 'Verifying…' : 'Verify and continue'}
             </button>

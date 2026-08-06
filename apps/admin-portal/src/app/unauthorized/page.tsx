@@ -75,7 +75,7 @@ export default function UnauthorizedPage() {
             type="button"
             onClick={() => void handleSignInWithDifferentAccount()}
             disabled={state === 'signing-out'}
-            className="h-12 w-full bg-[#252a25] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#252a25] focus:ring-offset-2"
+            className="h-12 w-full bg-[#1A1816] px-4 text-sm font-semibold text-[#FAF7F2] transition-colors hover:bg-[#2C2926] disabled:cursor-not-allowed disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#5C4A3C] focus:ring-offset-2"
           >
             {state === 'signing-out'
               ? 'Signing out…'
