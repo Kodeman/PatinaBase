@@ -16,18 +16,14 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  usePlanRoom,
-  usePlanRoomHoldings,
-  type FilePlanPrintsResult,
-} from '@patina/supabase';
+import { usePlanRoom, type FilePlanPrintsResult } from '@patina/supabase';
 import { useDocumentEngagement } from '@/hooks/use-document-state';
 import { folderTab } from '@/lib/document/desk-derivation';
 import { fmtDay } from '@/lib/document/format';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
 import { planRoomEvents } from '@/lib/analytics/plan-room-events';
-import type { LightTableProposal } from '@/lib/plans/model';
+import { deriveHolders, type LightTableProposal } from '@/lib/plans/model';
 import { DocumentAction, DocumentActionRow } from '../document-action';
 import { LightTable, type StagedTable } from './light-table';
 import { PlanConfirmStrip } from './plan-confirm-strip';
@@ -68,8 +64,9 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
     }
   }, [resolution, router]);
 
+  // One query, one derivation. Holders come from the bundle everywhere in this
+  // room (band, set, ceremony) so no two surfaces can disagree mid-load.
   const room = usePlanRoom(projectId ?? '');
-  const holdings = usePlanRoomHoldings(projectId ?? '');
   const bundle = room.data;
 
   useEffect(() => {
@@ -78,11 +75,11 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
     planRoomEvents.opened({
       project_id: projectId,
       sheet_count: bundle.sheets.length,
-      has_amber_holders: (holdings.data?.parties ?? []).some(
-        (party) => party.behindCount > 0,
+      has_amber_holders: deriveHolders(bundle).some(
+        (holder) => holder.behindCount > 0,
       ),
     });
-  }, [projectId, bundle, holdings.data]);
+  }, [projectId, bundle]);
 
   if (engagement.isLoading || (projectId && room.isLoading)) {
     return (
@@ -124,12 +121,15 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
     );
     if (pdfs.length === 0) return;
     setReadError(null);
+    // A new drop replaces the staged table wholesale, key included.
     setStaged(null);
     setPendingFiles(pdfs);
     setView('light-table');
   };
 
-  const flippedAt = bundle?.prints.reduce<string | null>(
+  // The newest print's created_at — "last filed", not "flipped". A flip is a
+  // pointer moving; this date is simply when something last came in.
+  const lastFiledAt = bundle?.prints.reduce<string | null>(
     (latest, print) =>
       latest == null || print.created_at > latest ? print.created_at : latest,
     null,
@@ -166,7 +166,7 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
         <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-4">
           <Link
             href={`/doc/${routeId}`}
-            className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)] hover:text-[var(--color-clay)]"
+            className="inline-flex min-h-11 items-center py-2 font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)] hover:text-[var(--color-clay)]"
           >
             ← {projectName}
           </Link>
@@ -175,7 +175,7 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
             <p className="font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
               {bundle?.sheets.length ?? 0}{' '}
               {(bundle?.sheets.length ?? 0) === 1 ? 'sheet' : 'sheets'}
-              {flippedAt ? ` · flipped ${fmtDay(flippedAt)}` : ''} ·{' '}
+              {lastFiledAt ? ` · last filed ${fmtDay(lastFiledAt)}` : ''} ·{' '}
               {bundle?.issues.length ?? 0}{' '}
               {(bundle?.issues.length ?? 0) === 1 ? 'issue' : 'issues'} to date
             </p>
@@ -263,6 +263,7 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
 
       {bundle && view === 'set' && (
         <PlanRoomSet
+          projectId={projectId}
           bundle={bundle}
           onOpenSheet={(sheetId) => {
             planRoomEvents.sheetOpened({ project_id: projectId, sheet_id: sheetId });
@@ -281,9 +282,23 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
             bundle={bundle}
             pendingFiles={pendingFiles}
             staged={staged}
-            onStaged={setStaged}
+            onStaged={(table) => {
+              setStaged(table);
+              // The drop is consumed. Clearing it is what stops a later remount
+              // (a look at a sheet and back) from re-parsing the file and
+              // minting a SECOND idempotency key for a table the designer was
+              // told had been saved.
+              setPendingFiles(null);
+            }}
             onProposalsChange={(proposals: LightTableProposal[]) =>
               setStaged((prev) => (prev ? { ...prev, proposals } : prev))
+            }
+            onThumbnail={(pageIndex, thumbnail) =>
+              setStaged((prev) =>
+                prev
+                  ? { ...prev, thumbnails: { ...prev.thumbnails, [pageIndex]: thumbnail } }
+                  : prev,
+              )
             }
             onReadFailed={(message) => {
               setReadError(message);
@@ -319,7 +334,6 @@ export function PlanRoomWorkspace({ routeId }: { routeId: string }) {
         <PlanIssueCeremony
           projectId={projectId}
           bundle={bundle}
-          holdings={holdings.data}
           onBack={() => setView('set')}
         />
       )}

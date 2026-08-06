@@ -6,11 +6,11 @@ import { render, screen } from '@testing-library/react';
 import type { PlanRoomBundle } from '@patina/supabase';
 
 const usePlanRoom = jest.fn();
-const usePlanRoomHoldings = jest.fn();
 
+// The band reads ONE query and derives holders from the bundle — the holdings
+// RPC is deliberately not wired here, so there is nothing else to mock.
 jest.mock('@patina/supabase', () => ({
   usePlanRoom: (...args: unknown[]) => usePlanRoom(...args),
-  usePlanRoomHoldings: (...args: unknown[]) => usePlanRoomHoldings(...args),
 }));
 
 jest.mock('@/lib/analytics/document-events', () => ({
@@ -74,7 +74,6 @@ function bundleWithSheets(): PlanRoomBundle {
 
 beforeEach(() => {
   usePlanRoom.mockReturnValue({ data: bundleWithSheets() });
-  usePlanRoomHoldings.mockReturnValue({ data: undefined });
 });
 
 describe('PlanRoomBand', () => {
@@ -102,34 +101,62 @@ describe('PlanRoomBand', () => {
   });
 
   it('goes golden hour with an amber subline when a holder is behind', () => {
-    usePlanRoomHoldings.mockReturnValue({
+    // Boone was sent Rev B of ID-401; the sheet's pointer has since moved to
+    // the Rev C print, so the identity test says behind.
+    usePlanRoom.mockReturnValue({
       data: {
-        parties: [
+        ...bundleWithSheets(),
+        issues: [
           {
-            partyId: null,
-            partyDisplayName: 'Boone Millwork',
-            partyCompany: 'Boone Millwork',
+            id: 'i2',
+            project_id: 'proj',
+            issue_number: 2,
+            name: 'Production Set — 22 Jul 2026',
+            idempotency_key: 'ik2',
+            request_hash: 'ih2',
+            issued_at: '2026-07-22T10:00:00Z',
+            set_checksum: 'c2',
+            sheet_count: 1,
+            prior_issue_id: null,
+            created_at: '2026-07-22T10:00:00Z',
+            created_by: null,
+          },
+        ],
+        issuePrints: [
+          {
+            id: 'ip1',
+            issue_id: 'i2',
+            print_id: 'p-b',
+            sheet_id: 's401',
+            sheet_number: 'ID-401',
+            sheet_title: 'Millwork Elevations — Study',
+            rev_letter: 'B',
+            sha256: 'b',
+            created_at: '2026-07-22T10:00:00Z',
+          },
+        ],
+        transmittals: [
+          {
+            id: 't4',
+            project_id: 'proj',
+            issue_id: 'i2',
+            party_id: null,
+            party_display_name: 'Boone Millwork',
+            party_company: 'Boone Millwork',
+            party_email: null,
             purpose: 'production',
-            sentAt: '2026-07-22T11:00:00Z',
-            issueId: 'i2',
-            issueName: 'Production Set — 22 Jul 2026',
-            activeLink: null,
-            holds: [
-              {
-                sheetId: 's401',
-                sheetNumber: 'ID-401',
-                heldRev: 'B',
-                currentRev: 'C',
-                behind: true,
-              },
-            ],
-            behindCount: 1,
+            message: null,
+            sent_at: '2026-07-22T11:00:00Z',
+            created_at: '2026-07-22T11:00:00Z',
+            created_by: null,
           },
         ],
       },
     });
     render(<PlanRoomBand routeId="doc-1" projectId="proj" />);
-    expect(screen.getByText('Boone Millwork holds Rev B')).toBeInTheDocument();
+    expect(
+      screen.getByText('Boone Millwork holds Rev B · current is Rev C'),
+    ).toBeInTheDocument();
     const band = document.querySelector('[data-plan-room-band]')!;
     expect(band.className).toContain('border-[var(--color-golden-hour)]');
     expect(band.className).not.toMatch(/shadow/);

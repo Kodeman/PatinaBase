@@ -14,18 +14,12 @@ import { psqlScalar } from '../helpers/psql';
  * Chromium-pinned: this is a single-actor DB walk, not a rendering-engine
  * question, and it files real rows.
  *
- * ⚠ KNOWN BLOCKER (not this spec's bug). This walk fails at the upload stage
- * with "new row violates row-level security policy" until migration 00170's
- * four project-documents storage policies are repaired. All four write
- * `(storage.foldername(name))[1]` inside a subquery that selects `FROM
- * public.projects p`, so the unqualified `name` binds to `p.name` — the
- * PROJECT'S NAME — instead of `objects.name`. `storage.foldername('Whitlock
- * residence')` is `{}`, so the check is NULL and the policy denies every
- * project-prefixed object. It blocks the plan room's whole upload leg and the
- * project leg of the Folio; the discovery and proposal folio policies are
- * unaffected because they correctly qualify `objects.name`. Qualifying all
- * four turns this spec green in ~7s (verified locally 2026-08-06, then
- * reverted — the fix belongs in a migration, not in a test run).
+ * The storage-policy blocker this spec first surfaced is FIXED: migration 00430
+ * qualifies `storage.objects.name` in all four project-documents policies.
+ * Before it, every policy wrote `(storage.foldername(name))[1]` inside a
+ * subquery selecting `FROM public.projects p`, so the unqualified `name` bound
+ * to the PROJECT'S NAME and denied every project-prefixed object — blocking the
+ * plan room's upload leg and the project leg of the Folio alike.
  *
  * ISOLATION AND CLEANUP. The plan-room tables are guard-protected — a filed
  * print freezes its Folio row (00429's folio guard: no re-file, no re-anchor,
@@ -101,9 +95,10 @@ test('files a dropped set, then shares a sheet with the client', async ({
   // ── Stage the fixture on the Light Table ────────────────────────────────
   await page.locator('input[type="file"]').setInputFiles(FIXTURE);
 
-  // Two pages carry a sheet number and are proposed as new sheets; the third
-  // has none and lands in the loose papers tray rather than being guessed at.
-  await expect(page.locator('[data-plan-card]')).toHaveCount(2, {
+  // Three cards: two pages carry a sheet number and are proposed as new sheets,
+  // and the third — which has none — gets a card of its own in the loose papers
+  // tray, where it can go to the Folio or be pointed at a sheet already held.
+  await expect(page.locator('[data-plan-card]')).toHaveCount(3, {
     timeout: 60_000,
   });
   await expect(page.getByLabel('Sheet number for page 1')).toHaveValue('ID-401');
@@ -115,10 +110,11 @@ test('files a dropped set, then shares a sheet with the client', async ({
   // open — the fork chips only appear on a near miss.
   await expect(page.locator('[data-plan-card][data-unresolved]')).toHaveCount(0);
   // .first(): the strip inks the sentence once and repeats it in an sr-only
-  // live region, so AT hears it whole rather than as split spans.
+  // live region, so AT hears it whole rather than as split spans. The verb
+  // counts PRINTS — a confirmation carries no bytes and makes no print.
   await expect(
     page
-      .getByText('File 2 sheets · 2 new sheets · 1 loose page · one transaction')
+      .getByText('File 2 prints · 2 new sheets · 1 loose page · one transaction')
       .first(),
   ).toBeVisible();
 
@@ -169,9 +165,10 @@ test('files a dropped set, then shares a sheet with the client', async ({
   await expect(
     page.getByText(/2 further pages matched cleanly/),
   ).toBeVisible({ timeout: 60_000 });
+  // Nothing carries bytes this time, so the act names itself a confirmation.
   await expect(
     page
-      .getByText('File 2 sheets · 2 confirmed current · 1 loose page · one transaction')
+      .getByText('Confirm 2 sheets current · 1 loose page · one transaction')
       .first(),
   ).toBeVisible();
 

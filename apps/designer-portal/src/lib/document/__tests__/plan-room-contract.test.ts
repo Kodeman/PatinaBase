@@ -31,11 +31,19 @@ const read = (path: string) => readFileSync(path, 'utf8');
 const stripComments = (source: string) =>
   source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
+/**
+ * Shipped source only. A spec that asserts `.not.toMatch(/shadow/)` contains
+ * the word by necessity, and sweeping it would make the D4 check fail on the
+ * very test that enforces D4.
+ */
 function sourcesUnder(dir: string): Array<[string, string]> {
   return readdirSync(dir).flatMap((entry): Array<[string, string]> => {
     const full = join(dir, entry);
-    if (statSync(full).isDirectory()) return sourcesUnder(full);
+    if (statSync(full).isDirectory()) {
+      return entry === '__tests__' ? [] : sourcesUnder(full);
+    }
     if (!/\.tsx?$/.test(entry)) return [];
+    if (/\.(test|spec)\.tsx?$/.test(entry)) return [];
     return [[entry, stripComments(read(full))]];
   });
 }
@@ -93,8 +101,11 @@ describe('the plan room obeys the Document’s laws', () => {
   const sources = sourcesUnder(join(SRC, 'components', 'document', 'plans'));
 
   it('carries no shadow anywhere (D4)', () => {
+    // Deliberately broad: bare `shadow`, any `shadow-*` utility, arbitrary
+    // values (`shadow-[0_1px_2px]`), and opacity syntax (`shadow-black/10`).
+    // The earlier enumeration of Tailwind's named sizes let all three through.
     const offenders = sources
-      .filter(([, body]) => /box-shadow|shadow-\[|\bshadow-(sm|md|lg|xl|2xl|inner|none)\b|drop-shadow/.test(body))
+      .filter(([, body]) => /\bshadow(\b|-)/.test(body))
       .map(([name]) => name);
     expect(offenders).toEqual([]);
   });

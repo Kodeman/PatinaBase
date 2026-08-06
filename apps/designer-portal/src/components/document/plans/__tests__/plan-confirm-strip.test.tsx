@@ -66,7 +66,7 @@ const openFork: LightTableProposal[] = [
     sheetNumber: 'ID-402',
     sheetTitle: 'Millwork Elevations — Banquette',
     discipline: 'ID',
-    nearMiss: { parsed: 'ID-4O2', canonical: 'ID-402' },
+    nearMiss: { parsed: 'ID-4O2', canonical: 'ID-402', readAs: 'O', actual: '0' },
     fork: null,
     requiresFork: true,
   },
@@ -111,15 +111,18 @@ describe('PlanConfirmStrip', () => {
     // Twice: the inked sentence (aria-hidden) and the sr-only live region that
     // announces it verbatim, so AT never hears the split spans.
     expect(
-      screen.getAllByText('File 1 sheet · 1 confirmed current · one transaction'),
+      screen.getAllByText('Confirm 1 sheet current \u00b7 one transaction'),
     ).toHaveLength(2);
     const region = document.querySelector(
       '[data-action-region="light-table-confirmation"]',
     )!;
     expect(region.querySelectorAll('[data-action-variant="primary"]')).toHaveLength(1);
-    expect(
-      document.querySelector('[data-plan-confirm-strip]')!.className,
-    ).not.toMatch(/shadow/);
+    const strip = document.querySelector('[data-plan-confirm-strip]')!;
+    expect(strip.className).not.toMatch(/shadow/);
+    // Clears the Studio drawer (fixed, 60px, z-40 from 1180px) — house idiom,
+    // same as log-strip and the composition bar.
+    expect(strip.className).toContain('min-[1180px]:bottom-[60px]');
+    expect(strip.className).toContain('z-[45]');
   });
 
   it('writes nothing while a fork is open, even force-enabled', async () => {

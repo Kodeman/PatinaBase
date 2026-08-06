@@ -10,13 +10,14 @@
 
 import type { PlanRoomBundle } from '@patina/supabase';
 import {
-  changedSinceLastIssue,
   confirmSummary,
   deriveCurrentSet,
   deriveDrawingLog,
   deriveHolders,
   guessSheetTitle,
+  holderSentence,
   nearMissMatch,
+  nearMissSentence,
   normalizeSheetNumber,
   normalizeTextLayer,
   planFileEntries,
@@ -85,14 +86,22 @@ describe('scoreSheetNumberCandidates', () => {
 });
 
 describe('nearMissMatch', () => {
-  it('catches a letter O read as a zero', () => {
+  it('catches a letter O read as a zero, and says which pair it saw', () => {
     expect(nearMissMatch('ID-4O2', ['ID-401', 'ID-402'])).toEqual({
+      parsed: 'ID-4O2',
       canonical: 'ID-402',
+      readAs: 'O',
+      actual: '0',
     });
   });
 
   it('catches an I read as a one', () => {
-    expect(nearMissMatch('ID-4I1', ['ID-411'])).toEqual({ canonical: 'ID-411' });
+    expect(nearMissMatch('ID-4I1', ['ID-411'])).toEqual({
+      parsed: 'ID-4I1',
+      canonical: 'ID-411',
+      readAs: 'I',
+      actual: '1',
+    });
   });
 
   it('never guesses across a real difference', () => {
@@ -100,6 +109,34 @@ describe('nearMissMatch', () => {
     expect(nearMissMatch('ID-4O3', ['ID-402'])).toBeNull();
     expect(nearMissMatch('ID-401', ['ID-401'])).toBeNull();
     expect(nearMissMatch(null, ['ID-402'])).toBeNull();
+  });
+});
+
+describe('nearMissSentence', () => {
+  it('names the O/0 confusion it actually found', () => {
+    expect(
+      nearMissSentence({
+        parsed: 'ID-4O2',
+        canonical: 'ID-402',
+        readAs: 'O',
+        actual: '0',
+      }),
+    ).toBe(
+      'parsed ID-4O2 \u2014 a letter O, not a zero. You hold an ID-402. Which is this?',
+    );
+  });
+
+  it('names the I/1 confusion instead when that is the pair', () => {
+    expect(
+      nearMissSentence({
+        parsed: 'ID-4I1',
+        canonical: 'ID-411',
+        readAs: 'I',
+        actual: '1',
+      }),
+    ).toBe(
+      'parsed ID-4I1 \u2014 a capital I, not a one. You hold an ID-411. Which is this?',
+    );
   });
 });
 
@@ -172,7 +209,12 @@ describe('proposeMatches', () => {
     const [proposal] = proposeMatches([page(0, 'ID-4O2 Banquette', 'x')], KNOWN, {});
     expect(proposal.kind).toBe('revision');
     expect(proposal.sheetId).toBe('s402');
-    expect(proposal.nearMiss).toEqual({ parsed: 'ID-4O2', canonical: 'ID-402' });
+    expect(proposal.nearMiss).toEqual({
+      parsed: 'ID-4O2',
+      canonical: 'ID-402',
+      readAs: 'O',
+      actual: '0',
+    });
     expect(proposal.requiresFork).toBe(true);
     expect(proposal.fork).toBeNull();
   });
@@ -237,9 +279,11 @@ describe('confirmSummary', () => {
     ];
     const summary = confirmSummary(proposals);
     expect(summary.sentence).toBe(
-      'File 6 sheets · 2 pointers move · 4 confirmed current · one transaction',
+      'File 2 prints \u00b7 4 confirmed current \u00b7 one transaction',
     );
+    expect(summary.primaryLabel).toBe('File 2 prints');
     expect(summary.fileCount).toBe(6);
+    expect(summary.printCount).toBe(2);
     expect(summary.ready).toBe(true);
   });
 
@@ -263,6 +307,39 @@ describe('confirmSummary', () => {
     expect(summary.ready).toBe(false);
   });
 
+  it('speaks as a confirmation when nothing carries bytes', () => {
+    const summary = confirmSummary([
+      proposal({ pageIndex: 0, kind: 'confirm_current', sheetId: 's1', fork: 'confirm_current' }),
+      proposal({ pageIndex: 1, kind: 'confirm_current', sheetId: 's2', fork: 'confirm_current' }),
+      proposal({ pageIndex: 2, kind: 'confirm_current', sheetId: 's3', fork: 'confirm_current' }),
+      proposal({ pageIndex: 3, kind: 'confirm_current', sheetId: 's4', fork: 'confirm_current' }),
+    ]);
+    expect(summary.sentence).toBe(
+      'Confirm 4 sheets current \u00b7 one transaction',
+    );
+    expect(summary.primaryLabel).toBe('Confirm 4 sheets current');
+    expect(summary.printCount).toBe(0);
+  });
+
+  it('shuts the gate when two cards claim the same sheet', () => {
+    const summary = confirmSummary([
+      proposal({ pageIndex: 0, kind: 'revision', sheetId: 's401', fork: 'revision' }),
+      proposal({ pageIndex: 1, kind: 'revision', sheetId: 's401', fork: 'revision' }),
+    ]);
+    expect(summary.ready).toBe(false);
+    expect(summary.conflicts[0]).toMatch(/same sheet/);
+    expect(summary.conflicts[1]).toMatch(/same sheet/);
+  });
+
+  it('shuts the gate when two new sheets claim one number', () => {
+    const summary = confirmSummary([
+      proposal({ pageIndex: 0, kind: 'new_sheet', sheetNumber: 'ID-401', fork: 'new_sheet' }),
+      proposal({ pageIndex: 1, kind: 'new_sheet', sheetNumber: 'id-401', fork: 'new_sheet' }),
+    ]);
+    expect(summary.ready).toBe(false);
+    expect(summary.conflicts[1]).toMatch(/ID-401/);
+  });
+
   it('counts loose pages without filing them', () => {
     const summary = confirmSummary([
       proposal({
@@ -274,7 +351,7 @@ describe('confirmSummary', () => {
       proposal({ pageIndex: 1, kind: 'unmatched' }),
     ]);
     expect(summary.sentence).toBe(
-      'File 1 sheet · 1 new sheet · 1 loose page · one transaction',
+      'File 1 print \u00b7 1 new sheet \u00b7 1 loose page \u00b7 one transaction',
     );
     expect(summary.looseCount).toBe(1);
   });
@@ -615,11 +692,13 @@ describe('the Whitlock fixture', () => {
 
   it('reproduces every holder line off the transmittals alone', () => {
     const holders = deriveHolders(bundle);
+    // get_plan_room_holdings orders parties by sent_at DESC, transmittal id
+    // DESC — the two most recent sends first, newest id ahead on a tie.
     expect(holders.map((holder) => holder.partyDisplayName)).toEqual([
-      'Boone Millwork',
-      'Fenn Metalworks',
-      'Lindqvist Upholstery',
       'Merrill Bros. Construction',
+      'Boone Millwork',
+      'Lindqvist Upholstery',
+      'Fenn Metalworks',
     ]);
 
     // Boone and Merrill were last sent the 22 Jul Production Set: they hold
@@ -656,7 +735,7 @@ describe('the Whitlock fixture', () => {
     }
   });
 
-  it('logs the ten events oldest first, counting the 1 Aug filing the deck’s way', () => {
+  it('logs every event oldest first, counting the 1 Aug filing the deck’s way', () => {
     const log = deriveDrawingLog(bundle);
     expect(log.map((row) => row.event)).toEqual([
       'filed',
@@ -678,22 +757,53 @@ describe('the Whitlock fixture', () => {
 
     const augustFiling = log.find((row) => row.key === 'filed:b3')!;
     expect(augustFiling.what).toContain('2 new prints, 4 confirmed current');
+    // Per sheet, never one letter asserted for the whole flip.
     const augustFlip = log.find((row) => row.key === 'flipped:b3')!;
-    expect(augustFlip.what).toBe('ID-401, ID-501 flipped to Rev C');
+    expect(augustFlip.what).toBe('ID-401 \u2192 Rev C \u00b7 ID-501 \u2192 Rev C');
 
     const transmittal = log.find((row) => row.key === 'transmitted:t4')!;
     expect(transmittal.what).toBe(
       'Production Set — 22 Jul 2026 · for production · not opened yet',
     );
-    expect(transmittal.who).toBe('Boone Millwork · Boone Millwork');
+    // Name and company are the same one-person shop; it is printed once.
+    expect(transmittal.who).toBe('Boone Millwork');
   });
 
-  it('marks exactly ID-401 and ID-501 as changed since the last issue', () => {
-    const changed = changedSinceLastIssue(bundle);
-    expect([...changed].sort()).toEqual(['s401', 's501']);
+  it('reads the amber sentence off the holder, plural when it should be', () => {
+    const holders = deriveHolders(bundle);
+    const boone = holders.find((h) => h.partyDisplayName === 'Boone Millwork')!;
+    expect(holderSentence(boone, '22 Jul')).toBe(
+      'Boone Millwork is behind on 2 sheets \u00b7 last sent 22 Jul',
+    );
+
+    // One sheet behind keeps the specific revision sentence.
+    const single: typeof boone = {
+      ...boone,
+      behindCount: 1,
+      behindNumbers: ['ID-401'],
+      behindRev: 'B',
+      currentRev: 'C',
+    };
+    expect(holderSentence(single)).toBe(
+      'Boone Millwork holds Rev B \u00b7 current is Rev C',
+    );
   });
 
-  it('marks nothing when the room has never issued', () => {
-    expect(changedSinceLastIssue({ ...bundle, issues: [], issuePrints: [] }).size).toBe(0);
+  it('counts a sheet with no current print as behind, exactly as the RPC does', () => {
+    // current_print_id IS DISTINCT FROM print_id — a pointer cleared off a
+    // sheet is distinct from every print anyone was ever sent.
+    const orphaned = {
+      ...bundle,
+      sheets: bundle.sheets.map((sheet) =>
+        sheet.id === 's201' ? { ...sheet, current_print_id: null } : sheet,
+      ),
+    };
+    const fenn = deriveHolders(orphaned).find(
+      (holder) => holder.partyDisplayName === 'Fenn Metalworks',
+    )!;
+    expect(fenn.behindCount).toBe(7);
+    expect(
+      fenn.holds.find((sheet) => sheet.sheetNumber === 'ID-201'),
+    ).toMatchObject({ currentRev: null, behind: true });
   });
 });

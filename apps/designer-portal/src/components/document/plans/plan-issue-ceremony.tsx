@@ -7,11 +7,21 @@
  * The contents grid is the whole current set on purpose. A recipient must hold
  * a WHOLE SET, not a diff: the sheets that changed are marked in golden hour so
  * the designer can see what moved, and every other sheet still goes along.
+ * What "changed" MEANS is the database's answer, not a second opinion computed
+ * here — `preview_plan_issue` compares print identity against the prior issue's
+ * snapshot, and its `drift` is what these marks render.
  *
- * The raw transmittal token exists exactly once, in the mutation's result. It
- * is rendered here and never written to the cache, to state that outlives the
- * ceremony, or to telemetry. If the designer navigates away without copying it,
- * the link must be reissued — that is the point of hashing it server-side.
+ * THE FAN-OUT IS SEQUENTIAL AND RESUMABLE. Each recipient is sent one at a
+ * time and recorded the instant their token lands, so a failure on the third of
+ * five cannot take the first two's links down with it — those tokens exist
+ * server-side and will never be shown again. On a failure the ceremony stops,
+ * names who it stopped on, keeps every minted link on screen, and the retry
+ * sends ONLY to whoever is still unsent. No duplicate transmittals, no lost
+ * tokens.
+ *
+ * The raw token exists exactly once, in the mutation's result. It is rendered
+ * by PlanLinkOnce and never written to the cache, to state that outlives the
+ * ceremony, or to telemetry.
  */
 
 import { useMemo, useState } from 'react';
@@ -20,19 +30,18 @@ import {
   useCreatePlanTransmittal,
   usePlanIssuePreview,
   useProjectRoster,
-  useRevokePlanTransmittalLink,
   type PlanRoomBundle,
-  type PlanRoomHoldings,
 } from '@patina/supabase';
 import { Input } from '@/components/ui/controls';
 import { fmtDay } from '@/lib/document/format';
 import { resolveClientPortalOrigin } from '@/lib/client-portal-url';
-import { changedSinceLastIssue, deriveCurrentSet } from '@/lib/plans/model';
+import { deriveCurrentSet, deriveHolders, holderSentence } from '@/lib/plans/model';
 import { planRoomEvents } from '@/lib/analytics/plan-room-events';
 import { DocumentAction, DocumentActionGroup, DocumentActionRow } from '../document-action';
 import { SectionEyebrow } from '../section-eyebrow';
 import { Stamp } from '../stamp';
 import { StatusChip } from '../status-chip';
+import { PlanLinkOnce } from './plan-link-once';
 
 const PURPOSES = ['pricing', 'production', 'information', 'record'] as const;
 type Purpose = (typeof PURPOSES)[number];
@@ -41,18 +50,18 @@ const CHIP_CLASS =
   'inline-flex min-h-[44px] min-w-[44px] items-center justify-center border px-3 py-2 font-mono text-[10px] uppercase tracking-[0.08em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
 
 interface Recipient {
+  /** party_id when off the roster, else the folded name — the same key the
+   *  holdings derivation groups on, so a row never keys on a display name. */
   key: string;
   name: string;
   company: string | null;
-  /** project_parties.id when the recipient came off the roster. */
   partyId: string | null;
 }
 
 interface MintedLink {
   recipientKey: string;
   transmittalId: string;
-  name: string;
-  /** The raw token, held only for the life of this component. */
+  /** The raw token URL, held only for the life of this component. */
   url: string;
 }
 
@@ -66,17 +75,17 @@ function defaultIssueName(purpose: Purpose): string {
   return `${word} Set — ${today}`;
 }
 
+const foldName = (name: string) => name.trim().toLowerCase();
+
 export interface PlanIssueCeremonyProps {
   projectId: string;
   bundle: PlanRoomBundle;
-  holdings: PlanRoomHoldings | undefined;
   onBack: () => void;
 }
 
 export function PlanIssueCeremony({
   projectId,
   bundle,
-  holdings,
   onBack,
 }: PlanIssueCeremonyProps) {
   const [purpose, setPurpose] = useState<Purpose>('production');
@@ -87,32 +96,62 @@ export function PlanIssueCeremony({
   const [freeName, setFreeName] = useState('');
   const [freeCompany, setFreeCompany] = useState('');
   const [failure, setFailure] = useState<string | null>(null);
-  const [minted, setMinted] = useState<MintedLink[] | null>(null);
-  const [copied, setCopied] = useState<string | null>(null);
-  const [revoked, setRevoked] = useState<Record<string, string>>({});
-  const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
+  const [issueId, setIssueId] = useState<string | null>(null);
+  const [minted, setMinted] = useState<MintedLink[]>([]);
+  const [sending, setSending] = useState(false);
   const [startedAt] = useState(() => Date.now());
-  // Minted once and held across retries: a failed send must not create a
-  // second issue when the designer presses the verb again.
-  const [idempotencyKey] = useState(() => crypto.randomUUID());
 
   const set = useMemo(() => deriveCurrentSet(bundle), [bundle]);
-  const changed = useMemo(() => changedSinceLastIssue(bundle), [bundle]);
+  // One derivation for holders, everywhere. The holdings RPC is deliberately
+  // not called here: it and the bundle settle at different moments, and a
+  // recipient hint that disagreed with the band beside it is worse than none.
+  const holders = useMemo(() => deriveHolders(bundle), [bundle]);
   const roster = useProjectRoster(projectId);
   const createIssue = useCreatePlanIssue(projectId);
   const createTransmittal = useCreatePlanTransmittal(projectId);
-  const revokeLink = useRevokePlanTransmittalLink(projectId);
 
-  const sheetIds = useMemo(
-    () => (selected ? set.filter((row) => selected.has(row.sheetId)) : set).map((row) => row.sheetId),
+  const selectedIds = useMemo(
+    () =>
+      (selected ? set.filter((row) => selected.has(row.sheetId)) : set).map(
+        (row) => row.sheetId,
+      ),
     [selected, set],
   );
-  const preview = usePlanIssuePreview(projectId, sheetIds);
+  // The RPC treats null as "the whole current set". Sending an explicit list
+  // that happens to be the whole set is a different request hash for the same
+  // act, so a full set always speaks as null.
+  const isFullSet = selectedIds.length === set.length;
+  const sheetIdsArgument = isFullSet ? null : selectedIds;
 
+  const preview = usePlanIssuePreview(projectId, sheetIdsArgument);
+  const drift = preview.data?.drift;
   const priorIssue = preview.data?.priorIssue ?? null;
-  const changedCount = set.filter(
-    (row) => changed.has(row.sheetId) && sheetIds.includes(row.sheetId),
-  ).length;
+  const changed = useMemo(
+    () => new Set([...(drift?.changed ?? []), ...(drift?.added ?? [])]),
+    [drift],
+  );
+  const changedCount = drift?.changed.length ?? 0;
+
+  /**
+   * The issue's idempotency key. A key is a promise that two calls describing
+   * the SAME act collapse into one — so it must rotate the moment the act
+   * changes (a renamed set, a toggled sheet) and hold absolutely still across a
+   * pure retry. Reusing it after a change earns 'idempotency key was reused
+   * with a different request'; rotating it on retry mints a second issue.
+   * Adjusting state during render is React's own answer to derived state.
+   */
+  const signature = JSON.stringify([name.trim(), [...selectedIds].sort()]);
+  const [issueKey, setIssueKey] = useState(() => ({
+    signature,
+    key: crypto.randomUUID(),
+  }));
+  if (issueKey.signature !== signature) {
+    setIssueKey({ signature, key: crypto.randomUUID() });
+  }
+
+  const mintedFor = (recipientKey: string) =>
+    minted.find((entry) => entry.recipientKey === recipientKey) ?? null;
+  const unsent = recipients.filter((recipient) => !mintedFor(recipient.key));
 
   const toggleSheet = (sheetId: string) => {
     setSelected((prev) => {
@@ -124,15 +163,9 @@ export function PlanIssueCeremony({
   };
 
   const holdingFor = (recipient: Recipient) => {
-    const party = holdings?.parties.find((entry) =>
-      recipient.partyId
-        ? entry.partyId === recipient.partyId
-        : entry.partyDisplayName.trim().toLowerCase() ===
-          recipient.name.trim().toLowerCase(),
-    );
-    if (!party) return null;
-    const behind = party.holds.find((sheet) => sheet.behind) ?? party.holds[0];
-    return `last sent ${fmtDay(party.sentAt)}${behind ? ` · holds Rev ${behind.heldRev}` : ''}`;
+    const holder = holders.find((entry) => entry.partyKey === recipient.key);
+    if (!holder) return null;
+    return holderSentence(holder, fmtDay(holder.sentAt));
   };
 
   const addRecipient = (recipient: Recipient) => {
@@ -142,82 +175,89 @@ export function PlanIssueCeremony({
   };
 
   const issueAndSend = async () => {
-    if (recipients.length === 0 || sheetIds.length === 0) return;
+    if (unsent.length === 0 || selectedIds.length === 0) return;
     setFailure(null);
+    setSending(true);
     try {
-      planRoomEvents.issueStarted({
-        project_id: projectId,
-        sheet_count: sheetIds.length,
-      });
-      const issue = await createIssue.mutateAsync({
-        name: name.trim() || defaultIssueName(purpose),
-        idempotencyKey,
-        sheetIds,
-      });
+      let currentIssueId = issueId;
+      if (!currentIssueId) {
+        planRoomEvents.issueStarted({
+          project_id: projectId,
+          sheet_count: selectedIds.length,
+        });
+        const issue = await createIssue.mutateAsync({
+          name: name.trim() || defaultIssueName(purpose),
+          idempotencyKey: issueKey.key,
+          sheetIds: sheetIdsArgument,
+        });
+        currentIssueId = issue.issue.id;
+        setIssueId(currentIssueId);
+      }
 
-      const links: MintedLink[] = [];
       const origin = resolveClientPortalOrigin(
         typeof window === 'undefined' ? undefined : window.location.origin,
       );
-      for (const recipient of recipients) {
-        const result = await createTransmittal.mutateAsync({
-          issueId: issue.issue.id,
-          purpose,
-          partyId: recipient.partyId,
-          recipientName: recipient.partyId ? null : recipient.name,
-          recipientCompany: recipient.partyId ? null : recipient.company,
-        });
-        const transmittalId = String(
-          (result.transmittal as { id?: string }).id ?? '',
-        );
-        links.push({
-          recipientKey: recipient.key,
-          transmittalId,
-          name: recipient.name,
-          // The raw token, rendered once. Never cached, never persisted.
-          url: `${origin}/plans/${result.token}`,
-        });
-        planRoomEvents.transmittalCreated({
-          project_id: projectId,
-          issue_id: issue.issue.id,
-          purpose,
-        });
+
+      // One at a time, recorded as each lands. A token that has been minted
+      // exists whether or not the next call succeeds, and it will never be
+      // shown again — so it goes on screen before the next attempt is made.
+      for (const recipient of unsent) {
+        try {
+          const result = await createTransmittal.mutateAsync({
+            issueId: currentIssueId,
+            purpose,
+            partyId: recipient.partyId,
+            recipientName: recipient.partyId ? null : recipient.name,
+            recipientCompany: recipient.partyId ? null : recipient.company,
+          });
+          const transmittalId = String(
+            (result.transmittal as { id?: string }).id ?? '',
+          );
+          setMinted((prev) => [
+            ...prev,
+            {
+              recipientKey: recipient.key,
+              transmittalId,
+              url: `${origin}/plans/${result.token}`,
+            },
+          ]);
+          planRoomEvents.transmittalCreated({
+            project_id: projectId,
+            issue_id: currentIssueId,
+            purpose,
+          });
+        } catch (error) {
+          setFailure(
+            `${recipient.name} could not be sent — ${
+              error instanceof Error ? error.message : 'the send failed'
+            }. Everyone above holds their link; try again to send the rest.`,
+          );
+          setSending(false);
+          return;
+        }
       }
 
-      setMinted(links);
       planRoomEvents.issueFinalized({
         project_id: projectId,
-        issue_id: issue.issue.id,
-        sheet_count: issue.issue.sheetCount,
-        recipient_count: links.length,
+        issue_id: currentIssueId,
+        sheet_count: selectedIds.length,
+        recipient_count: recipients.length,
         duration_ms: Date.now() - startedAt,
       });
     } catch (error) {
       setFailure(
         error instanceof Error ? error.message : 'The set could not be issued.',
       );
+    } finally {
+      setSending(false);
     }
   };
 
-  const revoke = async (link: MintedLink) => {
-    try {
-      await revokeLink.mutateAsync(link.transmittalId);
-      setRevoked((prev) => ({ ...prev, [link.transmittalId]: 'Link revoked.' }));
-      planRoomEvents.transmittalRevoked({
-        project_id: projectId,
-        transmittal_id: link.transmittalId,
-      });
-    } catch (error) {
-      setRevoked((prev) => ({
-        ...prev,
-        [link.transmittalId]:
-          error instanceof Error ? error.message : 'It could not be revoked.',
-      }));
-    }
-    setConfirmRevoke(null);
-  };
-
-  const busy = createIssue.isPending || createTransmittal.isPending;
+  const finalized = issueId != null && unsent.length === 0 && recipients.length > 0;
+  const primaryLabel =
+    minted.length > 0 && unsent.length > 0
+      ? `Send the ${unsent.length} still unsent`
+      : 'Issue & send';
 
   return (
     <section aria-label="Issue the current set" className="px-4 py-6 md:px-8">
@@ -229,6 +269,7 @@ export function PlanIssueCeremony({
             <Input
               aria-label="Issue name"
               value={name}
+              className="min-h-11"
               onChange={(event) => {
                 setName(event.target.value);
                 setNameTouched(true);
@@ -262,11 +303,12 @@ export function PlanIssueCeremony({
 
           {/* Contents — the whole current set, with what moved marked */}
           <div className="mt-8">
-            <SectionEyebrow count={sheetIds.length}>Contents</SectionEyebrow>
+            <SectionEyebrow count={selectedIds.length}>Contents</SectionEyebrow>
             {priorIssue && (
               <p className="mb-3 max-w-xl text-[0.82rem] text-[var(--text-muted)]">
-                {changedCount} of {sheetIds.length} changed since {priorIssue.name}.
-                The rest go along so the recipient holds a whole set, not a diff.
+                {changedCount} of {selectedIds.length} changed since{' '}
+                {priorIssue.name}. The rest go along so the recipient holds a
+                whole set, not a diff.
               </p>
             )}
             <div className="grid">
@@ -313,9 +355,14 @@ export function PlanIssueCeremony({
             {(roster.data ?? []).length > 0 && (
               <div className="mb-3 flex flex-wrap gap-1.5">
                 {(roster.data ?? [])
-                  .filter((row) => row.display_name)
+                  // Team rows are the studio's own people; a transmittal is a
+                  // record of handing drawings OUT.
+                  .filter((row) => row.display_name && row.source !== 'team')
                   .map((row) => {
-                    const key = row.roster_id ?? row.display_name!;
+                    const key =
+                      row.source === 'party' && row.roster_id
+                        ? row.roster_id
+                        : foldName(row.display_name!);
                     const chosen = recipients.some((entry) => entry.key === key);
                     return (
                       <button
@@ -349,12 +396,14 @@ export function PlanIssueCeremony({
                 aria-label="Recipient name"
                 placeholder="Name"
                 value={freeName}
+                className="min-h-11"
                 onChange={(event) => setFreeName(event.target.value)}
               />
               <Input
                 aria-label="Recipient company"
                 placeholder="Company"
                 value={freeCompany}
+                className="min-h-11"
                 onChange={(event) => setFreeCompany(event.target.value)}
               />
               <DocumentActionRow surfaceKey="plan-room" regionKey="add-recipient">
@@ -364,7 +413,7 @@ export function PlanIssueCeremony({
                   disabled={!freeName.trim()}
                   onClick={() => {
                     addRecipient({
-                      key: `free:${freeName.trim().toLowerCase()}`,
+                      key: foldName(freeName),
                       name: freeName.trim(),
                       company: freeCompany.trim() || null,
                       partyId: null,
@@ -381,7 +430,7 @@ export function PlanIssueCeremony({
             <div className="mt-3 grid">
               {recipients.map((recipient) => {
                 const held = holdingFor(recipient);
-                const link = minted?.find((entry) => entry.recipientKey === recipient.key);
+                const link = mintedFor(recipient.key);
                 return (
                   <div
                     key={recipient.key}
@@ -399,7 +448,9 @@ export function PlanIssueCeremony({
                           </span>
                         )}
                       </span>
-                      {!minted && (
+                      {link ? (
+                        <StatusChip label="sent" color="#85947C" />
+                      ) : (
                         <DocumentActionRow
                           surfaceKey="plan-room"
                           regionKey={`recipient-${recipient.key}`}
@@ -407,6 +458,7 @@ export function PlanIssueCeremony({
                           <DocumentAction
                             actionKey="remove-plan-recipient"
                             variant="tertiary"
+                            disabled={sending}
                             onClick={() =>
                               setRecipients((prev) =>
                                 prev.filter((entry) => entry.key !== recipient.key),
@@ -420,54 +472,10 @@ export function PlanIssueCeremony({
                     </div>
 
                     {link && (
-                      <div className="mt-2 border-l-2 border-[var(--color-golden-hour)] pl-2.5">
-                        <p className="break-all font-mono text-[10px] text-[var(--color-charcoal)]">
-                          {link.url}
-                        </p>
-                        <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-golden-hour)]">
-                          This link won’t be shown again — copy it now.
-                        </p>
-                        <DocumentActionRow
-                          surfaceKey="plan-room"
-                          regionKey={`link-${link.transmittalId}`}
-                        >
-                          <DocumentAction
-                            actionKey="copy-plan-link"
-                            variant="secondary"
-                            onClick={async () => {
-                              await navigator.clipboard?.writeText(link.url);
-                              setCopied(link.transmittalId);
-                            }}
-                          >
-                            {copied === link.transmittalId ? 'Copied' : 'Copy the link'}
-                          </DocumentAction>
-                          {confirmRevoke === link.transmittalId ? (
-                            <DocumentAction
-                              actionKey="confirm-revoke-plan-link"
-                              variant="danger"
-                              onClick={() => revoke(link)}
-                            >
-                              Revoke it — the trade loses this link
-                            </DocumentAction>
-                          ) : (
-                            <DocumentAction
-                              actionKey="revoke-plan-link"
-                              variant="tertiary"
-                              onClick={() => setConfirmRevoke(link.transmittalId)}
-                            >
-                              Revoke
-                            </DocumentAction>
-                          )}
-                        </DocumentActionRow>
-                        {revoked[link.transmittalId] && (
-                          <p
-                            role="status"
-                            className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-terracotta)]"
-                          >
-                            {revoked[link.transmittalId]}
-                          </p>
-                        )}
-                      </div>
+                      <PlanLinkOnce
+                        url={link.url}
+                        regionKey={`link-${link.transmittalId}`}
+                      />
                     )}
                   </div>
                 );
@@ -492,16 +500,16 @@ export function PlanIssueCeremony({
                 <p className="font-heading text-lg text-[var(--color-charcoal)]">
                   {name}
                 </p>
-                {minted ? (
+                {finalized ? (
                   <Stamp label="ISSUED" color="var(--color-sage)" ink="#85947C" />
                 ) : (
                   <StatusChip label="Not yet minted" color="var(--color-aged-oak)" />
                 )}
               </div>
               <p className="mt-2 font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-                {sheetIds.length} {sheetIds.length === 1 ? 'sheet' : 'sheets'} · for{' '}
-                {purpose} · {recipients.length}{' '}
-                {recipients.length === 1 ? 'recipient' : 'recipients'}
+                {selectedIds.length}{' '}
+                {selectedIds.length === 1 ? 'sheet' : 'sheets'} · for {purpose} ·{' '}
+                {minted.length} of {recipients.length} sent
               </p>
               {preview.data && (
                 <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
@@ -512,7 +520,7 @@ export function PlanIssueCeremony({
               {failure && (
                 <p
                   role="alert"
-                  className="mt-3 border-l-2 border-[var(--color-terracotta)] pl-2 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-terracotta)]"
+                  className="mt-3 border-l-2 border-[var(--color-terracotta)] pl-2 text-[0.78rem] leading-snug text-[var(--color-terracotta)]"
                 >
                   {failure}
                 </p>
@@ -524,16 +532,18 @@ export function PlanIssueCeremony({
                 className="mt-4"
                 aria-label="Issue the set"
               >
-                {!minted && (
+                {!finalized && (
                   <DocumentAction
                     actionKey="issue-and-send"
                     variant="primary"
-                    disabled={recipients.length === 0 || sheetIds.length === 0 || busy}
-                    loading={busy}
-                    loadingLabel="Issuing…"
+                    disabled={
+                      unsent.length === 0 || selectedIds.length === 0 || sending
+                    }
+                    loading={sending}
+                    loadingLabel="Sending…"
                     onClick={issueAndSend}
                   >
-                    Issue &amp; send
+                    {primaryLabel}
                   </DocumentAction>
                 )}
                 <DocumentAction

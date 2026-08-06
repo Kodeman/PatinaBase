@@ -42,10 +42,16 @@ export const planRoomEvents = {
     duration_ms: number;
   }) => capture("plan_room_light_table_confirmed", properties),
 
+  /**
+   * `code` only — never the raw message. A Postgres error from
+   * file_plan_prints interpolates the offending sheet number into its text
+   * ("sheet ID-401 is named twice"), and a storage failure can carry a signed
+   * path; both would leave the studio's drawings in an analytics payload.
+   */
   lightTableFailed: (properties: {
     project_id: string;
     stage: string;
-    error: string;
+    code: string;
   }) => capture("plan_room_light_table_failed", properties),
 
   sheetOpened: (properties: { project_id: string; sheet_id: string }) =>

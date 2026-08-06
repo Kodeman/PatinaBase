@@ -1,28 +1,43 @@
 'use client';
 
 /**
- * The current set and the drawing log — the room's resting face.
+ * The current set, the drawing log, and the transmittals — the room's resting
+ * face.
  *
- * Every holder line here is read off transmittals by the pure model: nobody
- * types "Boone holds Rev B", the ledger says it. When anyone is behind, one
+ * Every holder line here is read off transmittals by `deriveHolders`, the one
+ * derivation the band and the ceremony read too. When anyone is behind, one
  * golden-hour band across the page says so and offers the single act that fixes
  * it — issue the current set.
  *
- * The log is a CSS grid, never a <table>: the Document's ledgers are ruled
+ * The transmittals ledger is where a link's life is managed after it is sent.
+ * Reissue mints a fresh token (the old one dies with it) and shows it once;
+ * Revoke ends the link without erasing the record, because a transmittal is a
+ * statement about the past and the past does not un-happen.
+ *
+ * The ledgers are CSS grids, never <table>: the Document's ledgers are ruled
  * paper, not tabular data (D4 · zero shadows throughout).
  */
 
-import type { PlanRoomBundle } from '@patina/supabase';
+import { useState } from 'react';
+import {
+  useReissuePlanTransmittalLink,
+  useRevokePlanTransmittalLink,
+  type PlanRoomBundle,
+} from '@patina/supabase';
 import {
   deriveCurrentSet,
   deriveDrawingLog,
   deriveHolders,
+  holderSentence,
   type DrawingLogEvent,
 } from '@/lib/plans/model';
 import { fmtDay } from '@/lib/document/format';
+import { resolveClientPortalOrigin } from '@/lib/client-portal-url';
+import { planRoomEvents } from '@/lib/analytics/plan-room-events';
 import { DocumentAction, DocumentActionRow } from '../document-action';
 import { SectionEyebrow } from '../section-eyebrow';
 import { StatusChip } from '../status-chip';
+import { PlanLinkOnce } from './plan-link-once';
 
 const STATE_WORD: Record<string, { label: string; color: string }> = {
   draft: { label: 'Draft', color: 'var(--color-aged-oak)' },
@@ -46,6 +61,7 @@ function RevLetterBadge({ letter }: { letter: string | null }) {
 }
 
 export interface PlanRoomSetProps {
+  projectId: string;
   bundle: PlanRoomBundle;
   onOpenSheet: (sheetId: string) => void;
   onIssue: () => void;
@@ -53,15 +69,77 @@ export interface PlanRoomSetProps {
 }
 
 export function PlanRoomSet({
+  projectId,
   bundle,
   onOpenSheet,
   onIssue,
   onChooseFile,
 }: PlanRoomSetProps) {
+  const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState<Record<string, string>>({});
+  const [reissued, setReissued] = useState<Record<string, string>>({});
+  const revokeLink = useRevokePlanTransmittalLink(projectId);
+  const reissueLink = useReissuePlanTransmittalLink(projectId);
+
   const set = deriveCurrentSet(bundle);
   const holders = deriveHolders(bundle);
   const log = deriveDrawingLog(bundle);
   const behind = holders.filter((holder) => holder.behindCount > 0);
+
+  const transmittals = [...bundle.transmittals].sort((a, b) =>
+    a.sent_at === b.sent_at
+      ? a.id < b.id
+        ? 1
+        : -1
+      : a.sent_at < b.sent_at
+        ? 1
+        : -1,
+  );
+
+  const tokenFor = (transmittalId: string) =>
+    bundle.tokens
+      .filter((token) => token.transmittal_id === transmittalId)
+      .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0] ?? null;
+
+  const revoke = async (transmittalId: string) => {
+    setOutcome((prev) => ({ ...prev, [transmittalId]: '' }));
+    try {
+      await revokeLink.mutateAsync(transmittalId);
+      setOutcome((prev) => ({ ...prev, [transmittalId]: 'Link revoked.' }));
+      planRoomEvents.transmittalRevoked({
+        project_id: projectId,
+        transmittal_id: transmittalId,
+      });
+    } catch (error) {
+      setOutcome((prev) => ({
+        ...prev,
+        [transmittalId]:
+          error instanceof Error ? error.message : 'It could not be revoked.',
+      }));
+    }
+    setConfirmRevoke(null);
+  };
+
+  const reissue = async (transmittalId: string) => {
+    setOutcome((prev) => ({ ...prev, [transmittalId]: '' }));
+    try {
+      const result = await reissueLink.mutateAsync(transmittalId);
+      const origin = resolveClientPortalOrigin(
+        typeof window === 'undefined' ? undefined : window.location.origin,
+      );
+      // The raw token, held only for this render. Never cached, never stored.
+      setReissued((prev) => ({
+        ...prev,
+        [transmittalId]: `${origin}/plans/${result.token}`,
+      }));
+    } catch (error) {
+      setOutcome((prev) => ({
+        ...prev,
+        [transmittalId]:
+          error instanceof Error ? error.message : 'A new link could not be minted.',
+      }));
+    }
+  };
 
   if (set.length === 0) {
     return (
@@ -106,8 +184,7 @@ export function PlanRoomSet({
                 key={holder.partyKey}
                 className="text-[0.82rem] text-[var(--color-charcoal)]"
               >
-                {holder.partyDisplayName} holds Rev {holder.behindRev} · current
-                is Rev {holder.currentRev} · last sent {fmtDay(holder.sentAt)}
+                {holderSentence(holder, fmtDay(holder.sentAt))}
               </p>
             ))}
           </div>
@@ -137,7 +214,7 @@ export function PlanRoomSet({
                 .map((sheet) => ({ holder, sheet })),
             )
             .sort((a, b) =>
-              a.holder.partyDisplayName.localeCompare(b.holder.partyDisplayName),
+              a.holder.partyDisplayName < b.holder.partyDisplayName ? -1 : 1,
             );
           const word = STATE_WORD[row.state] ?? {
             label: row.state,
@@ -184,16 +261,18 @@ export function PlanRoomSet({
       </div>
 
       <SectionEyebrow count={log.length}>The drawing log</SectionEyebrow>
-      <div role="list" aria-label="Drawing log" className="grid">
-        <div
-          aria-hidden
-          className="grid grid-cols-[5.5rem_7rem_minmax(0,1fr)] gap-3 border-b border-[var(--color-pearl)] pb-1.5 font-mono text-[8.5px] uppercase tracking-[0.1em] text-[var(--text-muted)] sm:grid-cols-[6rem_7rem_minmax(0,1fr)_12rem]"
-        >
-          <span>When</span>
-          <span>Event</span>
-          <span>What</span>
-          <span className="hidden sm:block">Who</span>
-        </div>
+      {/* The header sits OUTSIDE the list: a column heading is not a list item,
+          and a screen reader counting it as one miscounts the log. */}
+      <div
+        aria-hidden
+        className="grid grid-cols-[5.5rem_7rem_minmax(0,1fr)] gap-3 border-b border-[var(--color-pearl)] pb-1.5 font-mono text-[8.5px] uppercase tracking-[0.1em] text-[var(--text-muted)] sm:grid-cols-[6rem_7rem_minmax(0,1fr)_12rem]"
+      >
+        <span>When</span>
+        <span>Event</span>
+        <span>What</span>
+        <span className="hidden sm:block">Who</span>
+      </div>
+      <div role="list" aria-label="Drawing log" className="mb-10 grid">
         {log.map((row) => (
           <div
             key={row.key}
@@ -215,6 +294,126 @@ export function PlanRoomSet({
           </div>
         ))}
       </div>
+
+      {transmittals.length > 0 && (
+        <>
+          <SectionEyebrow count={transmittals.length}>Transmittals</SectionEyebrow>
+          <div
+            aria-hidden
+            className="grid grid-cols-[minmax(0,1fr)_6rem_5.5rem] gap-3 border-b border-[var(--color-pearl)] pb-1.5 font-mono text-[8.5px] uppercase tracking-[0.1em] text-[var(--text-muted)] sm:grid-cols-[minmax(0,1fr)_6rem_5.5rem_8rem_minmax(0,14rem)]"
+          >
+            <span>Recipient</span>
+            <span>For</span>
+            <span>Sent</span>
+            <span className="hidden sm:block">Opened</span>
+            <span className="hidden sm:block">Link</span>
+          </div>
+          <div role="list" aria-label="Transmittals" className="grid">
+            {transmittals.map((transmittal) => {
+              const token = tokenFor(transmittal.id);
+              const expired =
+                token != null &&
+                token.status === 'active' &&
+                token.expires_at < new Date().toISOString();
+              const linkWord = !token
+                ? 'no link'
+                : token.status === 'revoked'
+                  ? 'revoked'
+                  : expired
+                    ? 'expired'
+                    : 'live';
+              const link = reissued[transmittal.id];
+              return (
+                <div
+                  key={transmittal.id}
+                  role="listitem"
+                  data-plan-transmittal-row
+                  className="border-b border-[var(--color-pearl)] py-2.5"
+                >
+                  <div className="grid grid-cols-[minmax(0,1fr)_6rem_5.5rem] items-baseline gap-3 sm:grid-cols-[minmax(0,1fr)_6rem_5.5rem_8rem_minmax(0,14rem)]">
+                    <span className="min-w-0 text-[0.82rem] text-[var(--color-charcoal)]">
+                      {transmittal.party_display_name}
+                      {transmittal.party_company &&
+                      transmittal.party_company !== transmittal.party_display_name
+                        ? ` · ${transmittal.party_company}`
+                        : ''}
+                    </span>
+                    <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                      {transmittal.purpose}
+                    </span>
+                    <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                      {fmtDay(transmittal.sent_at)}
+                    </span>
+                    <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                      {token?.first_opened_at
+                        ? fmtDay(token.first_opened_at)
+                        : 'not opened'}
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <StatusChip
+                        label={linkWord}
+                        color={
+                          linkWord === 'live'
+                            ? '#85947C'
+                            : linkWord === 'revoked'
+                              ? 'var(--color-terracotta)'
+                              : 'var(--color-aged-oak)'
+                        }
+                      />
+                    </span>
+                  </div>
+
+                  <DocumentActionRow
+                    surfaceKey="plan-room"
+                    regionKey={`transmittal-${transmittal.id}`}
+                    aria-label={`Link for ${transmittal.party_display_name}`}
+                  >
+                    <DocumentAction
+                      actionKey="reissue-plan-link"
+                      variant="secondary"
+                      loading={reissueLink.isPending}
+                      loadingLabel="Minting…"
+                      onClick={() => reissue(transmittal.id)}
+                    >
+                      Reissue the link
+                    </DocumentAction>
+                    {confirmRevoke === transmittal.id ? (
+                      <DocumentAction
+                        actionKey="confirm-revoke-plan-link"
+                        variant="danger"
+                        onClick={() => revoke(transmittal.id)}
+                      >
+                        Revoke it — they lose this link
+                      </DocumentAction>
+                    ) : (
+                      <DocumentAction
+                        actionKey="revoke-plan-link"
+                        variant="tertiary"
+                        disabled={!token || token.status === 'revoked'}
+                        onClick={() => setConfirmRevoke(transmittal.id)}
+                      >
+                        Revoke
+                      </DocumentAction>
+                    )}
+                  </DocumentActionRow>
+
+                  {link && (
+                    <PlanLinkOnce url={link} regionKey={`reissued-${transmittal.id}`} />
+                  )}
+                  {outcome[transmittal.id] && (
+                    <p
+                      role="status"
+                      className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-terracotta)]"
+                    >
+                      {outcome[transmittal.id]}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
     </section>
   );
 }

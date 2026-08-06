@@ -66,6 +66,30 @@ export interface PlanStagedSession {
 
 type CommitStage = 'cutting' | 'hashing' | 'uploading' | 'filing';
 
+/**
+ * The machine-readable half of a failure, for telemetry only. A Postgres error
+ * from file_plan_prints interpolates the offending sheet number into its
+ * message, and a storage error can carry a signed path — neither belongs in an
+ * analytics payload, so the event gets the SQLSTATE or HTTP status and nothing
+ * else. The human-readable message still reaches the designer, inline.
+ */
+function failureCode(error: unknown): string {
+  if (error && typeof error === 'object') {
+    const candidate = error as {
+      code?: unknown;
+      statusCode?: unknown;
+      status?: unknown;
+    };
+    if (typeof candidate.code === 'string' && candidate.code) return candidate.code;
+    if (typeof candidate.statusCode === 'string' && candidate.statusCode) {
+      return candidate.statusCode;
+    }
+    if (typeof candidate.statusCode === 'number') return String(candidate.statusCode);
+    if (typeof candidate.status === 'number') return String(candidate.status);
+  }
+  return 'unknown';
+}
+
 const STAGE_LINE: Record<CommitStage, string> = {
   cutting: 'Cutting the pages…',
   hashing: 'Taking each page’s fingerprint…',
@@ -136,13 +160,17 @@ export function PlanConfirmStrip({
 
     const fail = (failedStage: CommitStage, error: unknown) => {
       const message =
-        error instanceof Error ? error.message : 'The filing could not be completed.';
+        error instanceof Error
+          ? error.message
+          : typeof (error as { message?: unknown })?.message === 'string'
+            ? String((error as { message: string }).message)
+            : 'The filing could not be completed.';
       setFailure({ stage: failedStage, message });
       setStage(null);
       planRoomEvents.lightTableFailed({
         project_id: session.projectId,
         stage: failedStage,
-        error: message,
+        code: failureCode(error),
       });
     };
 
@@ -204,7 +232,9 @@ export function PlanConfirmStrip({
             contentType: 'application/pdf',
             upsert: true,
           });
-        if (error) throw new Error(error.message);
+        // Rethrow the object itself, not a fresh Error — its statusCode is what
+        // failureCode reports, and wrapping would flatten it to 'unknown'.
+        if (error) throw error;
       } catch (error) {
         fail('uploading', error);
         return;
@@ -250,7 +280,11 @@ export function PlanConfirmStrip({
       role="region"
       aria-label="Pending filing"
       data-plan-confirm-strip
-      className="sticky bottom-0 z-20 mt-4 flex flex-wrap items-center justify-between gap-4 border-l-[2.5px] border-[var(--color-golden-hour)] bg-[var(--color-off-white)] px-4 py-2.5"
+      /* Clears the Studio drawer exactly as the composition bar and the log
+         strip do: the drawer is a 60px fixed rail at z-40 from 1180px up, and
+         a strip that sat under it put the one verb that writes anything out of
+         reach — which an e2e caught by clicking into the drawer instead. */
+      className="sticky bottom-0 z-[45] mt-4 flex flex-wrap items-center justify-between gap-4 border-l-[2.5px] border-[var(--color-golden-hour)] bg-[var(--color-off-white)] px-4 py-2.5 min-[1180px]:bottom-[60px]"
     >
       <div className="min-w-0">
         <p
@@ -264,7 +298,9 @@ export function PlanConfirmStrip({
         </span>
         {!summary.ready && (
           <p className="mt-1 font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--text-muted)]">
-            Answer every card before the table files
+            {Object.keys(summary.conflicts).length > 0
+              ? 'Two cards want the same sheet — settle it before the table files'
+              : 'Answer every card before the table files'}
           </p>
         )}
         {stage && (
@@ -308,7 +344,7 @@ export function PlanConfirmStrip({
           loading={running}
           loadingLabel="Filing…"
         >
-          File {summary.fileCount} {summary.fileCount === 1 ? 'sheet' : 'sheets'}
+          {summary.primaryLabel}
         </DocumentAction>
       </DocumentActionGroup>
     </div>

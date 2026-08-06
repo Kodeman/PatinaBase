@@ -8,11 +8,21 @@
  * A near miss is the one place the table refuses to decide. It says what it
  * read, what it holds, and offers three forks — and until one is pressed the
  * card is unresolved and the confirm strip's primary stays shut.
+ *
+ * A page whose number could not be read is NOT limited to "new sheet or loose
+ * paper". A scanned plot, or a title block the text layer lost, is very often
+ * a revision of a sheet the room already holds — so those cards carry a
+ * "file it to a sheet you already hold" chooser too.
  */
 
 import { useEffect, useState } from 'react';
 import { Input, Select } from '@/components/ui/controls';
-import { previewRevLetter, type LightTableProposal } from '@/lib/plans/model';
+import {
+  nearMissSentence,
+  previewRevLetter,
+  type KnownSheet,
+  type LightTableProposal,
+} from '@/lib/plans/model';
 import { StatusChip } from '../status-chip';
 
 const DISCIPLINES = ['A', 'ID', 'EL', 'M', 'S', 'FP', 'L', 'P'];
@@ -33,6 +43,10 @@ export interface LightTableCardProps {
   thumbnail: Blob | null;
   /** The matched sheet's current revision, for the "becomes Rev x" preview. */
   currentRev: string | null;
+  /** Every sheet the room holds, for the file-to-an-existing-sheet chooser. */
+  sheets: KnownSheet[];
+  /** Set when another staged card claims the same sheet or number. */
+  conflict: string | null;
   onChange: (next: LightTableProposal) => void;
 }
 
@@ -40,6 +54,8 @@ export function LightTableCard({
   proposal,
   thumbnail,
   currentRev,
+  sheets,
+  conflict,
   onChange,
 }: LightTableCardProps) {
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
@@ -58,6 +74,9 @@ export function LightTableCard({
   const becomes =
     proposal.kind === 'confirm_current' ? null : previewRevLetter(currentRev);
   const unresolved = proposal.requiresFork && proposal.fork == null;
+  // A page the table could not read a number off. Its identity is entirely the
+  // designer's to give — by hand, or by pointing at a sheet already held.
+  const unread = proposal.parsedNumber == null;
 
   const answerFork = (fork: NonNullable<LightTableProposal['fork']>) => {
     if (fork === 'new_sheet') {
@@ -80,15 +99,44 @@ export function LightTableCard({
     });
   };
 
+  const fileToExistingSheet = (sheetId: string) => {
+    if (!sheetId) {
+      // Back to where it was: a page with no number is a loose paper again.
+      onChange({
+        ...proposal,
+        kind: 'unmatched',
+        fork: null,
+        sheetId: null,
+        sheetNumber: null,
+        discipline: null,
+      });
+      return;
+    }
+    const sheet = sheets.find((entry) => entry.id === sheetId);
+    if (!sheet) return;
+    onChange({
+      ...proposal,
+      kind: 'revision',
+      fork: 'revision',
+      sheetId: sheet.id,
+      sheetNumber: sheet.sheet_number,
+      sheetTitle: sheet.title,
+      discipline: sheet.discipline ?? null,
+    });
+  };
+
   return (
     <div
       data-plan-card
       data-page-index={proposal.pageIndex}
       data-unresolved={unresolved ? 'true' : undefined}
+      data-conflicted={conflict ? 'true' : undefined}
       className={`flex flex-col gap-2 border bg-[var(--doc-paper)] p-3 ${
-        unresolved
-          ? 'border-[var(--color-golden-hour)]'
-          : 'border-[var(--doc-ink-border)]'
+        conflict
+          ? 'border-[var(--color-terracotta)]'
+          : unresolved
+            ? 'border-[var(--color-golden-hour)]'
+            : 'border-[var(--doc-ink-border)]'
       }`}
     >
       <div className="flex items-start justify-between gap-2">
@@ -133,6 +181,7 @@ export function LightTableCard({
             aria-label={`Sheet number for page ${proposal.pageIndex + 1}`}
             value={proposal.sheetNumber ?? ''}
             placeholder="Sheet number"
+            className="min-h-11"
             onChange={(event) =>
               onChange({ ...proposal, sheetNumber: event.target.value })
             }
@@ -141,6 +190,7 @@ export function LightTableCard({
             aria-label={`Sheet title for page ${proposal.pageIndex + 1}`}
             value={proposal.sheetTitle ?? ''}
             placeholder="Sheet title"
+            className="min-h-11"
             onChange={(event) =>
               onChange({ ...proposal, sheetTitle: event.target.value })
             }
@@ -148,6 +198,7 @@ export function LightTableCard({
           <Select
             aria-label={`Discipline for page ${proposal.pageIndex + 1}`}
             value={proposal.discipline ?? ''}
+            className="min-h-11"
             onChange={(event) =>
               onChange({ ...proposal, discipline: event.target.value || null })
             }
@@ -168,17 +219,43 @@ export function LightTableCard({
         </div>
       )}
 
+      {/* The table could not read this page's number. Rather than forcing a new
+          sheet or the Folio, let it land on a sheet the room already holds. */}
+      {unread && (
+        <Select
+          aria-label={`File page ${proposal.pageIndex + 1} to an existing sheet`}
+          value={proposal.sheetId ?? ''}
+          className="min-h-11"
+          onChange={(event) => fileToExistingSheet(event.target.value)}
+        >
+          <option value="">File to an existing sheet —</option>
+          {sheets.map((sheet) => (
+            <option key={sheet.id} value={sheet.id}>
+              {sheet.sheet_number} · {sheet.title}
+            </option>
+          ))}
+        </Select>
+      )}
+
       {becomes && proposal.kind !== 'unmatched' && (
         <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
           becomes Rev {becomes}
         </p>
       )}
 
+      {conflict && (
+        <p
+          role="alert"
+          className="border-l-2 border-[var(--color-terracotta)] pl-2 text-[0.75rem] leading-snug text-[var(--color-terracotta)]"
+        >
+          {conflict}
+        </p>
+      )}
+
       {proposal.nearMiss && (
         <div className="border-l-2 border-[var(--color-golden-hour)] pl-2.5">
           <p className="text-[0.78rem] leading-snug text-[var(--color-charcoal)]">
-            parsed {proposal.nearMiss.parsed} — a letter O, not a zero. You hold
-            an {proposal.nearMiss.canonical}. Which is this?
+            {nearMissSentence(proposal.nearMiss)}
           </p>
           <div
             role="group"

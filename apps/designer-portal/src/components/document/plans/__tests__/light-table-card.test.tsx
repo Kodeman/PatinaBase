@@ -1,6 +1,11 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import type { LightTableProposal } from '@/lib/plans/model';
+import type { KnownSheet, LightTableProposal } from '@/lib/plans/model';
 import { LightTableCard } from '../light-table-card';
+
+const SHEETS: KnownSheet[] = [
+  { id: 's401', sheet_number: 'ID-401', title: 'Millwork Elevations — Study' },
+  { id: 's402', sheet_number: 'ID-402', title: 'Millwork Elevations — Banquette' },
+];
 
 const base: LightTableProposal = {
   pageIndex: 1,
@@ -11,7 +16,7 @@ const base: LightTableProposal = {
   sheetNumber: 'ID-402',
   sheetTitle: 'Millwork Elevations — Banquette',
   discipline: 'ID',
-  nearMiss: { parsed: 'ID-4O2', canonical: 'ID-402' },
+  nearMiss: { parsed: 'ID-4O2', canonical: 'ID-402', readAs: 'O', actual: '0' },
   fork: null,
   requiresFork: true,
 };
@@ -23,6 +28,8 @@ describe('LightTableCard', () => {
         proposal={base}
         thumbnail={null}
         currentRev="B"
+        sheets={SHEETS}
+        conflict={null}
         onChange={jest.fn()}
       />,
     );
@@ -41,13 +48,17 @@ describe('LightTableCard', () => {
         proposal={base}
         thumbnail={null}
         currentRev="B"
+        sheets={SHEETS}
+        conflict={null}
         onChange={onChange}
       />,
     );
     const card = document.querySelector('[data-plan-card]')!;
     expect(card.getAttribute('data-unresolved')).toBe('true');
 
-    const chips = screen.getAllByRole('button');
+    const chips = screen
+      .getAllByRole('button')
+      .filter((button) => button.getAttribute('aria-pressed') !== null);
     expect(chips).toHaveLength(3);
     for (const chip of chips) {
       expect(chip.getAttribute('aria-pressed')).toBe('false');
@@ -77,6 +88,8 @@ describe('LightTableCard', () => {
         proposal={answered}
         thumbnail={null}
         currentRev="B"
+        sheets={SHEETS}
+        conflict={null}
         onChange={onChange}
       />,
     );
@@ -102,6 +115,8 @@ describe('LightTableCard', () => {
         }}
         thumbnail={null}
         currentRev={null}
+        sheets={SHEETS}
+        conflict={null}
         onChange={onChange}
       />,
     );
@@ -140,10 +155,65 @@ describe('LightTableCard', () => {
         }}
         thumbnail={null}
         currentRev={null}
+        sheets={SHEETS}
+        conflict={null}
         onChange={jest.fn()}
       />,
     );
     expect(screen.getByText(/It goes to the Folio as a loose paper/)).toBeInTheDocument();
     expect(screen.queryByText(/becomes Rev/)).not.toBeInTheDocument();
+  });
+
+  it('lets a page it could not read land on a sheet the room already holds', () => {
+    const onChange = jest.fn();
+    render(
+      <LightTableCard
+        proposal={{
+          ...base,
+          kind: 'unmatched',
+          parsedNumber: null,
+          sheetId: null,
+          sheetNumber: null,
+          nearMiss: null,
+          fork: null,
+          requiresFork: false,
+        }}
+        thumbnail={null}
+        currentRev={null}
+        sheets={SHEETS}
+        conflict={null}
+        onChange={onChange}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('File page 2 to an existing sheet'), {
+      target: { value: 's401' },
+    });
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'revision',
+        fork: 'revision',
+        sheetId: 's401',
+        sheetNumber: 'ID-401',
+      }),
+    );
+  });
+
+  it('marks a card that collides with another staged card', () => {
+    render(
+      <LightTableCard
+        proposal={{ ...base, fork: 'revision' }}
+        thumbnail={null}
+        currentRev="B"
+        sheets={SHEETS}
+        conflict="Two pages are filed to this same sheet (p.2, p.3)."
+        onChange={jest.fn()}
+      />,
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      /Two pages are filed to this same sheet/,
+    );
+    expect(
+      document.querySelector('[data-plan-card]')!.getAttribute('data-conflicted'),
+    ).toBe('true');
   });
 });

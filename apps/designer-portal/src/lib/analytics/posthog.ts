@@ -1,4 +1,4 @@
-import posthog from 'posthog-js';
+import posthog, { type CaptureResult } from 'posthog-js';
 
 declare global {
   interface Window {
@@ -67,6 +67,69 @@ export function isAnalyticsPossible(): boolean {
   return true;
 }
 
+// /field tokens are either a 64-hex field_link_tokens value OR an
+// `sr_`-prefixed site-request token — a broader URL-safe alphabet than plain
+// hex, so it stays its own pattern rather than folding into the generic one.
+const FIELD_BEARER_IN_URL = /\/field\/[A-Za-z0-9_-]{32,256}(?![A-Za-z0-9_-])/g;
+
+// /share, /rfq, /evidence, and /plans all mint the same 64-char lowercase-hex
+// bearer (document_shares, trade_rfq_tokens, fulfillment_mint_evidence_token,
+// plan_transmittal_tokens). The plan-room transmittal link is the reason this
+// exists on the designer side: the ceremony renders a raw token once, and an
+// autocaptured href or referrer must never carry it off the machine.
+// Ported from apps/client-portal/src/lib/analytics/posthog.ts — keep in sync.
+const HEX_BEARER_IN_URL = /\/(share|rfq|evidence|plans)\/[0-9a-f]{64}(?![0-9a-f])/gi;
+
+function redactBearerPaths(value: string): string {
+  return value
+    .replace(FIELD_BEARER_IN_URL, '/field/[redacted]')
+    .replace(HEX_BEARER_IN_URL, (_match, prefix: string) => `/${prefix}/[redacted]`);
+}
+
+function sanitizeAnalyticsValue(value: unknown, seen: WeakMap<object, unknown>): unknown {
+  if (typeof value === 'string') {
+    return redactBearerPaths(value);
+  }
+  if (!value || typeof value !== 'object') return value;
+
+  if (typeof URL !== 'undefined' && value instanceof URL) {
+    return redactBearerPaths(value.toString());
+  }
+  if (value instanceof Date || value instanceof RegExp) return value;
+
+  const prior = seen.get(value);
+  if (prior) return prior;
+
+  if (Array.isArray(value)) {
+    const sanitized: unknown[] = [];
+    seen.set(value, sanitized);
+    value.forEach((entry) => sanitized.push(sanitizeAnalyticsValue(entry, seen)));
+    return sanitized;
+  }
+
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return value;
+
+  const sanitized: Record<string, unknown> = {};
+  seen.set(value, sanitized);
+  for (const [key, entry] of Object.entries(value)) {
+    const sanitizedKey = redactBearerPaths(key);
+    sanitized[sanitizedKey] = sanitizeAnalyticsValue(entry, seen);
+  }
+  return sanitized;
+}
+
+/**
+ * Last-mile privacy boundary for every PostHog event, including SDK-generated
+ * autocapture properties and URLs added after an SPA navigation. Bearer
+ * credentials are valid path segments, so no event may leave the browser with
+ * one embedded in a URL, referrer, element href, key, or nested value.
+ */
+export function sanitizePostHogEvent(event: CaptureResult | null): CaptureResult | null {
+  if (!event) return null;
+  return sanitizeAnalyticsValue(event, new WeakMap()) as CaptureResult;
+}
+
 export function initPostHog(): void {
   if (initialized || typeof window === 'undefined') return;
 
@@ -88,6 +151,7 @@ export function initPostHog(): void {
     respect_dnt: true,
     ip: false,
     persistence: 'localStorage+cookie',
+    before_send: sanitizePostHogEvent,
     loaded: (ph) => {
       if (process.env.NODE_ENV === 'development') {
         ph.debug();

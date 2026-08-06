@@ -183,10 +183,21 @@ export function PlanSheetDetail({
         <div className="grid">
           {prints.map((print) => {
             const isCurrent = print.id === sheet.current_print_id;
+            // The print that superseded this one is the NEXT one filed — the
+            // lowest print_number above it. `prints` is newest-first, so
+            // `.find` would hand back the newest instead, and Rev A would
+            // claim it was superseded by Rev D when Rev B is what replaced it.
             const supersededBy = isCurrent
               ? null
-              : (prints.find((later) => later.print_number > print.print_number)
-                  ?.rev_letter ?? currentPrint?.rev_letter ?? null);
+              : (prints
+                  .filter((later) => later.print_number > print.print_number)
+                  .reduce<(typeof prints)[number] | null>(
+                    (lowest, candidate) =>
+                      lowest == null || candidate.print_number < lowest.print_number
+                        ? candidate
+                        : lowest,
+                    null,
+                  )?.rev_letter ?? null);
             const history = historyFor(print.id);
             return (
               <div

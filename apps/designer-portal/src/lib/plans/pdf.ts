@@ -50,6 +50,16 @@ export async function loadPdfPages(file: File): Promise<LoadedPdf> {
 
   // getDocument transfers/detaches the buffer it is handed, so it gets a copy
   // and `bytes` stays usable for extractSinglePagePdf.
+  //
+  // A plan set is an untrusted file arriving from a trade, so neither eval nor
+  // embedded PDF JavaScript may run. On pdfjs 5.7 both are structural rather
+  // than optional: `isEvalSupported` no longer exists (v5 removed eval-based
+  // font compilation outright — zero occurrences in the build), and
+  // `enableScripting` is an AnnotationLayer parameter, not a getDocument one.
+  // This surface builds no annotation layer and no PDFScriptingManager, so a
+  // document's JavaScript actions are never wired to anything. Passing either
+  // option here would be an excess property the types correctly reject; the
+  // guarantee is the absence of the machinery, not a flag.
   const document = await pdfjs.getDocument({ data: bytes.slice() }).promise;
   const pages: ParsedPdfPage[] = [];
 
@@ -97,6 +107,7 @@ export async function renderPageThumbnail(
 ): Promise<Blob> {
   await configurePdfWorker();
   const pdfjs = await import('pdfjs-dist');
+  // Same posture as loadPdfPages: no eval, no scripting machinery, by absence.
   const document = await pdfjs.getDocument({ data: bytes.slice() }).promise;
   try {
     const page = await document.getPage(pageIndex + 1);

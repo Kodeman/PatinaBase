@@ -67,7 +67,7 @@ export interface LightTableProposal {
   sheetTitle: string | null;
   discipline: string | null;
   /** Set when the parse is one confusable character off a sheet we hold. */
-  nearMiss: { parsed: string; canonical: string } | null;
+  nearMiss: NearMiss | null;
   /** The answered fork. Pre-answered except on a near miss. */
   fork: ProposalFork | null;
   /** A card with an open fork is unresolved until the designer answers it. */
@@ -76,12 +76,20 @@ export interface LightTableProposal {
 
 export interface ConfirmSummary {
   sentence: string;
+  /** The primary's own words — a filing files PRINTS, a confirmation confirms. */
+  primaryLabel: string;
+  /** Entries the RPC will carry, of every kind. */
   fileCount: number;
+  /** Entries that carry bytes — the only ones that make a print. */
+  printCount: number;
   newCount: number;
   revisionCount: number;
   confirmCount: number;
   looseCount: number;
-  /** Every card that needs a fork has one. */
+  /** pageIndex → why this card is in conflict with another staged card. */
+  conflicts: Record<number, string>;
+  /** Every card that needs a fork has one, carries what the RPC needs, and
+   *  does not collide with another card. */
   ready: boolean;
 }
 
@@ -100,13 +108,16 @@ export interface HeldSheet {
   sheetId: string;
   sheetNumber: string;
   heldRev: string;
-  currentRev: string;
+  /** null when the sheet has no current print at all — which counts as behind. */
+  currentRev: string | null;
   behind: boolean;
 }
 
 export interface HolderLine {
   /** party_id when the recipient came off the roster, else the folded name. */
   partyKey: string;
+  /** The transmittal this reading comes from — also the DB's tie-breaker. */
+  transmittalId: string;
   partyDisplayName: string;
   partyCompany: string | null;
   purpose: string;
@@ -121,6 +132,26 @@ export interface HolderLine {
   behindRev: string | null;
   /** The revision those sheets are actually at now. */
   currentRev: string | null;
+}
+
+/**
+ * The one sentence every amber surface says about a holder — the band, the set
+ * view, and the ceremony's recipient hints all read this, so no two can word
+ * the same fact differently. `sentOn` is the caller's formatted date; omit it
+ * where the line has to stay short.
+ */
+export function holderSentence(
+  holder: HolderLine,
+  sentOn?: string,
+): string {
+  const tail = sentOn ? ` \u00b7 last sent ${sentOn}` : '';
+  if (holder.behindCount === 0) {
+    return `${holder.partyDisplayName} is current${tail}`;
+  }
+  if (holder.behindCount > 1) {
+    return `${holder.partyDisplayName} is behind on ${holder.behindCount} sheets${tail}`;
+  }
+  return `${holder.partyDisplayName} holds Rev ${holder.behindRev} \u00b7 current is Rev ${holder.currentRev ?? 'none'}${tail}`;
 }
 
 export type DrawingLogEvent = 'filed' | 'flipped' | 'issued' | 'transmitted';
@@ -241,10 +272,36 @@ const CONFUSABLE_CLASS: Record<string, string> = {
  * or null. Never guesses across two characters; a set that far off is a
  * different sheet.
  */
+export interface NearMiss {
+  /** What the page's ink said. */
+  parsed: string;
+  /** The sheet number the room actually holds. */
+  canonical: string;
+  /** The character read off the page. */
+  readAs: string;
+  /** The character the held number carries in that position. */
+  actual: string;
+}
+
+const GLYPH_NAME: Record<string, string> = {
+  O: 'a letter O',
+  '0': 'a zero',
+  I: 'a capital I',
+  L: 'a lowercase l',
+  '1': 'a one',
+};
+
+/** The card's sentence, derived from the pair that actually matched. */
+export function nearMissSentence(nearMiss: NearMiss): string {
+  const read = GLYPH_NAME[nearMiss.readAs.toUpperCase()] ?? `"${nearMiss.readAs}"`;
+  const actual = GLYPH_NAME[nearMiss.actual.toUpperCase()] ?? `"${nearMiss.actual}"`;
+  return `parsed ${nearMiss.parsed} \u2014 ${read}, not ${actual}. You hold an ${nearMiss.canonical}. Which is this?`;
+}
+
 export function nearMissMatch(
   parsed: string | null | undefined,
   existingNumbers: string[],
-): { canonical: string } | null {
+): NearMiss | null {
   const candidate = normalizeSheetNumber(parsed) ?? parsed?.trim().toUpperCase();
   if (!candidate) return null;
 
@@ -255,6 +312,8 @@ export function nearMissMatch(
 
     let differences = 0;
     let confusable = true;
+    let readAs = '';
+    let actual = '';
     for (let index = 0; index < existing.length; index += 1) {
       const a = candidate[index].toUpperCase();
       const b = existing[index].toUpperCase();
@@ -270,8 +329,12 @@ export function nearMissMatch(
         confusable = false;
         break;
       }
+      readAs = candidate[index];
+      actual = existing[index];
     }
-    if (confusable && differences === 1) return { canonical: existing };
+    if (confusable && differences === 1) {
+      return { parsed: candidate, canonical: existing, readAs, actual };
+    }
   }
   return null;
 }
@@ -344,12 +407,13 @@ export function proposeMatches(
   sheets: KnownSheet[],
   currentPrintTextShaBySheet: Record<string, string | null>,
 ): LightTableProposal[] {
+  // Keyed on upper(btrim(sheet_number)) — the DB's own uniqueness expression,
+  // NOT normalizeSheetNumber. Normalizing would fold A101 and A-101 together
+  // when the room treats them as two distinct sheets, and the Light Table must
+  // never propose a revision of a sheet the RPC would refuse to find.
   const bySheetNumber = new Map<string, KnownSheet>();
   for (const sheet of sheets) {
-    const canonical =
-      normalizeSheetNumber(sheet.sheet_number) ??
-      sheet.sheet_number.trim().toUpperCase();
-    bySheetNumber.set(canonical, sheet);
+    bySheetNumber.set(sheet.sheet_number.trim().toUpperCase(), sheet);
   }
   const existingNumbers = [...bySheetNumber.keys()];
 
@@ -406,7 +470,7 @@ export function proposeMatches(
         sheetNumber: sheet.sheet_number,
         sheetTitle: sheet.title,
         discipline: sheet.discipline ?? null,
-        nearMiss: { parsed: parsedNumber, canonical: near.canonical },
+        nearMiss: near,
         fork: null,
         requiresFork: true,
       };
@@ -442,31 +506,90 @@ export function previewRevLetter(currentRev: string | null | undefined): string 
   return `${String.fromCharCode(first.charCodeAt(0) + 1)}A`;
 }
 
+/**
+ * Cards that collide with one another. The RPC refuses a WHOLE BATCH when two
+ * entries name the same sheet or two new sheets carry the same number, so the
+ * table catches it first and says which two cards disagree — a batch of forty
+ * must never be refused for a pair.
+ */
+function stagingConflicts(
+  proposals: LightTableProposal[],
+): Record<number, string> {
+  const conflicts: Record<number, string> = {};
+  const bySheetId = new Map<string, number[]>();
+  const byNumber = new Map<string, number[]>();
+
+  for (const proposal of proposals) {
+    if (proposal.kind === 'unmatched') continue;
+    const kind = proposal.fork ?? proposal.kind;
+    if (kind === 'new_sheet') {
+      const key = (proposal.sheetNumber ?? '').trim().toUpperCase();
+      if (!key) continue;
+      byNumber.set(key, [...(byNumber.get(key) ?? []), proposal.pageIndex]);
+      continue;
+    }
+    if (!proposal.sheetId) continue;
+    bySheetId.set(proposal.sheetId, [
+      ...(bySheetId.get(proposal.sheetId) ?? []),
+      proposal.pageIndex,
+    ]);
+  }
+
+  for (const [, pages] of bySheetId) {
+    if (pages.length < 2) continue;
+    const others = pages.map((page) => `p.${page + 1}`).join(', ');
+    for (const page of pages) {
+      conflicts[page] =
+        `Two pages are filed to this same sheet (${others}). Only one page can be its next print.`;
+    }
+  }
+  for (const [number, pages] of byNumber) {
+    if (pages.length < 2) continue;
+    const others = pages.map((page) => `p.${page + 1}`).join(', ');
+    for (const page of pages) {
+      conflicts[page] =
+        `Two pages claim the number ${number} (${others}). Give one of them a different number.`;
+    }
+  }
+  return conflicts;
+}
+
 /** The one honest sentence the confirm strip states before it writes. */
 export function confirmSummary(
   proposals: LightTableProposal[],
 ): ConfirmSummary {
   const filed = proposals.filter((proposal) => proposal.kind !== 'unmatched');
-  const newCount = filed.filter((proposal) => proposal.kind === 'new_sheet').length;
-  const revisionCount = filed.filter((proposal) => proposal.kind === 'revision').length;
+  const kindOf = (proposal: LightTableProposal) => proposal.fork ?? proposal.kind;
+  const newCount = filed.filter((proposal) => kindOf(proposal) === 'new_sheet').length;
+  const revisionCount = filed.filter((proposal) => kindOf(proposal) === 'revision').length;
   const confirmCount = filed.filter(
-    (proposal) => proposal.kind === 'confirm_current',
+    (proposal) => kindOf(proposal) === 'confirm_current',
   ).length;
   const looseCount = proposals.filter(
     (proposal) => proposal.kind === 'unmatched',
   ).length;
   const fileCount = filed.length;
+  // Only these carry bytes. A confirmation moves no pointer and makes no print,
+  // so counting it as something "filed" would overstate what the act does.
+  const printCount = newCount + revisionCount;
 
-  const clauses = [`File ${fileCount} ${fileCount === 1 ? 'sheet' : 'sheets'}`];
-  if (newCount > 0) {
-    clauses.push(`${newCount} new ${newCount === 1 ? 'sheet' : 'sheets'}`);
-  }
-  if (revisionCount > 0) {
+  const primaryLabel =
+    printCount > 0
+      ? `File ${printCount} ${printCount === 1 ? 'print' : 'prints'}`
+      : `Confirm ${confirmCount} ${confirmCount === 1 ? 'sheet' : 'sheets'} current`;
+
+  const clauses: string[] = [];
+  if (printCount > 0) {
+    clauses.push(`File ${printCount} ${printCount === 1 ? 'print' : 'prints'}`);
+    if (newCount > 0) {
+      clauses.push(`${newCount} new ${newCount === 1 ? 'sheet' : 'sheets'}`);
+    }
+    if (confirmCount > 0) clauses.push(`${confirmCount} confirmed current`);
+  } else if (confirmCount > 0) {
     clauses.push(
-      `${revisionCount} ${revisionCount === 1 ? 'pointer moves' : 'pointers move'}`,
+      `Confirm ${confirmCount} ${confirmCount === 1 ? 'sheet' : 'sheets'} current`,
     );
   }
-  if (confirmCount > 0) clauses.push(`${confirmCount} confirmed current`);
   if (looseCount > 0) {
     clauses.push(`${looseCount} loose ${looseCount === 1 ? 'page' : 'pages'}`);
   }
@@ -477,19 +600,27 @@ export function confirmSummary(
   // on. An unresolved card shuts the primary — no partial filing.
   const resolved = (proposal: LightTableProposal) => {
     if (proposal.requiresFork && proposal.fork == null) return false;
-    const kind = proposal.fork ?? proposal.kind;
+    const kind = kindOf(proposal);
     if (kind === 'new_sheet') return Boolean(proposal.sheetNumber?.trim());
     return Boolean(proposal.sheetId);
   };
 
+  const conflicts = stagingConflicts(proposals);
+
   return {
-    sentence: clauses.join(' · '),
+    sentence: clauses.join(' \u00b7 '),
+    primaryLabel,
     fileCount,
+    printCount,
     newCount,
     revisionCount,
     confirmCount,
     looseCount,
-    ready: fileCount > 0 && filed.every(resolved),
+    conflicts,
+    ready:
+      fileCount > 0 &&
+      filed.every(resolved) &&
+      Object.keys(conflicts).length === 0,
   };
 }
 
@@ -561,26 +692,26 @@ export function deriveCurrentSet(bundle: PlanRoomBundle): CurrentSetRow[] {
         filedAt: print?.created_at ?? null,
       };
     })
-    .sort((a, b) => a.sheetNumber.localeCompare(b.sheetNumber));
-}
-
-function currentRevBySheet(bundle: PlanRoomBundle): Map<string, string> {
-  const prints = printsById(bundle);
-  const map = new Map<string, string>();
-  for (const sheet of bundle.sheets) {
-    const print = sheet.current_print_id ? prints.get(sheet.current_print_id) : undefined;
-    if (print) map.set(sheet.id, print.rev_letter);
-  }
-  return map;
+    .sort((a, b) =>
+      a.sheetNumber < b.sheetNumber ? -1 : a.sheetNumber > b.sheetNumber ? 1 : 0,
+    );
 }
 
 /**
- * Who holds what. Read entirely off transmittals: a party holds the revisions
- * recorded in the LAST issue they were sent, and nothing they were never sent.
- * No holder line is ever typed.
+ * Who holds what. This mirrors `get_plan_room_holdings` (00429) EXACTLY, so no
+ * surface can disagree with the database mid-load:
+ *
+ *   · one row per party, keyed COALESCE(party_id, lower(btrim(display_name)))
+ *   · the party's LAST transmittal wins — sent_at DESC, then id DESC
+ *   · behind = `current_print_id IS DISTINCT FROM issue_print.print_id`, an
+ *     IDENTITY test, not a revision-letter or checksum comparison. A sheet
+ *     whose current print was removed has a NULL pointer, which is distinct
+ *     from any print they were sent — so they are behind, correctly.
+ *   · holds sorted by upper(sheet_number); parties by sent_at DESC, id DESC
  */
 export function deriveHolders(bundle: PlanRoomBundle): HolderLine[] {
-  const current = currentRevBySheet(bundle);
+  const prints = printsById(bundle);
+  const sheetsById = new Map(bundle.sheets.map((sheet) => [sheet.id, sheet]));
   const issuesById = new Map(bundle.issues.map((issue) => [issue.id, issue]));
 
   const latest = new Map<string, PlanRoomBundle['transmittals'][number]>();
@@ -599,26 +730,36 @@ export function deriveHolders(bundle: PlanRoomBundle): HolderLine[] {
 
   const lines: HolderLine[] = [];
   for (const [partyKey, transmittal] of latest) {
-    const snapshot = bundle.issuePrints.filter(
-      (issuePrint) => issuePrint.issue_id === transmittal.issue_id,
-    );
-    const holds: HeldSheet[] = snapshot
-      .filter((issuePrint) => current.has(issuePrint.sheet_id))
-      .map((issuePrint) => {
-        const currentRev = current.get(issuePrint.sheet_id)!;
-        return {
-          sheetId: issuePrint.sheet_id,
-          sheetNumber: issuePrint.sheet_number,
-          heldRev: issuePrint.rev_letter,
-          currentRev,
-          behind: issuePrint.rev_letter !== currentRev,
-        };
+    const holds: HeldSheet[] = bundle.issuePrints
+      .filter((issuePrint) => issuePrint.issue_id === transmittal.issue_id)
+      .flatMap((issuePrint): HeldSheet[] => {
+        const sheet = sheetsById.get(issuePrint.sheet_id);
+        if (!sheet) return [];
+        const currentPrint = sheet.current_print_id
+          ? prints.get(sheet.current_print_id)
+          : undefined;
+        return [
+          {
+            sheetId: issuePrint.sheet_id,
+            sheetNumber: issuePrint.sheet_number,
+            heldRev: issuePrint.rev_letter,
+            currentRev: currentPrint?.rev_letter ?? null,
+            behind: sheet.current_print_id !== issuePrint.print_id,
+          },
+        ];
       })
-      .sort((a, b) => a.sheetNumber.localeCompare(b.sheetNumber));
+      .sort((a, b) =>
+        a.sheetNumber.toUpperCase() < b.sheetNumber.toUpperCase()
+          ? -1
+          : a.sheetNumber.toUpperCase() > b.sheetNumber.toUpperCase()
+            ? 1
+            : 0,
+      );
 
     const behind = holds.filter((sheet) => sheet.behind);
     lines.push({
       partyKey,
+      transmittalId: transmittal.id,
       partyDisplayName: transmittal.party_display_name,
       partyCompany: transmittal.party_company,
       purpose: transmittal.purpose,
@@ -633,7 +774,16 @@ export function deriveHolders(bundle: PlanRoomBundle): HolderLine[] {
     });
   }
 
-  return lines.sort((a, b) => a.partyDisplayName.localeCompare(b.partyDisplayName));
+  // `ORDER BY sent_at DESC, id DESC` — the RPC's own ordering, transmittal id
+  // and not party key, so the two lists never differ.
+  return lines.sort((a, b) => {
+    if (a.sentAt !== b.sentAt) return a.sentAt < b.sentAt ? 1 : -1;
+    return a.transmittalId < b.transmittalId
+      ? 1
+      : a.transmittalId > b.transmittalId
+        ? -1
+        : 0;
+  });
 }
 
 /** The drawing log — every event this room has had, oldest first. */
@@ -674,22 +824,26 @@ export function deriveDrawingLog(bundle: PlanRoomBundle): DrawingLogRow[] {
     });
 
     if (batch.flipped_sheet_ids.length > 0) {
-      const flippedPrints = bundle.prints.filter(
-        (print) =>
-          print.batch_id === batch.id &&
-          batch.flipped_sheet_ids.includes(print.sheet_id),
+      // One rev per sheet. Asserting a single letter for the whole flip is a
+      // lie the moment two sheets sit at different revisions — which is the
+      // ordinary case, since a set revises unevenly.
+      const revBySheet = new Map(
+        bundle.prints
+          .filter((print) => print.batch_id === batch.id)
+          .map((print) => [print.sheet_id, print.rev_letter]),
       );
-      const numbers = batch.flipped_sheet_ids
-        .map((sheetId) => sheetNumbers.get(sheetId) ?? sheetId)
-        .sort((a, b) => a.localeCompare(b));
-      const rev = flippedPrints[0]?.rev_letter;
+      const parts = batch.flipped_sheet_ids
+        .map((sheetId) => {
+          const number = sheetNumbers.get(sheetId) ?? sheetId;
+          const rev = revBySheet.get(sheetId);
+          return rev ? `${number} \u2192 Rev ${rev}` : `${number} flipped`;
+        })
+        .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
       rows.push({
         key: `flipped:${batch.id}`,
         at: batch.created_at,
         event: 'flipped',
-        what: rev
-          ? `${numbers.join(', ')} flipped to Rev ${rev}`
-          : `${numbers.join(', ')} flipped`,
+        what: parts.join(' \u00b7 '),
         who: null,
       });
     }
@@ -713,41 +867,31 @@ export function deriveDrawingLog(bundle: PlanRoomBundle): DrawingLogRow[] {
       at: transmittal.sent_at,
       event: 'transmitted',
       what: `${issueName} · for ${transmittal.purpose}${opened ? ' · opened' : ' · not opened yet'}`,
-      who: [transmittal.party_display_name, transmittal.party_company]
+      // A one-person shop's name IS its company; printing it twice reads as a
+      // rendering bug rather than a fact.
+      who: [
+        transmittal.party_display_name,
+        transmittal.party_company !== transmittal.party_display_name
+          ? transmittal.party_company
+          : null,
+      ]
         .filter(Boolean)
-        .join(' · '),
+        .join(' \u00b7 '),
     });
   }
 
-  return rows.sort((a, b) => (a.at === b.at ? a.key.localeCompare(b.key) : a.at.localeCompare(b.at)));
+  // ISO-8601 UTC sorts lexicographically; localeCompare would drag collation
+  // rules into an ordering that is pure byte order.
+  return rows.sort((a, b) => {
+    if (a.at !== b.at) return a.at < b.at ? -1 : 1;
+    return a.key < b.key ? -1 : a.key > b.key ? 1 : 0;
+  });
 }
 
-/**
- * Sheets whose current print is not the one the last issue carried — the rows
- * the issue ceremony marks in golden hour.
+/*
+ * changedSinceLastIssue used to live here. It is gone on purpose: the ceremony
+ * now reads `preview_plan_issue`'s own `drift` (00429), which compares
+ * print_id identity against the prior issue's snapshot. Two implementations of
+ * "what changed" is one more than a studio can be asked to trust, and the
+ * database's is the one the issue is actually cut from.
  */
-export function changedSinceLastIssue(bundle: PlanRoomBundle): Set<string> {
-  const changed = new Set<string>();
-  const prints = printsById(bundle);
-
-  const lastIssue = [...bundle.issues].sort((a, b) =>
-    a.issued_at === b.issued_at
-      ? b.issue_number - a.issue_number
-      : b.issued_at.localeCompare(a.issued_at),
-  )[0];
-  if (!lastIssue) return changed;
-
-  const snapshot = new Map(
-    bundle.issuePrints
-      .filter((issuePrint) => issuePrint.issue_id === lastIssue.id)
-      .map((issuePrint) => [issuePrint.sheet_id, issuePrint.sha256]),
-  );
-
-  for (const sheet of bundle.sheets) {
-    const print = sheet.current_print_id ? prints.get(sheet.current_print_id) : undefined;
-    if (!print) continue;
-    const issued = snapshot.get(sheet.id);
-    if (issued == null || issued !== print.sha256) changed.add(sheet.id);
-  }
-  return changed;
-}

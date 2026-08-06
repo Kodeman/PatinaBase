@@ -46,10 +46,14 @@ export function Providers({ children }: { children: ReactNode }) {
       <PostHogAnalyticsProvider>{children}</PostHogAnalyticsProvider>
       <Toaster />
       {/* Keep development chrome out of the protected paper/mobile regimes;
-          it can otherwise sit over the single edge owner at tablet widths. */}
-      <div className="hidden min-[1440px]:block">
-        <ReactQueryDevtools initialIsOpen={false} />
-      </div>
+          it can otherwise sit over the single edge owner at tablet widths.
+          Gated on NODE_ENV so the panel — which exposes every cached query
+          payload, this studio's projects included — cannot reach production. */}
+      {process.env.NODE_ENV !== 'production' && (
+        <div className="hidden min-[1440px]:block">
+          <ReactQueryDevtools initialIsOpen={false} />
+        </div>
+      )}
     </QueryClientProvider>
   );
 }

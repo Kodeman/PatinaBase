@@ -9,9 +9,18 @@
  * draw a thumbnail. Nothing leaves the machine until the confirm strip fires —
  * this surface is entirely a preview.
  *
+ * THE STAGED TABLE LIVES IN THE WORKSPACE, NOT HERE. Parsed pages, proposals,
+ * fork answers, thumbnails and the idempotency key are all lifted, so stepping
+ * out to look at a sheet and coming back restores the table exactly — no
+ * re-parse, and above all NO NEW IDEMPOTENCY KEY. A key that rotated on
+ * remount would turn "save the table for later" into a promise the room
+ * cannot keep: the retry would land as a second batch. A new key is minted in
+ * exactly two places — a new drop, and a successful commit.
+ *
  * Two honest failures are surfaced rather than papered over:
  *  · a page with no sheet number is NOT guessed at — it goes to the loose
- *    papers tray and, from there, to the Folio.
+ *    papers tray and, from there, to the Folio (or onto a sheet the room
+ *    already holds, via the card's own chooser).
  *  · a file with no text layer at all (a scan of a plot) cannot be read, so
  *    every card falls back to manual assignment behind a terracotta band.
  */
@@ -20,6 +29,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PlanRoomBundle } from '@patina/supabase';
 import { useUploadFolioFile } from '@/hooks/use-folio';
 import {
+  confirmSummary,
   normalizeTextLayer,
   proposeMatches,
   type LightTableProposal,
@@ -37,12 +47,14 @@ import { SectionEyebrow } from '../section-eyebrow';
 import { LightTableCard } from './light-table-card';
 import type { PlanStagedSession } from './plan-confirm-strip';
 
-/** The staged table, lifted so switching views never loses it. */
+/** The staged table, held by the workspace so no view switch can destroy it. */
 export interface StagedTable {
   session: PlanStagedSession;
   proposals: LightTableProposal[];
   /** True when not one page in the drop carried a readable text layer. */
   noTextLayer: boolean;
+  /** Display only, by page index. Lifted so a return trip needs no redraw. */
+  thumbnails: Record<number, Blob | null>;
 }
 
 type ReadStage = 'reading' | 'proposing' | 'drawing';
@@ -56,11 +68,12 @@ const STAGE_LINE: Record<ReadStage, string> = {
 export interface LightTableProps {
   projectId: string;
   bundle: PlanRoomBundle;
-  /** A fresh drop. Consumed once, then cleared by the workspace. */
+  /** A fresh drop. The workspace clears it the moment staging lands. */
   pendingFiles: File[] | null;
   staged: StagedTable | null;
   onStaged: (table: StagedTable) => void;
   onProposalsChange: (proposals: LightTableProposal[]) => void;
+  onThumbnail: (pageIndex: number, thumbnail: Blob | null) => void;
   onReadFailed: (message: string) => void;
 }
 
@@ -71,10 +84,10 @@ export function LightTable({
   staged,
   onStaged,
   onProposalsChange,
+  onThumbnail,
   onReadFailed,
 }: LightTableProps) {
   const [stage, setStage] = useState<ReadStage | null>(null);
-  const [thumbnails, setThumbnails] = useState<Record<number, Blob | null>>({});
   const [showMatched, setShowMatched] = useState(false);
   const [sentToFolio, setSentToFolio] = useState<Record<number, 'sending' | 'sent' | string>>(
     {},
@@ -158,10 +171,10 @@ export function LightTable({
             )
           : proposeMatches(pages, bundle.sheets, textShaBySheet);
 
-        const table: StagedTable = {
+        onStaged({
           session: {
             projectId,
-            // Minted ONCE per staged table and held across every retry.
+            // Minted ONCE per staged table, here and nowhere else.
             idempotencyKey: crypto.randomUUID(),
             sourceFilename: pendingFiles[0]?.name ?? null,
             sources,
@@ -170,8 +183,8 @@ export function LightTable({
           },
           proposals,
           noTextLayer,
-        };
-        onStaged(table);
+          thumbnails: {},
+        });
         planRoomEvents.lightTableStaged({
           project_id: projectId,
           page_count: proposals.length,
@@ -188,10 +201,10 @@ export function LightTable({
           try {
             const blob = await renderPageThumbnail(source.bytes, origin.localPageIndex);
             if (!live()) return;
-            setThumbnails((prev) => ({ ...prev, [page.pageIndex]: blob }));
+            onThumbnail(page.pageIndex, blob);
           } catch {
             if (!live()) return;
-            setThumbnails((prev) => ({ ...prev, [page.pageIndex]: null }));
+            onThumbnail(page.pageIndex, null);
           }
         }
         if (live()) setStage(null);
@@ -210,6 +223,8 @@ export function LightTable({
   }, [pendingFiles]);
 
   const proposals = staged?.proposals ?? [];
+  const thumbnails = staged?.thumbnails ?? {};
+  const summary = confirmSummary(proposals);
   const cleanlyMatched = proposals.filter((p) => p.kind === 'confirm_current');
   const decidable = proposals.filter(
     (p) => p.kind !== 'confirm_current' && p.kind !== 'unmatched',
@@ -221,6 +236,20 @@ export function LightTable({
       proposals.map((p) => (p.pageIndex === next.pageIndex ? next : p)),
     );
   };
+
+  const cardFor = (proposal: LightTableProposal) => (
+    <LightTableCard
+      key={proposal.pageIndex}
+      proposal={proposal}
+      thumbnail={thumbnails[proposal.pageIndex] ?? null}
+      currentRev={
+        proposal.sheetId ? (currentRevBySheet.get(proposal.sheetId) ?? null) : null
+      }
+      sheets={bundle.sheets}
+      conflict={summary.conflicts[proposal.pageIndex] ?? null}
+      onChange={update}
+    />
+  );
 
   const sendToFolio = async (proposal: LightTableProposal) => {
     if (!staged) return;
@@ -266,8 +295,8 @@ export function LightTable({
         >
           <p className="text-[0.82rem] text-[var(--color-charcoal)]">
             This file carries no text layer — a scan, not a plot. The table can’t
-            read a sheet number off it, so every page needs a number and a title
-            by hand before it files.
+            read a sheet number off it, so each page needs a number and a title by
+            hand, or a sheet you already hold to land on.
           </p>
         </div>
       )}
@@ -276,17 +305,7 @@ export function LightTable({
         <>
           <SectionEyebrow count={decidable.length}>Pages to place</SectionEyebrow>
           <div className="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {decidable.map((proposal) => (
-              <LightTableCard
-                key={proposal.pageIndex}
-                proposal={proposal}
-                thumbnail={thumbnails[proposal.pageIndex] ?? null}
-                currentRev={
-                  proposal.sheetId ? (currentRevBySheet.get(proposal.sheetId) ?? null) : null
-                }
-                onChange={update}
-              />
-            ))}
+            {decidable.map(cardFor)}
           </div>
         </>
       )}
@@ -305,19 +324,7 @@ export function LightTable({
           </button>
           {showMatched && (
             <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {cleanlyMatched.map((proposal) => (
-                <LightTableCard
-                  key={proposal.pageIndex}
-                  proposal={proposal}
-                  thumbnail={thumbnails[proposal.pageIndex] ?? null}
-                  currentRev={
-                    proposal.sheetId
-                      ? (currentRevBySheet.get(proposal.sheetId) ?? null)
-                      : null
-                  }
-                  onChange={update}
-                />
-              ))}
+              {cleanlyMatched.map(cardFor)}
             </div>
           )}
         </div>
@@ -328,8 +335,12 @@ export function LightTable({
           <SectionEyebrow count={loose.length}>Loose papers</SectionEyebrow>
           <p className="mb-3 max-w-xl text-[0.82rem] text-[var(--text-muted)]">
             No sheet number on these. They aren’t drawings in the set — they go to
-            the Folio, clipped to the letterhead.
+            the Folio, clipped to the letterhead. If one is really a revision, put
+            it on its sheet with the chooser on the card.
           </p>
+          <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {loose.map(cardFor)}
+          </div>
           <div className="grid gap-2">
             {loose.map((proposal) => {
               const state = sentToFolio[proposal.pageIndex];
