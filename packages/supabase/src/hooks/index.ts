@@ -1615,3 +1615,38 @@ export type {
   StudioContactHistory,
   PromoteToStudioContactInput,
 } from './use-studio-contacts';
+
+// The Plan Room (00429) — sheets, prints, batches, issues, transmittals: the
+// bundle query, the ceremonies, and the client-portal shared set.
+export {
+  planRoomKeys,
+  usePlanRoom,
+  usePlanRoomHoldings,
+  usePlanIssuePreview,
+  useFilePlanPrints,
+  useSetPlanSheetState,
+  useDeletePlanSheet,
+  useCreatePlanIssue,
+  useCreatePlanTransmittal,
+  useReissuePlanTransmittalLink,
+  useRevokePlanTransmittalLink,
+  useClientPlanSet,
+} from './use-plan-room';
+export type {
+  PlanSheet,
+  PlanPrint,
+  PlanPrintBatch,
+  PlanIssue,
+  PlanIssuePrint,
+  PlanTransmittal,
+  PlanTransmittalTokenSafe,
+  PlanRoomBundle,
+  FilePlanPrintsResult,
+  PlanIssuePreview,
+  CreatePlanIssueResult,
+  CreatePlanTransmittalResult,
+  PlanRoomHoldings,
+  PrintUploadInput,
+  FilePlanPrintEntry,
+  ClientPlanSheet,
+} from './use-plan-room';
