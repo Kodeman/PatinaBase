@@ -41,6 +41,7 @@ import { STUDIO_LEDGERS } from '@/lib/document/registry';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 import { DocumentAction, DocumentActionGroup } from './document-action';
 import { ProjectAuthorityBandForProject } from './commercial/project-authority-band';
+import { PendingTimeAuthorizationBand } from './pending-time-authorization-band';
 import { useProjectBillingAuthority } from '@/hooks/use-commercial-documents';
 import {
   isInvoiceEligibleTimeEntry,
@@ -167,6 +168,26 @@ export function HoursLedger({
     },
   });
 
+  const {
+    data: pendingAuthorizationRows,
+    refetch: refetchPendingAuthorization,
+  } = useQuery({
+    queryKey: ['document-hours-pending-authorization', lensProjectId],
+    queryFn: async () => {
+      let query = getSupabase()
+        .from('project_time_entries')
+        .select('id, project_id, duration_minutes')
+        .eq('billable', true)
+        .is('invoice_id', null)
+        .eq('billing_state', 'pending_authorization')
+        .not('duration_minutes', 'is', null);
+      if (lensProjectId) query = query.eq('project_id', lensProjectId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data ?? []) as AnyRecord[];
+    },
+  });
+
   const unbilledById = useMemo(() => {
     const map = new Map<string, UnbilledInfo>();
     for (const row of unbilledRows ?? [])
@@ -243,6 +264,7 @@ export function HoursLedger({
       setAddMinutes('');
       void refetch();
       void refetchUnbilled();
+      void refetchPendingAuthorization();
     } catch (e) {
       setNote(
         `Could not add — ${e instanceof Error ? e.message : 'try again'}`,
@@ -259,6 +281,7 @@ export function HoursLedger({
         onSuccess: () => {
           void refetch();
           void refetchUnbilled();
+          void refetchPendingAuthorization();
         },
         onError: (e) =>
           setNote(
@@ -375,6 +398,12 @@ export function HoursLedger({
               ]
             : []),
         ]}
+      />
+
+      <PendingTimeAuthorizationBand
+        rows={pendingAuthorizationRows ?? []}
+        projects={projects ?? []}
+        onSelectProject={setLensProjectId}
       />
 
       {/* A project-scoped Hours sheet carries the same RPC-owned authority
