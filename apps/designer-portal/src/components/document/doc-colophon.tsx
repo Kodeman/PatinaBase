@@ -3,11 +3,11 @@
 /**
  * The Colophon (R29) — the paper's last line states its own facts: a quiet
  * DM-mono row at the document's foot — studio · hands on the work · Brief a
- * vendor · Hold · Archive · Team… Click → a small paper popover. Hold → the
+ * vendor · Hold · Archive · Team… Hold → the
  * Desk's paused in-motion chip. Archive → the cabinet (⌘K-findable, R1).
- * Team… carries the §14.6 RLS widening (00205): adding a studio member
- * makes their margin notes visible per D6. Brief a vendor deep-links the
- * Orders book (the R28 vendor pane arrives with Track 2).
+ * Team… opens the canonical Call Sheet picker, so studio hands, GCs, subs,
+ * vendors, and field parties all enter through one roster. Brief a vendor
+ * deep-links the Orders book (the R28 vendor pane arrives with Track 2).
  */
 
 import { useState } from 'react';
@@ -73,34 +73,6 @@ function useSetProjectStatus(projectId: string | null) {
   });
 }
 
-function useAddTeamMemberByEmail(projectId: string | null) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ email, role }: { email: string; role: string }) => {
-      const supabase = getSupabase();
-      const { data: profile, error: pErr } = await supabase
-        .from('profiles')
-        .select('id, full_name')
-        .ilike('email', email.trim())
-        .maybeSingle();
-      if (pErr) throw pErr;
-      if (!profile) throw new Error('No member found with that email');
-      const { error } = await supabase.from('project_team_members').insert({
-        project_id: projectId,
-        user_id: profile.id,
-        role,
-      });
-      if (error) throw error;
-      return profile;
-    },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['project-team'] });
-      // D6/00205: their notes become visible — the margin re-reads.
-      void qc.invalidateQueries({ queryKey: ['margin-items'] });
-    },
-  });
-}
-
 export function DocColophon({
   projectId,
   designerId,
@@ -118,12 +90,8 @@ export function DocColophon({
   const router = useRouter();
   const { data: studioName } = useStudioName(designerId);
   const setStatus = useSetProjectStatus(projectId);
-  const addMember = useAddTeamMemberByEmail(projectId);
 
-  const [pane, setPane] = useState<null | 'archive' | 'team'>(null);
-  const [email, setEmail] = useState('');
-  const [role, setRole] = useState('support_designer');
-  const [teamNote, setTeamNote] = useState<string | null>(null);
+  const [pane, setPane] = useState<null | 'archive'>(null);
 
   const hands =
     handsOnTheWork.length > 0 ? `you · ${handsOnTheWork.join(' · ')}` : 'you';
@@ -185,7 +153,13 @@ export function DocColophon({
           <DocumentAction
             actionKey="open-project-team"
             variant="secondary"
-            onClick={() => setPane(pane === 'team' ? null : 'team')}
+            onClick={() => {
+              window.dispatchEvent(
+                new CustomEvent('document:open-call-sheet', {
+                  detail: { mode: 'picker' },
+                }),
+              );
+            }}
           >
             Team…
           </DocumentAction>
@@ -234,65 +208,6 @@ export function DocColophon({
         </div>
       )}
 
-      {pane === 'team' && (
-        <div className="mt-2 max-w-[460px] rounded-[4px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] p-3">
-          <p className="mb-1.5 text-[11px] italic text-[var(--text-muted)]">
-            Add a hand to this work — their margin notes join yours (D6).
-          </p>
-          <DocumentActionRow
-            surfaceKey="open-document"
-            regionKey="project-team"
-            aria-label="Project team actions"
-          >
-            <input
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="email"
-              aria-label="Member email"
-              className="min-w-0 flex-1 border-b border-dashed border-[var(--color-pearl)] bg-transparent text-[11.5px] text-[var(--color-charcoal)] outline-none placeholder:italic"
-            />
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              aria-label="Role"
-              className="bg-transparent font-mono text-[9px] uppercase tracking-[0.04em] text-[var(--text-muted)] outline-none"
-            >
-              <option value="support_designer">designer</option>
-              <option value="bookkeeper">bookkeeper</option>
-              <option value="lead_designer">lead</option>
-            </select>
-            <DocumentAction
-              actionKey="add-project-team-member"
-              variant="primary"
-              disabled={!email.trim() || addMember.isPending}
-              loading={addMember.isPending}
-              loadingLabel="Adding…"
-              onClick={() =>
-                addMember.mutate(
-                  { email, role },
-                  {
-                    onSuccess: (p) => {
-                      setTeamNote(`${p.full_name ?? email} added`);
-                      setEmail('');
-                    },
-                    onError: (e) =>
-                      setTeamNote(
-                        e instanceof Error ? e.message : 'Could not add',
-                      ),
-                  },
-                )
-              }
-            >
-              Add
-            </DocumentAction>
-          </DocumentActionRow>
-          {teamNote && (
-            <p className="mt-1.5 font-mono text-[8.5px] text-[var(--text-muted)]">
-              {teamNote}
-            </p>
-          )}
-        </div>
-      )}
     </footer>
   );
 }
