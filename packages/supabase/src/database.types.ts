@@ -13297,6 +13297,11 @@ export type Database = {
           profile_id: string | null
           project_id: string
           show_to_client: boolean
+          sms_consent_disclosure_version: string | null
+          sms_consent_evidence: string | null
+          sms_consent_recorded_at: string | null
+          sms_consent_recorded_by: string | null
+          sms_consent_source: string | null
           sms_consent_status: string
           sms_consented_at: string | null
           sms_opt_out_at: string | null
@@ -13318,6 +13323,11 @@ export type Database = {
           profile_id?: string | null
           project_id: string
           show_to_client?: boolean
+          sms_consent_disclosure_version?: string | null
+          sms_consent_evidence?: string | null
+          sms_consent_recorded_at?: string | null
+          sms_consent_recorded_by?: string | null
+          sms_consent_source?: string | null
           sms_consent_status?: string
           sms_consented_at?: string | null
           sms_opt_out_at?: string | null
@@ -13339,6 +13349,11 @@ export type Database = {
           profile_id?: string | null
           project_id?: string
           show_to_client?: boolean
+          sms_consent_disclosure_version?: string | null
+          sms_consent_evidence?: string | null
+          sms_consent_recorded_at?: string | null
+          sms_consent_recorded_by?: string | null
+          sms_consent_source?: string | null
           sms_consent_status?: string
           sms_consented_at?: string | null
           sms_opt_out_at?: string | null
@@ -30091,4 +30106,3 @@ export const Constants = {
     },
   },
 } as const
-

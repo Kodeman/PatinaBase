@@ -106,8 +106,10 @@ function twilioFromField(fromNumber: string): [string, string] {
 
 interface TwilioCreds {
   accountSid: string;
-  authToken: string;
+  credentialSid: string;
+  credentialSecret: string;
   fromNumber: string;
+  statusCallbackUrl?: string;
 }
 
 async function sendViaTwilio(
@@ -122,12 +124,15 @@ async function sendViaTwilio(
   const [fromKey, fromVal] = twilioFromField(creds.fromNumber);
   form.set(fromKey, fromVal);
   form.set("Body", params.body);
+  if (creds.statusCallbackUrl) {
+    form.set("StatusCallback", creds.statusCallbackUrl);
+  }
 
   const res = await fetchImpl(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
-      Authorization: `Basic ${btoa(`${creds.accountSid}:${creds.authToken}`)}`,
+      Authorization: `Basic ${btoa(`${creds.credentialSid}:${creds.credentialSecret}`)}`,
     },
     body: form.toString(),
   });
@@ -396,6 +401,11 @@ export async function sendPartySms(
   const fromNumber = env(deps, "TWILIO_FROM_NUMBER") ?? "";
   const accountSid = env(deps, "TWILIO_ACCOUNT_SID") ?? "";
   const authToken = env(deps, "TWILIO_AUTH_TOKEN") ?? "";
+  const apiKeySid = env(deps, "TWILIO_API_KEY_SID") ?? "";
+  const apiKeySecret = env(deps, "TWILIO_API_KEY_SECRET") ?? "";
+  const credentialSid = apiKeySid && apiKeySecret ? apiKeySid : accountSid;
+  const credentialSecret = apiKeySid && apiKeySecret ? apiKeySecret : authToken;
+  const statusCallbackUrl = env(deps, "SMS_STATUS_CALLBACK_URL") ?? "";
   const redirectNumber = env(deps, "SMS_DEV_REDIRECT_NUMBER") ?? "";
   const isInvite = input.templateKey === "sms_optin_invite";
 
@@ -417,6 +427,25 @@ export async function sendPartySms(
   ) {
     // The invite is meaningful only for a pending (or already-granted) party.
     return { sent: false, reason: "not_invitable" };
+  }
+  if (isInvite) {
+    if (!input.partyId) {
+      return { sent: false, reason: "consent_evidence_required" };
+    }
+    const { data: proof } = await supabase
+      .from("project_parties")
+      .select(
+        "sms_consent_source, sms_consent_evidence, sms_consent_recorded_at, sms_consent_disclosure_version",
+      )
+      .eq("id", input.partyId)
+      .maybeSingle();
+    if (
+      !proof?.sms_consent_source || !proof?.sms_consent_recorded_at ||
+      !proof?.sms_consent_disclosure_version ||
+      !String(proof.sms_consent_evidence ?? "").trim()
+    ) {
+      return { sent: false, reason: "consent_evidence_required" };
+    }
   }
 
   // ── Resolve body ──────────────────────────────────────────────────────────
@@ -480,13 +509,19 @@ export async function sendPartySms(
     const to = mode === "redirect" ? redirectNumber : recipient.phone;
     if (mode === "redirect") sendBody = `[DEV→${recipient.phone}] ${body}`;
     if (
-      !accountSid || !authToken || !fromNumber ||
+      !accountSid || !credentialSid || !credentialSecret || !fromNumber ||
       (mode === "redirect" && !redirectNumber)
     ) {
       twilioStatus = "failed";
       reason = "twilio_not_configured";
     } else {
-      const r = await sendViaTwilio({ accountSid, authToken, fromNumber }, {
+      const r = await sendViaTwilio({
+        accountSid,
+        credentialSid,
+        credentialSecret,
+        fromNumber,
+        statusCallbackUrl,
+      }, {
         to,
         body: sendBody,
       }, fetchImpl);
@@ -552,6 +587,11 @@ export async function flushDeferredMessages(
   const fromNumber = env(deps, "TWILIO_FROM_NUMBER") ?? "";
   const accountSid = env(deps, "TWILIO_ACCOUNT_SID") ?? "";
   const authToken = env(deps, "TWILIO_AUTH_TOKEN") ?? "";
+  const apiKeySid = env(deps, "TWILIO_API_KEY_SID") ?? "";
+  const apiKeySecret = env(deps, "TWILIO_API_KEY_SECRET") ?? "";
+  const credentialSid = apiKeySid && apiKeySecret ? apiKeySid : accountSid;
+  const credentialSecret = apiKeySid && apiKeySecret ? apiKeySecret : authToken;
+  const statusCallbackUrl = env(deps, "SMS_STATUS_CALLBACK_URL") ?? "";
   const redirectNumber = env(deps, "SMS_DEV_REDIRECT_NUMBER") ?? "";
 
   const { data: rows } = await supabase
@@ -591,13 +631,19 @@ export async function flushDeferredMessages(
       const to = mode === "redirect" ? redirectNumber : phone;
       if (mode === "redirect") sendBody = `[DEV→${phone}] ${row.body}`;
       if (
-        !accountSid || !authToken || !fromNumber ||
+        !accountSid || !credentialSid || !credentialSecret || !fromNumber ||
         (mode === "redirect" && !redirectNumber)
       ) {
         skipped++;
         continue;
       }
-      const r = await sendViaTwilio({ accountSid, authToken, fromNumber }, {
+      const r = await sendViaTwilio({
+        accountSid,
+        credentialSid,
+        credentialSecret,
+        fromNumber,
+        statusCallbackUrl,
+      }, {
         to,
         body: sendBody,
       }, fetchImpl);

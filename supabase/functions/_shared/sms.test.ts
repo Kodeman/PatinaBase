@@ -19,6 +19,10 @@ function party(id: string, consent: string) {
     project_id: "proj1",
     display_name: "Sal Sub",
     sms_consent_status: consent,
+    sms_consent_source: "verbal",
+    sms_consent_evidence: "Recorded during the project kickoff meeting",
+    sms_consent_recorded_at: "2026-07-08T18:00:00Z",
+    sms_consent_disclosure_version: "field-sms-v1",
   };
 }
 

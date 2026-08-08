@@ -10,8 +10,8 @@
 //   * notification_log lifecycle (queued → sending → delivered/failed/suppressed)
 //   * all secrets via Deno.env
 //
-// Real sending is creds-gated. When TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN /
-// TWILIO_FROM_NUMBER are absent, the function returns a clear "not configured"
+// Real sending is creds-gated. Restricted API keys are preferred; the account
+// auth token remains a fallback and is also used for webhook verification.
 // response (and logs the attempt as failed) instead of crashing.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -61,7 +61,12 @@ serve(async (req) => {
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
   const authToken = Deno.env.get("TWILIO_AUTH_TOKEN");
+  const apiKeySid = Deno.env.get("TWILIO_API_KEY_SID");
+  const apiKeySecret = Deno.env.get("TWILIO_API_KEY_SECRET");
   const fromNumber = Deno.env.get("TWILIO_FROM_NUMBER");
+  const statusCallbackUrl = Deno.env.get("SMS_STATUS_CALLBACK_URL");
+  const credentialSid = apiKeySid && apiKeySecret ? apiKeySid : accountSid;
+  const credentialSecret = apiKeySid && apiKeySecret ? apiKeySecret : authToken;
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
@@ -180,7 +185,7 @@ serve(async (req) => {
     }
 
     // ── Creds gate: Twilio must be configured ────────────────────────────
-    if (!accountSid || !authToken || !fromNumber) {
+    if (!accountSid || !credentialSid || !credentialSecret || !fromNumber) {
       await logSms(supabase, job.userId ?? null, type, "failed", {
         reason: "twilio_not_configured",
       });
@@ -190,7 +195,7 @@ serve(async (req) => {
           reason: "twilio_not_configured",
           message:
             "SMS sending is not configured. Set TWILIO_ACCOUNT_SID, " +
-            "TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER.",
+            "TWILIO_FROM_NUMBER and either a restricted API key or TWILIO_AUTH_TOKEN.",
         }),
         // 503: the plumbing is sound, the dependency just isn't provisioned.
         { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -220,7 +225,7 @@ serve(async (req) => {
         await updateLog(supabase, logId, "sending");
 
         const result = await sendSmsViaTwilio(
-          { accountSid, authToken, fromNumber },
+          { accountSid, credentialSid, credentialSecret, fromNumber, statusCallbackUrl },
           { to: toNumber, body }
         );
 
@@ -373,23 +378,35 @@ interface SendResult {
 /**
  * Send an SMS via the Twilio Messages REST API using a direct fetch (no SDK,
  * to keep the edge function lightweight). Auth is HTTP Basic with the account
- * SID + auth token; the payload is application/x-www-form-urlencoded.
+ * restricted API key (or account-token fallback); the payload is form encoded.
  */
 async function sendSmsViaTwilio(
-  creds: { accountSid: string; authToken: string; fromNumber: string },
+  creds: {
+    accountSid: string;
+    credentialSid: string;
+    credentialSecret: string;
+    fromNumber: string;
+    statusCallbackUrl?: string;
+  },
   params: { to: string; body: string }
 ): Promise<SendResult> {
   const url = `https://api.twilio.com/2010-04-01/Accounts/${creds.accountSid}/Messages.json`;
   const form = new URLSearchParams();
   form.set("To", params.to);
-  form.set("From", creds.fromNumber);
+  form.set(
+    creds.fromNumber.startsWith("MG") ? "MessagingServiceSid" : "From",
+    creds.fromNumber,
+  );
   form.set("Body", params.body);
+  if (creds.statusCallbackUrl) {
+    form.set("StatusCallback", creds.statusCallbackUrl);
+  }
 
   const response = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
-      Authorization: `Basic ${btoa(`${creds.accountSid}:${creds.authToken}`)}`,
+      Authorization: `Basic ${btoa(`${creds.credentialSid}:${creds.credentialSecret}`)}`,
     },
     body: form.toString(),
   });
