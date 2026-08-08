@@ -22,6 +22,9 @@
 //                          legacy caller) ⇒ NULL claim ⇒ both rails, no fee, a
 //                          byte-identical session to before. Any other value is
 //                          rejected 400 invalid_payment_method.
+//   { invoiceId, reconcile_session_id }
+//                          Authenticated fallback for an exact pending invoice
+//                          session when webhook delivery has not settled it.
 //
 // Shared flow (per payable):
 //   1. Auth: resolve the caller from the Authorization header.
@@ -64,6 +67,7 @@ import {
   type InvoiceCheckoutPaymentMethod,
   type InvoiceCheckoutSession,
   invoiceCheckoutReturnUrl,
+  reconcileInvoiceCheckoutSession,
   runInvoiceCheckout,
 } from './invoice-checkout-core.ts';
 
@@ -734,6 +738,154 @@ function invoiceAttemptFields(attempt: InvoiceCheckoutAttempt, sessionId?: strin
   };
 }
 
+async function reconcileStoredInvoiceCheckout(
+  admin: SupabaseClient,
+  stripe: Stripe,
+  caller: CallerUser,
+  invoiceId: string,
+  sessionId: string,
+): Promise<Response> {
+  const { data: attemptData, error: attemptError } = await admin
+    .from('invoice_checkout_attempts')
+    .select(
+      'id, invoice_id, payer_id, stripe_customer_id, amount_cents, surcharge_cents, payment_method, currency, state, stripe_idempotency_key, stripe_checkout_session_id',
+    )
+    .eq('invoice_id', invoiceId)
+    .eq('stripe_checkout_session_id', sessionId)
+    .maybeSingle();
+  if (attemptError) {
+    console.error('create-checkout-session: reconciliation attempt lookup failed', attemptError);
+    return json({ error: 'lookup_failed', detail: attemptError.message }, 500);
+  }
+  if (!attemptData) return json({ error: 'invoice_not_found' }, 404);
+
+  const [invoiceResult, paymentResult] = await Promise.all([
+    admin.from('invoices').select('designer_id').eq('id', invoiceId).maybeSingle(),
+    admin
+      .from('invoice_payments')
+      .select('id, stripe_event_id, stripe_checkout_session_id')
+      .eq('checkout_attempt_id', attemptData.id)
+      .maybeSingle(),
+  ]);
+  if (invoiceResult.error || paymentResult.error) {
+    const detail = invoiceResult.error?.message ?? paymentResult.error?.message ?? 'lookup failed';
+    console.error('create-checkout-session: reconciliation payment lookup failed', detail);
+    return json({ error: 'lookup_failed', detail }, 500);
+  }
+
+  const invoice = invoiceResult.data as { designer_id: string } | null;
+  const payment = paymentResult.data as {
+    id: string;
+    stripe_event_id: string | null;
+    stripe_checkout_session_id: string | null;
+  } | null;
+  if (
+    !invoice ||
+    (caller.id !== attemptData.payer_id && caller.id !== invoice.designer_id)
+  ) {
+    return json({ error: 'invoice_not_found' }, 404);
+  }
+  if (!payment || payment.stripe_checkout_session_id !== sessionId) {
+    return json(
+      {
+        error: 'payment_reconciliation_required',
+        detail: 'The exact pending Checkout payment could not be resolved.',
+      },
+      409,
+    );
+  }
+
+  const activeState =
+    attemptData.state === 'claimed' ||
+    attemptData.state === 'session_created' ||
+    attemptData.state === 'processing';
+  const knownMethod =
+    attemptData.payment_method === null ||
+    attemptData.payment_method === 'card' ||
+    attemptData.payment_method === 'us_bank_account';
+  if (
+    !activeState ||
+    !knownMethod ||
+    !attemptData.id ||
+    !attemptData.payer_id ||
+    !attemptData.stripe_customer_id ||
+    !Number.isInteger(attemptData.amount_cents) ||
+    !Number.isInteger(attemptData.surcharge_cents) ||
+    !attemptData.currency ||
+    !attemptData.stripe_idempotency_key
+  ) {
+    return json(
+      {
+        error: 'payment_reconciliation_required',
+        detail: 'The Checkout attempt is not active or complete enough to reconcile.',
+      },
+      409,
+    );
+  }
+
+  const attempt: InvoiceCheckoutAttempt = {
+    attemptId: attemptData.id,
+    paymentId: payment.id,
+    invoiceId: attemptData.invoice_id,
+    payerId: attemptData.payer_id,
+    stripeCustomerId: attemptData.stripe_customer_id,
+    amountCents: attemptData.amount_cents,
+    surchargeCents: attemptData.surcharge_cents,
+    paymentMethod: attemptData.payment_method as InvoiceCheckoutPaymentMethod | null,
+    currency: attemptData.currency,
+    state: attemptData.state as InvoiceCheckoutAttempt['state'],
+    stripeIdempotencyKey: attemptData.stripe_idempotency_key,
+    stripeCheckoutSessionId: sessionId,
+    supersededSessionId: null,
+  };
+
+  let stripeSession: Stripe.Checkout.Session;
+  try {
+    stripeSession = await stripe.checkout.sessions.retrieve(sessionId);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : 'Stripe session unavailable.';
+    return json({ error: 'checkout_session_unavailable', detail }, 502);
+  }
+
+  const session = stripeSessionView(stripeSession);
+  try {
+    const result = await reconcileInvoiceCheckoutSession(attempt, session, async () => {
+      const paymentIntentId =
+        typeof stripeSession.payment_intent === 'string'
+          ? stripeSession.payment_intent
+          : (stripeSession.payment_intent?.id ?? null);
+      const { data, error } = await admin.rpc('settle_invoice_checkout_payment', {
+        p_payment_id: payment.id,
+        p_stripe_event_id: payment.stripe_event_id ?? `checkout-session:${sessionId}`,
+        p_stripe_payment_intent_id: paymentIntentId,
+        p_reported_amount_cents: stripeSession.amount_total,
+        p_stripe_payment_method_type:
+          attempt.paymentMethod ?? (stripeSession.payment_status === 'paid' ? 'card' : null),
+      });
+      if (error) throw new Error(`failed to settle payment ${payment.id}: ${error.message}`);
+      const outcome = (data as { outcome?: string } | null)?.outcome;
+      if (
+        outcome !== 'succeeded' &&
+        outcome !== 'requires_refund' &&
+        outcome !== 'refunded' &&
+        outcome !== 'failed' &&
+        outcome !== 'pending'
+      ) {
+        throw new Error(`settlement returned an invalid outcome for payment ${payment.id}`);
+      }
+      return outcome;
+    });
+    return json({ status: result.kind, ...invoiceAttemptFields(attempt, sessionId) });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : 'Checkout reconciliation failed.';
+    if (error instanceof InvoiceCheckoutIntegrityError) {
+      return json({ error: 'payment_reconciliation_required', detail }, 409);
+    }
+    console.error('create-checkout-session: reconciliation failed', error);
+    return json({ error: 'checkout_reconciliation_failed', detail }, 500);
+  }
+}
+
 async function startInvoiceCheckout(
   admin: SupabaseClient,
   stripe: Stripe,
@@ -1048,8 +1200,16 @@ Deno.serve(async (req: Request) => {
   const invoiceId: string | undefined = body?.invoiceId ?? body?.invoice_id;
   const poPaymentId: string | undefined = body?.po_payment_id ?? body?.poPaymentId;
   const directOrderId: string | undefined = body?.direct_order_id ?? body?.directOrderId;
+  const reconcileSessionId: string | undefined =
+    body?.reconcile_session_id ?? body?.reconcileSessionId;
   if (!invoiceId && !poPaymentId && !directOrderId) {
     return json({ error: 'payable_id_required' }, 400);
+  }
+  if (
+    reconcileSessionId &&
+    (!invoiceId || poPaymentId || directOrderId || !reconcileSessionId.startsWith('cs_'))
+  ) {
+    return json({ error: 'invalid_reconciliation_target' }, 400);
   }
 
   // Rail choice — invoices only. Absent/null ⇒ legacy path (both rails, no fee).
@@ -1081,6 +1241,20 @@ Deno.serve(async (req: Request) => {
   }
 
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  const stripe = new Stripe(STRIPE_SECRET_KEY, {
+    apiVersion: STRIPE_API_VERSION,
+    httpClient: Stripe.createFetchHttpClient(),
+  });
+
+  if (reconcileSessionId) {
+    return reconcileStoredInvoiceCheckout(
+      admin,
+      stripe,
+      caller,
+      invoiceId as string,
+      reconcileSessionId,
+    );
+  }
 
   // ── Load + authorize the requested payable ───────────────────────────────
   const payableResult = poPaymentId
@@ -1091,11 +1265,6 @@ Deno.serve(async (req: Request) => {
   if (payableResult instanceof Response) {
     return payableResult;
   }
-
-  const stripe = new Stripe(STRIPE_SECRET_KEY, {
-    apiVersion: STRIPE_API_VERSION,
-    httpClient: Stripe.createFetchHttpClient(),
-  });
 
   // paymentMethod is deliberately dropped for po_payment / direct_order — those
   // rails carry no surcharge model and keep offering card + ACH together.

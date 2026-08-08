@@ -15,7 +15,7 @@
  * <body>) and lets the paper flow as pages.
  */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   useInvoice,
   useIssueInvoice,
@@ -41,6 +41,7 @@ import { Stamp } from '../stamp';
 import { todayYmd } from '@/lib/document/format';
 import { dollarsToCents } from '@/lib/document/invoice-composer';
 import { resolveClientPortalOrigin } from '@/lib/client-portal-url';
+import { useReconcileInvoiceCheckout } from '@/hooks/use-invoice-checkout-reconciliation';
 import { AccountsQueryFailure } from './accounts-query-failure';
 
 const SAGE_INK = '#85947C';
@@ -91,6 +92,8 @@ export function InvoiceFolio({
   const send = useSendInvoice({ errorSurface: 'inline' });
   const recordPayment = useRecordPayment({ errorSurface: 'inline' });
   const voidInvoice = useVoidInvoice({ errorSurface: 'inline' });
+  const reconcileCheckout = useReconcileInvoiceCheckout();
+  const reconciledSessionIds = useRef(new Set<string>());
 
   const [act, setAct] = useState<ActPanel>(null);
   /** R51's quiet confirmation grammar — sage when it landed, terracotta when not. */
@@ -103,6 +106,36 @@ export function InvoiceFolio({
   const [receivedDate, setReceivedDate] = useState(() => todayYmd());
   const [showClientFallback, setShowClientFallback] = useState(false);
   const [clientLinkStatus, setClientLinkStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const pendingStripeSessionId = invoice?.payments?.find(
+    (payment) =>
+      payment.method === 'stripe' &&
+      payment.status === 'pending' &&
+      payment.stripe_checkout_session_id,
+  )?.stripe_checkout_session_id;
+
+  useEffect(() => {
+    if (!pendingStripeSessionId || reconciledSessionIds.current.has(pendingStripeSessionId)) return;
+    reconciledSessionIds.current.add(pendingStripeSessionId);
+    let active = true;
+
+    void reconcileCheckout
+      .mutateAsync({ invoiceId, sessionId: pendingStripeSessionId })
+      .then(async () => {
+        const fresh = await refetch();
+        if (!active) return;
+        const freshPayment = fresh.data?.payments?.find(
+          (payment) => payment.stripe_checkout_session_id === pendingStripeSessionId,
+        );
+        if (freshPayment && freshPayment.status !== 'pending') {
+          void qc.invalidateQueries({ queryKey: ['document-state'] });
+        }
+      })
+      .catch(() => undefined);
+
+    return () => {
+      active = false;
+    };
+  }, [invoiceId, pendingStripeSessionId, qc, reconcileCheckout, refetch]);
 
   if (isLoading) {
     return (
@@ -149,7 +182,11 @@ export function InvoiceFolio({
     portalClientId && portalClientProfile?.id === portalClientId,
   );
   const busy =
-    issue.isPending || send.isPending || recordPayment.isPending || voidInvoice.isPending;
+    issue.isPending ||
+    send.isPending ||
+    recordPayment.isPending ||
+    voidInvoice.isPending ||
+    reconcileCheckout.isPending;
 
   const openPanel = (panel: ActPanel) => {
     setNote(null);

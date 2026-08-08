@@ -6,6 +6,9 @@ const mockIssue = jest.fn();
 const mockSend = jest.fn();
 const mockRecordPayment = jest.fn();
 const mockVoid = jest.fn();
+const mockReconcileCheckout = jest.fn();
+const mockRefetch = jest.fn();
+const mockInvalidateQueries = jest.fn();
 
 const invoice: Invoice = {
   id: 'invoice-1',
@@ -48,7 +51,12 @@ const invoice: Invoice = {
 let mockInvoice: Invoice = invoice;
 
 jest.mock('@patina/supabase', () => ({
-  useInvoice: () => ({ data: mockInvoice, isLoading: false, isError: false, refetch: jest.fn() }),
+  useInvoice: () => ({
+    data: mockInvoice,
+    isLoading: false,
+    isError: false,
+    refetch: mockRefetch,
+  }),
   useIssueInvoice: () => ({ mutateAsync: mockIssue, isPending: false }),
   useSendInvoice: () => ({ mutateAsync: mockSend, isPending: false }),
   useRecordPayment: () => ({
@@ -58,14 +66,74 @@ jest.mock('@patina/supabase', () => ({
   useVoidInvoice: () => ({ mutateAsync: mockVoid, isPending: false }),
 }));
 
+jest.mock(
+  '@/hooks/use-invoice-checkout-reconciliation',
+  () => ({
+    useReconcileInvoiceCheckout: () => ({
+      mutateAsync: mockReconcileCheckout,
+      isPending: false,
+    }),
+  }),
+  { virtual: true },
+);
+
 jest.mock('@tanstack/react-query', () => ({
-  useQueryClient: () => ({ invalidateQueries: jest.fn() }),
+  useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
 }));
 
 describe('InvoiceFolio delivery recovery', () => {
   beforeEach(() => {
     mockInvoice = invoice;
     jest.clearAllMocks();
+    mockRefetch.mockResolvedValue({ data: invoice });
+  });
+
+  it('reconciles a pending card session and re-derives the fresh payment before invalidating', async () => {
+    const pendingPayment = {
+      id: 'payment-1',
+      invoice_id: invoice.id,
+      amount_cents: invoice.total_cents,
+      surcharge_cents: 750,
+      method: 'stripe' as const,
+      status: 'pending' as const,
+      reference: null,
+      note: null,
+      received_at: null,
+      recorded_by: 'client-1',
+      checkout_attempt_id: 'attempt-1',
+      stripe_checkout_session_id: 'cs_paid_card',
+      stripe_payment_intent_id: null,
+      stripe_payment_method_type: null,
+      stripe_event_id: null,
+      created_at: '2026-08-07T02:45:44.000Z',
+      updated_at: '2026-08-07T02:45:44.000Z',
+    };
+    mockInvoice = {
+      ...invoice,
+      status: 'sent',
+      invoice_number: 'INV-1045',
+      payments: [pendingPayment],
+    };
+    mockReconcileCheckout.mockResolvedValue({ status: 'confirmed' });
+    mockRefetch.mockResolvedValue({
+      data: {
+        ...mockInvoice,
+        status: 'paid',
+        amount_paid_cents: invoice.total_cents,
+        payments: [{ ...pendingPayment, status: 'succeeded' as const }],
+      },
+    });
+
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+
+    await waitFor(() =>
+      expect(mockReconcileCheckout).toHaveBeenCalledWith({
+        invoiceId: 'invoice-1',
+        sessionId: 'cs_paid_card',
+      }),
+    );
+    await waitFor(() => expect(mockRefetch).toHaveBeenCalledTimes(1));
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['document-state'] });
   });
 
   it('keeps the issued invoice reachable when email delivery fails', async () => {

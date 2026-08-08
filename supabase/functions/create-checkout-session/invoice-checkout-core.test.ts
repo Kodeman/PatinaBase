@@ -5,6 +5,7 @@ import {
   InvoiceCheckoutIntegrityError,
   type InvoiceCheckoutSession,
   invoiceCheckoutReturnUrl,
+  reconcileInvoiceCheckoutSession,
   runInvoiceCheckout,
 } from './invoice-checkout-core.ts';
 
@@ -154,33 +155,49 @@ Deno.test(
   }
 );
 
-Deno.test('invoice Checkout: completed card/webhook lag and ACH both stay processing', async () => {
-  const claimed = attempt({
+Deno.test('invoice Checkout: paid card reconciliation clears stale processing while ACH stays pending', async () => {
+  const cardAttempt = attempt({
     state: 'processing',
     stripeCheckoutSessionId: 'cs_attempt_1',
+    paymentMethod: 'card',
+    surchargeCents: 375,
   });
-  for (const paymentStatus of ['paid', 'unpaid'] as const) {
-    const result = await runInvoiceCheckout({
-      claim: async () => claimed,
-      retrieveSession: async () =>
-        sessionFor(claimed, {
-          status: 'complete',
-          paymentStatus,
-          url: null,
-        }),
-      createSession: async () => {
-        throw new Error('not expected');
-      },
-      finalize: async () => {
-        throw new Error('not expected');
-      },
-      failExpired: async () => {
-        throw new Error('not expected');
-      },
-    });
-    assertEquals(result.kind, 'processing');
-    assertEquals(result.attempt.paymentId, 'payment-1');
-  }
+  let settleCalls = 0;
+  const cardResult = await reconcileInvoiceCheckoutSession(
+    cardAttempt,
+    sessionFor(cardAttempt, {
+      status: 'complete',
+      paymentStatus: 'paid',
+      url: null,
+    }),
+    async () => {
+      settleCalls += 1;
+      return 'succeeded';
+    },
+  );
+  assertEquals(cardResult.kind, 'confirmed');
+  assertEquals(settleCalls, 1);
+
+  const achAttempt = attempt({
+    state: 'processing',
+    stripeCheckoutSessionId: 'cs_attempt_1',
+    paymentMethod: 'us_bank_account',
+    surchargeCents: 500,
+  });
+  const achResult = await reconcileInvoiceCheckoutSession(
+    achAttempt,
+    sessionFor(achAttempt, {
+      status: 'complete',
+      paymentStatus: 'unpaid',
+      url: null,
+    }),
+    async () => {
+      settleCalls += 1;
+      return 'succeeded';
+    },
+  );
+  assertEquals(achResult.kind, 'processing');
+  assertEquals(settleCalls, 1);
 });
 
 Deno.test('invoice Checkout: payer/customer/attempt tampering is never reused', async () => {

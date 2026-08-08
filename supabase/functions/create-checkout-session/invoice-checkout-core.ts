@@ -70,6 +70,19 @@ export type InvoiceCheckoutResult =
       session: InvoiceCheckoutSession;
     };
 
+export type InvoiceCheckoutSettlementOutcome =
+  | 'succeeded'
+  | 'requires_refund'
+  | 'refunded'
+  | 'failed'
+  | 'pending';
+
+export type InvoiceCheckoutReconciliationResult = {
+  kind: 'confirmed' | 'processing' | 'requires_refund' | 'refunded' | 'failed';
+  attempt: InvoiceCheckoutAttempt;
+  session: InvoiceCheckoutSession;
+};
+
 export class InvoiceCheckoutIntegrityError extends Error {
   constructor(
     public readonly code:
@@ -134,6 +147,32 @@ export function assertInvoiceSessionIdentity(
  * A finalize failure is surfaced without returning the Stripe URL: retrying
  * recovers the same session because the database claim and key remain stable.
  */
+export async function reconcileInvoiceCheckoutSession(
+  attempt: InvoiceCheckoutAttempt,
+  session: InvoiceCheckoutSession,
+  settle: (
+    attempt: InvoiceCheckoutAttempt,
+    session: InvoiceCheckoutSession,
+  ) => Promise<InvoiceCheckoutSettlementOutcome>,
+): Promise<InvoiceCheckoutReconciliationResult> {
+  assertInvoiceSessionIdentity(attempt, session);
+
+  if (session.status !== 'complete' || session.paymentStatus !== 'paid') {
+    return { kind: 'processing', attempt, session };
+  }
+
+  const outcome = await settle(attempt, session);
+  return {
+    kind: outcome === 'succeeded'
+      ? 'confirmed'
+      : outcome === 'pending'
+        ? 'processing'
+        : outcome,
+    attempt,
+    session,
+  };
+}
+
 export async function runInvoiceCheckout(
   gateway: InvoiceCheckoutGateway
 ): Promise<InvoiceCheckoutResult> {
