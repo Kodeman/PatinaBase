@@ -72,7 +72,7 @@ import { useHydrated } from '@/hooks/use-hydrated';
 import { ProjectAuthorityBandForProject } from '@/components/document/commercial/project-authority-band';
 import { ProjectMoodBoards } from '@/components/document/project-mood-boards';
 import { ProjectCommerceSection } from '@/components/document/commercial/project-commerce-section';
-import { commercialDocumentExperience } from '@/lib/document/commercial-documents';
+import { authorizationDoorwayFor } from '@/lib/document/authorization-doorway';
 
 const prettyPhase = (phase: string | null) =>
   phase
@@ -81,32 +81,6 @@ const prettyPhase = (phase: string | null) =>
         .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
         .join(' ')
     : null;
-
-export function authorizationDoorwayFor({
-  engagementKind,
-  projectId,
-  proposalId,
-  documentKind,
-}: {
-  engagementKind: DocumentStateRow['engagement_kind'] | null | undefined;
-  projectId: string | null | undefined;
-  proposalId: string | null | undefined;
-  documentKind: string | null | undefined;
-}): string | null {
-  if (
-    engagementKind !== 'proposal' ||
-    commercialDocumentExperience(documentKind) !== 'commercial_readonly' ||
-    !projectId ||
-    !proposalId
-  ) {
-    return null;
-  }
-
-  return `/desk?${new URLSearchParams({
-    authorization: proposalId,
-    projectId,
-  }).toString()}`;
-}
 
 type AnyRecord = any;
 

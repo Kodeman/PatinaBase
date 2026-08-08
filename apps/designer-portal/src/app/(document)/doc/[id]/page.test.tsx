@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import DocumentPage, { authorizationDoorwayFor } from './page';
+import DocumentPage from './page';
+import { authorizationDoorwayFor } from '@/lib/document/authorization-doorway';
 
 let mockHydrated = false;
 const mockRetryDocumentResolution = jest.fn();
