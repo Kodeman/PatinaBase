@@ -25,16 +25,13 @@ import { Users } from 'lucide-react';
 import { useProjectRoster, type ProjectRosterRow } from '@patina/supabase';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import {
-  flattenRoster,
-  groupRoster,
+  projectRosterProjection,
   vitalsLine,
-  type RosterGroup,
 } from '@/lib/document/roster-derivation';
 import { DocSheet } from '../overlays/doc-sheet';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
-import { SectionEyebrow } from '../section-eyebrow';
-import { RosterRow } from './roster-row';
 import { RolodexPicker } from './rolodex-picker';
+import { RosterGroups } from './roster-groups';
 
 const PRINT_CSS = `@media print {
   body > *:not(:has([data-call-sheet-region])) { display: none !important; }
@@ -43,45 +40,6 @@ const PRINT_CSS = `@media print {
   [data-doc-sheet-panel] { position: static !important; max-width: none !important; max-height: none !important; overflow: visible !important; border: 0 !important; border-radius: 0 !important; }
   .call-sheet-no-print { display: none !important; }
 }`;
-
-const GROUP_LABEL: Record<RosterGroup, string> = {
-  studioSide: 'Studio side',
-  clientSide: 'Client side',
-  buildSupply: 'Build & supply',
-};
-
-function RosterGroupSection({
-  group,
-  rows,
-  expandedId,
-  onToggle,
-  onOpenProfile,
-}: {
-  group: RosterGroup;
-  rows: ProjectRosterRow[];
-  expandedId: string | null;
-  onToggle: (id: string) => void;
-  onOpenProfile?: (row: ProjectRosterRow) => void;
-}) {
-  if (rows.length === 0) return null;
-  return (
-    <section className="mt-6 first:mt-0">
-      <SectionEyebrow count={rows.length}>{GROUP_LABEL[group]}</SectionEyebrow>
-      <ul className="border-t border-[var(--color-pearl)]">
-        {rows.map((row) => (
-          <RosterRow
-            key={row.roster_id ?? `${row.source}-${row.display_name}`}
-            row={row}
-            group={group}
-            expanded={expandedId === row.roster_id}
-            onToggle={() => onToggle(row.roster_id ?? '')}
-            onOpenProfile={onOpenProfile}
-          />
-        ))}
-      </ul>
-    </section>
-  );
-}
 
 /** document:open-call-sheet's optional mode (FIX 2 — kickoff/instrument open
  *  modes): 'picker' opens straight to the rolodex picker, 'add' opens it
@@ -117,7 +75,6 @@ export function CallSheet({
 }) {
   const { value: callSheetOn } = useFeatureFlag('call-sheet');
   const { data: rows, isLoading } = useProjectRoster(open ? projectId : null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerStartsInAdd, setPickerStartsInAdd] = useState(false);
   const [added, setAdded] = useState<string | null>(null);
@@ -126,9 +83,9 @@ export function CallSheet({
   // The project's own client (Wave 5). `v_project_roster` has no client
   // branch, so the document hands their identity down and groupRoster
   // prepends a synthetic row — unless a party row already claims them.
-  const groups = useMemo(
+  const projection = useMemo(
     () =>
-      groupRoster(roster, {
+      projectRosterProjection(roster, {
         name: clientName,
         profileId: clientProfileId ?? null,
         projectId,
@@ -137,7 +94,7 @@ export function CallSheet({
   );
   // The vitals count what the sheet SHOWS — the synthetic client included, so
   // the mono line and the groups beneath it can never disagree.
-  const shown = useMemo(() => flattenRoster(groups), [groups]);
+  const shown = projection.rows;
   const vitals = useMemo(() => vitalsLine(shown), [shown]);
   const empty = !isLoading && shown.length === 0;
 
@@ -245,20 +202,7 @@ export function CallSheet({
 
           {!isLoading && !empty && (
             <div className="mt-5">
-              {(['studioSide', 'clientSide', 'buildSupply'] as RosterGroup[]).map(
-                (group) => (
-                  <RosterGroupSection
-                    key={group}
-                    group={group}
-                    rows={groups[group]}
-                    expandedId={expandedId}
-                    onToggle={(id) =>
-                      setExpandedId((cur) => (cur === id ? null : id))
-                    }
-                    onOpenProfile={onOpenProfile}
-                  />
-                ),
-              )}
+              <RosterGroups groups={projection.groups} onOpenProfile={onOpenProfile} />
             </div>
           )}
         </div>

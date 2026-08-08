@@ -33,6 +33,19 @@ export interface GroupedRoster {
   buildSupply: ProjectRosterRow[];
 }
 
+export interface ProjectRosterProjection {
+  groups: GroupedRoster;
+  rows: ProjectRosterRow[];
+}
+
+export interface RosterIdentity {
+  display_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  profile_id?: string | null;
+  studio_contact_id?: string | null;
+}
+
 export type RosterGroup = keyof GroupedRoster;
 
 /** The client half of the sheet — party kinds only (a team row is never here,
@@ -264,6 +277,67 @@ export function groupRoster(
 /** Every row the sheet shows, in group order — the array the vitals count. */
 export function flattenRoster(groups: GroupedRoster): ProjectRosterRow[] {
   return [...groups.studioSide, ...groups.clientSide, ...groups.buildSupply];
+}
+
+function identityKeys(identity: RosterIdentity): string[] {
+  const keys: string[] = [];
+  const name = normalizeName(identity.display_name);
+  const email = (identity.email ?? '').trim().toLowerCase();
+  const phone = (identity.phone ?? '').replace(/\D/g, '');
+
+  if (identity.profile_id) keys.push(`profile:${identity.profile_id}`);
+  if (identity.studio_contact_id) keys.push(`contact:${identity.studio_contact_id}`);
+  if (email) keys.push(`email:${email}:${name}`);
+  if (phone) keys.push(`phone:${phone}:${name}`);
+
+  return keys;
+}
+
+function dedupeRank(row: ProjectRosterRow): number {
+  if (row.source === 'team') return 0;
+  if (CLIENT_SIDE_KINDS.includes(row.kind ?? '')) return 1;
+  return 2 + buildSupplyRank(row.kind);
+}
+
+/**
+ * Collapse rows that resolve to the same permission-bearing profile, rolodex
+ * card, email/name, or phone/name identity. Team membership wins a collision
+ * because it is the access-bearing record; no identity is inferred from a
+ * display name alone.
+ */
+export function dedupeRoster(rows: ProjectRosterRow[]): ProjectRosterRow[] {
+  const ranked = rows
+    .map((row, index) => ({ row, index }))
+    .sort((a, b) => dedupeRank(a.row) - dedupeRank(b.row) || a.index - b.index);
+  const seen = new Set<string>();
+  const unique: ProjectRosterRow[] = [];
+
+  for (const { row } of ranked) {
+    const keys = identityKeys(row);
+    if (keys.some((key) => seen.has(key))) continue;
+    keys.forEach((key) => seen.add(key));
+    unique.push(row);
+  }
+
+  return unique;
+}
+
+export function rosterHasIdentity(
+  rows: ProjectRosterRow[],
+  identity: RosterIdentity,
+): boolean {
+  const candidate = new Set(identityKeys(identity));
+  if (candidate.size === 0) return false;
+  return rows.some((row) => identityKeys(row).some((key) => candidate.has(key)));
+}
+
+/** The one projection consumed by every project-roster surface. */
+export function projectRosterProjection(
+  rows: ProjectRosterRow[],
+  client?: SyntheticClient | null,
+): ProjectRosterProjection {
+  const groups = groupRoster(dedupeRoster(rows), client);
+  return { groups, rows: flattenRoster(groups) };
 }
 
 // ============================================================================

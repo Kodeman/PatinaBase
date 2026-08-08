@@ -1,10 +1,12 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { StudioContact } from '@patina/supabase';
+import type { ProjectRosterRow, StudioContact } from '@patina/supabase';
 import { RolodexPicker } from '../rolodex-picker';
 
 const addPartyMutate = jest.fn();
 const addContactMutate = jest.fn();
 const useStudioContacts = jest.fn();
+const useProjectRoster = jest.fn();
+const refetchRoster = jest.fn();
 
 jest.mock('@patina/supabase', () => ({
   useAddProjectParty: () => ({ mutateAsync: addPartyMutate, isPending: false }),
@@ -14,6 +16,7 @@ jest.mock('@patina/supabase', () => ({
     isLoading: false,
   }),
   useStudioContacts: (...args: unknown[]) => useStudioContacts(...args),
+  useProjectRoster: (...args: unknown[]) => useProjectRoster(...args),
   useStudioContactHistory: () => ({
     data: { 'contact-1': { projectCount: 3, lastProjectName: 'Ellsworth', lastAt: null } },
   }),
@@ -56,6 +59,9 @@ beforeEach(() => {
   props.onClose.mockReset();
   useStudioContacts.mockReset();
   useStudioContacts.mockReturnValue({ data: [ROSA], isLoading: false });
+  refetchRoster.mockReset();
+  useProjectRoster.mockReset();
+  useProjectRoster.mockReturnValue({ data: [], refetch: refetchRoster });
 });
 
 describe('RolodexPicker — pre-scoped kinds', () => {
@@ -99,6 +105,42 @@ describe('RolodexPicker — the hits and their history', () => {
       studioContactId: 'contact-1',
     });
     await waitFor(() => expect(props.onClose).toHaveBeenCalled());
+    expect(refetchRoster).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not add a rolodex contact already represented on the roster', async () => {
+    useProjectRoster.mockReturnValue({
+      data: [
+        {
+          roster_id: 'party-1',
+          source: 'party',
+          project_id: 'proj-1',
+          kind: 'sub',
+          display_name: 'Rosa Martínez',
+          company_name: 'Martínez Tile Works',
+          email: 'rosa@martineztile.co',
+          phone: '(513) 555-0148',
+          trade: 'tile',
+          job_title: null,
+          staff_role: null,
+          studio_contact_id: 'contact-1',
+          profile_id: null,
+          show_to_client: false,
+          has_active_field_link: false,
+          sms_consent_status: 'not_asked',
+          updated_at: null,
+        } satisfies ProjectRosterRow,
+      ],
+      refetch: refetchRoster,
+    });
+    render(<RolodexPicker {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: /Rosa Martínez/ }));
+
+    expect(
+      await screen.findByText('Rosa Martínez is already on the call sheet.'),
+    ).toBeInTheDocument();
+    expect(addPartyMutate).not.toHaveBeenCalled();
+    expect(refetchRoster).not.toHaveBeenCalled();
   });
 });
 

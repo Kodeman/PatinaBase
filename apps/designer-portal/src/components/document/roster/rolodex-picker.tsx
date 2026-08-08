@@ -23,12 +23,14 @@ import {
   useAddProjectParty,
   useAddStudioContact,
   useOrganizations,
+  useProjectRoster,
   useStudioContactHistory,
   useStudioContacts,
   type StudioContact,
 } from '@patina/supabase';
 import { getPartyKindLabel, type PartyKind } from '@patina/types';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { rosterHasIdentity } from '@/lib/document/roster-derivation';
 import { DocSheet } from '../overlays/doc-sheet';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { TradeChipRow } from '../people/directory/trade-chip-row';
@@ -155,6 +157,9 @@ export function RolodexPicker({
   }, [contacts, trade]);
 
   const { data: history } = useStudioContactHistory(hits.map((c) => c.id));
+  const { data: rosterRows, refetch: refetchRoster } = useProjectRoster(
+    open && callSheetOn ? projectId : null,
+  );
 
   const companyNames = useMemo(
     () =>
@@ -183,6 +188,18 @@ export function RolodexPicker({
   const addFromRolodex = async (contact: StudioContact) => {
     setError(null);
     const name = contactName(contact);
+    if (
+      rosterHasIdentity(rosterRows ?? [], {
+        display_name: name,
+        email: contact.email,
+        phone: contact.phone,
+        profile_id: contact.profile_id,
+        studio_contact_id: contact.id,
+      })
+    ) {
+      setError(`${name} is already on the call sheet.`);
+      return;
+    }
     try {
       await addParty.mutateAsync({
         projectId,
@@ -194,6 +211,7 @@ export function RolodexPicker({
         email: contact.email,
         studioContactId: contact.id,
       });
+      void refetchRoster();
       finish(name);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not add them to the call sheet.');
@@ -208,6 +226,16 @@ export function RolodexPicker({
     }
     setError(null);
     const tradeValue = form.trade === 'all' ? null : form.trade;
+    if (
+      rosterHasIdentity(rosterRows ?? [], {
+        display_name: name,
+        email: form.email,
+        phone: form.phone,
+      })
+    ) {
+      setError(`${name} is already on the call sheet.`);
+      return;
+    }
 
     // The stamp writes the rolodex card FIRST, so the party can carry its id.
     // A rolodex hiccup must never cost the designer the add they came for —
@@ -242,6 +270,7 @@ export function RolodexPicker({
         email: form.email.trim() || null,
         studioContactId,
       });
+      void refetchRoster();
       finish(name);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not add them to the call sheet.');
