@@ -397,6 +397,36 @@ describe('inboxRecordItem', () => {
       row: { kind: 'cross_reference', href: '/doc/p-9', onDesk: true },
     });
   });
+
+  it('renders a project file change as a document-linked notice', () => {
+    const item = inboxRecordItem(
+      notif({
+        type: 'project_file_changed',
+        metadata: {
+          event_key: 'project-document:file-1:2026-08-07 12:00:00+00',
+          project_id: 'project-1',
+          project_name: 'Winky Loft',
+          file_id: 'file-1',
+          file_name: 'Site measurements.pdf',
+          actor_id: 'designer-1',
+          actor_name: 'Kody',
+          occurred_at: '2026-08-07T12:00:00Z',
+          read_at: null,
+          subject: 'New file: Site measurements.pdf',
+          message: 'Kody added Site measurements.pdf to Winky Loft.',
+          deep_link: '/doc/project-1',
+        },
+      }),
+    );
+
+    expect(item).toMatchObject({
+      read: false,
+      title: 'New file: Site measurements.pdf',
+      body: 'Kody added Site measurements.pdf to Winky Loft.',
+      typeLabel: 'Project File Changed',
+      row: { kind: 'notice', href: '/doc/project-1', onDesk: false },
+    });
+  });
 });
 
 describe('mergeRecordItems', () => {

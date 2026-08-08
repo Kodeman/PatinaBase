@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import DocumentPage from './page';
+import DocumentPage, { authorizationDoorwayFor } from './page';
 
 let mockHydrated = false;
 const mockRetryDocumentResolution = jest.fn();
@@ -154,5 +154,37 @@ describe('DocumentPage hydration render behavior', () => {
     expect(screen.getByText('This document could not be picked up.')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(mockRetryDocumentResolution).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('furnishings authorization doorway', () => {
+  it('routes a project-backed authorization through the Desk doorway', () => {
+    expect(
+      authorizationDoorwayFor({
+        engagementKind: 'proposal',
+        projectId: 'project-1',
+        proposalId: 'authorization-1',
+        documentKind: 'furnishings_authorization',
+      }),
+    ).toBe('/desk?authorization=authorization-1&projectId=project-1');
+  });
+
+  it('leaves ordinary proposals and unlinked authorizations in place', () => {
+    expect(
+      authorizationDoorwayFor({
+        engagementKind: 'proposal',
+        projectId: 'project-1',
+        proposalId: 'proposal-1',
+        documentKind: 'legacy',
+      }),
+    ).toBeNull();
+    expect(
+      authorizationDoorwayFor({
+        engagementKind: 'proposal',
+        projectId: null,
+        proposalId: 'authorization-1',
+        documentKind: 'furnishings_authorization',
+      }),
+    ).toBeNull();
   });
 });

@@ -72,6 +72,7 @@ import { useHydrated } from '@/hooks/use-hydrated';
 import { ProjectAuthorityBandForProject } from '@/components/document/commercial/project-authority-band';
 import { ProjectMoodBoards } from '@/components/document/project-mood-boards';
 import { ProjectCommerceSection } from '@/components/document/commercial/project-commerce-section';
+import { commercialDocumentExperience } from '@/lib/document/commercial-documents';
 
 const prettyPhase = (phase: string | null) =>
   phase
@@ -80,6 +81,32 @@ const prettyPhase = (phase: string | null) =>
         .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
         .join(' ')
     : null;
+
+export function authorizationDoorwayFor({
+  engagementKind,
+  projectId,
+  proposalId,
+  documentKind,
+}: {
+  engagementKind: DocumentStateRow['engagement_kind'] | null | undefined;
+  projectId: string | null | undefined;
+  proposalId: string | null | undefined;
+  documentKind: string | null | undefined;
+}): string | null {
+  if (
+    engagementKind !== 'proposal' ||
+    commercialDocumentExperience(documentKind) !== 'commercial_readonly' ||
+    !projectId ||
+    !proposalId
+  ) {
+    return null;
+  }
+
+  return `/desk?${new URLSearchParams({
+    authorization: proposalId,
+    projectId,
+  }).toString()}`;
+}
 
 type AnyRecord = any;
 
@@ -127,6 +154,12 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   const { data: project } = useProjectV2(projectId) as { data: AnyRecord };
   const { data: phases } = useProjectPhases(projectId) as { data: AnyRecord[] | undefined };
   const { data: liveProposal } = useProposal(proposalId) as { data: any };
+  const authorizationDoorway = authorizationDoorwayFor({
+    engagementKind: row?.engagement_kind,
+    projectId: row?.project_id,
+    proposalId: row?.proposal_id,
+    documentKind: liveProposal?.document_kind,
+  });
   const others = useDocumentPresence(row?.engagement_id ?? null);
   const designerClientId =
     row?.engagement_kind === 'relationship'
@@ -231,6 +264,14 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   useEffect(() => {
     if (resolution?.kind === 'redirect') router.replace(`/doc/${resolution.projectId}`);
   }, [resolution, router]);
+
+  // Furnishings authorizations are project instruments, not standalone
+  // proposal documents. Route old Desk links through the canonical doorway so
+  // the authorization opens in the project's ledger instead of dead-ending on
+  // the read-only proposal shell.
+  useEffect(() => {
+    if (authorizationDoorway) router.replace(authorizationDoorway);
+  }, [authorizationDoorway, router]);
 
   // Esc puts down (D1) — unless an overlay owns it (ledger sheet first, §3).
   useEffect(() => {
