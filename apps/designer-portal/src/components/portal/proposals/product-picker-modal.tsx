@@ -7,7 +7,6 @@ import {
   useProposalCaptures,
   useLayerProducts,
   useLayerCounts,
-  useCrossLayerSearch,
   useCaptureFromUrl,
   useCaptureProduct,
   type ProposalCapture,
@@ -113,6 +112,9 @@ export interface ProductPickResult {
 /** What an individual tab emits; the modal shell folds in `scopeRoomId`. */
 type TabPick = Omit<ProductPickResult, 'scopeRoomId'>;
 
+const CATALOG_PAGE_SIZE = 24;
+const LIBRARY_PAGE_SIZE = 60;
+
 export interface ProductPickerModalProps {
   open: boolean;
   onClose: () => void;
@@ -148,7 +150,7 @@ export interface ProductPickerModalProps {
   configureStep?: boolean;
 }
 
-type Tab = 'browse' | 'captures' | 'draft';
+type Tab = 'catalog' | 'library' | 'captures' | 'draft';
 
 interface CatalogProductRow {
   id: string;
@@ -314,10 +316,12 @@ function CatalogTab({
   onPick: (pick: TabPick) => void;
 }) {
   const [search, setSearch] = useState('');
+  const [pageSize, setPageSize] = useState(CATALOG_PAGE_SIZE);
+  useEffect(() => setPageSize(CATALOG_PAGE_SIZE), [search]);
   // useProducts defaults to status='published' — exactly what we want.
-  const { data, isLoading, isError, error } = useProducts(
+  const { data, isLoading, isFetching, isError, error } = useProducts(
     { search: search.trim() || undefined },
-    { page: 1, pageSize: 24 }
+    { page: 1, pageSize }
   );
 
   const products: CatalogProductRow[] = (data?.data ?? []) as CatalogProductRow[];
@@ -333,6 +337,7 @@ function CatalogTab({
     configuration_mode: p.configuration_mode ?? null,
     configuration_summary: p.configuration_summary ?? null,
   }));
+  const total = data?.pagination?.total ?? rows.length;
 
   return (
     <div className="flex flex-col gap-3">
@@ -369,6 +374,15 @@ function CatalogTab({
         </div>
       )}
       {!isLoading && rows.length > 0 && <ProductResultGrid rows={rows} onPick={onPick} />}
+      {!isLoading && !isError && rows.length < total && (
+        <Button
+          variant="secondary"
+          disabled={isFetching}
+          onClick={() => setPageSize((current) => current + CATALOG_PAGE_SIZE)}
+        >
+          {isFetching ? 'Loading more…' : 'Load more catalog products'}
+        </Button>
+      )}
     </div>
   );
 }
@@ -378,17 +392,44 @@ function CatalogTab({
 function LibraryTab({ onPick }: { onPick: (pick: TabPick) => void }) {
   const [search, setSearch] = useState('');
   const [activeLayer, setActiveLayer] = useState<LayerProductLayer>('personal');
+  const [limits, setLimits] = useState<Record<LayerProductLayer, number>>({
+    personal: LIBRARY_PAGE_SIZE,
+    studio: LIBRARY_PAGE_SIZE,
+    catalog: LIBRARY_PAGE_SIZE,
+  });
   const trimmed = search.trim();
   const isSearching = trimmed.length > 0;
 
-  const { data: counts } = useLayerCounts();
-  // Default browse (blank query) of the active layer — useCrossLayerSearch
-  // returns empty on a blank query, so the per-layer browse fills that gap.
-  const browse = useLayerProducts({ layer: activeLayer, enabled: !isSearching });
-  // Typing switches to one cross-layer query, grouped by layer below.
-  const searchRes = useCrossLayerSearch({ query: trimmed, enabled: isSearching });
+  useEffect(() => {
+    setLimits({
+      personal: LIBRARY_PAGE_SIZE,
+      studio: LIBRARY_PAGE_SIZE,
+      catalog: LIBRARY_PAGE_SIZE,
+    });
+  }, [trimmed]);
+
+  const { data: counts, isError: countsError } = useLayerCounts();
+  const personal = useLayerProducts({
+    layer: 'personal',
+    search: trimmed || undefined,
+    limit: limits.personal,
+    enabled: isSearching || activeLayer === 'personal',
+  });
+  const studio = useLayerProducts({
+    layer: 'studio',
+    search: trimmed || undefined,
+    limit: limits.studio,
+    enabled: isSearching || activeLayer === 'studio',
+  });
+  const catalog = useLayerProducts({
+    layer: 'catalog',
+    search: trimmed || undefined,
+    limit: limits.catalog,
+    enabled: isSearching || activeLayer === 'catalog',
+  });
 
   const layers: LayerProductLayer[] = ['personal', 'studio', 'catalog'];
+  const queryByLayer = { personal, studio, catalog };
   const toGridRows = (items: LayerProductRow[], layer: LayerProductLayer): GridRow[] =>
     items.map((r) => ({
       id: r.id,
@@ -432,27 +473,57 @@ function LibraryTab({ onPick }: { onPick: (pick: TabPick) => void }) {
         })}
       </div>
 
+      {countsError && (
+        <div className="rounded-sm border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Library totals are unavailable, but authorized products can still be browsed.
+        </div>
+      )}
+
       {/* Browse the active layer (blank query) */}
       {!isSearching && (
         <>
-          {browse.isLoading && (
+          {queryByLayer[activeLayer].isLoading && (
             <div className="py-8 text-center type-body" style={messageStyle}>
               Loading {LAYER_LABEL[activeLayer].toLowerCase()} library…
             </div>
           )}
-          {browse.isError && (
+          {queryByLayer[activeLayer].isError && (
             <div className="rounded-sm border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-              {(browse.error as Error)?.message ?? 'Failed to load library.'}
+              {(queryByLayer[activeLayer].error as Error)?.message ?? 'Failed to load library.'}
             </div>
           )}
-          {!browse.isLoading && !browse.isError && (browse.data?.length ?? 0) === 0 && (
+          {!queryByLayer[activeLayer].isLoading &&
+            !queryByLayer[activeLayer].isError &&
+            (queryByLayer[activeLayer].data?.length ?? 0) === 0 && (
             <div className="py-8 text-center type-body" style={messageStyle}>
               Nothing in your {LAYER_LABEL[activeLayer].toLowerCase()} library yet. Search
               the catalog, capture with the extension, or quick-create a draft.
             </div>
           )}
-          {(browse.data?.length ?? 0) > 0 && (
-            <ProductResultGrid rows={toGridRows(browse.data ?? [], activeLayer)} onPick={onPick} />
+          {(queryByLayer[activeLayer].data?.length ?? 0) > 0 && (
+            <ProductResultGrid
+              rows={toGridRows(queryByLayer[activeLayer].data ?? [], activeLayer)}
+              onPick={onPick}
+            />
+          )}
+          {(queryByLayer[activeLayer].data?.length ?? 0) > 0 &&
+            (counts
+              ? (queryByLayer[activeLayer].data?.length ?? 0) < counts[activeLayer]
+              : (queryByLayer[activeLayer].data?.length ?? 0) >= limits[activeLayer]) && (
+            <Button
+              variant="secondary"
+              disabled={queryByLayer[activeLayer].isFetching}
+              onClick={() =>
+                setLimits((current) => ({
+                  ...current,
+                  [activeLayer]: current[activeLayer] + LIBRARY_PAGE_SIZE,
+                }))
+              }
+            >
+              {queryByLayer[activeLayer].isFetching
+                ? 'Loading more…'
+                : `Load more ${LAYER_LABEL[activeLayer].toLowerCase()}`}
+            </Button>
           )}
         </>
       )}
@@ -460,25 +531,35 @@ function LibraryTab({ onPick }: { onPick: (pick: TabPick) => void }) {
       {/* Cross-layer search results, grouped by layer */}
       {isSearching && (
         <>
-          {searchRes.isLoading && (
+          {layers.some((layer) => queryByLayer[layer].isLoading) && (
             <div className="py-8 text-center type-body" style={messageStyle}>
               Searching…
             </div>
           )}
-          {searchRes.isError && (
-            <div className="rounded-sm border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-              {(searchRes.error as Error)?.message ?? 'Search failed.'}
-            </div>
-          )}
-          {searchRes.data && searchRes.data.total === 0 && (
+          {layers.every(
+            (layer) =>
+              !queryByLayer[layer].isLoading &&
+              !queryByLayer[layer].isError &&
+              (queryByLayer[layer].data?.length ?? 0) === 0,
+          ) && (
             <div className="py-8 text-center type-body" style={messageStyle}>
               No matches in your library or the catalog. Quick-create a draft instead.
             </div>
           )}
-          {searchRes.data &&
-            layers.map((l) => {
-              const items = searchRes.data!.byLayer[l];
-              if (!items || items.length === 0) return null;
+          {layers.map((l) => {
+              const query = queryByLayer[l];
+              const items = query.data ?? [];
+              if (query.isError) {
+                return (
+                  <div
+                    key={l}
+                    className="rounded-sm border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+                  >
+                    {LAYER_LABEL[l]} search failed: {(query.error as Error)?.message ?? 'Unknown error'}
+                  </div>
+                );
+              }
+              if (query.isLoading || items.length === 0) return null;
               return (
                 <div key={l} className="flex flex-col gap-2">
                   <div
@@ -493,6 +574,22 @@ function LibraryTab({ onPick }: { onPick: (pick: TabPick) => void }) {
                     {LAYER_LABEL[l]} · {items.length}
                   </div>
                   <ProductResultGrid rows={toGridRows(items, l)} onPick={onPick} />
+                  {items.length >= limits[l] && (
+                    <Button
+                      variant="secondary"
+                      disabled={query.isFetching}
+                      onClick={() =>
+                        setLimits((current) => ({
+                          ...current,
+                          [l]: current[l] + LIBRARY_PAGE_SIZE,
+                        }))
+                      }
+                    >
+                      {query.isFetching
+                        ? 'Loading more…'
+                        : `Load more ${LAYER_LABEL[l].toLowerCase()} matches`}
+                    </Button>
+                  )}
                 </div>
               );
             })}
@@ -951,7 +1048,7 @@ export function ProductPickerModal({
   scope = 'catalog',
   configureStep = true,
 }: ProductPickerModalProps) {
-  const [tab, setTab] = useState<Tab>('browse');
+  const [tab, setTab] = useState<Tab>(scope);
   const [scopeRoomId, setScopeRoomId] = useState<string | null>(defaultScopeRoomId ?? null);
   // Non-null while an optioned pick is being resolved — the configure pane
   // replaces the grid instead of the modal closing behind the designer.
@@ -962,11 +1059,11 @@ export function ProductPickerModal({
   // Reset to the browse tab and the default room whenever the modal opens.
   useEffect(() => {
     if (open) {
-      setTab('browse');
+      setTab(scope);
       setScopeRoomId(defaultScopeRoomId ?? null);
       setPendingConfigure(null);
     }
-  }, [open, defaultScopeRoomId]);
+  }, [open, defaultScopeRoomId, scope]);
 
   // Close on Escape.
   useEffect(() => {
@@ -996,8 +1093,6 @@ export function ProductPickerModal({
     }
     emit(result);
   };
-
-  const browseLabel = scope === 'library' ? 'Library' : 'Catalog';
 
   const tabButton = (key: Tab, label: string) => (
     <button
@@ -1048,7 +1143,7 @@ export function ProductPickerModal({
         {pendingConfigure ? (
           <PickerConfigureStep
             pick={pendingConfigure}
-            pickerScope={scope}
+            pickerScope={tab}
             onBack={() => setPendingConfigure(null)}
             onConfirm={emit}
             onSkip={emit}
@@ -1081,18 +1176,17 @@ export function ProductPickerModal({
             className="mb-4 flex gap-1 border-b"
             style={{ borderColor: 'var(--border-default)' }}
           >
-            {tabButton('browse', browseLabel)}
+            {tabButton('catalog', 'Catalog')}
+            {tabButton('library', 'Library')}
             {tabButton('captures', 'Captures')}
             {allowDraftCreate && tabButton('draft', 'Quick-create draft')}
           </div>
 
           {/* Panels */}
-          {tab === 'browse' &&
-            (scope === 'library' ? (
-              <LibraryTab onPick={handlePick} />
-            ) : (
-              <CatalogTab defaultCategorySlug={defaultCategorySlug} onPick={handlePick} />
-            ))}
+          {tab === 'catalog' && (
+            <CatalogTab defaultCategorySlug={defaultCategorySlug} onPick={handlePick} />
+          )}
+          {tab === 'library' && <LibraryTab onPick={handlePick} />}
           {tab === 'captures' && <CapturesTab onPick={handlePick} />}
           {tab === 'draft' && allowDraftCreate && <DraftTab onPick={handlePick} />}
         </>

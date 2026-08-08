@@ -112,6 +112,9 @@ function layerRow(overrides: Record<string, unknown> = {}) {
 }
 
 let mockLayerRows: Array<Record<string, unknown>> = [];
+let mockLayerRowsByLayer: Record<string, Array<Record<string, unknown>>> = {};
+let mockLayerCounts = { personal: 1, studio: 0, catalog: 0 };
+let mockLayerErrors: Record<string, Error | undefined> = {};
 let mockCatalogRows: Array<Record<string, unknown>> = [];
 let mockProduct: Record<string, unknown> = VARIANT_PRODUCT;
 let mockDefinition: Record<string, unknown> = VARIANT_DEFINITION;
@@ -185,8 +188,19 @@ jest.mock('@patina/supabase', () => ({
     isLoading: false,
     isError: false,
   }),
-  useLayerProducts: () => ({ data: mockLayerRows, isLoading: false, isError: false }),
-  useLayerCounts: () => ({ data: { personal: 1, studio: 0, catalog: 0 } }),
+  useLayerProducts: ({ layer, limit = 60 }: { layer: string; limit?: number }) => {
+    const rows = mockLayerRowsByLayer[layer]
+      ?? (layer === 'personal' ? mockLayerRows : []);
+    const error = mockLayerErrors[layer];
+    return {
+      data: rows.slice(0, limit),
+      isLoading: false,
+      isFetching: false,
+      isError: Boolean(error),
+      error,
+    };
+  },
+  useLayerCounts: () => ({ data: mockLayerCounts, isError: false }),
   useCrossLayerSearch: () => ({
     data: {
       byLayer: { personal: [], studio: [], catalog: [] },
@@ -271,7 +285,64 @@ beforeEach(() => {
   mockProduct = VARIANT_PRODUCT;
   mockDefinition = VARIANT_DEFINITION;
   mockLayerRows = [layerRow()];
+  mockLayerRowsByLayer = {};
+  mockLayerCounts = { personal: 1, studio: 0, catalog: 0 };
+  mockLayerErrors = {};
   mockCatalogRows = [];
+});
+
+describe('ProductPickerModal — proposal library access', () => {
+  it('exposes personal, studio, and catalog layers from a catalog-first proposal picker', () => {
+    mockLayerRowsByLayer = {
+      studio: [
+        layerRow({
+          id: 'studio-chair-1',
+          name: 'Studio Reading Chair',
+          layer: 'studio',
+          owner_user_id: null,
+          studio_id: 'studio-1',
+        }),
+      ],
+    };
+    mockLayerCounts = { personal: 1, studio: 1, catalog: 0 };
+    render(
+      <ProductPickerModal open onClose={jest.fn()} onPick={jest.fn()} />,
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Library' }));
+    fireEvent.click(screen.getByTestId('library-layer-studio'));
+
+    expect(screen.getByText('Studio Reading Chair')).toBeVisible();
+    expect(screen.getByTestId('library-layer-personal')).toBeVisible();
+    expect(screen.getByTestId('library-layer-catalog')).toBeVisible();
+  });
+
+  it('loads beyond the first authorized layer page', async () => {
+    mockLayerRows = Array.from({ length: 61 }, (_, index) =>
+      layerRow({ id: `personal-${index}`, name: `Personal piece ${index}` }),
+    );
+    mockLayerCounts = { personal: 61, studio: 0, catalog: 0 };
+    openLibraryPicker();
+
+    expect(screen.getAllByTestId('product-picker-result')).toHaveLength(60);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Load more personal' }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getAllByTestId('product-picker-result')).toHaveLength(61),
+    );
+  });
+
+  it('surfaces a layer error without hiding the other authorized layers', () => {
+    mockLayerErrors = { studio: new Error('Studio library unavailable') };
+    openLibraryPicker();
+
+    fireEvent.click(screen.getByTestId('library-layer-studio'));
+    expect(screen.getByText('Studio library unavailable')).toBeVisible();
+    expect(screen.getByTestId('library-layer-personal')).toBeVisible();
+    expect(screen.getByTestId('library-layer-catalog')).toBeVisible();
+  });
 });
 
 describe('ProductPickerModal — standard pieces keep the one-click grammar', () => {

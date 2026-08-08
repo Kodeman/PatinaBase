@@ -14,8 +14,10 @@ import {
   useQuery,
 } from '@tanstack/react-query';
 import {
+  useDraftingEstimate,
   useDraftingState,
   useDraftingWritesPending,
+  useSaveDraftingEstimate,
 } from './use-drafting-state';
 
 const mockCreateBrowserClient = jest.fn();
@@ -200,5 +202,101 @@ describe('drafting mutation feedback', () => {
     expect(result.current.error).toBe(failure);
 
     await expect(result.current.refresh()).rejects.toBe(failure);
+  });
+});
+
+describe('drafting time estimates', () => {
+  beforeEach(() => {
+    mockCreateBrowserClient.mockReset();
+  });
+
+  it('restores persisted estimated hours from the canonical investment section', async () => {
+    const builder: Record<string, jest.Mock> = {};
+    builder.select = jest.fn(() => builder);
+    builder.eq = jest.fn(() => builder);
+    builder.maybeSingle = jest.fn().mockResolvedValue({
+      data: {
+        id: 'investment-1',
+        metadata: { estimated_hours: 42, currency: 'USD' },
+      },
+      error: null,
+    });
+    mockCreateBrowserClient.mockReturnValue({ from: jest.fn(() => builder) });
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+
+    const { result } = renderHook(() => useDraftingEstimate('proposal-1'), {
+      wrapper,
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual({
+      sectionId: 'investment-1',
+      estimatedHours: 42,
+    });
+  });
+
+  it('updates estimated hours without replacing existing investment metadata', async () => {
+    const readBuilder: Record<string, jest.Mock> = {};
+    readBuilder.select = jest.fn(() => readBuilder);
+    readBuilder.eq = jest.fn(() => readBuilder);
+    readBuilder.maybeSingle = jest.fn().mockResolvedValue({
+      data: {
+        id: 'investment-1',
+        metadata: { currency: 'USD', payment_schedule: [{ label: 'Deposit' }] },
+      },
+      error: null,
+    });
+    const updateBuilder: Record<string, jest.Mock> = {};
+    updateBuilder.update = jest.fn(() => updateBuilder);
+    updateBuilder.eq = jest.fn(() => updateBuilder);
+    updateBuilder.select = jest.fn(() => updateBuilder);
+    updateBuilder.single = jest.fn().mockResolvedValue({
+      data: {
+        id: 'investment-1',
+        metadata: {
+          currency: 'USD',
+          payment_schedule: [{ label: 'Deposit' }],
+          estimated_hours: 64,
+        },
+      },
+      error: null,
+    });
+    const from = jest
+      .fn()
+      .mockReturnValueOnce(readBuilder)
+      .mockReturnValueOnce(updateBuilder);
+    mockCreateBrowserClient.mockReturnValue({ from });
+    const queryClient = new QueryClient({
+      defaultOptions: { mutations: { retry: false } },
+    });
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useSaveDraftingEstimate(), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        proposalId: 'proposal-1',
+        estimatedHours: 64,
+      });
+    });
+
+    expect(updateBuilder.update).toHaveBeenCalledWith({
+      metadata: {
+        currency: 'USD',
+        payment_schedule: [{ label: 'Deposit' }],
+        estimated_hours: 64,
+      },
+      updated_at: expect.any(String),
+    });
+    expect(queryClient.getQueryData(['drafting-estimate', 'proposal-1'])).toEqual({
+      sectionId: 'investment-1',
+      estimatedHours: 64,
+    });
   });
 });

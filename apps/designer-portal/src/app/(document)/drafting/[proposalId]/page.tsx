@@ -1,6 +1,7 @@
 'use client';
 
 import { use } from 'react';
+import { DraftingEstimateFlow } from '@/components/document/drafting/drafting-estimate-flow';
 import { DraftingRoom } from '@/components/document/rooms/drafting/drafting-room';
 
 /**
@@ -16,5 +17,10 @@ export default function DraftingRoute({
   params: Promise<{ proposalId: string }>;
 }) {
   const { proposalId } = use(params);
-  return <DraftingRoom proposalId={proposalId} />;
+  return (
+    <>
+      <DraftingRoom proposalId={proposalId} />
+      <DraftingEstimateFlow proposalId={proposalId} />
+    </>
+  );
 }

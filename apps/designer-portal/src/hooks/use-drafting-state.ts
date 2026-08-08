@@ -14,7 +14,12 @@
  */
 
 import { useCallback } from 'react';
-import { useIsMutating, useQuery } from '@tanstack/react-query';
+import {
+  useIsMutating,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { createBrowserClient, type ProposalItemType } from '@patina/supabase';
 import {
   draftingFill,
@@ -48,6 +53,127 @@ export interface FacetRead {
   facets: DraftingFacets;
   summary: DraftingSummary;
   items: DraftingItem[];
+}
+
+export interface DraftingEstimate {
+  sectionId: string | null;
+  estimatedHours: number | null;
+}
+
+type DraftingEstimateRow = {
+  id: string;
+  metadata: Record<string, unknown> | null;
+};
+
+const draftingEstimateKey = (proposalId: string) => [
+  'drafting-estimate',
+  proposalId,
+] as const;
+
+export function readDraftingEstimatedHours(metadata: unknown): number | null {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    return null;
+  }
+  const raw = (metadata as Record<string, unknown>).estimated_hours;
+  const value =
+    typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : NaN;
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function mapDraftingEstimate(row: DraftingEstimateRow | null): DraftingEstimate {
+  return {
+    sectionId: row?.id ?? null,
+    estimatedHours: readDraftingEstimatedHours(row?.metadata),
+  };
+}
+
+export function useDraftingEstimate(proposalId: string, enabled = true) {
+  return useQuery<DraftingEstimate>({
+    queryKey: draftingEstimateKey(proposalId),
+    enabled: !!proposalId && enabled,
+    queryFn: async () => {
+      const supabase = createBrowserClient() as any;
+      const { data, error } = await supabase
+        .from('proposal_sections')
+        .select('id, metadata')
+        .eq('proposal_id', proposalId)
+        .eq('type', 'investment')
+        .maybeSingle();
+
+      if (error) throw error;
+      return mapDraftingEstimate(data as DraftingEstimateRow | null);
+    },
+  });
+}
+
+export function useSaveDraftingEstimate() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    DraftingEstimate,
+    Error,
+    { proposalId: string; estimatedHours: number | null }
+  >({
+    meta: { errorSurface: 'inline' },
+    mutationFn: async ({ proposalId, estimatedHours }) => {
+      if (
+        estimatedHours !== null &&
+        (!Number.isFinite(estimatedHours) || estimatedHours <= 0)
+      ) {
+        throw new Error('Estimated hours must be greater than zero.');
+      }
+
+      const supabase = createBrowserClient() as any;
+      const { data: existing, error: readError } = await supabase
+        .from('proposal_sections')
+        .select('id, metadata')
+        .eq('proposal_id', proposalId)
+        .eq('type', 'investment')
+        .maybeSingle();
+
+      if (readError) throw readError;
+
+      const metadata = {
+        ...((existing?.metadata as Record<string, unknown> | null) ?? {}),
+        estimated_hours: estimatedHours,
+      };
+      const updatedAt = new Date().toISOString();
+
+      const result = existing?.id
+        ? await supabase
+            .from('proposal_sections')
+            .update({ metadata, updated_at: updatedAt })
+            .eq('id', existing.id)
+            .select('id, metadata')
+            .single()
+        : await supabase
+            .from('proposal_sections')
+            .insert({
+              proposal_id: proposalId,
+              type: 'investment',
+              title: 'Investment',
+              body: null,
+              metadata,
+              sort_order: 4,
+              created_at: updatedAt,
+              updated_at: updatedAt,
+            })
+            .select('id, metadata')
+            .single();
+
+      if (result.error) throw result.error;
+      return mapDraftingEstimate(result.data as DraftingEstimateRow);
+    },
+    onSuccess: (estimate, { proposalId }) => {
+      queryClient.setQueryData(draftingEstimateKey(proposalId), estimate);
+      void queryClient.invalidateQueries({
+        queryKey: ['proposal-sections', proposalId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ['proposal-mirror', proposalId],
+      });
+    },
+  });
 }
 
 export interface DraftingState {
