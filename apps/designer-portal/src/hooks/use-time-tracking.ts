@@ -83,6 +83,23 @@ export interface UnbilledTimeSummary {
   totalAmountCents: number;
 }
 
+export function filterProjectUnbilledEntries<
+  T extends {
+    project_id: string;
+    billing_state?: TimeBillingState | null;
+  },
+>(rows: readonly T[], projectId: string): T[] {
+  return rows.filter(
+    (entry) =>
+      entry.project_id === projectId &&
+      isInvoiceEligibleTimeEntry({
+        billable: true,
+        invoice_id: null,
+        billing_state: entry.billing_state,
+      }),
+  );
+}
+
 // ── Cache invalidation ──
 
 // Every time-entry write must refresh the project's entry list, the summary
@@ -148,14 +165,10 @@ export function useUnbilledTime(projectId: string | null) {
       // pending cap/retainer time and explicit nonbillable time must never be
       // selectable even if a stale view briefly returns them. Null preserves
       // compatibility with entries created before billing authorities existed.
-      const entries = ((data ?? []) as UnbilledTimeRow[])
-        .filter((entry) =>
-          isInvoiceEligibleTimeEntry({
-            ...entry,
-            billable: true,
-            invoice_id: null,
-          }),
-        )
+      const entries = filterProjectUnbilledEntries(
+        (data ?? []) as UnbilledTimeRow[],
+        projectId,
+      )
         .map((entry) => ({
           ...entry,
           // New authority-aware rows carry the immutable rated snapshot.

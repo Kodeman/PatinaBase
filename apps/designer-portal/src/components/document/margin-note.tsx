@@ -87,6 +87,8 @@ export interface MarginNoteProps {
    *  transient hold (e.g. while the Desk Walkthrough modal or tour is on
    *  screen). Lifting it re-reveals the note unless it has since been seen. */
   suppressed?: boolean;
+  seen?: boolean;
+  onSeen?: () => void;
   className?: string;
 }
 
@@ -97,6 +99,8 @@ export function MarginNote({
   actionEvents,
   commandBar = false,
   suppressed = false,
+  seen,
+  onSeen,
   className,
 }: MarginNoteProps) {
   const [visible, setVisible] = useState(false);
@@ -108,7 +112,7 @@ export function MarginNote({
   // flips so a lifted hold re-reveals an unseen note. SSR and the first client
   // paint agree (nothing → nothing) because the effect runs after mount.
   useEffect(() => {
-    if (suppressed || hasSeen(noteKey)) {
+    if (suppressed || (seen ?? hasSeen(noteKey))) {
       setVisible(false);
       return;
     }
@@ -117,7 +121,7 @@ export function MarginNote({
       shownRef.current = true;
       documentEvents.wayfinding.marginNote({ key: noteKey, action: 'shown' });
     }
-  }, [noteKey, suppressed]);
+  }, [noteKey, suppressed, seen]);
 
   // Once shown, the first named action recedes the note forever. Listeners are
   // only bound while the note is on screen (and not suppressed), so a note that
@@ -125,7 +129,8 @@ export function MarginNote({
   useEffect(() => {
     if (!visible || suppressed) return;
     const recede = () => {
-      markMarginNoteSeen(noteKey);
+      if (seen === undefined) markMarginNoteSeen(noteKey);
+      onSeen?.();
       setVisible(false);
       documentEvents.wayfinding.marginNote({ key: noteKey, action: 'acted' });
     };
@@ -148,12 +153,13 @@ export function MarginNote({
       });
     }
     return () => cleanups.forEach((fn) => fn());
-  }, [visible, suppressed, noteKey, commandBar, actionEvents]);
+  }, [visible, suppressed, noteKey, commandBar, actionEvents, seen, onSeen]);
 
   if (suppressed || !visible) return null;
 
   const dismiss = () => {
-    markMarginNoteSeen(noteKey);
+    if (seen === undefined) markMarginNoteSeen(noteKey);
+    onSeen?.();
     setVisible(false);
     documentEvents.wayfinding.marginNote({ key: noteKey, action: 'dismissed' });
   };

@@ -27,6 +27,10 @@ import { useSectionTasks } from '@/hooks/use-section-work';
 import { useMarginItems } from '@/hooks/use-margin-items';
 import { useCreateMarginNote } from '@/hooks/use-margin-notes';
 import {
+  useMarkProjectFileChangeRead,
+  useProjectFileChangeNotifications,
+} from '@/hooks/use-project-file-change-notifications';
+import {
   partitionMargin,
   type MarginItemRow,
 } from '@/lib/document/margin-derivation';
@@ -277,6 +281,8 @@ export function MarginRail({
   onNoteAnchorConsumed?: () => void;
 }) {
   const { data: items, isLoading } = useMarginItems(projectId, proposalId);
+  const { data: fileChanges } = useProjectFileChangeNotifications(projectId);
+  const markFileChangeRead = useMarkProjectFileChangeRead();
   const [openId, setOpenId] = useState<string | null>(null);
   const [settledOpen, setSettledOpen] = useState(false);
 
@@ -404,6 +410,25 @@ export function MarginRail({
           your hand.
         </MarginNote>
       )}
+      {fileChanges.map((change) => (
+        <MarginNote
+          key={change.eventKey}
+          noteKey={`file-change:${change.id}`}
+          seen={Boolean(change.readAt)}
+          onSeen={() => {
+            void markFileChangeRead(change.id).catch(() => undefined);
+          }}
+          caption={`${change.projectName} · ${new Date(change.occurredAt).toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+          })}`}
+          className="mb-4"
+        >
+          {change.actorName} changed {change.fileName}.
+        </MarginNote>
+      ))}
       <div className="mb-3 flex items-baseline justify-between">
         <p className="font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)]">
           In the margin

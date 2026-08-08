@@ -75,6 +75,20 @@ export function AccountNotificationsPage() {
         the others — this is email only; what breaks through the margin is set
         in ⌘K → Interruptions.
       </p>
+      <div className="mb-4 flex items-start gap-3 border-y border-[var(--color-pearl)] py-3">
+        <span className="min-w-0 flex-1">
+          <span className="block text-[13px] font-medium text-[var(--color-charcoal)]">
+            Project file changes
+          </span>
+          <span className="block text-[11px] text-[var(--color-aged-oak)]">
+            New files and revisions appear in the project margin and The Post
+            with the teammate, file, project, and time.
+          </span>
+        </span>
+        <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+          In app
+        </span>
+      </div>
       <ul>
         {PREFERENCES.map((pref) => {
           // Default-on: a missing key reads as enabled (matches the old form).

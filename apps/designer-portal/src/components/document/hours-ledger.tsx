@@ -26,6 +26,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { createBrowserClient } from '@patina/supabase';
 import {
+  filterProjectUnbilledEntries,
   useCreateTimeEntry,
   useDeleteTimeEntry,
   useUpdateTimeEntry,
@@ -126,8 +127,7 @@ export function HoursLedger({
     queryFn: async () => {
       const { data, error } = await getSupabase()
         .from('projects')
-        .select('id, name')
-        .eq('status', 'active')
+        .select('id, name, status')
         .order('name');
       if (error) throw error;
       return (data ?? []) as AnyRecord[];
@@ -160,7 +160,9 @@ export function HoursLedger({
     queryFn: async () => {
       let query = getSupabase()
         .from('project_unbilled_time')
-        .select('id, project_id, duration_minutes, amount_cents');
+        .select(
+          'id, project_id, duration_minutes, amount_cents, authority_rate_id, billing_state',
+        );
       if (lensProjectId) query = query.eq('project_id', lensProjectId);
       const { data, error } = await query;
       if (error) throw error;
@@ -209,6 +211,26 @@ export function HoursLedger({
   const unbilledProjects = useMemo(
     () => [...new Set((unbilledRows ?? []).map((r) => r.project_id as string))],
     [unbilledRows],
+  );
+  const [billingProjectId, setBillingProjectId] = useState(
+    initialContext?.projectId ?? '',
+  );
+  const billingTargetProjectId =
+    lensProjectId ??
+    (unbilledProjects.length === 1
+      ? unbilledProjects[0]
+      : unbilledProjects.includes(billingProjectId)
+        ? billingProjectId
+        : null);
+  const billingTargetRows = useMemo(
+    () =>
+      billingTargetProjectId
+        ? filterProjectUnbilledEntries(
+            unbilledRows ?? [],
+            billingTargetProjectId,
+          )
+        : [],
+    [billingTargetProjectId, unbilledRows],
   );
 
   const [addProject, setAddProject] = useState(initialContext?.projectId ?? '');
@@ -423,20 +445,33 @@ export function HoursLedger({
           {unbilledProjects.length > 1 && (
             <span>· {unbilledProjects.length} documents</span>
           )}
+          {!lensProjectId && unbilledProjects.length > 1 && (
+            <select
+              aria-label="Project to bill"
+              value={billingTargetProjectId ?? ''}
+              onChange={(event) => setBillingProjectId(event.target.value)}
+              className="rounded-[3px] border border-[var(--color-pearl)] bg-white px-2 py-1 text-[9px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none [&_option]:bg-[var(--doc-paper)]"
+            >
+              <option value="">Choose a document…</option>
+              {unbilledProjects.map((projectId) => (
+                <option key={projectId} value={projectId}>
+                  {(projects ?? []).find((project) => project.id === projectId)
+                    ?.name ?? 'Untitled project'}
+                </option>
+              ))}
+            </select>
+          )}
           <DocumentAction
             actionKey="bill-unbilled-time"
             surfaceKey="hours"
             regionKey="unbilled-balance"
             variant="primary"
+            disabled={!billingTargetProjectId || billingTargetRows.length === 0}
             onClick={() =>
               openInvoiceComposer({
-                projectId:
-                  lensProjectId ??
-                  (unbilledProjects.length === 1
-                    ? unbilledProjects[0]
-                    : undefined),
-                initialTimeEntryIds: (unbilledRows ?? []).map(
-                  (r) => r.id as string,
+                projectId: billingTargetProjectId ?? undefined,
+                initialTimeEntryIds: billingTargetRows.map(
+                  (row) => row.id as string,
                 ),
               })
             }
@@ -516,11 +551,13 @@ export function HoursLedger({
           onChange={(e) => setAddProject(e.target.value)}
         >
           <option value="">Document…</option>
-          {(projects ?? []).map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
+          {(projects ?? [])
+            .filter((project) => project.status === 'active')
+            .map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
         </select>
         <input
           type="number"

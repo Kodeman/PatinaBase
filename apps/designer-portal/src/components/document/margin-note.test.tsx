@@ -5,7 +5,7 @@
  * assert the 'shown' beacon precisely. Visibility is checked via the `note`
  * role (the primitive renders `<aside role="note">` only when it shows).
  */
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MarginNote, markMarginNoteSeen } from './margin-note';
 
 const marginNoteEvent = jest.fn();
@@ -69,6 +69,27 @@ describe('MarginNote — suppressed prop', () => {
     render(<MarginNote noteKey="k-seen">already seen</MarginNote>);
     expect(screen.queryByRole('note')).toBeNull();
     expect(marginNoteEvent).not.toHaveBeenCalled();
+  });
+
+  it('uses external read state and reports dismissal without writing local storage', () => {
+    const onSeen = jest.fn();
+    const { rerender } = render(
+      <MarginNote noteKey="file-change-1" seen={false} onSeen={onSeen}>
+        A file changed
+      </MarginNote>,
+    );
+
+    expect(screen.queryByRole('note')).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss note' }));
+    expect(onSeen).toHaveBeenCalledTimes(1);
+    expect(window.localStorage.getItem(storageKey('file-change-1'))).toBeNull();
+
+    rerender(
+      <MarginNote noteKey="file-change-1" seen onSeen={onSeen}>
+        A file changed
+      </MarginNote>,
+    );
+    expect(screen.queryByRole('note')).toBeNull();
   });
 });
 

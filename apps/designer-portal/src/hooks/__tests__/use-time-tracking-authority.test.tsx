@@ -1,7 +1,11 @@
 import type { ReactNode } from "react";
 import { act, renderHook } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useStopTimer } from "../use-time-tracking";
+import {
+  filterProjectUnbilledEntries,
+  useStopTimer,
+  type UnbilledTimeRow,
+} from "../use-time-tracking";
 
 const mockCreateBrowserClient = jest.fn();
 
@@ -79,5 +83,36 @@ describe("authority-aware time writes", () => {
         hourly_rate_cents: expect.anything(),
       }),
     );
+  });
+});
+
+describe("project unbilled selection", () => {
+  const entry = (
+    overrides: Partial<UnbilledTimeRow>,
+  ): UnbilledTimeRow => ({
+    id: "entry-1",
+    project_id: "winky-loft",
+    phase_key: null,
+    task_id: null,
+    user_id: "designer-1",
+    started_at: "2026-08-06T15:00:00.000Z",
+    duration_minutes: 90,
+    notes: "Winky Loft site review",
+    resolved_rate_cents: 20_000,
+    amount_cents: 30_000,
+    billing_state: "authorized",
+    ...overrides,
+  });
+
+  it("keeps completed, billable, unclaimed Winky Loft entries without leaking another project", () => {
+    const rows = [
+      entry({ id: "winky-eligible" }),
+      entry({ id: "winky-pending", billing_state: "pending_authorization" }),
+      entry({ id: "other-project", project_id: "other-project" }),
+    ];
+
+    expect(filterProjectUnbilledEntries(rows, "winky-loft")).toEqual([
+      expect.objectContaining({ id: "winky-eligible", project_id: "winky-loft" }),
+    ]);
   });
 });
