@@ -1,4 +1,4 @@
--- 00430 project-document notification integration test.
+-- 00431 project-document notification integration test.
 -- Runner: plain psql against a locally reset Supabase database.
 
 BEGIN;

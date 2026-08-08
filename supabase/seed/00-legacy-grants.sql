@@ -9150,7 +9150,7 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00430_project_document_notifications.sql
+-- 00431_project_document_notifications.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.notify_project_document_change() FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;

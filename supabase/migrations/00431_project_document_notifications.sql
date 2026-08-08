@@ -122,7 +122,7 @@ REVOKE ALL ON FUNCTION public.notify_project_document_change()
   FROM PUBLIC, anon, authenticated, service_role;
 
 COMMENT ON FUNCTION public.notify_project_document_change() IS
-  '00430: emits one deduplicated in-app project_file_changed row per authorized non-actor when a project Folio file or revision is inserted.';
+  '00431: emits one deduplicated in-app project_file_changed row per authorized non-actor when a project Folio file or revision is inserted.';
 
 DROP TRIGGER IF EXISTS notify_project_document_change_trg
   ON public.project_documents;
