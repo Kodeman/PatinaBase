@@ -23,6 +23,14 @@ jest.mock('@/hooks/use-commercial-documents', () => ({
   },
 }));
 
+jest.mock('@/lib/react-query', () => ({
+  queryKeys: {
+    projects: {
+      ffeItems: (projectId: string) => ['project-ffe-items', projectId],
+    },
+  },
+}));
+
 import { AddLineSheet, dollarsToCents } from '../add-line-sheet';
 
 const renderSheet = (
@@ -115,12 +123,15 @@ describe('AddLineSheet', () => {
     );
   });
 
-  it('refreshes the working budget so the Scheduled column follows', async () => {
+  it('refreshes the canonical lines and working budget after save', async () => {
     const onClose = jest.fn();
     renderSheet({ onClose });
     type('Line name', 'Library table');
     fireEvent.click(screen.getByRole('button', { name: /add the line/i }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['project-ffe-items', 'project-1'],
+    });
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ['working-budget', 'project-1'],
     });

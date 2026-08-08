@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId } from 'react';
 
 const pad2 = (value: number) => String(value).padStart(2, '0');
 
@@ -40,7 +40,7 @@ export function DateTextInput({
   className,
   ariaLabel,
   onValidityChange,
-  instruction = 'Enter as MM/DD/YYYY.',
+  instruction = 'Choose a date with the picker or keyboard.',
 }: {
   value: string | null;
   onChange: (value: string | null) => void;
@@ -51,56 +51,27 @@ export function DateTextInput({
 }) {
   const descriptionId = useId();
   const errorId = useId();
-  const [draft, setDraft] = useState(() => displayDateText(value));
-  const [invalid, setInvalid] = useState(false);
+  const canonicalValue = value && parseDateText(value) === value ? value : '';
+  const invalid = Boolean(value && !canonicalValue);
 
   useEffect(() => {
-    setDraft(displayDateText(value));
-    setInvalid(false);
-    onValidityChange?.(!value || parseDateText(value) !== null);
-  }, [value, onValidityChange]);
-
-  const commit = () => {
-    if (!draft.trim()) {
-      setInvalid(false);
-      onValidityChange?.(true);
-      onChange(null);
-      return true;
-    }
-    const parsed = parseDateText(draft);
-    if (!parsed) {
-      setInvalid(true);
-      onValidityChange?.(false);
-      return false;
-    }
-    setInvalid(false);
-    onValidityChange?.(true);
-    setDraft(displayDateText(parsed));
-    onChange(parsed);
-    return true;
-  };
+    onValidityChange?.(!invalid);
+  }, [invalid, onValidityChange]);
 
   return (
     <span className="block">
       <input
-        type="text"
-        inputMode="numeric"
+        type="date"
         autoComplete="off"
-        placeholder="MM/DD/YYYY"
-        value={draft}
+        value={canonicalValue}
         aria-label={ariaLabel}
         aria-describedby={`${descriptionId}${invalid ? ` ${errorId}` : ''}`}
         aria-invalid={invalid || undefined}
         className={className}
         onChange={(event) => {
           const next = event.target.value;
-          setDraft(next);
-          setInvalid(false);
-          onValidityChange?.(!next.trim() || parseDateText(next) !== null);
-        }}
-        onBlur={commit}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' && !commit()) event.preventDefault();
+          onValidityChange?.(true);
+          onChange(next || null);
         }}
       />
       <span
@@ -115,7 +86,7 @@ export function DateTextInput({
           role="alert"
           className="mt-1 block text-[10px] text-[var(--color-terracotta)]"
         >
-          Use a valid date in MM/DD/YYYY format.
+          Choose a valid calendar date.
         </span>
       ) : null}
     </span>

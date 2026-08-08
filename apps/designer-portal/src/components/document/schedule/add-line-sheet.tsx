@@ -17,6 +17,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { PlusCircle } from 'lucide-react';
 import { useAddProjectFFEItem } from '@/hooks/use-projects';
 import { commercialDocumentKeys } from '@/hooks/use-commercial-documents';
+import { queryKeys } from '@/lib/react-query';
 import { DocSheet } from '../overlays/doc-sheet';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 
@@ -88,11 +89,14 @@ export function AddLineSheet({
         projectRoomId: roomId,
         budgetMaxCents: kind === 'allowance' ? cents : null,
       });
-      // The Scheduled column is derived from these lines — refresh the budget
-      // alongside the schedule the add hook already invalidates.
-      void queryClient.invalidateQueries({
-        queryKey: commercialDocumentKeys.budget(projectId),
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.projects.ffeItems(projectId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: commercialDocumentKeys.budget(projectId),
+        }),
+      ]);
       reset();
       onClose();
     } catch (cause) {

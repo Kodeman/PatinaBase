@@ -98,6 +98,7 @@ import { PhaseDeleteConfirm } from './phase-delete-confirm';
 import { MilestoneComposer, type MilestoneDraft } from './milestone-composer';
 import { ScheduleEntryField } from './schedule-entry-field';
 import { RevisionLedger } from './revision-ledger';
+import { AddLineSheet } from './add-line-sheet';
 import type { PastProjectOption } from './past-project-picker';
 import { DocumentAction } from '../document-action';
 
@@ -131,8 +132,12 @@ export interface ScheduleSpineProps {
   clientName: string;
 }
 
-/** The spine's sheet state: an item id (its OpenItemSheet), the composer, or none. */
-type SheetState = { kind: 'item'; id: string } | { kind: 'composer' } | null;
+/** The spine's sheet state: one overlay at a time, or none. */
+type SheetState =
+  | { kind: 'item'; id: string }
+  | { kind: 'composer' }
+  | { kind: 'add-line' }
+  | null;
 
 export function ScheduleSpine({
   projectId,
@@ -610,6 +615,7 @@ export function ScheduleSpine({
 
   const openItem = (id: string) => setSheet({ kind: 'item', id });
   const openComposer = () => setSheet({ kind: 'composer' });
+  const openAddLine = () => setSheet({ kind: 'add-line' });
   const closeSheet = () => setSheet(null);
 
   // The item currently in the OpenItemSheet (resolved fresh from the live query
@@ -888,7 +894,7 @@ export function ScheduleSpine({
                       today={today}
                       headingActions={
                         <PhaseComposeActions
-                          onAddItem={openComposer}
+                          onAddItem={openAddLine}
                           canDelete={row?.status === 'pending'}
                           // Each open resets its mutation's stale error state
                           // (updateChain is shared with the chip unpin) so a
@@ -962,6 +968,16 @@ export function ScheduleSpine({
 
       {/* ── Overlays — DocSheet children at the spine root so the document stays
           mounted beneath (D1). `open` is spine-local state, never a route. ── */}
+      {sheet?.kind === 'add-line' && (
+        <AddLineSheet
+          open
+          projectId={projectId}
+          roomId={null}
+          roomName="Throughout"
+          onClose={closeSheet}
+        />
+      )}
+
       <DocSheet
         open={sheet?.kind === 'item' && Boolean(activeItem)}
         onClose={closeSheet}
