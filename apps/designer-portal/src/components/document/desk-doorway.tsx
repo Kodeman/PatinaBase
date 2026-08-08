@@ -19,6 +19,8 @@
  *   /desk?book=hours
  *   /desk?book=post
  *   /desk?account=profile|notifications|security|devices|studio
+ *   /desk?authorization=…&projectId=…
+ *        — opens that authorization's actionable project document.
  *   /desk?book=orders&po=…&checkout=success|cancelled&session_id=…
  *        — the Stripe Checkout return (create-checkout-session builds it).
  *
@@ -84,6 +86,7 @@ const DOORWAY_KEYS = [
   'vendorId',
   'projectId',
   'invoiceId',
+  'authorization',
   'account',
   'checkout',
   'session_id',
@@ -129,6 +132,19 @@ function DeskDoorwayInner() {
     const book = params.get('book')?.toLowerCase() ?? null;
     const account = params.get('account')?.toLowerCase() ?? null;
     const checkout = params.get('checkout')?.toLowerCase() ?? null;
+    const authorization = params.get('authorization');
+    const projectId = params.get('projectId');
+
+    if (authorization && projectId) {
+      const destination = new URLSearchParams({
+        authorization,
+        from: 'desk',
+      });
+      router.replace(
+        `/doc/${encodeURIComponent(projectId)}?${destination.toString()}`,
+      );
+      return;
+    }
 
     if (book && book in BOOK_PAGES) {
       const key = book as Book;
@@ -149,7 +165,6 @@ function DeskDoorwayInner() {
         const context: OpenLedgerContext = {};
         if (page && allowed.includes(page)) context.page = page;
         const vendorId = params.get('vendorId');
-        const projectId = params.get('projectId');
         const invoiceId = params.get('invoiceId');
         if (vendorId) context.vendorId = vendorId;
         if (projectId) context.projectId = projectId;

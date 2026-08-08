@@ -118,6 +118,53 @@ describe("AuthorizationDetail", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it("opens a partial authorization safely on a 440px viewport", () => {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 440,
+    });
+    mockCommercialDocument = { data: {}, isLoading: false };
+    const partialInstrument = {
+      ...baseInstrument,
+      itemCount: undefined,
+      items: undefined,
+    } as unknown as ProjectInstrumentView;
+
+    expect(() =>
+      render(
+        <AuthorizationDetail
+          projectId="project-1"
+          instrument={partialInstrument}
+          open
+          onClose={jest.fn()}
+        />,
+      ),
+    ).not.toThrow();
+
+    expect(screen.getByText("Signed line details are unavailable.")).toBeVisible();
+    expect(screen.getByText("lines PO-ready").nextSibling).toHaveTextContent("0");
+  });
+
+  it("contains signed lines in their own horizontal scroll region on mobile", () => {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 440,
+    });
+
+    render(
+      <AuthorizationDetail
+        projectId="project-1"
+        instrument={baseInstrument}
+        open
+        onClose={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("authorization-lines-scroll")).toHaveClass(
+      "overflow-x-auto",
+    );
+  });
+
   it("renders the figure band: authorized / deposit due / deposit paid / lines PO-ready", () => {
     render(
       <AuthorizationDetail

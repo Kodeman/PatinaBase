@@ -200,12 +200,16 @@ export function AuthorizationDetail({
   const [sendError, setSendError] = useState<string | null>(null);
   const [recordOnPaperOpen, setRecordOnPaperOpen] = useState(false);
 
+  const items = useMemo(
+    () => (Array.isArray(instrument?.items) ? instrument.items : []),
+    [instrument?.items],
+  );
   const ffeItemIds = useMemo(
     () =>
-      (instrument?.items ?? [])
+      items
         .map((item) => item.sourceFfeItemId)
         .filter((id): id is string => Boolean(id)),
-    [instrument],
+    [items],
   );
   const driftQuery = useAuthorizationLineDrift(ffeItemIds, open);
   const drift = driftQuery.data;
@@ -219,7 +223,10 @@ export function AuthorizationDetail({
     instrument?.proposalId ?? "",
     open && instrument?.state === "executed",
   );
-  const paperSignature = bundle.data?.signatures.find(
+  const signatures = Array.isArray(bundle.data?.signatures)
+    ? bundle.data.signatures
+    : [];
+  const paperSignature = signatures.find(
     (signature) => signature.party === "client" && signature.executedOnPaper,
   );
   const executedOnPaper = Boolean(paperSignature);
@@ -228,13 +235,18 @@ export function AuthorizationDetail({
 
   const posture = furnishingsDepositPosture(instrument);
   const roomGroups = new Map<string, ProjectInstrumentItemView[]>();
-  for (const item of instrument.items) {
+  for (const item of items) {
     const key = item.roomName || "Unassigned";
     const list = roomGroups.get(key) ?? [];
     list.push(item);
     roomGroups.set(key, list);
   }
-  const readyLineCount = instrument.state === "executed" ? instrument.itemCount : 0;
+  const readyLineCount =
+    instrument.state === "executed"
+      ? Number.isFinite(instrument.itemCount)
+        ? instrument.itemCount
+        : items.length
+      : 0;
 
   const send = async () => {
     setSendError(null);
@@ -315,47 +327,60 @@ export function AuthorizationDetail({
           <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
             What was signed
           </p>
-          {Array.from(roomGroups.entries()).map(([roomName, items]) => (
-            <div key={roomName} className="mt-3">
-              <p className="font-mono text-[9.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                {roomName}
+          {items.length === 0 ? (
+            <p className="mt-3 text-[11px] text-[var(--text-muted)]">
+              Signed line details are unavailable.
+            </p>
+          ) : (
+            <>
+              <div
+                data-testid="authorization-lines-scroll"
+                className="max-w-full overflow-x-auto overscroll-x-contain"
+              >
+                {Array.from(roomGroups.entries()).map(([roomName, roomItems]) => (
+                  <div key={roomName} className="mt-3">
+                    <p className="font-mono text-[9.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                      {roomName}
+                    </p>
+                    <table className="mt-1 w-full min-w-[440px] text-left text-[11px]">
+                      <tbody>
+                        {roomItems.map((item) => (
+                          <tr key={item.id} className="border-t border-[var(--doc-ink-border)]/60">
+                            <td className="py-2 pr-2">
+                              {item.name}
+                              <span className="block text-[9px] text-[var(--text-muted)]">
+                                {item.itemType}
+                              </span>
+                            </td>
+                            <td className="py-2 pr-2 text-right">{item.quantity}</td>
+                            <td className="py-2 text-right">
+                              {money(item.clientUnitPriceCents)} each
+                              <span className="ml-1 inline-flex items-center">
+                                {money(item.clientLineTotalCents)} total
+                                <DeltaGlyph
+                                  item={item}
+                                  currentLineTotalCents={
+                                    item.sourceFfeItemId
+                                      ? (drift?.get(item.sourceFfeItemId)?.currentLineTotalCents ?? null)
+                                      : null
+                                  }
+                                />
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-3 text-[10px] text-[var(--text-muted)]">
+                Quantities, client prices, and checkpoint linkage are immutable in
+                this authorization snapshot. ▲/▼ compares a line to the
+                schedule&rsquo;s current figure for the same item.
               </p>
-              <table className="mt-1 w-full min-w-[440px] text-left text-[11px]">
-                <tbody>
-                  {items.map((item) => (
-                    <tr key={item.id} className="border-t border-[var(--doc-ink-border)]/60">
-                      <td className="py-2 pr-2">
-                        {item.name}
-                        <span className="block text-[9px] text-[var(--text-muted)]">
-                          {item.itemType}
-                        </span>
-                      </td>
-                      <td className="py-2 pr-2 text-right">{item.quantity}</td>
-                      <td className="py-2 text-right">
-                        {money(item.clientUnitPriceCents)} each
-                        <span className="ml-1 inline-flex items-center">
-                          {money(item.clientLineTotalCents)} total
-                          <DeltaGlyph
-                            item={item}
-                            currentLineTotalCents={
-                              item.sourceFfeItemId
-                                ? (drift?.get(item.sourceFfeItemId)?.currentLineTotalCents ?? null)
-                                : null
-                            }
-                          />
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ))}
-          <p className="mt-3 text-[10px] text-[var(--text-muted)]">
-            Quantities, client prices, and checkpoint linkage are immutable in
-            this authorization snapshot. ▲/▼ compares a line to the
-            schedule&rsquo;s current figure for the same item.
-          </p>
+            </>
+          )}
         </div>
 
         {(instrument.state === "draft" || instrument.state === "sent") && (
