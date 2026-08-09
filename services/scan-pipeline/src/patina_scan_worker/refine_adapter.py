@@ -48,6 +48,8 @@ COLMAP_LOG_READ_BYTES = 16 * 1024
 COLMAP_LOG_DRAIN_JOIN_S = 5.0
 COLMAP_PROCESS_TERM_GRACE_S = 0.10
 COLMAP_PROCESS_KILL_REAP_S = 1.0
+REFINE_ENGINE_TIMEOUT_CODE = "REFINE_ENGINE_TIMEOUT"
+REFINE_ENGINE_CLEANUP_FAILED_CODE = "REFINE_ENGINE_CLEANUP_FAILED"
 
 TEMPORAL_WINDOW = 10
 SPATIAL_RADIUS_M = 1.5
@@ -148,7 +150,7 @@ class RefineDeadline:
         if deadline <= now:
             raise AdapterError(
                 "claimed lease has no engine time after the completion reserve",
-                "REFINE_ENGINE_TIMEOUT",
+                REFINE_ENGINE_TIMEOUT_CODE,
             )
         return cls(deadline)
 
@@ -156,7 +158,10 @@ class RefineDeadline:
         now = time.monotonic() if now_monotonic_s is None else now_monotonic_s
         remaining = self.expires_at_monotonic_s - now
         if not math.isfinite(remaining) or remaining <= 0:
-            raise AdapterError("refine stage engine deadline is exhausted", "REFINE_ENGINE_TIMEOUT")
+            raise AdapterError(
+                "refine stage engine deadline is exhausted",
+                REFINE_ENGINE_TIMEOUT_CODE,
+            )
         return remaining
 
 
@@ -304,8 +309,7 @@ def qualify_colmap_versions(cli_output: str, binding_version: str) -> EngineQual
     parsed_binding = binding_match.group(1) if binding_match else "unparseable"
     if cli_version != COLMAP_TARGET_VERSION or parsed_binding != COLMAP_TARGET_VERSION:
         raise AdapterError(
-            "COLMAP CLI/PyCOLMAP mismatch: "
-            f"target={COLMAP_TARGET_VERSION}, cli={cli_version}, binding={parsed_binding}",
+            f"COLMAP CLI/PyCOLMAP mismatch: target={COLMAP_TARGET_VERSION}, cli={cli_version}, binding={parsed_binding}",
             "REFINE_ENGINE_VERSION_MISMATCH",
         )
     return EngineQualification(COLMAP_TARGET_VERSION, cli_version, parsed_binding)
@@ -399,10 +403,7 @@ def _mat_vec(matrix: Matrix3, vector: Sequence[float]) -> Vector3:
 
 
 def _mat_mul(a: Matrix3, b: Matrix3) -> Matrix3:
-    return tuple(
-        tuple(sum(a[row][k] * b[k][col] for k in range(3)) for col in range(3))
-        for row in range(3)
-    )  # type: ignore[return-value]
+    return tuple(tuple(sum(a[row][k] * b[k][col] for k in range(3)) for col in range(3)) for row in range(3))  # type: ignore[return-value]
 
 
 def _transpose(matrix: Matrix3) -> Matrix3:
@@ -417,7 +418,9 @@ def _determinant(matrix: Matrix3) -> float:
     )
 
 
-def _parse_arkit_transform(values: Sequence[Any]) -> tuple[Matrix3, Vector3, tuple[float, ...]]:
+def _parse_arkit_transform(
+    values: Sequence[Any],
+) -> tuple[Matrix3, Vector3, tuple[float, ...]]:
     if not isinstance(values, (list, tuple)) or len(values) != 16:
         raise AdapterError("cameraTransform must be a row-major 4x4 matrix")
     flat = tuple(_number(value, "cameraTransform") for value in values)
@@ -524,9 +527,7 @@ def right_rotated_intrinsics(
     if native.image_width <= 0 or native.image_height <= 0:
         raise AdapterError("native image dimensions must be positive")
     if encoded_width != native.image_height or encoded_height != native.image_width:
-        raise AdapterError(
-            "encoded HEIC dimensions do not match a physically right-rotated native image"
-        )
+        raise AdapterError("encoded HEIC dimensions do not match a physically right-rotated native image")
     return PinholeIntrinsics(
         fx=native.fy,
         fy=native.fx,
@@ -558,10 +559,22 @@ def colmap_w2c_to_arkit_c2w(pose: ColmapPose) -> list[float]:
     camera_center = tuple(-value for value in _mat_vec(colmap_to_world, pose.translation))
     arkit_rotation = _mat_mul(colmap_to_world, ARKIT_TO_RIGHT_ROTATED_COLMAP)
     return [
-        arkit_rotation[0][0], arkit_rotation[0][1], arkit_rotation[0][2], camera_center[0],
-        arkit_rotation[1][0], arkit_rotation[1][1], arkit_rotation[1][2], camera_center[1],
-        arkit_rotation[2][0], arkit_rotation[2][1], arkit_rotation[2][2], camera_center[2],
-        0.0, 0.0, 0.0, 1.0,
+        arkit_rotation[0][0],
+        arkit_rotation[0][1],
+        arkit_rotation[0][2],
+        camera_center[0],
+        arkit_rotation[1][0],
+        arkit_rotation[1][1],
+        arkit_rotation[1][2],
+        camera_center[1],
+        arkit_rotation[2][0],
+        arkit_rotation[2][1],
+        arkit_rotation[2][2],
+        camera_center[2],
+        0.0,
+        0.0,
+        0.0,
+        1.0,
     ]
 
 
@@ -678,9 +691,7 @@ def build_pair_graph(
         for right, candidate in enumerate(ordered):
             if right == left or abs(right - left) <= temporal_window:
                 continue
-            distance = _norm(
-                tuple(candidate.camera_center_m[axis] - ordered[left].camera_center_m[axis] for axis in range(3))
-            )
+            distance = _norm(tuple(candidate.camera_center_m[axis] - ordered[left].camera_center_m[axis] for axis in range(3)))
             if spatial_min_baseline_m <= distance <= spatial_radius_m:
                 spatial_candidates.append((distance, candidate.image_name, right))
         for _, _, right in sorted(spatial_candidates)[:max_spatial_neighbors]:
@@ -722,13 +733,7 @@ def classify_overlap(
         if len(pair) != 2 or pair[0] not in positions or pair[1] not in positions or pair[0] == pair[1]:
             continue
         canonical = _canonical_pair(pair[0], pair[1])
-        if (
-            canonical not in candidate_pairs
-            or canonical in seen
-            or isinstance(inliers, bool)
-            or not isinstance(inliers, int)
-            or inliers < minimum_inliers
-        ):
+        if canonical not in candidate_pairs or canonical in seen or isinstance(inliers, bool) or not isinstance(inliers, int) or inliers < minimum_inliers:
             continue
         seen.add(canonical)
         verified_edges += 1
@@ -794,7 +799,9 @@ def _require_non_collinear(centered: Sequence[Vector3], label: str) -> None:
         raise AdapterError(f"Sim(3) {label} points must be non-collinear")
 
 
-def _largest_symmetric_eigenvector(matrix: Sequence[Sequence[float]]) -> tuple[float, ...]:
+def _largest_symmetric_eigenvector(
+    matrix: Sequence[Sequence[float]],
+) -> tuple[float, ...]:
     """Cyclic Jacobi eigen solve for the tiny symmetric 4x4 Horn matrix."""
 
     size = len(matrix)
@@ -845,10 +852,7 @@ def estimate_sim3(source: Sequence[Sequence[float]], target: Sequence[Sequence[f
     _require_non_collinear(target_centered, "target")
 
     # Cross-dispersion S = sum(source * target^T), Horn 1987.
-    dispersion = [
-        [sum(x[row] * y[col] for x, y in zip(source_centered, target_centered)) for col in range(3)]
-        for row in range(3)
-    ]
+    dispersion = [[sum(x[row] * y[col] for x, y in zip(source_centered, target_centered)) for col in range(3)] for row in range(3)]
     sxx, sxy, sxz = dispersion[0]
     syx, syy, syz = dispersion[1]
     szx, szy, szz = dispersion[2]
@@ -866,9 +870,7 @@ def estimate_sim3(source: Sequence[Sequence[float]], target: Sequence[Sequence[f
     if not math.isfinite(scale) or scale <= 1e-12:
         raise AdapterError("Sim(3) requires a finite positive scale")
     rotated_source_centroid = _mat_vec(rotation, source_centroid)
-    translation = tuple(
-        target_centroid[axis] - scale * rotated_source_centroid[axis] for axis in range(3)
-    )
+    translation = tuple(target_centroid[axis] - scale * rotated_source_centroid[axis] for axis in range(3))
     return Sim3(scale=scale, rotation=rotation, translation=translation)  # type: ignore[arg-type]
 
 
@@ -890,15 +892,18 @@ def trajectory_shape_change_metrics(
     target_points = [_point(point, "shape-change target point") for point in target]
     target_centroid = _centroid(target_points)
     radius = math.sqrt(
-        sum(_dot(tuple(point[i] - target_centroid[i] for i in range(3)), tuple(point[i] - target_centroid[i] for i in range(3))) for point in target_points)
+        sum(
+            _dot(
+                tuple(point[i] - target_centroid[i] for i in range(3)),
+                tuple(point[i] - target_centroid[i] for i in range(3)),
+            )
+            for point in target_points
+        )
         / len(target_points)
     )
     if radius <= 1e-12:
         raise AdapterError("raw keyframe trajectory must have non-zero RMS radius")
-    residuals = [
-        _norm(tuple(target_point[i] - transform.apply(source_point)[i] for i in range(3)))
-        for source_point, target_point in zip(source_points, target_points)
-    ]
+    residuals = [_norm(tuple(target_point[i] - transform.apply(source_point)[i] for i in range(3))) for source_point, target_point in zip(source_points, target_points)]
     rmse = math.sqrt(sum(residual * residual for residual in residuals) / len(residuals))
     mean = sum(residuals) / len(residuals)
     return TrajectoryShapeChangeMetrics(
@@ -922,7 +927,9 @@ def _relative_gain(before: float, after: float) -> float:
     return (after - before) / before
 
 
-def evaluate_refinement_evidence(evidence: RefinementEvidence) -> RefinementEvidenceVerdict:
+def evaluate_refinement_evidence(
+    evidence: RefinementEvidence,
+) -> RefinementEvidenceVerdict:
     """Evaluate comparable geometric evidence without claiming absolute accuracy.
 
     Reprojection values must use identical feature tracks/observations before and
@@ -968,7 +975,10 @@ def evaluate_refinement_evidence(evidence: RefinementEvidence) -> RefinementEvid
         raise AdapterError("external error evidence needs both before and after")
     if any(value is not None and (not math.isfinite(value) or value < 0) for value in external_pair):
         raise AdapterError("external errors must be finite and non-negative")
-    external_metadata = (evidence.external_evidence_kind, evidence.external_evidence_ref)
+    external_metadata = (
+        evidence.external_evidence_kind,
+        evidence.external_evidence_ref,
+    )
     if external_pair[0] is None:
         if any(value is not None for value in external_metadata):
             raise AdapterError("external evidence metadata requires before/after errors")
@@ -979,7 +989,12 @@ def evaluate_refinement_evidence(evidence: RefinementEvidence) -> RefinementEvid
     coverage_after = evidence.registered_images_after / evidence.input_images
     if evidence.verified_loop_edges < 1:
         return RefinementEvidenceVerdict(
-            False, False, "REFINE_LOW_OVERLAP", "no_verified_loop_evidence", coverage_before, coverage_after
+            False,
+            False,
+            "REFINE_LOW_OVERLAP",
+            "no_verified_loop_evidence",
+            coverage_before,
+            coverage_after,
         )
     if coverage_after < MIN_CONNECTED_FRACTION or coverage_after < coverage_before:
         return RefinementEvidenceVerdict(
@@ -993,8 +1008,7 @@ def evaluate_refinement_evidence(evidence: RefinementEvidence) -> RefinementEvid
     regressions = (
         evidence.reprojection_rmse_px_after > evidence.reprojection_rmse_px_before,
         evidence.loop_rotation_rmse_deg_after > evidence.loop_rotation_rmse_deg_before,
-        evidence.loop_translation_direction_rmse_deg_after
-        > evidence.loop_translation_direction_rmse_deg_before,
+        evidence.loop_translation_direction_rmse_deg_after > evidence.loop_translation_direction_rmse_deg_before,
         external_pair[0] is not None and external_pair[1] > external_pair[0],
     )
     if any(regressions):
@@ -1008,7 +1022,10 @@ def evaluate_refinement_evidence(evidence: RefinementEvidence) -> RefinementEvid
         )
     improvements = [
         _relative_improvement(evidence.reprojection_rmse_px_before, evidence.reprojection_rmse_px_after),
-        _relative_improvement(evidence.loop_rotation_rmse_deg_before, evidence.loop_rotation_rmse_deg_after),
+        _relative_improvement(
+            evidence.loop_rotation_rmse_deg_before,
+            evidence.loop_rotation_rmse_deg_after,
+        ),
         _relative_improvement(
             evidence.loop_translation_direction_rmse_deg_before,
             evidence.loop_translation_direction_rmse_deg_after,
@@ -1327,8 +1344,16 @@ def build_adapter_artifacts(
             }
         ],
         "artifacts": [
-            {"name": adapter_path.name, "sha256": _sha256_bytes(adapter_payload), "sizeBytes": len(adapter_payload)},
-            {"name": pairs_path.name, "sha256": _sha256_bytes(pair_payload), "sizeBytes": len(pair_payload)},
+            {
+                "name": adapter_path.name,
+                "sha256": _sha256_bytes(adapter_payload),
+                "sizeBytes": len(adapter_payload),
+            },
+            {
+                "name": pairs_path.name,
+                "sha256": _sha256_bytes(pair_payload),
+                "sizeBytes": len(pair_payload),
+            },
         ],
     }
     manifest_payload = _json_bytes(manifest_document)
@@ -1460,15 +1485,21 @@ def run_colmap_subprocess(
     """Run one argv-only command using what remains of the shared stage budget.
 
     The future handler creates one :class:`RefineDeadline` from the actual claim
-    lease at stage start and passes it to every call. Output streams to a scratch
-    log. A reader thread continuously drains the merged pipe into a hard-capped
-    64 KiB on-disk tail; retries start fresh, and only that tail can be attached
-    to an error.
+    lease at stage start and passes it to every call. Setup, process launch,
+    waiting, log draining, and the final acceptance check all consume that same
+    absolute deadline. Output streams to a scratch log. A reader thread
+    continuously drains the merged pipe into a hard-capped 64 KiB on-disk tail;
+    retries start fresh, and only that tail can be attached to an error.
+
+    Production callers may pass only the qualified synchronous COLMAP 4.0.2
+    commands. Those commands are contractually required to return with no live
+    OS descendants; arbitrary executables do not satisfy this success contract.
+    Timeout cleanup still targets the entire dedicated process group.
     """
 
     if not command or any(not isinstance(part, str) or not part for part in command):
         raise AdapterError("COLMAP command must be a non-empty argv sequence")
-    timeout_s = deadline.remaining_seconds()
+    deadline.remaining_seconds()
     destination = Path(log_path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     sink = _CappedTailLog(destination, COLMAP_LOG_TAIL_BYTES)
@@ -1479,6 +1510,8 @@ def run_colmap_subprocess(
     cleanup_errors: list[str] = []
     returncode: int | None = None
     startup_error: OSError | None = None
+    deadline_error: AdapterError | None = None
+    wait_timeout_s: float | None = None
     try:
         try:
             process = subprocess.Popen(
@@ -1502,16 +1535,37 @@ def run_colmap_subprocess(
             )
             drain_thread.start()
             try:
-                returncode = process.wait(timeout=timeout_s)
-            except subprocess.TimeoutExpired as exc:
-                timed_out = exc
+                wait_timeout_s = deadline.remaining_seconds()
+            except AdapterError as exc:
+                deadline_error = exc
                 cleanup_errors.extend(_kill_and_reap(process))
                 returncode = process.returncode
+            else:
+                try:
+                    returncode = process.wait(timeout=wait_timeout_s)
+                except subprocess.TimeoutExpired as exc:
+                    timed_out = exc
+                    cleanup_errors.extend(_kill_and_reap(process))
+                    returncode = process.returncode
+                else:
+                    try:
+                        deadline.remaining_seconds()
+                    except AdapterError as exc:
+                        deadline_error = exc
     finally:
         if process is not None and process.poll() is None:
             cleanup_errors.extend(_kill_and_reap(process))
         if drain_thread is not None:
-            drain_thread.join(COLMAP_LOG_DRAIN_JOIN_S)
+            drain_join_s = 0.0
+            if deadline_error is None and timed_out is None:
+                try:
+                    drain_join_s = min(
+                        COLMAP_LOG_DRAIN_JOIN_S,
+                        deadline.remaining_seconds(),
+                    )
+                except AdapterError as exc:
+                    deadline_error = exc
+            drain_thread.join(drain_join_s)
             if drain_thread.is_alive():
                 # A dead child closes the pipe. This close is a last-resort
                 # unblock for a broken stream implementation before we fail.
@@ -1534,21 +1588,26 @@ def run_colmap_subprocess(
             f"cannot start COLMAP subprocess {command[0]}: {startup_error}",
             "REFINE_ENGINE_FAILED",
         ) from startup_error
-    if timed_out is not None:
-        details = [*cleanup_errors, *(str(error) for error in drain_errors)]
-        cleanup_detail = ""
-        if details:
-            cleanup_detail = "; cleanup: " + "; ".join(details)
-        raise AdapterError(
-            f"COLMAP subprocess exceeded {timeout_s} seconds: {command[0]}"
-            f"{cleanup_detail}",
-            "REFINE_ENGINE_TIMEOUT",
-        ) from timed_out
+    if deadline_error is None and timed_out is None:
+        try:
+            deadline.remaining_seconds()
+        except AdapterError as exc:
+            deadline_error = exc
     if cleanup_errors:
         raise AdapterError(
             "cannot stop and reap COLMAP process group: " + "; ".join(cleanup_errors),
-            "REFINE_ENGINE_FAILED",
+            REFINE_ENGINE_CLEANUP_FAILED_CODE,
         )
+    if timed_out is not None or deadline_error is not None:
+        details = [str(error) for error in drain_errors]
+        cleanup_detail = ""
+        if details:
+            cleanup_detail = "; cleanup: " + "; ".join(details)
+        elapsed_budget = wait_timeout_s if wait_timeout_s is not None else 0.0
+        raise AdapterError(
+            f"COLMAP subprocess exceeded its shared deadline (last wait budget {elapsed_budget} seconds): {command[0]}{cleanup_detail}",
+            REFINE_ENGINE_TIMEOUT_CODE,
+        ) from (timed_out or deadline_error)
     if drain_errors:
         error = drain_errors[0]
         raise AdapterError(

@@ -56,10 +56,22 @@ def _transform(
     ),
 ) -> list[float]:
     return [
-        rotation[0][0], rotation[0][1], rotation[0][2], center[0],
-        rotation[1][0], rotation[1][1], rotation[1][2], center[1],
-        rotation[2][0], rotation[2][1], rotation[2][2], center[2],
-        0.0, 0.0, 0.0, 1.0,
+        rotation[0][0],
+        rotation[0][1],
+        rotation[0][2],
+        center[0],
+        rotation[1][0],
+        rotation[1][1],
+        rotation[1][2],
+        center[1],
+        rotation[2][0],
+        rotation[2][1],
+        rotation[2][2],
+        center[2],
+        0.0,
+        0.0,
+        0.0,
+        1.0,
     ]
 
 
@@ -103,10 +115,7 @@ def _transpose(matrix):
 
 
 def _mat_mul(left, right):
-    return tuple(
-        tuple(sum(left[row][index] * right[index][col] for index in range(3)) for col in range(3))
-        for row in range(3)
-    )
+    return tuple(tuple(sum(left[row][index] * right[index][col] for index in range(3)) for col in range(3)) for row in range(3))
 
 
 def _flatten(matrix):
@@ -302,14 +311,8 @@ def test_sim3_rebases_camera_orientation_and_preserves_projection_rays():
     source_point = (1.2, 0.3, -2.0)
     metric_point = world_sim3.apply(source_point)
 
-    source_camera = tuple(
-        value + source_pose.translation[index]
-        for index, value in enumerate(_mat_vec(source_pose.rotation, source_point))
-    )
-    metric_camera = tuple(
-        value + metric_pose.translation[index]
-        for index, value in enumerate(_mat_vec(metric_pose.rotation, metric_point))
-    )
+    source_camera = tuple(value + source_pose.translation[index] for index, value in enumerate(_mat_vec(source_pose.rotation, source_point)))
+    metric_camera = tuple(value + metric_pose.translation[index] for index, value in enumerate(_mat_vec(metric_pose.rotation, metric_point)))
 
     # A world Sim(3) scales camera coordinates uniformly, so projection rays
     # stay identical while camera orientation is correctly rebased.
@@ -394,10 +397,12 @@ def test_normalization_exposes_full_pose_prior_but_fallback_discards_rotation():
 
     assert frame.camera_center_m == pytest.approx((1.0, 2.0, 3.0))
     assert frame.pose_prior.position_m == pytest.approx((1.0, 2.0, 3.0))
-    assert _flatten(frame.pose_prior.covariance_m2) == pytest.approx(
-        _flatten(((0.01, 0.0, 0.0), (0.0, 0.01, 0.0), (0.0, 0.0, 0.01)))
+    assert _flatten(frame.pose_prior.covariance_m2) == pytest.approx(_flatten(((0.01, 0.0, 0.0), (0.0, 0.01, 0.0), (0.0, 0.0, 0.01))))
+    assert adapter.PRIMARY_PIPELINE[-3:] == (
+        "point_triangulator",
+        "bundle_adjuster",
+        "sim3_world_alignment",
     )
-    assert adapter.PRIMARY_PIPELINE[-3:] == ("point_triangulator", "bundle_adjuster", "sim3_world_alignment")
     assert "global_mapper" not in adapter.PRIMARY_PIPELINE
     assert "pose_prior_mapper" in adapter.FALLBACK_PIPELINE
 
@@ -480,7 +485,11 @@ def test_adapter_artifacts_are_versioned_checksummed_idempotent_and_manifest_las
     first_bytes = {path.name: path.read_bytes() for path in first}
     second = build_adapter_artifacts(index, output, room_file_version=7)
 
-    assert [path.name for path in first] == ["adapter-v2.json", "pairs-v2.txt", "adapter-manifest-v2.json"]
+    assert [path.name for path in first] == [
+        "adapter-v2.json",
+        "pairs-v2.txt",
+        "adapter-manifest-v2.json",
+    ]
     assert publish_order[2] == "adapter-manifest-v2.json"
     assert publish_order[-1] == "adapter-manifest-v2.json"
     assert {path.name: path.read_bytes() for path in second} == first_bytes
@@ -489,7 +498,10 @@ def test_adapter_artifacts_are_versioned_checksummed_idempotent_and_manifest_las
     normalized = json.loads((output / "adapter-v2.json").read_text())
     assert manifest["schemaVersion"] == ADAPTER_SCHEMA_VERSION
     assert manifest["roomFileVersion"] == 7
-    assert {row["name"] for row in manifest["artifacts"]} == {"adapter-v2.json", "pairs-v2.txt"}
+    assert {row["name"] for row in manifest["artifacts"]} == {
+        "adapter-v2.json",
+        "pairs-v2.txt",
+    }
     assert normalized["frames"][0]["sourceSha256"] == hashlib.sha256(source_payloads[0]).hexdigest()
     assert normalized["frames"][0]["intrinsics"]["width"] == 3024
     assert normalized["frames"][0]["intrinsics"]["height"] == 4032
@@ -504,12 +516,7 @@ def test_immutable_publication_is_safe_for_identical_multiprocess_writers(tmp_pa
     destination = tmp_path / "v3" / "refine" / "adapter-manifest-v2.json"
     payload = b'{"schemaVersion":2}\n'
 
-    child = (
-        "import sys; "
-        "from patina_scan_worker.refine_adapter import publish_immutable; "
-        "created=publish_immutable(sys.argv[1], bytes.fromhex(sys.argv[2])); "
-        "raise SystemExit(0 if created else 2)"
-    )
+    child = "import sys; from patina_scan_worker.refine_adapter import publish_immutable; created=publish_immutable(sys.argv[1], bytes.fromhex(sys.argv[2])); raise SystemExit(0 if created else 2)"
     environment = dict(os.environ)
     environment["PYTHONPATH"] = str(Path(__file__).resolve().parent.parent / "src")
     processes = [
@@ -725,20 +732,14 @@ def test_subprocess_high_volume_log_is_hard_capped_and_reused_path_is_fresh(tmp_
     command = [
         sys.executable,
         "-c",
-        (
-            "import os,time; "
-            "[(os.write(1, b'x' * 4096), time.sleep(0.002)) for _ in range(80)]; "
-            "os.write(2, b'FIRST-RUN-END\\n')"
-        ),
+        ("import os,time; [(os.write(1, b'x' * 4096), time.sleep(0.002)) for _ in range(80)]; os.write(2, b'FIRST-RUN-END\\n')"),
     ]
     results = []
     errors = []
 
     def invoke():
         try:
-            results.append(
-                adapter.run_colmap_subprocess(command, deadline=deadline, log_path=log_path)
-            )
+            results.append(adapter.run_colmap_subprocess(command, deadline=deadline, log_path=log_path))
         except BaseException as exc:  # pragma: no cover - asserted below
             errors.append(exc)
 
@@ -792,10 +793,7 @@ def test_subprocess_timeout_kills_process_group_reaps_and_blocks_late_writes(tmp
             "import sys",
             "import time",
             f"pathlib.Path({str(leader_pid_path)!r}).write_text(str(os.getpid()))",
-            (
-                f"subprocess.Popen([sys.executable, '-c', {descendant_program!r}, "
-                f"{str(descendant_pid_path)!r}, {str(late_artifact)!r}])"
-            ),
+            (f"subprocess.Popen([sys.executable, '-c', {descendant_program!r}, {str(descendant_pid_path)!r}, {str(late_artifact)!r}])"),
             f"pid_path = pathlib.Path({str(descendant_pid_path)!r})",
             "stop = time.monotonic() + 5.0",
             "while not pid_path.exists() and time.monotonic() < stop:",
@@ -839,6 +837,96 @@ def test_subprocess_timeout_kills_process_group_reaps_and_blocks_late_writes(tmp
     assert log_path.stat().st_size <= COLMAP_LOG_TAIL_BYTES
     time.sleep(0.80)
     assert not late_artifact.exists()
+
+
+def test_subprocess_deadline_consumes_slow_process_startup(tmp_path, monkeypatch):
+    process = _CompletedPopen()
+    cleanup_calls = []
+
+    def delayed_popen(_command, **kwargs):
+        del kwargs
+        time.sleep(0.25)
+        return process
+
+    def reap_after_expired_startup(cleanup_process):
+        cleanup_calls.append(cleanup_process)
+        cleanup_process.returncode = -9
+        return ()
+
+    monkeypatch.setattr(adapter.subprocess, "Popen", delayed_popen)
+    monkeypatch.setattr(adapter, "_kill_and_reap", reap_after_expired_startup)
+    now = time.monotonic()
+    deadline = RefineDeadline.start(
+        now_monotonic_s=now,
+        lease_expires_at_monotonic_s=now + LEASE_COMPLETION_RESERVE_S + 0.15,
+    )
+
+    with pytest.raises(AdapterError) as raised:
+        adapter.run_colmap_subprocess(
+            ["colmap", "feature_extractor"],
+            deadline=deadline,
+            log_path=tmp_path / "slow-startup.log",
+        )
+
+    assert raised.value.code == "REFINE_ENGINE_TIMEOUT"
+    assert process.wait_timeouts == []
+    assert cleanup_calls == [process]
+
+
+def test_subprocess_deadline_consumes_slow_log_drain(tmp_path, monkeypatch):
+    real_drain = adapter._drain_colmap_output
+
+    def delayed_drain(stream, sink, errors):
+        real_drain(stream, sink, errors)
+        time.sleep(0.25)
+
+    monkeypatch.setattr(adapter, "_drain_colmap_output", delayed_drain)
+    now = time.monotonic()
+    deadline = RefineDeadline.start(
+        now_monotonic_s=now,
+        lease_expires_at_monotonic_s=now + LEASE_COMPLETION_RESERVE_S + 0.15,
+    )
+
+    with pytest.raises(AdapterError) as raised:
+        adapter.run_colmap_subprocess(
+            [sys.executable, "-c", "print('completed-before-slow-drain')"],
+            deadline=deadline,
+            log_path=tmp_path / "slow-drain.log",
+        )
+
+    assert raised.value.code == "REFINE_ENGINE_TIMEOUT"
+
+
+def test_subprocess_timeout_cleanup_uncertainty_is_never_retryable(tmp_path, monkeypatch):
+    process = _CompletedPopen()
+
+    def timed_out_wait(timeout=None):
+        process.wait_timeouts.append(timeout)
+        raise subprocess.TimeoutExpired("colmap", timeout)
+
+    process.wait = timed_out_wait
+    monkeypatch.setattr(adapter.subprocess, "Popen", lambda *_args, **_kwargs: process)
+
+    def failed_cleanup(cleanup_process):
+        cleanup_process.returncode = -9
+        return ("synthetic process-group cleanup failure",)
+
+    monkeypatch.setattr(adapter, "_kill_and_reap", failed_cleanup)
+    deadline = RefineDeadline.start(
+        now_monotonic_s=100.0,
+        lease_expires_at_monotonic_s=1000.0,
+    )
+    monkeypatch.setattr(adapter.time, "monotonic", lambda: 175.0)
+
+    with pytest.raises(AdapterError) as raised:
+        adapter.run_colmap_subprocess(
+            ["colmap", "feature_extractor"],
+            deadline=deadline,
+            log_path=tmp_path / "cleanup-failed.log",
+        )
+
+    assert raised.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
+    assert "synthetic process-group cleanup failure" in str(raised.value)
 
 
 def test_subprocess_propagates_log_drain_errors(tmp_path, monkeypatch):
@@ -939,8 +1027,11 @@ def test_claimed_task_expiry_feeds_refine_deadline_and_reserve_fails_closed():
 
 def test_subprocess_deadline_is_shared_across_commands(monkeypatch, tmp_path):
     timeouts = []
+    clock = [1100.0]
+    launch_times = iter((1100.0, 1180.0))
 
     def fake_popen(_command, **_kwargs):
+        clock[0] = next(launch_times)
         process = _CompletedPopen()
         real_wait = process.wait
 
@@ -956,14 +1047,13 @@ def test_subprocess_deadline_is_shared_across_commands(monkeypatch, tmp_path):
         now_monotonic_s=1000.0,
         lease_expires_at_monotonic_s=2000.0,
     )
-    times = iter((1100.0, 1180.0))
-    monkeypatch.setattr(adapter.time, "monotonic", lambda: next(times))
+    monkeypatch.setattr(adapter.time, "monotonic", lambda: clock[0])
 
     adapter.run_colmap_subprocess(
-        ["colmap", "feature_extractor"], deadline=deadline, log_path=tmp_path / "features.log"
+        ["colmap", "feature_extractor"],
+        deadline=deadline,
+        log_path=tmp_path / "features.log",
     )
-    adapter.run_colmap_subprocess(
-        ["colmap", "bundle_adjuster"], deadline=deadline, log_path=tmp_path / "ba.log"
-    )
+    adapter.run_colmap_subprocess(["colmap", "bundle_adjuster"], deadline=deadline, log_path=tmp_path / "ba.log")
 
     assert timeouts == pytest.approx([140.0, 60.0])
