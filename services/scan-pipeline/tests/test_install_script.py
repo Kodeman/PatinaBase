@@ -92,6 +92,49 @@ INSTALL_SOURCE_FILES = (
 )
 
 
+#: Every directory a fixture in this file stands in for something the real
+#: installer manages: an installer source snapshot, a release tree, a
+#: transaction directory. All of those are 0o755 or tighter in production
+#: (install-colmap-4.0.2.sh chmods 0755 explicitly; install-venv-lib.sh's
+#: transaction dir is `install -d -m 0700`), never group/world writable.
+TRUSTED_FIXTURE_DIRECTORY_MODE = 0o755
+
+
+def make_trusted_fixture_directory(path: Path) -> Path:
+    """Create ``path`` and any missing ancestors at an exact 0o755.
+
+    ``Path.mkdir(parents=True)`` derives the permissions of the *parents* it
+    creates from the ambient umask, ignoring any ``mode=`` given for the leaf
+    -- so a fixture built with it is only as trustworthy as the umask the
+    suite happens to run under. On a stock Ubuntu login shell (``pam_umask``,
+    umask 0002) that lands 0o775 on every directory this created, and the
+    real ``install-path-guard.py`` trust check then *correctly* refuses it as
+    group-writable: production never depends on a umask (see the module
+    docstring above), so the harness may not either. This mirrors
+    ``make_trusted_directory`` in ``_colmap_toolchain.py`` (commit 86c460f9),
+    the same fix already applied to the refine fixtures.
+
+    ``chmod`` after ``mkdir`` rather than ``mkdir(mode=...)`` alone: mkdir's
+    ``mode`` argument is *also* masked by the umask (``mode & ~umask``), so a
+    restrictive umask (e.g. 0o077) would silently narrow 0o755 to 0o700 --
+    harmless for the "not group/world writable" trust check itself, but wrong
+    for the handful of tests here that assert an exact literal mode. chmod is
+    not masked, so it is what actually pins the value regardless of umask.
+    """
+
+    missing: list[Path] = []
+    probe = path
+    while not probe.is_dir():
+        missing.append(probe)
+        if probe.parent == probe:
+            break
+        probe = probe.parent
+    for parent in reversed(missing):
+        parent.mkdir(mode=TRUSTED_FIXTURE_DIRECTORY_MODE)
+        parent.chmod(TRUSTED_FIXTURE_DIRECTORY_MODE)
+    return path
+
+
 def test_upgrade_refuses_to_rebuild_gpu_install_as_cpu_by_omission():
     script = INSTALL.read_text()
     guard = 'if [ "$UPGRADE" -eq 1 ] && [ "$GPU" -eq 0 ] && [ -f "$DROPIN_DIR/gpu.conf" ]'
@@ -561,7 +604,14 @@ def _write_stock_legacy_venv(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
         "0755",
     )
     interpreter_dir = tmp_path / "trusted" / "usr" / "bin"
-    interpreter_dir.mkdir(parents=True)
+    # Explicit 0o755 at every level `ensure-trusted-dir` above didn't create
+    # ("trusted" itself came from the guard CLI call; "usr" and "usr/bin" are
+    # fixture-only): Path.mkdir(parents=True) with no mode inherits the
+    # ambient umask for the parents it creates, and a permissive umask (e.g.
+    # 0002) lands a group-writable directory the guard's trust check then
+    # correctly refuses.
+    interpreter_dir.parent.mkdir(mode=0o755)
+    interpreter_dir.mkdir(mode=0o755)
     canonical = interpreter_dir / "python3.11"
     canonical.write_text("#!/bin/sh\nexit 0\n")
     canonical.chmod(0o755)
@@ -571,8 +621,13 @@ def _write_stock_legacy_venv(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
     legacy = app / ".venv"
     bin_dir = legacy / "bin"
     lib_dir = legacy / "lib"
-    bin_dir.mkdir(parents=True)
-    lib_dir.mkdir()
+    # Explicit 0o755, one level at a time (not mkdir(parents=True), which
+    # would inherit the ambient umask for "legacy" and "bin"): a stock venv's
+    # directories are never group/world writable, and the fixture must not
+    # depend on the umask the suite happens to run under to stay that way.
+    legacy.mkdir(mode=0o755)
+    bin_dir.mkdir(mode=0o755)
+    lib_dir.mkdir(mode=0o755)
     (bin_dir / "python3").symlink_to(alias)
     (bin_dir / "python").symlink_to("python3")
     (bin_dir / "python3.11").symlink_to("python3")
@@ -838,7 +893,10 @@ def test_legacy_tree_operations_reject_same_device_bind_mounts(
 def test_path_guard_adopts_only_the_final_real_directory(tmp_path):
     anchor = tmp_path / "trusted"
     parent = anchor / "opt" / "patina"
-    parent.mkdir(parents=True, mode=0o755)
+    # Not mkdir(parents=True, mode=0o755): that only applies mode to the
+    # final component ("patina"), leaving "trusted" and "opt" -- created as a
+    # side effect -- at the ambient umask.
+    make_trusted_fixture_directory(parent)
     app = parent / "scan-pipeline"
     app.mkdir(mode=0o777)
     app.chmod(0o777)
@@ -879,7 +937,7 @@ def test_path_guard_rejects_a_symlinked_managed_parent(tmp_path):
 def test_path_guard_canonicalizes_only_a_trusted_executable(tmp_path):
     anchor = tmp_path / "trusted"
     bin_dir = anchor / "usr" / "bin"
-    bin_dir.mkdir(parents=True, mode=0o755)
+    make_trusted_fixture_directory(bin_dir)
     target = bin_dir / "python3.11"
     target.write_text("#!/bin/sh\n")
     target.chmod(0o755)
@@ -898,7 +956,7 @@ def test_path_guard_canonicalizes_only_a_trusted_executable(tmp_path):
 def test_path_guard_rejects_writable_or_relative_privileged_executable(tmp_path):
     anchor = tmp_path / "trusted"
     bin_dir = anchor / "usr" / "bin"
-    bin_dir.mkdir(parents=True, mode=0o755)
+    make_trusted_fixture_directory(bin_dir)
     executable = bin_dir / "python3.11"
     executable.write_text("#!/bin/sh\n")
     executable.chmod(0o777)
@@ -1416,7 +1474,11 @@ def test_stable_release_check_never_chmods_active_release(tmp_path, monkeypatch)
         "0755",
     )
     release = app / ".venv.release.active"
+    # chmod after mkdir: mkdir's mode is still masked by the ambient umask
+    # (0o755 & ~0o077 == 0o700), and this test asserts the release directory
+    # is exactly 0o755 after the guard call proves it was never re-chmod'd.
     release.mkdir(mode=0o755)
+    release.chmod(0o755)
     module = release / "worker.py"
     module.write_text("pass\n")
     module.chmod(0o644)
@@ -1461,7 +1523,12 @@ def test_stable_release_check_never_chmods_active_release(tmp_path, monkeypatch)
 
 def test_trusted_directory_validation_rejects_group_world_writable_state(tmp_path):
     transaction = tmp_path / "trusted" / "etc" / ".scan-worker-install-transaction"
-    transaction.mkdir(parents=True, mode=0o700)
+    # mkdir(parents=True, mode=0o700) only applies mode to the final
+    # component; "trusted" and "etc", created as a side effect, would get the
+    # ambient umask instead.
+    make_trusted_fixture_directory(transaction.parent)
+    transaction.mkdir(mode=0o700)
+    transaction.chmod(0o700)
     transaction.chmod(0o777)
 
     result = _path_guard(
@@ -1477,7 +1544,12 @@ def test_trusted_directory_validation_rejects_group_world_writable_state(tmp_pat
 
 def test_marker_read_rejects_symlinks_without_disclosing_the_target(tmp_path):
     transaction = tmp_path / "trusted" / "etc" / ".scan-worker-install-transaction"
-    transaction.mkdir(parents=True, mode=0o700)
+    # mkdir(parents=True, mode=0o700) only applies mode to the final
+    # component; "trusted" and "etc", created as a side effect, would get the
+    # ambient umask instead.
+    make_trusted_fixture_directory(transaction.parent)
+    transaction.mkdir(mode=0o700)
+    transaction.chmod(0o700)
     outside = tmp_path / "service-controlled-secret"
     outside.write_text("arbitrary-unit-target\n")
     (transaction / "state").symlink_to(outside)
@@ -1498,7 +1570,12 @@ def test_marker_read_rejects_symlinks_without_disclosing_the_target(tmp_path):
 
 def test_marker_read_requires_trusted_regular_nonwritable_file(tmp_path):
     transaction = tmp_path / "trusted" / "etc" / ".scan-worker-install-transaction"
-    transaction.mkdir(parents=True, mode=0o700)
+    # mkdir(parents=True, mode=0o700) only applies mode to the final
+    # component; "trusted" and "etc", created as a side effect, would get the
+    # ambient umask instead.
+    make_trusted_fixture_directory(transaction.parent)
+    transaction.mkdir(mode=0o700)
+    transaction.chmod(0o700)
     marker = transaction / "state"
     marker.write_text("prepared\n")
     marker.chmod(0o666)
@@ -1527,10 +1604,10 @@ def test_marker_read_requires_trusted_regular_nonwritable_file(tmp_path):
 
 
 def _write_minimal_installer_source(source: Path) -> None:
-    source.mkdir(parents=True, exist_ok=True)
+    make_trusted_fixture_directory(source)
     for name in INSTALL_SOURCE_FILES:
         path = source / name
-        path.parent.mkdir(parents=True, exist_ok=True)
+        make_trusted_fixture_directory(path.parent)
         path.write_text(f"fixture {name}\n")
         path.chmod(
             0o755
@@ -1556,7 +1633,7 @@ def _copy_reviewed_installer_source(source: Path) -> None:
     for name in INSTALL_SOURCE_FILES:
         original = INSTALL.parent / name
         destination = source / name
-        destination.parent.mkdir(parents=True, exist_ok=True)
+        make_trusted_fixture_directory(destination.parent)
         shutil.copy2(original, destination)
 
 
@@ -1592,6 +1669,14 @@ def _rewrite_worker_wheel(wheel: Path, mutate) -> None:
     with zipfile.ZipFile(replacement, "x", compression=zipfile.ZIP_DEFLATED) as archive:
         for name, data in payloads.items():
             archive.writestr(name, data)
+    # zipfile opens `replacement` at the default mode (0o666), masked by the
+    # ambient umask same as every other fixture-created path in this file --
+    # under a permissive umask the mutated wheel lands group-writable and
+    # validate-worker-wheel rejects it for THAT reason, masking the specific
+    # rejection reason (payload/Requires-Dist mismatch) this helper exists to
+    # trigger. Pin it before it replaces the original, matching the chmod
+    # already applied to the wheel `pip wheel` produced.
+    replacement.chmod(0o644)
     replacement.replace(wheel)
 
 
@@ -1733,7 +1818,15 @@ def test_local_path_build_keeps_trusted_source_byte_and_tree_clean(
     trusted = tmp_path / "trusted"
     source = trusted / "scan-pipeline-source"
     transaction_parent = trusted / "etc"
-    transaction_parent.mkdir(parents=True, mode=0o750)
+    # `mkdir(parents=True, mode=0o750)` only applies `mode` to the leaf
+    # ("etc"); the "trusted" parent it also has to create here gets the
+    # ambient umask instead, exactly the gap this whole file is fixing.
+    make_trusted_fixture_directory(trusted)
+    # chmod after mkdir, not mode= alone: mkdir's mode is still masked by the
+    # umask (0o750 & ~0o077 == 0o700), and some tests compare this directory's
+    # mode literally, so the umask must not be able to narrow it.
+    transaction_parent.mkdir(mode=0o750)
+    transaction_parent.chmod(0o750)
     _copy_reviewed_installer_source(source)
     _path_guard(tmp_path, "validate-source-tree", "--source-dir", str(source))
     source_before = _installer_source_snapshot(source)
@@ -1801,11 +1894,11 @@ _prepare_isolated_source_build "$SRC_DIR"
         assert (build_source / relative).read_bytes() == (source / relative).read_bytes()
 
     wheel_dir = trusted / "candidate-release" / ".artifacts"
-    wheel_dir.mkdir(parents=True)
+    make_trusted_fixture_directory(wheel_dir)
     build_tmp = (
         transaction_parent / ".scan-worker-install-transaction" / "build-tmp"
     )
-    build_tmp.mkdir()
+    build_tmp.mkdir(mode=0o755)
     build_env = {
         **os.environ,
         "SOURCE_DATE_EPOCH": "1784655816",
@@ -1833,6 +1926,15 @@ _prepare_isolated_source_build "$SRC_DIR"
     assert built.returncode == 0, built.stdout + built.stderr
     assert (build_source / "build").is_dir()
     assert (build_source / "src" / "patina_scan_worker.egg-info").is_dir()
+
+    # `pip wheel` writes its output file(s) with the ambient umask like any
+    # other tool -- under a permissive umask (e.g. 0002) the .whl lands
+    # group-writable and validate-worker-wheel then correctly refuses it, the
+    # same class of bug as every mkdir() above, just from a subprocess this
+    # fixture doesn't control the mode of directly. A real release artifact
+    # is never left group/world writable, so pin it explicitly here too.
+    for artifact in wheel_dir.iterdir():
+        artifact.chmod(0o644)
 
     wheel_result = _path_guard(
         tmp_path,
@@ -2467,7 +2569,7 @@ def test_legacy_commit_boundary_is_copy_smoke_quarantine_then_ready():
 
 def _write_fake_systemctl(tmp_path: Path) -> Path:
     fake_bin = tmp_path / "bin"
-    fake_bin.mkdir(exist_ok=True)
+    fake_bin.mkdir(mode=0o755, exist_ok=True)
     fake_systemctl = fake_bin / "systemctl"
     fake_systemctl.write_text(
         """#!/usr/bin/env bash
@@ -2522,24 +2624,32 @@ def _setup_transaction_tree(
     transaction_parent = tmp_path / "etc"
     units = tmp_path / "systemd"
     candidates = tmp_path / "candidates"
-    app.mkdir()
+    # Explicit 0o755 throughout: "app" anchors the chain the guard walks for
+    # every release/venv path below it, and a bare mkdir() would inherit the
+    # ambient umask (0o775 at umask 0002), which the guard then correctly
+    # refuses as group-writable.
+    app.mkdir(mode=0o755)
+    # chmod after mkdir, not mode= alone: mkdir's mode is still masked by the
+    # umask (0o750 & ~0o077 == 0o700), and some tests compare this directory's
+    # mode literally, so the umask must not be able to narrow it.
     transaction_parent.mkdir(mode=0o750)
-    units.mkdir()
-    candidates.mkdir()
+    transaction_parent.chmod(0o750)
+    units.mkdir(mode=0o755)
+    candidates.mkdir(mode=0o755)
     trusted_interpreter = tmp_path / "python3.11"
     trusted_interpreter.write_text("#!/bin/sh\nexit 0\n")
     trusted_interpreter.chmod(0o755)
 
     old_release = app / ".venv.release.old"
-    old_release.mkdir()
+    old_release.mkdir(mode=0o755)
     (old_release / "marker").write_text("old")
     live = app / ".venv"
     if legacy_live:
-        live.mkdir()
+        live.mkdir(mode=0o755)
         (live / "marker").write_text("old")
         legacy_bin = live / "bin"
-        (live / "lib").mkdir()
-        legacy_bin.mkdir()
+        (live / "lib").mkdir(mode=0o755)
+        legacy_bin.mkdir(mode=0o755)
         (legacy_bin / "python").symlink_to(trusted_interpreter)
         entrypoint = legacy_bin / "patina-scan-worker"
         entrypoint.write_text("#!/bin/sh\nexit 0\n")
@@ -2547,14 +2657,14 @@ def _setup_transaction_tree(
     else:
         live.symlink_to(old_release.name if relative_live else old_release)
     older_release = app / ".venv.release.older"
-    older_release.mkdir()
+    older_release.mkdir(mode=0o755)
     (older_release / "marker").write_text("older")
     (app / ".venv.previous").symlink_to(
         older_release.name if relative_live else older_release
     )
 
     staged = app / ".venv.release.new"
-    staged.mkdir()
+    staged.mkdir(mode=0o755)
     (staged / "marker").write_text("new")
 
     names = [
@@ -2569,8 +2679,8 @@ def _setup_transaction_tree(
     for index, name in enumerate(names):
         target = units / name
         candidate = candidates / name
-        target.parent.mkdir(parents=True, exist_ok=True)
-        candidate.parent.mkdir(parents=True, exist_ok=True)
+        make_trusted_fixture_directory(target.parent)
+        make_trusted_fixture_directory(candidate.parent)
         old_value = "old-worker-unit\n" if index == 0 else f"old-{index}\n"
         new_value = "new-worker-unit\n" if index == 0 else f"new-{index}\n"
         target.write_text(old_value)
@@ -2695,7 +2805,7 @@ def _run_transaction(
     )
     if real_previous:
         (app / ".venv.previous").unlink()
-        (app / ".venv.previous").mkdir()
+        (app / ".venv.previous").mkdir(mode=0o755)
         (app / ".venv.previous" / "marker").write_text("obsolete raw backup")
     if legacy_external_symlink:
         assert legacy_live
@@ -3220,7 +3330,7 @@ def test_partial_unready_materialization_is_discarded_and_retried(tmp_path):
     transaction = app.parent / "etc" / ".scan-worker-install-transaction"
     materialized = app / ".venv.release.partial"
     quarantine = app / ".venv.quarantine.partial"
-    materialized.mkdir()
+    materialized.mkdir(mode=0o755)
     partial_marker = materialized / "marker"
     partial_marker.write_text("partial")
     (tmp_path / "partial-marker-alias").hardlink_to(partial_marker)
@@ -3392,26 +3502,43 @@ def test_interruption_after_durable_commit_keeps_new_release_on_recovery(tmp_pat
 
 def test_recovery_cleans_an_interrupted_build_stage_without_touching_live(tmp_path):
     trusted_source = tmp_path / "trusted-source"
-    trusted_source.mkdir()
+    trusted_source.mkdir(mode=0o755)
     trusted_marker = trusted_source / "pyproject.toml"
     trusted_marker.write_text("reviewed-source\n")
+    # Path.write_text() opens with the default mode (0o666), masked by the
+    # ambient umask same as a bare mkdir() -- 0o664 at umask 0002 -- and this
+    # is read back as a *trusted* file, which the guard correctly refuses if
+    # it is group/world writable.
+    trusted_marker.chmod(0o644)
     app = tmp_path / "app"
-    app.mkdir()
+    app.mkdir(mode=0o755)
     old = app / ".venv.release.old"
-    old.mkdir()
+    old.mkdir(mode=0o755)
     (app / ".venv").symlink_to(old)
     staged = app / ".venv.release.abandoned"
-    staged.mkdir()
+    staged.mkdir(mode=0o755)
     transaction_parent = tmp_path / "etc"
+    # chmod after mkdir, not mode= alone: mkdir's mode is still masked by the
+    # umask (0o750 & ~0o077 == 0o700), and some tests compare this directory's
+    # mode literally, so the umask must not be able to narrow it.
     transaction_parent.mkdir(mode=0o750)
+    transaction_parent.chmod(0o750)
     txn = transaction_parent / ".scan-worker-install-transaction"
-    txn.mkdir()
+    # 0o700, matching what `install -d -m 0700` actually gives this directory
+    # in production (see install-venv-lib.sh) -- this fixture pre-creates it
+    # directly (simulating an already-interrupted transaction) instead of
+    # going through that code path, so it must reproduce the same mode by hand.
+    txn.mkdir(mode=0o700)
     (txn / "state").write_text("building\n")
+    (txn / "state").chmod(0o600)
     (txn / "staged_release").write_text(f"{staged}\n")
+    (txn / "staged_release").chmod(0o600)
     source_build = txn / "source-build" / "build"
-    source_build.mkdir(parents=True)
+    make_trusted_fixture_directory(source_build)
     (source_build / "backend-output").write_text("interrupted\n")
+    (source_build / "backend-output").chmod(0o644)
     (txn / "source-build" / "pyproject.toml").write_text("partial-copy\n")
+    (txn / "source-build" / "pyproject.toml").chmod(0o644)
     result = subprocess.run(
         [
             "bash",
@@ -3436,9 +3563,13 @@ def test_recovery_cleans_an_interrupted_build_stage_without_touching_live(tmp_pa
 
 def test_prepare_refuses_a_dangling_transaction_symlink(tmp_path):
     app = tmp_path / "app"
-    app.mkdir()
+    app.mkdir(mode=0o755)
     transaction_parent = tmp_path / "etc"
+    # chmod after mkdir, not mode= alone: mkdir's mode is still masked by the
+    # umask (0o750 & ~0o077 == 0o700), and some tests compare this directory's
+    # mode literally, so the umask must not be able to narrow it.
     transaction_parent.mkdir(mode=0o750)
+    transaction_parent.chmod(0o750)
     txn = transaction_parent / ".scan-worker-install-transaction"
     txn.symlink_to(app / "missing-transaction-target")
     shell = r"""

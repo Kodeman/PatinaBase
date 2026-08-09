@@ -2219,6 +2219,34 @@ def test_false_clean_primary_cleanup_is_verified_before_return_and_kills_group(
         if leader_pid_path.is_file() and descendant_pid_path.is_file():
             leader_pid = int(leader_pid_path.read_text(encoding="utf-8"))
             descendant_pid = int(descendant_pid_path.read_text(encoding="utf-8"))
+            # Bounded poll, not a single instantaneous _pid_is_gone() check:
+            # the descendant is a grandchild -- spawned by the leader, not by
+            # this test process -- so nothing here can wait()/reap it
+            # directly, and the kernel's teardown of the pair (SIGKILL
+            # delivery to both, the leader's own exit, the descendant's
+            # reparenting and eventual reap) is not instantaneous under load.
+            # os.kill(pid, 0) -- what _pid_is_gone() calls -- succeeds against
+            # a zombie; only ESRCH means fully gone. A single check right
+            # after run_native_engine_child returns races that teardown and
+            # can observe a not-yet-reaped zombie, which is exactly the
+            # 1-in-19-under-load failure this loop replaces. It does not
+            # relax what's being proven: a zombie still fails this loop's
+            # condition, and the assertion below still requires full reap of
+            # both pids, not merely that they stopped running.
+            #
+            # 2.0s matches the identical bounded-poll idiom already used by
+            # this file's other leader+descendant teardown assertions (see
+            # test_success_result_with_surviving_descendant_is_rejected_and_group_is_killed
+            # and test_timeout_kills_group_reaps_leader_and_prevents_late_publication)
+            # -- long enough to beat teardown under concurrent load (it is
+            # 200x the 0.01s poll interval), short enough that a genuine
+            # failure to kill the group still fails this test in ~2s rather
+            # than hanging the suite.
+            stop = time.monotonic() + 2.0
+            while time.monotonic() < stop and not (
+                _pid_is_gone(leader_pid) and _pid_is_gone(descendant_pid)
+            ):
+                time.sleep(0.01)
             gone_at_return = _pid_is_gone(leader_pid) and _pid_is_gone(descendant_pid)
     finally:
         if leader_pid is not None and not _pid_is_gone(leader_pid):
@@ -2238,7 +2266,11 @@ def test_false_clean_primary_cleanup_is_verified_before_return_and_kills_group(
     assert len(str(failure).encode("utf-8")) <= NATIVE_CHILD_MAX_ERROR_BYTES
     assert emergency_calls == [leader_pid]
     assert verification_reports == [()]
-    assert gone_at_return
+    assert gone_at_return, (
+        f"leader {leader_pid} and/or descendant {descendant_pid} were still "
+        "present (running or a zombie) 2.0s after the emergency kill -- the "
+        "adapter did not actually kill the group, this is not just slow reaping"
+    )
     time.sleep(0.80)
     assert activity_log.read_text(encoding="utf-8") == "leader-ready\n"
     assert not late_artifact.exists()
