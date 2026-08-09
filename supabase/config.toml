@@ -296,6 +296,11 @@ verify_jwt = false
 [functions.sms-inbound]
 verify_jwt = false
 
+# Twilio delivery receipts use the same signature scheme as inbound SMS.
+# SMS_STATUS_CALLBACK_URL must exactly match the configured Twilio callback.
+[functions.sms-status]
+verify_jwt = false
+
 # Unauthenticated email-link GET (?t=<signed token>); its own token is the auth.
 [functions.comms-mute]
 verify_jwt = false

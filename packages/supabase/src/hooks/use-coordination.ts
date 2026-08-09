@@ -65,6 +65,11 @@ export interface ProjectParty {
   sms_consent_status: 'not_asked' | 'pending' | 'granted' | 'opted_out';
   sms_consented_at: string | null;
   sms_opt_out_at: string | null;
+  sms_consent_source: string | null;
+  sms_consent_evidence: string | null;
+  sms_consent_recorded_at: string | null;
+  sms_consent_recorded_by: string | null;
+  sms_consent_disclosure_version: string | null;
   vendor_id: string | null;
   profile_id: string | null;
   /** Lineage into the shared studio rolodex (00417/00418) — set by the
@@ -372,6 +377,8 @@ export interface AddProjectPartyInput {
    *  which fires the opt-in invite server-side (Track B DB trigger); false →
    *  'not_asked'. The UI only writes the row; it never sends the invite. */
   textUpdates?: boolean;
+  smsConsentSource?: 'verbal' | 'written' | 'web_form' | 'other';
+  smsConsentEvidence?: string;
   /** Lineage into the shared studio rolodex (00417/00418) — set when the row
    *  is added FROM a rolodex pick (Call Sheet Wave 3's rolodex-picker). Omit
    *  or null for an inline add with no rolodex link. */
@@ -394,6 +401,13 @@ export function useAddProjectParty() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const wantsText = input.textUpdates && !!input.phone?.trim();
+      const consentSource = input.smsConsentSource?.trim() || null;
+      const consentEvidence = input.smsConsentEvidence?.trim() || null;
+      if (wantsText && (!consentSource || !consentEvidence)) {
+        throw new Error(
+          'Record how and where this person gave prior consent before sending a text.',
+        );
+      }
       const { data, error } = await supabase
         .from('project_parties')
         .insert({
@@ -405,6 +419,10 @@ export function useAddProjectParty() {
           phone: input.phone?.trim() || null,
           email: input.email?.trim() || null,
           sms_consent_status: wantsText ? 'pending' : 'not_asked',
+          sms_consent_source: wantsText ? consentSource : null,
+          sms_consent_evidence: wantsText ? consentEvidence : null,
+          sms_consent_recorded_at: wantsText ? new Date().toISOString() : null,
+          sms_consent_disclosure_version: wantsText ? 'field-sms-v1' : null,
           studio_contact_id: input.studioContactId ?? null,
           show_to_client: input.showToClient ?? false,
         })

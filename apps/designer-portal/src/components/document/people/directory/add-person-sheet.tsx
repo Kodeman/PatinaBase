@@ -175,7 +175,11 @@ export function AddPersonSheet({
   const [phone, setPhone] = useState('');
   const [partyEmail, setPartyEmail] = useState('');
   const [projectId, setProjectId] = useState('');
-  const [textUpdates, setTextUpdates] = useState(true);
+  const [textUpdates, setTextUpdates] = useState(false);
+  const [consentSource, setConsentSource] = useState<
+    '' | 'verbal' | 'written' | 'web_form' | 'other'
+  >('');
+  const [consentEvidence, setConsentEvidence] = useState('');
 
   const [error, setError] = useState<string | null>(null);
 
@@ -194,7 +198,9 @@ export function AddPersonSheet({
     setPhone('');
     setPartyEmail('');
     setProjectId('');
-    setTextUpdates(true);
+    setTextUpdates(false);
+    setConsentSource('');
+    setConsentEvidence('');
     setError(null);
   };
 
@@ -289,6 +295,12 @@ export function AddPersonSheet({
       );
       return;
     }
+    if (textUpdates && (!consentSource || !consentEvidence.trim())) {
+      setError(
+        'Record how and where they gave prior consent before sending a text.',
+      );
+      return;
+    }
     try {
       await addParty.mutateAsync({
         projectId,
@@ -299,6 +311,8 @@ export function AddPersonSheet({
         phone,
         email: partyEmail,
         textUpdates,
+        smsConsentSource: consentSource || undefined,
+        smsConsentEvidence: consentEvidence,
       });
       void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
 
@@ -306,7 +320,7 @@ export function AddPersonSheet({
         projects.find((p) => p.id === projectId)?.name ?? 'the project';
       const message =
         textUpdates && phone.trim()
-          ? `${trimmedName} added to ${proj} — a text invite to opt in is on its way.`
+          ? `${trimmedName} added to ${proj} — a text confirmation is on its way.`
           : `${trimmedName} added to ${proj}.`;
       onAdded?.(message, 'field');
       reset();
@@ -558,13 +572,53 @@ export function AddPersonSheet({
               className="mt-0.5 h-4 w-4 cursor-pointer rounded border-[var(--color-pearl)] accent-[var(--color-clay)]"
             />
             <span>
-              Text updates
+              They gave prior express consent for text updates
               <span className="mt-0.5 block text-[0.64rem] text-[var(--color-aged-oak)]">
-                Send an opt-in invite by text (~1 msg/day, reply STOP to quit).
-                They confirm before any updates go out.
+                Optional and never preselected. They agreed to Patina project
+                texts (~1/day, rates may apply, reply STOP to quit).
               </span>
             </span>
           </label>
+
+          {textUpdates && (
+            <div className="mt-4 rounded border border-[var(--color-pearl)] bg-[var(--color-linen)]/45 p-3">
+              <label className={FIELD_LABEL}>How consent was given</label>
+              <select
+                value={consentSource}
+                onChange={(e) =>
+                  setConsentSource(
+                    e.target.value as
+                      | ''
+                      | 'verbal'
+                      | 'written'
+                      | 'web_form'
+                      | 'other',
+                  )
+                }
+                className={`${FIELD_INPUT} mb-3`}
+                aria-label="SMS consent method"
+              >
+                <option value="">Choose a method…</option>
+                <option value="verbal">Verbal agreement</option>
+                <option value="written">Written agreement</option>
+                <option value="web_form">Website or form</option>
+                <option value="other">Other documented consent</option>
+              </select>
+
+              <label className={FIELD_LABEL}>Consent record</label>
+              <textarea
+                value={consentEvidence}
+                onChange={(e) => setConsentEvidence(e.target.value)}
+                placeholder="Where and when they agreed, e.g. signed site kickoff form on Aug 8"
+                rows={3}
+                className={`${FIELD_INPUT} resize-none`}
+              />
+              <p className="mt-2 text-[0.62rem] leading-relaxed text-[var(--color-aged-oak)]">
+                Keep the underlying form, message, or signed record. Patina stores
+                this note, time, disclosure version, and the person recording it.
+              </p>
+            </div>
+          )}
         </>
       )}
 
