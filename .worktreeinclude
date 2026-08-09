@@ -1,0 +1,8 @@
+# Core localhost-validated paths copied from ~/.config/patina/env/local.
+# Add opaque or third-party credentials only after a task-specific manual review.
+apps/admin-portal/.env.local
+apps/client-portal/.env.local
+apps/designer-portal/.env.local
+services/media/.env
+services/orders/.env
+services/projects/.env

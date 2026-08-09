@@ -1,19 +1,16 @@
-# Advisory only — this repo has no CI-gating culture (see patina-verification
-# skill: docker-publish.yml's last 40 runs on main all failed and nothing was
-# blocked). No branch protection rule references this workflow. It exists so
-# a skill-authoring mistake shows up as a red check in the PR UI, not so it
-# can block a merge. scripts/lint-skills.mjs is zero-dependency Node stdlib,
-# so this job intentionally skips `pnpm install` — checkout + node is enough.
+# Fast standalone validation for the canonical cross-agent skill tree.
 name: Skills lint
 
 on:
   push:
     paths:
-      - '.claude/skills/**'
+      - '.agents/skills/**'
+      - '.claude/skills'
       - 'scripts/lint-skills.mjs'
   pull_request:
     paths:
-      - '.claude/skills/**'
+      - '.agents/skills/**'
+      - '.claude/skills'
       - 'scripts/lint-skills.mjs'
 
 jobs:
