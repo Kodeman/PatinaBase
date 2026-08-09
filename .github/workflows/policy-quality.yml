@@ -1,0 +1,107 @@
+name: Policy and affected quality
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: policy-quality-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  policy:
+    name: Security policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Check changed paths and content
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [[ "$BASE_SHA" =~ ^0+$ ]]; then BASE_SHA=HEAD^; fi
+          node scripts/hooks/patina-hooks.mjs policy --base "$BASE_SHA" --head HEAD --strict
+
+      - name: Test the policy engine
+        run: node --test scripts/hooks/*.test.mjs
+
+  plan:
+    name: Affected plan
+    runs-on: ubuntu-latest
+    outputs:
+      ios_patina: ${{ steps.plan.outputs.ios_patina }}
+      ios_capture: ${{ steps.plan.outputs.ios_capture }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - id: plan
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [[ "$BASE_SHA" =~ ^0+$ ]]; then BASE_SHA=HEAD^; fi
+          node scripts/hooks/patina-hooks.mjs plan --base "$BASE_SHA" --head HEAD
+
+  affected-quality:
+    name: Affected quality (advisory)
+    needs: plan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Run affected build, type, lint, and unit gates
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [[ "$BASE_SHA" =~ ^0+$ ]]; then BASE_SHA=HEAD^; fi
+          node scripts/hooks/patina-hooks.mjs verify --base "$BASE_SHA" --head HEAD --run --strict
+
+  ios-patina:
+    name: Patina iOS gate (advisory)
+    needs: plan
+    if: needs.plan.outputs.ios_patina == 'true'
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: apps/mobile/Patina/scripts/ios-gate.sh all
+
+  ios-capture:
+    name: Capture iOS gate (advisory)
+    needs: plan
+    if: needs.plan.outputs.ios_capture == 'true'
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: apps/mobile/Capture/scripts/capture-gate.sh all

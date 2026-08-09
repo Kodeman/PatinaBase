@@ -1,0 +1,134 @@
+name: Deploy production
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Full commit SHA from main to deploy
+        required: true
+      base_sha:
+        description: Previously deployed full commit SHA
+        required: true
+      scope:
+        description: Deploy changed units or the full platform
+        required: true
+        type: choice
+        options: [affected, all]
+        default: affected
+      reason:
+        description: Release or incident reason
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate-and-plan:
+    name: Validate immutable release and create manifest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 0
+
+      - name: Require an immutable commit on main
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          BASE_SHA: ${{ inputs.base_sha }}
+        run: |
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          git fetch origin main
+          git merge-base --is-ancestor "$RELEASE_SHA" origin/main
+          git merge-base --is-ancestor "$BASE_SHA" "$RELEASE_SHA"
+
+      - name: Create ordered deployment manifest
+        env:
+          BASE_SHA: ${{ inputs.base_sha }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          DEPLOY_SCOPE: ${{ inputs.scope }}
+          RELEASE_REASON: ${{ inputs.reason }}
+          REQUESTED_BY: ${{ github.actor }}
+        run: node scripts/hooks/patina-hooks.mjs deploy-plan --base "$BASE_SHA" --release "$RELEASE_SHA" --scope "$DEPLOY_SCOPE" --reason "$RELEASE_REASON" --requested-by "$REQUESTED_BY" --output deployment-manifest.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: production-manifest-${{ inputs.release_sha }}-${{ github.run_attempt }}
+          path: deployment-manifest.json
+          retention-days: 90
+
+  integration:
+    name: Release integration gate
+    uses: ./.github/workflows/integration.yml
+    with:
+      ref: ${{ inputs.release_sha }}
+
+  deploy:
+    name: Protected production deployment
+    needs: [validate-and-plan, integration]
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: production
+      cancel-in-progress: false
+    env:
+      GITHUB_ACTIONS: "true"
+      PATINA_PRODUCTION_DEPLOY: "1"
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.72.7
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: production-manifest-${{ inputs.release_sha }}-${{ github.run_attempt }}
+
+      - name: Validate production credentials
+        run: |
+          test -n "$SUPABASE_ACCESS_TOKEN"
+          test -n "$SUPABASE_DB_PASSWORD"
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$NEXT_PUBLIC_SUPABASE_URL"
+          test -n "$NEXT_PUBLIC_SUPABASE_ANON_KEY"
+          case "$NEXT_PUBLIC_SUPABASE_URL" in
+            *localhost*|*127.0.0.1*) exit 1 ;;
+          esac
+
+      - name: Link the production Supabase project
+        run: supabase link --project-ref bkvcixdmuyejfzcijpdg --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Execute the approved manifest
+        run: node scripts/hooks/patina-hooks.mjs deploy --manifest deployment-manifest.json --output deployment-results.json
+
+      - name: Preserve the deployment record
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-record-${{ inputs.release_sha }}-${{ github.run_attempt }}
+          path: |
+            deployment-manifest.json
+            deployment-results.json
+          retention-days: 90

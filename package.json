@@ -23,6 +23,10 @@
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint:fix",
     "lint:skills": "node scripts/lint-skills.mjs",
+    "hooks:test": "node --test scripts/hooks/*.test.mjs",
+    "hooks:policy": "node scripts/hooks/patina-hooks.mjs policy --staged --strict",
+    "hooks:verify": "node scripts/hooks/patina-hooks.mjs verify --run",
+    "hooks:audit": "node scripts/hooks/patina-hooks.mjs audit",
     "dev:seed-room-fixture": "node scripts/dev/seed-room-scan-fixture.mjs",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,scss,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,css,scss,md}\"",
@@ -46,7 +50,8 @@
     "prisma:push": "pnpm --filter @patina/orders exec prisma db push && pnpm --filter @patina/media exec prisma db push && pnpm --filter @patina/projects exec prisma db push",
     "seed:fulfillment": "deno run -A scripts/seed-fulfillment-orders.ts",
     "test:library-config": "psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -f supabase/tests/library/product_configuration_test.sql",
-    "test:boh-audit": "psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -f supabase/functions/_tests/fulfillment_foundation.assert.sql && psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -f supabase/functions/_tests/fulfillment_queue_bands.assert.sql && psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -f supabase/functions/_tests/fulfillment_transmission.assert.sql && psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -f supabase/functions/_tests/fulfillment_ledger_walk.assert.sql && psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -f supabase/functions/_tests/fulfillment_exceptions.assert.sql && deno test --no-check -A --node-modules-dir=auto supabase/functions/_tests/fulfillment-*.test.ts"
+    "test:boh-audit": "psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -f supabase/functions/_tests/fulfillment_foundation.assert.sql && psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -f supabase/functions/_tests/fulfillment_queue_bands.assert.sql && psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -f supabase/functions/_tests/fulfillment_transmission.assert.sql && psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -f supabase/functions/_tests/fulfillment_ledger_walk.assert.sql && psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -f supabase/functions/_tests/fulfillment_exceptions.assert.sql && deno test --no-check -A --node-modules-dir=auto supabase/functions/_tests/fulfillment-*.test.ts",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@types/node": "^20.11.19",
@@ -54,6 +59,7 @@
     "@typescript-eslint/parser": "^8.0.0",
     "eslint": "^9.0.0",
     "eslint-config-prettier": "^9.1.0",
+    "husky": "^9.1.7",
     "lint-staged": "^15.2.2",
     "prettier": "^3.2.5",
     "turbo": "^2.0.0",
