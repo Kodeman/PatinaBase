@@ -1,0 +1,63 @@
+name: AI quality gate
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-quality-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Validate agent policy and scripts
+        run: |
+          test -L .claude/skills
+          test "$(readlink .claude/skills)" = "../.agents/skills"
+          grep -Fxq '@AGENTS.md' CLAUDE.md
+          bash -n scripts/agent-preflight.sh scripts/bootstrap-worktree.sh scripts/init-local-env-profile.sh scripts/worktree-recovery-manifest.sh scripts/verify-affected.sh scripts/repo-gc.sh
+          pnpm lint:skills
+
+      - name: Verify affected code
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: pnpm verify:affected -- "$BASE_SHA" "$HEAD_SHA"
+
+  quality-gate:
+    if: always()
+    needs: [quality]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require quality job
+        run: test "${{ needs.quality.result }}" = success

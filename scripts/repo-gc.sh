@@ -3,7 +3,7 @@
 # repo-gc.sh — safe repo garbage collector for the patina-merged monorepo.
 #
 # Codifies the manual sweep we've been doing by hand: retire stale agent
-# git worktrees (see .claude/skills/patina-parallel-work) and clear
+# git worktrees (see .agents/skills/patina-parallel-work) and clear
 # rebuildable build-artifact directories in the main checkout. Defaults to
 # a DRY RUN — nothing is removed, branches are never touched, and node
 # processes currently using an artifact dir make that dir untouchable
@@ -41,7 +41,7 @@
 # Section 2 — build-artifact clean (main checkout only):
 #   Candidates: apps/*/.next, apps/*/.open-next, apps/mobile/Patina/build,
 #   apps/mobile/Capture/.build, <root>/.build, packages/*/storybook-static,
-#   and any .turbo directory outside node_modules/ and .claude/worktrees/.
+#   and any .turbo directory outside node_modules/ and registered worktrees.
 #   Skipped automatically (with a printed reason) if a matching dev/build
 #   process is running:
 #     - `next dev`/`next-server` running  -> .next/.open-next left alone
@@ -57,10 +57,11 @@ set -euo pipefail
 
 APPLY=0
 IGNORE_GENERATED_DIRT=0
+EXTERNAL_ROOT=""
 
 usage() {
   cat <<'EOF'
-Usage: scripts/repo-gc.sh [--apply] [--ignore-generated-dirt] [--help]
+Usage: scripts/repo-gc.sh [--apply] [--ignore-generated-dirt] [--external-root PATH] [--help]
 
 Dry run by default: reports removable worktrees and build-artifact
 directories without touching anything. Pass --apply to actually remove them.
@@ -71,6 +72,8 @@ Options:
   --ignore-generated-dirt   Treat a worktree as clean when its only dirty
                             paths are under */src/generated/prisma-client/*
                             (pre-existing generated-file drift). Off by default.
+  --external-root PATH      Allowed Herdr worktree root. Defaults to the local
+                            git config patina.worktreeRoot, then ~/Code/.herdr-worktrees.
   -h, --help                Show this help and exit.
 
 Never touches: the main checkout (not a removal candidate, ever), branches
@@ -79,17 +82,23 @@ branches), node_modules/.venv/.serena, or any git-tracked path.
 EOF
 }
 
-for arg in "$@"; do
-  case "$arg" in
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
     --apply) APPLY=1 ;;
     --ignore-generated-dirt) IGNORE_GENERATED_DIRT=1 ;;
+    --external-root)
+      shift
+      [[ "$#" -gt 0 ]] || { echo "repo-gc.sh: --external-root requires a path" >&2; exit 2; }
+      EXTERNAL_ROOT="$1"
+      ;;
     -h|--help) usage; exit 0 ;;
     *)
-      echo "repo-gc.sh: unknown argument: $arg" >&2
+      echo "repo-gc.sh: unknown argument: $1" >&2
       usage
       exit 2
       ;;
   esac
+  shift
 done
 
 # ---------------------------------------------------------------------------
@@ -122,12 +131,34 @@ fi
 
 cd "$REPO_ROOT"
 
+REPO_NAME="$(basename "$REPO_ROOT")"
+if [[ -z "$EXTERNAL_ROOT" ]]; then
+  EXTERNAL_ROOT="$(git config --local --get patina.worktreeRoot || true)"
+fi
+if [[ -z "$EXTERNAL_ROOT" ]]; then
+  EXTERNAL_ROOT="$HOME/Code/.herdr-worktrees"
+fi
+case "$EXTERNAL_ROOT" in
+  "~/"*) EXTERNAL_ROOT="$HOME/${EXTERNAL_ROOT#~/}" ;;
+esac
+HERDR_REPO_ROOT="$EXTERNAL_ROOT/$REPO_NAME"
+
 # True only for a path that exists, resolves under REPO_ROOT, and is not
 # REPO_ROOT itself. Every destructive action is gated on this.
-under_root() {
+under_repo_root() {
   local resolved
   resolved="$(cd "$1" 2>/dev/null && pwd)" || return 1
   [[ "$resolved" == "$REPO_ROOT"/* && "$resolved" != "$REPO_ROOT" ]]
+}
+
+under_managed_worktree_root() {
+  local resolved herdr_resolved=""
+  resolved="$(cd "$1" 2>/dev/null && pwd)" || return 1
+  if [[ -d "$HERDR_REPO_ROOT" ]]; then
+    herdr_resolved="$(cd "$HERDR_REPO_ROOT" && pwd)"
+  fi
+  [[ "$resolved" == "$REPO_ROOT"/* && "$resolved" != "$REPO_ROOT" ]] || \
+    [[ -n "$herdr_resolved" && "$resolved" == "$herdr_resolved"/* ]]
 }
 
 human_kb() {
@@ -142,6 +173,7 @@ MODE_LABEL="DRY RUN"
 [[ "$APPLY" -eq 1 ]] && MODE_LABEL="APPLY"
 echo "== repo-gc: $MODE_LABEL =="
 echo "repo root: $REPO_ROOT"
+echo "herdr root: $HERDR_REPO_ROOT"
 echo
 
 # =============================================================================
@@ -200,8 +232,8 @@ for i in "${!WT_PATH[@]}"; do
   if [[ "$wt_real" == "$REPO_ROOT" ]]; then
     continue # main checkout — never a candidate
   fi
-  if ! under_root "$wt_real"; then
-    echo "  ! $wt_real — resolves outside the repo root, refusing to consider it"
+  if ! under_managed_worktree_root "$wt_real"; then
+    echo "  ! $wt_real — outside the repo and configured Herdr roots; refusing to consider it"
     continue
   fi
 
@@ -265,8 +297,8 @@ if [[ "$APPLY" -eq 1 && "${#REMOVABLE_WT[@]}" -gt 0 ]]; then
   echo
   echo "  applying removals:"
   for wt in "${REMOVABLE_WT[@]}"; do
-    if ! under_root "$wt"; then
-      echo "    refusing to remove $wt — no longer strictly under repo root" >&2
+    if ! under_managed_worktree_root "$wt"; then
+      echo "    refusing to remove $wt — outside the configured cleanup roots" >&2
       continue
     fi
     recheck="$(git -C "$wt" status --porcelain)"
@@ -337,11 +369,8 @@ add_candidates packages/*/storybook-static
 
 # .turbo dirs anywhere in the tree, excluding node_modules/ and worktrees —
 # `find` rather than a glob since .turbo can nest at arbitrary depth. Agent
-# worktrees live under both .claude/worktrees/ and .codex/worktrees/ in this
-# repo (APFS is case-insensitive, so .Codex/worktrees/ is the same directory
-# on disk) — pruning on the `worktrees` basename itself, rather than listing
-# each parent, covers all of them and stops find from descending into any of
-# them at all (faster than -not -path, which still walks the whole subtree).
+# Legacy nested worktrees may remain in old clones. Pruning on the `worktrees`
+# basename prevents this main-checkout artifact scan from entering them.
 while IFS= read -r -d '' d; do
   CANDIDATES+=("$d")
 done < <(find "$REPO_ROOT" \
@@ -391,7 +420,7 @@ for t in "${CANDIDATES[@]+"${CANDIDATES[@]}"}"; do
     continue
   fi
 
-  if ! under_root "$real"; then
+  if ! under_repo_root "$real"; then
     echo "  ! $real resolves outside the repo root — skipping" >&2
     continue
   fi

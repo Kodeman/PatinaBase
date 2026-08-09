@@ -1,5 +1,94 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "disableBypassPermissionsMode": "disable",
+    "disableAutoMode": "disable",
+    "allow": [
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(git rev-parse*)",
+      "Bash(git merge-base*)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(pnpm install --frozen-lockfile*)",
+      "Bash(pnpm --filter * lint*)",
+      "Bash(pnpm --filter * type-check*)",
+      "Bash(pnpm --filter * test*)",
+      "Bash(pnpm --filter * build*)",
+      "Bash(pnpm lint:skills*)",
+      "Bash(pnpm verify:affected*)",
+      "Bash(node *)",
+      "Bash(deno check *)",
+      "Bash(deno test *)",
+      "Bash(rg *)"
+    ],
+    "ask": [
+      "Bash(git push*)",
+      "Bash(gh pr create*)",
+      "Bash(gh pr merge*)",
+      "Bash(git reset --hard*)",
+      "Bash(git worktree remove*)",
+      "Bash(git branch -D*)",
+      "Bash(rm -rf *)",
+      "Bash(pnpm supabase:reset*)",
+      "Bash(pnpm supabase:remote:*)",
+      "Bash(pnpm prisma:push*)",
+      "Bash(pnpm db:push*)",
+      "Bash(pnpm --filter * deploy*)",
+      "Bash(pnpm --filter * push*)",
+      "Bash(pnpm --filter * exec wrangler deploy*)",
+      "Bash(supabase db *)",
+      "Bash(supabase functions deploy*)",
+      "Bash(npx wrangler deploy*)",
+      "Bash(wrangler deploy*)",
+      "Bash(./infra/deploy-portal.sh*)"
+    ],
+    "deny": [
+      "Read(/.env)",
+      "Read(/**/.env)",
+      "Read(/**/.env.*)",
+      "Read(/infra/.env*)",
+      "Edit(/.env)",
+      "Edit(/**/.env)",
+      "Edit(/**/.env.*)",
+      "Bash(git add -A*)",
+      "Bash(git add .*)",
+      "Bash(git add *env*)",
+      "Bash(git commit -a*)",
+      "Bash(git commit --all*)",
+      "Bash(ssh *192.168.1.14*)",
+      "Bash(vercel --prod*)"
+    ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "failIfUnavailable": true,
+    "autoAllowBashIfSandboxed": false,
+    "filesystem": {
+      "denyRead": [
+        "./.env",
+        "./**/.env",
+        "./**/.env.*",
+        "./infra/.env*",
+        "~/.ssh",
+        "~/.aws/credentials",
+        "~/.config/gcloud"
+      ]
+    },
+    "network": {
+      "allowedDomains": [
+        "registry.npmjs.org",
+        "github.com",
+        "api.github.com",
+        "localhost",
+        "127.0.0.1"
+      ],
+      "allowLocalBinding": true
+    }
+  },
   "hooks": {
     "PreToolUse": [
       {
@@ -7,7 +96,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "input=$(cat); cmd=$(echo \"$input\" | jq -r '.tool_input.command // \"\"'); case \"$cmd\" in *\"pnpm dev:designer\"*|*\"pnpm dev:minimal\"*|*\"pnpm dev:client\"*|*\"pnpm dev:admin\"*|*\"pnpm dev:frontend\"*) env_file=\"apps/designer-portal/.env.local\"; missing=\"\"; if [ ! -f \"$env_file\" ]; then missing=\" (file missing)\"; else grep -q '^NEXT_PUBLIC_POSTHOG_KEY=phc_' \"$env_file\" || missing=\"$missing NEXT_PUBLIC_POSTHOG_KEY\"; grep -q '^NEXT_PUBLIC_POSTHOG_HOST=' \"$env_file\" || missing=\"$missing NEXT_PUBLIC_POSTHOG_HOST\"; grep -q '^NEXT_PUBLIC_POSTHOG_ENABLE_IN_DEV=true' \"$env_file\" || missing=\"$missing NEXT_PUBLIC_POSTHOG_ENABLE_IN_DEV=true\"; fi; if [ -n \"$missing\" ]; then jq -nc --arg m \"$missing\" '{systemMessage: (\"PostHog dev env not set — feature flags will fail-closed locally. Missing:\" + $m), hookSpecificOutput: {hookEventName: \"PreToolUse\", additionalContext: (\"apps/designer-portal/.env.local is missing PostHog vars for local dev (missing:\" + $m + \"). Feature flags (procurement-workspace-pilot) will evaluate to false; gated UI is invisible. Add to apps/designer-portal/.env.local before running dev:\\nNEXT_PUBLIC_POSTHOG_KEY=<phc_... from PostHog project 326191>\\nNEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com\\nNEXT_PUBLIC_POSTHOG_ENABLE_IN_DEV=true\")}}'; fi ;; esac; exit 0",
+            "command": "scripts/agent-preflight.sh",
             "timeout": 10
           }
         ]
