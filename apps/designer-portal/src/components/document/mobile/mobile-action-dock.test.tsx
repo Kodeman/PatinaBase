@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MobileActionDock } from './mobile-action-dock';
 import { MobileBar } from './mobile-bar';
 import {
@@ -10,6 +10,8 @@ import {
 } from './mobile-shell';
 import { openFeedbackSheet } from '../feedback/feedback-sheet';
 import { ProposalShareInstrument } from '../proposal-share-instrument';
+import { DocumentGuide } from '../document-guide';
+import { MOBILE_ACTION_PRIORITY, signedProposalMobileAction } from './lifecycle-mobile-action';
 
 const mockOpenPost = jest.fn();
 let mockPathname = '/desk';
@@ -57,11 +59,12 @@ jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: {
     actionShown: jest.fn(),
     actionSelected: jest.fn(),
+    guideShown: jest.fn(),
   },
 }));
 
-function Registration({ action }: { action: MobilePrimaryAction | null }) {
-  useMobilePrimaryAction(action);
+function Registration({ action, priority }: { action: MobilePrimaryAction | null; priority?: number }) {
+  useMobilePrimaryAction(action, { priority });
   return null;
 }
 
@@ -119,6 +122,46 @@ describe('unified mobile edge owner', () => {
     expect(primary).toHaveClass('min-h-11');
     fireEvent.click(primary);
     expect(press).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the signed-proposal activation action above fallback guide messaging', () => {
+    const activate = jest.fn();
+    const guideActivate = jest.fn();
+    render(
+      <MobileShellProvider>
+        <DocumentGuide
+          model={{
+            state: 'actionable',
+            stage: 'proposal',
+            eyebrow: 'Proposal · signed',
+            headline: 'The client has signed',
+            reason: 'Use the signed-proposal controls below.',
+            action: {
+              key: 'review-signing-controls',
+              label: 'Review signing controls',
+              destination: { kind: 'anchor', section: 'proposal' },
+            },
+          }}
+          onActivate={guideActivate}
+        />
+        <Registration
+          action={signedProposalMobileAction({
+            projectId: null,
+            isLoading: false,
+            isPending: false,
+            onActivate: activate,
+          })}
+          priority={MOBILE_ACTION_PRIORITY.lifecycle}
+        />
+        <MobileBar />
+      </MobileShellProvider>,
+    );
+
+    const mobileBar = within(screen.getByTestId('mobile-bar'));
+    expect(mobileBar.queryByRole('button', { name: 'Review signing controls' })).not.toBeInTheDocument();
+    fireEvent.click(mobileBar.getByRole('button', { name: 'Open the project' }));
+    expect(activate).toHaveBeenCalledTimes(1);
+    expect(guideActivate).not.toHaveBeenCalled();
   });
 
   it('keeps secondary doorways in an accessible More disclosure', () => {

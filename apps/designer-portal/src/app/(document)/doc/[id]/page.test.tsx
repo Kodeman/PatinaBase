@@ -1,9 +1,11 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import DocumentPage from './page';
 import { authorizationDoorwayFor } from '@/lib/document/authorization-doorway';
 
 let mockHydrated = false;
 const mockRetryDocumentResolution = jest.fn();
+const mockHistoryToggled = jest.fn();
 let mockDocumentQuery: Record<string, unknown>;
 
 jest.mock('@portabletext/react', () => ({
@@ -36,7 +38,35 @@ jest.mock('@/hooks/document-time-provider', () => ({
 
 jest.mock('@/components/document/mobile/mobile-shell', () => ({
   useMobileActiveDoc: jest.fn(),
+  useMobilePrimaryAction: jest.fn(),
 }));
+
+jest.mock('@/components/document/doc-spine', () => ({
+  DocSpine: ({ onJump }: { onJump: (section: string) => void }) => (
+    <button type="button" onClick={() => onJump('brief')}>Jump to brief</button>
+  ),
+}));
+jest.mock('@/components/document/doc-letterhead', () => ({
+  DocLetterhead: ({ title }: { title: string }) => <header>{title}</header>,
+}));
+jest.mock('@/components/document/brief-section', () => ({
+  BriefSection: () => <div>Brief work</div>,
+}));
+jest.mock('@/components/document/brief-recap', () => ({ BriefRecap: () => <div>Brief recap</div> }));
+jest.mock('@/components/document/discovery/discovery-section', () => ({
+  DiscoverySection: () => <div>Discovery work</div>,
+}));
+jest.mock('@/components/document/mobile/mobile-margin-chips', () => ({ MobileMarginChips: () => null }));
+jest.mock('@/components/document/letterhead-instruments', () => ({ LetterheadInstruments: () => null }));
+jest.mock('@/components/document/schedule/schedule-nav-context', () => ({
+  ScheduleNavProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
+}));
+jest.mock('@/components/document/schedule/schedule-ripple-context', () => ({
+  RippleProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
+}));
+jest.mock('@/components/document/project-schedule-handoff-mount', () => ({ ProjectScheduleHandoffMount: () => null }));
+jest.mock('@/components/document/margin-rail', () => ({ MarginRail: () => null, ResponsiveMarginRail: () => null }));
+jest.mock('@/components/document/doc-colophon', () => ({ DocColophon: () => null }));
 
 jest.mock('@/components/document/phase-timeline', () => ({
   PhaseTimeline: ({ projectId }: { projectId: string }) => (
@@ -105,6 +135,12 @@ jest.mock('@/lib/help-system/use-document-surface', () => ({
 
 jest.mock('@/lib/analytics/document-events', () => ({
   rememberDocumentInHand: jest.fn(),
+  documentEvents: {
+    historyToggled: (...args: unknown[]) => mockHistoryToggled(...args),
+    guideShown: jest.fn(),
+    actionShown: jest.fn(),
+    actionSelected: jest.fn(),
+  },
 }));
 
 const fulfilledParams = {
@@ -155,6 +191,79 @@ describe('DocumentPage hydration render behavior', () => {
     expect(screen.getByText('This document could not be picked up.')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(mockRetryDocumentResolution).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('DocumentPage guide activation', () => {
+  beforeEach(() => {
+    mockHydrated = true;
+    mockHistoryToggled.mockReset();
+    mockDocumentQuery = {
+      data: {
+        kind: 'engagement',
+        row: {
+          engagement_kind: 'lead', engagement_id: 'lead-1', project_id: null, proposal_id: null,
+          lead_id: 'lead-1', designer_id: 'designer-1', client_profile_id: null,
+          client_name: 'Avery Stone', title: 'Stone Residence', active_section: 'brief',
+          project_status: null, current_phase: null, is_paused: false, is_archived: false,
+          proposal_status: null, proposal_sent_at: null, proposal_viewed_at: null,
+          lead_response_deadline: null, lead_status: null, overdue_decision_count: 0,
+          earliest_overdue_due: null, awaiting_inspection_count: 0, blocked_item_count: 0,
+          in_flight_count: 0, installed_count: 0, item_count: 0,
+          updated_at: '2026-08-10T12:00:00Z', open_claim_count: 0, open_claim_po: null,
+          unsent_pulse_count: 0, pulse_week_of: null, draft_unsent_po_count: 0,
+          oldest_draft_po_created_at: null, draft_po_label: null, unacked_po_count: 0,
+          oldest_unacked_sent_at: null, unacked_po_label: null, due_task_count: 0,
+          earliest_task_due: null, due_task_title: null,
+        },
+      },
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      refetch: mockRetryDocumentResolution,
+    };
+    window.matchMedia = jest.fn().mockReturnValue({ matches: true }) as unknown as typeof window.matchMedia;
+    window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    }) as typeof window.requestAnimationFrame;
+    HTMLElement.prototype.scrollIntoView = jest.fn();
+  });
+
+  it('activates the guide anchor and honors reduced motion', () => {
+    render(<DocumentPage params={fulfilledParams} />);
+    const activeSection = document.querySelector<HTMLElement>('[data-active-section]');
+    expect(activeSection).not.toBeNull();
+    activeSection!.scrollIntoView = jest.fn();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Review the brief' }));
+
+    expect(activeSection!.scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'auto' });
+  });
+
+  it('counts a programmatic history expansion once', () => {
+    const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+    mockDocumentQuery = {
+      ...mockDocumentQuery,
+      data: {
+        kind: 'engagement',
+        row: {
+          ...current,
+          engagement_kind: 'relationship',
+          active_section: 'discovery',
+          engagement_id: 'relationship-1',
+          lead_id: null,
+          client_profile_id: 'client-1',
+        },
+      },
+    };
+
+    render(<DocumentPage params={fulfilledParams} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Jump to brief' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Jump to brief' }));
+
+    expect(mockHistoryToggled).toHaveBeenCalledTimes(1);
+    expect(mockHistoryToggled).toHaveBeenCalledWith({ expanded: true, completed_count: 1 });
   });
 });
 

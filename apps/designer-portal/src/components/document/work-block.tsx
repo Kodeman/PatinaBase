@@ -66,8 +66,10 @@ export function WorkBlock({
   clientUserId: string | null;
   clientName: string;
 }) {
-  const { data: tasks } = useSectionTasks(projectId);
-  const { data: gates } = useSectionGates(projectId);
+  const tasksQuery = useSectionTasks(projectId);
+  const gatesQuery = useSectionGates(projectId);
+  const tasks = tasksQuery.data;
+  const gates = gatesQuery.data;
   const { data: loggedMinutes } = useSectionLoggedMinutes(
     projectId,
     sectionKey,
@@ -119,6 +121,33 @@ export function WorkBlock({
     setEstimateH('');
     setCapturing(false);
   };
+
+  if (tasksQuery.isLoading || gatesQuery.isLoading) {
+    return (
+      <p className="mb-1 mt-4 py-3 text-[11.5px] italic text-[var(--text-muted)]">
+        Reading the work…
+      </p>
+    );
+  }
+
+  if (tasksQuery.isError || gatesQuery.isError) {
+    return (
+      <div className="mb-1 mt-4 border-y border-[var(--color-pearl)] py-3">
+        <p role="alert" className="text-[11.5px] text-[var(--color-terracotta)]">
+          The work could not be read.
+        </p>
+        <DocumentAction
+          actionKey="retry-section-work"
+          surfaceKey="open-document"
+          regionKey={`${sectionKey}-work-error`}
+          variant="secondary"
+          onClick={() => void Promise.all([tasksQuery.refetch(), gatesQuery.refetch()])}
+        >
+          Try again
+        </DocumentAction>
+      </div>
+    );
+  }
 
   if (sectionTasks.length === 0 && !gate && !capturing && !gateAsking) {
     return (

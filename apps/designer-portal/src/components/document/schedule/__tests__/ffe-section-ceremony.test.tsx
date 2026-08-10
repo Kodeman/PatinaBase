@@ -5,6 +5,9 @@ let mockRooms: Record<string, unknown>[] = [];
 let mockInstruments: Record<string, unknown>[] = [];
 let mockTradeScopes: Record<string, unknown>[] = [];
 let mockAuthority: { data: unknown } = { data: null };
+let mockItemsLoading = false;
+let mockItemsError = false;
+const mockItemsRefetch = jest.fn();
 
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
@@ -13,11 +16,17 @@ jest.mock('@/lib/analytics/document-events', () => ({
 jest.mock('@/lib/help-system/open-help', () => ({ openHelp: jest.fn() }));
 
 jest.mock('@tanstack/react-query', () => ({
+  ...jest.requireActual('@tanstack/react-query'),
   useQueryClient: () => ({ invalidateQueries: jest.fn() }),
 }));
 
 jest.mock('@patina/supabase', () => ({
-  useProjectFFEItems: () => ({ data: mockItems, isLoading: false }),
+  useProjectFFEItems: () => ({
+    data: mockItems,
+    isLoading: mockItemsLoading,
+    isError: mockItemsError,
+    refetch: mockItemsRefetch,
+  }),
   useFfeInvoiceCoverage: () => ({ data: {} }),
 }));
 
@@ -96,6 +105,9 @@ const renderSection = () =>
 
 describe('the schedule ceremony', () => {
   beforeEach(() => {
+    mockItemsLoading = false;
+    mockItemsError = false;
+    mockItemsRefetch.mockReset();
     mockRooms = [
       { id: 'room-1', name: 'Primary bedroom', budget_cents: 0 },
       { id: 'room-2', name: 'Living', budget_cents: 0 },
@@ -127,6 +139,27 @@ describe('the schedule ceremony', () => {
     ];
     mockTradeScopes = [];
     mockAuthority = { data: { state: 'active', agreementId: 'agreement-1' } };
+  });
+
+  it('distinguishes loading, error, and a successful empty schedule', () => {
+    mockItems = [];
+    mockItemsLoading = true;
+    const loading = renderSection();
+    expect(screen.getByText('Reading the schedule…')).toBeVisible();
+    expect(screen.queryByText('Build the FF&E schedule')).not.toBeInTheDocument();
+    loading.unmount();
+
+    mockItemsLoading = false;
+    mockItemsError = true;
+    const failed = renderSection();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(mockItemsRefetch).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Build the FF&E schedule')).not.toBeInTheDocument();
+    failed.unmount();
+
+    mockItemsError = false;
+    renderSection();
+    expect(screen.getByText('Build the FF&E schedule')).toBeVisible();
   });
 
   it('wears the second stamp beside the logistics one', () => {

@@ -23,7 +23,7 @@ import { useDocumentEngagement } from '@/hooks/use-document-state';
 import { useHoldDocument } from '@/hooks/document-time-provider';
 import { useMobileActiveDoc } from '@/components/document/mobile/mobile-shell';
 import { MobileMarginChips } from '@/components/document/mobile/mobile-margin-chips';
-import { rememberDocumentInHand } from '@/lib/analytics/document-events';
+import { documentEvents, rememberDocumentInHand } from '@/lib/analytics/document-events';
 import { useDocumentPresence } from '@/hooks/use-document-presence';
 import { useProposal } from '@/hooks/use-proposals';
 import { deriveSections, type SectionLineage } from '@/lib/document/section-derivation';
@@ -129,7 +129,10 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   const projectId = row?.project_id ?? '';
   const proposalId = row?.proposal_id ?? '';
 
-  const { data: project } = useProjectV2(projectId) as { data: AnyRecord };
+  const { data: project, isLoading: projectIsLoading } = useProjectV2(projectId) as {
+    data: AnyRecord;
+    isLoading: boolean;
+  };
   const { data: phases } = useProjectPhases(projectId) as { data: AnyRecord[] | undefined };
   const { data: liveProposal } = useProposal(proposalId) as { data: any };
   const authorizationDoorway = authorizationDoorwayFor({
@@ -185,6 +188,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   // proposal-only unfold so ANY completed phase can be clicked open.
   const [openSection, setOpenSection] = useState<SectionKey | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const settledCountRef = useRef(0);
   const [highlightLineId, setHighlightLineId] = useState<string | null>(null);
   const [pendingNoteAnchor, setPendingNoteAnchor] = useState<string | null>(null);
   // The Call Sheet (Wave 3) — an overlay, never a section (D1). Closed by
@@ -202,18 +206,28 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   // Click a spine marker (or a settled bar): unfold that phase and scroll to it.
   // The active phase has no settled bar — the scroll just lands on its section.
   const jumpToSection = useCallback((key: SectionKey) => {
-    if (key !== row?.active_section) setHistoryOpen(true);
+    if (key !== row?.active_section && !historyOpen) {
+      setHistoryOpen(true);
+      documentEvents.historyToggled({
+        expanded: true,
+        completed_count: settledCountRef.current,
+      });
+    }
     setOpenSection(key);
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         const section = document.getElementById(sectionAnchorId(key));
-        section?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+        section?.scrollIntoView({
+          block: 'start',
+          behavior: reduceMotion ? 'auto' : 'smooth',
+        });
         section
           ?.querySelector<HTMLElement>('[data-settled-heading]')
           ?.focus({ preventScroll: true });
       });
     });
-  }, [row?.active_section]);
+  }, [historyOpen, row?.active_section]);
 
   // D13: the mobile spine sheet lives outside this React tree — it asks for a
   // section jump via a CustomEvent (mirrors the account sheet's open-account).
@@ -303,11 +317,28 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           lineage,
           projectStartDate: project?.start_date ?? null,
           installStartDate: installPhase?.start_date ?? null,
+          lineageResolved: row.engagement_kind !== 'project' || !projectIsLoading,
         },
         new Date(),
       )
     : [];
-  const guideModel = useMemo(() => (row ? deriveDocumentGuide({ row }) : null), [row]);
+  const guideModel = useMemo(
+    () =>
+      row
+        ? deriveDocumentGuide({
+            row,
+            proposal: liveProposal
+              ? {
+                  status: liveProposal.status ?? null,
+                  documentKind: liveProposal.document_kind ?? null,
+                  commercialState: liveProposal.commercial_state ?? null,
+                  projectId: liveProposal.project_id ?? null,
+                }
+              : null,
+          })
+        : null,
+    [liveProposal, row],
+  );
   const activateGuide = useCallback(() => {
     const destination = guideModel?.action?.destination;
     if (!destination) return;
@@ -410,6 +441,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   }
 
   const settled = sections.filter((s) => s.state === 'settled');
+  settledCountRef.current = settled.length;
   const unfoldProposalId =
     row.engagement_kind === 'project' ? (project?.proposal?.id ?? null) : (row.proposal_id ?? null);
   const seal = lineage?.signedAt

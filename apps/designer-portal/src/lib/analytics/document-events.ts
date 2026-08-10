@@ -163,7 +163,6 @@ export const documentEvents = {
     stage: string;
     state: string;
     action_key: string | null;
-    input_count: number;
   }) => track('document_guide_shown', props),
 
   historyToggled: (props: { expanded: boolean; completed_count: number }) =>
