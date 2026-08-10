@@ -2,13 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
-import { useFeatureFlag } from "@/hooks/use-feature-flag";
 import { captureExtensionEvents } from "@/lib/analytics/capture-extension-events";
 import { getCaptureExtensionConfig } from "@/lib/capture-extension";
 import { DocumentAction, DocumentActionGroup } from "../../document-action";
 import { openAccountPage } from "../../account/account-sheet";
 
-const DISMISSED_KEY = "patina:capture-extension-beta-prompt";
+const DISMISSED_KEY = "patina:capture-extension-prompt";
 
 function markPromptSeen(): void {
   try {
@@ -27,13 +26,12 @@ function promptWasSeen(): boolean {
 }
 
 export function CaptureExtensionPrompt() {
-  const { value: enabled, isLoading } = useFeatureFlag("chrome-extension-beta");
   const [visible, setVisible] = useState(false);
   const viewedRef = useRef(false);
   const { mode, installUrl, isConfigured } = getCaptureExtensionConfig();
 
   useEffect(() => {
-    if (isLoading || !enabled || !isConfigured || !mode || promptWasSeen()) {
+    if (!isConfigured || !mode || promptWasSeen()) {
       setVisible(false);
       return;
     }
@@ -46,11 +44,9 @@ export function CaptureExtensionPrompt() {
         install_mode: mode,
       });
     }
-  }, [enabled, isConfigured, isLoading, mode]);
+  }, [isConfigured, mode]);
 
   if (
-    isLoading ||
-    !enabled ||
     !visible ||
     !isConfigured ||
     !mode ||
@@ -71,7 +67,7 @@ export function CaptureExtensionPrompt() {
     >
       <div className="min-w-0">
         <p className="font-mono text-[8.5px] font-semibold uppercase tracking-[0.11em] text-[var(--color-clay)]">
-          New instrument · beta
+          Chrome capture
         </p>
         <h2
           id="capture-extension-prompt-title"
@@ -80,9 +76,9 @@ export function CaptureExtensionPrompt() {
           Bring product pages into your Library.
         </h2>
         <p className="mt-1 max-w-[58ch] text-[11.5px] leading-relaxed text-[var(--color-aged-oak)]">
-          Patina Capture reads the piece in front of you and saves it here,
-          ready for your eye. Desktop Chrome only while the extension is in
-          development.
+          {mode === "webstore"
+            ? "Patina Capture reads the piece in front of you and saves it here, ready for your eye."
+            : "The Chrome update is under review. Paste a product URL below to capture it now."}
         </p>
       </div>
 
@@ -105,9 +101,7 @@ export function CaptureExtensionPrompt() {
               });
               recede();
             }}
-          >
-            {mode === "webstore" ? "Add to Chrome" : "Download beta"}
-          </DocumentAction>
+          >{mode === "webstore" ? "Add to Chrome" : "Chrome update under review"}</DocumentAction>
           <DocumentAction
             actionKey="capture-extension-instructions"
             variant="tertiary"
@@ -120,12 +114,12 @@ export function CaptureExtensionPrompt() {
               openAccountPage("extension");
             }}
           >
-            Installation steps
+            {mode === "webstore" ? "Installation steps" : "Paste a URL instead"}
           </DocumentAction>
         </DocumentActionGroup>
         <button
           type="button"
-          aria-label="Dismiss extension beta"
+          aria-label="Dismiss extension prompt"
           onClick={() => {
             captureExtensionEvents.promptDismissed({
               surface: "library",

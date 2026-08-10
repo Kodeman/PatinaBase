@@ -52,6 +52,14 @@ export interface BuiltImport {
   total: number;
 }
 
+/** A CSV/XLSX cell beginning with a formula sigil must never be carried into a
+ * product record as an executable spreadsheet formula. The apostrophe is the
+ * conventional literal marker and is retained as provenance. */
+export function sanitizeSpreadsheetCell(value: string): string {
+  const trimmed = value.trim();
+  return /^[=+@-]/.test(trimmed) ? `'${trimmed}` : trimmed;
+}
+
 // --- Inline CSV parser (ported from catalog/import) -----------------------
 // Handles quoted fields (incl. commas/newlines inside quotes) and escaped
 // quotes (""). No new dependency: papaparse is not in the workspace.
@@ -146,7 +154,7 @@ export function buildImportRows(dataRows: string[][], mapping: ProductField[]): 
     const values = {} as Record<ProductField, string>;
     mapping.forEach((field, colIdx) => {
       if (!field) return;
-      const cell = (cells[colIdx] ?? '').trim();
+      const cell = sanitizeSpreadsheetCell(cells[colIdx] ?? '');
       // Last non-empty cell wins if a field is mapped twice.
       if (cell !== '' || values[field] === undefined) values[field] = cell;
     });

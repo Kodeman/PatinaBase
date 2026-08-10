@@ -27,6 +27,7 @@ import {
   SPEC_BOOK_PLACEMENT_CONTEXT_KEY,
   loadSpecBookPlacementContext,
   placementRpcPayload,
+  placementV2Request,
   placeProductInProject,
   saveSpecBookPlacementContext,
   type SpecBookPlacementRoute,
@@ -107,6 +108,11 @@ describe('sticky spec-book placement context', () => {
 });
 
 describe('place_product_in_project payloads', () => {
+  it('uses the canonical v2 envelope with a stable retry key', () => {
+    expect(placementV2Request('product-1', { kind: 'project_inbox', projectId: 'project-1', roomId: null }, source)).toMatchObject({
+      projectId: 'project-1', productId: 'product-1', assignment: { scope: 'unassigned', roomId: null }, disposition: 'candidate', duplicateMode: 'reuse_or_create',
+    });
+  });
   it('routes an existing slot without leaking create-line fields', () => {
     expect(
       placementRpcPayload(
@@ -207,15 +213,10 @@ describe('retry and duplicate preservation', () => {
     ).resolves.toBe('product-existing');
 
     expect(from).not.toHaveBeenCalled();
-    expect(rpc).toHaveBeenCalledWith('place_product_in_project', {
-      p_project_id: 'project-1',
-      p_product_id: 'product-existing',
-      p_room_id: 'room-1',
-      p_slot_id: null,
-      p_category: 'seating',
-      p_source: expect.objectContaining({
-        surface: 'chrome_extension',
-        route_kind: 'create_line',
+    expect(rpc).toHaveBeenCalledWith('place_product_in_project_v2', {
+      p_request: expect.objectContaining({
+        projectId: 'project-1', productId: 'product-existing',
+        source: expect.objectContaining({ surface: 'chrome_extension', route_kind: 'create_line' }),
       }),
     });
   });

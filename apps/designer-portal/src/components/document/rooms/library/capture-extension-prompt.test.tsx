@@ -1,16 +1,11 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { CaptureExtensionPrompt } from "./capture-extension-prompt";
 
-const mockUseFeatureFlag = jest.fn();
 const mockOpenAccountPage = jest.fn();
 const mockPromptViewed = jest.fn();
 const mockInstallClicked = jest.fn();
 const mockInstructionsOpened = jest.fn();
 const mockPromptDismissed = jest.fn();
-
-jest.mock("@/hooks/use-feature-flag", () => ({
-  useFeatureFlag: (...args: unknown[]) => mockUseFeatureFlag(...args),
-}));
 
 jest.mock("@/lib/analytics/capture-extension-events", () => ({
   captureExtensionEvents: {
@@ -31,7 +26,6 @@ describe("CaptureExtensionPrompt", () => {
     process.env.NEXT_PUBLIC_CAPTURE_EXTENSION_INSTALL_MODE = "unpacked";
     process.env.NEXT_PUBLIC_CAPTURE_EXTENSION_INSTALL_URL =
       "https://example.com/patina-capture.zip";
-    mockUseFeatureFlag.mockReturnValue({ value: true, isLoading: false });
   });
 
   afterEach(() => {
@@ -40,27 +34,25 @@ describe("CaptureExtensionPrompt", () => {
     delete process.env.NEXT_PUBLIC_CAPTURE_EXTENSION_INSTALL_URL;
   });
 
-  it("fails closed while the beta flag is loading or disabled", () => {
-    mockUseFeatureFlag.mockReturnValue({ value: false, isLoading: true });
+  it("fails closed when no Web Store configuration exists", () => {
+    delete process.env.NEXT_PUBLIC_CAPTURE_EXTENSION_INSTALL_MODE;
     const { rerender } = render(<CaptureExtensionPrompt />);
     expect(screen.queryByText(/Bring product pages/i)).not.toBeInTheDocument();
-
-    mockUseFeatureFlag.mockReturnValue({ value: false, isLoading: false });
+    process.env.NEXT_PUBLIC_CAPTURE_EXTENSION_INSTALL_MODE = "unpacked";
     rerender(<CaptureExtensionPrompt />);
-    expect(screen.queryByText(/Bring product pages/i)).not.toBeInTheDocument();
   });
 
-  it("shows configured beta copy and permanently recedes on dismissal", () => {
+  it("shows the honest update-under-review alternative and permanently recedes on dismissal", () => {
     const { unmount } = render(<CaptureExtensionPrompt />);
 
     expect(screen.getByText(/Bring product pages/i)).toBeInTheDocument();
     expect(mockPromptViewed).toHaveBeenCalledTimes(1);
     expect(
-      screen.getByRole("link", { name: /Download beta/i }),
+      screen.getByRole("link", { name: /Chrome update under review/i }),
     ).toHaveAttribute("href", "https://example.com/patina-capture.zip");
 
     fireEvent.click(
-      screen.getByRole("button", { name: /Dismiss extension beta/i }),
+      screen.getByRole("button", { name: /Dismiss extension prompt/i }),
     );
     expect(mockPromptDismissed).toHaveBeenCalledWith({
       surface: "library",
@@ -73,10 +65,10 @@ describe("CaptureExtensionPrompt", () => {
     expect(screen.queryByText(/Bring product pages/i)).not.toBeInTheDocument();
   });
 
-  it("opens the permanent Account instructions and retires the prompt", () => {
+  it("offers the paste-URL alternative while Chrome is under review", () => {
     render(<CaptureExtensionPrompt />);
     fireEvent.click(
-      screen.getByRole("button", { name: /Installation steps/i }),
+      screen.getByRole("button", { name: /Paste a URL instead/i }),
     );
 
     expect(mockOpenAccountPage).toHaveBeenCalledWith("extension");

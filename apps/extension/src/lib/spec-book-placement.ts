@@ -47,6 +47,21 @@ export interface PlacementRpcPayload {
   };
 }
 
+/** The GA command envelope. The N-1 RPC below remains the Chrome transition
+ * fallback, so installed extensions can continue to route to Unsorted until
+ * the Web Store release is available. */
+export interface PlacementV2Request {
+  projectId: string;
+  productId: string;
+  assignment: { scope: 'room' | 'unassigned'; roomId: string | null };
+  duplicateMode: 'reuse_or_create';
+  disposition: 'candidate';
+  placeholderSelectionId: string | null;
+  roleConfigurationIdentity: null;
+  idempotencyKey: string;
+  source: PlacementRpcPayload['p_source'];
+}
+
 function isContext(value: unknown): value is SpecBookPlacementContext {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Record<string, unknown>;
@@ -99,6 +114,27 @@ export function placementRpcPayload(
   };
 }
 
+export function placementV2Request(
+  productId: string,
+  route: Exclude<SpecBookPlacementRoute, { kind: 'library' }>,
+  source: PlacementSource,
+): PlacementV2Request {
+  const legacy = placementRpcPayload(productId, route, source);
+  return {
+    projectId: route.projectId,
+    productId,
+    assignment: { scope: route.roomId ? 'room' : 'unassigned', roomId: route.roomId },
+    duplicateMode: 'reuse_or_create',
+    disposition: 'candidate',
+    placeholderSelectionId: route.kind === 'fill_slot' ? route.slotId : null,
+    roleConfigurationIdentity: null,
+    // Product + destination make retries stable without persisting a mutable
+    // request body in the extension.
+    idempotencyKey: `chrome:${productId}:${route.projectId}:${route.kind}:${route.roomId ?? 'unassigned'}:${route.kind === 'fill_slot' ? route.slotId : route.kind === 'create_line' ? route.category.trim() : ''}`,
+    source: legacy.p_source,
+  };
+}
+
 export class SpecBookPlacementError extends Error {
   constructor(
     message: string,
@@ -139,10 +175,15 @@ export async function placeProductInProject(
 ): Promise<void> {
   if (route.kind === 'library') return;
 
-  const { error } = await supabase.rpc(
-    'place_product_in_project',
-    placementRpcPayload(productId, route, source)
-  );
+  const v2 = await supabase.rpc('place_product_in_project_v2', {
+    p_request: placementV2Request(productId, route, source),
+  });
+  // N-1 extension compatibility only: databases before the GA migration do
+  // not know v2. Any authorization/domain error is surfaced, never retried by
+  // writing through a weaker path.
+  const error = v2.error?.code === '42883'
+    ? (await supabase.rpc('place_product_in_project', placementRpcPayload(productId, route, source))).error
+    : v2.error;
   if (error) {
     throw new SpecBookPlacementError(errorMessage(error), productId, route);
   }

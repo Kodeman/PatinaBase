@@ -1,0 +1,1 @@
+export function parseSendRequest(value: unknown): { editionId: string } | null { return value && typeof value === "object" && typeof (value as Record<string, unknown>).editionId === "string" ? { editionId: (value as Record<string, string>).editionId } : null; }
