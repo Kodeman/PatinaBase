@@ -7,6 +7,11 @@ let mockHydrated = false;
 const mockRetryDocumentResolution = jest.fn();
 const mockHistoryToggled = jest.fn();
 let mockDocumentQuery: Record<string, unknown>;
+let mockDiscoveryQuery: Record<string, unknown> = { data: undefined, isLoading: false, isError: false };
+let mockDraftingState: Record<string, unknown> = { gaps: [], isLoading: false, error: null };
+let mockProposalData: Record<string, unknown> | undefined;
+let mockProposalError = false;
+let mockProjectQuery: Record<string, unknown> = { data: undefined, isLoading: false, isError: false };
 
 jest.mock('@portabletext/react', () => ({
   PortableText: () => null,
@@ -18,10 +23,11 @@ jest.mock('next/navigation', () => ({
 }));
 
 jest.mock('@patina/supabase', () => ({
-  useProjectV2: () => ({ data: undefined }),
+  useProjectV2: () => mockProjectQuery,
   useProjectPhases: () => ({ data: [] }),
   useProposalFeedback: () => ({ data: [] }),
   useProjectRoster: () => ({ data: [] }),
+  useDiscovery: () => mockDiscoveryQuery,
 }));
 
 jest.mock('@/hooks/use-hydrated', () => ({
@@ -56,6 +62,9 @@ jest.mock('@/components/document/brief-recap', () => ({ BriefRecap: () => <div>B
 jest.mock('@/components/document/discovery/discovery-section', () => ({
   DiscoverySection: () => <div>Discovery work</div>,
 }));
+jest.mock('@/components/document/proposal-blocks-readonly', () => ({ ProposalBlocksReadOnly: () => null }));
+jest.mock('@/components/document/proposal-instruments', () => ({ ProposalInstruments: () => null }));
+jest.mock('@/components/document/folio-strip', () => ({ FolioLetterhead: () => null, ProposalFolioStrip: () => null }));
 jest.mock('@/components/document/mobile/mobile-margin-chips', () => ({ MobileMarginChips: () => null }));
 jest.mock('@/components/document/letterhead-instruments', () => ({ LetterheadInstruments: () => null }));
 jest.mock('@/components/document/schedule/schedule-nav-context', () => ({
@@ -113,7 +122,11 @@ jest.mock('@/hooks/use-document-presence', () => ({
 }));
 
 jest.mock('@/hooks/use-proposals', () => ({
-  useProposal: () => ({ data: undefined }),
+  useProposal: () => ({ data: mockProposalData, isError: mockProposalError }),
+}));
+
+jest.mock('@/hooks/use-drafting-state', () => ({
+  useDraftingState: () => mockDraftingState,
 }));
 
 jest.mock('@/hooks/use-document-rooms', () => ({
@@ -198,6 +211,11 @@ describe('DocumentPage guide activation', () => {
   beforeEach(() => {
     mockHydrated = true;
     mockHistoryToggled.mockReset();
+    mockDiscoveryQuery = { data: undefined, isLoading: false, isError: false };
+    mockDraftingState = { gaps: [], isLoading: false, error: null };
+    mockProposalData = undefined;
+    mockProposalError = false;
+    mockProjectQuery = { data: undefined, isLoading: false, isError: false };
     mockDocumentQuery = {
       data: {
         kind: 'engagement',
@@ -239,6 +257,7 @@ describe('DocumentPage guide activation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Review the brief' }));
 
     expect(activeSection!.scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'auto' });
+    expect(activeSection).toHaveFocus();
   });
 
   it('counts a programmatic history expansion once', () => {
@@ -264,6 +283,70 @@ describe('DocumentPage guide activation', () => {
 
     expect(mockHistoryToggled).toHaveBeenCalledTimes(1);
     expect(mockHistoryToggled).toHaveBeenCalledWith({ expanded: true, completed_count: 1 });
+  });
+
+  it('composes canonical Discovery readiness into guide input copy', () => {
+    const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+    mockDocumentQuery = {
+      ...mockDocumentQuery,
+      data: { kind: 'engagement', row: {
+        ...current, engagement_kind: 'relationship', active_section: 'discovery',
+        engagement_id: 'relationship-1', lead_id: null, client_profile_id: 'client-1',
+      } },
+    };
+    mockDiscoveryQuery = {
+      data: { row: { project_type: 'full_home', rooms: [{ name: 'Living room' }] }, prefill: null },
+      isLoading: false,
+      isError: false,
+    };
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(screen.getByText(/Input needed · Working budget/).parentElement).toHaveTextContent(
+      'Client · blocks Direction · +3 more',
+    );
+  });
+
+  it('keeps a draft commercial agreement reachable from Direction', () => {
+    const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+    mockDocumentQuery = {
+      ...mockDocumentQuery,
+      data: { kind: 'engagement', row: {
+        ...current, engagement_kind: 'proposal', active_section: 'direction',
+        engagement_id: 'proposal-1', proposal_id: 'proposal-1', lead_id: null,
+        client_profile_id: 'client-1', proposal_status: 'draft',
+      } },
+    };
+    mockProposalData = {
+      id: 'proposal-1', status: 'draft', document_kind: 'design_services',
+      commercial_state: 'draft', project_id: null,
+    };
+    mockDraftingState = { gaps: ['phases & fees'], isLoading: false, error: null };
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(screen.getByRole('link', { name: 'Open Drafting Room' })).toHaveAttribute(
+      'href', '/drafting/proposal-1',
+    );
+    expect(screen.getByText(/Input needed · phases & fees/)).toBeInTheDocument();
+  });
+
+  it('treats a proposal query error as unknown guidance', () => {
+    const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+    mockDocumentQuery = {
+      ...mockDocumentQuery,
+      data: { kind: 'engagement', row: {
+        ...current, engagement_kind: 'proposal', active_section: 'proposal',
+        engagement_id: 'proposal-1', proposal_id: 'proposal-1', lead_id: null,
+        proposal_status: 'sent',
+      } },
+    };
+    mockProposalError = true;
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(screen.getByText('Guidance is unavailable')).toBeInTheDocument();
+    expect(screen.queryByText(/Input needed/)).not.toBeInTheDocument();
   });
 });
 

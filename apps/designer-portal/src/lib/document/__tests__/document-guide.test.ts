@@ -117,4 +117,92 @@ describe('deriveDocumentGuide', () => {
     });
     expect(guide.reason).not.toContain('highest-priority');
   });
+
+  it.each([
+    ['sent', 'Wait for the client’s signature'],
+    ['client_signed', 'Countersign the design agreement'],
+    ['declined', 'Follow up on the proposal'],
+    ['superseded', 'Follow up on the proposal'],
+  ] as const)('lets live commercial %s override stale accepted legacy state', (commercialState, headline) => {
+    const guide = deriveDocumentGuide({
+      row: row('proposal', {
+        proposal_status: 'accepted',
+        proposal_sent_at: '2026-07-01T12:00:00Z',
+        proposal_viewed_at: '2026-07-02T12:00:00Z',
+      }),
+      now: new Date('2026-08-10T12:00:00Z'),
+      proposal: {
+        status: 'accepted',
+        documentKind: 'design_services',
+        commercialState,
+        projectId: null,
+      },
+    });
+
+    expect(guide.headline).toBe(headline);
+  });
+
+  it.each(['sent', 'viewed'] as const)('does not let an aged legacy %s signal override client-signed commercial truth', (legacyStatus) => {
+    const guide = deriveDocumentGuide({
+      row: row('proposal', {
+        proposal_status: legacyStatus,
+        proposal_sent_at: '2026-07-01T12:00:00Z',
+        proposal_viewed_at: legacyStatus === 'viewed' ? '2026-07-02T12:00:00Z' : null,
+      }),
+      now: new Date('2026-08-10T12:00:00Z'),
+      proposal: {
+        status: legacyStatus,
+        documentKind: 'design_services',
+        commercialState: 'client_signed',
+        projectId: null,
+      },
+    });
+    expect(guide.headline).toBe('Countersign the design agreement');
+  });
+
+  it('treats a revised legacy proposal as superseded follow-up', () => {
+    const guide = deriveDocumentGuide({
+      row: row('proposal'),
+      proposal: { status: 'revised', documentKind: 'legacy', commercialState: null, projectId: null },
+    });
+    expect(guide.eyebrow).toContain('superseded');
+    expect(guide.action?.label).toBe('Review follow-up controls');
+  });
+
+  it('carries truthful input owner, blocker, and remaining count', () => {
+    const guide = deriveDocumentGuide({
+      row: row('discovery'),
+      inputFacts: [
+        { label: 'Working budget', owner: 'Client', blocks: 'Direction' },
+        { label: 'Style direction', owner: 'Client', blocks: 'Direction' },
+      ],
+    });
+    expect(guide.topInput).toEqual({ label: 'Working budget', owner: 'Client', blocks: 'Direction' });
+    expect(guide.remainingInputCount).toBe(1);
+  });
+
+  it('keeps a draft commercial agreement reachable from Direction', () => {
+    const guide = deriveDocumentGuide({
+      row: row('direction'),
+      proposal: { status: 'draft', documentKind: 'design_services', commercialState: 'draft', projectId: null },
+      inputFacts: [{ label: 'phases & fees', owner: 'Designer', blocks: 'Client proposal' }],
+    });
+    expect(guide.action).toEqual({
+      key: 'open-drafting-room',
+      label: 'Open Drafting Room',
+      destination: { kind: 'href', href: '/drafting/proposal-1' },
+    });
+    expect(guide.topInput?.label).toBe('phases & fees');
+  });
+
+  it('routes reconnect work to the canonical People nurture view', () => {
+    const guide = deriveDocumentGuide({
+      row: row('brief', {
+        lead_status: 'contacted',
+        lead_response_deadline: '2026-08-01T12:00:00Z',
+      }),
+      now: new Date('2026-08-10T12:00:00Z'),
+    });
+    expect(guide.action?.destination).toEqual({ kind: 'href', href: '/people?view=nurture' });
+  });
 });

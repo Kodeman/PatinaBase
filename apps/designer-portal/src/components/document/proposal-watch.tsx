@@ -180,7 +180,7 @@ export function ProposalWatch({
           target: { kind: 'press', onPress: () => setMarkSignedOpen(true) },
         }
       : null,
-    { priority: 10 },
+    { priority: MOBILE_ACTION_PRIORITY.lifecycle },
   );
 
   // Draft (handled by the work band) or still loading — nothing to watch.

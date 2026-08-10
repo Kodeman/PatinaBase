@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { DocumentGuide } from './document-guide';
 import type { DocumentGuideModel } from '@/lib/document/document-guide';
 
@@ -23,11 +24,15 @@ const model = (headline: string): DocumentGuideModel => ({
     label: 'Review active work',
     destination: { kind: 'anchor', section: 'project' },
   },
+  topInput: null,
+  remainingInputCount: 0,
 });
 
 describe('DocumentGuide', () => {
   it('registers below lifecycle actions and announces only subsequent changes', async () => {
-    const { rerender } = render(<DocumentGuide model={model('First task')} onActivate={jest.fn()} />);
+    const { rerender } = render(
+      <StrictMode><DocumentGuide model={model('First task')} onActivate={jest.fn()} /></StrictMode>,
+    );
 
     expect(mockUseMobilePrimaryAction).toHaveBeenLastCalledWith(
       expect.objectContaining({ actionKey: 'review-project-work' }),
@@ -36,7 +41,51 @@ describe('DocumentGuide', () => {
     const liveRegion = document.querySelector('[aria-live="polite"]');
     expect(liveRegion).toHaveTextContent('');
 
-    rerender(<DocumentGuide model={model('Second task')} onActivate={jest.fn()} />);
+    rerender(
+      <StrictMode><DocumentGuide model={{ ...model('Second task'), state: 'waiting' }} onActivate={jest.fn()} /></StrictMode>,
+    );
     await waitFor(() => expect(liveRegion).toHaveTextContent('Next up: Second task'));
+  });
+
+  it('names the first known input, owner, blocker, and remaining count', () => {
+    render(
+      <DocumentGuide
+        model={{
+          ...model('Complete Discovery'),
+          topInput: { label: 'Working budget', owner: 'Client', blocks: 'Direction' },
+          remainingInputCount: 2,
+        }}
+        onActivate={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/Input needed · Working budget/).parentElement).toHaveTextContent(
+      'Client · blocks Direction · +2 more',
+    );
+  });
+
+  it('announces an action change even when the headline is unchanged', async () => {
+    const { rerender } = render(
+      <StrictMode><DocumentGuide model={model('Same task')} onActivate={jest.fn()} /></StrictMode>,
+    );
+    const liveRegion = document.querySelector('[aria-live="polite"]');
+    expect(liveRegion).toHaveTextContent('');
+
+    rerender(
+      <StrictMode>
+        <DocumentGuide
+          model={{
+            ...model('Same task'),
+            action: {
+              key: 'new-canonical-action',
+              label: 'Review controls',
+              destination: { kind: 'anchor', section: 'project' },
+            },
+          }}
+          onActivate={jest.fn()}
+        />
+      </StrictMode>,
+    );
+    await waitFor(() => expect(liveRegion).toHaveTextContent('Next up: Same task'));
   });
 });

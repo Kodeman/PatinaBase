@@ -124,6 +124,8 @@ describe('Project roster surfaces', () => {
     useProjectV2.mockReturnValue({ data: { client: null }, isLoading: false });
     const view = render(<ProjectTeamRoster projectId="project-1" />);
 
+    expect(view.getByText('Build the project team')).toBeInTheDocument();
+    expect(view.getByText(/Start with · GC or trade/)).toBeInTheDocument();
     fireEvent.click(view.getByRole('button', { name: 'Add GC or trade' }));
     expect(mockRolodexPicker).toHaveBeenLastCalledWith(
       expect.objectContaining({

@@ -1,4 +1,31 @@
 import { deriveNeed, type DocumentStateRow, type NeedLine, type SectionKey } from './desk-derivation';
+import type { CommercialDocumentKind, CommercialState } from './commercial-documents';
+
+export type LegacyProposalLifecycle =
+  | 'draft'
+  | 'ready'
+  | 'sent'
+  | 'viewed'
+  | 'accepted'
+  | 'declined'
+  | 'expired'
+  | 'revised';
+
+const LEGACY_PROPOSAL_LIFECYCLES: readonly LegacyProposalLifecycle[] = [
+  'draft', 'ready', 'sent', 'viewed', 'accepted', 'declined', 'expired', 'revised',
+];
+
+export function asLegacyProposalLifecycle(value: unknown): LegacyProposalLifecycle | null {
+  return LEGACY_PROPOSAL_LIFECYCLES.includes(value as LegacyProposalLifecycle)
+    ? (value as LegacyProposalLifecycle)
+    : null;
+}
+
+export interface DocumentGuideInputFact {
+  label: string;
+  owner: 'Designer' | 'Client' | 'Studio' | 'Project team';
+  blocks: string;
+}
 
 export type DocumentGuideState =
   | 'unavailable'
@@ -26,12 +53,14 @@ export interface DocumentGuideModel {
   headline: string;
   reason: string;
   action: DocumentGuideAction | null;
+  topInput: DocumentGuideInputFact | null;
+  remainingInputCount: number;
 }
 
 export interface ProposalGuideFacts {
-  status: string | null;
-  documentKind: string | null;
-  commercialState: string | null;
+  status: LegacyProposalLifecycle | null;
+  documentKind: CommercialDocumentKind | null;
+  commercialState: CommercialState | null;
   projectId: string | null;
 }
 
@@ -41,9 +70,10 @@ interface DeriveDocumentGuideInput {
   now?: Date;
   operationalNeed?: NeedLine | null;
   proposal?: ProposalGuideFacts | null;
+  inputFacts?: readonly DocumentGuideInputFact[];
 }
 
-const stageCopy: Record<SectionKey, Omit<DocumentGuideModel, 'stage'>> = {
+const stageCopy: Record<SectionKey, Omit<DocumentGuideModel, 'stage' | 'topInput' | 'remainingInputCount'>> = {
   brief: {
     state: 'actionable',
     eyebrow: 'Brief · decide the fit',
@@ -95,6 +125,17 @@ const stageCopy: Record<SectionKey, Omit<DocumentGuideModel, 'stage'>> = {
   },
 };
 
+function withInputs(
+  model: Omit<DocumentGuideModel, 'topInput' | 'remainingInputCount'>,
+  inputFacts: readonly DocumentGuideInputFact[] | undefined,
+): DocumentGuideModel {
+  return {
+    ...model,
+    topInput: inputFacts?.[0] ?? null,
+    remainingInputCount: Math.max(0, (inputFacts?.length ?? 0) - 1),
+  };
+}
+
 function actionForNeed(need: NeedLine, row: DocumentStateRow): DocumentGuideAction {
   const orderPage =
     need.kind === 'damage_claim' || need.kind === 'awaiting_inspection'
@@ -102,8 +143,10 @@ function actionForNeed(need: NeedLine, row: DocumentStateRow): DocumentGuideActi
       : need.kind === 'po_unsent' || need.kind === 'po_unacknowledged'
         ? 'ledger'
         : null;
-  const destination: DocumentGuideDestination = orderPage
-    ? { kind: 'ledger', name: 'orders', context: { page: orderPage, projectId: row.project_id ?? undefined } }
+  const destination: DocumentGuideDestination = need.kind === 'reconnect_due'
+    ? { kind: 'href', href: '/people?view=nurture' }
+    : orderPage
+      ? { kind: 'ledger', name: 'orders', context: { page: orderPage, projectId: row.project_id ?? undefined } }
     : need.ledger
     ? { kind: 'ledger', name: need.ledger.name, context: need.ledger.context }
     : need.deepLink
@@ -116,7 +159,10 @@ function actionForNeed(need: NeedLine, row: DocumentStateRow): DocumentGuideActi
   };
 }
 
-function proposalGuide(row: DocumentStateRow, proposal: ProposalGuideFacts | null | undefined): DocumentGuideModel {
+function proposalGuide(
+  row: DocumentStateRow,
+  proposal: ProposalGuideFacts | null | undefined,
+): Omit<DocumentGuideModel, 'topInput' | 'remainingInputCount'> {
   const stage = row.active_section;
   const documentKind = proposal?.documentKind ?? 'legacy';
   const isCommercial = documentKind === 'design_services';
@@ -165,10 +211,11 @@ function proposalGuide(row: DocumentStateRow, proposal: ProposalGuideFacts | nul
       action: controls,
     };
   }
-  if (state === 'declined' || state === 'expired' || state === 'superseded') {
+  if (state === 'declined' || state === 'expired' || state === 'superseded' || state === 'revised') {
+    const outcome = state === 'revised' ? 'superseded' : state;
     return {
-      state: 'actionable', stage, eyebrow: `Proposal · ${state}`,
-      headline: state === 'expired' ? 'Follow up on the expired proposal' : 'Follow up on the proposal',
+      state: 'actionable', stage, eyebrow: `Proposal · ${outcome}`,
+      headline: outcome === 'expired' ? 'Follow up on the expired proposal' : 'Follow up on the proposal',
       reason: 'Review the recorded outcome and use the existing proposal controls for the next client conversation.',
       action: { key: 'review-proposal-follow-up', label: 'Review follow-up controls', destination: { kind: 'anchor', section: 'proposal' } },
     };
@@ -187,47 +234,52 @@ export function deriveDocumentGuide({
   now = new Date(),
   operationalNeed,
   proposal,
+  inputFacts,
 }: DeriveDocumentGuideInput): DocumentGuideModel {
   const stage = row.active_section;
   if (availability === 'unavailable') {
-    return {
+    return withInputs({
       state: 'unavailable', stage, eyebrow: 'Next up', headline: 'Guidance is unavailable',
       reason: 'Reload the document before acting so missing data is never mistaken for an empty section.',
       action: null,
-    };
+    }, undefined);
   }
   if (row.is_paused) {
-    return {
+    return withInputs({
       state: 'paused', stage, eyebrow: `${stageCopy[stage].eyebrow} · paused`, headline: 'This project is paused',
       reason: 'Review the project status before resuming lifecycle work.',
       action: { key: 'review-paused-project', label: 'Review project', destination: { kind: 'anchor', section: stage } },
-    };
+    }, inputFacts);
   }
 
   const need = operationalNeed === undefined ? deriveNeed(row, now) : operationalNeed;
   const proposalLifecycleNeed =
     need?.kind === 'proposal_signed' ||
     need?.kind === 'proposal_declined' ||
-    need?.kind === 'proposal_expired';
+    need?.kind === 'proposal_expired' ||
+    (proposal?.documentKind === 'design_services' && need?.kind === 'hesitating_proposal');
   if (need && !proposalLifecycleNeed) {
-    return {
+    return withInputs({
       state: 'actionable', stage, eyebrow: `${stageCopy[stage].eyebrow} · needs attention`,
       headline: need.text,
       reason: 'This action comes from the operational signals available on the current document.',
       action: actionForNeed(need, row),
-    };
+    }, inputFacts);
   }
 
-  if (stage === 'proposal') return proposalGuide(row, proposal);
+  if (stage === 'proposal') {
+    const guide = proposalGuide(row, proposal);
+    return withInputs(guide, inputFacts);
+  }
 
   const base = stageCopy[stage];
   const action =
     stage === 'direction' && row.proposal_id
       ? { ...base.action!, destination: { kind: 'href' as const, href: `/drafting/${row.proposal_id}` } }
       : base.action;
-  return {
+  return withInputs({
     ...base,
     stage,
     action,
-  };
+  }, inputFacts);
 }

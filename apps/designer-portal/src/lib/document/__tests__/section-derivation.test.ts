@@ -86,7 +86,7 @@ describe('deriveSections (§4)', () => {
     expect(s[4].state).toBe('active');
   });
 
-  it('keeps pre-project lineage neutral while the proposal read is unresolved', () => {
+  it.each(['loading', 'error'])('keeps pre-project lineage neutral while the proposal read is %s', () => {
     const s = deriveSections(
       { row: baseRow, lineage: null, lineageResolved: false, projectStartDate: null, installStartDate: null },
       NOW,
