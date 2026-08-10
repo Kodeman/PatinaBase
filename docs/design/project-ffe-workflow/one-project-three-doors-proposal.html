@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Patina Designer Portal proposal for a project-native FF&amp;E workflow across boards, the Library, and the Chrome clipper.">
+<title>One Project, Three Doors In — Patina</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&amp;family=Inter:wght@300;400;500;600&amp;family=Playfair+Display:ital,wght@0,500;0,600;1,500&amp;display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#FAF7F2;
+  --paper-2:#F1EBE2;
+  --paper-3:#E6DED2;
+  --ink:#25221E;
+  --muted:#6F675E;
+  --faint:#70685E;
+  --line:rgba(37,34,30,.17);
+  --line-dark:rgba(250,247,242,.18);
+  --clay:#C4A57B;
+  --oak:#765B3D;
+  --mocha:#5C4A3C;
+  --sage:#A8B5A0;
+  --sage-deep:#5E715D;
+  --blue:#8B9CAD;
+  --blue-deep:#596E82;
+  --terracotta:#B87558;
+  --gold:#D4B64D;
+  --danger:#A55343;
+  --serif:'Playfair Display',Georgia,serif;
+  --sans:'Inter',Arial,sans-serif;
+  --mono:'DM Mono',monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;background:var(--ink)}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-weight:400;overflow:hidden}
+button,a{font:inherit}
+a{color:inherit;text-decoration-color:rgba(37,34,30,.35);text-underline-offset:3px}
+button{color:inherit}
+.visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+.deck{height:100dvh;overflow-y:auto;scroll-snap-type:y mandatory;scrollbar-width:none}
+.deck::-webkit-scrollbar{display:none}
+.slide{height:100dvh;min-height:620px;scroll-snap-align:start;position:relative;overflow:hidden;background:var(--paper);border-bottom:1px solid var(--line)}
+.slide.ink{background:var(--ink);color:var(--paper);--line:var(--line-dark)}
+.slide-inner{height:100%;max-width:1560px;margin:0 auto;padding:clamp(34px,5.2vh,68px) clamp(42px,6.1vw,100px) clamp(58px,7vh,84px);display:grid;grid-template-columns:94px minmax(0,1fr);gap:clamp(26px,3.2vw,52px)}
+.margin{border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:flex-start;padding-right:18px;min-width:0}
+.margin .act{font:500 10px/1.35 var(--mono);letter-spacing:.15em;text-transform:uppercase;color:var(--oak);writing-mode:vertical-rl;transform:rotate(180deg);margin-top:2px}
+.ink .margin .act{color:var(--clay)}
+.margin .num{font:400 13px/1 var(--mono);margin-top:auto;color:var(--faint)}
+.main{min-width:0;display:flex;flex-direction:column;justify-content:center}
+.kicker{font:500 10px/1.35 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--oak);margin:0 0 15px}
+.ink .kicker{color:var(--clay)}
+h1,h2,h3,p{margin-top:0}
+h1{font:500 clamp(50px,6.6vw,104px)/.94 var(--serif);letter-spacing:-.045em;margin-bottom:24px}
+h2{font:500 clamp(34px,4.2vw,67px)/1 var(--serif);letter-spacing:-.035em;margin-bottom:18px;max-width:18ch}
+h2.wide{max-width:none}
+h3{font:600 16px/1.15 var(--serif);margin-bottom:7px}
+.lede{font:300 clamp(16px,1.45vw,22px)/1.55 var(--sans);max-width:70ch;color:var(--muted);margin-bottom:26px}
+.ink .lede{color:rgba(250,247,242,.73)}
+.small{font-size:12px;line-height:1.55;color:var(--muted)}
+.ink .small{color:rgba(250,247,242,.62)}
+.mono{font-family:var(--mono)}
+.rule{height:1px;background:var(--line);margin:18px 0}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.card{border:1px solid var(--line);padding:17px 18px;background:rgba(255,255,255,.26);min-width:0}
+.ink .card{background:rgba(250,247,242,.035)}
+.card p{font-size:13px;line-height:1.55;color:var(--muted);margin:0}
+.ink .card p{color:rgba(250,247,242,.67)}
+.card .label,.label{font:500 9px/1.25 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--oak);display:block;margin-bottom:8px}
+.ink .card .label,.ink .label{color:var(--clay)}
+.card.clay{border-top:3px solid var(--clay)}
+.card.sage{border-top:3px solid var(--sage-deep)}
+.card.blue{border-top:3px solid var(--blue-deep)}
+.card.warn{border-left:3px solid var(--danger)}
+.callout{border-left:3px solid var(--oak);padding:12px 17px;background:rgba(139,115,85,.07);font-size:14px;line-height:1.55;margin-top:17px;max-width:92ch}
+.ink .callout{border-color:var(--clay);background:rgba(196,165,123,.08)}
+.callout strong{font-weight:600}
+.source-note{margin-top:auto;padding-top:12px;font:400 9.5px/1.45 var(--mono);color:var(--faint);letter-spacing:.02em}
+.source-note a{text-decoration:none;border-bottom:1px solid currentColor}
+.badge{display:inline-flex;align-items:center;gap:6px;border:1px solid currentColor;padding:3px 7px;font:500 9px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
+.badge::before{content:'';width:5px;height:5px;background:currentColor;border-radius:50%}
+.badge.sage{color:var(--sage-deep)}
+.badge.blue{color:var(--blue-deep)}
+.badge.clay{color:var(--oak)}
+.badge.danger{color:var(--danger)}
+.badge.neutral{color:var(--muted)}
+.btn{appearance:none;border:1px solid var(--ink);background:var(--ink);color:var(--paper);padding:9px 13px;font:500 11px/1 var(--sans);cursor:pointer;display:inline-flex;align-items:center;gap:8px;justify-content:center}
+.btn.secondary{background:transparent;color:var(--ink);border-color:var(--line)}
+.btn.ghost{background:transparent;color:var(--muted);border-color:transparent}
+.btn:focus-visible,.source-option:focus-visible,.deck-tools button:focus-visible{outline:2px solid var(--blue-deep);outline-offset:3px}
+.mock-shell button,.clipper-scene button,.menu-sheet button,.dialog-sheet button,.ia-shell button{pointer-events:none}
+
+/* Cover signature: three source threads becoming one project record */
+.cover-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(360px,.82fr);gap:clamp(42px,6vw,100px);align-items:center}
+.cover-copy h1 em{font-style:italic;color:var(--clay)}
+.cover-meta{display:flex;gap:18px;flex-wrap:wrap;font:400 10px/1.4 var(--mono);color:rgba(250,247,242,.58);margin-top:30px}
+.convergence{height:500px;position:relative;display:grid;grid-template-rows:repeat(3,1fr);align-items:center}
+.source-door{position:relative;width:52%;border-top:1px solid var(--line-dark);padding-top:9px;z-index:2}
+.source-door b{font:500 11px/1 var(--mono);letter-spacing:.13em;text-transform:uppercase}
+.source-door small{display:block;color:rgba(250,247,242,.55);font-size:11px;margin-top:6px}
+.source-door::after{content:'';position:absolute;left:100%;top:-1px;width:70%;height:1px;transform-origin:left center;animation:draw 1.6s cubic-bezier(.22,.61,.36,1) both}
+.source-door.board::after{background:var(--sage);transform:rotate(21deg)}
+.source-door.library::after{background:var(--clay);transform:rotate(0)}
+.source-door.clipper::after{background:var(--blue);transform:rotate(-21deg)}
+.source-door::before{content:'';position:absolute;left:-12px;top:-4px;width:7px;height:7px;background:currentColor;border-radius:50%}
+.source-door.board{color:var(--sage)}
+.source-door.library{color:var(--clay)}
+.source-door.clipper{color:var(--blue)}
+.ledger{position:absolute;right:0;top:50%;transform:translateY(-50%);width:40%;height:270px;border:1px solid var(--line-dark);background:rgba(250,247,242,.035);padding:28px 24px}
+.ledger::before,.ledger::after{content:'';display:block;height:1px;background:var(--line-dark);margin-bottom:18px}
+.ledger-title{font:500 13px/1.2 var(--serif);margin-bottom:22px}
+.ledger-line{display:grid;grid-template-columns:9px 1fr auto;gap:9px;align-items:center;border-bottom:1px solid var(--line-dark);padding:10px 0;font-size:11px;color:rgba(250,247,242,.72)}
+.ledger-line i{height:6px;width:6px;border-radius:50%;background:var(--clay)}
+.ledger-line span:last-child{font:400 8px/1 var(--mono);text-transform:uppercase;letter-spacing:.09em;color:rgba(250,247,242,.43)}
+@keyframes draw{from{width:0;opacity:0}to{opacity:1}}
+
+/* Current-state audit */
+.audit-map{display:grid;grid-template-columns:1fr 54px 1fr 54px 1fr;align-items:stretch;gap:0;margin-top:4px}
+.audit-step{border:1px solid var(--line);padding:17px;min-height:145px;background:rgba(255,255,255,.28)}
+.audit-step strong{display:block;font:600 15px/1.25 var(--serif);margin:7px 0}
+.audit-step p{font-size:12px;line-height:1.5;color:var(--muted);margin:0}
+.audit-arrow{display:grid;place-items:center;color:var(--faint);font:300 23px/1 var(--serif)}
+.wounds{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-top:1px solid var(--line);border-left:1px solid var(--line);margin-top:17px}
+.wound{padding:14px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.wound b{display:block;font-size:12px;margin-bottom:5px}
+.wound span{font-size:11px;line-height:1.45;color:var(--muted)}
+
+/* Workflow */
+.workflow{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));margin-top:9px}
+.phase{border-top:1px solid var(--ink);padding:16px 12px 0;position:relative;min-height:150px}
+.phase::before{content:'';width:7px;height:7px;background:var(--ink);position:absolute;top:-4px;left:0;border-radius:50%}
+.phase .n{font:500 9px/1 var(--mono);color:var(--oak);letter-spacing:.12em}
+.phase b{display:block;font:600 14px/1.2 var(--serif);margin:9px 0 6px}
+.phase p{font-size:10.5px;line-height:1.45;color:var(--muted);margin:0}
+.loop{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;align-items:center;gap:9px;margin-top:17px;padding:13px 16px;border:1px solid var(--line);background:rgba(168,181,160,.08)}
+.loop b{font:500 11px/1.2 var(--mono);text-transform:uppercase;letter-spacing:.08em;text-align:center}
+.loop i{font-style:normal;color:var(--sage-deep)}
+
+/* Research matrix */
+.matrix{width:100%;border-collapse:collapse;font-size:11px;line-height:1.35}
+.matrix th{font:500 9px/1.3 var(--mono);text-transform:uppercase;letter-spacing:.1em;text-align:left;padding:9px 10px;border-bottom:2px solid var(--ink);vertical-align:bottom}
+.matrix td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--muted)}
+.matrix td:first-child{font-weight:600;color:var(--ink)}
+.matrix .yes{color:var(--sage-deep);font-weight:600}
+.matrix .best{background:rgba(196,165,123,.11)}
+
+/* Interactive convergence */
+.model{display:grid;grid-template-columns:280px 1fr;gap:26px;align-items:stretch}
+.source-options{border:1px solid var(--line);display:flex;flex-direction:column}
+.source-option{appearance:none;border:0;border-bottom:1px solid var(--line);background:transparent;text-align:left;padding:15px 16px;cursor:pointer;display:grid;grid-template-columns:18px 1fr;gap:10px;align-items:start}
+.source-option:last-child{border-bottom:0}
+.source-option .dot{width:9px;height:9px;border-radius:50%;margin-top:3px;background:var(--faint)}
+.source-option[data-source="board"] .dot{background:var(--sage-deep)}
+.source-option[data-source="library"] .dot{background:var(--oak)}
+.source-option[data-source="clipper"] .dot{background:var(--blue-deep)}
+.source-option[data-source="placeholder"] .dot{background:var(--terracotta)}
+.source-option b{display:block;font-size:12px;margin-bottom:3px}
+.source-option span{font-size:10px;line-height:1.35;color:var(--muted)}
+.source-option.on{background:var(--ink);color:var(--paper)}
+.source-option.on span{color:rgba(250,247,242,.6)}
+.record-stage{border:1px solid var(--line);position:relative;display:grid;grid-template-columns:1fr 42px 1.1fr;align-items:center;padding:28px;min-height:300px;background:linear-gradient(90deg,rgba(255,255,255,.2),transparent)}
+.origin-note h3{font-size:23px;margin-bottom:9px}
+.origin-note p{font-size:13px;line-height:1.55;color:var(--muted);max-width:34ch;margin:0}
+.record-arrow{text-align:center;color:var(--oak);font-size:26px}
+.canonical-record{border:1px solid var(--ink);padding:19px;background:var(--paper)}
+.record-head{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:10px}
+.record-head b{font:600 16px/1.2 var(--serif)}
+.record-row{display:grid;grid-template-columns:100px 1fr;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);font-size:10px}
+.record-row span:first-child{font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--faint)}
+.record-outlets{display:flex;gap:7px;flex-wrap:wrap;margin-top:13px}
+.record-outlets span{border:1px solid var(--line);padding:5px 7px;font:500 8px/1 var(--mono);text-transform:uppercase;letter-spacing:.08em}
+
+/* IA */
+.ia-shell{border:1px solid var(--line);background:rgba(255,255,255,.28)}
+.ia-top{display:flex;justify-content:space-between;align-items:center;padding:15px 17px;border-bottom:1px solid var(--line)}
+.ia-project b{display:block;font:600 18px/1.1 var(--serif)}
+.ia-project span{font-size:10px;color:var(--muted)}
+.ia-tabs{display:flex;gap:0;border-bottom:1px solid var(--line);padding:0 17px}
+.ia-tabs span{padding:11px 13px;font-size:10px;color:var(--muted);border-bottom:2px solid transparent}
+.ia-tabs span.on{color:var(--ink);border-color:var(--ink);font-weight:600}
+.ia-body{display:grid;grid-template-columns:1.1fr .9fr .9fr;min-height:235px}
+.ia-column{padding:17px;border-right:1px solid var(--line)}
+.ia-column:last-child{border-right:0}
+.ia-column h3{font-size:14px}
+.ia-list{list-style:none;padding:0;margin:11px 0 0}
+.ia-list li{padding:8px 0;border-top:1px solid var(--line);font-size:11px;display:flex;justify-content:space-between;gap:12px}
+.ia-list em{font:400 8px/1 var(--mono);font-style:normal;text-transform:uppercase;color:var(--faint)}
+
+/* App mockups */
+.mock-label{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font:500 9px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+.mock-shell{border:1px solid rgba(37,34,30,.22);background:#F8F5EF;min-height:425px;position:relative;overflow:hidden;color:#2D2A26}
+.browserbar{height:25px;background:#EAE4DA;border-bottom:1px solid #D6CEC2;display:flex;align-items:center;padding:0 10px;gap:5px}
+.browserbar i{width:5px;height:5px;border-radius:50%;background:#B6AEA3}
+.browserbar span{margin-left:9px;font:400 7px/1 var(--mono);color:#8A8176}
+.appbar{height:38px;display:flex;align-items:center;padding:0 16px;border-bottom:1px solid #DED7CD;background:#FCFAF7}
+.strata{display:inline-grid;gap:2px;margin-right:9px;vertical-align:middle}
+.strata i{display:block;height:1px;background:currentColor}
+.strata i:nth-child(1){width:14px}.strata i:nth-child(2){width:10px}.strata i:nth-child(3){width:6px}
+.appbrand{font:600 9px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase}
+.appbar .grow{flex:1}
+.appbar .quiet{font-size:8px;color:#8A8176;margin-right:12px}
+.projectbar{padding:13px 16px 0;background:#FCFAF7;border-bottom:1px solid #DED7CD}
+.projectbar-top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.project-title{font:600 17px/1.1 var(--serif)}
+.project-sub{font-size:8px;color:#8A8176;margin-top:3px}
+.tabs{display:flex;gap:19px;margin-top:13px}
+.tabs span{font-size:8px;color:#867E74;padding-bottom:8px;border-bottom:2px solid transparent}
+.tabs span.on{color:#2D2A26;border-color:#2D2A26;font-weight:600}
+.mini-btn{border:1px solid #2D2A26;background:#2D2A26;color:#FAF7F2;padding:7px 10px;font:600 8px/1 var(--sans)}
+.mini-btn.light{background:transparent;color:#2D2A26;border-color:#D2CABF}
+.mock-body{padding:14px 16px}
+.section-head{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid #D8D1C6;padding-bottom:7px;margin-bottom:10px}
+.section-head b{font:600 12px/1.1 var(--serif)}
+.section-head span{font-size:7px;color:#8A8176}
+.continue-grid{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:8px}
+.continue-card{border-top:2px solid #8B7355;border-bottom:1px solid #D8D1C6;padding:10px 9px;background:#FCFAF7;min-height:95px}
+.continue-card small{font:500 6.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:#8B7355}
+.continue-card b{display:block;font:600 10px/1.2 var(--serif);margin:8px 0 4px}
+.continue-card p{font-size:7px;line-height:1.45;color:#7E766C;margin:0}
+.continue-card.sage{border-top-color:#71806E}.continue-card.blue{border-top-color:#71869A}
+.room-row{display:grid;grid-template-columns:1.2fr .65fr .65fr auto;align-items:center;border-bottom:1px solid #DED7CD;padding:9px 0;font-size:8px}
+.room-row b{font-size:8px}.room-row span{color:#7E766C}
+.tiny-link{font:600 7px/1 var(--sans)!important;color:#5C4A3C!important}
+
+/* Add menu + board dialog */
+.dual-mock{display:grid;grid-template-columns:.72fr 1.28fr;gap:15px;align-items:start}
+.menu-sheet,.dialog-sheet{border:1px solid var(--line);background:#FCFAF7}
+.sheet-title{padding:15px;border-bottom:1px solid var(--line)}
+.sheet-title b{font:600 17px/1.1 var(--serif)}
+.sheet-title p{font-size:9px;color:var(--muted);margin:4px 0 0}
+.menu-group{padding:10px 14px 4px;font:500 7px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+.menu-row{display:grid;grid-template-columns:24px 1fr auto;align-items:center;gap:9px;padding:9px 14px;border-top:1px solid var(--line)}
+.menu-icon{width:22px;height:22px;display:grid;place-items:center;border:1px solid var(--line);font:500 8px/1 var(--mono)}
+.menu-row b{font-size:9px;display:block}.menu-row span{font-size:7px;color:var(--muted)}.menu-row em{font-style:normal;color:var(--faint);font-size:12px}
+.dialog-body{padding:15px}
+.field{margin-bottom:12px}
+.field label{display:block;font:500 7px/1 var(--mono);text-transform:uppercase;letter-spacing:.1em;color:var(--faint);margin-bottom:5px}
+.input{border:1px solid var(--line);padding:9px 10px;font-size:9px;background:var(--paper)}
+.choice-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.choice{border:1px solid var(--line);padding:9px 7px;min-height:64px;background:var(--paper)}
+.choice.on{border-color:var(--oak);background:rgba(196,165,123,.12)}
+.choice b{font-size:8px;display:block;margin-bottom:4px}.choice span{font-size:6.5px;line-height:1.35;color:var(--muted)}
+.sheet-actions{display:flex;justify-content:flex-end;gap:7px;padding-top:7px}
+
+/* Library mock */
+.context-strip{display:flex;align-items:center;gap:7px;padding:8px 12px;background:#2D2A26;color:#FAF7F2;font-size:7px}
+.context-strip b{font-weight:600}.context-strip span{color:rgba(250,247,242,.58)}.context-strip .grow{flex:1}
+.product-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.product{border:1px solid #DED7CD;background:#FCFAF7;padding:7px;position:relative}
+.product.selected{border:2px solid #5E715D;padding:6px}
+.product-check{position:absolute;right:7px;top:7px;width:13px;height:13px;border:1px solid #756D64;background:#FCFAF7;display:grid;place-items:center;font-size:8px}
+.selected .product-check{background:#5E715D;color:#fff;border-color:#5E715D}
+.product-art{height:83px;background:#EEE8DE;display:grid;place-items:center;margin-bottom:7px;color:#7D6B57;overflow:hidden}
+.product-art svg{width:66%;height:66%;stroke:currentColor;fill:none;stroke-width:1.6}
+.product b{display:block;font:600 8px/1.2 var(--serif)}
+.product small{display:block;font-size:6.5px;color:#8A8176;margin-top:3px}
+.product .price{font:500 7px/1 var(--mono);margin-top:6px;color:#5C4A3C}
+.selection-dock{position:absolute;left:16px;right:16px;bottom:11px;border:1px solid #2D2A26;background:#FCFAF7;padding:8px 10px;display:flex;align-items:center;gap:14px}
+.selection-dock b{font-size:8px}.selection-dock span{font-size:7px;color:#7E766C}.selection-dock .grow{flex:1}
+
+/* Clipper */
+.clipper-scene{display:grid;grid-template-columns:1.25fr .75fr;border:1px solid var(--line);min-height:425px;background:#EEE9E2}
+.vendor-page{padding:28px 34px;background:#F7F5F1;display:grid;grid-template-columns:1fr 1fr;gap:25px;align-items:center;position:relative}
+.vendor-word{position:absolute;top:15px;left:20px;font:600 9px/1 var(--mono);letter-spacing:.14em}
+.vendor-image{height:245px;background:#E3DDD4;display:grid;place-items:center;color:#6C5A48}
+.vendor-image svg{width:68%;height:68%;stroke:currentColor;fill:none;stroke-width:1.5}
+.vendor-copy .vendor-k{font:500 7px/1 var(--mono);text-transform:uppercase;letter-spacing:.12em;color:#8B7355}
+.vendor-copy h3{font-size:22px;margin:8px 0}.vendor-copy p{font-size:8px;line-height:1.5;color:#756D64}.vendor-price{font:500 12px/1 var(--mono);margin:13px 0}
+.clip-panel{background:#FCFAF7;border-left:1px solid #CDC5B9;padding:14px;display:flex;flex-direction:column}
+.clip-head{display:flex;justify-content:space-between;border-bottom:1px solid #D8D1C6;padding-bottom:9px;margin-bottom:10px}.clip-head b{font:600 12px/1 var(--serif)}.clip-head span{font-size:8px;color:#8A8176}
+.clip-preview{display:grid;grid-template-columns:48px 1fr;gap:9px;margin-bottom:10px}.clip-thumb{background:#E7E0D6;display:grid;place-items:center;color:#6C5A48}.clip-thumb svg{width:75%;stroke:currentColor;fill:none}.clip-preview b{font-size:8px}.clip-preview span{font-size:7px;color:#8A8176;display:block;margin-top:3px}
+.clip-field{margin-bottom:8px}.clip-field label{display:block;font:500 6.5px/1 var(--mono);text-transform:uppercase;letter-spacing:.09em;color:#958C81;margin-bottom:4px}.clip-select{border:1px solid #D4CCC1;padding:7px 8px;font-size:7.5px;display:flex;justify-content:space-between}.clip-select::after{content:'⌄';color:#958C81}
+.clip-check{display:flex;gap:6px;font-size:7px;color:#6E675E;margin:2px 0 10px}.clip-check i{width:10px;height:10px;background:#5E715D;color:white;font-style:normal;display:grid;place-items:center;font-size:7px}
+.clip-success{border-left:2px solid #5E715D;background:rgba(168,181,160,.16);padding:8px;font-size:7px;line-height:1.4;margin-top:8px}
+
+/* Board mock */
+.board-ui{display:grid;grid-template-columns:170px minmax(0,1fr) 190px;height:370px}
+.source-rail{border-right:1px solid #D9D1C6;background:#FCFAF7;padding:10px}
+.rail-tabs{display:flex;gap:7px;border-bottom:1px solid #DED7CD;margin-bottom:8px}.rail-tabs span{font-size:6.5px;padding-bottom:6px;color:#8A8176}.rail-tabs .on{color:#2D2A26;border-bottom:1px solid #2D2A26}
+.rail-search{border:1px solid #D9D1C6;padding:6px;font-size:7px;color:#8A8176;margin-bottom:7px}
+.rail-item{display:grid;grid-template-columns:36px 1fr;gap:6px;border-bottom:1px solid #E3DDD4;padding:6px 0}.rail-art{height:31px;background:#EEE8DE;display:grid;place-items:center}.rail-item b{font-size:7px;display:block}.rail-item span{font-size:6.5px;color:#6F675E}
+.canvas{position:relative;background-color:#ECE7DE;background-image:radial-gradient(#B9B0A4 0.65px,transparent .65px);background-size:12px 12px;overflow:hidden}
+.canvas-label{position:absolute;top:11px;left:13px;font:500 7px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:#8B7355}
+.board-pin{position:absolute;background:#F9F6F0;border:1px solid rgba(37,34,30,.2);display:grid;place-items:center;color:#75614E}
+.board-pin svg{width:72%;height:72%;stroke:currentColor;fill:none;stroke-width:1.4}.board-pin.selected{border:2px solid #5E715D}.board-pin.ref{background:#C9B8A3}.board-note{position:absolute;font:500 9px/1.35 var(--serif);color:#5C4A3C;width:105px}
+.inspector{border-left:1px solid #D9D1C6;background:#FCFAF7;padding:11px}.inspect-art{height:75px;background:#EEE8DE;display:grid;place-items:center;color:#6C5A48}.inspect-art svg{height:70%;stroke:currentColor;fill:none}.inspector h4{font:600 10px/1.2 var(--serif);margin:9px 0 3px}.inspector .by{font-size:6.5px;color:#6F675E}.inspect-row{display:flex;justify-content:space-between;border-top:1px solid #DED7CD;padding:6px 0;font-size:7px}.inspect-state{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;margin-top:8px}.inspect-state span{border:1px solid #D8D1C6;padding:5px 3px;font-size:6.5px;text-align:center}.inspect-state .on{background:#5E715D;color:white;border-color:#5E715D}.board-status{position:absolute;left:12px;bottom:10px;background:#2D2A26;color:#FAF7F2;padding:6px 8px;font:500 7px/1 var(--mono)}
+
+/* Selection schedule */
+.selection-tools{display:flex;align-items:center;gap:7px;margin-bottom:8px}.filter{border:1px solid #D5CDC2;padding:5px 7px;font-size:6.5px;color:#7E766C}.filter.on{background:#2D2A26;color:#FAF7F2;border-color:#2D2A26}.selection-tools .grow{flex:1}
+.schedule-head,.schedule-row{display:grid;grid-template-columns:34px 1.4fr .68fr .65fr .68fr .55fr;gap:8px;align-items:center}
+.schedule-head{font:500 6px/1 var(--mono);text-transform:uppercase;letter-spacing:.08em;color:#8A8176;padding:7px 6px;border-bottom:1px solid #AFA79C}
+.schedule-row{padding:8px 6px;border-bottom:1px solid #DED7CD;background:#FCFAF7;font-size:7.5px}
+.schedule-row .thumb{height:30px;background:#E9E2D8;display:grid;place-items:center;color:#6C5A48}.thumb svg{height:78%;width:78%;stroke:currentColor;fill:none}
+.schedule-row b{font-size:8px;display:block}.schedule-row small{font-size:6.5px;color:#6F675E}.schedule-row .badge{font-size:6.5px}.origin{font:500 6.5px/1 var(--mono);text-transform:uppercase;letter-spacing:.05em;padding:3px 4px;border:1px solid currentColor;display:inline-block}.origin.board{color:#5E715D}.origin.library{color:#765B3D}.origin.clipper{color:#596E82}.origin.placeholder{color:#A55343}
+.readiness{height:3px;background:#DED7CD;margin-top:4px}.readiness i{display:block;height:100%;background:#5E715D}.ready-note{font-size:6.5px;color:#6F675E;margin-top:3px}
+
+/* Lifecycle */
+.anatomy{display:grid;grid-template-columns:1.1fr .9fr;gap:20px}
+.lifecycle{display:grid;grid-template-columns:repeat(6,1fr);border:1px solid var(--line)}
+.life-step{padding:14px 10px;border-right:1px solid var(--line);min-height:124px}.life-step:last-child{border-right:0}.life-step .n{font:500 8px/1 var(--mono);color:var(--oak)}.life-step b{display:block;font:600 12px/1.2 var(--serif);margin:10px 0 5px}.life-step p{font-size:9px;line-height:1.4;color:var(--muted);margin:0}
+.edge-list{border:1px solid var(--line)}
+.edge-row{display:grid;grid-template-columns:145px 1fr;gap:15px;padding:11px 13px;border-bottom:1px solid var(--line);font-size:10px;line-height:1.4}.edge-row:last-child{border-bottom:0}.edge-row b{font-weight:600}.edge-row span{color:var(--muted)}
+
+/* Delivery */
+.rungs{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.rung{border-top:3px solid var(--ink);padding:15px 14px;border-bottom:1px solid var(--line);min-height:220px}.rung:nth-child(2){border-top-color:var(--oak)}.rung:nth-child(3){border-top-color:var(--sage-deep)}.rung .when{font:500 8px/1 var(--mono);text-transform:uppercase;letter-spacing:.11em;color:var(--faint)}.rung h3{font-size:18px;margin:10px 0}.rung ul{padding-left:16px;margin:0}.rung li{font-size:10px;line-height:1.45;color:var(--muted);margin-bottom:5px}
+.metrics{display:grid;grid-template-columns:repeat(6,1fr);border:1px solid var(--line);margin-top:15px}.metric{padding:10px;border-right:1px solid var(--line)}.metric:last-child{border-right:0}.metric b{display:block;font:500 8px/1.2 var(--mono);text-transform:uppercase;letter-spacing:.07em}.metric span{font-size:8.5px;line-height:1.4;color:var(--muted);display:block;margin-top:5px}
+
+/* Decision and sources */
+.decision-list{max-width:930px;border-top:1px solid var(--line)}
+.decision{display:grid;grid-template-columns:28px 1fr auto;gap:14px;align-items:center;padding:15px 0;border-bottom:1px solid var(--line)}
+.decision .check{width:19px;height:19px;border:1px solid var(--clay);display:grid;place-items:center;color:var(--clay);font-size:11px}.decision b{font:500 19px/1.15 var(--serif)}.decision span{font-size:11px;color:rgba(250,247,242,.6);text-align:right;max-width:34ch}
+.sources{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 24px;border-top:1px solid var(--line)}
+.source{display:grid;grid-template-columns:19px 1fr;gap:9px;padding:9px 0;border-bottom:1px solid var(--line)}
+.source .sn{font:500 8px/1.3 var(--mono);color:var(--oak)}
+.source b{font-size:10.5px;display:block;margin-bottom:2px}.source p{font-size:9px;line-height:1.35;color:var(--muted);margin:0}.source a{text-decoration:underline;text-decoration-thickness:1px}
+
+/* Presentation chrome */
+.deck-tools{position:fixed;right:18px;bottom:17px;z-index:100;display:flex;align-items:center;background:rgba(37,34,30,.92);color:var(--paper);border:1px solid rgba(250,247,242,.16);backdrop-filter:blur(8px)}
+.deck-tools button{appearance:none;border:0;border-right:1px solid rgba(250,247,242,.14);background:transparent;color:inherit;width:34px;height:31px;cursor:pointer;font-size:12px}
+.deck-tools button:last-child{border-right:0}
+.deck-tools button:disabled{opacity:.32;cursor:not-allowed}
+.deck-tools .counter{font:400 9px/1 var(--mono);min-width:66px;text-align:center;color:rgba(250,247,242,.7)}
+.progress{position:fixed;left:0;top:0;width:3px;height:100dvh;background:rgba(37,34,30,.08);z-index:100}
+.progress i{display:block;width:100%;height:0;background:var(--oak);transition:height .35s ease}
+.slide-menu{position:fixed;right:18px;top:17px;z-index:90;font:500 8px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--faint);mix-blend-mode:multiply}
+.ink .slide-menu{mix-blend-mode:normal}
+
+@media(max-width:1050px){
+  .slide{height:auto;min-height:100dvh;overflow:visible}.deck{scroll-snap-type:none}.slide-inner{grid-template-columns:56px;padding-left:24px;padding-right:24px}.cover-grid,.model,.anatomy{grid-template-columns:1fr}.convergence{display:none}.g4,.wounds{grid-template-columns:repeat(2,1fr)}.workflow{grid-template-columns:repeat(4,1fr);gap:12px}.phase{min-height:120px}.audit-map{grid-template-columns:1fr}.audit-arrow{height:28px;transform:rotate(90deg)}.record-stage{min-height:260px}.ia-body{grid-template-columns:1fr}.ia-column{border-right:0;border-bottom:1px solid var(--line)}.dual-mock{grid-template-columns:1fr}.clipper-scene{grid-template-columns:1fr}.vendor-page{display:none}.board-ui{grid-template-columns:135px 1fr}.inspector{display:none}.sources{grid-template-columns:1fr}.rungs{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(3,1fr)}.metric:nth-child(3){border-right:0}.lifecycle{grid-template-columns:repeat(3,1fr)}.life-step:nth-child(3){border-right:0}.matrix{font-size:9px}}
+@media(max-width:680px){
+  body{overflow-y:auto;overflow-x:hidden}.deck{overflow-x:hidden}.slide-inner{display:block;padding:62px 18px 70px}.margin{display:none}.g2,.g3,.g4,.wounds,.continue-grid,.product-grid,.choice-grid,.metrics{grid-template-columns:1fr}.workflow{grid-template-columns:1fr}.phase{min-height:0}.loop{grid-template-columns:1fr}.loop i{transform:rotate(90deg);text-align:center}.model{display:block}.source-options{margin-bottom:12px}.record-stage{grid-template-columns:1fr;padding:18px}.record-arrow{transform:rotate(90deg)}.dual-mock{display:block}.menu-sheet{margin-bottom:12px}.mock-shell{min-width:620px}.mock-scroll{width:100%;max-width:100%;overflow-x:auto;padding-bottom:8px}.mock-label span:last-child{display:none}.mock-label::after{content:'Swipe mockup ↔';font-weight:500}.clipper-scene{min-width:0}.deck-tools{right:8px;bottom:8px}.slide-menu{display:none}.anatomy{display:block}.edge-list{margin-top:12px}.lifecycle{grid-template-columns:1fr}.life-step{border-right:0;border-bottom:1px solid var(--line)}.source-note{margin-top:20px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.source-door::after{animation:none}.progress i{transition:none}}
+@media print{@page{size:landscape;margin:0}body{overflow:visible}.deck{height:auto;overflow:visible}.slide{page-break-after:always;height:100vh}.deck-tools,.progress,.slide-menu{display:none}}
+</style>
+</head>
+<body>
+<svg class="visually-hidden" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="chair" viewBox="0 0 100 100"><path d="M27 45h46v27H27zM31 45V25c0-7 5-12 12-12h14c7 0 12 5 12 12v20M27 54H18v18h9M73 54h9v18h-9M34 72v15M66 72v15"/></symbol>
+    <symbol id="lamp" viewBox="0 0 100 100"><path d="M50 16v54M35 70h30M42 16h16l9 22H33zM31 84h38"/></symbol>
+    <symbol id="table" viewBox="0 0 100 100"><path d="M18 42h64v12H18zM27 54v31M73 54v31M22 85h14M64 85h14"/></symbol>
+    <symbol id="rug" viewBox="0 0 100 100"><path d="M18 27h64v48H18zM24 33l52 36M76 33L24 69M18 80h64M24 75v10M32 75v10M68 75v10M76 75v10"/></symbol>
+    <symbol id="sofa" viewBox="0 0 100 100"><path d="M22 48h56v28H22zM28 48V33c0-6 4-10 10-10h24c6 0 10 4 10 10v15M22 55H13v21h9M78 55h9v21h-9M29 76v10M71 76v10M50 48v28"/></symbol>
+  </defs>
+</svg>
+
+<div class="progress" aria-hidden="true"><i id="progressBar"></i></div>
+<div class="slide-menu" id="slideTitle">Patina · FF&amp;E workflow</div>
+<nav class="deck-tools" aria-label="Presentation controls">
+  <button id="prev" type="button" aria-label="Previous slide">←</button>
+  <span class="counter" id="counter" aria-live="polite" aria-atomic="true">01 / 16</span>
+  <button id="next" type="button" aria-label="Next slide">→</button>
+  <button id="fullscreen" type="button" aria-label="Enter full screen">⛶</button>
+</nav>
+<div class="visually-hidden" id="slideAnnouncer" aria-live="polite" aria-atomic="true"></div>
+
+<main class="deck" id="deck">
+
+<!-- 01 · COVER -->
+<section class="slide ink" id="s1" data-title="One project, three doors in">
+  <div class="slide-inner">
+    <aside class="margin"><span class="act">Patina · Designer Portal</span><span class="num">01</span></aside>
+    <div class="main cover-grid">
+      <div class="cover-copy">
+        <p class="kicker">Workflow proposal · 9 August 2026</p>
+        <h1>One project.<br><em>Three doors in.</em><br>One living list.</h1>
+        <p class="lede">A project-native path for boards, Library browsing, and the Chrome clipper to build the same FF&amp;E record—without re-entry or wondering where the work went.</p>
+        <div class="cover-meta"><span>Audience · Patina product, design &amp; engineering</span><span>Status · proposed</span><span>Mock data · illustrative</span></div>
+      </div>
+      <div class="convergence" aria-label="Boards, Library, and Chrome clipper converge into one project selections ledger">
+        <div class="source-door board"><b>Boards</b><small>compose in the room</small></div>
+        <div class="source-door library"><b>Library</b><small>browse what the studio knows</small></div>
+        <div class="source-door clipper"><b>Chrome clipper</b><small>capture where sourcing happens</small></div>
+        <div class="ledger">
+          <div class="ledger-title">Ellsworth Residence<br>Selections</div>
+          <div class="ledger-line"><i></i><span>Halsted lounge chair</span><span>Considering</span></div>
+          <div class="ledger-line"><i></i><span>Wool rug · 10 × 14</span><span>Shortlisted</span></div>
+          <div class="ledger-line"><i></i><span>Console table</span><span>To source</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 02 · CURRENT STATE -->
+<section class="slide" id="s2" data-title="The project has no obvious verb">
+  <div class="slide-inner">
+    <aside class="margin"><span class="act">Act I · The break</span><span class="num">02</span></aside>
+    <div class="main">
+      <p class="kicker">What designers are telling us</p>
+      <h2 class="wide">The project has nouns. It has no obvious verb.</h2>
+      <p class="lede">A designer can find FF&amp;E, boards, the Library, and captures. What she cannot reliably find is the continuing act: <strong>add this to the project I am holding.</strong></p>
+      <div class="audit-map">
+        <div class="audit-step"><span class="badge neutral">Project</span><strong>No rooms means no item action</strong><p>“No FF&amp;E lines yet” appears, but “Add a line” exists only inside a room. The visible action is “Add room.”</p></div>
+        <div class="audit-arrow">→</div>
+        <div class="audit-step"><span class="badge sage">Boards</span><strong>The first board is invisible</strong><p>If a live project has no board, the entire Mood boards section returns nothing—no empty state and no “New board.”</p></div>
+        <div class="audit-arrow">→</div>
+        <div class="audit-step"><span class="badge clay">Library</span><strong>Placement loses the room</strong><p>Card → Piece Room → Add to a project → project row. The item lands unassigned, and the designer must refine it later.</p></div>
+      </div>
+      <div class="wounds">
+        <div class="wound"><b>Board → FF&amp;E breaks after conversion</b><span>“Send to the schedule” writes only to proposal items and is suppressed on project boards.</span></div>
+        <div class="wound"><b>Library import is global</b><span>“Import a list” populates My Library; it cannot target a project or room.</span></div>
+        <div class="wound"><b>The fastest placement is hidden</b><span>⌘K → Ask the Engine → Place works, but is not advertised beside Project · FF&amp;E.</span></div>
+        <div class="wound"><b>The clipper is ahead of the portal</b><span>It already supports Library, project inbox, existing slot, and new FF&amp;E line destinations.</span></div>
+      </div>
+      <div class="callout"><strong>Diagnosis:</strong> the first failure is continuity and visibility across capabilities Patina already owns. Completing the loop also needs one deliberate backend link: board placements must reference a project selection instead of becoming disconnected pins.</div>
+      <p class="source-note">Repo audit · 9 Aug 2026 · <span class="mono">FFESection · ProjectMoodBoards · AddToProjectSheet · BoardRoomInspector · FFESlotPicker</span></p>
+    </div>
+  </div>
+</section>
+
+<!-- 03 · NORMAL WORKFLOW -->
+<section class="slide" id="s3" data-title="The normal flow is a loop">
+  <div class="slide-inner">
+    <aside class="margin"><span class="act">Act I · The work</span><span class="num">03</span></aside>
+    <div class="main">
+      <p class="kicker">Professional interior-design flow</p>
+      <h2 class="wide">The normal flow is a loop that becomes more specific.</h2>
+      <p class="lede">The formal stages are stable; the hand between them is not. Designers collect, compose, compare, replace, and return before a selection is ready to buy.</p>
+      <div class="workflow">
+        <div class="phase"><span class="n">01</span><b>Brief</b><p>Rooms, use, budget, retained pieces, responsibility.</p></div>
+        <div class="phase"><span class="n">02</span><b>Concept</b><p>References, palettes, materials, visual direction.</p></div>
+        <div class="phase"><span class="n">03</span><b>Source</b><p>Products, alternates, dimensions, price, lead time.</p></div>
+        <div class="phase"><span class="n">04</span><b>Specify</b><p>Room, quantity, finish, vendor, code, cost summary.</p></div>
+        <div class="phase"><span class="n">05</span><b>Approve</b><p>Present options, receive item-level decisions, revise.</p></div>
+        <div class="phase"><span class="n">06</span><b>Procure</b><p>Quote, authorize, order, track, receive.</p></div>
+        <div class="phase"><span class="n">07</span><b>Install</b><p>Place, inspect, punch, preserve the final record.</p></div>
+      </div>
+      <div class="loop"><b>Collect loosely</b><i>⇄</i><b>Compose visually</b><i>⇄</i><b>Commit progressively</b></div>
+      <div class="g3 grid" style="margin-top:14px">
+        <div class="card sage"><span class="label">Early</span><p>An image and source link are enough to keep moving.</p></div>
+        <div class="card clay"><span class="label">Middle</span><p>Room, category, quantity, finish, price, and alternatives become known.</p></div>
+        <div class="card blue"><span class="label">Late</span><p>Approval, authorization, vendor and delivery state attach to the same selection.</p></div>
+      </div>
+      <p class="source-note">Sources: <a href="https://www.cidq.org/about-cidq/what-is-interior-design/" target="_blank" rel="noreferrer">CIDQ</a> · <a href="https://biid.org.uk/resources/professional-practice-series-ffe" target="_blank" rel="noreferrer">BIID FF&amp;E</a> · <a href="https://www.wbdg.org/FFC/NAVFAC/CECT/NAVFAC_ID_Procedures_FFE_29Aug2024.pdf" target="_blank" rel="noreferrer">NAVFAC FF&amp;E procedures</a>. Synthesis is Patina's inference.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 04 · MARKET -->
+<section class="slide" id="s4" data-title="Common multi-entry patterns recur">
+  <div class="slide-inner">
+    <aside class="margin"><span class="act">Act I · The field</span><span class="num">04</span></aside>
+    <div class="main">
+      <p class="kicker">Official product documentation · accessed 9 Aug 2026</p>
+      <h2 class="wide">Across five products, the same multi-entry patterns recur.</h2>
+      <table class="matrix">
+        <thead><tr><th>Tool</th><th>Ways in</th><th>Project continuity</th><th>Board / list relationship</th><th>Convention worth keeping</th></tr></thead>
+        <tbody>
+          <tr><td>Houzz Pro</td><td>Clipper, URL, Library, uploads, placeholders</td><td class="yes">Clip directly to project, room, and board</td><td>Draft project items feed boards, tracker, proposals</td><td class="best">Collect before commitment; “In this Project” beside “My Library”</td></tr>
+          <tr><td>Programa</td><td>Clipper, Library, URL, manual, Excel/CSV</td><td class="yes">Clip to schedule, Library, or both</td><td>Pinboards compare; schedules specify and approve</td><td class="best">Capture methods are peers, not hidden utilities</td></tr>
+          <tr><td>DesignFiles</td><td>Clipper, own/built-in Library, upload</td><td class="yes">Clip to My Library or an existing project</td><td>Boards created inside each project</td><td class="best">Design Boards → Add Design is plain and visible</td></tr>
+          <tr><td>Morpholio Board</td><td>Web clipper, Pinterest, gallery, images</td><td>Personal Library organized by project</td><td class="yes">Board emits furniture list and cut sheets</td><td class="best">Visual authorship does not become dead-end data</td></tr>
+          <tr><td>Mydoma</td><td>Clipper, mobile capture, catalog, upload</td><td class="yes">Capture feeds a reusable studio catalog</td><td>Products flow to proposals, invoices, POs</td><td class="best">Sourcing can advance into commercial documents</td></tr>
+        </tbody>
+      </table>
+      <div class="callout"><strong>Patina's opening:</strong> official product documentation shows a recurring pattern, not proof of usability or adoption: several entrances, visible project context, and progressive commitment. Patina can make the stronger promise that every product path reaches one deliberate project working set.</div>
+      <p class="source-note"><a href="https://pro.houzz.com/pro-help/r/how-to-use-selections-in-houzz-pro" target="_blank" rel="noreferrer">Houzz Pro Selection Boards</a> · <a href="https://pro.houzz.com/pro-help/r/draft-project-products" target="_blank" rel="noreferrer">Draft Project Items</a> · <a href="https://programa.design/features/schedule-software-for-interior-designers-architects-clients" target="_blank" rel="noreferrer">Programa Schedules</a> · <a href="https://intercom.help/designfiles/en/articles/3741957-creating-multiple-design-boards-in-a-project" target="_blank" rel="noreferrer">DesignFiles Boards</a> · <a href="https://www.morpholioapps.com/board/" target="_blank" rel="noreferrer">Morpholio Board</a> · <a href="https://mydomastudio.com/features/product-sourcing-curation/" target="_blank" rel="noreferrer">Mydoma Sourcing</a></p>
+    </div>
+  </div>
+</section>
+
+<!-- 05 · MODEL -->
+<section class="slide" id="s5" data-title="One project selection, four valid beginnings">
+  <div class="slide-inner">
+    <aside class="margin"><span class="act">Act II · The rule</span><span class="num">05</span></aside>
+    <div class="main">
+      <p class="kicker">The proposed product model</p>
+      <h2 class="wide">One project selection. Four valid beginnings.</h2>
+      <p class="lede">Tap a source to see what changes. The destination does not.</p>
+      <div class="model">
+        <div class="source-options" role="tablist" aria-label="Ways to add a project selection">
+          <button class="source-option on" id="source-tab-board" type="button" role="tab" aria-selected="true" aria-controls="sourcePanel" tabindex="0" data-source="board"><span class="dot"></span><span><b>From a board</b>Product pin becomes a draft selection.</span></button>
+          <button class="source-option" id="source-tab-library" type="button" role="tab" aria-selected="false" aria-controls="sourcePanel" tabindex="-1" data-source="library"><span class="dot"></span><span><b>From the Library</b>Reusable piece gets project context.</span></button>
+          <button class="source-option" id="source-tab-clipper" type="button" role="tab" aria-selected="false" aria-controls="sourcePanel" tabindex="-1" data-source="clipper"><span class="dot"></span><span><b>From the clipper</b>Supplier page routes straight to the project.</span></button>
+          <button class="source-option" id="source-tab-placeholder" type="button" role="tab" aria-selected="false" aria-controls="sourcePanel" tabindex="-1" data-source="placeholder"><span class="dot"></span><span><b>As a placeholder</b>Name the need before the product is known.</span></button>
+        </div>
+        <div class="record-stage" id="sourcePanel" role="tabpanel" aria-labelledby="source-tab-board" aria-live="polite">
+          <div class="origin-note"><span class="badge sage" id="sourceBadge">Board</span><h3 id="sourceTitle">A product pin is placed.</h3><p id="sourceBody">The visual composition remains free, but a real product joins the project working set and the placement links back to it.</p></div>
+          <div class="record-arrow">→</div>
+          <div class="canonical-record">
+            <div class="record-head"><b>Halsted lounge chair</b><span class="badge neutral">Draft selection</span></div>
+            <div class="record-row"><span>Project</span><span>Ellsworth Residence</span></div>
+            <div class="record-row"><span>Room</span><span id="sourceRoom">Living Room</span></div>
+            <div class="record-row"><span>Source</span><span id="sourceOrigin">Living Room · Concept 01</span></div>
+            <div class="record-row"><span>Known now</span><span id="sourceKnown">Product, image, vendor, source URL</span></div>
+            <div class="record-row"><span>Preference</span><span id="sourcePreference">Considering</span></div>
+            <div class="record-row"><span>Readiness</span><span id="sourceReadiness">Draft · finish and lead time missing</span></div>
+            <div class="record-row"><span>Authorization</span><span>Not released</span></div>
+            <div class="record-row"><span>Procurement</span><span>Not started</span></div>
+            <div class="record-outlets"><span>Board placement</span><span>Selections</span><span>FF&amp;E schedule</span><span>Client review</span><span>Procurement</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="callout"><strong>Boundaries:</strong> inspiration remains a reference; a product/material pin becomes a working candidate. Finishes, allowances, custom work, and services require explicit item kinds—never infer a product from an image alone. One Library product may correctly seed separate selections when room, configuration, or quantity differs.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 06 · IA -->
+<section class="slide" id="s6" data-title="Put the verbs where the project lives">
+  <div class="slide-inner">
+    <aside class="margin"><span class="act">Act II · The address</span><span class="num">06</span></aside>
+    <div class="main">
+      <p class="kicker">Proposed project information architecture</p>
+      <h2 class="wide">Put the verbs where the project lives.</h2>
+      <p class="lede">Keep the professional artifact. Change the everyday language and the route into it.</p>
+      <div class="ia-shell">
+        <div class="ia-top"><div class="ia-project"><b>Ellsworth Residence</b><span>The Ellsworths · Engaged · Concept</span></div><button class="btn" type="button">＋ Add to project</button></div>
+        <div class="ia-tabs"><span class="on">Overview</span><span>Rooms</span><span>Boards</span><span>Selections</span><span>Procurement</span><span>Files</span></div>
+        <div class="ia-body">
+          <div class="ia-column"><span class="label">One persistent act</span><h3>＋ Add to project</h3><ul class="ia-list"><li><span>Browse Patina Library</span><em>product</em></li><li><span>Use Chrome clipper</span><em>product</em></li><li><span>Paste a product link</span><em>product</em></li><li><span>Add placeholder / allowance</span><em>need</em></li><li><span>Upload a reference</span><em>image</em></li><li><span>Create a board</span><em>workspace</em></li></ul></div>
+          <div class="ia-column"><span class="label">The visual room</span><h3>Boards</h3><ul class="ia-list"><li><span>New board</span><em>visible always</em></li><li><span>Continue last draft</span><em>resume</em></li><li><span>Concept / selection / material</span><em>type</em></li><li><span>Room or whole project</span><em>scope</em></li></ul></div>
+          <div class="ia-column"><span class="label">The living FF&amp;E list</span><h3>Selections</h3><ul class="ia-list"><li><span>Ideas and placeholders</span><em>working</em></li><li><span>Ready to present</span><em>review</em></li><li><span>Approved</span><em>agreed</em></li><li><span>Ready to order</span><em>handoff</em></li><li><span>Export FF&amp;E schedule</span><em>artifact</em></li></ul></div>
+        </div>
+      </div>
+      <div class="g2 grid" style="margin-top:14px"><div class="card clay"><span class="label">Naming recommendation</span><p><strong>Selections</strong> is the workspace designers enter. <strong>FF&amp;E schedule</strong> is the document they issue or export.</p></div><div class="card sage"><span class="label">Continuity recommendation</span><p>Project, room, and board remain visible destination chips while browsing, clipping, importing, and placing.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 07 · PROJECT HOME MOCK -->
+<section class="slide" id="s7" data-title="The project tells the designer how to continue">
+  <div class="slide-inner">
+    <aside class="margin"><span class="act">Act III · Project home</span><span class="num">07</span></aside>
+    <div class="main">
+      <p class="kicker">UI proposal · illustrative data</p>
+      <h2 class="wide">The project tells the designer how to continue.</h2>
+      <div class="mock-label"><span>Project overview</span><span>Persistent add · current work · room entry</span></div>
+      <div class="mock-scroll"><div class="mock-shell">
+        <div class="browserbar"><i></i><i></i><i></i><span>app.patina.cloud/doc/ellsworth-residence</span></div>
+        <div class="appbar"><span class="strata"><i></i><i></i><i></i></span><span class="appbrand">Patina</span><span class="grow"></span><span class="quiet">The Desk</span><span class="quiet">Studio drawer</span></div>
+        <div class="projectbar"><div class="projectbar-top"><div><div class="project-title">Ellsworth Residence</div><div class="project-sub">The Ellsworths · Engaged 12 March · Concept development</div></div><button class="mini-btn">＋ Add to project</button></div><div class="tabs"><span class="on">Overview</span><span>Rooms</span><span>Boards</span><span>Selections</span><span>Procurement</span><span>Files</span></div></div>
+        <div class="mock-body">
+          <div class="section-head"><b>Continue building</b><span>The work that has a next move</span></div>
+          <div class="continue-grid">
+            <div class="continue-card"><small>Resume</small><b>Living Room · Concept 01</b><p>Last edited yesterday · 8 product items · 6 references</p><div style="margin-top:10px" class="tiny-link">Open board →</div></div>
+            <div class="continue-card blue"><small>Route</small><b>6 captured products</b><p>Saved to this project's inbox. Room and board are still open.</p><div style="margin-top:10px" class="tiny-link">Review captures →</div></div>
+            <div class="continue-card sage"><small>Complete</small><b>4 selections need specs</b><p>Finish, quantity, or lead time before client review.</p><div style="margin-top:10px" class="tiny-link">Complete the four →</div></div>
+          </div>
+          <div class="section-head" style="margin-top:15px"><b>Rooms</b><span>Every room has a way in</span></div>
+          <div class="room-row"><b>Living Room</b><span>8 selections</span><span>2 boards</span><span class="tiny-link">＋ Add</span></div>
+          <div class="room-row"><b>Primary Bedroom</b><span>5 selections</span><span>1 board</span><span class="tiny-link">＋ Add</span></div>
+          <div class="room-row"><b>Study</b><span>Nothing added yet</span><span>No board</span><span class="tiny-link">Start the room →</span></div>
+        </div>
+      </div></div>
+      <div class="callout"><strong>Two levels of discoverability:</strong> one project-wide action that never disappears, plus contextual actions wherever the designer is already thinking—room, board, or selections.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 08 · ADD + BOARD -->
+<section class="slide" id="s8" data-title="One add menu; board creation stays inside the project">
+  <div class="slide-inner">
+    <aside class="margin"><span class="act">Act III · The verbs</span><span class="num">08</span></aside>
+    <div class="main">
+      <p class="kicker">UI proposal · add menu and new board</p>
+      <h2 class="wide">One add menu. Board creation stays inside the project.</h2>
+      <div class="dual-mock">
+        <div class="menu-sheet">
+          <div class="sheet-title"><b>Add to Ellsworth Residence</b><p>Everything lands in this project. Room and board can be chosen next.</p></div>
+          <div class="menu-group">Add a selection</div>
+          <div class="menu-row"><span class="menu-icon">L</span><span><b>Browse Patina Library</b><span>Studio, shared, and Patina pieces</span></span><em>›</em></div>
+          <div class="menu-row"><span class="menu-icon">↗</span><span><b>Clip from the web</b><span>Open or install the Chrome clipper</span></span><em>›</em></div>
+          <div class="menu-row"><span class="menu-icon">⌘</span><span><b>Paste a product link</b><span>Bring the source page into a draft</span></span><em>›</em></div>
+          <div class="menu-row"><span class="menu-icon">＋</span><span><b>Add a placeholder or allowance</b><span>Name the need before sourcing it</span></span><em>›</em></div>
+          <div class="menu-group">Add a working surface</div>
+          <div class="menu-row"><span class="menu-icon">B</span><span><b>New board</b><span>Concept, selection, material, or blank</span></span><em>›</em></div>
+          <div class="menu-row"><span class="menu-icon">▤</span><span><b>Upload a quote or spec sheet</b><span>Keep the PDF and extract a draft item</span></span><em>›</em></div>
+          <div class="menu-row"><span class="menu-icon">⇧</span><span><b>Import a spreadsheet</b><span>Map columns, reconcile matches, then route rows</span></span><em>›</em></div>
+        </div>
+        <div class="dialog-sheet">
+          <div class="sheet-title"><b>Start a board</b><p>Ellsworth Residence · the project is already chosen</p></div>
+          <div class="dialog-body">
+            <div class="g2 grid"><div class="field"><label>Board name</label><div class="input">Living Room · Concept 02</div></div><div class="field"><label>Room or area</label><div class="input">Living Room ⌄</div></div></div>
+            <div class="field"><label>Start with</label><div class="choice-grid"><div class="choice on"><b>Blank board</b><span>An open canvas with the project source rail.</span></div><div class="choice"><b>Room items</b><span>Place the Living Room's working selections.</span></div><div class="choice"><b>Template</b><span>Use a Patina or studio starting arrangement.</span></div><div class="choice"><b>Another board</b><span>New placements point to the same project selections.</span></div></div></div>
+            <div class="g2 grid"><div class="field"><label>Board purpose</label><div class="input">Concept direction ⌄</div></div><div class="field"><label>Client state</label><div class="input">Draft · studio only ⌄</div></div></div>
+            <div class="callout" style="font-size:10px;margin-top:0"><strong>From Room items</strong> creates new placement IDs that reference existing selections. It never reuses placement identity or clones FF&amp;E lines.</div>
+            <div class="sheet-actions"><button class="btn secondary">Cancel</button><button class="btn">Create board</button></div>
+          </div>
+        </div>
+      </div>
+      <p class="source-note">Reuse, don't rebuild: <span class="mono">BoardsBuilder</span> already accepts <span class="mono">projectId</span> and supports blank, Patina starter, and studio-template paths; it is currently mounted only for proposals.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 09 · LIBRARY -->
+<section class="slide" id="s9" data-title="Browse the Library without putting the project down">
+  <div class="slide-inner">
+    <aside class="margin"><span class="act">Act III · Library</span><span class="num">09</span></aside>
+    <div class="main">
+      <p class="kicker">UI proposal · project-scoped Library browse</p>
+      <h2 class="wide">Browse the Library without putting the project down.</h2>
+      <div class="mock-label"><span>Library picker</span><span>Multi-select · destination stays visible</span></div>
+      <div class="mock-scroll"><div class="mock-shell">
+        <div class="browserbar"><i></i><i></i><i></i><span>app.patina.cloud/library?project=ellsworth</span></div>
+        <div class="appbar"><span class="strata"><i></i><i></i><i></i></span><span class="appbrand">Patina Library</span><span class="grow"></span><span class="quiet">Search pieces</span><button class="mini-btn light">Filters</button></div>
+        <div class="context-strip"><b>Adding to</b><span>Ellsworth Residence</span><span>›</span><b>Living Room</b><span>›</span><b>Concept 02</b><span class="grow"></span><span>Change destination</span></div>
+        <div class="mock-body">
+          <div class="section-head"><b>Seating · 86 pieces</b><span>Studio · Shared · Patina</span></div>
+          <div class="product-grid">
+            <div class="product selected"><span class="product-check">✓</span><div class="product-art"><svg><use href="#chair"/></svg></div><b>Halsted lounge chair</b><small>Middlewest Workshop · Walnut / flax</small><div class="price">Trade $940</div></div>
+            <div class="product selected"><span class="product-check">✓</span><div class="product-art" style="color:#596E82"><svg><use href="#sofa"/></svg></div><b>Ashby sofa</b><small>Thayer &amp; Co · Wool bouclé</small><div class="price">Trade $3,800</div></div>
+            <div class="product"><span class="product-check"></span><div class="product-art" style="color:#5E715D"><svg><use href="#chair"/></svg></div><b>Fowler armchair</b><small>Red Oak Studio · Saddle leather</small><div class="price">Trade $1,180</div></div>
+            <div class="product selected"><span class="product-check">✓</span><div class="product-art" style="color:#8B7355"><svg><use href="#table"/></svg></div><b>Grove side table</b><small>Hollowell Woodshop · White oak</small><div class="price">Trade $620</div></div>
+          </div>
+          <div class="selection-dock"><b>3 pieces selected</b><span>Disposition · Considering</span><span>Also place on Concept 02 · ✓</span><span class="grow"></span><button class="mini-btn">Add 3 to project</button></div>
+        </div>
+      </div></div>
+      <div class="g3 grid" style="margin-top:12px"><div class="card clay"><span class="label">No detail-room tax</span><p>Select from the shelf. Open details only when the details matter.</p></div><div class="card sage"><span class="label">Room at the moment of knowing</span><p>The room is optional, visible, and carried into the selection record.</p></div><div class="card blue"><span class="label">Studio-only money</span><p>Trade cost stays internal. Client preview enforces visibility before any board is published.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 10 · CLIPPER -->
+<section class="slide" id="s10" data-title="The clipper finishes the thought">
+  <div class="slide-inner">
+    <aside class="margin"><span class="act">Act III · Chrome clipper</span><span class="num">10</span></aside>
+    <div class="main">
+      <p class="kicker">UI proposal · destination-aware capture</p>
+      <h2 class="wide">The clipper finishes the thought while the source page is still open.</h2>
+      <div class="clipper-scene">
+        <div class="vendor-page"><div class="vendor-word">MIDDLEWEST WORKSHOP</div><div class="vendor-image"><svg><use href="#chair"/></svg></div><div class="vendor-copy"><div class="vendor-k">Lounge seating · made in Ohio</div><h3>Halsted lounge chair</h3><p>Solid walnut frame. Hand-tied seat. Flax linen shown; COM available. 31 × 33 × 30 in.</p><div class="vendor-price">$1,340 retail</div><button class="mini-btn light">Request a finish sample</button></div></div>
+        <div class="clip-panel">
+          <div class="clip-head"><b>Save with Patina</b><span>×</span></div>
+          <div class="clip-preview"><div class="clip-thumb"><svg><use href="#chair"/></svg></div><div><b>Halsted lounge chair</b><span>Middlewest Workshop</span><span>$1,340 · SKU HL-31</span></div></div>
+          <div class="clip-field"><label>Destination</label><div class="clip-select">Ellsworth Residence</div></div>
+          <div class="clip-field"><label>Room</label><div class="clip-select">Living Room</div></div>
+          <div class="clip-field"><label>Add to board</label><div class="clip-select">Concept 02</div></div>
+          <div class="clip-field"><label>Design disposition</label><div class="clip-select">Considering</div></div>
+          <div class="clip-check"><i>✓</i><span>Keep in My Library for future projects</span></div>
+          <button class="mini-btn" style="width:100%;padding:9px">Save to project</button>
+          <div class="clip-success"><b>After save</b><br>Added to Ellsworth Residence · Living Room · Concept 02<br><span style="color:#5E715D">Open in project →</span></div>
+        </div>
+      </div>
+      <div class="callout"><strong>Build on what shipped:</strong> the extension already supports project inbox, fill existing slot, and create new FF&amp;E line. Add room/board routing with validation that the board belongs to the chosen project and room; keep personal-Library reuse explicit.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 11 · BOARD -->
+<section class="slide" id="s11" data-title="A board is a view of the project, not a separate inventory">
+  <div class="slide-inner">
+    <aside class="margin"><span class="act">Act III · Board room</span><span class="num">11</span></aside>
+    <div class="main">
+      <p class="kicker">UI proposal · project board</p>
+      <h2 class="wide">A board is a view of the project—not a separate inventory.</h2>
+      <div class="mock-label"><span>Living Room · Concept 02</span><span>Product pins are already in Selections</span></div>
+      <div class="mock-scroll"><div class="mock-shell">
+        <div class="browserbar"><i></i><i></i><i></i><span>app.patina.cloud/board/living-concept-02</span></div>
+        <div class="appbar"><span class="strata"><i></i><i></i><i></i></span><span class="appbrand">Ellsworth Residence</span><span class="quiet" style="margin-left:12px">› Living Room › Concept 02</span><span class="grow"></span><button class="mini-btn light">Present</button><button class="mini-btn" style="margin-left:6px">Done</button></div>
+        <div class="board-ui">
+          <aside class="source-rail"><div class="rail-tabs"><span class="on">In project</span><span>Library</span><span>Captures</span></div><div class="rail-search">Search this project…</div><div class="rail-item"><div class="rail-art">↗</div><div><b>Wool rug · 10 × 14</b><span>Shortlisted · Living</span></div></div><div class="rail-item"><div class="rail-art">L</div><div><b>Grove side table</b><span>Considering · Living</span></div></div><div class="rail-item"><div class="rail-art">＋</div><div><b>Console table</b><span>Placeholder · To source</span></div></div><div class="rail-item"><div class="rail-art">↗</div><div><b>Cast-iron floor lamp</b><span>Considering · Unsorted</span></div></div></aside>
+          <div class="canvas"><span class="canvas-label">Warm oak · flax · old brass</span><div class="board-pin selected" style="left:15%;top:20%;width:23%;height:44%"><svg><use href="#sofa"/></svg></div><div class="board-pin" style="left:43%;top:17%;width:16%;height:33%"><svg><use href="#chair"/></svg></div><div class="board-pin" style="left:66%;top:23%;width:14%;height:28%"><svg><use href="#lamp"/></svg></div><div class="board-pin" style="left:39%;top:57%;width:33%;height:24%"><svg><use href="#rug"/></svg></div><div class="board-pin ref" style="left:78%;top:57%;width:13%;height:23%"></div><div class="board-note" style="left:12%;top:72%">A room with weight at the floor and light above the hand.</div><div class="board-status">8 products in Selections · 6 references stay on board only</div></div>
+          <aside class="inspector"><span class="label">Selected product</span><div class="inspect-art"><svg><use href="#sofa"/></svg></div><h4>Ashby sofa</h4><div class="by">Thayer &amp; Co · Wool bouclé</div><div class="inspect-row"><span>Room</span><b>Living Room</b></div><div class="inspect-row"><span>Readiness</span><b>2 required facts missing</b></div><div class="inspect-row"><span>Client price</span><b>Studio only · not set</b></div><div class="inspect-state"><span>Consider</span><span class="on">Shortlist</span><span>Reject</span></div><button class="mini-btn light" style="width:100%;margin-top:8px">Open selection →</button></aside>
+        </div>
+      </div></div>
+      <div class="callout"><strong>The replaced action:</strong> “Send to schedule” becomes two explicit updates: design disposition and readiness for review. A product pin begins as a working candidate; only selected candidates appear in issued FF&amp;E views, without copying the record. Client publishing masks studio-only fields.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 12 · SELECTIONS -->
+<section class="slide" id="s12" data-title="The FF&E list grows as the project grows">
+  <div class="slide-inner">
+    <aside class="margin"><span class="act">Act III · Selections</span><span class="num">12</span></aside>
+    <div class="main">
+      <p class="kicker">UI proposal · living FF&amp;E view</p>
+      <h2 class="wide">The FF&amp;E list grows as the project grows.</h2>
+      <div class="mock-label"><span>Selections · working list</span><span>Every row shows origin, disposition, and required gaps</span></div>
+      <div class="mock-scroll"><div class="mock-shell">
+        <div class="browserbar"><i></i><i></i><i></i><span>app.patina.cloud/doc/ellsworth-residence/selections</span></div>
+        <div class="appbar"><span class="strata"><i></i><i></i><i></i></span><span class="appbrand">Patina</span><span class="grow"></span><span class="quiet">Export FF&amp;E schedule</span><button class="mini-btn">＋ Add selection</button></div>
+        <div class="projectbar"><div class="projectbar-top"><div><div class="project-title">Selections</div><div class="project-sub">Ellsworth Residence · 18 project items · 3 rooms</div></div></div><div class="tabs"><span class="on">Working list</span><span>Design decisions</span><span>Authorization</span><span>Procurement</span></div></div>
+        <div class="mock-body">
+          <div class="selection-tools"><span class="filter on">All 18</span><span class="filter">Needs routing 2</span><span class="filter">Needs specs 4</span><span class="filter">Ready to present 7</span><span class="grow"></span><span class="filter">Room: All</span><span class="filter">Group by room</span></div>
+          <div class="schedule-head"><span></span><span>Selection</span><span>Origin</span><span>Room</span><span>Preference</span><span>Spec readiness</span></div>
+          <div class="schedule-row"><div class="thumb"><svg><use href="#chair"/></svg></div><div><b>Halsted lounge chair</b><small>Middlewest Workshop · HL-31</small></div><div><span class="origin clipper">Clipper</span></div><div>Living Room</div><div><span class="badge sage" style="padding:2px 4px">Shortlisted</span></div><div><div class="ready-note">Missing · finish, lead time</div></div></div>
+          <div class="schedule-row"><div class="thumb"><svg><use href="#sofa"/></svg></div><div><b>Ashby sofa</b><small>Thayer &amp; Co · ASH-96</small></div><div><span class="origin library">Library</span></div><div>Living Room</div><div><span class="badge clay" style="padding:2px 4px">Considering</span></div><div><div class="ready-note">Missing · qty, finish, price</div></div></div>
+          <div class="schedule-row"><div class="thumb"><svg><use href="#rug"/></svg></div><div><b>Wool rug · 10 × 14</b><small>Loomis Mill · custom border</small></div><div><span class="origin board">Board</span></div><div>Living Room</div><div><span class="badge blue" style="padding:2px 4px">Shortlisted</span></div><div><div class="ready-note">Ready for client review</div></div></div>
+          <div class="schedule-row"><div class="thumb" style="font:500 7px/1 var(--mono)">LV-12</div><div><b>Console table</b><small>To be sourced · allowance $2,000</small></div><div><span class="origin placeholder">Placeholder</span></div><div>Living Room</div><div><span class="badge danger" style="padding:2px 4px">Unreviewed</span></div><div><div class="ready-note">Gate · product not chosen</div></div></div>
+          <div class="schedule-row"><div class="thumb"><svg><use href="#lamp"/></svg></div><div><b>Cast-iron floor lamp</b><small>Ironwood Foundry · captured yesterday</small></div><div><span class="origin clipper">Clipper</span></div><div style="color:#A55343">Unsorted</div><div><span class="badge neutral" style="padding:2px 4px">Considering</span></div><div><div class="ready-note">Missing · room, qty, price</div></div></div>
+        </div>
+      </div></div>
+      <div class="g3 grid" style="margin-top:12px"><div class="card sage"><span class="label">Required gates, not a score</span><p>Show the exact missing facts, documents, samples, or explicit N/A. Support bulk room/category assignment.</p></div><div class="card clay"><span class="label">Independent axes</span><p>Internal disposition, client verdict, specification readiness, authorization, and procurement never share one status.</p></div><div class="card blue"><span class="label">Provenance in the open</span><p>Board, Library, clipper, URL, import, manual, or placeholder—plus source and last-checked date.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 13 · LIFECYCLE -->
+<section class="slide" id="s13" data-title="Author once; place many; advance in place">
+  <div class="slide-inner">
+    <aside class="margin"><span class="act">Act IV · The anatomy</span><span class="num">13</span></aside>
+    <div class="main">
+      <p class="kicker">Behavioral contract</p>
+      <h2 class="wide">Author once. Place many. Advance in place.</h2>
+      <div class="lifecycle">
+        <div class="life-step"><span class="n">01</span><b>Captured</b><p>Reusable Library product keeps source and provenance.</p></div>
+        <div class="life-step"><span class="n">02</span><b>Project selection</b><p>Project-specific room, quantity, finish, price snapshot.</p></div>
+        <div class="life-step"><span class="n">03</span><b>Board placement</b><p>Distinct placement IDs let one selection appear on several boards without twins.</p></div>
+        <div class="life-step"><span class="n">04</span><b>Decision</b><p>Internal disposition and client verdict keep actor, time, and board context; neither authorizes spend.</p></div>
+        <div class="life-step"><span class="n">05</span><b>Authorization</b><p>An immutable release instrument snapshots and references the selected project line.</p></div>
+        <div class="life-step"><span class="n">06</span><b>Procurement</b><p>Quoted, ordered, production, shipped, delivered, installed.</p></div>
+      </div>
+      <div class="anatomy" style="margin-top:18px">
+        <div>
+          <span class="label">One project need; many visual placements</span>
+          <div class="canonical-record">
+            <div class="record-head"><b>selection · LV-04</b><span class="badge sage">Preference · approved</span></div>
+            <div class="record-row"><span>Library source</span><span>product · HL-31 · captured from maker page</span></div>
+            <div class="record-row"><span>Project truth</span><span>Living Room · qty 2 · flax · client price · lead time</span></div>
+            <div class="record-row"><span>Placements</span><span>Concept 01 · Concept 02 · Client Selection Board</span></div>
+            <div class="record-row"><span>Readiness</span><span>Ready to issue · all required specification facts present</span></div>
+            <div class="record-row"><span>Authorization</span><span>Not released · editable working facts</span></div>
+            <div class="record-row"><span>Procurement</span><span>Not started</span></div>
+          </div>
+        </div>
+        <div class="edge-list">
+          <div class="edge-row"><b>Remove from this board</b><span>Deletes only the placement. The project selection remains.</span></div>
+          <div class="edge-row"><b>Move to another board</b><span>Moves or adds a placement. It never copies product data.</span></div>
+          <div class="edge-row"><b>Archive from project</b><span>Removes it from active work while preserving decisions and provenance.</span></div>
+          <div class="edge-row"><b>Replace before release</b><span>Links the alternate and keeps the reason and prior client verdict.</span></div>
+          <div class="edge-row"><b>Change after release</b><span>Voids or supersedes through the authorized change path; released money and configuration never mutate silently.</span></div>
+          <div class="edge-row"><b>Delete permanently</b><span>Only an unreleased, unlinked mistake. Authorized, invoiced, or ordered work follows void/supersede.</span></div>
+        </div>
+      </div>
+      <div class="callout"><strong>Alignment with The Authorized Schedule:</strong> author once, link never twin, derive never restate. A board creates a placement link; a project selection owns working facts; an immutable release instrument references its signed snapshot. Later change is void-or-supersede—not in-place replacement.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 14 · DELIVERY -->
+<section class="slide" id="s14" data-title="Ship visibility first, then continuity, then the full loop">
+  <div class="slide-inner">
+    <aside class="margin"><span class="act">Act IV · Delivery</span><span class="num">14</span></aside>
+    <div class="main">
+      <p class="kicker">Proposed sequence</p>
+      <h2 class="wide">Ship visibility first, then continuity, then the full loop.</h2>
+      <div class="rungs">
+        <div class="rung"><span class="when">Phase 1 · The doors</span><h3>Make building obvious</h3><ul><li>Persistent “＋ Add to project” in the active project header.</li><li>Visible Boards section and New board empty state.</li><li>Reuse <span class="mono">BoardsBuilder</span> for project-native board creation.</li><li>Replace manual-only AddLineSheet with existing multi-source add controls.</li><li>Room and board destinations in Library placement.</li></ul></div>
+        <div class="rung"><span class="when">Phase 2 · The shared record</span><h3>Make every path converge</h3><ul><li>Add explicit selection↔board-placement identity, migration, and RPCs.</li><li>Keep disposition, client verdict, readiness, authorization, and procurement separate.</li><li>Project Library multi-select; import mapping, errors, and reconciliation.</li><li>Unsorted inbox and reference vs product/material semantics.</li><li>Make dedupe contextual: same source can be valid across needs.</li></ul></div>
+        <div class="rung"><span class="when">Phase 3 · The loop</span><h3>Advance without re-entry</h3><ul><li>Lightweight preference before binding authorization.</li><li>Board publish and preview-as-client controls.</li><li>Replacement history and alternates before release.</li><li>Release locks money/configuration; later change voids or supersedes.</li><li>Procurement continues on the authorized line.</li></ul></div>
+      </div>
+      <div class="metrics">
+        <div class="metric"><b>Add discovery</b><span>Project sessions that open Add to project</span></div>
+        <div class="metric"><b>Completion</b><span>Started vs completed adds, by source</span></div>
+        <div class="metric"><b>Time to first</b><span>Project open → first new selection</span></div>
+        <div class="metric"><b>Routing debt</b><span>Unsorted items and age before assignment</span></div>
+        <div class="metric"><b>Source reuse</b><span>Repeated URL: intentional new need vs accidental twin</span></div>
+        <div class="metric"><b>Axis progression</b><span>Preference, readiness, release, and procurement separately</span></div>
+      </div>
+      <p class="source-note">No numeric targets until the current baseline is instrumented. Measure the three entrance paths separately and compare by project stage.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 15 · DECISION -->
+<section class="slide ink" id="s15" data-title="Decide the model, not merely the button">
+  <div class="slide-inner">
+    <aside class="margin"><span class="act">Act V · The decision</span><span class="num">15</span></aside>
+    <div class="main">
+      <p class="kicker">What the team needs to rule</p>
+      <h2 class="wide">Decide the model, not merely the button.</h2>
+      <p class="lede">A louder CTA without shared continuity will make the fragmentation easier to enter. The recommendation is the whole sentence.</p>
+      <div class="decision-list">
+        <div class="decision"><span class="check">✓</span><b>Every product path creates or deliberately reuses a selection for this need.</b><span>Board · Library · clipper · placeholder</span></div>
+        <div class="decision"><span class="check">✓</span><b>“＋ Add to project” persists wherever the project is open.</b><span>Overview · room · board · selections</span></div>
+        <div class="decision"><span class="check">✓</span><b>Boards are created, resumed, and understood inside the project.</b><span>No invisible first board</span></div>
+        <div class="decision"><span class="check">✓</span><b>Selections is the working lens; FF&amp;E remains the operational schedule and issued artifact.</b><span>Plain in the UI · canonical through procurement</span></div>
+        <div class="decision"><span class="check">✓</span><b>A pin creates a working candidate; selection controls issued-schedule inclusion.</b><span>Advance the record without flooding the formal view</span></div>
+        <div class="decision"><span class="check">✓</span><b>Disposition, client verdict, readiness, authorization, and procurement remain separate.</b><span>No overloaded status; no silent post-release mutation</span></div>
+      </div>
+      <div class="callout" style="font-size:16px;margin-top:24px"><strong>Recommended next move:</strong> turn slides 07–12 into a clickable prototype and put the three entry paths—board, Library, clipper—in front of the designers who raised the issue.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 16 · SOURCES -->
+<section class="slide" id="s16" data-title="Sources and internal evidence">
+  <div class="slide-inner">
+    <aside class="margin"><span class="act">Sources</span><span class="num">16</span></aside>
+    <div class="main">
+      <p class="kicker">Research ledger · accessed 9 Aug 2026</p>
+      <h2 class="wide">Sources and internal evidence.</h2>
+      <div class="sources">
+        <div class="source"><span class="sn">01</span><div><b><a href="https://www.cidq.org/about-cidq/what-is-interior-design/" target="_blank" rel="noreferrer">CIDQ · What is Interior Design?</a></b><p>Discovery, concept, selections, documentation, coordination, project management, and evaluation.</p></div></div>
+        <div class="source"><span class="sn">02</span><div><b><a href="https://biid.org.uk/resources/professional-practice-series-ffe" target="_blank" rel="noreferrer">BIID · Professional Practice: FF&amp;E</a></b><p>Selection, procurement routes, and designer responsibilities across supply and installation.</p></div></div>
+        <div class="source"><span class="sn">03</span><div><b><a href="https://www.wbdg.org/FFC/NAVFAC/CECT/NAVFAC_ID_Procedures_FFE_29Aug2024.pdf" target="_blank" rel="noreferrer">NAVFAC · Interior Design Procedures: FF&amp;E</a></b><p>Concept options, cost summaries, review, procurement data sheets, samples, and finalization.</p></div></div>
+        <div class="source"><span class="sn">04</span><div><b><a href="https://content.aia.org/sites/default/files/2019-11/AiaDocSynopsesByFamily_103119_0.pdf" target="_blank" rel="noreferrer">AIA · B253 FF&amp;E services synopsis</a></b><p>Programming, schematic design, development, FF&amp;E documents, procurement, and administration.</p></div></div>
+        <div class="source"><span class="sn">05</span><div><b><a href="https://pro.houzz.com/pro-help/r/how-to-use-selections-in-houzz-pro" target="_blank" rel="noreferrer">Houzz Pro · Selection Boards</a></b><p>Project-native boards; clipper, URL, Library, uploads, placeholders, room and direct-to-board routing.</p></div></div>
+        <div class="source"><span class="sn">06</span><div><b><a href="https://pro.houzz.com/pro-help/r/draft-project-products" target="_blank" rel="noreferrer">Houzz Pro · Draft Project Items</a></b><p>Collect without commitment; add from Library, clipper, or tracker; use later in boards and documents.</p></div></div>
+        <div class="source"><span class="sn">07</span><div><b><a href="https://programa.design/features/schedule-software-for-interior-designers-architects-clients" target="_blank" rel="noreferrer">Programa · Specification &amp; Schedules</a></b><p>Web clipper, Product Library, URL paste, manual entry, and Excel/CSV capture paths.</p></div></div>
+        <div class="source"><span class="sn">08</span><div><b><a href="https://programa.com/eu/features/interior-design-webclipper" target="_blank" rel="noreferrer">Programa · Web Clipper</a></b><p>Capture to schedule, Library, or both; scrape product data and carry it through the project.</p></div></div>
+        <div class="source"><span class="sn">09</span><div><b><a href="https://intercom.help/designfiles/en/articles/3741957-creating-multiple-design-boards-in-a-project" target="_blank" rel="noreferrer">DesignFiles · Multiple Design Boards</a></b><p>Design Boards → Add Design inside a project.</p></div></div>
+        <div class="source"><span class="sn">10</span><div><b><a href="https://intercom.help/designfiles/en/articles/3843016-installing-and-using-the-add-to-designfiles-product-clipper" target="_blank" rel="noreferrer">DesignFiles · Product Clipper</a></b><p>Capture product details to My Library or an existing project.</p></div></div>
+        <div class="source"><span class="sn">11</span><div><b><a href="https://www.morpholioapps.com/board/" target="_blank" rel="noreferrer">Morpholio Board</a></b><p>Web capture and personal library; furniture list and cut sheets generated from the authored board.</p></div></div>
+        <div class="source"><span class="sn">12</span><div><b><a href="https://mydomastudio.com/features/product-sourcing-curation/" target="_blank" rel="noreferrer">Mydoma · Product Sourcing &amp; Curation</a></b><p>Captured products move from catalog and boards to proposals, invoices, and purchase orders.</p></div></div>
+        <div class="source"><span class="sn">13</span><div><b><a href="../../qa/ffe-scope-builder/findings.md">Patina · FF&amp;E Scope Builder QA</a></b><p>Catalog placement, room assignment, capture consumption, readiness, and historical friction.</p></div></div>
+        <div class="source"><span class="sn">14</span><div><b><a href="../mood-board-reimagined/mood-board-reimagined-proposal.html">Patina · A Room for the Board</a></b><p>Prior board research, interaction direction, project continuity, and schedule relationship.</p></div></div>
+        <div class="source"><span class="sn">15</span><div><b><a href="../authorized-schedule/the-authorized-schedule-proposal.html">Patina · The Authorized Schedule</a></b><p>Author once, link never twin, derive never restate; authorization belongs on the existing schedule.</p></div></div>
+        <div class="source"><span class="sn">16</span><div><b>Live repository audit · 9 Aug 2026</b><p>Document project, Board Room, Library, shared pickers, and Chrome extension destination flows.</p></div></div>
+      </div>
+      <p class="source-note">All competitor statements are based on official product/help documentation. Proposed workflow and Patina opportunity statements are explicitly the team's inference from those sources and the current codebase.</p>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<script>
+const deck = document.getElementById('deck');
+const slides = [...document.querySelectorAll('.slide')];
+const counter = document.getElementById('counter');
+const progressBar = document.getElementById('progressBar');
+const slideTitle = document.getElementById('slideTitle');
+const slideAnnouncer = document.getElementById('slideAnnouncer');
+let current = 0;
+
+function setCurrent(index){
+  current = Math.max(0, Math.min(index, slides.length - 1));
+  counter.textContent = `${String(current + 1).padStart(2,'0')} / ${String(slides.length).padStart(2,'0')}`;
+  progressBar.style.height = `${((current + 1) / slides.length) * 100}%`;
+  slideTitle.textContent = slides[current].dataset.title || 'Patina · FF&E workflow';
+  slideAnnouncer.textContent = `Slide ${current + 1} of ${slides.length}: ${slides[current].dataset.title || 'Patina FF&E workflow'}`;
+  document.getElementById('prev').disabled=current===0;
+  document.getElementById('next').disabled=current===slides.length-1;
+}
+function go(index){const target=Math.max(0,Math.min(index,slides.length-1));setCurrent(target);slides[target].scrollIntoView({behavior:'smooth',block:'start'});}
+document.getElementById('prev').addEventListener('click',()=>go(current-1));
+document.getElementById('next').addEventListener('click',()=>go(current+1));
+document.getElementById('fullscreen').addEventListener('click',()=>{
+  if(!document.fullscreenElement){document.documentElement.requestFullscreen?.();}
+  else{document.exitFullscreen?.();}
+});
+document.addEventListener('fullscreenchange',()=>{document.getElementById('fullscreen').setAttribute('aria-label',document.fullscreenElement?'Exit full screen':'Enter full screen');});
+document.addEventListener('keydown',event=>{
+  if(event.target.closest('button,a,[role="tab"]')) return;
+  if(['ArrowRight','ArrowDown','PageDown',' '].includes(event.key)){event.preventDefault();go(current+1);}
+  if(['ArrowLeft','ArrowUp','PageUp'].includes(event.key)){event.preventDefault();go(current-1);}
+  if(event.key==='Home'){event.preventDefault();go(0);}
+  if(event.key==='End'){event.preventDefault();go(slides.length-1);}
+  if(event.key.toLowerCase()==='f'){document.getElementById('fullscreen').click();}
+});
+let scrollFrame=0;
+deck.addEventListener('scroll',()=>{if(scrollFrame)return;scrollFrame=requestAnimationFrame(()=>{scrollFrame=0;const center=innerHeight/2;let nearest=0;let distance=Infinity;slides.forEach((slide,index)=>{const box=slide.getBoundingClientRect();const candidate=Math.abs(box.top+Math.min(box.height,innerHeight)/2-center);if(candidate<distance){distance=candidate;nearest=index;}});if(nearest!==current)setCurrent(nearest);});},{passive:true});
+setCurrent(0);
+
+const sourceData = {
+  board:{badge:'Board',badgeClass:'sage',title:'A product pin is placed.',body:'The visual composition remains free, but a real product joins the project working set and the placement links back to it.',preference:'Considering',readiness:'Draft · finish and lead time missing',room:'Living Room',origin:'Living Room · Concept 01',known:'Product, image, vendor, source URL'},
+  library:{badge:'Library',badgeClass:'clay',title:'A known piece is chosen.',body:'The reusable Library record stays intact. Project-specific quantity, configuration, room, and price snapshot begin here.',preference:'Considering',readiness:'Draft · quantity and finish missing',room:'Living Room',origin:'Patina Library · studio layer',known:'Verified product record and trade data'},
+  clipper:{badge:'Clipper',badgeClass:'blue',title:'A supplier page is captured.',body:'The designer can route the product to project, room, and board without leaving the source page. Provenance stays visible.',preference:'Considering',readiness:'Draft · room and lead time missing',room:'Living Room',origin:'Chrome clipper · maker page',known:'Image, URL, price, SKU, dimensions'},
+  placeholder:{badge:'Placeholder',badgeClass:'danger',title:'The need is named first.',body:'“Console table” can exist with a room, allowance, and quantity before a product is sourced. A later product fills the unreleased need.',preference:'Unreviewed',readiness:'Blocked · product not chosen',room:'Living Room',origin:'Project need · manually added',known:'Need, room, category, allowance'}
+};
+const sourceTabs=[...document.querySelectorAll('.source-option')];
+function activateSource(button){
+  document.querySelectorAll('.source-option').forEach(item=>{item.classList.toggle('on',item===button);item.setAttribute('aria-selected',String(item===button));});
+  sourceTabs.forEach(item=>{item.tabIndex=item===button?0:-1;});
+  const data=sourceData[button.dataset.source];
+  const badge=document.getElementById('sourceBadge');
+  badge.className=`badge ${data.badgeClass}`;badge.textContent=data.badge;
+  document.getElementById('sourcePanel').setAttribute('aria-labelledby',button.id);
+  document.getElementById('sourceTitle').textContent=data.title;
+  document.getElementById('sourceBody').textContent=data.body;
+  document.getElementById('sourceRoom').textContent=data.room;
+  document.getElementById('sourceOrigin').textContent=data.origin;
+  document.getElementById('sourceKnown').textContent=data.known;
+  document.getElementById('sourcePreference').textContent=data.preference;
+  document.getElementById('sourceReadiness').textContent=data.readiness;
+}
+sourceTabs.forEach((button,index)=>{
+  button.addEventListener('click',()=>activateSource(button));
+  button.addEventListener('keydown',event=>{
+    let next=index;
+    if(event.key==='ArrowDown'||event.key==='ArrowRight') next=(index+1)%sourceTabs.length;
+    else if(event.key==='ArrowUp'||event.key==='ArrowLeft') next=(index-1+sourceTabs.length)%sourceTabs.length;
+    else if(event.key==='Home') next=0;
+    else if(event.key==='End') next=sourceTabs.length-1;
+    else return;
+    event.preventDefault();activateSource(sourceTabs[next]);sourceTabs[next].focus();
+  });
+});
+document.querySelectorAll('button:not(.source-option):not(#prev):not(#next):not(#fullscreen)').forEach(button=>{button.tabIndex=-1;button.setAttribute('aria-hidden','true');});
+document.querySelectorAll('a[target="_blank"]').forEach(link=>{link.setAttribute('aria-label',`${link.textContent.trim()} (opens in a new tab)`);});
+</script>
+</body>
+</html>
