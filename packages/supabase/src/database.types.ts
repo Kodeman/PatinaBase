@@ -8952,6 +8952,7 @@ export type Database = {
           phases: Json
           slug: string
           updated_at: string
+          version: number
         }
         Insert: {
           created_at?: string
@@ -8963,6 +8964,7 @@ export type Database = {
           phases: Json
           slug: string
           updated_at?: string
+          version?: number
         }
         Update: {
           created_at?: string
@@ -8974,6 +8976,7 @@ export type Database = {
           phases?: Json
           slug?: string
           updated_at?: string
+          version?: number
         }
         Relationships: [
           {
@@ -13555,6 +13558,7 @@ export type Database = {
       project_phases: {
         Row: {
           anchor_date: string | null
+          canonical_stage_key: string | null
           completed_at: string | null
           created_at: string
           deliverables: Json | null
@@ -13574,13 +13578,17 @@ export type Database = {
           revisions_used: number | null
           sort_order: number
           source_proposal_phase_id: string | null
+          source_template_slug: string | null
+          source_template_version: number | null
           start_date: string | null
           status: string
           target_end_date: string | null
           updated_at: string
+          workflow_track: string | null
         }
         Insert: {
           anchor_date?: string | null
+          canonical_stage_key?: string | null
           completed_at?: string | null
           created_at?: string
           deliverables?: Json | null
@@ -13600,13 +13608,17 @@ export type Database = {
           revisions_used?: number | null
           sort_order?: number
           source_proposal_phase_id?: string | null
+          source_template_slug?: string | null
+          source_template_version?: number | null
           start_date?: string | null
           status?: string
           target_end_date?: string | null
           updated_at?: string
+          workflow_track?: string | null
         }
         Update: {
           anchor_date?: string | null
+          canonical_stage_key?: string | null
           completed_at?: string | null
           created_at?: string
           deliverables?: Json | null
@@ -13626,10 +13638,13 @@ export type Database = {
           revisions_used?: number | null
           sort_order?: number
           source_proposal_phase_id?: string | null
+          source_template_slug?: string | null
+          source_template_version?: number | null
           start_date?: string | null
           status?: string
           target_end_date?: string | null
           updated_at?: string
+          workflow_track?: string | null
         }
         Relationships: [
           {
@@ -15387,6 +15402,7 @@ export type Database = {
           proposal_id: string
           request_id: string
           template_slug: string
+          template_version: number | null
         }
         Insert: {
           created_at?: string
@@ -15396,6 +15412,7 @@ export type Database = {
           proposal_id: string
           request_id: string
           template_slug: string
+          template_version?: number | null
         }
         Update: {
           created_at?: string
@@ -15405,6 +15422,7 @@ export type Database = {
           proposal_id?: string
           request_id?: string
           template_slug?: string
+          template_version?: number | null
         }
         Relationships: [
           {
@@ -15451,6 +15469,7 @@ export type Database = {
       proposal_phases: {
         Row: {
           anchor_date: string | null
+          canonical_stage_key: string | null
           created_at: string
           deliverables: Json | null
           duration_days: number | null
@@ -15465,10 +15484,14 @@ export type Database = {
           proposal_id: string
           revision_limit: number | null
           sort_order: number
+          source_template_slug: string | null
+          source_template_version: number | null
           updated_at: string
+          workflow_track: string | null
         }
         Insert: {
           anchor_date?: string | null
+          canonical_stage_key?: string | null
           created_at?: string
           deliverables?: Json | null
           duration_days?: number | null
@@ -15483,10 +15506,14 @@ export type Database = {
           proposal_id: string
           revision_limit?: number | null
           sort_order?: number
+          source_template_slug?: string | null
+          source_template_version?: number | null
           updated_at?: string
+          workflow_track?: string | null
         }
         Update: {
           anchor_date?: string | null
+          canonical_stage_key?: string | null
           created_at?: string
           deliverables?: Json | null
           duration_days?: number | null
@@ -15501,7 +15528,10 @@ export type Database = {
           proposal_id?: string
           revision_limit?: number | null
           sort_order?: number
+          source_template_slug?: string | null
+          source_template_version?: number | null
           updated_at?: string
+          workflow_track?: string | null
         }
         Relationships: [
           {
@@ -26328,6 +26358,7 @@ export type Database = {
         }
         Returns: {
           anchor_date: string | null
+          canonical_stage_key: string | null
           completed_at: string | null
           created_at: string
           deliverables: Json | null
@@ -26347,10 +26378,13 @@ export type Database = {
           revisions_used: number | null
           sort_order: number
           source_proposal_phase_id: string | null
+          source_template_slug: string | null
+          source_template_version: number | null
           start_date: string | null
           status: string
           target_end_date: string | null
           updated_at: string
+          workflow_track: string | null
         }
         SetofOptions: {
           from: "*"
@@ -26375,6 +26409,7 @@ export type Database = {
         }
         Returns: {
           anchor_date: string | null
+          canonical_stage_key: string | null
           created_at: string
           deliverables: Json | null
           duration_days: number | null
@@ -26389,7 +26424,10 @@ export type Database = {
           proposal_id: string
           revision_limit: number | null
           sort_order: number
+          source_template_slug: string | null
+          source_template_version: number | null
           updated_at: string
+          workflow_track: string | null
         }
         SetofOptions: {
           from: "*"
@@ -27391,6 +27429,29 @@ export type Database = {
         Args: { p_project_id: string }
         Returns: Json
       }
+      get_project_workflow: {
+        Args: { p_project_id: string }
+        Returns: {
+          canonical_stage_key: string
+          completed_at: string
+          current_blockers: Json
+          deliverables: Json
+          follows_phase_id: string
+          gate_note: string
+          lane: string
+          phase_id: string
+          phase_key: string
+          phase_name: string
+          phase_status: string
+          progress: number
+          sort_order: number
+          source_proposal_phase_id: string
+          start_date: string
+          target_end_date: string
+          template_provenance: Json
+          workflow_track: string
+        }[]
+      }
       get_project_working_budget: {
         Args: { p_project_id: string }
         Returns: Json
@@ -28252,6 +28313,7 @@ export type Database = {
         }
         Returns: {
           anchor_date: string | null
+          canonical_stage_key: string | null
           created_at: string
           deliverables: Json | null
           duration_days: number | null
@@ -28266,7 +28328,10 @@ export type Database = {
           proposal_id: string
           revision_limit: number | null
           sort_order: number
+          source_template_slug: string | null
+          source_template_version: number | null
           updated_at: string
+          workflow_track: string | null
         }
         SetofOptions: {
           from: "*"
@@ -29594,6 +29659,7 @@ export type Database = {
         }
         Returns: {
           anchor_date: string | null
+          canonical_stage_key: string | null
           completed_at: string | null
           created_at: string
           deliverables: Json | null
@@ -29613,10 +29679,13 @@ export type Database = {
           revisions_used: number | null
           sort_order: number
           source_proposal_phase_id: string | null
+          source_template_slug: string | null
+          source_template_version: number | null
           start_date: string | null
           status: string
           target_end_date: string | null
           updated_at: string
+          workflow_track: string | null
         }
         SetofOptions: {
           from: "*"
@@ -29634,6 +29703,7 @@ export type Database = {
         }
         Returns: {
           anchor_date: string | null
+          canonical_stage_key: string | null
           created_at: string
           deliverables: Json | null
           duration_days: number | null
@@ -29648,7 +29718,10 @@ export type Database = {
           proposal_id: string
           revision_limit: number | null
           sort_order: number
+          source_template_slug: string | null
+          source_template_version: number | null
           updated_at: string
+          workflow_track: string | null
         }
         SetofOptions: {
           from: "*"

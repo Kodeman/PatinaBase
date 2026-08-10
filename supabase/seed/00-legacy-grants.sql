@@ -9155,3 +9155,63 @@ DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.notify_project_document_change() FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00433_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.maintain_phase_template_version() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00433_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._proposal_phase_effect_snapshot(uuid, uuid[]) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00433_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.prepare_phase_template_application() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00433_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.carry_project_phase_workflow_metadata() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00433_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.seed_project_schedule_from_template(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00433_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.seed_project_schedule_from_template(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00433_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_workflow(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00433_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_workflow(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00433_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.proposal_phase_template_applications FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00433_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.proposal_phase_template_applications TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
