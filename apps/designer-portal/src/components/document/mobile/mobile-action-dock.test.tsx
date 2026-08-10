@@ -141,6 +141,8 @@ describe('unified mobile edge owner', () => {
               label: 'Review signing controls',
               destination: { kind: 'anchor', section: 'proposal' },
             },
+            topInput: null,
+            remainingInputCount: 0,
           }}
           onActivate={guideActivate}
         />

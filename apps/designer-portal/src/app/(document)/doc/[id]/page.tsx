@@ -17,6 +17,7 @@ import {
   useProjectPhases,
   useProposalFeedback,
   useProjectRoster,
+  useDiscovery,
 } from '@patina/supabase';
 import { rollupVerdicts, formatVerdictRollup } from '@patina/utils';
 import { useDocumentEngagement } from '@/hooks/use-document-state';
@@ -75,7 +76,17 @@ import { ProjectAuthorityBandForProject } from '@/components/document/commercial
 import { ProjectMoodBoards } from '@/components/document/project-mood-boards';
 import { ProjectCommerceSection } from '@/components/document/commercial/project-commerce-section';
 import { authorizationDoorwayFor } from '@/lib/document/authorization-doorway';
-import { deriveDocumentGuide } from '@/lib/document/document-guide';
+import {
+  asLegacyProposalLifecycle,
+  deriveDocumentGuide,
+  type ProposalGuideFacts,
+} from '@/lib/document/document-guide';
+import { composeDocumentGuideInputs } from '@/lib/document/document-guide-inputs';
+import {
+  asCommercialDocumentKind,
+  asCommercialState,
+} from '@/lib/document/commercial-documents';
+import { useDraftingState } from '@/hooks/use-drafting-state';
 import { openLedger } from '@/components/document/command-bar';
 
 const prettyPhase = (phase: string | null) =>
@@ -129,12 +140,23 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   const projectId = row?.project_id ?? '';
   const proposalId = row?.proposal_id ?? '';
 
-  const { data: project, isLoading: projectIsLoading } = useProjectV2(projectId) as {
+  const { data: project, isLoading: projectIsLoading, isError: projectIsError } = useProjectV2(projectId) as {
     data: AnyRecord;
     isLoading: boolean;
+    isError: boolean;
   };
   const { data: phases } = useProjectPhases(projectId) as { data: AnyRecord[] | undefined };
-  const { data: liveProposal } = useProposal(proposalId) as { data: any };
+  const { data: liveProposal, isError: proposalIsError } = useProposal(proposalId) as {
+    data: any;
+    isError: boolean;
+  };
+  const discoveryQuery = useDiscovery(
+    row?.active_section === 'discovery' ? row.engagement_id : null,
+  );
+  const draftingState = useDraftingState(
+    proposalId,
+    row?.active_section === 'direction' && Boolean(proposalId),
+  );
   const authorizationDoorway = authorizationDoorwayFor({
     engagementKind: row?.engagement_kind,
     projectId: row?.project_id,
@@ -222,9 +244,9 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           block: 'start',
           behavior: reduceMotion ? 'auto' : 'smooth',
         });
-        section
-          ?.querySelector<HTMLElement>('[data-settled-heading]')
-          ?.focus({ preventScroll: true });
+        const focusTarget =
+          section?.querySelector<HTMLElement>('[data-settled-heading]') ?? section;
+        focusTarget?.focus({ preventScroll: true });
       });
     });
   }, [historyOpen, row?.active_section]);
@@ -317,28 +339,56 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           lineage,
           projectStartDate: project?.start_date ?? null,
           installStartDate: installPhase?.start_date ?? null,
-          lineageResolved: row.engagement_kind !== 'project' || !projectIsLoading,
+          lineageResolved:
+            row.engagement_kind !== 'project' || (!projectIsLoading && !projectIsError),
         },
         new Date(),
       )
     : [];
-  const guideModel = useMemo(
-    () =>
-      row
-        ? deriveDocumentGuide({
-            row,
-            proposal: liveProposal
-              ? {
-                  status: liveProposal.status ?? null,
-                  documentKind: liveProposal.document_kind ?? null,
-                  commercialState: liveProposal.commercial_state ?? null,
-                  projectId: liveProposal.project_id ?? null,
-                }
-              : null,
-          })
-        : null,
-    [liveProposal, row],
+  const proposalGuideFacts: ProposalGuideFacts | null = liveProposal
+    ? {
+        status: asLegacyProposalLifecycle(liveProposal.status),
+        documentKind: asCommercialDocumentKind(liveProposal.document_kind),
+        commercialState: asCommercialState(liveProposal.commercial_state),
+        projectId: liveProposal.project_id ?? null,
+      }
+    : null;
+  const guideInputs = row
+    ? composeDocumentGuideInputs({
+        row,
+        proposal: proposalGuideFacts,
+        readiness: {
+          discovery: discoveryQuery.isError
+            ? { state: 'error' }
+            : discoveryQuery.isLoading
+              ? { state: 'loading' }
+              : discoveryQuery.data
+                ? { state: 'ready', data: discoveryQuery.data.row ?? discoveryQuery.data.prefill ?? {} }
+                : { state: 'idle' },
+          drafting: draftingState.error
+            ? { state: 'error' }
+            : draftingState.isLoading
+              ? { state: 'loading' }
+              : { state: 'ready', data: { gaps: draftingState.gaps } },
+        },
+      })
+    : [];
+  const guideUnavailable = Boolean(
+    row && (
+      (row.engagement_kind === 'project' && projectIsError) ||
+      ((row.active_section === 'direction' || row.active_section === 'proposal') && proposalIsError) ||
+      (row.active_section === 'discovery' && discoveryQuery.isError) ||
+      (row.active_section === 'direction' && draftingState.error)
+    ),
   );
+  const guideModel = row
+    ? deriveDocumentGuide({
+        row,
+        availability: guideUnavailable ? 'unavailable' : 'ready',
+        proposal: proposalGuideFacts,
+        inputFacts: guideInputs,
+      })
+    : null;
   const activateGuide = useCallback(() => {
     const destination = guideModel?.action?.destination;
     if (!destination) return;
@@ -663,7 +713,8 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           <div
             id={sectionAnchorId(row.active_section)}
             data-active-section
-            className="scroll-mt-24"
+            tabIndex={-1}
+            className="scroll-mt-24 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
             onDragOver={(e) => {
               if (!row.project_id || !e.dataTransfer?.types?.includes('Files')) return;
               e.preventDefault();

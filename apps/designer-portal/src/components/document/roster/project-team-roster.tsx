@@ -8,6 +8,7 @@ import { projectRosterProjection } from '@/lib/document/roster-derivation';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { RolodexPicker } from './rolodex-picker';
 import { RosterGroups } from './roster-groups';
+import { GuidedEmptyState } from '../guided-empty-state';
 
 const BUILD_TEAM_KINDS: PartyKind[] = [
   'gc',
@@ -59,26 +60,37 @@ export function ProjectTeamRoster({
         The same project roster shown on the call sheet. A GC is optional; add the
         trades working directly when there is no GC.
       </p>
-      <DocumentActionGroup
-        surfaceKey="open-document"
-        regionKey="project-team-roster"
-        aria-label="Project roster actions"
-      >
-        <DocumentAction
-          actionKey="add-project-gc-or-trade"
-          variant="primary"
-          onClick={() => setPickerMode('picker')}
+      {!isLoading && projection.rows.length === 0 && (
+        <GuidedEmptyState
+          title="Build the project team"
+          description="Add the GC or trades who need project context and will appear on the call sheet."
+          inputs={['GC or trade', 'Role', 'Contact details']}
+          action={{
+            key: 'add-project-gc-or-trade',
+            label: 'Add GC or trade',
+            onClick: () => setPickerMode('picker'),
+          }}
+          secondary={{
+            key: 'add-new-project-trade',
+            label: 'New trade contact',
+            onClick: () => setPickerMode('add'),
+          }}
+        />
+      )}
+      {!isLoading && projection.rows.length > 0 && (
+        <DocumentActionGroup
+          surfaceKey="open-document"
+          regionKey="project-team-roster"
+          aria-label="Project roster actions"
         >
-          Add GC or trade
-        </DocumentAction>
-        <DocumentAction
-          actionKey="add-new-project-trade"
-          variant="secondary"
-          onClick={() => setPickerMode('add')}
-        >
-          New trade contact
-        </DocumentAction>
-      </DocumentActionGroup>
+          <DocumentAction actionKey="add-project-gc-or-trade" variant="primary" onClick={() => setPickerMode('picker')}>
+            Add GC or trade
+          </DocumentAction>
+          <DocumentAction actionKey="add-new-project-trade" variant="secondary" onClick={() => setPickerMode('add')}>
+            New trade contact
+          </DocumentAction>
+        </DocumentActionGroup>
+      )}
 
       {added && (
         <p role="status" className="mt-2 text-[10px] text-[var(--color-sage)]">
@@ -87,11 +99,6 @@ export function ProjectTeamRoster({
       )}
       {isLoading && (
         <p className="py-4 text-[11px] text-[var(--text-muted)]">Reading the roster…</p>
-      )}
-      {!isLoading && projection.rows.length === 0 && (
-        <p className="py-4 text-[11px] text-[var(--text-muted)]">
-          No one is on the project roster yet.
-        </p>
       )}
       {!isLoading && projection.rows.length > 0 && (
         <div className="mt-4">
