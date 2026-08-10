@@ -104,7 +104,8 @@ describe("AuthorizationsLedger", () => {
 
   it("shows the empty state when there are no instruments yet", () => {
     render(<AuthorizationsLedger projectId="project-1" />);
-    expect(screen.getByText("No furnishings authorizations yet.")).toBeVisible();
+    expect(screen.getByText("No authorizations recorded yet")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Draft a trade scope" })).toBeVisible();
   });
 
   it("lists each instrument as Authorization № N · name / Lines / Total / State", () => {

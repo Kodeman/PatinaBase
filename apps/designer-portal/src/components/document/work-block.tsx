@@ -27,6 +27,7 @@ import {
   DocumentActionGroup,
   DocumentActionRow,
 } from './document-action';
+import { GuidedEmptyState } from './guided-empty-state';
 
 // The gate's Golden-Hour stamp (HTML §1 .stamp.st-gh) — a gate IS a decision,
 // and the section's closing line wears the stamp the client will grant.
@@ -120,34 +121,15 @@ export function WorkBlock({
   };
 
   if (sectionTasks.length === 0 && !gate && !capturing && !gateAsking) {
-    // Empty state stays one quiet line — the block earns its space.
     return (
-      <DocumentActionGroup
-        surfaceKey="open-document"
-        regionKey={`${sectionKey}-work-empty`}
+      <GuidedEmptyState
         className="mb-1 mt-4"
-        aria-label={`${sectionLabel} work actions`}
-      >
-        <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-          The work
-        </span>
-        {clientUserId && (
-          <DocumentAction
-            actionKey="request-signoff"
-            variant="primary"
-            onClick={() => setGateAsking(true)}
-          >
-            Request sign-off
-          </DocumentAction>
-        )}
-        <DocumentAction
-          actionKey="add-task"
-          variant="secondary"
-          onClick={() => setCapturing(true)}
-        >
-          + Task
-        </DocumentAction>
-      </DocumentActionGroup>
+        title={`Plan the ${sectionLabel.toLowerCase()} work`}
+        description="List the concrete work here so the next action, due date, and sign-off stay visible in the document."
+        inputs={['Task', 'Optional due date', 'Optional estimate']}
+        action={{ key: 'add-task', label: 'Add the first task', onClick: () => setCapturing(true) }}
+        secondary={clientUserId ? { key: 'request-signoff', label: 'Request sign-off', onClick: () => setGateAsking(true) } : undefined}
+      />
     );
   }
 

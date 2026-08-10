@@ -38,6 +38,7 @@ import { AuthorizationDetail } from "./authorization-detail";
 import { DocumentAction } from "../document-action";
 import { TradeScopeDetail } from "./trade/trade-scope-detail";
 import { TradeScopeDraftSheet } from "./trade/trade-scope-draft-sheet";
+import { GuidedEmptyState } from "../guided-empty-state";
 
 const toneColor = {
   quiet: "var(--text-muted)",
@@ -137,6 +138,10 @@ export function AuthorizationsLedger({
   const draftScope = scopes.find((scope) => scope.proposalId === draftScopeId);
 
   const isLoading = instrumentsQuery.isLoading || tradeScopesQuery.isLoading;
+  const openDraftScope = () => {
+    setDraftScopeId(null);
+    setDraftOpen(true);
+  };
   // The two reads fail independently and say so independently: a trade read
   // that cannot answer must never make the furnishings ledger look broken.
 
@@ -160,18 +165,17 @@ export function AuthorizationsLedger({
         <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
           Authorizations &amp; trade scopes
         </p>
-        <DocumentAction
-          actionKey="draft-a-trade-scope"
-          surfaceKey="project"
-          regionKey="authorizations-ledger"
-          variant="secondary"
-          onClick={() => {
-            setDraftScopeId(null);
-            setDraftOpen(true);
-          }}
-        >
-          Draft a trade scope
-        </DocumentAction>
+        {(rows.length > 0 || isLoading || Boolean(instrumentsQuery.error) || Boolean(tradeScopesQuery.error)) && (
+          <DocumentAction
+            actionKey="draft-a-trade-scope"
+            surfaceKey="project"
+            regionKey="authorizations-ledger"
+            variant="secondary"
+            onClick={openDraftScope}
+          >
+            Draft a trade scope
+          </DocumentAction>
+        )}
       </div>
       <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-[var(--text-muted)]">
         An authorization releases signed schedule items for purchasing — release
@@ -194,10 +198,14 @@ export function AuthorizationsLedger({
           Trade scopes are unavailable.
         </p>
       )}
-      {!isLoading && rows.length === 0 && (
-        <p className="mt-3 text-[11px] text-[var(--text-muted)]">
-          No furnishings authorizations yet.
-        </p>
+      {!isLoading && !instrumentsQuery.error && !tradeScopesQuery.error && rows.length === 0 && (
+        <GuidedEmptyState
+          className="mt-3"
+          title="No authorizations recorded yet"
+          description="Release furnishings from the FF&E schedule when prices are ready for client approval, or begin a trade scope here."
+          inputs={["Scope", "Responsible trade", "Client price"]}
+          action={{ key: "draft-first-trade-scope", label: "Draft a trade scope", onClick: openDraftScope }}
+        />
       )}
 
       {rows.length > 0 && (
