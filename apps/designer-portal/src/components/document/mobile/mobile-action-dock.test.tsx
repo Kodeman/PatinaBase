@@ -14,6 +14,7 @@ import { DocumentGuide } from '../document-guide';
 import { MOBILE_ACTION_PRIORITY, signedProposalMobileAction } from './lifecycle-mobile-action';
 
 const mockOpenPost = jest.fn();
+const mockGuideSelected = jest.fn();
 let mockPathname = '/desk';
 let mockUnseenFeedback: Array<{ id: string }> = [];
 let mockTimeState = {
@@ -60,7 +61,7 @@ jest.mock('@/lib/analytics/document-events', () => ({
     actionShown: jest.fn(),
     actionSelected: jest.fn(),
     guideShown: jest.fn(),
-    guideSelected: jest.fn(),
+    guideSelected: (...args: unknown[]) => mockGuideSelected(...args),
   },
 }));
 
@@ -90,6 +91,7 @@ describe('unified mobile edge owner', () => {
       offer: null,
     };
     mockOpenPost.mockClear();
+    mockGuideSelected.mockClear();
     jest.mocked(openFeedbackSheet).mockClear();
   });
 
@@ -165,6 +167,41 @@ describe('unified mobile edge owner', () => {
     fireEvent.click(mobileBar.getByRole('button', { name: 'Open the project' }));
     expect(activate).toHaveBeenCalledTimes(1);
     expect(guideActivate).not.toHaveBeenCalled();
+  });
+
+  it('uses the latest guide input count when a stable mobile action is selected', () => {
+    const baseModel = {
+      state: 'needs_input' as const,
+      stage: 'discovery' as const,
+      eyebrow: 'Discovery',
+      headline: 'Complete Discovery',
+      reason: 'Capture the next input.',
+      action: {
+        key: 'continue-discovery',
+        label: 'Continue Discovery',
+        destination: { kind: 'anchor' as const, section: 'discovery' as const },
+      },
+      topInput: { label: 'Working budget', owner: 'Client' as const, blocks: 'Direction' },
+      remainingInputCount: 3,
+    };
+    const { rerender } = render(
+      <MobileShellProvider>
+        <DocumentGuide model={baseModel} onActivate={jest.fn()} />
+        <MobileBar />
+      </MobileShellProvider>,
+    );
+    rerender(
+      <MobileShellProvider>
+        <DocumentGuide
+          model={{ ...baseModel, remainingInputCount: 0 }}
+          onActivate={jest.fn()}
+        />
+        <MobileBar />
+      </MobileShellProvider>,
+    );
+
+    fireEvent.click(within(screen.getByTestId('mobile-bar')).getByRole('button', { name: 'Continue Discovery' }));
+    expect(mockGuideSelected).toHaveBeenLastCalledWith(expect.objectContaining({ input_count: 1 }));
   });
 
   it('keeps secondary doorways in an accessible More disclosure', () => {

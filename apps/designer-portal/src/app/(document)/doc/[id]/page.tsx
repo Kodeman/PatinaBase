@@ -87,6 +87,10 @@ import {
   asCommercialState,
 } from '@/lib/document/commercial-documents';
 import { useDraftingState } from '@/hooks/use-drafting-state';
+import {
+  selectOperationalNeedForDocument,
+  useDeskEngagements,
+} from '@/hooks/use-desk-engagements';
 import { openLedger } from '@/components/document/command-bar';
 
 const prettyPhase = (phase: string | null) =>
@@ -156,6 +160,18 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   const draftingState = useDraftingState(
     proposalId,
     row?.active_section === 'direction' && Boolean(proposalId),
+  );
+  const enrichedOperationalQuery = useDeskEngagements({
+    enabled: Boolean(
+      row?.project_id &&
+      (row.active_section === 'project' ||
+        row.active_section === 'install' ||
+        row.active_section === 'care'),
+    ),
+  });
+  const enrichedOperationalNeed = selectOperationalNeedForDocument(
+    enrichedOperationalQuery.data,
+    row?.engagement_id,
   );
   const authorizationDoorway = authorizationDoorwayFor({
     engagementKind: row?.engagement_kind,
@@ -252,7 +268,13 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           (responsiveFocusId ? document.getElementById(responsiveFocusId) : null) ??
           section?.querySelector<HTMLElement>('[data-settled-heading]') ?? section;
         focusTarget?.focus({ preventScroll: true });
-        if (activate && focusTarget instanceof HTMLButtonElement) focusTarget.click();
+        if (
+          activate &&
+          focusTarget instanceof HTMLButtonElement &&
+          focusTarget.getAttribute('aria-expanded') !== 'true'
+        ) {
+          focusTarget.click();
+        }
       });
     });
   }, [historyOpen, row?.active_section]);
@@ -393,6 +415,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
         availability: guideUnavailable ? 'unavailable' : 'ready',
         proposal: proposalGuideFacts,
         inputFacts: guideInputs,
+        operationalNeed: enrichedOperationalNeed ?? undefined,
       })
     : null;
   const activateGuide = useCallback(() => {

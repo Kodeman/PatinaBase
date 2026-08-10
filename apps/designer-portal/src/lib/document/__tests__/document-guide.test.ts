@@ -88,6 +88,20 @@ describe('deriveDocumentGuide', () => {
     expect(guide.action?.label).toBe('Review decisions');
   });
 
+  it('accepts the enriched need selected from the shared Desk composition', () => {
+    const guide = deriveDocumentGuide({
+      row: row('project'),
+      operationalNeed: {
+        kind: 'schedule_conflict',
+        text: 'Install collision needs resolution',
+        actionLabel: 'Resolve the schedule',
+        stamp: { label: 'COLLISION', color: 'var(--color-terracotta)' },
+        urgent: false,
+      },
+    });
+    expect(guide.headline).toBe('Install collision needs resolution');
+  });
+
   it.each([
     ['draft', 'legacy', null, 'Finish the proposal', 'Open Drafting Room'],
     ['sent', 'legacy', null, 'Wait for the client’s signature', 'Review signing controls'],

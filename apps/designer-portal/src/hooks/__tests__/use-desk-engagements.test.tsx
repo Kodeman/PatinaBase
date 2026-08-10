@@ -51,7 +51,11 @@ jest.mock('@tanstack/react-query', () => {
   };
 });
 
-import { useDeskEngagements } from '../use-desk-engagements';
+import {
+  selectOperationalNeedForDocument,
+  useDeskEngagements,
+} from '../use-desk-engagements';
+import { partitionDesk, type DocumentStateRow } from '@/lib/document/desk-derivation';
 
 /** A chainable PostgrestFilterBuilder stand-in — every filter method returns
  *  itself, and `.then` resolves it as the Promise.all in the hook expects. */
@@ -144,6 +148,14 @@ describe('useDeskEngagements', () => {
     expect(passedOptions.placeholderData).toBe(keepPreviousData);
   });
 
+  it('keeps the shared Desk cache key while allowing document-stage gating', () => {
+    renderHook(() => useDeskEngagements({ enabled: false }), { wrapper: createWrapper() });
+    const passedOptions = (useQuery as jest.Mock).mock.calls.at(-1)[0];
+    expect(passedOptions.queryKey).toEqual(['document-state', 'desk']);
+    expect(passedOptions.enabled).toBe(false);
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
   it('fires the zero-row breadcrumb when a 0-row read follows a non-zero cached result', async () => {
     mockGetSession.mockResolvedValue({
       data: { session: { access_token: 'tok' } },
@@ -171,5 +183,53 @@ describe('useDeskEngagements', () => {
       previous_chip_count: 0,
       session_valid: true,
     });
+  });
+});
+
+describe('selectOperationalNeedForDocument', () => {
+  const now = new Date('2026-08-10T12:00:00Z');
+  const base = {
+    ...NEW_LEAD_ROW,
+    client_name: 'Avery Stone', title: 'Stone Residence', designer_id: 'designer-1',
+    client_profile_id: 'client-1', active_section: 'project', is_paused: false,
+    project_status: 'active', current_phase: 'design_development', proposal_status: null,
+    proposal_sent_at: null, proposal_viewed_at: null, overdue_decision_count: 0,
+    awaiting_inspection_count: 0, blocked_item_count: 0, in_flight_count: 0,
+    installed_count: 0, item_count: 0, open_claim_po: null, unsent_pulse_count: 0,
+    pulse_week_of: null, draft_unsent_po_count: 0, oldest_draft_po_created_at: null,
+    draft_po_label: null, unacked_po_count: 0, oldest_unacked_sent_at: null,
+    unacked_po_label: null, due_task_count: 0, earliest_task_due: null, due_task_title: null,
+  } as unknown as DocumentStateRow;
+
+  it.each([
+    ['schedule_conflict', () => partitionDesk(
+      [{ ...base, engagement_kind: 'project', engagement_id: 'project-1', project_id: 'project-1' }],
+      now,
+      new Map([['project-1', { collision: { text: 'Install collision', label: 'COLLISION', date: null }, drift: null }]]),
+    )],
+    ['overdue_invoice', () => partitionDesk(
+      [{ ...base, engagement_kind: 'project', engagement_id: 'project-1', project_id: 'project-1' }],
+      now,
+      undefined,
+      new Map([['project-1', { count: 1, oldestDue: '2026-08-01', totalBalanceCents: 1000, invoiceId: 'invoice-1', invoiceLabel: 'Invoice 1' }]]),
+    )],
+    ['lines_flagged', () => partitionDesk(
+      [{ ...base, engagement_kind: 'proposal', engagement_id: 'proposal-1', proposal_id: 'proposal-1', project_id: null, active_section: 'proposal', proposal_status: 'sent' }],
+      now,
+      undefined,
+      undefined,
+      new Map([['proposal-1', { count: 2, docTitle: 'Design agreement', proposalId: 'proposal-1' }]]),
+    )],
+    ['ceremony_pending', () => partitionDesk(
+      [{ ...base, engagement_kind: 'lead', engagement_id: 'lead-1', lead_id: 'lead-1', project_id: null, active_section: 'brief', lead_status: 'new' }],
+      now,
+      undefined,
+      undefined,
+      undefined,
+      new Map([['lead-1', { id: 'ceremony-1', state: 'draft', introText: 'Hello Avery', offeredSlots: null, offeredAt: null, pickedSlotStartsAt: null, timezone: null, threadId: null }]]),
+    )],
+  ] as const)('selects the canonical %s need from shared Desk composition', (kind, compose) => {
+    const data = compose();
+    expect(selectOperationalNeedForDocument(data, data.folders[0].row.engagement_id)?.kind).toBe(kind);
   });
 });

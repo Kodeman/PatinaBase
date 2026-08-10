@@ -216,6 +216,9 @@ export function useMobilePrimaryAction(
     const current = latest.current;
     if (current?.target.kind === 'press') current.target.onPress();
   }, []);
+  const selected = useCallback(() => {
+    latest.current?.onSelected?.();
+  }, []);
 
   const actionKey = action?.actionKey ?? null;
   const surfaceKey = action?.surfaceKey ?? null;
@@ -232,6 +235,7 @@ export function useMobilePrimaryAction(
     const normalized: MobilePrimaryAction | null = current
       ? {
           ...current,
+          onSelected: selected,
           target:
             current.target.kind === 'href'
               ? { kind: 'href', href: current.target.href }
@@ -247,6 +251,7 @@ export function useMobilePrimaryAction(
     label,
     loading,
     press,
+    selected,
     priority,
     regionKey,
     registerPrimaryAction,
