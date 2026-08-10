@@ -35,7 +35,7 @@ DECLARE v_a jsonb; v_a_retry jsonb; v_b jsonb; v_role jsonb; v_config jsonb; v_s
   v_batch_line_a jsonb; v_batch_line_b jsonb; v_batch_po public.purchase_orders;
   v_partial jsonb; v_retry jsonb; v_damaged jsonb; v_clean jsonb; v_inspection_count integer;
   v_rebuild_line jsonb; v_rebuild_po public.purchase_orders; v_rebuild jsonb; v_twenty_board uuid;
-  v_peer_line jsonb; v_peer_po public.purchase_orders;
+  v_peer_line jsonb; v_peer_po public.purchase_orders; v_reprice jsonb;
 BEGIN
   PERFORM pg_temp.assume_lineage_actor('fb000000-0000-4000-8000-000000000001');
   v_a:=public.place_product_in_project('fb100000-0000-4000-8000-000000000001','fb300000-0000-4000-8000-000000000001',NULL,NULL,NULL,'{"captureId":"capture-a"}'::jsonb);
@@ -193,6 +193,45 @@ BEGIN
     PERFORM public.log_po_acknowledgment((v_rebuild->>'replacementPoId')::uuid,NULL,NULL);
     RAISE EXCEPTION 'incomplete replacement PO was acknowledged';
   EXCEPTION WHEN check_violation THEN NULL; END;
+  BEGIN
+    UPDATE public.purchase_orders SET sent_at=now()
+    WHERE id=(v_rebuild->>'replacementPoId')::uuid;
+    RAISE EXCEPTION 'incomplete replacement PO bypassed release with sent_at';
+  EXCEPTION WHEN check_violation THEN NULL; END;
+  BEGIN
+    PERFORM public.reprice_replacement_purchase_order(
+      (v_rebuild->>'replacementPoId')::uuid,
+      jsonb_build_array(jsonb_build_object(
+        'selectionId',v_rebuild_line->>'selectionId',
+        'unitPriceCents','60000','tradePriceCents','70000'
+      ))
+    );
+    RAISE EXCEPTION 'replacement pricing accepted client price below trade cost';
+  EXCEPTION WHEN check_violation THEN NULL; END;
+  ASSERT (SELECT needs_repricing AND sent_at IS NULL
+    FROM public.purchase_orders WHERE id=(v_rebuild->>'replacementPoId')::uuid),
+    'failed repricing must retain the release hold atomically';
+  v_reprice:=public.reprice_replacement_purchase_order(
+    (v_rebuild->>'replacementPoId')::uuid,
+    jsonb_build_array(jsonb_build_object(
+      'selectionId',v_rebuild_line->>'selectionId',
+      'unitPriceCents','110000','tradePriceCents','70000'
+    ))
+  );
+  ASSERT NOT(v_reprice->>'needsRepricing')::boolean
+    AND (v_reprice->>'tradeTotalCents')::integer=70000
+    AND (SELECT NOT needs_repricing AND total_cents=70000
+      FROM public.purchase_orders WHERE id=(v_rebuild->>'replacementPoId')::uuid)
+    AND (SELECT unit_price_cents=110000 AND trade_price_cents=70000
+      AND line_total_cents=110000 FROM public.project_ffe_items
+      WHERE id=(v_rebuild_line->>'selectionId')::uuid)
+    AND (SELECT count(*)=1 AND sum(amount_cents)=70000
+      FROM public.po_payments WHERE purchase_order_id=(v_rebuild->>'replacementPoId')::uuid),
+    'trusted repricing must atomically validate lines, rebuild payments, and clear the hold';
+  PERFORM public.log_po_acknowledgment((v_rebuild->>'replacementPoId')::uuid,NULL,NULL);
+  ASSERT (SELECT status='confirmed' FROM public.purchase_orders
+    WHERE id=(v_rebuild->>'replacementPoId')::uuid),
+    'fully repriced replacement PO may proceed through the trusted lifecycle';
   BEGIN
     UPDATE public.purchase_order_changes SET replacement_purchase_order_id=v_rebuild_po.id
     WHERE id=(v_rebuild->>'changeId')::uuid;

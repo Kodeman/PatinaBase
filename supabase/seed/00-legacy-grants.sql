@@ -9845,3 +9845,15 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.register_project_ffe_working_media_source( uuid, uuid, text, text, text, bigint, text, text, uuid ) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00456_ffe_replacement_po_repricing.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.reprice_replacement_purchase_order(uuid,jsonb,jsonb) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00456_ffe_replacement_po_repricing.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.reprice_replacement_purchase_order(uuid,jsonb,jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

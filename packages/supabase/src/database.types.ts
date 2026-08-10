@@ -30107,6 +30107,14 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      reprice_replacement_purchase_order: {
+        Args: {
+          p_custom_payments?: Json
+          p_lines: Json
+          p_purchase_order_id: string
+        }
+        Returns: Json
+      }
       request_proposal_change: {
         Args: { p_feedback: string; p_proposal_id: string }
         Returns: undefined

@@ -115,6 +115,10 @@ DO $$ BEGIN
   ASSERT NOT has_table_privilege('authenticated','public.purchase_orders','UPDATE');
   ASSERT has_function_privilege('authenticated',
     'public.record_project_ffe_receipt_batch(uuid,jsonb,public.receiving_inspection_outcome,text,uuid[])','EXECUTE');
+  ASSERT has_function_privilege('authenticated',
+    'public.reprice_replacement_purchase_order(uuid,jsonb,jsonb)','EXECUTE');
+  ASSERT NOT has_function_privilege('anon',
+    'public.reprice_replacement_purchase_order(uuid,jsonb,jsonb)','EXECUTE');
   ASSERT (SELECT public=false FROM storage.buckets WHERE id='proposal-mood-boards');
   ASSERT NOT EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='storage' AND tablename='objects'
     AND policyname='Proposal mood boards are publicly readable');
