@@ -141,6 +141,8 @@ export interface ProductPickerModalProps {
    *    per-layer browse + cross-layer search. Used by decisions ("library-first").
    */
   scope?: 'catalog' | 'library';
+  /** Tab shown when the picker opens; URL intake uses the captures tab. */
+  initialTab?: 'catalog' | 'library' | 'captures' | 'draft';
   /**
    * Stop on an optioned piece (variant/configured/custom) and resolve ONE
    * specification before emitting. Default true — a family of SKUs is not
@@ -1046,9 +1048,10 @@ export function ProductPickerModal({
   defaultScopeRoomId = null,
   allowDraftCreate = true,
   scope = 'catalog',
+  initialTab = scope,
   configureStep = true,
 }: ProductPickerModalProps) {
-  const [tab, setTab] = useState<Tab>(scope);
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [scopeRoomId, setScopeRoomId] = useState<string | null>(defaultScopeRoomId ?? null);
   // Non-null while an optioned pick is being resolved — the configure pane
   // replaces the grid instead of the modal closing behind the designer.
@@ -1059,11 +1062,11 @@ export function ProductPickerModal({
   // Reset to the browse tab and the default room whenever the modal opens.
   useEffect(() => {
     if (open) {
-      setTab(scope);
+      setTab(initialTab);
       setScopeRoomId(defaultScopeRoomId ?? null);
       setPendingConfigure(null);
     }
-  }, [open, defaultScopeRoomId, scope]);
+  }, [open, defaultScopeRoomId, initialTab]);
 
   // Close on Escape.
   useEffect(() => {

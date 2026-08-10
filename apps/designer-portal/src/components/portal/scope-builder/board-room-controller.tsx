@@ -248,10 +248,16 @@ function boardItemFromRow(row: ProposalBoardItem): EditableMoodBoardItem {
     locked: row.locked,
     productId: row.product_id,
     captureId: row.capture_id,
+    projectFfeItemId: row.project_ffe_item_id,
     paletteId: row.palette_id,
     imageUrl: row.image_url,
     content: row.content,
-    data: row.data ?? {},
+    data: {
+      ...(row.data ?? {}),
+      ...(row.review_media_asset_id
+        ? { review_media_asset_id: row.review_media_asset_id, review_media_status: 'prepared' }
+        : {}),
+    },
   };
 }
 
@@ -310,6 +316,7 @@ function sameStructuralItem(a: EditableMoodBoardItem, b: EditableMoodBoardItem):
     (a.locked ?? false) === (b.locked ?? false) &&
     (a.productId ?? null) === (b.productId ?? null) &&
     (a.captureId ?? null) === (b.captureId ?? null) &&
+    (a.projectFfeItemId ?? null) === (b.projectFfeItemId ?? null) &&
     (a.paletteId ?? null) === (b.paletteId ?? null) &&
     (a.imageUrl ?? null) === (b.imageUrl ?? null) &&
     (a.content ?? null) === (b.content ?? null) &&
@@ -339,6 +346,7 @@ function atomicBoardState(state: BoardRoomState) {
       locked: item.locked ?? false,
       productId: item.productId ?? null,
       captureId: item.captureId ?? null,
+      projectFfeItemId: item.projectFfeItemId ?? null,
       paletteId: item.paletteId ?? null,
       imageUrl: item.imageUrl ?? null,
       content: item.content ?? null,
@@ -455,6 +463,7 @@ export function revertFailedStructuralTransition(
     'locked',
     'productId',
     'captureId',
+    'projectFfeItemId',
     'paletteId',
     'imageUrl',
     'imageKey',
@@ -676,6 +685,14 @@ export function useBoardRoomController({
       await structuralWriteGateRef.current;
       const current = stateRef.current;
       if (!current || current.boardId !== targetBoardId) return;
+      if (owner.kind === 'project') {
+        await applyStateMutation.mutateAsync({
+          boardId: targetBoardId,
+          owner,
+          state: atomicBoardState(current),
+        });
+        return;
+      }
       const live = new Set(current.items.map((item) => item.id));
       const positions = Object.values(envelope)
         .filter(({ generation, position }) =>
@@ -684,7 +701,7 @@ export function useBoardRoomController({
         .map(({ position }) => position);
       if (positions.length === 0) return;
       await saveLayoutMutation.mutateAsync({ boardId: targetBoardId, owner, positions });
-    }, [owner, saveLayoutMutation]),
+    }, [applyStateMutation, owner, saveLayoutMutation]),
   });
 
   const canvasBuffer = useBufferedAutosave<string, CanvasPatch>({
@@ -693,8 +710,18 @@ export function useBoardRoomController({
     delay: 1_000,
     save: useCallback(async (targetBoardId: string, patch: CanvasPatch) => {
       await structuralWriteGateRef.current;
+      const current = stateRef.current;
+      if (owner.kind === 'project') {
+        if (!current || current.boardId !== targetBoardId) return;
+        await applyStateMutation.mutateAsync({
+          boardId: targetBoardId,
+          owner,
+          state: atomicBoardState(current),
+        });
+        return;
+      }
       await upsertBoardMutation.mutateAsync({ boardId: targetBoardId, owner, ...patch });
-    }, [owner, upsertBoardMutation]),
+    }, [applyStateMutation, owner, upsertBoardMutation]),
   });
 
   useEffect(() => {
@@ -831,6 +858,13 @@ export function useBoardRoomController({
       if (!generationsRef.current.has(added.id)) generationsRef.current.set(added.id, 0);
     }
 
+    // Project boards are RPC-only. Every transition, including geometry and
+    // canvas-only edits, persists as one complete board snapshot.
+    if (owner.kind === 'project') {
+      scheduleStructural(before, after, command, direction, viewTranslationDelta);
+      return;
+    }
+
     const layoutEnvelope: LayoutEnvelope = {};
     for (const next of after.items) {
       const previous = beforeById.get(next.id);
@@ -874,6 +908,7 @@ export function useBoardRoomController({
     boardId,
     canvasBuffer,
     layoutBuffer,
+    owner.kind,
     scheduleStructural,
   ]);
 

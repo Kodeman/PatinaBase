@@ -36,12 +36,12 @@ function prepared(assetId: string): PreparedBoardImage {
 function storage(): BoardAssetStorage & {
   upload: jest.Mock;
   remove: jest.Mock;
-  getPublicUrl: jest.Mock;
+  getUrl: jest.Mock;
 } {
   return {
     upload: jest.fn(async (path: string) => ({ path })),
     remove: jest.fn(async () => undefined),
-    getPublicUrl: jest.fn((path: string) => `https://storage.example/${path}`),
+    getUrl: jest.fn(async (path: string) => `https://storage.example/${path}`),
   };
 }
 

@@ -54,6 +54,12 @@ export interface ScheduleLineInput {
   budget_max_cents?: number | null;
   status?: string | null;
   blocked?: boolean | null;
+  removed_at?: string | null;
+  design_disposition?: string | null;
+  authoritative_readiness?: {
+    ready: boolean;
+    missingFields: string[];
+  } | null;
   /** Set on a trade scope's presence lines — the trade instrument that owns
    *  this line. Such a line is already bought, on other paper. */
   trade_scope_document_id?: string | null;
@@ -299,6 +305,14 @@ export function eligibility(
   /** The trade scope holding this line, when one does. */
   tradeHold: TradeLineHold = { onTradeScope: false },
 ): LineEligibility {
+  if (item.removed_at) return { eligible: false, reason: 'archived selection' };
+  if (item.design_disposition && item.design_disposition !== 'selected') {
+    return { eligible: false, reason: 'select this design direction first' };
+  }
+  if (item.blocked) return { eligible: false, reason: 'release blocked' };
+  if ('authoritative_readiness' in item && item.authoritative_readiness?.ready !== true) {
+    return { eligible: false, reason: 'specification not ready' };
+  }
   // Trade work is bought on its own instrument. A presence line is the
   // schedule's record of work already authorized — it can never join a
   // furnishings release, and the reason says which paper holds it.

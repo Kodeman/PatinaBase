@@ -628,7 +628,7 @@ describe('BoardRoomController binding', () => {
     await act(async () => {
       await api!.flushPending();
     });
-    mockSaveLayout.mockClear();
+    mockApplyBoardRoomState.mockClear();
 
     act(() => api!.tidy([], { gap: 24, gestureId: 'tidy-spacing', committedAt: 1 }));
     act(() => api!.tidy([], { gap: 40, gestureId: 'tidy-spacing', committedAt: 1 }));
@@ -642,11 +642,11 @@ describe('BoardRoomController binding', () => {
     await act(async () => {
       await api!.flushPending();
     });
-    await waitFor(() => expect(mockSaveLayout).toHaveBeenLastCalledWith(expect.objectContaining({
-      positions: expect.arrayContaining([
+    await waitFor(() => expect(mockApplyBoardRoomState).toHaveBeenLastCalledWith(expect.objectContaining({
+      state: expect.objectContaining({ items: expect.arrayContaining([
         expect.objectContaining({ id: 'item-1', x: 32 }),
         expect.objectContaining({ id: 'item-2', x: 272 }),
-      ]),
+      ]) }),
     })));
   });
 
@@ -797,7 +797,7 @@ describe('BoardRoomController binding', () => {
     }));
   });
 
-  it('keeps a restored item on the buffered path after its delete write fails', async () => {
+  it('keeps a restored item on the atomic project path after its delete write fails', async () => {
     mockBoardResult = { ...mockBoard, items: [...mockBoard.items, secondBoardRow] };
     const onError = jest.fn();
     let failDelete: (error: Error) => void = () => undefined;
@@ -829,14 +829,16 @@ describe('BoardRoomController binding', () => {
     await waitFor(() => expect(onError).toHaveBeenCalled());
     expect(screen.getByTestId('restored-items')).toHaveTextContent('item-1,item-2');
 
-    // The write never landed, so the server still holds item-2: its drag has no
-    // reason to amplify into another full-board write.
+    // Project geometry still leaves through the complete-state RPC.
     act(() => api!.moveItems({ 'item-2': { x: 700, y: 120 } }));
     await act(async () => { jest.advanceTimersByTime(700); });
-    await waitFor(() => expect(mockSaveLayout).toHaveBeenCalledWith(expect.objectContaining({
-      positions: [expect.objectContaining({ id: 'item-2', x: 700 })],
-    })));
-    expect(mockApplyBoardRoomState).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(mockApplyBoardRoomState).toHaveBeenCalledTimes(2));
+    expect(mockSaveLayout).not.toHaveBeenCalled();
+    expect(mockApplyBoardRoomState).toHaveBeenLastCalledWith(expect.objectContaining({
+      state: expect.objectContaining({
+        items: expect.arrayContaining([expect.objectContaining({ id: 'item-2', x: 700 })]),
+      }),
+    }));
   });
 
   it('flushes a project-owner layout before exit and supports shell rename (AC1.29)', async () => {
@@ -878,15 +880,16 @@ describe('BoardRoomController binding', () => {
       await Promise.resolve();
     });
     await waitFor(() => expect(onExit).toHaveBeenCalledTimes(1));
-    expect(mockSaveLayout).toHaveBeenCalledWith(expect.objectContaining({
-      boardId: 'board-project',
-      owner: { kind: 'project', id: 'project-1' },
-      positions: [expect.objectContaining({ id: 'item-1', x: 510, width: 200, height: 220 })],
-    }));
+    expect(mockSaveLayout).not.toHaveBeenCalled();
     expect(mockApplyBoardRoomState).toHaveBeenCalledWith(expect.objectContaining({
       boardId: 'board-project',
       owner: { kind: 'project', id: 'project-1' },
-      state: expect.objectContaining({ name: 'Client-ready concept' }),
+      state: expect.objectContaining({
+        name: 'Client-ready concept',
+        items: expect.arrayContaining([
+          expect.objectContaining({ id: 'item-1', x: 510, width: 200, height: 220 }),
+        ]),
+      }),
     }));
   });
 
@@ -967,7 +970,7 @@ describe('BoardRoomController binding', () => {
     }));
   });
 
-  it('keeps an unrelated drag on the buffered layout path behind an in-flight delete', async () => {
+  it('keeps an unrelated drag on the atomic project path behind an in-flight delete', async () => {
     mockBoardResult = { ...mockBoard, items: [...mockBoard.items, secondBoardRow] };
     let settleDelete: () => void = () => undefined;
     mockApplyBoardRoomState.mockImplementationOnce(
@@ -989,16 +992,17 @@ describe('BoardRoomController binding', () => {
     act(() => api!.moveItems({ 'item-1': { x: 640, y: 20 } }));
     await act(async () => { jest.advanceTimersByTime(700); });
 
-    // No promotion: an unrelated drag never becomes a full-board write.
+    // The second complete-state command waits behind the in-flight delete.
     expect(mockApplyBoardRoomState).toHaveBeenCalledTimes(1);
     expect(mockSaveLayout).not.toHaveBeenCalled();
 
     await act(async () => { settleDelete(); await Promise.resolve(); });
-    await waitFor(() => expect(mockSaveLayout).toHaveBeenCalledWith(expect.objectContaining({
-      boardId: 'board-project',
-      positions: [expect.objectContaining({ id: 'item-1', x: 640 })],
-    })));
-    expect(mockApplyBoardRoomState).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(mockApplyBoardRoomState).toHaveBeenCalledTimes(2));
+    expect(mockApplyBoardRoomState).toHaveBeenLastCalledWith(expect.objectContaining({
+      state: expect.objectContaining({
+        items: [expect.objectContaining({ id: 'item-1', x: 640 })],
+      }),
+    }));
   });
 
   it('orders a new item’s dragged geometry behind the create write', async () => {
@@ -1027,10 +1031,12 @@ describe('BoardRoomController binding', () => {
     expect(mockSaveLayout).not.toHaveBeenCalled();
 
     await act(async () => { settleCreate(); await Promise.resolve(); });
-    await waitFor(() => expect(mockSaveLayout).toHaveBeenCalledWith(expect.objectContaining({
-      positions: [expect.objectContaining({ id: 'item-new', x: 520 })],
-    })));
-    expect(mockApplyBoardRoomState).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(mockApplyBoardRoomState).toHaveBeenCalledTimes(2));
+    expect(mockApplyBoardRoomState).toHaveBeenLastCalledWith(expect.objectContaining({
+      state: expect.objectContaining({
+        items: expect.arrayContaining([expect.objectContaining({ id: 'item-new', x: 520 })]),
+      }),
+    }));
   });
 
   it('promotes geometry for an item whose create has not reached the server yet', async () => {
@@ -1104,9 +1110,15 @@ describe('BoardRoomController binding', () => {
       await Promise.resolve();
     });
 
-    await waitFor(() => expect(mockSaveLayout).toHaveBeenCalledWith(expect.objectContaining({
-      positions: [expect.objectContaining({ id: 'item-1', x: 640 })],
-    })));
+    await waitFor(() => expect(mockApplyBoardRoomState).toHaveBeenCalledTimes(2));
+    expect(mockApplyBoardRoomState).toHaveBeenLastCalledWith(expect.objectContaining({
+      state: expect.objectContaining({
+        items: expect.arrayContaining([
+          expect.objectContaining({ id: 'item-1', x: 640 }),
+          expect.objectContaining({ id: 'item-2' }),
+        ]),
+      }),
+    }));
     await waitFor(() => expect(onError).toHaveBeenCalled());
     expect(screen.getByTestId('reverted-items')).toHaveTextContent('item-1,item-2');
   });

@@ -11,7 +11,8 @@ import { BOARD_ASSET_BUCKET } from './upload-board-assets';
 
 export interface MoodBoardCoverStorage {
   upload(path: string, blob: Blob): Promise<void>;
-  publicUrl(path: string): string;
+  remove(path: string): Promise<void>;
+  url(path: string): Promise<string>;
 }
 
 function safePathSegment(value: string, label: string): string {
@@ -21,8 +22,11 @@ function safePathSegment(value: string, label: string): string {
   return value;
 }
 
-export function createMoodBoardCoverStorage(): MoodBoardCoverStorage {
-  const bucket = createBrowserClient().storage.from(BOARD_ASSET_BUCKET);
+export function createMoodBoardCoverStorage(options: {
+  bucket?: string;
+  privateUrl?: boolean;
+} = {}): MoodBoardCoverStorage {
+  const bucket = createBrowserClient().storage.from(options.bucket ?? BOARD_ASSET_BUCKET);
   return {
     async upload(path, blob) {
       const { error } = await bucket.upload(path, blob, {
@@ -32,8 +36,15 @@ export function createMoodBoardCoverStorage(): MoodBoardCoverStorage {
       });
       if (error) throw new Error(error.message);
     },
-    publicUrl(path) {
-      return bucket.getPublicUrl(path).data.publicUrl;
+    async remove(path) {
+      const { error } = await bucket.remove([path]);
+      if (error) throw new Error(error.message);
+    },
+    async url(path) {
+      if (!options.privateUrl) return bucket.getPublicUrl(path).data.publicUrl;
+      const { data, error } = await bucket.createSignedUrl(path, 3_600);
+      if (error || !data?.signedUrl) throw new Error(error?.message ?? 'Cover URL was not returned');
+      return data.signedUrl;
     },
   };
 }
@@ -46,6 +57,7 @@ export async function generateAndUploadMoodBoardCover(options: {
   ownerId: string;
   boardId: string;
   input: MoodBoardRasterInput;
+  version?: string;
   storage?: MoodBoardCoverStorage;
   renderer?: (
     input: MoodBoardRasterInput,
@@ -54,9 +66,17 @@ export async function generateAndUploadMoodBoardCover(options: {
 }): Promise<{ url: string; path: string; raster: MoodBoardRasterResult }> {
   const ownerId = safePathSegment(options.ownerId, 'Owner ID');
   const boardId = safePathSegment(options.boardId, 'Board ID');
-  const path = `${ownerId}/boards/${boardId}/cover.png`;
+  const version = options.version
+    ? safePathSegment(options.version, 'Cover version')
+    : null;
+  const path = `${ownerId}/boards/${boardId}/${version ? `cover-${version}` : 'cover'}.png`;
   const raster = await (options.renderer ?? renderMoodBoardCover)(options.input);
   const storage = options.storage ?? createMoodBoardCoverStorage();
   await storage.upload(path, raster.blob);
-  return { path, url: storage.publicUrl(path), raster };
+  try {
+    return { path, url: await storage.url(path), raster };
+  } catch (error) {
+    if (version) await storage.remove(path).catch(() => undefined);
+    throw error;
+  }
 }

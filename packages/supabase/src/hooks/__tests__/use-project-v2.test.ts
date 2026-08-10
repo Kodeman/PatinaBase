@@ -445,139 +445,13 @@ type PricingMutationConfig = {
 };
 
 describe('useUpdateFFEItemPricing', () => {
-  it('writes only trade_price_cents when only tradePriceCents is provided (no quantity read)', async () => {
-    queueTableResults('project_ffe_items', {
-      data: { id: 'ffe-1', trade_price_cents: 120000 },
-      error: null,
-    });
-
-    const config = useUpdateFFEItemPricing() as unknown as PricingMutationConfig;
-    await config.mutationFn({ itemId: 'ffe-1', projectId: 'proj-1', tradePriceCents: 120000 });
-
-    const builder = builders.project_ffe_items;
-    const updates = builder.__chain.filter((c) => c.method === 'update');
-    expect(updates).toHaveLength(1);
-    // ONLY the trade column — no unit price, no markup, no line_total.
-    expect(updates[0].args[0]).toEqual({ trade_price_cents: 120000 });
-
-    // Scoped to the item id.
-    const eqArgs = builder.__chain.filter((c) => c.method === 'eq').map((c) => c.args);
-    expect(eqArgs).toEqual([['id', 'ffe-1']]);
-
-    // No quantity read: exactly one terminal .single() (the UPDATE's), and the
-    // only select is the post-update row select (no args / no 'quantity').
-    const selects = builder.__chain.filter((c) => c.method === 'select');
-    expect(selects).toHaveLength(1);
-    expect(selects[0].args).toEqual([]);
-  });
-
-  it('clears trade + markup back to NULL when explicit nulls are passed (partial update semantics)', async () => {
-    queueTableResults('project_ffe_items', {
-      data: { id: 'ffe-1', trade_price_cents: null, markup_percent: null },
-      error: null,
-    });
-
-    const config = useUpdateFFEItemPricing() as unknown as PricingMutationConfig;
-    await config.mutationFn({
-      itemId: 'ffe-1',
-      projectId: 'proj-1',
-      tradePriceCents: null,
-      markupPercent: null,
-    });
-
-    const builder = builders.project_ffe_items;
-    const update = builder.__chain.find((c) => c.method === 'update');
-    expect(update?.args[0]).toEqual({ trade_price_cents: null, markup_percent: null });
-  });
-
-  it('writes markup_percent alone when only markupPercent is provided', async () => {
-    queueTableResults('project_ffe_items', {
-      data: { id: 'ffe-1', markup_percent: 22.5 },
-      error: null,
-    });
-
-    const config = useUpdateFFEItemPricing() as unknown as PricingMutationConfig;
-    await config.mutationFn({ itemId: 'ffe-1', projectId: 'proj-1', markupPercent: 22.5 });
-
-    const builder = builders.project_ffe_items;
-    const update = builder.__chain.find((c) => c.method === 'update');
-    expect(update?.args[0]).toEqual({ markup_percent: 22.5 });
-  });
-
-  it('reads the row quantity and recomputes line_total_cents when unitPriceCents is provided', async () => {
-    queueTableResults(
-      'project_ffe_items',
-      // 1. quantity read (select-then-update — same approach as useUpdateFFEItemStatus)
-      { data: { quantity: 3 }, error: null },
-      // 2. the UPDATE itself
-      { data: { id: 'ffe-1', unit_price_cents: 45000, line_total_cents: 135000 }, error: null },
-    );
-
-    const config = useUpdateFFEItemPricing() as unknown as PricingMutationConfig;
-    await config.mutationFn({
-      itemId: 'ffe-1',
-      projectId: 'proj-1',
-      unitPriceCents: 45000,
-      tradePriceCents: 30000,
-    });
-
-    const builder = builders.project_ffe_items;
-
-    // Quantity read happened: select('quantity') before the update.
-    const selectQty = builder.__chain.find(
-      (c) => c.method === 'select' && c.args[0] === 'quantity',
-    );
-    expect(selectQty).toBeDefined();
-    const selectIdx = builder.__chain.findIndex(
-      (c) => c.method === 'select' && c.args[0] === 'quantity',
-    );
-    const updateIdx = builder.__chain.findIndex((c) => c.method === 'update');
-    expect(selectIdx).toBeLessThan(updateIdx);
-
-    // Payload carries client price + recomputed line total + trade price.
-    const update = builder.__chain.find((c) => c.method === 'update');
-    expect(update?.args[0]).toEqual({
-      unit_price_cents: 45000,
-      line_total_cents: 45000 * 3,
-      trade_price_cents: 30000,
-    });
-  });
-
-  it('throws (and never UPDATEs) when the quantity read fails — a stale line total must not survive a price change', async () => {
-    queueTableResults('project_ffe_items', {
-      data: null,
-      error: { message: 'rls denied' },
-    });
-
+  it('fails closed without direct project_ffe_items DML', async () => {
     const config = useUpdateFFEItemPricing() as unknown as PricingMutationConfig;
     await expect(
-      config.mutationFn({ itemId: 'ffe-x', projectId: 'proj-1', unitPriceCents: 1000 }),
-    ).rejects.toThrow(/failed to read quantity.*rls denied/);
+      config.mutationFn({ itemId: 'ffe-1', projectId: 'proj-1', unitPriceCents: 1000 }),
+    ).rejects.toThrow(/pricing changes are RPC-only/);
 
-    const builder = builders.project_ffe_items;
-    expect(builder.__chain.find((c) => c.method === 'update')).toBeUndefined();
-  });
-
-  it('throws when no pricing fields are provided', async () => {
-    const config = useUpdateFFEItemPricing() as unknown as PricingMutationConfig;
-    await expect(
-      config.mutationFn({ itemId: 'ffe-1', projectId: 'proj-1' }),
-    ).rejects.toThrow(/no pricing fields provided/);
-
-    // Nothing was written.
     expect(builders.project_ffe_items).toBeUndefined();
-  });
-
-  it('throws when the UPDATE itself fails', async () => {
-    queueTableResults('project_ffe_items', {
-      data: null,
-      error: new Error('check constraint violated'),
-    });
-
-    const config = useUpdateFFEItemPricing() as unknown as PricingMutationConfig;
-    await expect(
-      config.mutationFn({ itemId: 'ffe-1', projectId: 'proj-1', tradePriceCents: -1 }),
-    ).rejects.toThrow('check constraint violated');
   });
 
   it('onSuccess invalidates the FF&E trio (via invalidateFfeCaches) plus the package financials key', () => {
@@ -847,6 +721,15 @@ type StatusMutationConfig = {
 };
 
 describe('useUpdateFFEItemStatus', () => {
+  it('fails closed without direct project_ffe_items DML', async () => {
+    const config = useUpdateFFEItemStatus() as unknown as StatusMutationConfig;
+    await expect(
+      config.mutationFn({ itemId: 'ffe-1', projectId: 'proj-5', status: 'ordered' }),
+    ).rejects.toThrow(/logistics changes are RPC-only/);
+
+    expect(builders.project_ffe_items).toBeUndefined();
+  });
+
   it('onSuccess invalidates the FF&E keys plus project-financials (price param may change line_total_cents)', () => {
     const config = useUpdateFFEItemStatus() as unknown as StatusMutationConfig;
 
@@ -871,50 +754,18 @@ type ReassignMutationConfig = {
 };
 
 describe('useBulkReassignFfeVendor', () => {
-  it('updates vendor_id + vendor_name over the ids, scoped to the project, guarded to unordered lines', async () => {
-    queueTableResults('project_ffe_items', {
-      data: [{ id: 'ffe-1' }, { id: 'ffe-2' }],
-      error: null,
-    });
-
+  it('fails closed without direct project_ffe_items DML', async () => {
     const config = useBulkReassignFfeVendor() as unknown as ReassignMutationConfig;
-    const result = await config.mutationFn({
-      projectId: 'proj-1',
-      itemIds: ['ffe-1', 'ffe-2'],
-      vendorId: 'v-9',
-      vendorName: 'Hewn Woodworks',
-    });
+    await expect(
+      config.mutationFn({
+        projectId: 'proj-1',
+        itemIds: ['ffe-1', 'ffe-2'],
+        vendorId: 'v-9',
+        vendorName: 'Hewn Woodworks',
+      }),
+    ).rejects.toThrow(/vendor changes are RPC-only/);
 
-    const builder = builders.project_ffe_items;
-    const update = builder.__chain.find((c) => c.method === 'update');
-    expect(update?.args[0]).toEqual({ vendor_id: 'v-9', vendor_name: 'Hewn Woodworks' });
-
-    // One write, addressed to exactly the selected ids…
-    const inCall = builder.__chain.find((c) => c.method === 'in');
-    expect(inCall?.args).toEqual(['id', ['ffe-1', 'ffe-2']]);
-    // …defense-in-depth scoped to the project (useAssignProductToFfeSlot pattern)…
-    const eqCall = builder.__chain.find((c) => c.method === 'eq');
-    expect(eqCall?.args).toEqual(['project_id', 'proj-1']);
-    // …and the PO guard: an ordered line is never bulk-reassigned.
-    const isCall = builder.__chain.find((c) => c.method === 'is');
-    expect(isCall?.args).toEqual(['purchase_order_id', null]);
-
-    expect(result).toEqual({ updatedIds: ['ffe-1', 'ffe-2'], skippedIds: [] });
-  });
-
-  it('reports ids the guarded UPDATE did not reach as skipped (stale client raced an order)', async () => {
-    // ffe-2 got PO-linked since the board loaded — the .is() guard drops it.
-    queueTableResults('project_ffe_items', { data: [{ id: 'ffe-1' }], error: null });
-
-    const config = useBulkReassignFfeVendor() as unknown as ReassignMutationConfig;
-    const result = await config.mutationFn({
-      projectId: 'proj-1',
-      itemIds: ['ffe-1', 'ffe-2'],
-      vendorId: 'v-9',
-      vendorName: 'Hewn Woodworks',
-    });
-
-    expect(result).toEqual({ updatedIds: ['ffe-1'], skippedIds: ['ffe-2'] });
+    expect(builders.project_ffe_items).toBeUndefined();
   });
 
   it('throws (and never writes) on an empty selection', async () => {
@@ -928,23 +779,6 @@ describe('useBulkReassignFfeVendor', () => {
       }),
     ).rejects.toThrow(/no items selected/);
     expect(builders.project_ffe_items).toBeUndefined();
-  });
-
-  it('throws when the UPDATE fails', async () => {
-    queueTableResults('project_ffe_items', {
-      data: null,
-      error: new Error('rls denied'),
-    });
-
-    const config = useBulkReassignFfeVendor() as unknown as ReassignMutationConfig;
-    await expect(
-      config.mutationFn({
-        projectId: 'proj-1',
-        itemIds: ['ffe-1'],
-        vendorId: 'v-9',
-        vendorName: 'Hewn Woodworks',
-      }),
-    ).rejects.toThrow('rls denied');
   });
 
   it('onSuccess invalidates the FF&E trio (invalidateFfeCaches)', () => {

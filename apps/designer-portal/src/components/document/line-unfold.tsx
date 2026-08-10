@@ -300,6 +300,7 @@ export function LineUnfold({
   auth = { track: 'none' },
   isCommercialOrigin = false,
   onIncludeInRelease,
+  canEditSelection = true,
 }: {
   item: FFERow;
   projectId: string;
@@ -312,6 +313,7 @@ export function LineUnfold({
   isCommercialOrigin?: boolean;
   /** Enter the release ceremony with this line already ticked. */
   onIncludeInRelease?: () => void;
+  canEditSelection?: boolean;
 }) {
   const stamp = deriveLineStamp(item);
   const po = item.purchase_order ?? null;
@@ -438,27 +440,34 @@ export function LineUnfold({
       )}
 
       {/* R25: room assignment, in the unfold's quiet grammar. */}
-      {(rooms ?? []).length > 0 && (
+      {canEditSelection && (
         <div className="mb-2.5 flex items-baseline gap-2">
           <span className="font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
             Room
           </span>
           <select
-            value={item.project_room_id ?? ''}
+            value={item.assignment_scope === 'room' && item.project_room_id
+              ? `room:${item.project_room_id}`
+              : item.assignment_scope === 'unassigned'
+                ? 'unassigned'
+                : 'throughout'}
             disabled={Boolean(softLock)}
             title={softLock ?? undefined}
-            onChange={(e) =>
+            onChange={(e) => {
+              const value = e.target.value;
               assignRoom.mutate({
                 itemId: item.id,
-                roomId: e.target.value || null,
-              })
-            }
+                roomId: value.startsWith('room:') ? value.slice(5) : null,
+                assignmentScope: value.startsWith('room:') ? 'room' : value as 'throughout' | 'unassigned',
+              });
+            }}
             aria-label="Assign to room"
             className="bg-transparent text-[10.5px] text-[var(--color-charcoal)] outline-none disabled:opacity-60"
           >
-            <option value="">Throughout · unassigned</option>
+            <option value="unassigned">Unsorted</option>
+            <option value="throughout">Throughout</option>
             {(rooms ?? []).map((r) => (
-              <option key={r.id} value={r.id}>
+              <option key={r.id} value={`room:${r.id}`}>
                 {r.name}
               </option>
             ))}

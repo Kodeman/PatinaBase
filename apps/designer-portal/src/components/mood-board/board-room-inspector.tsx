@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { resolveMoodBoardGeometry, unionBoardRects } from '@patina/design-system';
 import type { BoardOwnerRef, BoardRect, EditableMoodBoardItem } from '@patina/types';
+import { usePromoteBoardReferenceToSelection } from '@patina/supabase';
 import { Button, Input, Select, Textarea } from '@/components/ui/controls';
 import type { BoardRoomControllerApi } from '@/components/portal/scope-builder/board-room-controller';
 import { BoardImageInspectorActions } from './board-image-inspector-actions';
@@ -191,6 +192,8 @@ export function BoardRoomInspector({
   onCommand?: (kind: 'arrange' | 'content' | 'delete' | 'handle') => void;
 }) {
   const panelRef = useRef<HTMLElement>(null);
+  const promoteReference = usePromoteBoardReferenceToSelection();
+  const [promotionError, setPromotionError] = useState<string | null>(null);
   const selected = useMemo(
     () => api.state?.items.filter((item) => api.selectedItemIds.includes(item.id)) ?? [],
     [api.selectedItemIds, api.state?.items],
@@ -421,6 +424,7 @@ export function BoardRoomInspector({
           <BoardImageInspectorActions
             boardId={api.state.boardId}
             item={lead}
+            enabled={owner?.kind !== 'project'}
             onUpdate={(itemId, patch) => {
               api.updateItem(itemId, patch);
               onCommand?.('content');
@@ -441,6 +445,46 @@ export function BoardRoomInspector({
               scopeRoomId={scopeRoomId}
               item={lead}
             />
+          )}
+
+          {owner?.kind === 'project' && lead.projectFfeItemId && (
+            <p className="rounded-[4px] border border-[var(--border-default)] px-2.5 py-2 text-[10px] leading-4 text-[var(--text-muted)]">
+              In project · removing this pin removes only the board placement.
+            </p>
+          )}
+
+          {owner?.kind === 'project' && !lead.projectFfeItemId &&
+            (lead.type === 'product' || lead.type === 'capture') && (
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={promoteReference.isPending}
+                onClick={() => {
+                  setPromotionError(null);
+                  void promoteReference.mutateAsync({
+                    projectId: owner.id,
+                    boardItemId: lead.id,
+                    assignmentScope: scopeRoomId ? 'room' : 'unassigned',
+                    roomId: scopeRoomId,
+                    disposition: 'candidate',
+                    duplicateMode: 'reuse',
+                    idempotencyKey: `promote:${lead.id}`,
+                  }).then((result) => {
+                    if (!result.selectionId) throw new Error('Promotion did not return a selection.');
+                    api.updateItem(lead.id, { projectFfeItemId: result.selectionId });
+                  }).catch((cause) => {
+                    setPromotionError(
+                      cause instanceof Error ? cause.message : 'This reference could not be promoted.',
+                    );
+                  });
+                }}
+              >
+                {promoteReference.isPending ? 'Promoting…' : 'Promote to project selection'}
+              </Button>
+            )}
+
+          {promotionError && (
+            <p role="alert" className="text-[10px] text-[var(--color-clay)]">{promotionError}</p>
           )}
 
           {onOpenProduct && lead.productId && (lead.type === 'product' || lead.type === 'capture') && (
@@ -469,7 +513,9 @@ export function BoardRoomInspector({
       )}
 
       <div className="mt-3 border-t border-[var(--border-default)] pt-2">
-        <Button size="sm" variant="ghost" onClick={deleteSelection}>Delete</Button>
+        <Button size="sm" variant="ghost" onClick={deleteSelection}>
+          {lead.projectFfeItemId ? 'Remove placement' : 'Delete reference'}
+        </Button>
       </div>
     </aside>
   );

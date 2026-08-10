@@ -192,18 +192,7 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
           : outcome === 'damaged'
             ? `Inspection logged — damage claim drafted for ${vendorName}.`
             : `Inspection logged — partial delivery noted for ${vendorName}.`;
-      // W5-T2 — per-item count writes are non-critical in the hook; surface
-      // any failures so the designer can re-enter them from the item list.
-      if (result.itemUpdateFailures.length > 0) {
-        toast(
-          `Inspection logged, but ${result.itemUpdateFailures.length} received ${
-            result.itemUpdateFailures.length === 1 ? 'count' : 'counts'
-          } failed to save — re-check the items.`,
-          'warning',
-        );
-      } else {
-        toast(successMsg, outcome === 'clean' ? 'success' : 'warning');
-      }
+      toast(successMsg, outcome === 'clean' ? 'success' : 'warning');
       onOpenChange(false);
     } catch (e) {
       setSubmitError((e as Error)?.message ?? 'Failed to log inspection.');

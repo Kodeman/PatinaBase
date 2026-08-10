@@ -12,6 +12,10 @@ jest.mock('@/hooks/use-background-removal', () => ({
   useRemoveBoardItemBackground: () => ({ mutateAsync: jest.fn(), isPending: false, error: null }),
 }));
 
+jest.mock('@patina/supabase', () => ({
+  usePromoteBoardReferenceToSelection: () => ({ mutateAsync: jest.fn(), isPending: false }),
+}));
+
 function controllerApi(): BoardRoomControllerApi {
   return {
     state: {
@@ -110,8 +114,34 @@ describe('BoardRoomInspector multi-selection', () => {
     fireEvent.change(screen.getByLabelText('Section'), { target: { value: 'living' } });
     expect(api.setItemsSectionMembership).toHaveBeenCalledWith(['chair', 'rug'], 'living');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete reference' }));
     expect(api.deleteItems).toHaveBeenCalled();
+  });
+});
+
+describe('BoardRoomInspector project placement lifecycle', () => {
+  it('removes only the board placement for a linked project selection', () => {
+    const api = controllerApi();
+    api.state = {
+      ...api.state!,
+      owner: { kind: 'project', id: 'project-1' },
+      items: [{
+        ...api.state!.items[0],
+        projectFfeItemId: 'selection-1',
+        productId: 'product-1',
+      }],
+    };
+    api.selectedItemIds = ['chair'];
+
+    render(
+      <div className="relative h-[600px] w-[800px]">
+        <BoardRoomInspector api={api} owner={{ kind: 'project', id: 'project-1' }} />
+      </div>,
+    );
+
+    expect(screen.getByText(/removing this pin removes only the board placement/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove placement' }));
+    expect(api.deleteItems).toHaveBeenCalledWith();
   });
 });
 

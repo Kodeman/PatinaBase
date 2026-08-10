@@ -14,7 +14,7 @@ export interface BoardAssetStorage {
     file: File,
     options: { contentType: string; cacheControl: string; upsert: false },
   ): Promise<{ path: string }>;
-  getPublicUrl(path: string): string;
+  getUrl(path: string): Promise<string>;
   remove(paths: string[]): Promise<void>;
 }
 
@@ -60,8 +60,11 @@ function safeSegment(value: string, label: string): string {
   return value;
 }
 
-export function createBoardAssetStorage(): BoardAssetStorage {
-  const bucket = createBrowserClient().storage.from(BOARD_ASSET_BUCKET);
+export function createBoardAssetStorage(options: {
+  bucket?: string;
+  privateUrl?: boolean;
+} = {}): BoardAssetStorage {
+  const bucket = createBrowserClient().storage.from(options.bucket ?? BOARD_ASSET_BUCKET);
   return {
     async upload(path, file, options) {
       const { data, error } = await bucket.upload(path, file, options);
@@ -69,8 +72,11 @@ export function createBoardAssetStorage(): BoardAssetStorage {
       if (!data?.path) throw new Error('Board asset upload returned no path');
       return { path: data.path };
     },
-    getPublicUrl(path) {
-      return bucket.getPublicUrl(path).data.publicUrl;
+    async getUrl(path) {
+      if (!options.privateUrl) return bucket.getPublicUrl(path).data.publicUrl;
+      const { data, error } = await bucket.createSignedUrl(path, 3_600);
+      if (error || !data?.signedUrl) throw new Error(error?.message ?? 'Board asset URL was not returned');
+      return data.signedUrl;
     },
     async remove(paths) {
       if (paths.length === 0) return;
@@ -125,8 +131,10 @@ export async function uploadPreparedBoardImage(options: {
     );
     uploadedPaths.push(thumbnail.path);
 
-    const displayUrl = storage.getPublicUrl(display.path);
-    const thumbnailUrl = storage.getPublicUrl(thumbnail.path);
+    const [displayUrl, thumbnailUrl] = await Promise.all([
+      storage.getUrl(display.path),
+      storage.getUrl(thumbnail.path),
+    ]);
     return {
       image_url: displayUrl,
       data: { thumbnail_url: thumbnailUrl },

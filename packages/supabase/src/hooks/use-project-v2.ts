@@ -162,12 +162,14 @@ export function useProjectFFEItems(projectId: string, filters?: FFEItemFilters) 
           blocking_decision:client_decisions!blocked_by_decision_id(id, status, due_date),
           item_claims:damage_claims!ffe_item_id(id, state),
           spec:project_ffe_specs!project_ffe_specs_ffe_item_id_fkey(
+            readiness_status,
             configuration_id, configuration_snapshot,
             configuration_snapshot_hash, configuration_locked_at
           ),
           purchase_order:purchase_orders!purchase_order_id(id, status, vendor_id, vendor_po_number, sidemark, confirmed_eta, acknowledged_at, payment_pattern, created_at, po_number, sent_at)
         `)
         .eq('project_id', projectId)
+        .is('removed_at', null)
         .order('sort_order', { ascending: true });
 
       if (filters?.roomId) query = query.eq('project_room_id', filters.roomId);
@@ -186,15 +188,7 @@ export function useProjectFFEItems(projectId: string, filters?: FFEItemFilters) 
 export function useUpdateFFEItemStatus() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({
-      itemId,
-      projectId,
-      status,
-      poNumber,
-      eta,
-      vendorName,
-      unitPriceCents,
-    }: {
+    mutationFn: async (_input: {
       itemId: string;
       projectId: string;
       status: string;
@@ -203,31 +197,9 @@ export function useUpdateFFEItemStatus() {
       vendorName?: string;
       unitPriceCents?: number;
     }) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const supabase = getSupabase() as any;
-      const updates: Record<string, unknown> = { status };
-      if (poNumber !== undefined) updates.po_number = poNumber;
-      if (eta !== undefined) updates.eta = eta;
-      if (vendorName !== undefined) updates.vendor_name = vendorName;
-      if (unitPriceCents !== undefined) {
-        updates.unit_price_cents = unitPriceCents;
-        // Recalculate line total
-        const { data: item } = await supabase
-          .from('project_ffe_items')
-          .select('quantity')
-          .eq('id', itemId)
-          .single();
-        if (item) updates.line_total_cents = unitPriceCents * item.quantity;
-      }
-
-      const { data, error } = await supabase
-        .from('project_ffe_items')
-        .update(updates)
-        .eq('id', itemId)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      throw new Error(
+        'FF&E logistics changes are RPC-only; use the lifecycle or purchase-order change workflow.',
+      );
     },
     onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: ['project-ffe-items', projectId] });
@@ -286,28 +258,13 @@ export function useBulkReassignFfeVendor() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({
-      projectId,
       itemIds,
-      vendorId,
-      vendorName,
+      projectId: _projectId,
+      vendorId: _vendorId,
+      vendorName: _vendorName,
     }: BulkReassignFfeVendorInput): Promise<BulkReassignFfeVendorResult> => {
       if (itemIds.length === 0) throw new Error('no items selected');
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const supabase = getSupabase() as any;
-      const { data, error } = await supabase
-        .from('project_ffe_items')
-        .update({ vendor_id: vendorId, vendor_name: vendorName })
-        .in('id', itemIds)
-        .eq('project_id', projectId)
-        .is('purchase_order_id', null)
-        .select('id');
-      if (error) throw error;
-      const updatedIds = ((data ?? []) as Array<{ id: string }>).map((r) => r.id);
-      const reached = new Set(updatedIds);
-      return {
-        updatedIds,
-        skippedIds: itemIds.filter((id) => !reached.has(id)),
-      };
+      throw new Error('FF&E vendor changes are RPC-only; use the selection or PO change workflow.');
     },
     onSuccess: (_, { projectId }) => {
       invalidateFfeCaches(queryClient, projectId);
@@ -336,73 +293,16 @@ export interface UpdateFFEItemPricingInput {
 }
 
 /**
- * Updates the dual-pricing columns (00185) on a single FF&E item:
- * `trade_price_cents`, `markup_percent`, and/or `unit_price_cents` (CLIENT
- * price). Only the fields provided are written; explicit `null` clears
- * trade/markup back to "unknown".
- *
- * line_total recompute: when `unitPriceCents` is provided we read the row's
- * current `quantity` first and write `line_total_cents = unitPriceCents ×
- * quantity` in the same UPDATE — the same select-then-update approach
- * useUpdateFFEItemStatus uses, chosen so callers never have to thread
- * quantity through (and can't pass a stale one; see `quantity?: never`).
- * Unlike the sibling hook we THROW when that read fails rather than silently
- * skipping the recompute — writing a new unit price while leaving a stale
- * line total would corrupt client-facing money. Note the recompute is
- * unconditional (mirrors useUpdateFFEItemStatus): allowance items' midpoint
- * line totals are owned by the portal's useUpdateProjectFFEItem, so pass
- * unitPriceCents only for fixed-price items.
- *
- * Invalidates both FF&E namespaces + the cross-project procurement view (via
- * invalidateFfeCaches — same trio as useUpdateFFEItemStatus) plus this
- * package's ['project-financials', projectId], whose margin rollup reads the
- * pricing columns written here.
+ * Legacy API retained for source compatibility. FF&E price writes are now
+ * command-only so this hook deliberately fails closed before touching data.
  */
 export function useUpdateFFEItemPricing() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({
-      itemId,
-      projectId: _projectId,
-      tradePriceCents,
-      markupPercent,
-      unitPriceCents,
-    }: UpdateFFEItemPricingInput) => {
-      const supabase = getSupabase();
-
-      const updates: Database['public']['Tables']['project_ffe_items']['Update'] = {};
-      if (tradePriceCents !== undefined) updates.trade_price_cents = tradePriceCents;
-      if (markupPercent !== undefined) updates.markup_percent = markupPercent;
-      if (unitPriceCents !== undefined) {
-        updates.unit_price_cents = unitPriceCents;
-        // Recompute the client line total from the row's current quantity.
-        const { data: item, error: readError } = await supabase
-          .from('project_ffe_items')
-          .select('quantity')
-          .eq('id', itemId)
-          .single();
-        if (readError || !item) {
-          throw new Error(
-            `useUpdateFFEItemPricing: failed to read quantity for item ${itemId}: ${
-              readError?.message ?? 'row not found'
-            }`
-          );
-        }
-        updates.line_total_cents = unitPriceCents * item.quantity;
-      }
-
-      if (Object.keys(updates).length === 0) {
-        throw new Error('useUpdateFFEItemPricing: no pricing fields provided');
-      }
-
-      const { data, error } = await supabase
-        .from('project_ffe_items')
-        .update(updates)
-        .eq('id', itemId)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+    mutationFn: async (_input: UpdateFFEItemPricingInput) => {
+      throw new Error(
+        'FF&E pricing changes are RPC-only; use the project selection pricing workflow.',
+      );
     },
     onSuccess: (_, { projectId }) => {
       // ['project-ffe-items', projectId] + ['projects', projectId] +

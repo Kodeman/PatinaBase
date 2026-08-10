@@ -1,8 +1,16 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ProposalCapture } from '@patina/supabase';
 import type { BoardOwnerRef, EditableMoodBoardItem } from '@patina/types';
 import type { ProductPickResult } from '@/components/portal/proposals/product-picker-modal';
-import { BoardAddRail, boardItemThumbnail, captureToBoardItem, productPickToBoardItem } from '../board-add-rail';
+import {
+  BoardAddRail,
+  boardItemThumbnail,
+  captureToBoardItem,
+  productPickToBoardItem,
+  projectSelectionToBoardItem,
+} from '../board-add-rail';
+
+const placeProduct = jest.fn();
 
 jest.mock('@patina/supabase', () => ({
   createBrowserClient: () => ({
@@ -27,6 +35,8 @@ jest.mock('@patina/supabase', () => ({
       },
     ],
   }),
+  useProjectFFEItems: () => ({ data: [], isLoading: false }),
+  usePlaceProductInProjectV2: () => ({ mutateAsync: placeProduct, isPending: false }),
   useRoomScans: () => ({
     data: [
       { id: 'scan-1', name: 'Living room', room_type: 'living', thumbnail_url: 'https://images.example/scan.jpg' },
@@ -108,6 +118,22 @@ describe('mood-board add rail item provenance', () => {
     })).toBe('https://images.example/thumb.webp');
     expect(boardItemThumbnail(base)).toBe('https://images.example/display.webp');
   });
+
+  it('links an In project placement to the existing selection identity', () => {
+    const item = projectSelectionToBoardItem({
+      id: 'selection-1', projectId: 'project-1', productId: 'product-1', projectRoomId: null,
+      name: 'Oak chair', quantity: 2, status: 'specified', designDisposition: 'selected',
+      assignmentScope: 'throughout', selectionThreadId: 'thread-1', supersedesFfeItemId: null,
+      createdAt: '2026-08-10T00:00:00Z', product: { id: 'product-1', name: 'Oak chair', images: ['https://images.example/chair.jpg'] },
+    }, { x: 40, y: 60 }, 3);
+    expect(item).toEqual(expect.objectContaining({
+      productId: 'product-1',
+      projectFfeItemId: 'selection-1',
+      x: 40,
+      y: 60,
+      zIndex: 3,
+    }));
+  });
 });
 
 const owner: BoardOwnerRef = { kind: 'project', id: 'project-1' };
@@ -130,7 +156,7 @@ const uploadedImage: EditableMoodBoardItem = {
   data: { thumbnail_url: 'https://images.example/thumb.webp' },
 };
 
-function renderRail() {
+function renderRail(onAddItems = jest.fn()) {
   return render(
     <BoardAddRail
       owner={owner}
@@ -138,7 +164,7 @@ function renderRail() {
       items={[uploadedImage]}
       nextPoint={() => ({ x: 0, y: 0 })}
       nextZ={() => 1}
-      onAddItems={jest.fn()}
+      onAddItems={onAddItems}
     />,
   );
 }
@@ -147,6 +173,34 @@ function renderRail() {
 // parent div, not the browser's own image drag — an img left draggable would
 // contribute a competing native text/uri-list payload to the same gesture.
 describe('BoardAddRail thumbnails carry no native browser drag payload', () => {
+  beforeEach(() => {
+    placeProduct.mockReset();
+    placeProduct.mockResolvedValue({
+      outcome: 'created', selectionId: 'selection-1', threadId: 'thread-1', placementId: 'placement-1',
+    });
+  });
+
+  it('creates the project selection and placement before adding a capture product locally', async () => {
+    const onAddItems = jest.fn();
+    renderRail(onAddItems);
+    fireEvent.click(screen.getByRole('tab', { name: 'captures' }));
+    fireEvent.click(screen.getByRole('button', { name: /Oak chair/i }));
+
+    await waitFor(() => expect(placeProduct).toHaveBeenCalledWith(expect.objectContaining({
+      projectId: 'project-1',
+      productId: 'product-1',
+      captureId: 'capture-1',
+      boardId: 'board-1',
+      assignmentScope: 'unassigned',
+      duplicateMode: 'reuse',
+    })));
+    expect(onAddItems).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: 'placement-1', productId: 'product-1', projectFfeItemId: 'selection-1', type: 'product',
+      }),
+    ], 'rail_click');
+  });
+
   it('captures tab thumbnail is draggable={false}', () => {
     renderRail();
     fireEvent.click(screen.getByRole('tab', { name: 'captures' }));

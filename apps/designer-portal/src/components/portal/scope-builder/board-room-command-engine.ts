@@ -858,6 +858,7 @@ function parseClipboardItem(value: unknown): EditableMoodBoardItem | null {
     !(value.locked == null || typeof value.locked === 'boolean') ||
     !clipboardNullableString(value.productId) ||
     !clipboardNullableString(value.captureId) ||
+    !clipboardNullableString(value.projectFfeItemId) ||
     !clipboardNullableString(value.paletteId) ||
     !clipboardNullableString(value.imageUrl) ||
     !clipboardNullableString(value.imageKey) ||
@@ -876,6 +877,7 @@ function parseClipboardItem(value: unknown): EditableMoodBoardItem | null {
     locked: (value.locked as boolean | undefined) ?? false,
     productId: (value.productId as string | null | undefined) ?? null,
     captureId: (value.captureId as string | null | undefined) ?? null,
+    projectFfeItemId: (value.projectFfeItemId as string | null | undefined) ?? null,
     paletteId: (value.paletteId as string | null | undefined) ?? null,
     imageUrl: (value.imageUrl as string | null | undefined) ?? null,
     imageKey: (value.imageKey as string | null | undefined) ?? null,
