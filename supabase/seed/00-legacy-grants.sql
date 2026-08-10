@@ -9689,3 +9689,159 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.stage_project_ffe_import(jsonb) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00449_ffe_final_direct_probe_fixes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.project_review_board_media_assets FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00449_ffe_final_direct_probe_fixes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._create_purchase_order_00448_impl( uuid, uuid, public.purchase_order_payment_pattern, uuid[], text, date, boolean, date, integer, jsonb, text, text ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00449_ffe_final_direct_probe_fixes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._apply_board_room_state_00448_impl(uuid, text, uuid, jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00449_ffe_final_direct_probe_fixes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._publish_project_review_00448_impl(jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00449_ffe_final_direct_probe_fixes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_purchase_order_change_immutable(), public.guard_purchase_order_repricing(), public.guard_published_review_media_asset() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00449_ffe_final_direct_probe_fixes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_purchase_order( uuid, uuid, public.purchase_order_payment_pattern, uuid[], text, date, boolean, date, integer, jsonb, text, text ), public.start_purchase_order_change(jsonb), public.log_po_acknowledgment(uuid, text, date), public.apply_board_room_state(uuid, text, uuid, jsonb), public.publish_project_review(jsonb) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00449_ffe_final_direct_probe_fixes.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_purchase_order( uuid, uuid, public.purchase_order_payment_pattern, uuid[], text, date, boolean, date, integer, jsonb, text, text ), public.start_purchase_order_change(jsonb), public.log_po_acknowledgment(uuid, text, date), public.apply_board_room_state(uuid, text, uuid, jsonb), public.publish_project_review(jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00450_ffe_po_compat_and_media_dedupe.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._create_purchase_order_00449_impl( uuid, uuid, public.purchase_order_payment_pattern, uuid[], text, date, boolean, date, integer, jsonb, text, text ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00450_ffe_po_compat_and_media_dedupe.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_purchase_order( uuid, uuid, public.purchase_order_payment_pattern, uuid[], text, date, boolean, date, integer, jsonb, text, text ) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00450_ffe_po_compat_and_media_dedupe.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_purchase_order( uuid, uuid, public.purchase_order_payment_pattern, uuid[], text, date, boolean, date, integer, jsonb, text, text ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00451_ffe_po_ack_compatibility.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.log_po_acknowledgment(uuid, text, date) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00451_ffe_po_ack_compatibility.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.log_po_acknowledgment(uuid, text, date) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00452_ffe_po_change_response.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._start_purchase_order_change_00451_impl(jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00452_ffe_po_change_response.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.start_purchase_order_change(jsonb) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00452_ffe_po_change_response.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.start_purchase_order_change(jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00453_ffe_evidence_guard_cleanup.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._start_purchase_order_change_00452_impl(jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00453_ffe_evidence_guard_cleanup.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_project_review_board_media_evidence() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00453_ffe_evidence_guard_cleanup.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.start_purchase_order_change(jsonb) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00453_ffe_evidence_guard_cleanup.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.start_purchase_order_change(jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00454_ffe_review_media_prepare_boundary.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._apply_board_room_state_00453_impl(uuid, text, uuid, jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00454_ffe_review_media_prepare_boundary.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.authorize_project_review_media_source(uuid, uuid, text, text), public.prepare_project_review_media_asset( uuid, uuid, text, text, text, bigint, text, text, text, text, bigint, text, integer, integer ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00454_ffe_review_media_prepare_boundary.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.authorize_project_review_media_source(uuid, uuid, text, text), public.prepare_project_review_media_asset( uuid, uuid, text, text, text, bigint, text, text, text, text, bigint, text, integer, integer ) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00454_ffe_review_media_prepare_boundary.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.apply_board_room_state(uuid, text, uuid, jsonb) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00454_ffe_review_media_prepare_boundary.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.apply_board_room_state(uuid, text, uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00455_ffe_working_media_registration.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.register_project_ffe_working_media_source( uuid, uuid, text, text, text, bigint, text, text, uuid ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00455_ffe_working_media_registration.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.register_project_ffe_working_media_source( uuid, uuid, text, text, text, bigint, text, text, uuid ) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

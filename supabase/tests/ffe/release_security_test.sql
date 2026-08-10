@@ -33,10 +33,14 @@ BEGIN
   v_board:=public.create_project_board('{"projectId":"fa100000-0000-4000-8000-000000000001","name":"Review composition"}'::jsonb);
   PERFORM public.apply_board_room_state((v_board->>'boardId')::uuid,'project','fa100000-0000-4000-8000-000000000001',jsonb_build_object(
     'name','Review composition','canvasWidth',1200,'canvasHeight',800,'backgroundColor','#FAF8F5','sections','[]'::jsonb,
+    'coverImageUrl','fa100000-0000-4000-8000-000000000001/source/chair.pdf',
+    'coverReviewMediaAssetId','fa500000-0000-4000-8000-000000000001',
     'items',jsonb_build_array(
       jsonb_build_object('id','fa600000-0000-4000-8000-000000000001','type','product','x',0,'y',0,'width',200,
         'productId','fa300000-0000-4000-8000-000000000001','projectFfeItemId',v_selected->>'selectionId','data','{}'::jsonb),
       jsonb_build_object('id','fa600000-0000-4000-8000-000000000002','type','image','x',220,'y',0,'width',200,
+        'imageUrl','https://local.test/storage/v1/object/sign/project-ffe-working/fa100000-0000-4000-8000-000000000001/reference.webp',
+        'reviewMediaAssetId','fa500000-0000-4000-8000-000000000001',
         'content','Board-only inspiration','data',jsonb_build_object('section_id','inspiration'))
     )));
   BEGIN
@@ -60,8 +64,16 @@ BEGIN
     'published item must freeze exact media path and size';
   ASSERT (SELECT jsonb_array_length(board_snapshot->0->'items')=2
     AND board_snapshot->0->'items'->1->>'type'='image'
+    AND board_snapshot->0->'items'->1->'renderMedia'->>'assetId'='fa500000-0000-4000-8000-000000000001'
+    AND board_snapshot->0->'coverMedia'->>'checksumSha256'=repeat('e',64)
+    AND position('/review/chair.webp' IN board_snapshot::text)=0
     FROM public.project_review_editions WHERE id=v_edition),
     'published review must freeze linked selections and board-only references';
+  BEGIN
+    UPDATE public.project_review_board_media_assets SET checksum_sha256=repeat('a',64)
+    WHERE edition_id=v_edition;
+    RAISE EXCEPTION 'published board media evidence mutated';
+  EXCEPTION WHEN check_violation THEN NULL; END;
   BEGIN UPDATE public.project_review_media_assets SET storage_path='fa100000-0000-4000-8000-000000000001/review/drift.webp' WHERE id='fa500000-0000-4000-8000-000000000001';
     RAISE EXCEPTION 'published media mutation succeeded'; EXCEPTION WHEN check_violation THEN NULL; END;
   ALTER TABLE public.project_review_media_assets DISABLE TRIGGER guard_published_review_media_asset_trg;
@@ -72,7 +84,8 @@ BEGIN
   EXCEPTION WHEN data_exception THEN NULL; END;
   ALTER TABLE public.project_review_media_assets ENABLE TRIGGER guard_published_review_media_asset_trg;
   v_manifest:=public.authorize_project_review_media(v_edition,'fa000000-0000-4000-8000-000000000002');
-  ASSERT v_manifest->'media'->0->>'checksumSha256'=repeat('e',64);
+  ASSERT jsonb_array_length(v_manifest->'media')=1
+    AND v_manifest->'media'->0->>'checksumSha256'=repeat('e',64);
   PERFORM pg_temp.assume_release_actor('fa000000-0000-4000-8000-000000000002');
   ASSERT position('/review/chair.webp' in public.get_client_project_review_bundle(v_edition)::text)=0,
     'client bundle must not expose private derivative paths';
@@ -98,6 +111,7 @@ DO $$ BEGIN
   ASSERT NOT has_table_privilege('authenticated','public.project_ffe_selection_threads','UPDATE');
   ASSERT NOT has_table_privilege('authenticated','public.project_ffe_receipt_commands','SELECT');
   ASSERT NOT has_table_privilege('authenticated','public.project_ffe_receipt_commands','INSERT');
+  ASSERT NOT has_table_privilege('authenticated','public.project_review_board_media_assets','UPDATE');
   ASSERT NOT has_table_privilege('authenticated','public.purchase_orders','UPDATE');
   ASSERT has_function_privilege('authenticated',
     'public.record_project_ffe_receipt_batch(uuid,jsonb,public.receiving_inspection_outcome,text,uuid[])','EXECUTE');

@@ -6,9 +6,16 @@ CREATE OR REPLACE FUNCTION pg_temp.assume_lineage_actor(p_actor uuid) RETURNS vo
   PERFORM set_config('request.jwt.claim.sub',p_actor::text,true);
 END; $$;
 INSERT INTO auth.users(id,email,encrypted_password,email_confirmed_at,created_at,updated_at,instance_id,aud,role) VALUES
-('fb000000-0000-4000-8000-000000000001','lineage-owner@test.invalid','',now(),now(),now(),'00000000-0000-0000-0000-000000000000','authenticated','authenticated');
+('fb000000-0000-4000-8000-000000000001','lineage-owner@test.invalid','',now(),now(),now(),'00000000-0000-0000-0000-000000000000','authenticated','authenticated'),
+('fb000000-0000-4000-8000-000000000002','lineage-peer@test.invalid','',now(),now(),now(),'00000000-0000-0000-0000-000000000000','authenticated','authenticated');
 INSERT INTO public.profiles(id,email,full_name,is_designer) VALUES
-('fb000000-0000-4000-8000-000000000001','lineage-owner@test.invalid','Lineage Owner',true) ON CONFLICT DO NOTHING;
+('fb000000-0000-4000-8000-000000000001','lineage-owner@test.invalid','Lineage Owner',true),
+('fb000000-0000-4000-8000-000000000002','lineage-peer@test.invalid','Lineage Peer',true) ON CONFLICT DO NOTHING;
+INSERT INTO public.organizations(id,type,name,slug) VALUES
+('fb010000-0000-4000-8000-000000000001','design_studio','Lineage Studio','lineage-studio');
+INSERT INTO public.organization_members(id,user_id,organization_id,role,status,joined_at) VALUES
+('fb020000-0000-4000-8000-000000000001','fb000000-0000-4000-8000-000000000001','fb010000-0000-4000-8000-000000000001','owner','active',now()),
+('fb020000-0000-4000-8000-000000000002','fb000000-0000-4000-8000-000000000002','fb010000-0000-4000-8000-000000000001','member','active',now());
 INSERT INTO public.projects(id,name,designer_id,created_by) VALUES
 ('fb100000-0000-4000-8000-000000000001','Lineage Project','fb000000-0000-4000-8000-000000000001','fb000000-0000-4000-8000-000000000001');
 INSERT INTO public.vendors(id,name) VALUES
@@ -28,6 +35,7 @@ DECLARE v_a jsonb; v_a_retry jsonb; v_b jsonb; v_role jsonb; v_config jsonb; v_s
   v_batch_line_a jsonb; v_batch_line_b jsonb; v_batch_po public.purchase_orders;
   v_partial jsonb; v_retry jsonb; v_damaged jsonb; v_clean jsonb; v_inspection_count integer;
   v_rebuild_line jsonb; v_rebuild_po public.purchase_orders; v_rebuild jsonb; v_twenty_board uuid;
+  v_peer_line jsonb; v_peer_po public.purchase_orders;
 BEGIN
   PERFORM pg_temp.assume_lineage_actor('fb000000-0000-4000-8000-000000000001');
   v_a:=public.place_product_in_project('fb100000-0000-4000-8000-000000000001','fb300000-0000-4000-8000-000000000001',NULL,NULL,NULL,'{"captureId":"capture-a"}'::jsonb);
@@ -174,8 +182,30 @@ BEGIN
     AND (SELECT status='cancelled' FROM public.purchase_orders WHERE id=v_rebuild_po.id)
     AND (SELECT purchase_order_id=(v_rebuild->>'replacementPoId')::uuid
       AND vendor_id='fb200000-0000-4000-8000-000000000002'
-      FROM public.project_ffe_items WHERE id=(v_rebuild_line->>'selectionId')::uuid),
+      FROM public.project_ffe_items WHERE id=(v_rebuild_line->>'selectionId')::uuid)
+    AND (v_rebuild->>'needsRepricing')::boolean
+    AND (SELECT jsonb_array_length(prior_snapshot->'lines')=1
+      FROM public.purchase_order_changes WHERE id=(v_rebuild->>'changeId')::uuid),
     'draft vendor change must atomically rebuild and relink a replacement PO';
+  ASSERT current_setting('app.po_change_replacement_link',true) IS DISTINCT FROM 'on',
+    'one-time replacement linkage capability must not leak past the command';
+  BEGIN
+    PERFORM public.log_po_acknowledgment((v_rebuild->>'replacementPoId')::uuid,NULL,NULL);
+    RAISE EXCEPTION 'incomplete replacement PO was acknowledged';
+  EXCEPTION WHEN check_violation THEN NULL; END;
+  BEGIN
+    UPDATE public.purchase_order_changes SET replacement_purchase_order_id=v_rebuild_po.id
+    WHERE id=(v_rebuild->>'changeId')::uuid;
+    RAISE EXCEPTION 'replacement PO evidence mutated after one-time linkage';
+  EXCEPTION WHEN check_violation THEN NULL; END;
+  v_peer_line:=public.place_product_in_project_v2('{"projectId":"fb100000-0000-4000-8000-000000000001","productId":"fb300000-0000-4000-8000-000000000001","assignmentScope":"throughout","disposition":"selected","duplicateMode":"create","idempotencyKey":"peer-po-line"}'::jsonb);
+  PERFORM pg_temp.assume_lineage_actor('fb000000-0000-4000-8000-000000000002');
+  v_peer_po:=public.create_purchase_order('fb100000-0000-4000-8000-000000000001','fb200000-0000-4000-8000-000000000001','full_upfront'::public.purchase_order_payment_pattern,
+    ARRAY[(v_peer_line->>'selectionId')::uuid]);
+  ASSERT v_peer_po.designer_id='fb000000-0000-4000-8000-000000000001'
+    AND v_peer_po.created_by='fb000000-0000-4000-8000-000000000002',
+    'studio co-member PO creation must retain owner authority and actor audit';
+  PERFORM pg_temp.assume_lineage_actor('fb000000-0000-4000-8000-000000000001');
   INSERT INTO public.project_boards(id,project_id,name,items,sections) VALUES(
     'fb500000-0000-4000-8000-000000000001','fb100000-0000-4000-8000-000000000001','Activated board',
     jsonb_build_array(jsonb_build_object('type','product','product_id','fb300000-0000-4000-8000-000000000001','data','{}'::jsonb,'project_ffe_item_id',v_replacement->>'selectionId')),'[]'::jsonb);
@@ -204,8 +234,8 @@ BEGIN
   ),'20-item continuation must preserve each source identity without UUID-order shuffling';
   v_live_board:=public.create_project_board('{"projectId":"fb100000-0000-4000-8000-000000000001","name":"Live board"}'::jsonb);
   PERFORM public.apply_board_room_state((v_live_board->>'boardId')::uuid,'project','fb100000-0000-4000-8000-000000000001',
-    '{"name":"Live board","canvasWidth":1200,"canvasHeight":800,"backgroundColor":"#FAF8F5","sections":[],"items":[],"coverImageUrl":"https://local.test/storage/v1/object/sign/project-ffe-working/fb100000-0000-4000-8000-000000000001/cover.webp"}'::jsonb);
-  ASSERT (SELECT cover_image_url LIKE '%project-ffe-working/%' FROM public.proposal_boards WHERE id=(v_live_board->>'boardId')::uuid),
+    '{"name":"Live board","canvasWidth":1200,"canvasHeight":800,"backgroundColor":"#FAF8F5","sections":[],"items":[],"coverImageUrl":"fb100000-0000-4000-8000-000000000001/boards/cover.webp"}'::jsonb);
+  ASSERT (SELECT cover_image_url='fb100000-0000-4000-8000-000000000001/boards/cover.webp' FROM public.proposal_boards WHERE id=(v_live_board->>'boardId')::uuid),
     'atomic project board state must persist a private working cover';
   BEGIN
     PERFORM public.apply_board_room_state((v_live_board->>'boardId')::uuid,'project','fb100000-0000-4000-8000-000000000001',

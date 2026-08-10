@@ -14399,6 +14399,83 @@ export type Database = {
           },
         ]
       }
+      project_review_board_media_assets: {
+        Row: {
+          asset_id: string
+          board_id: string
+          checksum_sha256: string
+          content_type: string
+          created_at: string
+          derivative_kind: string
+          edition_id: string
+          id: string
+          media_role: string
+          placement_id: string | null
+          size_bytes: number
+          storage_bucket: string
+          storage_path: string
+        }
+        Insert: {
+          asset_id: string
+          board_id: string
+          checksum_sha256: string
+          content_type: string
+          created_at?: string
+          derivative_kind: string
+          edition_id: string
+          id?: string
+          media_role: string
+          placement_id?: string | null
+          size_bytes: number
+          storage_bucket: string
+          storage_path: string
+        }
+        Update: {
+          asset_id?: string
+          board_id?: string
+          checksum_sha256?: string
+          content_type?: string
+          created_at?: string
+          derivative_kind?: string
+          edition_id?: string
+          id?: string
+          media_role?: string
+          placement_id?: string | null
+          size_bytes?: number
+          storage_bucket?: string
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_review_board_media_assets_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "project_review_media_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_review_board_media_assets_board_id_fkey"
+            columns: ["board_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_boards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_review_board_media_assets_edition_id_fkey"
+            columns: ["edition_id"]
+            isOneToOne: false
+            referencedRelation: "project_review_editions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_review_board_media_assets_placement_id_fkey"
+            columns: ["placement_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_board_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_review_delivery_attempts: {
         Row: {
           attempted_at: string
@@ -15562,6 +15639,7 @@ export type Database = {
           palette_id: string | null
           product_id: string | null
           project_ffe_item_id: string | null
+          review_media_asset_id: string | null
           rotation: number
           type: string
           updated_at: string
@@ -15583,6 +15661,7 @@ export type Database = {
           palette_id?: string | null
           product_id?: string | null
           project_ffe_item_id?: string | null
+          review_media_asset_id?: string | null
           rotation?: number
           type: string
           updated_at?: string
@@ -15604,6 +15683,7 @@ export type Database = {
           palette_id?: string | null
           product_id?: string | null
           project_ffe_item_id?: string | null
+          review_media_asset_id?: string | null
           rotation?: number
           type?: string
           updated_at?: string
@@ -15676,6 +15756,13 @@ export type Database = {
             referencedRelation: "project_ffe_items"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "proposal_board_items_review_media_asset_id_fkey"
+            columns: ["review_media_asset_id"]
+            isOneToOne: false
+            referencedRelation: "project_review_media_assets"
+            referencedColumns: ["id"]
+          },
         ]
       }
       proposal_boards: {
@@ -15684,6 +15771,7 @@ export type Database = {
           canvas_height: number
           canvas_width: number
           cover_image_url: string | null
+          cover_review_media_asset_id: string | null
           created_at: string
           id: string
           name: string
@@ -15702,6 +15790,7 @@ export type Database = {
           canvas_height?: number
           canvas_width?: number
           cover_image_url?: string | null
+          cover_review_media_asset_id?: string | null
           created_at?: string
           id?: string
           name: string
@@ -15720,6 +15809,7 @@ export type Database = {
           canvas_height?: number
           canvas_width?: number
           cover_image_url?: string | null
+          cover_review_media_asset_id?: string | null
           created_at?: string
           id?: string
           name?: string
@@ -15734,6 +15824,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "proposal_boards_cover_review_media_asset_id_fkey"
+            columns: ["cover_review_media_asset_id"]
+            isOneToOne: false
+            referencedRelation: "project_review_media_assets"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "proposal_boards_project_id_fkey"
             columns: ["project_id"]
@@ -17383,10 +17480,12 @@ export type Database = {
           acknowledged_at: string | null
           confirmed_eta: string | null
           created_at: string
+          created_by: string | null
           delivered_date: string | null
           designer_id: string
           id: string
           is_patina_catalog: boolean
+          needs_repricing: boolean
           notes: string | null
           payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
           po_document_path: string | null
@@ -17405,10 +17504,12 @@ export type Database = {
           acknowledged_at?: string | null
           confirmed_eta?: string | null
           created_at?: string
+          created_by?: string | null
           delivered_date?: string | null
           designer_id: string
           id?: string
           is_patina_catalog?: boolean
+          needs_repricing?: boolean
           notes?: string | null
           payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
           po_document_path?: string | null
@@ -17427,10 +17528,12 @@ export type Database = {
           acknowledged_at?: string | null
           confirmed_eta?: string | null
           created_at?: string
+          created_by?: string | null
           delivered_date?: string | null
           designer_id?: string
           id?: string
           is_patina_catalog?: boolean
+          needs_repricing?: boolean
           notes?: string | null
           payment_pattern?: Database["public"]["Enums"]["purchase_order_payment_pattern"]
           po_document_path?: string | null
@@ -17446,6 +17549,20 @@ export type Database = {
           vendor_po_number?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "purchase_orders_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "purchase_orders_project_id_fkey"
             columns: ["project_id"]
@@ -25647,6 +25764,24 @@ export type Database = {
         }
         Returns: undefined
       }
+      _apply_board_room_state_00448_impl: {
+        Args: {
+          p_board_id: string
+          p_owner_id: string
+          p_owner_kind: string
+          p_state: Json
+        }
+        Returns: undefined
+      }
+      _apply_board_room_state_00453_impl: {
+        Args: {
+          p_board_id: string
+          p_owner_id: string
+          p_owner_kind: string
+          p_state: Json
+        }
+        Returns: undefined
+      }
       _apply_board_room_state_v1_impl: {
         Args: {
           p_board_id: string
@@ -25877,6 +26012,98 @@ export type Database = {
         }
         Returns: Json
       }
+      _create_purchase_order_00448_impl: {
+        Args: {
+          p_confirmed_eta?: string
+          p_custom_milestones?: Json
+          p_deposit_amount_cents?: number
+          p_deposit_due_date?: string
+          p_ffe_item_ids: string[]
+          p_is_patina_catalog?: boolean
+          p_notes?: string
+          p_payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
+          p_project_id: string
+          p_sidemark?: string
+          p_vendor_id: string
+          p_vendor_po_number?: string
+        }
+        Returns: {
+          acknowledged_at: string | null
+          confirmed_eta: string | null
+          created_at: string
+          created_by: string | null
+          delivered_date: string | null
+          designer_id: string
+          id: string
+          is_patina_catalog: boolean
+          needs_repricing: boolean
+          notes: string | null
+          payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
+          po_document_path: string | null
+          po_number: string | null
+          project_id: string
+          sent_at: string | null
+          ship_to: string | null
+          sidemark: string | null
+          status: string
+          total_cents: number
+          updated_at: string
+          vendor_id: string
+          vendor_po_number: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "purchase_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      _create_purchase_order_00449_impl: {
+        Args: {
+          p_confirmed_eta?: string
+          p_custom_milestones?: Json
+          p_deposit_amount_cents?: number
+          p_deposit_due_date?: string
+          p_ffe_item_ids: string[]
+          p_is_patina_catalog?: boolean
+          p_notes?: string
+          p_payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
+          p_project_id: string
+          p_sidemark?: string
+          p_vendor_id: string
+          p_vendor_po_number?: string
+        }
+        Returns: {
+          acknowledged_at: string | null
+          confirmed_eta: string | null
+          created_at: string
+          created_by: string | null
+          delivered_date: string | null
+          designer_id: string
+          id: string
+          is_patina_catalog: boolean
+          needs_repricing: boolean
+          notes: string | null
+          payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
+          po_document_path: string | null
+          po_number: string | null
+          project_id: string
+          sent_at: string | null
+          ship_to: string | null
+          sidemark: string | null
+          status: string
+          total_cents: number
+          updated_at: string
+          vendor_id: string
+          vendor_po_number: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "purchase_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       _create_purchase_order_v1_impl: {
         Args: {
           p_confirmed_eta?: string
@@ -25896,10 +26123,12 @@ export type Database = {
           acknowledged_at: string | null
           confirmed_eta: string | null
           created_at: string
+          created_by: string | null
           delivered_date: string | null
           designer_id: string
           id: string
           is_patina_catalog: boolean
+          needs_repricing: boolean
           notes: string | null
           payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
           po_document_path: string | null
@@ -26397,6 +26626,10 @@ export type Database = {
         Args: { p_request: Json }
         Returns: Json
       }
+      _publish_project_review_00448_impl: {
+        Args: { p_request: Json }
+        Returns: Json
+      }
       _recompute_proposal_total_locked: {
         Args: { p_proposal_id: string }
         Returns: number
@@ -26694,6 +26927,14 @@ export type Database = {
         Returns: Json
       }
       _start_purchase_order_change_00446_impl: {
+        Args: { p_request: Json }
+        Returns: Json
+      }
+      _start_purchase_order_change_00451_impl: {
+        Args: { p_request: Json }
+        Returns: Json
+      }
+      _start_purchase_order_change_00452_impl: {
         Args: { p_request: Json }
         Returns: Json
       }
@@ -27089,10 +27330,12 @@ export type Database = {
           acknowledged_at: string | null
           confirmed_eta: string | null
           created_at: string
+          created_by: string | null
           delivered_date: string | null
           designer_id: string
           id: string
           is_patina_catalog: boolean
+          needs_repricing: boolean
           notes: string | null
           payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
           po_document_path: string | null
@@ -27116,6 +27359,15 @@ export type Database = {
       }
       authorize_project_review_media: {
         Args: { p_actor_id: string; p_edition_id: string }
+        Returns: Json
+      }
+      authorize_project_review_media_source: {
+        Args: {
+          p_actor_id: string
+          p_project_id: string
+          p_source_bucket: string
+          p_source_path: string
+        }
         Returns: Json
       }
       batch_place_library_products_in_project: {
@@ -27761,10 +28013,12 @@ export type Database = {
           acknowledged_at: string | null
           confirmed_eta: string | null
           created_at: string
+          created_by: string | null
           delivered_date: string | null
           designer_id: string
           id: string
           is_patina_catalog: boolean
+          needs_repricing: boolean
           notes: string | null
           payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
           po_document_path: string | null
@@ -27887,6 +28141,7 @@ export type Database = {
           canvas_height: number
           canvas_width: number
           cover_image_url: string | null
+          cover_review_media_asset_id: string | null
           created_at: string
           id: string
           name: string
@@ -29091,10 +29346,12 @@ export type Database = {
           acknowledged_at: string | null
           confirmed_eta: string | null
           created_at: string
+          created_by: string | null
           delivered_date: string | null
           designer_id: string
           id: string
           is_patina_catalog: boolean
+          needs_repricing: boolean
           notes: string | null
           payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
           po_document_path: string | null
@@ -29344,6 +29601,25 @@ export type Database = {
           p_actor_id: string
           p_edition_id: string
           p_idempotency_key: string
+        }
+        Returns: Json
+      }
+      prepare_project_review_media_asset: {
+        Args: {
+          p_actor_id: string
+          p_content_type: string
+          p_derivative_bucket: string
+          p_derivative_checksum: string
+          p_derivative_kind: string
+          p_derivative_path: string
+          p_derivative_size: number
+          p_height: number
+          p_project_id: string
+          p_source_bucket: string
+          p_source_checksum: string
+          p_source_path: string
+          p_source_size: number
+          p_width: number
         }
         Returns: Json
       }
@@ -29654,6 +29930,20 @@ export type Database = {
       }
       refresh_product_behavior_stats: { Args: never; Returns: undefined }
       refresh_style_centroids: { Args: never; Returns: number }
+      register_project_ffe_working_media_source: {
+        Args: {
+          p_actor_id: string
+          p_bucket: string
+          p_checksum_sha256: string
+          p_content_type: string
+          p_ffe_item_id?: string
+          p_media_kind: string
+          p_path: string
+          p_project_id: string
+          p_size_bytes: number
+        }
+        Returns: Json
+      }
       reissue_plan_transmittal_link: {
         Args: { p_transmittal_id: string }
         Returns: Json
