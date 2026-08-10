@@ -32,4 +32,3 @@ it('uses the shared guided-empty grammar for an empty drawing set', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Choose a PDF' }));
   expect(choose).toHaveBeenCalledTimes(1);
 });
-
