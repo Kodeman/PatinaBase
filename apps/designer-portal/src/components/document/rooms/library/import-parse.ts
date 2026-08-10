@@ -131,6 +131,7 @@ export function guessField(header: string): ProductField {
 }
 
 function isPriceValid(raw: string): boolean {
+  if (/^'?\s*[=+@-]/.test(raw)) return false;
   const cleaned = raw.replace(/[^0-9.]/g, '');
   return cleaned !== '' && Number.isFinite(parseFloat(cleaned));
 }

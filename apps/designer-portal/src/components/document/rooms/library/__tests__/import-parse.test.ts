@@ -112,4 +112,10 @@ describe('buildImportRows — the import-to-capture mapping', () => {
     expect(sanitizeSpreadsheetCell('=HYPERLINK("https://bad.example")')).toBe("'=HYPERLINK(\"https://bad.example\")");
     expect(buildImportRows([['@SUM(1,2)', 'Maker', 'SKU', 'table', '']], mapping).rows[0].name).toBe("'@SUM(1,2)");
   });
+
+  it('holds formula-like prices instead of digit-stripping them into a price', () => {
+    const result = buildImportRows([['Chair', 'Maker', 'SKU', 'table', '=1+1']], mapping);
+    expect(result.rows).toHaveLength(0);
+    expect(result.invalidCount).toBe(1);
+  });
 });

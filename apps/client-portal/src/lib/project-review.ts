@@ -37,8 +37,10 @@ export function reviewVerdictFromLabel(label: 'Looks good' | 'Needs a change' | 
 
 export function adaptClientProjectReviewBundle(value: unknown): ClientProjectReviewBundle | null {
   const root = record(value);
-  const editionId = text(first(root, 'editionId', 'edition_id', 'id'));
+  const editionId = text(first(root, 'editionId', 'edition_id'));
   if (!editionId) return null;
+  const rawStatus = first(root, 'status');
+  if (rawStatus !== 'published') return null;
   const rawItems = first(root, 'items', 'reviewItems', 'review_items');
   const items = Array.isArray(rawItems) ? rawItems.map((entry) => {
     const row = record(entry);
@@ -56,11 +58,10 @@ export function adaptClientProjectReviewBundle(value: unknown): ClientProjectRev
       comment: nullableText(first(row, 'comment')),
     } satisfies ClientProjectReviewItem;
   }).filter((item): item is ClientProjectReviewItem => item !== null) : [];
-  const status = first(root, 'status');
   return {
     editionId,
     publishedAt: nullableText(first(root, 'publishedAt', 'published_at')),
-    status: status === 'superseded' || status === 'finalized' ? status : 'published',
+    status: 'published',
     items,
   };
 }

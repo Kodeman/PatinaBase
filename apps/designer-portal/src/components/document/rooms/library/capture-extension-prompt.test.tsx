@@ -47,9 +47,7 @@ describe("CaptureExtensionPrompt", () => {
 
     expect(screen.getByText(/Bring product pages/i)).toBeInTheDocument();
     expect(mockPromptViewed).toHaveBeenCalledTimes(1);
-    expect(
-      screen.getByRole("link", { name: /Chrome update under review/i }),
-    ).toHaveAttribute("href", "https://example.com/patina-capture.zip");
+    expect(screen.getByRole("button", { name: /Paste a URL/i })).toBeInTheDocument();
 
     fireEvent.click(
       screen.getByRole("button", { name: /Dismiss extension prompt/i }),
@@ -68,7 +66,7 @@ describe("CaptureExtensionPrompt", () => {
   it("offers the paste-URL alternative while Chrome is under review", () => {
     render(<CaptureExtensionPrompt />);
     fireEvent.click(
-      screen.getByRole("button", { name: /Paste a URL instead/i }),
+      screen.getByRole("button", { name: /Capture help/i }),
     );
 
     expect(mockOpenAccountPage).toHaveBeenCalledWith("extension");

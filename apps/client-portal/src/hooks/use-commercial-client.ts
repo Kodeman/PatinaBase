@@ -107,9 +107,10 @@ export function useClientProjectReviewBundle(projectId: string) {
 export function useRecordProjectReviewFeedback(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ reviewItemId, verdict, comment }: { reviewItemId: string; verdict: ClientReviewVerdict; comment?: string }) => {
+    mutationFn: async ({ editionId, reviewItemId, verdict, comment }: { editionId: string; reviewItemId: string; verdict: ClientReviewVerdict; comment?: string }) => {
       const { data, error } = await getSupabase().rpc('record_project_review_feedback', {
         p_project_review_item_id: reviewItemId,
+        p_project_review_edition_id: editionId,
         p_verdict: verdict,
         p_comment: comment?.trim() || null,
       });

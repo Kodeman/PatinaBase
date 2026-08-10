@@ -13,4 +13,10 @@ describe('client project review adapter', () => {
     expect(reviewVerdictFromLabel('Needs a change')).toBe('rejected');
     expect(reviewVerdictFromLabel('Ask a question')).toBe('comment');
   });
+
+  it('omits draft, finalized, and unknown editions instead of treating them as published', () => {
+    expect(adaptClientProjectReviewBundle({ editionId: 'draft', status: 'draft', items: [] })).toBeNull();
+    expect(adaptClientProjectReviewBundle({ editionId: 'final', status: 'finalized', items: [] })).toBeNull();
+    expect(adaptClientProjectReviewBundle({ id: 'not-an-edition', status: 'published', items: [] })).toBeNull();
+  });
 });

@@ -57,25 +57,15 @@ public struct RemoteFFEItem: Codable, Sendable, Identifiable {
     public let status: String?
     public let client_line_total_cents: Int?
     public let room_name: String?
-}
 
+    enum CodingKeys: String, CodingKey {
+        case id, name, status
+        case client_line_total_cents = "clientLineTotalCents"
+        case room_name = "roomName"
+    }
+}
 public struct RemoteClientSelectionsBundle: Codable, Sendable {
     public let selections: [RemoteFFEItem]
-}
-
-public struct RemoteProjectReviewItem: Codable, Sendable, Identifiable {
-    public let id: String
-    public let name: String?
-    public let room_name: String?
-    public let client_price_cents: Int?
-    public let currency: String?
-    public let verdict: String?
-}
-
-public struct RemoteProjectReviewBundle: Codable, Sendable {
-    public let edition_id: String?
-    public let status: String?
-    public let items: [RemoteProjectReviewItem]
 }
 
 // MARK: - Client
@@ -165,12 +155,4 @@ public actor ProjectsAPIClient {
         return bundle.selections
     }
 
-    /// Published review snapshots are separate from selections and authority.
-    /// The mobile reader presents their verdicts as nonbinding preferences.
-    public func fetchProjectReview(projectId: String) async throws -> RemoteProjectReviewBundle? {
-        try await SupabaseClientManager.shared.client
-            .rpc("get_client_project_review_bundle", params: ClientProjectParams(p_project_id: projectId))
-            .execute()
-            .value
-    }
 }

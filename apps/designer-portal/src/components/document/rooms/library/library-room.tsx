@@ -98,6 +98,11 @@ export function LibraryRoom() {
     : null;
 
   const [captureOpen, setCaptureOpen] = useState(false);
+  useEffect(() => {
+    const openCapture = () => setCaptureOpen(true);
+    window.addEventListener('document:open-library-capture', openCapture);
+    return () => window.removeEventListener('document:open-library-capture', openCapture);
+  }, []);
   const [importOpen, setImportOpen] = useState(false);
   const [activeLayer, setActiveLayer] = useState<LayerProductLayer>("personal");
   const [activeCapability, setActiveCapability] =

@@ -54,13 +54,14 @@ export interface PlacementV2Request {
   projectId: string;
   productId: string;
   assignment: { scope: 'room' | 'unassigned'; roomId: string | null };
-  duplicateMode: 'reuse_or_create';
+  duplicateMode: 'reuse_or_create' | 'create_duplicate';
   disposition: 'candidate';
   placeholderSelectionId: string | null;
   roleConfigurationIdentity: null;
   idempotencyKey: string;
   source: PlacementRpcPayload['p_source'];
 }
+export interface PlacementOutcome { outcome: 'created' | 'reused' | 'filled' | 'held'; selectionId: string | null; selectionThreadId: string | null; placementId: string | null; }
 
 function isContext(value: unknown): value is SpecBookPlacementContext {
   if (!value || typeof value !== 'object') return false;
@@ -118,13 +119,14 @@ export function placementV2Request(
   productId: string,
   route: Exclude<SpecBookPlacementRoute, { kind: 'library' }>,
   source: PlacementSource,
+  duplicateMode: PlacementV2Request['duplicateMode'] = 'reuse_or_create',
 ): PlacementV2Request {
   const legacy = placementRpcPayload(productId, route, source);
   return {
     projectId: route.projectId,
     productId,
     assignment: { scope: route.roomId ? 'room' : 'unassigned', roomId: route.roomId },
-    duplicateMode: 'reuse_or_create',
+    duplicateMode,
     disposition: 'candidate',
     placeholderSelectionId: route.kind === 'fill_slot' ? route.slotId : null,
     roleConfigurationIdentity: null,
@@ -171,20 +173,23 @@ function errorMessage(error: unknown): string {
 export async function placeProductInProject(
   productId: string,
   route: SpecBookPlacementRoute,
-  source: PlacementSource
-): Promise<void> {
-  if (route.kind === 'library') return;
+  source: PlacementSource,
+  options: { duplicateMode?: PlacementV2Request['duplicateMode'] } = {},
+): Promise<PlacementOutcome | null> {
+  if (route.kind === 'library') return null;
 
   const v2 = await supabase.rpc('place_product_in_project_v2', {
-    p_request: placementV2Request(productId, route, source),
+    p_request: placementV2Request(productId, route, source, options.duplicateMode),
   });
   // N-1 extension compatibility only: databases before the GA migration do
   // not know v2. Any authorization/domain error is surfaced, never retried by
   // writing through a weaker path.
-  const error = v2.error?.code === '42883'
-    ? (await supabase.rpc('place_product_in_project', placementRpcPayload(productId, route, source))).error
-    : v2.error;
+  const fallback = v2.error?.code === '42883' || v2.error?.code === 'PGRST202';
+  const legacy = fallback ? await supabase.rpc('place_product_in_project', placementRpcPayload(productId, route, source)) : null;
+  const error = fallback ? legacy?.error : v2.error;
   if (error) {
     throw new SpecBookPlacementError(errorMessage(error), productId, route);
   }
+  const result = (fallback ? legacy?.data : v2.data) as Record<string, unknown> | null;
+  return result ? { outcome: result.outcome === 'reused' || result.outcome === 'filled' || result.outcome === 'held' ? result.outcome : 'created', selectionId: typeof result.selection_id === 'string' ? result.selection_id : null, selectionThreadId: typeof result.selection_thread_id === 'string' ? result.selection_thread_id : null, placementId: typeof result.placement_id === 'string' ? result.placement_id : null } : null;
 }

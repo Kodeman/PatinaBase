@@ -16,7 +16,18 @@ describe('ProjectReviewEdition', () => {
     render(<ProjectReviewEdition projectId="project-1" />);
     expect(screen.getByText(/does not authorize a purchase/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Needs a change' }));
-    expect(mutate).toHaveBeenCalledWith({ reviewItemId: 'item-1', verdict: 'rejected' });
+    expect(mutate).toHaveBeenCalledWith({ editionId: 'edition-1', reviewItemId: 'item-1', verdict: 'rejected' });
+  });
+
+  it('requires a written question before recording the comment verdict', () => {
+    const mutate = jest.fn();
+    review.mockReturnValue({ isLoading: false, data: { editionId: 'edition-1', status: 'published', publishedAt: null, items: [{ id: 'item-1', name: 'Chair', roomName: 'Living room', imageUrl: null, clientPriceCents: null, currency: 'USD', verdict: null, comment: null }] } });
+    feedback.mockReturnValue({ mutate, isPending: false });
+    render(<ProjectReviewEdition projectId="project-1" />);
+    const question = screen.getByRole('textbox', { name: 'Question about Chair' });
+    fireEvent.change(question, { target: { value: 'Could this be lighter?' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Ask a question' }));
+    expect(mutate).toHaveBeenCalledWith({ editionId: 'edition-1', reviewItemId: 'item-1', verdict: 'comment', comment: 'Could this be lighter?' });
   });
 
   it('does not offer verdict controls after an edition is closed', () => {

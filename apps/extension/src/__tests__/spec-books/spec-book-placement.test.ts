@@ -168,6 +168,12 @@ describe('place_product_in_project payloads', () => {
 });
 
 describe('retry and duplicate preservation', () => {
+  it('falls back for both PostgreSQL and PostgREST missing-v2 contracts', async () => {
+    const route: SpecBookPlacementRoute = { kind: 'project_inbox', projectId: 'project-1', roomId: null };
+    rpc.mockResolvedValueOnce({ data: null, error: { code: 'PGRST202' } }).mockResolvedValueOnce({ data: { ffe_item_id: 'legacy-1' }, error: null });
+    await expect(placeProductInProject('product-1', route, source)).resolves.toEqual({ outcome: 'created', selectionId: null, selectionThreadId: null, placementId: null });
+    expect(rpc).toHaveBeenNthCalledWith(2, 'place_product_in_project', expect.any(Object));
+  });
   it('retains the durable Product and selected route when placement fails', async () => {
     const route: SpecBookPlacementRoute = {
       kind: 'fill_slot',

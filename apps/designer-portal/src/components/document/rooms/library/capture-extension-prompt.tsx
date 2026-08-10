@@ -90,18 +90,17 @@ export function CaptureExtensionPrompt() {
           <DocumentAction
             actionKey="install-capture-extension"
             variant="primary"
-            href={installUrl}
-            target="_blank"
-            rel="noopener noreferrer"
+            {...(mode === "webstore" ? { href: installUrl, target: "_blank", rel: "noopener noreferrer" } : {})}
             trailing="↗"
             onClick={() => {
               captureExtensionEvents.installClicked({
                 surface: "library",
                 install_mode: mode,
               });
+              if (mode !== "webstore") window.dispatchEvent(new Event("document:open-library-capture"));
               recede();
             }}
-          >{mode === "webstore" ? "Add to Chrome" : "Chrome update under review"}</DocumentAction>
+          >{mode === "webstore" ? "Add to Chrome" : "Paste a URL"}</DocumentAction>
           <DocumentAction
             actionKey="capture-extension-instructions"
             variant="tertiary"
@@ -114,7 +113,7 @@ export function CaptureExtensionPrompt() {
               openAccountPage("extension");
             }}
           >
-            {mode === "webstore" ? "Installation steps" : "Paste a URL instead"}
+            {mode === "webstore" ? "Installation steps" : "Capture help"}
           </DocumentAction>
         </DocumentActionGroup>
         <button
