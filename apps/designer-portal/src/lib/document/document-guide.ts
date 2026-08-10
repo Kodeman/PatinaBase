@@ -29,6 +29,7 @@ export interface DocumentGuideInputFact {
 }
 
 export type DocumentGuideState =
+  | 'loading'
   | 'unavailable'
   | 'paused'
   | 'actionable'
@@ -67,7 +68,8 @@ export interface ProposalGuideFacts {
 
 interface DeriveDocumentGuideInput {
   row: DocumentStateRow;
-  availability?: 'ready' | 'unavailable';
+  availability?: 'ready' | 'loading' | 'unavailable';
+  retryAvailable?: boolean;
   now?: Date;
   operationalNeed?: NeedLine | null;
   proposal?: ProposalGuideFacts | null;
@@ -259,17 +261,30 @@ function proposalGuide(
 export function deriveDocumentGuide({
   row,
   availability = 'ready',
+  retryAvailable = false,
   now = new Date(),
   proposal,
   operationalNeed,
   inputFacts,
 }: DeriveDocumentGuideInput): DocumentGuideModel {
   const stage = row.active_section;
+  if (availability === 'loading') {
+    return withInputs({
+      state: 'loading', stage, eyebrow: 'Next up', headline: 'Checking what needs attention',
+      reason: 'Guidance will appear when the latest project signals are ready.',
+      action: null,
+    }, undefined);
+  }
   if (availability === 'unavailable') {
     return withInputs({
       state: 'unavailable', stage, eyebrow: 'Next up', headline: 'Guidance is unavailable',
-      reason: 'Reload the document before acting so missing data is never mistaken for an empty section.',
-      action: null,
+      reason: 'Try again before acting so missing data is never mistaken for an empty section.',
+      action: retryAvailable
+        ? {
+            key: 'retry-guidance', label: 'Try again',
+            destination: { kind: 'anchor', section: stage },
+          }
+        : null,
     }, undefined);
   }
   if (row.is_paused) {

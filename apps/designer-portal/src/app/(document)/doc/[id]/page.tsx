@@ -398,29 +398,36 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     : [];
   const guideUnavailable = Boolean(
     row && (
+      enrichedOperationalQuery.isError ||
       (row.engagement_kind === 'project' && projectIsError) ||
       ((row.active_section === 'direction' || row.active_section === 'proposal') && proposalIsError) ||
       (row.active_section === 'discovery' && discoveryQuery.isError) ||
       (row.active_section === 'direction' && draftingState.error)
     ),
   );
+  const guideLoading = Boolean(row && enrichedOperationalQuery.isLoading);
   const guideModel = row
     ? deriveDocumentGuide({
         row,
-        availability: guideUnavailable ? 'unavailable' : 'ready',
+        availability: guideUnavailable ? 'unavailable' : guideLoading ? 'loading' : 'ready',
+        retryAvailable: Boolean(enrichedOperationalQuery.isError),
         proposal: proposalGuideFacts,
         inputFacts: guideInputs,
         operationalNeed: enrichedOperationalNeed ?? undefined,
       })
     : null;
   const activateGuide = useCallback(() => {
+    if (guideModel?.action?.key === 'retry-guidance') {
+      void enrichedOperationalQuery.refetch();
+      return;
+    }
     const destination = guideModel?.action?.destination;
     if (!destination) return;
     if (destination.kind === 'anchor') {
       jumpToSection(destination.section, destination.focusId, destination.activate);
     }
     if (destination.kind === 'ledger') openLedger(destination.name, destination.context);
-  }, [guideModel, jumpToSection]);
+  }, [enrichedOperationalQuery, guideModel, jumpToSection]);
 
   // D13: publish the held document to the mobile shell (bar + spine sheet).
   useMobileActiveDoc(
