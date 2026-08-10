@@ -95,18 +95,18 @@ VALUES
 --             net_30 total = 30000 (case 6, NULL-price tolerance)
 --   i5        trade 30000 × qty 1 (case 6)
 --   i6        trade 25000 × qty 1 (case 7 — acknowledgment fixture PO)
-INSERT INTO project_ffe_items (id, project_id, name, status, quantity, unit_price_cents, trade_price_cents, line_total_cents, blocked, purchase_order_id)
+INSERT INTO project_ffe_items (id, project_id, name, status, quantity, unit_price_cents, trade_price_cents, line_total_cents, blocked, purchase_order_id, vendor_id, design_disposition)
 VALUES
-  ('cc200000-0000-4000-8000-000000000001', 'cc000000-0000-4000-8000-000000000001', 'Trade-priced sofa',   'approved', 2, 100000, 80000, 200000, FALSE, NULL),                             -- i1
-  ('cc200000-0000-4000-8000-000000000002', 'cc000000-0000-4000-8000-000000000001', 'No-trade lamp',       'approved', 1,  50000,  NULL,  50000, FALSE, NULL),                             -- i2
-  ('cc200000-0000-4000-8000-000000000003', 'cc000000-0000-4000-8000-000000000001', 'Already-ordered rug', 'approved', 1,  30000, 20000,  30000, FALSE, 'cc100000-0000-4000-8000-000000000001'), -- i_linked
-  ('cc200000-0000-4000-8000-000000000004', 'cc000000-0000-4000-8000-000000000001', 'Blocked credenza',    'approved', 1,  60000, 45000,  60000, TRUE,  NULL),                             -- i_blocked
-  ('cc200000-0000-4000-8000-000000000005', 'cc000000-0000-4000-8000-000000000002', 'Rival project chair', 'approved', 1,  40000, 30000,  40000, FALSE, NULL),                             -- i_rival
-  ('cc200000-0000-4000-8000-000000000006', 'cc000000-0000-4000-8000-000000000001', 'Milestone console',   'approved', 1,  55000, 40000,  55000, FALSE, NULL),                             -- i3
-  ('cc200000-0000-4000-8000-000000000007', 'cc000000-0000-4000-8000-000000000001', 'Unpriced ottoman',    'approved', 3,   NULL,  NULL,   NULL, FALSE, NULL),                             -- i4
-  ('cc200000-0000-4000-8000-000000000008', 'cc000000-0000-4000-8000-000000000001', 'Net-30 side table',   'approved', 1,  42000, 30000,  42000, FALSE, NULL),                             -- i5
-  ('cc200000-0000-4000-8000-000000000009', 'cc000000-0000-4000-8000-000000000001', 'Ack-fixture mirror',  'approved', 1,  32000, 25000,  32000, FALSE, NULL),                             -- i6
-  ('cc200000-0000-4000-8000-000000000010', 'cc000000-0000-4000-8000-000000000001', 'Non-owner test lamp', 'approved', 1,  20000, 15000,  20000, FALSE, NULL);                             -- i7 (case 9 non-owner rejection)
+  ('cc200000-0000-4000-8000-000000000001', 'cc000000-0000-4000-8000-000000000001', 'Trade-priced sofa',   'approved', 2, 100000, 80000, 200000, FALSE, NULL, 'cc000000-0000-4000-8000-000000000003', 'selected'),
+  ('cc200000-0000-4000-8000-000000000002', 'cc000000-0000-4000-8000-000000000001', 'No-trade lamp',       'approved', 1,  50000,  NULL,  50000, FALSE, NULL, 'cc000000-0000-4000-8000-000000000003', 'selected'),
+  ('cc200000-0000-4000-8000-000000000003', 'cc000000-0000-4000-8000-000000000001', 'Already-ordered rug', 'approved', 1,  30000, 20000,  30000, FALSE, 'cc100000-0000-4000-8000-000000000001', 'cc000000-0000-4000-8000-000000000003', 'selected'),
+  ('cc200000-0000-4000-8000-000000000004', 'cc000000-0000-4000-8000-000000000001', 'Blocked credenza',    'approved', 1,  60000, 45000,  60000, TRUE,  NULL, 'cc000000-0000-4000-8000-000000000003', 'selected'),
+  ('cc200000-0000-4000-8000-000000000005', 'cc000000-0000-4000-8000-000000000002', 'Rival project chair', 'approved', 1,  40000, 30000,  40000, FALSE, NULL, 'cc000000-0000-4000-8000-000000000003', 'selected'),
+  ('cc200000-0000-4000-8000-000000000006', 'cc000000-0000-4000-8000-000000000001', 'Milestone console',   'approved', 1,  55000, 40000,  55000, FALSE, NULL, 'cc000000-0000-4000-8000-000000000003', 'selected'),
+  ('cc200000-0000-4000-8000-000000000007', 'cc000000-0000-4000-8000-000000000001', 'Unpriced ottoman',    'approved', 3,   NULL,  NULL,   NULL, FALSE, NULL, 'cc000000-0000-4000-8000-000000000003', 'selected'),
+  ('cc200000-0000-4000-8000-000000000008', 'cc000000-0000-4000-8000-000000000001', 'Net-30 side table',   'approved', 1,  42000, 30000,  42000, FALSE, NULL, 'cc000000-0000-4000-8000-000000000003', 'selected'),
+  ('cc200000-0000-4000-8000-000000000009', 'cc000000-0000-4000-8000-000000000001', 'Ack-fixture mirror',  'approved', 1,  32000, 25000,  32000, FALSE, NULL, 'cc000000-0000-4000-8000-000000000003', 'selected'),
+  ('cc200000-0000-4000-8000-000000000010', 'cc000000-0000-4000-8000-000000000001', 'Non-owner test lamp', 'approved', 1,  20000, 15000,  20000, FALSE, NULL, 'cc000000-0000-4000-8000-000000000003', 'selected');
 
 -- ─── helpers ───────────────────────────────────────────────────────────────
 --

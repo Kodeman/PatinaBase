@@ -9155,3 +9155,159 @@ DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.notify_project_document_change() FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00433_ffe_safe_reader_media_compatibility.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_client_project_selections(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00433_ffe_safe_reader_media_compatibility.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_client_project_selections(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00433_ffe_safe_reader_media_compatibility.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON public.project_ffe_media_assets TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00433_ffe_safe_reader_media_compatibility.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.project_review_media_assets TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00433_ffe_safe_reader_media_compatibility.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.project_ffe_media_reconciliation TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00433_ffe_safe_reader_media_compatibility.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.project_ffe_media_assets, public.project_review_media_assets, public.project_ffe_media_reconciliation TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00434_ffe_privacy_domain_foundation.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.project_ffe_selection_threads, public.project_review_editions, public.project_review_items, public.project_review_delivery_attempts, public.project_ffe_import_batches, public.project_ffe_import_rows, public.purchase_order_changes TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00434_ffe_privacy_domain_foundation.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.project_ffe_command_idempotency TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00434_ffe_privacy_domain_foundation.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.project_ffe_selection_threads, public.project_review_editions, public.project_review_items, public.project_review_delivery_attempts, public.project_ffe_import_batches, public.project_ffe_import_rows, public.project_ffe_command_idempotency, public.purchase_order_changes TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00434_ffe_privacy_domain_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_project_ffe_selection_integrity(), public.set_project_ffe_thread_primary(), public.guard_project_board_ownership(), public.guard_board_selection_ownership(), public.guard_published_project_review(), public.guard_purchase_order_change_immutable() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00434_ffe_privacy_domain_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_board_share(uuid, text, timestamptz), public.resolve_board_share(text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00434_ffe_privacy_domain_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_board_share(uuid, text, timestamptz) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00434_ffe_privacy_domain_foundation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.resolve_board_share(text) TO anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_ffe_ga_rpc_boundaries.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._apply_board_room_state_v1_impl(uuid, text, uuid, jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_ffe_ga_rpc_boundaries.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._continue_board_in_project_v1_impl(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_ffe_ga_rpc_boundaries.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._create_purchase_order_v1_impl(uuid,uuid,public.purchase_order_payment_pattern,uuid[],text,date,boolean,date,integer,jsonb,text,text) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_ffe_ga_rpc_boundaries.sql
+DO $g$ BEGIN
+  REVOKE INSERT,UPDATE,DELETE ON public.project_ffe_items,public.proposal_boards,public.proposal_board_items,public.item_feedback FROM authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_ffe_ga_rpc_boundaries.sql
+DO $g$ BEGIN
+  GRANT INSERT,UPDATE,DELETE ON public.proposal_boards,public.proposal_board_items TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_ffe_ga_rpc_boundaries.sql
+DO $g$ BEGIN
+  GRANT INSERT ON public.item_feedback TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_ffe_ga_rpc_boundaries.sql
+DO $g$ BEGIN
+  REVOKE INSERT,UPDATE,DELETE ON public.project_ffe_specs FROM authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_ffe_ga_rpc_boundaries.sql
+DO $g$ BEGIN
+  GRANT UPDATE (sku,finish,material,color_fabric,selected_dimensions,exact_location,client_notes,trade_notes,install_notes,care_notes,warranty_notes,selected_media,source_verifications,na_declarations,field_provenance,routing_source,updated_by,updated_at) ON public.project_ffe_specs TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_ffe_ga_rpc_boundaries.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._ffe_require_studio_project(uuid),public._reconcile_activated_ffe_placements(uuid), public.guard_ffe_rpc_mutation(),public.guard_project_board_rpc_mutation(), public.get_project_review_media_manifest(uuid,uuid) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_ffe_ga_rpc_boundaries.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_review_media_manifest(uuid,uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_ffe_ga_rpc_boundaries.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_ffe_readiness(uuid),public.place_product_in_project_v2(jsonb), public.place_product_in_project(uuid,uuid,uuid,uuid,text,jsonb),public.create_named_project_need(jsonb), public.batch_place_library_products_in_project(jsonb),public.create_project_board(jsonb), public.apply_board_room_state(uuid,text,uuid,jsonb),public.continue_board_in_project(uuid), public.promote_board_reference_to_selection(uuid,jsonb),public.triage_project_ffe_items(jsonb), public.archive_project_selection(uuid,text),public.supersede_project_selection(jsonb), public.stage_project_ffe_import(jsonb),public.commit_project_ffe_import(uuid,jsonb), public.publish_project_review(jsonb),public.record_project_review_feedback(uuid,text,text), public.get_client_project_selections(uuid),public.get_client_project_review_bundle(uuid), public.start_purchase_order_change(jsonb), public.create_purchase_order(uuid,uuid,public.purchase_order_payment_pattern,uuid[],text,date,boolean,date,integer,jsonb,text,text), public.activate_proposal_as_project(uuid,date) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_ffe_ga_rpc_boundaries.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_ffe_readiness(uuid),public.place_product_in_project_v2(jsonb), public.place_product_in_project(uuid,uuid,uuid,uuid,text,jsonb),public.create_named_project_need(jsonb), public.batch_place_library_products_in_project(jsonb),public.create_project_board(jsonb), public.apply_board_room_state(uuid,text,uuid,jsonb),public.continue_board_in_project(uuid), public.promote_board_reference_to_selection(uuid,jsonb),public.triage_project_ffe_items(jsonb), public.archive_project_selection(uuid,text),public.supersede_project_selection(jsonb), public.stage_project_ffe_import(jsonb),public.commit_project_ffe_import(uuid,jsonb), public.publish_project_review(jsonb),public.record_project_review_feedback(uuid,text,text), public.get_client_project_selections(uuid),public.get_client_project_review_bundle(uuid), public.start_purchase_order_change(jsonb), public.create_purchase_order(uuid,uuid,public.purchase_order_payment_pattern,uuid[],text,date,boolean,date,integer,jsonb,text,text), public.activate_proposal_as_project(uuid,date) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_ffe_ga_rpc_boundaries.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_client_project_selections(uuid),public.get_client_project_review_bundle(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
