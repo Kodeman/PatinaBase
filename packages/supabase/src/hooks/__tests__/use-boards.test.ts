@@ -302,6 +302,7 @@ describe('owner-aware board hooks', () => {
       width: 210,
       height: null,
       productId: 'product-1',
+      projectFfeItemId: 'selection-1',
       imageUrl: 'https://cdn.example/chair.jpg',
       data: { source_url: 'https://maker.example/chair' },
     });
@@ -311,6 +312,7 @@ describe('owner-aware board hooks', () => {
       id: 'item-original',
       board_id: 'board-1',
       product_id: 'product-1',
+      project_ffe_item_id: 'selection-1',
       image_url: 'https://cdn.example/chair.jpg',
       data: { source_url: 'https://maker.example/chair' },
     }));

@@ -28,7 +28,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
-import { LifeBuoy, Ruler } from 'lucide-react';
+import { FolderPlus, LifeBuoy, Ruler } from 'lucide-react';
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
 import {
   usePeopleDirectory,
@@ -465,6 +465,20 @@ export function CommandBar() {
       },
     ];
 
+    const addToProjectRow: PaletteRow | null = inHandRow?.row.project_id
+      ? {
+          kind: 'verb',
+          key: 'add-to-project-here',
+          label: 'Add to project',
+          sub: 'this project · Library, link, need, import, or board',
+          icon: FolderPlus,
+          run: () => window.dispatchEvent(new CustomEvent('document:open-add-to-project', {
+            detail: { source: 'command_palette' },
+          })),
+          match: 'add to project selection ffe furniture library product link import board need',
+        }
+      : null;
+
     const q = query.trim().toLowerCase();
     let sections: PaletteSection[];
     let matches = 0;
@@ -489,6 +503,7 @@ export function CommandBar() {
       if (recentRows.length) sections.push({ eyebrow: 'Recent', rows: recentRows });
 
       const thisSurface: PaletteRow[] = [];
+      if (addToProjectRow) thisSurface.push(addToProjectRow);
       if (inHandRow?.row.project_id) {
         const projectName = folderTab(inHandRow.row);
         const projectId = inHandRow.row.project_id;
@@ -563,6 +578,7 @@ export function CommandBar() {
       // for "board" / "moodboard" queries.
       list.push(...recentBoards.map(recentBoardRow).filter((r) => r.match.includes(q)));
       list.push(...liveDocs.map((f) => documentRow(f.row)).filter((r) => r.match.includes(q)));
+      if (addToProjectRow?.match.includes(q)) list.push(addToProjectRow);
       // Document-scoped registry surfaces (scope: 'document' — registry.tsx's
       // own canon: "only reachable with a document in hand") must pass the
       // same in-hand gate their "This surface" row above is gated on, or a

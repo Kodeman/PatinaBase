@@ -65,6 +65,8 @@ export interface MoodBoardItemSnapshot {
   locked?: boolean
   productId?: string | null
   captureId?: string | null
+  /** Project selection linked to this placement; null keeps a loose reference. */
+  projectFfeItemId?: string | null
   paletteId?: string | null
   imageUrl?: string | null
   /** Optional renderer/cache identity; never required persistence truth. */

@@ -248,6 +248,7 @@ function boardItemFromRow(row: ProposalBoardItem): EditableMoodBoardItem {
     locked: row.locked,
     productId: row.product_id,
     captureId: row.capture_id,
+    projectFfeItemId: row.project_ffe_item_id,
     paletteId: row.palette_id,
     imageUrl: row.image_url,
     content: row.content,
@@ -310,6 +311,7 @@ function sameStructuralItem(a: EditableMoodBoardItem, b: EditableMoodBoardItem):
     (a.locked ?? false) === (b.locked ?? false) &&
     (a.productId ?? null) === (b.productId ?? null) &&
     (a.captureId ?? null) === (b.captureId ?? null) &&
+    (a.projectFfeItemId ?? null) === (b.projectFfeItemId ?? null) &&
     (a.paletteId ?? null) === (b.paletteId ?? null) &&
     (a.imageUrl ?? null) === (b.imageUrl ?? null) &&
     (a.content ?? null) === (b.content ?? null) &&
@@ -339,6 +341,7 @@ function atomicBoardState(state: BoardRoomState) {
       locked: item.locked ?? false,
       productId: item.productId ?? null,
       captureId: item.captureId ?? null,
+      projectFfeItemId: item.projectFfeItemId ?? null,
       paletteId: item.paletteId ?? null,
       imageUrl: item.imageUrl ?? null,
       content: item.content ?? null,
@@ -455,6 +458,7 @@ export function revertFailedStructuralTransition(
     'locked',
     'productId',
     'captureId',
+    'projectFfeItemId',
     'paletteId',
     'imageUrl',
     'imageKey',

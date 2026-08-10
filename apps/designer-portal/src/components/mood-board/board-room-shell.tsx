@@ -823,7 +823,9 @@ function BoardRoomSurface({
         )}
 
         <div className="flex shrink-0 items-center gap-1">
-          <Button variant="ghost" size="sm" className="min-h-11 min-w-11" onClick={() => setShareOpen(true)}>Share</Button>
+          {owner.kind === 'proposal' && (
+            <Button variant="ghost" size="sm" className="min-h-11 min-w-11" onClick={() => setShareOpen(true)}>Share</Button>
+          )}
           {api.mode === 'edit' && <Button variant="ghost" size="sm" className="hidden min-h-11 min-w-11 sm:inline-flex" onClick={() => setExportOpen(true)}>Export</Button>}
           <Button variant={api.mode === 'present' ? 'secondary' : 'ghost'} size="sm" className="min-h-11 min-w-11" onClick={api.togglePresent}>
             {api.mode === 'present' ? 'Edit' : 'Present'}
@@ -973,7 +975,7 @@ function BoardRoomSurface({
           <BoardRoomInspector
             api={api}
             owner={owner}
-            scopeRoomId={boardQuery.data?.scope_room_id ?? null}
+            scopeRoomId={boardQuery.data?.project_room_id ?? boardQuery.data?.scope_room_id ?? null}
             onOpenProduct={openProduct}
             onReplaceImage={replaceImage}
           />
@@ -988,15 +990,17 @@ function BoardRoomSurface({
             : '')}
       </div>
 
-      <BoardShareDialog
-        boardId={state.boardId}
-        boardName={state.name}
-        owner={owner}
-        sourceProposalId={sourceProposalId}
-        open={shareOpen}
-        onOpenChange={setShareOpen}
-        flush={api.flushPending}
-      />
+      {owner.kind === 'proposal' && (
+        <BoardShareDialog
+          boardId={state.boardId}
+          boardName={state.name}
+          owner={owner}
+          sourceProposalId={sourceProposalId}
+          open={shareOpen}
+          onOpenChange={setShareOpen}
+          flush={api.flushPending}
+        />
+      )}
       <BoardExportDialog
         boardId={state.boardId}
         boardName={state.name}

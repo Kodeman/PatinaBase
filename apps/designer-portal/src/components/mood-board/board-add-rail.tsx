@@ -1,13 +1,19 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
-import type { BoardOwnerRef, BoardPoint, EditableMoodBoardItem } from '@patina/types';
+import type {
+  BoardOwnerRef,
+  BoardPoint,
+  EditableMoodBoardItem,
+  ProjectFfeSelection,
+} from '@patina/types';
 import {
   createBrowserClient,
   useBoardFeedback,
   usePalettes,
   useProposal,
   useProposalCaptures,
+  useProjectFFEItems,
   useRoomScans,
   type AddBoardItemInput,
   type ItemFeedback,
@@ -32,6 +38,7 @@ import {
 
 export type BoardAddSource = 'rail_click' | 'file_drop' | 'suggestion';
 export type BoardAddRailTab =
+  | 'project'
   | 'library'
   | 'captures'
   | 'uploads'
@@ -40,6 +47,64 @@ export type BoardAddRailTab =
   | 'feedback';
 
 const BOARD_RAIL_TAB_KEY = 'patina:mood-board:add-rail-tab';
+
+function projectSelectionFromRow(row: Record<string, unknown>): ProjectFfeSelection {
+  const product = row.product && typeof row.product === 'object'
+    ? row.product as Record<string, unknown>
+    : null;
+  const room = row.room && typeof row.room === 'object'
+    ? row.room as Record<string, unknown>
+    : null;
+  return {
+    id: String(row.id),
+    projectId: String(row.project_id),
+    productId: typeof row.product_id === 'string' ? row.product_id : null,
+    captureId: typeof row.capture_id === 'string' ? row.capture_id : null,
+    projectRoomId: typeof row.project_room_id === 'string' ? row.project_room_id : null,
+    name: String(row.name ?? product?.name ?? 'Untitled selection'),
+    quantity: Number(row.quantity ?? 1),
+    status: String(row.status ?? 'specified') as ProjectFfeSelection['status'],
+    designDisposition: String(row.design_disposition ?? 'selected') as ProjectFfeSelection['designDisposition'],
+    assignmentScope: String(row.assignment_scope ?? (row.project_room_id ? 'room' : 'throughout')) as ProjectFfeSelection['assignmentScope'],
+    selectionThreadId: String(row.selection_thread_id ?? row.id),
+    supersedesFfeItemId: typeof row.supersedes_ffe_item_id === 'string' ? row.supersedes_ffe_item_id : null,
+    readinessStatus: typeof row.readiness_status === 'string' ? row.readiness_status : null,
+    missingRequiredFieldCount: Number(row.missing_required_field_count ?? 0),
+    latestReviewVerdict: (row.latest_review_verdict ?? null) as ProjectFfeSelection['latestReviewVerdict'],
+    createdAt: String(row.created_at ?? ''),
+    product: product ? {
+      id: String(product.id ?? row.product_id ?? ''),
+      name: String(product.name ?? row.name ?? 'Untitled selection'),
+      brand: typeof product.brand === 'string' ? product.brand : null,
+      images: Array.isArray(product.images) ? product.images.filter((value): value is string => typeof value === 'string') : null,
+    } : null,
+    room: room ? { id: String(room.id), name: String(room.name) } : null,
+  };
+}
+
+export function projectSelectionToBoardItem(
+  selection: ProjectFfeSelection,
+  point: BoardPoint,
+  zIndex: number,
+): EditableMoodBoardItem {
+  const imageUrl = selection.product?.images?.[0] ?? null;
+  return {
+    ...baseBoardItem(point, zIndex),
+    type: 'product',
+    width: 260,
+    height: 300,
+    productId: selection.productId,
+    projectFfeItemId: selection.id,
+    imageUrl,
+    data: {
+      name: selection.name,
+      vendor_name: selection.product?.brand ?? null,
+      image_url: imageUrl,
+      assignment_scope: selection.assignmentScope,
+      design_disposition: selection.designDisposition,
+    },
+  };
+}
 
 function beginRailDrag(
   event: DragEvent<HTMLElement>,
@@ -580,6 +645,13 @@ export function BoardAddRail({
   const [captureSearch, setCaptureSearch] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const { data: captures = [], isLoading: capturesLoading } = useProposalCaptures({ status: 'inbox' });
+  const projectSelectionsQuery = useProjectFFEItems(owner.kind === 'project' ? owner.id : '');
+  const projectSelections = useMemo(
+    () => ((projectSelectionsQuery.data ?? []) as Record<string, unknown>[])
+      .filter((row) => row.removed_at == null)
+      .map(projectSelectionFromRow),
+    [projectSelectionsQuery.data],
+  );
   const visibleCaptures = useMemo(() => {
     const term = captureSearch.trim().toLowerCase();
     if (!term) return captures;
@@ -603,6 +675,7 @@ export function BoardAddRail({
     try {
       const persisted = window.localStorage.getItem(tabPreferenceKey);
       if (
+        persisted === 'project' ||
         persisted === 'library' ||
         persisted === 'captures' ||
         persisted === 'uploads' ||
@@ -610,14 +683,14 @@ export function BoardAddRail({
         persisted === 'scans' ||
         persisted === 'feedback'
       ) {
-        setTab(persisted);
+        setTab(persisted === 'project' && owner.kind !== 'project' ? 'library' : persisted);
       } else {
         setTab('library');
       }
     } catch {
       // Storage is an enhancement; private browsing must not break the rail.
     }
-  }, [tabPreferenceKey]);
+  }, [owner.kind, tabPreferenceKey]);
 
   const selectTab = (next: BoardAddRailTab) => {
     setTab(next);
@@ -691,7 +764,15 @@ export function BoardAddRail({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div role="tablist" aria-label="Board sources" className="flex shrink-0 overflow-x-auto border-b border-[var(--border-default)]">
-        {(['library', 'captures', 'uploads', 'palettes', 'scans', 'feedback'] as const).map((value) => (
+        {([
+          ...(owner.kind === 'project' ? ['project'] as const : []),
+          'library',
+          'captures',
+          'uploads',
+          'palettes',
+          'scans',
+          'feedback',
+        ] as const).map((value) => (
           <button
             key={value}
             type="button"
@@ -700,12 +781,46 @@ export function BoardAddRail({
             onClick={() => selectTab(value)}
             className={`min-h-11 min-w-11 shrink-0 px-2 font-mono text-[8px] uppercase tracking-[0.04em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] ${tab === value ? 'border-b-2 border-[var(--color-clay)] text-[var(--color-clay)]' : 'text-[var(--text-muted)]'}`}
           >
-            {value}
+            {value === 'project' ? 'In project' : value}
           </button>
         ))}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        {tab === 'project' && owner.kind === 'project' && (
+          <div className="space-y-2">
+            <p className="text-[11px] leading-4 text-[var(--text-muted)]">
+              Place an existing project selection on this board. The selection remains in the project if this placement is removed.
+            </p>
+            {projectSelectionsQuery.isLoading && (
+              <p className="text-[11px] text-[var(--text-muted)]">Loading project selections…</p>
+            )}
+            {!projectSelectionsQuery.isLoading && projectSelections.length === 0 && (
+              <p className="text-[11px] text-[var(--text-muted)]">No project selections yet.</p>
+            )}
+            {projectSelections.map((selection) => (
+              <button
+                key={selection.id}
+                type="button"
+                onClick={() => onAddItems([
+                  projectSelectionToBoardItem(selection, nextPoint(), nextZ()),
+                ], 'rail_click')}
+                className="flex min-h-11 w-full items-center justify-between gap-2 rounded-[4px] border border-[var(--border-default)] px-2.5 text-left hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-[11px] text-[var(--text-primary)]">
+                    {selection.name}
+                  </span>
+                  <span className="block truncate font-mono text-[8px] uppercase text-[var(--text-muted)]">
+                    {selection.room?.name ?? (selection.assignmentScope === 'unassigned' ? 'Unsorted' : 'Throughout')} · {selection.designDisposition.replace('_', ' ')}
+                  </span>
+                </span>
+                <span className="shrink-0 font-mono text-[8px] uppercase text-[var(--color-clay)]">Place</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {tab === 'library' && (
           <div className="space-y-3">
             <p className="text-[11px] leading-4 text-[var(--text-muted)]">

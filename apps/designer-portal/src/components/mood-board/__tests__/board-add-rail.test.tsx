@@ -2,7 +2,13 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import type { ProposalCapture } from '@patina/supabase';
 import type { BoardOwnerRef, EditableMoodBoardItem } from '@patina/types';
 import type { ProductPickResult } from '@/components/portal/proposals/product-picker-modal';
-import { BoardAddRail, boardItemThumbnail, captureToBoardItem, productPickToBoardItem } from '../board-add-rail';
+import {
+  BoardAddRail,
+  boardItemThumbnail,
+  captureToBoardItem,
+  productPickToBoardItem,
+  projectSelectionToBoardItem,
+} from '../board-add-rail';
 
 jest.mock('@patina/supabase', () => ({
   createBrowserClient: () => ({
@@ -27,6 +33,7 @@ jest.mock('@patina/supabase', () => ({
       },
     ],
   }),
+  useProjectFFEItems: () => ({ data: [], isLoading: false }),
   useRoomScans: () => ({
     data: [
       { id: 'scan-1', name: 'Living room', room_type: 'living', thumbnail_url: 'https://images.example/scan.jpg' },
@@ -107,6 +114,22 @@ describe('mood-board add rail item provenance', () => {
       data: { thumbnail_url: 'https://images.example/thumb.webp' },
     })).toBe('https://images.example/thumb.webp');
     expect(boardItemThumbnail(base)).toBe('https://images.example/display.webp');
+  });
+
+  it('links an In project placement to the existing selection identity', () => {
+    const item = projectSelectionToBoardItem({
+      id: 'selection-1', projectId: 'project-1', productId: 'product-1', projectRoomId: null,
+      name: 'Oak chair', quantity: 2, status: 'specified', designDisposition: 'selected',
+      assignmentScope: 'throughout', selectionThreadId: 'thread-1', supersedesFfeItemId: null,
+      createdAt: '2026-08-10T00:00:00Z', product: { id: 'product-1', name: 'Oak chair', images: ['https://images.example/chair.jpg'] },
+    }, { x: 40, y: 60 }, 3);
+    expect(item).toEqual(expect.objectContaining({
+      productId: 'product-1',
+      projectFfeItemId: 'selection-1',
+      x: 40,
+      y: 60,
+      zIndex: 3,
+    }));
   });
 });
 

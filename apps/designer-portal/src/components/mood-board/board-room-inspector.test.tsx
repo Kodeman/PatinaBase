@@ -12,6 +12,10 @@ jest.mock('@/hooks/use-background-removal', () => ({
   useRemoveBoardItemBackground: () => ({ mutateAsync: jest.fn(), isPending: false, error: null }),
 }));
 
+jest.mock('@patina/supabase', () => ({
+  usePromoteBoardReferenceToSelection: () => ({ mutateAsync: jest.fn(), isPending: false }),
+}));
+
 function controllerApi(): BoardRoomControllerApi {
   return {
     state: {
@@ -110,7 +114,7 @@ describe('BoardRoomInspector multi-selection', () => {
     fireEvent.change(screen.getByLabelText('Section'), { target: { value: 'living' } });
     expect(api.setItemsSectionMembership).toHaveBeenCalledWith(['chair', 'rug'], 'living');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete reference' }));
     expect(api.deleteItems).toHaveBeenCalled();
   });
 });

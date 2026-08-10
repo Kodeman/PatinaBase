@@ -34,6 +34,7 @@ import Link from 'next/link';
 import {
   useFfeInvoiceCoverage,
   useProjectFFEItems,
+  useProjectOwnedBoards,
   type FfeItemCoverage,
 } from '@patina/supabase';
 import { openInvoiceComposer } from './accounts/invoice-overlays';
@@ -80,6 +81,7 @@ import {
 } from '@/hooks/use-commercial-documents';
 import { AuthorizationStamp } from './schedule/authorization-stamp';
 import { AddLineSheet } from './schedule/add-line-sheet';
+import { AddToProjectSheet, openAddToProject } from './schedule/add-to-project-sheet';
 import { CompositionBar } from './schedule/composition-bar';
 import { ReviewReleaseSheet } from './schedule/review-release-sheet';
 import {
@@ -388,7 +390,7 @@ function FFELine({
   }`;
 
   return (
-    <li className="border-b border-[var(--color-pearl)]">
+    <li id={`ffe-selection-${item.id}`} className="scroll-mt-24 border-b border-[var(--color-pearl)]">
       {selecting ? (
         // The whole row is the tick while the schedule is a selection surface.
         <label
@@ -678,6 +680,9 @@ function FFESectionBody({
   const { data: rooms } = useDocumentRooms(
     mode === 'project' ? projectId : null,
   );
+  const { data: projectBoards = [] } = useProjectOwnedBoards(
+    mode === 'project' ? projectId : null,
+  );
   // R76 — per-line billing truth (00187 bridge). Invalidated by every invoice
   // mutation that moves money, so the stamps stay honest without a poll.
   const { data: coverage } = useFfeInvoiceCoverage(projectId);
@@ -833,18 +838,22 @@ function FFESectionBody({
         rows: rows.filter((r) => r.item.project_room_id === room.id),
       }))
     : [];
-  const unassigned = groupByRoom
+  const throughout = groupByRoom
     ? rows.filter(
         (r) =>
-          !r.item.project_room_id ||
-          !(rooms ?? []).some((rm) => rm.id === r.item.project_room_id),
+          r.item.assignment_scope !== 'unassigned' &&
+          (!r.item.project_room_id ||
+            !(rooms ?? []).some((rm) => rm.id === r.item.project_room_id)),
       )
     : rows;
+  const unassigned = groupByRoom
+    ? rows.filter((r) => r.item.assignment_scope === 'unassigned')
+    : [];
 
   const composition = releaseSummary(releaseLines);
 
   return (
-    <section>
+    <section id="project-ffe">
       <div className="mb-1.5 mt-5 flex items-baseline justify-between gap-3">
         <h2 className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]">
           {selecting
@@ -878,6 +887,17 @@ function FFESectionBody({
                 >
                   Spec book →
                 </Link>
+              )}
+              {mode === 'project' && (
+                <DocumentAction
+                  actionKey="open-add-to-project"
+                  surfaceKey="project"
+                  regionKey="ffe-head"
+                  variant="primary"
+                  onClick={() => openAddToProject('section')}
+                >
+                  Add to project
+                </DocumentAction>
               )}
               {/* R76 — bill the schedule: the composer opens FF&E-prefilled
                   with every uninvoiced priced line ticked (untick there to
@@ -980,15 +1000,31 @@ function FFESectionBody({
               </ul>
             </div>
           ))}
-          {unassigned.length > 0 && (
+          {throughout.length > 0 && (
             <div>
               <RoomHeading
-                name="Throughout · unassigned"
+                name="Throughout"
                 budgetCents={0}
-                rows={unassigned}
+                rows={throughout}
                 onAddLine={() =>
                   setAddLineRoom({ id: null, name: 'Throughout' })
                 }
+                {...roomHeadingProps(throughout)}
+              />
+              <ul>
+                {throughout.map((row) => (
+                  <FFELine key={row.item.id} {...lineProps(row)} />
+                ))}
+              </ul>
+            </div>
+          )}
+          {unassigned.length > 0 && (
+            <div>
+              <RoomHeading
+                name="Unsorted"
+                budgetCents={0}
+                rows={unassigned}
+                onAddLine={() => setAddLineRoom({ id: null, name: 'Unsorted' })}
                 {...roomHeadingProps(unassigned)}
               />
               <ul>
@@ -1046,6 +1082,14 @@ function FFESectionBody({
           roomId={addLineRoom.id}
           roomName={addLineRoom.name}
           onClose={() => setAddLineRoom(null)}
+        />
+      )}
+      {mode === 'project' && (
+        <AddToProjectSheet
+          projectId={projectId}
+          projectName={projectName}
+          rooms={(rooms ?? []).map((room) => ({ id: room.id, name: room.name }))}
+          boards={projectBoards}
         />
       )}
     </section>

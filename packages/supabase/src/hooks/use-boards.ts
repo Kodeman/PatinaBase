@@ -87,6 +87,7 @@ export interface ProposalBoard {
   project_id: string | null;
   name: string;
   scope_room_id: string | null;
+  project_room_id?: string | null;
   cover_image_url: string | null;
   canvas_width: number;
   canvas_height: number;
@@ -127,6 +128,7 @@ export interface ProposalBoardItem {
   locked: boolean;
   product_id: string | null;
   capture_id: string | null;
+  project_ffe_item_id?: string | null;
   palette_id: string | null;
   image_url: string | null;
   content: string | null;
@@ -215,6 +217,7 @@ export interface AddBoardItemInput {
   locked?: boolean;
   productId?: string | null;
   captureId?: string | null;
+  projectFfeItemId?: string | null;
   paletteId?: string | null;
   imageUrl?: string | null;
   content?: string | null;
@@ -237,6 +240,7 @@ export interface UpdateBoardItemInput {
   locked?: boolean;
   productId?: string | null;
   captureId?: string | null;
+  projectFfeItemId?: string | null;
   paletteId?: string | null;
   imageUrl?: string | null;
   content?: string | null;
@@ -661,6 +665,7 @@ export function useAddBoardItem() {
         locked: input.locked ?? false,
         product_id: input.productId ?? null,
         capture_id: input.captureId ?? null,
+        project_ffe_item_id: input.projectFfeItemId ?? null,
         palette_id: input.paletteId ?? null,
         image_url: input.imageUrl ?? null,
         content: input.content ?? null,
@@ -718,6 +723,9 @@ export function useUpdateBoardItem() {
       if (input.locked !== undefined) updates.locked = input.locked;
       if (input.productId !== undefined) updates.product_id = input.productId;
       if (input.captureId !== undefined) updates.capture_id = input.captureId;
+      if (input.projectFfeItemId !== undefined) {
+        updates.project_ffe_item_id = input.projectFfeItemId;
+      }
       if (input.paletteId !== undefined) updates.palette_id = input.paletteId;
       if (input.imageUrl !== undefined) updates.image_url = input.imageUrl;
       if (input.content !== undefined) updates.content = input.content;

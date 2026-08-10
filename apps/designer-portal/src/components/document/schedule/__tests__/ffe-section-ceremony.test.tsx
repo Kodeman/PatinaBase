@@ -18,7 +18,14 @@ jest.mock('@tanstack/react-query', () => ({
 
 jest.mock('@patina/supabase', () => ({
   useProjectFFEItems: () => ({ data: mockItems, isLoading: false }),
+  useProjectOwnedBoards: () => ({ data: [], isLoading: false }),
+  useCreateNamedProjectNeed: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useFfeInvoiceCoverage: () => ({ data: {} }),
+}));
+
+jest.mock('../add-to-project-sheet', () => ({
+  AddToProjectSheet: () => null,
+  openAddToProject: jest.fn(),
 }));
 
 jest.mock('@/hooks/use-document-rooms', () => ({
@@ -39,10 +46,6 @@ jest.mock('@/hooks/use-commercial-documents', () => ({
   }),
   usePublishBudgetCheckpoint: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useOverrideBudgetCheckpoint: () => ({ mutateAsync: jest.fn(), isPending: false }),
-}));
-
-jest.mock('@/hooks/use-projects', () => ({
-  useAddProjectFFEItem: () => ({ mutateAsync: jest.fn(), isPending: false }),
 }));
 
 jest.mock('@/components/portal/ffe/stages', () => ({

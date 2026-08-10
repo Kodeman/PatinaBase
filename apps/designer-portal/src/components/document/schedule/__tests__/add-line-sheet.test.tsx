@@ -1,7 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 const addMutate = jest.fn(async () => ({ id: 'line-9' }));
-const invalidateQueries = jest.fn();
 
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
@@ -9,29 +8,11 @@ jest.mock('@/lib/analytics/document-events', () => ({
 
 jest.mock('@/lib/help-system/open-help', () => ({ openHelp: jest.fn() }));
 
-jest.mock('@tanstack/react-query', () => ({
-  useQueryClient: () => ({ invalidateQueries }),
+jest.mock('@patina/supabase', () => ({
+  useCreateNamedProjectNeed: () => ({ mutateAsync: addMutate, isPending: false }),
 }));
 
-jest.mock('@/hooks/use-projects', () => ({
-  useAddProjectFFEItem: () => ({ mutateAsync: addMutate, isPending: false }),
-}));
-
-jest.mock('@/hooks/use-commercial-documents', () => ({
-  commercialDocumentKeys: {
-    budget: (projectId: string) => ['working-budget', projectId],
-  },
-}));
-
-jest.mock('@/lib/react-query', () => ({
-  queryKeys: {
-    projects: {
-      ffeItems: (projectId: string) => ['project-ffe-items', projectId],
-    },
-  },
-}));
-
-import { AddLineSheet, dollarsToCents } from '../add-line-sheet';
+import { AddLineSheet } from '../add-line-sheet';
 
 const renderSheet = (
   over: Partial<Parameters<typeof AddLineSheet>[0]> = {},
@@ -50,27 +31,15 @@ const renderSheet = (
 const type = (label: string, value: string) =>
   fireEvent.change(screen.getByLabelText(label), { target: { value } });
 
-describe('dollarsToCents', () => {
-  it('reads a typed figure, however it is punctuated', () => {
-    expect(dollarsToCents('12,300')).toBe(1230000);
-    expect(dollarsToCents('$4,200.50')).toBe(420050);
-    expect(dollarsToCents('')).toBe(0);
-    expect(dollarsToCents('—')).toBe(0);
-  });
-});
-
 describe('AddLineSheet', () => {
   beforeEach(() => {
     addMutate.mockClear();
-    invalidateQueries.mockClear();
   });
 
   it('adds goods to the room it was reached from', async () => {
     renderSheet();
     type('Line name', 'Walnut bed, king');
     type('Quantity', '2');
-    type('Client unit price', '12,300');
-    type('Vendor', 'Hollowell Woodshop');
     fireEvent.click(screen.getByRole('button', { name: /add the line/i }));
 
     await waitFor(() => expect(addMutate).toHaveBeenCalled());
@@ -78,63 +47,55 @@ describe('AddLineSheet', () => {
       projectId: 'project-1',
       name: 'Walnut bed, king',
       quantity: 2,
-      unitPriceCents: 1230000,
-      vendorName: 'Hollowell Woodshop',
-      itemType: 'fixed',
+      assignmentScope: 'room',
       projectRoomId: 'room-1',
-      budgetMaxCents: null,
+      designDisposition: 'candidate',
+      needKind: 'manual_product',
+      idempotencyKey: expect.any(String),
     });
   });
 
-  it('swaps the price for a ceiling on an allowance', async () => {
+  it('creates an allowance need without deriving client money in the browser', async () => {
     renderSheet();
     fireEvent.click(screen.getByRole('button', { name: 'Allowance' }));
     type('Line name', 'Sisal area rug');
-    type('Allowance ceiling', '4,000');
     fireEvent.click(screen.getByRole('button', { name: /add the line/i }));
 
     await waitFor(() => expect(addMutate).toHaveBeenCalled());
     expect(addMutate).toHaveBeenCalledWith(
       expect.objectContaining({
-        itemType: 'allowance',
-        unitPriceCents: 400000,
-        budgetMaxCents: 400000,
+        needKind: 'allowance',
+        assignmentScope: 'room',
       }),
     );
   });
 
-  it('leaves the maker out when it was not given', async () => {
+  it('does not send pricing or vendor fields through the named-need command', async () => {
     renderSheet();
     type('Line name', 'Console table');
     fireEvent.click(screen.getByRole('button', { name: /add the line/i }));
     await waitFor(() => expect(addMutate).toHaveBeenCalled());
-    expect(addMutate).toHaveBeenCalledWith(
-      expect.objectContaining({ vendorName: null, unitPriceCents: 0 }),
-    );
+    const request = addMutate.mock.calls[0]?.[0];
+    expect(request).not.toHaveProperty('vendorName');
+    expect(request).not.toHaveProperty('unitPriceCents');
   });
 
-  it('lands an unassigned line under Throughout', async () => {
+  it('lands a project-wide line under Throughout', async () => {
     renderSheet({ roomId: null, roomName: 'Throughout' });
     type('Line name', 'Runner');
     fireEvent.click(screen.getByRole('button', { name: /add the line/i }));
     await waitFor(() => expect(addMutate).toHaveBeenCalled());
     expect(addMutate).toHaveBeenCalledWith(
-      expect.objectContaining({ projectRoomId: null }),
+      expect.objectContaining({ projectRoomId: null, assignmentScope: 'throughout' }),
     );
   });
 
-  it('refreshes the canonical lines and working budget after save', async () => {
+  it('closes after the canonical command succeeds', async () => {
     const onClose = jest.fn();
     renderSheet({ onClose });
     type('Line name', 'Library table');
     fireEvent.click(screen.getByRole('button', { name: /add the line/i }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ['project-ffe-items', 'project-1'],
-    });
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ['working-budget', 'project-1'],
-    });
   });
 
   it('will not add a nameless line', () => {

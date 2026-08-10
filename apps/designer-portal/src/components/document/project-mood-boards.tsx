@@ -1,12 +1,14 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { BoardComposition } from '@patina/design-system';
 import {
   useContinueBoardInProject,
+  useCreateProjectBoard,
   useProjectBoards,
+  useProjectFFEItems,
   useProjectOwnedBoards,
   type ProjectBoard,
   type ProposalBoardSummary,
@@ -15,6 +17,8 @@ import type { MoodBoardSection } from '@patina/types';
 import { boardRoomHref } from '@/lib/mood-board/navigation';
 import { moodBoardEvents } from '@/lib/analytics/mood-board-events';
 import { BoardCoverArt } from '@/components/mood-board/board-cover-art';
+import { ffeEvents } from '@/lib/analytics/ffe-events';
+import { DocumentAction } from './document-action';
 
 type LiveBoardWithLineage = ProposalBoardSummary & {
   source_project_board_id?: string | null;
@@ -23,6 +27,14 @@ type LiveBoardWithLineage = ProposalBoardSummary & {
 type FrozenBoardWithSections = ProjectBoard & {
   sections?: MoodBoardSection[];
 };
+
+interface ContinueItem {
+  key: string;
+  label: string;
+  detail: string;
+  href?: string;
+  action?: () => void;
+}
 
 function roomHref(boardId: string, pathname: string) {
   return boardRoomHref({
@@ -42,8 +54,12 @@ export function ProjectMoodBoards({ projectId }: { projectId: string }) {
   const router = useRouter();
   const liveQuery = useProjectOwnedBoards(projectId);
   const frozenQuery = useProjectBoards(projectId);
+  const selectionsQuery = useProjectFFEItems(projectId);
   const continueBoard = useContinueBoardInProject();
+  const createBoard = useCreateProjectBoard();
   const [continuingId, setContinuingId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [boardName, setBoardName] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const liveBoards = (liveQuery.data ?? []) as LiveBoardWithLineage[];
@@ -61,6 +77,70 @@ export function ProjectMoodBoards({ projectId }: { projectId: string }) {
   );
 
   const isLoading = liveQuery.isLoading || frozenQuery.isLoading;
+
+  const continueItems = useMemo<ContinueItem[]>(() => {
+    const rows = (selectionsQuery.data ?? []) as Array<Record<string, unknown>>;
+    const result: ContinueItem[] = [];
+    const reviewAttention = rows.find((row) =>
+      row.latest_review_verdict === 'rejected' || row.latest_review_verdict === 'comment',
+    );
+    if (reviewAttention) {
+      result.push({
+        key: `review:${String(reviewAttention.id)}`,
+        label: 'Continue client review changes',
+        detail: 'A published review has a change or question to resolve.',
+        href: `#ffe-selection-${String(reviewAttention.id)}`,
+      });
+    }
+    const unsorted = rows
+      .filter((row) => row.assignment_scope === 'unassigned')
+      .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))[0];
+    if (unsorted) {
+      result.push({
+        key: `unsorted:${String(unsorted.id)}`,
+        label: 'Route the oldest Unsorted selection',
+        detail: 'Choose a room, Throughout, or a compatible board.',
+        href: `#ffe-selection-${String(unsorted.id)}`,
+      });
+    }
+    const lastBoard = [...liveBoards].sort((a, b) =>
+      String(b.updated_at).localeCompare(String(a.updated_at)),
+    )[0];
+    if (lastBoard) {
+      result.push({
+        key: `board:${lastBoard.id}`,
+        label: `Continue ${lastBoard.name}`,
+        detail: `${lastBoard.item_count} ${lastBoard.item_count === 1 ? 'piece' : 'pieces'} · working board`,
+        href: roomHref(lastBoard.id, pathname),
+      });
+    }
+    const specGap = rows.find((row) =>
+      Number(row.missing_required_field_count ?? 0) > 0 || row.readiness_status === 'blocked',
+    );
+    if (specGap) {
+      result.push({
+        key: `spec:${String(specGap.id)}`,
+        label: 'Finish a release-blocking specification',
+        detail: 'Required product or commercial facts are still missing.',
+        href: `#ffe-selection-${String(specGap.id)}`,
+      });
+    }
+    if (rows.length === 0 && liveBoards.length === 0) {
+      result.push({
+        key: 'first-add',
+        label: 'Make the first project selection',
+        detail: 'Browse the Library, paste a link, or name a need.',
+        action: () => window.dispatchEvent(new CustomEvent('document:open-add-to-project', { detail: { source: 'empty_state' } })),
+      });
+    }
+    return result.slice(0, 3);
+  }, [liveBoards, pathname, selectionsQuery.data]);
+
+  useEffect(() => {
+    const openCreator = () => setCreating(true);
+    window.addEventListener('document:new-project-board', openCreator);
+    return () => window.removeEventListener('document:new-project-board', openCreator);
+  }, []);
   if (isLoading) {
     return (
       <section aria-label="Mood boards" className="mt-9 border-t border-[var(--color-pearl)] pt-6">
@@ -81,8 +161,6 @@ export function ProjectMoodBoards({ projectId }: { projectId: string }) {
       </section>
     );
   }
-
-  if (liveBoards.length === 0 && frozenBoards.length === 0) return null;
 
   const handleContinue = async (snapshot: FrozenBoardWithSections) => {
     const existing = continuedBySnapshot.get(snapshot.id);
@@ -115,21 +193,87 @@ export function ProjectMoodBoards({ projectId }: { projectId: string }) {
     }
   };
 
+  const handleCreate = async () => {
+    const name = boardName.trim() || `Board ${liveBoards.length + 1}`;
+    setError(null);
+    try {
+      const boardId = await createBoard.mutateAsync({
+        projectId,
+        name,
+        starterIntent: 'blank',
+        idempotencyKey: globalThis.crypto?.randomUUID?.() ?? `board-${projectId}-${Date.now()}`,
+      });
+      setBoardName('');
+      setCreating(false);
+      router.push(roomHref(boardId, pathname));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The board could not be created.');
+      ffeEvents.failed({ project_id: projectId, operation: 'create_board', reason_code: 'rpc_error' });
+    }
+  };
+
   return (
     <section aria-labelledby="project-mood-boards" className="mt-9 border-t border-[var(--color-pearl)] pt-6">
       <div className="flex items-baseline justify-between gap-4">
         <div>
           <h2 id="project-mood-boards" className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]">
-            Mood boards
+            Working boards
           </h2>
           <p className="mt-1 text-[11px] text-[var(--text-muted)]">
-            Live working boards and the direction frozen when the proposal was signed.
+            Compose references and project selections before publishing a review.
           </p>
         </div>
-        <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
-          {liveBoards.length} live · {frozenBoards.length} frozen
+        <span className="flex items-center gap-3">
+          <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+            {liveBoards.length} live · {frozenBoards.length} frozen
+          </span>
+          <DocumentAction actionKey="new-project-board" surfaceKey="project" regionKey="working-boards" variant="primary" onClick={() => setCreating(true)}>
+            New board
+          </DocumentAction>
         </span>
       </div>
+
+      {continueItems.length > 0 && (
+        <div aria-label="Continue project FF&E work" className="mt-4 border-y border-[var(--color-pearl)]">
+          {continueItems.map((item) => {
+            const body = (
+              <>
+                <span className="font-heading text-[13px] text-[var(--color-charcoal)]">{item.label}</span>
+                <span className="text-[10.5px] text-[var(--text-muted)]">{item.detail}</span>
+                <span aria-hidden className="ml-auto text-[var(--color-clay)]">→</span>
+              </>
+            );
+            return item.href ? (
+              <Link key={item.key} href={item.href} className="flex min-h-12 items-center gap-3 border-b border-[var(--color-pearl)] py-2 last:border-b-0">{body}</Link>
+            ) : (
+              <button key={item.key} type="button" onClick={item.action} className="flex min-h-12 w-full items-center gap-3 border-b border-[var(--color-pearl)] py-2 text-left last:border-b-0">{body}</button>
+            );
+          })}
+        </div>
+      )}
+
+      {creating && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-y border-[var(--color-pearl)] py-3">
+          <input
+            autoFocus
+            value={boardName}
+            onChange={(event) => setBoardName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') void handleCreate();
+              if (event.key === 'Escape') setCreating(false);
+            }}
+            aria-label="Board name"
+            placeholder={`Board ${liveBoards.length + 1}`}
+            className="min-h-11 min-w-0 flex-1 rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-3 text-[13px] outline-none focus:border-[var(--color-clay)]"
+          />
+          <DocumentAction actionKey="create-project-board" surfaceKey="project" regionKey="working-boards" variant="primary" loading={createBoard.isPending} onClick={() => void handleCreate()}>
+            Start board
+          </DocumentAction>
+          <DocumentAction actionKey="cancel-project-board" surfaceKey="project" regionKey="working-boards" variant="tertiary" onClick={() => setCreating(false)}>
+            Put back
+          </DocumentAction>
+        </div>
+      )}
 
       {liveBoards.length > 0 && (
         <div className="mt-5">
@@ -167,6 +311,17 @@ export function ProjectMoodBoards({ projectId }: { projectId: string }) {
             })}
           </div>
         </div>
+      )}
+
+      {liveBoards.length === 0 && (
+        <button
+          type="button"
+          onClick={() => setCreating(true)}
+          className="mt-5 w-full rounded-[5px] border border-dashed border-[var(--border-default)] px-6 py-8 text-center hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+        >
+          <span className="block font-heading text-[15px] text-[var(--color-charcoal)]">Start the first working board</span>
+          <span className="mt-1 block text-[11px] text-[var(--text-muted)]">References can stay loose; products become project selections when you promote them.</span>
+        </button>
       )}
 
       {frozenBoards.length > 0 && (
