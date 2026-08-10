@@ -20,6 +20,8 @@ export interface ClientPickerProps {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  /** Accessible name for the combobox trigger when nearby copy is not a label. */
+  ariaLabel?: string;
   /** Render the trigger compactly (for inline chip contexts). */
   inlineChip?: boolean;
   /**
@@ -51,6 +53,7 @@ export function ClientPicker({
   placeholder = 'Select a client…',
   disabled = false,
   className,
+  ariaLabel,
   inlineChip = false,
   open: openProp,
   onOpenChange,
@@ -200,6 +203,7 @@ export function ClientPicker({
             type="button"
             role="combobox"
             data-testid="client-picker-trigger"
+            aria-label={ariaLabel}
             aria-expanded={open}
             disabled={disabled}
             className={cn(

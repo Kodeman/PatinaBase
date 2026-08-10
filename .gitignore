@@ -46,6 +46,8 @@ supabase/.temp/
 infra/secrets.txt
 infra/.env
 infra/.env.swp
+infra/.env.bak-*
+infra/.env*.bak*
 infra/coolify/.env.coolify
 
 # iOS app local secrets (Secrets.example.swift is the committed template)

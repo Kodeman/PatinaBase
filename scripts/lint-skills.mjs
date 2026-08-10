@@ -3,8 +3,8 @@
  * lint-skills.mjs
  * ------------------------------------------------------------------------
  * WHAT THIS DOES
- * Validates every `.claude/skills/<dir>/SKILL.md` in the repo against the
- * minimal contract Claude Code (and Cowork) skills must satisfy:
+ * Validates every `.agents/skills/<dir>/SKILL.md` in the canonical cross-agent
+ * skill tree against the minimal skill contract:
  *
  *   1. The file starts with a YAML frontmatter fence (`---` ... `---`).
  *   2. Frontmatter has non-empty `name:` and `description:` keys. Unknown
@@ -43,7 +43,7 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, '..');
-const SKILLS_DIR = path.join(REPO_ROOT, '.claude', 'skills');
+const SKILLS_DIR = path.join(REPO_ROOT, '.agents', 'skills');
 const MAX_DESCRIPTION_LEN = 1024;
 const MAX_SKILL_MD_LINES = 500;
 const KEBAB_CASE_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;

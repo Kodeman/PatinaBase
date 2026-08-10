@@ -1,5 +1,94 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "disableBypassPermissionsMode": "disable",
+    "disableAutoMode": "disable",
+    "allow": [
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(git rev-parse*)",
+      "Bash(git merge-base*)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(pnpm install --frozen-lockfile*)",
+      "Bash(pnpm --filter * lint*)",
+      "Bash(pnpm --filter * type-check*)",
+      "Bash(pnpm --filter * test*)",
+      "Bash(pnpm --filter * build*)",
+      "Bash(pnpm lint:skills*)",
+      "Bash(pnpm verify:affected*)",
+      "Bash(node *)",
+      "Bash(deno check *)",
+      "Bash(deno test *)",
+      "Bash(rg *)"
+    ],
+    "ask": [
+      "Bash(git push*)",
+      "Bash(gh pr create*)",
+      "Bash(gh pr merge*)",
+      "Bash(git reset --hard*)",
+      "Bash(git worktree remove*)",
+      "Bash(git branch -D*)",
+      "Bash(rm -rf *)",
+      "Bash(pnpm supabase:reset*)",
+      "Bash(pnpm supabase:remote:*)",
+      "Bash(pnpm prisma:push*)",
+      "Bash(pnpm db:push*)",
+      "Bash(pnpm --filter * deploy*)",
+      "Bash(pnpm --filter * push*)",
+      "Bash(pnpm --filter * exec wrangler deploy*)",
+      "Bash(supabase db *)",
+      "Bash(supabase functions deploy*)",
+      "Bash(npx wrangler deploy*)",
+      "Bash(wrangler deploy*)",
+      "Bash(./infra/deploy-portal.sh*)"
+    ],
+    "deny": [
+      "Read(/.env)",
+      "Read(/**/.env)",
+      "Read(/**/.env.*)",
+      "Read(/infra/.env*)",
+      "Edit(/.env)",
+      "Edit(/**/.env)",
+      "Edit(/**/.env.*)",
+      "Bash(git add -A*)",
+      "Bash(git add .*)",
+      "Bash(git add *env*)",
+      "Bash(git commit -a*)",
+      "Bash(git commit --all*)",
+      "Bash(ssh *192.168.1.14*)",
+      "Bash(vercel --prod*)"
+    ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "failIfUnavailable": true,
+    "autoAllowBashIfSandboxed": false,
+    "filesystem": {
+      "denyRead": [
+        "./.env",
+        "./**/.env",
+        "./**/.env.*",
+        "./infra/.env*",
+        "~/.ssh",
+        "~/.aws/credentials",
+        "~/.config/gcloud"
+      ]
+    },
+    "network": {
+      "allowedDomains": [
+        "registry.npmjs.org",
+        "github.com",
+        "api.github.com",
+        "localhost",
+        "127.0.0.1"
+      ],
+      "allowLocalBinding": true
+    }
+  },
   "hooks": {
     "SessionStart": [
       {

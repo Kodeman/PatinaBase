@@ -106,12 +106,12 @@ export function DraftingEstimateFlow({ proposalId }: { proposalId: string }) {
         : '';
 
   return (
-    <div className="fixed bottom-5 right-5 z-40 flex max-w-[calc(100vw-2.5rem)] flex-col items-end gap-2">
+    <div className="fixed bottom-[var(--doc-shell-floating-bottom)] right-5 z-40 flex max-w-[calc(100vw-2.5rem)] flex-col items-end gap-2">
       {open && (
         <aside
           role="dialog"
           aria-label="Estimate to quote"
-          className="w-[360px] max-w-full rounded-[7px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] p-5 shadow-xl"
+          className="w-[360px] max-w-full rounded-[7px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] p-5"
         >
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -209,7 +209,7 @@ export function DraftingEstimateFlow({ proposalId }: { proposalId: string }) {
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
-        className="rounded-full border border-[var(--color-clay)] bg-[var(--doc-paper)] px-4 py-3 font-mono text-[0.65rem] uppercase tracking-[0.08em] text-[var(--color-charcoal)] shadow-lg"
+        className="rounded-full border border-[var(--color-clay)] bg-[var(--doc-paper)] px-4 py-3 font-mono text-[0.65rem] uppercase tracking-[0.08em] text-[var(--color-charcoal)]"
       >
         Estimate · {STAGES.find((item) => item.id === stage)?.label}
       </button>

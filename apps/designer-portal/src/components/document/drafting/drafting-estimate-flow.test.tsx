@@ -61,4 +61,13 @@ describe('DraftingEstimateFlow', () => {
       'true',
     );
   });
+
+  it('keeps the fixed estimate control above the persistent document chrome', () => {
+    render(<DraftingEstimateFlow proposalId="proposal-1" />);
+
+    expect(
+      screen.getByRole('button', { name: /Estimate · ROM estimate/i })
+        .parentElement,
+    ).toHaveClass('bottom-[var(--doc-shell-floating-bottom)]');
+  });
 });

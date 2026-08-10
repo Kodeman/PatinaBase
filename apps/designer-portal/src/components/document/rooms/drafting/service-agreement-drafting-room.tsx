@@ -6,6 +6,10 @@ import { RoomShell } from "../room-shell";
 import { DocSheet } from "../../overlays/doc-sheet";
 import { DocumentAction } from "../../document-action";
 import { Button, Input, Select, Textarea } from "@/components/ui/controls";
+import { ClientPicker } from "@/components/portal/client-picker";
+import { useAttachDocumentClient } from "@/hooks/use-attach-client";
+import { useAuth } from "@/hooks/use-auth";
+import { useClients } from "@/hooks/use-clients";
 import {
   useCommercialDocument,
   useSaveServiceAgreement,
@@ -23,12 +27,31 @@ import { clearRoomOrigin, readRoomOrigin } from "@/lib/document/room-origin";
 const labelClass =
   "font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]";
 
-function emptyTerms(proposalId: string): ServiceAgreementTerms {
+const DEFAULT_DELIVERABLES = [
+  "Concept presentation",
+  "Design documentation",
+  "Selection schedules",
+];
+const DEFAULT_EXCLUSIONS = [
+  "Construction labor",
+  "Furnishings, freight, tax, and installation",
+];
+
+function emptyTerms(
+  proposalId: string,
+  proposal: { description?: unknown },
+): ServiceAgreementTerms {
+  const description =
+    typeof proposal.description === "string" ? proposal.description.trim() : "";
+  const scope =
+    description && !description.startsWith("Seeded from Discovery ·")
+      ? description
+      : "Interior design services, including concept development, design documentation, and selections.";
   return {
     proposalId,
-    scope: "",
-    deliverables: [],
-    exclusions: [],
+    scope,
+    deliverables: [...DEFAULT_DELIVERABLES],
+    exclusions: [...DEFAULT_EXCLUSIONS],
     billingCeilingCents: 0,
     retainerAmountCents: 0,
     retainerActivationPolicy: "immediate",
@@ -37,7 +60,7 @@ function emptyTerms(proposalId: string): ServiceAgreementTerms {
     terms: "",
     currentRateVersion: 1,
     updatedAt: null,
-    furnishingsDepositPercent: null,
+    furnishingsDepositPercent: 50,
   };
 }
 
@@ -74,7 +97,8 @@ export function ServiceAgreementDraftingRoom({ proposal }: { proposal: any }) {
       key={`${bundle.data.terms?.updatedAt ?? "new"}-${bundle.data.rates.length}`}
       proposal={proposal}
       document={bundle.data.document}
-      initialTerms={bundle.data.terms ?? emptyTerms(proposalId)}
+      initialTerms={bundle.data.terms ?? emptyTerms(proposalId, proposal)}
+      initiallyDirty={!bundle.data.terms}
       initialRates={bundle.data.rates.filter(
         (rate) =>
           rate.version ===
@@ -106,16 +130,29 @@ function ServiceAgreementEditor({
   document,
   initialTerms,
   initialRates,
+  initiallyDirty,
   signatures,
 }: {
   proposal: any;
   document: CommercialDocument;
   initialTerms: ServiceAgreementTerms;
   initialRates: ServiceRate[];
+  initiallyDirty: boolean;
   signatures: Parameters<typeof ServiceAgreementPreview>[0]["signatures"];
 }) {
   const router = useRouter();
   const save = useSaveServiceAgreement(document.id);
+  const attachClient = useAttachDocumentClient();
+  const { user, status: authStatus } = useAuth();
+  const clients = useClients();
+  const ownsProposal = user?.id === proposal.designer_id;
+  const ownerClients = useMemo(
+    () =>
+      (clients.data ?? []).filter(
+        (client) => client.designer_id === proposal.designer_id,
+      ),
+    [clients.data, proposal.designer_id],
+  );
   const [terms, setTerms] = useState(initialTerms);
   const [rates, setRates] = useState<ServiceRate[]>(
     initialRates.length > 0
@@ -125,14 +162,16 @@ function ServiceAgreementEditor({
             id: "new-1",
             proposalId: document.id,
             version: 1,
-            roleName: "",
+            roleName: "Principal designer",
             hourlyRateCents: 0,
             effectiveAt: null,
           },
         ],
   );
-  const [dirty, setDirty] = useState(false);
+  const [dirty, setDirty] = useState(initiallyDirty);
   const [saveNote, setSaveNote] = useState<string | null>(null);
+  const [clientNote, setClientNote] = useState<string | null>(null);
+  const [clientError, setClientError] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
 
@@ -189,6 +228,40 @@ function ServiceAgreementEditor({
     if (dirty && !(await persist())) return;
     setSendOpen(true);
   };
+  const changeClient = (clientId: string | null) => {
+    setClientNote(null);
+    setClientError(false);
+    if (!ownsProposal) {
+      setClientError(true);
+      setClientNote("Only the agreement owner can change the client account.");
+      return;
+    }
+    attachClient.mutate(
+      {
+        engagementKind: "proposal",
+        targetId: document.id,
+        clientId,
+      },
+      {
+        onSuccess: () => {
+          setClientError(false);
+          setClientNote(
+            clientId
+              ? "Client account attached to this agreement."
+              : "Client account cleared.",
+          );
+        },
+        onError: (error) => {
+          setClientError(true);
+          setClientNote(
+            error instanceof Error
+              ? error.message
+              : "The client account could not be attached.",
+          );
+        },
+      },
+    );
+  };
 
   return (
     <RoomShell
@@ -232,6 +305,40 @@ function ServiceAgreementEditor({
                 {dirty ? "Save agreement" : "Saved"}
               </Button>
             </div>
+          </div>
+          <div className="mt-4 max-w-sm">
+            <p className={labelClass}>Client account</p>
+            <ClientPicker
+              className="mt-2"
+              value={
+                typeof proposal.client_id === "string"
+                  ? proposal.client_id
+                  : null
+              }
+              onChange={changeClient}
+              disabled={
+                attachClient.isPending ||
+                authStatus === "loading" ||
+                !ownsProposal
+              }
+              clientOptions={ownerClients}
+              ariaLabel="Client account"
+              requireClientLogin
+              placeholder="Select or invite a client…"
+            />
+            {!ownsProposal && authStatus !== "loading" && !clientNote && (
+              <p className="mt-2 text-[11px] text-[var(--color-mocha)]">
+                Only the agreement owner can change the client account.
+              </p>
+            )}
+            {clientNote && (
+              <p
+                role={clientError ? "alert" : "status"}
+                className="mt-2 text-[11px] text-[var(--color-mocha)]"
+              >
+                {clientNote}
+              </p>
+            )}
           </div>
           {saveNote && (
             <p
