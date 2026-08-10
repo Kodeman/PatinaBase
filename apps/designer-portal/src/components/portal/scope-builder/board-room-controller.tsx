@@ -252,7 +252,12 @@ function boardItemFromRow(row: ProposalBoardItem): EditableMoodBoardItem {
     paletteId: row.palette_id,
     imageUrl: row.image_url,
     content: row.content,
-    data: row.data ?? {},
+    data: {
+      ...(row.data ?? {}),
+      ...(row.review_media_asset_id
+        ? { review_media_asset_id: row.review_media_asset_id, review_media_status: 'prepared' }
+        : {}),
+    },
   };
 }
 

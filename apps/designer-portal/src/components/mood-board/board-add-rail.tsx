@@ -33,6 +33,10 @@ import {
   createBoardAssetStorage,
   prepareAndUploadBoardImages,
 } from '@/lib/mood-board-assets/upload-board-assets';
+import {
+  prepareProjectReviewMedia,
+  type PreparedProjectReviewMedia,
+} from '@/lib/mood-board-assets/project-review-media';
 import { verdictChipSpec } from '@/lib/document/verdict-chip';
 import { BoardSuggestionsRail } from '@/components/portal/scope-builder/board-suggestions-rail';
 import {
@@ -220,17 +224,47 @@ export async function uploadFilesAsBoardItems(options: {
   point: BoardPoint;
   startZ: number;
   onProgress?: Parameters<typeof prepareAndUploadBoardImages>[0]['onProgress'];
+  prepareReviewMedia?: (input: {
+    projectId: string;
+    sourcePath: string;
+  }) => Promise<PreparedProjectReviewMedia>;
 }): Promise<EditableMoodBoardItem[]> {
+  const projectStorage = options.ownerKind === 'project'
+    ? createBoardAssetStorage({ bucket: 'project-ffe-working', privateUrl: true })
+    : null;
   const uploaded = await prepareAndUploadBoardImages({
     ownerId: options.ownerId,
     boardId: options.boardId,
     files: options.files,
-    ...(options.ownerKind === 'project'
-      ? { storage: createBoardAssetStorage({ bucket: 'project-ffe-working', privateUrl: true }) }
-      : {}),
+    ...(projectStorage ? { storage: projectStorage } : {}),
     onProgress: options.onProgress,
   });
+  let reviewAssets: Array<PreparedProjectReviewMedia | null>;
+  let preparedCount = 0;
+  try {
+    if (options.ownerKind === 'project') {
+      reviewAssets = [];
+      for (const asset of uploaded) {
+        reviewAssets.push(await (options.prepareReviewMedia ?? prepareProjectReviewMedia)({
+            projectId: options.ownerId,
+            sourcePath: asset.assets.display.path,
+          }));
+        preparedCount += 1;
+      }
+    } else {
+      reviewAssets = uploaded.map(() => null);
+    }
+  } catch (error) {
+    if (preparedCount === 0) {
+      await projectStorage?.remove(uploaded.flatMap((asset) => [
+        asset.assets.display.path,
+        asset.assets.thumbnail.path,
+      ])).catch(() => undefined);
+    }
+    throw error;
+  }
   return uploaded.map((asset, index) => {
+    const reviewAsset = reviewAssets[index];
     const width = 280;
     const height = Math.max(120, Math.round(width / asset.aspectRatio));
     return {
@@ -251,6 +285,12 @@ export async function uploadFilesAsBoardItems(options: {
       data: {
         image_url: asset.image_url,
         thumbnail_url: asset.data.thumbnail_url,
+        ...(options.ownerKind === 'project' ? {
+          working_image_path: asset.assets.display.path,
+          working_thumbnail_path: asset.assets.thumbnail.path,
+          review_media_asset_id: reviewAsset?.assetId,
+          review_media_status: 'prepared',
+        } : {}),
         resolved_height: height,
       },
     };

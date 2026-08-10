@@ -39,6 +39,10 @@ export interface MoodBoardItemData extends Record<string, unknown> {
   resolved_height?: number | null
   image_url?: string | null
   thumbnail_url?: string | null
+  working_image_path?: string | null
+  working_thumbnail_path?: string | null
+  review_media_asset_id?: string | null
+  review_media_status?: 'preparing' | 'prepared' | 'error' | null
   original_image_url?: string | null
   source_url?: string | null
   name?: string | null

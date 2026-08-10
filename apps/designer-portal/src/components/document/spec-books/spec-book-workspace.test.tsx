@@ -112,6 +112,21 @@ beforeEach(() => {
 });
 
 describe("SelectionEditor — structured dimensions", () => {
+  it("renders authoritative readiness as read-only guidance", () => {
+    render(
+      <SelectionEditor
+        item={buildItem()}
+        readiness="incomplete"
+        missingFields={["finish", "selected_dimensions"]}
+      />,
+    );
+    expect(screen.getByText("incomplete")).toHaveAttribute(
+      "title",
+      "Missing: finish, selected_dimensions",
+    );
+    expect(screen.queryByRole("combobox", { name: "Readiness" })).not.toBeInTheDocument();
+  });
+
   it("renders the DimensionFields control seeded from the spec's selected_dimensions", () => {
     render(<SelectionEditor item={buildItem()} />);
     expect(screen.getByLabelText("width")).toHaveValue("72");

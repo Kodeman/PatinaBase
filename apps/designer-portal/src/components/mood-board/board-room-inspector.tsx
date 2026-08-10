@@ -424,6 +424,7 @@ export function BoardRoomInspector({
           <BoardImageInspectorActions
             boardId={api.state.boardId}
             item={lead}
+            enabled={owner?.kind !== 'project'}
             onUpdate={(itemId, patch) => {
               api.updateItem(itemId, patch);
               onCommand?.('content');

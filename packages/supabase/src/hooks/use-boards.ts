@@ -89,6 +89,7 @@ export interface ProposalBoard {
   scope_room_id: string | null;
   project_room_id?: string | null;
   cover_image_url: string | null;
+  cover_review_media_asset_id?: string | null;
   canvas_width: number;
   canvas_height: number;
   background_color: string;
@@ -129,6 +130,7 @@ export interface ProposalBoardItem {
   product_id: string | null;
   capture_id: string | null;
   project_ffe_item_id?: string | null;
+  review_media_asset_id?: string | null;
   palette_id: string | null;
   image_url: string | null;
   content: string | null;
@@ -261,8 +263,35 @@ export interface ApplyBoardRoomStateInput {
     canvasHeight: number;
     backgroundColor: string;
     coverImageUrl?: string | null;
+    coverReviewMediaAssetId?: string | null;
     sections: MoodBoardSection[];
     items: EditableMoodBoardItem[];
+  };
+}
+
+function stableStringField(data: Record<string, unknown>, key: string): string | null {
+  const value = data[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+/** Never let an expiring working-media signature enter a project snapshot. */
+export function stableProjectBoardState(state: ApplyBoardRoomStateInput['state']) {
+  return {
+    ...state,
+    items: state.items.map((item) => {
+      const data = { ...(item.data ?? {}) };
+      const imagePath = stableStringField(data, 'working_image_path');
+      const thumbnailPath = stableStringField(data, 'working_thumbnail_path');
+      const reviewMediaAssetId = stableStringField(data, 'review_media_asset_id');
+      if (imagePath) data.image_url = imagePath;
+      if (thumbnailPath) data.thumbnail_url = thumbnailPath;
+      return {
+        ...item,
+        ...(imagePath ? { imageUrl: imagePath } : {}),
+        data,
+        ...(reviewMediaAssetId ? { reviewMediaAssetId } : {}),
+      };
+    }),
   };
 }
 
@@ -288,8 +317,8 @@ export interface BoardLayoutPosition {
 /**
  * All boards on a proposal (BOTH active and archived — the builder filters by
  * status client-side), ordered by sort_order then created_at. A compact item
- * projection (type/image_url/z_index plus RLS-visible verdict fields — no
- * `data` JSONB) rides along to derive item_count, the fallback cover, and
+ * projection (type/image_url/data/z_index plus RLS-visible verdict fields)
+ * rides along to derive item_count, the fallback cover, and
  * verdict totals in one round trip. RLS scopes rows to the proposal designer
  * (or, for non-draft proposals, the linked client).
  */
@@ -313,7 +342,9 @@ export function useBoards(ownerInput: BoardOwnerInput) {
       if (error) throw error;
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return ((data ?? []) as any[]).map((row) => {
+      const resolvedRows = await Promise.all(((data ?? []) as any[]).map((row) =>
+        signProjectWorkingBoardRow(supabase, row)));
+      return resolvedRows.map((row) => {
         const { proposal_board_items: items, ...board } = row;
         return summarizeBoard(board, (items ?? []) as BoardCoverItem[]);
       });
@@ -387,6 +418,73 @@ export function summarizeBoard(
   };
 }
 
+function projectWorkingPath(projectId: unknown, value: unknown): value is string {
+  return typeof projectId === 'string' && typeof value === 'string' &&
+    value.startsWith(`${projectId}/`) && !value.includes('://') && !value.includes('?');
+}
+
+async function signProjectWorkingBoardRow(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  row: any,
+) {
+  const projectId = row?.project_id;
+  if (typeof projectId !== 'string') return row;
+  const items = Array.isArray(row.proposal_board_items) ? row.proposal_board_items : [];
+  const paths = new Set<string>();
+  if (projectWorkingPath(projectId, row.cover_image_url)) paths.add(row.cover_image_url);
+  for (const item of items) {
+    if (projectWorkingPath(projectId, item.image_url)) paths.add(item.image_url);
+    const data = item.data && typeof item.data === 'object' ? item.data as Record<string, unknown> : {};
+    if (projectWorkingPath(projectId, data.thumbnail_url)) paths.add(data.thumbnail_url);
+  }
+  if (paths.size === 0) return row;
+  const orderedPaths = [...paths];
+  const { data: signed, error } = await supabase.storage
+    .from('project-ffe-working')
+    .createSignedUrls(orderedPaths, 3_600);
+  if (error) throw error;
+  const urls = new Map<string, string>();
+  for (const entry of signed ?? []) {
+    if (typeof entry?.path === 'string' && typeof entry?.signedUrl === 'string') {
+      urls.set(entry.path, entry.signedUrl);
+    }
+  }
+  if (urls.size !== orderedPaths.length) {
+    throw new Error('One or more private board media URLs could not be resolved.');
+  }
+  return {
+    ...row,
+    cover_image_url: projectWorkingPath(projectId, row.cover_image_url)
+      ? urls.get(row.cover_image_url) : row.cover_image_url,
+    proposal_board_items: items.map((item: Record<string, unknown>) => {
+      const stableImagePath = projectWorkingPath(projectId, item.image_url) ? item.image_url : null;
+      const itemData = item.data && typeof item.data === 'object'
+        ? item.data as Record<string, unknown>
+        : {};
+      const stableThumbnailPath = projectWorkingPath(projectId, itemData.thumbnail_url)
+        ? itemData.thumbnail_url
+        : null;
+      return {
+        ...item,
+        image_url: stableImagePath ? urls.get(stableImagePath) : item.image_url,
+        data: {
+          ...itemData,
+          ...(stableImagePath ? {
+            image_url: urls.get(stableImagePath),
+            working_image_path: stableImagePath,
+          } : {}),
+          ...(stableThumbnailPath ? {
+            thumbnail_url: urls.get(stableThumbnailPath),
+            working_thumbnail_path: stableThumbnailPath,
+          } : {}),
+        },
+      };
+    }),
+  };
+}
+
 /**
  * A single board with its items inlined, ordered by z_index (bottom → top).
  */
@@ -407,7 +505,8 @@ export function useBoard(boardId: string | null | undefined) {
       if (error) throw error;
       if (!data) return null;
 
-      const { proposal_board_items: items, ...board } = data;
+      const resolved = await signProjectWorkingBoardRow(supabase, data);
+      const { proposal_board_items: items, ...board } = resolved;
       return {
         ...(board as ProposalBoard),
         proposal_id: board.proposal_id ?? null,
@@ -829,11 +928,12 @@ export function useApplyBoardRoomState() {
     }: ApplyBoardRoomStateInput): Promise<void> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
+      const rpcState = owner.kind === 'project' ? stableProjectBoardState(state) : state;
       const { error } = await supabase.rpc('apply_board_room_state', {
         p_board_id: boardId,
         p_owner_kind: owner.kind,
         p_owner_id: owner.id,
-        p_state: state,
+        p_state: rpcState,
       });
       if (error) throw error;
     },
@@ -962,7 +1062,7 @@ export function useProjectOwnedBoards(projectId: string | null | undefined) {
       const { data, error } = await supabase
         .from('proposal_boards')
         .select(
-          '*, proposal_board_items(type, image_url, z_index, verdicts:item_feedback!item_feedback_board_item_id_fkey(id, client_id, verdict, created_at))',
+          '*, proposal_board_items(type, image_url, data, z_index, verdicts:item_feedback!item_feedback_board_item_id_fkey(id, client_id, verdict, created_at))',
         )
         .eq('project_id', projectId)
         .order('sort_order', { ascending: true })
@@ -971,7 +1071,9 @@ export function useProjectOwnedBoards(projectId: string | null | undefined) {
       if (error) throw error;
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return ((data ?? []) as any[]).map((row) => {
+      const resolvedRows = await Promise.all(((data ?? []) as any[]).map((row) =>
+        signProjectWorkingBoardRow(supabase, row)));
+      return resolvedRows.map((row) => {
         const { proposal_board_items: items, ...board } = row;
         return summarizeBoard(board, (items ?? []) as BoardCoverItem[]);
       });

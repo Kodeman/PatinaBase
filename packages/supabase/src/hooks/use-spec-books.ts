@@ -322,7 +322,6 @@ export interface UpdateProjectFfeSpecInput {
       | "source_verifications"
       | "na_declarations"
       | "field_provenance"
-      | "readiness_status"
     >
   >;
 }
@@ -340,6 +339,9 @@ export function useUpdateProjectFfeSpec() {
       expectedRowVersion,
       changes,
     }: UpdateProjectFfeSpecInput): Promise<ProjectFfeSpec> => {
+      if ("readiness_status" in changes) {
+        throw new Error("Readiness is derived from the active spec template and cannot be edited.");
+      }
       const { data, error } = await getSupabase()
         .from("project_ffe_specs")
         // row_version is database-managed by spec_book_bump_spec_version().

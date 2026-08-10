@@ -62,7 +62,11 @@ import {
   generateAndUploadMoodBoardCover,
   createMoodBoardCoverStorage,
 } from '@/lib/mood-board-assets/board-cover';
-import { prepareAndUploadBoardImages } from '@/lib/mood-board-assets/upload-board-assets';
+import {
+  createBoardAssetStorage,
+  prepareAndUploadBoardImages,
+} from '@/lib/mood-board-assets/upload-board-assets';
+import { prepareProjectReviewMedia } from '@/lib/mood-board-assets/project-review-media';
 import { buildSendToScheduleArgs, findScheduleTwin } from '@/lib/scope/board-schedule';
 import {
   createMoodBoardCoverLifecycle,
@@ -307,6 +311,18 @@ function BoardRoomSurface({
   const sourceProposalId = owner.kind === 'proposal'
     ? owner.id
     : projectQuery.data?.proposal_id ?? null;
+  const unpreparedReviewMediaCount = useMemo(() => {
+    if (owner.kind !== 'project') return 0;
+    const itemCount = (api.state?.items ?? []).filter((item) =>
+      !item.projectFfeItemId &&
+      (item.type === 'image' || item.type === 'room_scan') &&
+      Boolean(item.imageUrl) &&
+      typeof item.data?.review_media_asset_id !== 'string').length;
+    const coverCount = boardQuery.data?.cover_image_url &&
+      !boardQuery.data.cover_review_media_asset_id ? 1 : 0;
+    return itemCount + coverCount;
+  }, [api.state?.items, boardQuery.data?.cover_image_url,
+    boardQuery.data?.cover_review_media_asset_id, owner.kind]);
   const scheduleQuery = useProposalScheduleItems(owner.kind === 'proposal' ? owner.id : undefined);
   const addScheduleItem = useAddProposalItem();
   const feedbackQuery = useBoardFeedback(owner.kind === 'proposal' ? owner.id : undefined);
@@ -346,11 +362,17 @@ function BoardRoomSurface({
       ...(owner.kind === 'project' ? { version: generatedId('cover') } : {}),
       storage: coverStorage,
     });
+    let reviewMediaPrepared = false;
     try {
       if (owner.kind === 'project') {
         if (!api.state || api.state.boardId !== snapshot.boardId) {
           throw new Error('The active project board is unavailable.');
         }
+        const reviewMedia = await prepareProjectReviewMedia({
+          projectId: owner.id,
+          sourcePath: generated.path,
+        });
+        reviewMediaPrepared = true;
         await applyBoardStateRef.current({
           boardId: snapshot.boardId,
           owner,
@@ -359,7 +381,8 @@ function BoardRoomSurface({
             canvasWidth: api.state.canvasWidth,
             canvasHeight: api.state.canvasHeight,
             backgroundColor: api.state.backgroundColor,
-            coverImageUrl: generated.url,
+            coverImageUrl: generated.path,
+            coverReviewMediaAssetId: reviewMedia.assetId,
             sections: api.state.sections,
             items: api.state.items,
           },
@@ -372,7 +395,7 @@ function BoardRoomSurface({
         });
       }
     } catch (error) {
-      if (owner.kind === 'project') {
+      if (owner.kind === 'project' && !reviewMediaPrepared) {
         await coverStorage.remove(generated.path).catch(() => undefined);
       }
       throw error;
@@ -534,18 +557,43 @@ function BoardRoomSurface({
     setSurfaceError(null);
     try {
       validateBoardImageFiles([file]);
+      const projectStorage = owner.kind === 'project'
+        ? createBoardAssetStorage({ bucket: 'project-ffe-working', privateUrl: true })
+        : null;
       const [asset] = await prepareAndUploadBoardImages({
         ownerId: owner.id,
         boardId: api.state.boardId,
         files: [file],
+        ...(projectStorage ? { storage: projectStorage } : {}),
       });
       if (!asset) throw new Error('The replacement image was not created.');
+      let reviewMediaAssetId: string | null = null;
+      if (owner.kind === 'project') {
+        try {
+          reviewMediaAssetId = (await prepareProjectReviewMedia({
+            projectId: owner.id,
+            sourcePath: asset.assets.display.path,
+          })).assetId;
+        } catch (error) {
+          await projectStorage?.remove([
+            asset.assets.display.path,
+            asset.assets.thumbnail.path,
+          ]).catch(() => undefined);
+          throw error;
+        }
+      }
       const current = api.state.items.find((item) => item.id === itemId);
       if (!current) throw new Error('That pin is no longer on the board.');
       const data = {
         ...(current.data ?? {}),
         image_url: asset.image_url,
         thumbnail_url: asset.data.thumbnail_url,
+        ...(owner.kind === 'project' ? {
+          working_image_path: asset.assets.display.path,
+          working_thumbnail_path: asset.assets.thumbnail.path,
+          review_media_asset_id: reviewMediaAssetId,
+          review_media_status: 'prepared' as const,
+        } : {}),
       };
       delete data.original_image_url;
       api.updateItem(itemId, { imageUrl: asset.image_url, data });
@@ -553,7 +601,7 @@ function BoardRoomSurface({
     } catch (cause) {
       setSurfaceError(cause instanceof Error ? cause.message : 'The image could not be replaced.');
     }
-  }, [api, owner.id]);
+  }, [api, owner]);
 
   useEffect(() => {
     const handlers: BoardRoomItemActions = {
@@ -914,6 +962,12 @@ function BoardRoomSurface({
           >
             Dismiss
           </button>
+        </div>
+      )}
+
+      {unpreparedReviewMediaCount > 0 && !surfaceError && !api.persistenceError && (
+        <div role="status" className="relative z-40 shrink-0 border-b border-[var(--color-clay)] bg-[var(--bg-surface)] px-4 py-2 text-[11px] text-[var(--color-clay)]">
+          {unpreparedReviewMediaCount} visual {unpreparedReviewMediaCount === 1 ? 'reference needs' : 'references need'} review-media preparation before this board can be published.
         </div>
       )}
 

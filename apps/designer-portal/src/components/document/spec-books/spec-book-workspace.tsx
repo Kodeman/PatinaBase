@@ -17,6 +17,7 @@ import {
   useCreateSpecBookShare,
   useFinalizeSpecBookIssue,
   usePrepareSpecBookIssue,
+  useProjectFfeReadiness,
   useProjectV2,
   useRenderSpecBookArtifact,
   useSpecBookWorkbench,
@@ -26,7 +27,6 @@ import {
   type SpecBookArtifact,
   type SpecBookAudience,
   type SpecBookIssueType,
-  type SpecBookReadiness,
   type SpecBookWorkItem,
 } from "@patina/supabase";
 import {
@@ -74,17 +74,18 @@ const AUDIENCES: Array<{
 ];
 
 type WorkspaceView = "workbench" | "preview" | "preflight" | "history";
-type ReadinessFilter = "all" | SpecBookReadiness | "unassigned" | "drift";
+type DerivedReadiness = "ready" | "incomplete" | "checking" | "unavailable";
+type ReadinessFilter = "all" | "ready" | "incomplete" | "unassigned" | "drift";
 
-function readinessLabel(value: SpecBookReadiness | undefined): string {
-  return (value ?? "draft").replace("_", " ");
+function readinessLabel(value: DerivedReadiness): string {
+  return value;
 }
 
-function readinessColor(value: SpecBookReadiness | undefined): string {
+function readinessColor(value: DerivedReadiness): string {
   switch (value) {
     case "ready":
       return "text-[#66765f]";
-    case "blocked":
+    case "unavailable":
       return "text-[var(--color-terracotta)]";
     case "incomplete":
       return "text-[#a47f33]";
@@ -139,7 +140,13 @@ function FieldProvenance({
   );
 }
 
-function ReadinessMark({ status }: { status: SpecBookReadiness | undefined }) {
+function ReadinessMark({
+  status,
+  missingFields = [],
+}: {
+  status: DerivedReadiness;
+  missingFields?: readonly string[];
+}) {
   const ready = status === "ready";
   return (
     <span
@@ -150,18 +157,24 @@ function ReadinessMark({ status }: { status: SpecBookReadiness | undefined }) {
       ) : (
         <CircleDashed className="h-3 w-3" />
       )}
-      {readinessLabel(status)}
+      <span title={missingFields.length ? `Missing: ${missingFields.join(", ")}` : undefined}>
+        {readinessLabel(status)}
+      </span>
     </span>
   );
 }
 
 function ItemCard({
   item,
+  readiness,
+  missingFields,
   selected,
   drift,
   onSelect,
 }: {
   item: SpecBookWorkItem;
+  readiness: DerivedReadiness;
+  missingFields: readonly string[];
   selected: boolean;
   drift: boolean;
   onSelect: () => void;
@@ -197,7 +210,7 @@ function ItemCard({
           {displayResolvedValue(finish)}
         </p>
         <div className="mt-3 flex items-center gap-3">
-          <ReadinessMark status={item.spec?.readiness_status} />
+          <ReadinessMark status={readiness} missingFields={missingFields} />
           {drift && (
             <span className="font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-terracotta)]">
               changed since issue
@@ -220,9 +233,13 @@ function isDimensionsObject(value: unknown): value is Record<string, unknown> {
 
 export function SelectionEditor({
   item,
+  readiness = "checking",
+  missingFields = [],
   onSaved,
 }: {
   item: SpecBookWorkItem;
+  readiness?: DerivedReadiness;
+  missingFields?: readonly string[];
   onSaved?: () => void;
 }) {
   const updateSpec = useUpdateProjectFfeSpec();
@@ -346,31 +363,6 @@ export function SelectionEditor({
     }
   };
 
-  const setReadiness = async (next: SpecBookReadiness) => {
-    if (!item.spec) return;
-    const from = item.spec.readiness_status;
-    try {
-      await updateSpec.mutateAsync({
-        projectId: item.project_id,
-        specId: item.spec.id,
-        expectedRowVersion: item.spec.row_version,
-        changes: { readiness_status: next },
-      });
-      specBookEvents.readinessChanged({
-        project_id: item.project_id,
-        item_id: item.id,
-        from,
-        to: next,
-      });
-    } catch (error) {
-      setFeedback(
-        error instanceof Error
-          ? error.message
-          : "Readiness could not be saved.",
-      );
-    }
-  };
-
   const declareNa = async () => {
     if (!item.spec || !naReason.trim()) {
       setFeedback("An N/A declaration requires a reason.");
@@ -442,19 +434,7 @@ export function SelectionEditor({
             {item.name}
           </h2>
         </div>
-        <Select
-          aria-label="Readiness"
-          value={item.spec.readiness_status}
-          onChange={(event) =>
-            void setReadiness(event.target.value as SpecBookReadiness)
-          }
-          wrapperClassName="w-36"
-        >
-          <option value="draft">Draft</option>
-          <option value="incomplete">Incomplete</option>
-          <option value="ready">Ready</option>
-          <option value="blocked">Blocked</option>
-        </Select>
+        <ReadinessMark status={readiness} missingFields={missingFields} />
       </div>
 
       {configuration && (
@@ -752,7 +732,6 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
   const project = useProjectV2(projectId) as {
     data: { name?: string; title?: string } | undefined;
   };
-  const bulkUpdateSpec = useUpdateProjectFfeSpec();
   const updateSetting = useUpdateSpecBookItemSetting(projectId);
   const prepareIssue = usePrepareSpecBookIssue();
   const finalizeIssue = useFinalizeSpecBookIssue(projectId);
@@ -772,7 +751,6 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
   const [issueReason, setIssueReason] = useState("");
   const [warningReason, setWarningReason] = useState("");
   const [issueFeedback, setIssueFeedback] = useState<string | null>(null);
-  const [bulkFeedback, setBulkFeedback] = useState<string | null>(null);
   const [shareResult, setShareResult] = useState<{
     artifactId: string;
     url: string;
@@ -780,6 +758,24 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
   const openedRef = useRef(false);
 
   const data = workbench.data;
+  const selectionIds = useMemo(
+    () => (data?.items ?? []).map((item) => item.id),
+    [data?.items],
+  );
+  const readinessQuery = useProjectFfeReadiness(selectionIds);
+  const readinessBySelection = useMemo(
+    () => new Map((readinessQuery.data ?? []).map((entry) => [entry.selectionId, entry])),
+    [readinessQuery.data],
+  );
+  const derivedReadiness = useCallback((selectionId: string): DerivedReadiness => {
+    if (readinessQuery.isLoading) return "checking";
+    if (readinessQuery.isError) return "unavailable";
+    return readinessBySelection.get(selectionId)?.ready === true ? "ready" : "incomplete";
+  }, [readinessBySelection, readinessQuery.isError, readinessQuery.isLoading]);
+  const missingReadinessFields = useCallback(
+    (selectionId: string) => readinessBySelection.get(selectionId)?.missingFields ?? [],
+    [readinessBySelection],
+  );
   const latestIssued = useMemo(
     () =>
       data?.revisions.find((revision) => revision.status === "issued") ?? null,
@@ -804,10 +800,8 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
         hasIssuedDrift(item, latestIssued?.issued_at ?? null),
       );
     }
-    return items.filter(
-      (item) => (item.spec?.readiness_status ?? "draft") === readiness,
-    );
-  }, [data?.items, latestIssued?.issued_at, readiness]);
+    return items.filter((item) => derivedReadiness(item.id) === readiness);
+  }, [data?.items, derivedReadiness, latestIssued?.issued_at, readiness]);
 
   const groups = useMemo(() => {
     const chapters = data?.chapters ?? [];
@@ -861,44 +855,6 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
       blocker_count: preflight.blockers.length,
       warning_count: preflight.warnings.length,
     });
-  };
-
-  const markVisibleReady = async () => {
-    const candidates = visibleItems.filter(
-      (item) => item.spec && item.spec.readiness_status !== "ready",
-    );
-    if (candidates.length === 0) {
-      setBulkFeedback("Every visible selection is already ready.");
-      return;
-    }
-    setBulkFeedback(null);
-    try {
-      await Promise.all(
-        candidates.map((item) =>
-          bulkUpdateSpec.mutateAsync({
-            projectId,
-            specId: item.spec!.id,
-            expectedRowVersion: item.spec!.row_version,
-            changes: { readiness_status: "ready" },
-          }),
-        ),
-      );
-      candidates.forEach((item) =>
-        specBookEvents.readinessChanged({
-          project_id: projectId,
-          item_id: item.id,
-          from: item.spec!.readiness_status,
-          to: "ready",
-        }),
-      );
-      setBulkFeedback(`${candidates.length} selections marked ready.`);
-    } catch (error) {
-      setBulkFeedback(
-        error instanceof Error
-          ? error.message
-          : "Bulk readiness update failed.",
-      );
-    }
   };
 
   const issue = useCallback(async () => {
@@ -1172,10 +1128,8 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                 {(
                   [
                     "all",
-                    "draft",
                     "incomplete",
                     "ready",
-                    "blocked",
                     "unassigned",
                     "drift",
                   ] as ReadinessFilter[]
@@ -1189,23 +1143,9 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                   </FilterPill>
                 ))}
               </div>
-              <Button
-                className="mt-4 w-full"
-                size="sm"
-                variant="secondary"
-                loading={bulkUpdateSpec.isPending}
-                onClick={() => void markVisibleReady()}
-              >
-                Mark visible ready
-              </Button>
-              {bulkFeedback && (
-                <p
-                  className="mt-2 text-[10px] text-[var(--text-muted)]"
-                  role="status"
-                >
-                  {bulkFeedback}
-                </p>
-              )}
+              <p className="mt-4 text-[10px] leading-4 text-[var(--text-muted)]">
+                Readiness is calculated from the active spec template. Complete the listed fields to advance it.
+              </p>
             </div>
           </aside>
 
@@ -1236,6 +1176,8 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                     <ItemCard
                       key={item.id}
                       item={item}
+                      readiness={derivedReadiness(item.id)}
+                      missingFields={missingReadinessFields(item.id)}
                       selected={selectedItem?.id === item.id}
                       drift={hasIssuedDrift(
                         item,
@@ -1304,7 +1246,11 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                     </div>
                   </div>
                 )}
-                <SelectionEditor item={selectedItem} />
+                <SelectionEditor
+                  item={selectedItem}
+                  readiness={derivedReadiness(selectedItem.id)}
+                  missingFields={missingReadinessFields(selectedItem.id)}
+                />
               </>
             ) : (
               <p className="py-16 text-center italic text-[var(--text-muted)]">

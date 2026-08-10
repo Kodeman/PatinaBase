@@ -83,7 +83,12 @@ const fromSpy = vi.fn((table: string) => {
 });
 
 const rpc = vi.fn();
-const supabaseClient = { from: fromSpy, rpc };
+const createSignedUrls = vi.fn();
+const supabaseClient = {
+  from: fromSpy,
+  rpc,
+  storage: { from: vi.fn(() => ({ createSignedUrls })) },
+};
 
 vi.mock('@supabase/ssr', () => ({
   createBrowserClient: () => supabaseClient,
@@ -100,6 +105,7 @@ vi.mock('@tanstack/react-query', () => ({
 import {
   useAddBoardItem,
   useApplyBoardRoomState,
+  useBoard,
   useBoards,
   useSaveBoardLayout,
   useBoardsWithItems,
@@ -115,6 +121,7 @@ beforeEach(() => {
   invalidateQueries.mockReset();
   fromSpy.mockClear();
   rpc.mockReset();
+  createSignedUrls.mockReset();
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -192,7 +199,8 @@ describe('useApplyBoardRoomState', () => {
       canvasWidth: 1200,
       canvasHeight: 800,
       backgroundColor: '#FAF8F5',
-      coverImageUrl: 'https://storage.example/object/sign/project-ffe-working/project-1/cover.png',
+      coverImageUrl: 'project-1/boards/board-1/cover.png',
+      coverReviewMediaAssetId: '22222222-2222-4222-8222-222222222222',
       sections: [{ id: 'section-1', name: 'Seating' }],
       items: [{
         id: '11111111-1111-4111-8111-111111111111',
@@ -242,6 +250,41 @@ describe('useApplyBoardRoomState', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['project-owned-boards-with-items', 'project-1'] });
   });
 
+  it('replaces expiring item URLs with stable working paths and derivative identity', async () => {
+    rpc.mockResolvedValue({ data: null, error: null });
+    const config = useApplyBoardRoomState() as unknown as {
+      mutationFn: (value: any) => Promise<void>;
+    };
+    await config.mutationFn({
+      ...input,
+      state: {
+        ...input.state,
+        items: [{
+          ...input.state.items[0],
+          type: 'image',
+          imageUrl: 'https://signed.example/working.png?token=short-lived',
+          data: {
+            image_url: 'https://signed.example/working.png?token=short-lived',
+            thumbnail_url: 'https://signed.example/thumb.png?token=short-lived',
+            working_image_path: 'project-1/boards/board-1/asset.webp',
+            working_thumbnail_path: 'project-1/boards/board-1/asset-thumb.webp',
+            review_media_asset_id: '33333333-3333-4333-8333-333333333333',
+          },
+        }],
+      },
+    });
+    const state = rpc.mock.calls[0][1].p_state;
+    expect(state.items[0]).toMatchObject({
+      imageUrl: 'project-1/boards/board-1/asset.webp',
+      reviewMediaAssetId: '33333333-3333-4333-8333-333333333333',
+      data: {
+        image_url: 'project-1/boards/board-1/asset.webp',
+        thumbnail_url: 'project-1/boards/board-1/asset-thumb.webp',
+      },
+    });
+    expect(JSON.stringify(state)).not.toContain('token=short-lived');
+  });
+
   it('invalidates pin feedback after a proposal room snapshot can cascade rows', async () => {
     const config = useApplyBoardRoomState() as unknown as {
       onSettled: (
@@ -261,6 +304,48 @@ describe('useApplyBoardRoomState', () => {
 
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ['board-feedback', 'proposal-1'],
+    });
+  });
+});
+
+describe('useBoard private working media', () => {
+  it('signs stable project paths only for display and preserves their persistence identity', async () => {
+    pushTableResult('proposal_boards', {
+      data: {
+        id: 'board-1',
+        proposal_id: null,
+        project_id: 'project-1',
+        name: 'Direction',
+        cover_image_url: 'project-1/boards/board-1/cover.png',
+        sections: [],
+        status: 'active',
+        proposal_board_items: [{
+          id: 'item-1',
+          image_url: 'project-1/boards/board-1/image.webp',
+          data: { thumbnail_url: 'project-1/boards/board-1/thumb.webp' },
+        }],
+      },
+      error: null,
+    });
+    createSignedUrls.mockResolvedValue({
+      data: [
+        { path: 'project-1/boards/board-1/cover.png', signedUrl: 'https://signed/cover' },
+        { path: 'project-1/boards/board-1/image.webp', signedUrl: 'https://signed/image' },
+        { path: 'project-1/boards/board-1/thumb.webp', signedUrl: 'https://signed/thumb' },
+      ],
+      error: null,
+    });
+    const query = useBoard('board-1') as unknown as { queryFn: () => Promise<any> };
+    const board = await query.queryFn();
+    expect(board.cover_image_url).toBe('https://signed/cover');
+    expect(board.items[0]).toMatchObject({
+      image_url: 'https://signed/image',
+      data: {
+        image_url: 'https://signed/image',
+        thumbnail_url: 'https://signed/thumb',
+        working_image_path: 'project-1/boards/board-1/image.webp',
+        working_thumbnail_path: 'project-1/boards/board-1/thumb.webp',
+      },
     });
   });
 });
