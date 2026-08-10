@@ -1,230 +1,290 @@
-import { RESIDENTIAL_WORKFLOW_STAGES } from '@patina/types';
+import {
+  RESIDENTIAL_WORKFLOW_RESPONSIBILITY_LANE_KEYS,
+  RESIDENTIAL_WORKFLOW_SCHEDULE_LANE_KEYS,
+  RESIDENTIAL_WORKFLOW_STAGES,
+  RESIDENTIAL_WORKFLOW_TRACK_KEYS,
+} from '@patina/types';
 
 import {
-  configuredDeliverablesFrom,
+  deriveSectionWorkflowStageDocument,
   deriveWorkflowStageDocument,
-  stageForCanonicalPhaseKey,
+  stageForCanonicalStageKey,
+  trackForWorkflowTrack,
   type WorkflowPhaseLike,
 } from '../workflow-stage-derivation';
 
 function phase(
-  partial: Partial<WorkflowPhaseLike> & Pick<WorkflowPhaseLike, 'id' | 'name'>,
+  overrides: Partial<WorkflowPhaseLike> = {},
 ): WorkflowPhaseLike {
   return {
-    phase_key: null,
-    status: 'pending',
-    sort_order: 0,
-    gate_condition: null,
-    deliverables: null,
-    follows_phase_id: null,
+    phase_id: 'phase-1',
+    phase_name: 'Concept work',
+    phase_status: 'active',
+    phase_key: 'local_concept_label',
+    canonical_stage_key: 'concept_schematic',
+    workflow_track: 'core',
+    sort_order: 10,
     lane: 'main',
-    ...partial,
+    follows_phase_id: null,
+    gate_note: null,
+    deliverables: [],
+    template_provenance: {},
+    current_blockers: { count: 0, phase: [], tasks: [], ffe: [] },
+    ...overrides,
   };
 }
 
-describe('residential workflow catalog', () => {
-  it('defines eleven ordered stages with Project occupying stages 04–09', () => {
-    expect(RESIDENTIAL_WORKFLOW_STAGES).toHaveLength(11);
-    expect(RESIDENTIAL_WORKFLOW_STAGES.map((stage) => stage.number)).toEqual([
-      '01',
-      '02',
-      '03',
-      '04',
-      '05',
-      '06',
-      '07',
-      '08',
-      '09',
-      '10',
-      '11',
-    ]);
+describe('residential workflow persistence contract', () => {
+  it('pins migration 00433 keys and Capability Ledger titles exactly', () => {
     expect(
-      RESIDENTIAL_WORKFLOW_STAGES.slice(3, 9).map((stage) => stage.title),
+      RESIDENTIAL_WORKFLOW_STAGES.map(({ key, title }) => ({ key, title })),
     ).toEqual([
-      'Kickoff & Existing Conditions',
-      'Concept / Schematic Design',
-      'Design Development',
-      'Documentation & Budget Authorization',
-      'Procurement & Fabrication',
-      'Renovation / Construction Administration',
+      { key: 'inquiry_qualification', title: 'Inquiry & Qualification' },
+      { key: 'discovery_programming', title: 'Discovery & Programming' },
+      { key: 'scope_engagement', title: 'Scope & Engagement' },
+      {
+        key: 'kickoff_existing_conditions',
+        title: 'Kickoff & Existing Conditions',
+      },
+      { key: 'concept_schematic', title: 'Concept / Schematic' },
+      { key: 'design_development', title: 'Design Development' },
+      {
+        key: 'documentation_authorization',
+        title: 'Documentation / Authorization',
+      },
+      {
+        key: 'bidding_permitting_procurement',
+        title: 'Bidding, Permitting & Procurement',
+      },
+      {
+        key: 'contract_administration',
+        title: 'Contract Administration',
+      },
+      {
+        key: 'delivery_installation',
+        title: 'Delivery, Installation & Styling',
+      },
+      {
+        key: 'closeout_post_occupancy',
+        title: 'Closeout & Post-Occupancy',
+      },
     ]);
+    expect(RESIDENTIAL_WORKFLOW_TRACK_KEYS).toEqual([
+      'core',
+      'ffe',
+      'construction',
+    ]);
+  });
+
+  it('keeps schedule topology and responsibility ownership distinct', () => {
+    expect(RESIDENTIAL_WORKFLOW_SCHEDULE_LANE_KEYS).toEqual([
+      'main',
+      'thread',
+    ]);
+    expect(RESIDENTIAL_WORKFLOW_RESPONSIBILITY_LANE_KEYS).toHaveLength(6);
+    expect(RESIDENTIAL_WORKFLOW_RESPONSIBILITY_LANE_KEYS).not.toContain(
+      'main',
+    );
   });
 });
 
 describe('deriveWorkflowStageDocument', () => {
-  it('maps an explicit phase key and keeps configured project truth separate from the catalog', () => {
-    const phases = [
-      phase({
-        id: 'concept',
-        name: 'Concept',
-        phase_key: 'concept_development',
-        status: 'in_progress',
-        gate_condition: 'Household approves one direction',
-        deliverables: [{ label: 'Concept folio' }, 'Preliminary selections'],
-      }),
-      phase({
-        id: 'development',
-        name: 'Design Development',
-        phase_key: 'design_refinement',
-        sort_order: 1,
-        follows_phase_id: 'concept',
-      }),
-    ];
-
-    const state = deriveWorkflowStageDocument(phases, []);
-
-    expect(state.activeStage?.number).toBe('05');
-    expect(state.activeTrack?.label).toBe('Design');
-    expect(state.responsibleLane?.label).toBe('Lead designer / studio');
-    expect(state.configuredGate).toBe('Household approves one direction');
-    expect(state.configuredDeliverables).toEqual([
-      'Concept folio',
-      'Preliminary selections',
-    ]);
-    expect(state.activeStage?.expectedGate).toBe(
-      'One concept direction approved for development',
-    );
-    expect(state.nextAction).toEqual({
-      kind: 'advance',
-      label: 'Review the configured gate, then advance to Design Development.',
+  it('classifies only canonical_stage_key and workflow_track', () => {
+    const ambiguous = phase({
+      phase_id: 'ambiguous',
+      phase_name: 'Looks canonical only by local key',
+      phase_key: 'contract_administration',
+      canonical_stage_key: null,
+      workflow_track: 'construction',
     });
-    expect(state.stageStatus.concept_schematic_design).toBe('active');
-    expect(state.stageStatus.design_development).toBe('scheduled');
-  });
-
-  it('uses the same blocker authority as phase handoffs', () => {
-    const active = phase({
-      id: 'procurement',
-      name: 'Procurement',
-      phase_key: 'procurement',
-      status: 'in_progress',
+    const canonical = phase({
+      phase_id: 'canonical',
+      phase_name: 'Canonical contract work',
+      phase_key: 'concept_development',
+      canonical_stage_key: 'contract_administration',
+      workflow_track: 'construction',
+    });
+    const invalidTrack = phase({
+      phase_id: 'invalid-track',
+      phase_name: 'Known stage with an invented track',
+      canonical_stage_key: 'design_development',
+      workflow_track: 'design',
     });
 
-    const state = deriveWorkflowStageDocument(
-      [active],
-      [
-        {
-          id: 'blocking',
-          title: 'Approve revised freight',
-          phase_id: 'procurement',
-          status: 'pending',
-          blocks_kind: 'phase',
-        },
-        {
-          id: 'resolved',
-          title: 'Old blocker',
-          phase_id: 'procurement',
-          status: 'responded',
-          blocking_status: 'blocks_phase',
-        },
-        {
-          id: 'informational',
-          title: 'FYI only',
-          phase_id: 'procurement',
-          status: 'pending',
-          blocks_kind: 'none',
-        },
-      ],
-    );
-
-    expect(state.blockers.map((blocker) => blocker.id)).toEqual(['blocking']);
-    expect(state.nextAction).toEqual({
-      kind: 'resolve_blockers',
-      label: 'Resolve 1 phase blocker before advancing.',
-    });
-  });
-
-  it('never guesses a legacy phase from its display name', () => {
     const state = deriveWorkflowStageDocument([
-      phase({
-        id: 'legacy',
-        name: 'Concept Development',
-        phase_key: null,
-        status: 'in_progress',
-      }),
+      ambiguous,
+      canonical,
+      invalidTrack,
     ]);
 
-    expect(state.activePhase?.name).toBe('Concept Development');
-    expect(state.activeStage).toBeNull();
-    expect(state.activeTrack).toBeNull();
-    expect(state.isLegacyPhase).toBe(true);
-    expect(state.nextAction).toEqual({
-      kind: 'map_phase',
-      label:
-        'Assign a canonical phase key to Concept Development before using workflow guidance.',
-    });
-    expect(state.stageStatus.concept_schematic_design).toBe('canonical');
+    expect(state.activeGroups).toHaveLength(1);
+    expect(state.activeGroups[0].stage.key).toBe('contract_administration');
+    expect(state.activeGroups[0].track.key).toBe('construction');
+    expect(state.unclassifiedActivePhases).toHaveLength(2);
+    expect(state.unclassifiedActivePhases[0].phase.phase_id).toBe('ambiguous');
+    expect(state.stageStatus.design_development).toBe('canonical');
+    expect(stageForCanonicalStageKey('contract_administration')?.number).toBe(
+      '09',
+    );
+    expect(stageForCanonicalStageKey('concept_development')).toBeNull();
+    expect(trackForWorkflowTrack('construction')?.label).toBe('Construction');
+    expect(trackForWorkflowTrack('design')).toBeNull();
   });
 
-  it('uses the active main-lane phase instead of a stitched thread phase', () => {
+  it('retains parallel main and thread rows in one stage-track aggregate', () => {
+    const completedMain = phase({
+      phase_id: 'main-complete',
+      phase_name: 'Main procurement',
+      phase_status: 'completed',
+      canonical_stage_key: 'bidding_permitting_procurement',
+      workflow_track: 'ffe',
+      lane: 'main',
+    });
+    const activeThread = phase({
+      phase_id: 'thread-active',
+      phase_name: 'Custom fabrication',
+      phase_status: 'active',
+      canonical_stage_key: 'bidding_permitting_procurement',
+      workflow_track: 'ffe',
+      lane: 'thread',
+    });
+
+    const state = deriveWorkflowStageDocument([
+      completedMain,
+      activeThread,
+    ]);
+    const group = state.activeGroups[0];
+
+    expect(group.phases.map((row) => row.phase_id)).toEqual([
+      'main-complete',
+      'thread-active',
+    ]);
+    expect(group.activePhases.map((row) => row.phase_id)).toEqual([
+      'thread-active',
+    ]);
+    expect(group.scheduleLanes).toEqual(['thread']);
+    expect(
+      state.stageStatus.bidding_permitting_procurement,
+    ).toBe('active');
+  });
+
+  it('keeps simultaneous tracks as separate groups at the same stage', () => {
     const state = deriveWorkflowStageDocument([
       phase({
-        id: 'thread',
-        name: 'Construction thread',
-        phase_key: 'construction_administration',
-        status: 'in_progress',
+        phase_id: 'ffe',
+        canonical_stage_key: 'bidding_permitting_procurement',
+        workflow_track: 'ffe',
+      }),
+      phase({
+        phase_id: 'construction',
+        canonical_stage_key: 'bidding_permitting_procurement',
+        workflow_track: 'construction',
         lane: 'thread',
       }),
-      phase({
-        id: 'main',
-        name: 'Concept',
-        phase_key: 'concept_development',
-        status: 'in_progress',
-        sort_order: 1,
-      }),
     ]);
 
-    expect(state.activePhase?.id).toBe('main');
-    expect(state.activeStage?.number).toBe('05');
+    expect(state.activeGroups.map((group) => group.key)).toEqual([
+      'bidding_permitting_procurement:ffe',
+      'bidding_permitting_procurement:construction',
+    ]);
   });
 
-  it('points to the next configured phase without inventing an active stage', () => {
+  it('lets a delayed parallel row outrank a completed row', () => {
     const state = deriveWorkflowStageDocument([
+      phase({ phase_id: 'complete', phase_status: 'completed' }),
+      phase({ phase_id: 'delayed', phase_status: 'delayed', lane: 'thread' }),
+    ]);
+
+    expect(state.activeGroups[0].status).toBe('delayed');
+    expect(state.stageStatus.concept_schematic).toBe('delayed');
+  });
+
+  it('follows exact successor edges across schedule lanes', () => {
+    const state = deriveWorkflowStageDocument([
+      phase({ phase_id: 'active-main', phase_name: 'Main concept' }),
       phase({
-        id: 'closed',
-        name: 'Concept',
-        phase_key: 'concept_development',
-        status: 'completed',
-      }),
-      phase({
-        id: 'next',
-        name: 'Procurement',
-        phase_key: 'procurement',
-        status: 'pending',
+        phase_id: 'thread-successor',
+        phase_name: 'Thread engineering review',
+        phase_status: 'pending',
+        lane: 'thread',
+        follows_phase_id: 'active-main',
+        canonical_stage_key: 'design_development',
+        workflow_track: 'construction',
         sort_order: 1,
       }),
     ]);
 
-    expect(state.activePhase).toBeNull();
-    expect(state.activeStage).toBeNull();
-    expect(state.stageStatus.concept_schematic_design).toBe('complete');
-    expect(state.stageStatus.procurement_fabrication).toBe('scheduled');
-    expect(state.nextAction).toEqual({
-      kind: 'start_phase',
-      label: 'Start Procurement.',
+    expect(state.activeGroups[0].nextActions[0]).toEqual({
+      phaseId: 'active-main',
+      kind: 'advance',
+      label:
+        'complete Main concept to advance to Thread engineering review.',
     });
+  });
+
+  it('treats zero exact followers as terminal without catalog fallback', () => {
+    const state = deriveWorkflowStageDocument([
+      phase({ phase_id: 'active', phase_name: 'Concept decision' }),
+      phase({
+        phase_id: 'unconnected-next-stage',
+        phase_name: 'Development work',
+        phase_status: 'pending',
+        follows_phase_id: null,
+        canonical_stage_key: 'design_development',
+      }),
+    ]);
+
+    expect(state.activeGroups[0].nextActions[0]).toEqual({
+      phaseId: 'active',
+      kind: 'terminal',
+      label:
+        'Concept decision is terminal in the configured schedule graph.',
+    });
+  });
+
+  it('aggregates configured work, provenance, and blockers from live rows', () => {
+    const state = deriveWorkflowStageDocument([
+      phase({
+        gate_note: 'Household approval',
+        deliverables: [{ label: 'Concept folio' }],
+        template_provenance: { slug: 'full-service', version: 4 },
+        current_blockers: {
+          count: 2,
+          phase: [{ id: 'decision-1', kind: 'coordination', title: 'Approve plan' }],
+          tasks: [{ id: 'task-1', kind: 'task', title: 'Survey missing' }],
+          ffe: [],
+        },
+      }),
+    ]);
+    const group = state.activeGroups[0];
+
+    expect(group.configuredGates).toEqual(['Household approval']);
+    expect(group.configuredDeliverables).toEqual(['Concept folio']);
+    expect(group.provenance).toEqual([{ slug: 'full-service', version: 4 }]);
+    expect(group.blockers.map((blocker) => blocker.title)).toEqual([
+      'Approve plan',
+      'Survey missing',
+    ]);
+    expect(group.nextActions[0].label).toContain('Resolve 2 blockers');
   });
 });
 
-describe('workflow phase boundaries', () => {
-  it('normalizes only an explicit key and does not normalize a label', () => {
-    expect(stageForCanonicalPhaseKey(' CONCEPT_DEVELOPMENT ')?.number).toBe(
-      '05',
-    );
-    expect(stageForCanonicalPhaseKey('Concept Development')).toBeNull();
-    expect(stageForCanonicalPhaseKey(null)).toBeNull();
-  });
+describe('deriveSectionWorkflowStageDocument', () => {
+  it('maps only explicit non-project sections without manufacturing phases', () => {
+    const discovery = deriveSectionWorkflowStageDocument('discovery');
 
-  it('extracts supported deliverable labels and drops malformed values', () => {
-    expect(
-      configuredDeliverablesFrom([
-        { label: 'Drawing set' },
-        { title: 'Budget' },
-        'Care notes',
-        { label: 'Drawing set' },
-        { unknown: true },
-        null,
-      ]),
-    ).toEqual(['Drawing set', 'Budget', 'Care notes']);
+    expect(discovery.mode).toBe('section');
+    expect(discovery.activeGroups[0].stage.key).toBe('discovery_programming');
+    expect(discovery.activeGroups[0].track.key).toBe('core');
+    expect(discovery.activeGroups[0].phases).toEqual([]);
+    expect(discovery.activeGroups[0].activePhases).toEqual([]);
+    expect(discovery.activeGroups[0].nextActions[0].kind).toBe('section');
+
+    expect(deriveSectionWorkflowStageDocument('install').activeGroups).toEqual(
+      [],
+    );
+    expect(deriveSectionWorkflowStageDocument('care').activeGroups).toEqual(
+      [],
+    );
   });
 });

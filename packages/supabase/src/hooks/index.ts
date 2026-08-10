@@ -1548,6 +1548,12 @@ export {
 } from './use-schedule';
 export type { PhaseRow, MilestoneRow, ScheduleRevisionRow, UseResolvedScheduleResult } from './use-schedule';
 
+export {
+  projectWorkflowQueryKey,
+  useProjectWorkflow,
+  type ProjectWorkflowRow,
+} from './use-project-workflow';
+
 // The Document · Schedule (C4) — Slice 03 (Compose): write paths for
 // schedule_milestones + the project_phases chain columns, delete-with-relink,
 // and the two birth RPCs (seed_project_schedule_from_template /

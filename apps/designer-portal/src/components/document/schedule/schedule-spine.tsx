@@ -89,7 +89,6 @@ import {
   toComposerPhases,
 } from '../coordination/item-composer';
 import { CoordinationWork } from '../coordination/coordination-work';
-import { WorkflowStageDocument } from './workflow-stage-document';
 import { PhaseSection } from './phase-section';
 import { TodayRule } from './today-rule';
 import { GhostAddLine, type GhostAddInput } from './ghost-add-line';
@@ -950,14 +949,6 @@ export function ScheduleSpine({
               />
             </div>
           )}
-
-          {/* The canonical workflow reads the same raw schedule + coordination
-              authority as the spine. R105 keeps The Work immediately beneath
-              it until task semantics finish migrating into coordination items. */}
-          <WorkflowStageDocument
-            phases={schedule.phases}
-            coordinationItems={allItems}
-          />
 
           <CoordinationWork
             projectId={projectId}
