@@ -9341,3 +9341,261 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.get_project_review_media_manifest(uuid, uuid) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00438_ffe_release_security_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.project_ffe_selection_threads,public.project_review_editions, public.project_review_items,public.project_review_media_assets,public.project_ffe_media_assets, public.project_review_delivery_attempts,public.project_ffe_import_batches, public.project_ffe_import_rows,public.project_ffe_command_idempotency, public.purchase_order_changes,public.project_review_access, public.project_ffe_board_reconciliation FROM PUBLIC,anon,authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00438_ffe_release_security_hardening.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.project_ffe_selection_threads,public.project_review_editions, public.project_review_items,public.project_review_media_assets,public.project_ffe_media_assets, public.project_review_delivery_attempts,public.project_ffe_import_batches, public.project_ffe_import_rows,public.purchase_order_changes,public.project_review_access, public.project_ffe_board_reconciliation TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00438_ffe_release_security_hardening.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.project_ffe_command_idempotency TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00438_ffe_release_security_hardening.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.project_ffe_selection_threads,public.project_review_editions, public.project_review_items,public.project_review_media_assets,public.project_ffe_media_assets, public.project_review_delivery_attempts,public.project_ffe_import_batches, public.project_ffe_import_rows,public.project_ffe_command_idempotency, public.purchase_order_changes,public.project_review_access, public.project_ffe_board_reconciliation TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00438_ffe_release_security_hardening.sql
+DO $g$ BEGIN
+  REVOKE INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER ON public.project_ffe_items FROM authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00438_ffe_release_security_hardening.sql
+DO $g$ BEGIN
+  REVOKE INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER ON TABLES FROM authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00438_ffe_release_security_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_project_board_public_media_reference(), public.guard_ffe_media_project_identity(),public.guard_published_review_media_asset(), public.assert_project_ffe_thread_consistency() FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00439_ffe_release_command_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._place_product_in_project_v2_00438_impl(jsonb) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00439_ffe_release_command_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._ffe_strict_client_fields(jsonb), public._place_product_in_project_v2_00438_impl(jsonb) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00439_ffe_release_command_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.revoke_project_review_access(uuid,text) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00439_ffe_release_command_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.revoke_project_review_access(uuid,text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00439_ffe_release_command_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.place_product_in_project_v2(jsonb), public.place_product_in_project(uuid,uuid,uuid,uuid,text,jsonb), public.publish_project_review(jsonb),public.get_client_project_selections(uuid), public.get_client_project_review_bundle(uuid),public.record_project_review_feedback(uuid,text,text), public.supersede_project_selection(jsonb),public.start_purchase_order_change(jsonb), public.continue_board_in_project(uuid),public.stage_project_ffe_import(jsonb), public.commit_project_ffe_import(uuid,jsonb) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00439_ffe_release_command_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.place_product_in_project_v2(jsonb), public.place_product_in_project(uuid,uuid,uuid,uuid,text,jsonb), public.publish_project_review(jsonb),public.get_client_project_selections(uuid), public.get_client_project_review_bundle(uuid),public.record_project_review_feedback(uuid,text,text), public.supersede_project_selection(jsonb),public.start_purchase_order_change(jsonb), public.continue_board_in_project(uuid),public.stage_project_ffe_import(jsonb), public.commit_project_ffe_import(uuid,jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00439_ffe_release_command_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_client_project_selections(uuid), public.get_client_project_review_bundle(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00440_ffe_release_trigger_and_rpc_fixes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_ffe_media_project_identity() FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00441_ffe_release_delivery_and_n1_fix.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.mark_project_review_delivery_sent(uuid,uuid,text,text) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00441_ffe_release_delivery_and_n1_fix.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.mark_project_review_delivery_sent(uuid,uuid,text,text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00441_ffe_release_delivery_and_n1_fix.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.place_product_in_project(uuid,uuid,uuid,uuid,text,jsonb) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00441_ffe_release_delivery_and_n1_fix.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.place_product_in_project(uuid,uuid,uuid,uuid,text,jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00441_ffe_release_delivery_and_n1_fix.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_client_project_selections(uuid) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00441_ffe_release_delivery_and_n1_fix.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_client_project_selections(uuid) TO authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00442_ffe_configuration_placement_bridge.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._place_product_in_project_v2_00441_wrapper(jsonb) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00442_ffe_configuration_placement_bridge.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.place_product_in_project_v2(jsonb) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00442_ffe_configuration_placement_bridge.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.place_product_in_project_v2(jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00443_ffe_review_projection_and_delivery_guard.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._prepare_project_review_delivery_00442_impl(uuid,uuid,text) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00443_ffe_review_projection_and_delivery_guard.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._mark_project_review_delivery_sent_00442_impl(uuid,uuid,text,text) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00443_ffe_review_projection_and_delivery_guard.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sanitize_project_review_item_snapshot() FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00443_ffe_review_projection_and_delivery_guard.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.prepare_project_review_delivery(uuid,uuid,text), public.mark_project_review_delivery_sent(uuid,uuid,text,text), public.get_client_project_review_bundle(uuid) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00443_ffe_review_projection_and_delivery_guard.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.prepare_project_review_delivery(uuid,uuid,text), public.mark_project_review_delivery_sent(uuid,uuid,text,text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00443_ffe_review_projection_and_delivery_guard.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_client_project_review_bundle(uuid) TO authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00444_ffe_service_acl_replay_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.authorize_project_review_media(uuid,uuid) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00444_ffe_service_acl_replay_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_ffe_extract_upload(uuid,uuid,uuid) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00444_ffe_service_acl_replay_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.stage_project_ffe_document_extraction(uuid,uuid,uuid,text,jsonb) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00444_ffe_service_acl_replay_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.prepare_project_review_delivery(uuid,uuid,text) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00444_ffe_service_acl_replay_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.mark_project_review_delivery_sent(uuid,uuid,text) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00444_ffe_service_acl_replay_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.mark_project_review_delivery_sent(uuid,uuid,text,text) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00444_ffe_service_acl_replay_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_review_media_manifest(uuid,uuid) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00444_ffe_service_acl_replay_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.authorize_project_review_media(uuid,uuid), public.get_project_ffe_extract_upload(uuid,uuid,uuid), public.stage_project_ffe_document_extraction(uuid,uuid,uuid,text,jsonb), public.prepare_project_review_delivery(uuid,uuid,text), public.mark_project_review_delivery_sent(uuid,uuid,text), public.mark_project_review_delivery_sent(uuid,uuid,text,text), public.get_project_review_media_manifest(uuid,uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00445_ffe_release_authority_and_receiving.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._create_furnishings_authorization_from_schedule_00444_impl(uuid, text, uuid[], numeric) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00445_ffe_release_authority_and_receiving.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._place_product_in_project_v2_00444_impl(jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00445_ffe_release_authority_and_receiving.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._apply_board_room_state_00444_impl(uuid, text, uuid, jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00445_ffe_release_authority_and_receiving.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_ffe_readiness(uuid), public.create_furnishings_authorization_from_schedule(uuid, text, uuid[], numeric), public.place_product_in_project_v2(jsonb), public.record_project_ffe_receipt(uuid, integer, public.receiving_inspection_outcome, text, uuid[]), public.apply_board_room_state(uuid, text, uuid, jsonb) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00445_ffe_release_authority_and_receiving.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_ffe_readiness(uuid), public.create_furnishings_authorization_from_schedule(uuid, text, uuid[], numeric), public.place_product_in_project_v2(jsonb), public.record_project_ffe_receipt(uuid, integer, public.receiving_inspection_outcome, text, uuid[]), public.apply_board_room_state(uuid, text, uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

@@ -131,10 +131,10 @@ BEGIN
   v_attempt_id := (v_delivery->>'attemptId')::uuid;
   v_delivery := public.prepare_project_review_delivery(v_second_id,'f7000000-0000-4000-8000-000000000001','delivery-boundary');
   ASSERT v_delivery->>'outcome' = 'in_progress' AND NOT (v_delivery->>'claimed')::boolean;
-  PERFORM public.mark_project_review_delivery_sent(v_attempt_id,'f7000000-0000-4000-8000-000000000001','provider_timeout');
+  PERFORM public.mark_project_review_delivery_sent(v_attempt_id,'f7000000-0000-4000-8000-000000000001',NULL,'provider_timeout');
   v_retry := public.prepare_project_review_delivery(v_second_id,'f7000000-0000-4000-8000-000000000001','delivery-boundary');
   ASSERT v_retry->>'outcome' = 'claimed' AND (v_retry->>'attemptId')::uuid = v_attempt_id;
-  PERFORM public.mark_project_review_delivery_sent(v_attempt_id,'f7000000-0000-4000-8000-000000000001');
+  PERFORM public.mark_project_review_delivery_sent(v_attempt_id,'f7000000-0000-4000-8000-000000000001','provider-message-1',NULL);
   v_delivery := public.prepare_project_review_delivery(v_second_id,'f7000000-0000-4000-8000-000000000001','delivery-boundary');
   ASSERT v_delivery->>'outcome' = 'already_sent' AND v_delivery->>'status' = 'sent';
 END;
@@ -146,7 +146,7 @@ BEGIN
   ASSERT NOT has_function_privilege('authenticated','public.authorize_project_review_media(uuid,uuid)','EXECUTE');
   ASSERT NOT has_function_privilege('anon','public.get_project_ffe_extract_upload(uuid,uuid,uuid)','EXECUTE');
   ASSERT NOT has_function_privilege('authenticated','public.prepare_project_review_delivery(uuid,uuid,text)','EXECUTE');
-  ASSERT NOT has_function_privilege('authenticated','public.mark_project_review_delivery_sent(uuid,uuid,text)','EXECUTE');
+  ASSERT NOT has_function_privilege('authenticated','public.mark_project_review_delivery_sent(uuid,uuid,text,text)','EXECUTE');
 END;
 $$;
 

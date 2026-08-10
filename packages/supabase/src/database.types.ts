@@ -12813,6 +12813,74 @@ export type Database = {
           },
         ]
       }
+      project_ffe_board_reconciliation: {
+        Row: {
+          mapped_board_id: string | null
+          mapped_selection_id: string | null
+          project_id: string
+          reconciled_at: string | null
+          resolution: string
+          source_board_id: string | null
+          source_fingerprint: string
+          source_id: string
+          source_item_id: string | null
+          source_kind: string
+        }
+        Insert: {
+          mapped_board_id?: string | null
+          mapped_selection_id?: string | null
+          project_id: string
+          reconciled_at?: string | null
+          resolution?: string
+          source_board_id?: string | null
+          source_fingerprint: string
+          source_id: string
+          source_item_id?: string | null
+          source_kind: string
+        }
+        Update: {
+          mapped_board_id?: string | null
+          mapped_selection_id?: string | null
+          project_id?: string
+          reconciled_at?: string | null
+          resolution?: string
+          source_board_id?: string | null
+          source_fingerprint?: string
+          source_id?: string
+          source_item_id?: string | null
+          source_kind?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_ffe_board_reconciliation_mapped_board_id_fkey"
+            columns: ["mapped_board_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_boards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_board_reconciliation_mapped_selection_id_fkey"
+            columns: ["mapped_selection_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_board_reconciliation_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_ffe_board_reconciliation_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_ffe_command_idempotency: {
         Row: {
           actor_id: string
@@ -12854,6 +12922,7 @@ export type Database = {
       }
       project_ffe_import_batches: {
         Row: {
+          commit_response: Json | null
           committed_at: string | null
           created_at: string
           file_hash: string
@@ -12867,6 +12936,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          commit_response?: Json | null
           committed_at?: string | null
           created_at?: string
           file_hash: string
@@ -12880,6 +12950,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          commit_response?: Json | null
           committed_at?: string | null
           created_at?: string
           file_hash?: string
@@ -13029,6 +13100,7 @@ export type Database = {
           removal_reason: string | null
           removed_at: string | null
           removed_by: string | null
+          role_identity: string
           selection_thread_id: string
           sort_order: number
           source_authorization_item_id: string | null
@@ -13075,6 +13147,7 @@ export type Database = {
           removal_reason?: string | null
           removed_at?: string | null
           removed_by?: string | null
+          role_identity?: string
           selection_thread_id: string
           sort_order?: number
           source_authorization_item_id?: string | null
@@ -13121,6 +13194,7 @@ export type Database = {
           removal_reason?: string | null
           removed_at?: string | null
           removed_by?: string | null
+          role_identity?: string
           selection_thread_id?: string
           sort_order?: number
           source_authorization_item_id?: string | null
@@ -14213,6 +14287,75 @@ export type Database = {
             columns: ["section_id"]
             isOneToOne: false
             referencedRelation: "project_sections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_review_access: {
+        Row: {
+          actor_id: string
+          created_at: string
+          edition_id: string
+          expires_at: string | null
+          revoke_reason: string | null
+          revoked_at: string | null
+          revoked_by: string | null
+          status: string
+        }
+        Insert: {
+          actor_id: string
+          created_at?: string
+          edition_id: string
+          expires_at?: string | null
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          status?: string
+        }
+        Update: {
+          actor_id?: string
+          created_at?: string
+          edition_id?: string
+          expires_at?: string | null
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_review_access_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_review_access_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_review_access_edition_id_fkey"
+            columns: ["edition_id"]
+            isOneToOne: false
+            referencedRelation: "project_review_editions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_review_access_revoked_by_fkey"
+            columns: ["revoked_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_review_access_revoked_by_fkey"
+            columns: ["revoked_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
             referencedColumns: ["id"]
           },
         ]
@@ -17103,6 +17246,7 @@ export type Database = {
           purchase_order_id: string
           reason: string
           replacement_purchase_order_id: string | null
+          requested_vendor_id: string | null
           resolved_at: string | null
           status: string
         }
@@ -17117,6 +17261,7 @@ export type Database = {
           purchase_order_id: string
           reason: string
           replacement_purchase_order_id?: string | null
+          requested_vendor_id?: string | null
           resolved_at?: string | null
           status?: string
         }
@@ -17131,6 +17276,7 @@ export type Database = {
           purchase_order_id?: string
           reason?: string
           replacement_purchase_order_id?: string | null
+          requested_vendor_id?: string | null
           resolved_at?: string | null
           status?: string
         }
@@ -17182,6 +17328,13 @@ export type Database = {
             columns: ["replacement_purchase_order_id"]
             isOneToOne: false
             referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_changes_requested_vendor_id_fkey"
+            columns: ["requested_vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
             referencedColumns: ["id"]
           },
         ]
@@ -25446,6 +25599,15 @@ export type Database = {
         Returns: number[]
       }
       _aesthete_utilization: { Args: { p_ratio: number }; Returns: number }
+      _apply_board_room_state_00444_impl: {
+        Args: {
+          p_board_id: string
+          p_owner_id: string
+          p_owner_kind: string
+          p_state: Json
+        }
+        Returns: undefined
+      }
       _apply_board_room_state_v1_impl: {
         Args: {
           p_board_id: string
@@ -25663,6 +25825,15 @@ export type Database = {
         Args: { p_project_board_id: string }
         Returns: string
       }
+      _create_furnishings_authorization_from_schedule_00444_impl: {
+        Args: {
+          p_deposit_percent?: number
+          p_ffe_item_ids: string[]
+          p_name: string
+          p_project_id: string
+        }
+        Returns: Json
+      }
       _create_purchase_order_v1_impl: {
         Args: {
           p_confirmed_eta?: string
@@ -25874,6 +26045,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      _ffe_strict_client_fields: { Args: { p_fields: Json }; Returns: Json }
       _finalize_spec_book_issue_00403: {
         Args: { p_revision_id: string }
         Returns: {
@@ -26000,6 +26172,15 @@ export type Database = {
           status: string
         }[]
       }
+      _mark_project_review_delivery_sent_00442_impl: {
+        Args: {
+          p_actor_id: string
+          p_attempt_id: string
+          p_error_code?: string
+          p_provider_message_id?: string
+        }
+        Returns: Json
+      }
       _mark_proposal_viewed_impl: {
         Args: { p_proposal_id: string }
         Returns: {
@@ -26068,6 +26249,18 @@ export type Database = {
         }
         Returns: Json
       }
+      _place_product_in_project_v2_00438_impl: {
+        Args: { p_request: Json }
+        Returns: Json
+      }
+      _place_product_in_project_v2_00441_wrapper: {
+        Args: { p_request: Json }
+        Returns: Json
+      }
+      _place_product_in_project_v2_00444_impl: {
+        Args: { p_request: Json }
+        Returns: Json
+      }
       _plan_room_canonical_json: { Args: { p_value: Json }; Returns: string }
       _plan_room_rev_letter: { Args: { p_n: number }; Returns: string }
       _plan_room_set_doc_visibility: {
@@ -26080,6 +26273,14 @@ export type Database = {
           follows_phase_id: string
           sort_order: number
         }[]
+      }
+      _prepare_project_review_delivery_00442_impl: {
+        Args: {
+          p_actor_id: string
+          p_edition_id: string
+          p_idempotency_key: string
+        }
+        Returns: Json
       }
       _prepare_spec_book_issue_00403: {
         Args: {
@@ -28897,14 +29098,24 @@ export type Database = {
         }
       }
       mark_feedback_seen: { Args: { p_id: string }; Returns: undefined }
-      mark_project_review_delivery_sent: {
-        Args: {
-          p_actor_id: string
-          p_attempt_id: string
-          p_error_code?: string
-        }
-        Returns: Json
-      }
+      mark_project_review_delivery_sent:
+        | {
+            Args: {
+              p_actor_id: string
+              p_attempt_id: string
+              p_error_code: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_actor_id: string
+              p_attempt_id: string
+              p_error_code?: string
+              p_provider_message_id?: string
+            }
+            Returns: Json
+          }
       mark_proposal_viewed: { Args: { p_proposal_id: string }; Returns: Json }
       mark_room_scan_geometry_error: {
         Args: { p_error: string; p_scan_id: string }
@@ -29329,6 +29540,16 @@ export type Database = {
         }
         Returns: Json
       }
+      record_project_ffe_receipt: {
+        Args: {
+          p_ffe_item_id: string
+          p_notes?: string
+          p_outcome: Database["public"]["Enums"]["receiving_inspection_outcome"]
+          p_photo_asset_ids?: string[]
+          p_received_quantity: number
+        }
+        Returns: Json
+      }
       record_project_review_feedback: {
         Args: { p_body?: string; p_review_item_id: string; p_verdict: string }
         Returns: Json
@@ -29729,6 +29950,10 @@ export type Database = {
       revoke_field_link: { Args: { p_token_id: string }; Returns: boolean }
       revoke_plan_transmittal_link: {
         Args: { p_transmittal_id: string }
+        Returns: Json
+      }
+      revoke_project_review_access: {
+        Args: { p_edition_id: string; p_reason: string }
         Returns: Json
       }
       revoke_role_from_user: {
