@@ -35,6 +35,7 @@ import { DOCUMENT_SURFACE_KEYS } from "@/lib/help-system/document-surface-keys";
 import { DocumentAction, DocumentActionGroup } from "../../document-action";
 import { useMobilePrimaryAction } from "../../mobile/mobile-shell";
 import type { LibraryCapabilityFilter } from "./library-configuration-summary";
+import { subscribeToLibraryCapture } from "./library-capture-events";
 
 const SHELF_COPY: Record<LayerProductLayer, { name: string; meta: string }> = {
   personal: {
@@ -100,8 +101,7 @@ export function LibraryRoom() {
   const [captureOpen, setCaptureOpen] = useState(false);
   useEffect(() => {
     const openCapture = () => setCaptureOpen(true);
-    window.addEventListener('document:open-library-capture', openCapture);
-    return () => window.removeEventListener('document:open-library-capture', openCapture);
+    return subscribeToLibraryCapture(openCapture);
   }, []);
   const [importOpen, setImportOpen] = useState(false);
   const [activeLayer, setActiveLayer] = useState<LayerProductLayer>("personal");

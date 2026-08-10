@@ -4,11 +4,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { commercialKeys, createBrowserClient } from '@patina/supabase';
 import {
   clientPlanKey,
+  clientReviewKey,
   clientSelectionsKey,
   invalidateSignedCommercialDocument,
   useClientCommercialDocument,
   useClientPlan,
+  useClientProjectReviewBundle,
   useClientSelections,
+  useRecordProjectReviewFeedback,
   useDeclineCommercialDocument,
   useProjectCommercialSummary,
 } from '../use-commercial-client';
@@ -173,6 +176,47 @@ describe('commercial client hooks', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     expect(queryClient.getQueryData(clientSelectionsKey('project-1'))).toEqual(result.current.data);
+  });
+
+  it('loads one immutable edition and resolves its media through the authenticated edge function', async () => {
+    const rpc = jest.fn().mockResolvedValue({
+      data: {
+        edition: { id: 'edition-1', status: 'published' },
+        project: { id: 'project-1' },
+        items: [{ id: 'review-item-1', snapshot: { name: 'Chair', media: [{ id: 'asset-1' }] }, feedback: [] }],
+      },
+      error: null,
+    });
+    const invoke = jest.fn().mockResolvedValue({
+      data: { urls: [{ assetId: 'asset-1', signedUrl: 'https://signed.example/chair' }] },
+      error: null,
+    });
+    mockCreateBrowserClient.mockReturnValue({ rpc, functions: { invoke } });
+
+    const { result } = renderHook(() => useClientProjectReviewBundle('edition-1', 'project-1'), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(rpc).toHaveBeenCalledWith('get_client_project_review_bundle', { p_edition_id: 'edition-1' });
+    expect(invoke).toHaveBeenCalledWith('project-review-media', { body: { editionId: 'edition-1' } });
+    expect(result.current.data?.items[0].imageUrl).toBe('https://signed.example/chair');
+  });
+
+  it('records feedback against the immutable review item contract and invalidates its edition', async () => {
+    const rpc = jest.fn().mockResolvedValue({ data: { feedbackId: 'feedback-1' }, error: null });
+    mockCreateBrowserClient.mockReturnValue({ rpc });
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+    const invalidate = jest.spyOn(queryClient, 'invalidateQueries').mockResolvedValue(undefined);
+    const mutationWrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+
+    const { result } = renderHook(() => useRecordProjectReviewFeedback('edition-1'), { wrapper: mutationWrapper });
+    await result.current.mutateAsync({ reviewItemId: 'review-item-1', verdict: 'comment', comment: '  Lighter?  ' });
+
+    expect(rpc).toHaveBeenCalledWith('record_project_review_feedback', {
+      p_review_item_id: 'review-item-1', p_verdict: 'comment', p_body: 'Lighter?',
+    });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: clientReviewKey('edition-1') });
   });
 
   it('loads the client plan grid keyed by project and adapts published-checkpoint lines', async () => {

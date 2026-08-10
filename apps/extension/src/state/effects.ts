@@ -23,7 +23,7 @@ import { draftToProductPayload } from './draft';
 import { extensionEvents } from '../lib/analytics';
 import { addRecent, type RecentCapture } from '../lib/recent-captures';
 import type { DraftSlice, RoutingSlice } from './types';
-import { placeProductInProject, type SpecBookPlacementRoute } from '../lib/spec-book-placement';
+import { placeProductInProject, type PlacementOutcome, type PlacementV2Request, type SpecBookPlacementRoute } from '../lib/spec-book-placement';
 
 type ProductStatus = 'published' | 'draft';
 
@@ -146,18 +146,24 @@ async function runPilotPlacement(
   productId: string,
   route: SpecBookPlacementRoute,
   draft: DraftSlice,
-  reusedProduct: boolean
-): Promise<void> {
+  reusedProduct: boolean,
+  duplicateMode: PlacementV2Request['duplicateMode'],
+): Promise<PlacementOutcome> {
   extensionEvents.specBookPlacementAttempted({
     routeKind: route.kind,
     reusedProduct,
   });
   try {
-    await placeProductInProject(productId, route, placementSource(draft));
+    const outcome = await placeProductInProject(productId, route, placementSource(draft), { duplicateMode });
+    if (!outcome) throw new Error('Project placement returned no outcome');
     extensionEvents.specBookPlacementSucceeded({
       routeKind: route.kind,
       reusedProduct,
+      outcome: outcome.outcome,
+      selectionId: outcome.selectionId,
+      placementId: outcome.placementId,
     });
+    return outcome;
   } catch (error) {
     extensionEvents.specBookPlacementFailed({
       routeKind: route.kind,
@@ -175,13 +181,14 @@ async function runPilotPlacement(
 export async function retrySpecBookPlacement(
   productId: string,
   draft: DraftSlice,
-  routing: RoutingSlice
-): Promise<string> {
+  routing: RoutingSlice,
+  duplicateMode: PlacementV2Request['duplicateMode'],
+): Promise<{ productId: string; placementOutcome: PlacementOutcome | null }> {
   const route = routing.specBookPlacement;
-  if (!route || route.kind === 'library') return productId;
-  await runPilotPlacement(productId, route, draft, false);
+  if (!route || route.kind === 'library') return { productId, placementOutcome: null };
+  const placementOutcome = await runPilotPlacement(productId, route, draft, false, duplicateMode);
   recordRecent(draft, productId, 'library');
-  return productId;
+  return { productId, placementOutcome };
 }
 
 /** Reuse a matched Product master as a distinct project selection. */
@@ -189,12 +196,12 @@ export async function reuseProductForSpecBookPlacement(
   productId: string,
   draft: DraftSlice,
   routing: RoutingSlice
-): Promise<string> {
+): Promise<{ productId: string; placementOutcome: PlacementOutcome | null }> {
   const route = routing.specBookPlacement;
-  if (!route || route.kind === 'library') return productId;
-  await runPilotPlacement(productId, route, draft, true);
+  if (!route || route.kind === 'library') return { productId, placementOutcome: null };
+  const placementOutcome = await runPilotPlacement(productId, route, draft, true, 'reuse_or_create');
   recordRecent(draft, productId, 'library');
-  return productId;
+  return { productId, placementOutcome };
 }
 
 // ─── Save effects (thin I/O) ──────────────────────────────────────────────────
@@ -203,8 +210,9 @@ export async function reuseProductForSpecBookPlacement(
 export async function saveToLibrary(
   draft: DraftSlice,
   routing: RoutingSlice,
-  user: User
-): Promise<string> {
+  user: User,
+  duplicateMode: PlacementV2Request['duplicateMode'],
+): Promise<{ productId: string; placementOutcome: PlacementOutcome | null }> {
   const { data: product, error } = await supabase
     .from('products')
     .insert(productRow(draft, user.id, 'published'))
@@ -224,11 +232,11 @@ export async function saveToLibrary(
     await supabase.from('product_styles').insert(styleInserts(product.id, draft.styleIds, user.id));
   }
   captureAnalytics(draft, 'new');
-  if (routing.specBookPlacement && routing.specBookPlacement.kind !== 'library') {
-    await runPilotPlacement(product.id, routing.specBookPlacement, draft, false);
-  }
+  const placementOutcome = routing.specBookPlacement && routing.specBookPlacement.kind !== 'library'
+    ? await runPilotPlacement(product.id, routing.specBookPlacement, draft, false, duplicateMode)
+    : null;
   recordRecent(draft, product.id, 'library');
-  return product.id;
+  return { productId: product.id, placementOutcome };
 }
 
 /** "Send to inbox" — products(status='draft') + styles + proposal_captures. */
@@ -329,7 +337,7 @@ export async function updateExisting(
   draft: DraftSlice,
   routing: RoutingSlice,
   user: User
-): Promise<string> {
+): Promise<{ productId: string; placementOutcome: PlacementOutcome | null }> {
   const full = productRow(draft, user.id, 'published');
   const { error } = await supabase
     .from('products')
@@ -365,16 +373,16 @@ export async function updateExisting(
       });
     }
   }
-  if (routing.specBookPlacement && routing.specBookPlacement.kind !== 'library') {
-    await runPilotPlacement(existingId, routing.specBookPlacement, draft, true);
-  }
+  const placementOutcome = routing.specBookPlacement && routing.specBookPlacement.kind !== 'library'
+    ? await runPilotPlacement(existingId, routing.specBookPlacement, draft, true, 'reuse_or_create')
+    : null;
   if (draft.styleIds.length) {
     await supabase.from('product_styles').delete().eq('product_id', existingId);
     await supabase.from('product_styles').insert(styleInserts(existingId, draft.styleIds, user.id));
   }
   recordRecent(draft, existingId, 'update');
   captureAnalytics(draft, 'update');
-  return existingId;
+  return { productId: existingId, placementOutcome };
 }
 
 /** Vendor-mode save — vendors + vendor_certifications. */

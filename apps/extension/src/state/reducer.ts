@@ -58,6 +58,7 @@ export function initialCaptureState(prefs: Prefs = DEFAULT_PREFS): CaptureState 
       error: null,
       lastSavedProductId: null,
       pendingPlacementProductId: null,
+      lastPlacementOutcome: null,
     },
   };
 }
@@ -450,6 +451,7 @@ export function captureReducer(state: CaptureState, action: CaptureAction): Capt
           isSaving: false,
           lastSavedProductId: action.productId,
           pendingPlacementProductId: null,
+          lastPlacementOutcome: action.placementOutcome ?? null,
         },
       };
 
@@ -477,6 +479,7 @@ export function captureReducer(state: CaptureState, action: CaptureAction): Capt
           error: null,
           lastSavedProductId: null,
           pendingPlacementProductId: null,
+          lastPlacementOutcome: null,
         },
       };
 

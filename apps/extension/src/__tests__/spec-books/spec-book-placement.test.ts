@@ -171,7 +171,7 @@ describe('retry and duplicate preservation', () => {
   it('falls back for both PostgreSQL and PostgREST missing-v2 contracts', async () => {
     const route: SpecBookPlacementRoute = { kind: 'project_inbox', projectId: 'project-1', roomId: null };
     rpc.mockResolvedValueOnce({ data: null, error: { code: 'PGRST202' } }).mockResolvedValueOnce({ data: { ffe_item_id: 'legacy-1' }, error: null });
-    await expect(placeProductInProject('product-1', route, source)).resolves.toEqual({ outcome: 'created', selectionId: null, selectionThreadId: null, placementId: null });
+    await expect(placeProductInProject('product-1', route, source, { duplicateMode: 'reuse_or_create' })).resolves.toEqual({ outcome: 'created', selectionId: 'legacy-1', selectionThreadId: null, placementId: null });
     expect(rpc).toHaveBeenNthCalledWith(2, 'place_product_in_project', expect.any(Object));
   });
   it('retains the durable Product and selected route when placement fails', async () => {
@@ -188,14 +188,14 @@ describe('retry and duplicate preservation', () => {
       })
       .mockResolvedValueOnce({ data: { ffe_item_id: 'ffe-1' }, error: null });
 
-    const failed = placeProductInProject('product-existing', route, source);
+    const failed = placeProductInProject('product-existing', route, source, { duplicateMode: 'reuse_or_create' });
     await expect(failed).rejects.toMatchObject({
       name: 'SpecBookPlacementError',
       productId: 'product-existing',
       route,
     });
 
-    await placeProductInProject('product-existing', route, source);
+    await placeProductInProject('product-existing', route, source, { duplicateMode: 'reuse_or_create' });
     expect(rpc).toHaveBeenCalledTimes(2);
     expect(rpc.mock.calls[1]).toEqual(rpc.mock.calls[0]);
   });
@@ -216,7 +216,7 @@ describe('retry and duplicate preservation', () => {
 
     await expect(
       reuseProductForSpecBookPlacement('product-existing', draft, routing)
-    ).resolves.toBe('product-existing');
+    ).resolves.toMatchObject({ productId: 'product-existing' });
 
     expect(from).not.toHaveBeenCalled();
     expect(rpc).toHaveBeenCalledWith('place_product_in_project_v2', {
@@ -224,6 +224,21 @@ describe('retry and duplicate preservation', () => {
         projectId: 'project-1', productId: 'product-existing',
         source: expect.objectContaining({ surface: 'chrome_extension', route_kind: 'create_line' }),
       }),
+    });
+  });
+
+  it('preserves explicit duplicate intent and consumes camel-case v2 outcome ids', async () => {
+    const route: SpecBookPlacementRoute = { kind: 'project_inbox', projectId: 'project-1', roomId: null };
+    rpc.mockResolvedValueOnce({
+      data: { outcome: 'held', selectionId: 'selection-1', selectionThreadId: 'thread-1', placementId: 'placement-1' },
+      error: null,
+    });
+
+    await expect(placeProductInProject('product-1', route, source, { duplicateMode: 'create_duplicate' })).resolves.toEqual({
+      outcome: 'held', selectionId: 'selection-1', selectionThreadId: 'thread-1', placementId: 'placement-1',
+    });
+    expect(rpc).toHaveBeenCalledWith('place_product_in_project_v2', {
+      p_request: expect.objectContaining({ duplicateMode: 'create_duplicate' }),
     });
   });
 });

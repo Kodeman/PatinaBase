@@ -23,9 +23,8 @@ jest.mock("../../account/account-sheet", () => ({
 describe("CaptureExtensionPrompt", () => {
   beforeEach(() => {
     window.localStorage.clear();
-    process.env.NEXT_PUBLIC_CAPTURE_EXTENSION_INSTALL_MODE = "unpacked";
-    process.env.NEXT_PUBLIC_CAPTURE_EXTENSION_INSTALL_URL =
-      "https://example.com/patina-capture.zip";
+    process.env.NEXT_PUBLIC_CAPTURE_EXTENSION_INSTALL_MODE = "under_review";
+    delete process.env.NEXT_PUBLIC_CAPTURE_EXTENSION_INSTALL_URL;
   });
 
   afterEach(() => {
@@ -38,7 +37,7 @@ describe("CaptureExtensionPrompt", () => {
     delete process.env.NEXT_PUBLIC_CAPTURE_EXTENSION_INSTALL_MODE;
     const { rerender } = render(<CaptureExtensionPrompt />);
     expect(screen.queryByText(/Bring product pages/i)).not.toBeInTheDocument();
-    process.env.NEXT_PUBLIC_CAPTURE_EXTENSION_INSTALL_MODE = "unpacked";
+    process.env.NEXT_PUBLIC_CAPTURE_EXTENSION_INSTALL_MODE = "under_review";
     rerender(<CaptureExtensionPrompt />);
   });
 
@@ -54,7 +53,7 @@ describe("CaptureExtensionPrompt", () => {
     );
     expect(mockPromptDismissed).toHaveBeenCalledWith({
       surface: "library",
-      install_mode: "unpacked",
+      install_mode: "under_review",
     });
     expect(screen.queryByText(/Bring product pages/i)).not.toBeInTheDocument();
 
@@ -64,16 +63,16 @@ describe("CaptureExtensionPrompt", () => {
   });
 
   it("offers the paste-URL alternative while Chrome is under review", () => {
+    const opened = jest.fn();
+    window.addEventListener("document:open-library-capture", opened);
     render(<CaptureExtensionPrompt />);
     fireEvent.click(
-      screen.getByRole("button", { name: /Capture help/i }),
+      screen.getByRole("button", { name: /Paste a URL/i }),
     );
 
-    expect(mockOpenAccountPage).toHaveBeenCalledWith("extension");
-    expect(mockInstructionsOpened).toHaveBeenCalledWith({
-      surface: "library",
-      install_mode: "unpacked",
-    });
+    expect(opened).toHaveBeenCalledTimes(1);
+    expect(mockInstallClicked).toHaveBeenCalledWith({ surface: "library", install_mode: "under_review" });
     expect(screen.queryByText(/Bring product pages/i)).not.toBeInTheDocument();
+    window.removeEventListener("document:open-library-capture", opened);
   });
 });

@@ -12,20 +12,20 @@ export const captureExtensionEvents = {
   promptViewed: (properties: {
     surface: CaptureExtensionSurface;
     install_mode: CaptureExtensionInstallMode;
-  }) => track("capture_extension_beta_prompt_viewed", properties),
+  }) => track("ffe_extension_prompt_viewed", properties),
 
   installClicked: (properties: {
     surface: CaptureExtensionSurface;
     install_mode: CaptureExtensionInstallMode;
-  }) => track("capture_extension_beta_install_clicked", properties),
+  }) => track("ffe_extension_install_clicked", properties),
 
   instructionsOpened: (properties: {
     surface: CaptureExtensionSurface;
     install_mode: CaptureExtensionInstallMode | null;
-  }) => track("capture_extension_beta_instructions_opened", properties),
+  }) => track("ffe_extension_instructions_opened", properties),
 
   promptDismissed: (properties: {
     surface: "library";
     install_mode: CaptureExtensionInstallMode;
-  }) => track("capture_extension_beta_prompt_dismissed", properties),
+  }) => track("ffe_extension_prompt_dismissed", properties),
 };

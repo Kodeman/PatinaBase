@@ -15,18 +15,18 @@ describe("getCaptureExtensionConfig", () => {
     else process.env[URL_KEY] = originalUrl;
   });
 
-  it("accepts a configured unpacked beta", () => {
-    process.env[MODE_KEY] = "unpacked";
-    process.env[URL_KEY] = "https://example.com/patina-capture.zip";
+  it("accepts an honest under-review state without an install artifact", () => {
+    process.env[MODE_KEY] = "under_review";
+    delete process.env[URL_KEY];
 
     expect(getCaptureExtensionConfig()).toEqual({
-      mode: "unpacked",
-      installUrl: "https://example.com/patina-capture.zip",
+      mode: "under_review",
+      installUrl: null,
       isConfigured: true,
     });
   });
 
-  it("accepts a configured Web Store beta", () => {
+  it("accepts a configured Web Store release", () => {
     process.env[MODE_KEY] = "webstore";
     process.env[URL_KEY] =
       "https://chromewebstore.google.com/detail/patina/example";
@@ -40,7 +40,7 @@ describe("getCaptureExtensionConfig", () => {
 
   it.each([
     ["unknown", "https://example.com/extension.zip"],
-    ["unpacked", "http://example.com/extension.zip"],
+    ["unpacked", "https://example.com/extension.zip"],
     ["webstore", "not-a-url"],
   ])("fails closed for mode %s and URL %s", (mode, url) => {
     process.env[MODE_KEY] = mode;

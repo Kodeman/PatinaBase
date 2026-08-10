@@ -6,7 +6,6 @@
 import { Storage } from '@plasmohq/storage';
 import type { QuickCaptureRequest, VendorSelection, VendorCaptureInput } from '@patina/shared';
 import { supabase } from './lib/supabase';
-import { checkForUpdate } from './lib/update-checker';
 
 // Initialize storage
 const storage = new Storage({ area: 'local' });
@@ -489,7 +488,6 @@ chrome.runtime.onStartup.addListener(() => {
 
 // Periodic sync using alarms (Manifest V3 doesn't allow setInterval in service workers)
 chrome.alarms?.create('sync-queue', { periodInMinutes: 5 });
-chrome.alarms?.create('check-update', { periodInMinutes: 60 });
 chrome.alarms?.create('refresh-token', { periodInMinutes: 30 });
 
 chrome.alarms?.onAlarm?.addListener(async alarm => {
@@ -500,16 +498,6 @@ chrome.alarms?.onAlarm?.addListener(async alarm => {
     } catch (err) {
       console.warn('[background] sync-queue failed', err);
     }
-  }
-  if (alarm.name === 'check-update') {
-    checkForUpdate().then(state => {
-      if (state?.hasUpdate) {
-        // Notify sidepanel if open
-        chrome.runtime.sendMessage({ type: 'UPDATE_AVAILABLE', updateState: state }).catch(() => {
-          // Sidepanel not open — that's fine, it will read cached state on next open
-        });
-      }
-    });
   }
   if (alarm.name === 'refresh-token') {
     // Proactively refresh the Supabase session in the SW so the offline

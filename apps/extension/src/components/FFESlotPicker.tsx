@@ -5,6 +5,7 @@ import {
   placeProductInProject,
   saveSpecBookPlacementContext,
   type SpecBookPlacementContext,
+  type PlacementOutcome,
   type SpecBookPlacementRoute,
 } from '../lib/spec-book-placement';
 
@@ -76,6 +77,7 @@ export function FFESlotPicker({
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [error, setError] = useState('');
+  const [outcome, setOutcome] = useState<PlacementOutcome | null>(null);
 
   useEffect(() => {
     if (!selectedProjectId) {
@@ -176,11 +178,12 @@ export function FFESlotPicker({
     setAssigning(true);
     setError('');
     try {
-      await placeProductInProject(productId, route, {
+      const placed = await placeProductInProject(productId, route, {
         sourceUrl: '',
         captureKind: 'post_save',
-      });
-      onComplete?.();
+      }, { duplicateMode: 'reuse_or_create' });
+      if (!placed) throw new Error('Project placement returned no outcome');
+      setOutcome(placed);
     } catch (cause) {
       setError(messageFor(cause));
     } finally {
@@ -300,7 +303,22 @@ export function FFESlotPicker({
         </p>
       )}
 
-      {assigningExisting && (
+      {outcome && (
+        <div role="status" className="rounded-md border border-verdigris/40 bg-verdigris/5 p-3 text-[0.78rem] text-ink">
+          {outcome.outcome === 'reused'
+            ? 'Reused the existing project selection.'
+            : outcome.outcome === 'filled'
+              ? 'Filled the selected project need.'
+              : outcome.outcome === 'held'
+                ? 'Held the project placement for review.'
+                : 'Created a new project selection.'}
+          <button type="button" onClick={onComplete} className="mt-2 block font-mono text-[0.62rem] uppercase tracking-[0.08em] text-verdigris">
+            Done
+          </button>
+        </div>
+      )}
+
+      {assigningExisting && !outcome && (
         <button
           type="button"
           onClick={handleAssign}

@@ -6,6 +6,7 @@ import { captureExtensionEvents } from "@/lib/analytics/capture-extension-events
 import { getCaptureExtensionConfig } from "@/lib/capture-extension";
 import { DocumentAction, DocumentActionGroup } from "../../document-action";
 import { openAccountPage } from "../../account/account-sheet";
+import { requestLibraryCapture } from "./library-capture-events";
 
 const DISMISSED_KEY = "patina:capture-extension-prompt";
 
@@ -50,7 +51,7 @@ export function CaptureExtensionPrompt() {
     !visible ||
     !isConfigured ||
     !mode ||
-    !installUrl
+    (mode === "webstore" && !installUrl)
   ) {
     return null;
   }
@@ -90,14 +91,14 @@ export function CaptureExtensionPrompt() {
           <DocumentAction
             actionKey="install-capture-extension"
             variant="primary"
-            {...(mode === "webstore" ? { href: installUrl, target: "_blank", rel: "noopener noreferrer" } : {})}
+            {...(mode === "webstore" ? { href: installUrl!, target: "_blank" as const, rel: "noopener noreferrer" } : {})}
             trailing="↗"
             onClick={() => {
               captureExtensionEvents.installClicked({
                 surface: "library",
                 install_mode: mode,
               });
-              if (mode !== "webstore") window.dispatchEvent(new Event("document:open-library-capture"));
+              if (mode !== "webstore") requestLibraryCapture();
               recede();
             }}
           >{mode === "webstore" ? "Add to Chrome" : "Paste a URL"}</DocumentAction>

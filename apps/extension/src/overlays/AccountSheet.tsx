@@ -1,13 +1,11 @@
 /** T2 — Account. Identity, version + update status, sign out. Single workspace. */
 import { useCapture } from '../state/CaptureProvider';
 import { OverlaySheet } from '../panel/OverlaySheet';
-import { useUpdateCheck } from '../hooks/use-update-check';
 import { supabase } from '../lib/supabase';
 import { resetAnalytics } from '../lib/analytics';
 
 export function AccountSheet() {
   const { session } = useCapture();
-  const update = useUpdateCheck();
   const version = chrome.runtime.getManifest().version;
   const email = session.user?.email ?? '—';
 
@@ -31,11 +29,7 @@ export function AccountSheet() {
           </dt>
           <dd className="text-[0.85rem] text-ink">
             v{version}
-            {update.hasUpdate ? (
-              <span className="ml-2 text-verdigris">update available</span>
-            ) : (
-              <span className="ml-2 text-ink-soft">up to date</span>
-            )}
+            <span className="ml-2 text-ink-soft">updated by Chrome</span>
           </dd>
         </div>
       </dl>

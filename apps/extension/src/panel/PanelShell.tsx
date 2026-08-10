@@ -11,7 +11,6 @@ import { ConnectionStrip } from './ConnectionStrip';
 import { CommitBar } from './CommitBar';
 import { PanelRouter, OverlayLayer } from './PanelRouter';
 import { AuthScreen } from '../components/AuthScreen';
-import { UpdateBanner } from '../components/UpdateBanner';
 import { LoadingStrata } from '../components/LoadingStrata';
 
 export function PanelShell() {
@@ -36,7 +35,6 @@ export function PanelShell() {
   return (
     <ControllerContext.Provider value={controller}>
       <div className="flex h-screen w-full min-w-[320px] max-w-[600px] flex-col bg-paper font-body text-ink">
-        <UpdateBanner />
         <ConnectionStrip />
         <div className="relative flex-1 overflow-hidden">
           <div className="h-full overflow-y-auto p-4">

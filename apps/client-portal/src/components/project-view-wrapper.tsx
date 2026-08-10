@@ -19,7 +19,6 @@ import { ProjectCommercialSummary } from '@/components/project-commercial-summar
 import { AwaitingSignatureCards } from '@/components/commercial/awaiting-signature-cards';
 import { ClientPlanGrid } from '@/components/commercial/client-plan-grid';
 import { ClientSelections } from '@/components/commercial/client-selections';
-import { ProjectReviewEdition } from '@/components/project/ProjectReviewEdition';
 import { useClientSelections } from '@/hooks/use-commercial-client';
 import type { MilestoneDetail } from '@/types/project';
 import { useProjectPhaseRealtime } from '@/hooks/use-project-phase-realtime';
@@ -100,8 +99,6 @@ export function ProjectViewWrapper({
       {showOverview && isCommercial && <AwaitingSignatureCards projectId={projectId} />}
       {showOverview && isCommercial && <ClientPlanGrid projectId={projectId} />}
       {showOverview && isCommercial && <ClientSelections projectId={projectId} />}
-      {showOverview && <ProjectReviewEdition projectId={projectId} />}
-
       {showOverview && showLegacyOriginTree && <BudgetOverview projectId={projectId} />}
 
       {showOverview && <ProjectInvoicesSummary projectId={projectId} />}

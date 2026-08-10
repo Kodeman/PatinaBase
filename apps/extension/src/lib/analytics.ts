@@ -142,10 +142,13 @@ export const extensionEvents = {
       route_kind: properties.routeKind,
       reused_product: properties.reusedProduct,
     }),
-  specBookPlacementSucceeded: (properties: { routeKind: string; reusedProduct: boolean }) =>
+  specBookPlacementSucceeded: (properties: { routeKind: string; reusedProduct: boolean; outcome: string; selectionId: string | null; placementId: string | null }) =>
     track('spec_book.capture_routing.succeeded', {
       route_kind: properties.routeKind,
       reused_product: properties.reusedProduct,
+      outcome: properties.outcome,
+      selection_id: properties.selectionId,
+      placement_id: properties.placementId,
     }),
   specBookPlacementFailed: (properties: {
     routeKind: string;

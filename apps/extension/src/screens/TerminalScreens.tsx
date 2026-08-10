@@ -45,6 +45,15 @@ export function SavedScreen() {
   const [showFfe, setShowFfe] = useState(false);
 
   const productId = io.lastSavedProductId;
+  const placementMessage = io.lastPlacementOutcome
+    ? io.lastPlacementOutcome.outcome === 'reused'
+      ? 'The piece is in your library and its existing project selection was reused.'
+      : io.lastPlacementOutcome.outcome === 'filled'
+        ? 'The piece is in your library and filled the selected project need.'
+        : io.lastPlacementOutcome.outcome === 'held'
+          ? 'The piece is in your library and its project placement is held for review.'
+          : 'The piece is in your library and a project selection was created.'
+    : 'The piece is in your library, ready to place.';
   const initialContext =
     routing.destination.type === 'project-room'
       ? {
@@ -71,7 +80,7 @@ export function SavedScreen() {
       <span className="font-display text-[1.6rem] text-verdigris">✓</span>
       <h2 className="mt-2 font-display text-[1.3rem] text-ink">Saved to your library</h2>
       <p className="mt-1 max-w-[28ch] text-[0.85rem] text-ink-soft">
-        The piece is in your library, ready to place.
+        {placementMessage}
       </p>
       <button
         type="button"

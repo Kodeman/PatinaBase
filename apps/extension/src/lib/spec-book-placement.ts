@@ -63,6 +63,23 @@ export interface PlacementV2Request {
 }
 export interface PlacementOutcome { outcome: 'created' | 'reused' | 'filled' | 'held'; selectionId: string | null; selectionThreadId: string | null; placementId: string | null; }
 
+const resultText = (row: Record<string, unknown>, camel: string, snake: string) => {
+  const value = row[camel] ?? row[snake];
+  return typeof value === 'string' && value ? value : null;
+};
+
+export function placementOutcome(value: unknown): PlacementOutcome | null {
+  if (!value || typeof value !== 'object') return null;
+  const row = value as Record<string, unknown>;
+  const rawOutcome = row.outcome;
+  return {
+    outcome: rawOutcome === 'reused' || rawOutcome === 'filled' || rawOutcome === 'held' ? rawOutcome : 'created',
+    selectionId: resultText(row, 'selectionId', 'selection_id') ?? resultText(row, 'ffeItemId', 'ffe_item_id'),
+    selectionThreadId: resultText(row, 'selectionThreadId', 'selection_thread_id'),
+    placementId: resultText(row, 'placementId', 'placement_id'),
+  };
+}
+
 function isContext(value: unknown): value is SpecBookPlacementContext {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Record<string, unknown>;
@@ -174,7 +191,7 @@ export async function placeProductInProject(
   productId: string,
   route: SpecBookPlacementRoute,
   source: PlacementSource,
-  options: { duplicateMode?: PlacementV2Request['duplicateMode'] } = {},
+  options: { duplicateMode: PlacementV2Request['duplicateMode'] },
 ): Promise<PlacementOutcome | null> {
   if (route.kind === 'library') return null;
 
@@ -190,6 +207,5 @@ export async function placeProductInProject(
   if (error) {
     throw new SpecBookPlacementError(errorMessage(error), productId, route);
   }
-  const result = (fallback ? legacy?.data : v2.data) as Record<string, unknown> | null;
-  return result ? { outcome: result.outcome === 'reused' || result.outcome === 'filled' || result.outcome === 'held' ? result.outcome : 'created', selectionId: typeof result.selection_id === 'string' ? result.selection_id : null, selectionThreadId: typeof result.selection_thread_id === 'string' ? result.selection_thread_id : null, placementId: typeof result.placement_id === 'string' ? result.placement_id : null } : null;
+  return placementOutcome(fallback ? legacy?.data : v2.data);
 }

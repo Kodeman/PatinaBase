@@ -55,20 +55,25 @@ export function CommitBar() {
     setBusy(kind);
     dispatch({ type: 'SAVE_START', target });
     try {
-      const productId =
-        io.pendingPlacementProductId && hasProjectPlacement
-          ? await retrySpecBookPlacement(io.pendingPlacementProductId, draft, routing)
-          : kind === 'reuse'
-            ? await reuseProductForSpecBookPlacement(dedup.match!.id, draft, routing)
-            : kind === 'library'
-              ? await saveToLibrary(draft, routing, user)
-              : kind === 'inbox'
-                ? await saveToInbox(draft, routing, user)
-                : await updateExisting(dedup.match!.id, draft, routing, user);
+      const duplicateMode = kind === 'library' && dedup.match ? 'create_duplicate' as const : 'reuse_or_create' as const;
+      let productId: string;
+      let placementOutcome = null;
+      if (io.pendingPlacementProductId && hasProjectPlacement) {
+        ({ productId, placementOutcome } = await retrySpecBookPlacement(io.pendingPlacementProductId, draft, routing, duplicateMode));
+      } else if (kind === 'reuse') {
+        ({ productId, placementOutcome } = await reuseProductForSpecBookPlacement(dedup.match!.id, draft, routing));
+      } else if (kind === 'library') {
+        ({ productId, placementOutcome } = await saveToLibrary(draft, routing, user, duplicateMode));
+      } else if (kind === 'update') {
+        ({ productId, placementOutcome } = await updateExisting(dedup.match!.id, draft, routing, user));
+      } else {
+        productId = await saveToInbox(draft, routing, user);
+      }
       dispatch({
         type: 'SAVE_SUCCESS',
         productId,
         landed: kind === 'inbox' ? 'inbox' : 'library',
+        placementOutcome,
       });
     } catch (e) {
       dispatch({
