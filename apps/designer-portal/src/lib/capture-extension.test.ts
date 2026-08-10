@@ -29,11 +29,11 @@ describe("getCaptureExtensionConfig", () => {
   it("accepts a configured Web Store release", () => {
     process.env[MODE_KEY] = "webstore";
     process.env[URL_KEY] =
-      "https://chromewebstore.google.com/detail/patina/example";
+      "https://chromewebstore.google.com/detail/patina/abcdefghijklmnopabcdefghijklmnop";
 
     expect(getCaptureExtensionConfig()).toEqual({
       mode: "webstore",
-      installUrl: "https://chromewebstore.google.com/detail/patina/example",
+      installUrl: "https://chromewebstore.google.com/detail/patina/abcdefghijklmnopabcdefghijklmnop",
       isConfigured: true,
     });
   });
@@ -45,6 +45,10 @@ describe("getCaptureExtensionConfig", () => {
     ["webstore", "https://example.com/detail/patina/example"],
     ["webstore", "https://chromewebstore.google.com.evil.example/detail/patina/example"],
     ["webstore", "https://chromewebstore.google.com/webstore/category/extensions"],
+    ["webstore", "https://chromewebstore.google.com/detail/patina/example"],
+    ["webstore", "https://chromewebstore.google.com/detail/patina/abcdefghijklmnopabcdefghijklmnop?hl=en"],
+    ["webstore", "https://chromewebstore.google.com/detail/patina/abcdefghijklmnopabcdefghijklmnop#reviews"],
+    ["webstore", "https://chromewebstore.google.com/detail/patina/qrstuvwxyzqrstuvwxyzqrstuvwxyzqr"],
   ])("fails closed for mode %s and URL %s", (mode, url) => {
     process.env[MODE_KEY] = mode;
     process.env[URL_KEY] = url;

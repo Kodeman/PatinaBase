@@ -45,7 +45,7 @@ export function CommitBar() {
   const valid = selectValidation(state).isValid;
   const placementRoute = routing.specBookPlacement;
   const hasProjectPlacement =
-    routing.specBookPlacementPilot && placementRoute !== null && placementRoute.kind !== 'library';
+    placementRoute !== null && placementRoute.kind !== 'library';
   const disabled =
     !valid || !routing.specBookPlacementValid || io.isSaving || !user || busy !== null;
 
@@ -169,7 +169,7 @@ export function CommitBar() {
       )}
       <button
         type="button"
-        disabled={!valid || io.isSaving || !user}
+        disabled={!valid || !routing.specBookPlacementValid || io.isSaving || !user}
         onClick={() => dispatch({ type: 'OPEN_OVERLAY', overlay: 'DEC' })}
         className="w-full py-1 text-center font-mono text-[0.62rem] uppercase tracking-[0.08em] text-ink-soft transition-colors hover:text-brass disabled:opacity-40"
       >

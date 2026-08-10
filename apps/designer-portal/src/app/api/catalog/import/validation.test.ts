@@ -1,4 +1,4 @@
-import { parseUsdCents, strictImportText } from './validation';
+import { parseUsdCents, strictImportText, strictOptionalUuid } from './validation';
 
 describe('catalog import validation', () => {
   it.each([
@@ -20,5 +20,15 @@ describe('catalog import validation', () => {
     expect(strictImportText('Chair\u0000', 'name', true).error).toMatch(/control/);
     expect(strictImportText('   ', 'name', true).error).toMatch(/whitespace-only/);
     expect(strictImportText(' Chair', 'name', true).error).toMatch(/surrounding whitespace/);
+  });
+});
+
+describe('strictOptionalUuid', () => {
+  it('accepts only canonical UUID-shaped vendor identities', () => {
+    expect(strictOptionalUuid('123e4567-e89b-42d3-a456-426614174000', 'vendorId')).toEqual({
+      value: '123e4567-e89b-42d3-a456-426614174000', error: null,
+    });
+    expect(strictOptionalUuid('Acme Furniture', 'vendorId').error).toMatch(/expected UUID/);
+    expect(strictOptionalUuid(' 123e4567-e89b-42d3-a456-426614174000', 'vendorId').error).toMatch(/expected UUID/);
   });
 });

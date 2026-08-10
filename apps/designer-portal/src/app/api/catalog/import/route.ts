@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@patina/supabase/server';
-import { parseUsdCents, strictImportText } from './validation';
+import { parseUsdCents, strictImportText, strictOptionalUuid } from './validation';
 
 // POST /api/catalog/import — bulk-import mapped products (auth required).
 //
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
         material: strictImportText(row.material, 'material'),
         dimensions: strictImportText(row.dimensions, 'dimensions'),
         vendor: strictImportText(row.vendor, 'vendor'),
-        vendorId: strictImportText(row.vendorId, 'vendorId'),
+        vendorId: strictOptionalUuid(row.vendorId, 'vendorId'),
       };
       const invalidText = Object.values(fields).find((field) => field.error);
       if (invalidText?.error || !fields.name.value) {
@@ -107,7 +107,10 @@ export async function POST(request: NextRequest) {
         style_tags: [],
         captured_by: user.id,
         captured_at: now,
-        vendor_id: fields.vendorId.value || fields.vendor.value || null,
+        // A mapped vendor name is provenance, not a foreign key. Name-based
+        // resolution belongs in staged import review; only an explicit UUID
+        // may populate products.vendor_id here.
+        vendor_id: fields.vendorId.value,
         // Imported rows land in the designer's private My Library (layer=personal),
         // matching the single-create route. Without this the 00152 trigger defaults
         // a layer-less insert to 'catalog' (the shared Patina Catalog).

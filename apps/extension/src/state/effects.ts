@@ -142,7 +142,7 @@ function placementSource(draft: DraftSlice) {
   };
 }
 
-async function runPilotPlacement(
+async function runProjectPlacement(
   productId: string,
   route: SpecBookPlacementRoute,
   draft: DraftSlice,
@@ -186,7 +186,7 @@ export async function retrySpecBookPlacement(
 ): Promise<{ productId: string; placementOutcome: PlacementOutcome | null }> {
   const route = routing.specBookPlacement;
   if (!route || route.kind === 'library') return { productId, placementOutcome: null };
-  const placementOutcome = await runPilotPlacement(productId, route, draft, false, duplicateMode);
+  const placementOutcome = await runProjectPlacement(productId, route, draft, false, duplicateMode);
   recordRecent(draft, productId, 'library');
   return { productId, placementOutcome };
 }
@@ -199,7 +199,7 @@ export async function reuseProductForSpecBookPlacement(
 ): Promise<{ productId: string; placementOutcome: PlacementOutcome | null }> {
   const route = routing.specBookPlacement;
   if (!route || route.kind === 'library') return { productId, placementOutcome: null };
-  const placementOutcome = await runPilotPlacement(productId, route, draft, true, 'reuse');
+  const placementOutcome = await runProjectPlacement(productId, route, draft, true, 'reuse');
   recordRecent(draft, productId, 'library');
   return { productId, placementOutcome };
 }
@@ -221,19 +221,12 @@ export async function saveToLibrary(
   if (error) throw error;
   if (!product) throw new Error('Failed to create product');
 
-  if (routing.specBookPlacement === null && routing.destination.type === 'project-room') {
-    await supabase.from('project_products').insert({
-      project_id: routing.destination.projectId,
-      product_id: product.id,
-      notes: draft.note || null,
-    });
-  }
   if (draft.styleIds.length) {
     await supabase.from('product_styles').insert(styleInserts(product.id, draft.styleIds, user.id));
   }
   captureAnalytics(draft, 'new');
   const placementOutcome = routing.specBookPlacement && routing.specBookPlacement.kind !== 'library'
-    ? await runPilotPlacement(product.id, routing.specBookPlacement, draft, false, duplicateMode)
+    ? await runProjectPlacement(product.id, routing.specBookPlacement, draft, false, duplicateMode)
     : null;
   recordRecent(draft, product.id, 'library');
   return { productId: product.id, placementOutcome };
@@ -358,23 +351,8 @@ export async function updateExisting(
     .eq('id', existingId);
   if (error) throw error;
 
-  if (routing.specBookPlacement === null && routing.destination.type === 'project-room') {
-    const { data: assignment } = await supabase
-      .from('project_products')
-      .select('id')
-      .eq('project_id', routing.destination.projectId)
-      .eq('product_id', existingId)
-      .single();
-    if (!assignment) {
-      await supabase.from('project_products').insert({
-        project_id: routing.destination.projectId,
-        product_id: existingId,
-        notes: draft.note || null,
-      });
-    }
-  }
   const placementOutcome = routing.specBookPlacement && routing.specBookPlacement.kind !== 'library'
-    ? await runPilotPlacement(existingId, routing.specBookPlacement, draft, true, 'reuse')
+    ? await runProjectPlacement(existingId, routing.specBookPlacement, draft, true, 'reuse')
     : null;
   if (draft.styleIds.length) {
     await supabase.from('product_styles').delete().eq('product_id', existingId);

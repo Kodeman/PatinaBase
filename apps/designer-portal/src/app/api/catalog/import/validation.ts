@@ -1,6 +1,7 @@
 const FORMULA_PREFIX = /^(?:[=+@]|-[A-Za-z])/;
 const CONTROL_CHARACTER = /[\u0000-\u001f\u007f-\u009f]/;
 const USD_AMOUNT = /^(?:\$|USD )?(?:(?:0|[1-9]\d*)|(?:[1-9]\d{0,2}(?:,\d{3})+))(?:\.(\d{1,2}))?$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export type ValidationResult<T> = { value: T; error: null } | { value: null; error: string };
 
@@ -35,4 +36,12 @@ export function parseUsdCents(raw: unknown): ValidationResult<number | null> {
   return Number.isSafeInteger(cents)
     ? { value: cents, error: null }
     : { value: null, error: 'Invalid price' };
+}
+
+export function strictOptionalUuid(raw: unknown, field: string): ValidationResult<string | null> {
+  if (raw === null || raw === undefined || raw === '') return { value: null, error: null };
+  if (typeof raw !== 'string' || raw !== raw.trim() || !UUID.test(raw)) {
+    return { value: null, error: `Invalid ${field}: expected UUID` };
+  }
+  return { value: raw.toLowerCase(), error: null };
 }

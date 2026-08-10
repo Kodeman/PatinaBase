@@ -122,12 +122,7 @@ export interface RoutingSlice {
   proposalId: UUID | null;
   scopeRoomId: UUID | null;
   ffeCategorySlug: string | null;
-  /**
-   * Null means the pilot flag has not enabled the new placement contract and
-   * the legacy destination behavior must remain untouched.
-   */
   specBookPlacement: SpecBookPlacementRoute | null;
-  specBookPlacementPilot: boolean;
   specBookPlacementValid: boolean;
   // Decision targeting (carried from the legacy panel).
   decision: {
@@ -251,7 +246,6 @@ export type CaptureAction =
   | {
       type: 'SPEC_BOOK_PLACEMENT_SET';
       route: SpecBookPlacementRoute | null;
-      pilot: boolean;
       valid?: boolean;
     }
   | { type: 'DECISION_TARGET_SET'; patch: Partial<RoutingSlice['decision']> }

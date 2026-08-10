@@ -292,6 +292,7 @@ export function FFESlotPicker({
           aria-label="New line category"
           value={category}
           onChange={(event) => setCategory(event.target.value)}
+          maxLength={200}
           placeholder="Category, e.g. seating"
           className="w-full rounded-md border border-line bg-paper-3 px-2.5 py-2 text-[0.85rem] text-ink outline-none placeholder:text-ink-faint focus:border-verdigris"
         />
