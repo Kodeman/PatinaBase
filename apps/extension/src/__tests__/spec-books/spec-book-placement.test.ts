@@ -27,6 +27,7 @@ import {
   SPEC_BOOK_PLACEMENT_CONTEXT_KEY,
   loadSpecBookPlacementContext,
   placementRpcPayload,
+  placementV2Request,
   placeProductInProject,
   saveSpecBookPlacementContext,
   type SpecBookPlacementRoute,
@@ -39,6 +40,9 @@ const source = {
   sourceUrl: 'https://shop.example/chair',
   captureKind: 'product',
 };
+const SELECTION_ID = '123e4567-e89b-42d3-a456-426614174000';
+const THREAD_ID = '223e4567-e89b-42d3-a456-426614174000';
+const PLACEMENT_ID = '323e4567-e89b-42d3-a456-426614174000';
 
 function extraction(): ExtractedProductData {
   return {
@@ -60,7 +64,7 @@ function extraction(): ExtractedProductData {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  rpc.mockResolvedValue({ data: { ffe_item_id: 'ffe-1' }, error: null });
+  rpc.mockResolvedValue({ data: { outcome: 'created', selectionId: SELECTION_ID, threadId: THREAD_ID, placementId: PLACEMENT_ID }, error: null });
 });
 
 describe('sticky spec-book placement context', () => {
@@ -107,6 +111,19 @@ describe('sticky spec-book placement context', () => {
 });
 
 describe('place_product_in_project payloads', () => {
+  it('uses the canonical v2 envelope with a stable retry key', () => {
+    const route = { kind: 'project_inbox' as const, projectId: 'project-1', roomId: null };
+    expect(placementV2Request('product-1', route, source, 'reuse')).toEqual({
+      projectId: 'project-1', productId: 'product-1', roomId: null,
+      assignmentScope: 'unassigned', category: null, boardId: null,
+      disposition: 'candidate', duplicateMode: 'reuse', placeholderSelectionId: null,
+      configurationId: null, roleConfigurationIdentity: null,
+      idempotencyKey: 'chrome:product-1:project-1:project_inbox:unassigned::reuse',
+      source: 'chrome_extension',
+    });
+    expect(placementV2Request('product-1', route, source, 'create').idempotencyKey)
+      .not.toBe(placementV2Request('product-1', route, source, 'reuse').idempotencyKey);
+  });
   it('routes an existing slot without leaking create-line fields', () => {
     expect(
       placementRpcPayload(
@@ -117,7 +134,8 @@ describe('place_product_in_project payloads', () => {
           roomId: 'room-1',
           slotId: 'slot-1',
         },
-        source
+        { ...source, captureId: 'capture-1' },
+        'reuse',
       )
     ).toEqual({
       p_project_id: 'project-1',
@@ -131,6 +149,8 @@ describe('place_product_in_project payloads', () => {
         route_kind: 'fill_slot',
         source_url: source.sourceUrl,
         capture_kind: 'product',
+        captureId: 'capture-1',
+        idempotencyKey: 'chrome:product-1:project-1:fill_slot:room-1:slot-1:reuse',
       },
     });
   });
@@ -145,7 +165,8 @@ describe('place_product_in_project payloads', () => {
           roomId: 'room-1',
           category: '  lounge seating  ',
         },
-        source
+        source,
+        'create',
       )
     ).toMatchObject({
       p_project_id: 'project-1',
@@ -159,9 +180,30 @@ describe('place_product_in_project payloads', () => {
       },
     });
   });
+
+  it('bounds category input and caps a stable retry key at 200 characters', () => {
+    const route = {
+      kind: 'create_line' as const, projectId: 'project-1', roomId: 'room-1', category: 'x'.repeat(200),
+    };
+    const first = placementV2Request('product-1', route, source, 'create').idempotencyKey;
+    const second = placementV2Request('product-1', route, source, 'create').idempotencyKey;
+    expect(first).toBe(second);
+    expect(first.length).toBeLessThanOrEqual(200);
+    expect(() => placementV2Request('product-1', { ...route, category: 'x'.repeat(201) }, source, 'create'))
+      .toThrow('1–200');
+  });
 });
 
 describe('retry and duplicate preservation', () => {
+  it('falls back for both PostgreSQL and PostgREST missing-v2 contracts', async () => {
+    const route: SpecBookPlacementRoute = { kind: 'project_inbox', projectId: 'project-1', roomId: null };
+    rpc.mockResolvedValueOnce({ data: null, error: { code: 'PGRST202' } }).mockResolvedValueOnce({ data: { outcome: 'created', selectionId: SELECTION_ID, threadId: THREAD_ID, placementId: null }, error: null });
+    await expect(placeProductInProject('product-1', route, source, { duplicateMode: 'reuse' })).resolves.toEqual({ outcome: 'created', selectionId: SELECTION_ID, threadId: THREAD_ID, placementId: null });
+    expect(rpc).toHaveBeenNthCalledWith(2, 'place_product_in_project', expect.any(Object));
+    expect(rpc.mock.calls[1][1].p_source.idempotencyKey).toBe(
+      placementV2Request('product-1', route, source, 'reuse').idempotencyKey,
+    );
+  });
   it('retains the durable Product and selected route when placement fails', async () => {
     const route: SpecBookPlacementRoute = {
       kind: 'fill_slot',
@@ -174,16 +216,16 @@ describe('retry and duplicate preservation', () => {
         data: null,
         error: { message: 'slot already filled' },
       })
-      .mockResolvedValueOnce({ data: { ffe_item_id: 'ffe-1' }, error: null });
+      .mockResolvedValueOnce({ data: { outcome: 'filled', selectionId: SELECTION_ID, threadId: THREAD_ID, placementId: null }, error: null });
 
-    const failed = placeProductInProject('product-existing', route, source);
+    const failed = placeProductInProject('product-existing', route, source, { duplicateMode: 'reuse' });
     await expect(failed).rejects.toMatchObject({
       name: 'SpecBookPlacementError',
       productId: 'product-existing',
       route,
     });
 
-    await placeProductInProject('product-existing', route, source);
+    await placeProductInProject('product-existing', route, source, { duplicateMode: 'reuse' });
     expect(rpc).toHaveBeenCalledTimes(2);
     expect(rpc.mock.calls[1]).toEqual(rpc.mock.calls[0]);
   });
@@ -192,7 +234,6 @@ describe('retry and duplicate preservation', () => {
     const draft = draftFromExtraction(extraction());
     const routing = {
       ...initialCaptureState().routing,
-      specBookPlacementPilot: true,
       specBookPlacementValid: true,
       specBookPlacement: {
         kind: 'create_line' as const,
@@ -204,19 +245,48 @@ describe('retry and duplicate preservation', () => {
 
     await expect(
       reuseProductForSpecBookPlacement('product-existing', draft, routing)
-    ).resolves.toBe('product-existing');
+    ).resolves.toMatchObject({ productId: 'product-existing' });
 
     expect(from).not.toHaveBeenCalled();
-    expect(rpc).toHaveBeenCalledWith('place_product_in_project', {
-      p_project_id: 'project-1',
-      p_product_id: 'product-existing',
-      p_room_id: 'room-1',
-      p_slot_id: null,
-      p_category: 'seating',
-      p_source: expect.objectContaining({
-        surface: 'chrome_extension',
-        route_kind: 'create_line',
+    expect(rpc).toHaveBeenCalledWith('place_product_in_project_v2', {
+      p_request: expect.objectContaining({
+        projectId: 'project-1', productId: 'product-existing',
+        source: 'chrome_extension', duplicateMode: 'reuse',
       }),
     });
+  });
+
+  it('preserves explicit hold intent and requires its outcome ids to remain null', async () => {
+    const route: SpecBookPlacementRoute = { kind: 'project_inbox', projectId: 'project-1', roomId: null };
+    rpc.mockResolvedValueOnce({
+      data: { outcome: 'held', selectionId: null, threadId: null, placementId: null },
+      error: null,
+    });
+
+    await expect(placeProductInProject('product-1', route, source, { duplicateMode: 'hold' })).resolves.toEqual({
+      outcome: 'held', selectionId: null, threadId: null, placementId: null,
+    });
+    expect(rpc).toHaveBeenCalledWith('place_product_in_project_v2', {
+      p_request: expect.objectContaining({ duplicateMode: 'hold' }),
+    });
+  });
+
+  it.each([
+    { outcome: 'created', selectionId: null, threadId: THREAD_ID, placementId: null },
+    { outcome: 'reused', selectionId: SELECTION_ID, threadId: 'not-a-uuid', placementId: null },
+    { outcome: 'filled', selectionId: SELECTION_ID, threadId: THREAD_ID, placementId: 'not-a-uuid' },
+    { outcome: 'held', selectionId: SELECTION_ID, threadId: THREAD_ID, placementId: null },
+  ])('fails closed for malformed exact outcome %#', async (data) => {
+    const route: SpecBookPlacementRoute = { kind: 'project_inbox', projectId: 'project-1', roomId: null };
+    rpc.mockResolvedValueOnce({ data, error: null });
+    await expect(placeProductInProject('product-1', route, source, { duplicateMode: 'reuse' }))
+      .rejects.toThrow('invalid outcome');
+  });
+
+  it.each([undefined, 'unknown'])('fails closed for missing or unknown outcome %s', async (outcome) => {
+    const route: SpecBookPlacementRoute = { kind: 'project_inbox', projectId: 'project-1', roomId: null };
+    rpc.mockResolvedValueOnce({ data: { outcome, selectionId: SELECTION_ID, threadId: THREAD_ID }, error: null });
+    await expect(placeProductInProject('product-1', route, source, { duplicateMode: 'reuse' }))
+      .rejects.toThrow('invalid outcome');
   });
 });

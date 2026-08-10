@@ -695,7 +695,7 @@ export function adaptProjectCommercialSummary(value: unknown): ProjectCommercial
 // get_client_project_selections and get_project_working_budget's per-line
 // scheduledCents/authorizedCents additions are database-owned allowlist
 // projections, same discipline as the bundle above: read only known keys,
-// tolerate camelCase or snake_case, and discard everything else.
+// consume the exact camelCase projection and discard everything else.
 
 export type ClientSelectionOrigin = 'commercial' | 'legacy';
 
@@ -735,10 +735,10 @@ export interface ClientSelection {
   clientUnitPriceCents: number;
   clientLineTotalCents: number;
   itemType: string;
-  status: FFEStageKey;
+  logisticsStatus: FFEStageKey;
   /**
    * Set only on kind:'trade' rows — the trade scope's own progress vocabulary
-   * (TradeScopeProgressState), never the FF&E `status` above. Null for
+   * (TradeScopeProgressState), never the FF&E `logisticsStatus` above. Null for
    * furnishings lines.
    */
   tradeJourney: TradeScopeProgressState | null;
@@ -799,7 +799,7 @@ export function adaptClientSelections(value: unknown): ClientProjectSelections {
           clientUnitPriceCents: number(first(row, 'clientUnitPriceCents', 'client_unit_price_cents')),
           clientLineTotalCents: number(first(row, 'clientLineTotalCents', 'client_line_total_cents')),
           itemType: text(first(row, 'itemType', 'item_type')),
-          status: oneOf(row.status, FFE_STAGE_KEYS, 'specified'),
+          logisticsStatus: oneOf(row.logisticsStatus, FFE_STAGE_KEYS, 'specified'),
           tradeJourney: tradeJourneyRaw === undefined || tradeJourneyRaw === null
             ? null
             : oneOf(tradeJourneyRaw, TRADE_SCOPE_PROGRESS_STATES, 'none'),

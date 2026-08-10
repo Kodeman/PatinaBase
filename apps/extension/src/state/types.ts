@@ -15,7 +15,7 @@ import type {
   UUID,
 } from '@patina/shared';
 import type { NavState } from './screens';
-import type { SpecBookPlacementRoute } from '../lib/spec-book-placement';
+import type { PlacementOutcome, SpecBookPlacementRoute } from '../lib/spec-book-placement';
 
 // ─── Routing destination (mirrors @patina/catalog-ui DestinationPicker) ──────
 
@@ -122,12 +122,7 @@ export interface RoutingSlice {
   proposalId: UUID | null;
   scopeRoomId: UUID | null;
   ffeCategorySlug: string | null;
-  /**
-   * Null means the pilot flag has not enabled the new placement contract and
-   * the legacy destination behavior must remain untouched.
-   */
   specBookPlacement: SpecBookPlacementRoute | null;
-  specBookPlacementPilot: boolean;
   specBookPlacementValid: boolean;
   // Decision targeting (carried from the legacy panel).
   decision: {
@@ -183,6 +178,7 @@ export interface IoSlice {
   lastSavedProductId: UUID | null;
   /** Durable Product retained when only the project-placement RPC failed. */
   pendingPlacementProductId: UUID | null;
+  lastPlacementOutcome: PlacementOutcome | null;
 }
 
 export interface CaptureState {
@@ -250,7 +246,6 @@ export type CaptureAction =
   | {
       type: 'SPEC_BOOK_PLACEMENT_SET';
       route: SpecBookPlacementRoute | null;
-      pilot: boolean;
       valid?: boolean;
     }
   | { type: 'DECISION_TARGET_SET'; patch: Partial<RoutingSlice['decision']> }
@@ -265,7 +260,7 @@ export type CaptureAction =
   | { type: 'MERGE_FIELD_PICK'; field: DraftFieldKey; pick: 'existing' | 'new' }
   // save lifecycle
   | { type: 'SAVE_START'; target: CommitTarget }
-  | { type: 'SAVE_SUCCESS'; productId: UUID; landed: 'library' | 'inbox' }
+  | { type: 'SAVE_SUCCESS'; productId: UUID; landed: 'library' | 'inbox'; placementOutcome?: PlacementOutcome | null }
   | { type: 'SAVE_ERROR'; error: string; preservedProductId?: UUID }
   | { type: 'CAPTURE_NEXT' }
   // offline / prefs

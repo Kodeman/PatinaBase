@@ -466,16 +466,16 @@ export function TheMaking({ projectId, project, milestones }: TheMakingProps) {
 
   const goods = selections.filter((selection) => selection.kind === 'furnishings');
   const inMotion = goods
-    .filter((selection) => journeyStageIndexForStatus(selection.status) < INSTALLED_STOP)
+    .filter((selection) => journeyStageIndexForStatus(selection.logisticsStatus) < INSTALLED_STOP)
     // Furthest along first — what is nearly here reads before what has not
     // left the studio. Name breaks the tie so the order is stable.
     .sort(
       (a, b) =>
-        journeyStageIndexForStatus(b.status) - journeyStageIndexForStatus(a.status) ||
+        journeyStageIndexForStatus(b.logisticsStatus) - journeyStageIndexForStatus(a.logisticsStatus) ||
         a.name.localeCompare(b.name),
     );
   const installed = goods.filter(
-    (selection) => journeyStageIndexForStatus(selection.status) === INSTALLED_STOP,
+    (selection) => journeyStageIndexForStatus(selection.logisticsStatus) === INSTALLED_STOP,
   );
 
   const acceptanceGates = selections.flatMap((selection) => {
@@ -505,7 +505,7 @@ export function TheMaking({ projectId, project, milestones }: TheMakingProps) {
   const gateCount = signatureGates.length + acceptanceGates.length;
   const namesAtStop = (stop: number) =>
     goods
-      .filter((selection) => journeyStageIndexForStatus(selection.status) === stop)
+      .filter((selection) => journeyStageIndexForStatus(selection.logisticsStatus) === stop)
       .map((selection) => selection.name);
 
   const openChapterLoading =
@@ -623,7 +623,7 @@ export function TheMaking({ projectId, project, milestones }: TheMakingProps) {
                   name={selection.name}
                   imageUrl={selection.imageUrl}
                   priceCents={selection.clientLineTotalCents || null}
-                  status={selection.status}
+                  status={selection.logisticsStatus}
                 />
               </div>
             </OpenRow>,

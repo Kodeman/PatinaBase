@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@patina/supabase/server';
+import { parseUsdCents, strictImportText, strictOptionalUuid } from './validation';
 
 // POST /api/catalog/import — bulk-import mapped products (auth required).
 //
@@ -35,22 +36,6 @@ function slugify(name: string): string {
     .replace(/^-|-$/g, '');
 }
 
-function parsePrice(raw: unknown): number | null {
-  if (raw === null || raw === undefined || raw === '') return null;
-  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null;
-  // Strip currency symbols / thousands separators before parsing.
-  const cleaned = String(raw).replace(/[^0-9.]/g, '');
-  if (cleaned === '') return null;
-  const n = parseFloat(cleaned);
-  return Number.isFinite(n) ? n : null;
-}
-
-function str(raw: unknown): string | null {
-  if (raw === null || raw === undefined) return null;
-  const s = String(raw).trim();
-  return s === '' ? null : s;
-}
-
 export async function POST(request: NextRequest) {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generated types not yet updated for new columns
@@ -82,42 +67,50 @@ export async function POST(request: NextRequest) {
     const insertData: Record<string, unknown>[] = [];
 
     rows.forEach((row, i) => {
-      const name = str(row.name);
-      if (!name) {
-        errors.push({ row: i, reason: 'Missing required field: name' });
+      const fields = {
+        name: strictImportText(row.name, 'name', true),
+        brand: strictImportText(row.brand, 'brand'),
+        description: strictImportText(row.description, 'description'),
+        category: strictImportText(row.category, 'category'),
+        sku: strictImportText(row.sku, 'sku'),
+        material: strictImportText(row.material, 'material'),
+        dimensions: strictImportText(row.dimensions, 'dimensions'),
+        vendor: strictImportText(row.vendor, 'vendor'),
+        vendorId: strictOptionalUuid(row.vendorId, 'vendorId'),
+      };
+      const invalidText = Object.values(fields).find((field) => field.error);
+      if (invalidText?.error || !fields.name.value) {
+        errors.push({ row: i, reason: invalidText?.error ?? 'Missing required field: name' });
         return;
       }
 
-      // Price is optional, but if provided it must parse to a number.
-      let priceRetail: number | null = null;
-      if (row.price !== undefined && row.price !== null && row.price !== '') {
-        const price = parsePrice(row.price);
-        if (price === null) {
-          errors.push({ row: i, reason: `Invalid price: ${String(row.price)}` });
-          return;
-        }
-        priceRetail = Math.round(price * 100);
+      const price = parseUsdCents(row.price);
+      if (price.error) {
+        errors.push({ row: i, reason: price.error });
+        return;
       }
-
-      const material = str(row.material);
+      const name = fields.name.value;
 
       insertData.push({
         name,
         slug: slugify(name),
-        brand: str(row.brand),
-        description: str(row.description),
-        category: str(row.category) || 'decor',
+        brand: fields.brand.value,
+        description: fields.description.value,
+        category: fields.category.value || 'decor',
         status: 'draft',
-        sku: str(row.sku),
-        price_retail: priceRetail,
+        sku: fields.sku.value,
+        price_retail: price.value,
         images: [],
-        materials: material ? [material] : [],
-        dimensions: str(row.dimensions),
+        materials: fields.material.value ? [fields.material.value] : [],
+        dimensions: fields.dimensions.value,
         tags: [],
         style_tags: [],
         captured_by: user.id,
         captured_at: now,
-        vendor_id: str(row.vendorId) || str(row.vendor) || null,
+        // A mapped vendor name is provenance, not a foreign key. Name-based
+        // resolution belongs in staged import review; only an explicit UUID
+        // may populate products.vendor_id here.
+        vendor_id: fields.vendorId.value,
         // Imported rows land in the designer's private My Library (layer=personal),
         // matching the single-create route. Without this the 00152 trigger defaults
         // a layer-less insert to 'catalog' (the shared Patina Catalog).

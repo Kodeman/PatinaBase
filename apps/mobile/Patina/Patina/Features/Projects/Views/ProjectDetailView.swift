@@ -283,7 +283,7 @@ struct ProjectDetailView: View {
                             .font(PatinaTypography.bodySmall)
                             .foregroundStyle(PatinaColors.Text.primary)
                         Spacer()
-                        if let total = item.line_total_cents {
+                        if let total = item.client_line_total_cents {
                             Text(formatPrice(total))
                                 .font(PatinaTypography.monoTiny)
                                 .foregroundStyle(PatinaColors.Text.secondary)

@@ -11,7 +11,9 @@ import {
 } from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import {
   buildFallbackSidemark,
+  checkPoRepricingGate,
   checkPoTotalsCoherence,
+  PO_NEEDS_REPRICING_DETAIL,
   PO_OUT_OF_SYNC_DETAIL,
   parsePoSendBody,
   paymentPatternLabel,
@@ -99,6 +101,44 @@ Deno.test("parsePoSendBody treats non-true ccDesigner as false", () => {
   const result = parsePoSendBody({ purchaseOrderId: "po-1", ccDesigner: "yes" });
   assertEquals(result.ok, true);
   if (result.ok) assertEquals(result.payload.ccDesigner, false);
+});
+
+// ─── needs_repricing — final release guard ─────────────────────────────────
+
+Deno.test("repricing blocks send and mark_sent before any release side effect", () => {
+  for (const mode of ["send", "mark_sent"] as const) {
+    const calls = { render: 0, send: 0, mark: 0 };
+    const gate = checkPoRepricingGate({ needs_repricing: true }, mode);
+    if (gate.ok) {
+      calls.render += 1;
+      if (mode === "send") calls.send += 1;
+      calls.mark += 1;
+    }
+    assertEquals(gate, {
+      ok: false,
+      error: "po_needs_repricing",
+      detail: PO_NEEDS_REPRICING_DETAIL,
+    });
+    assertEquals(calls, { render: 0, send: 0, mark: 0 });
+  }
+});
+
+Deno.test("repricing payload is strictly boolean and preview remains diagnostic-only", () => {
+  assertEquals(checkPoRepricingGate({ needs_repricing: false }, "send"), {
+    ok: true,
+    needsRepricing: false,
+  });
+  assertEquals(checkPoRepricingGate({ needs_repricing: true }, "preview"), {
+    ok: true,
+    needsRepricing: true,
+  });
+  for (const value of [{}, { needs_repricing: "true" }, null]) {
+    assertEquals(checkPoRepricingGate(value, "send"), {
+      ok: false,
+      error: "invalid_po_state",
+      detail: "Purchase order repricing state is unavailable.",
+    });
+  }
 });
 
 // ─── resolveVendorRecipient — the 00188 fallback chain ───────────────────────

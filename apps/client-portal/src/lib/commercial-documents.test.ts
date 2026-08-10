@@ -719,6 +719,13 @@ describe('adaptClientSelections', () => {
     expect(result.selections[0]).toMatchObject({ kind: 'furnishings', tradeJourney: null });
   });
 
+  it('consumes only the curated camelCase logistics status field', () => {
+    const result = adaptClientSelections({
+      selections: [{ id: 'sel-1', name: 'Sectional', logisticsStatus: 'shipped', status: 'installed' }],
+    });
+    expect(result.selections[0].logisticsStatus).toBe('shipped');
+  });
+
   it('reads a trade presence line — kind, tradeJourney, and the instrument proposalId the accept act needs', () => {
     const result = adaptClientSelections({
       origin: 'commercial',

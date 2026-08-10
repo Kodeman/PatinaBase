@@ -8,6 +8,33 @@
 
 export type PoSendMode = 'preview' | 'send' | 'mark_sent';
 
+export const PO_NEEDS_REPRICING_DETAIL =
+  'This purchase order must be repriced before it can be sent or marked sent.';
+
+export type PoRepricingGate =
+  | { ok: true; needsRepricing: boolean }
+  | { ok: false; error: 'invalid_po_state' | 'po_needs_repricing'; detail: string };
+
+/** Block release modes while keeping preview available for diagnosis. */
+export function checkPoRepricingGate(value: unknown, mode: PoSendMode): PoRepricingGate {
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    typeof (value as Record<string, unknown>).needs_repricing !== 'boolean'
+  ) {
+    return {
+      ok: false,
+      error: 'invalid_po_state',
+      detail: 'Purchase order repricing state is unavailable.',
+    };
+  }
+  const needsRepricing = (value as { needs_repricing: boolean }).needs_repricing;
+  if (needsRepricing && (mode === 'send' || mode === 'mark_sent')) {
+    return { ok: false, error: 'po_needs_repricing', detail: PO_NEEDS_REPRICING_DETAIL };
+  }
+  return { ok: true, needsRepricing };
+}
+
 export interface PoSendPayload {
   purchaseOrderId: string;
   mode: PoSendMode;

@@ -39,8 +39,7 @@ export function initialCaptureState(prefs: Prefs = DEFAULT_PREFS): CaptureState 
       scopeRoomId: null,
       ffeCategorySlug: null,
       specBookPlacement: null,
-      specBookPlacementPilot: false,
-      specBookPlacementValid: true,
+      specBookPlacementValid: false,
       decision: {
         designerClientId: null,
         clientProfileId: null,
@@ -58,6 +57,7 @@ export function initialCaptureState(prefs: Prefs = DEFAULT_PREFS): CaptureState 
       error: null,
       lastSavedProductId: null,
       pendingPlacementProductId: null,
+      lastPlacementOutcome: null,
     },
   };
 }
@@ -366,7 +366,6 @@ export function captureReducer(state: CaptureState, action: CaptureAction): Capt
         routing: {
           ...state.routing,
           specBookPlacement: action.route,
-          specBookPlacementPilot: action.pilot,
           specBookPlacementValid: action.valid ?? true,
           ...(action.route && action.route.kind !== 'library'
             ? {
@@ -450,6 +449,7 @@ export function captureReducer(state: CaptureState, action: CaptureAction): Capt
           isSaving: false,
           lastSavedProductId: action.productId,
           pendingPlacementProductId: null,
+          lastPlacementOutcome: action.placementOutcome ?? null,
         },
       };
 
@@ -469,6 +469,11 @@ export function captureReducer(state: CaptureState, action: CaptureAction): Capt
       return {
         ...state,
         draft: null,
+        routing: {
+          ...state.routing,
+          specBookPlacement: null,
+          specBookPlacementValid: false,
+        },
         dedup: { match: null, confidence: 0, mergePicks: {} },
         nav: { ...state.nav, screen: 'C1', overlay: null },
         io: {
@@ -477,6 +482,7 @@ export function captureReducer(state: CaptureState, action: CaptureAction): Capt
           error: null,
           lastSavedProductId: null,
           pendingPlacementProductId: null,
+          lastPlacementOutcome: null,
         },
       };
 

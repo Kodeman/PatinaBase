@@ -85,6 +85,10 @@ export function ImportSheet({
         return;
       }
       const [hdr, ...rest] = parsed;
+      if (rest.length > 5_000) {
+        setParseError('This import has more than 5,000 rows. Split it into smaller files before continuing.');
+        return;
+      }
       setHeaders(hdr);
       setDataRows(rest);
       setMapping(hdr.map((h) => guessField(h)));

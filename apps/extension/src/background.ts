@@ -6,7 +6,7 @@
 import { Storage } from '@plasmohq/storage';
 import type { QuickCaptureRequest, VendorSelection, VendorCaptureInput } from '@patina/shared';
 import { supabase } from './lib/supabase';
-import { checkForUpdate } from './lib/update-checker';
+import { placeProductInProject } from './lib/spec-book-placement';
 
 // Initialize storage
 const storage = new Storage({ area: 'local' });
@@ -17,8 +17,8 @@ interface QueuedVendorData {
   retailer: VendorSelection | null;
 }
 
-// Where the capture is intended to land. 'project' = legacy
-// project_products workflow; 'proposal' = persisted as a real product
+// Where the capture is intended to land. 'project' routes through the
+// canonical placement command; 'proposal' = persisted as a real product
 // AND a proposal_captures row that already targets a specific
 // proposal/room/category; 'inbox' = persisted as a real product (or
 // stub) AND a proposal_captures row in 'inbox' status.
@@ -33,7 +33,7 @@ interface QueuedCapture {
   vendorData?: VendorCaptureInput;    // Direct vendor data for vendor-only capture
   projectId?: string | null;          // Project to add the product to
   styleIds?: string[];                // Style assignments for the product
-  note?: string | null;               // Note for project_products
+  note?: string | null;
   // Wave 2 — Proposal/Inbox targeting
   proposalId?: string | null;
   scopeRoomId?: string | null;
@@ -257,13 +257,13 @@ async function syncQueue(): Promise<void> {
         }
 
         if (target === 'project') {
-          // Legacy path — add to project if specified.
           if (item.projectId && product) {
-            await supabase.from('project_products').insert({
-              project_id: item.projectId,
-              product_id: product.id,
-              notes: item.note || null,
-            });
+            await placeProductInProject(
+              product.id,
+              { kind: 'project_inbox', projectId: item.projectId, roomId: null },
+              { sourceUrl: captureData.url ?? '', captureKind: 'queued_product', captureId: item.id },
+              { duplicateMode: 'create' },
+            );
           }
         } else if (product && (target === 'proposal' || target === 'inbox')) {
           // Wave 2 — write a proposal_captures row with the right targeting.
@@ -489,7 +489,6 @@ chrome.runtime.onStartup.addListener(() => {
 
 // Periodic sync using alarms (Manifest V3 doesn't allow setInterval in service workers)
 chrome.alarms?.create('sync-queue', { periodInMinutes: 5 });
-chrome.alarms?.create('check-update', { periodInMinutes: 60 });
 chrome.alarms?.create('refresh-token', { periodInMinutes: 30 });
 
 chrome.alarms?.onAlarm?.addListener(async alarm => {
@@ -500,16 +499,6 @@ chrome.alarms?.onAlarm?.addListener(async alarm => {
     } catch (err) {
       console.warn('[background] sync-queue failed', err);
     }
-  }
-  if (alarm.name === 'check-update') {
-    checkForUpdate().then(state => {
-      if (state?.hasUpdate) {
-        // Notify sidepanel if open
-        chrome.runtime.sendMessage({ type: 'UPDATE_AVAILABLE', updateState: state }).catch(() => {
-          // Sidepanel not open — that's fine, it will read cached state on next open
-        });
-      }
-    });
   }
   if (alarm.name === 'refresh-token') {
     // Proactively refresh the Supabase session in the SW so the offline
