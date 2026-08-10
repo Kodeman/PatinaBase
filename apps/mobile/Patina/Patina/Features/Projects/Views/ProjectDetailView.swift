@@ -29,6 +29,7 @@ struct ProjectDetailView: View {
                     if viewModel.hasInvoices { ProjectInvoicesLink() }
                     if viewModel.hasDocuments { ProjectDocumentsLink() }
                     if !viewModel.ffe.isEmpty { ffeSection }
+                    if let review = viewModel.review, !review.items.isEmpty { reviewSection(review) }
                     // R23: empty sections collapse into one quiet portal hint
                     // instead of stacked "No X yet" rows.
                     if !missingSectionNames.isEmpty {
@@ -283,7 +284,7 @@ struct ProjectDetailView: View {
                             .font(PatinaTypography.bodySmall)
                             .foregroundStyle(PatinaColors.Text.primary)
                         Spacer()
-                        if let total = item.line_total_cents {
+                        if let total = item.client_line_total_cents {
                             Text(formatPrice(total))
                                 .font(PatinaTypography.monoTiny)
                                 .foregroundStyle(PatinaColors.Text.secondary)
@@ -296,6 +297,38 @@ struct ProjectDetailView: View {
                             .fill(PatinaColors.pearl)
                             .frame(height: 1)
                     }
+                }
+            }
+            .background(PatinaColors.Background.secondary)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .padding(.horizontal, 24)
+        }
+    }
+
+    // Published review editions are a distinct, nonbinding preference surface.
+    // No authorization or procurement action is exposed in the client app.
+    private func reviewSection(_ review: RemoteProjectReviewBundle) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            MonoLabel(text: "SELECTION REVIEW")
+                .padding(.horizontal, 24)
+            Text("Share a preference with your studio. This does not authorize a purchase.")
+                .font(PatinaTypography.caption)
+                .foregroundStyle(PatinaColors.Text.muted)
+                .padding(.horizontal, 24)
+            VStack(spacing: 0) {
+                ForEach(review.items) { item in
+                    HStack {
+                        VStack(alignment: .leading) {
+                            Text(item.name ?? "Selection")
+                                .font(PatinaTypography.bodySmall)
+                            Text(item.room_name ?? "Throughout")
+                                .font(PatinaTypography.caption)
+                                .foregroundStyle(PatinaColors.Text.muted)
+                        }
+                        Spacer()
+                        if let price = item.client_price_cents { Text(formatPrice(price)).font(PatinaTypography.monoTiny) }
+                    }
+                    .padding(.vertical, 12).padding(.horizontal, 16)
                 }
             }
             .background(PatinaColors.Background.secondary)

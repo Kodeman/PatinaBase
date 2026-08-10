@@ -12,12 +12,14 @@ import {
   type CommercialDocumentBundle,
   type ProjectCommercialSummary,
 } from '@/lib/commercial-documents';
+import { adaptClientProjectReviewBundle, type ClientProjectReviewBundle, type ClientReviewVerdict } from '@/lib/project-review';
 
 /** Canonical query keys for the client selections/plan projections — kept as
  * plain arrays (not object literals) so callers can pass them straight to
  * invalidateQueries without importing a helper. */
 export const clientSelectionsKey = (projectId: string) => ['client-selections', projectId];
 export const clientPlanKey = (projectId: string) => ['client-plan', projectId];
+export const clientReviewKey = (projectId: string) => ['client-project-review', projectId];
 
 // The Wave 1 RPCs intentionally return hand-curated JSON rather than database
 // rows. Keep their untrusted response at this boundary until the allowlist
@@ -82,6 +84,39 @@ export function useClientSelections(projectId: string) {
       if (error) throw error;
       return adaptClientSelections(data);
     },
+  });
+}
+
+/** Published review editions are immutable snapshots. This is deliberately a
+ * distinct projection from selections/authorizations: feedback is preference,
+ * never permission to procure or alter an authorization. */
+export function useClientProjectReviewBundle(projectId: string) {
+  return useQuery<ClientProjectReviewBundle | null>({
+    queryKey: clientReviewKey(projectId),
+    enabled: !!projectId,
+    queryFn: async () => {
+      const { data, error } = await getSupabase().rpc('get_client_project_review_bundle', {
+        p_project_id: projectId,
+      });
+      if (error) throw error;
+      return adaptClientProjectReviewBundle(data);
+    },
+  });
+}
+
+export function useRecordProjectReviewFeedback(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ reviewItemId, verdict, comment }: { reviewItemId: string; verdict: ClientReviewVerdict; comment?: string }) => {
+      const { data, error } = await getSupabase().rpc('record_project_review_feedback', {
+        p_project_review_item_id: reviewItemId,
+        p_verdict: verdict,
+        p_comment: comment?.trim() || null,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: clientReviewKey(projectId) }),
   });
 }
 

@@ -36,6 +36,7 @@ final class ProjectDetailViewModel {
     var phases: [RemoteProjectPhase] = []
     var milestones: [RemotePaymentMilestone] = []
     var ffe: [RemoteFFEItem] = []
+    var review: RemoteProjectReviewBundle?
     var isLoading: Bool = false
     var error: String?
 
@@ -58,17 +59,19 @@ final class ProjectDetailViewModel {
         async let phasesTask = (try? await ProjectsAPIClient.shared.listPhases(projectId: projectId)) ?? []
         async let milestonesTask = (try? await ProjectsAPIClient.shared.listMilestones(projectId: projectId)) ?? []
         async let ffeTask = (try? await ProjectsAPIClient.shared.listFFEItems(projectId: projectId)) ?? []
+        async let reviewTask = try? await ProjectsAPIClient.shared.fetchProjectReview(projectId: projectId)
         async let proposalIdTask = try? await ProposalsAPIClient.shared.proposalId(forProject: projectId)
         async let invoicesTask = (try? await InvoicesAPIClient.shared.hasInvoices(forProject: projectId)) ?? false
         async let documentsTask = (try? await DocumentsAPIClient.shared.hasDocuments(forProject: projectId)) ?? false
 
-        let (p, ph, mi, ff, prop, hasInv, hasDocs) = await (
-            projectTask, phasesTask, milestonesTask, ffeTask, proposalIdTask, invoicesTask, documentsTask
+        let (p, ph, mi, ff, reviewBundle, prop, hasInv, hasDocs) = await (
+            projectTask, phasesTask, milestonesTask, ffeTask, reviewTask, proposalIdTask, invoicesTask, documentsTask
         )
         self.project = p ?? nil
         self.phases = ph
         self.milestones = mi
         self.ffe = ff
+        self.review = reviewBundle ?? nil
         self.linkedProposalId = prop
         self.hasInvoices = hasInv
         self.hasDocuments = hasDocs
