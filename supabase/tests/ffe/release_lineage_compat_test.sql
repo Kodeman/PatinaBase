@@ -25,6 +25,9 @@ DECLARE v_a jsonb; v_a_retry jsonb; v_b jsonb; v_role jsonb; v_config jsonb; v_s
   v_second_selected jsonb; v_change jsonb; v_po public.purchase_orders; v_second_po public.purchase_orders;
   v_snapshot uuid; v_continued uuid; v_import jsonb; v_batch uuid; v_first_commit jsonb; v_retry_commit jsonb; v_rows jsonb;
   v_need jsonb; v_allowance jsonb; v_receipt jsonb; v_live_board jsonb; v_readiness jsonb;
+  v_batch_line_a jsonb; v_batch_line_b jsonb; v_batch_po public.purchase_orders;
+  v_partial jsonb; v_retry jsonb; v_damaged jsonb; v_clean jsonb; v_inspection_count integer;
+  v_rebuild_line jsonb; v_rebuild_po public.purchase_orders; v_rebuild jsonb; v_twenty_board uuid;
 BEGIN
   PERFORM pg_temp.assume_lineage_actor('fb000000-0000-4000-8000-000000000001');
   v_a:=public.place_product_in_project('fb100000-0000-4000-8000-000000000001','fb300000-0000-4000-8000-000000000001',NULL,NULL,NULL,'{"captureId":"capture-a"}'::jsonb);
@@ -38,6 +41,21 @@ BEGIN
     'configuration identity must prevent duplicate reuse';
   ASSERT v_role->>'roleConfigurationIdentity'='accent' AND NOT(v_role?'roleIdentity'),
     'canonical placement response must expose roleConfigurationIdentity only';
+  BEGIN
+    PERFORM public.place_product_in_project_v2(jsonb_build_object(
+      'projectId','fb100000-0000-4000-8000-000000000001','selectionReferenceId',v_role->>'selectionId',
+      'productId','fb300000-0000-4000-8000-000000000001','itemType','allowance','budgetMaxCents','90000',
+      'assignmentScope','throughout','disposition','candidate','duplicateMode','reuse',
+      'roleConfigurationIdentity','accent','configurationId','fb400000-0000-4000-8000-000000000001',
+      'idempotencyKey','unsafe-reference-mutation'));
+    RAISE EXCEPTION 'explicit reference changed item type';
+  EXCEPTION WHEN integrity_constraint_violation THEN NULL; END;
+  ASSERT (SELECT item_type='fixed' FROM public.project_ffe_items WHERE id=(v_role->>'selectionId')::uuid),
+    'reused explicit references must not mutate commercial identity';
+  BEGIN
+    PERFORM public.place_product_in_project_v2('{"projectId":"fb100000-0000-4000-8000-000000000001","productId":"fb300000-0000-4000-8000-000000000001","quantity":"999999999999999999999","assignmentScope":"throughout","disposition":"candidate","duplicateMode":"create","idempotencyKey":"huge-quantity"}'::jsonb);
+    RAISE EXCEPTION 'overflow quantity reached a cast';
+  EXCEPTION WHEN check_violation THEN NULL; END;
   v_need:=public.create_named_project_need('{"projectId":"fb100000-0000-4000-8000-000000000001","name":"Window-seat placeholder","itemType":"tbd","assignmentScope":"unassigned","disposition":"candidate","idempotencyKey":"named-placeholder"}'::jsonb);
   v_allowance:=public.create_named_project_need('{"projectId":"fb100000-0000-4000-8000-000000000001","name":"Art allowance","itemType":"allowance","budgetMaxCents":"500000","assignmentScope":"throughout","disposition":"candidate","idempotencyKey":"named-allowance"}'::jsonb);
   ASSERT (SELECT item_type='tbd' FROM public.project_ffe_items WHERE id=(v_need->>'selectionId')::uuid)
@@ -83,9 +101,81 @@ BEGIN
     AND (SELECT purchase_order_id=v_second_po.id FROM public.project_ffe_items WHERE id=(v_second_selected->>'selectionId')::uuid),
     'sent PO change must record immutable follow-up without rewriting the PO or line';
   BEGIN
+    UPDATE public.purchase_order_changes SET requested_vendor_id='fb200000-0000-4000-8000-000000000001'
+    WHERE id=(v_change->>'changeId')::uuid;
+    RAISE EXCEPTION 'requested vendor evidence mutated';
+  EXCEPTION WHEN check_violation THEN NULL; END;
+  BEGIN
     PERFORM public.supersede_project_selection(jsonb_build_object('selectionId',v_second_selected->>'selectionId','placementIds','[]'::jsonb));
     RAISE EXCEPTION 'PO-linked selection superseded directly';
   EXCEPTION WHEN check_violation THEN NULL; END;
+  v_batch_line_a:=public.place_product_in_project_v2('{"projectId":"fb100000-0000-4000-8000-000000000001","productId":"fb300000-0000-4000-8000-000000000001","quantity":"2","assignmentScope":"throughout","disposition":"selected","duplicateMode":"create","idempotencyKey":"batch-receipt-a"}'::jsonb);
+  v_batch_line_b:=public.place_product_in_project_v2('{"projectId":"fb100000-0000-4000-8000-000000000001","productId":"fb300000-0000-4000-8000-000000000001","quantity":"3","assignmentScope":"throughout","disposition":"selected","duplicateMode":"create","idempotencyKey":"batch-receipt-b"}'::jsonb);
+  v_batch_po:=public.create_purchase_order('fb100000-0000-4000-8000-000000000001','fb200000-0000-4000-8000-000000000001','full_upfront'::public.purchase_order_payment_pattern,
+    ARRAY[(v_batch_line_a->>'selectionId')::uuid,(v_batch_line_b->>'selectionId')::uuid]);
+  UPDATE public.purchase_orders SET status='confirmed',sent_at=now() WHERE id=v_batch_po.id;
+  BEGIN
+    PERFORM public.record_project_ffe_receipt_batch(v_batch_po.id,jsonb_build_array(
+      jsonb_build_object('selectionId',v_batch_line_a->>'selectionId','receivedQuantity',0),
+      jsonb_build_object('selectionId',v_batch_line_b->>'selectionId','receivedQuantity',0)
+    ),'partial','Unauthorized photo',ARRAY['fb900000-0000-4000-8000-000000000001'::uuid]);
+    RAISE EXCEPTION 'unowned receiving photo accepted';
+  EXCEPTION WHEN integrity_constraint_violation THEN NULL; END;
+  v_partial:=public.record_project_ffe_receipt_batch(v_batch_po.id,jsonb_build_array(
+    jsonb_build_object('selectionId',v_batch_line_b->>'selectionId','receivedQuantity',0),
+    jsonb_build_object('selectionId',v_batch_line_a->>'selectionId','receivedQuantity',1)
+  ),'partial','First delivery','{}');
+  v_retry:=public.record_project_ffe_receipt_batch(v_batch_po.id,jsonb_build_array(
+    jsonb_build_object('selectionId',v_batch_line_a->>'selectionId','receivedQuantity',1),
+    jsonb_build_object('selectionId',v_batch_line_b->>'selectionId','receivedQuantity',0)
+  ),'partial','First delivery','{}');
+  ASSERT (v_partial->>'inspectionId')=(v_retry->>'inspectionId') AND (v_retry->>'reused')::boolean,
+    'normalized batch receipt retry must reuse the exact inspection';
+  SELECT count(*) INTO v_inspection_count FROM public.receiving_inspections WHERE purchase_order_id=v_batch_po.id;
+  ASSERT v_inspection_count=1,'one batch receipt must create exactly one inspection';
+  BEGIN
+    PERFORM public.record_project_ffe_receipt_batch(v_batch_po.id,jsonb_build_array(
+      jsonb_build_object('selectionId',v_batch_line_a->>'selectionId','receivedQuantity',3),
+      jsonb_build_object('selectionId',v_batch_line_b->>'selectionId','receivedQuantity',1)
+    ),'damaged','Invalid overage','{}');
+    RAISE EXCEPTION 'over-received batch succeeded';
+  EXCEPTION WHEN check_violation THEN NULL; END;
+  ASSERT (SELECT received_quantity=1 FROM public.project_ffe_items WHERE id=(v_batch_line_a->>'selectionId')::uuid)
+    AND (SELECT received_quantity=0 FROM public.project_ffe_items WHERE id=(v_batch_line_b->>'selectionId')::uuid)
+    AND (SELECT count(*)=1 FROM public.receiving_inspections WHERE purchase_order_id=v_batch_po.id),
+    'invalid batch must roll back every quantity and inspection write';
+  BEGIN
+    PERFORM public.record_project_ffe_receipt((v_batch_line_a->>'selectionId')::uuid,2,'partial',NULL,'{}');
+    RAISE EXCEPTION 'single-line receipt accepted a multi-line PO';
+  EXCEPTION WHEN check_violation THEN NULL; END;
+  v_damaged:=public.record_project_ffe_receipt_batch(v_batch_po.id,jsonb_build_array(
+    jsonb_build_object('selectionId',v_batch_line_a->>'selectionId','receivedQuantity',2),
+    jsonb_build_object('selectionId',v_batch_line_b->>'selectionId','receivedQuantity',1)
+  ),'damaged','Damaged carton','{}');
+  ASSERT (v_damaged->>'outcome')='damaged'
+    AND (SELECT count(*)=2 FROM public.receiving_inspections WHERE purchase_order_id=v_batch_po.id),
+    'damaged batch must create one additional PO-level inspection';
+  v_clean:=public.record_project_ffe_receipt_batch(v_batch_po.id,jsonb_build_array(
+    jsonb_build_object('selectionId',v_batch_line_a->>'selectionId','receivedQuantity',2),
+    jsonb_build_object('selectionId',v_batch_line_b->>'selectionId','receivedQuantity',3)
+  ),'clean','Final delivery','{}');
+  ASSERT (v_clean->>'outcome')='clean'
+    AND (SELECT bool_and(received_quantity=quantity) FROM public.project_ffe_items WHERE purchase_order_id=v_batch_po.id)
+    AND (SELECT count(*)=3 FROM public.receiving_inspections WHERE purchase_order_id=v_batch_po.id),
+    'clean batch must fully receive every line with one final inspection';
+  v_rebuild_line:=public.place_product_in_project_v2('{"projectId":"fb100000-0000-4000-8000-000000000001","productId":"fb300000-0000-4000-8000-000000000001","assignmentScope":"throughout","disposition":"selected","duplicateMode":"create","idempotencyKey":"draft-rebuild-line"}'::jsonb);
+  v_rebuild_po:=public.create_purchase_order('fb100000-0000-4000-8000-000000000001','fb200000-0000-4000-8000-000000000001','full_upfront'::public.purchase_order_payment_pattern,
+    ARRAY[(v_rebuild_line->>'selectionId')::uuid]);
+  v_rebuild:=public.start_purchase_order_change(jsonb_build_object(
+    'purchaseOrderId',v_rebuild_po.id,'selectionId',v_rebuild_line->>'selectionId',
+    'changeKind','vendor_change','replacementVendorId','fb200000-0000-4000-8000-000000000002',
+    'reason','Draft vendor replacement'));
+  ASSERT (v_rebuild->>'replacementPoId') IS NOT NULL
+    AND (SELECT status='cancelled' FROM public.purchase_orders WHERE id=v_rebuild_po.id)
+    AND (SELECT purchase_order_id=(v_rebuild->>'replacementPoId')::uuid
+      AND vendor_id='fb200000-0000-4000-8000-000000000002'
+      FROM public.project_ffe_items WHERE id=(v_rebuild_line->>'selectionId')::uuid),
+    'draft vendor change must atomically rebuild and relink a replacement PO';
   INSERT INTO public.project_boards(id,project_id,name,items,sections) VALUES(
     'fb500000-0000-4000-8000-000000000001','fb100000-0000-4000-8000-000000000001','Activated board',
     jsonb_build_array(jsonb_build_object('type','product','product_id','fb300000-0000-4000-8000-000000000001','data','{}'::jsonb,'project_ffe_item_id',v_replacement->>'selectionId')),'[]'::jsonb);
@@ -93,6 +183,25 @@ BEGIN
   ASSERT (SELECT project_ffe_item_id=(v_replacement->>'selectionId')::uuid AND NOT(data?'project_ffe_item_id')
     FROM public.proposal_board_items WHERE board_id=v_continued),
     'continuation must persist linkage in the typed column only';
+  INSERT INTO public.project_ffe_items(id,project_id,product_id,name,quantity,unit_price_cents,line_total_cents,
+    vendor_id,vendor_name,design_disposition,assignment_scope,role_identity)
+  SELECT (md5('stable-selection-'||ordinal))::uuid,'fb100000-0000-4000-8000-000000000001',
+    'fb300000-0000-4000-8000-000000000001','Stable selection '||ordinal,1,100000,100000,
+    'fb200000-0000-4000-8000-000000000001','Lineage Vendor','candidate','throughout','default'
+  FROM generate_series(1,20) ordinal;
+  INSERT INTO public.project_boards(id,project_id,name,items,sections)
+  SELECT 'fb500000-0000-4000-8000-000000000020','fb100000-0000-4000-8000-000000000001','Twenty item board',
+    jsonb_agg(jsonb_build_object('type','product','x',ordinal*10,'y',0,'width',100,
+      'product_id','fb300000-0000-4000-8000-000000000001','project_ffe_item_id',(md5('stable-selection-'||ordinal))::uuid,
+      'data',jsonb_build_object('sourceOrdinal',ordinal)) ORDER BY ordinal),'[]'::jsonb
+  FROM generate_series(1,20) ordinal;
+  v_twenty_board:=public.continue_board_in_project('fb500000-0000-4000-8000-000000000020');
+  ASSERT NOT EXISTS(
+    SELECT 1 FROM public.proposal_board_items placement
+    WHERE placement.board_id=v_twenty_board
+      AND placement.project_ffe_item_id IS DISTINCT FROM
+        (md5('stable-selection-'||(placement.data->>'sourceOrdinal')))::uuid
+  ),'20-item continuation must preserve each source identity without UUID-order shuffling';
   v_live_board:=public.create_project_board('{"projectId":"fb100000-0000-4000-8000-000000000001","name":"Live board"}'::jsonb);
   PERFORM public.apply_board_room_state((v_live_board->>'boardId')::uuid,'project','fb100000-0000-4000-8000-000000000001',
     '{"name":"Live board","canvasWidth":1200,"canvasHeight":800,"backgroundColor":"#FAF8F5","sections":[],"items":[],"coverImageUrl":"https://local.test/storage/v1/object/sign/project-ffe-working/fb100000-0000-4000-8000-000000000001/cover.webp"}'::jsonb);
@@ -114,6 +223,11 @@ BEGIN
   ASSERT (SELECT validation_errors @> '["formula_like_value","invalid_quantity"]'::jsonb
     FROM public.project_ffe_import_rows WHERE batch_id=(v_import->>'batchId')::uuid),
     'leading whitespace formula and unsafe numeric cast must be inert';
+  BEGIN
+    PERFORM public.stage_project_ffe_import(jsonb_build_object('projectId','fb100000-0000-4000-8000-000000000001','sourceKind','csv',
+      'fileHash',repeat('9',64),'rows',jsonb_build_array(jsonb_build_object('name','Overflow','quantity',repeat('9',40)))));
+    RAISE EXCEPTION 'overflow spreadsheet quantity reached a cast';
+  EXCEPTION WHEN check_violation THEN NULL; END;
   SELECT jsonb_agg(jsonb_build_object('name','Generated row '||ordinal)) INTO v_rows FROM generate_series(1,5000) ordinal;
   v_import:=public.stage_project_ffe_import(jsonb_build_object('projectId','fb100000-0000-4000-8000-000000000001','sourceKind','xlsx',
     'fileHash',repeat('e',64),'rows',v_rows));
@@ -127,7 +241,7 @@ BEGIN
 END; $$;
 
 DO $$
-DECLARE v_thread uuid; v_selected uuid; v_alternate uuid;
+DECLARE v_thread uuid; v_selected uuid; v_alternate uuid; v_new_thread uuid;
 BEGIN
   INSERT INTO public.project_ffe_selection_threads(id,project_id,created_by) VALUES
     ('fb600000-0000-4000-8000-000000000001','fb100000-0000-4000-8000-000000000001','fb000000-0000-4000-8000-000000000001') RETURNING id INTO v_thread;
@@ -139,6 +253,14 @@ BEGIN
     UPDATE public.project_ffe_items SET design_disposition='candidate' WHERE id=v_selected;
     SET CONSTRAINTS assert_project_ffe_thread_consistency_trg IMMEDIATE;
     RAISE EXCEPTION 'alternate thread without selected row succeeded';
+  EXCEPTION WHEN integrity_constraint_violation THEN NULL; END;
+  SET CONSTRAINTS assert_project_ffe_thread_consistency_trg DEFERRED;
+  INSERT INTO public.project_ffe_selection_threads(id,project_id,created_by) VALUES
+    ('fb600000-0000-4000-8000-000000000002','fb100000-0000-4000-8000-000000000001','fb000000-0000-4000-8000-000000000001') RETURNING id INTO v_new_thread;
+  BEGIN
+    UPDATE public.project_ffe_items SET selection_thread_id=v_new_thread WHERE id=v_selected;
+    SET CONSTRAINTS assert_project_ffe_thread_consistency_trg IMMEDIATE;
+    RAISE EXCEPTION 'cross-thread move left the old alternate thread without a selection';
   EXCEPTION WHEN integrity_constraint_violation THEN NULL; END;
   SET CONSTRAINTS assert_project_ffe_thread_consistency_trg DEFERRED;
 END; $$;

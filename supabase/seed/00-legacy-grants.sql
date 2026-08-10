@@ -9599,3 +9599,93 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.get_project_ffe_readiness(uuid), public.create_furnishings_authorization_from_schedule(uuid, text, uuid[], numeric), public.place_product_in_project_v2(jsonb), public.record_project_ffe_receipt(uuid, integer, public.receiving_inspection_outcome, text, uuid[]), public.apply_board_room_state(uuid, text, uuid, jsonb) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00446_ffe_atomic_batch_receiving.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.project_ffe_receipt_commands FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00446_ffe_atomic_batch_receiving.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_project_ffe_receipt_batch( uuid, jsonb, public.receiving_inspection_outcome, text, uuid[] ), public.record_project_ffe_receipt( uuid, integer, public.receiving_inspection_outcome, text, uuid[] ) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00446_ffe_atomic_batch_receiving.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_project_ffe_receipt_batch( uuid, jsonb, public.receiving_inspection_outcome, text, uuid[] ), public.record_project_ffe_receipt( uuid, integer, public.receiving_inspection_outcome, text, uuid[] ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00447_ffe_final_adversarial_hardening.sql
+DO $g$ BEGIN
+  REVOKE INSERT, UPDATE, DELETE ON TABLE public.purchase_orders FROM authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00447_ffe_final_adversarial_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._start_purchase_order_change_00446_impl(jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00447_ffe_final_adversarial_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._place_product_in_project_v2_00446_impl(jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00447_ffe_final_adversarial_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._commit_project_ffe_import_00446_impl(uuid, jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00447_ffe_final_adversarial_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._publish_project_review_00446_impl(jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00447_ffe_final_adversarial_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._record_project_ffe_receipt_batch_00446_impl( uuid, jsonb, public.receiving_inspection_outcome, text, uuid[] ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00447_ffe_final_adversarial_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_purchase_order_rpc_mutation(), public.guard_purchase_order_change_immutable(), public.set_project_ffe_thread_primary(), public.assert_project_ffe_thread_consistency() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00447_ffe_final_adversarial_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.start_purchase_order_change(jsonb), public.continue_board_in_project(uuid), public.place_product_in_project_v2(jsonb), public.commit_project_ffe_import(uuid, jsonb), public.publish_project_review(jsonb), public.record_project_ffe_receipt_batch(uuid, jsonb, public.receiving_inspection_outcome, text, uuid[]) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00447_ffe_final_adversarial_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.start_purchase_order_change(jsonb), public.continue_board_in_project(uuid), public.place_product_in_project_v2(jsonb), public.commit_project_ffe_import(uuid, jsonb), public.publish_project_review(jsonb), public.record_project_ffe_receipt_batch(uuid, jsonb, public.receiving_inspection_outcome, text, uuid[]) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00448_ffe_import_numeric_boundary.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._stage_project_ffe_import_00447_impl(jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00448_ffe_import_numeric_boundary.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.stage_project_ffe_import(jsonb) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00448_ffe_import_numeric_boundary.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.stage_project_ffe_import(jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

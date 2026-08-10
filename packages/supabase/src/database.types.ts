@@ -13508,6 +13508,45 @@ export type Database = {
           },
         ]
       }
+      project_ffe_receipt_commands: {
+        Row: {
+          created_at: string
+          inspection_id: string | null
+          purchase_order_id: string
+          request_hash: string
+          response: Json | null
+        }
+        Insert: {
+          created_at?: string
+          inspection_id?: string | null
+          purchase_order_id: string
+          request_hash: string
+          response?: Json | null
+        }
+        Update: {
+          created_at?: string
+          inspection_id?: string | null
+          purchase_order_id?: string
+          request_hash?: string
+          response?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_ffe_receipt_commands_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "receiving_inspections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_receipt_commands_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_ffe_selection_threads: {
         Row: {
           created_at: string
@@ -25742,6 +25781,10 @@ export type Database = {
         Args: { p_proposal_id: string }
         Returns: string
       }
+      _commit_project_ffe_import_00446_impl: {
+        Args: { p_batch_id: string; p_decisions?: Json }
+        Returns: Json
+      }
       _commit_proposal_send: {
         Args: {
           p_cc_email?: string
@@ -26261,6 +26304,10 @@ export type Database = {
         Args: { p_request: Json }
         Returns: Json
       }
+      _place_product_in_project_v2_00446_impl: {
+        Args: { p_request: Json }
+        Returns: Json
+      }
       _plan_room_canonical_json: { Args: { p_value: Json }; Returns: string }
       _plan_room_rev_letter: { Args: { p_n: number }; Returns: string }
       _plan_room_set_doc_visibility: {
@@ -26346,6 +26393,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      _publish_project_review_00446_impl: {
+        Args: { p_request: Json }
+        Returns: Json
+      }
       _recompute_proposal_total_locked: {
         Args: { p_proposal_id: string }
         Returns: number
@@ -26388,6 +26439,16 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      _record_project_ffe_receipt_batch_00446_impl: {
+        Args: {
+          p_lines: Json
+          p_notes?: string
+          p_outcome: Database["public"]["Enums"]["receiving_inspection_outcome"]
+          p_photo_asset_ids?: string[]
+          p_purchase_order_id: string
+        }
+        Returns: Json
       }
       _repair_legacy_proposal_phase_topology: {
         Args: { p_proposal_id: string }
@@ -26626,6 +26687,14 @@ export type Database = {
           p_studio: Json
           p_verified_at: string
         }
+        Returns: Json
+      }
+      _stage_project_ffe_import_00447_impl: {
+        Args: { p_request: Json }
+        Returns: Json
+      }
+      _start_purchase_order_change_00446_impl: {
+        Args: { p_request: Json }
         Returns: Json
       }
       _sync_proposal_send_email_log: {
@@ -29547,6 +29616,16 @@ export type Database = {
           p_outcome: Database["public"]["Enums"]["receiving_inspection_outcome"]
           p_photo_asset_ids?: string[]
           p_received_quantity: number
+        }
+        Returns: Json
+      }
+      record_project_ffe_receipt_batch: {
+        Args: {
+          p_lines: Json
+          p_notes?: string
+          p_outcome: Database["public"]["Enums"]["receiving_inspection_outcome"]
+          p_photo_asset_ids?: string[]
+          p_purchase_order_id: string
         }
         Returns: Json
       }
