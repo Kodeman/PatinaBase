@@ -20,11 +20,11 @@ export interface DocumentGuideReadinessFacts {
 }
 
 const DISCOVERY_INPUTS: Record<EssentialKey, DocumentGuideInputFact> = {
-  scope: { label: 'Project type and named rooms', owner: 'Designer', blocks: 'Direction' },
-  budget: { label: 'Working budget', owner: 'Client', blocks: 'Direction' },
-  timeline: { label: 'Target or hard date', owner: 'Client', blocks: 'Direction' },
-  style: { label: 'Style direction', owner: 'Client', blocks: 'Direction' },
-  lifestyle: { label: 'Lifestyle needs', owner: 'Client', blocks: 'Direction' },
+  scope: { label: 'Project type and named rooms', owner: 'Designer', blocks: 'Direction', focusId: 'discovery-facet-scope' },
+  budget: { label: 'Working budget', owner: 'Client', blocks: 'Direction', focusId: 'discovery-facet-budget' },
+  timeline: { label: 'Target or hard date', owner: 'Client', blocks: 'Direction', focusId: 'discovery-facet-timeline' },
+  style: { label: 'Style direction', owner: 'Client', blocks: 'Direction', focusId: 'discovery-facet-style' },
+  lifestyle: { label: 'Lifestyle needs', owner: 'Client', blocks: 'Direction', focusId: 'discovery-facet-lifestyle' },
 };
 
 const EMPTY_DISCOVERY: DiscoveryFacts = {
@@ -89,6 +89,20 @@ export function composeDocumentGuideInputs({
       blocks: 'Active project work',
     }];
   }
+  if ((row.active_section === 'install' || row.active_section === 'care') && row.open_claim_count > 0) {
+    return [{
+      label: `${row.open_claim_count} open damage claim${row.open_claim_count === 1 ? '' : 's'}`,
+      owner: 'Project team',
+      blocks: row.active_section === 'install' ? 'Installation completion' : 'Project closeout',
+    }];
+  }
+  if ((row.active_section === 'install' || row.active_section === 'care') && row.awaiting_inspection_count > 0) {
+    return [{
+      label: `${row.awaiting_inspection_count} delivery inspection${row.awaiting_inspection_count === 1 ? '' : 's'}`,
+      owner: 'Designer',
+      blocks: row.active_section === 'install' ? 'Installation completion' : 'Project closeout',
+    }];
+  }
   if (row.blocked_item_count > 0) {
     return [{
       label: `${row.blocked_item_count} blocked project item${row.blocked_item_count === 1 ? '' : 's'}`,
@@ -99,4 +113,3 @@ export function composeDocumentGuideInputs({
 
   return [];
 }
-

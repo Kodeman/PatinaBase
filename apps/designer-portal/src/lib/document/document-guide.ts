@@ -25,6 +25,7 @@ export interface DocumentGuideInputFact {
   label: string;
   owner: 'Designer' | 'Client' | 'Studio' | 'Project team';
   blocks: string;
+  focusId?: string;
 }
 
 export type DocumentGuideState =
@@ -37,7 +38,7 @@ export type DocumentGuideState =
 
 export type DocumentGuideDestination =
   | { kind: 'href'; href: string }
-  | { kind: 'anchor'; section: SectionKey }
+  | { kind: 'anchor'; section: SectionKey; focusId?: string; activate?: boolean }
   | { kind: 'ledger'; name: string; context?: { page?: string; invoiceId?: string; projectId?: string } };
 
 export interface DocumentGuideAction {
@@ -68,7 +69,6 @@ interface DeriveDocumentGuideInput {
   row: DocumentStateRow;
   availability?: 'ready' | 'unavailable';
   now?: Date;
-  operationalNeed?: NeedLine | null;
   proposal?: ProposalGuideFacts | null;
   inputFacts?: readonly DocumentGuideInputFact[];
 }
@@ -129,9 +129,24 @@ function withInputs(
   model: Omit<DocumentGuideModel, 'topInput' | 'remainingInputCount'>,
   inputFacts: readonly DocumentGuideInputFact[] | undefined,
 ): DocumentGuideModel {
+  const firstInput = inputFacts?.[0] ?? null;
+  const inputAction =
+    firstInput?.focusId && model.stage === 'discovery'
+      ? {
+          key: 'open-missing-input',
+          label: `Add ${firstInput.label}`,
+          destination: {
+            kind: 'anchor' as const,
+            section: model.stage,
+            focusId: firstInput.focusId,
+            activate: true,
+          },
+        }
+      : model.action;
   return {
     ...model,
-    topInput: inputFacts?.[0] ?? null,
+    action: inputAction,
+    topInput: firstInput,
     remainingInputCount: Math.max(0, (inputFacts?.length ?? 0) - 1),
   };
 }
@@ -151,7 +166,19 @@ function actionForNeed(need: NeedLine, row: DocumentStateRow): DocumentGuideActi
     ? { kind: 'ledger', name: need.ledger.name, context: need.ledger.context }
     : need.deepLink
       ? { kind: 'href', href: need.deepLink }
-      : { kind: 'anchor', section: row.active_section };
+      : {
+          kind: 'anchor',
+          section: row.active_section,
+          focusId:
+            need.kind === 'overdue_decision'
+              ? 'document-decision-controls'
+              : need.kind === 'task_due'
+                ? 'document-task-controls'
+                : need.kind === 'pulse_due'
+                  ? 'document-pulse-control'
+                  : undefined,
+          activate: need.kind === 'pulse_due',
+        };
   return {
     key: `resolve-${need.kind}`,
     label: need.actionLabel ?? 'Review now',
@@ -232,7 +259,6 @@ export function deriveDocumentGuide({
   row,
   availability = 'ready',
   now = new Date(),
-  operationalNeed,
   proposal,
   inputFacts,
 }: DeriveDocumentGuideInput): DocumentGuideModel {
@@ -248,16 +274,22 @@ export function deriveDocumentGuide({
     return withInputs({
       state: 'paused', stage, eyebrow: `${stageCopy[stage].eyebrow} · paused`, headline: 'This project is paused',
       reason: 'Review the project status before resuming lifecycle work.',
-      action: { key: 'review-paused-project', label: 'Review project', destination: { kind: 'anchor', section: stage } },
+      action: {
+        key: 'review-paused-project',
+        label: 'Review project status',
+        destination: { kind: 'anchor', section: stage, focusId: 'document-project-status' },
+      },
     }, inputFacts);
   }
 
-  const need = operationalNeed === undefined ? deriveNeed(row, now) : operationalNeed;
+  const need = deriveNeed(row, now);
   const proposalLifecycleNeed =
     need?.kind === 'proposal_signed' ||
     need?.kind === 'proposal_declined' ||
     need?.kind === 'proposal_expired' ||
-    (proposal?.documentKind === 'design_services' && need?.kind === 'hesitating_proposal');
+    (proposal?.documentKind === 'design_services' &&
+      proposal.commercialState !== 'sent' &&
+      need?.kind === 'hesitating_proposal');
   if (need && !proposalLifecycleNeed) {
     return withInputs({
       state: 'actionable', stage, eyebrow: `${stageCopy[stage].eyebrow} · needs attention`,

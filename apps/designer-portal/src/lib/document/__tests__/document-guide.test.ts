@@ -160,6 +160,25 @@ describe('deriveDocumentGuide', () => {
     expect(guide.headline).toBe('Countersign the design agreement');
   });
 
+  it.each(['sent', 'viewed'] as const)('preserves aged %s follow-up when commercial truth is still sent', (legacyStatus) => {
+    const guide = deriveDocumentGuide({
+      row: row('proposal', {
+        proposal_status: legacyStatus,
+        proposal_sent_at: '2026-07-01T12:00:00Z',
+        proposal_viewed_at: legacyStatus === 'viewed' ? '2026-07-02T12:00:00Z' : null,
+      }),
+      now: new Date('2026-08-10T12:00:00Z'),
+      proposal: {
+        status: legacyStatus,
+        documentKind: 'design_services',
+        commercialState: 'sent',
+        projectId: null,
+      },
+    });
+    expect(guide.headline).toMatch(legacyStatus === 'sent' ? /not yet opened/ : /no signature yet/);
+    expect(guide.action?.label).toBe('Follow up');
+  });
+
   it('treats a revised legacy proposal as superseded follow-up', () => {
     const guide = deriveDocumentGuide({
       row: row('proposal'),
@@ -204,5 +223,26 @@ describe('deriveDocumentGuide', () => {
       now: new Date('2026-08-10T12:00:00Z'),
     });
     expect(guide.action?.destination).toEqual({ kind: 'href', href: '/people?view=nurture' });
+  });
+
+  it.each([
+    [{ overdue_decision_count: 1 }, 'document-decision-controls', false],
+    [{ due_task_count: 1, earliest_task_due: '2026-08-10', due_task_title: 'Confirm trim' }, 'document-task-controls', false],
+    [{ unsent_pulse_count: 1, pulse_week_of: '2026-08-03' }, 'document-pulse-control', true],
+  ] as const)('routes row-backed work to its mounted canonical target', (overrides, focusId, activate) => {
+    const guide = deriveDocumentGuide({
+      row: row('project', overrides),
+      now: new Date('2026-08-10T12:00:00Z'),
+    });
+    expect(guide.action?.destination).toMatchObject({
+      kind: 'anchor', section: 'project', focusId, activate,
+    });
+  });
+
+  it('routes paused work to the project status target', () => {
+    const guide = deriveDocumentGuide({ row: row('project', { is_paused: true }) });
+    expect(guide.action?.destination).toEqual({
+      kind: 'anchor', section: 'project', focusId: 'document-project-status',
+    });
   });
 });

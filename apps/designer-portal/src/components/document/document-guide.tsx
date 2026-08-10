@@ -9,6 +9,16 @@ import { MOBILE_ACTION_PRIORITY } from './mobile/lifecycle-mobile-action';
 
 export function DocumentGuide({ model, onActivate }: { model: DocumentGuideModel; onActivate: () => void }) {
   const href = model.action?.destination.kind === 'href' ? model.action.destination.href : null;
+  const inputCount = model.topInput ? model.remainingInputCount + 1 : 0;
+  const recordSelection = () => {
+    if (!model.action) return;
+    documentEvents.guideSelected({
+      stage: model.stage,
+      state: model.state,
+      action_key: model.action.key,
+      input_count: inputCount,
+    });
+  };
   useMobilePrimaryAction(
     model.action
       ? {
@@ -17,6 +27,7 @@ export function DocumentGuide({ model, onActivate }: { model: DocumentGuideModel
           regionKey: 'next-up',
           label: model.action.label,
           target: href ? { kind: 'href', href } : { kind: 'press', onPress: onActivate },
+          onSelected: recordSelection,
         }
       : null,
     { priority: MOBILE_ACTION_PRIORITY.guide },
@@ -26,8 +37,9 @@ export function DocumentGuide({ model, onActivate }: { model: DocumentGuideModel
       stage: model.stage,
       state: model.state,
       action_key: model.action?.key ?? null,
+      input_count: inputCount,
     });
-  }, [model.action?.key, model.stage, model.state]);
+  }, [inputCount, model.action?.key, model.stage, model.state]);
 
   return (
     <section aria-labelledby="document-next-up" className="my-5 border-y border-[var(--color-pearl)] py-4">
@@ -49,9 +61,9 @@ export function DocumentGuide({ model, onActivate }: { model: DocumentGuideModel
         {model.action && (
           <div className="hidden min-[1180px]:block">
             {href ? (
-              <DocumentAction actionKey={model.action.key} surfaceKey="open-document" regionKey="next-up" variant="primary" href={href}>{model.action.label}</DocumentAction>
+              <DocumentAction actionKey={model.action.key} surfaceKey="open-document" regionKey="next-up" variant="primary" href={href} onClick={recordSelection}>{model.action.label}</DocumentAction>
             ) : (
-              <DocumentAction actionKey={model.action.key} surfaceKey="open-document" regionKey="next-up" variant="primary" onClick={onActivate}>{model.action.label}</DocumentAction>
+              <DocumentAction actionKey={model.action.key} surfaceKey="open-document" regionKey="next-up" variant="primary" onClick={() => { recordSelection(); onActivate(); }}>{model.action.label}</DocumentAction>
             )}
           </div>
         )}

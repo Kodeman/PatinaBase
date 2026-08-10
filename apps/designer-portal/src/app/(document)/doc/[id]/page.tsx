@@ -227,7 +227,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
 
   // Click a spine marker (or a settled bar): unfold that phase and scroll to it.
   // The active phase has no settled bar — the scroll just lands on its section.
-  const jumpToSection = useCallback((key: SectionKey) => {
+  const jumpToSection = useCallback((key: SectionKey, focusId?: string, activate = false) => {
     if (key !== row?.active_section && !historyOpen) {
       setHistoryOpen(true);
       documentEvents.historyToggled({
@@ -244,9 +244,15 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           block: 'start',
           behavior: reduceMotion ? 'auto' : 'smooth',
         });
+        const responsiveFocusId =
+          focusId === 'document-pulse-control'
+            ? `${focusId}-${window.matchMedia?.('(min-width: 1180px)').matches ? 'desktop' : 'mobile'}`
+            : focusId;
         const focusTarget =
+          (responsiveFocusId ? document.getElementById(responsiveFocusId) : null) ??
           section?.querySelector<HTMLElement>('[data-settled-heading]') ?? section;
         focusTarget?.focus({ preventScroll: true });
+        if (activate && focusTarget instanceof HTMLButtonElement) focusTarget.click();
       });
     });
   }, [historyOpen, row?.active_section]);
@@ -392,7 +398,9 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   const activateGuide = useCallback(() => {
     const destination = guideModel?.action?.destination;
     if (!destination) return;
-    if (destination.kind === 'anchor') jumpToSection(destination.section);
+    if (destination.kind === 'anchor') {
+      jumpToSection(destination.section, destination.focusId, destination.activate);
+    }
     if (destination.kind === 'ledger') openLedger(destination.name, destination.context);
   }, [guideModel, jumpToSection]);
 

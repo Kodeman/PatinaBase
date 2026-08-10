@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { DocumentGuide } from './document-guide';
 import type { DocumentGuideModel } from '@/lib/document/document-guide';
+import { documentEvents } from '@/lib/analytics/document-events';
 
 const mockUseMobilePrimaryAction = jest.fn();
 
@@ -10,7 +11,7 @@ jest.mock('./mobile/mobile-shell', () => ({
 }));
 
 jest.mock('@/lib/analytics/document-events', () => ({
-  documentEvents: { guideShown: jest.fn(), actionShown: jest.fn(), actionSelected: jest.fn() },
+  documentEvents: { guideShown: jest.fn(), guideSelected: jest.fn(), actionShown: jest.fn(), actionSelected: jest.fn() },
 }));
 
 const model = (headline: string): DocumentGuideModel => ({
@@ -61,6 +62,13 @@ describe('DocumentGuide', () => {
 
     expect(screen.getByText(/Input needed · Working budget/).parentElement).toHaveTextContent(
       'Client · blocks Direction · +2 more',
+    );
+    expect(documentEvents.guideShown).toHaveBeenCalledWith(
+      expect.objectContaining({ input_count: 3 }),
+    );
+    screen.getByRole('button', { name: 'Review active work' }).click();
+    expect(documentEvents.guideSelected).toHaveBeenCalledWith(
+      expect.objectContaining({ input_count: 3 }),
     );
   });
 

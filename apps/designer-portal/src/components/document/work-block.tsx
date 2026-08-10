@@ -163,7 +163,7 @@ export function WorkBlock({
   }
 
   return (
-    <div className="mb-2 mt-4 rounded-[6px] border border-[var(--color-pearl)] bg-[rgba(252,250,246,0.7)]">
+    <div id="document-task-controls" tabIndex={-1} className="mb-2 mt-4 rounded-[6px] border border-[var(--color-pearl)] bg-[rgba(252,250,246,0.7)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]">
       <div className="flex items-baseline justify-between border-b border-[var(--color-pearl)] px-3 py-1.5">
         <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">
           The work{total > 0 ? ` · ${doneCount} of ${total}` : ''}
