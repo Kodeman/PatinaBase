@@ -192,6 +192,7 @@ describe('useApplyBoardRoomState', () => {
       canvasWidth: 1200,
       canvasHeight: 800,
       backgroundColor: '#FAF8F5',
+      coverImageUrl: 'https://storage.example/object/sign/project-ffe-working/project-1/cover.png',
       sections: [{ id: 'section-1', name: 'Seating' }],
       items: [{
         id: '11111111-1111-4111-8111-111111111111',
@@ -280,19 +281,11 @@ describe('owner-aware board hooks', () => {
     expect(legacy.queryKey).toEqual(['boards', 'proposal-1']);
   });
 
-  it('inserts a caller-supplied id and complete snapshot for delete resurrection', async () => {
-    const inserted = {
-      id: 'item-original',
-      board_id: 'board-1',
-      type: 'product',
-      x: 12,
-      y: 34,
-    };
-    const builder = pushTableResult('proposal_board_items', { data: inserted, error: null });
+  it('fails closed before a project item can bypass the atomic state command', async () => {
     const config = useAddBoardItem() as unknown as {
       mutationFn: (input: Record<string, unknown>) => Promise<unknown>;
     };
-    await config.mutationFn({
+    await expect(config.mutationFn({
       itemId: 'item-original',
       boardId: 'board-1',
       owner: { kind: 'project', id: 'project-1' },
@@ -305,17 +298,8 @@ describe('owner-aware board hooks', () => {
       projectFfeItemId: 'selection-1',
       imageUrl: 'https://cdn.example/chair.jpg',
       data: { source_url: 'https://maker.example/chair' },
-    });
-
-    const insert = builder.__chain.find((call) => call.method === 'insert');
-    expect(insert?.args[0]).toEqual(expect.objectContaining({
-      id: 'item-original',
-      board_id: 'board-1',
-      product_id: 'product-1',
-      project_ffe_item_id: 'selection-1',
-      image_url: 'https://cdn.example/chair.jpg',
-      data: { source_url: 'https://maker.example/chair' },
-    }));
+    })).rejects.toThrow('apply_board_room_state');
+    expect(fromSpy).not.toHaveBeenCalled();
   });
 });
 
@@ -543,15 +527,10 @@ describe('useUpsertBoard — owner switch (B8)', () => {
       mutationFn: (input: any) => Promise<any>;
     }).mutationFn;
 
-  it('inserts a PROJECT-owned board with project_id and NO proposal_id', async () => {
-    const builder = pushTableResult('proposal_boards', {
-      data: { id: 'b1', project_id: 'proj-1', proposal_id: null },
-      error: null,
-    });
-    await mutationFnOf()({ projectId: 'proj-1', name: 'Working board' });
-    const row = builder.__chain.find((c) => c.method === 'insert')?.args[0] as Record<string, unknown>;
-    expect(row.project_id).toBe('proj-1');
-    expect(row).not.toHaveProperty('proposal_id');
+  it('fails closed for project creation before direct DML', async () => {
+    await expect(mutationFnOf()({ projectId: 'proj-1', name: 'Working board' }))
+      .rejects.toThrow('apply_board_room_state');
+    expect(fromSpy).not.toHaveBeenCalled();
   });
 
   it('inserts a PROPOSAL-owned board with proposal_id and NO project_id', async () => {
@@ -577,6 +556,15 @@ describe('useUpsertBoard — owner switch (B8)', () => {
     expect(row).not.toHaveProperty('proposal_id');
     expect(row).not.toHaveProperty('project_id');
     expect(builder.__chain.find((c) => c.method === 'eq')?.args).toEqual(['id', 'b1']);
+  });
+
+  it('fails closed for a project-owned update before direct DML', async () => {
+    await expect(mutationFnOf()({
+      boardId: 'b1',
+      owner: { kind: 'project', id: 'proj-1' },
+      name: 'Renamed',
+    })).rejects.toThrow('apply_board_room_state');
+    expect(fromSpy).not.toHaveBeenCalled();
   });
 });
 

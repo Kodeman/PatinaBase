@@ -6,8 +6,6 @@ import { useCreateNamedProjectNeed } from '@patina/supabase';
 import { DocSheet } from '../overlays/doc-sheet';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 
-type LineKind = 'goods' | 'allowance';
-
 const FIELD_CLASS =
   'min-h-11 w-full rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2.5 text-[13px] text-[var(--color-charcoal)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--color-clay)]';
 
@@ -29,18 +27,16 @@ export function AddLineSheet({
 }) {
   const addLine = useCreateNamedProjectNeed();
 
-  const [kind, setKind] = useState<LineKind>('goods');
   const [name, setName] = useState('');
   const [quantity, setQuantity] = useState('1');
   const [error, setError] = useState<string | null>(null);
-  const requestKey = useRef<string | null>(null);
+  const requestKey = useRef<{ fingerprint: string; key: string } | null>(null);
 
   const trimmedName = name.trim();
   const parsedQuantity = Math.max(1, Math.round(Number(quantity) || 1));
   const canSave = trimmedName.length > 0 && !addLine.isPending;
 
   const reset = () => {
-    setKind('goods');
     setName('');
     setQuantity('1');
     setError(null);
@@ -51,17 +47,28 @@ export function AddLineSheet({
     if (!canSave) return;
     setError(null);
     try {
-      await addLine.mutateAsync({
+      const request = {
         projectId,
         name: trimmedName,
         quantity: parsedQuantity,
-        assignmentScope: roomId ? 'room' : roomName === 'Unsorted' ? 'unassigned' : 'throughout',
+        itemType: 'tbd' as const,
+        assignmentScope: roomId
+          ? ('room' as const)
+          : roomName === 'Unsorted'
+            ? ('unassigned' as const)
+            : ('throughout' as const),
         roomId,
-        disposition: 'candidate',
-        source: 'named-need',
-        sourceMetadata: { needKind: kind === 'allowance' ? 'allowance' : 'manual_product' },
-        idempotencyKey: requestKey.current ??= globalThis.crypto?.randomUUID?.() ?? `need-${projectId}-${Date.now()}`,
-      });
+        disposition: 'candidate' as const,
+        source: 'named-need' as const,
+      };
+      const fingerprint = JSON.stringify(request);
+      if (requestKey.current?.fingerprint !== fingerprint) {
+        requestKey.current = {
+          fingerprint,
+          key: globalThis.crypto?.randomUUID?.() ?? `need-${projectId}-${Date.now()}`,
+        };
+      }
+      await addLine.mutateAsync({ ...request, idempotencyKey: requestKey.current.key });
       reset();
       onClose();
     } catch (cause) {
@@ -81,24 +88,6 @@ export function AddLineSheet({
       title="Add a line"
       pageLabel={roomName}
     >
-      <div className="mb-3 flex items-center gap-1.5">
-        {(['goods', 'allowance'] as const).map((option) => (
-          <button
-            key={option}
-            type="button"
-            aria-pressed={kind === option}
-            onClick={() => setKind(option)}
-            className={`min-h-11 rounded-[3px] border px-3 font-mono text-[11px] capitalize ${
-              kind === option
-                ? 'border-[var(--color-clay)] text-[var(--color-charcoal)]'
-                : 'border-[var(--color-pearl)] text-[var(--text-muted)]'
-            }`}
-          >
-            {option === 'goods' ? 'Goods' : 'Allowance'}
-          </button>
-        ))}
-      </div>
-
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="sm:col-span-2">
           <span className={LABEL_CLASS}>Line</span>
@@ -125,9 +114,7 @@ export function AddLineSheet({
       </div>
 
       <p className="mt-2 text-[11px] text-[var(--text-muted)]">
-        {kind === 'allowance'
-          ? 'The allowance is a named need. Set its client-facing amount when preparing a review or authorization.'
-          : `It lands in ${roomName} as a candidate — nothing is released until you say so.`}
+        It lands in {roomName} as a candidate — nothing is released until you say so.
       </p>
 
       {error && (

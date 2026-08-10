@@ -29,7 +29,10 @@ import {
   type ProductPickResult,
 } from '@/components/portal/proposals/product-picker-modal';
 import { validateBoardImageFiles } from '@/components/portal/scope-builder/board-room-controller';
-import { prepareAndUploadBoardImages } from '@/lib/mood-board-assets/upload-board-assets';
+import {
+  createBoardAssetStorage,
+  prepareAndUploadBoardImages,
+} from '@/lib/mood-board-assets/upload-board-assets';
 import { verdictChipSpec } from '@/lib/document/verdict-chip';
 import { BoardSuggestionsRail } from '@/components/portal/scope-builder/board-suggestions-rail';
 import {
@@ -211,6 +214,7 @@ export function productPickToBoardItem(
 
 export async function uploadFilesAsBoardItems(options: {
   ownerId: string;
+  ownerKind?: BoardOwnerRef['kind'];
   boardId: string;
   files: readonly File[];
   point: BoardPoint;
@@ -221,6 +225,9 @@ export async function uploadFilesAsBoardItems(options: {
     ownerId: options.ownerId,
     boardId: options.boardId,
     files: options.files,
+    ...(options.ownerKind === 'project'
+      ? { storage: createBoardAssetStorage({ bucket: 'project-ffe-working', privateUrl: true }) }
+      : {}),
     onProgress: options.onProgress,
   });
   return uploaded.map((asset, index) => {
@@ -725,6 +732,8 @@ export function BoardAddRail({
         projectId: owner.id,
         productId,
         captureId,
+        itemType: 'fixed',
+        roleConfigurationIdentity: 'default',
         assignmentScope: projectRoomId ? 'room' : 'unassigned',
         roomId: projectRoomId ?? null,
         boardId,
@@ -779,6 +788,7 @@ export function BoardAddRail({
     try {
       const items = await uploadFilesAsBoardItems({
         ownerId: owner.id,
+        ownerKind: owner.kind,
         boardId,
         files,
         point: nextPoint(),

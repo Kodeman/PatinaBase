@@ -5,6 +5,8 @@ const push = jest.fn();
 const useProjectOwnedBoards = jest.fn();
 const useProjectBoards = jest.fn();
 const useProjectFFEItems = jest.fn();
+const useProjectFfeReadiness = jest.fn();
+const useProjectReviewAttention = jest.fn();
 const mutateAsync = jest.fn();
 const createBoard = jest.fn();
 
@@ -17,6 +19,8 @@ jest.mock('@patina/supabase', () => ({
   useProjectOwnedBoards: (...args: unknown[]) => useProjectOwnedBoards(...args),
   useProjectBoards: (...args: unknown[]) => useProjectBoards(...args),
   useProjectFFEItems: (...args: unknown[]) => useProjectFFEItems(...args),
+  useProjectFfeReadiness: (...args: unknown[]) => useProjectFfeReadiness(...args),
+  useProjectReviewAttention: (...args: unknown[]) => useProjectReviewAttention(...args),
   useContinueBoardInProject: () => ({ mutateAsync, isPending: false }),
   useCreateProjectBoard: () => ({ mutateAsync: createBoard, isPending: false }),
 }));
@@ -65,6 +69,8 @@ describe('ProjectMoodBoards', () => {
     useProjectOwnedBoards.mockReturnValue({ data: [], isLoading: false, isError: false });
     useProjectBoards.mockReturnValue({ data: [frozen], isLoading: false, isError: false });
     useProjectFFEItems.mockReturnValue({ data: [], isLoading: false, isError: false });
+    useProjectFfeReadiness.mockReturnValue({ data: [], isLoading: false, isError: false });
+    useProjectReviewAttention.mockReturnValue({ data: [], isLoading: false, isError: false });
   });
 
   it('renders an id-less frozen snapshot read-only and continues it into the room', async () => {
@@ -162,6 +168,29 @@ describe('ProjectMoodBoards', () => {
     expect(region.children[0]).toHaveTextContent('Route the oldest Unsorted selection');
     expect(region).not.toHaveTextContent('Continue client review changes');
     expect(region).not.toHaveTextContent('release-blocking specification');
+  });
+
+  it('prioritizes unresolved review attention and authoritative release gaps', () => {
+    useProjectOwnedBoards.mockReturnValue({ data: [], isLoading: false, isError: false });
+    useProjectFFEItems.mockReturnValue({
+      data: [{ id: 'selected-gap', design_disposition: 'selected', created_at: '2026-08-01' }],
+      isLoading: false,
+      isError: false,
+    });
+    useProjectReviewAttention.mockReturnValue({
+      data: [{ feedbackId: 'feedback-1', selectionId: 'selected-gap', verdict: 'comment' }],
+      isLoading: false,
+      isError: false,
+    });
+    useProjectFfeReadiness.mockReturnValue({
+      data: [{ selectionId: 'selected-gap', ready: false, missingFields: ['vendor'] }],
+      isLoading: false,
+      isError: false,
+    });
+    render(<ProjectMoodBoards projectId="project-1" />);
+    const region = screen.getByLabelText('Continue project FF&E work');
+    expect(region.children[0]).toHaveTextContent('Answer a client question');
+    expect(region.children[1]).toHaveTextContent('release-blocking specification');
   });
 
   it('filters archived live boards and fails closed while selections load', () => {

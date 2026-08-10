@@ -9,6 +9,8 @@ import {
   useCreateProjectBoard,
   useProjectBoards,
   useProjectFFEItems,
+  useProjectFfeReadiness,
+  useProjectReviewAttention,
   useProjectOwnedBoards,
   type ProjectBoard,
   type ProposalBoardSummary,
@@ -66,6 +68,16 @@ export function ProjectMoodBoards({
   const liveQuery = useProjectOwnedBoards(projectId);
   const frozenQuery = useProjectBoards(projectId);
   const selectionsQuery = useProjectFFEItems(projectId);
+  const activeSelectionRows = useMemo(
+    () => ((selectionsQuery.data ?? []) as Array<Record<string, unknown>>)
+      .filter((row) => row.removed_at == null)
+      .filter((row) => !['not_selected', 'superseded'].includes(String(row.design_disposition))),
+    [selectionsQuery.data],
+  );
+  const readinessQuery = useProjectFfeReadiness(
+    activeSelectionRows.map((row) => String(row.id)),
+  );
+  const attentionQuery = useProjectReviewAttention(projectId);
   const continueBoard = useContinueBoardInProject();
   const createBoard = useCreateProjectBoard();
   const [continuingId, setContinuingId] = useState<string | null>(null);
@@ -92,13 +104,23 @@ export function ProjectMoodBoards({
     [liveBoards],
   );
 
-  const isLoading = liveQuery.isLoading || frozenQuery.isLoading || selectionsQuery.isLoading;
+  const isLoading = liveQuery.isLoading || frozenQuery.isLoading || selectionsQuery.isLoading ||
+    readinessQuery.isLoading || attentionQuery.isLoading;
 
   const continueItems = useMemo<ContinueItem[]>(() => {
-    const rows = ((selectionsQuery.data ?? []) as Array<Record<string, unknown>>)
-      .filter((row) => row.removed_at == null)
-      .filter((row) => !['not_selected', 'superseded'].includes(String(row.design_disposition)));
+    const rows = activeSelectionRows;
     const result: ContinueItem[] = [];
+    const attention = attentionQuery.data?.[0];
+    if (attention) {
+      result.push({
+        key: `feedback:${attention.feedbackId}`,
+        label: attention.verdict === 'rejected'
+          ? 'Continue a client-requested change'
+          : 'Answer a client question',
+        detail: 'Open the selection from its latest published review.',
+        href: `#ffe-selection-${attention.selectionId}`,
+      });
+    }
     const unsorted = rows
       .filter((row) => row.assignment_scope === 'unassigned')
       .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))[0];
@@ -121,6 +143,21 @@ export function ProjectMoodBoards({
         href: roomHref(lastBoard.id, pathname),
       });
     }
+    const readiness = new Map(
+      (readinessQuery.data ?? []).map((row) => [row.selectionId, row]),
+    );
+    const releaseGap = rows
+      .filter((row) => row.design_disposition === 'selected')
+      .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))
+      .find((row) => readiness.get(String(row.id))?.ready === false);
+    if (releaseGap) {
+      result.push({
+        key: `readiness:${String(releaseGap.id)}`,
+        label: 'Complete a release-blocking specification',
+        detail: 'Resolve the oldest selected line that is not ready for authorization.',
+        href: `#ffe-selection-${String(releaseGap.id)}`,
+      });
+    }
     if (canCreate && rows.length === 0 && liveBoards.length === 0) {
       result.push({
         key: 'first-add',
@@ -130,7 +167,7 @@ export function ProjectMoodBoards({
       });
     }
     return result.slice(0, 3);
-  }, [canCreate, liveBoards, pathname, selectionsQuery.data]);
+  }, [activeSelectionRows, attentionQuery.data, canCreate, liveBoards, pathname, readinessQuery.data]);
 
   useEffect(() => {
     const openCreator = () => { if (canCreate) setCreating(true); };
@@ -145,7 +182,8 @@ export function ProjectMoodBoards({
     );
   }
 
-  if (liveQuery.isError || frozenQuery.isError || selectionsQuery.isError) {
+  if (liveQuery.isError || frozenQuery.isError || selectionsQuery.isError ||
+      readinessQuery.isError || attentionQuery.isError) {
     return (
       <section aria-labelledby="project-mood-boards" className="mt-9 border-t border-[var(--color-pearl)] pt-6">
         <h2 id="project-mood-boards" className="font-heading text-[16px] text-[var(--color-charcoal)]">

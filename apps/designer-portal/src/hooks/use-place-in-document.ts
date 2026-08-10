@@ -10,6 +10,7 @@
 
 import { useMutation } from '@tanstack/react-query';
 import { usePlaceProductInProjectV2 } from '@patina/supabase';
+import type { FfeAssignmentScope, FfeDuplicateMode } from '@patina/types';
 
 export interface PlaceablePiece {
   /** product id */
@@ -25,25 +26,41 @@ export interface PlaceablePiece {
 export function usePlaceInDocument() {
   const place = usePlaceProductInProjectV2();
   return useMutation({
-    mutationFn: async ({ projectId, piece, configurationId = null }: {
+    mutationFn: async ({
+      projectId,
+      piece,
+      configurationId = null,
+      assignmentScope = 'unassigned',
+      roomId = null,
+      boardId = null,
+      duplicateMode = 'reuse',
+      idempotencyKey,
+    }: {
       projectId: string;
       piece: PlaceablePiece;
       configurationId?: string | null;
+      assignmentScope?: FfeAssignmentScope;
+      roomId?: string | null;
+      boardId?: string | null;
+      duplicateMode?: FfeDuplicateMode;
+      idempotencyKey?: string;
     }) => {
       const result = await place.mutateAsync({
         projectId,
         productId: piece.id,
         name: piece.name,
-        assignmentScope: 'unassigned',
-        roomId: null,
+        itemType: 'fixed',
+        assignmentScope,
+        roomId,
+        boardId,
         disposition: 'candidate',
-        duplicateMode: 'create',
+        duplicateMode,
         configurationId,
+        roleConfigurationIdentity: 'default',
         source: 'engine',
-        idempotencyKey: globalThis.crypto?.randomUUID?.() ?? `engine-${projectId}-${piece.id}-${Date.now()}`,
+        idempotencyKey: idempotencyKey ?? globalThis.crypto?.randomUUID?.() ?? `engine-${projectId}-${piece.id}-${Date.now()}`,
       });
-      if (!result.selectionId) throw new Error('The project selection was not created.');
-      return { id: result.selectionId };
+      return result;
     },
   });
 }

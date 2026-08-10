@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
 import { FolderPlus } from 'lucide-react';
 import type {
   FfeAssignmentScope,
@@ -36,6 +35,23 @@ function newIdempotencyKey(prefix: string): string {
   return globalThis.crypto?.randomUUID?.() ?? `${prefix}-${Date.now()}`;
 }
 
+interface RequestIdentity {
+  fingerprint: string;
+  key: string;
+}
+
+function idempotencyKeyFor(
+  ref: { current: RequestIdentity | null },
+  prefix: string,
+  request: object,
+): string {
+  const fingerprint = JSON.stringify(request);
+  if (ref.current?.fingerprint !== fingerprint) {
+    ref.current = { fingerprint, key: newIdempotencyKey(prefix) };
+  }
+  return ref.current.key;
+}
+
 export function AddToProjectSheet({
   projectId,
   projectName,
@@ -49,8 +65,6 @@ export function AddToProjectSheet({
   boards: ProposalBoardSummary[];
   placeholders?: Array<{ id: string; name: string }>;
 }) {
-  const router = useRouter();
-  const pathname = usePathname();
   const placeProduct = usePlaceProductInProjectV2();
   const createNeed = useCreateNamedProjectNeed();
   const [open, setOpen] = useState(false);
@@ -65,12 +79,11 @@ export function AddToProjectSheet({
   const [duplicateMode, setDuplicateMode] = useState<FfeDuplicateMode>('reuse');
   const [placeholderSelectionId, setPlaceholderSelectionId] = useState('');
   const [needName, setNeedName] = useState('');
-  const [needKind, setNeedKind] = useState<'placeholder' | 'allowance' | 'manual_product'>('placeholder');
   const [quantity, setQuantity] = useState('1');
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
-  const productRequestKey = useRef<string | null>(null);
-  const needRequestKey = useRef<string | null>(null);
+  const productRequestKey = useRef<RequestIdentity | null>(null);
+  const needRequestKey = useRef<RequestIdentity | null>(null);
 
   const compatibleBoards = useMemo(
     () => boards.filter((board) => {
@@ -101,7 +114,6 @@ export function AddToProjectSheet({
     setDuplicateMode('reuse');
     setPlaceholderSelectionId('');
     setNeedName('');
-    setNeedKind('placeholder');
     setQuantity('1');
     setError(null);
     setResult(null);
@@ -124,10 +136,11 @@ export function AddToProjectSheet({
     if (!picked || (assignment === 'room' && !roomId)) return;
     setError(null);
     try {
-      const response = await placeProduct.mutateAsync({
+      const request = {
         projectId,
         productId: picked.productId,
         captureId: picked.captureId ?? null,
+        itemType: 'fixed' as const,
         assignmentScope: assignment,
         roomId: assignment === 'room' ? roomId : null,
         boardId: boardId || null,
@@ -135,7 +148,11 @@ export function AddToProjectSheet({
         duplicateMode,
         placeholderSelectionId: placeholderSelectionId || null,
         configurationId: picked.configurationSelection?.savedConfigurationId ?? null,
-        idempotencyKey: productRequestKey.current ??= newIdempotencyKey('place'),
+        roleConfigurationIdentity: 'default',
+      };
+      const response = await placeProduct.mutateAsync({
+        ...request,
+        idempotencyKey: idempotencyKeyFor(productRequestKey, 'place', request),
       });
       ffeEvents.routingChosen({
         project_id: projectId,
@@ -166,7 +183,7 @@ export function AddToProjectSheet({
     if (!needName.trim() || (assignment === 'room' && !roomId)) return;
     setError(null);
     try {
-      const response = await createNeed.mutateAsync({
+      const request = {
         projectId,
         name: needName.trim(),
         assignmentScope: assignment,
@@ -174,9 +191,12 @@ export function AddToProjectSheet({
         boardId: boardId || null,
         disposition,
         quantity: Math.max(1, Math.round(Number(quantity) || 1)),
+        itemType: 'tbd' as const,
         source: 'named-need',
-        sourceMetadata: { needKind },
-        idempotencyKey: needRequestKey.current ??= newIdempotencyKey('need'),
+      };
+      const response = await createNeed.mutateAsync({
+        ...request,
+        idempotencyKey: idempotencyKeyFor(needRequestKey, 'need', request),
       });
       ffeEvents.routingChosen({
         project_id: projectId,
@@ -248,10 +268,9 @@ export function AddToProjectSheet({
               }],
               ['Browse the Library', 'Choose one known product, then route it here.', () => { setPickerInitialTab('library'); setPickerOpen(true); }],
               ['Paste a product link', 'Capture through the guarded URL intake, then route it here.', () => { setPickerInitialTab('captures'); setPickerOpen(true); }],
-              ['Name a need', 'Add a placeholder, allowance, or manual product.', () => setMode('name_need')],
-              ['Import a schedule', 'Map CSV or XLSX rows before any selections are created.', () => {
-                router.push(`/library?projectId=${encodeURIComponent(projectId)}&import=1&returnTo=${encodeURIComponent(`${pathname}#project-ffe`)}`);
-                close();
+              ['Name a need', 'Add a named selection to resolve later.', () => setMode('name_need')],
+              ['Import a schedule', 'Project schedule staging is not available in this build.', () => {
+                setError('Project schedule staging is not available yet. No selections were created.');
               }],
             ].map(([label, description, action]) => (
               <button key={String(label)} type="button" onClick={action as () => void} className="flex min-h-16 w-full items-center justify-between gap-4 py-3 text-left">
@@ -281,7 +300,7 @@ export function AddToProjectSheet({
               <div className="grid grid-cols-3 gap-1.5">
                 <button type="button" aria-pressed={duplicateMode === 'reuse'} onClick={() => setDuplicateMode('reuse')} className={`${FIELD_CLASS} ${duplicateMode === 'reuse' ? 'border-[var(--color-clay)]' : ''}`}>Reuse selection</button>
                 <button type="button" aria-pressed={duplicateMode === 'create'} onClick={() => setDuplicateMode('create')} className={`${FIELD_CLASS} ${duplicateMode === 'create' ? 'border-[var(--color-clay)]' : ''}`}>Separate need</button>
-                <button type="button" aria-pressed={duplicateMode === 'hold'} onClick={() => setDuplicateMode('hold')} className={`${FIELD_CLASS} ${duplicateMode === 'hold' ? 'border-[var(--color-clay)]' : ''}`}>Hold</button>
+                <button type="button" aria-pressed={duplicateMode === 'hold'} onClick={() => { setDuplicateMode('hold'); setPlaceholderSelectionId(''); }} className={`${FIELD_CLASS} ${duplicateMode === 'hold' ? 'border-[var(--color-clay)]' : ''}`}>Hold</button>
               </div>
             </fieldset>
             {placeholders.length > 0 && duplicateMode !== 'hold' && (
@@ -305,7 +324,6 @@ export function AddToProjectSheet({
           <>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="sm:col-span-2"><span className={LABEL_CLASS}>Need</span><input autoFocus value={needName} onChange={(event) => setNeedName(event.target.value)} placeholder="Pair of reading chairs" className={FIELD_CLASS} /></label>
-              <label><span className={LABEL_CLASS}>Kind</span><select value={needKind} onChange={(event) => setNeedKind(event.target.value as typeof needKind)} className={FIELD_CLASS}><option value="placeholder">Placeholder</option><option value="allowance">Allowance</option><option value="manual_product">Manual product</option></select></label>
               <label><span className={LABEL_CLASS}>Quantity</span><input type="number" min={1} value={quantity} onChange={(event) => setQuantity(event.target.value)} className={FIELD_CLASS} /></label>
             </div>
             <div className="mt-3">{routeField}</div>

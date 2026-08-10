@@ -260,6 +260,7 @@ export interface ApplyBoardRoomStateInput {
     canvasWidth: number;
     canvasHeight: number;
     backgroundColor: string;
+    coverImageUrl?: string | null;
     sections: MoodBoardSection[];
     items: EditableMoodBoardItem[];
   };
@@ -474,6 +475,9 @@ export function useUpsertBoard() {
   return useMutation({
     mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async (input: UpsertBoardInput): Promise<ProposalBoard> => {
+      if (mutationOwner(input)?.kind === 'project') {
+        throw new Error('Project board changes require apply_board_room_state');
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
@@ -618,6 +622,9 @@ export function useDeleteBoard() {
       projectId?: string;
       owner?: BoardOwnerRef;
     }): Promise<void> => {
+      if (mutationOwner({ proposalId: _proposalId, projectId: _projectId, owner: _owner })?.kind === 'project') {
+        throw new Error('Project board deletion is unavailable without an atomic project command');
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const { error } = await supabase.from('proposal_boards').delete().eq('id', boardId);
@@ -649,6 +656,9 @@ export function useAddBoardItem() {
   return useMutation({
     mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async (input: AddBoardItemInput): Promise<ProposalBoardItem> => {
+      if (mutationOwner(input)?.kind === 'project') {
+        throw new Error('Project board changes require apply_board_room_state');
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
@@ -709,6 +719,9 @@ export function useUpdateBoardItem() {
   return useMutation({
     mutationKey: [PROPOSAL_CLIENT_MUTATION_KEY],
     mutationFn: async (input: UpdateBoardItemInput): Promise<ProposalBoardItem> => {
+      if (mutationOwner(input)?.kind === 'project') {
+        throw new Error('Project board changes require apply_board_room_state');
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
@@ -775,6 +788,9 @@ export function useDeleteBoardItem() {
       projectId?: string;
       owner?: BoardOwnerRef;
     }): Promise<void> => {
+      if (mutationOwner({ proposalId: _proposalId, projectId: _projectId, owner: _owner })?.kind === 'project') {
+        throw new Error('Project board changes require apply_board_room_state');
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const { error } = await supabase.from('proposal_board_items').delete().eq('id', itemId);
@@ -864,6 +880,9 @@ export function useSaveBoardLayout() {
       positions: BoardLayoutPosition[];
     }): Promise<void> => {
       if (positions.length === 0) return;
+      if (mutationOwner({ proposalId: _proposalId, projectId: _projectId, owner: _owner })?.kind === 'project') {
+        throw new Error('Project board changes require apply_board_room_state');
+      }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;

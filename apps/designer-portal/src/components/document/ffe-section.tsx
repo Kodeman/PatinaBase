@@ -34,6 +34,7 @@ import Link from 'next/link';
 import {
   useFfeInvoiceCoverage,
   useProjectFFEItems,
+  useProjectFfeReadiness,
   useProjectOwnedBoards,
   type FfeItemCoverage,
 } from '@patina/supabase';
@@ -680,6 +681,15 @@ function FFESectionBody({
     data: FFERow[] | undefined;
     isLoading: boolean;
   };
+  const selectionIds = useMemo(
+    () => (items ?? []).map((item) => String(item.id)),
+    [items],
+  );
+  const readinessQuery = useProjectFfeReadiness(selectionIds);
+  const readinessBySelection = useMemo(
+    () => new Map((readinessQuery.data ?? []).map((row) => [row.selectionId, row])),
+    [readinessQuery.data],
+  );
   const { data: rooms } = useDocumentRooms(
     mode === 'project' ? projectId : null,
   );
@@ -726,7 +736,11 @@ function FFESectionBody({
     RELEASING_AUTHORITY.has(String(authority.data?.state ?? ''));
   const selecting = ceremony?.phase === 'selecting';
 
-  const rows: LineRow[] = (items ?? []).map((item) => {
+  const rows: LineRow[] = (items ?? []).map((wireItem) => {
+    const item = {
+      ...wireItem,
+      authoritative_readiness: readinessBySelection.get(String(wireItem.id)) ?? null,
+    };
     const auth = deriveLineAuthorization(item, instrumentIndex);
     const tradeHold = deriveTradeLineHold(item, tradeIndex);
     return {

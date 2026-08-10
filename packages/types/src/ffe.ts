@@ -87,6 +87,9 @@ export interface PlaceProductInProjectRequest {
   name?: string | null;
   category?: string | null;
   quantity?: number;
+  itemType?: 'fixed' | 'allowance' | 'tbd';
+  budgetMinCents?: number | null;
+  budgetMaxCents?: number | null;
   assignmentScope: FfeAssignmentScope;
   roomId?: string | null;
   boardId?: string | null;
@@ -96,6 +99,7 @@ export interface PlaceProductInProjectRequest {
   selectionReferenceId?: string | null;
   selectionThreadId?: string | null;
   configurationId?: string | null;
+  roleConfigurationIdentity?: string | null;
   source?: string | null;
   sourceMetadata?: Record<string, unknown>;
   placement?: {
@@ -112,6 +116,8 @@ export interface PlaceProductInProjectResult {
   selectionId: string | null;
   threadId: string | null;
   placementId: string | null;
+  itemType?: 'fixed' | 'allowance' | 'tbd';
+  roleConfigurationIdentity?: string | null;
 }
 
 export interface CreateProjectBoardRequest {
@@ -125,6 +131,9 @@ export interface CreateNamedProjectNeedRequest {
   name: string;
   category?: string | null;
   quantity?: number;
+  itemType?: 'fixed' | 'allowance' | 'tbd';
+  budgetMinCents?: number | null;
+  budgetMaxCents?: number | null;
   assignmentScope: FfeAssignmentScope;
   roomId?: string | null;
   boardId?: string | null;

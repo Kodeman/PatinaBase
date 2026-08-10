@@ -1362,11 +1362,10 @@ export function useTodayProcurementCounts() {
 /**
  * Resolved value for `useCreateReceivingInspection.mutateAsync(...)`.
  *
- * `damageClaimCreated` reflects whether step 4 actually succeeded — callers
+ * `damageClaimCreated` reflects whether the follow-up claim draft succeeded — callers
  * (e.g. `LogInspectionDrawer`) need this to decide whether to fire the
- * `procurement_damage_claim_created` analytics event. The compensating-delete
- * path throws before returning, so a successful resolve with
- * `damageClaimCreated: false` means either outcome was 'clean' or step 4 was
+ * `procurement_damage_claim_created` analytics event. A successful resolve with
+ * `damageClaimCreated: false` means either outcome was 'clean' or the claim was
  * not attempted. Set to `true` only after the damage_claims INSERT returned
  * without error.
  *
@@ -1375,40 +1374,15 @@ export function useTodayProcurementCounts() {
 export interface CreateReceivingInspectionResult {
   inspection: ReceivingInspection;
   damageClaimCreated: boolean;
-  /**
-   * project_ffe_items ids whose received_quantity UPDATE failed (W5-T2).
-   * Always present; empty on the happy path. These failures are
-   * NON-critical — the inspection (and any damage claim) are already
-   * committed and the 00184 trigger side effects have run, so the mutation
-   * still resolves. Callers should surface a warning so the designer can
-   * re-enter the counts.
-   */
+  /** Retained as an always-empty N-1 result field; the batch RPC is atomic. */
   itemUpdateFailures: string[];
 }
 
 /**
- * Mutation: logs a physical receiving inspection. The client owns only the
- * two writes that need client-side composition; everything else is owned by
- * the DB (migration 00184, Trigger C `trg_receiving_inspection_side_effects`,
- * AFTER INSERT ON receiving_inspections), which stamps
- * purchase_orders.delivered_date, advances the PO to 'delivered' on a clean
- * outcome, shifts the net-30 pending balance due_date, and marks linked
- * project_ffe_items received.
- *
- * Client-side steps, sequential, with compensating delete on critical-path
- * failure:
- *   1. INSERT receiving_inspections (critical path — fires Trigger C).
- *   2. IF outcome != 'clean': INSERT damage_claims drafted with auto-draft
- *      description (critical path — compensating DELETE on inspection if
- *      this fails). Description composition stays client-side deliberately:
- *      it folds the designer's inspection notes into editable copy.
- *
- * Returns `{ inspection, damageClaimCreated }`. Callers should use
- * `damageClaimCreated` (not `outcome !== 'clean'`) to gate analytics events
- * tied to the damage_claim row — when step 2 fails, the inspection is
- * compensated away and this mutation rejects, so any spurious event from a
- * caller previously triggered by outcome alone is now impossible
- * (W3.5.5 HIGH-1).
+ * Records one physical receipt for the complete PO line set. Inspection
+ * creation and every received quantity commit together in
+ * record_project_ffe_receipt_batch; the browser never writes either table.
+ * Non-clean outcomes retain the existing editable claim-draft follow-up.
  *
  * Invalidates: ['receiving-inspections'], ['damage-claims'],
  *              ['purchase-orders'], ['purchase-order', poId],
@@ -1423,57 +1397,40 @@ export function useCreateReceivingInspection() {
       input: CreateReceivingInspectionInput,
     ): Promise<CreateReceivingInspectionResult> => {
       const supabase = getSupabase() as any;
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      // Step 1: INSERT receiving_inspections. Critical path. Trigger C
-      // (00184) runs inside this statement and owns the PO/payment/item
-      // side effects.
-      const { data: inspection, error: inspectionError } = await supabase
-        .from('receiving_inspections')
-        .insert({
-          purchase_order_id: input.purchaseOrderId,
-          inspected_by: user.id,
-          outcome: input.outcome,
-          notes: input.notes ?? null,
-          photo_asset_ids: input.photoAssetIds ?? [],
-        })
-        .select()
-        .single();
-
-      if (inspectionError) {
-        throw new Error(
-          `Failed to insert receiving inspection: ${
-            inspectionError.message ?? String(inspectionError)
-          }`,
-        );
+      if (!input.items?.length) {
+        throw new Error('Every purchase-order line needs a received quantity.');
       }
-
-      const inspectionRow = inspection as ReceivingInspection;
-      const inspectionId = inspectionRow.id;
-
-      // Compensating-delete helper for the inspection row itself. Used only
-      // when step 2 (damage_claim INSERT) fails — that path is the only
-      // critical-path side effect after step 1.
-      const compensatingDeleteInspection = async (): Promise<string> => {
-        try {
-          const { error: deleteError } = await supabase
-            .from('receiving_inspections')
-            .delete()
-            .eq('id', inspectionId);
-          if (deleteError) {
-            return `compensating delete FAILED: ${
-              deleteError.message ?? String(deleteError)
-            }`;
-          }
-          return 'compensating delete succeeded';
-        } catch (e) {
-          return `compensating delete THREW: ${(e as Error)?.message ?? String(e)}`;
-        }
+      const { data: receipt, error: receiptError } = await supabase.rpc(
+        'record_project_ffe_receipt_batch',
+        {
+          p_purchase_order_id: input.purchaseOrderId,
+          p_lines: input.items.map((item) => ({
+            selectionId: item.ffeItemId,
+            receivedQuantity: item.receivedQuantity,
+          })),
+          p_outcome: input.outcome,
+          p_notes: input.notes ?? null,
+          p_photo_asset_ids: input.photoAssetIds ?? [],
+        },
+      );
+      if (receiptError) throw receiptError;
+      const receiptRow = (receipt ?? {}) as Record<string, unknown>;
+      if (typeof receiptRow.inspectionId !== 'string') {
+        throw new Error('The receiving command returned no inspection identity.');
+      }
+      const now = new Date().toISOString();
+      const inspectionRow: ReceivingInspection = {
+        id: receiptRow.inspectionId,
+        purchase_order_id: input.purchaseOrderId,
+        inspected_at: now,
+        inspected_by: '',
+        outcome: input.outcome,
+        notes: input.notes ?? null,
+        photo_asset_ids: input.photoAssetIds ?? [],
+        created_at: now,
+        updated_at: now,
       };
+      const inspectionId = inspectionRow.id;
 
       // Step 2: IF outcome != 'clean', INSERT damage_claims (critical path).
       // The parent PO is read only on this path — solely to source the
@@ -1539,63 +1496,17 @@ export function useCreateReceivingInspection() {
         const { error: claimError } = await supabase.from('damage_claims').insert(claimRows);
 
         if (claimError) {
-          const cleanupStatus = await compensatingDeleteInspection();
           throw new Error(
-            `Receiving inspection created (${inspectionId}) but damage_claim INSERT failed: ${
+            `Receiving was recorded (${inspectionId}), but the claim draft failed: ${
               claimError.message ?? String(claimError)
-            }. ${cleanupStatus}.`,
+            }. Retry to finish the claim.`,
           );
         }
         // INSERT returned without error → the damage_claim row exists.
         damageClaimCreated = true;
       }
 
-      // Step 3 (W5-T2): per-item received quantities. Runs AFTER the
-      // critical path (steps 1–2) so the compensating-delete branch above
-      // never leaves stray item writes behind.
-      //
-      // Interplay with 00184 Trigger C: on CLEAN outcomes the trigger
-      // already stamps received_quantity = quantity on every linked item
-      // inside step 1's INSERT statement. So:
-      //   * non-clean outcomes — the trigger never touches
-      //     received_quantity; every supplied row is written here;
-      //   * clean outcome — rows at full ordered quantity are skipped as
-      //     redundant (the trigger's stamp already matches); short rows
-      //     still write, and because this runs after the trigger, the
-      //     client's (lower) count wins.
-      // Failures are non-critical (the inspection is committed); failed ids
-      // are surfaced via itemUpdateFailures instead of rejecting.
-      let itemUpdateFailures: string[] = [];
-      const itemInputs = input.items ?? [];
-      const updatable = itemInputs.filter((it) => {
-        if (input.outcome !== 'clean') return true;
-        if (it.orderedQuantity === undefined) return true;
-        return it.receivedQuantity < it.orderedQuantity;
-      });
-      if (updatable.length > 0) {
-        const outcomes = await Promise.all(
-          updatable.map(async (it): Promise<string | null> => {
-            try {
-              const { error: itemError } = await supabase
-                .from('project_ffe_items')
-                .update({ received_quantity: it.receivedQuantity })
-                .eq('id', it.ffeItemId);
-              return itemError ? it.ffeItemId : null;
-            } catch {
-              return it.ffeItemId;
-            }
-          }),
-        );
-        itemUpdateFailures = outcomes.filter((id): id is string => id !== null);
-        if (itemUpdateFailures.length > 0) {
-          console.warn(
-            'useCreateReceivingInspection: received_quantity update failed for',
-            itemUpdateFailures,
-          );
-        }
-      }
-
-      return { inspection: inspectionRow, damageClaimCreated, itemUpdateFailures };
+      return { inspection: inspectionRow, damageClaimCreated, itemUpdateFailures: [] };
     },
     onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: ['receiving-inspections'] });
@@ -2291,19 +2202,10 @@ export function useAssignProductToFfeSlot() {
       ffeItemId: string;
       projectId: string;
     }): Promise<{ id: string; product_id: string }> => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const supabase = getSupabase() as any;
-
-      const { data, error } = await supabase
-        .from('project_ffe_items')
-        .update({ product_id: productId })
-        .eq('id', ffeItemId)
-        .eq('project_id', projectId)
-        .select('id, product_id')
-        .single();
-
-      if (error) throw error;
-      return data as { id: string; product_id: string };
+      void productId;
+      void ffeItemId;
+      void projectId;
+      throw new Error('Placeholder filling requires place_product_in_project_v2.');
     },
     onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: ['project-ffe-items', projectId] });

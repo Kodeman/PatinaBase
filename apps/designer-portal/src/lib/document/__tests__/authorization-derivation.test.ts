@@ -231,7 +231,9 @@ describe('eligibility', () => {
       .toEqual({ eligible: false, reason: 'archived selection' });
     expect(eligibility(line({ blocked: true }), { track: 'none' }))
       .toEqual({ eligible: false, reason: 'release blocked' });
-    expect(eligibility(line({ spec: { readiness_status: 'incomplete' } }), { track: 'none' }))
+    expect(eligibility(line({ authoritative_readiness: { ready: false, missingFields: ['vendor'] } }), { track: 'none' }))
+      .toEqual({ eligible: false, reason: 'specification not ready' });
+    expect(eligibility(line({ authoritative_readiness: null }), { track: 'none' }))
       .toEqual({ eligible: false, reason: 'specification not ready' });
   });
 

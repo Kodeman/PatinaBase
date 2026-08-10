@@ -258,28 +258,13 @@ export function useBulkReassignFfeVendor() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({
-      projectId,
       itemIds,
-      vendorId,
-      vendorName,
+      projectId: _projectId,
+      vendorId: _vendorId,
+      vendorName: _vendorName,
     }: BulkReassignFfeVendorInput): Promise<BulkReassignFfeVendorResult> => {
       if (itemIds.length === 0) throw new Error('no items selected');
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const supabase = getSupabase() as any;
-      const { data, error } = await supabase
-        .from('project_ffe_items')
-        .update({ vendor_id: vendorId, vendor_name: vendorName })
-        .in('id', itemIds)
-        .eq('project_id', projectId)
-        .is('purchase_order_id', null)
-        .select('id');
-      if (error) throw error;
-      const updatedIds = ((data ?? []) as Array<{ id: string }>).map((r) => r.id);
-      const reached = new Set(updatedIds);
-      return {
-        updatedIds,
-        skippedIds: itemIds.filter((id) => !reached.has(id)),
-      };
+      throw new Error('FF&E vendor changes are RPC-only; use the selection or PO change workflow.');
     },
     onSuccess: (_, { projectId }) => {
       invalidateFfeCaches(queryClient, projectId);

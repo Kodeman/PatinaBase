@@ -47,28 +47,18 @@ describe('AddLineSheet', () => {
       projectId: 'project-1',
       name: 'Walnut bed, king',
       quantity: 2,
+      itemType: 'tbd',
       assignmentScope: 'room',
       roomId: 'room-1',
       disposition: 'candidate',
       source: 'named-need',
-      sourceMetadata: { needKind: 'manual_product' },
       idempotencyKey: expect.any(String),
     });
   });
 
-  it('creates an allowance need without deriving client money in the browser', async () => {
+  it('does not offer an allowance kind until its effective fields can be collected', () => {
     renderSheet();
-    fireEvent.click(screen.getByRole('button', { name: 'Allowance' }));
-    type('Line name', 'Sisal area rug');
-    fireEvent.click(screen.getByRole('button', { name: /add the line/i }));
-
-    await waitFor(() => expect(addMutate).toHaveBeenCalled());
-    expect(addMutate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sourceMetadata: { needKind: 'allowance' },
-        assignmentScope: 'room',
-      }),
-    );
+    expect(screen.queryByRole('button', { name: 'Allowance' })).not.toBeInTheDocument();
   });
 
   it('does not send pricing or vendor fields through the named-need command', async () => {

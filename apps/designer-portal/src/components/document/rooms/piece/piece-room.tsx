@@ -1214,7 +1214,7 @@ export function PieceRoom({ productId }: { productId: string }) {
           price_trade: p.price_trade,
           price_retail: p.price_retail,
         }}
-        onAdded={(name) => setToast(`Added “${p.name}” to ${name}.`)}
+        onAdded={(name, outcome) => setToast(`${outcome} · “${p.name}” in ${name}.`)}
       />
       {configurationView.mode === "custom" && customCommissionOpen && (
         <CustomCommissionSheet

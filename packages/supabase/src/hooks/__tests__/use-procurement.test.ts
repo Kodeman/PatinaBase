@@ -933,7 +933,7 @@ describe('useLogPaymentPaid', () => {
 // useCreateReceivingInspection
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('useCreateReceivingInspection', () => {
+describe.skip('legacy direct useCreateReceivingInspection contract', () => {
   it('clean outcome: INSERTs the inspection and NOTHING else — PO/payment/item side effects are owned by DB trigger 00184', async () => {
     supabaseClient.auth.getUser.mockResolvedValue({
       data: { user: { id: 'user-1' } },
@@ -1399,6 +1399,59 @@ describe('useCreateReceivingInspection', () => {
 
     const invalidatedKeys = invalidateQueries.mock.calls.map((c) => c[0].queryKey);
     expect(invalidatedKeys).toContainEqual(['procurement-items']);
+  });
+});
+
+describe('useCreateReceivingInspection batch command', () => {
+  it('records every PO line in one trusted RPC and performs no receiving or item DML', async () => {
+    supabaseClient.rpc.mockResolvedValue({
+      data: {
+        purchaseOrderId: 'po-1',
+        inspectionId: 'inspection-1',
+        outcome: 'clean',
+        reused: false,
+        lines: [
+          { selectionId: 'ffe-1', receivedQuantity: 2, orderedQuantity: 2, complete: true },
+          { selectionId: 'ffe-2', receivedQuantity: 1, orderedQuantity: 1, complete: true },
+        ],
+      },
+      error: null,
+    });
+    const config = useCreateReceivingInspection() as unknown as {
+      mutationFn: (input: any) => Promise<any>;
+    };
+    const result = await config.mutationFn({
+      purchaseOrderId: 'po-1',
+      outcome: 'clean',
+      notes: 'All clear',
+      photoAssetIds: ['asset-1'],
+      items: [
+        { ffeItemId: 'ffe-1', receivedQuantity: 2, orderedQuantity: 2 },
+        { ffeItemId: 'ffe-2', receivedQuantity: 1, orderedQuantity: 1 },
+      ],
+    });
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('record_project_ffe_receipt_batch', {
+      p_purchase_order_id: 'po-1',
+      p_lines: [
+        { selectionId: 'ffe-1', receivedQuantity: 2 },
+        { selectionId: 'ffe-2', receivedQuantity: 1 },
+      ],
+      p_outcome: 'clean',
+      p_notes: 'All clear',
+      p_photo_asset_ids: ['asset-1'],
+    });
+    expect(result.inspection).toMatchObject({ id: 'inspection-1', purchase_order_id: 'po-1' });
+    expect(supabaseClient.from).not.toHaveBeenCalledWith('receiving_inspections');
+    expect(supabaseClient.from).not.toHaveBeenCalledWith('project_ffe_items');
+  });
+
+  it('fails closed when the caller omits the complete line set', async () => {
+    const config = useCreateReceivingInspection() as unknown as {
+      mutationFn: (input: any) => Promise<any>;
+    };
+    await expect(config.mutationFn({ purchaseOrderId: 'po-1', outcome: 'clean' }))
+      .rejects.toThrow('Every purchase-order line');
+    expect(supabaseClient.rpc).not.toHaveBeenCalled();
   });
 });
 
@@ -2776,7 +2829,7 @@ describe('useMarkProcurementNotificationRead', () => {
 // useAssignProductToFfeSlot  (Sprint 3 / Wave 3.3 — capture-to-slot)
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('useAssignProductToFfeSlot', () => {
+describe.skip('legacy direct useAssignProductToFfeSlot contract', () => {
   it('UPDATEs project_ffe_items.product_id scoped by both id and project_id, then invalidates the slot + PO query keys', async () => {
     queueTableResults('project_ffe_items', {
       data: { id: 'ffe-1', product_id: 'prod-1' },
@@ -2845,5 +2898,19 @@ describe('useAssignProductToFfeSlot', () => {
         projectId: 'proj-other',
       })
     ).rejects.toThrow('row level security policy denied');
+  });
+});
+
+describe('useAssignProductToFfeSlot fail-closed boundary', () => {
+  it('rejects before direct project FF&E DML', async () => {
+    const config = useAssignProductToFfeSlot() as unknown as {
+      mutationFn: (input: any) => Promise<unknown>;
+    };
+    await expect(config.mutationFn({
+      productId: 'prod-1',
+      ffeItemId: 'ffe-1',
+      projectId: 'proj-1',
+    })).rejects.toThrow('place_product_in_project_v2');
+    expect(supabaseClient.from).not.toHaveBeenCalledWith('project_ffe_items');
   });
 });

@@ -9,6 +9,7 @@ vi.mock('@supabase/ssr', () => ({
 
 vi.mock('@tanstack/react-query', () => ({
   useMutation: (config: unknown) => config,
+  useQuery: (config: unknown) => config,
   useQueryClient: () => ({ invalidateQueries }),
 }));
 
@@ -17,6 +18,7 @@ import {
   useCreateNamedProjectNeed,
   useCreateProjectBoard,
   usePlaceProductInProjectV2,
+  useProjectFfeReadiness,
   usePromoteBoardReferenceToSelection,
   usePublishProjectReview,
   useSupersedeProjectSelection,
@@ -45,6 +47,7 @@ describe('project FF&E GA commands', () => {
     const request = {
       projectId: 'project-1',
       productId: 'product-1',
+      itemType: 'fixed',
       assignmentScope: 'room',
       roomId: 'room-1',
       boardId: 'board-1',
@@ -98,12 +101,12 @@ describe('project FF&E GA commands', () => {
       projectId: 'project-1',
       name: 'Reading chair',
       quantity: 2,
+      itemType: 'tbd',
       assignmentScope: 'room',
       roomId: 'room-1',
       boardId: 'board-1',
       disposition: 'candidate',
       source: 'named-need',
-      sourceMetadata: { needKind: 'placeholder' },
       idempotencyKey: 'need-1',
     };
 
@@ -111,6 +114,22 @@ describe('project FF&E GA commands', () => {
       outcome: 'created', selectionId: 'selection-2', threadId: 'thread-2', placementId: 'placement-2',
     });
     expect(rpc).toHaveBeenCalledWith('create_named_project_need', { p_request: request });
+  });
+
+  it('uses the exact authoritative readiness positional signature', async () => {
+    rpc.mockResolvedValue({
+      data: { selectionId: 'selection-1', ready: false, missingFields: ['vendor'] },
+      error: null,
+    });
+    const config = useProjectFfeReadiness(['selection-1']) as unknown as {
+      queryFn: () => Promise<unknown>;
+    };
+    await expect(config.queryFn()).resolves.toEqual([
+      { selectionId: 'selection-1', ready: false, missingFields: ['vendor'] },
+    ]);
+    expect(rpc).toHaveBeenCalledWith('get_project_ffe_readiness', {
+      p_ffe_item_id: 'selection-1',
+    });
   });
 
   it('promotes a board item with the positional id and camelCase p_request', async () => {

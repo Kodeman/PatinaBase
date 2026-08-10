@@ -15,7 +15,8 @@ describe('mood board cover generation', () => {
     const renderer = jest.fn().mockResolvedValue(raster);
     const storage = {
       upload: jest.fn().mockResolvedValue(undefined),
-      publicUrl: jest.fn().mockReturnValue('https://assets.example/cover.png'),
+      remove: jest.fn().mockResolvedValue(undefined),
+      url: jest.fn().mockResolvedValue('https://assets.example/cover.png'),
     };
 
     const result = await generateAndUploadMoodBoardCover({

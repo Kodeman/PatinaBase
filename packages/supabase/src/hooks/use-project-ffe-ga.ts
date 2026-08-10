@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   ArchiveProjectSelectionRequest,
   CreateNamedProjectNeedRequest,
@@ -16,6 +16,19 @@ import { boardOwnerQueryKeys } from './use-boards';
 import { invalidateFfeCaches } from './use-procurement';
 
 type JsonRecord = Record<string, unknown>;
+
+export interface ProjectFfeReadiness {
+  selectionId: string;
+  ready: boolean;
+  missingFields: string[];
+}
+
+export interface ProjectReviewAttention {
+  feedbackId: string;
+  selectionId: string;
+  verdict: 'rejected' | 'comment';
+  createdAt: string;
+}
 
 async function callJsonCommand<Result>(name: string, request: object): Promise<Result> {
   // Generated function types arrive with the migration lane; this compatibility
@@ -48,7 +61,88 @@ function normalizePlacement(data: unknown): PlaceProductInProjectResult {
     selectionId,
     threadId: typeof row.threadId === 'string' ? row.threadId : null,
     placementId: (row.placementId ?? row.placement_id ?? null) as string | null,
+    ...(['fixed', 'allowance', 'tbd'].includes(String(row.itemType))
+      ? { itemType: row.itemType as PlaceProductInProjectResult['itemType'] }
+      : {}),
+    ...(typeof row.roleConfigurationIdentity === 'string'
+      ? { roleConfigurationIdentity: row.roleConfigurationIdentity }
+      : {}),
   };
+}
+
+function normalizeReadiness(data: unknown): ProjectFfeReadiness {
+  const row = (data ?? {}) as JsonRecord;
+  if (typeof row.selectionId !== 'string' || typeof row.ready !== 'boolean') {
+    throw new Error('Authoritative FF&E readiness was not returned');
+  }
+  return {
+    selectionId: row.selectionId,
+    ready: row.ready,
+    missingFields: Array.isArray(row.missingFields)
+      ? row.missingFields.filter((field): field is string => typeof field === 'string')
+      : [],
+  };
+}
+
+export function useProjectFfeReadiness(selectionIds: readonly string[]) {
+  const ids = [...new Set(selectionIds.filter(Boolean))].sort();
+  return useQuery({
+    queryKey: ['project-ffe-readiness', ids],
+    enabled: ids.length > 0,
+    queryFn: async (): Promise<ProjectFfeReadiness[]> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = createBrowserClient() as any;
+      return Promise.all(ids.map(async (selectionId) => {
+        const { data, error } = await supabase.rpc('get_project_ffe_readiness', {
+          p_ffe_item_id: selectionId,
+        });
+        if (error) throw error;
+        return normalizeReadiness(data);
+      }));
+    },
+    staleTime: 15_000,
+  });
+}
+
+export function useProjectReviewAttention(projectId: string) {
+  return useQuery({
+    queryKey: ['project-review-attention', projectId],
+    enabled: Boolean(projectId),
+    queryFn: async (): Promise<ProjectReviewAttention[]> => {
+      // Studio-owned review feedback is a working projection. Clients never
+      // use this path; their reads stay behind the curated review RPC.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = createBrowserClient() as any;
+      const { data, error } = await supabase
+        .from('item_feedback')
+        .select(`
+          id, verdict, created_at, resolved_at,
+          review_item:project_review_items!inner(
+            source_ffe_item_id,
+            edition:project_review_editions!inner(project_id, status)
+          )
+        `)
+        .eq('review_item.edition.project_id', projectId)
+        .eq('review_item.edition.status', 'published')
+        .in('verdict', ['rejected', 'comment'])
+        .is('resolved_at', null)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return ((data ?? []) as Array<Record<string, any>>).flatMap((row) => {
+        const reviewItem = Array.isArray(row.review_item) ? row.review_item[0] : row.review_item;
+        const selectionId = reviewItem?.source_ffe_item_id;
+        if (typeof selectionId !== 'string' || !['rejected', 'comment'].includes(row.verdict)) {
+          return [];
+        }
+        return [{
+          feedbackId: String(row.id),
+          selectionId,
+          verdict: row.verdict as 'rejected' | 'comment',
+          createdAt: String(row.created_at),
+        }];
+      });
+    },
+  });
 }
 
 function invalidateProjectFfe(

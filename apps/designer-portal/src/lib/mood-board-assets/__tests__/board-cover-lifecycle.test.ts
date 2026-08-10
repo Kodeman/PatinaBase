@@ -38,7 +38,8 @@ describe('mood board cover lifecycle', () => {
     });
     const storage = {
       upload: jest.fn().mockResolvedValue(undefined),
-      publicUrl: jest.fn().mockReturnValue('https://assets.example/cover.png'),
+      remove: jest.fn().mockResolvedValue(undefined),
+      url: jest.fn().mockResolvedValue('https://assets.example/cover.png'),
     };
     const persist = jest.fn().mockResolvedValue(undefined);
     const lifecycle = createMoodBoardCoverLifecycle({

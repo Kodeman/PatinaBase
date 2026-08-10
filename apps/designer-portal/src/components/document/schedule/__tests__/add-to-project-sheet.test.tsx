@@ -107,15 +107,15 @@ describe('AddToProjectSheet', () => {
     }));
   });
 
-  it('opens import from the Library query and permits a named need board placement', async () => {
+  it('is honest about deferred project staging and permits a named need board placement', async () => {
     createNeed.mockResolvedValue({
       outcome: 'created', selectionId: 'selection-2', threadId: 'thread-2', placementId: 'placement-2',
     });
     renderSheet();
     fireEvent.click(screen.getByRole('button', { name: /Import a schedule/i }));
-    expect(push).toHaveBeenCalledWith(expect.stringContaining('/library?projectId=project-1&import=1'));
+    expect(screen.getByRole('alert')).toHaveTextContent('No selections were created');
+    expect(push).not.toHaveBeenCalled();
 
-    act(() => openAddToProject('section'));
     fireEvent.click(screen.getByRole('button', { name: /Name a need/i }));
     fireEvent.change(screen.getByPlaceholderText('Pair of reading chairs'), { target: { value: 'Side table' } });
     fireEvent.change(screen.getByLabelText('Optional board placement'), { target: { value: 'board-wide' } });
@@ -124,7 +124,25 @@ describe('AddToProjectSheet', () => {
       boardId: 'board-wide',
       assignmentScope: 'unassigned',
       source: 'named-need',
-      sourceMetadata: { needKind: 'placeholder' },
+      itemType: 'tbd',
     })));
+  });
+
+  it('regenerates idempotency only when the logical request changes', async () => {
+    placeProduct.mockRejectedValue(new Error('connection closed'));
+    renderSheet();
+    fireEvent.click(screen.getByRole('button', { name: /Browse the Library/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Pick Oak chair' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add selection' }));
+    await screen.findByRole('alert');
+    const first = placeProduct.mock.calls[0][0].idempotencyKey;
+    fireEvent.click(screen.getByRole('button', { name: 'Separate need' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add selection' }));
+    await waitFor(() => expect(placeProduct).toHaveBeenCalledTimes(2));
+    expect(placeProduct.mock.calls[1][0].idempotencyKey).not.toBe(first);
+    expect(placeProduct.mock.calls[1][0]).toMatchObject({
+      duplicateMode: 'create',
+      itemType: 'fixed',
+    });
   });
 });
