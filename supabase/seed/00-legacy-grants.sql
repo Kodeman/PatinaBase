@@ -9857,3 +9857,21 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.reprice_replacement_purchase_order(uuid,jsonb,jsonb) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00457_ffe_board_cover_patch_semantics.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._apply_board_room_state_00456_impl(uuid, text, uuid, jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00457_ffe_board_cover_patch_semantics.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.apply_board_room_state(uuid, text, uuid, jsonb) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00457_ffe_board_cover_patch_semantics.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.apply_board_room_state(uuid, text, uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

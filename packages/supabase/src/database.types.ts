@@ -25782,6 +25782,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      _apply_board_room_state_00456_impl: {
+        Args: {
+          p_board_id: string
+          p_owner_id: string
+          p_owner_kind: string
+          p_state: Json
+        }
+        Returns: undefined
+      }
       _apply_board_room_state_v1_impl: {
         Args: {
           p_board_id: string

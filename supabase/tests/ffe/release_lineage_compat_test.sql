@@ -273,9 +273,9 @@ BEGIN
   ),'20-item continuation must preserve each source identity without UUID-order shuffling';
   v_live_board:=public.create_project_board('{"projectId":"fb100000-0000-4000-8000-000000000001","name":"Live board"}'::jsonb);
   PERFORM public.apply_board_room_state((v_live_board->>'boardId')::uuid,'project','fb100000-0000-4000-8000-000000000001',
-    '{"name":"Live board","canvasWidth":1200,"canvasHeight":800,"backgroundColor":"#FAF8F5","sections":[],"items":[],"coverImageUrl":"fb100000-0000-4000-8000-000000000001/boards/cover.webp"}'::jsonb);
-  ASSERT (SELECT cover_image_url='fb100000-0000-4000-8000-000000000001/boards/cover.webp' FROM public.proposal_boards WHERE id=(v_live_board->>'boardId')::uuid),
-    'atomic project board state must persist a private working cover';
+    '{"name":"Live board","canvasWidth":1200,"canvasHeight":800,"backgroundColor":"#FAF8F5","sections":[],"items":[]}'::jsonb);
+  ASSERT (SELECT canvas_width=1200 AND canvas_height=800 FROM public.proposal_boards WHERE id=(v_live_board->>'boardId')::uuid),
+    'atomic project board state must persist its layout';
   BEGIN
     PERFORM public.apply_board_room_state((v_live_board->>'boardId')::uuid,'project','fb100000-0000-4000-8000-000000000001',
       '{"name":"Live board","canvasWidth":1200,"canvasHeight":800,"backgroundColor":"#FAF8F5","sections":[],"items":[],"coverImageUrl":"https://local.test/storage/v1/object/public/proposal-mood-boards/project/cover.webp"}'::jsonb);

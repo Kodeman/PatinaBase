@@ -32,6 +32,26 @@ BEGIN
   v_candidate:=public.place_product_in_project_v2('{"projectId":"fa100000-0000-4000-8000-000000000001","productId":"fa300000-0000-4000-8000-000000000001","assignmentScope":"unassigned","disposition":"candidate","duplicateMode":"create","idempotencyKey":"release-candidate"}'::jsonb);
   v_board:=public.create_project_board('{"projectId":"fa100000-0000-4000-8000-000000000001","name":"Review composition"}'::jsonb);
   PERFORM public.apply_board_room_state((v_board->>'boardId')::uuid,'project','fa100000-0000-4000-8000-000000000001',jsonb_build_object(
+    'name','Review composition','canvasWidth',1200,'canvasHeight',800,'backgroundColor','#FAF8F5','sections','[]'::jsonb,'items','[]'::jsonb,
+    'coverImageUrl','fa100000-0000-4000-8000-000000000001/source/chair.pdf',
+    'coverReviewMediaAssetId','fa500000-0000-4000-8000-000000000001'));
+  PERFORM public.apply_board_room_state((v_board->>'boardId')::uuid,'project','fa100000-0000-4000-8000-000000000001',
+    '{"name":"Review composition","canvasWidth":1400,"canvasHeight":900,"backgroundColor":"#FAF8F5","sections":[],"items":[]}'::jsonb);
+  ASSERT (SELECT cover_image_url='fa100000-0000-4000-8000-000000000001/source/chair.pdf'
+    AND cover_review_media_asset_id='fa500000-0000-4000-8000-000000000001'
+    FROM public.proposal_boards WHERE id=(v_board->>'boardId')::uuid),
+    'ordinary layout autosave without cover keys must preserve the prepared cover pair';
+  BEGIN
+    PERFORM public.apply_board_room_state((v_board->>'boardId')::uuid,'project','fa100000-0000-4000-8000-000000000001',
+      '{"name":"Review composition","canvasWidth":1400,"canvasHeight":900,"backgroundColor":"#FAF8F5","sections":[],"items":[],"coverImageUrl":"fa100000-0000-4000-8000-000000000001/source/chair.pdf"}'::jsonb);
+    RAISE EXCEPTION 'project cover replacement without prepared derivative succeeded';
+  EXCEPTION WHEN check_violation THEN NULL; END;
+  PERFORM public.apply_board_room_state((v_board->>'boardId')::uuid,'project','fa100000-0000-4000-8000-000000000001',
+    '{"name":"Review composition","canvasWidth":1400,"canvasHeight":900,"backgroundColor":"#FAF8F5","sections":[],"items":[],"coverImageUrl":null}'::jsonb);
+  ASSERT (SELECT cover_image_url IS NULL AND cover_review_media_asset_id IS NULL
+    FROM public.proposal_boards WHERE id=(v_board->>'boardId')::uuid),
+    'explicit project cover clear must clear both the path and derivative';
+  PERFORM public.apply_board_room_state((v_board->>'boardId')::uuid,'project','fa100000-0000-4000-8000-000000000001',jsonb_build_object(
     'name','Review composition','canvasWidth',1200,'canvasHeight',800,'backgroundColor','#FAF8F5','sections','[]'::jsonb,
     'coverImageUrl','fa100000-0000-4000-8000-000000000001/source/chair.pdf',
     'coverReviewMediaAssetId','fa500000-0000-4000-8000-000000000001',
