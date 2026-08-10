@@ -6,9 +6,11 @@ describe('PreviousWork', () => {
     render(<PreviousWork count={3}><div>Brief recap</div></PreviousWork>);
     const button = screen.getByRole('button', { name: 'Previous work · 3 complete' });
     expect(button).toHaveAttribute('aria-expanded', 'false');
+    expect(document.getElementById(button.getAttribute('aria-controls')!)).toBeInTheDocument();
     expect(screen.queryByText('Brief recap')).not.toBeInTheDocument();
     fireEvent.click(button);
     expect(button).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByText('Brief recap')).toBeInTheDocument();
+    expect(document.getElementById(button.getAttribute('aria-controls')!)).toBeVisible();
   });
 });

@@ -36,7 +36,7 @@ export function PreviousWork({
         <span>Previous work · {count} complete</span>
         <span aria-hidden>{open ? '−' : '+'}</span>
       </button>
-      {open && <div id={contentId} className="pt-2">{children}</div>}
+      <div id={contentId} hidden={!open} className="pt-2">{open ? children : null}</div>
     </section>
   );
 }

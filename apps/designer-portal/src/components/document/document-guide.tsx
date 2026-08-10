@@ -4,7 +4,8 @@ import { DocumentAction } from './document-action';
 import { useMobilePrimaryAction } from './mobile/mobile-shell';
 import type { DocumentGuideModel } from '@/lib/document/document-guide';
 import { documentEvents } from '@/lib/analytics/document-events';
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
+import { MOBILE_ACTION_PRIORITY } from './mobile/lifecycle-mobile-action';
 
 export function DocumentGuide({ model, onActivate }: { model: DocumentGuideModel; onActivate: () => void }) {
   const href = model.action?.destination.kind === 'href' ? model.action.destination.href : null;
@@ -18,16 +19,15 @@ export function DocumentGuide({ model, onActivate }: { model: DocumentGuideModel
           target: href ? { kind: 'href', href } : { kind: 'press', onPress: onActivate },
         }
       : null,
-    { priority: 100 },
+    { priority: MOBILE_ACTION_PRIORITY.guide },
   );
   useEffect(() => {
     documentEvents.guideShown({
       stage: model.stage,
       state: model.state,
       action_key: model.action?.key ?? null,
-      input_count: (model.topInput ? 1 : 0) + model.remainingInputCount,
     });
-  }, [model.action?.key, model.remainingInputCount, model.stage, model.state, model.topInput]);
+  }, [model.action?.key, model.stage, model.state]);
 
   return (
     <section aria-labelledby="document-next-up" className="my-5 border-y border-[var(--color-pearl)] py-4">
@@ -36,13 +36,6 @@ export function DocumentGuide({ model, onActivate }: { model: DocumentGuideModel
         <div className="min-w-0 flex-1">
           <h2 id="document-next-up" className="font-heading text-[19px] font-medium text-[var(--color-charcoal)]">{model.headline}</h2>
           <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-[var(--text-muted)]">{model.reason}</p>
-          {model.topInput && (
-            <p className="mt-2 text-[11px] text-[var(--color-charcoal)]">
-              <span className="font-medium">Input needed:</span> {model.topInput.label} · {model.topInput.owner}
-              <span className="text-[var(--text-muted)]"> · blocks {model.topInput.blocks}</span>
-              {model.remainingInputCount > 0 && <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)]"> · + {model.remainingInputCount} more</span>}
-            </p>
-          )}
         </div>
         {model.action && (
           <div className="hidden min-[1180px]:block">
@@ -54,6 +47,20 @@ export function DocumentGuide({ model, onActivate }: { model: DocumentGuideModel
           </div>
         )}
       </div>
+      <GuideAnnouncement headline={model.headline} />
     </section>
   );
+}
+
+function GuideAnnouncement({ headline }: { headline: string }) {
+  const first = React.useRef(true);
+  const [announcement, setAnnouncement] = React.useState('');
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    setAnnouncement(`Next up: ${headline}`);
+  }, [headline]);
+  return <span className="sr-only" aria-live="polite" aria-atomic="true">{announcement}</span>;
 }

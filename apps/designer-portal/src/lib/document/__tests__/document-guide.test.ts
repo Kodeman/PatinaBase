@@ -51,7 +51,7 @@ describe('deriveDocumentGuide', () => {
     ['brief', 'Review the inquiry', 'brief'],
     ['discovery', 'Complete Discovery', 'discovery'],
     ['direction', 'Shape the direction', '/drafting/proposal-1'],
-    ['proposal', 'Follow up on the proposal', 'proposal'],
+    ['proposal', 'Wait for the client’s signature', 'proposal'],
     ['project', 'Move the project forward', 'project'],
     ['install', 'Complete the installation', 'install'],
     ['care', 'Close out the project', 'care'],
@@ -88,16 +88,33 @@ describe('deriveDocumentGuide', () => {
     expect(guide.action?.label).toBe('Review decisions');
   });
 
-  it('shows the highest hard input and an honest remaining count', () => {
+  it.each([
+    ['draft', 'legacy', null, 'Finish the proposal', 'Open Drafting Room'],
+    ['sent', 'legacy', null, 'Wait for the client’s signature', 'Review signing controls'],
+    ['accepted', 'legacy', null, 'The client has signed', 'Review signing controls'],
+    ['declined', 'legacy', null, 'Follow up on the proposal', 'Review follow-up controls'],
+    ['expired', 'legacy', null, 'Follow up on the expired proposal', 'Review follow-up controls'],
+    ['ignored', 'design_services', 'client_signed', 'Countersign the design agreement', 'Review countersign controls'],
+    ['ignored', 'design_services', 'executed', 'Open the authorized project', 'Open the project'],
+  ] as const)('uses live proposal facts for %s/%s/%s', (status, documentKind, commercialState, headline, label) => {
     const guide = deriveDocumentGuide({
-      row: row('discovery'),
-      hardInputs: [
-        { label: 'Project scope', owner: 'Designer', blocks: 'Direction' },
-        { label: 'Working budget', owner: 'Client', blocks: 'Direction' },
-        { label: 'Target date', owner: 'Client', blocks: 'Direction' },
-      ],
+      row: row('proposal'),
+      proposal: { status, documentKind, commercialState, projectId: commercialState === 'executed' ? 'project-1' : null },
     });
-    expect(guide.topInput).toEqual({ label: 'Project scope', owner: 'Designer', blocks: 'Direction' });
-    expect(guide.remainingInputCount).toBe(2);
+    expect(guide.headline).toBe(headline);
+    expect(guide.action?.label).toBe(label);
+  });
+
+  it('routes order-backed needs to the existing Orders ledger context', () => {
+    const guide = deriveDocumentGuide({
+      row: row('project', { awaiting_inspection_count: 2 }),
+    });
+
+    expect(guide.action?.destination).toEqual({
+      kind: 'ledger',
+      name: 'orders',
+      context: { page: 'receiving', projectId: 'project-1' },
+    });
+    expect(guide.reason).not.toContain('highest-priority');
   });
 });

@@ -48,6 +48,10 @@ import { ProposalPreviewRail } from './drafting/proposal-mirror';
 import { SendSheet } from './overlays/send-sheet';
 import { MarkSignedSheet } from './overlays/mark-signed-sheet';
 import { useMobilePrimaryAction } from './mobile/mobile-shell';
+import {
+  MOBILE_ACTION_PRIORITY,
+  signedProposalMobileAction,
+} from './mobile/lifecycle-mobile-action';
 
 const fmtDay = (iso: string) =>
   new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(
@@ -453,25 +457,13 @@ function SignedSeal({
   };
 
   useMobilePrimaryAction(
-    projectId
-      ? {
-          actionKey: 'open-project',
-          surfaceKey: 'open-document',
-          regionKey: 'signed-proposal',
-          label: 'Open the project',
-          target: { kind: 'href', href: `/doc/${projectId}` },
-        }
-      : !isLoading
-        ? {
-            actionKey: 'open-project',
-            surfaceKey: 'open-document',
-            regionKey: 'signed-proposal',
-            label: 'Open the project',
-            target: { kind: 'press', onPress: () => void onOpenProject() },
-            loading: activate.isPending,
-          }
-        : null,
-    { priority: 10 },
+    signedProposalMobileAction({
+      projectId,
+      isLoading,
+      isPending: activate.isPending,
+      onActivate: () => void onOpenProject(),
+    }),
+    { priority: MOBILE_ACTION_PRIORITY.lifecycle },
   );
 
   return (

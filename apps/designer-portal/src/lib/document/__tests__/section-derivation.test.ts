@@ -49,7 +49,7 @@ const lineage = {
 describe('deriveSections (§4)', () => {
   it('signed active project: Brief→Proposal settled, Project active, Install/Care future', () => {
     const s = deriveSections(
-      { row: baseRow, lineage, projectStartDate: '2026-03-30', installStartDate: '2026-09-02' },
+      { row: baseRow, lineage, lineageResolved: true, projectStartDate: '2026-03-30', installStartDate: '2026-09-02' },
       NOW,
     );
     expect(s.map((x) => x.state)).toEqual([
@@ -68,7 +68,7 @@ describe('deriveSections (§4)', () => {
 
   it('manual project (no lineage): Brief→Proposal are unrecorded, not future or complete', () => {
     const s = deriveSections(
-      { row: baseRow, lineage: null, projectStartDate: '2026-03-30', installStartDate: null },
+      { row: baseRow, lineage: null, lineageResolved: true, projectStartDate: '2026-03-30', installStartDate: null },
       NOW,
     );
     expect(s.slice(0, 4).map((x) => x.state)).toEqual([
@@ -86,11 +86,21 @@ describe('deriveSections (§4)', () => {
     expect(s[4].state).toBe('active');
   });
 
+  it('keeps pre-project lineage neutral while the proposal read is unresolved', () => {
+    const s = deriveSections(
+      { row: baseRow, lineage: null, lineageResolved: false, projectStartDate: null, installStartDate: null },
+      NOW,
+    );
+    expect(s.slice(0, 4).map((x) => x.state)).toEqual(['future', 'future', 'future', 'future']);
+    expect(s.slice(0, 4).some((x) => x.sub === 'Not recorded')).toBe(false);
+  });
+
   it('install-phase project: Install active with phase pretty name', () => {
     const s = deriveSections(
       {
         row: { ...baseRow, active_section: 'install', current_phase: 'final_walkthrough' },
         lineage,
+        lineageResolved: true,
         projectStartDate: '2026-03-30',
         installStartDate: '2026-09-02',
       },
@@ -106,6 +116,7 @@ describe('deriveSections (§4)', () => {
       {
         row: { ...baseRow, active_section: 'care', project_status: 'completed' },
         lineage,
+        lineageResolved: true,
         projectStartDate: '2026-03-30',
         installStartDate: null,
       },
@@ -127,6 +138,7 @@ describe('deriveSections (§4)', () => {
           proposal_sent_at: '2026-06-03T12:00:00Z',
         },
         lineage: { ...lineage, signedAt: null, status: 'sent' },
+        lineageResolved: true,
         projectStartDate: null,
         installStartDate: null,
       },
@@ -147,6 +159,7 @@ describe('deriveSections (§4)', () => {
           proposal_status: 'declined',
         },
         lineage: { ...lineage, signedAt: null, status: 'declined' },
+        lineageResolved: true,
         projectStartDate: null,
         installStartDate: null,
       },
@@ -165,6 +178,7 @@ describe('deriveSections (§4)', () => {
           proposal_status: 'accepted',
         },
         lineage,
+        lineageResolved: true,
         projectStartDate: null,
         installStartDate: null,
       },
@@ -184,6 +198,7 @@ describe('deriveSections (§4)', () => {
           proposal_status: 'draft',
         },
         lineage: { ...lineage, sentAt: null, signedAt: null, status: 'draft' },
+        lineageResolved: true,
         projectStartDate: null,
         installStartDate: null,
       },
@@ -203,6 +218,7 @@ describe('deriveSections (§4)', () => {
           lead_response_deadline: '2026-06-12T12:00:00Z',
         },
         lineage: null,
+        lineageResolved: true,
         projectStartDate: null,
         installStartDate: null,
       },
@@ -217,6 +233,7 @@ describe('deriveSections (§4)', () => {
       {
         row: { ...baseRow, engagement_kind: 'relationship', active_section: 'discovery' },
         lineage: null,
+        lineageResolved: true,
         projectStartDate: null,
         installStartDate: null,
       },

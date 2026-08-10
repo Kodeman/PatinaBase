@@ -8,12 +8,6 @@ export type DocumentGuideState =
   | 'waiting'
   | 'on_track';
 
-export interface DocumentGuideInput {
-  label: string;
-  owner: 'Designer' | 'Client' | 'Studio' | 'Maker';
-  blocks: string;
-}
-
 export type DocumentGuideDestination =
   | { kind: 'href'; href: string }
   | { kind: 'anchor'; section: SectionKey }
@@ -31,20 +25,25 @@ export interface DocumentGuideModel {
   eyebrow: string;
   headline: string;
   reason: string;
-  topInput: DocumentGuideInput | null;
-  remainingInputCount: number;
   action: DocumentGuideAction | null;
+}
+
+export interface ProposalGuideFacts {
+  status: string | null;
+  documentKind: string | null;
+  commercialState: string | null;
+  projectId: string | null;
 }
 
 interface DeriveDocumentGuideInput {
   row: DocumentStateRow;
   availability?: 'ready' | 'unavailable';
   now?: Date;
-  hardInputs?: DocumentGuideInput[];
   operationalNeed?: NeedLine | null;
+  proposal?: ProposalGuideFacts | null;
 }
 
-const stageCopy: Record<SectionKey, Omit<DocumentGuideModel, 'stage' | 'topInput' | 'remainingInputCount'>> = {
+const stageCopy: Record<SectionKey, Omit<DocumentGuideModel, 'stage'>> = {
   brief: {
     state: 'actionable',
     eyebrow: 'Brief · decide the fit',
@@ -96,12 +95,20 @@ const stageCopy: Record<SectionKey, Omit<DocumentGuideModel, 'stage' | 'topInput
   },
 };
 
-function actionForNeed(need: NeedLine, stage: SectionKey): DocumentGuideAction {
-  const destination: DocumentGuideDestination = need.ledger
+function actionForNeed(need: NeedLine, row: DocumentStateRow): DocumentGuideAction {
+  const orderPage =
+    need.kind === 'damage_claim' || need.kind === 'awaiting_inspection'
+      ? 'receiving'
+      : need.kind === 'po_unsent' || need.kind === 'po_unacknowledged'
+        ? 'ledger'
+        : null;
+  const destination: DocumentGuideDestination = orderPage
+    ? { kind: 'ledger', name: 'orders', context: { page: orderPage, projectId: row.project_id ?? undefined } }
+    : need.ledger
     ? { kind: 'ledger', name: need.ledger.name, context: need.ledger.context }
     : need.deepLink
       ? { kind: 'href', href: need.deepLink }
-      : { kind: 'anchor', section: stage };
+      : { kind: 'anchor', section: row.active_section };
   return {
     key: `resolve-${need.kind}`,
     label: need.actionLabel ?? 'Review now',
@@ -109,37 +116,109 @@ function actionForNeed(need: NeedLine, stage: SectionKey): DocumentGuideAction {
   };
 }
 
+function proposalGuide(row: DocumentStateRow, proposal: ProposalGuideFacts | null | undefined): DocumentGuideModel {
+  const stage = row.active_section;
+  const documentKind = proposal?.documentKind ?? 'legacy';
+  const isCommercial = documentKind === 'design_services';
+  const state = isCommercial ? proposal?.commercialState : proposal?.status ?? row.proposal_status;
+  const controls: DocumentGuideAction = {
+    key: 'review-signing-controls',
+    label: 'Review signing controls',
+    destination: { kind: 'anchor', section: 'proposal' },
+  };
+
+  if (state === 'draft') {
+    return {
+      state: 'actionable', stage, eyebrow: 'Proposal · in the studio',
+      headline: isCommercial ? 'Finish the design agreement' : 'Finish the proposal',
+      reason: 'Review the current draft and complete the client-facing terms before it leaves the studio.',
+      action: row.proposal_id
+        ? { key: 'open-drafting-room', label: 'Open Drafting Room', destination: { kind: 'href', href: `/drafting/${row.proposal_id}` } }
+        : controls,
+    };
+  }
+  if (state === 'client_signed') {
+    return {
+      state: 'actionable', stage, eyebrow: 'Proposal · client signed',
+      headline: 'Countersign the design agreement',
+      reason: 'Client consent is recorded. Use the agreement controls to add the studio signature and authorize the work.',
+      action: { ...controls, key: 'review-countersign-controls', label: 'Review countersign controls' },
+    };
+  }
+  if (state === 'executed') {
+    return {
+      state: 'actionable', stage, eyebrow: 'Proposal · executed',
+      headline: proposal?.projectId ? 'Open the authorized project' : 'Review the executed agreement',
+      reason: proposal?.projectId
+        ? 'Both signatures are recorded and the project is ready for active work.'
+        : 'Both signatures are recorded; review the execution controls for the authoritative project doorway.',
+      action: proposal?.projectId
+        ? { key: 'open-authorized-project', label: 'Open the project', destination: { kind: 'href', href: `/doc/${proposal.projectId}` } }
+        : controls,
+    };
+  }
+  if (state === 'accepted') {
+    return {
+      state: 'actionable', stage, eyebrow: 'Proposal · signed',
+      headline: 'The client has signed',
+      reason: 'Use the signed-proposal controls below to open or enter the project through the canonical activation action.',
+      action: controls,
+    };
+  }
+  if (state === 'declined' || state === 'expired' || state === 'superseded') {
+    return {
+      state: 'actionable', stage, eyebrow: `Proposal · ${state}`,
+      headline: state === 'expired' ? 'Follow up on the expired proposal' : 'Follow up on the proposal',
+      reason: 'Review the recorded outcome and use the existing proposal controls for the next client conversation.',
+      action: { key: 'review-proposal-follow-up', label: 'Review follow-up controls', destination: { kind: 'anchor', section: 'proposal' } },
+    };
+  }
+  return {
+    state: 'waiting', stage, eyebrow: 'Proposal · with the client',
+    headline: 'Wait for the client’s signature',
+    reason: 'The proposal is in the client’s hands. Review its activity and follow-up controls below.',
+    action: controls,
+  };
+}
+
 export function deriveDocumentGuide({
   row,
   availability = 'ready',
   now = new Date(),
-  hardInputs = [],
   operationalNeed,
+  proposal,
 }: DeriveDocumentGuideInput): DocumentGuideModel {
   const stage = row.active_section;
   if (availability === 'unavailable') {
     return {
       state: 'unavailable', stage, eyebrow: 'Next up', headline: 'Guidance is unavailable',
       reason: 'Reload the document before acting so missing data is never mistaken for an empty section.',
-      topInput: null, remainingInputCount: 0, action: null,
+      action: null,
     };
   }
   if (row.is_paused) {
     return {
       state: 'paused', stage, eyebrow: `${stageCopy[stage].eyebrow} · paused`, headline: 'This project is paused',
-      reason: 'Review the project status before resuming lifecycle work.', topInput: null,
-      remainingInputCount: 0, action: { key: 'review-paused-project', label: 'Review project', destination: { kind: 'anchor', section: stage } },
+      reason: 'Review the project status before resuming lifecycle work.',
+      action: { key: 'review-paused-project', label: 'Review project', destination: { kind: 'anchor', section: stage } },
     };
   }
 
   const need = operationalNeed === undefined ? deriveNeed(row, now) : operationalNeed;
-  if (need) {
+  const proposalLifecycleNeed =
+    need?.kind === 'proposal_signed' ||
+    need?.kind === 'proposal_declined' ||
+    need?.kind === 'proposal_expired';
+  if (need && !proposalLifecycleNeed) {
     return {
       state: 'actionable', stage, eyebrow: `${stageCopy[stage].eyebrow} · needs attention`,
-      headline: need.text, reason: 'This is the highest-priority open action in the current document.',
-      topInput: null, remainingInputCount: 0, action: actionForNeed(need, stage),
+      headline: need.text,
+      reason: 'This action comes from the operational signals available on the current document.',
+      action: actionForNeed(need, row),
     };
   }
+
+  if (stage === 'proposal') return proposalGuide(row, proposal);
 
   const base = stageCopy[stage];
   const action =
@@ -150,7 +229,5 @@ export function deriveDocumentGuide({
     ...base,
     stage,
     action,
-    topInput: hardInputs[0] ?? null,
-    remainingInputCount: Math.max(0, hardInputs.length - 1),
   };
 }

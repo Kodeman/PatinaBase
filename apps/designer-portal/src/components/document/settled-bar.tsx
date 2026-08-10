@@ -61,11 +61,21 @@ export function SettledBar({
           {inner}
         </button>
       ) : (
-        <div className={rowClass}>{inner}</div>
+        <div
+          data-settled-heading
+          tabIndex={-1}
+          className={`${rowClass} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]`}
+        >
+          {inner}
+        </div>
       )}
-      {expandable && open && (
-        <div id={anchorId ? `${anchorId}-review` : undefined} className="rounded-b-[5px] border border-t-0 border-[var(--color-pearl)] bg-[rgba(252,250,246,0.7)] px-4 pb-4 pt-3.5">
-          {children}
+      {expandable && (
+        <div
+          id={anchorId ? `${anchorId}-review` : undefined}
+          hidden={!open}
+          className="rounded-b-[5px] border border-t-0 border-[var(--color-pearl)] bg-[rgba(252,250,246,0.7)] px-4 pb-4 pt-3.5"
+        >
+          {open ? children : null}
         </div>
       )}
     </div>
