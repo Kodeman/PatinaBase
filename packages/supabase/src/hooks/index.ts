@@ -1549,6 +1549,7 @@ export {
 export type { PhaseRow, MilestoneRow, ScheduleRevisionRow, UseResolvedScheduleResult } from './use-schedule';
 
 export {
+  invalidateProjectWorkflow,
   projectWorkflowQueryKey,
   useProjectWorkflow,
   type ProjectWorkflowRow,

@@ -61,6 +61,8 @@ describe('WorkflowStageDocumentMount', () => {
             tasks: [],
             ffe: [],
           },
+          advance_blocker_count: 0,
+          blocks_advance: false,
         },
       ],
       isLoading: false,

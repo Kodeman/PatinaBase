@@ -25,6 +25,8 @@ export interface WorkflowPhaseLike {
   deliverables: unknown;
   template_provenance: unknown;
   current_blockers: unknown;
+  advance_blocker_count: number;
+  blocks_advance: boolean;
 }
 
 export type WorkflowStageStatus =
@@ -47,7 +49,7 @@ export interface WorkflowProvenance {
 
 export interface WorkflowNextAction {
   phaseId: string | null;
-  kind: 'advance' | 'terminal' | 'section';
+  kind: 'advance' | 'resume' | 'terminal' | 'section';
   label: string;
 }
 
@@ -231,23 +233,33 @@ function uniqueProvenance(
 function nextActionFor(
   phase: WorkflowPhaseLike,
   phases: readonly WorkflowPhaseLike[],
-  blockers: readonly WorkflowBlocker[],
 ): WorkflowNextAction {
+  const advanceBlockerCount = phase.blocks_advance
+    ? Math.max(1, phase.advance_blocker_count)
+    : 0;
+  const advanceBlockerLabel = `${advanceBlockerCount} phase blocker${advanceBlockerCount === 1 ? '' : 's'}`;
+
+  if (phase.phase_status === 'delayed') {
+    return {
+      phaseId: phase.phase_id,
+      kind: 'resume',
+      label: phase.blocks_advance
+        ? `Resolve ${advanceBlockerLabel}, then resume ${phase.phase_name}.`
+        : `Resume ${phase.phase_name} before following the configured schedule graph.`,
+    };
+  }
+
   const followers = phases.filter(
     (candidate) => candidate.follows_phase_id === phase.phase_id,
   );
-  const blockerPrefix =
-    blockers.length > 0
-      ? `Resolve ${blockers.length} blocker${blockers.length === 1 ? '' : 's'}, then `
-      : '';
 
   if (followers.length === 0) {
     return {
       phaseId: phase.phase_id,
       kind: 'terminal',
       label:
-        blockers.length > 0
-          ? `Resolve ${blockers.length} blocker${blockers.length === 1 ? '' : 's'} before closing ${phase.phase_name}. ${phase.phase_name} is terminal in the configured schedule graph.`
+        phase.blocks_advance
+          ? `Resolve ${advanceBlockerLabel} before closing ${phase.phase_name}. ${phase.phase_name} is terminal in the configured schedule graph.`
           : `${phase.phase_name} is terminal in the configured schedule graph.`,
     };
   }
@@ -256,7 +268,9 @@ function nextActionFor(
   return {
     phaseId: phase.phase_id,
     kind: 'advance',
-    label: `${blockerPrefix}complete ${phase.phase_name} to advance to ${followerNames.join(', ')}.`,
+    label: phase.blocks_advance
+      ? `Resolve ${advanceBlockerLabel} before advancing from ${phase.phase_name} to ${followerNames.join(', ')}.`
+      : `Complete ${phase.phase_name} to advance to ${followerNames.join(', ')}.`,
   };
 }
 
@@ -374,11 +388,7 @@ export function deriveWorkflowStageDocument(
           .filter((value): value is WorkflowProvenance => value !== null),
       ),
       nextActions: groupActivePhases.map((phase) =>
-        nextActionFor(
-          phase,
-          phases,
-          blockersFrom(phase.current_blockers, phase.phase_id),
-        ),
+        nextActionFor(phase, phases),
       ),
     });
   }
@@ -395,7 +405,7 @@ export function deriveWorkflowStageDocument(
         phase,
         reason: classificationReason(phase),
         blockers,
-        nextAction: nextActionFor(phase, phases, blockers),
+        nextAction: nextActionFor(phase, phases),
       };
     });
 

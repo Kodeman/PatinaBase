@@ -3,9 +3,33 @@ import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 const from = vi.fn();
 const rpc = vi.fn();
 const invalidateQueries = vi.fn();
+const channelOn = vi.fn();
+const channelSubscribe = vi.fn();
+const removeChannel = vi.fn();
+const channel: Record<string, unknown> = {};
+channel.on = (...args: unknown[]) => {
+  channelOn(...args);
+  return channel;
+};
+channel.subscribe = () => {
+  channelSubscribe();
+  return channel;
+};
+let effectCleanup: (() => void) | void;
 
 vi.mock('@supabase/ssr', () => ({
-  createBrowserClient: () => ({ from, rpc }),
+  createBrowserClient: () => ({
+    from,
+    rpc,
+    channel: () => channel,
+    removeChannel,
+  }),
+}));
+
+vi.mock('react', () => ({
+  useEffect: (effect: () => (() => void) | void) => {
+    effectCleanup = effect();
+  },
 }));
 
 vi.mock('@tanstack/react-query', () => ({
@@ -22,6 +46,7 @@ import {
   usePublishCoordinationItem,
   useReassignCoordinationItem,
   useResolveCoordinationItem,
+  useCoordinationRealtime,
   useSubmitCoordinationRevision,
   useUpdateCoordinationItem,
   type SubmitCoordinationRevisionInput,
@@ -38,9 +63,46 @@ beforeEach(() => {
   rpc.mockReset();
   rpc.mockResolvedValue({ data: coordinationItem, error: null });
   invalidateQueries.mockReset();
+  channelOn.mockReset();
+  channelSubscribe.mockReset();
+  removeChannel.mockReset();
+  effectCleanup = undefined;
 });
 
 describe('coordination authority routing', () => {
+  it('invalidates the project workflow after a blocker mutation', () => {
+    const config = useCreateCoordinationItem('proj-1') as unknown as {
+      onSuccess: (data: typeof coordinationItem) => void;
+    };
+
+    config.onSuccess(coordinationItem);
+
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['project-workflow', 'proj-1'],
+    });
+  });
+
+  it('shares one realtime channel across decisions, tasks, and FF&E with deterministic cleanup', () => {
+    useCoordinationRealtime('proj-1');
+
+    expect(channelSubscribe).toHaveBeenCalledTimes(1);
+    expect(channelOn.mock.calls.map((call) => call[1])).toEqual([
+      expect.objectContaining({ table: 'client_decisions' }),
+      expect.objectContaining({ table: 'project_tasks' }),
+      expect.objectContaining({ table: 'project_ffe_items' }),
+    ]);
+
+    const invalidate = channelOn.mock.calls[0][2] as () => void;
+    invalidate();
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['project-workflow', 'proj-1'],
+    });
+
+    effectCleanup?.();
+    expect(removeChannel).toHaveBeenCalledTimes(1);
+    expect(removeChannel).toHaveBeenCalledWith(channel);
+  });
+
   it('never forwards caller-supplied resolution attribution or a separate notice', async () => {
     const config = useResolveCoordinationItem('proj-1') as unknown as {
       mutationFn: (input: unknown) => Promise<unknown>;

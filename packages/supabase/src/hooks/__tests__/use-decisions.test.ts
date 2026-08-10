@@ -262,6 +262,24 @@ describe('useDecisionMetrics', () => {
 });
 
 describe('useCreateDecision', () => {
+  it('invalidates the project workflow after a project decision changes', () => {
+    const config = useCreateDecision() as unknown as {
+      onSuccess: (data: ReturnType<typeof makeDecision>) => void;
+    };
+
+    config.onSuccess(
+      makeDecision({
+        id: 'dec-1',
+        designer_client_id: 'dc-1',
+        project_id: 'proj-1',
+      }),
+    );
+
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['project-workflow', 'proj-1'],
+    });
+  });
+
   it('creates the row, options, dependencies, and first notice through one RPC', async () => {
     supabaseClient.rpc.mockResolvedValueOnce({
       data: { id: 'dec-1', designer_client_id: 'dc-1', project_id: 'proj-1' },

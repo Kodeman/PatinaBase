@@ -8,6 +8,7 @@ import type { ProductConfigurationSelection } from '@patina/types';
 // Track 5 coordination axis — type-only import (erased at compile time, so no
 // runtime cycle even though use-coordination imports ClientDecisionOption back).
 import type { CoordinationKind, Court } from './use-coordination';
+import { invalidateProjectWorkflow } from './use-project-workflow';
 
 const getSupabase = () => createBrowserClient();
 
@@ -497,6 +498,7 @@ export function useCreateDecision() {
         queryClient.invalidateQueries({ queryKey: ['project-decisions', data.project_id] });
         queryClient.invalidateQueries({ queryKey: ['project-ffe-items', data.project_id] });
         queryClient.invalidateQueries({ queryKey: ['section-tasks', data.project_id] });
+        void invalidateProjectWorkflow(queryClient, data.project_id);
       }
     },
   });
@@ -564,6 +566,9 @@ export function useUpdateDecisionStatus(options?: { errorSurface?: 'inline' }) {
       queryClient.invalidateQueries({ queryKey: ['client-decision', data.id] });
       queryClient.invalidateQueries({ queryKey: ['all-decisions'] });
       queryClient.invalidateQueries({ queryKey: ['decision-metrics'] });
+      if (data.project_id) {
+        void invalidateProjectWorkflow(queryClient, data.project_id);
+      }
     },
   });
 }
@@ -632,6 +637,7 @@ export function useUpdateDecision(options?: { errorSurface?: 'inline' }) {
       queryClient.invalidateQueries({ queryKey: ['decision-metrics'] });
       if (data.project_id) {
         queryClient.invalidateQueries({ queryKey: ['project-decisions', data.project_id] });
+        void invalidateProjectWorkflow(queryClient, data.project_id);
       }
     },
   });
@@ -673,6 +679,7 @@ export function useExtendAndReopenDecision(options?: { errorSurface?: 'inline' }
       queryClient.invalidateQueries({ queryKey: ['decision-metrics'] });
       if (data.project_id) {
         queryClient.invalidateQueries({ queryKey: ['project-decisions', data.project_id] });
+        void invalidateProjectWorkflow(queryClient, data.project_id);
       }
     },
   });
@@ -710,6 +717,7 @@ export function useDeleteDecision() {
       queryClient.invalidateQueries({ queryKey: ['decision-metrics'] });
       if (projectId) {
         queryClient.invalidateQueries({ queryKey: ['project-decisions', projectId] });
+        void invalidateProjectWorkflow(queryClient, projectId);
       }
     },
   });
@@ -742,6 +750,7 @@ export function usePublishDraftDecision() {
       queryClient.invalidateQueries({ queryKey: ['decision-metrics'] });
       if (data.project_id) {
         queryClient.invalidateQueries({ queryKey: ['project-decisions', data.project_id] });
+        void invalidateProjectWorkflow(queryClient, data.project_id);
       }
     },
   });
@@ -860,6 +869,7 @@ export function useSelectDecisionOption() {
         queryClient.invalidateQueries({ queryKey: ['project-decisions', data.project_id] });
         queryClient.invalidateQueries({ queryKey: ['project-ffe-items', data.project_id] });
         queryClient.invalidateQueries({ queryKey: ['project-ffe', data.project_id] });
+        void invalidateProjectWorkflow(queryClient, data.project_id);
       }
     },
   });
@@ -907,6 +917,7 @@ export function useApplyDecisionOverride() {
       if (data.project_id) {
         queryClient.invalidateQueries({ queryKey: ['project-decisions', data.project_id] });
         queryClient.invalidateQueries({ queryKey: ['project-ffe-items', data.project_id] });
+        void invalidateProjectWorkflow(queryClient, data.project_id);
       }
     },
   });

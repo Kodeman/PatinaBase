@@ -63,6 +63,11 @@ jest.mock('@patina/supabase', () => ({
   useProjectParties: () => ({ data: [] }),
   useCoordinationItems: () => ({ data: [] }),
   useDesignerClientForClientUser: () => ({ data: null }),
+  useProjectWorkflow: () => ({
+    data: [],
+    isLoading: false,
+    isError: false,
+  }),
 }));
 
 // The project document's own sections are not what these tests exercise; the

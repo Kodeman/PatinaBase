@@ -223,6 +223,11 @@ type UpdatePhaseChainMutationConfig = {
     followsPhaseId?: string | null;
     lane?: 'main' | 'thread';
   }) => Promise<unknown>;
+  onSuccess: (result: unknown, variables: {
+    phaseId: string;
+    projectId: string;
+    expectedUpdatedAt: string;
+  }) => void;
 };
 
 describe('useUpdateProjectPhaseChain', () => {
@@ -250,6 +255,15 @@ describe('useUpdateProjectPhaseChain', () => {
       p_phase_id: 'phase-2',
       p_expected_updated_at: '2026-08-01T12:00:00.000Z',
       p_patch: { follows_phase_id: 'phase-1', lane: 'main' },
+    });
+
+    config.onSuccess({}, {
+      phaseId: 'phase-2',
+      projectId: 'project-1',
+      expectedUpdatedAt: '2026-08-01T12:00:00.000Z',
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['project-workflow', 'project-1'],
     });
   });
 });
@@ -431,6 +445,7 @@ describe('useUpdateProjectPhaseStatus', () => {
       ['project-v2', 'project-7'],
       ['projects'],
       ['document-state'],
+      ['project-workflow', 'project-7'],
     ]);
   });
 });
@@ -858,6 +873,7 @@ describe('useUpdateFFEItemStatus', () => {
     expect(invalidatedKeys).toContainEqual(['projects', 'proj-5']);
     expect(invalidatedKeys).toContainEqual(['procurement-items']);
     expect(invalidatedKeys).toContainEqual(['project-financials', 'proj-5']);
+    expect(invalidatedKeys).toContainEqual(['project-workflow', 'proj-5']);
   });
 });
 

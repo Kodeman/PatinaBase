@@ -23,6 +23,8 @@ function phase(
     lane: 'main',
     template_provenance: { slug: 'full-service', version: 4 },
     current_blockers: { count: 0, phase: [], tasks: [], ffe: [] },
+    advance_blocker_count: 0,
+    blocks_advance: false,
     ...overrides,
   };
 }

@@ -7,6 +7,7 @@ import { createBrowserClient } from '../client';
 import type { ProductConfigurationSelection, PartyKind as SharedPartyKind } from '@patina/types';
 import type { ClientDecisionOption, DecisionType } from './use-decisions';
 import { peopleKeys } from './use-people';
+import { invalidateProjectWorkflow } from './use-project-workflow';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Track 5 — Project Coordination data layer (the ball-in-court).
@@ -694,6 +695,7 @@ export function useResolveCoordinationItem(projectId: string | null | undefined)
         void queryClient.invalidateQueries({ queryKey: ['project-decisions', pid] });
         void queryClient.invalidateQueries({ queryKey: ['project-ffe-items', pid] });
         void queryClient.invalidateQueries({ queryKey: ['project-ffe', pid] });
+        void invalidateProjectWorkflow(queryClient, pid);
       }
     },
   });
@@ -954,6 +956,7 @@ export function useCoordinationRealtime(projectId: string | null | undefined) {
       queryClient.invalidateQueries({ queryKey: ['section-tasks', projectId] });
       queryClient.invalidateQueries({ queryKey: ['margin-items'] });
       queryClient.invalidateQueries({ queryKey: ['document-state'] });
+      void invalidateProjectWorkflow(queryClient, projectId);
     };
 
     const channel: RealtimeChannel = supabase
@@ -974,6 +977,16 @@ export function useCoordinationRealtime(projectId: string | null | undefined) {
           event: '*',
           schema: 'public',
           table: 'project_tasks',
+          filter: `project_id=eq.${projectId}`,
+        },
+        invalidate,
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'project_ffe_items',
           filter: `project_id=eq.${projectId}`,
         },
         invalidate,
@@ -1003,6 +1016,7 @@ function invalidateCoordination(
     void queryClient.invalidateQueries({ queryKey: ['section-tasks', projectId] });
     void queryClient.invalidateQueries({ queryKey: ['project-decisions', projectId] });
     void queryClient.invalidateQueries({ queryKey: ['project-ffe-items', projectId] });
+    void invalidateProjectWorkflow(queryClient, projectId);
   }
   if (designerClientId) {
     void queryClient.invalidateQueries({ queryKey: ['client-decisions', designerClientId] });

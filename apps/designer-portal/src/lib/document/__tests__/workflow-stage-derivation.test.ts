@@ -30,6 +30,8 @@ function phase(
     deliverables: [],
     template_provenance: {},
     current_blockers: { count: 0, phase: [], tasks: [], ffe: [] },
+    advance_blocker_count: 0,
+    blocks_advance: false,
     ...overrides,
   };
 }
@@ -218,7 +220,7 @@ describe('deriveWorkflowStageDocument', () => {
       phaseId: 'active-main',
       kind: 'advance',
       label:
-        'complete Main concept to advance to Thread engineering review.',
+        'Complete Main concept to advance to Thread engineering review.',
     });
   });
 
@@ -265,7 +267,86 @@ describe('deriveWorkflowStageDocument', () => {
       'Approve plan',
       'Survey missing',
     ]);
-    expect(group.nextActions[0].label).toContain('Resolve 2 blockers');
+    expect(group.nextActions[0].label).not.toContain('Resolve');
+    expect(group.nextActions[0].kind).toBe('terminal');
+  });
+
+  it('uses only exact phase decision blockers to gate advance language', () => {
+    const state = deriveWorkflowStageDocument([
+      phase({
+        phase_name: 'Concept work',
+        blocks_advance: true,
+        advance_blocker_count: 1,
+        current_blockers: {
+          count: 3,
+          phase: [{ id: 'decision-1', title: 'Approve plan' }],
+          tasks: [{ id: 'task-1', title: 'Survey missing' }],
+          ffe: [{ id: 'ffe-1', title: 'Sofa delayed' }],
+        },
+      }),
+      phase({
+        phase_id: 'successor',
+        phase_name: 'Design development',
+        phase_status: 'pending',
+        follows_phase_id: 'phase-1',
+        canonical_stage_key: 'design_development',
+      }),
+    ]);
+
+    expect(state.activeGroups[0].blockers).toHaveLength(3);
+    expect(state.activeGroups[0].nextActions[0]).toEqual({
+      phaseId: 'phase-1',
+      kind: 'advance',
+      label:
+        'Resolve 1 phase blocker before advancing from Concept work to Design development.',
+    });
+  });
+
+  it('makes delayed work resume-first even with followers and informational blockers', () => {
+    const state = deriveWorkflowStageDocument([
+      phase({
+        phase_name: 'Delayed concept',
+        phase_status: 'delayed',
+        current_blockers: {
+          count: 2,
+          phase: [],
+          tasks: [{ id: 'task-1', title: 'Survey missing' }],
+          ffe: [{ id: 'ffe-1', title: 'Sofa delayed' }],
+        },
+      }),
+      phase({
+        phase_id: 'successor',
+        phase_name: 'Design development',
+        phase_status: 'pending',
+        follows_phase_id: 'phase-1',
+        canonical_stage_key: 'design_development',
+      }),
+    ]);
+
+    expect(state.activeGroups[0].nextActions[0]).toEqual({
+      phaseId: 'phase-1',
+      kind: 'resume',
+      label:
+        'Resume Delayed concept before following the configured schedule graph.',
+    });
+    expect(state.activeGroups[0].blockers).toHaveLength(2);
+  });
+
+  it('resolves an exact phase blocker before resuming delayed work', () => {
+    const state = deriveWorkflowStageDocument([
+      phase({
+        phase_name: 'Delayed concept',
+        phase_status: 'delayed',
+        blocks_advance: true,
+        advance_blocker_count: 2,
+      }),
+    ]);
+
+    expect(state.activeGroups[0].nextActions[0]).toEqual({
+      phaseId: 'phase-1',
+      kind: 'resume',
+      label: 'Resolve 2 phase blockers, then resume Delayed concept.',
+    });
   });
 });
 

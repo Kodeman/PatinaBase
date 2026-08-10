@@ -1632,6 +1632,7 @@ describe('invalidateFfeCaches', () => {
       ['project-ffe-items', 'proj-9'],
       ['projects', 'proj-9'],
       ['procurement-items'],
+      ['project-workflow', 'proj-9'],
     ]);
   });
 });
