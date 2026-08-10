@@ -10,7 +10,7 @@
 import type { DocumentStateRow, SectionKey } from './desk-derivation';
 import { fmtDay } from './format';
 
-export type SectionState = 'settled' | 'active' | 'future';
+export type SectionState = 'settled' | 'active' | 'future' | 'unrecorded';
 
 export interface SpineSection {
   key: SectionKey;
@@ -35,6 +35,7 @@ export interface SectionLineage {
 export interface SectionFacts {
   row: DocumentStateRow;
   lineage: SectionLineage | null;
+  lineageResolved: boolean;
   projectStartDate: string | null;
   installStartDate: string | null;
 }
@@ -126,19 +127,23 @@ function futureSub(key: SectionKey, f: SectionFacts): string {
 export function deriveSections(f: SectionFacts, now: Date): SpineSection[] {
   const activeIdx = ORDER.indexOf(f.row.active_section);
   // Manual projects (signed shape, no proposal lineage) ghost Brief→Proposal (R1).
-  const ghostPast = f.row.engagement_kind === 'project' && f.lineage === null;
+  const ghostPast =
+    f.row.engagement_kind === 'project' && f.lineageResolved && f.lineage === null;
+  const lineagePending =
+    f.row.engagement_kind === 'project' && !f.lineageResolved && f.lineage === null;
 
   return ORDER.map((key, idx) => {
     let state: SectionState = idx < activeIdx ? 'settled' : idx === activeIdx ? 'active' : 'future';
-    if (ghostPast && idx < 4 && state === 'settled') state = 'future';
+    if (ghostPast && idx < 4 && state === 'settled') state = 'unrecorded';
+    if (lineagePending && idx < 4 && state === 'settled') state = 'future';
 
     const sub =
       state === 'settled'
         ? settledSub(key, f)
         : state === 'active'
           ? activeSub(key, f, now)
-          : ghostPast && idx < 4
-            ? '—'
+          : state === 'unrecorded'
+            ? 'Not recorded'
             : futureSub(key, f);
 
     return { key, label: LABEL[key], state, sub };

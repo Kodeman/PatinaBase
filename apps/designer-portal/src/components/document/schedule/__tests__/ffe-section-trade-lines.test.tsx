@@ -14,11 +14,12 @@ jest.mock('@/lib/analytics/document-events', () => ({
 jest.mock('@/lib/help-system/open-help', () => ({ openHelp: jest.fn() }));
 
 jest.mock('@tanstack/react-query', () => ({
+  ...jest.requireActual('@tanstack/react-query'),
   useQueryClient: () => ({ invalidateQueries: jest.fn() }),
 }));
 
 jest.mock('@patina/supabase', () => ({
-  useProjectFFEItems: () => ({ data: mockItems, isLoading: false }),
+  useProjectFFEItems: () => ({ data: mockItems, isLoading: false, isError: false, refetch: jest.fn() }),
   useFfeInvoiceCoverage: () => ({ data: {} }),
 }));
 

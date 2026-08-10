@@ -64,7 +64,7 @@ export function DocSpine({
               </span>
               <span
                 className={`sr-only min-[1440px]:not-sr-only ${
-                  s.state === 'future' ? 'min-[1440px]:opacity-45' : ''
+                  s.state === 'future' || s.state === 'unrecorded' ? 'min-[1440px]:opacity-45' : ''
                 }`}
               >
                 <span
@@ -94,7 +94,7 @@ export function DocSpine({
           // inert (nothing to reach yet). The jump button gives keyboard reach.
           return (
             <li key={s.key} className="w-full shrink-0">
-              {s.state === 'future' || !onJump ? (
+              {s.state === 'future' || s.state === 'unrecorded' || !onJump ? (
                 <div
                   aria-label={`${s.label}: ${s.sub}`}
                   className="flex min-h-11 items-center justify-center gap-2.5 min-[1440px]:justify-start min-[1440px]:py-[0.45rem]"

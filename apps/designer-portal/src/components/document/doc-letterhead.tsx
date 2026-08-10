@@ -35,7 +35,7 @@ export function DocLetterhead({
   projectId?: string | null;
 }) {
   return (
-    <header className="mb-4 border-b border-[var(--color-pearl)] pb-4">
+    <header id="document-project-status" tabIndex={-1} className="mb-4 border-b border-[var(--color-pearl)] pb-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]">
       <div className="mb-2.5">
         <StrataMark state="active" size="lg" fill={fill} label={fill ? 'Document progress' : undefined} />
       </div>

@@ -159,6 +159,23 @@ const wayfinding = {
 };
 
 export const documentEvents = {
+  guideShown: (props: {
+    stage: string;
+    state: string;
+    action_key: string | null;
+    input_count: number;
+  }) => track('document_guide_shown', props),
+
+  guideSelected: (props: {
+    stage: string;
+    state: string;
+    action_key: string;
+    input_count: number;
+  }) => track('document_guide_selected', props),
+
+  historyToggled: (props: { expanded: boolean; completed_count: number }) =>
+    track('document_previous_work_toggled', props),
+
   actionShown: (props: {
     surface_key: string;
     region_key: string;

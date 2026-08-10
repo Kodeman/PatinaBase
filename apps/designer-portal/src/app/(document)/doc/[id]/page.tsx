@@ -17,13 +17,14 @@ import {
   useProjectPhases,
   useProposalFeedback,
   useProjectRoster,
+  useDiscovery,
 } from '@patina/supabase';
 import { rollupVerdicts, formatVerdictRollup } from '@patina/utils';
 import { useDocumentEngagement } from '@/hooks/use-document-state';
 import { useHoldDocument } from '@/hooks/document-time-provider';
 import { useMobileActiveDoc } from '@/components/document/mobile/mobile-shell';
 import { MobileMarginChips } from '@/components/document/mobile/mobile-margin-chips';
-import { rememberDocumentInHand } from '@/lib/analytics/document-events';
+import { documentEvents, rememberDocumentInHand } from '@/lib/analytics/document-events';
 import { useDocumentPresence } from '@/hooks/use-document-presence';
 import { useProposal } from '@/hooks/use-proposals';
 import { deriveSections, type SectionLineage } from '@/lib/document/section-derivation';
@@ -34,6 +35,8 @@ import { documentResolutionState } from '@/lib/document/document-resolution-stat
 import { DocSpine } from '@/components/document/doc-spine';
 import { DocLetterhead } from '@/components/document/doc-letterhead';
 import { SettledBar } from '@/components/document/settled-bar';
+import { PreviousWork } from '@/components/document/previous-work';
+import { DocumentGuide } from '@/components/document/document-guide';
 import { ProposalBlocksReadOnly } from '@/components/document/proposal-blocks-readonly';
 import { FFESection } from '@/components/document/ffe-section';
 import { CoordinationBand } from '@/components/document/coordination/coordination-band';
@@ -73,6 +76,22 @@ import { ProjectAuthorityBandForProject } from '@/components/document/commercial
 import { ProjectMoodBoards } from '@/components/document/project-mood-boards';
 import { ProjectCommerceSection } from '@/components/document/commercial/project-commerce-section';
 import { authorizationDoorwayFor } from '@/lib/document/authorization-doorway';
+import {
+  asLegacyProposalLifecycle,
+  deriveDocumentGuide,
+  type ProposalGuideFacts,
+} from '@/lib/document/document-guide';
+import { composeDocumentGuideInputs } from '@/lib/document/document-guide-inputs';
+import {
+  asCommercialDocumentKind,
+  asCommercialState,
+} from '@/lib/document/commercial-documents';
+import { useDraftingState } from '@/hooks/use-drafting-state';
+import {
+  selectOperationalNeedForDocument,
+  useDeskEngagements,
+} from '@/hooks/use-desk-engagements';
+import { openLedger } from '@/components/document/command-bar';
 
 const prettyPhase = (phase: string | null) =>
   phase
@@ -125,9 +144,30 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   const projectId = row?.project_id ?? '';
   const proposalId = row?.proposal_id ?? '';
 
-  const { data: project } = useProjectV2(projectId) as { data: AnyRecord };
+  const { data: project, isLoading: projectIsLoading, isError: projectIsError } = useProjectV2(projectId) as {
+    data: AnyRecord;
+    isLoading: boolean;
+    isError: boolean;
+  };
   const { data: phases } = useProjectPhases(projectId) as { data: AnyRecord[] | undefined };
-  const { data: liveProposal } = useProposal(proposalId) as { data: any };
+  const { data: liveProposal, isError: proposalIsError } = useProposal(proposalId) as {
+    data: any;
+    isError: boolean;
+  };
+  const discoveryQuery = useDiscovery(
+    row?.active_section === 'discovery' ? row.engagement_id : null,
+  );
+  const draftingState = useDraftingState(
+    proposalId,
+    row?.active_section === 'direction' && Boolean(proposalId),
+  );
+  const enrichedOperationalQuery = useDeskEngagements({
+    enabled: Boolean(row && !isError),
+  });
+  const enrichedOperationalNeed = selectOperationalNeedForDocument(
+    enrichedOperationalQuery.data,
+    row?.engagement_id,
+  );
   const authorizationDoorway = authorizationDoorwayFor({
     engagementKind: row?.engagement_kind,
     projectId: row?.project_id,
@@ -180,6 +220,8 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   // Which settled phase is unfolded (R66 review) — generalizes the old
   // proposal-only unfold so ANY completed phase can be clicked open.
   const [openSection, setOpenSection] = useState<SectionKey | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const settledCountRef = useRef(0);
   const [highlightLineId, setHighlightLineId] = useState<string | null>(null);
   const [pendingNoteAnchor, setPendingNoteAnchor] = useState<string | null>(null);
   // The Call Sheet (Wave 3) — an overlay, never a section (D1). Closed by
@@ -196,14 +238,41 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
 
   // Click a spine marker (or a settled bar): unfold that phase and scroll to it.
   // The active phase has no settled bar — the scroll just lands on its section.
-  const jumpToSection = useCallback((key: SectionKey) => {
+  const jumpToSection = useCallback((key: SectionKey, focusId?: string, activate = false) => {
+    if (key !== row?.active_section && !historyOpen) {
+      setHistoryOpen(true);
+      documentEvents.historyToggled({
+        expanded: true,
+        completed_count: settledCountRef.current,
+      });
+    }
     setOpenSection(key);
     requestAnimationFrame(() => {
-      document
-        .getElementById(sectionAnchorId(key))
-        ?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      requestAnimationFrame(() => {
+        const section = document.getElementById(sectionAnchorId(key));
+        const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+        section?.scrollIntoView({
+          block: 'start',
+          behavior: reduceMotion ? 'auto' : 'smooth',
+        });
+        const responsiveFocusId =
+          focusId === 'document-pulse-control'
+            ? `${focusId}-${window.matchMedia?.('(min-width: 1180px)').matches ? 'desktop' : 'mobile'}`
+            : focusId;
+        const focusTarget =
+          (responsiveFocusId ? document.getElementById(responsiveFocusId) : null) ??
+          section?.querySelector<HTMLElement>('[data-settled-heading]') ?? section;
+        focusTarget?.focus({ preventScroll: true });
+        if (
+          activate &&
+          focusTarget instanceof HTMLButtonElement &&
+          focusTarget.getAttribute('aria-expanded') !== 'true'
+        ) {
+          focusTarget.click();
+        }
+      });
     });
-  }, []);
+  }, [historyOpen, row?.active_section]);
 
   // D13: the mobile spine sheet lives outside this React tree — it asks for a
   // section jump via a CustomEvent (mirrors the account sheet's open-account).
@@ -293,10 +362,72 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           lineage,
           projectStartDate: project?.start_date ?? null,
           installStartDate: installPhase?.start_date ?? null,
+          lineageResolved:
+            row.engagement_kind !== 'project' || (!projectIsLoading && !projectIsError),
         },
         new Date(),
       )
     : [];
+  const proposalGuideFacts: ProposalGuideFacts | null = liveProposal
+    ? {
+        status: asLegacyProposalLifecycle(liveProposal.status),
+        documentKind: asCommercialDocumentKind(liveProposal.document_kind),
+        commercialState: asCommercialState(liveProposal.commercial_state),
+        projectId: liveProposal.project_id ?? null,
+      }
+    : null;
+  const guideInputs = row
+    ? composeDocumentGuideInputs({
+        row,
+        proposal: proposalGuideFacts,
+        readiness: {
+          discovery: discoveryQuery.isError
+            ? { state: 'error' }
+            : discoveryQuery.isLoading
+              ? { state: 'loading' }
+              : discoveryQuery.data
+                ? { state: 'ready', data: discoveryQuery.data.row ?? discoveryQuery.data.prefill ?? {} }
+                : { state: 'idle' },
+          drafting: draftingState.error
+            ? { state: 'error' }
+            : draftingState.isLoading
+              ? { state: 'loading' }
+              : { state: 'ready', data: { gaps: draftingState.gaps } },
+        },
+      })
+    : [];
+  const guideUnavailable = Boolean(
+    row && (
+      enrichedOperationalQuery.isError ||
+      (row.engagement_kind === 'project' && projectIsError) ||
+      ((row.active_section === 'direction' || row.active_section === 'proposal') && proposalIsError) ||
+      (row.active_section === 'discovery' && discoveryQuery.isError) ||
+      (row.active_section === 'direction' && draftingState.error)
+    ),
+  );
+  const guideLoading = Boolean(row && enrichedOperationalQuery.isLoading);
+  const guideModel = row
+    ? deriveDocumentGuide({
+        row,
+        availability: guideUnavailable ? 'unavailable' : guideLoading ? 'loading' : 'ready',
+        retryAvailable: Boolean(enrichedOperationalQuery.isError),
+        proposal: proposalGuideFacts,
+        inputFacts: guideInputs,
+        operationalNeed: enrichedOperationalNeed ?? undefined,
+      })
+    : null;
+  const activateGuide = useCallback(() => {
+    if (guideModel?.action?.key === 'retry-guidance') {
+      void enrichedOperationalQuery.refetch();
+      return;
+    }
+    const destination = guideModel?.action?.destination;
+    if (!destination) return;
+    if (destination.kind === 'anchor') {
+      jumpToSection(destination.section, destination.focusId, destination.activate);
+    }
+    if (destination.kind === 'ledger') openLedger(destination.name, destination.context);
+  }, [enrichedOperationalQuery, guideModel, jumpToSection]);
 
   // D13: publish the held document to the mobile shell (bar + spine sheet).
   useMobileActiveDoc(
@@ -393,6 +524,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   }
 
   const settled = sections.filter((s) => s.state === 'settled');
+  settledCountRef.current = settled.length;
   const unfoldProposalId =
     row.engagement_kind === 'project' ? (project?.proposal?.id ?? null) : (row.proposal_id ?? null);
   const seal = lineage?.signedAt
@@ -457,6 +589,8 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           }
         />
 
+        {guideModel && <DocumentGuide model={guideModel} onActivate={activateGuide} />}
+
         {/* R27 / R63: the letterhead instruments — one quiet DM-mono row under
             the subtitle, now STAGE-CONSISTENT. Send-a-note (and, where there's
             something to mirror, View-as) ride the letterhead across stages,
@@ -488,20 +622,6 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           />
         )}
 
-        {/* Wave 3 — the kickoff band. Project docs only; the band checks the
-            `call-sheet` flag itself and self-manages its own visibility
-            (dismissal, retirement at 4 names), so this mount is unconditional
-            for a project document. */}
-        {row.engagement_kind === 'project' && row.project_id && (
-          <>
-            <KickoffBand projectId={row.project_id} rows={rosterRows ?? []} />
-            {/* The plan room's threshold band. It renders nothing until the
-                bundle resolves and never dismisses — a set nobody is current
-                on is not something to hide. */}
-            <PlanRoomBand routeId={id} projectId={row.project_id} />
-          </>
-        )}
-
         {/* D13: letterhead-anchored margin items (Pulse, section items) as
             chips beneath the title — the desktop margin rail hides on mobile. */}
         <MobileMarginChips
@@ -513,7 +633,12 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
         {/* Settled bars — letterhead bar + stamp; every phase with a read-only
             body unfolds in place so completed work stays reviewable (R66).
             Clicked from the spine marker (jumpToSection) or the bar itself. */}
-        {settled.map((s) => {
+        <PreviousWork
+          count={settled.length}
+          open={historyOpen}
+          onOpenChange={setHistoryOpen}
+        >
+          {settled.map((s) => {
           const isOpen = openSection === s.key;
           const toggle = () => setOpenSection((prev) => (prev === s.key ? null : s.key));
 
@@ -576,16 +701,8 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
               {body}
             </SettledBar>
           );
-        })}
-
-        {/* R26: the Account Page — engagement money at the top of the
-            Project section. Studio eyes only; never mirrored. */}
-        {row.engagement_kind === 'project' && row.project_id && (
-          <>
-            <AccountBand projectId={row.project_id} clientName={row.client_name} />
-            <ProjectMoodBoards projectId={row.project_id} />
-          </>
-        )}
+          })}
+        </PreviousWork>
 
         {/* ScheduleNavProvider wires the Rule (below) to the Spine (mounted
             deeper, inside the active section) so a minimap click reveals
@@ -629,7 +746,8 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           <div
             id={sectionAnchorId(row.active_section)}
             data-active-section
-            className="scroll-mt-24"
+            tabIndex={-1}
+            className="scroll-mt-24 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
             onDragOver={(e) => {
               if (!row.project_id || !e.dataTransfer?.types?.includes('Files')) return;
               e.preventDefault();
@@ -702,16 +820,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
               )}
               {row.active_section === 'project' && row.project_id && (
                 <>
-                  <ProjectAuthorityBandForProject
-                    projectId={row.project_id}
-                    allowAddendum
-                  />
-                  <ProjectCommerceSection
-                    projectId={row.project_id}
-                    projectName={row.title}
-                    clientName={row.client_name}
-                  />
-                {/* Track 5 — the coordination band (ball-in-court + dependency web).
+                  {/* Track 5 — the coordination band (ball-in-court + dependency web).
                     The band resolves designerClientId itself from clientUserId
                     (work-block.tsx pattern); the page passes clientUserId, never a
                     raw uid. Mounts ABOVE the FF&E section in the project home (D1:
@@ -721,37 +830,43 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
                     IS the accepted current page, so this is zero flash/layout
                     shift for the non-pilot cohort (PostHog persists flags, so
                     pilots see at most one first-visit swap). */}
-                {!spineGate.isLoading && spineGate.value ? (
-                  <ScheduleSpine
+                  {!spineGate.isLoading && spineGate.value ? (
+                    <ScheduleSpine
+                      projectId={row.project_id}
+                      clientUserId={row.client_profile_id}
+                      clientName={row.client_name}
+                    />
+                  ) : (
+                    <CoordinationBand
+                      projectId={row.project_id}
+                      clientUserId={row.client_profile_id}
+                      clientName={row.client_name}
+                    />
+                  )}
+                  <FFESection
                     projectId={row.project_id}
+                    projectName={row.title}
+                    mode="project"
+                    highlightId={highlightLineId}
+                    onAddNote={setPendingNoteAnchor}
+                    sectionKey="project"
                     clientUserId={row.client_profile_id}
                     clientName={row.client_name}
+                    folioDrop={folioDrop}
+                    onFolioDropConsumed={() => setFolioDrop(null)}
+                    sectionDragOver={sectionDrag}
                   />
-                ) : (
-                  <CoordinationBand
+                  <ProjectAuthorityBandForProject projectId={row.project_id} allowAddendum />
+                  <ProjectCommerceSection
                     projectId={row.project_id}
-                    clientUserId={row.client_profile_id}
+                    projectName={row.title}
                     clientName={row.client_name}
                   />
-                )}
-                <FFESection
-                  projectId={row.project_id}
-                  projectName={row.title}
-                  mode="project"
-                  highlightId={highlightLineId}
-                  onAddNote={setPendingNoteAnchor}
-                  sectionKey="project"
-                  clientUserId={row.client_profile_id}
-                  clientName={row.client_name}
-                  folioDrop={folioDrop}
-                  onFolioDropConsumed={() => setFolioDrop(null)}
-                  sectionDragOver={sectionDrag}
-                />
-                {/* R80: the Care band — closure stays reachable from an active
+                  {/* R80: the Care band — closure stays reachable from an active
                     project (a quiet folded line until install nears). */}
-                <CareBand projectId={row.project_id} />
-              </>
-            )}
+                  <CareBand projectId={row.project_id} />
+                </>
+              )}
             {row.active_section === 'install' && row.project_id && (
               <>
                 <FFESection
@@ -798,6 +913,17 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           </div>
           </RippleProvider>
         </ScheduleNavProvider>
+
+        {row.engagement_kind === 'project' && row.project_id && (
+          <>
+            {/* Supporting project records follow the active work so a newly
+                opened document reaches the schedule before its reference material. */}
+            <AccountBand projectId={row.project_id} clientName={row.client_name} />
+            <ProjectMoodBoards projectId={row.project_id} />
+            <KickoffBand projectId={row.project_id} rows={rosterRows ?? []} />
+            <PlanRoomBand routeId={id} projectId={row.project_id} />
+          </>
+        )}
 
         {/* R29: the colophon — the paper's last line states its own facts. */}
         {row.engagement_kind === 'project' && row.project_id && (

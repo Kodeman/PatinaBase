@@ -38,6 +38,7 @@ import { DocumentAction, DocumentActionRow } from '../document-action';
 import { SectionEyebrow } from '../section-eyebrow';
 import { StatusChip } from '../status-chip';
 import { PlanLinkOnce } from './plan-link-once';
+import { GuidedEmptyState } from '../guided-empty-state';
 
 const STATE_WORD: Record<string, { label: string; color: string }> = {
   draft: { label: 'Draft', color: 'var(--color-aged-oak)' },
@@ -143,30 +144,13 @@ export function PlanRoomSet({
 
   if (set.length === 0) {
     return (
-      <section
-        aria-label="The light table"
-        className="mx-auto max-w-[42rem] px-4 py-20 text-center md:px-8"
-      >
-        <div className="inline-block text-left">
-          <SectionEyebrow>The light table</SectionEyebrow>
-        </div>
-        <p className="mx-auto max-w-[34rem] font-heading text-[1.35rem] italic leading-relaxed text-[var(--color-charcoal)]">
-          Drop a PDF set — the table splits it, proposes where each page belongs,
-          and nothing is current until you confirm.
-        </p>
-        <DocumentActionRow
-          surfaceKey="plan-room"
-          regionKey="empty-invitation"
-          className="mt-6 justify-center"
-        >
-          <DocumentAction
-            actionKey="choose-plan-pdf-empty"
-            variant="primary"
-            onClick={onChooseFile}
-          >
-            Choose a PDF
-          </DocumentAction>
-        </DocumentActionRow>
+      <section aria-label="The light table" className="mx-auto max-w-[42rem] px-4 py-12 md:px-8">
+        <GuidedEmptyState
+          title="Start the current drawing set"
+          description="Choose a PDF set; the light table splits it and proposes where each page belongs before anything becomes current."
+          inputs={['PDF drawing set', 'Sheet titles and numbers', 'Current revision']}
+          action={{ key: 'choose-plan-pdf-empty', label: 'Choose a PDF', onClick: onChooseFile }}
+        />
       </section>
     );
   }

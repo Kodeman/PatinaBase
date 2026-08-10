@@ -79,6 +79,7 @@ import {
   useTradeScopes,
 } from '@/hooks/use-commercial-documents';
 import { AuthorizationStamp } from './schedule/authorization-stamp';
+import { GuidedEmptyState } from './guided-empty-state';
 import { AddLineSheet } from './schedule/add-line-sheet';
 import { CompositionBar } from './schedule/composition-bar';
 import { ReviewReleaseSheet } from './schedule/review-release-sheet';
@@ -671,9 +672,11 @@ function FFESectionBody({
     id: string | null;
     name: string;
   } | null>(null);
-  const { data: items, isLoading } = useProjectFFEItems(projectId) as {
+  const { data: items, isLoading, isError, refetch } = useProjectFFEItems(projectId) as {
     data: FFERow[] | undefined;
     isLoading: boolean;
+    isError: boolean;
+    refetch: () => Promise<unknown>;
   };
   const { data: rooms } = useDocumentRooms(
     mode === 'project' ? projectId : null,
@@ -953,10 +956,36 @@ function FFESectionBody({
         </p>
       )}
 
-      {!isLoading && total === 0 && (
-        <p className="border-t border-[var(--color-pearl)] py-3 text-[11.5px] text-[var(--text-muted)]">
-          No FF&E lines yet.
-        </p>
+      {!isLoading && isError && (
+        <div className="border-t border-[var(--color-pearl)] py-3">
+          <p role="alert" className="text-[11.5px] text-[var(--color-terracotta)]">
+            The FF&amp;E schedule could not be read.
+          </p>
+          <DocumentAction
+            actionKey="retry-ffe-schedule"
+            surfaceKey="project"
+            regionKey="ffe-query-error"
+            variant="secondary"
+            onClick={() => void refetch()}
+          >
+            Try again
+          </DocumentAction>
+        </div>
+      )}
+
+      {!isLoading && !isError && total === 0 && (
+        mode === 'project' ? (
+          <GuidedEmptyState
+            title="Build the FF&E schedule"
+            description="Add the pieces and allowances the studio will specify, price, authorize, procure, and install."
+            inputs={['Room', 'Piece or allowance', 'Budget']}
+            action={{ key: 'start-ffe-schedule', label: 'Open the spec book', href: `/doc/${projectId}/spec-book` }}
+          />
+        ) : (
+          <p className="border-t border-[var(--color-pearl)] py-3 text-[11.5px] text-[var(--text-muted)]">
+            No FF&amp;E lines are scheduled for installation.
+          </p>
+        )
       )}
 
       {groupByRoom ? (

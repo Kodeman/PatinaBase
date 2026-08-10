@@ -712,7 +712,7 @@ export function ScheduleSpine({
   const loading = schedule.isLoading || schedule.resolved == null;
 
   return (
-    <section aria-label="Project schedule" className="mt-2">
+    <section id="document-decision-controls" tabIndex={-1} aria-label="Project schedule" className="mt-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]">
       {/* The section head — the band's grammar: a quiet Playfair label over the
           StrataMiniRule, ONE quiet mono action at right (hidden, not disabled,
           until the designer-client id resolves). Depth = value contrast. */}

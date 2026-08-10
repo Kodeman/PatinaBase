@@ -192,11 +192,15 @@ export function MobileBar() {
             <DocumentAction
               {...primaryShared}
               href={primaryAction.target.href}
+              onClick={primaryAction.onSelected}
             />
           ) : (
             <DocumentAction
               {...primaryShared}
-              onClick={primaryAction.target.onPress}
+              onClick={() => {
+                primaryAction.onSelected?.();
+                primaryAction.target.kind === 'press' && primaryAction.target.onPress();
+              }}
             />
           )
         ) : (

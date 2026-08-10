@@ -26,6 +26,7 @@ export function FacetSection({
   onToggle,
   /** A small movement accent dot in the head (the line this facet feeds). */
   accent,
+  targetId,
   children,
 }: {
   name: string;
@@ -34,6 +35,7 @@ export function FacetSection({
   open: boolean;
   onToggle: () => void;
   accent?: string;
+  targetId?: string;
   children: React.ReactNode;
 }) {
   const contentId = useId();
@@ -58,6 +60,7 @@ export function FacetSection({
       }`}
     >
       <button
+        id={targetId}
         type="button"
         onClick={onToggle}
         aria-expanded={open}

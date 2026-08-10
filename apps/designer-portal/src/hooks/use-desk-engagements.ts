@@ -54,6 +54,14 @@ export interface DeskData {
   chips: MotionChip[];
 }
 
+export function selectOperationalNeedForDocument(
+  data: DeskData | undefined,
+  engagementId: string | null | undefined,
+) {
+  if (!data || !engagementId) return null;
+  return data.folders.find((folder) => folder.row.engagement_id === engagementId)?.need ?? null;
+}
+
 /** Conflict window: today → +120d covers any configured install horizon. */
 const CONFLICT_WINDOW_DAYS = 120;
 
@@ -98,7 +106,7 @@ function flattenBoardFlaggedRows(rows: any): FlaggedLineRow[] {
     .filter((r) => !!r.proposalId);
 }
 
-export function useDeskEngagements() {
+export function useDeskEngagements(options: { enabled?: boolean } = {}) {
   // Arrival Arc Phase 0 (I64): tracks the last successfully computed Desk so
   // the zero-row breadcrumb can tell "went quiet after real work" apart from
   // "was already quiet" — a fresh mount has nothing to compare against, so it
@@ -108,6 +116,7 @@ export function useDeskEngagements() {
 
   return useQuery<DeskData>({
     queryKey: ['document-state', 'desk'],
+    enabled: options.enabled ?? true,
     refetchInterval: 60_000,
     // A background refetch (the 60s tick) never flashes an empty desk over
     // good data while the request is in flight — the prior result stays on

@@ -38,6 +38,7 @@ import { ProposalWatch } from './proposal-watch';
 import { useMobilePrimaryAction } from './mobile/mobile-shell';
 import { commercialDocumentExperience } from '@/lib/document/commercial-documents';
 import { ServiceAgreementInstruments } from './commercial/service-agreement-instruments';
+import { MOBILE_ACTION_PRIORITY } from './mobile/lifecycle-mobile-action';
 
 export function ProposalInstruments({
   proposalId,
@@ -142,7 +143,7 @@ function LegacyProposalInstruments({
           loading: entering,
         }
       : null,
-    { priority: 10 },
+    { priority: MOBILE_ACTION_PRIORITY.lifecycle },
   );
 
   // Out the door — the Proposal section becomes the watch view (R71). It carries

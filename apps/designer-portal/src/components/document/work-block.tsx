@@ -27,6 +27,7 @@ import {
   DocumentActionGroup,
   DocumentActionRow,
 } from './document-action';
+import { GuidedEmptyState } from './guided-empty-state';
 
 // The gate's Golden-Hour stamp (HTML §1 .stamp.st-gh) — a gate IS a decision,
 // and the section's closing line wears the stamp the client will grant.
@@ -65,8 +66,10 @@ export function WorkBlock({
   clientUserId: string | null;
   clientName: string;
 }) {
-  const { data: tasks } = useSectionTasks(projectId);
-  const { data: gates } = useSectionGates(projectId);
+  const tasksQuery = useSectionTasks(projectId);
+  const gatesQuery = useSectionGates(projectId);
+  const tasks = tasksQuery.data;
+  const gates = gatesQuery.data;
   const { data: loggedMinutes } = useSectionLoggedMinutes(
     projectId,
     sectionKey,
@@ -119,40 +122,48 @@ export function WorkBlock({
     setCapturing(false);
   };
 
-  if (sectionTasks.length === 0 && !gate && !capturing && !gateAsking) {
-    // Empty state stays one quiet line — the block earns its space.
+  if (tasksQuery.isLoading || gatesQuery.isLoading) {
     return (
-      <DocumentActionGroup
-        surfaceKey="open-document"
-        regionKey={`${sectionKey}-work-empty`}
-        className="mb-1 mt-4"
-        aria-label={`${sectionLabel} work actions`}
-      >
-        <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-          The work
-        </span>
-        {clientUserId && (
-          <DocumentAction
-            actionKey="request-signoff"
-            variant="primary"
-            onClick={() => setGateAsking(true)}
-          >
-            Request sign-off
-          </DocumentAction>
-        )}
+      <p className="mb-1 mt-4 py-3 text-[11.5px] italic text-[var(--text-muted)]">
+        Reading the work…
+      </p>
+    );
+  }
+
+  if (tasksQuery.isError || gatesQuery.isError) {
+    return (
+      <div className="mb-1 mt-4 border-y border-[var(--color-pearl)] py-3">
+        <p role="alert" className="text-[11.5px] text-[var(--color-terracotta)]">
+          The work could not be read.
+        </p>
         <DocumentAction
-          actionKey="add-task"
+          actionKey="retry-section-work"
+          surfaceKey="open-document"
+          regionKey={`${sectionKey}-work-error`}
           variant="secondary"
-          onClick={() => setCapturing(true)}
+          onClick={() => void Promise.all([tasksQuery.refetch(), gatesQuery.refetch()])}
         >
-          + Task
+          Try again
         </DocumentAction>
-      </DocumentActionGroup>
+      </div>
+    );
+  }
+
+  if (sectionTasks.length === 0 && !gate && !capturing && !gateAsking) {
+    return (
+      <GuidedEmptyState
+        className="mb-1 mt-4"
+        title={`Plan the ${sectionLabel.toLowerCase()} work`}
+        description="List the concrete work here so the next action, due date, and sign-off stay visible in the document."
+        inputs={['Task', 'Optional due date', 'Optional estimate']}
+        action={{ key: 'add-task', label: 'Add the first task', onClick: () => setCapturing(true) }}
+        secondary={clientUserId ? { key: 'request-signoff', label: 'Request sign-off', onClick: () => setGateAsking(true) } : undefined}
+      />
     );
   }
 
   return (
-    <div className="mb-2 mt-4 rounded-[6px] border border-[var(--color-pearl)] bg-[rgba(252,250,246,0.7)]">
+    <div id="document-task-controls" tabIndex={-1} className="mb-2 mt-4 rounded-[6px] border border-[var(--color-pearl)] bg-[rgba(252,250,246,0.7)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]">
       <div className="flex items-baseline justify-between border-b border-[var(--color-pearl)] px-3 py-1.5">
         <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">
           The work{total > 0 ? ` · ${doneCount} of ${total}` : ''}
