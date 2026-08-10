@@ -55,7 +55,7 @@ export function CommitBar() {
     setBusy(kind);
     dispatch({ type: 'SAVE_START', target });
     try {
-      const duplicateMode = kind === 'library' && dedup.match ? 'create_duplicate' as const : 'reuse_or_create' as const;
+      const duplicateMode = kind === 'library' && dedup.match ? 'create' as const : 'reuse' as const;
       let productId: string;
       let placementOutcome = null;
       if (io.pendingPlacementProductId && hasProjectPlacement) {

@@ -2,7 +2,8 @@ export const MAX_PDF_BYTES = 25 * 1024 * 1024;
 export const MAX_ROWS = 5_000;
 export const EXTRACTION_TOOL_NAME = "stage_project_ffe_rows";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const ROW_KEYS = new Set(["page", "name", "quantity", "room", "category", "manufacturer", "sourcePrice", "confidence"]);
+const ROW_KEYS = new Set(["pageNumber", "provenance", "name", "quantity", "roomName", "category"]);
+const PROVENANCE_KEYS = new Set(["page", "confidence"]);
 
 export type ExtractRequest = { assetId: string; projectId: string };
 export type ExtractSource = {
@@ -16,14 +17,19 @@ export type ExtractSource = {
   contentType: "application/pdf";
 };
 export type ExtractionRow = {
-  page: number;
+  pageNumber: number;
+  provenance: { page: number; confidence: number };
   name: string;
-  quantity: number | null;
-  room: string | null;
+  quantity: number;
+  roomName: string | null;
   category: string | null;
-  manufacturer: string | null;
-  sourcePrice: number | null;
-  confidence: number;
+};
+export type ExtractionBatchResult = {
+  batchId: string;
+  status: "staged" | "committed" | "failed" | "abandoned";
+  reused: boolean;
+  rowCount: number;
+  sourceAssetId: string;
 };
 
 export function parseExtractRequest(value: unknown): ExtractRequest | null {
@@ -64,7 +70,7 @@ export function parseExtractSource(value: unknown, request: ExtractRequest, acto
 }
 
 export function extractionPrompt(): string {
-  return "Extract only explicit FF&E facts from the PDF. Never infer approval, authority, trade cost, markup, or a client verdict. Preserve the PDF page number and give a 0–1 confidence for every row. Submit all rows with the provided tool.";
+  return "Extract only explicit FF&E facts from the PDF. Never infer approval, authority, pricing, trade cost, markup, or a client verdict. Preserve the PDF page number in both pageNumber and provenance.page, use an integer quantity (default 1), and give provenance.confidence from 0–1. Submit all rows with the provided tool.";
 }
 
 const nullableStringSchema = (maxLength: number) => ({ type: ["string", "null"], maxLength });
@@ -84,16 +90,22 @@ export function extractionTool() {
           items: {
             type: "object",
             additionalProperties: false,
-            required: ["page", "name", "quantity", "room", "category", "manufacturer", "sourcePrice", "confidence"],
+            required: ["pageNumber", "provenance", "name", "quantity", "roomName", "category"],
             properties: {
-              page: { type: "integer", minimum: 1, maximum: 10_000 },
+              pageNumber: { type: "integer", minimum: 1, maximum: 10_000 },
+              provenance: {
+                type: "object",
+                additionalProperties: false,
+                required: ["page", "confidence"],
+                properties: {
+                  page: { type: "integer", minimum: 1, maximum: 10_000 },
+                  confidence: { type: "number", minimum: 0, maximum: 1 },
+                },
+              },
               name: { type: "string", minLength: 1, maxLength: 500 },
-              quantity: { type: ["number", "null"], exclusiveMinimum: 0, maximum: 1_000_000 },
-              room: nullableStringSchema(200),
+              quantity: { type: "integer", minimum: 1, maximum: 1_000_000 },
+              roomName: nullableStringSchema(200),
               category: nullableStringSchema(200),
-              manufacturer: nullableStringSchema(300),
-              sourcePrice: { type: ["number", "null"], minimum: 0, maximum: 1_000_000_000_000 },
-              confidence: { type: "number", minimum: 0, maximum: 1 },
             },
           },
         },
@@ -106,7 +118,8 @@ function nullableText(value: unknown, maxLength: number): string | null | undefi
   if (value === null) return null;
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
-  return trimmed.length <= maxLength ? trimmed || null : undefined;
+  if (trimmed.length > maxLength || /^[=+@]/.test(trimmed) || /^-[A-Za-z]/.test(trimmed) || /[\u0000-\u001f\u007f]/.test(trimmed)) return undefined;
+  return trimmed || null;
 }
 
 export function validateExtraction(value: unknown): { rows: ExtractionRow[] } | null {
@@ -119,29 +132,55 @@ export function validateExtraction(value: unknown): { rows: ExtractionRow[] } | 
     if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
     const row = entry as Record<string, unknown>;
     if (Object.keys(row).some((key) => !ROW_KEYS.has(key)) || Object.keys(row).length !== ROW_KEYS.size) return null;
-    const name = typeof row.name === "string" ? row.name.trim() : "";
-    const room = nullableText(row.room, 200);
+    const name = nullableText(row.name, 500);
+    const roomName = nullableText(row.roomName, 200);
     const category = nullableText(row.category, 200);
-    const manufacturer = nullableText(row.manufacturer, 300);
+    const provenance = row.provenance && typeof row.provenance === "object" && !Array.isArray(row.provenance)
+      ? row.provenance as Record<string, unknown>
+      : null;
     if (
-      !name || name.length > 500 || !Number.isInteger(row.page) || (row.page as number) < 1 || (row.page as number) > 10_000 ||
-      (row.quantity !== null && (typeof row.quantity !== "number" || !Number.isFinite(row.quantity) || row.quantity <= 0 || row.quantity > 1_000_000)) ||
-      room === undefined || category === undefined || manufacturer === undefined ||
-      (row.sourcePrice !== null && (typeof row.sourcePrice !== "number" || !Number.isFinite(row.sourcePrice) || row.sourcePrice < 0 || row.sourcePrice > 1_000_000_000_000)) ||
-      typeof row.confidence !== "number" || !Number.isFinite(row.confidence) || row.confidence < 0 || row.confidence > 1
+      !name || roomName === undefined || category === undefined || !provenance ||
+      Object.keys(provenance).some((key) => !PROVENANCE_KEYS.has(key)) || Object.keys(provenance).length !== PROVENANCE_KEYS.size ||
+      !Number.isInteger(row.pageNumber) || (row.pageNumber as number) < 1 || (row.pageNumber as number) > 10_000 ||
+      !Number.isInteger(provenance.page) || provenance.page !== row.pageNumber ||
+      typeof provenance.confidence !== "number" || !Number.isFinite(provenance.confidence) || provenance.confidence < 0 || provenance.confidence > 1 ||
+      !Number.isInteger(row.quantity) || (row.quantity as number) < 1 || (row.quantity as number) > 1_000_000
     ) return null;
     safe.push({
-      page: row.page as number,
+      pageNumber: row.pageNumber as number,
+      provenance: { page: provenance.page as number, confidence: provenance.confidence as number },
       name,
-      quantity: row.quantity as number | null,
-      room,
+      quantity: row.quantity as number,
+      roomName,
       category,
-      manufacturer,
-      sourcePrice: row.sourcePrice as number | null,
-      confidence: row.confidence,
     });
   }
   return { rows: safe };
+}
+
+export function extractionStageArgs(request: ExtractRequest, actorId: string, fileHash: string, rows: ExtractionRow[]) {
+  return {
+    p_project_id: request.projectId,
+    p_asset_id: request.assetId,
+    p_actor_id: actorId,
+    p_file_hash: fileHash,
+    p_rows: rows,
+  };
+}
+
+export function parseExtractionBatchResult(value: unknown, expectedAssetId: string): ExtractionBatchResult | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Record<string, unknown>;
+  const batchId = typeof row.batchId === "string" ? row.batchId.toLowerCase() : "";
+  const sourceAssetId = typeof row.sourceAssetId === "string" ? row.sourceAssetId.toLowerCase() : "";
+  const status = row.status;
+  if (
+    !UUID.test(batchId) || sourceAssetId !== expectedAssetId ||
+    (status !== "staged" && status !== "committed" && status !== "failed" && status !== "abandoned") ||
+    typeof row.reused !== "boolean" || !Number.isSafeInteger(row.rowCount) ||
+    (row.rowCount as number) < 0 || (row.rowCount as number) > MAX_ROWS
+  ) return null;
+  return { batchId, sourceAssetId, status, reused: row.reused, rowCount: row.rowCount as number };
 }
 
 export function base64Chunks(bytes: Uint8Array, chunkSize = 0x6000): string {

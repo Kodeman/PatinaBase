@@ -40,7 +40,7 @@ export function FFEPipelinePanel({ projectId }: { projectId: string }) {
 
   const items = useMemo(() => {
     return (data?.selections ?? []).filter((item) =>
-      (STATUS_ORDER as readonly string[]).includes(item.status)
+      (STATUS_ORDER as readonly string[]).includes(item.logisticsStatus)
     );
   }, [data]);
 
@@ -48,7 +48,7 @@ export function FFEPipelinePanel({ projectId }: { projectId: string }) {
     const map = new Map<ClientVisibleStatus, typeof items>();
     for (const status of STATUS_ORDER) map.set(status, []);
     for (const item of items) {
-      const list = map.get(item.status as ClientVisibleStatus);
+      const list = map.get(item.logisticsStatus as ClientVisibleStatus);
       if (list) list.push(item);
     }
     return map;

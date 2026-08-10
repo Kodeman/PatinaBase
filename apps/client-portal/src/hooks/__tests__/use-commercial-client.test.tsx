@@ -142,7 +142,7 @@ describe('commercial client hooks', () => {
             clientUnitPriceCents: 480_000,
             clientLineTotalCents: 480_000,
             itemType: 'furniture',
-            status: 'ordered',
+            logisticsStatus: 'ordered',
             allowance: null,
             instrument: { documentId: 'doc-1', name: 'Furnishings authorization', executedAt: '2026-08-01' },
             productId: 'prod-1',
@@ -162,6 +162,7 @@ describe('commercial client hooks', () => {
     expect(result.current.data?.origin).toBe('commercial');
     expect(result.current.data?.selections).toHaveLength(1);
     expect(result.current.data?.selections[0].name).toBe('Meadow linen sectional');
+    expect(result.current.data?.selections[0].logisticsStatus).toBe('ordered');
   });
 
   it('uses the client-selections key so callers can target the same cache entry', async () => {

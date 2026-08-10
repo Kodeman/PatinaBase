@@ -17,7 +17,10 @@ function safeInstallUrl(value: string | undefined): string | null {
 
   try {
     const url = new URL(value);
-    return url.protocol === "https:" ? url.toString() : null;
+    return url.protocol === "https:" && url.hostname === "chromewebstore.google.com" &&
+        url.port === "" && url.username === "" && url.password === "" && /^\/detail\/[^/]+\/[^/]+\/?$/.test(url.pathname)
+      ? url.toString()
+      : null;
   } catch {
     return null;
   }

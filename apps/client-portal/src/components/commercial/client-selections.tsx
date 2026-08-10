@@ -57,7 +57,7 @@ function SelectionCard({ selection }: { selection: ClientSelection }) {
           </p>
         )}
         <div className="mt-2">
-          <JourneyStepper status={selection.status} />
+          <JourneyStepper status={selection.logisticsStatus} />
         </div>
       </div>
     </div>

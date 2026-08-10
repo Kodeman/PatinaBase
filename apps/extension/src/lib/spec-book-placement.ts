@@ -53,15 +53,19 @@ export interface PlacementRpcPayload {
 export interface PlacementV2Request {
   projectId: string;
   productId: string;
-  assignment: { scope: 'room' | 'unassigned'; roomId: string | null };
-  duplicateMode: 'reuse_or_create' | 'create_duplicate';
+  roomId: string | null;
+  assignmentScope: 'room' | 'unassigned';
+  category: string | null;
+  boardId: null;
   disposition: 'candidate';
+  duplicateMode: 'reuse' | 'create' | 'hold';
   placeholderSelectionId: string | null;
+  configurationId: null;
   roleConfigurationIdentity: null;
   idempotencyKey: string;
-  source: PlacementRpcPayload['p_source'];
+  source: 'chrome_extension';
 }
-export interface PlacementOutcome { outcome: 'created' | 'reused' | 'filled' | 'held'; selectionId: string | null; selectionThreadId: string | null; placementId: string | null; }
+export interface PlacementOutcome { outcome: 'created' | 'reused' | 'filled' | 'held'; selectionId: string | null; threadId: string | null; placementId: string | null; }
 
 const resultText = (row: Record<string, unknown>, camel: string, snake: string) => {
   const value = row[camel] ?? row[snake];
@@ -72,10 +76,11 @@ export function placementOutcome(value: unknown): PlacementOutcome | null {
   if (!value || typeof value !== 'object') return null;
   const row = value as Record<string, unknown>;
   const rawOutcome = row.outcome;
+  if (rawOutcome !== 'created' && rawOutcome !== 'reused' && rawOutcome !== 'filled' && rawOutcome !== 'held') return null;
   return {
-    outcome: rawOutcome === 'reused' || rawOutcome === 'filled' || rawOutcome === 'held' ? rawOutcome : 'created',
+    outcome: rawOutcome,
     selectionId: resultText(row, 'selectionId', 'selection_id') ?? resultText(row, 'ffeItemId', 'ffe_item_id'),
-    selectionThreadId: resultText(row, 'selectionThreadId', 'selection_thread_id'),
+    threadId: resultText(row, 'threadId', 'thread_id'),
     placementId: resultText(row, 'placementId', 'placement_id'),
   };
 }
@@ -136,21 +141,24 @@ export function placementV2Request(
   productId: string,
   route: Exclude<SpecBookPlacementRoute, { kind: 'library' }>,
   source: PlacementSource,
-  duplicateMode: PlacementV2Request['duplicateMode'] = 'reuse_or_create',
+  duplicateMode: PlacementV2Request['duplicateMode'],
 ): PlacementV2Request {
-  const legacy = placementRpcPayload(productId, route, source);
   return {
     projectId: route.projectId,
     productId,
-    assignment: { scope: route.roomId ? 'room' : 'unassigned', roomId: route.roomId },
+    roomId: route.roomId,
+    assignmentScope: route.roomId ? 'room' : 'unassigned',
+    category: route.kind === 'create_line' ? route.category.trim() : null,
+    boardId: null,
     duplicateMode,
     disposition: 'candidate',
     placeholderSelectionId: route.kind === 'fill_slot' ? route.slotId : null,
+    configurationId: null,
     roleConfigurationIdentity: null,
     // Product + destination make retries stable without persisting a mutable
     // request body in the extension.
-    idempotencyKey: `chrome:${productId}:${route.projectId}:${route.kind}:${route.roomId ?? 'unassigned'}:${route.kind === 'fill_slot' ? route.slotId : route.kind === 'create_line' ? route.category.trim() : ''}`,
-    source: legacy.p_source,
+    idempotencyKey: `chrome:${productId}:${route.projectId}:${route.kind}:${route.roomId ?? 'unassigned'}:${route.kind === 'fill_slot' ? route.slotId : route.kind === 'create_line' ? route.category.trim() : ''}:${duplicateMode}`,
+    source: 'chrome_extension',
   };
 }
 
@@ -207,5 +215,7 @@ export async function placeProductInProject(
   if (error) {
     throw new SpecBookPlacementError(errorMessage(error), productId, route);
   }
-  return placementOutcome(fallback ? legacy?.data : v2.data);
+  const outcome = placementOutcome(fallback ? legacy?.data : v2.data);
+  if (!outcome) throw new SpecBookPlacementError('Project placement returned an invalid outcome', productId, route);
+  return outcome;
 }

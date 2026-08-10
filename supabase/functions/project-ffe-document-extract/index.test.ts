@@ -2,17 +2,19 @@ import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   EXTRACTION_TOOL_NAME,
   base64Chunks,
+  extractionStageArgs,
   extractionPrompt,
   extractionTool,
   parseExtractRequest,
   parseExtractSource,
+  parseExtractionBatchResult,
   validateExtraction,
 } from "./lib.ts";
 
 const projectId = "123e4567-e89b-42d3-a456-426614174000";
 const assetId = "123e4567-e89b-42d3-a456-426614174001";
 const actorId = "123e4567-e89b-42d3-a456-426614174002";
-const row = { page: 1, name: "Chair", quantity: 2, room: "Living", category: "Seating", manufacturer: null, sourcePrice: 1200, confidence: 0.8 };
+const row = { pageNumber: 1, provenance: { page: 1, confidence: 0.8 }, name: "Chair", quantity: 2, roomName: "Living", category: "Seating" };
 
 Deno.test("extract request requires explicit UUID project and staged asset", () => {
   assertEquals(parseExtractRequest({ projectId, assetId }), { projectId, assetId });
@@ -46,10 +48,28 @@ Deno.test("Anthropic request uses one forced schema-constrained staging tool", (
 
 Deno.test("extraction runtime validator rejects unknown, malformed, and formula-like fields", () => {
   assertEquals(validateExtraction({ rows: [row] })?.rows, [row]);
-  assertEquals(validateExtraction({ rows: [{ ...row, page: 0 }] }), null);
+  assertEquals(validateExtraction({ rows: [{ ...row, pageNumber: 0 }] }), null);
+  assertEquals(validateExtraction({ rows: [{ ...row, provenance: { page: 2, confidence: 0.8 } }] }), null);
   assertEquals(validateExtraction({ rows: [{ ...row, quantity: "many" }] }), null);
-  assertEquals(validateExtraction({ rows: [{ ...row, sourcePrice: "=1+1" }] }), null);
+  assertEquals(validateExtraction({ rows: [{ ...row, quantity: 1.5 }] }), null);
+  assertEquals(validateExtraction({ rows: [{ ...row, roomName: "=1+1" }] }), null);
   assertEquals(validateExtraction({ rows: [{ ...row, tradeCost: 99 }] }), null);
+});
+
+Deno.test("staging orchestration uses exact SQL args and returns only authoritative batch data", () => {
+  const fileHash = "b".repeat(64);
+  assertEquals(extractionStageArgs({ projectId, assetId }, actorId, fileHash, [row]), {
+    p_project_id: projectId,
+    p_asset_id: assetId,
+    p_actor_id: actorId,
+    p_file_hash: fileHash,
+    p_rows: [row],
+  });
+  const batchId = "123e4567-e89b-42d3-a456-426614174003";
+  assertEquals(parseExtractionBatchResult({ batchId, status: "staged", reused: false, rowCount: 1, sourceAssetId: assetId }, assetId), {
+    batchId, status: "staged", reused: false, rowCount: 1, sourceAssetId: assetId,
+  });
+  assertEquals(parseExtractionBatchResult({ batchId, status: "staged", reused: false, rowCount: 1, sourceAssetId: projectId }, assetId), null);
 });
 
 Deno.test("PDF base64 encoding roundtrips across multiple bounded chunks", () => {

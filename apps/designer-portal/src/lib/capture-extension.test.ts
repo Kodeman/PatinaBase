@@ -42,6 +42,9 @@ describe("getCaptureExtensionConfig", () => {
     ["unknown", "https://example.com/extension.zip"],
     ["unpacked", "https://example.com/extension.zip"],
     ["webstore", "not-a-url"],
+    ["webstore", "https://example.com/detail/patina/example"],
+    ["webstore", "https://chromewebstore.google.com.evil.example/detail/patina/example"],
+    ["webstore", "https://chromewebstore.google.com/webstore/category/extensions"],
   ])("fails closed for mode %s and URL %s", (mode, url) => {
     process.env[MODE_KEY] = mode;
     process.env[URL_KEY] = url;

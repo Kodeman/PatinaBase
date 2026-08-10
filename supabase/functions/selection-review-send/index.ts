@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendCompliantEmail } from "../_shared/send-email.ts";
-import { deliveryIdempotencyKey, parsePreparedDelivery, parseSendRequest, reviewUrl } from "./lib.ts";
+import { deliveryIdempotencyKey, markDeliveryArgs, parseMarkedDelivery, parsePreparedDelivery, parseSendRequest, prepareDeliveryArgs, reviewUrl } from "./lib.ts";
 
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
@@ -16,11 +16,7 @@ Deno.serve(async (req) => {
   const body = parseSendRequest(await req.json().catch(() => null));
   if (!body) return json({ error: "invalid_body" }, 400);
   const idempotencyKey = deliveryIdempotencyKey(body.editionId);
-  const prepared = await admin.rpc("prepare_project_review_delivery", {
-    p_edition_id: body.editionId,
-    p_actor_id: caller.data.user.id,
-    p_idempotency_key: idempotencyKey,
-  });
+  const prepared = await admin.rpc("prepare_project_review_delivery", prepareDeliveryArgs(body.editionId, caller.data.user.id));
   if (prepared.error || !prepared.data) return json({ error: "not_found" }, 404);
   const delivery = parsePreparedDelivery(prepared.data, body.editionId);
   if (!delivery) return json({ error: "invalid_delivery" }, 502);
@@ -30,23 +26,29 @@ Deno.serve(async (req) => {
   if (!url || !delivery.email) return json({ error: "invalid_delivery" }, 502);
 
   let sendError: string | null = null;
+  let providerMessageId: string | null = null;
   try {
     const sent = await sendCompliantEmail(admin, {
       to: delivery.email,
       subject: delivery.title,
       html: `<p>Your studio has shared a selection review.</p><p><a href="${url}">Open review</a></p>`,
       category: "transactional",
+      userId: delivery.clientId,
       idempotencyKey,
+      failClosedPolicyReads: true,
     });
     if (!sent.success) sendError = "send_failed";
+    else if (typeof sent.id !== "string" || !sent.id.trim()) sendError = "provider_message_missing";
+    else providerMessageId = sent.id.trim();
   } catch {
     sendError = "send_failed";
   }
-  const marked = await admin.rpc("mark_project_review_delivery_sent", {
-    p_attempt_id: delivery.attemptId,
-    p_actor_id: caller.data.user.id,
-    p_error_code: sendError,
-  });
-  if (sendError || marked.error) return json({ published: true, delivered: false, retryable: true }, 502);
-  return json({ published: true, delivered: true });
+  const marked = await admin.rpc(
+    "mark_project_review_delivery_sent",
+    markDeliveryArgs(delivery.attemptId, caller.data.user.id, providerMessageId, sendError),
+  );
+  if (marked.error) return json({ published: true, delivered: false, retryable: true }, 502);
+  const completion = parseMarkedDelivery(marked.data, delivery, providerMessageId, sendError);
+  if (!completion || sendError) return json({ published: true, delivered: false, retryable: true }, 502);
+  return json({ published: true, delivered: true, attemptId: completion.attemptId });
 });

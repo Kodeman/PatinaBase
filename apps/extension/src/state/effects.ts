@@ -199,7 +199,7 @@ export async function reuseProductForSpecBookPlacement(
 ): Promise<{ productId: string; placementOutcome: PlacementOutcome | null }> {
   const route = routing.specBookPlacement;
   if (!route || route.kind === 'library') return { productId, placementOutcome: null };
-  const placementOutcome = await runPilotPlacement(productId, route, draft, true, 'reuse_or_create');
+  const placementOutcome = await runPilotPlacement(productId, route, draft, true, 'reuse');
   recordRecent(draft, productId, 'library');
   return { productId, placementOutcome };
 }
@@ -374,7 +374,7 @@ export async function updateExisting(
     }
   }
   const placementOutcome = routing.specBookPlacement && routing.specBookPlacement.kind !== 'library'
-    ? await runPilotPlacement(existingId, routing.specBookPlacement, draft, true, 'reuse_or_create')
+    ? await runPilotPlacement(existingId, routing.specBookPlacement, draft, true, 'reuse')
     : null;
   if (draft.styleIds.length) {
     await supabase.from('product_styles').delete().eq('product_id', existingId);

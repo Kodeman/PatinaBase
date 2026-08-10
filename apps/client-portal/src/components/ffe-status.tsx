@@ -46,7 +46,7 @@ export function FFEStatus({ projectId }: FFEStatusProps) {
 
   // Filter to only client-visible items (past the internal specified/quoted stages)
   const items = (data?.selections ?? []).filter((item) =>
-    CLIENT_VISIBLE_STATUSES.includes(item.status)
+    CLIENT_VISIBLE_STATUSES.includes(item.logisticsStatus)
   );
 
   if (items.length === 0) {
@@ -73,7 +73,7 @@ export function FFEStatus({ projectId }: FFEStatusProps) {
           <div className="space-y-0">
             {roomItems.map((item: any) => {
               const itemName = item.name || 'Item';
-              const dotStatus = ffeStatusToDotStatus(item.status);
+              const dotStatus = ffeStatusToDotStatus(item.logisticsStatus);
 
               return (
                 <div
@@ -85,7 +85,7 @@ export function FFEStatus({ projectId }: FFEStatusProps) {
                     <div className="min-w-0">
                       <p className="text-sm text-[var(--text-primary)] truncate">{itemName}</p>
                       <p className="type-meta-small mt-0.5">
-                        {statusLabels[item.status] || item.status}
+                        {statusLabels[item.logisticsStatus] || item.logisticsStatus}
                       </p>
                     </div>
                   </div>

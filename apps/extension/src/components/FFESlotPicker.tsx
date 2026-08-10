@@ -181,7 +181,7 @@ export function FFESlotPicker({
       const placed = await placeProductInProject(productId, route, {
         sourceUrl: '',
         captureKind: 'post_save',
-      }, { duplicateMode: 'reuse_or_create' });
+      }, { duplicateMode: 'reuse' });
       if (!placed) throw new Error('Project placement returned no outcome');
       setOutcome(placed);
     } catch (cause) {

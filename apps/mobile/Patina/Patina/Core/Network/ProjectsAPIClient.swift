@@ -54,12 +54,12 @@ public struct RemotePaymentMilestone: Codable, Sendable, Identifiable {
 public struct RemoteFFEItem: Codable, Sendable, Identifiable {
     public let id: String
     public let name: String?
-    public let status: String?
+    public let logisticsStatus: String?
     public let client_line_total_cents: Int?
     public let room_name: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, name, status
+        case id, name, logisticsStatus
         case client_line_total_cents = "clientLineTotalCents"
         case room_name = "roomName"
     }

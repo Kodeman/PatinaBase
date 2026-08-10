@@ -304,7 +304,6 @@ struct ProjectDetailView: View {
         }
     }
 
-
     private func errorView(_ msg: String) -> some View {
         PatinaErrorState(
             message: msg,

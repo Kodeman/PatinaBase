@@ -4,7 +4,9 @@ import {
   MAX_PDF_BYTES,
   base64Chunks,
   extractionPrompt,
+  extractionStageArgs,
   extractionTool,
+  parseExtractionBatchResult,
   parseExtractRequest,
   parseExtractSource,
   sha256Hex,
@@ -57,13 +59,12 @@ Deno.serve(async (req) => {
   const toolUse = model.content?.find((entry) => entry.type === "tool_use" && entry.name === EXTRACTION_TOOL_NAME);
   const extraction = validateExtraction(toolUse?.input);
   if (!extraction) return json({ error: "invalid_extraction" }, 502);
-  const committed = await admin.rpc("stage_project_ffe_document_extraction", {
-    p_project_id: payload.projectId,
-    p_asset_id: payload.assetId,
-    p_actor_id: caller.data.user.id,
-    p_file_hash: fileHash,
-    p_rows: extraction.rows,
-  });
+  const committed = await admin.rpc(
+    "stage_project_ffe_document_extraction",
+    extractionStageArgs(payload, caller.data.user.id, fileHash, extraction.rows),
+  );
   if (committed.error) return json({ error: "staging_failed" }, 500);
-  return json({ ok: true, assetId: payload.assetId, staged: true, rowCount: extraction.rows.length });
+  const batch = parseExtractionBatchResult(committed.data, payload.assetId);
+  if (!batch) return json({ error: "invalid_staging_result" }, 502);
+  return json(batch);
 });
