@@ -1,0 +1,1 @@
+node scripts/hooks/patina-hooks.mjs commit-msg "$1"

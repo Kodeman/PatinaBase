@@ -1,0 +1,108 @@
+name: Integration verification
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit to verify
+        required: false
+        type: string
+        default: main
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit or branch to verify
+        required: false
+        default: main
+  schedule:
+    - cron: "23 6 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-${{ inputs.ref || 'main' }}
+  cancel-in-progress: false
+
+jobs:
+  database-and-edge:
+    name: Database reset, SQL, and edge tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || 'main' }}
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.72.7
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Start and rebuild local Supabase
+        run: |
+          supabase start
+          supabase db reset
+
+      - name: Run database tests
+        run: supabase test db
+
+      - name: Run edge-function tests
+        run: deno test --allow-all --config supabase/functions/deno.json supabase/functions
+
+  portal-e2e:
+    name: ${{ matrix.portal }} portal browser integration
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - portal: designer
+            package: "@patina/designer-portal"
+          - portal: admin
+            package: "@patina/admin-portal"
+          - portal: client
+            package: "@patina/client-portal"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || 'main' }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.72.7
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Start local Supabase and export browser environment
+        run: |
+          supabase start
+          supabase status -o json > /tmp/supabase-status.json
+          jq -r '"NEXT_PUBLIC_SUPABASE_URL=\(.API_URL)", "NEXT_PUBLIC_SUPABASE_ANON_KEY=\(.ANON_KEY)"' /tmp/supabase-status.json >> "$GITHUB_ENV"
+          echo 'NEXT_PUBLIC_POSTHOG_ENABLE_IN_DEV=false' >> "$GITHUB_ENV"
+
+      - name: Install Chromium
+        run: pnpm --filter "${{ matrix.package }}" exec playwright install --with-deps chromium
+
+      - name: Run browser suite
+        run: env -u CI pnpm --filter "${{ matrix.package }}" test:e2e -- --project=chromium
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-${{ matrix.portal }}-${{ github.run_id }}
+          path: apps/${{ matrix.portal }}-portal/playwright-report
+          if-no-files-found: ignore
+          retention-days: 14

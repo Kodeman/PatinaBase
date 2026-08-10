@@ -90,14 +90,48 @@
     }
   },
   "hooks": {
-    "PreToolUse": [
+    "SessionStart": [
       {
-        "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "scripts/agent-preflight.sh",
+            "command": "node scripts/hooks/patina-hooks.mjs agent SessionStart",
             "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "(^Bash$|exec_command$|unified_exec$)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/hooks/patina-hooks.mjs agent PreToolUse",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "(^Write$|^Edit$|^MultiEdit$|apply_patch$)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/hooks/patina-hooks.mjs agent PostToolUse",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/hooks/patina-hooks.mjs agent Stop",
+            "timeout": 20
           }
         ]
       }
