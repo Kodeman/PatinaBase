@@ -1,0 +1,857 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A detailed Patina leadership proposal for building boards, selections, and FF&amp;E from within the existing Document paradigm.">
+  <title>Keep the Project in Hand — Patina FF&amp;E</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Inter:wght@400;500;600&amp;family=Playfair+Display:ital,wght@0,500;0,600;1,500&amp;display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --desk:#1c1a17;
+      --desk-2:#29251f;
+      --paper:#f7f0e5;
+      --paper-hi:#fffaf1;
+      --linen:#e8ddd0;
+      --ink:#26221d;
+      --muted:#655f57;
+      --quiet:#6f675e;
+      --rule:#c9beb0;
+      --rule-dark:#4b453d;
+      --clay:#a64e38;
+      --clay-dark:#8e422f;
+      --oak:#6d4e2f;
+      --sage:#52624f;
+      --blue:#415d73;
+      --gold:#9a7426;
+      --danger:#a04336;
+      --serif:'Playfair Display',Georgia,serif;
+      --sans:'Inter',Arial,sans-serif;
+      --mono:'DM Mono',monospace;
+    }
+    *{box-sizing:border-box}
+    html{background:var(--desk);scroll-behavior:smooth}
+    body{margin:0;color:var(--ink);background:var(--desk);font-family:var(--sans);overflow:hidden}
+    button,a{font:inherit}
+    button{color:inherit}
+    a{color:inherit;text-underline-offset:3px}
+    :focus-visible{outline:3px solid var(--blue);outline-offset:3px}
+    .sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+
+    /* The presentation is a marked-up proof set on a dark worktable. */
+    .deck{height:100dvh;overflow-y:auto;scroll-snap-type:y mandatory;scrollbar-width:none}
+    .deck::-webkit-scrollbar{display:none}
+    .slide{height:100dvh;min-height:700px;scroll-snap-align:start;position:relative;overflow:hidden;background:var(--paper);border-bottom:1px solid var(--rule)}
+    .slide.dark{background:var(--desk);color:var(--paper);border-color:var(--rule-dark)}
+    .slide.field{background:var(--linen)}
+    .slide-inner{height:100%;max-width:1600px;margin:0 auto;padding:clamp(34px,5vh,64px) clamp(44px,5.5vw,92px) clamp(60px,7vh,86px);display:grid;grid-template-columns:76px minmax(0,1fr);gap:clamp(24px,3vw,48px)}
+    .folio{border-right:1px solid var(--rule);display:flex;flex-direction:column;padding-right:15px;min-width:0}
+    .dark .folio{border-color:var(--rule-dark)}
+    .folio-act{font:500 10px/1.25 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--clay-dark);writing-mode:vertical-rl;transform:rotate(180deg)}
+    .dark .folio-act{color:#d88a72}
+    .folio-num{margin-top:auto;font:500 12px/1 var(--mono);color:var(--muted)}
+    .dark .folio-num{color:#b6aa9d}
+    .stage{min-width:0;display:flex;flex-direction:column;justify-content:center}
+    .kicker{margin:0 0 12px;font:500 10px/1.4 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--clay-dark)}
+    .dark .kicker{color:#d88a72}
+    h1,h2,h3,p{margin-top:0}
+    h1{font:500 clamp(55px,7.2vw,112px)/.91 var(--serif);letter-spacing:-.052em;margin-bottom:22px;max-width:11ch}
+    h2{font:500 clamp(36px,4.2vw,66px)/.98 var(--serif);letter-spacing:-.038em;margin-bottom:16px;max-width:19ch}
+    h2.wide{max-width:none}
+    h3{font:600 17px/1.16 var(--serif);margin-bottom:7px}
+    .lede{font:400 clamp(16px,1.35vw,21px)/1.55 var(--sans);color:var(--muted);max-width:72ch;margin-bottom:22px}
+    .dark .lede{color:#c7bdb1}
+    .note{font-size:12px;line-height:1.55;color:var(--muted)}
+    .dark .note{color:#b9aea2}
+    .label{display:block;font:500 9.5px/1.25 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--clay-dark);margin-bottom:8px}
+    .dark .label{color:#d88a72}
+    .rule{height:1px;background:var(--rule);margin:16px 0}
+    .dark .rule{background:var(--rule-dark)}
+    .source-note{margin-top:auto;padding-top:11px;font:400 10px/1.5 var(--mono);color:var(--muted)}
+    .dark .source-note{color:#a99e92}
+    .source-note a{text-decoration-color:currentColor}
+    .callout{border-left:4px solid var(--clay);padding:12px 15px;background:rgba(184,95,70,.075);font-size:13px;line-height:1.55;margin-top:13px;max-width:100ch}
+    .dark .callout{background:rgba(216,138,114,.08)}
+    .callout strong{font-weight:600}
+    .grid{display:grid;gap:13px}
+    .g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+    .card{border:1px solid var(--rule);padding:15px 16px;background:rgba(255,250,241,.36);min-width:0}
+    .dark .card{border-color:var(--rule-dark);background:#211f1b}
+    .card p{font-size:12px;line-height:1.5;color:var(--muted);margin:0}
+    .dark .card p{color:#bfb4a8}
+    .card.clay{border-top:4px solid var(--clay)}
+    .card.sage{border-top:4px solid var(--sage)}
+    .card.blue{border-top:4px solid var(--blue)}
+    .card.gold{border-top:4px solid var(--gold)}
+    .pill{display:inline-flex;align-items:center;gap:5px;border:1px solid currentColor;padding:4px 7px;font:500 8.5px/1 var(--mono);letter-spacing:.07em;text-transform:uppercase;white-space:nowrap}
+    .pill::before{content:'';width:5px;height:5px;background:currentColor;border-radius:50%}
+    .pill.clay{color:var(--clay-dark)}.pill.sage{color:var(--sage)}.pill.blue{color:var(--blue)}.pill.gold{color:var(--gold)}.pill.neutral{color:var(--muted)}.pill.danger{color:var(--danger)}
+
+    /* Provenance/redline thread: three entrances, one project selection. */
+    .thread{display:grid;grid-template-columns:1fr 1fr 1fr 1.8fr;gap:0;align-items:center;margin:3px 0 15px;max-width:900px}
+    .thread span{position:relative;border-top:2px solid currentColor;padding-top:7px;font:500 9px/1.2 var(--mono);letter-spacing:.08em;text-transform:uppercase}
+    .thread span::before{content:'';position:absolute;top:-4px;left:0;width:6px;height:6px;border-radius:50%;background:currentColor}
+    .thread .t-board{color:var(--sage)}.thread .t-library{color:var(--oak)}.thread .t-clip{color:var(--blue)}.thread .t-selection{color:var(--clay-dark);padding-left:12px}
+    .thread .t-selection::before{left:12px}
+
+    /* Cover */
+    .cover{display:grid;grid-template-columns:minmax(0,1fr) minmax(370px,.86fr);gap:clamp(48px,6vw,96px);align-items:center}
+    .cover h1 em{color:#d88a72;font-style:italic}
+    .cover-meta{display:flex;flex-wrap:wrap;gap:18px;margin-top:28px;font:400 10px/1.4 var(--mono);color:#b5aa9e}
+    .proof-stack{height:520px;position:relative}
+    .proof-page{position:absolute;border:1px solid var(--rule-dark);background:var(--paper);color:var(--ink);width:77%;height:76%;right:0;top:12%;padding:28px 30px}
+    .proof-page.back{right:13%;top:4%;background:#d8cabb;border-color:#665d52}
+    .proof-page.mid{right:7%;top:8%;background:#eee4d8}
+    .proof-page .wordmark{font:500 9px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase}
+    .proof-page h3{font-size:27px;margin:32px 0 6px}
+    .proof-page .hair{height:1px;background:var(--rule);margin:13px 0}
+    .proof-page .project-row{display:grid;grid-template-columns:1fr auto;padding:11px 0;border-bottom:1px solid var(--rule);font-size:11px}
+    .proof-page .project-row b{font-family:var(--serif);font-size:15px}
+    .proof-page .project-row span{font-family:var(--mono);font-size:9px;color:var(--clay-dark);text-transform:uppercase}
+    .proof-thread{position:absolute;left:-2%;top:41%;width:105%;height:2px;background:#d88a72;z-index:4}
+    .proof-thread::after{content:'PROJECT SELECTION';position:absolute;right:3px;top:-21px;font:500 9px/1 var(--mono);letter-spacing:.1em;color:#d88a72}
+    .proof-thread::before{content:'';position:absolute;right:-4px;top:-3px;width:8px;height:8px;background:#d88a72;border-radius:50%}
+
+    /* Evidence and principles */
+    .quote-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:18px}
+    .quote{border-top:1px solid var(--ink);padding-top:16px;font:500 clamp(22px,2.4vw,36px)/1.17 var(--serif);letter-spacing:-.02em}
+    .quote em{color:var(--clay-dark)}
+    .symptoms{display:grid;gap:8px}
+    .symptom{border:1px solid var(--rule);padding:12px 13px;display:grid;grid-template-columns:29px 1fr;gap:10px;align-items:start;background:rgba(255,250,241,.35)}
+    .symptom b{font:500 17px/1 var(--mono);color:var(--clay-dark)}
+    .symptom span{font-size:12px;line-height:1.45}
+    .constraint-list{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border-left:1px solid var(--rule);border-top:1px solid var(--rule);margin-top:12px}
+    .constraint{border-right:1px solid var(--rule);border-bottom:1px solid var(--rule);padding:14px;min-height:120px}
+    .constraint b{display:block;font:600 14px/1.2 var(--serif);margin:8px 0 5px}
+    .constraint p{font-size:11px;line-height:1.45;color:var(--muted);margin:0}
+
+    /* Current screenshot proof */
+    .evidence-proof{position:relative;border:1px solid var(--rule);background:var(--paper-hi);padding:10px}
+    .evidence-proof img{display:block;width:100%;height:470px;object-fit:cover;object-position:top left;border:1px solid var(--rule)}
+    .pin-note{position:absolute;z-index:3;width:180px;background:var(--paper-hi);border:1px solid var(--clay);padding:8px 9px;font-size:10px;line-height:1.35}
+    .pin-note b{font:500 9px/1 var(--mono);color:var(--clay-dark);margin-right:4px}
+    .pin-note::after{content:'';position:absolute;background:var(--clay)}
+    .pin-a{left:3%;top:17%}.pin-a::after{width:76px;height:1px;left:100%;top:50%}
+    .pin-b{left:41%;bottom:5%}.pin-b::after{width:1px;height:52px;left:50%;bottom:100%}
+    .pin-c{right:3%;top:30%}.pin-c::after{width:58px;height:1px;right:100%;top:50%}
+    .pin-d{right:4%;bottom:7%}.pin-d::after{width:1px;height:46px;left:50%;bottom:100%}
+
+    /* Shared app proof */
+    .mock-label{display:flex;justify-content:space-between;gap:18px;align-items:baseline;margin-bottom:8px;font:500 9.5px/1.3 var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+    .proof-scroll{overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--clay) transparent;padding-bottom:2px}
+    .proof-wrap{align-self:stretch;min-width:0;width:100%;max-width:100%;overflow:hidden}
+    .app-proof{min-width:990px;height:470px;border:1px solid #aaa095;background:#f9f5ee;color:#2a2723;position:relative;overflow:hidden}
+    #s20 .app-proof{height:360px}
+    .topbar{height:33px;display:flex;align-items:center;padding:0 14px;border-bottom:1px solid #d5cec4;background:#fffaf4;gap:11px}
+    .brandmark{font:500 9px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase}
+    .strata{display:grid;gap:2px;width:16px}.strata i{height:1px;background:currentColor;display:block}.strata i:nth-child(2){width:11px}.strata i:nth-child(3){width:6px}
+    .grow{flex:1}
+    .topquiet{font-size:9px;color:#736c63}
+    .avatar{width:21px;height:21px;border:1px solid #9f9589;border-radius:50%;display:grid;place-items:center;font:500 8px/1 var(--mono)}
+    .doc-stage{height:calc(100% - 33px);display:grid;grid-template-columns:78px minmax(0,1fr) 165px;position:relative;padding-bottom:38px}
+    .doc-spine{border-right:1px solid #d2c9bd;background:#f0e8dd;padding:16px 10px}
+    .putdown{font:500 8px/1 var(--mono);letter-spacing:.09em;text-transform:uppercase;color:#834c3b;margin-bottom:19px}
+    .spine-step{padding:7px 0;border-top:1px solid #d3cabf;font:500 8px/1.2 var(--mono);color:#645d56}
+    .spine-step.on{color:#2a2723;font-weight:600}.spine-step.on::before{content:'• ';color:var(--clay)}
+    .doc-paper{padding:16px 23px 38px;overflow:hidden;background:#fbf7f0}
+    .doc-mark{font:500 8px/1 var(--mono);letter-spacing:.13em;text-transform:uppercase}
+    .doc-title{font:500 23px/1.05 var(--serif);letter-spacing:-.02em;margin:15px 0 4px}
+    .doc-meta{font-size:8.5px;color:#6d665e;margin-bottom:12px}
+    .settled{border-top:1px solid #d4ccc1;padding:7px 0;display:flex;align-items:center;gap:8px;font:500 10px/1 var(--serif)}
+    .settled small{font:500 7.5px/1 var(--mono);text-transform:uppercase;color:var(--sage);margin-left:auto}
+    .account-band{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid #bcb2a5;border-bottom:1px solid #d4ccc1;margin-top:8px}
+    .account-band div{padding:7px 8px;border-right:1px solid #d4ccc1}.account-band div:last-child{border:0}
+    .account-band b{display:block;font:500 11px/1 var(--serif)}.account-band span{font:500 7px/1.2 var(--mono);color:#6d665e;text-transform:uppercase}
+    .doc-section-head{display:flex;align-items:baseline;gap:12px;border-bottom:1px solid #c9beb2;padding:11px 0 6px}
+    .doc-section-head h4{font:500 14px/1 var(--serif);margin:0}.doc-section-head .count{font:500 7.5px/1 var(--mono);text-transform:uppercase;color:#6d665e}.doc-section-head .head-actions{margin-left:auto;display:flex;gap:9px}
+    .doc-action{font:500 8px/1 var(--mono);letter-spacing:.05em;text-transform:uppercase;color:#8e422f;border-bottom:1px solid currentColor;padding:7px 2px 5px;min-height:28px;display:inline-flex;align-items:center}
+    .doc-action.primary{color:#2a2723;border-bottom:3px double #8e422f;font-weight:600}
+    .work-note{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #ddd5ca;font-size:9px;color:#5f5952}
+    .work-note b{color:#2a2723}.work-note span:last-child{margin-left:auto;font:500 7.5px/1 var(--mono);text-transform:uppercase;color:#8e422f}
+    .doc-margin{border-left:1px solid #d2c9bd;background:#f5eee4;padding:17px 12px;overflow:hidden}
+    .margin-label{font:500 7.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:#655f57;margin-bottom:10px}
+    .margin-item{border-top:1px solid #d3cabf;padding:9px 0;font-size:8.5px;line-height:1.35}.margin-item b{display:block;font-size:9px;margin-bottom:2px}.margin-item time{font:500 7px/1 var(--mono);color:#6d665e}
+    .studio-drawer{position:absolute;left:0;right:0;bottom:0;height:38px;background:#292622;color:#f7f0e5;display:flex;align-items:center;padding:0 14px;gap:22px;font:500 8px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase}
+    .studio-drawer span:first-child{color:#dfa083}.studio-drawer .drawer-close{margin-left:auto;color:#aaa096}
+    .redline{position:absolute;border:1px solid var(--clay);pointer-events:none;z-index:8}
+    .redtag{position:absolute;background:var(--clay);color:#fff;font:500 8px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;padding:5px 6px;z-index:9;white-space:nowrap}
+    .quiet-tag{display:inline-flex;border:1px solid #cabfb3;padding:4px 6px;font:500 7.5px/1 var(--mono);text-transform:uppercase;color:#665f57}
+
+    /* Project-section content */
+    .board-folio{padding:9px 0 10px;border-bottom:1px solid #d2c9bd}
+    .folio-head{display:flex;align-items:baseline;gap:8px;margin-bottom:7px}.folio-head b{font:500 10px/1 var(--serif)}.folio-head span{font:500 7px/1 var(--mono);text-transform:uppercase;color:#6d665e}.folio-head .new{margin-left:auto;color:#8e422f}
+    .board-row{display:flex;gap:7px;overflow:hidden}
+    .board-card{width:118px;height:66px;border:1px solid #cfc5b8;background:#eee6da;padding:7px;position:relative;flex:none}
+    .board-card.blank{background:#fbf7f0;border-style:dashed;display:grid;place-items:center;text-align:center;color:#8e422f;font:500 8px/1.35 var(--mono)}
+    .board-swatch{height:28px;display:flex;align-items:end;gap:3px;margin-bottom:6px}.board-swatch i{display:block;background:#9a8065}.board-swatch i:nth-child(1){width:27px;height:17px}.board-swatch i:nth-child(2){width:16px;height:24px;background:#78866e}.board-swatch i:nth-child(3){width:31px;height:12px;background:#c6b79f}
+    .board-card b{display:block;font:500 8px/1 var(--serif)}.board-card small{font:500 6.5px/1 var(--mono);color:#645d56}
+    .room-head{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:baseline;padding:9px 0 4px;border-bottom:1px solid #d6cec3}.room-head b{font:500 italic 11px/1 var(--serif)}.room-head span{font:500 7px/1 var(--mono);text-transform:uppercase;color:#6d665e}.room-head .addline{color:#8e422f}
+    .ffe-line{display:grid;grid-template-columns:34px 1.4fr .7fr .65fr .8fr;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid #ddd5ca;font-size:8px}
+    .line-art{width:29px;height:25px;border:1px solid #cfc5b8;background:#eee6da;display:grid;place-items:center;font:500 7px/1 var(--mono);color:#6d4e2f}.ffe-line b{display:block;font-size:8.5px}.ffe-line small{display:block;font-size:7px;color:#6d665e;margin-top:2px}.line-origin{font:500 7px/1 var(--mono);text-transform:uppercase;color:var(--blue)}.line-gap{color:#a04336}.line-ready{color:var(--sage)}
+
+    /* Overlay sheets */
+    .veil{position:absolute;inset:0 0 38px;background:rgba(28,26,23,.24);z-index:10}
+    .doc-sheet{position:absolute;z-index:11;top:48px;left:50%;transform:translateX(-50%);width:405px;max-height:370px;background:#fffaf2;border:1px solid #9e9286;padding:18px 19px;color:#28241f;overflow:hidden}
+    .doc-sheet.wide{width:690px}
+    .sheet-kicker{font:500 7.5px/1 var(--mono);letter-spacing:.11em;text-transform:uppercase;color:#8e422f;margin-bottom:7px}.sheet-head{display:flex;align-items:start;gap:12px;border-bottom:1px solid #d6cec3;padding-bottom:10px;margin-bottom:9px}.sheet-head h4{font:500 20px/1 var(--serif);margin:0}.sheet-x{margin-left:auto;font:500 9px/1 var(--mono);color:#736c63}
+    .sheet-context{font-size:9px;color:#665f57;margin-top:4px}.sheet-context b{color:#28241f}
+    .action-list{display:grid}.action-row{display:grid;grid-template-columns:31px 1fr auto;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid #ded6cc}.action-icon{width:28px;height:28px;border:1px solid #c7bdb0;display:grid;place-items:center;font:500 10px/1 var(--mono);color:#8e422f}.action-row b{display:block;font-size:10px}.action-row small{font-size:8px;color:#645d56}.action-row em{font-style:normal;color:#8e422f;font-size:13px}
+    .field-label{font:500 7.5px/1 var(--mono);letter-spacing:.09em;text-transform:uppercase;color:#736c63;margin:10px 0 5px}.fake-input{border:1px solid #c8beb1;background:#fffdf8;padding:8px 9px;font-size:9px}.choice-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.choice{border:1px solid #c8beb1;padding:9px 7px;min-height:58px}.choice.on{border:2px solid #8e422f;padding:8px 6px;background:#f5e8df}.choice b{display:block;font-size:9px}.choice span{display:block;font-size:7px;line-height:1.3;color:#645d56;margin-top:4px}.sheet-actions{display:flex;justify-content:flex-end;gap:7px;margin-top:12px}.fake-button{display:inline-flex;align-items:center;justify-content:center;border:1px solid #28241f;padding:7px 10px;font:500 8px/1 var(--mono);text-transform:uppercase}.fake-button.solid{background:#28241f;color:#fffaf2}.fake-button.clay{background:#8e422f;color:#fff;border-color:#8e422f}
+
+    /* Anatomy and models */
+    .anatomy-map{display:grid;grid-template-columns:215px 1fr 215px;gap:13px;align-items:stretch}
+    .anatomy-side{display:grid;gap:8px}.anatomy-note{border:1px solid var(--rule);padding:12px;background:rgba(255,250,241,.4)}.anatomy-note b{display:block;font:600 13px/1.2 var(--serif);margin-bottom:5px}.anatomy-note p{font-size:10.5px;line-height:1.42;color:var(--muted);margin:0}
+    .mini-document{border:1px solid var(--ink);background:var(--paper-hi);padding:19px;position:relative;min-height:360px}.mini-document .doc-title{font-size:28px}.mini-document .section{border-top:1px solid var(--rule);padding:12px 0;display:flex;justify-content:space-between;font:500 13px/1 var(--serif)}.mini-document .section.project{display:block;border-top:2px solid var(--ink)}.mini-document .section small{font:500 8px/1 var(--mono);text-transform:uppercase;color:var(--muted)}.mini-document .project-block{border-left:3px solid var(--clay);padding:12px 13px;margin-top:9px;background:#f4e9de}.mini-document .project-block b{font:600 17px/1.1 var(--serif)}.mini-document .project-block p{font-size:11px;line-height:1.45;margin:5px 0 0;color:var(--muted)}
+    .identity-chain{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));margin-top:8px}.identity{border-top:2px solid var(--ink);padding:15px 13px 0;position:relative;min-height:190px}.identity::before{content:'';position:absolute;top:-5px;left:0;width:8px;height:8px;background:var(--ink);border-radius:50%}.identity .id{font:500 8px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--clay-dark)}.identity b{display:block;font:600 17px/1.15 var(--serif);margin:9px 0 6px}.identity p{font-size:11px;line-height:1.45;color:var(--muted);margin:0}.identity code{display:block;margin-top:9px;font:500 8px/1.4 var(--mono);color:var(--blue)}
+    .do-not{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:15px}.do-not div{border:1px solid var(--rule);padding:13px}.do-not b{font-size:12px}.do-not p{font-size:11px;color:var(--muted);margin:5px 0 0;line-height:1.45}
+
+    /* Source tabs */
+    .source-tabs{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--rule);margin-top:5px}
+    .source-tab{appearance:none;border:0;border-right:1px solid var(--rule);background:transparent;text-align:left;padding:13px 14px;cursor:pointer;min-height:72px}.source-tab:last-child{border-right:0}.source-tab[aria-selected="true"]{background:var(--desk);color:var(--paper)}.source-tab b{display:block;font:600 14px/1.1 var(--serif);margin-bottom:5px}.source-tab span{display:block;font-size:9.5px;line-height:1.35;color:var(--muted)}.source-tab[aria-selected="true"] span{color:#bbb0a4}
+    .journey-panel{border:1px solid var(--ink);border-top:0;display:grid;grid-template-columns:1fr 42px 1fr 42px 1fr;align-items:stretch;min-height:230px}.journey-step{padding:20px 18px;background:rgba(255,250,241,.38)}.journey-step .stepno{font:500 8px/1 var(--mono);text-transform:uppercase;color:var(--clay-dark)}.journey-step h3{margin:10px 0 6px}.journey-step p{font-size:11px;line-height:1.5;color:var(--muted);margin:0}.journey-arrow{display:grid;place-items:center;font:500 21px/1 var(--serif);color:var(--clay-dark)}
+
+    /* Empty, board room, library, clipper */
+    .empty-doc{border-top:1px solid #c9beb2;margin-top:9px;padding-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:10px}.empty-block{border:1px dashed #beb3a6;padding:13px;background:#fffaf4;min-height:100px}.empty-block h5{font:500 12px/1 var(--serif);margin:0 0 5px}.empty-block p{font-size:8px;line-height:1.4;color:#645d56;margin:0 0 9px}.empty-block .entry-links{display:flex;gap:10px;font:500 7.5px/1 var(--mono);text-transform:uppercase;color:#8e422f}
+    .board-room{height:calc(100% - 33px);display:grid;grid-template-columns:205px 1fr 205px;position:relative;background:#efe7db}.board-rail{border-right:1px solid #c9beb2;padding:12px;background:#f8f3eb}.board-rail.right{border-right:0;border-left:1px solid #c9beb2}.board-crumb{grid-column:1/-1;height:35px;position:absolute;left:0;right:0;top:0;z-index:2;background:#fffaf4;border-bottom:1px solid #d2c9bd;display:flex;align-items:center;padding:0 13px;gap:7px;font-size:8px}.board-crumb b{font-size:9px}.board-crumb span:last-child{margin-left:auto}.board-rail{padding-top:48px}.rail-tabs{display:flex;border-bottom:1px solid #c9beb2;margin-bottom:9px}.rail-tabs span{font:500 7px/1 var(--mono);padding:0 6px 7px;color:#645d56}.rail-tabs span.on{color:#28241f;border-bottom:2px solid #8e422f}.rail-search{border:1px solid #c8beb1;padding:7px;font-size:8px;color:#645d56;margin-bottom:8px}.rail-card{display:grid;grid-template-columns:34px 1fr;gap:7px;align-items:center;padding:7px 0;border-bottom:1px solid #ddd5ca}.rail-thumb{width:34px;height:29px;background:#e6dbcc;border:1px solid #c8beb1;display:grid;place-items:center;font:500 7px/1 var(--mono);color:#6d4e2f}.rail-card b{display:block;font-size:8px}.rail-card span{display:block;font-size:7px;color:#645d56;margin-top:2px}.board-canvas{margin-top:35px;position:relative;background:#e9ddcd;overflow:hidden}.canvas-title{position:absolute;top:12px;left:14px;font:500 italic 12px/1 var(--serif);color:#62574b}.canvas-item{position:absolute;background:#fffaf2;border:1px solid #bcae9e;display:grid;place-items:center;color:#6d4e2f;font:500 9px/1 var(--mono)}.canvas-item.selected{border:2px solid #8e422f}.canvas-item.ref{background:#6f5d4d;color:#fff}.canvas-note{position:absolute;background:#fff6c8;border:1px solid #c3ad59;padding:8px;font:500 8px/1.4 var(--serif);width:125px}.inspector-title{font:500 8px/1 var(--mono);text-transform:uppercase;color:#645d56;margin-bottom:11px}.inspect-image{height:85px;border:1px solid #c8beb1;background:#e7dccd;display:grid;place-items:center;font:500 10px/1 var(--mono);color:#6d4e2f}.board-rail h4{font:500 15px/1.1 var(--serif);margin:9px 0 3px}.inspect-sub{font-size:7.5px;color:#645d56}.inspect-row{display:grid;grid-template-columns:65px 1fr;gap:8px;border-top:1px solid #d7cec2;padding:7px 0;font-size:7.5px}.inspect-row span{color:#645d56}.inspect-state{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid #c8beb1;margin-top:7px}.inspect-state span{text-align:center;padding:6px 2px;font:500 6.5px/1 var(--mono);text-transform:uppercase}.inspect-state .on{background:#8e422f;color:#fff}
+    .product-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.product-card{border:1px solid #d0c7bc;background:#fffaf4;padding:7px;position:relative}.product-card.selected{border:2px solid var(--sage);padding:6px}.product-image{height:73px;background:#e9dfd2;display:grid;place-items:center;font:500 8px/1 var(--mono);color:#6d4e2f;margin-bottom:7px}.product-card b{display:block;font:500 9px/1.15 var(--serif)}.product-card small{display:block;font-size:7px;color:#645d56;margin-top:3px}.check{position:absolute;right:7px;top:7px;width:14px;height:14px;border:1px solid #8c8277;background:#fff;display:grid;place-items:center;font-size:8px}.selected .check{background:var(--sage);color:#fff;border-color:var(--sage)}
+    .destination-strip{height:31px;background:#292622;color:#f7f0e5;display:flex;align-items:center;padding:0 12px;gap:8px;font-size:8px}.destination-strip b{font-weight:600}.destination-strip span{color:#bdb2a6}.destination-strip .fake-button{margin-left:auto;border-color:#e7ddd0;padding:5px 8px;color:#fff}
+    .dedupe-sheet{display:grid;grid-template-columns:1fr 1fr;gap:10px}.match-card{border:1px solid #c9beb2;padding:10px}.match-card h5{font:500 11px/1 var(--serif);margin:0 0 4px}.match-card p{font-size:8px;line-height:1.4;color:#645d56;margin:0}.match-card .match-meta{border-top:1px solid #ddd5ca;margin-top:8px;padding-top:7px;font:500 7px/1.5 var(--mono);color:#665f57}.dedupe-actions{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:8px}.dedupe-action{border:1px solid #c9beb2;padding:9px}.dedupe-action.on{border:2px solid #8e422f;padding:8px}.dedupe-action b{display:block;font-size:9px}.dedupe-action span{display:block;font-size:7.5px;color:#645d56;margin-top:3px}
+    .clipper-scene{display:grid;grid-template-columns:1fr 315px;grid-template-areas:'vendor panel';height:470px;border:1px solid var(--rule);background:#ece6dc}.vendor-page{grid-area:vendor;position:relative;padding:40px 48px;background:#d7c7b4}.vendor-brand{font:500 9px/1 var(--mono);letter-spacing:.14em}.vendor-art{position:absolute;left:12%;right:12%;top:75px;height:270px;border:1px solid #8e806f;background:#eadfce;display:grid;place-items:center;font:500 23px/1 var(--serif);color:#6d4e2f}.vendor-copy{position:absolute;bottom:18px;left:48px;right:48px;display:flex;align-items:end}.vendor-copy h3{font-size:22px;margin:0}.vendor-copy span{margin-left:auto;font:500 11px/1 var(--mono)}.clip-panel{grid-area:panel;background:#fffaf4;border-left:1px solid #a99e92;padding:15px}.clip-head{display:flex;align-items:center;border-bottom:1px solid #d5ccc1;padding-bottom:10px}.clip-head b{font:600 14px/1 var(--serif)}.clip-head span{margin-left:auto}.clip-preview{display:grid;grid-template-columns:58px 1fr;gap:9px;padding:10px 0}.clip-thumb{height:55px;background:#e8ddcf;border:1px solid #cec3b5;display:grid;place-items:center;font:500 7px/1 var(--mono);color:#6d4e2f}.clip-preview b{display:block;font-size:9px}.clip-preview span{display:block;font-size:7px;color:#645d56;margin-top:3px}.clip-field{margin-bottom:7px}.clip-field label{display:block;font:500 7px/1 var(--mono);text-transform:uppercase;color:#736c63;margin-bottom:4px}.clip-select{border:1px solid #c8beb1;padding:7px 8px;font-size:8px;background:#fff}.clip-confirm{border-top:1px solid #d5ccc1;margin-top:9px;padding-top:8px;font-size:8px;line-height:1.4}.clip-confirm b{color:var(--sage)}
+
+    /* Inbox, import, schedule, axes */
+    .inbox-list{border-top:1px solid #c9beb2}.inbox-row{display:grid;grid-template-columns:32px 1.25fr .9fr .9fr .7fr auto;gap:8px;align-items:center;border-bottom:1px solid #ddd5ca;padding:7px 0;font-size:8px}.inbox-row.head{font:500 7px/1 var(--mono);text-transform:uppercase;color:#645d56}.inbox-row b{display:block;font-size:8.5px}.inbox-row small{display:block;font-size:7px;color:#645d56}.route-missing{color:#a04336}.route-set{color:var(--sage)}
+    .import-grid{display:grid;grid-template-columns:1fr 1.25fr;gap:13px}.dropzone{border:1px dashed #9e9286;background:#fffaf4;min-height:260px;display:grid;place-items:center;text-align:center;padding:25px}.dropzone b{font:600 17px/1.2 var(--serif)}.dropzone p{font-size:10px;line-height:1.45;color:#645d56;max-width:32ch;margin:7px auto}.mapping{border:1px solid #bfb4a8;background:#fffaf4}.mapping-head{padding:11px 12px;border-bottom:1px solid #d5ccc1;display:flex;align-items:center}.mapping-head b{font:600 13px/1 var(--serif)}.mapping-head span{margin-left:auto;font:500 7px/1 var(--mono);color:var(--sage)}.map-row{display:grid;grid-template-columns:1fr 26px 1fr;gap:6px;align-items:center;padding:7px 10px;border-bottom:1px solid #ded6cc;font-size:8px}.map-row span:nth-child(2){text-align:center;color:#8e422f}.map-row .warn{color:#a04336}.import-errors{margin-top:8px;border-left:3px solid #a04336;padding:8px 10px;background:#f3e4df;font-size:8px;line-height:1.45}.import-errors b{display:block;margin-bottom:3px}
+    .axis-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px}.axis{border:1px solid var(--rule);background:rgba(255,250,241,.4);min-height:230px;padding:13px}.axis .axis-no{font:500 8px/1 var(--mono);color:var(--clay-dark)}.axis h3{font-size:15px;margin:8px 0 8px}.axis ul{list-style:none;padding:0;margin:0}.axis li{border-top:1px solid var(--rule);padding:7px 0;font-size:10px;color:var(--muted)}.axis li.on{color:var(--ink);font-weight:600}.axis small{display:block;font-size:8px;line-height:1.4;color:var(--muted);margin-top:10px}.axis.immutable{border-top:4px double var(--gold)}
+    .line-unfold{border-top:1px solid #bdb2a5;margin-top:8px}.unfold-head{display:grid;grid-template-columns:44px 1.4fr .8fr .8fr .9fr;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #d4ccc1;font-size:8px}.unfold-body{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:0;border-bottom:1px solid #bdb2a5;background:#fffaf4}.unfold-col{padding:11px 12px;border-right:1px solid #d4ccc1}.unfold-col:last-child{border:0}.unfold-col h5{font:500 8px/1 var(--mono);text-transform:uppercase;color:#645d56;margin:0 0 8px}.fact{display:grid;grid-template-columns:75px 1fr;gap:7px;border-top:1px solid #ddd5ca;padding:6px 0;font-size:7.5px}.fact span{color:#645d56}.readiness-item{display:flex;gap:6px;align-items:start;border-top:1px solid #ddd5ca;padding:6px 0;font-size:7.5px}.readiness-item i{font-style:normal;color:var(--sage)}.readiness-item.missing i,.readiness-item.missing b{color:#a04336}.history{border-left:2px solid #c6b8a8;padding-left:9px}.history div{position:relative;padding:0 0 9px;font-size:7.5px;line-height:1.35}.history div::before{content:'';position:absolute;left:-13px;top:2px;width:6px;height:6px;background:#8e422f;border-radius:50%}
+    .client-split{display:grid;grid-template-columns:1fr 1fr;gap:14px}.client-view{border:1px solid var(--rule);background:#fffaf4;min-height:325px;padding:15px}.client-view.studio{border-top:4px solid var(--clay)}.client-view.client{border-top:4px solid var(--sage)}.client-head{display:flex;align-items:baseline;border-bottom:1px solid var(--rule);padding-bottom:9px;margin-bottom:10px}.client-head h3{margin:0}.client-head span{margin-left:auto;font:500 8px/1 var(--mono);text-transform:uppercase;color:var(--muted)}.review-card{display:grid;grid-template-columns:80px 1fr;gap:10px;border-bottom:1px solid var(--rule);padding:9px 0}.review-art{height:65px;background:#e8ddcf;display:grid;place-items:center;font:500 8px/1 var(--mono);color:#6d4e2f}.review-card h4{font:600 12px/1.1 var(--serif);margin:0 0 4px}.review-card p{font-size:8px;line-height:1.4;color:var(--muted);margin:0}.review-actions{display:flex;gap:5px;margin-top:7px}.review-actions span{border:1px solid var(--rule);padding:5px 6px;font:500 7px/1 var(--mono);text-transform:uppercase}.review-actions span.on{background:var(--sage);color:#fff;border-color:var(--sage)}
+    .change-path{display:grid;grid-template-columns:1fr 42px 1fr;gap:0;align-items:stretch}.change-path.three{grid-template-columns:1fr 34px 1fr 34px 1fr}.change-card{border:1px solid var(--rule);padding:15px;background:rgba(255,250,241,.38)}.change-card h3{font-size:18px}.change-card p{font-size:11px;line-height:1.45;color:var(--muted)}.change-card ul{padding-left:17px;margin:9px 0 0}.change-card li{font-size:10.5px;line-height:1.55}.change-path.three .change-card{padding:13px}.change-path.three .change-card h3{font-size:16px}.change-path.three .change-card p{font-size:10px}.change-path.three .change-card li{font-size:9.5px;line-height:1.45}.dark .change-card{background:#231f1b;border-color:#554d44}.dark .change-card h3{color:var(--paper)}.dark .change-card p,.dark .change-card li{color:#c5baae}.change-arrow{display:grid;place-items:center;color:var(--clay-dark);font-size:22px}.lock-line{border-top:4px double var(--gold);margin-top:13px;padding-top:10px;font:500 9px/1.4 var(--mono);color:#74591f;text-transform:uppercase}
+
+    /* Mobile, delivery, rulings, sources */
+    .mobile-set{display:grid;grid-template-columns:repeat(3,250px);gap:18px;justify-content:center}.phone{height:476px;border:1px solid #797066;background:#f9f4ec;position:relative;overflow:hidden}.phone-top{height:33px;border-bottom:1px solid #d2c9bd;display:flex;align-items:center;padding:0 9px;font:500 7px/1 var(--mono);text-transform:uppercase}.phone-top span:last-child{margin-left:auto}.phone-doc{padding:13px 13px 52px}.phone-doc h4{font:500 17px/1 var(--serif);margin:8px 0 3px}.phone-doc p{font-size:7.5px;color:#645d56}.mobile-sections{margin-top:12px}.mobile-section{border-top:1px solid #d4ccc1;padding:8px 0;font:500 9px/1 var(--serif)}.mobile-section.open{border-top:2px solid #28241f}.phone-sheet{position:absolute;left:0;right:0;bottom:0;background:#fffaf2;border-top:1px solid #8c8175;padding:13px}.phone-sheet h5{font:500 15px/1 var(--serif);margin:0 0 8px}.phone-action{display:grid;grid-template-columns:25px 1fr;gap:7px;border-top:1px solid #d7cec2;padding:8px 0;font-size:8px}.mobile-actionbar{position:absolute;left:0;right:0;bottom:0;height:42px;background:#292622;color:#fff;display:flex;align-items:center;justify-content:space-around;font:500 7px/1 var(--mono);text-transform:uppercase}.mobile-caption{text-align:center;font:500 9px/1.3 var(--mono);text-transform:uppercase;color:var(--muted);margin-top:8px}
+    .screen-map{width:100%;border-collapse:collapse;font-size:10px;line-height:1.35}.screen-map th{text-align:left;font:500 8px/1.2 var(--mono);letter-spacing:.08em;text-transform:uppercase;border-bottom:2px solid var(--ink);padding:8px}.screen-map td{border-bottom:1px solid var(--rule);padding:8px;color:var(--muted);vertical-align:top}.screen-map td:first-child{color:var(--ink);font-weight:600}.screen-map code{font:500 8px/1.35 var(--mono);color:var(--blue)}
+    .phase-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.phase-card{border:1px solid var(--rule);padding:16px;background:rgba(255,250,241,.4)}.phase-card .phase-no{font:500 8px/1 var(--mono);color:var(--clay-dark);text-transform:uppercase}.phase-card h3{font-size:19px;margin-top:9px}.phase-card ul{padding-left:17px;margin:8px 0}.phase-card li{font-size:10.5px;line-height:1.55}.phase-card .gate{border-top:1px solid var(--rule);padding-top:9px;font:500 8px/1.4 var(--mono);color:var(--sage);text-transform:uppercase}
+    .rulings{display:grid;grid-template-columns:1fr 1fr;gap:0;border-top:1px solid var(--rule-dark);border-left:1px solid var(--rule-dark)}.ruling{border-right:1px solid var(--rule-dark);border-bottom:1px solid var(--rule-dark);padding:14px 15px;display:grid;grid-template-columns:34px 1fr;gap:10px}.ruling .yes{width:32px;height:23px;border:1px solid #d88a72;color:#d88a72;display:grid;place-items:center;font:500 7.5px/1 var(--mono);letter-spacing:.05em}.ruling b{display:block;font-size:12px;color:var(--paper)}.ruling span{display:block;font-size:9.5px;line-height:1.4;color:#b9aea2;margin-top:4px}
+    .decision-label{display:flex;align-items:center;gap:10px;margin:3px 0 8px;font:500 8px/1.3 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:#d88a72}.decision-label::after{content:'';height:1px;flex:1;background:var(--rule-dark)}
+    .prototype-defaults{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border-top:1px solid var(--rule-dark);border-left:1px solid var(--rule-dark)}.prototype-default{border-right:1px solid var(--rule-dark);border-bottom:1px solid var(--rule-dark);padding:11px 12px;min-width:0}.prototype-default em{display:block;font:500 7px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:#d88a72;font-style:normal}.prototype-default b{display:block;font-size:10px;line-height:1.3;color:var(--paper);margin:7px 0 4px}.prototype-default span{display:block;font-size:8.5px;line-height:1.38;color:#b9aea2}.prototype-default small{display:block;margin-top:8px;font:500 7px/1 var(--mono);text-transform:uppercase;color:#d8a08e}
+    .sources{display:grid;grid-template-columns:1fr 1fr;gap:0 22px;border-top:1px solid var(--rule)}.source{display:grid;grid-template-columns:27px 1fr;gap:9px;padding:9px 0;border-bottom:1px solid var(--rule)}.source .sn{font:500 8px/1 var(--mono);color:var(--clay-dark)}.source b{display:block;font-size:10.5px}.source p{font-size:9px;line-height:1.4;color:var(--muted);margin:3px 0 0}
+
+    /* Fixed presentation controls */
+    .deck-tools{position:fixed;right:18px;bottom:17px;z-index:100;display:flex;align-items:center;background:var(--desk);color:var(--paper);border:1px solid #665e54}
+    .deck-tools button{appearance:none;width:38px;height:36px;border:0;border-right:1px solid #665e54;background:transparent;color:inherit;cursor:pointer}.deck-tools button:disabled{opacity:.35;cursor:default}.deck-tools button:last-child{border-right:0}.deck-counter{font:500 9px/1 var(--mono);padding:0 10px;white-space:nowrap;color:#c5baae}
+    .progress{position:fixed;right:0;top:0;bottom:0;width:3px;background:#3b3731;z-index:99}.progress i{display:block;width:100%;height:0;background:#d88a72;transition:height .25s ease}
+    .slide-title-live{position:fixed;left:17px;bottom:17px;z-index:100;background:var(--desk);color:#c5baae;border:1px solid #665e54;padding:9px 11px;font:500 8px/1 var(--mono);letter-spacing:.07em;text-transform:uppercase;max-width:35vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+    @media (max-width:1100px){
+      .slide-inner{grid-template-columns:48px minmax(0,1fr);gap:22px;padding-left:28px;padding-right:28px}
+      .folio{padding-right:10px}.cover{grid-template-columns:1fr 390px}.proof-stack{height:440px}
+      .constraint-list{grid-template-columns:repeat(3,1fr)}
+      .anatomy-map{grid-template-columns:180px 1fr}.anatomy-side:last-child{grid-column:1/-1;grid-template-columns:repeat(3,1fr)}
+      .mobile-set{grid-template-columns:repeat(3,220px)}.phone{height:440px}
+      .app-proof{min-width:990px}.mock-label::after{content:'Swipe proof ↔';color:var(--clay-dark);margin-left:auto}.mock-label span:last-child{display:none}
+    }
+    @media (max-height:800px) and (min-width:761px){
+      .slide-inner{padding-top:22px;padding-bottom:38px}
+      .kicker{margin-bottom:7px}
+      h1{font-size:70px;margin-bottom:15px}
+      h2{font-size:42px;line-height:.98;margin-bottom:10px}
+      .lede{font-size:15px;line-height:1.4;margin-bottom:13px}
+      .callout{font-size:11px;line-height:1.42;margin-top:8px;padding:8px 12px}
+      .source-note{font-size:8px;padding-top:7px}
+      .app-proof{height:340px}
+      #s20 .app-proof{height:290px}
+      .evidence-proof img{height:340px}
+      .proof-stack{height:390px}
+      #s14 .product-image{height:48px}
+      #s16 .clipper-scene{height:340px;overflow:hidden}
+      #s16 .vendor-page{padding:28px 38px}
+      #s16 .vendor-art{top:58px;height:185px}
+      #s16 .vendor-copy{bottom:14px;left:38px;right:38px}
+      #s16 .vendor-copy h3{font-size:18px}
+      #s16 .clip-panel{padding:9px 12px}
+      #s16 .clip-head{padding-bottom:6px}
+      #s16 .clip-preview{grid-template-columns:48px 1fr;padding:6px 0}
+      #s16 .clip-thumb{height:42px}
+      #s16 .clip-field{margin-bottom:4px}
+      #s16 .clip-field label{margin-bottom:2px}
+      #s16 .clip-select{padding:5px 7px}
+      #s16 .clip-confirm{margin-top:5px;padding-top:5px}
+      .doc-sheet{top:38px;max-height:285px;padding:12px 14px}
+      .doc-sheet.wide{width:650px}
+      .sheet-head{padding-bottom:6px;margin-bottom:5px}
+      .sheet-head h4{font-size:17px}
+      .action-row{padding:5px 0}
+      .action-icon{width:24px;height:24px}
+      .field-label{margin:6px 0 3px}
+      .fake-input{padding:6px 8px}
+      .choice{min-height:46px;padding:6px}
+      .choice.on{padding:5px}
+      .sheet-actions{margin-top:7px}
+      .axis{min-height:190px;padding:10px}
+      .axis li{padding:5px 0}
+      .phone{height:335px}
+      .phone-doc{padding-top:8px}
+      .mobile-set{grid-template-columns:repeat(3,210px);gap:13px}
+      .phase-card{padding:12px}
+      .phase-card li{font-size:9px;line-height:1.4}
+      .ruling{padding:10px 12px}
+      .prototype-default{padding:8px 9px}
+      .prototype-default b{font-size:9px;margin:5px 0 3px}
+      .prototype-default span{font-size:7.5px}
+      .prototype-default small{margin-top:5px}
+      .change-path.three .change-card{padding:9px}
+      .change-path.three .change-card p{font-size:8.5px;margin-bottom:6px}
+      .change-path.three .change-card li{font-size:8px;line-height:1.35}
+      .change-path.three .lock-line{font-size:7px;margin-top:7px;padding-top:6px}
+      .source{padding:6px 0}
+    }
+    @media (max-width:760px){
+      html,body{max-width:100%;overflow-x:hidden}body{overflow-y:auto}.deck{height:auto;max-width:100%;overflow:visible;scroll-snap-type:none}.slide{height:auto;min-height:100dvh;max-width:100%;overflow:visible}.slide-inner{width:100%;max-width:100%;height:auto;min-height:100dvh;grid-template-columns:minmax(0,1fr);padding:42px 20px 110px}.folio{display:none}.stage{width:calc(100vw - 40px);max-width:calc(100vw - 40px);min-width:0;justify-content:flex-start;overflow:hidden}
+      h1{font-size:54px}h1,h2,h2.wide,.kicker,.lede{width:calc(100vw - 40px);max-width:calc(100vw - 40px)}.cover{grid-template-columns:minmax(0,1fr)}.proof-stack{height:360px}.cover-meta{margin-top:15px}
+      .g2,.g3,.g4,.quote-grid,.do-not,.client-split,.phase-row{grid-template-columns:1fr}.constraint-list{grid-template-columns:1fr 1fr}.constraint{min-height:105px}.thread{grid-template-columns:1fr}.thread span{margin-bottom:8px}.thread .t-selection{padding-left:0}.thread .t-selection::before{left:0}
+      .proof-thread::after{right:18px;font-size:7px}
+      .evidence-proof img{height:360px}.pin-note{position:static;width:auto;margin-top:6px}.pin-note::after{display:none}.evidence-proof{display:grid}
+      .anatomy-map{grid-template-columns:1fr}.anatomy-side:last-child{grid-column:auto;grid-template-columns:1fr}.identity-chain,.axis-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.source-tabs{width:100%;max-width:100%;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.source-tab{min-width:0}.source-tab:nth-child(2){border-right:0}.source-tab:nth-child(-n+2){border-bottom:1px solid var(--rule)}.journey-panel{width:100%;max-width:100%;grid-template-columns:minmax(0,1fr)}.journey-step{min-width:0}.journey-arrow,.change-arrow{transform:rotate(90deg);min-height:34px}.change-path,.change-path.three{grid-template-columns:minmax(0,1fr)}
+      .clipper-scene{width:100%;max-width:100%;height:auto;grid-template-columns:minmax(0,1fr);grid-template-areas:'panel' 'vendor';overflow:visible}.clip-panel{border-left:0;border-bottom:1px solid #a99e92}.vendor-page{height:360px;min-height:360px;padding:28px}.vendor-art{top:58px;height:205px}.vendor-copy{left:28px;right:28px;bottom:16px}.import-grid{width:100%;max-width:100%;grid-template-columns:minmax(0,1fr)}.import-grid>*{min-width:0}.mapping-head b{min-width:0;overflow-wrap:anywhere}.sheet-actions{max-width:100%;flex-wrap:wrap}.mobile-set{width:100%;max-width:100%;grid-template-columns:250px;justify-content:start;overflow-x:auto}.screen-map{min-width:760px}.table-scroll{width:100%;max-width:100%;overflow-x:auto}.table-scroll::before{content:'Swipe table ↔';display:block;margin-bottom:7px;font:500 9px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--clay-dark)}.rulings,.sources,.prototype-defaults{width:100%;max-width:100%;grid-template-columns:minmax(0,1fr)}
+      .slide-title-live{display:none}.deck-tools{right:10px;bottom:10px}.deck-tools #fullscreen{display:none}.progress{display:none}
+    }
+    @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.progress i{transition:none}}
+  </style>
+</head>
+<body>
+  <svg aria-hidden="true" width="0" height="0" style="position:absolute">
+    <symbol id="arrow" viewBox="0 0 24 24"><path d="M4 12h16M14 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.7"/></symbol>
+  </svg>
+
+  <div class="progress" aria-hidden="true"><i id="progressBar"></i></div>
+  <div class="slide-title-live" id="slideTitle">Keep the project in hand</div>
+  <div class="deck-tools" aria-label="Presentation controls">
+    <button id="prev" type="button" aria-label="Previous slide">←</button>
+    <span class="deck-counter" id="counter">01 / 30</span>
+    <button id="next" type="button" aria-label="Next slide">→</button>
+    <button id="fullscreen" type="button" aria-label="Enter full screen">↗</button>
+  </div>
+  <p class="sr-only" id="slideAnnouncer" aria-live="polite"></p>
+
+  <main class="deck" id="deck">
+    <!-- 01 -->
+    <section class="slide dark" id="s01" data-title="Keep the project in hand">
+      <div class="slide-inner">
+        <aside class="folio"><span class="folio-act">Leadership proof set</span><span class="folio-num">01</span></aside>
+        <div class="stage cover">
+          <div>
+            <p class="kicker">Patina Designer · detailed UI/UX proposal</p>
+            <h1>Keep the project <em>in hand.</em></h1>
+            <p class="lede">Boards, Library finds, Chrome captures, and imported schedules become one continuous act inside the existing Document.</p>
+            <div class="cover-meta"><span>30 annotated proofs</span><span>Desktop + mobile</span><span>Leadership decisions included</span><span>09 Aug 2026</span></div>
+          </div>
+          <div class="proof-stack" aria-hidden="true">
+            <div class="proof-page back"></div><div class="proof-page mid"></div>
+            <div class="proof-page"><div class="wordmark">Patina · The Document</div><h3>Ellsworth Residence</h3><div class="hair"></div><div class="project-row"><b>Working boards</b><span>+ New board</span></div><div class="project-row"><b>Project · FF&amp;E</b><span>+ Add to project</span></div><div class="project-row"><b>Living Room · 8 selections</b><span>2 need facts</span></div></div>
+            <div class="proof-thread"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 02 -->
+    <section class="slide" id="s02" data-title="The feedback is a continuity problem">
+      <div class="slide-inner">
+        <aside class="folio"><span class="folio-act">The mandate</span><span class="folio-num">02</span></aside>
+        <div class="stage">
+          <p class="kicker">What designers are telling us</p>
+          <h2 class="wide">The feedback is not “we need one more button.” It is “I lose the project when I try to build it.”</h2>
+          <div class="quote-grid">
+            <div class="quote">“When I am viewing the project, it is not clear <em>how to add a new item</em> or <em>how to create another board.</em>”</div>
+            <div class="symptoms">
+              <div class="symptom"><b>01</b><span>Boards, the Library, the clipper, and FF&amp;E feel like separate destinations.</span></div>
+              <div class="symptom"><b>02</b><span>The empty project names absence, but does not teach the first constructive act.</span></div>
+              <div class="symptom"><b>03</b><span>Returning designers see status, not the most useful next piece of work.</span></div>
+              <div class="symptom"><b>04</b><span>A louder global “create” would still leave routing, identity, and authorization ambiguous.</span></div>
+            </div>
+          </div>
+          <div class="callout"><strong>Design mandate:</strong> preserve Patina’s one-document-at-a-time paradigm while making project creation visible, reversible, and continuous across every source.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 03 -->
+    <section class="slide field" id="s03" data-title="Start from the Document that already exists">
+      <div class="slide-inner">
+        <aside class="folio"><span class="folio-act">Live grammar</span><span class="folio-num">03</span></aside>
+        <div class="stage">
+          <p class="kicker">Repository-grounded evidence · current Designer Portal</p>
+          <h2 class="wide">Start from the Document that already exists.</h2>
+          <div class="evidence-proof">
+            <img src="../the-document/screenshots/track-1/document-top.png" alt="Current Patina Document showing the engagement spine, main paper, right margin, and Studio Drawer.">
+            <div class="pin-note pin-a"><b>01</b> The spine holds the engagement’s stage—not feature navigation.</div>
+            <div class="pin-note pin-b"><b>02</b> Project work belongs in the paper’s active section.</div>
+            <div class="pin-note pin-c"><b>03</b> The right margin carries quiet decisions and attention.</div>
+            <div class="pin-note pin-d"><b>04</b> The Studio Drawer opens rooms and ledgers while the Document stays mounted.</div>
+          </div>
+          <p class="source-note">Live implementation: <code>DocumentPage</code>, <code>ProjectMoodBoards</code>, <code>FFESectionBody</code>, <code>StudioDrawer</code>, <code>DocSheet</code>. Existing decision contract: one document in hand; paper fills the viewport; no shadows; overlays must be sheet-weight.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 04 -->
+    <section class="slide dark" id="s04" data-title="Do not add a project dashboard">
+      <div class="slide-inner">
+        <aside class="folio"><span class="folio-act">Design thesis</span><span class="folio-num">04</span></aside>
+        <div class="stage">
+          <p class="kicker">The ruling behind every screen</p>
+          <h2 class="wide">Do not add a project dashboard. Make the Project section more capable.</h2>
+          <p class="lede">The Document is the engagement. Boards are working rooms. The Library is a Studio room. FF&amp;E lines are the operational record. Sheets handle focused construction without creating another place to go.</p>
+          <div class="grid g4">
+            <div class="card clay"><span class="label">In hand</span><h3>Document</h3><p>Shows what is settled, what is being built, and the next useful act.</p></div>
+            <div class="card sage"><span class="label">Step through</span><h3>Board room</h3><p>Composes a direction from project selections and visual references.</p></div>
+            <div class="card blue"><span class="label">Lay over</span><h3>Paper sheet</h3><p>Creates, imports, routes, or edits while preserving project context.</p></div>
+            <div class="card gold"><span class="label">Open beneath</span><h3>Studio Drawer</h3><p>Reaches Library and operational ledgers without becoming project IA.</p></div>
+          </div>
+          <div class="callout"><strong>One sentence:</strong> a designer should be able to add from wherever the idea appears and land back on the same project line without re-entering context or facts.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 05 -->
+    <section class="slide" id="s05" data-title="The proposed Project anatomy">
+      <div class="slide-inner">
+        <aside class="folio"><span class="folio-act">Project anatomy</span><span class="folio-num">05</span></aside>
+        <div class="stage">
+          <p class="kicker">Where the new capability lives</p>
+          <h2 class="wide">The active Project section becomes a work folio, not a report.</h2>
+          <div class="anatomy-map">
+            <div class="anatomy-side">
+              <div class="anatomy-note"><span class="label">New · quiet continuation</span><b>Work to continue</b><p>One line names the most useful unfinished act: resume board, route captures, finish specifications.</p></div>
+              <div class="anatomy-note"><span class="label">Expanded · existing</span><b>Working boards</b><p>Visible even when empty; “New board” lives at the heading and in the first-run proof.</p></div>
+              <div class="anatomy-note"><span class="label">Persistent act</span><b>Add to project</b><p>One verb at the Project · FF&amp;E heading opens all valid sources.</p></div>
+            </div>
+            <div class="mini-document">
+              <div class="doc-mark">Patina · The Document</div><div class="doc-title">Ellsworth Residence</div><div class="doc-meta">A full-service furnishing engagement · $184,000 working budget</div>
+              <div class="section">Brief <small>settled</small></div><div class="section">Direction <small>approved</small></div><div class="section project"><span>Project</span><div class="project-block"><b>Continue Living Room · Concept 02 →</b><p>Two clipped pieces are ready to place. Three selections still need finish and lead time.</p></div></div><div class="section">Install <small>later</small></div>
+            </div>
+            <div class="anatomy-side">
+              <div class="anatomy-note"><span class="label">Existing pattern</span><b>Room headings</b><p>Room owns allocation and default routing. “Add a line” remains available for a named need.</p></div>
+              <div class="anatomy-note"><span class="label">Expanded unfold</span><b>Selection line</b><p>Shows provenance, facts, placements, readiness, decision history, and the authorization boundary.</p></div>
+              <div class="anatomy-note"><span class="label">Existing downstream</span><b>Release / bill / order</b><p>Formal actions remain schedule acts; the working workflow feeds them instead of bypassing them.</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 06 -->
+    <section class="slide field" id="s06" data-title="Five identities keep continuity honest">
+      <div class="slide-inner">
+        <aside class="folio"><span class="folio-act">Information model</span><span class="folio-num">06</span></aside>
+        <div class="stage">
+          <p class="kicker">Continuity requires explicit identity</p>
+          <h2 class="wide">Five identities keep one idea from becoming five conflicting records.</h2>
+          <div class="identity-chain">
+            <div class="identity"><span class="id">01 · reusable</span><b>Library product</b><p>Maker, source URL, media, trade facts. Reusable across engagements.</p><code>product_id</code></div>
+            <div class="identity"><span class="id">02 · project truth</span><b>Project selection</b><p>Room, quantity, configuration, client price, working facts and project decisions.</p><code>project_ffe_item_id</code></div>
+            <div class="identity"><span class="id">03 · visual</span><b>Board placement</b><p>Canvas position, crop, scale, board, section. Many placements may reference one selection.</p><code>placement_id → project_ffe_item_id</code></div>
+            <div class="identity"><span class="id">04 · review</span><b>Edition item</b><p>Exactly what the client saw and judged in one immutable, nonbinding review edition.</p><code>review_item_id → frozen view</code></div>
+            <div class="identity"><span class="id">05 · authority</span><b>Authorization line</b><p>Signed quantity, configuration, and money snapshot. Later change voids or supersedes.</p><code>authorization_item_id → source line</code></div>
+          </div>
+          <div class="do-not"><div><b>Same URL does not always mean duplicate.</b><p>The same chair in Living and Library, with different finishes or quantities, can be two legitimate project needs.</p></div><div><b>A board pin cannot be the procurement record.</b><p>One selection may appear on several boards; deleting a placement must never delete authorized work.</p></div></div>
+          <div class="callout"><strong>Implementation consequence:</strong> mounting the current board builder is not enough. A <code>capture_id</code> is provenance, an inbox arrival, or a board reference—it is not interchangeable with <code>product_id</code>. Product placements need an explicit <code>project_ffe_item_id</code> link plus migration/RPC work.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 07 -->
+    <section class="slide" id="s07" data-title="The project always answers what next">
+      <div class="slide-inner">
+        <aside class="folio"><span class="folio-act">Return visit</span><span class="folio-num">07</span></aside>
+        <div class="stage">
+          <p class="kicker">Mockup · Document in hand</p>
+          <h2 class="wide">On return, the project answers “what can I do next?” before it reports status.</h2>
+          <div class="mock-label"><span>Proposed Project section · desktop</span><span>Redline marks new or expanded affordances</span></div>
+          <div class="proof-scroll"><div class="app-proof">
+            <div class="topbar"><span class="strata"><i></i><i></i><i></i></span><span class="brandmark">Patina</span><span class="grow"></span><span class="topquiet">Saved · Leah and Priya in this document</span><span class="avatar">LK</span></div>
+            <div class="doc-stage"><aside class="doc-spine"><div class="putdown">← Put down</div><div class="spine-step">Brief</div><div class="spine-step">Discovery</div><div class="spine-step">Direction</div><div class="spine-step">Proposal</div><div class="spine-step on">Project</div><div class="spine-step">Install</div><div class="spine-step">Care</div></aside>
+              <main class="doc-paper"><div class="doc-mark">Patina · Ellsworth Residence</div><div class="doc-title">Ellsworth Residence</div><div class="doc-meta">Morgan Ellsworth · Full-service furnishing · Started 02 Jun 2026</div><div class="settled">Brief <small>settled</small></div><div class="settled">Direction <small>approved · 18 Jun</small></div><div class="account-band"><div><span>Working budget</span><b>$184,000</b></div><div><span>Authorized</span><b>$62,400</b></div><div><span>Remaining</span><b>$121,600</b></div></div>
+                <div class="doc-section-head"><h4>Project</h4><span class="count">18 selections · 3 rooms</span></div><div class="work-note"><b>Continue Living Room · Concept 02</b><span>2 captures ready to place · 3 missing facts</span><span>Open board →</span></div>
+                <div class="board-folio"><div class="folio-head"><b>Working boards</b><span>3 live · 1 signed direction</span><span class="new">+ New board</span></div><div class="board-row"><div class="board-card"><div class="board-swatch"><i></i><i></i><i></i></div><b>Living · Concept 02</b><small>8 pieces · open room</small></div><div class="board-card"><div class="board-swatch"><i></i><i></i><i></i></div><b>Dining · Materials</b><small>5 pieces · edited Tue</small></div><div class="board-card blank">+<br>New board</div></div></div>
+                <div class="doc-section-head"><h4>Project · FF&amp;E</h4><span class="count">7 underway · 3 need facts</span><span class="head-actions"><span class="doc-action">Spec book →</span><span class="doc-action primary">+ Add to project</span></span></div><div class="room-head"><b>Living Room</b><span>$54,200 allocated</span><span class="addline">+ Add a line</span></div><div class="ffe-line"><div class="line-art">CH</div><div><b>Halsted lounge chair</b><small>Middlewest · qty 2 · flax</small></div><div class="line-origin">Clipper</div><div>Shortlisted</div><div class="line-gap">2 facts missing</div></div>
+              </main><aside class="doc-margin"><div class="margin-label">In the margin</div><div class="margin-item"><b>3 review decisions</b><time>From published client review</time></div><div class="margin-item"><b>Lead-time risk</b><time>Console · 18 weeks</time></div><div class="margin-item"><b>2 captures to place</b><time>Saved from Chrome</time></div></aside><div class="studio-drawer"><span>Library</span><span>Orders</span><span>Accounts</span><span>People</span><span>Hours</span><span class="drawer-close">Studio drawer⌃</span></div></div>
+            <div class="redline" style="left:100px;top:245px;width:550px;height:31px"></div><div class="redtag" style="left:590px;top:228px">01 · next work</div><div class="redline" style="left:100px;top:282px;width:550px;height:92px"></div><div class="redtag" style="left:108px;top:351px">02 · working boards</div><div class="redline" style="left:830px;top:392px;width:150px;height:30px"></div><div class="redtag" style="left:862px;top:423px">03 · add</div>
+          </div></div>
+          <div class="callout"><strong>Hierarchy:</strong> “Continue…” is contextual and singular. “New board” is local to boards. “Add to project” is the persistent multi-source entrance. Room-level “Add a line” stays the fastest way to name a need.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 08 -->
+    <section class="slide" id="s08" data-title="Several doors, one project sentence">
+      <div class="slide-inner">
+        <aside class="folio"><span class="folio-act">Four entrances</span><span class="folio-num">08</span></aside>
+        <div class="stage">
+          <p class="kicker">Interactive journey map</p>
+          <h2 class="wide">Several doors in. One project sentence out.</h2>
+          <div class="thread" aria-hidden="true"><span class="t-board">Board</span><span class="t-library">Library</span><span class="t-clip">Clipper / import</span><span class="t-selection">Project selection</span></div>
+          <div class="source-tabs" role="tablist" aria-label="Choose a sourcing entrance">
+            <button class="source-tab" id="source-board" role="tab" aria-selected="true" aria-controls="journey" tabindex="0" data-source="board"><b>Start on a board</b><span>Compose loosely, then promote a product pin.</span></button>
+            <button class="source-tab" id="source-library" role="tab" aria-selected="false" aria-controls="journey" tabindex="-1" data-source="library"><b>Browse the Library</b><span>Place known products without losing the project.</span></button>
+            <button class="source-tab" id="source-clipper" role="tab" aria-selected="false" aria-controls="journey" tabindex="-1" data-source="clipper"><b>Capture in Chrome</b><span>Route from the maker page or leave unsorted.</span></button>
+            <button class="source-tab" id="source-import" role="tab" aria-selected="false" aria-controls="journey" tabindex="-1" data-source="import"><b>Import / name a need</b><span>Honor spreadsheets and incomplete placeholders.</span></button>
+          </div>
+          <div class="journey-panel" id="journey" role="tabpanel" aria-labelledby="source-board">
+            <div class="journey-step"><span class="stepno">Capture</span><h3 id="journeyStart">Pin a product or reference</h3><p id="journeyStartBody">A visual reference can remain board-only. A real product becomes a project candidate when promoted.</p></div><div class="journey-arrow">→</div>
+            <div class="journey-step"><span class="stepno">Route</span><h3 id="journeyRoute">Room + board are already known</h3><p id="journeyRouteBody">The canvas supplies context; no duplicate destination form is needed.</p></div><div class="journey-arrow">→</div>
+            <div class="journey-step"><span class="stepno">Continue</span><h3 id="journeyEnd">One project selection</h3><p id="journeyEndBody">It appears in the working FF&amp;E folio with board provenance and missing facts.</p></div>
+          </div>
+          <div class="callout"><strong>Default behavior:</strong> capture succeeds even when routing is incomplete. Project is required; room and board may be deferred to the project’s Unsorted work line.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 09 -->
+    <section class="slide field" id="s09" data-title="Add to project is a sheet, not a detour">
+      <div class="slide-inner"><aside class="folio"><span class="folio-act">Entrance</span><span class="folio-num">09</span></aside><div class="stage">
+        <p class="kicker">Mockup · multi-source DocSheet</p><h2 class="wide">“Add to project” lays the valid entrances over the work already in hand.</h2>
+        <div class="mock-label"><span>Project · FF&amp;E → Add to project</span><span>Reuse the existing DocSheet overlay contract</span></div>
+        <div class="proof-scroll"><div class="app-proof"><div class="topbar"><span class="strata"><i></i><i></i><i></i></span><span class="brandmark">Patina</span><span class="grow"></span><span class="topquiet">Ellsworth Residence</span></div><div class="doc-stage"><aside class="doc-spine"><div class="putdown">← Put down</div><div class="spine-step">Brief</div><div class="spine-step">Direction</div><div class="spine-step on">Project</div><div class="spine-step">Install</div></aside><main class="doc-paper"><div class="doc-mark">Patina · The Document</div><div class="doc-title">Ellsworth Residence</div><div class="settled">Proposal <small>signed · 25 Jun</small></div><div class="doc-section-head"><h4>Project · FF&amp;E</h4><span class="count">18 selections</span><span class="head-actions"><span class="doc-action primary">+ Add to project</span></span></div><div class="room-head"><b>Living Room</b><span>$54,200</span><span class="addline">+ Add a line</span></div></main><aside class="doc-margin"><div class="margin-label">In the margin</div><div class="margin-item"><b>2 captures to place</b><time>Saved today</time></div></aside><div class="studio-drawer"><span>Library</span><span>Orders</span><span>Accounts</span><span>People</span><span class="drawer-close">Studio drawer⌃</span></div><div class="veil"></div><section class="doc-sheet" aria-label="Static mockup of the Add to project sheet"><div class="sheet-kicker">Ellsworth Residence · Project</div><div class="sheet-head"><div><h4>Add to project</h4><div class="sheet-context">Destination remains visible until the add is complete.</div></div><span class="sheet-x">ESC · PUT BACK</span></div><div class="action-list"><div class="action-row"><span class="action-icon">□</span><div><b>Start a board</b><small>Concept, selections, materials, or blank.</small></div><em>→</em></div><div class="action-row"><span class="action-icon">L</span><div><b>Browse the Library</b><small>Select one or many known products.</small></div><em>→</em></div><div class="action-row"><span class="action-icon">↗</span><div><b>Paste a product link</b><small>Capture details without leaving this project.</small></div><em>→</em></div><div class="action-row"><span class="action-icon">+</span><div><b>Name a need</b><small>Add a placeholder, allowance, or manual product.</small></div><em>→</em></div><div class="action-row"><span class="action-icon">⇧</span><div><b>Import a schedule</b><small>Map CSV or XLSX columns before creating lines.</small></div><em>→</em></div></div></section></div></div></div>
+        <div class="callout"><strong>Vocabulary:</strong> use verbs designers can predict. “Name a need” explains an incomplete line better than “manual item.” “Start a board” belongs here and beside Working boards.</div>
+      </div></div>
+    </section>
+
+    <!-- 10 -->
+    <section class="slide" id="s10" data-title="The empty project teaches the first move">
+      <div class="slide-inner"><aside class="folio"><span class="folio-act">First run</span><span class="folio-num">10</span></aside><div class="stage">
+        <p class="kicker">Mockup · no boards and no FF&amp;E lines</p><h2 class="wide">The empty project teaches the first move instead of merely naming absence.</h2>
+        <div class="mock-label"><span>Existing “No FF&amp;E lines yet” replaced with constructive choices</span><span>No onboarding modal; the document itself teaches</span></div>
+        <div class="proof-scroll"><div class="app-proof"><div class="topbar"><span class="strata"><i></i><i></i><i></i></span><span class="brandmark">Patina</span><span class="grow"></span><span class="topquiet">Saved</span></div><div class="doc-stage"><aside class="doc-spine"><div class="putdown">← Put down</div><div class="spine-step">Brief</div><div class="spine-step">Direction</div><div class="spine-step on">Project</div><div class="spine-step">Install</div></aside><main class="doc-paper"><div class="doc-mark">Patina · The Document</div><div class="doc-title">Cedar Hill Residence</div><div class="doc-meta">Project opened from signed proposal · Rooms already carried forward</div><div class="doc-section-head"><h4>Project</h4><span class="count">Ready to build</span></div><div class="empty-doc"><div class="empty-block"><h5>Begin with a direction</h5><p>Start a visual board for a room. References can stay loose; products can join FF&amp;E when ready.</p><div class="entry-links"><span>+ Start first board</span><span>Use signed direction</span></div></div><div class="empty-block"><h5>Begin with known pieces</h5><p>Browse the Library, paste a link, import a schedule, or name the first room need.</p><div class="entry-links"><span>Browse Library</span><span>More ways →</span></div></div></div><div class="doc-section-head"><h4>Project · FF&amp;E</h4><span class="count">0 selections</span><span class="head-actions"><span class="doc-action primary">+ Add to project</span></span></div><div class="room-head"><b>Living Room</b><span>$0 allocated</span><span class="addline">+ Add a line</span></div><div class="work-note"><span>No selections yet. Add a known product or name what this room still needs.</span></div><div class="room-head"><b>Dining Room</b><span>$0 allocated</span><span class="addline">+ Add a line</span></div><span class="doc-action" style="display:inline-block;margin-top:9px">+ Add room</span></main><aside class="doc-margin"><div class="margin-label">In the margin</div><div class="margin-item"><b>No open decisions</b><time>The project is ready to build</time></div></aside><div class="studio-drawer"><span>Library</span><span>Orders</span><span>Accounts</span><span>People</span><span class="drawer-close">Studio drawer⌃</span></div></div></div></div>
+        <div class="grid g3" style="margin-top:12px"><div class="card sage"><span class="label">Board-first</span><p>Best when direction is still fluid.</p></div><div class="card blue"><span class="label">Product-first</span><p>Best when selections are already known.</p></div><div class="card clay"><span class="label">Need-first</span><p>Best when scope precedes sourcing.</p></div></div>
+      </div></div>
+    </section>
+
+    <!-- 11 -->
+    <section class="slide field" id="s11" data-title="Create a board without leaving the project">
+      <div class="slide-inner"><aside class="folio"><span class="folio-act">Board setup</span><span class="folio-num">11</span></aside><div class="stage">
+        <p class="kicker">Mockup · New board DocSheet</p><h2 class="wide">Create a board with enough context to be useful—and no separate setup trip.</h2>
+        <div class="mock-label"><span>Working boards → New board</span><span>Room defaults can be created inline</span></div>
+        <div class="proof-scroll"><div class="app-proof"><div class="topbar"><span class="strata"><i></i><i></i><i></i></span><span class="brandmark">Patina</span><span class="grow"></span><span class="topquiet">Ellsworth Residence</span></div><div class="doc-stage"><aside class="doc-spine"><div class="putdown">← Put down</div><div class="spine-step on">Project</div></aside><main class="doc-paper"><div class="doc-title">Ellsworth Residence</div><div class="doc-section-head"><h4>Project</h4></div><div class="board-folio"><div class="folio-head"><b>Working boards</b><span>3 live</span><span class="new">+ New board</span></div></div></main><aside class="doc-margin"></aside><div class="studio-drawer"><span>Library</span><span>Orders</span><span>Accounts</span><span class="drawer-close">Studio drawer⌃</span></div><div class="veil"></div><section class="doc-sheet wide"><div class="sheet-kicker">Ellsworth Residence · Working boards</div><div class="sheet-head"><div><h4>Start a board</h4><div class="sheet-context">A board is a working room inside this project.</div></div><span class="sheet-x">ESC · PUT BACK</span></div><div class="field-label">Board name</div><div class="fake-input">Living Room · Concept 03</div><div class="field-label">Starter intent</div><div class="choice-row"><div class="choice on"><b>Concept</b><span>References and early products.</span></div><div class="choice"><b>Selections</b><span>Specific pieces for review.</span></div><div class="choice"><b>Materials</b><span>Finishes, fixtures, samples.</span></div><div class="choice"><b>Blank</b><span>Open composition.</span></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:9px"><div><div class="field-label">Room or area</div><div class="fake-input">Living Room</div></div><div><div class="field-label">Begin from · Patina / your studio</div><div class="fake-input">Signed direction · Living · Change →</div></div></div><p style="font:500 7.5px/1.4 var(--mono);color:var(--sage);margin:10px 0 0">STUDIO ONLY · Patina starters, your studio templates, and another board remain available.</p><div class="sheet-actions"><span class="fake-button">Put back</span><span class="fake-button solid">Start board →</span></div></section></div></div></div>
+        <div class="callout"><strong>Starter intent is not the template library:</strong> Concept / Selections / Materials / Blank set the board’s purpose. “Begin from” still exposes Patina starters, studio templates, another board, and the signed direction. After create, open the Board Room and preserve the exact return trail.</div>
+      </div></div>
+    </section>
+
+    <!-- 12 -->
+    <section class="slide" id="s12" data-title="The board is a working room of the project">
+      <div class="slide-inner"><aside class="folio"><span class="folio-act">Board room</span><span class="folio-num">12</span></aside><div class="stage">
+        <p class="kicker">Mockup · full-screen working room</p><h2 class="wide">The board is a working room of the project—not a second inventory.</h2>
+        <div class="mock-label"><span>Living Room · Concept 03</span><span>Project context and return path remain explicit</span></div>
+        <div class="proof-scroll"><div class="app-proof"><div class="topbar"><span class="strata"><i></i><i></i><i></i></span><span class="brandmark">Patina</span><span class="grow"></span><span class="topquiet">Saved just now</span><span class="avatar">LK</span></div><div class="board-room"><div class="board-crumb"><b>← Ellsworth Residence</b><span>› Project</span><span>› Working boards</span><span>Living Room · Concept 03 · Active · studio only</span><span><span class="fake-button">Share</span> <span class="fake-button">Export</span> <span class="fake-button">Present</span> <span class="fake-button solid">Done</span></span></div><aside class="board-rail"><div class="rail-tabs"><span class="on">In project</span><span>Library</span><span>Captures 2</span><span>More 4</span></div><div style="font:500 6.5px/1.35 var(--mono);color:#6d665e;margin:-3px 0 8px">UPLOADS · PALETTES · SCANS · FEEDBACK</div><div class="rail-search">Search this project…</div><div class="rail-card"><div class="rail-thumb">RUG</div><div><b>Wool rug · 10 × 14</b><span>Shortlisted · Living</span></div></div><div class="rail-card"><div class="rail-thumb">TAB</div><div><b>Grove side table</b><span>Considering · Living</span></div></div><div class="rail-card"><div class="rail-thumb">+</div><div><b>Console table</b><span>Named need · to source</span></div></div><div class="rail-card"><div class="rail-thumb">↗</div><div><b>Cast-iron floor lamp</b><span>Capture · unsorted</span></div></div></aside><main class="board-canvas"><span class="canvas-title">Warm oak · flax · old brass</span><div class="canvas-item selected" style="left:13%;top:18%;width:29%;height:40%">ASHBY SOFA</div><div class="canvas-item" style="left:48%;top:16%;width:16%;height:27%">CHAIR</div><div class="canvas-item" style="left:69%;top:20%;width:13%;height:25%">LAMP</div><div class="canvas-item" style="left:38%;top:55%;width:39%;height:20%">WOOL RUG</div><div class="canvas-item ref" style="left:81%;top:57%;width:13%;height:21%">REFERENCE</div><div class="canvas-note" style="left:10%;top:70%">Weight at the floor. Quiet grain. Brass only where the hand finds it.</div></main><aside class="board-rail right"><div class="inspector-title">Selected · product pin</div><div class="inspect-image">ASHBY SOFA</div><h4>Ashby sofa</h4><div class="inspect-sub">Thayer &amp; Co · ASH-96</div><div class="inspect-row"><span>Project line</span><b>Living · SO-01</b></div><div class="inspect-row"><span>On boards</span><b>Concept 02 + 03</b></div><div class="inspect-row"><span>Readiness</span><b style="color:#a04336">2 facts missing</b></div><div class="inspect-state"><span>Consider</span><span class="on">Shortlist</span><span>Reject</span></div><span class="fake-button" style="width:100%;margin-top:9px">Open selection →</span></aside></div></div></div>
+        <div class="callout"><strong>Source rail:</strong> “In project” is first because reuse is faster than reacquisition. Library and Captures remain available without leaving the board. Product pins reference project selections; visual references remain board-only until promoted.</div>
+      </div></div>
+    </section>
+
+    <!-- 13 -->
+    <section class="slide dark" id="s13" data-title="References stay loose; products gain continuity">
+      <div class="slide-inner"><aside class="folio"><span class="folio-act">Progressive commitment</span><span class="folio-num">13</span></aside><div class="stage">
+        <p class="kicker">Board behavior contract</p><h2 class="wide">References stay loose. Products gain continuity.</h2><p class="lede">Concept work should not require procurement facts. Commitment happens progressively and explicitly.</p>
+        <div class="grid g3"><div class="card blue"><span class="label">Reference</span><h3>Inspiration only</h3><p>Room image, texture, palette, render, note. Lives on the board. Never silently enters FF&amp;E.</p></div><div class="card sage"><span class="label">Product pin</span><h3>Working candidate</h3><p>Has source identity. Promoting it creates or deliberately reuses a project selection and placement link.</p></div><div class="card clay"><span class="label">Selected line</span><h3>Included in working FF&amp;E</h3><p>Owns room, quantity, configuration, price, readiness, decisions, and downstream continuity.</p></div></div>
+        <div class="change-path" style="margin-top:16px"><div class="change-card"><span class="label">On the canvas</span><h3>“Keep as reference”</h3><p>The default for pasted imagery when no product details are detected.</p><ul><li>Board-only</li><li>No schedule noise</li><li>Can be promoted later</li></ul></div><div class="change-arrow">→</div><div class="change-card"><span class="label">Explicit promotion</span><h3>“Make a product”</h3><p>Patina shows known source facts, asks only for a project need, and records provenance.</p><ul><li>Choose existing need or make a new line</li><li>Room inherits from board</li><li>Missing facts become a checklist</li></ul></div></div>
+        <div class="callout"><strong>Removing:</strong> “Remove from this board” deletes the placement only. “Archive from project” preserves history. Permanent delete is reserved for unreleased, unlinked mistakes.</div>
+      </div></div>
+    </section>
+
+    <!-- 14 -->
+    <section class="slide field" id="s14" data-title="The Library opens with the destination pinned">
+      <div class="slide-inner"><aside class="folio"><span class="folio-act">Library entrance</span><span class="folio-num">14</span></aside><div class="stage">
+        <p class="kicker">Mockup · Library room in project context</p><h2 class="wide">The Library opens with the project destination pinned to the work.</h2>
+        <div class="mock-label"><span>Add to project → Browse the Library</span><span>Room-weight Library; destination strip preserves context</span></div>
+        <div class="proof-scroll"><div class="app-proof"><div class="topbar"><span class="strata"><i></i><i></i><i></i></span><span class="brandmark">Patina</span><span class="grow"></span><span class="topquiet">Return to Ellsworth Residence ×</span></div><div class="destination-strip"><b>Placing into</b><span>Ellsworth Residence</span><span>› Living Room</span><span>› No board yet</span><span class="fake-button">Change destination</span></div><div style="padding:8px 15px"><div style="display:flex;align-items:baseline;border-bottom:1px solid #c9beb2;padding-bottom:6px"><h4 style="font:500 17px/1 var(--serif);margin:0">The Library</h4><span class="grow"></span><span class="doc-action">Capture</span></div><div class="fake-input" style="margin-top:7px;display:flex"><span>Ask the Librarian or search makers, pieces, and materials…</span><span class="grow"></span><b>⌘K</b></div><div class="rail-tabs" style="margin:7px 0 0"><span class="on">My Library</span><span>Studio Library</span><span>Patina Catalog</span><span class="grow"></span><span>Add to Library</span><span>Import list</span></div><div class="doc-section-head" style="padding-top:3px"><h4>Seating · 184 products</h4><span class="count">My shelf + studio + catalog</span><span class="head-actions"><span class="quiet-tag">Search</span><span class="quiet-tag">Filters</span></span></div><div class="product-grid" style="margin-top:8px"><div class="product-card selected"><span class="check">✓</span><div class="product-image">HALSTED CHAIR</div><b>Halsted lounge chair</b><small>Middlewest · trade verified</small></div><div class="product-card"><span class="check"></span><div class="product-image">ASHBY SOFA</div><b>Ashby sofa</b><small>Thayer &amp; Co · COM</small></div><div class="product-card selected"><span class="check">✓</span><div class="product-image">MARA STOOL</div><b>Mara counter stool</b><small>Linden Studio · walnut</small></div><div class="product-card"><span class="check"></span><div class="product-image">OTTO CHAIR</div><b>Otto armchair</b><small>Form &amp; Field · 8 finishes</small></div></div><div style="display:flex;align-items:center;border-top:1px solid #c9beb2;margin-top:8px;padding-top:7px;font-size:8px"><b>2 selected</b><span style="color:#645d56;margin-left:8px">Room and configuration can differ per selection.</span><span class="grow"></span><span class="fake-button">Put back</span><span class="fake-button solid" style="margin-left:6px">Place 2 in project →</span></div></div></div></div>
+        <div class="callout"><strong>After placement:</strong> return to the exact Project section anchor, reveal the new lines, and offer “Add both to Living · Concept 03” as a reversible next act—not a required field.</div>
+      </div></div>
+    </section>
+
+    <!-- 15 -->
+    <section class="slide" id="s15" data-title="Dedupe asks about project intent">
+      <div class="slide-inner"><aside class="folio"><span class="folio-act">Dedupe</span><span class="folio-num">15</span></aside><div class="stage">
+        <p class="kicker">Mockup · same source, contextual choice</p><h2 class="wide">Dedupe asks about project intent—not whether two URLs match.</h2>
+        <div class="mock-label"><span>Library placement detects an existing project selection</span><span>No silent merge and no automatic twin</span></div>
+        <div class="proof-scroll"><div class="app-proof"><div class="topbar"><span class="strata"><i></i><i></i><i></i></span><span class="brandmark">Patina · Library</span><span class="grow"></span><span class="topquiet">Placing into Ellsworth Residence</span></div><div style="padding:20px 120px"><div class="sheet-kicker">Before placing · source already used in this project</div><div class="sheet-head"><div><h4>Is this the same project need?</h4><div class="sheet-context">The Halsted lounge chair is already part of Ellsworth Residence.</div></div></div><div class="dedupe-sheet"><div class="match-card"><span class="pill sage">Existing selection</span><h5>Living Room · LV-04</h5><p>Halsted lounge chair · Qty 2 · flax linen · shortlisted</p><div class="match-meta">On boards: Concept 02<br>Client decision: not shared<br>Specs: 2 facts missing</div></div><div class="match-card"><span class="pill blue">Incoming product</span><h5>Halsted lounge chair</h5><p>Same maker URL and SKU. The Library item itself remains reusable.</p><div class="match-meta">Destination: Library<br>Proposed room: Living Room<br>Configuration: not chosen</div></div><div class="dedupe-actions"><div class="dedupe-action on"><b>Use the existing Living Room selection</b><span>Add another board placement; keep one quantity/configuration truth.</span></div><div class="dedupe-action"><b>Create a separate project need</b><span>Use for another room, finish, quantity, client, or procurement line.</span></div></div></div><div class="sheet-actions"><span class="fake-button">Put back</span><span class="fake-button solid">Continue →</span></div></div></div></div>
+        <div class="grid g3" style="margin-top:12px"><div class="card sage"><span class="label">Reuse</span><p>Same need; another placement or view.</p></div><div class="card blue"><span class="label">New line</span><p>Same product; different project intent.</p></div><div class="card clay"><span class="label">Conflict</span><p>Show existing authorization before any change.</p></div></div>
+      </div></div>
+    </section>
+
+    <!-- 16 -->
+    <section class="slide field" id="s16" data-title="The clipper finishes the thought">
+      <div class="slide-inner"><aside class="folio"><span class="folio-act">Chrome capture</span><span class="folio-num">16</span></aside><div class="stage">
+        <p class="kicker">Mockup · destination-aware Chrome clipper</p><h2 class="wide">The clipper finishes the thought while the source page is still open.</h2>
+        <div class="clipper-scene"><div class="vendor-page"><div class="vendor-brand">MIDDLEWEST WORKSHOP</div><div class="vendor-art">HALSTED LOUNGE CHAIR</div><div class="vendor-copy"><h3>Solid walnut · hand-tied seat</h3><span>$1,340</span></div></div><aside class="clip-panel"><div class="clip-head"><b>Save with Patina</b><span>×</span></div><div class="clip-preview"><div class="clip-thumb">CHAIR</div><div><b>Halsted lounge chair</b><span>Middlewest Workshop</span><span>$1,340 · SKU HL-31</span></div></div><div class="clip-field"><label>Project</label><div class="clip-select">Ellsworth Residence</div></div><div class="clip-field"><label>Assignment · optional</label><div class="clip-select">Living Room</div></div><div class="clip-field"><label>Board · optional</label><div class="clip-select">Concept 03</div></div><div class="clip-field"><label>Project need</label><div class="clip-select">Create a new selection</div></div><div class="clip-field"><label>Library copy</label><div class="clip-select">Always kept · reusable later</div></div><span class="fake-button clay" style="width:100%;margin-top:3px">Save to project</span><div class="clip-confirm"><b>After save</b><br>Living Room · Concept 03 · Considering<br>Open in project →</div></aside></div>
+        <div class="callout"><strong>Truthful recovery:</strong> the product is kept in My Library first. If project placement fails, say “The piece is safe in My Library,” preserve the intended destination, and offer Retry placement. Project, room, and board are validated server-side.</div>
+      </div></div>
+    </section>
+
+    <!-- 17 -->
+    <section class="slide" id="s17" data-title="Unsorted is a forgiving inbox, not a dead end">
+      <div class="slide-inner"><aside class="folio"><span class="folio-act">Capture inbox</span><span class="folio-num">17</span></aside><div class="stage">
+        <p class="kicker">Mockup · quiet work folio in Project</p><h2 class="wide">Unsorted is a forgiving inbox—not a dead end.</h2>
+        <div class="mock-label"><span>Project · Captures to place · unfolded</span><span>Bulk routing without leaving the Document</span></div>
+        <div class="proof-scroll"><div class="app-proof"><div class="topbar"><span class="strata"><i></i><i></i><i></i></span><span class="brandmark">Patina</span><span class="grow"></span><span class="topquiet">Ellsworth Residence</span></div><div class="doc-stage"><aside class="doc-spine"><div class="putdown">← Put down</div><div class="spine-step on">Project</div></aside><main class="doc-paper"><div class="doc-title">Ellsworth Residence</div><div class="doc-section-head"><h4>Project</h4><span class="count">4 captures · 3 shown</span></div><div class="work-note"><b>Captures to place · 4</b><span>Showing 3 of 4 · saved from Chrome and mobile</span><span>Fold ↑</span></div><div class="inbox-list"><div class="inbox-row head"><span></span><span>Capture</span><span>Room</span><span>Board</span><span>Kind</span><span></span></div><div class="inbox-row"><span class="line-art">LP</span><div><b>Cast-iron floor lamp</b><small>Ironwood · Chrome · today</small></div><span class="route-missing">Choose room</span><span class="route-missing">No board</span><span>Product</span><span class="doc-action">Place</span></div><div class="inbox-row"><span class="line-art">TX</span><div><b>Hand-blocked textile</b><small>Photo · Patina Field · Tue</small></div><span class="route-set">Primary suite</span><span class="route-missing">No board</span><span>Reference</span><span class="doc-action">Place</span></div><div class="inbox-row"><span class="line-art">MR</span><div><b>Antique trumeau mirror</b><small>1stDibs · Chrome · Mon</small></div><span class="route-set">Entry</span><span class="route-set">Entry · Concept</span><span>Product</span><span class="doc-action">Place</span></div></div><div style="display:flex;gap:7px;justify-content:flex-end;margin-top:9px"><span class="fake-button">Select shown 3</span><span class="fake-button solid">Route selected →</span></div><div class="doc-section-head"><h4>Working boards</h4><span class="count">3 live</span><span class="head-actions"><span class="doc-action">+ New board</span></span></div><div class="doc-section-head"><h4>Project · FF&amp;E</h4><span class="count">18 selections</span><span class="head-actions"><span class="doc-action primary">+ Add to project</span></span></div></main><aside class="doc-margin"><div class="margin-label">In the margin</div><div class="margin-item"><b>Unsorted is aging</b><time>Oldest capture · 6 days</time></div></aside><div class="studio-drawer"><span>Library</span><span>Orders</span><span>Accounts</span><span class="drawer-close">Studio drawer⌃</span></div></div></div></div>
+        <div class="callout"><strong>Routing semantics:</strong> project is the only required destination. “Unsorted” is routing debt; “Throughout” is an intentional whole-project assignment—they need distinct stored values. A reference can route to a board without becoming FF&amp;E. A product routes to a selection; adding it to a board creates a placement link.</div>
+      </div></div>
+    </section>
+
+    <!-- 18 -->
+    <section class="slide field" id="s18" data-title="Import respects the spreadsheet already in use">
+      <div class="slide-inner"><aside class="folio"><span class="folio-act">Schedule import</span><span class="folio-num">18</span></aside><div class="stage">
+        <p class="kicker">Mockup · staged CSV / XLSX import</p><h2 class="wide">Import respects the spreadsheet already in use—and makes every mismatch recoverable.</h2>
+        <div class="import-grid"><div class="dropzone"><div><span class="label">Step 1 · choose a file</span><b>Drop an FF&amp;E schedule</b><p>CSV or XLSX · up to 5,000 rows. Patina reads a preview before creating project lines.</p><span class="fake-button solid">Choose file</span><p>Download Patina column guide</p></div></div><div><div class="mapping"><div class="mapping-head"><b>Map columns · Ellsworth-FFE-v7.xlsx</b><span>38 rows read</span></div><div class="map-row"><b>Your column</b><span>→</span><b>Patina field</b></div><div class="map-row"><span>Room / Area</span><span>→</span><span>Project room</span></div><div class="map-row"><span>Item Description</span><span>→</span><span>Selection name</span></div><div class="map-row"><span>Vendor + SKU</span><span>→</span><span>Vendor / SKU</span></div><div class="map-row"><span>Spec / Finish</span><span>→</span><span>Configuration notes</span></div><div class="map-row"><span>Net</span><span>→</span><span>Unit cost · studio only</span></div><div class="map-row"><span class="warn">Approval?</span><span>→</span><span class="warn">Do not import as authorization</span></div></div><div class="import-errors"><b>Preview found 4 issues</b>2 unknown rooms · 1 missing item name · 1 repeated SKU that may be a legitimate second need. Download issue file, fix in place, or resolve each before import.</div><div class="sheet-actions"><span class="fake-button">Put back</span><span class="fake-button">Download preview</span><span class="fake-button solid">Review 38 lines →</span></div></div></div>
+        <div class="callout"><strong>Safety boundary:</strong> imported “approved” text can become a note or historical client verdict with provenance. It must never manufacture a Patina authorization instrument.</div>
+      </div></div>
+    </section>
+
+    <!-- 19 -->
+    <section class="slide" id="s19" data-title="FF&E grows as the project grows">
+      <div class="slide-inner"><aside class="folio"><span class="folio-act">Working FF&amp;E</span><span class="folio-num">19</span></aside><div class="stage">
+        <p class="kicker">Mockup · selections woven into the existing schedule</p><h2 class="wide">FF&amp;E grows as the project grows—without becoming a separate “Selections app.”</h2>
+        <div class="mock-label"><span>Project · FF&amp;E · working folio</span><span>Origin and next missing fact are visible at scan speed</span></div>
+        <div class="proof-scroll"><div class="app-proof"><div class="topbar"><span class="strata"><i></i><i></i><i></i></span><span class="brandmark">Patina</span><span class="grow"></span><span class="topquiet">Ellsworth Residence</span></div><div class="doc-stage"><aside class="doc-spine"><div class="putdown">← Put down</div><div class="spine-step">Proposal</div><div class="spine-step on">Project</div><div class="spine-step">Install</div></aside><main class="doc-paper"><div class="doc-title">Ellsworth Residence</div><div class="doc-section-head"><h4>Project · FF&amp;E</h4><span class="count">18 selections · 7 underway</span><span class="head-actions"><span class="doc-action">Spec book →</span><span class="doc-action">Bill 4</span><span class="doc-action primary">+ Add to project</span></span></div><div class="work-note"><b>Finish the working list</b><span>2 need routing · 4 need specs · 7 ready for client review</span><span>Review gaps →</span></div><div class="room-head"><b>Living Room</b><span>$54,200 allocated · 6 selections</span><span class="addline">+ Add a line</span></div><div class="ffe-line"><div class="line-art">CH</div><div><b>Halsted lounge chair</b><small>Middlewest · qty 2 · flax</small></div><div class="line-origin">Clipper · C03</div><div>Shortlisted</div><div class="line-gap">Finish · lead time</div></div><div class="ffe-line"><div class="line-art">SO</div><div><b>Ashby sofa</b><small>Thayer · qty 1 · COM</small></div><div class="line-origin" style="color:#6d4e2f">Library · C02 + C03</div><div>Considering</div><div class="line-gap">Qty · price</div></div><div class="ffe-line"><div class="line-art">RG</div><div><b>Wool rug · 10 × 14</b><small>Loomis Mill · custom border</small></div><div class="line-origin" style="color:var(--sage)">Board · C02</div><div>Shortlisted</div><div class="line-ready">Ready for review</div></div><div class="ffe-line"><div class="line-art">+</div><div><b>Console table</b><small>Named need · allowance $2,000</small></div><div class="line-origin" style="color:#8e422f">Placeholder</div><div>Considering</div><div class="line-gap">Product not chosen</div></div><div class="room-head"><b>Dining Room</b><span>$38,000 allocated · 4 selections</span><span class="addline">+ Add a line</span></div></main><aside class="doc-margin"><div class="margin-label">In the margin</div><div class="margin-item"><b>3 client decisions</b><time>Living selection review</time></div><div class="margin-item"><b>Lead-time risk</b><time>Dining chairs · 20 weeks</time></div></aside><div class="studio-drawer"><span>Library</span><span>Orders</span><span>Accounts</span><span class="drawer-close">Studio drawer⌃</span></div></div></div></div>
+        <div class="callout"><strong>Scan contract:</strong> the row answers “what is it, where did it come from, how are we leaning, and what blocks the next act?” Logistics stamps continue to show specified → ordered → installed; they are not reused for design state.</div>
+      </div></div>
+    </section>
+
+    <!-- 20 -->
+    <section class="slide field" id="s20" data-title="The line unfold holds the complete working truth">
+      <div class="slide-inner"><aside class="folio"><span class="folio-act">Selection detail</span><span class="folio-num">20</span></aside><div class="stage">
+        <p class="kicker">Mockup · expanded existing line-unfold pattern</p><h2 class="wide">The line unfold holds the complete working truth.</h2>
+        <div class="mock-label"><span>Living Room · Halsted lounge chair · unfolded</span><span>Facts, readiness, and history remain spatially distinct</span></div>
+        <div class="proof-wrap">
+        <div class="proof-scroll"><div class="app-proof" style="padding:18px 25px"><div class="doc-mark">Ellsworth Residence · Project · FF&amp;E</div><div class="line-unfold"><div class="unfold-head"><span class="line-art">CH</span><div><b>Halsted lounge chair</b><small>Living Room · LV-04 · Qty 2</small></div><span class="pill sage">Shortlisted</span><span class="pill blue">Client pending</span><span style="text-align:right;font:500 8px/1 var(--mono)">$3,620 client</span></div><div class="unfold-body"><div class="unfold-col"><h5>Project specification</h5><div class="fact"><span>Source</span><b>Middlewest Workshop · HL-31</b></div><div class="fact"><span>Configuration</span><b>Walnut · flax linen · standard fill</b></div><div class="fact"><span>Quantity</span><b>2 · Living conversation pair</b></div><div class="fact"><span>Price</span><b>$1,810 each · checked 08 Aug</b></div><div class="fact"><span>Placements</span><b>Concept 02 + Concept 03</b></div><div class="fact"><span>Provenance</span><b>Chrome clipper · maker page</b></div><span class="fake-button" style="margin-top:8px">Edit working facts</span></div><div class="unfold-col"><h5>Ready for client review</h5><div class="readiness-item"><i>✓</i><div><b>Need + room</b><br>Living seating</div></div><div class="readiness-item"><i>✓</i><div><b>Quantity + configuration</b><br>Qty 2 · walnut / flax</div></div><div class="readiness-item missing"><i>!</i><div><b>Finish approval sample</b><br>No sample recorded</div></div><div class="readiness-item missing"><i>!</i><div><b>Lead time</b><br>Maker has not confirmed</div></div><div class="readiness-item"><i>✓</i><div><b>Client-facing price</b><br>$3,620</div></div><span class="fake-button" style="margin-top:8px">Record missing facts</span></div><div class="unfold-col"><h5>Decision + provenance history</h5><div class="history"><div><b>Shortlisted by Leah</b><br>08 Aug · Concept 03</div><div><b>Added to Concept 03</b><br>08 Aug · placement link</div><div><b>Captured from maker</b><br>07 Aug · Chrome</div></div><div class="lock-line">Not released · working facts remain editable</div><span class="fake-button solid" style="margin-top:10px">Include in client review</span></div></div></div><div style="display:flex;align-items:center;margin-top:10px;font-size:8px"><span class="doc-action">Manage placements</span><span class="doc-action" style="margin-left:14px">Archive from project</span><span class="grow"></span><span class="doc-action">Open source ↗</span></div></div></div></div>
+        <div class="callout"><strong>Readiness is a checklist, not a score.</strong> It names the exact fact, file, sample, or explicit N/A required for the next act. Early concept work stays fast; formal review stays trustworthy.</div>
+      </div></div>
+    </section>
+
+    <!-- 21 -->
+    <section class="slide" id="s21" data-title="Five state axes never collapse into one status">
+      <div class="slide-inner"><aside class="folio"><span class="folio-act">State model</span><span class="folio-num">21</span></aside><div class="stage">
+        <p class="kicker">Behavioral contract · separate actors and consequences</p><h2 class="wide">Five axes. Never one overloaded “status.”</h2>
+        <div class="axis-grid"><div class="axis"><span class="axis-no">01 · designer</span><h3>Disposition</h3><ul><li>Considering</li><li class="on">Shortlisted</li><li>Rejected</li></ul><small>How the studio is leaning. No client or commercial consequence.</small></div><div class="axis"><span class="axis-no">02 · client</span><h3>Verdict</h3><ul><li>Not shared</li><li class="on">Pending</li><li>Looks good</li><li>Needs a change / question</li></ul><small>Who saw what, when, and in which published review. Nonbinding.</small></div><div class="axis"><span class="axis-no">03 · next act</span><h3>Readiness</h3><ul><li>Draft</li><li class="on">2 facts missing</li><li>Ready for review</li><li>Ready for release</li></ul><small>Derived from explicit gates; never a manual lifecycle status.</small></div><div class="axis immutable"><span class="axis-no">04 · authority</span><h3>Authorization</h3><ul><li>Not released</li><li>Draft release</li><li class="on">Sent to client</li><li>Authorized · executed</li><li>Voided / superseded</li></ul><small>The actual draft → sent → executed instrument lifecycle. Released facts soft-lock before signature.</small></div><div class="axis"><span class="axis-no">05 · logistics</span><h3>Procurement</h3><ul><li>Specified</li><li>Quoted</li><li class="on">Ordered</li><li>Production</li><li>Shipped · delivered · installed</li></ul><small>The existing FF&amp;E ratchet and line stamps remain operational truth.</small></div></div>
+        <div class="callout"><strong>Example:</strong> a chair may be “Shortlisted · client liked · ready for release · not released · quoted.” Any single label would hide the actor or imply a consequence that has not happened.</div>
+      </div></div>
+    </section>
+
+    <!-- 22 -->
+    <section class="slide field" id="s22" data-title="Client review is a controlled mirror">
+      <div class="slide-inner"><aside class="folio"><span class="folio-act">Client review</span><span class="folio-num">22</span></aside><div class="stage">
+        <p class="kicker">Mockup · studio preview and client mirror</p><h2 class="wide">Client review is a controlled mirror—not a copy of the studio’s board.</h2>
+        <div class="client-split"><div class="client-view studio"><div class="client-head"><h3>Preview as client</h3><span>Studio controls</span></div><div class="review-card"><div class="review-art">CHAIR</div><div><h4>Halsted lounge chair</h4><p>Vendor · SKU · trade cost · markup · source link are visible to the studio.</p><div class="review-actions"><span class="on">Show name</span><span>Hide vendor</span><span>Hide trade</span></div></div></div><div class="review-card"><div class="review-art">RUG</div><div><h4>Wool rug · 10 × 14</h4><p>Client price, quantity, finish notes, and review prompt are visible.</p><div class="review-actions"><span class="on">Ask decision</span><span>Allow note</span></div></div></div><span class="fake-button solid" style="margin-top:12px">Publish Living Room review →</span></div><div class="client-view client"><div class="client-head"><h3>Living Room selections</h3><span>Morgan’s view</span></div><div class="review-card"><div class="review-art">CHAIR</div><div><h4>Halsted lounge chair</h4><p>Walnut · flax linen · Qty 2<br>$3,620 · estimated 12–14 weeks</p><div class="review-actions"><span class="on">Looks good</span><span>Needs change</span><span>Ask</span></div></div></div><div class="review-card"><div class="review-art">RUG</div><div><h4>Wool rug · 10 × 14</h4><p>Natural wool · espresso border<br>$8,950 · custom</p><div class="review-actions"><span>Looks good</span><span class="on">Needs change</span><span>Ask</span></div></div></div><p class="note" style="margin-top:12px">“Looks good” records nonbinding preference. It never authorizes purchase; the formal release instrument remains a separate act.</p></div></div>
+        <div class="callout"><strong>Review-edition lifecycle:</strong> Draft edition → Published → Decisions received → Superseded / finalized. The live board remains Active or Archived. Every verdict anchors an immutable edition-item ID; republishing creates a new edition instead of rewriting what the client saw.</div>
+      </div></div>
+    </section>
+
+    <!-- 23 -->
+    <section class="slide dark" id="s23" data-title="Replacement changes at release and execution">
+      <div class="slide-inner"><aside class="folio"><span class="folio-act">Change control</span><span class="folio-num">23</span></aside><div class="stage">
+        <p class="kicker">Three authority boundaries · working, released, executed</p><h2 class="wide">Replacement changes at release—and changes again at execution.</h2>
+        <div class="change-path three"><div class="change-card" style="background:#231f1b;border-color:#554d44"><span class="label">Working line · editable</span><h3>Before release</h3><p>Replace or fill a placeholder while preserving why the design changed.</p><ul><li>Link the alternate in the same selection thread</li><li>Keep the prior verdict as historical provenance</li><li>Reset the active verdict; review anew</li><li>Choose whether placements swap</li></ul><div class="lock-line" style="border-color:#776331;color:#d8bb70">Not released · no money locked</div></div><div class="change-arrow" style="color:#d88a72">→</div><div class="change-card" style="background:#231f1b;border-color:#554d44"><span class="label">Release draft or sent · soft-locked</span><h3>While the release is out</h3><p>Released money and configuration cannot change—even before signature.</p><ul><li>Void the release with a recorded reason</li><li>Then start the replacement selection</li><li>Reset active preference review</li><li>No authority to order yet</li></ul><div class="lock-line" style="border-color:#776331;color:#d8bb70">Draft / sent · void before change</div></div><div class="change-arrow" style="color:#d88a72">→</div><div class="change-card" style="background:#231f1b;border-color:#554d44"><span class="label">Executed authorization · immutable</span><h3>After execution</h3><p>The authorized quantity, configuration, and money remain part of the record.</p><ul><li>Start a superseding selection</li><li>Explain price and schedule delta</li><li>Collect a new authorization or addendum</li><li>After PO send, use a vendor change path</li></ul><div class="lock-line" style="border-color:#776331;color:#d8bb70">Executed · authority to order</div></div></div>
+        <div class="callout"><strong>Boundary rule:</strong> release requires void before working facts change; execution requires a superseding record. Once a purchase order is sent, replacement becomes a vendor change, claim, or new scope—not a rewritten line.</div>
+      </div></div>
+    </section>
+
+    <!-- 24 -->
+    <section class="slide field" id="s24" data-title="Studio only must be true at the data edge">
+      <div class="slide-inner"><aside class="folio"><span class="folio-act">Privacy boundary</span><span class="folio-num">24</span></aside><div class="stage">
+        <p class="kicker">Phase 0 · required before project-native working views</p><h2 class="wide">“Studio only” must be true at the data edge—not merely hidden in the interface.</h2>
+        <p class="lede">The proposed experience assumes candidates, raw boards, trade facts, and markup are private until a designer deliberately publishes a review edition. Current access rules do not make that promise consistently.</p>
+        <div class="table-scroll"><table class="screen-map"><thead><tr><th>Working truth</th><th>Current risk</th><th>Required contract</th><th>Client receives</th></tr></thead><tbody>
+          <tr><td>Project-owned board</td><td>Project clients can select live board and item rows; “Draft” is not an access boundary.</td><td><code>client_visible = false</code> by default; narrow RLS; publish immutable review edition</td><td>Only the explicitly published composition</td></tr>
+          <tr><td>Working board media</td><td>The <code>proposal-mood-boards</code> bucket currently permits public reads; private rows cannot hide public objects.</td><td>Move working uploads behind private signed access; publish immutable client-safe media derivatives</td><td>Only media attached to the published review edition</td></tr>
+          <tr><td>Candidate / unsorted FF&amp;E</td><td>Legacy-origin projects can expose raw <code>project_ffe_items</code>.</td><td>Narrow raw client RLS for every project; use curated review and authorized projections</td><td>Only fields selected for the active review</td></tr>
+          <tr><td>Studio price and provenance</td><td>Rendering controls cannot protect columns that the client can query.</td><td>Server-shaped response omits trade cost, markup, studio notes, PO data, and internal provenance</td><td>Client price, quantity, finish, lead time, public attachments</td></tr>
+          <tr><td>Signed authorization</td><td>Working facts can diverge from a released snapshot.</td><td>Existing immutable authorization item remains the authority; working replacement voids or supersedes</td><td>Exact signed snapshot and later change record</td></tr>
+        </tbody></table></div>
+        <div class="callout"><strong>P0 gate:</strong> working rows and media must be unreadable to clients before project-native creation ships. Keep every sharing act disabled until the immutable review projection and its client-safe media derivatives ship in Phase 2.</div>
+      </div></div>
+    </section>
+
+    <!-- 25 -->
+    <section class="slide" id="s25" data-title="Recovery is part of the primary flow">
+      <div class="slide-inner"><aside class="folio"><span class="folio-act">Edge states</span><span class="folio-num">25</span></aside><div class="stage">
+        <p class="kicker">Failure, interruption, and accessibility proof</p><h2 class="wide">Recovery is part of the primary flow.</h2>
+        <div class="grid g4"><div class="card clay"><span class="label">Clipper lost routing</span><h3>Safe in the Library</h3><p>“The piece is safe in My Library. We could not place it in Ellsworth.” Preserve destination and offer Retry placement.</p></div><div class="card blue"><span class="label">Library placement conflict</span><h3>Intent before merge</h3><p>Show the existing project need and ask reuse vs separate line. Never dedupe silently.</p></div><div class="card sage"><span class="label">Import partially valid</span><h3>Preview, then commit</h3><p>No project lines are created until mapping and issue review are confirmed. Export an issue file.</p></div><div class="card gold"><span class="label">Authorized selection</span><h3>Change path only</h3><p>Disable destructive replacement; explain the lock and offer void/supersede with delta.</p></div></div>
+        <div class="grid g3" style="margin-top:13px"><div class="card"><span class="label">Keyboard</span><h3>Sheets trap and return focus</h3><p>Esc puts back. Board source tabs use roving focus. Mock controls in this deck are inert; product UI actions are semantic buttons.</p></div><div class="card"><span class="label">Screen reader</span><h3>Announce outcome + destination</h3><p>“Added Halsted chair to Ellsworth · Living Room · Concept 03.” Errors precede correction fields.</p></div><div class="card"><span class="label">Visual</span><h3>State never relies on color</h3><p>Text labels, stamps, borders, and icons carry meaning. Minimum 44px touch targets in product UI.</p></div></div>
+        <div class="callout"><strong>Interrupted work:</strong> sheets preserve draft mapping and board setup. Returning to the Document restores the exact Project anchor and highlights the result once—no permanent toast dependency.</div>
+      </div></div>
+    </section>
+
+    <!-- 26 -->
+    <section class="slide field" id="s26" data-title="Mobile keeps the same nouns and verbs">
+      <div class="slide-inner"><aside class="folio"><span class="folio-act">Mobile</span><span class="folio-num">26</span></aside><div class="stage">
+        <p class="kicker">Responsive proof · 390px product target</p><h2 class="wide">Mobile keeps the same nouns and verbs; only the spatial arrangement changes.</h2>
+        <div class="mobile-set"><div><div class="phone"><div class="phone-top"><span>← Put down</span><span>Project · 5 / 7</span></div><div class="phone-doc"><div class="doc-mark">Patina · The Document</div><h4>Ellsworth Residence</h4><p>Full-service furnishing · Morgan Ellsworth</p><div class="mobile-sections"><div class="mobile-section">Brief · settled</div><div class="mobile-section">Direction · approved</div><div class="mobile-section open">Project</div></div><div class="work-note"><b>Continue Living · Concept 03</b><span>Open →</span></div><div class="board-folio"><div class="folio-head"><b>Working boards</b><span class="new">+ New</span></div><div class="board-row"><div class="board-card"><div class="board-swatch"><i></i><i></i><i></i></div><b>Living · C03</b></div><div class="board-card blank">+ board</div></div></div><div class="doc-section-head"><h4>Project · FF&amp;E</h4><span class="count">18</span></div><div class="room-head"><b>Living Room</b><span>6 lines</span><span></span></div></div><div class="mobile-actionbar"><span>Library</span><span>+ Add</span><span>Margin</span></div></div><div class="mobile-caption">01 · Document</div></div>
+          <div><div class="phone"><div class="phone-top"><span>Ellsworth · Project</span><span>Put back · Esc</span></div><div class="phone-doc" aria-hidden="true"><h4>Project · FF&amp;E</h4><div class="mobile-section">Living Room</div><div class="mobile-section">Dining Room</div></div><div class="phone-sheet"><h5>Add to project</h5><div class="phone-action"><span class="action-icon">□</span><b>Start a board</b></div><div class="phone-action"><span class="action-icon">L</span><b>Browse the Library</b></div><div class="phone-action"><span class="action-icon">↗</span><b>Paste a product link</b></div><div class="phone-action"><span class="action-icon">+</span><b>Name a need</b></div><div class="phone-action"><span class="action-icon">⇧</span><b>Import a schedule</b></div></div></div><div class="mobile-caption">02 · Sheet</div></div>
+          <div><div class="phone"><div class="phone-top"><span>← Ellsworth</span><span>Concept 03</span></div><div class="phone-doc"><div class="rail-tabs"><span class="on">Project</span><span>Library</span><span>Captures</span><span>More 4</span></div><div style="height:225px;background:#e9ddcd;position:relative;margin-top:9px"><div class="canvas-item selected" style="left:8%;top:17%;width:46%;height:35%">SOFA</div><div class="canvas-item" style="left:59%;top:20%;width:27%;height:26%">CHAIR</div><div class="canvas-item" style="left:25%;top:60%;width:57%;height:19%">RUG</div></div><div class="inspect-row"><span>Selected</span><b>Ashby sofa · Shortlisted</b></div><div class="inspect-row"><span>Readiness</span><b style="color:#a04336">2 facts missing</b></div></div><div class="mobile-actionbar"><span>Sources</span><span>+ Pin</span><span>Selection</span></div></div><div class="mobile-caption">03 · Board room</div></div></div>
+        <div class="callout"><strong>Responsive rule:</strong> the spine becomes a sticky stage strip; the margin becomes a labeled sheet; the Studio Drawer becomes the bottom action rail. No desktop mock is simply squeezed into a pan-only viewport.</div>
+      </div></div>
+    </section>
+
+    <!-- 27 -->
+    <section class="slide" id="s27" data-title="Reuse the Document grammar; add only missing contracts">
+      <div class="slide-inner"><aside class="folio"><span class="folio-act">Delivery map</span><span class="folio-num">27</span></aside><div class="stage">
+        <p class="kicker">Design-to-implementation handoff</p><h2 class="wide">Reuse the Document grammar. Add only the contracts that are missing.</h2>
+        <div class="table-scroll"><table class="screen-map"><thead><tr><th>Proposed surface</th><th>Existing Patina grammar to reuse</th><th>New behavior / data contract</th><th>Primary acceptance proof</th></tr></thead><tbody>
+          <tr><td>Continue work line</td><td><code>WorkBlock</code> + Document section anchor</td><td>Priority resolver across boards, captures, spec gaps, decisions</td><td>Returning designer resumes the named act in one click</td></tr>
+          <tr><td>Working boards folio</td><td><code>ProjectMoodBoards</code> + Board Room route</td><td>Visible empty/new tile; project-room FK; private-by-default RLS; exact return anchor</td><td>Boards originate inside Project and remain studio-only until published</td></tr>
+          <tr><td>Add to project</td><td><code>DocumentAction</code> + <code>DocSheet</code></td><td>Multi-source chooser; destination context; result reveal</td><td>Board, Library, link, need, import are all discoverable</td></tr>
+          <tr><td>Project Library placement</td><td>Library Room + Studio Drawer room routing</td><td>Destination strip; multi-select; contextual dedupe</td><td>Products land on correct project lines without copied facts</td></tr>
+          <tr><td>Board product pins</td><td>Board composition + inspector</td><td><code>placement_id → project_ffe_item_id</code>; reference promotion</td><td>One selection on many boards; placement removal is safe</td></tr>
+          <tr><td>Working FF&amp;E line</td><td><code>FFESectionBody</code> + existing line unfold</td><td>Provenance, disposition, readiness gates, placements, decision history</td><td>Scan and unfold answer next act without status overload</td></tr>
+          <tr><td>Client review / replacement</td><td>Client mirror + release ceremony + instrument lines</td><td>Revision snapshots; separate verdict; void/supersede change path</td><td>Preference never implies spend; signed money never mutates</td></tr>
+        </tbody></table></div>
+        <p class="source-note">Names are implementation references, not prescribed UI copy. Detailed build should start with task/schema review for the placement link and separate state axes before treating these screens as a front-end-only change.</p>
+      </div></div>
+    </section>
+
+    <!-- 28 -->
+    <section class="slide field" id="s28" data-title="Secure the working layer, then make building obvious">
+      <div class="slide-inner"><aside class="folio"><span class="folio-act">Phasing</span><span class="folio-num">28</span></aside><div class="stage">
+        <p class="kicker">Proposed delivery sequence</p><h2 class="wide">Secure the working layer, then make building obvious.</h2>
+        <div class="phase-row"><div class="phase-card"><span class="phase-no">Phase 0 · make privacy and identity true</span><h3>The foundation</h3><ul><li>Narrow board and project FF&amp;E client RLS</li><li>Move working board media behind private access</li><li>Add project-room identity to live boards</li><li>Link board placements to project selections</li><li>Separate Unsorted from Throughout</li><li>Validate every destination server-side</li></ul><div class="gate">Gate · clients cannot read any live working row or working media</div></div><div class="phase-card"><span class="phase-no">Phase 1 · make building visible</span><h3>The entrances</h3><ul><li>Continue work line in Project</li><li>Working boards empty/new affordances</li><li>Add to project DocSheet</li><li>Project-scoped Library and clipper routing</li><li>Unsorted work folio + import preview</li></ul><div class="gate">Gate · every entrance converges; all client sharing remains disabled</div></div><div class="phase-card"><span class="phase-no">Phase 2–3 · enable review, then change</span><h3>Review and authority</h3><ul><li>Immutable review editions + private derivatives</li><li>Verdicts anchored to edition-item IDs</li><li>Separate disposition and readiness gates</li><li>Replacement threads and reset verdicts</li><li>Void/supersede after release</li></ul><div class="gate">Gate · only published projections are client-readable; no design act authorizes spend</div></div></div>
+        <div class="grid g4" style="margin-top:13px"><div class="card"><span class="label">Discoverability</span><p>Project open → first add; entrance chosen.</p></div><div class="card"><span class="label">Continuity</span><p>Add complete → result revealed; duplicate intent.</p></div><div class="card"><span class="label">Routing debt</span><p>Unsorted count and age to placement.</p></div><div class="card"><span class="label">Progression</span><p>Readiness, verdict, authority, logistics—measured separately.</p></div></div>
+        <p class="source-note">Set numeric targets only after baseline instrumentation. Evaluate board, Library, clipper, import, and need-first paths separately; designer usability sessions remain the decision gate.</p>
+      </div></div>
+    </section>
+
+    <!-- 29 -->
+    <section class="slide dark" id="s29" data-title="Leadership decision sheet">
+      <div class="slide-inner"><aside class="folio"><span class="folio-act">Decision sheet</span><span class="folio-num">29</span></aside><div class="stage">
+        <p class="kicker">Leadership + Design · mark Accept or Change</p><h2 class="wide">Approve the model and the prototype defaults separately.</h2>
+        <div class="decision-label">Recommended model defaults · none are recorded as approved</div>
+        <div class="rulings"><div class="ruling"><span class="yes">A / C</span><div><b>Project stays inside the Document.</b><span>No project dashboard or duplicate Selections app.</span></div></div><div class="ruling"><span class="yes">A / C</span><div><b>“Add to project” is the persistent multi-source act.</b><span>Board, Library, clipper/link, import, and named need.</span></div></div><div class="ruling"><span class="yes">A / C</span><div><b>Boards are working rooms over shared selections.</b><span>References remain loose; product placements link, never twin.</span></div></div><div class="ruling"><span class="yes">A / C</span><div><b>Project is required; room and board may wait.</b><span>Unsorted is a visible, recoverable work folio.</span></div></div><div class="ruling"><span class="yes">A / C</span><div><b>Five state axes remain separate.</b><span>Designer, client, readiness, authority, and logistics.</span></div></div><div class="ruling"><span class="yes">A / C</span><div><b>Release is the commercial boundary.</b><span>After release, replacement means void or supersede.</span></div></div></div>
+        <div class="decision-label" style="margin-top:13px">Recommended prototype defaults · resolve before moderated testing</div>
+        <div class="prototype-defaults"><div class="prototype-default"><em>01 · working noun</em><b>Keep “Project · FF&amp;E” as the section.</b><span>Use “selection” only for a working project line; do not add a new app.</span><small>Recommend · Accept / Change</small></div><div class="prototype-default"><em>02 · review price</em><b>Choose prices per review edition.</b><span>Client price may be included; trade cost and markup never are.</span><small>Recommend · Accept / Change</small></div><div class="prototype-default"><em>03 · clipper copy</em><b>Always keep the reusable Library product in v1.</b><span>Project-only capture needs a different ephemeral source model.</span><small>Recommend · Accept / Change</small></div><div class="prototype-default"><em>04 · replacement</em><b>Use explicit selection threads.</b><span>Keep old verdicts as history; reset the active alternate for review.</span><small>Recommend · Accept / Change</small></div><div class="prototype-default"><em>05 · preference review</em><b>Preference review is optional; warn, don’t block.</b><span>Required authorization facts still hard-block release. Review remains nonbinding.</span><small>Recommend · Accept / Change</small></div></div>
+        <div class="callout"><strong>How to use this proof:</strong> record Accept or Change beside each line. Any Change becomes a prototype hypothesis; it does not silently alter the privacy, identity, or authorization constraints.</div>
+      </div></div>
+    </section>
+
+    <!-- 30 -->
+    <section class="slide dark" id="s30" data-title="Evidence and recommended next act">
+      <div class="slide-inner"><aside class="folio"><span class="folio-act">Evidence + next act</span><span class="folio-num">30</span></aside><div class="stage">
+        <p class="kicker">Research synthesis · professional practice + current tools + Patina grammar</p><h2 class="wide">The evidence supports three doors in—and one project sentence out.</h2>
+        <div class="grid g3"><div class="card"><span class="label">Interior-design practice</span><h3>Work loops, then converges.</h3><p>Discovery, concept, selection, documentation, coordination, procurement, and installation are iterative—not a single wizard.</p></div><div class="card"><span class="label">Common product pattern</span><h3>Boards, Library, and capture coexist.</h3><p>Design tools expose project-native boards plus reusable products, web capture, placeholders, and spreadsheet paths.</p></div><div class="card"><span class="label">Patina translation</span><h3>The Document remains the project.</h3><p>Sheets handle quick reversible acts; Rooms hold deep work; every return restores the exact project sentence in hand.</p></div></div>
+        <div class="sources" style="margin-top:14px;border-color:#4b453d"><div class="source" style="border-color:#4b453d"><span class="sn" style="color:#d88a72">01</span><div><b><a href="https://www.cidq.org/about-cidq/what-is-interior-design/" target="_blank" rel="noreferrer">CIDQ · professional workflow</a></b><p style="color:#b9aea2">Discovery, concept, selections, documentation, coordination.</p></div></div><div class="source" style="border-color:#4b453d"><span class="sn" style="color:#d88a72">02</span><div><b><a href="https://biid.org.uk/resources/professional-practice-series-ffe" target="_blank" rel="noreferrer">BIID · FF&amp;E practice</a></b><p style="color:#b9aea2">Selection, procurement roles, delivery and installation.</p></div></div><div class="source" style="border-color:#4b453d"><span class="sn" style="color:#d88a72">03</span><div><b><a href="https://pro.houzz.com/pro-help/r/how-to-use-selections-in-houzz-pro" target="_blank" rel="noreferrer">Houzz Pro · Selection Boards</a></b><p style="color:#b9aea2">Project-native creation, multi-source capture, placeholders.</p></div></div><div class="source" style="border-color:#4b453d"><span class="sn" style="color:#d88a72">04</span><div><b><a href="https://programa.design/features/schedule-software-for-interior-designers-architects-clients" target="_blank" rel="noreferrer">Programa · schedules</a></b><p style="color:#b9aea2">Clipper, Library, URL, manual, and spreadsheet paths.</p></div></div><div class="source" style="border-color:#4b453d"><span class="sn" style="color:#d88a72">05</span><div><b><a href="https://intercom.help/designfiles/en/articles/3741957-creating-multiple-design-boards-in-a-project" target="_blank" rel="noreferrer">DesignFiles · project boards</a></b><p style="color:#b9aea2">Visible Add Design action inside the project.</p></div></div><div class="source" style="border-color:#4b453d"><span class="sn" style="color:#d88a72">06</span><div><b><a href="https://milanote.com/guide/interior-design-moodboard" target="_blank" rel="noreferrer">Milanote · capture inbox</a></b><p style="color:#b9aea2">Forgiving Unsorted area for later organization.</p></div></div></div>
+        <p class="source-note" style="margin:8px 0 0;padding:0;color:#a99e92">Full evidence ledger: <a href="one-project-three-doors-proposal.html">One Project, Three Doors In</a> · Internal grammar: <a href="../the-document/DECISIONS.md">The Document decisions</a> · Research accessed 09 Aug 2026.</p>
+        <div class="callout"><strong>Recommended next act:</strong> after the decision sheet is ruled, turn slides 07, 09, 11–12, 14, 16–17, and 19–20 into one instrumented clickable prototype. Test the board, Library, and clipper journeys with the designers who raised the issue before implementation sequencing is locked.</div>
+      </div></div>
+    </section>
+  </main>
+
+  <script>
+    const deck=document.getElementById('deck');
+    const slides=[...document.querySelectorAll('.slide')];
+    const counter=document.getElementById('counter');
+    const progressBar=document.getElementById('progressBar');
+    const slideTitle=document.getElementById('slideTitle');
+    const slideAnnouncer=document.getElementById('slideAnnouncer');
+    const previous=document.getElementById('prev');
+    const next=document.getElementById('next');
+    const fullscreen=document.getElementById('fullscreen');
+    let current=0;
+
+    function setCurrent(index){
+      current=Math.max(0,Math.min(index,slides.length-1));
+      counter.textContent=`${String(current+1).padStart(2,'0')} / ${String(slides.length).padStart(2,'0')}`;
+      progressBar.style.height=`${((current+1)/slides.length)*100}%`;
+      const title=slides[current].dataset.title||'Patina FF&E proposal';
+      slideTitle.textContent=title;
+      slideAnnouncer.textContent=`Slide ${current+1} of ${slides.length}: ${title}`;
+      previous.disabled=current===0;
+      next.disabled=current===slides.length-1;
+    }
+    function go(index){
+      const target=Math.max(0,Math.min(index,slides.length-1));
+      setCurrent(target);
+      slides[target].scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
+    }
+    previous.addEventListener('click',()=>go(current-1));
+    next.addEventListener('click',()=>go(current+1));
+    fullscreen.addEventListener('click',()=>document.fullscreenElement?document.exitFullscreen?.():document.documentElement.requestFullscreen?.());
+    document.addEventListener('fullscreenchange',()=>fullscreen.setAttribute('aria-label',document.fullscreenElement?'Exit full screen':'Enter full screen'));
+    document.addEventListener('keydown',event=>{
+      if(event.target.closest('button,a,input,select,textarea,[role="tab"]'))return;
+      if(['ArrowRight','ArrowDown','PageDown',' '].includes(event.key)){event.preventDefault();go(current+1)}
+      if(['ArrowLeft','ArrowUp','PageUp'].includes(event.key)){event.preventDefault();go(current-1)}
+      if(event.key==='Home'){event.preventDefault();go(0)}
+      if(event.key==='End'){event.preventDefault();go(slides.length-1)}
+      if(event.key.toLowerCase()==='f'){fullscreen.click()}
+    });
+    let scrollFrame=0;
+    function trackVisibleSlide(){
+      if(scrollFrame)return;
+      scrollFrame=requestAnimationFrame(()=>{
+        scrollFrame=0;
+        const center=innerHeight/2;
+        let nearest=0,distance=Infinity;
+        slides.forEach((slide,index)=>{
+          const box=slide.getBoundingClientRect();
+          const candidate=Math.abs(box.top+Math.min(box.height,innerHeight)/2-center);
+          if(candidate<distance){distance=candidate;nearest=index}
+        });
+        if(nearest!==current)setCurrent(nearest);
+      });
+    }
+    deck.addEventListener('scroll',trackVisibleSlide,{passive:true});
+    addEventListener('scroll',trackVisibleSlide,{passive:true});
+
+    const journeyData={
+      board:{start:'Pin a product or reference',startBody:'A visual reference can remain board-only. A real product becomes a project candidate when promoted.',route:'Room + board are already known',routeBody:'The canvas supplies context; no duplicate destination form is needed.',end:'One project selection',endBody:'It appears in working FF&E with board provenance and exact missing facts.'},
+      library:{start:'Select one or many known products',startBody:'Reusable Library facts stay at the source; project configuration begins only after placement.',route:'Project stays pinned',routeBody:'Choose room now or leave Unsorted; adding to a board is an optional next act.',end:'Reveal the new lines',endBody:'Return to the Project anchor, highlight results, and preserve Library provenance.'},
+      clipper:{start:'Capture the maker page',startBody:'Image, URL, maker, price, SKU, and dimensions are read while the page is open.',route:'Project required; room optional',routeBody:'Choose an existing board, create one inline, or safely land in Unsorted.',end:'Continue in the Document',endBody:'The capture becomes a project selection or fills a chosen unreleased need.'},
+      import:{start:'Map a schedule or name a need',startBody:'A spreadsheet preview or incomplete placeholder respects how the project began.',route:'Resolve intent before commit',routeBody:'Map rooms and fields; repeated sources ask reuse vs separate project need.',end:'Progressively complete',endBody:'Missing facts are visible gates; imported text never fabricates authorization.'}
+    };
+    const sourceTabs=[...document.querySelectorAll('.source-tab')];
+    function activateSource(tab){
+      sourceTabs.forEach(item=>{const on=item===tab;item.setAttribute('aria-selected',String(on));item.tabIndex=on?0:-1});
+      const data=journeyData[tab.dataset.source];
+      document.getElementById('journey').setAttribute('aria-labelledby',tab.id);
+      document.getElementById('journeyStart').textContent=data.start;
+      document.getElementById('journeyStartBody').textContent=data.startBody;
+      document.getElementById('journeyRoute').textContent=data.route;
+      document.getElementById('journeyRouteBody').textContent=data.routeBody;
+      document.getElementById('journeyEnd').textContent=data.end;
+      document.getElementById('journeyEndBody').textContent=data.endBody;
+    }
+    sourceTabs.forEach((tab,index)=>{
+      tab.addEventListener('click',()=>activateSource(tab));
+      tab.addEventListener('keydown',event=>{
+        let target=index;
+        if(event.key==='ArrowRight'||event.key==='ArrowDown')target=(index+1)%sourceTabs.length;
+        else if(event.key==='ArrowLeft'||event.key==='ArrowUp')target=(index-1+sourceTabs.length)%sourceTabs.length;
+        else if(event.key==='Home')target=0;
+        else if(event.key==='End')target=sourceTabs.length-1;
+        else return;
+        event.preventDefault();activateSource(sourceTabs[target]);sourceTabs[target].focus();
+      });
+    });
+    document.querySelectorAll('.proof-scroll,.table-scroll,.mobile-set').forEach((region,index)=>{
+      const slide=region.closest('.slide');
+      region.tabIndex=0;
+      region.setAttribute('role','region');
+      region.setAttribute('aria-label',`Scrollable detail ${index+1}: ${slide?.dataset.title||'Patina workflow proof'}`);
+    });
+    document.querySelectorAll('a[target="_blank"]').forEach(link=>link.setAttribute('aria-label',`${link.textContent.trim()} (opens in a new tab)`));
+    const query=new URLSearchParams(location.search);
+    const requestedSlide=Number(query.get('slide'));
+    if(Number.isInteger(requestedSlide)&&requestedSlide>=1&&requestedSlide<=slides.length){
+      const requestedIndex=requestedSlide-1;
+      current=requestedIndex;
+      slides[requestedIndex].scrollIntoView({behavior:'auto',block:'start'});
+      setCurrent(requestedIndex);
+      const realign=()=>slides[requestedIndex].scrollIntoView({behavior:'auto',block:'start'});
+      requestAnimationFrame(()=>requestAnimationFrame(realign));
+      addEventListener('load',realign,{once:true});
+      document.fonts?.ready.then(realign);
+    }else{
+      setCurrent(0);
+    }
+  </script>
+</body>
+</html>
