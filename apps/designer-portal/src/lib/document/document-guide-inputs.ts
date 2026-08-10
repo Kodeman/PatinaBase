@@ -82,34 +82,35 @@ export function composeDocumentGuideInputs({
     }
   }
 
+  const inputs: DocumentGuideInputFact[] = [];
   if (row.overdue_decision_count > 0) {
-    return [{
+    inputs.push({
       label: `${row.overdue_decision_count} overdue client decision${row.overdue_decision_count === 1 ? '' : 's'}`,
       owner: 'Client',
       blocks: 'Active project work',
-    }];
+    });
   }
   if ((row.active_section === 'install' || row.active_section === 'care') && row.open_claim_count > 0) {
-    return [{
+    inputs.push({
       label: `${row.open_claim_count} open damage claim${row.open_claim_count === 1 ? '' : 's'}`,
       owner: 'Project team',
       blocks: row.active_section === 'install' ? 'Installation completion' : 'Project closeout',
-    }];
+    });
   }
   if ((row.active_section === 'install' || row.active_section === 'care') && row.awaiting_inspection_count > 0) {
-    return [{
+    inputs.push({
       label: `${row.awaiting_inspection_count} delivery inspection${row.awaiting_inspection_count === 1 ? '' : 's'}`,
       owner: 'Designer',
       blocks: row.active_section === 'install' ? 'Installation completion' : 'Project closeout',
-    }];
+    });
   }
   if (row.blocked_item_count > 0) {
-    return [{
+    inputs.push({
       label: `${row.blocked_item_count} blocked project item${row.blocked_item_count === 1 ? '' : 's'}`,
       owner: 'Project team',
       blocks: 'Active project work',
-    }];
+    });
   }
 
-  return [];
+  return inputs;
 }
