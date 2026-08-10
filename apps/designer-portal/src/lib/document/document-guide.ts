@@ -69,6 +69,7 @@ interface DeriveDocumentGuideInput {
   row: DocumentStateRow;
   availability?: 'ready' | 'unavailable';
   now?: Date;
+  operationalNeed?: NeedLine | null;
   proposal?: ProposalGuideFacts | null;
   inputFacts?: readonly DocumentGuideInputFact[];
 }
@@ -260,6 +261,7 @@ export function deriveDocumentGuide({
   availability = 'ready',
   now = new Date(),
   proposal,
+  operationalNeed,
   inputFacts,
 }: DeriveDocumentGuideInput): DocumentGuideModel {
   const stage = row.active_section;
@@ -282,7 +284,7 @@ export function deriveDocumentGuide({
     }, inputFacts);
   }
 
-  const need = deriveNeed(row, now);
+  const need = operationalNeed === undefined ? deriveNeed(row, now) : operationalNeed;
   const proposalLifecycleNeed =
     need?.kind === 'proposal_signed' ||
     need?.kind === 'proposal_declined' ||

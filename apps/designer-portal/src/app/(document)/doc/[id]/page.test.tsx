@@ -7,6 +7,7 @@ let mockHydrated = false;
 const mockRetryDocumentResolution = jest.fn();
 const mockHistoryToggled = jest.fn();
 const mockDiscoveryFacetOpen = jest.fn();
+let mockDiscoveryFacetExpanded = false;
 let mockDocumentQuery: Record<string, unknown>;
 let mockDiscoveryQuery: Record<string, unknown> = { data: undefined, isLoading: false, isError: false };
 let mockDraftingState: Record<string, unknown> = { gaps: [], isLoading: false, error: null };
@@ -63,7 +64,7 @@ jest.mock('@/components/document/brief-recap', () => ({ BriefRecap: () => <div>B
 jest.mock('@/components/document/discovery/discovery-section', () => ({
   DiscoverySection: () => (
     <>
-      <button id="discovery-facet-budget" type="button" onClick={mockDiscoveryFacetOpen}>
+      <button id="discovery-facet-budget" type="button" aria-expanded={mockDiscoveryFacetExpanded} onClick={mockDiscoveryFacetOpen}>
         Budget comfort
       </button>
       <div id="document-decision-controls" tabIndex={-1}>Decision controls</div>
@@ -135,6 +136,11 @@ jest.mock('@/hooks/use-proposals', () => ({
 
 jest.mock('@/hooks/use-drafting-state', () => ({
   useDraftingState: () => mockDraftingState,
+}));
+
+jest.mock('@/hooks/use-desk-engagements', () => ({
+  useDeskEngagements: () => ({ data: undefined }),
+  selectOperationalNeedForDocument: () => null,
 }));
 
 jest.mock('@/hooks/use-document-rooms', () => ({
@@ -221,6 +227,7 @@ describe('DocumentPage guide activation', () => {
     mockHydrated = true;
     mockHistoryToggled.mockReset();
     mockDiscoveryFacetOpen.mockReset();
+    mockDiscoveryFacetExpanded = false;
     mockDiscoveryQuery = { data: undefined, isLoading: false, isError: false };
     mockDraftingState = { gaps: [], isLoading: false, error: null };
     mockProposalData = undefined;
@@ -342,6 +349,28 @@ describe('DocumentPage guide activation', () => {
       'href', '/drafting/proposal-1',
     );
     expect(screen.getByText(/Input needed · phases & fees/)).toBeInTheDocument();
+  });
+
+  it('focuses an already-open missing Discovery facet without toggling it closed', () => {
+    const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+    mockDocumentQuery = {
+      ...mockDocumentQuery,
+      data: { kind: 'engagement', row: {
+        ...current, engagement_kind: 'relationship', active_section: 'discovery',
+        engagement_id: 'relationship-1', lead_id: null, client_profile_id: 'client-1',
+      } },
+    };
+    mockDiscoveryQuery = {
+      data: { row: { project_type: 'full_home', rooms: [{ name: 'Living room' }] }, prefill: null },
+      isLoading: false,
+      isError: false,
+    };
+    mockDiscoveryFacetExpanded = true;
+
+    render(<DocumentPage params={fulfilledParams} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add Working budget' }));
+    expect(mockDiscoveryFacetOpen).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Budget comfort' })).toHaveFocus();
   });
 
   it('focuses the canonical control for an operational guide action', () => {
