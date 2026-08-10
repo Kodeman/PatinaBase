@@ -9158,6 +9158,60 @@ END $g$;
 
 -- 00433_canonical_workflow_spine.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_phase_workflow_metadata() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00433_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  REVOKE INSERT, UPDATE ON TABLE public.proposal_phases FROM authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00433_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  GRANT INSERT ON TABLE public.proposal_phases TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00433_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  GRANT INSERT ( id, proposal_id, name, phase_key, duration_weeks, fee_cents, revision_limit, gate_condition, deliverables, sort_order, created_at, updated_at, duration_days, anchor_date, lane, follows_phase_id ) ON TABLE public.proposal_phases TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00433_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  GRANT UPDATE ( name, phase_key, duration_weeks, fee_cents, revision_limit, gate_condition, deliverables, duration_days, anchor_date ) ON TABLE public.proposal_phases TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00433_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  GRANT UPDATE ( id, proposal_id, name, phase_key, duration_weeks, fee_cents, revision_limit, gate_condition, deliverables, sort_order, created_at, updated_at, duration_days, anchor_date, lane, follows_phase_id ) ON TABLE public.proposal_phases TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00433_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  REVOKE INSERT, UPDATE ON TABLE public.project_phases FROM authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00433_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  GRANT INSERT ( id, project_id, source_proposal_phase_id, name, phase_key, status, start_date, target_end_date, completed_at, duration_weeks, fee_cents, revision_limit, revisions_used, gate_condition, deliverables, progress, sort_order, created_at, updated_at, duration_days, anchor_date, estimated_hours, lane, follows_phase_id ) ON TABLE public.project_phases TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00433_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  GRANT UPDATE ( id, project_id, source_proposal_phase_id, name, phase_key, status, start_date, target_end_date, completed_at, duration_weeks, fee_cents, revision_limit, revisions_used, gate_condition, deliverables, progress, sort_order, created_at, updated_at, duration_days, anchor_date, estimated_hours, lane, follows_phase_id ) ON TABLE public.project_phases TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00433_canonical_workflow_spine.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.maintain_phase_template_version() FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -9171,6 +9225,18 @@ END $g$;
 -- 00433_canonical_workflow_spine.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.prepare_phase_template_application() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00433_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.apply_phase_template(uuid, text, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00433_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.apply_phase_template(uuid, text, uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

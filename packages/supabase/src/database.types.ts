@@ -13409,6 +13409,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "project_parties_sms_consent_recorded_by_fkey"
+            columns: ["sms_consent_recorded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_parties_sms_consent_recorded_by_fkey"
+            columns: ["sms_consent_recorded_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "project_parties_studio_contact_id_fkey"
             columns: ["studio_contact_id"]
             isOneToOne: false
@@ -27432,6 +27446,8 @@ export type Database = {
       get_project_workflow: {
         Args: { p_project_id: string }
         Returns: {
+          advance_blocker_count: number
+          blocks_advance: boolean
           canonical_stage_key: string
           completed_at: string
           current_blockers: Json
