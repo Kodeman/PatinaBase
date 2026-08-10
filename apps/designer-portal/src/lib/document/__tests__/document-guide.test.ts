@@ -78,6 +78,20 @@ describe('deriveDocumentGuide', () => {
     expect(paused.headline).toBe('This project is paused');
   });
 
+  it('keeps row-only guidance quiet while enriched signals load', () => {
+    const guide = deriveDocumentGuide({ row: row('brief'), availability: 'loading' });
+    expect(guide).toMatchObject({
+      state: 'loading', headline: 'Checking what needs attention', action: null,
+    });
+  });
+
+  it('offers an explicit retry only when the failed source is retryable here', () => {
+    const guide = deriveDocumentGuide({
+      row: row('brief'), availability: 'unavailable', retryAvailable: true,
+    });
+    expect(guide.action).toMatchObject({ key: 'retry-guidance', label: 'Try again' });
+  });
+
   it('puts an operational need ahead of stage guidance', () => {
     const guide = deriveDocumentGuide({
       row: row('project', { overdue_decision_count: 2, earliest_overdue_due: '2026-08-01' }),

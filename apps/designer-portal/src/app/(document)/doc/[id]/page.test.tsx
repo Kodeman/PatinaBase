@@ -18,8 +18,14 @@ let mockDeskData: {
   folders: Array<{ row: { engagement_id: string }; need: Record<string, unknown> | null }>;
   chips: unknown[];
 } = { folders: [], chips: [] };
+let mockDeskLoading = false;
+let mockDeskError = false;
+const mockRetryDesk = jest.fn();
 const mockUseDeskEngagements = jest.fn((_options?: { enabled?: boolean }) => ({
   data: mockDeskData,
+  isLoading: mockDeskLoading,
+  isError: mockDeskError,
+  refetch: mockRetryDesk,
 }));
 const mockSelectOperationalNeed = jest.fn(
   (data: typeof mockDeskData | undefined, engagementId: string | null | undefined) =>
@@ -249,6 +255,9 @@ describe('DocumentPage guide activation', () => {
     mockProposalError = false;
     mockProjectQuery = { data: undefined, isLoading: false, isError: false };
     mockDeskData = { folders: [], chips: [] };
+    mockDeskLoading = false;
+    mockDeskError = false;
+    mockRetryDesk.mockReset();
     mockUseDeskEngagements.mockClear();
     mockSelectOperationalNeed.mockClear();
     mockDocumentQuery = {
@@ -317,6 +326,26 @@ describe('DocumentPage guide activation', () => {
     expect(screen.getByRole('link', { name: 'Continue the introduction' })).toHaveAttribute(
       'href', '/ceremony/lead-1',
     );
+  });
+
+  it('shows unknown guidance while fresh operational signals load', () => {
+    mockDeskLoading = true;
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(screen.getByText('Checking what needs attention')).toBeInTheDocument();
+    expect(screen.queryByText('Review the inquiry')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Review the brief' })).not.toBeInTheDocument();
+  });
+
+  it('shows unavailable guidance and retries a failed operational read', () => {
+    mockDeskError = true;
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(screen.getByText('Guidance is unavailable')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(mockRetryDesk).toHaveBeenCalledTimes(1);
   });
 
   it('fetches and selects flagged-line guidance on a freshly opened Proposal', () => {
