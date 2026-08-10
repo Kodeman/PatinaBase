@@ -12860,6 +12860,7 @@ export type Database = {
           id: string
           project_id: string
           row_count: number
+          source_asset_id: string | null
           source_kind: string
           staged_by: string
           status: string
@@ -12872,6 +12873,7 @@ export type Database = {
           id?: string
           project_id: string
           row_count?: number
+          source_asset_id?: string | null
           source_kind: string
           staged_by?: string
           status?: string
@@ -12884,6 +12886,7 @@ export type Database = {
           id?: string
           project_id?: string
           row_count?: number
+          source_asset_id?: string | null
           source_kind?: string
           staged_by?: string
           status?: string
@@ -12902,6 +12905,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_import_batches_source_asset_id_fkey"
+            columns: ["source_asset_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_media_assets"
             referencedColumns: ["id"]
           },
           {
@@ -14215,6 +14225,8 @@ export type Database = {
           error_code: string | null
           id: string
           idempotency_key: string
+          provider_message_id: string | null
+          requested_by: string | null
           status: string
         }
         Insert: {
@@ -14224,6 +14236,8 @@ export type Database = {
           error_code?: string | null
           id?: string
           idempotency_key: string
+          provider_message_id?: string | null
+          requested_by?: string | null
           status?: string
         }
         Update: {
@@ -14233,6 +14247,8 @@ export type Database = {
           error_code?: string | null
           id?: string
           idempotency_key?: string
+          provider_message_id?: string | null
+          requested_by?: string | null
           status?: string
         }
         Relationships: [
@@ -14241,6 +14257,20 @@ export type Database = {
             columns: ["edition_id"]
             isOneToOne: false
             referencedRelation: "project_review_editions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_review_delivery_attempts_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_review_delivery_attempts_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
             referencedColumns: ["id"]
           },
         ]
@@ -25792,6 +25822,10 @@ export type Database = {
         }
         Returns: Json
       }
+      _ffe_is_studio_actor: {
+        Args: { p_actor_id: string; p_owner_id: string }
+        Returns: boolean
+      }
       _ffe_require_studio_project: {
         Args: { p_project_id: string }
         Returns: {
@@ -26809,6 +26843,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      authorize_project_review_media: {
+        Args: { p_actor_id: string; p_edition_id: string }
+        Returns: Json
       }
       batch_place_library_products_in_project: {
         Args: { p_request: Json }
@@ -28433,6 +28471,10 @@ export type Database = {
         Args: { p_project_id: string }
         Returns: Json
       }
+      get_project_ffe_extract_upload: {
+        Args: { p_actor_id: string; p_asset_id: string; p_project_id: string }
+        Returns: Json
+      }
       get_project_ffe_readiness: {
         Args: { p_ffe_item_id: string }
         Returns: Json
@@ -28855,6 +28897,14 @@ export type Database = {
         }
       }
       mark_feedback_seen: { Args: { p_id: string }; Returns: undefined }
+      mark_project_review_delivery_sent: {
+        Args: {
+          p_actor_id: string
+          p_attempt_id: string
+          p_error_code?: string
+        }
+        Returns: Json
+      }
       mark_proposal_viewed: { Args: { p_proposal_id: string }; Returns: Json }
       mark_room_scan_geometry_error: {
         Args: { p_error: string; p_scan_id: string }
@@ -29006,6 +29056,14 @@ export type Database = {
           p_scope?: string
           p_timeline?: string
           p_vendor_id: string
+        }
+        Returns: Json
+      }
+      prepare_project_review_delivery: {
+        Args: {
+          p_actor_id: string
+          p_edition_id: string
+          p_idempotency_key: string
         }
         Returns: Json
       }
@@ -30324,6 +30382,16 @@ export type Database = {
           media_id: string
           object_path: string
         }[]
+      }
+      stage_project_ffe_document_extraction: {
+        Args: {
+          p_actor_id: string
+          p_asset_id: string
+          p_file_hash: string
+          p_project_id: string
+          p_rows: Json
+        }
+        Returns: Json
       }
       stage_project_ffe_import: { Args: { p_request: Json }; Returns: Json }
       stamp_client_decision_reminder: {

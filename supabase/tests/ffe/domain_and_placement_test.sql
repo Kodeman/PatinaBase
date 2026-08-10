@@ -94,5 +94,25 @@ DO $$ BEGIN
   ASSERT (SELECT count(*)=0 FROM public.project_ffe_items WHERE project_id='f5100000-0000-4000-8000-000000000001'),'client raw FF&E read must fail closed';
   ASSERT jsonb_array_length(public.get_client_project_selections('f5100000-0000-4000-8000-000000000001')->'selections')>0,'curated client reader must remain available';
 END; $$;
+
+SELECT pg_temp.assume_ffe_actor('f5000000-0000-4000-8000-000000000001');
+SELECT set_config('app.board_state_rpc','on',true);
+DO $$ BEGIN
+  BEGIN
+    UPDATE public.proposal_boards
+    SET name=name || ' spoofed'
+    WHERE project_id='f5100000-0000-4000-8000-000000000001';
+    RAISE EXCEPTION 'authenticated caller spoofed the project-board RPC guard';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+
+  BEGIN
+    UPDATE public.proposal_board_items item
+    SET x=item.x + 1
+    FROM public.proposal_boards board
+    WHERE board.id=item.board_id
+      AND board.project_id='f5100000-0000-4000-8000-000000000001';
+    RAISE EXCEPTION 'authenticated caller spoofed the project-board-item RPC guard';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+END; $$;
 RESET ROLE;
 ROLLBACK;

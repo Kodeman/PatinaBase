@@ -9311,3 +9311,33 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.get_client_project_selections(uuid),public.get_client_project_review_bundle(uuid) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00436_ffe_board_mutation_guard_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_project_board_rpc_mutation() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_ffe_service_boundaries.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._ffe_is_studio_actor(uuid, uuid), public.authorize_project_review_media(uuid, uuid), public.get_project_ffe_extract_upload(uuid, uuid, uuid), public.stage_project_ffe_document_extraction(uuid, uuid, uuid, text, jsonb), public.prepare_project_review_delivery(uuid, uuid, text), public.mark_project_review_delivery_sent(uuid, uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_ffe_service_boundaries.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.authorize_project_review_media(uuid, uuid), public.get_project_ffe_extract_upload(uuid, uuid, uuid), public.stage_project_ffe_document_extraction(uuid, uuid, uuid, text, jsonb), public.prepare_project_review_delivery(uuid, uuid, text), public.mark_project_review_delivery_sent(uuid, uuid, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_ffe_service_boundaries.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_review_media_manifest(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_ffe_service_boundaries.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_review_media_manifest(uuid, uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
