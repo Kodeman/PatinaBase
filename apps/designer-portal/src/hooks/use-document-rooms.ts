@@ -7,7 +7,8 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createBrowserClient } from '@patina/supabase';
+import { createBrowserClient, useTriageProjectFfeItems } from '@patina/supabase';
+import type { FfeAssignmentScope } from '@patina/types';
 
 const getSupabase = () => createBrowserClient() as any;
 
@@ -69,18 +70,21 @@ export function useAddDocumentRoom(projectId: string | null) {
 
 /** Assign a line to a room (from the unfold; drag lands here too). */
 export function useAssignLineRoom(projectId: string | null) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ itemId, roomId }: { itemId: string; roomId: string | null }) => {
-      const { error } = await getSupabase()
-        .from('project_ffe_items')
-        .update({ project_room_id: roomId })
-        .eq('id', itemId);
-      if (error) throw error;
+  const triage = useTriageProjectFfeItems();
+  return {
+    ...triage,
+    mutate: ({ itemId, roomId, assignmentScope }: {
+      itemId: string;
+      roomId: string | null;
+      assignmentScope: FfeAssignmentScope;
+    }) => {
+      if (!projectId) return;
+      triage.mutate({
+        projectId,
+        selectionIds: [itemId],
+        assignmentScope,
+        roomId,
+      });
     },
-    onSuccess: () => {
-      if (projectId) void qc.invalidateQueries({ queryKey: ['project-ffe-items', projectId] });
-      void qc.invalidateQueries({ queryKey: ['document-rooms', projectId] });
-    },
-  });
+  };
 }

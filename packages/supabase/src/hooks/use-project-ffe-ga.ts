@@ -17,24 +17,12 @@ import { invalidateFfeCaches } from './use-procurement';
 
 type JsonRecord = Record<string, unknown>;
 
-function snakeKey(key: string): string {
-  return key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
-}
-
-function rpcRequest(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(rpcRequest);
-  if (!value || typeof value !== 'object') return value;
-  return Object.fromEntries(
-    Object.entries(value as JsonRecord).map(([key, item]) => [snakeKey(key), rpcRequest(item)]),
-  );
-}
-
-async function callCommand<Result>(name: string, request: object): Promise<Result> {
+async function callJsonCommand<Result>(name: string, request: object): Promise<Result> {
   // Generated function types arrive with the migration lane; this compatibility
   // cast keeps the web lane buildable while preserving one public RPC boundary.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = createBrowserClient() as any;
-  const { data, error } = await supabase.rpc(name, { request: rpcRequest(request) });
+  const { data, error } = await supabase.rpc(name, { p_request: request });
   if (error) throw error;
   return data as Result;
 }
@@ -49,15 +37,25 @@ function responseString(data: unknown, camel: string, snake: string): string {
 
 function normalizePlacement(data: unknown): PlaceProductInProjectResult {
   const row = (data ?? {}) as JsonRecord;
+  const outcome = row.outcome;
+  if (!['created', 'reused', 'filled', 'held'].includes(String(outcome))) {
+    throw new Error('outcome was not returned');
+  }
+  const selectionId = typeof row.selectionId === 'string' ? row.selectionId : null;
+  if (outcome !== 'held' && !selectionId) throw new Error('selectionId was not returned');
   return {
-    outcome: (row.outcome ?? 'created') as PlaceProductInProjectResult['outcome'],
-    selectionId: responseString(row, 'selectionId', 'selection_id'),
-    selectionThreadId: responseString(row, 'selectionThreadId', 'selection_thread_id'),
+    outcome: outcome as PlaceProductInProjectResult['outcome'],
+    selectionId,
+    threadId: typeof row.threadId === 'string' ? row.threadId : null,
     placementId: (row.placementId ?? row.placement_id ?? null) as string | null,
   };
 }
 
-function invalidateProjectFfe(queryClient: ReturnType<typeof useQueryClient>, projectId: string) {
+function invalidateProjectFfe(
+  queryClient: ReturnType<typeof useQueryClient>,
+  projectId: string,
+  boardId?: string | null,
+) {
   invalidateFfeCaches(queryClient, projectId);
   queryClient.invalidateQueries({
     queryKey: boardOwnerQueryKeys.list({ kind: 'project', id: projectId }),
@@ -66,14 +64,15 @@ function invalidateProjectFfe(queryClient: ReturnType<typeof useQueryClient>, pr
     queryKey: boardOwnerQueryKeys.withItems({ kind: 'project', id: projectId }),
   });
   queryClient.invalidateQueries({ queryKey: ['project-review-editions', projectId] });
+  if (boardId) queryClient.invalidateQueries({ queryKey: ['board', boardId] });
 }
 
 export function usePlaceProductInProjectV2() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (request: PlaceProductInProjectRequest) =>
-      normalizePlacement(await callCommand<unknown>('place_product_in_project_v2', request)),
-    onSuccess: (_result, request) => invalidateProjectFfe(queryClient, request.projectId),
+      normalizePlacement(await callJsonCommand<unknown>('place_product_in_project_v2', request)),
+    onSuccess: (_result, request) => invalidateProjectFfe(queryClient, request.projectId, request.boardId),
   });
 }
 
@@ -81,7 +80,7 @@ export function useCreateProjectBoard() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (request: CreateProjectBoardRequest): Promise<string> =>
-      responseString(await callCommand<unknown>('create_project_board', request), 'boardId', 'board_id'),
+      responseString(await callJsonCommand<unknown>('create_project_board', request), 'boardId', 'board_id'),
     onSuccess: (_boardId, request) => invalidateProjectFfe(queryClient, request.projectId),
   });
 }
@@ -91,7 +90,19 @@ export function usePromoteBoardReferenceToSelection() {
   return useMutation({
     mutationFn: async (request: PromoteBoardReferenceRequest) =>
       normalizePlacement(
-        await callCommand<unknown>('promote_board_reference_to_selection', request),
+        await (createBrowserClient() as any).rpc('promote_board_reference_to_selection', {
+          p_board_item_id: request.boardItemId,
+          p_request: {
+            assignmentScope: request.assignmentScope,
+            roomId: request.roomId ?? null,
+            disposition: request.disposition,
+            duplicateMode: request.duplicateMode,
+            idempotencyKey: request.idempotencyKey,
+          },
+        }).then(({ data, error }: { data: unknown; error: unknown }) => {
+          if (error) throw error;
+          return data;
+        }),
       ),
     onSuccess: (_result, request) => invalidateProjectFfe(queryClient, request.projectId),
   });
@@ -100,13 +111,9 @@ export function usePromoteBoardReferenceToSelection() {
 export function useCreateNamedProjectNeed() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (request: CreateNamedProjectNeedRequest): Promise<string> =>
-      responseString(
-        await callCommand<unknown>('create_named_project_need', request),
-        'selectionId',
-        'selection_id',
-      ),
-    onSuccess: (_selectionId, request) => invalidateProjectFfe(queryClient, request.projectId),
+    mutationFn: async (request: CreateNamedProjectNeedRequest): Promise<PlaceProductInProjectResult> =>
+      normalizePlacement(await callJsonCommand<unknown>('create_named_project_need', request)),
+    onSuccess: (_result, request) => invalidateProjectFfe(queryClient, request.projectId, request.boardId),
   });
 }
 
@@ -114,7 +121,13 @@ export function useTriageProjectFfeItems() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (request: TriageProjectFfeItemsRequest) =>
-      callCommand<unknown>('triage_project_ffe_items', request),
+      callJsonCommand<unknown>('triage_project_ffe_items', {
+        projectId: request.projectId,
+        selectionIds: request.selectionIds,
+        assignmentScope: request.assignmentScope,
+        roomId: request.roomId ?? null,
+        disposition: request.disposition,
+      }),
     onSuccess: (_result, request) => invalidateProjectFfe(queryClient, request.projectId),
   });
 }
@@ -122,8 +135,14 @@ export function useTriageProjectFfeItems() {
 export function useArchiveProjectSelection() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (request: ArchiveProjectSelectionRequest) =>
-      callCommand<unknown>('archive_project_selection', request),
+    mutationFn: async (request: ArchiveProjectSelectionRequest) => {
+      const { data, error } = await (createBrowserClient() as any).rpc('archive_project_selection', {
+        p_ffe_item_id: request.selectionId,
+        p_reason: request.reason,
+      });
+      if (error) throw error;
+      return data;
+    },
     onSuccess: (_result, request) => invalidateProjectFfe(queryClient, request.projectId),
   });
 }
@@ -132,7 +151,12 @@ export function useSupersedeProjectSelection() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (request: SupersedeProjectSelectionRequest) =>
-      callCommand<unknown>('supersede_project_selection', request),
+      callJsonCommand<unknown>('supersede_project_selection', {
+        selectionId: request.selectionId,
+        productId: request.productId ?? null,
+        name: request.name ?? null,
+        placementIds: request.placementIds,
+      }),
     onSuccess: (_result, request) => invalidateProjectFfe(queryClient, request.projectId),
   });
 }
@@ -141,13 +165,13 @@ export function usePublishProjectReview() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (request: PublishProjectReviewRequest): Promise<PublishProjectReviewResult> => {
-      const row = await callCommand<JsonRecord>('publish_project_review', request);
+      const row = await callJsonCommand<JsonRecord>('publish_project_review', request);
       return {
         editionId: responseString(row, 'editionId', 'edition_id'),
         editionNumber: Number(row.editionNumber ?? row.edition_number ?? 0),
         status: 'published',
-        deliveryStatus: (row.deliveryStatus ?? row.delivery_status ?? 'not_requested') as
-          PublishProjectReviewResult['deliveryStatus'],
+        snapshotHash: responseString(row, 'snapshotHash', 'snapshot_hash'),
+        itemCount: Number(row.itemCount ?? row.item_count ?? 0),
       };
     },
     onSuccess: (_result, request) => invalidateProjectFfe(queryClient, request.projectId),

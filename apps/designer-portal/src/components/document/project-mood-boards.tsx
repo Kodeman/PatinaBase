@@ -36,6 +36,9 @@ interface ContinueItem {
   action?: () => void;
 }
 
+const EMPTY_LIVE_BOARDS: readonly LiveBoardWithLineage[] = [];
+const EMPTY_FROZEN_BOARDS: readonly FrozenBoardWithSections[] = [];
+
 function roomHref(boardId: string, pathname: string) {
   return boardRoomHref({
     boardId,
@@ -49,7 +52,15 @@ function roomHref(boardId: string, pathname: string) {
  * while signed snapshots stay visibly frozen and can be continued exactly
  * once through the idempotent database RPC.
  */
-export function ProjectMoodBoards({ projectId }: { projectId: string }) {
+export function ProjectMoodBoards({
+  projectId,
+  rooms = [],
+  canCreate = true,
+}: {
+  projectId: string;
+  rooms?: Array<{ id: string; name: string }>;
+  canCreate?: boolean;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const liveQuery = useProjectOwnedBoards(projectId);
@@ -60,10 +71,15 @@ export function ProjectMoodBoards({ projectId }: { projectId: string }) {
   const [continuingId, setContinuingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [boardName, setBoardName] = useState('');
+  const [boardRoomId, setBoardRoomId] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const liveBoards = (liveQuery.data ?? []) as LiveBoardWithLineage[];
-  const frozenBoards = (frozenQuery.data ?? []) as FrozenBoardWithSections[];
+  const liveBoards = useMemo(
+    () => ((liveQuery.data ?? EMPTY_LIVE_BOARDS) as LiveBoardWithLineage[])
+      .filter((board) => board.status !== 'archived'),
+    [liveQuery.data],
+  );
+  const frozenBoards = (frozenQuery.data ?? EMPTY_FROZEN_BOARDS) as FrozenBoardWithSections[];
   const continuedBySnapshot = useMemo(
     () =>
       new Map(
@@ -76,22 +92,13 @@ export function ProjectMoodBoards({ projectId }: { projectId: string }) {
     [liveBoards],
   );
 
-  const isLoading = liveQuery.isLoading || frozenQuery.isLoading;
+  const isLoading = liveQuery.isLoading || frozenQuery.isLoading || selectionsQuery.isLoading;
 
   const continueItems = useMemo<ContinueItem[]>(() => {
-    const rows = (selectionsQuery.data ?? []) as Array<Record<string, unknown>>;
+    const rows = ((selectionsQuery.data ?? []) as Array<Record<string, unknown>>)
+      .filter((row) => row.removed_at == null)
+      .filter((row) => !['not_selected', 'superseded'].includes(String(row.design_disposition)));
     const result: ContinueItem[] = [];
-    const reviewAttention = rows.find((row) =>
-      row.latest_review_verdict === 'rejected' || row.latest_review_verdict === 'comment',
-    );
-    if (reviewAttention) {
-      result.push({
-        key: `review:${String(reviewAttention.id)}`,
-        label: 'Continue client review changes',
-        detail: 'A published review has a change or question to resolve.',
-        href: `#ffe-selection-${String(reviewAttention.id)}`,
-      });
-    }
     const unsorted = rows
       .filter((row) => row.assignment_scope === 'unassigned')
       .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))[0];
@@ -114,18 +121,7 @@ export function ProjectMoodBoards({ projectId }: { projectId: string }) {
         href: roomHref(lastBoard.id, pathname),
       });
     }
-    const specGap = rows.find((row) =>
-      Number(row.missing_required_field_count ?? 0) > 0 || row.readiness_status === 'blocked',
-    );
-    if (specGap) {
-      result.push({
-        key: `spec:${String(specGap.id)}`,
-        label: 'Finish a release-blocking specification',
-        detail: 'Required product or commercial facts are still missing.',
-        href: `#ffe-selection-${String(specGap.id)}`,
-      });
-    }
-    if (rows.length === 0 && liveBoards.length === 0) {
+    if (canCreate && rows.length === 0 && liveBoards.length === 0) {
       result.push({
         key: 'first-add',
         label: 'Make the first project selection',
@@ -134,13 +130,13 @@ export function ProjectMoodBoards({ projectId }: { projectId: string }) {
       });
     }
     return result.slice(0, 3);
-  }, [liveBoards, pathname, selectionsQuery.data]);
+  }, [canCreate, liveBoards, pathname, selectionsQuery.data]);
 
   useEffect(() => {
-    const openCreator = () => setCreating(true);
+    const openCreator = () => { if (canCreate) setCreating(true); };
     window.addEventListener('document:new-project-board', openCreator);
     return () => window.removeEventListener('document:new-project-board', openCreator);
-  }, []);
+  }, [canCreate]);
   if (isLoading) {
     return (
       <section aria-label="Mood boards" className="mt-9 border-t border-[var(--color-pearl)] pt-6">
@@ -149,7 +145,7 @@ export function ProjectMoodBoards({ projectId }: { projectId: string }) {
     );
   }
 
-  if (liveQuery.isError || frozenQuery.isError) {
+  if (liveQuery.isError || frozenQuery.isError || selectionsQuery.isError) {
     return (
       <section aria-labelledby="project-mood-boards" className="mt-9 border-t border-[var(--color-pearl)] pt-6">
         <h2 id="project-mood-boards" className="font-heading text-[16px] text-[var(--color-charcoal)]">
@@ -200,10 +196,10 @@ export function ProjectMoodBoards({ projectId }: { projectId: string }) {
       const boardId = await createBoard.mutateAsync({
         projectId,
         name,
-        starterIntent: 'blank',
-        idempotencyKey: globalThis.crypto?.randomUUID?.() ?? `board-${projectId}-${Date.now()}`,
+        roomId: boardRoomId || null,
       });
       setBoardName('');
+      setBoardRoomId('');
       setCreating(false);
       router.push(roomHref(boardId, pathname));
     } catch (cause) {
@@ -227,9 +223,11 @@ export function ProjectMoodBoards({ projectId }: { projectId: string }) {
           <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
             {liveBoards.length} live · {frozenBoards.length} frozen
           </span>
-          <DocumentAction actionKey="new-project-board" surfaceKey="project" regionKey="working-boards" variant="primary" onClick={() => setCreating(true)}>
-            New board
-          </DocumentAction>
+          {canCreate && (
+            <DocumentAction actionKey="new-project-board" surfaceKey="project" regionKey="working-boards" variant="primary" onClick={() => setCreating(true)}>
+              New board
+            </DocumentAction>
+          )}
         </span>
       </div>
 
@@ -252,7 +250,7 @@ export function ProjectMoodBoards({ projectId }: { projectId: string }) {
         </div>
       )}
 
-      {creating && (
+      {canCreate && creating && (
         <div className="mt-3 flex flex-wrap items-center gap-2 border-y border-[var(--color-pearl)] py-3">
           <input
             autoFocus
@@ -266,6 +264,15 @@ export function ProjectMoodBoards({ projectId }: { projectId: string }) {
             placeholder={`Board ${liveBoards.length + 1}`}
             className="min-h-11 min-w-0 flex-1 rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-3 text-[13px] outline-none focus:border-[var(--color-clay)]"
           />
+          <select
+            value={boardRoomId}
+            onChange={(event) => setBoardRoomId(event.target.value)}
+            aria-label="Board room"
+            className="min-h-11 rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-3 text-[13px] outline-none focus:border-[var(--color-clay)]"
+          >
+            <option value="">Project-wide</option>
+            {rooms.map((room) => <option key={room.id} value={room.id}>{room.name}</option>)}
+          </select>
           <DocumentAction actionKey="create-project-board" surfaceKey="project" regionKey="working-boards" variant="primary" loading={createBoard.isPending} onClick={() => void handleCreate()}>
             Start board
           </DocumentAction>
@@ -313,14 +320,14 @@ export function ProjectMoodBoards({ projectId }: { projectId: string }) {
         </div>
       )}
 
-      {liveBoards.length === 0 && (
+      {canCreate && liveBoards.length === 0 && (
         <button
           type="button"
           onClick={() => setCreating(true)}
           className="mt-5 w-full rounded-[5px] border border-dashed border-[var(--border-default)] px-6 py-8 text-center hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
         >
           <span className="block font-heading text-[15px] text-[var(--color-charcoal)]">Start the first working board</span>
-          <span className="mt-1 block text-[11px] text-[var(--text-muted)]">References can stay loose; products become project selections when you promote them.</span>
+          <span className="mt-1 block text-[11px] text-[var(--text-muted)]">References stay loose; Library and capture products become project selections as they are placed.</span>
         </button>
       )}
 
@@ -353,7 +360,7 @@ export function ProjectMoodBoards({ projectId }: { projectId: string }) {
                     >
                       Open continued board
                     </Link>
-                  ) : (
+                  ) : canCreate ? (
                     <button
                       type="button"
                       onClick={() => void handleContinue(snapshot)}
@@ -362,6 +369,10 @@ export function ProjectMoodBoards({ projectId }: { projectId: string }) {
                     >
                       {busy ? 'Continuing…' : 'Continue in project'}
                     </button>
+                  ) : (
+                    <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+                      Historical
+                    </span>
                   )}
                 </div>
 

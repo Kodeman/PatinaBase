@@ -462,14 +462,14 @@ export function BoardRoomInspector({
                   setPromotionError(null);
                   void promoteReference.mutateAsync({
                     projectId: owner.id,
-                    boardId: api.state!.boardId,
-                    placementId: lead.id,
+                    boardItemId: lead.id,
                     assignmentScope: scopeRoomId ? 'room' : 'unassigned',
-                    projectRoomId: scopeRoomId,
-                    designDisposition: 'candidate',
+                    roomId: scopeRoomId,
+                    disposition: 'candidate',
                     duplicateMode: 'reuse',
-                    idempotencyKey: globalThis.crypto?.randomUUID?.() ?? `promote-${lead.id}-${Date.now()}`,
+                    idempotencyKey: `promote:${lead.id}`,
                   }).then((result) => {
+                    if (!result.selectionId) throw new Error('Promotion did not return a selection.');
                     api.updateItem(lead.id, { projectFfeItemId: result.selectionId });
                   }).catch((cause) => {
                     setPromotionError(

@@ -20,7 +20,7 @@ export const ffeEvents = {
   }) => track('ffe_routing_chosen', properties),
   placementCompleted: (properties: {
     project_id: string;
-    selection_id: string;
+    selection_id: string | null;
     placement_id: string | null;
     outcome: 'created' | 'reused' | 'filled' | 'held';
   }) => track('ffe_placement_completed', properties),

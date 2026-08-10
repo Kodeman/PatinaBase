@@ -48,9 +48,10 @@ describe('AddLineSheet', () => {
       name: 'Walnut bed, king',
       quantity: 2,
       assignmentScope: 'room',
-      projectRoomId: 'room-1',
-      designDisposition: 'candidate',
-      needKind: 'manual_product',
+      roomId: 'room-1',
+      disposition: 'candidate',
+      source: 'named-need',
+      sourceMetadata: { needKind: 'manual_product' },
       idempotencyKey: expect.any(String),
     });
   });
@@ -64,7 +65,7 @@ describe('AddLineSheet', () => {
     await waitFor(() => expect(addMutate).toHaveBeenCalled());
     expect(addMutate).toHaveBeenCalledWith(
       expect.objectContaining({
-        needKind: 'allowance',
+        sourceMetadata: { needKind: 'allowance' },
         assignmentScope: 'room',
       }),
     );
@@ -86,7 +87,7 @@ describe('AddLineSheet', () => {
     fireEvent.click(screen.getByRole('button', { name: /add the line/i }));
     await waitFor(() => expect(addMutate).toHaveBeenCalled());
     expect(addMutate).toHaveBeenCalledWith(
-      expect.objectContaining({ projectRoomId: null, assignmentScope: 'throughout' }),
+      expect.objectContaining({ roomId: null, assignmentScope: 'throughout' }),
     );
   });
 

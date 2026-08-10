@@ -894,16 +894,16 @@ export function useAddProjectFFEItem() {
   });
 }
 
-// Remove an FF&E item, then recompute the project budget (inverse of add).
+// Legacy API retained for source compatibility. Selections are soft-removed
+// through archive_project_selection; physical deletion deliberately fails closed.
 export function useRemoveProjectFFEItem() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ itemId, projectId }: { itemId: string; projectId: string }) => {
-      const supabase = getSupabase();
-      const { error } = await supabase.from('project_ffe_items').delete().eq('id', itemId);
-      if (error) throw error;
-      await recomputeProjectBudget(supabase, projectId);
+    mutationFn: async (_input: { itemId: string; projectId: string }) => {
+      throw new Error(
+        'Physical FF&E deletion is disabled; archive the project selection instead.',
+      );
     },
     onSuccess: (_, { projectId }) => invalidateProjectFFE(queryClient, projectId),
   });

@@ -582,8 +582,16 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
             Project section. Studio eyes only; never mirrored. */}
         {row.engagement_kind === 'project' && row.project_id && (
           <>
-            <AccountBand projectId={row.project_id} clientName={row.client_name} />
-            <ProjectMoodBoards projectId={row.project_id} />
+            <AccountBand
+              projectId={row.project_id}
+              clientName={row.client_name}
+              activeSection={row.active_section}
+            />
+            <ProjectMoodBoards
+              projectId={row.project_id}
+              rooms={(docRooms ?? []).map((room) => ({ id: room.id, name: room.name }))}
+              canCreate={row.active_section === 'project'}
+            />
           </>
         )}
 

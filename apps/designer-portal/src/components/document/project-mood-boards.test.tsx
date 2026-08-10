@@ -64,12 +64,12 @@ describe('ProjectMoodBoards', () => {
     createBoard.mockReset();
     useProjectOwnedBoards.mockReturnValue({ data: [], isLoading: false, isError: false });
     useProjectBoards.mockReturnValue({ data: [frozen], isLoading: false, isError: false });
-    useProjectFFEItems.mockReturnValue({ data: [], isLoading: false });
+    useProjectFFEItems.mockReturnValue({ data: [], isLoading: false, isError: false });
   });
 
   it('renders an id-less frozen snapshot read-only and continues it into the room', async () => {
     mutateAsync.mockResolvedValue('live-board-1');
-    render(<ProjectMoodBoards projectId="project-1" />);
+    render(<ProjectMoodBoards projectId="project-1" rooms={[{ id: 'room-1', name: 'Living room' }]} />);
 
     expect(screen.getByText('Signed living room')).toBeInTheDocument();
     expect(screen.getByTestId('composition-snapshot-1')).toHaveAttribute('data-interactive', 'false');
@@ -115,7 +115,7 @@ describe('ProjectMoodBoards', () => {
       ],
     });
 
-    render(<ProjectMoodBoards projectId="project-1" />);
+    render(<ProjectMoodBoards projectId="project-1" rooms={[{ id: 'room-1', name: 'Living room' }]} />);
 
     expect(screen.queryByRole('button', { name: 'Continue in project' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open continued board' })).toHaveAttribute(
@@ -127,28 +127,29 @@ describe('ProjectMoodBoards', () => {
   it('keeps the empty board surface visible and creates through the canonical command', async () => {
     useProjectBoards.mockReturnValue({ data: [], isLoading: false, isError: false });
     createBoard.mockResolvedValue('board-new');
-    render(<ProjectMoodBoards projectId="project-1" />);
+    render(<ProjectMoodBoards projectId="project-1" rooms={[{ id: 'room-1', name: 'Living room' }]} />);
 
     fireEvent.click(screen.getByRole('button', { name: /start the first working board/i }));
     fireEvent.change(screen.getByRole('textbox', { name: 'Board name' }), {
       target: { value: 'Living selections' },
     });
+    fireEvent.change(screen.getByLabelText('Board room'), { target: { value: 'room-1' } });
     fireEvent.click(screen.getByRole('button', { name: 'Start board' }));
 
     await waitFor(() => expect(createBoard).toHaveBeenCalledWith(expect.objectContaining({
       projectId: 'project-1',
       name: 'Living selections',
-      starterIntent: 'blank',
-      idempotencyKey: expect.any(String),
+      roomId: 'room-1',
     })));
     expect(push).toHaveBeenCalledWith(
       '/board/board-new?source=project_surface&from=%2Fdoc%2Fproject-1',
     );
   });
 
-  it('caps Continue work at three rows in priority order', () => {
+  it('uses only fields present on the live selection query for Continue work', () => {
     useProjectFFEItems.mockReturnValue({
       isLoading: false,
+      isError: false,
       data: [
         { id: 'review', latest_review_verdict: 'comment', created_at: '2026-08-05' },
         { id: 'unsorted', assignment_scope: 'unassigned', created_at: '2026-08-01' },
@@ -157,8 +158,47 @@ describe('ProjectMoodBoards', () => {
     });
     render(<ProjectMoodBoards projectId="project-1" />);
     const region = screen.getByLabelText('Continue project FF&E work');
-    expect(region.children).toHaveLength(3);
-    expect(region.children[0]).toHaveTextContent('Continue client review changes');
-    expect(region.children[1]).toHaveTextContent('Route the oldest Unsorted selection');
+    expect(region.children).toHaveLength(1);
+    expect(region.children[0]).toHaveTextContent('Route the oldest Unsorted selection');
+    expect(region).not.toHaveTextContent('Continue client review changes');
+    expect(region).not.toHaveTextContent('release-blocking specification');
+  });
+
+  it('filters archived live boards and fails closed while selections load', () => {
+    useProjectOwnedBoards.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: [{ id: 'archived', status: 'archived', name: 'Old board', updated_at: '2026-08-10', item_count: 2 }],
+    });
+    useProjectFFEItems.mockReturnValue({ data: undefined, isLoading: true, isError: false });
+    render(<ProjectMoodBoards projectId="project-1" />);
+    expect(screen.getByLabelText('Mood boards')).toBeInTheDocument();
+    expect(screen.queryByText('Old board')).not.toBeInTheDocument();
+  });
+
+  it('does not route inactive selections from Continue', () => {
+    useProjectBoards.mockReturnValue({ data: [], isLoading: false, isError: false });
+    useProjectFFEItems.mockReturnValue({
+      data: [
+        { id: 'removed', assignment_scope: 'unassigned', removed_at: '2026-08-10' },
+        { id: 'rejected', assignment_scope: 'unassigned', design_disposition: 'not_selected' },
+        { id: 'old', assignment_scope: 'unassigned', design_disposition: 'superseded' },
+      ],
+      isLoading: false,
+      isError: false,
+    });
+
+    render(<ProjectMoodBoards projectId="project-1" />);
+
+    expect(screen.queryByText('Route the oldest Unsorted selection')).not.toBeInTheDocument();
+    expect(screen.getByText('Make the first project selection')).toBeInTheDocument();
+  });
+
+  it('keeps board creation and continuation read-only after Project', () => {
+    render(<ProjectMoodBoards projectId="project-1" canCreate={false} />);
+    expect(screen.queryByRole('button', { name: 'New board' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /start the first working board/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Continue in project' })).not.toBeInTheDocument();
+    expect(screen.getByText('Historical')).toBeInTheDocument();
   });
 });

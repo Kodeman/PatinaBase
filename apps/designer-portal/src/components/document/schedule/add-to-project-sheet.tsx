@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { FolderPlus } from 'lucide-react';
 import type {
   FfeAssignmentScope,
   FfeDesignDisposition,
+  FfeDuplicateMode,
 } from '@patina/types';
 import {
   useCreateNamedProjectNeed,
@@ -31,7 +32,7 @@ export function openAddToProject(source: 'section' | 'command_palette' | 'empty_
   window.dispatchEvent(new CustomEvent('document:open-add-to-project', { detail: { source } }));
 }
 
-function idempotencyKey(prefix: string): string {
+function newIdempotencyKey(prefix: string): string {
   return globalThis.crypto?.randomUUID?.() ?? `${prefix}-${Date.now()}`;
 }
 
@@ -40,11 +41,13 @@ export function AddToProjectSheet({
   projectName,
   rooms,
   boards,
+  placeholders = [],
 }: {
   projectId: string;
   projectName: string;
   rooms: Array<{ id: string; name: string }>;
   boards: ProposalBoardSummary[];
+  placeholders?: Array<{ id: string; name: string }>;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -53,21 +56,26 @@ export function AddToProjectSheet({
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<SheetMode>('sources');
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerInitialTab, setPickerInitialTab] = useState<'library' | 'captures'>('library');
   const [picked, setPicked] = useState<ProductPickResult | null>(null);
   const [assignment, setAssignment] = useState<FfeAssignmentScope>('unassigned');
   const [roomId, setRoomId] = useState('');
   const [boardId, setBoardId] = useState('');
-  const [disposition, setDisposition] = useState<FfeDesignDisposition>('candidate');
-  const [duplicateMode, setDuplicateMode] = useState<'reuse' | 'separate'>('reuse');
+  const [disposition, setDisposition] = useState<Exclude<FfeDesignDisposition, 'superseded'>>('candidate');
+  const [duplicateMode, setDuplicateMode] = useState<FfeDuplicateMode>('reuse');
+  const [placeholderSelectionId, setPlaceholderSelectionId] = useState('');
   const [needName, setNeedName] = useState('');
   const [needKind, setNeedKind] = useState<'placeholder' | 'allowance' | 'manual_product'>('placeholder');
   const [quantity, setQuantity] = useState('1');
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
+  const productRequestKey = useRef<string | null>(null);
+  const needRequestKey = useRef<string | null>(null);
 
   const compatibleBoards = useMemo(
     () => boards.filter((board) => {
-      const boardRoomId = board.project_room_id ?? board.scope_room_id;
+      if (board.status === 'archived') return false;
+      const boardRoomId = board.project_room_id;
       return assignment === 'room' ? boardRoomId === roomId : !boardRoomId;
     }),
     [assignment, boards, roomId],
@@ -91,11 +99,14 @@ export function AddToProjectSheet({
     setBoardId('');
     setDisposition('candidate');
     setDuplicateMode('reuse');
+    setPlaceholderSelectionId('');
     setNeedName('');
     setNeedKind('placeholder');
     setQuantity('1');
     setError(null);
     setResult(null);
+    productRequestKey.current = null;
+    needRequestKey.current = null;
   };
 
   const close = () => {
@@ -118,12 +129,13 @@ export function AddToProjectSheet({
         productId: picked.productId,
         captureId: picked.captureId ?? null,
         assignmentScope: assignment,
-        projectRoomId: assignment === 'room' ? roomId : null,
+        roomId: assignment === 'room' ? roomId : null,
         boardId: boardId || null,
-        designDisposition: disposition,
+        disposition,
         duplicateMode,
+        placeholderSelectionId: placeholderSelectionId || null,
         configurationId: picked.configurationSelection?.savedConfigurationId ?? null,
-        idempotencyKey: idempotencyKey('place'),
+        idempotencyKey: productRequestKey.current ??= newIdempotencyKey('place'),
       });
       ffeEvents.routingChosen({
         project_id: projectId,
@@ -137,7 +149,13 @@ export function AddToProjectSheet({
         placement_id: response.placementId,
         outcome: response.outcome,
       });
-      setResult(`${response.outcome === 'reused' ? 'Reused' : 'Added'} selection · ${picked.name}`);
+      const outcomeCopy = {
+        created: 'Created selection',
+        reused: 'Reused selection',
+        filled: 'Filled placeholder',
+        held: 'Held for duplicate review',
+      }[response.outcome];
+      setResult(`${outcomeCopy} · ${picked.name}`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'The product could not be placed.');
       ffeEvents.failed({ project_id: projectId, operation: 'place', reason_code: 'rpc_error' });
@@ -148,23 +166,31 @@ export function AddToProjectSheet({
     if (!needName.trim() || (assignment === 'room' && !roomId)) return;
     setError(null);
     try {
-      await createNeed.mutateAsync({
+      const response = await createNeed.mutateAsync({
         projectId,
         name: needName.trim(),
         assignmentScope: assignment,
-        projectRoomId: assignment === 'room' ? roomId : null,
-        designDisposition: disposition,
-        needKind,
+        roomId: assignment === 'room' ? roomId : null,
+        boardId: boardId || null,
+        disposition,
         quantity: Math.max(1, Math.round(Number(quantity) || 1)),
-        idempotencyKey: idempotencyKey('need'),
+        source: 'named-need',
+        sourceMetadata: { needKind },
+        idempotencyKey: needRequestKey.current ??= newIdempotencyKey('need'),
       });
       ffeEvents.routingChosen({
         project_id: projectId,
         assignment_scope: assignment,
-        has_board: false,
+        has_board: Boolean(boardId),
         disposition,
       });
-      setResult(`Added need · ${needName.trim()}`);
+      ffeEvents.placementCompleted({
+        project_id: projectId,
+        selection_id: response.selectionId,
+        placement_id: response.placementId,
+        outcome: response.outcome,
+      });
+      setResult(`${response.outcome === 'created' ? 'Created selection' : 'Placed selection'} · ${needName.trim()}`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'The need could not be created.');
       ffeEvents.failed({ project_id: projectId, operation: 'place', reason_code: 'rpc_error' });
@@ -200,7 +226,7 @@ export function AddToProjectSheet({
       )}
       <label>
         <span className={LABEL_CLASS}>Design status</span>
-        <select value={disposition} onChange={(event) => setDisposition(event.target.value as FfeDesignDisposition)} className={FIELD_CLASS}>
+        <select value={disposition} onChange={(event) => setDisposition(event.target.value as Exclude<FfeDesignDisposition, 'superseded'>)} className={FIELD_CLASS}>
           <option value="candidate">Candidate</option>
           <option value="selected">Selected</option>
           <option value="alternate">Alternate</option>
@@ -220,8 +246,8 @@ export function AddToProjectSheet({
                 close();
                 window.dispatchEvent(new CustomEvent('document:new-project-board'));
               }],
-              ['Browse the Library', 'Choose one known product, then route it here.', () => setPickerOpen(true)],
-              ['Paste a product link', 'Capture through the guarded URL intake, then route it here.', () => setPickerOpen(true)],
+              ['Browse the Library', 'Choose one known product, then route it here.', () => { setPickerInitialTab('library'); setPickerOpen(true); }],
+              ['Paste a product link', 'Capture through the guarded URL intake, then route it here.', () => { setPickerInitialTab('captures'); setPickerOpen(true); }],
               ['Name a need', 'Add a placeholder, allowance, or manual product.', () => setMode('name_need')],
               ['Import a schedule', 'Map CSV or XLSX rows before any selections are created.', () => {
                 router.push(`/library?projectId=${encodeURIComponent(projectId)}&import=1&returnTo=${encodeURIComponent(`${pathname}#project-ffe`)}`);
@@ -252,11 +278,21 @@ export function AddToProjectSheet({
             </label>
             <fieldset className="mt-3">
               <legend className={LABEL_CLASS}>If this product is already in the project</legend>
-              <div className="grid grid-cols-2 gap-1.5">
+              <div className="grid grid-cols-3 gap-1.5">
                 <button type="button" aria-pressed={duplicateMode === 'reuse'} onClick={() => setDuplicateMode('reuse')} className={`${FIELD_CLASS} ${duplicateMode === 'reuse' ? 'border-[var(--color-clay)]' : ''}`}>Reuse selection</button>
-                <button type="button" aria-pressed={duplicateMode === 'separate'} onClick={() => setDuplicateMode('separate')} className={`${FIELD_CLASS} ${duplicateMode === 'separate' ? 'border-[var(--color-clay)]' : ''}`}>Separate need</button>
+                <button type="button" aria-pressed={duplicateMode === 'create'} onClick={() => setDuplicateMode('create')} className={`${FIELD_CLASS} ${duplicateMode === 'create' ? 'border-[var(--color-clay)]' : ''}`}>Separate need</button>
+                <button type="button" aria-pressed={duplicateMode === 'hold'} onClick={() => setDuplicateMode('hold')} className={`${FIELD_CLASS} ${duplicateMode === 'hold' ? 'border-[var(--color-clay)]' : ''}`}>Hold</button>
               </div>
             </fieldset>
+            {placeholders.length > 0 && duplicateMode !== 'hold' && (
+              <label className="mt-3 block">
+                <span className={LABEL_CLASS}>Optional placeholder to fill</span>
+                <select value={placeholderSelectionId} onChange={(event) => setPlaceholderSelectionId(event.target.value)} className={FIELD_CLASS}>
+                  <option value="">Create or reuse normally</option>
+                  {placeholders.map((placeholder) => <option key={placeholder.id} value={placeholder.id}>{placeholder.name}</option>)}
+                </select>
+              </label>
+            )}
             <DocumentActionGroup surfaceKey="project" regionKey="add-to-project" className="mt-4">
               <DocumentAction actionKey="place-product-in-project" variant="primary" disabled={assignment === 'room' && !roomId} loading={placeProduct.isPending} onClick={() => void saveProduct()}>
                 Add selection
@@ -273,6 +309,13 @@ export function AddToProjectSheet({
               <label><span className={LABEL_CLASS}>Quantity</span><input type="number" min={1} value={quantity} onChange={(event) => setQuantity(event.target.value)} className={FIELD_CLASS} /></label>
             </div>
             <div className="mt-3">{routeField}</div>
+            <label className="mt-3 block">
+              <span className={LABEL_CLASS}>Optional board placement</span>
+              <select value={boardId} onChange={(event) => setBoardId(event.target.value)} className={FIELD_CLASS}>
+                <option value="">No board</option>
+                {compatibleBoards.map((board) => <option key={board.id} value={board.id}>{board.name}</option>)}
+              </select>
+            </label>
             <DocumentActionGroup surfaceKey="project" regionKey="add-to-project" className="mt-4">
               <DocumentAction actionKey="create-named-project-need" variant="primary" disabled={!needName.trim() || (assignment === 'room' && !roomId)} loading={createNeed.isPending} onClick={() => void saveNeed()}>
                 Add the need
@@ -302,6 +345,7 @@ export function AddToProjectSheet({
         }}
         rooms={rooms.map((room) => ({ id: room.id, name: room.name }))}
         scope="library"
+        initialTab={pickerInitialTab}
         configureStep
       />
     </>

@@ -216,6 +216,25 @@ describe('eligibility', () => {
     expect(eligibility(line(), { track: 'none' })).toEqual({ eligible: true });
   });
 
+  it.each(['candidate', 'alternate', 'not_selected', 'superseded'])(
+    'keeps a %s design disposition out of authorization',
+    (design_disposition) => {
+      expect(eligibility(line({ design_disposition }), { track: 'none' })).toEqual({
+        eligible: false,
+        reason: 'select this design direction first',
+      });
+    },
+  );
+
+  it('keeps archived, blocked, and incomplete selections out of authorization', () => {
+    expect(eligibility(line({ removed_at: '2026-08-10T00:00:00Z' }), { track: 'none' }))
+      .toEqual({ eligible: false, reason: 'archived selection' });
+    expect(eligibility(line({ blocked: true }), { track: 'none' }))
+      .toEqual({ eligible: false, reason: 'release blocked' });
+    expect(eligibility(line({ spec: { readiness_status: 'incomplete' } }), { track: 'none' }))
+      .toEqual({ eligible: false, reason: 'specification not ready' });
+  });
+
   it('names the instrument already holding the line', () => {
     expect(
       eligibility(line(), {

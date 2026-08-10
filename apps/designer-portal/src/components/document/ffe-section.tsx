@@ -304,6 +304,7 @@ function FFELine({
   selected,
   onSelectToggle,
   onIncludeInRelease,
+  canEditSelection,
 }: LineRow & {
   projectId: string;
   projectName: string;
@@ -319,6 +320,7 @@ function FFELine({
   selected: boolean;
   onSelectToggle: () => void;
   onIncludeInRelease: () => void;
+  canEditSelection: boolean;
 }) {
   const sp = stampProps(stamp);
   const line = vendorLine(item, stamp, showRoom);
@@ -435,6 +437,7 @@ function FFELine({
           auth={auth}
           isCommercialOrigin={isCommercialOrigin}
           onIncludeInRelease={onIncludeInRelease}
+          canEditSelection={canEditSelection}
         />
       )}
     </li>
@@ -816,6 +819,7 @@ function FFESectionBody({
       setOpenLineId(null);
       ceremony?.begin([row.item.id]);
     },
+    canEditSelection: mode === 'project',
   });
 
   const roomHeadingProps = (group: LineRow[]) => {
@@ -831,7 +835,7 @@ function FFESectionBody({
   };
 
   // R25 grouping (project mode): rooms in sort order, then Throughout.
-  const groupByRoom = mode === 'project' && (rooms ?? []).length > 0;
+  const groupByRoom = mode === 'project';
   const roomGroups = groupByRoom
     ? (rooms ?? []).map((room) => ({
         room,
@@ -1034,9 +1038,7 @@ function FFESectionBody({
               </ul>
             </div>
           )}
-          {mode === 'project' && !selecting && (
-            <AddRoomInline projectId={projectId} />
-          )}
+          {!selecting && <AddRoomInline projectId={projectId} />}
         </>
       ) : (
         <>
@@ -1045,9 +1047,6 @@ function FFESectionBody({
               <FFELine key={row.item.id} {...lineProps(row)} />
             ))}
           </ul>
-          {mode === 'project' && !selecting && (
-            <AddRoomInline projectId={projectId} />
-          )}
         </>
       )}
 
@@ -1090,6 +1089,9 @@ function FFESectionBody({
           projectName={projectName}
           rooms={(rooms ?? []).map((room) => ({ id: room.id, name: room.name }))}
           boards={projectBoards}
+          placeholders={(items ?? [])
+            .filter((item) => !item.product_id && item.removed_at == null)
+            .map((item) => ({ id: item.id, name: item.name }))}
         />
       )}
     </section>

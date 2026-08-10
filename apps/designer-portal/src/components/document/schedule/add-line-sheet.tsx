@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { PlusCircle } from 'lucide-react';
 import { useCreateNamedProjectNeed } from '@patina/supabase';
 import { DocSheet } from '../overlays/doc-sheet';
@@ -33,6 +33,7 @@ export function AddLineSheet({
   const [name, setName] = useState('');
   const [quantity, setQuantity] = useState('1');
   const [error, setError] = useState<string | null>(null);
+  const requestKey = useRef<string | null>(null);
 
   const trimmedName = name.trim();
   const parsedQuantity = Math.max(1, Math.round(Number(quantity) || 1));
@@ -43,6 +44,7 @@ export function AddLineSheet({
     setName('');
     setQuantity('1');
     setError(null);
+    requestKey.current = null;
   };
 
   const save = async () => {
@@ -54,10 +56,11 @@ export function AddLineSheet({
         name: trimmedName,
         quantity: parsedQuantity,
         assignmentScope: roomId ? 'room' : roomName === 'Unsorted' ? 'unassigned' : 'throughout',
-        projectRoomId: roomId,
-        designDisposition: 'candidate',
-        needKind: kind === 'allowance' ? 'allowance' : 'manual_product',
-        idempotencyKey: globalThis.crypto?.randomUUID?.() ?? `need-${projectId}-${Date.now()}`,
+        roomId,
+        disposition: 'candidate',
+        source: 'named-need',
+        sourceMetadata: { needKind: kind === 'allowance' ? 'allowance' : 'manual_product' },
+        idempotencyKey: requestKey.current ??= globalThis.crypto?.randomUUID?.() ?? `need-${projectId}-${Date.now()}`,
       });
       reset();
       onClose();

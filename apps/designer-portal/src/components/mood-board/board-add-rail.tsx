@@ -13,6 +13,7 @@ import {
   usePalettes,
   useProposal,
   useProposalCaptures,
+  usePlaceProductInProjectV2,
   useProjectFFEItems,
   useRoomScans,
   type AddBoardItemInput,
@@ -620,6 +621,7 @@ function FeedbackPanel({
 export function BoardAddRail({
   owner,
   boardId,
+  projectRoomId,
   items,
   preferenceScope,
   nextPoint,
@@ -629,6 +631,7 @@ export function BoardAddRail({
 }: {
   owner: BoardOwnerRef;
   boardId: string;
+  projectRoomId?: string | null;
   items: readonly EditableMoodBoardItem[];
   /** Auth user id; keeps rail preferences isolated on shared browsers. */
   preferenceScope?: string;
@@ -643,14 +646,22 @@ export function BoardAddRail({
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [captureSearch, setCaptureSearch] = useState('');
+  const [placingProductId, setPlacingProductId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { data: captures = [], isLoading: capturesLoading } = useProposalCaptures({ status: 'inbox' });
   const projectSelectionsQuery = useProjectFFEItems(owner.kind === 'project' ? owner.id : '');
+  const placeProduct = usePlaceProductInProjectV2();
   const projectSelections = useMemo(
     () => ((projectSelectionsQuery.data ?? []) as Record<string, unknown>[])
-      .filter((row) => row.removed_at == null)
+      .filter((row) => row.removed_at == null && !['not_selected', 'superseded'].includes(String(row.design_disposition)))
       .map(projectSelectionFromRow),
     [projectSelectionsQuery.data],
+  );
+  const compatibleProjectSelections = useMemo(
+    () => projectSelections.filter((selection) => !projectRoomId || (
+      selection.assignmentScope === 'room' && selection.projectRoomId === projectRoomId
+    )),
+    [projectRoomId, projectSelections],
   );
   const visibleCaptures = useMemo(() => {
     const term = captureSearch.trim().toLowerCase();
@@ -702,8 +713,56 @@ export function BoardAddRail({
     }
   };
 
+  const placeProjectProduct = async (
+    draft: EditableMoodBoardItem,
+    productId: string,
+    captureId: string | null,
+  ) => {
+    setPlacingProductId(productId);
+    setError(null);
+    try {
+      const response = await placeProduct.mutateAsync({
+        projectId: owner.id,
+        productId,
+        captureId,
+        assignmentScope: projectRoomId ? 'room' : 'unassigned',
+        roomId: projectRoomId ?? null,
+        boardId,
+        disposition: 'candidate',
+        duplicateMode: 'reuse',
+        placement: {
+          x: draft.x,
+          y: draft.y,
+          width: draft.width,
+          sectionId: typeof draft.data?.section_id === 'string' ? draft.data.section_id : null,
+        },
+        idempotencyKey: `board-place:${boardId}:${draft.id}`,
+      });
+      if (!response.selectionId || !response.placementId) {
+        throw new Error('The project placement did not return its selection identity.');
+      }
+      onAddItems([{
+        ...draft,
+        id: response.placementId,
+        type: 'product',
+        productId,
+        captureId,
+        projectFfeItemId: response.selectionId,
+      }], 'rail_click');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'This product could not be placed in the project.');
+    } finally {
+      setPlacingProductId(null);
+    }
+  };
+
   const addProduct = (result: ProductPickResult) => {
-    onAddItems([productPickToBoardItem(result, nextPoint(), nextZ())], 'rail_click');
+    const draft = productPickToBoardItem(result, nextPoint(), nextZ());
+    if (owner.kind === 'project') {
+      void placeProjectProduct(draft, result.productId, result.captureId ?? null);
+      return;
+    }
+    onAddItems([draft], 'rail_click');
   };
 
   const upload = async (files: readonly File[]) => {
@@ -795,10 +854,10 @@ export function BoardAddRail({
             {projectSelectionsQuery.isLoading && (
               <p className="text-[11px] text-[var(--text-muted)]">Loading project selections…</p>
             )}
-            {!projectSelectionsQuery.isLoading && projectSelections.length === 0 && (
+            {!projectSelectionsQuery.isLoading && compatibleProjectSelections.length === 0 && (
               <p className="text-[11px] text-[var(--text-muted)]">No project selections yet.</p>
             )}
-            {projectSelections.map((selection) => (
+            {compatibleProjectSelections.map((selection) => (
               <button
                 key={selection.id}
                 type="button"
@@ -854,7 +913,15 @@ export function BoardAddRail({
                   key={capture.id}
                   type="button"
                   draggable
-                  onClick={() => onAddItems([captureToBoardItem(capture, nextPoint(), nextZ())], 'rail_click')}
+                  disabled={placingProductId === capture.product_id}
+                  onClick={() => {
+                    const draft = captureToBoardItem(capture, nextPoint(), nextZ());
+                    if (owner.kind === 'project' && capture.product_id) {
+                      void placeProjectProduct(draft, capture.product_id, capture.id);
+                      return;
+                    }
+                    onAddItems([draft], 'rail_click');
+                  }}
                   onDragStart={(event) => beginRailDrag(
                     event,
                     owner,

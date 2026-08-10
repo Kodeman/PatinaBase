@@ -903,6 +903,7 @@ function BoardRoomSurface({
             <BoardAddRail
               owner={owner}
               boardId={state.boardId}
+              projectRoomId={owner.kind === 'project' ? boardQuery.data?.project_room_id ?? null : null}
               items={state.items}
               preferenceScope={preferenceScope}
               nextPoint={nextPoint}

@@ -50,7 +50,7 @@ export type FfeDesignDisposition =
 
 export type FfeAssignmentScope = 'room' | 'throughout' | 'unassigned';
 
-export type FfeDuplicateMode = 'reuse' | 'separate' | 'fill_placeholder';
+export type FfeDuplicateMode = 'reuse' | 'create' | 'hold';
 
 export type FfePlacementOutcome = 'created' | 'reused' | 'filled' | 'held';
 
@@ -84,41 +84,55 @@ export interface PlaceProductInProjectRequest {
   projectId: string;
   productId?: string | null;
   captureId?: string | null;
+  name?: string | null;
+  category?: string | null;
+  quantity?: number;
   assignmentScope: FfeAssignmentScope;
-  projectRoomId?: string | null;
+  roomId?: string | null;
   boardId?: string | null;
-  designDisposition?: FfeDesignDisposition;
+  disposition?: Exclude<FfeDesignDisposition, 'superseded'>;
   duplicateMode: FfeDuplicateMode;
-  placeholderFfeItemId?: string | null;
-  selectionFfeItemId?: string | null;
-  roleKey?: string | null;
+  placeholderSelectionId?: string | null;
+  selectionReferenceId?: string | null;
+  selectionThreadId?: string | null;
   configurationId?: string | null;
+  source?: string | null;
+  sourceMetadata?: Record<string, unknown>;
+  placement?: {
+    x?: number;
+    y?: number;
+    width?: number;
+    sectionId?: string | null;
+  };
   idempotencyKey: string;
 }
 
 export interface PlaceProductInProjectResult {
   outcome: FfePlacementOutcome;
-  selectionId: string;
-  selectionThreadId: string;
+  selectionId: string | null;
+  threadId: string | null;
   placementId: string | null;
 }
 
 export interface CreateProjectBoardRequest {
   projectId: string;
   name: string;
-  projectRoomId?: string | null;
-  starterIntent?: 'concept' | 'selections' | 'materials' | 'blank';
-  idempotencyKey: string;
+  roomId?: string | null;
 }
 
 export interface CreateNamedProjectNeedRequest {
   projectId: string;
   name: string;
-  assignmentScope: FfeAssignmentScope;
-  projectRoomId?: string | null;
-  designDisposition?: FfeDesignDisposition;
-  needKind?: 'placeholder' | 'allowance' | 'manual_product';
+  category?: string | null;
   quantity?: number;
+  assignmentScope: FfeAssignmentScope;
+  roomId?: string | null;
+  boardId?: string | null;
+  disposition?: Exclude<FfeDesignDisposition, 'superseded'>;
+  selectionThreadId?: string | null;
+  source?: string | null;
+  sourceMetadata?: Record<string, unknown>;
+  placement?: PlaceProductInProjectRequest['placement'];
   idempotencyKey: string;
 }
 
@@ -126,18 +140,16 @@ export interface TriageProjectFfeItemsRequest {
   projectId: string;
   selectionIds: string[];
   assignmentScope: FfeAssignmentScope;
-  projectRoomId?: string | null;
-  designDisposition?: FfeDesignDisposition;
-  idempotencyKey: string;
+  roomId?: string | null;
+  disposition?: Exclude<FfeDesignDisposition, 'superseded'>;
 }
 
 export interface PromoteBoardReferenceRequest {
   projectId: string;
-  boardId: string;
-  placementId: string;
+  boardItemId: string;
   assignmentScope: FfeAssignmentScope;
-  projectRoomId?: string | null;
-  designDisposition?: FfeDesignDisposition;
+  roomId?: string | null;
+  disposition?: Exclude<FfeDesignDisposition, 'superseded'>;
   duplicateMode: FfeDuplicateMode;
   idempotencyKey: string;
 }
@@ -145,32 +157,36 @@ export interface PromoteBoardReferenceRequest {
 export interface ArchiveProjectSelectionRequest {
   projectId: string;
   selectionId: string;
-  reason?: string | null;
-  idempotencyKey: string;
+  reason: string;
 }
 
 export interface SupersedeProjectSelectionRequest {
   projectId: string;
   selectionId: string;
-  replacementProductId?: string | null;
-  replacementCaptureId?: string | null;
-  replacePlacementIds: string[];
-  reason?: string | null;
-  idempotencyKey: string;
+  productId?: string | null;
+  name?: string | null;
+  placementIds: string[];
+}
+
+export interface PublishProjectReviewItem {
+  selectionId: string;
+  clientFields?: Record<string, unknown>;
+  mediaAssetIds?: string[];
+  sortOrder?: number;
 }
 
 export interface PublishProjectReviewRequest {
   projectId: string;
-  editionId?: string | null;
-  selectionIds: string[];
+  title?: string | null;
+  items: PublishProjectReviewItem[];
   boardIds: string[];
-  priceVisibility: 'show_client_price' | 'hide_price';
-  idempotencyKey: string;
+  clientPriceMode: 'hide' | 'unit' | 'line_total';
 }
 
 export interface PublishProjectReviewResult {
   editionId: string;
   editionNumber: number;
   status: 'published';
-  deliveryStatus: 'not_requested' | 'queued' | 'failed';
+  snapshotHash: string;
+  itemCount: number;
 }

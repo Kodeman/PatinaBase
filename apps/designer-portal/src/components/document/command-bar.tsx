@@ -465,7 +465,7 @@ export function CommandBar() {
       },
     ];
 
-    const addToProjectRow: PaletteRow | null = inHandRow?.row.project_id
+    const addToProjectRow: PaletteRow | null = inHandRow?.row.project_id && inHandRow.row.active_section === 'project'
       ? {
           kind: 'verb',
           key: 'add-to-project-here',
@@ -476,6 +476,18 @@ export function CommandBar() {
             detail: { source: 'command_palette' },
           })),
           match: 'add to project selection ffe furniture library product link import board need',
+        }
+      : null;
+    const addChangeRow: PaletteRow | null = inHandRow?.row.project_id &&
+      (inHandRow.row.active_section === 'install' || inHandRow.row.active_section === 'care')
+      ? {
+          kind: 'verb',
+          key: 'add-project-change-here',
+          label: 'Add a change',
+          sub: 'this project · amendment workflow',
+          icon: FolderPlus,
+          run: () => window.dispatchEvent(new CustomEvent('document:open-project-change')),
+          match: 'add change amendment project scope',
         }
       : null;
 
@@ -504,6 +516,7 @@ export function CommandBar() {
 
       const thisSurface: PaletteRow[] = [];
       if (addToProjectRow) thisSurface.push(addToProjectRow);
+      if (addChangeRow) thisSurface.push(addChangeRow);
       if (inHandRow?.row.project_id) {
         const projectName = folderTab(inHandRow.row);
         const projectId = inHandRow.row.project_id;
@@ -579,6 +592,7 @@ export function CommandBar() {
       list.push(...recentBoards.map(recentBoardRow).filter((r) => r.match.includes(q)));
       list.push(...liveDocs.map((f) => documentRow(f.row)).filter((r) => r.match.includes(q)));
       if (addToProjectRow?.match.includes(q)) list.push(addToProjectRow);
+      if (addChangeRow?.match.includes(q)) list.push(addChangeRow);
       // Document-scoped registry surfaces (scope: 'document' — registry.tsx's
       // own canon: "only reachable with a document in hand") must pass the
       // same in-hand gate their "This surface" row above is gated on, or a

@@ -8,7 +8,7 @@
  */
 
 import { useState } from "react";
-import { usePlaceProductConfiguration, useProjects } from "@patina/supabase";
+import { useProjects } from "@patina/supabase";
 import { DocumentAction } from "../../document-action";
 import { RoomSheet } from "../room-sheet";
 import {
@@ -32,7 +32,6 @@ export function AddToProjectSheet({
 }) {
   const { data: projects, isLoading } = useProjects();
   const place = usePlaceInDocument();
-  const placeConfiguration = usePlaceProductConfiguration();
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -53,15 +52,7 @@ export function AddToProjectSheet({
     setBusy(projectId);
     setErr(null);
     try {
-      if (configurationId) {
-        await placeConfiguration.mutateAsync({
-          projectId,
-          configurationId,
-          source: { surface: "library-piece" },
-        });
-      } else {
-        await place.mutateAsync({ projectId, piece });
-      }
+      await place.mutateAsync({ projectId, piece, configurationId });
       productEvents.addToProject(piece.id);
       onAdded(projectName);
       onClose();

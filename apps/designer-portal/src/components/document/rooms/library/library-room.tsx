@@ -107,6 +107,12 @@ export function LibraryRoom() {
   const [nominateVendorId, setNominateVendorId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("import") === "1") {
+      setImportOpen(true);
+    }
+  }, []);
+
   useMobilePrimaryAction({
     actionKey: "capture-piece",
     surfaceKey: "library",

@@ -119,6 +119,32 @@ describe('BoardRoomInspector multi-selection', () => {
   });
 });
 
+describe('BoardRoomInspector project placement lifecycle', () => {
+  it('removes only the board placement for a linked project selection', () => {
+    const api = controllerApi();
+    api.state = {
+      ...api.state!,
+      owner: { kind: 'project', id: 'project-1' },
+      items: [{
+        ...api.state!.items[0],
+        projectFfeItemId: 'selection-1',
+        productId: 'product-1',
+      }],
+    };
+    api.selectedItemIds = ['chair'];
+
+    render(
+      <div className="relative h-[600px] w-[800px]">
+        <BoardRoomInspector api={api} owner={{ kind: 'project', id: 'project-1' }} />
+      </div>,
+    );
+
+    expect(screen.getByText(/removing this pin removes only the board placement/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove placement' }));
+    expect(api.deleteItems).toHaveBeenCalledWith();
+  });
+});
+
 describe('BoardRoomInspector geometry fields', () => {
   function singleSelectionApi() {
     const api = controllerApi();
