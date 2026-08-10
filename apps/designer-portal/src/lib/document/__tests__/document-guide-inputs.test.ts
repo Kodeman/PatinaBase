@@ -98,4 +98,26 @@ describe('composeDocumentGuideInputs', () => {
     });
     expect(inputs[0]).toMatchObject({ label, blocks });
   });
+
+  it.each(['install', 'care'] as const)(
+    'composes simultaneous %s blockers in deterministic priority order',
+    (activeSection) => {
+      const inputs = composeDocumentGuideInputs({
+        row: row({
+          engagement_kind: 'project', active_section: activeSection, project_id: 'project-1',
+          overdue_decision_count: 1, open_claim_count: 2, awaiting_inspection_count: 3,
+          blocked_item_count: 4,
+        }),
+        proposal: null,
+        readiness: idleReadiness,
+      });
+
+      expect(inputs.map((input) => input.label)).toEqual([
+        '1 overdue client decision',
+        '2 open damage claims',
+        '3 delivery inspections',
+        '4 blocked project items',
+      ]);
+    },
+  );
 });

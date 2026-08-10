@@ -14,6 +14,17 @@ let mockDraftingState: Record<string, unknown> = { gaps: [], isLoading: false, e
 let mockProposalData: Record<string, unknown> | undefined;
 let mockProposalError = false;
 let mockProjectQuery: Record<string, unknown> = { data: undefined, isLoading: false, isError: false };
+let mockDeskData: {
+  folders: Array<{ row: { engagement_id: string }; need: Record<string, unknown> | null }>;
+  chips: unknown[];
+} = { folders: [], chips: [] };
+const mockUseDeskEngagements = jest.fn((_options?: { enabled?: boolean }) => ({
+  data: mockDeskData,
+}));
+const mockSelectOperationalNeed = jest.fn(
+  (data: typeof mockDeskData | undefined, engagementId: string | null | undefined) =>
+    data?.folders.find((folder) => folder.row.engagement_id === engagementId)?.need ?? null,
+);
 
 jest.mock('@portabletext/react', () => ({
   PortableText: () => null,
@@ -139,8 +150,12 @@ jest.mock('@/hooks/use-drafting-state', () => ({
 }));
 
 jest.mock('@/hooks/use-desk-engagements', () => ({
-  useDeskEngagements: () => ({ data: undefined }),
-  selectOperationalNeedForDocument: () => null,
+  useDeskEngagements: (options?: { enabled?: boolean }) => mockUseDeskEngagements(options),
+  selectOperationalNeedForDocument: (
+    data: typeof mockDeskData | undefined,
+    engagementId: string | null | undefined,
+  ) =>
+    mockSelectOperationalNeed(data, engagementId),
 }));
 
 jest.mock('@/hooks/use-document-rooms', () => ({
@@ -233,6 +248,9 @@ describe('DocumentPage guide activation', () => {
     mockProposalData = undefined;
     mockProposalError = false;
     mockProjectQuery = { data: undefined, isLoading: false, isError: false };
+    mockDeskData = { folders: [], chips: [] };
+    mockUseDeskEngagements.mockClear();
+    mockSelectOperationalNeed.mockClear();
     mockDocumentQuery = {
       data: {
         kind: 'engagement',
@@ -275,6 +293,67 @@ describe('DocumentPage guide activation', () => {
 
     expect(activeSection!.scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'auto' });
     expect(activeSection).toHaveFocus();
+  });
+
+  it('fetches and selects a ceremony need on a freshly opened Brief', () => {
+    mockDeskData = {
+      folders: [{
+        row: { engagement_id: 'lead-1' },
+        need: {
+          kind: 'ceremony_pending', text: 'Introduce yourself to Avery',
+          actionLabel: 'Continue the introduction', urgent: false,
+          stamp: { label: 'CLAIMED · CEREMONY WAITING' }, deepLink: '/ceremony/lead-1',
+        },
+      }],
+      chips: [],
+    };
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(mockUseDeskEngagements).toHaveBeenCalledWith({ enabled: true });
+    expect(mockSelectOperationalNeed).toHaveBeenCalledWith(
+      mockDeskData, 'lead-1',
+    );
+    expect(screen.getByRole('link', { name: 'Continue the introduction' })).toHaveAttribute(
+      'href', '/ceremony/lead-1',
+    );
+  });
+
+  it('fetches and selects flagged-line guidance on a freshly opened Proposal', () => {
+    const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+    mockDocumentQuery = {
+      ...mockDocumentQuery,
+      data: { kind: 'engagement', row: {
+        ...current, engagement_kind: 'proposal', active_section: 'proposal',
+        engagement_id: 'proposal-1', proposal_id: 'proposal-1', lead_id: null,
+        proposal_status: 'sent',
+      } },
+    };
+    mockProposalData = {
+      id: 'proposal-1', status: 'sent', document_kind: 'design_services',
+      commercial_state: 'sent', project_id: null,
+    };
+    mockDeskData = {
+      folders: [{
+        row: { engagement_id: 'proposal-1' },
+        need: {
+          kind: 'lines_flagged', text: '2 lines flagged on Design agreement',
+          actionLabel: 'Review flagged lines', urgent: false,
+          stamp: { label: 'FLAGGED' }, deepLink: '/drafting/proposal-1?flagged=1',
+        },
+      }],
+      chips: [],
+    };
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(mockUseDeskEngagements).toHaveBeenCalledWith({ enabled: true });
+    expect(mockSelectOperationalNeed).toHaveBeenCalledWith(
+      mockDeskData, 'proposal-1',
+    );
+    expect(screen.getByRole('link', { name: 'Review flagged lines' })).toHaveAttribute(
+      'href', '/drafting/proposal-1?flagged=1',
+    );
   });
 
   it('counts a programmatic history expansion once', () => {

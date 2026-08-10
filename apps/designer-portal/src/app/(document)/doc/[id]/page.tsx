@@ -162,12 +162,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     row?.active_section === 'direction' && Boolean(proposalId),
   );
   const enrichedOperationalQuery = useDeskEngagements({
-    enabled: Boolean(
-      row?.project_id &&
-      (row.active_section === 'project' ||
-        row.active_section === 'install' ||
-        row.active_section === 'care'),
-    ),
+    enabled: Boolean(row && !isError),
   });
   const enrichedOperationalNeed = selectOperationalNeedForDocument(
     enrichedOperationalQuery.data,
