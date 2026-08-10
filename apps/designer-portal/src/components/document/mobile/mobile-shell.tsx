@@ -57,6 +57,7 @@ export type MobilePrimaryAction = {
     | { kind: 'href'; href: string };
   disabled?: boolean;
   loading?: boolean;
+  onSelected?: () => void;
 };
 
 /** A surface-owned quiet act that belongs inside MobileBar's More disclosure. */

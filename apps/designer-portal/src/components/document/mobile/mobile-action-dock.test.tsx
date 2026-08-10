@@ -60,6 +60,7 @@ jest.mock('@/lib/analytics/document-events', () => ({
     actionShown: jest.fn(),
     actionSelected: jest.fn(),
     guideShown: jest.fn(),
+    guideSelected: jest.fn(),
   },
 }));
 

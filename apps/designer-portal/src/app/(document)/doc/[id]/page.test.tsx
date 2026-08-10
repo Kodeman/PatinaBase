@@ -6,6 +6,7 @@ import { authorizationDoorwayFor } from '@/lib/document/authorization-doorway';
 let mockHydrated = false;
 const mockRetryDocumentResolution = jest.fn();
 const mockHistoryToggled = jest.fn();
+const mockDiscoveryFacetOpen = jest.fn();
 let mockDocumentQuery: Record<string, unknown>;
 let mockDiscoveryQuery: Record<string, unknown> = { data: undefined, isLoading: false, isError: false };
 let mockDraftingState: Record<string, unknown> = { gaps: [], isLoading: false, error: null };
@@ -60,7 +61,14 @@ jest.mock('@/components/document/brief-section', () => ({
 }));
 jest.mock('@/components/document/brief-recap', () => ({ BriefRecap: () => <div>Brief recap</div> }));
 jest.mock('@/components/document/discovery/discovery-section', () => ({
-  DiscoverySection: () => <div>Discovery work</div>,
+  DiscoverySection: () => (
+    <>
+      <button id="discovery-facet-budget" type="button" onClick={mockDiscoveryFacetOpen}>
+        Budget comfort
+      </button>
+      <div id="document-decision-controls" tabIndex={-1}>Decision controls</div>
+    </>
+  ),
 }));
 jest.mock('@/components/document/proposal-blocks-readonly', () => ({ ProposalBlocksReadOnly: () => null }));
 jest.mock('@/components/document/proposal-instruments', () => ({ ProposalInstruments: () => null }));
@@ -151,6 +159,7 @@ jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: {
     historyToggled: (...args: unknown[]) => mockHistoryToggled(...args),
     guideShown: jest.fn(),
+    guideSelected: jest.fn(),
     actionShown: jest.fn(),
     actionSelected: jest.fn(),
   },
@@ -211,6 +220,7 @@ describe('DocumentPage guide activation', () => {
   beforeEach(() => {
     mockHydrated = true;
     mockHistoryToggled.mockReset();
+    mockDiscoveryFacetOpen.mockReset();
     mockDiscoveryQuery = { data: undefined, isLoading: false, isError: false };
     mockDraftingState = { gaps: [], isLoading: false, error: null };
     mockProposalData = undefined;
@@ -305,6 +315,9 @@ describe('DocumentPage guide activation', () => {
     expect(screen.getByText(/Input needed · Working budget/).parentElement).toHaveTextContent(
       'Client · blocks Direction · +3 more',
     );
+    fireEvent.click(screen.getByRole('button', { name: 'Add Working budget' }));
+    expect(mockDiscoveryFacetOpen).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Budget comfort' })).toHaveFocus();
   });
 
   it('keeps a draft commercial agreement reachable from Direction', () => {
@@ -329,6 +342,21 @@ describe('DocumentPage guide activation', () => {
       'href', '/drafting/proposal-1',
     );
     expect(screen.getByText(/Input needed · phases & fees/)).toBeInTheDocument();
+  });
+
+  it('focuses the canonical control for an operational guide action', () => {
+    const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+    mockDocumentQuery = {
+      ...mockDocumentQuery,
+      data: { kind: 'engagement', row: {
+        ...current, engagement_kind: 'relationship', active_section: 'discovery',
+        engagement_id: 'relationship-1', lead_id: null, overdue_decision_count: 1,
+      } },
+    };
+
+    render(<DocumentPage params={fulfilledParams} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Review decisions' }));
+    expect(screen.getByText('Decision controls')).toHaveFocus();
   });
 
   it('treats a proposal query error as unknown guidance', () => {

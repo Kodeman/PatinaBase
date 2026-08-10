@@ -491,6 +491,7 @@ export function DiscoverySection({
           done={done[b.key]}
           open={open.has(b.key)}
           onToggle={() => toggle(b.key)}
+          targetId={`discovery-facet-${b.key}`}
           accent="var(--color-clay)"
         >
           {b.node}

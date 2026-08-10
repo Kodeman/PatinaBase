@@ -136,4 +136,30 @@ describe('Project roster surfaces', () => {
       }),
     );
   });
+
+  it('distinguishes roster errors from an empty roster and retries both reads', () => {
+    const retryRoster = jest.fn();
+    const retryProject = jest.fn();
+    useProjectRoster.mockReturnValue({
+      data: undefined, isLoading: false, isError: true, refetch: retryRoster,
+    });
+    useProjectV2.mockReturnValue({
+      data: undefined, isLoading: false, isError: false, refetch: retryProject,
+    });
+
+    const view = render(<ProjectTeamRoster projectId="project-1" />);
+    expect(view.getByRole('alert')).toHaveTextContent('could not be read');
+    expect(view.queryByText('Build the project team')).not.toBeInTheDocument();
+    fireEvent.click(view.getByRole('button', { name: 'Try again' }));
+    expect(retryRoster).toHaveBeenCalledTimes(1);
+    expect(retryProject).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps loading distinct from empty guidance', () => {
+    useProjectRoster.mockReturnValue({ data: undefined, isLoading: true, isError: false });
+    useProjectV2.mockReturnValue({ data: undefined, isLoading: true, isError: false });
+    const view = render(<ProjectTeamRoster projectId="project-1" />);
+    expect(view.getByText('Reading the roster…')).toBeInTheDocument();
+    expect(view.queryByText('Build the project team')).not.toBeInTheDocument();
+  });
 });

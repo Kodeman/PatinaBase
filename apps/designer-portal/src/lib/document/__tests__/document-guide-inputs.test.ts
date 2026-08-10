@@ -40,7 +40,10 @@ describe('composeDocumentGuideInputs', () => {
     expect(inputs.map((input) => input.label)).toEqual([
       'Working budget', 'Target or hard date', 'Style direction', 'Lifestyle needs',
     ]);
-    expect(inputs[0]).toEqual({ label: 'Working budget', owner: 'Client', blocks: 'Direction' });
+    expect(inputs[0]).toEqual({
+      label: 'Working budget', owner: 'Client', blocks: 'Direction',
+      focusId: 'discovery-facet-budget',
+    });
   });
 
   it('composes the production drafting gaps used by Direction', () => {
@@ -81,5 +84,18 @@ describe('composeDocumentGuideInputs', () => {
       readiness: { discovery: { state: 'loading' }, drafting: { state: 'error' } },
     })).toEqual([]);
   });
-});
 
+  it.each([
+    ['install', { open_claim_count: 2 }, '2 open damage claims', 'Installation completion'],
+    ['care', { awaiting_inspection_count: 1 }, '1 delivery inspection', 'Project closeout'],
+  ] as const)('uses row-backed %s prerequisites without inventing closeout facts', (stage, facts, label, blocks) => {
+    const inputs = composeDocumentGuideInputs({
+      row: row({
+        engagement_kind: 'project', active_section: stage, project_id: 'project-1', ...facts,
+      }),
+      proposal: null,
+      readiness: idleReadiness,
+    });
+    expect(inputs[0]).toMatchObject({ label, blocks });
+  });
+});

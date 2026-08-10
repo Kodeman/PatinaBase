@@ -20,12 +20,14 @@ export function MarginItem({
   open,
   onToggle,
   onHoverAnchor,
+  targetId,
   children,
 }: {
   row: MarginItemRow;
   open: boolean;
   onToggle?: () => void;
   onHoverAnchor?: (lineId: string | null) => void;
+  targetId?: string;
   children?: React.ReactNode;
 }) {
   const accent = marginAccent(row.kind);
@@ -48,6 +50,7 @@ export function MarginItem({
       {...hoverProps}
     >
       <button
+        id={targetId}
         type="button"
         onClick={onToggle}
         disabled={!expandable}
