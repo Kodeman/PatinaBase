@@ -10,7 +10,7 @@
 import type { DocumentStateRow, SectionKey } from './desk-derivation';
 import { fmtDay } from './format';
 
-export type SectionState = 'settled' | 'active' | 'future';
+export type SectionState = 'settled' | 'active' | 'future' | 'unrecorded';
 
 export interface SpineSection {
   key: SectionKey;
@@ -130,15 +130,15 @@ export function deriveSections(f: SectionFacts, now: Date): SpineSection[] {
 
   return ORDER.map((key, idx) => {
     let state: SectionState = idx < activeIdx ? 'settled' : idx === activeIdx ? 'active' : 'future';
-    if (ghostPast && idx < 4 && state === 'settled') state = 'future';
+    if (ghostPast && idx < 4 && state === 'settled') state = 'unrecorded';
 
     const sub =
       state === 'settled'
         ? settledSub(key, f)
         : state === 'active'
           ? activeSub(key, f, now)
-          : ghostPast && idx < 4
-            ? '—'
+          : state === 'unrecorded'
+            ? 'Not recorded'
             : futureSub(key, f);
 
     return { key, label: LABEL[key], state, sub };

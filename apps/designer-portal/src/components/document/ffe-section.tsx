@@ -79,6 +79,7 @@ import {
   useTradeScopes,
 } from '@/hooks/use-commercial-documents';
 import { AuthorizationStamp } from './schedule/authorization-stamp';
+import { GuidedEmptyState } from './guided-empty-state';
 import { AddLineSheet } from './schedule/add-line-sheet';
 import { CompositionBar } from './schedule/composition-bar';
 import { ReviewReleaseSheet } from './schedule/review-release-sheet';
@@ -954,9 +955,18 @@ function FFESectionBody({
       )}
 
       {!isLoading && total === 0 && (
-        <p className="border-t border-[var(--color-pearl)] py-3 text-[11.5px] text-[var(--text-muted)]">
-          No FF&E lines yet.
-        </p>
+        mode === 'project' ? (
+          <GuidedEmptyState
+            title="Build the FF&E schedule"
+            description="Add the pieces and allowances the studio will specify, price, authorize, procure, and install."
+            inputs={['Room', 'Piece or allowance', 'Budget']}
+            action={{ key: 'start-ffe-schedule', label: 'Open the spec book', href: `/doc/${projectId}/spec-book` }}
+          />
+        ) : (
+          <p className="border-t border-[var(--color-pearl)] py-3 text-[11.5px] text-[var(--text-muted)]">
+            No FF&amp;E lines are scheduled for installation.
+          </p>
+        )
       )}
 
       {groupByRoom ? (

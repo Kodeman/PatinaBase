@@ -50,14 +50,21 @@ export function SettledBar({
   return (
     <div id={anchorId} className="mb-2 scroll-mt-24">
       {expandable ? (
-        <button type="button" onClick={onToggle} className={`${rowClass} hover:border-[#CFC8BB]`}>
+        <button
+          type="button"
+          data-settled-heading
+          aria-expanded={open}
+          aria-controls={anchorId ? `${anchorId}-review` : undefined}
+          onClick={onToggle}
+          className={`${rowClass} hover:border-[#CFC8BB] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]`}
+        >
           {inner}
         </button>
       ) : (
         <div className={rowClass}>{inner}</div>
       )}
       {expandable && open && (
-        <div className="rounded-b-[5px] border border-t-0 border-[var(--color-pearl)] bg-[rgba(252,250,246,0.7)] px-4 pb-4 pt-3.5">
+        <div id={anchorId ? `${anchorId}-review` : undefined} className="rounded-b-[5px] border border-t-0 border-[var(--color-pearl)] bg-[rgba(252,250,246,0.7)] px-4 pb-4 pt-3.5">
           {children}
         </div>
       )}

@@ -34,6 +34,8 @@ import { documentResolutionState } from '@/lib/document/document-resolution-stat
 import { DocSpine } from '@/components/document/doc-spine';
 import { DocLetterhead } from '@/components/document/doc-letterhead';
 import { SettledBar } from '@/components/document/settled-bar';
+import { PreviousWork } from '@/components/document/previous-work';
+import { DocumentGuide } from '@/components/document/document-guide';
 import { ProposalBlocksReadOnly } from '@/components/document/proposal-blocks-readonly';
 import { FFESection } from '@/components/document/ffe-section';
 import { CoordinationBand } from '@/components/document/coordination/coordination-band';
@@ -73,6 +75,8 @@ import { ProjectAuthorityBandForProject } from '@/components/document/commercial
 import { ProjectMoodBoards } from '@/components/document/project-mood-boards';
 import { ProjectCommerceSection } from '@/components/document/commercial/project-commerce-section';
 import { authorizationDoorwayFor } from '@/lib/document/authorization-doorway';
+import { deriveDocumentGuide } from '@/lib/document/document-guide';
+import { openLedger } from '@/components/document/command-bar';
 
 const prettyPhase = (phase: string | null) =>
   phase
@@ -180,6 +184,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   // Which settled phase is unfolded (R66 review) — generalizes the old
   // proposal-only unfold so ANY completed phase can be clicked open.
   const [openSection, setOpenSection] = useState<SectionKey | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [highlightLineId, setHighlightLineId] = useState<string | null>(null);
   const [pendingNoteAnchor, setPendingNoteAnchor] = useState<string | null>(null);
   // The Call Sheet (Wave 3) — an overlay, never a section (D1). Closed by
@@ -197,13 +202,18 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   // Click a spine marker (or a settled bar): unfold that phase and scroll to it.
   // The active phase has no settled bar — the scroll just lands on its section.
   const jumpToSection = useCallback((key: SectionKey) => {
+    if (key !== row?.active_section) setHistoryOpen(true);
     setOpenSection(key);
     requestAnimationFrame(() => {
-      document
-        .getElementById(sectionAnchorId(key))
-        ?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      requestAnimationFrame(() => {
+        const section = document.getElementById(sectionAnchorId(key));
+        section?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        section
+          ?.querySelector<HTMLElement>('[data-settled-heading]')
+          ?.focus({ preventScroll: true });
+      });
     });
-  }, []);
+  }, [row?.active_section]);
 
   // D13: the mobile spine sheet lives outside this React tree — it asks for a
   // section jump via a CustomEvent (mirrors the account sheet's open-account).
@@ -297,6 +307,13 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
         new Date(),
       )
     : [];
+  const guideModel = useMemo(() => (row ? deriveDocumentGuide({ row }) : null), [row]);
+  const activateGuide = useCallback(() => {
+    const destination = guideModel?.action?.destination;
+    if (!destination) return;
+    if (destination.kind === 'anchor') jumpToSection(destination.section);
+    if (destination.kind === 'ledger') openLedger(destination.name, destination.context);
+  }, [guideModel, jumpToSection]);
 
   // D13: publish the held document to the mobile shell (bar + spine sheet).
   useMobileActiveDoc(
@@ -457,6 +474,8 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           }
         />
 
+        {guideModel && <DocumentGuide model={guideModel} onActivate={activateGuide} />}
+
         {/* R27 / R63: the letterhead instruments — one quiet DM-mono row under
             the subtitle, now STAGE-CONSISTENT. Send-a-note (and, where there's
             something to mirror, View-as) ride the letterhead across stages,
@@ -488,20 +507,6 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           />
         )}
 
-        {/* Wave 3 — the kickoff band. Project docs only; the band checks the
-            `call-sheet` flag itself and self-manages its own visibility
-            (dismissal, retirement at 4 names), so this mount is unconditional
-            for a project document. */}
-        {row.engagement_kind === 'project' && row.project_id && (
-          <>
-            <KickoffBand projectId={row.project_id} rows={rosterRows ?? []} />
-            {/* The plan room's threshold band. It renders nothing until the
-                bundle resolves and never dismisses — a set nobody is current
-                on is not something to hide. */}
-            <PlanRoomBand routeId={id} projectId={row.project_id} />
-          </>
-        )}
-
         {/* D13: letterhead-anchored margin items (Pulse, section items) as
             chips beneath the title — the desktop margin rail hides on mobile. */}
         <MobileMarginChips
@@ -513,7 +518,12 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
         {/* Settled bars — letterhead bar + stamp; every phase with a read-only
             body unfolds in place so completed work stays reviewable (R66).
             Clicked from the spine marker (jumpToSection) or the bar itself. */}
-        {settled.map((s) => {
+        <PreviousWork
+          count={settled.length}
+          open={historyOpen}
+          onOpenChange={setHistoryOpen}
+        >
+          {settled.map((s) => {
           const isOpen = openSection === s.key;
           const toggle = () => setOpenSection((prev) => (prev === s.key ? null : s.key));
 
@@ -576,16 +586,8 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
               {body}
             </SettledBar>
           );
-        })}
-
-        {/* R26: the Account Page — engagement money at the top of the
-            Project section. Studio eyes only; never mirrored. */}
-        {row.engagement_kind === 'project' && row.project_id && (
-          <>
-            <AccountBand projectId={row.project_id} clientName={row.client_name} />
-            <ProjectMoodBoards projectId={row.project_id} />
-          </>
-        )}
+          })}
+        </PreviousWork>
 
         {/* ScheduleNavProvider wires the Rule (below) to the Spine (mounted
             deeper, inside the active section) so a minimap click reveals
@@ -702,16 +704,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
               )}
               {row.active_section === 'project' && row.project_id && (
                 <>
-                  <ProjectAuthorityBandForProject
-                    projectId={row.project_id}
-                    allowAddendum
-                  />
-                  <ProjectCommerceSection
-                    projectId={row.project_id}
-                    projectName={row.title}
-                    clientName={row.client_name}
-                  />
-                {/* Track 5 — the coordination band (ball-in-court + dependency web).
+                  {/* Track 5 — the coordination band (ball-in-court + dependency web).
                     The band resolves designerClientId itself from clientUserId
                     (work-block.tsx pattern); the page passes clientUserId, never a
                     raw uid. Mounts ABOVE the FF&E section in the project home (D1:
@@ -721,37 +714,43 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
                     IS the accepted current page, so this is zero flash/layout
                     shift for the non-pilot cohort (PostHog persists flags, so
                     pilots see at most one first-visit swap). */}
-                {!spineGate.isLoading && spineGate.value ? (
-                  <ScheduleSpine
+                  {!spineGate.isLoading && spineGate.value ? (
+                    <ScheduleSpine
+                      projectId={row.project_id}
+                      clientUserId={row.client_profile_id}
+                      clientName={row.client_name}
+                    />
+                  ) : (
+                    <CoordinationBand
+                      projectId={row.project_id}
+                      clientUserId={row.client_profile_id}
+                      clientName={row.client_name}
+                    />
+                  )}
+                  <FFESection
                     projectId={row.project_id}
+                    projectName={row.title}
+                    mode="project"
+                    highlightId={highlightLineId}
+                    onAddNote={setPendingNoteAnchor}
+                    sectionKey="project"
                     clientUserId={row.client_profile_id}
                     clientName={row.client_name}
+                    folioDrop={folioDrop}
+                    onFolioDropConsumed={() => setFolioDrop(null)}
+                    sectionDragOver={sectionDrag}
                   />
-                ) : (
-                  <CoordinationBand
+                  <ProjectAuthorityBandForProject projectId={row.project_id} allowAddendum />
+                  <ProjectCommerceSection
                     projectId={row.project_id}
-                    clientUserId={row.client_profile_id}
+                    projectName={row.title}
                     clientName={row.client_name}
                   />
-                )}
-                <FFESection
-                  projectId={row.project_id}
-                  projectName={row.title}
-                  mode="project"
-                  highlightId={highlightLineId}
-                  onAddNote={setPendingNoteAnchor}
-                  sectionKey="project"
-                  clientUserId={row.client_profile_id}
-                  clientName={row.client_name}
-                  folioDrop={folioDrop}
-                  onFolioDropConsumed={() => setFolioDrop(null)}
-                  sectionDragOver={sectionDrag}
-                />
-                {/* R80: the Care band — closure stays reachable from an active
+                  {/* R80: the Care band — closure stays reachable from an active
                     project (a quiet folded line until install nears). */}
-                <CareBand projectId={row.project_id} />
-              </>
-            )}
+                  <CareBand projectId={row.project_id} />
+                </>
+              )}
             {row.active_section === 'install' && row.project_id && (
               <>
                 <FFESection
@@ -798,6 +797,17 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           </div>
           </RippleProvider>
         </ScheduleNavProvider>
+
+        {row.engagement_kind === 'project' && row.project_id && (
+          <>
+            {/* Supporting project records follow the active work so a newly
+                opened document reaches the schedule before its reference material. */}
+            <AccountBand projectId={row.project_id} clientName={row.client_name} />
+            <ProjectMoodBoards projectId={row.project_id} />
+            <KickoffBand projectId={row.project_id} rows={rosterRows ?? []} />
+            <PlanRoomBand routeId={id} projectId={row.project_id} />
+          </>
+        )}
 
         {/* R29: the colophon — the paper's last line states its own facts. */}
         {row.engagement_kind === 'project' && row.project_id && (

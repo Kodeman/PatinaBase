@@ -23,6 +23,10 @@ jest.mock('@patina/design-system', () => ({
   ),
 }));
 
+jest.mock('@/components/portal/scope-builder/boards-builder', () => ({
+  BoardsBuilder: ({ projectId }: { projectId: string }) => <div data-testid="boards-builder">Boards for {projectId}</div>,
+}));
+
 const frozen = {
   id: 'snapshot-1',
   project_id: 'project-1',
@@ -116,5 +120,13 @@ describe('ProjectMoodBoards', () => {
       'href',
       '/board/live-board-existing?source=project_surface&from=%2Fdoc%2Fproject-1',
     );
+  });
+
+  it('guides a new project into the canonical board builder', () => {
+    useProjectBoards.mockReturnValue({ data: [], isLoading: false, isError: false });
+    render(<ProjectMoodBoards projectId="project-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start a mood board' }));
+    expect(screen.getByTestId('boards-builder')).toHaveTextContent('Boards for project-1');
   });
 });

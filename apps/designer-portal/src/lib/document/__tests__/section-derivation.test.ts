@@ -66,13 +66,23 @@ describe('deriveSections (§4)', () => {
     expect(s[5].sub).toBe('Sep 2');
   });
 
-  it('manual project (no lineage): Brief→Proposal ghost as future with em-dash subs', () => {
+  it('manual project (no lineage): Brief→Proposal are unrecorded, not future or complete', () => {
     const s = deriveSections(
       { row: baseRow, lineage: null, projectStartDate: '2026-03-30', installStartDate: null },
       NOW,
     );
-    expect(s.slice(0, 4).map((x) => x.state)).toEqual(['future', 'future', 'future', 'future']);
-    expect(s.slice(0, 4).map((x) => x.sub)).toEqual(['—', '—', '—', '—']);
+    expect(s.slice(0, 4).map((x) => x.state)).toEqual([
+      'unrecorded',
+      'unrecorded',
+      'unrecorded',
+      'unrecorded',
+    ]);
+    expect(s.slice(0, 4).map((x) => x.sub)).toEqual([
+      'Not recorded',
+      'Not recorded',
+      'Not recorded',
+      'Not recorded',
+    ]);
     expect(s[4].state).toBe('active');
   });
 

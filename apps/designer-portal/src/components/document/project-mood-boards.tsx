@@ -15,6 +15,8 @@ import type { MoodBoardSection } from '@patina/types';
 import { boardRoomHref } from '@/lib/mood-board/navigation';
 import { moodBoardEvents } from '@/lib/analytics/mood-board-events';
 import { BoardCoverArt } from '@/components/mood-board/board-cover-art';
+import { GuidedEmptyState } from './guided-empty-state';
+import { BoardsBuilder } from '@/components/portal/scope-builder/boards-builder';
 
 type LiveBoardWithLineage = ProposalBoardSummary & {
   source_project_board_id?: string | null;
@@ -45,6 +47,7 @@ export function ProjectMoodBoards({ projectId }: { projectId: string }) {
   const continueBoard = useContinueBoardInProject();
   const [continuingId, setContinuingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [startingBoard, setStartingBoard] = useState(false);
 
   const liveBoards = (liveQuery.data ?? []) as LiveBoardWithLineage[];
   const frozenBoards = (frozenQuery.data ?? []) as FrozenBoardWithSections[];
@@ -82,7 +85,24 @@ export function ProjectMoodBoards({ projectId }: { projectId: string }) {
     );
   }
 
-  if (liveBoards.length === 0 && frozenBoards.length === 0) return null;
+  if (liveBoards.length === 0 && frozenBoards.length === 0) {
+    return (
+      <section aria-labelledby="project-mood-boards" className="mt-9 border-t border-[var(--color-pearl)] pt-6">
+        <h2 id="project-mood-boards" className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]">Mood boards</h2>
+        {startingBoard ? (
+          <div className="mt-3"><BoardsBuilder projectId={projectId} /></div>
+        ) : (
+          <GuidedEmptyState
+            className="mt-3"
+            title="Start the project’s visual direction"
+            description="Use a working mood board to collect references, compose the room, and keep the visual decisions close to the project."
+            inputs={['Room or purpose', 'References', 'A point of view']}
+            action={{ key: 'start-project-board', label: 'Start a mood board', onClick: () => setStartingBoard(true) }}
+          />
+        )}
+      </section>
+    );
+  }
 
   const handleContinue = async (snapshot: FrozenBoardWithSections) => {
     const existing = continuedBySnapshot.get(snapshot.id);
