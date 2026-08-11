@@ -273,4 +273,59 @@ describe('deriveDocumentGuide', () => {
       kind: 'anchor', section: 'project', focusId: 'document-project-status',
     });
   });
+
+  it('keeps a paused Discovery document on its own resume act', () => {
+    const guide = deriveDocumentGuide({
+      row: row('discovery', { is_paused: true }),
+      inputFacts: [
+        { label: 'Working budget', owner: 'Client', blocks: 'Direction', focusId: 'discovery-facet-budget' },
+      ],
+    });
+
+    expect(guide.state).toBe('paused');
+    expect(guide.action).toEqual({
+      key: 'review-paused-project',
+      label: 'Review project status',
+      destination: { kind: 'anchor', section: 'discovery', focusId: 'document-project-status' },
+    });
+    expect(guide.topInput?.label).toBe('Working budget');
+  });
+
+  it('keeps an operational need on its own act when inputs are still missing', () => {
+    const guide = deriveDocumentGuide({
+      row: row('discovery', { overdue_decision_count: 1, earliest_overdue_due: '2026-08-01' }),
+      now: new Date('2026-08-10T12:00:00Z'),
+      inputFacts: [
+        { label: 'Working budget', owner: 'Client', blocks: 'Direction', focusId: 'discovery-facet-budget' },
+      ],
+    });
+
+    expect(guide.state).toBe('actionable');
+    expect(guide.action).toEqual({
+      key: 'resolve-overdue_decision',
+      label: 'Review decisions',
+      destination: {
+        kind: 'anchor', section: 'discovery', focusId: 'document-decision-controls', activate: false,
+      },
+    });
+    expect(guide.topInput?.label).toBe('Working budget');
+  });
+
+  it('still derives the input act on the needs-input branch', () => {
+    const guide = deriveDocumentGuide({
+      row: row('discovery'),
+      inputFacts: [
+        { label: 'Working budget', owner: 'Client', blocks: 'Direction', focusId: 'discovery-facet-budget' },
+      ],
+    });
+
+    expect(guide.state).toBe('needs_input');
+    expect(guide.action).toEqual({
+      key: 'open-missing-input',
+      label: 'Add Working budget',
+      destination: {
+        kind: 'anchor', section: 'discovery', focusId: 'discovery-facet-budget', activate: true,
+      },
+    });
+  });
 });

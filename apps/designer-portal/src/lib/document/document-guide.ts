@@ -133,8 +133,11 @@ function withInputs(
   inputFacts: readonly DocumentGuideInputFact[] | undefined,
 ): DocumentGuideModel {
   const firstInput = inputFacts?.[0] ?? null;
+  // Only the needs-input branch derives its act from the missing input. Paused,
+  // needs-attention, proposal-lifecycle, and stage-default branches each state
+  // their own act, and an input fact must never displace it.
   const inputAction =
-    firstInput?.focusId && model.stage === 'discovery'
+    firstInput?.focusId && model.state === 'needs_input'
       ? {
           key: 'open-missing-input',
           label: `Add ${firstInput.label}`,
