@@ -75,6 +75,12 @@ jest.mock('@patina/supabase', () => ({
 jest.mock('@/components/document/ffe-section', () => ({ FFESection: () => null }));
 jest.mock('@/components/document/coordination/coordination-band', () => ({ CoordinationBand: () => null }));
 jest.mock('@/components/document/schedule/schedule-spine', () => ({ ScheduleSpine: () => null }));
+jest.mock('@/components/document/workflow/contextual-handoff-band', () => ({
+  ContextualHandoffBand: () => null,
+}));
+jest.mock('@/components/document/approvals/project-approval-document', () => ({
+  ProjectApprovalDocument: () => null,
+}));
 jest.mock('@/components/document/commercial/project-authority-band', () => ({
   ProjectAuthorityBandForProject: () => null,
 }));
