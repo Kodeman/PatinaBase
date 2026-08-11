@@ -379,6 +379,7 @@ export default function DeskPage() {
               presentation and states the known count before anything is hidden. */}
           <StudioPulse
             chips={data?.chips ?? []}
+            folders={data?.folders ?? []}
             engagementsResolved={Boolean(data) && !isLoading}
           />
 

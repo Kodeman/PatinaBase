@@ -13,6 +13,8 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { folderTab, type DeskFolder } from '@/lib/document/desk-derivation';
+import { deskGateSentence } from '@/lib/document/workflow-gate';
+import { NOT_OVERDUE } from '@/lib/document/overdue-condition';
 import { documentEvents } from '@/lib/analytics/document-events';
 import { StatusChip } from './status-chip';
 import { openLedger } from './command-bar';
@@ -20,6 +22,22 @@ import { TriageBar } from './triage-bar';
 import { DocumentAction, DocumentActionGroup } from './document-action';
 
 export const DESK_FOLIO_PREVIEW_LIMIT = 4;
+
+/**
+ * Ruling VI — the folio's need line keys to its nearest open gate: the party,
+ * the artifact, and how long it has waited. Where the folio's need is not a
+ * gate, the need keeps its own line, and the 2–4 folio ceiling is untouched
+ * either way.
+ */
+export function folioNeedLine(folder: DeskFolder): string {
+  return (
+    deskGateSentence({
+      clientName: folder.row.client_name,
+      activeSection: folder.row.active_section,
+      overdue: folder.overdue ?? NOT_OVERDUE,
+    }) ?? folder.need.text
+  );
+}
 
 const SECTION_LABEL: Record<string, string> = {
   brief: 'Brief',
@@ -194,7 +212,7 @@ export function FolderCard({
           openLedger(need.ledger!.name, need.ledger!.context);
         }}
         className={cardClassName}
-        aria-label={`${row.title} — ${need.text}`}
+        aria-label={`${row.title} — ${folioNeedLine(folder)}`}
         data-action-key={need.actionLabel ? need.kind : undefined}
         data-action-variant={need.actionLabel ? 'primary' : undefined}
         data-action-region={need.actionLabel ? 'needs-your-hand' : undefined}
@@ -209,7 +227,7 @@ export function FolderCard({
       href={need.deepLink ?? `/doc/${row.engagement_id}`}
       onClick={selectFolioAction}
       className={cardClassName}
-      aria-label={`${row.title} — ${need.text}`}
+      aria-label={`${row.title} — ${folioNeedLine(folder)}`}
       data-action-key={need.actionLabel ? need.kind : undefined}
       data-action-variant={need.actionLabel ? 'primary' : undefined}
       data-action-region={need.actionLabel ? 'needs-your-hand' : undefined}
@@ -273,7 +291,7 @@ function FolderFace({
             </p>
           )}
           <div className="mt-4 flex items-start justify-between gap-3 border-t border-[var(--border-default)] pt-3.5">
-            <p className="doc-type-body flex-1">{need.text}</p>
+            <p className="doc-type-body flex-1">{folioNeedLine(folder)}</p>
             <StatusChip label={need.stamp.label} color={need.stamp.color} />
           </div>
           {/* R61/R65: a lead is the one need whose act is a triage, not a pick-up

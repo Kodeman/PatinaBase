@@ -103,3 +103,58 @@ describe('StudioPulseDisclosure', () => {
     ).toBe('No secondary work needs attention · Field quiet');
   });
 });
+
+describe('Studio Pulse gains exactly one aggregate sentence (Ruling VI)', () => {
+  const counts = { openRequests: 1, inMotion: 0, reconnects: 0, field: 0 };
+
+  it('states the shape of the week in one line', () => {
+    render(
+      <StudioPulseDisclosure
+        counts={counts}
+        isReady
+        hasError={false}
+        gateSentence="3 folios need your hand, 1 overdue, 2 pieces are in production."
+      >
+        <a href="/real-work">Actionable work</a>
+      </StudioPulseDisclosure>,
+    );
+
+    const sentences = screen.getAllByTestId('studio-pulse-gate-sentence');
+    expect(sentences).toHaveLength(1);
+    expect(sentences[0]).toHaveTextContent(
+      '3 folios need your hand, 1 overdue, 2 pieces are in production.',
+    );
+  });
+
+  it('says nothing at all until the read resolves', () => {
+    render(
+      <StudioPulseDisclosure
+        counts={counts}
+        isReady={false}
+        hasError={false}
+        gateSentence="3 folios need your hand."
+      >
+        <a href="/real-work">Actionable work</a>
+      </StudioPulseDisclosure>,
+    );
+
+    expect(screen.queryByTestId('studio-pulse-gate-sentence')).toBeNull();
+  });
+
+  it('never turns the sentence into a badge or a second act', () => {
+    render(
+      <StudioPulseDisclosure
+        counts={counts}
+        isReady
+        hasError={false}
+        gateSentence="1 folio needs your hand, 1 overdue."
+      >
+        <a href="/real-work">Actionable work</a>
+      </StudioPulseDisclosure>,
+    );
+
+    const sentence = screen.getByTestId('studio-pulse-gate-sentence');
+    expect(sentence.querySelector('button')).toBeNull();
+    expect(sentence.querySelector('a')).toBeNull();
+  });
+});

@@ -15,6 +15,16 @@
  *   per-studio settings when studio #2 onboards.
  */
 
+// The one exception to "dependency-free" is deliberate: overdue-condition.ts
+// imports nothing at all, and Ruling IV requires the Desk's order to read the
+// same derivation the margin stamp and the guide sentence read.
+import {
+  deriveOverdue,
+  overdueSortTier,
+  NOT_OVERDUE,
+  type OverdueCondition,
+} from './overdue-condition';
+
 export type EngagementKind = 'project' | 'proposal' | 'lead' | 'relationship';
 
 export type SectionKey =
@@ -219,6 +229,9 @@ export interface NeedLine {
 export interface DeskFolder {
   row: DocumentStateRow;
   need: NeedLine;
+  /** Ruling IV — the one overdue derivation, read by this folio's order and by
+   *  its stamp. Undefined only where a folder was built outside partitionDesk. */
+  overdue?: OverdueCondition;
 }
 
 // ─── R53: People on the Desk (the nurture-due / reconnect surface) ──────────
@@ -935,7 +948,7 @@ export function deriveMotion(
   return null;
 }
 
-function needSortKey(folder: DeskFolder): [number, number, number] {
+function needSortKey(folder: DeskFolder): [number, number, number, number] {
   const { row, need } = folder;
   const date =
     need.kind === 'overdue_decision' && row.earliest_overdue_due
@@ -952,7 +965,14 @@ function needSortKey(folder: DeskFolder): [number, number, number] {
               : need.kind === 'task_due' && row.earliest_task_due
                 ? new Date(row.earliest_task_due).getTime()
                 : new Date(row.updated_at).getTime();
-  return [need.urgent ? 0 : 1, NEED_RANK[need.kind], date];
+  // Ruling IV's third rendering: an overdue folio rises to first position.
+  // Position is the whole pressure — no count, no colour change, no second act.
+  return [
+    overdueSortTier(folder.overdue ?? NOT_OVERDUE),
+    need.urgent ? 0 : 1,
+    NEED_RANK[need.kind],
+    date,
+  ];
 }
 
 /** Split rows into the needs-your-hand stack and the in-motion chips.
@@ -1006,7 +1026,16 @@ export function partitionDesk(
           : null;
     const need = deriveNeed(row, now, conflict, receivable, flagged, ceremony);
     if (need) {
-      folders.push({ row, need });
+      // Ruling IV: the overdue condition rides the folder so the sort, the
+      // folio's need line, and the margin stamp all read one derivation.
+      folders.push({
+        row,
+        need,
+        overdue:
+          need.kind === 'overdue_decision'
+            ? deriveOverdue(row.earliest_overdue_due, now)
+            : NOT_OVERDUE,
+      });
       continue;
     }
     const motion = deriveMotion(row, now, conflict, ceremony);
