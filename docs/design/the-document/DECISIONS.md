@@ -7162,15 +7162,39 @@ scale/opacity keyframe, guarded under `prefers-reduced-motion` the same way
 `patina-strata-wash` already is in `globals.css`), and a **HELD FOR
 DISCUSSION** stamp on `outcome === 'needs_discussion'`, drawn as loud as the
 seal per M8's own note that a holding gate must never read as a soft
-approval.
+approval. Its wording matches the stamp exactly — "Recorded outcome: Held for
+discussion," not the outcome picker's "Needs discussion" label — corrected on
+review (F11): a sighted reader and a screen-reader announcement must not
+disagree on the word for the same held gate, even though "Needs discussion"
+stays the outcome picker's own verbatim copy.
 
-**Removed, per the ruling's explicit instruction:** the shipped client-side
-terracotta "Overdue" indicator (previously beside the due date). Overdue is
-the studio's condition, computed and rendered only on the three studio
-surfaces of folio 10 — a client who finds a paper counting days against them
-is a client who stops opening the paper. `isOverdue` stays on the
-`ProjectApprovalReview` type (unchanged; this is a UI-only ruling) but the
-client component never reads it.
+**Corrected on review (F3):** the Impact section's Cost/Schedule/Lead-time
+`dt` labels shipped on `type-meta-small` (≈10px), under this ceremony's own
+≥12px metadata floor — the floor this entry already claimed for Due and the
+checksum. All three now render on `type-meta` (12px), matching every other
+anatomy-part label.
+
+**Removed, per the ruling's explicit instruction, from all four client
+surfaces that read `ProjectApprovalReview.isOverdue`** — not just
+`project-approval-review.tsx`: the shipped client-side terracotta "Overdue"
+indicator. Adversarial review (F2) caught that the first pass only fixed the
+review page; the other three surfaces derive attention/status text from the
+same field and all carried the same device:
+`lib/client-attention.ts:67`'s `projectApprovalAttentionLabel` (the
+`if (approval.isOverdue) return 'Overdue'` branch is gone; overdue and
+on-time now both fall through to `'Response required'`),
+`components/approvals/project-approval-summary.tsx:44-47` (the
+`" · Overdue"` suffix on the status line), and `components/making/
+the-making.tsx`'s `ProjectApprovalGate` (:298) and `DeferredProjectApprovals`
+(:365) (` · Overdue` suffixes on the gate line and the deferred-work list
+item). Overdue is the studio's condition, computed and rendered only on the
+three studio surfaces of folio 10 — a client who finds a paper counting days
+against them is a client who stops opening the paper. `isOverdue` stays on
+the `ProjectApprovalReview` type (unchanged; this is a UI-only ruling) but no
+client surface reads it toward client-facing copy anymore. The legacy
+`ClientDecision` surfaces (`app/decisions/page.tsx`'s "Overdue (N)",
+`decision-card-client.tsx`) are a different, older system and were left
+untouched — Kody is being looped in on those separately.
 
 **Mockup ambiguities interpreted, not ruled:**
 - M8's state A omits the due date and checksum entirely for visual clarity.
@@ -7181,17 +7205,28 @@ client component never reads it.
   The live surface keeps the generic "Submit response" label regardless of
   which outcome is selected — renaming it to "Approve" would misdescribe the
   act when Changes requested or Needs discussion is chosen.
-- No `--color-gold` token exists in `client-portal/globals.css` (the mockup's
-  `.s-hold` border is `var(--gold)`, `.s-seal` is `var(--mocha)`). The seal
-  uses `--color-mocha` (exact match); the hold stamp uses `--color-clay`, the
-  closest existing warm token, rather than inventing a new one or reusing the
-  terracotta this same ruling just removed.
+
+**Corrected on review (F5):** the first pass approximated the mockup's gold
+hold-border with the existing `--color-clay` token — clay is the app's
+primary CTA accent, the wrong read for a stamp that means "nothing is
+released." `--color-gold: #E8C547` (the mockup's own `--gold` value, exact)
+is now added to `client-portal/globals.css`, scoped to this one caller, with
+the hold stamp's text set to `--color-charcoal` — matching the mockup's
+`.s-hold{border-color:var(--gold);color:var(--char)}` precisely. The seal
+stays `--color-mocha` border and text, matching `.s-seal` precisely.
 
 Ruling IX (the co-approver) is unaffected — it ships in schema only
-(`requiredCoapproverId`, always `null`, gates a boolean elsewhere) and this
-change does not render it. R9 verification (repo-wide grep for
-`co_approver`/`coApprover`) found no UI rendering of the co-approver schema
-anywhere in the repo as of this entry; findings reported to the dispatching
-session, nothing fixed under this ticket.
+(`requiredCoapproverId`, always `null`) and this change does not render it.
+**R9 verification, precise claim:** a repo-wide grep for
+`co_approver`/`coApprover` (migrations, tests, docs/ADRs, generated
+`database.types.ts`, `@patina/supabase` types, and every app) found exactly
+one non-schema, non-test consumer —
+`apps/designer-portal/src/components/document/approvals/project-approval-
+document.tsx:131`, which reads `authority.requiredCoapproverId === null` as
+one term of a boolean gate (`canRequestSignOff`). It renders no co-approver
+identity, count, or state — the value only steers whether a sign-off act is
+offered. No surface, in this repo, renders the co-approver's identity or
+status to a screen. Findings reported to the dispatching session; nothing
+fixed under this ticket (designer-portal is out of scope for WP3 Track D).
 
 *Entries add: I114 · last id = I114*
