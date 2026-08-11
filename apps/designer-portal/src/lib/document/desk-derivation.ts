@@ -20,7 +20,6 @@
 // same derivation the margin stamp and the guide sentence read.
 import {
   deriveOverdue,
-  overdueSortTier,
   NOT_OVERDUE,
   type OverdueCondition,
 } from './overdue-condition';
@@ -948,7 +947,7 @@ export function deriveMotion(
   return null;
 }
 
-function needSortKey(folder: DeskFolder): [number, number, number, number] {
+function needSortKey(folder: DeskFolder): [number, number, number] {
   const { row, need } = folder;
   const date =
     need.kind === 'overdue_decision' && row.earliest_overdue_due
@@ -965,14 +964,13 @@ function needSortKey(folder: DeskFolder): [number, number, number, number] {
               : need.kind === 'task_due' && row.earliest_task_due
                 ? new Date(row.earliest_task_due).getTime()
                 : new Date(row.updated_at).getTime();
-  // Ruling IV's third rendering: an overdue folio rises to first position.
-  // Position is the whole pressure — no count, no colour change, no second act.
-  return [
-    overdueSortTier(folder.overdue ?? NOT_OVERDUE),
-    need.urgent ? 0 : 1,
-    NEED_RANK[need.kind],
-    date,
-  ];
+  // Ruling IV's third rendering needs no new tier: `overdue_decision` is the
+  // only urgent need AND rank 0, so an overdue folio already sorts above every
+  // other folio, and ties already break on `earliest_overdue_due` above. A
+  // leading overdue tier was measurably inert here — and actively harmful when
+  // `earliest_overdue_due` is null, since it demoted a real need below
+  // non-overdue folios.
+  return [need.urgent ? 0 : 1, NEED_RANK[need.kind], date];
 }
 
 /** Split rows into the needs-your-hand stack and the in-motion chips.
