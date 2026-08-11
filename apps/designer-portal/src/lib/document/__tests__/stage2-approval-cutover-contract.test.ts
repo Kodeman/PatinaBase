@@ -9,10 +9,10 @@ describe('designer Stage-2 cutover source contract', () => {
   it('mounts the project approval document immediately after workflow with projects.client_id', () => {
     const page = read('app/(document)/doc/[id]/page.tsx');
     expect(page).toMatch(
-      /<WorkflowStageDocumentMount[\s\S]*?<ProjectApprovalDocumentMount/,
+      /<SectionStageLineMount[\s\S]*?<ProjectApprovalDocumentMount/,
     );
     expect(page.indexOf('<ProjectApprovalDocumentMount')).toBeGreaterThan(
-      page.indexOf('<WorkflowStageDocumentMount'),
+      page.indexOf('<SectionStageLineMount'),
     );
     expect(page).toContain('project?.client_id ?? null');
     expect(page).not.toMatch(
