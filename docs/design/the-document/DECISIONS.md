@@ -7125,3 +7125,159 @@ mirrors the equivalent contract already carried by wave1's own
 of one silently drifting behind the other.
 
 *Entries add: I113 · last id = I113*
+
+### I114 · R1 — the eleven stages become the derivation layer (ratified R1)
+
+The workflow stage document is deleted from the glass. `workflow-stage-document.tsx`
+(347 lines: the eleven-row rail, the bracketed `Project · stages 04–09` group, and
+the eleven-row definition list) and `workflow-stage-document-mount.tsx` are gone,
+along with their two suites. The model underneath is untouched — migration 00433,
+`get_project_workflow`, `useProjectWorkflow`, and `workflow-stage-derivation.ts`
+all stay and remain the only source of stage truth. This is a render deletion, not
+a model deletion.
+
+In their place, `SectionStageLineMount` mounts at the same point in
+`app/(document)/doc/[id]/page.tsx` and renders `SectionStageLine` (M1-after): one
+mono sub-label carrying the stage, the track, and the position ("Design
+Development · FF&E · stage 06 of 04–09"); one Strata-Mark band per live track,
+drawn equal-width and colour-differentiated in the mark's own movement hues
+(Core → mocha, FF&E → clay, Construction → dusty blue); and one quiet provenance
+line naming where the classification came from. A new pure module,
+`lib/document/section-stage-line.ts`, reduces `WorkflowStageDocumentState` to that
+model, so the reduction is testable without a DOM.
+
+Four judgement calls, recorded because a designer would notice them:
+
+**(a) Bands are drawn only for tracks that carry active work.** M1's fixture has
+three live tracks and so shows three bands. Rendering a "Construction · —" band for
+a project with no construction phase would invent a track, so a track with no
+active group is simply absent. Hue is bound to the track, not to band position, so
+Core is mocha whether it is drawn first or alone.
+
+**(b) The bands carry no progress semantics.** Per M1's figcap the fills mark
+*which* track, never how much of it is done. They are therefore all `w-full`, and
+`section-stage-line.test.tsx` asserts that equality so a future "helpful" progress
+fill fails the suite rather than the review.
+
+**(c) Canonical stage titles ship, not the deck's sentence case.** M1 draws
+"Design development"; `RESIDENTIAL_WORKFLOW_STAGES[].title` says "Design
+Development". The wave1 engineering review (§2.9) already flagged two stage-label
+vocabularies shipping side by side as a real product inconsistency, so the
+canonical constant wins and the deck's rendering is treated as typography, not
+vocabulary.
+
+**(d) Provenance microcopy means template provenance.** M1-after's microcopy
+("Same derivation · same stage · same track / Eleven rows of chronology,
+withdrawn") is the deck comparing its own two panes; shipping it as product copy
+would be absurd. The line instead names the real provenance the derivation already
+computes — "Derived from residential-full-service · version 3" — and, when the
+schedule records none, says so rather than implying one.
+
+Two truths the deleted rail carried are kept as single quiet lines rather than
+dropped silently: active phases that no canonical stage classifies are counted
+("1 active phase not classified to a canonical stage"), and a workflow read error
+still says the stage position is unavailable *and* that the schedule itself is
+unchanged. The `[data-workflow-document]` hook survives on the new surface, so
+`e2e/document/workflow-stage-responsive.spec.ts` still gates 320px reflow.
+
+Copy sweep (HANDOFF §7, actor-neutral lexicon):
+`packages/types/src/residential-workflow.ts` stage 03's gate becomes "Agreement
+signed and engagement **confirmed**" and stage 07's becomes "Documents and
+**budget snapshot approved**" — the live wave copy "engagement authorized" and
+"budget, and execution authority approved" settled who holds commercial authority,
+which no UI copy may do.
+
+**Open, not resolved here:** the deck's own aside — Direction (a section that
+seals) and stage 05 concept/schematic (a stage that completes) overlap without
+agreeing. The sub-label deliberately omits the "of 04–09" band for stages outside
+04–09 rather than picking a side; the mapping goes to a design session.
+
+*Entries add: I114 · last id = I114*
+
+### I115 · R2 — the gate is a boundary ceremony, and SCOPE ships without a migration (ratified R2)
+
+`project-approval-document.tsx` is restaged from a form into M2's six-part anatomy
+— ARTIFACT / QUESTION / SCOPE / IMPACT / AUTHORITY / CONFIRMATION, and no seventh
+part. A new `approvals/gate-anatomy.tsx` owns the primitives: `GateCeremony`,
+`GatePartBlock` (read-only), `GateFieldset` (authoring), `ArtifactEdges`,
+`GateQuestion`, `GatePlain`, `GateImpact`. Both authoring flows — the composer and
+the superseding request — now run through the same six parts in the same order, so
+the shape a designer fills in is the shape the client reads.
+
+Each approval row renders one of two states. **State A** (a live leaf: draft or
+pending) unfolds the ceremony in place. **State B** (an outcome recorded, or the
+leaf withdrawn/superseded) collapses to a seal: the artifact name, one settled
+line, and the stamp — "Approved · <date>" in mocha for the approved case. The
+superseded predecessor is linked under the seal ("Edition 2 superseded — view") as
+an in-place focus of the predecessor row, never a navigation; M2's note that
+"nothing between State A and State B is a navigation" is honoured literally.
+
+**The SCOPE decision: no migration. SCOPE renders from the structured binding.**
+The deck argues SCOPE "has no dedicated field today, only a free-text context line
+doing the job by convention", and calls that one field "the whole of what this
+ceremony asks of the schema". We did not add it, and the reasoning is a risk
+judgement rather than a design one:
+
+- A `scope_note` column is additive, but *reaching* it is not.
+  `create_project_approval_decision`, `supersede_project_approval_decision`,
+  `get_project_decision_reviews`, `get_project_decision_review`, and
+  `list_my_project_decision_reviews` would each need restating — and whole-body RPC
+  restatement is precisely the failure mode the engineering review names as the
+  stack's highest risk (§2.1: 00436 already restates eleven main-installed bodies,
+  and `_apply_client_decision_authorized` has been restated three times).
+- 00445 is the tip of a stack with **zero verification run against it** (§2.3) and
+  no wired way to run one; a migration 00446 would land on an unreplayed
+  foundation, and this worktree does not own the local replay.
+- There is an honest smaller option, so the migration is not forced.
+
+That option: a decision binds **exactly one project phase**, and that binding is
+structured, server-validated evidence — it is the real answer to "what does this
+release". SCOPE therefore renders `Bound to <phase>. No other phase is bound to
+this decision.` as the scope of record, with the author's free-text note shown
+beneath it, verbatim, **only when one was written**. `gateScope()` in
+`project-approval-model.ts` returns the two separately so the structural claim is
+never confused with the author's prose, and the composer's field is relabelled from
+"Context (optional, not an approval response)" to **"Scope note"** with the
+placeholder "What this releases, and what it does not." Nothing is fabricated: when
+no note exists, none is drawn. **The dedicated field remains the right long-term
+answer** and should be minted with the next migration wave that already has to
+restate those RPCs — not on top of an unverified stack for a rendering win.
+
+Three further interpretations, recorded because the mockup is ambiguous:
+
+**(a) The part labels ship in the authoring flow, not in the read-only ceremony.**
+M2's figcap says "the annotations in the left margin are pedagogical, for this deck
+only. They do not ship." The left margin holds both the part name and its italic
+gloss. We read the gloss as unambiguously pedagogical and cut it entirely. The
+names we split: a `<fieldset>` must have a `<legend>`, so the authoring flow wears
+ARTIFACT/QUESTION/SCOPE/IMPACT/AUTHORITY/CONFIRMATION visibly; the settled-facing
+State A ceremony drops the label column and separates its parts by typography and
+order alone, keeping the names as accessible group labels so the anatomy still
+reaches assistive technology. Both readings of the figcap are defensible; this one
+makes the deck's two sentences simultaneously true.
+
+**(b) The seal carries no reviewer initials.** M2 stamps "Approved · M. Chen ·
+May 12". The approval projection deliberately exposes no reviewer name
+(APPROVAL-AUTHORITY-CONTRACT: "Internal reviewer identities are not exposed to
+clients") and the component receives a `clientProfileId`, not a person. The stamp
+therefore reads outcome + date. Adding the name is a data change, not a rendering
+one.
+
+**(c) Due date sits under CONFIRMATION.** It is an attribute of the act of putting
+the question in the client's court, not a seventh part; IMPACT stays the three
+signed deltas only.
+
+IMPACT copy now follows M2 rather than the raw cents dump it replaced:
+`formatGateImpact()` renders "+$4,200 · +6 days · lead time unchanged" — signed, in
+dollars, and stating "unchanged" for a zero delta rather than hiding it, because a
+stored zero is evidence. CONFIRMATION's act is renamed "Publish" → **"Publish for
+approval"** per M2; its review-count gate, the completed-phase notice, withdraw,
+and supersede all keep their existing predicates untouched.
+
+D4 holds: the artifact's depth is two flat offset sheets over `--doc-sheet-3` /
+`--doc-sheet-2` / `--doc-paper`, and both new suites assert the rendered markup
+matches no `/shadow/`. Every metadata string in both surfaces sits at or above the
+12px floor (`--type-metadata-min`), so the mockups' 8.5–10.5px miniature sizes do
+not ship.
+
+*Entries add: I114–I115 · last id = I115*
