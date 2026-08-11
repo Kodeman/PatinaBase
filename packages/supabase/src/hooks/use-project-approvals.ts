@@ -1,11 +1,9 @@
-import { useEffect } from 'react';
 import {
   useMutation,
   useQuery,
   useQueryClient,
   type QueryClient,
 } from '@tanstack/react-query';
-import type { RealtimeChannel } from '@supabase/supabase-js';
 
 import { createBrowserClient } from '../client';
 import { invalidateProjectWorkflow } from './use-project-workflow';
@@ -126,9 +124,10 @@ export const projectApprovalKeys = {
 
 const APPROVAL_FOREGROUND_REFRESH_MS = 30_000;
 
-// Client sessions cannot see the studio-only source rows over Realtime. Keep
-// every sanitized RPC projection fresh without polling a backgrounded tab.
-const sanitizedApprovalRefresh = {
+// Tracked migrations do not publish the approval/evidence/candidate tables to
+// Realtime. Every client-safe and studio-authoring read therefore self-heals
+// while foregrounded without polling a backgrounded tab.
+const approvalForegroundRefresh = {
   refetchOnWindowFocus: true,
   refetchInterval: APPROVAL_FOREGROUND_REFRESH_MS,
   refetchIntervalInBackground: false,
@@ -387,7 +386,7 @@ export function useProjectApprovals(projectId: string | undefined) {
       return data.map(parseProjectApprovalReview);
     },
     enabled: !!projectId,
-    ...sanitizedApprovalRefresh,
+    ...approvalForegroundRefresh,
   });
 }
 
@@ -408,6 +407,7 @@ export function useProjectApprovalArtifactCandidates(
       return data.map(parseProjectApprovalArtifactCandidate);
     },
     enabled: !!projectId,
+    ...approvalForegroundRefresh,
   });
 }
 
@@ -435,7 +435,7 @@ export function useProjectApprovalByDecision(decisionId: string | undefined) {
       return data == null ? null : parseProjectApprovalReview(data);
     },
     enabled: !!decisionId,
-    ...sanitizedApprovalRefresh,
+    ...approvalForegroundRefresh,
   });
 }
 
@@ -456,7 +456,7 @@ export function useMyProjectApprovalReviews() {
       }
       return data.map(parseProjectApprovalReview);
     },
-    ...sanitizedApprovalRefresh,
+    ...approvalForegroundRefresh,
   });
 }
 
@@ -483,6 +483,7 @@ export function useProjectDecisionAuthority(projectId: string | undefined) {
       } satisfies ProjectDecisionAuthority;
     },
     enabled: !!projectId,
+    ...approvalForegroundRefresh,
   });
 }
 
@@ -709,172 +710,13 @@ export function useSupersedeProjectApproval() {
   );
 }
 
-type ApprovalRealtimePayload = {
-  new?: Record<string, unknown> | null;
-  old?: Record<string, unknown> | null;
-};
-
-function realtimeDecisionId(payload: ApprovalRealtimePayload): string | null {
-  for (const row of [payload.new, payload.old]) {
-    if (!row) continue;
-    if (typeof row.decision_id === 'string' && row.decision_id) {
-      return row.decision_id;
-    }
-    if (typeof row.id === 'string' && row.id) return row.id;
-  }
-  return null;
-}
-
-/** One project-scoped channel covers every table that changes the safe projection. */
-export function useProjectApprovalRealtime(projectId: string | undefined) {
-  const queryClient = useQueryClient();
-
-  useEffect(() => {
-    if (!projectId) return;
-    const supabase = createBrowserClient();
-    const invalidateProjection = (payload: ApprovalRealtimePayload) => {
-      void invalidateProjectApprovalQueries(queryClient, {
-        projectId,
-        decisionId: realtimeDecisionId(payload),
-      });
-    };
-    const invalidateAuthority = () => {
-      void queryClient.invalidateQueries({
-        queryKey: projectApprovalKeys.authority(projectId),
-      });
-    };
-    const invalidateCandidates = () => {
-      void queryClient.invalidateQueries({
-        queryKey: projectApprovalKeys.candidates(projectId),
-      });
-    };
-    const channel: RealtimeChannel = supabase
-      .channel(`project-approvals:${projectId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'client_decisions',
-          filter: `project_id=eq.${projectId}`,
-        },
-        invalidateProjection,
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'project_approval_artifacts',
-          filter: `project_id=eq.${projectId}`,
-        },
-        invalidateProjection,
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'project_decision_review_confirmations',
-          filter: `project_id=eq.${projectId}`,
-        },
-        invalidateProjection,
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'project_approval_action_receipts',
-          filter: `project_id=eq.${projectId}`,
-        },
-        invalidateProjection,
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'project_decision_authorities',
-          filter: `project_id=eq.${projectId}`,
-        },
-        invalidateAuthority,
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'plan_issues',
-          filter: `project_id=eq.${projectId}`,
-        },
-        invalidateCandidates,
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'project_documents',
-          filter: `project_id=eq.${projectId}`,
-        },
-        invalidateCandidates,
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'spec_books',
-          filter: `project_id=eq.${projectId}`,
-        },
-        invalidateCandidates,
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'project_budget_versions',
-          filter: `project_id=eq.${projectId}`,
-        },
-        invalidateCandidates,
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'project_budget_checkpoints',
-          filter: `project_id=eq.${projectId}`,
-        },
-        invalidateCandidates,
-      )
-      // These source tables are reached through spec-book/revision/document
-      // joins and carry no project_id column. RLS still limits delivered rows;
-      // invalidating this project's candidate list is conservative and safe.
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'spec_book_revisions',
-        },
-        invalidateCandidates,
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'spec_book_artifacts',
-        },
-        invalidateCandidates,
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [projectId, queryClient]);
+/**
+ * @deprecated Approval freshness is owned by foreground polling and centralized
+ * mutation invalidation. This compatibility shim intentionally creates no
+ * channel because tracked migrations publish none of its former source tables.
+ */
+export function useProjectApprovalRealtime(
+  _projectId: string | undefined,
+): void {
+  // Kept temporarily so installed portal callers do not need an atomic cutover.
 }

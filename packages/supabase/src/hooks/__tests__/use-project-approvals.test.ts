@@ -5,6 +5,7 @@ const invalidateQueries = vi.fn(() => Promise.resolve());
 const channelOn = vi.fn();
 const channelSubscribe = vi.fn();
 const removeChannel = vi.fn(() => Promise.resolve());
+const channelCreate = vi.fn();
 const channel: Record<string, unknown> = {};
 channel.on = (...args: unknown[]) => {
   channelOn(...args);
@@ -14,20 +15,14 @@ channel.subscribe = () => {
   channelSubscribe();
   return channel;
 };
-let effectCleanup: (() => void) | void;
+channelCreate.mockReturnValue(channel);
 
 vi.mock('@supabase/ssr', () => ({
   createBrowserClient: () => ({
     rpc,
-    channel: () => channel,
+    channel: channelCreate,
     removeChannel,
   }),
-}));
-
-vi.mock('react', () => ({
-  useEffect: (effect: () => (() => void) | void) => {
-    effectCleanup = effect();
-  },
 }));
 
 vi.mock('@tanstack/react-query', () => ({
@@ -46,6 +41,7 @@ import {
   useProjectApprovalByDecision,
   useProjectApprovalArtifactCandidates,
   useProjectApprovals,
+  useProjectDecisionAuthority,
   useMyProjectApprovalReviews,
   usePublishProjectApproval,
   useRespondProjectApproval,
@@ -96,17 +92,19 @@ beforeEach(() => {
   invalidateQueries.mockResolvedValue(undefined);
   channelOn.mockReset();
   channelSubscribe.mockReset();
+  channelCreate.mockClear();
   removeChannel.mockReset();
   removeChannel.mockResolvedValue(undefined);
-  effectCleanup = undefined;
 });
 
 describe('project approval sanitized reads', () => {
-  it('refreshes project, exact, and global projections only while foregrounded', () => {
+  it('refreshes every approval read model only while foregrounded', () => {
     const queries = [
       useProjectApprovals('project-1'),
       useProjectApprovalByDecision('decision-1'),
       useMyProjectApprovalReviews(),
+      useProjectDecisionAuthority('project-1'),
+      useProjectApprovalArtifactCandidates('project-1'),
     ] as unknown as Array<Record<string, unknown>>;
 
     for (const query of queries) {
@@ -449,7 +447,7 @@ describe('project approval authority and lifecycle RPCs', () => {
   });
 });
 
-describe('project approval cache and realtime authority', () => {
+describe('project approval cache and compatibility', () => {
   it('invalidates every Stage-2 consumer through one project-scoped helper', async () => {
     await invalidateProjectApprovalQueries({ invalidateQueries } as any, {
       projectId: 'project-1',
@@ -480,112 +478,13 @@ describe('project approval cache and realtime authority', () => {
     );
   });
 
-  it('uses one project channel for projection, exact, authority, and candidate owners', () => {
+  it('keeps the legacy realtime hook as a no-op without creating unavailable subscriptions', () => {
     useProjectApprovalRealtime('project-1');
+    useProjectApprovalRealtime(undefined);
 
-    expect(channelSubscribe).toHaveBeenCalledTimes(1);
-    const registrations = channelOn.mock.calls.map((call) => call[1]);
-    expect(registrations).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          table: 'client_decisions',
-          filter: 'project_id=eq.project-1',
-        }),
-        expect.objectContaining({
-          table: 'project_approval_artifacts',
-          filter: 'project_id=eq.project-1',
-        }),
-        expect.objectContaining({
-          table: 'project_decision_review_confirmations',
-          filter: 'project_id=eq.project-1',
-        }),
-        expect.objectContaining({
-          table: 'project_approval_action_receipts',
-          filter: 'project_id=eq.project-1',
-        }),
-        expect.objectContaining({
-          table: 'project_decision_authorities',
-          filter: 'project_id=eq.project-1',
-        }),
-        expect.objectContaining({
-          table: 'plan_issues',
-          filter: 'project_id=eq.project-1',
-        }),
-        expect.objectContaining({
-          table: 'project_documents',
-          filter: 'project_id=eq.project-1',
-        }),
-        expect.objectContaining({
-          table: 'spec_books',
-          filter: 'project_id=eq.project-1',
-        }),
-        expect.objectContaining({
-          table: 'project_budget_versions',
-          filter: 'project_id=eq.project-1',
-        }),
-        expect.objectContaining({
-          table: 'project_budget_checkpoints',
-          filter: 'project_id=eq.project-1',
-        }),
-        expect.objectContaining({ table: 'spec_book_revisions' }),
-        expect.objectContaining({ table: 'spec_book_artifacts' }),
-      ]),
-    );
-
-    const callbackFor = (table: string) =>
-      channelOn.mock.calls.find((call) => call[1].table === table)?.[2] as (
-        payload: unknown,
-      ) => void;
-
-    callbackFor('client_decisions')({
-      new: { id: 'decision-1', project_id: 'project-1' },
-      old: {},
-    });
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ['project-approvals', 'project-1'],
-    });
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ['project-approval', 'decision-1'],
-    });
-
-    invalidateQueries.mockClear();
-    callbackFor('project_approval_artifacts')({
-      new: {
-        id: 'artifact-row-1',
-        decision_id: 'decision-2',
-        project_id: 'project-1',
-      },
-      old: {},
-    });
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ['project-approval', 'decision-2'],
-    });
-    expect(invalidateQueries).not.toHaveBeenCalledWith({
-      queryKey: ['project-approval', 'artifact-row-1'],
-    });
-
-    invalidateQueries.mockClear();
-    callbackFor('project_decision_authorities')({
-      new: { project_id: 'project-1' },
-      old: {},
-    });
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ['project-approval-authority', 'project-1'],
-    });
-    expect(invalidateQueries).toHaveBeenCalledTimes(1);
-
-    invalidateQueries.mockClear();
-    callbackFor('plan_issues')({
-      new: { project_id: 'project-1' },
-      old: {},
-    });
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ['project-approval-artifact-candidates', 'project-1'],
-    });
-    expect(invalidateQueries).toHaveBeenCalledTimes(1);
-
-    effectCleanup?.();
-    expect(removeChannel).toHaveBeenCalledTimes(1);
-    expect(removeChannel).toHaveBeenCalledWith(channel);
+    expect(channelCreate).not.toHaveBeenCalled();
+    expect(channelOn).not.toHaveBeenCalled();
+    expect(channelSubscribe).not.toHaveBeenCalled();
+    expect(removeChannel).not.toHaveBeenCalled();
   });
 });
