@@ -9,7 +9,14 @@
     },
     "dev": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "passThroughEnv": [
+        "NEXT_PUBLIC_SUPABASE_URL",
+        "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+        "SUPABASE_INTERNAL_URL",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "SUPABASE_DB_URL"
+      ]
     },
     "lint": {
       "dependsOn": ["^build"],
