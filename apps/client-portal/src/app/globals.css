@@ -620,3 +620,24 @@ a:hover {
     animation-delay: 280ms;
   }
 }
+
+/* Gate seal settle (Ruling VIII / M8) — the approved stamp arrives with a
+   brief settle, never a shadow: it eases from slightly small and unrotated
+   into its resting tilt and full ink. Stilled under reduced motion, same as
+   every other motion device in this file — the seal still reads as sealed,
+   it just arrives at once. */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes gate-seal-settle {
+    0% {
+      opacity: 0;
+      transform: scale(0.92) rotate(0deg);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1) rotate(-2deg);
+    }
+  }
+  .gate-seal-settle {
+    animation: gate-seal-settle 420ms var(--ease-editorial) both;
+  }
+}

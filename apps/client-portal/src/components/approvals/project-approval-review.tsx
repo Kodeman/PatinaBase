@@ -11,6 +11,22 @@ import {
   type ProjectApprovalReview,
 } from "@patina/supabase";
 
+import { ScoredAction } from "@/components/making/scored-action";
+import { GateStamp } from "./gate-stamp";
+
+/* ── The client's side of the gate (Ruling VIII, folio 13, mockup M8) ───────
+   Codex's three outcomes and their copy are load-bearing and stay verbatim —
+   this file only adds the ceremony around them. A gate has six parts and no
+   more (Ruling II, folio 08): Artifact, Question, Scope, Impact, Authority,
+   Confirmation. Five already existed here field-for-field; Scope is the free
+   -text `context` line doing the job by convention, same as the designer's
+   side. The client's surface owes three things the designer's does not — an
+   immutability sentence naming the frozen edition, the same signed impact
+   figures the designer saw, and a way to hold the gate that reads as a
+   legitimate move rather than a stalled form. No overdue device renders here:
+   elapsed time is the studio's condition to carry and nudge from, never the
+   client's to be shown (Ruling VIII). ─────────────────────────────────────── */
+
 const OUTCOMES: Array<{
   value: ProjectApprovalOutcome;
   label: string;
@@ -140,161 +156,233 @@ export function ProjectApprovalReview({
       data-testid="project-approval-review"
     >
       <p className="type-meta text-[var(--text-muted)]">Project approval</p>
-      <h1
-        id="project-approval-question"
-        className="type-page-title mt-2 break-words"
-      >
-        {approval.question}
-      </h1>
-      {approval.context && (
-        <p className="type-body mt-3 whitespace-pre-wrap break-words">
-          {approval.context}
-        </p>
-      )}
 
-      <div className="mt-6 border-y border-[var(--border-default)] py-5">
-        <h2 className="type-item-name break-words">{approval.artifactTitle}</h2>
-        <dl className="mt-4 grid min-w-0 grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
-          <div>
-            <dt className="type-meta-small">Frozen edition</dt>
-            <dd className="type-body-small mt-1">
-              Edition {approval.artifactVersion}
-            </dd>
-          </div>
-          <div>
-            <dt className="type-meta-small">Due</dt>
-            <dd className="type-body-small mt-1">
-              <time dateTime={approval.dueAt}>
-                {formatDate(approval.dueAt)}
-              </time>
-              {approval.isOverdue && (
-                <strong className="ml-2 font-medium text-patina-terracotta">
-                  Overdue
-                </strong>
-              )}
-            </dd>
-          </div>
-          <div className="min-w-0 sm:col-span-2">
-            <dt className="type-meta-small">SHA-256 artifact checksum</dt>
-            <dd
-              className="mt-1 min-w-0 break-all font-mono text-xs"
-              data-testid="artifact-checksum"
-            >
-              {approval.artifactChecksum}
-            </dd>
-          </div>
-        </dl>
-      </div>
+      <div data-testid="gate-anatomy">
+        {/* ── Artifact — the exact thing, at a stated edition ──────────────── */}
+        <section
+          aria-labelledby="anatomy-artifact-heading"
+          className="mt-6"
+          data-testid="anatomy-artifact"
+        >
+          <h2 id="anatomy-artifact-heading" className="type-meta">
+            Artifact
+          </h2>
+          <p className="type-item-name mt-2 break-words">
+            {approval.artifactTitle}
+          </p>
+          <p className="type-body mt-2" data-testid="immutability-sentence">
+            You are approving edition {approval.artifactVersion}, exactly as
+            shown.
+          </p>
+          <dl className="mt-4 grid min-w-0 grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
+            <div>
+              <dt className="type-meta">Due</dt>
+              <dd className="type-body-small mt-1">
+                <time dateTime={approval.dueAt}>
+                  {formatDate(approval.dueAt)}
+                </time>
+              </dd>
+            </div>
+            <div className="min-w-0 sm:col-span-2">
+              <dt className="type-meta">SHA-256 artifact checksum</dt>
+              <dd
+                className="mt-1 min-w-0 break-all font-mono text-xs"
+                data-testid="artifact-checksum"
+              >
+                {approval.artifactChecksum}
+              </dd>
+            </div>
+          </dl>
+        </section>
 
-      <section aria-labelledby="approval-impacts-heading" className="py-5">
-        <h2 id="approval-impacts-heading" className="type-meta">
-          Explicit impacts
-        </h2>
-        <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="border-t border-[var(--border-default)] pt-3">
-            <dt className="type-meta-small">Cost</dt>
-            <dd className="type-body-small mt-1" data-testid="cost-delta">
-              {formatMoneyDelta(approval.costCentsDelta)}
-            </dd>
-          </div>
-          <div className="border-t border-[var(--border-default)] pt-3">
-            <dt className="type-meta-small">Schedule</dt>
-            <dd className="type-body-small mt-1" data-testid="schedule-delta">
-              {formatDayDelta(approval.scheduleDaysDelta, "schedule")}
-            </dd>
-          </div>
-          <div className="border-t border-[var(--border-default)] pt-3">
-            <dt className="type-meta-small">Lead time</dt>
-            <dd className="type-body-small mt-1" data-testid="lead-delta">
-              {formatDayDelta(approval.leadTimeDaysDelta, "lead-time")}
-            </dd>
-          </div>
-        </dl>
-      </section>
-
-      <section
-        aria-labelledby="approval-review-heading"
-        className="border-t border-[var(--border-default)] py-5"
-      >
-        <h2 id="approval-review-heading" className="type-meta">
-          Designated decision lead review
-        </h2>
-        <p className="type-body-small mt-2">
-          {approval.completedReviewCount} of {approval.requiredReviewCount}{" "}
-          required reviews confirmed.
-        </p>
-        {canConfirm && (
-          <button
-            type="button"
-            onClick={handleConfirmReview}
-            disabled={confirmReview.isPending}
-            className="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-[3px] bg-patina-charcoal px-4 py-3 text-sm font-medium text-white disabled:opacity-60 sm:w-auto"
+        {/* ── Question — one sentence, answerable ──────────────────────────── */}
+        <section
+          aria-labelledby="anatomy-question-heading"
+          className="border-t border-[var(--border-default)] py-5"
+          data-testid="anatomy-question"
+        >
+          <h2 id="anatomy-question-heading" className="type-meta">
+            Question
+          </h2>
+          <h1
+            id="project-approval-question"
+            className="type-page-title mt-2 break-words"
           >
-            {confirmReview.isPending
-              ? "Confirming review…"
-              : "I reviewed this exact edition"}
-          </button>
+            {approval.question}
+          </h1>
+        </section>
+
+        {/* ── Scope — what this releases and what it does not ─────────────── */}
+        {approval.context && (
+          <section
+            aria-labelledby="anatomy-scope-heading"
+            className="border-t border-[var(--border-default)] py-5"
+            data-testid="anatomy-scope"
+          >
+            <h2 id="anatomy-scope-heading" className="type-meta">
+              Scope
+            </h2>
+            <p className="type-body mt-2 whitespace-pre-wrap break-words">
+              {approval.context}
+            </p>
+          </section>
         )}
-        {approval.lifecycleStatus === "draft" &&
-          !reviewComplete &&
-          approval.authorityRevision === null && (
-            <p
-              role="alert"
-              className="type-body-small mt-3 text-[var(--color-error)]"
+
+        {/* ── Impact — the deltas, signed ──────────────────────────────────── */}
+        <section
+          aria-labelledby="anatomy-impact-heading"
+          className="border-t border-[var(--border-default)] py-5"
+          data-testid="anatomy-impact"
+        >
+          <h2 id="anatomy-impact-heading" className="type-meta">
+            Impact
+          </h2>
+          <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="border-t border-[var(--border-default)] pt-3">
+              <dt className="type-meta-small">Cost</dt>
+              <dd className="type-body-small mt-1" data-testid="cost-delta">
+                {formatMoneyDelta(approval.costCentsDelta)}
+              </dd>
+            </div>
+            <div className="border-t border-[var(--border-default)] pt-3">
+              <dt className="type-meta-small">Schedule</dt>
+              <dd
+                className="type-body-small mt-1"
+                data-testid="schedule-delta"
+              >
+                {formatDayDelta(approval.scheduleDaysDelta, "schedule")}
+              </dd>
+            </div>
+            <div className="border-t border-[var(--border-default)] pt-3">
+              <dt className="type-meta-small">Lead time</dt>
+              <dd className="type-body-small mt-1" data-testid="lead-delta">
+                {formatDayDelta(approval.leadTimeDaysDelta, "lead-time")}
+              </dd>
+            </div>
+          </dl>
+        </section>
+
+        {/* ── Authority — the named lead, frozen at publish ────────────────── */}
+        <section
+          aria-labelledby="anatomy-authority-heading"
+          className="border-t border-[var(--border-default)] py-5"
+          data-testid="anatomy-authority"
+        >
+          <h2 id="anatomy-authority-heading" className="type-meta">
+            Authority
+          </h2>
+          <p className="type-body-small mt-2">
+            {approval.completedReviewCount} of {approval.requiredReviewCount}{" "}
+            required reviews confirmed.
+          </p>
+          {canConfirm && (
+            <ScoredAction
+              actionKey="confirm_project_approval_review"
+              surfaceKey="project_approval"
+              regionKey="authority"
+              variant="primary"
+              onClick={handleConfirmReview}
+              disabled={confirmReview.isPending}
+              className="mt-4"
             >
-              Review confirmation is temporarily unavailable. The frozen
-              authority revision was not supplied.
+              {confirmReview.isPending
+                ? "Confirming review…"
+                : "I reviewed this exact edition"}
+            </ScoredAction>
+          )}
+          {approval.lifecycleStatus === "draft" &&
+            !reviewComplete &&
+            approval.authorityRevision === null && (
+              <p
+                role="alert"
+                className="type-body-small mt-3 text-[var(--color-error)]"
+              >
+                Review confirmation is temporarily unavailable. The frozen
+                authority revision was not supplied.
+              </p>
+            )}
+          {approval.lifecycleStatus === "draft" && reviewComplete && (
+            <p className="type-body-small mt-3">
+              Review complete. Your designer can now issue this request.
             </p>
           )}
-        {approval.lifecycleStatus === "draft" && reviewComplete && (
-          <p className="type-body-small mt-3">
-            Review complete. Your designer can now issue this request.
-          </p>
-        )}
-      </section>
+        </section>
 
-      {canRespond && (
-        <fieldset className="border-t border-[var(--border-default)] py-5">
-          <legend className="type-meta">Your consolidated response</legend>
-          <p className="type-body-small mt-2 text-[var(--text-muted)]">
-            Choose one outcome. Add questions or notes in Discussion below;
-            comments do not submit an outcome.
-          </p>
-          <div className="mt-4 divide-y divide-[var(--border-default)] border-y border-[var(--border-default)]">
-            {OUTCOMES.map((item) => (
-              <label
-                key={item.value}
-                className="flex min-h-11 cursor-pointer items-start gap-3 py-4"
-              >
-                <input
-                  type="radio"
-                  name="project-approval-outcome"
-                  value={item.value}
-                  checked={selectedOutcome === item.value}
-                  onChange={() => setSelectedOutcome(item.value)}
-                  className="mt-1 h-5 w-5 flex-none"
-                />
-                <span className="min-w-0">
-                  <span className="type-item-name block">{item.label}</span>
-                  <span className="type-body-small mt-1 block text-[var(--text-muted)]">
-                    {item.description}
-                  </span>
-                </span>
-              </label>
-            ))}
-          </div>
-          <button
-            type="button"
-            onClick={handleRespond}
-            disabled={!selectedOutcome || respond.isPending}
-            className="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-[3px] bg-patina-charcoal px-4 py-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+        {/* ── Confirmation — one scored act ────────────────────────────────── */}
+        {canRespond && (
+          <fieldset
+            aria-labelledby="anatomy-confirmation-heading"
+            className="border-t border-[var(--border-default)] py-5"
+            data-testid="anatomy-confirmation"
           >
-            {respond.isPending ? "Recording response…" : "Submit response"}
-          </button>
-        </fieldset>
-      )}
+            <legend id="anatomy-confirmation-heading" className="type-meta">
+              Confirmation
+            </legend>
+            <p className="type-body-small mt-2 text-[var(--text-muted)]">
+              Choose one outcome. Add questions or notes in Discussion below;
+              comments do not submit an outcome.
+            </p>
+            <div className="mt-4 divide-y divide-[var(--border-default)] border-y border-[var(--border-default)]">
+              {OUTCOMES.map((item) => (
+                <label
+                  key={item.value}
+                  className="flex min-h-11 cursor-pointer items-start gap-3 py-4"
+                >
+                  <input
+                    type="radio"
+                    name="project-approval-outcome"
+                    value={item.value}
+                    checked={selectedOutcome === item.value}
+                    onChange={() => setSelectedOutcome(item.value)}
+                    className="mt-1 h-5 w-5 flex-none"
+                  />
+                  <span className="min-w-0">
+                    <span className="type-item-name block">{item.label}</span>
+                    <span className="type-body-small mt-1 block text-[var(--text-muted)]">
+                      {item.description}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <ScoredAction
+              actionKey="submit_project_approval_response"
+              surfaceKey="project_approval"
+              regionKey="confirmation"
+              variant="primary"
+              onClick={handleRespond}
+              disabled={!selectedOutcome || respond.isPending}
+              className="mt-4"
+            >
+              {respond.isPending ? "Recording response…" : "Submit response"}
+            </ScoredAction>
+          </fieldset>
+        )}
+      </div>
 
-      {approval.outcome && (
+      {approval.outcome === "approved" && (
+        <div
+          className="border-t border-[var(--border-default)] py-5"
+          data-testid="approval-seal"
+        >
+          <GateStamp label="Approved" variant="seal" settle />
+          <p className="type-body-small mt-3">
+            Recorded outcome: <strong>{outcomeLabel(approval.outcome)}</strong>
+          </p>
+        </div>
+      )}
+      {approval.outcome === "needs_discussion" && (
+        <div
+          className="border-t border-[var(--border-default)] py-5"
+          data-testid="held-for-discussion"
+        >
+          <GateStamp label="Held for discussion" variant="hold" />
+          <p className="type-body-small mt-3">
+            Recorded outcome: <strong>{outcomeLabel(approval.outcome)}</strong>
+          </p>
+        </div>
+      )}
+      {approval.outcome === "changes_requested" && (
         <p className="border-t border-[var(--border-default)] py-5 type-body">
           Recorded outcome: <strong>{outcomeLabel(approval.outcome)}</strong>
         </p>
