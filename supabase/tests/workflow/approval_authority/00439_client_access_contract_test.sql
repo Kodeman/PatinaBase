@@ -363,8 +363,9 @@ WHERE decision.id = (
   FROM approval_439_results WHERE label = 'stage2'
 );
 
--- The frozen lead reaches the draft only through sanitized projections. Raw
--- parent/options stay hidden, while discussion access follows the snapshot.
+-- The frozen lead reaches the draft parent only through sanitized projections.
+-- The installed option-ID response rail exposes its three client-safe canonical
+-- outcomes to the exact frozen lead, while discussion follows the snapshot.
 SELECT pg_temp.assume_approval_actor(
   'a4390000-0000-4000-8000-000000000002'
 );
@@ -390,9 +391,14 @@ BEGIN
   ASSERT (SELECT count(*) = 0 FROM public.client_decisions WHERE id = v_id),
     'frozen lead received raw Stage-2 parent data';
   ASSERT (
-    SELECT count(*) = 0
-    FROM public.client_decision_options WHERE decision_id = v_id
-  ), 'frozen lead received raw Stage-2 option data';
+    SELECT count(*) = 3
+    FROM public.client_decision_options
+    WHERE decision_id = v_id
+      AND approval_outcome IN (
+        'approved', 'changes_requested', 'needs_discussion'
+      )
+      AND designer_note IS NULL
+  ), 'frozen lead lost the client-safe Stage-2 option-ID rail';
   ASSERT public.is_addressed_client_decision(v_id) = false,
     'raw addressed-client helper still admits Stage-2';
   ASSERT (SELECT count(*) = 1 FROM public.decision_comments WHERE decision_id = v_id),

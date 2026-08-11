@@ -10187,3 +10187,15 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION app_private.is_decision_comment_client(uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00440_stage2_option_frozen_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION app_private.is_stage2_option_client(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00440_stage2_option_frozen_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION app_private.is_stage2_option_client(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
