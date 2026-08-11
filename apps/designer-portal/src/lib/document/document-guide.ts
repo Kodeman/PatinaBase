@@ -29,7 +29,6 @@ export interface DocumentGuideInputFact {
 }
 
 export type DocumentGuideState =
-  | 'loading'
   | 'unavailable'
   | 'paused'
   | 'actionable'
@@ -39,6 +38,9 @@ export type DocumentGuideState =
 
 export type DocumentGuideDestination =
   | { kind: 'href'; href: string }
+  /** Re-read whatever source left guidance unavailable. It moves nowhere, so it
+   *  must not borrow a section anchor's shape to say so. */
+  | { kind: 'retry' }
   | { kind: 'anchor'; section: SectionKey; focusId?: string; activate?: boolean }
   | { kind: 'ledger'; name: string; context?: { page?: string; invoiceId?: string; projectId?: string } };
 
@@ -68,7 +70,7 @@ export interface ProposalGuideFacts {
 
 interface DeriveDocumentGuideInput {
   row: DocumentStateRow;
-  availability?: 'ready' | 'loading' | 'unavailable';
+  availability?: 'ready' | 'unavailable';
   retryAvailable?: boolean;
   now?: Date;
   operationalNeed?: NeedLine | null;
@@ -133,8 +135,11 @@ function withInputs(
   inputFacts: readonly DocumentGuideInputFact[] | undefined,
 ): DocumentGuideModel {
   const firstInput = inputFacts?.[0] ?? null;
+  // Only the needs-input branch derives its act from the missing input. Paused,
+  // needs-attention, proposal-lifecycle, and stage-default branches each state
+  // their own act, and an input fact must never displace it.
   const inputAction =
-    firstInput?.focusId && model.stage === 'discovery'
+    firstInput?.focusId && model.state === 'needs_input'
       ? {
           key: 'open-missing-input',
           label: `Add ${firstInput.label}`,
@@ -268,22 +273,16 @@ export function deriveDocumentGuide({
   inputFacts,
 }: DeriveDocumentGuideInput): DocumentGuideModel {
   const stage = row.active_section;
-  if (availability === 'loading') {
-    return withInputs({
-      state: 'loading', stage, eyebrow: 'Next up', headline: 'Checking what needs attention',
-      reason: 'Guidance will appear when the latest project signals are ready.',
-      action: null,
-    }, undefined);
-  }
   if (availability === 'unavailable') {
     return withInputs({
       state: 'unavailable', stage, eyebrow: 'Next up', headline: 'Guidance is unavailable',
-      reason: 'Try again before acting so missing data is never mistaken for an empty section.',
+      // Only the retryable source gets the retry instruction. Telling a designer
+      // to try again where no Try again exists is copy that cannot be obeyed.
+      reason: retryAvailable
+        ? 'Try again before acting so missing data is never mistaken for an empty section.'
+        : 'Part of this document could not be read, so nothing is claimed here. Work from the sections below rather than reading this space as an empty one.',
       action: retryAvailable
-        ? {
-            key: 'retry-guidance', label: 'Try again',
-            destination: { kind: 'anchor', section: stage },
-          }
+        ? { key: 'retry-guidance', label: 'Try again', destination: { kind: 'retry' } }
         : null,
     }, undefined);
   }

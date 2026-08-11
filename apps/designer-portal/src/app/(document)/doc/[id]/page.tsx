@@ -103,6 +103,22 @@ const prettyPhase = (phase: string | null) =>
 
 type AnyRecord = any;
 
+/**
+ * Whether the Desk composition can tell this document anything its own row
+ * cannot. The Desk's side feeds are keyed narrowly: conflicts and receivables
+ * on project_id, flagged lines on a proposal engagement, a parked ceremony on a
+ * lead. A relationship (Discovery) document matches none of them, and deriveNeed
+ * refuses paused/archived rows outright — so those never pay the read.
+ */
+function deskEnrichmentApplies(row: DocumentStateRow | null): boolean {
+  if (!row || row.is_paused || row.is_archived) return false;
+  return Boolean(
+    row.project_id ||
+      (row.engagement_kind === 'proposal' && row.proposal_id) ||
+      (row.engagement_kind === 'lead' && row.lead_id),
+  );
+}
+
 function vitalsFor(row: DocumentStateRow, project: AnyRecord, proposal: AnyRecord): string {
   // Project + proposal carry the client as a first-class subtitle (the
   // HouseholdChip in the title block), so the vitals drop the client name to
@@ -161,13 +177,18 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     proposalId,
     row?.active_section === 'direction' && Boolean(proposalId),
   );
+  const deskEnrichment = deskEnrichmentApplies(row);
   const enrichedOperationalQuery = useDeskEngagements({
-    enabled: Boolean(row && !isError),
+    enabled: deskEnrichment && !isError,
   });
-  const enrichedOperationalNeed = selectOperationalNeedForDocument(
-    enrichedOperationalQuery.data,
-    row?.engagement_id,
-  );
+  // Gated on the same predicate as the query, not on the query's own state: the
+  // CommandBar in (document)/layout.tsx holds this key hot on every document
+  // route, so `data` is present even where this page asked for nothing. Reading
+  // it there would let a composition that never covered this document answer
+  // "no need" for it.
+  const enrichedOperationalNeed = deskEnrichment
+    ? selectOperationalNeedForDocument(enrichedOperationalQuery.data, row?.engagement_id)
+    : undefined;
   const authorizationDoorway = authorizationDoorwayFor({
     engagementKind: row?.engagement_kind,
     projectId: row?.project_id,
@@ -263,6 +284,10 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           (responsiveFocusId ? document.getElementById(responsiveFocusId) : null) ??
           section?.querySelector<HTMLElement>('[data-settled-heading]') ?? section;
         focusTarget?.focus({ preventScroll: true });
+        // Idempotence rests on the target declaring its own state: an expandable
+        // focus target must publish aria-expanded, or a second activation would
+        // toggle it shut. Non-expandable targets (the mobile margin chip, which
+        // opens a sheet rather than toggling) carry none and stay safe to press.
         if (
           activate &&
           focusTarget instanceof HTMLButtonElement &&
@@ -396,33 +421,38 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
         },
       })
     : [];
+  // A failed Desk read only blanks guidance that depended on it. A document its
+  // side feeds never key on keeps its own truthful guidance through the outage.
+  const deskGuidanceFailed = deskEnrichment && enrichedOperationalQuery.isError;
   const guideUnavailable = Boolean(
     row && (
-      enrichedOperationalQuery.isError ||
+      deskGuidanceFailed ||
       (row.engagement_kind === 'project' && projectIsError) ||
       ((row.active_section === 'direction' || row.active_section === 'proposal') && proposalIsError) ||
       (row.active_section === 'discovery' && discoveryQuery.isError) ||
       (row.active_section === 'direction' && draftingState.error)
     ),
   );
-  const guideLoading = Boolean(row && enrichedOperationalQuery.isLoading);
+  // The Desk composition enriches guidance; it never gates it. A cold deep-link
+  // renders the document's own derivation on first paint and upgrades in place
+  // if the Desk read later contributes a need the row alone cannot carry.
   const guideModel = row
     ? deriveDocumentGuide({
         row,
-        availability: guideUnavailable ? 'unavailable' : guideLoading ? 'loading' : 'ready',
-        retryAvailable: Boolean(enrichedOperationalQuery.isError),
+        availability: guideUnavailable ? 'unavailable' : 'ready',
+        retryAvailable: deskGuidanceFailed,
         proposal: proposalGuideFacts,
         inputFacts: guideInputs,
-        operationalNeed: enrichedOperationalNeed ?? undefined,
+        operationalNeed: enrichedOperationalNeed,
       })
     : null;
   const activateGuide = useCallback(() => {
-    if (guideModel?.action?.key === 'retry-guidance') {
+    const destination = guideModel?.action?.destination;
+    if (!destination) return;
+    if (destination.kind === 'retry') {
       void enrichedOperationalQuery.refetch();
       return;
     }
-    const destination = guideModel?.action?.destination;
-    if (!destination) return;
     if (destination.kind === 'anchor') {
       jumpToSection(destination.section, destination.focusId, destination.activate);
     }

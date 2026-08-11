@@ -32,6 +32,7 @@ import {
   type DeskFolder,
   type DocumentStateRow,
   type MotionChip,
+  type NeedLine,
 } from '@/lib/document/desk-derivation';
 import { buildDeskConflicts } from '@/lib/document/desk-conflicts';
 import { buildDeskReceivables } from '@/lib/document/desk-receivables';
@@ -52,13 +53,31 @@ const getSupabase = () => createBrowserClient() as any;
 export interface DeskData {
   folders: DeskFolder[];
   chips: MotionChip[];
+  /** Engagement ids this composition actually derived a need for — see
+   *  partitionDesk. Presence here is what makes a "no need" answer sayable.
+   *  A plain object so React Query's replaceEqualDeep can structurally share it
+   *  across the 60s tick (it does not recurse into Sets). */
+  composed: Record<string, true>;
 }
 
+/**
+ * One sentinel each, and they mean different things: `undefined` = the Desk has
+ * not answered for this document, so the caller derives locally; `null` = this
+ * composition looked at the engagement and found no need. deriveDocumentGuide
+ * reads the pair the same way, so a genuine "no need" is honored instead of
+ * being re-derived from the row.
+ *
+ * Absence from `folders` alone is NOT an answer — the Desk's cache is shared
+ * with the CommandBar and is hot on every document route, so a document the
+ * composition never covered (archived, outside this read, a different studio's)
+ * would otherwise read as need-free. Only `composed` membership licenses `null`.
+ */
 export function selectOperationalNeedForDocument(
   data: DeskData | undefined,
   engagementId: string | null | undefined,
-) {
-  if (!data || !engagementId) return null;
+): NeedLine | null | undefined {
+  if (!data || !engagementId) return undefined;
+  if (data.composed[engagementId] !== true) return undefined;
   return data.folders.find((folder) => folder.row.engagement_id === engagementId)?.need ?? null;
 }
 

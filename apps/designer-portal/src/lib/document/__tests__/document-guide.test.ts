@@ -78,18 +78,24 @@ describe('deriveDocumentGuide', () => {
     expect(paused.headline).toBe('This project is paused');
   });
 
-  it('keeps row-only guidance quiet while enriched signals load', () => {
-    const guide = deriveDocumentGuide({ row: row('brief'), availability: 'loading' });
-    expect(guide).toMatchObject({
-      state: 'loading', headline: 'Checking what needs attention', action: null,
-    });
+  it('withholds the retry instruction when nothing here can be retried', () => {
+    const guide = deriveDocumentGuide({ row: row('brief'), availability: 'unavailable' });
+
+    expect(guide.state).toBe('unavailable');
+    expect(guide.action).toBeNull();
+    expect(guide.reason).not.toMatch(/try again/i);
   });
 
   it('offers an explicit retry only when the failed source is retryable here', () => {
     const guide = deriveDocumentGuide({
       row: row('brief'), availability: 'unavailable', retryAvailable: true,
     });
-    expect(guide.action).toMatchObject({ key: 'retry-guidance', label: 'Try again' });
+    expect(guide.reason).toMatch(/try again/i);
+    expect(guide.action).toEqual({
+      key: 'retry-guidance',
+      label: 'Try again',
+      destination: { kind: 'retry' },
+    });
   });
 
   it('puts an operational need ahead of stage guidance', () => {
@@ -127,6 +133,7 @@ describe('deriveDocumentGuide', () => {
   ] as const)('uses live proposal facts for %s/%s/%s', (status, documentKind, commercialState, headline, label) => {
     const guide = deriveDocumentGuide({
       row: row('proposal'),
+      now: new Date('2026-08-10T12:00:00Z'),
       proposal: { status, documentKind, commercialState, projectId: commercialState === 'executed' ? 'project-1' : null },
     });
     expect(guide.headline).toBe(headline);
@@ -210,6 +217,7 @@ describe('deriveDocumentGuide', () => {
   it('treats a revised legacy proposal as superseded follow-up', () => {
     const guide = deriveDocumentGuide({
       row: row('proposal'),
+      now: new Date('2026-08-10T12:00:00Z'),
       proposal: { status: 'revised', documentKind: 'legacy', commercialState: null, projectId: null },
     });
     expect(guide.eyebrow).toContain('superseded');
@@ -271,6 +279,71 @@ describe('deriveDocumentGuide', () => {
     const guide = deriveDocumentGuide({ row: row('project', { is_paused: true }) });
     expect(guide.action?.destination).toEqual({
       kind: 'anchor', section: 'project', focusId: 'document-project-status',
+    });
+  });
+
+  it('trusts an explicit no-need answer instead of re-deriving one from the row', () => {
+    const overdue = row('project', { overdue_decision_count: 2, earliest_overdue_due: '2026-08-01' });
+    const now = new Date('2026-08-10T12:00:00Z');
+
+    expect(deriveDocumentGuide({ row: overdue, now }).headline).toContain('2 decisions overdue');
+    expect(deriveDocumentGuide({ row: overdue, now, operationalNeed: null }).headline).toBe(
+      'Move the project forward',
+    );
+  });
+
+  it('keeps a paused Discovery document on its own resume act', () => {
+    const guide = deriveDocumentGuide({
+      row: row('discovery', { is_paused: true }),
+      inputFacts: [
+        { label: 'Working budget', owner: 'Client', blocks: 'Direction', focusId: 'discovery-facet-budget' },
+      ],
+    });
+
+    expect(guide.state).toBe('paused');
+    expect(guide.action).toEqual({
+      key: 'review-paused-project',
+      label: 'Review project status',
+      destination: { kind: 'anchor', section: 'discovery', focusId: 'document-project-status' },
+    });
+    expect(guide.topInput?.label).toBe('Working budget');
+  });
+
+  it('keeps an operational need on its own act when inputs are still missing', () => {
+    const guide = deriveDocumentGuide({
+      row: row('discovery', { overdue_decision_count: 1, earliest_overdue_due: '2026-08-01' }),
+      now: new Date('2026-08-10T12:00:00Z'),
+      inputFacts: [
+        { label: 'Working budget', owner: 'Client', blocks: 'Direction', focusId: 'discovery-facet-budget' },
+      ],
+    });
+
+    expect(guide.state).toBe('actionable');
+    expect(guide.action).toEqual({
+      key: 'resolve-overdue_decision',
+      label: 'Review decisions',
+      destination: {
+        kind: 'anchor', section: 'discovery', focusId: 'document-decision-controls', activate: false,
+      },
+    });
+    expect(guide.topInput?.label).toBe('Working budget');
+  });
+
+  it('still derives the input act on the needs-input branch', () => {
+    const guide = deriveDocumentGuide({
+      row: row('discovery'),
+      inputFacts: [
+        { label: 'Working budget', owner: 'Client', blocks: 'Direction', focusId: 'discovery-facet-budget' },
+      ],
+    });
+
+    expect(guide.state).toBe('needs_input');
+    expect(guide.action).toEqual({
+      key: 'open-missing-input',
+      label: 'Add Working budget',
+      destination: {
+        kind: 'anchor', section: 'discovery', focusId: 'discovery-facet-budget', activate: true,
+      },
     });
   });
 });

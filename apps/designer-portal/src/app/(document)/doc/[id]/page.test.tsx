@@ -8,19 +8,27 @@ const mockRetryDocumentResolution = jest.fn();
 const mockHistoryToggled = jest.fn();
 const mockDiscoveryFacetOpen = jest.fn();
 let mockDiscoveryFacetExpanded = false;
+/** Rows the real MarginRail composes into real MarginItems. */
+let mockMarginItems: Array<Record<string, unknown>> = [];
 let mockDocumentQuery: Record<string, unknown>;
 let mockDiscoveryQuery: Record<string, unknown> = { data: undefined, isLoading: false, isError: false };
 let mockDraftingState: Record<string, unknown> = { gaps: [], isLoading: false, error: null };
 let mockProposalData: Record<string, unknown> | undefined;
 let mockProposalError = false;
 let mockProjectQuery: Record<string, unknown> = { data: undefined, isLoading: false, isError: false };
-let mockDeskData: {
+type MockDeskData = {
   folders: Array<{ row: { engagement_id: string }; need: Record<string, unknown> | null }>;
   chips: unknown[];
-} = { folders: [], chips: [] };
+  composed: Record<string, true>;
+};
+let mockDeskData: MockDeskData = { folders: [], chips: [], composed: {} };
 let mockDeskLoading = false;
 let mockDeskError = false;
 const mockRetryDesk = jest.fn();
+// `enabled` does NOT withhold data: a disabled TanStack observer still reads the
+// cache, and <CommandBar/> in (document)/layout.tsx keeps this exact key hot on
+// every document route. The page must be safe against a populated cache it did
+// not ask for, so these tests hand it one.
 const mockUseDeskEngagements = jest.fn((_options?: { enabled?: boolean }) => ({
   data: mockDeskData,
   isLoading: mockDeskLoading,
@@ -28,8 +36,11 @@ const mockUseDeskEngagements = jest.fn((_options?: { enabled?: boolean }) => ({
   refetch: mockRetryDesk,
 }));
 const mockSelectOperationalNeed = jest.fn(
-  (data: typeof mockDeskData | undefined, engagementId: string | null | undefined) =>
-    data?.folders.find((folder) => folder.row.engagement_id === engagementId)?.need ?? null,
+  (data: MockDeskData | undefined, engagementId: string | null | undefined) => {
+    if (!data || !engagementId) return undefined;
+    if (data.composed[engagementId] !== true) return undefined;
+    return data.folders.find((folder) => folder.row.engagement_id === engagementId)?.need ?? null;
+  },
 );
 
 jest.mock('@portabletext/react', () => ({
@@ -47,7 +58,30 @@ jest.mock('@patina/supabase', () => ({
   useProposalFeedback: () => ({ data: [] }),
   useProjectRoster: () => ({ data: [] }),
   useDiscovery: () => mockDiscoveryQuery,
+  // Read by the real MarginRail.
+  useProjectFFEItems: () => ({ data: [] }),
+  useProjectParties: () => ({ data: [] }),
+  useCoordinationItems: () => ({ data: [] }),
+  useDesignerClientForClientUser: () => ({ data: null }),
 }));
+
+// The project document's own sections are not what these tests exercise; the
+// guide strip and the margin are.
+jest.mock('@/components/document/ffe-section', () => ({ FFESection: () => null }));
+jest.mock('@/components/document/coordination/coordination-band', () => ({ CoordinationBand: () => null }));
+jest.mock('@/components/document/schedule/schedule-spine', () => ({ ScheduleSpine: () => null }));
+jest.mock('@/components/document/commercial/project-authority-band', () => ({
+  ProjectAuthorityBandForProject: () => null,
+}));
+jest.mock('@/components/document/commercial/project-commerce-section', () => ({
+  ProjectCommerceSection: () => null,
+}));
+jest.mock('@/components/document/care-band', () => ({ CareBand: () => null }));
+jest.mock('@/components/document/account-band', () => ({ AccountBand: () => null }));
+jest.mock('@/components/document/project-mood-boards', () => ({ ProjectMoodBoards: () => null }));
+jest.mock('@/components/document/roster/kickoff-band', () => ({ KickoffBand: () => null }));
+jest.mock('@/components/document/plans/plan-room-band', () => ({ PlanRoomBand: () => null }));
+jest.mock('@/components/document/roster/call-sheet-mount', () => ({ CallSheetMount: () => null }));
 
 jest.mock('@/hooks/use-hydrated', () => ({
   useHydrated: () => mockHydrated,
@@ -100,7 +134,26 @@ jest.mock('@/components/document/schedule/schedule-ripple-context', () => ({
   RippleProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 jest.mock('@/components/document/project-schedule-handoff-mount', () => ({ ProjectScheduleHandoffMount: () => null }));
-jest.mock('@/components/document/margin-rail', () => ({ MarginRail: () => null, ResponsiveMarginRail: () => null }));
+// margin-rail is deliberately NOT mocked: the pulse activation path runs
+// through the real MarginRail → MarginItem, which is where the targetId and the
+// aria-expanded contract actually live. Only its data and its unfolded body are
+// stubbed.
+jest.mock('@/components/document/discovery/discovery-margin', () => ({
+  DiscoveryMargin: () => null,
+}));
+jest.mock('@/components/document/margin-bodies', () => ({
+  MarginItemBody: () => <div>Pulse body</div>,
+}));
+jest.mock('@/hooks/use-margin-items', () => ({
+  useMarginItems: () => ({ data: mockMarginItems, isLoading: false }),
+}));
+jest.mock('@/hooks/use-margin-notes', () => ({
+  useCreateMarginNote: () => ({ mutate: jest.fn(), isPending: false }),
+}));
+jest.mock('@/hooks/use-project-file-change-notifications', () => ({
+  useProjectFileChangeNotifications: () => ({ data: [] }),
+  useMarkProjectFileChangeRead: () => jest.fn(),
+}));
 jest.mock('@/components/document/doc-colophon', () => ({ DocColophon: () => null }));
 
 jest.mock('@/components/document/phase-timeline', () => ({
@@ -171,6 +224,7 @@ jest.mock('@/hooks/use-document-rooms', () => ({
 jest.mock('@/hooks/use-section-work', () => ({
   gateState: jest.fn(),
   useSectionGates: () => ({ data: [] }),
+  useSectionTasks: () => ({ data: [] }),
 }));
 
 jest.mock('@/hooks/use-feature-flag', () => ({
@@ -189,8 +243,30 @@ jest.mock('@/lib/analytics/document-events', () => ({
     guideSelected: jest.fn(),
     actionShown: jest.fn(),
     actionSelected: jest.fn(),
+    // The real MarginRail leads with the R94 first-touch margin note.
+    wayfinding: { marginNote: jest.fn() },
   },
 }));
+
+/** A truthful matchMedia: min-width queries answer against `width`, and the
+ *  motion query answers the stated preference. Anything else is false rather
+ *  than accidentally true. */
+function setViewport({ width, reducedMotion }: { width: number; reducedMotion: boolean }) {
+  window.matchMedia = jest.fn().mockImplementation((query: string) => {
+    const minWidth = /min-width:\s*(\d+)px/.exec(query);
+    const matches = minWidth
+      ? width >= Number(minWidth[1])
+      : query.includes('prefers-reduced-motion: reduce')
+        ? reducedMotion
+        : false;
+    return {
+      matches,
+      media: query,
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+    };
+  }) as unknown as typeof window.matchMedia;
+}
 
 const fulfilledParams = {
   status: 'fulfilled',
@@ -249,12 +325,13 @@ describe('DocumentPage guide activation', () => {
     mockHistoryToggled.mockReset();
     mockDiscoveryFacetOpen.mockReset();
     mockDiscoveryFacetExpanded = false;
+    mockMarginItems = [];
     mockDiscoveryQuery = { data: undefined, isLoading: false, isError: false };
     mockDraftingState = { gaps: [], isLoading: false, error: null };
     mockProposalData = undefined;
     mockProposalError = false;
     mockProjectQuery = { data: undefined, isLoading: false, isError: false };
-    mockDeskData = { folders: [], chips: [] };
+    mockDeskData = { folders: [], chips: [], composed: {} };
     mockDeskLoading = false;
     mockDeskError = false;
     mockRetryDesk.mockReset();
@@ -284,7 +361,10 @@ describe('DocumentPage guide activation', () => {
       isError: false,
       refetch: mockRetryDocumentResolution,
     };
-    window.matchMedia = jest.fn().mockReturnValue({ matches: true }) as unknown as typeof window.matchMedia;
+    // One viewport, answered per query rather than `true` to everything: a
+    // 1440px window (so the real ResponsiveMarginRail chooses its full-rail
+    // branch because the width says so) with reduced motion asked for.
+    setViewport({ width: 1440, reducedMotion: true });
     window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
       callback(0);
       return 1;
@@ -315,6 +395,7 @@ describe('DocumentPage guide activation', () => {
         },
       }],
       chips: [],
+      composed: { 'lead-1': true },
     };
 
     render(<DocumentPage params={fulfilledParams} />);
@@ -328,14 +409,67 @@ describe('DocumentPage guide activation', () => {
     );
   });
 
-  it('shows unknown guidance while fresh operational signals load', () => {
+  it('renders document-local guidance while the Desk read is still in flight', () => {
+    const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+    mockDocumentQuery = {
+      ...mockDocumentQuery,
+      data: { kind: 'engagement', row: { ...current, overdue_decision_count: 2 } },
+    };
+    // In flight: this engagement is not in any composition yet, so the guide has
+    // only the row to work from — and must state it rather than stalling.
     mockDeskLoading = true;
+    mockDeskData = { folders: [], chips: [], composed: {} };
 
     render(<DocumentPage params={fulfilledParams} />);
 
-    expect(screen.getByText('Checking what needs attention')).toBeInTheDocument();
-    expect(screen.queryByText('Review the inquiry')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Review the brief' })).not.toBeInTheDocument();
+    expect(mockSelectOperationalNeed).toHaveReturnedWith(undefined);
+    expect(screen.getByText(/2 decisions overdue/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Review decisions' })).toBeInTheDocument();
+  });
+
+  it('ignores a hot Desk cache for a document its side feeds cannot key on', () => {
+    const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+    mockDocumentQuery = {
+      ...mockDocumentQuery,
+      data: { kind: 'engagement', row: {
+        ...current, engagement_kind: 'relationship', active_section: 'discovery',
+        engagement_id: 'relationship-1', lead_id: null, client_profile_id: 'client-1',
+      } },
+    };
+    // The CommandBar keeps this key warm, so the cache holds a composed answer
+    // for this very engagement. This page declared the enrichment out of scope,
+    // so it must not consult it at all — not even to read the answer.
+    mockDeskData = {
+      folders: [{
+        row: { engagement_id: 'relationship-1' },
+        need: {
+          kind: 'reconnect_due', text: 'Reconnect with Avery',
+          actionLabel: 'Review now', urgent: false, stamp: { label: 'DORMANT' },
+        },
+      }],
+      chips: [],
+      composed: { 'relationship-1': true },
+    };
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(mockUseDeskEngagements).toHaveBeenCalledWith({ enabled: false });
+    expect(mockSelectOperationalNeed).not.toHaveBeenCalled();
+    expect(screen.queryByText('Reconnect with Avery')).not.toBeInTheDocument();
+    expect(screen.getByText('Complete Discovery')).toBeInTheDocument();
+  });
+
+  it('skips the Desk read on a paused document', () => {
+    const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+    mockDocumentQuery = {
+      ...mockDocumentQuery,
+      data: { kind: 'engagement', row: { ...current, is_paused: true } },
+    };
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(mockUseDeskEngagements).toHaveBeenCalledWith({ enabled: false });
+    expect(screen.getByText('This project is paused')).toBeInTheDocument();
   });
 
   it('shows unavailable guidance and retries a failed operational read', () => {
@@ -344,8 +478,70 @@ describe('DocumentPage guide activation', () => {
     render(<DocumentPage params={fulfilledParams} />);
 
     expect(screen.getByText('Guidance is unavailable')).toBeInTheDocument();
+    const activeSection = document.querySelector<HTMLElement>('[data-active-section]');
+    activeSection!.scrollIntoView = jest.fn();
+
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
     expect(mockRetryDesk).toHaveBeenCalledTimes(1);
+    // The retry destination dispatches on its own kind — it never falls through
+    // to the anchor branch and scrolls the document.
+    expect(activeSection!.scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it('honors a Desk answer of no need over re-deriving one from the row', () => {
+    const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+    mockDocumentQuery = {
+      ...mockDocumentQuery,
+      data: { kind: 'engagement', row: { ...current, overdue_decision_count: 1 } },
+    };
+    // Composed and need-free: the Desk looked at this engagement and found
+    // nothing, which outranks the row's own stale overdue count.
+    mockDeskData = { folders: [], chips: [], composed: { 'lead-1': true } };
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(mockSelectOperationalNeed).toHaveReturnedWith(null);
+    expect(screen.queryByText(/decision overdue/)).not.toBeInTheDocument();
+    expect(screen.getByText('Review the inquiry')).toBeInTheDocument();
+  });
+
+  it('derives locally when a hot Desk cache never composed this document', () => {
+    const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+    mockDocumentQuery = {
+      ...mockDocumentQuery,
+      data: { kind: 'engagement', row: { ...current, overdue_decision_count: 1 } },
+    };
+    // The CommandBar's read is warm and holds OTHER engagements. Absence from
+    // it is not an answer about this one, so the row's own need must still show.
+    mockDeskData = {
+      folders: [{ row: { engagement_id: 'someone-else' }, need: null }],
+      chips: [],
+      composed: { 'someone-else': true },
+    };
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(mockSelectOperationalNeed).toHaveReturnedWith(undefined);
+    expect(screen.getByText(/1 decision overdue/)).toBeInTheDocument();
+  });
+
+  it('keeps guidance whole when a Desk read this document never depended on fails', () => {
+    const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+    mockDocumentQuery = {
+      ...mockDocumentQuery,
+      data: { kind: 'engagement', row: {
+        ...current, engagement_kind: 'relationship', active_section: 'discovery',
+        engagement_id: 'relationship-1', lead_id: null, client_profile_id: 'client-1',
+      } },
+    };
+    mockDeskError = true;
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(screen.queryByText('Guidance is unavailable')).not.toBeInTheDocument();
+    expect(screen.getByText('Complete Discovery')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
   });
 
   it('fetches and selects flagged-line guidance on a freshly opened Proposal', () => {
@@ -372,6 +568,7 @@ describe('DocumentPage guide activation', () => {
         },
       }],
       chips: [],
+      composed: { 'proposal-1': true },
     };
 
     render(<DocumentPage params={fulfilledParams} />);
@@ -494,6 +691,57 @@ describe('DocumentPage guide activation', () => {
     render(<DocumentPage params={fulfilledParams} />);
     fireEvent.click(screen.getByRole('button', { name: 'Review decisions' }));
     expect(screen.getByText('Decision controls')).toHaveFocus();
+  });
+
+  it('opens a closed pulse item once and never toggles it shut on re-activation', () => {
+    // A project-shape row: document_state only reports unsent_pulse_count on a
+    // project engagement, so this is a state the view can actually produce.
+    const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+    mockDocumentQuery = {
+      ...mockDocumentQuery,
+      data: { kind: 'engagement', row: {
+        ...current, engagement_kind: 'project', active_section: 'project',
+        engagement_id: 'project-1', project_id: 'project-1', lead_id: null,
+        client_profile_id: 'client-1', current_phase: 'design_development',
+        project_status: 'active', unsent_pulse_count: 1, pulse_week_of: '2026-08-03',
+      } },
+    };
+    // The real MarginRail composes this into the real MarginItem that carries
+    // targetId="document-pulse-control-desktop" and its onToggle.
+    mockMarginItems = [{
+      kind: 'pulse',
+      item_id: 'pulse-1',
+      project_id: 'project-1',
+      proposal_id: null,
+      anchor_kind: 'letterhead',
+      anchor_id: null,
+      state: 'draft',
+      title: 'Weekly pulse',
+      detail: 'Draft ready to send',
+      ts: '2026-08-10T12:00:00Z',
+      payload: {},
+    }];
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    const pulse = document.getElementById('document-pulse-control-desktop');
+    expect(pulse).not.toBeNull();
+    expect(pulse).toHaveAttribute('aria-expanded', 'false');
+
+    // First activation unfolds it.
+    fireEvent.click(screen.getByRole('button', { name: 'Review and send' }));
+    expect(document.getElementById('document-pulse-control-desktop')).toHaveAttribute(
+      'aria-expanded', 'true',
+    );
+    expect(screen.getByText('Pulse body')).toBeInTheDocument();
+
+    // Second activation must leave it open, not toggle it shut.
+    fireEvent.click(screen.getByRole('button', { name: 'Review and send' }));
+    expect(document.getElementById('document-pulse-control-desktop')).toHaveAttribute(
+      'aria-expanded', 'true',
+    );
+    expect(screen.getByText('Pulse body')).toBeInTheDocument();
+    expect(document.getElementById('document-pulse-control-desktop')).toHaveFocus();
   });
 
   it('treats a proposal query error as unknown guidance', () => {

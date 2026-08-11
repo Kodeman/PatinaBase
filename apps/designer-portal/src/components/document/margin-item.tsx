@@ -54,6 +54,7 @@ export function MarginItem({
         type="button"
         onClick={onToggle}
         disabled={!expandable}
+        aria-expanded={expandable ? open : undefined}
         className="block w-full px-3 py-2.5 text-left"
       >
         <MItemContent

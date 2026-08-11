@@ -6944,3 +6944,159 @@ died with the portal layout that mounted it and cannot be re-read: it lived in
 PostHog project **"Patina Website" (326191)**.
 
 *Entries add: I109 · last id = I109*
+
+## The Document — the guide strip and its WP1 repair — 2026-08-11
+
+Two entries, recorded together because the first was owed: the guide strip
+merged (PR #26, `28afc56e`…`323847ff`) without a DECISIONS append, and the WP1
+review that closed its defects is the occasion to write both down.
+
+### I110 · The guide strip — "Next up" on the open document, and the canonical control anchors
+
+**Shipped, no ruling required** — it touches no locked decision. An open document
+gained a standing guidance strip under the letterhead (`DocumentGuide`,
+`src/components/document/document-guide.tsx`), fed by a pure derivation
+(`src/lib/document/document-guide.ts`) over the document's own `document_state`
+row. It states one thing to do next: an eyebrow naming the stage, a headline, a
+reason, at most one action, and — where the stage is still waiting on facts — the
+first missing input with its owner and what it blocks
+(`document-guide-inputs.ts`).
+
+The model is a small state machine over `DocumentGuideState`
+(`loading` · `unavailable` · `paused` · `actionable` · `needs_input` ·
+`waiting` · `on_track`), resolved in a fixed precedence: availability first, then
+paused, then an operational need (`deriveNeed`, the same derivation the Desk
+folders use — one definition of "what needs a hand", read at two scales), then
+the proposal lifecycle, then stage copy. This keeps D2 intact: the strip is
+guidance, never a notification centre, and it never carries a count.
+
+**The canonical control anchors.** The strip's actions had to land on something
+real, so the guide's `DocumentGuideDestination` addresses named DOM ids that the
+sections themselves publish — `document-decision-controls`,
+`document-task-controls`, `document-pulse-control-{desktop,mobile}`,
+`discovery-facet-{key}` — reached through `jumpToSection`, which unfolds the
+right section, scrolls it (honoring reduced motion), focuses the target, and may
+activate it. The rule this establishes: **an action names an existing mounted
+control; it never invents a surface.** A destination is one of `href` (leave the
+document), `anchor` (a section + optional focus target within it), `ledger` (open
+a Drawer book, D14/R96), or `retry` (added by I111).
+
+Analytics ride along as `guideShown` / `guideSelected` in
+`lib/analytics/document-events.ts`, and the strip registers as the mobile primary
+action beneath the lifecycle actions (`MOBILE_ACTION_PRIORITY.guide`).
+
+### I111 · The guide's six defects, closed (WP1)
+
+The ratified workflow-alignment review found six verified defects in the merged
+work. All six are fixed on `workflow-alignment/wp1-guide-fixes`, each with the
+coverage that proves it. Recorded because three of them changed a **contract**,
+not just a behavior.
+
+1. **An input must not speak for a branch that has its own act.** `withInputs`
+   replaced the model's action whenever the first input fact carried a `focusId`
+   and the stage was Discovery — but the paused and needs-attention branches both
+   pass their inputs through it, so a paused Discovery document advertised "Add
+   Working budget" instead of "Review project status". The input-derived action
+   now belongs to the `needs_input` state alone.
+
+2. **The Desk read enriches guidance; it never gates it.** Every document open
+   ran `useDeskEngagements` — a six-query `Promise.all` polling every 60s — and
+   the guide's headline waited on it, so a cold deep-link to one document paid
+   the whole Desk read before any guidance appeared. The read is now scoped to
+   documents the Desk's side feeds can key on (conflicts and receivables on
+   `project_id`, flagged lines on a proposal, a parked ceremony on a lead; never a
+   paused or archived row, which `deriveNeed` refuses anyway — a Discovery
+   relationship matches none of them and no longer pays), and the strip renders
+   the document's own derivation on first paint, upgrading in place if the
+   enrichment later contributes a need the row alone cannot carry.
+
+3. **A Desk failure costs the enrichment, not the strip.** `guideUnavailable` put
+   the Desk error ahead of every stage-specific condition, so a document whose
+   guidance never drew on Desk data still went blank on someone else's outage.
+   The error — and the retry it offers — is now scoped to documents the
+   enrichment actually reaches.
+
+4. **One sentinel each, and they mean different things.**
+   `selectOperationalNeedForDocument` returned `null` both for "the Desk has not
+   answered" and "the Desk answered: no need", and the caller then collapsed it
+   with `?? undefined`. Since `deriveDocumentGuide` reads the two apart —
+   `undefined` = derive locally, `null` = trust the answer — the null branch was
+   unreachable and a genuine Desk "no need" was silently re-derived from the row.
+   The selector now returns `undefined` for no answer and `null` for a composed
+   no-need, and the page passes it through unchanged. **This is the contract for
+   any future enrichment source.**
+
+5. **An action states what it does.** `retry-guidance` carried a real-looking
+   `{ kind: 'anchor', section: stage }` destination it never honored, and the page
+   intercepted it by matching the string literal `'retry-guidance'` before reading
+   the destination at all. `DocumentGuideDestination` gained a `retry` variant and
+   the page dispatches on the destination kind — **no caller knows an action key.**
+
+6. **Activation is idempotent, and the target declares its own state.** The
+   activate guard only clicks a focus target whose `aria-expanded` is not `'true'`,
+   but `MarginItem`'s toggle never published the attribute — so the `pulse_due`
+   path could toggle an already-open pulse item shut. `MarginItem` now declares
+   `aria-expanded` whenever it can unfold, which fixes the a11y gap and makes the
+   guard effective. The rule: **an expandable activate target must publish
+   `aria-expanded`**; non-expandable targets (the mobile margin chip, which opens a
+   sheet rather than toggling) carry none and stay safe to press twice.
+
+**Owed.** None of this has had a signed-in walk — the evidence is unit coverage
+and the two designer-portal gates (`test`, `type-check`), not a designer opening
+a cold `/doc/[id]`. The headline now flips in place when the Desk enrichment
+lands after first paint (the accepted cost of defect 2); whether that flip wants
+a transition is a **design question, not an implementation one** — it goes to the
+design session, not into the code, until ruled.
+
+*Entries add: I110–I111 · last id = I111*
+
+## The Document — the guide strip, corrected (WP1 review) — 2026-08-11
+
+### I112 · Three corrections to I111, and what the guide now costs
+
+Adversarial review of the WP1 fixes found one claim in I111 false and two
+consequences undisclosed. I111 stands as written (this log is append-only); this
+entry is the correction of record.
+
+**(a) The enrichment scoping does not reduce network — I111's claim is wrong.**
+I111 said the Desk read was "scoped to documents the Desk's side feeds can key
+on… a Discovery relationship no longer pays". It does not pay *on this page*,
+but it pays anyway: `<CommandBar/>` mounts in `(document)/layout.tsx` and calls
+`useDeskEngagements()` with no options on **every** document route, so the
+six-query composition and its 60s poll are already running under the same query
+key (`['document-state','desk']`) whatever `/doc/[id]` requests. A disabled
+TanStack observer also still reads that cache, so the page was handed real Desk
+data for documents it had declared out of scope.
+
+The scoping's real effect is **guidance semantics, not traffic**: which failures
+are allowed to blank the strip (I111 §3), and which compositions are allowed to
+answer for a document (§4). Both now hold, because the `enabled` predicate also
+gates the *selector call*, and because `partitionDesk` reports the engagement
+ids it actually composed — absence from the composition is `undefined`
+(unanswered), never `null` (need-free). The `enabled` gating itself is kept: it
+is harmless, and it becomes correct the day the CommandBar stops holding the key
+hot. **Anyone chasing the cold-open cost of a document should start at the
+CommandBar, not here.**
+
+**(b) The `'loading'` guide state is gone.** Nothing produces it once the strip
+stops waiting on the Desk, so the variant was removed rather than left as a
+state the model claims but never enters. Consequence for the week-one watch:
+`guideShown` events carrying `state: 'loading'` **go to zero from this deploy** —
+that is the removal, not a regression in instrumentation.
+
+**(c) The headline can change after first paint, and it is announced.** The
+strip renders the document's own derivation immediately and upgrades in place if
+the Desk composition later contributes a need the row alone cannot carry. So on
+one document view a designer may see the headline change under them; the
+`aria-live` region announces the change (as it does for any guide change); and
+`guideShown` can fire **twice for a single document view** — once local, once
+enriched. Anyone reading guide funnels should count document views, not
+`guideShown` events. Keyboard focus survives the swap (an anchor action becoming
+a link replaces the element), which is a fix, not a mitigation of the flip.
+
+**Flagged for the R5 design pass, not decided here:** whether an in-place
+headline change is acceptable studio behavior at all, or whether the enriched
+answer should arrive more quietly. This is a design question about how the
+document speaks; it stays out of the code until ruled.
+
+*Entries add: I112 · last id = I112*

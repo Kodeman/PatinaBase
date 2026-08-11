@@ -51,6 +51,7 @@ jest.mock('@tanstack/react-query', () => {
   };
 });
 
+import { replaceEqualDeep } from '@tanstack/react-query';
 import {
   selectOperationalNeedForDocument,
   useDeskEngagements,
@@ -127,7 +128,7 @@ describe('useDeskEngagements', () => {
     const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toEqual({ folders: [], chips: [] });
+    expect(result.current.data).toEqual({ folders: [], chips: [], composed: {} });
     expect(result.current.isError).toBe(false);
     // A genuinely quiet desk on first load has nothing to compare against —
     // no breadcrumb.
@@ -177,7 +178,7 @@ describe('useDeskEngagements', () => {
       await result.current.refetch();
     });
 
-    await waitFor(() => expect(result.current.data).toEqual({ folders: [], chips: [] }));
+    await waitFor(() => expect(result.current.data).toEqual({ folders: [], chips: [], composed: {} }));
     expect(mockDeskZeroRowRead).toHaveBeenCalledWith({
       previous_folder_count: 1,
       previous_chip_count: 0,
@@ -231,5 +232,85 @@ describe('selectOperationalNeedForDocument', () => {
   ] as const)('selects the canonical %s need from shared Desk composition', (kind, compose) => {
     const data = compose();
     expect(selectOperationalNeedForDocument(data, data.folders[0].row.engagement_id)?.kind).toBe(kind);
+  });
+
+  it('answers null when the Desk composed this document and found no need', () => {
+    const data = partitionDesk(
+      [{ ...base, engagement_kind: 'project', engagement_id: 'project-1', project_id: 'project-1' }],
+      now,
+    );
+
+    expect(data.folders).toHaveLength(0);
+    expect(selectOperationalNeedForDocument(data, 'project-1')).toBeNull();
+  });
+
+  it('answers undefined when the Desk has not answered for this document', () => {
+    const data = partitionDesk(
+      [{ ...base, engagement_kind: 'project', engagement_id: 'project-1', project_id: 'project-1' }],
+      now,
+    );
+
+    expect(selectOperationalNeedForDocument(undefined, 'project-1')).toBeUndefined();
+    expect(selectOperationalNeedForDocument(data, null)).toBeUndefined();
+    expect(selectOperationalNeedForDocument(data, undefined)).toBeUndefined();
+  });
+
+  it('stays structurally shareable across an identical recomposition', () => {
+    // The Desk re-reads every 60s. React Query's replaceEqualDeep hands back the
+    // PREVIOUS result when the new one deep-equals it, which is what keeps every
+    // consumer of this query from re-rendering on each tick — but it does not
+    // recurse into Sets or Maps, so `composed` has to stay plain data.
+    const rows = [
+      { ...base, engagement_kind: 'project', engagement_id: 'project-1', project_id: 'project-1' },
+    ] as DocumentStateRow[];
+
+    const first = partitionDesk(rows, now);
+    const second = partitionDesk(rows, now);
+
+    expect(replaceEqualDeep(first, second)).toBe(first);
+  });
+
+  it('never reads absence from a composition that did not cover the document', () => {
+    // The Desk cache is shared with the CommandBar, so it is hot on documents
+    // this composition never saw. Those are unanswered, not need-free.
+    const data = partitionDesk(
+      [{ ...base, engagement_kind: 'project', engagement_id: 'project-1', project_id: 'project-1' }],
+      now,
+    );
+
+    expect(data.composed['project-1']).toBe(true);
+    expect(selectOperationalNeedForDocument(data, 'some-other-engagement')).toBeUndefined();
+  });
+
+  it('treats an archived engagement as uncomposed rather than need-free', () => {
+    const data = partitionDesk(
+      [{
+        ...base,
+        engagement_kind: 'project',
+        engagement_id: 'project-1',
+        project_id: 'project-1',
+        is_archived: true,
+      }],
+      now,
+    );
+
+    expect(data.composed['project-1']).toBeUndefined();
+    expect(selectOperationalNeedForDocument(data, 'project-1')).toBeUndefined();
+  });
+
+  it('composes a paused engagement, so its no-need answer is sayable', () => {
+    const data = partitionDesk(
+      [{
+        ...base,
+        engagement_kind: 'project',
+        engagement_id: 'project-1',
+        project_id: 'project-1',
+        is_paused: true,
+      }],
+      now,
+    );
+
+    expect(data.composed['project-1']).toBe(true);
+    expect(selectOperationalNeedForDocument(data, 'project-1')).toBeNull();
   });
 });
