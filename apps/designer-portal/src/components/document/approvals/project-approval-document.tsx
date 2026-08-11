@@ -113,9 +113,13 @@ function readableStatus(review: ProjectApprovalReview): string {
   return review.lifecycleStatus === 'pending' ? 'Pending' : 'Expired';
 }
 
-/** The paper has settled when an outcome is recorded or the leaf is closed. */
+/**
+ * The paper has settled only when the question is answered for good. Changes
+ * requested and needs discussion are bounced, not settled — the same component
+ * still marks them the current live leaf, so their anatomy stays unfolded.
+ */
 function isSealed(review: ProjectApprovalReview): boolean {
-  return review.outcome !== null || review.disposition !== 'active';
+  return review.disposition !== 'active' || review.outcome === 'approved';
 }
 
 function sealFor(review: ProjectApprovalReview): {
@@ -139,6 +143,18 @@ function artifactMeta(version: number, checksum: string): string {
   return `Edition ${version} · frozen at publish · proof ${checksum.slice(0, 8)}`;
 }
 
+/**
+ * M2 names the lead on the paper. The designer portal already knows the
+ * household's name; only the internal reviewer set is withheld, and that is not
+ * what this line states.
+ */
+function decisionLeadLine(clientName: string | null | undefined): string {
+  const named = clientName?.trim();
+  return named
+    ? `Decision lead — ${named} · frozen at publish`
+    : 'Decision lead — the designated project client · frozen at publish';
+}
+
 function focusApprovalRow(decisionId: string) {
   const target = document.getElementById(`project-approval-${decisionId}`);
   if (!target) return;
@@ -155,10 +171,12 @@ function focusApprovalRow(decisionId: string) {
 export function ProjectApprovalDocument({
   projectId,
   clientProfileId,
+  clientName,
   phases,
 }: {
   projectId: string;
   clientProfileId: string | null;
+  clientName?: string | null;
   phases: readonly ProjectApprovalPhase[];
 }) {
   const approvalsQuery = useProjectApprovals(projectId);
@@ -700,9 +718,7 @@ export function ProjectApprovalDocument({
             </GateFieldset>
 
             <GateFieldset part="authority">
-              <GatePlain>
-                Decision lead — the project client · frozen at publish
-              </GatePlain>
+              <GatePlain>{decisionLeadLine(clientName)}</GatePlain>
             </GateFieldset>
 
             <GateFieldset part="confirmation">
@@ -817,6 +833,13 @@ export function ProjectApprovalDocument({
                         <p className="min-w-0 break-words font-mono text-[12px] font-semibold uppercase tracking-[0.16em] text-[var(--color-mocha)]">
                           {review.artifactTitle}
                         </p>
+                        {/* A settled gate must state which edition settled. */}
+                        <p className={`mt-1 ${META}`}>
+                          {artifactMeta(
+                            review.artifactVersion,
+                            review.artifactChecksum,
+                          )}
+                        </p>
                         <p className="mt-1.5 min-w-0 break-words text-[13px] leading-relaxed text-[var(--text-muted)]">
                           {scope.note ?? scope.binding}
                         </p>
@@ -872,10 +895,7 @@ export function ProjectApprovalDocument({
                     </GatePartBlock>
 
                     <GatePartBlock part="authority">
-                      <GatePlain>
-                        Decision lead — the designated project client · frozen
-                        at publish
-                      </GatePlain>
+                      <GatePlain>{decisionLeadLine(clientName)}</GatePlain>
                       <p className={`mt-1 ${META}`}>
                         Review {review.completedReviewCount} of{' '}
                         {review.requiredReviewCount} confirmed
@@ -886,10 +906,16 @@ export function ProjectApprovalDocument({
                       <p className={META}>
                         {review.lifecycleStatus === 'draft'
                           ? `Due ${fmtDay(review.dueAt)} once published`
-                          : `Published${
-                              review.sentAt ? ` ${fmtDay(review.sentAt)}` : ''
-                            } · due ${fmtDay(review.dueAt)}`}
-                        {review.isOverdue ? ' · overdue' : ''}
+                          : review.outcome
+                            ? `${readableStatus(review)} · ${fmtDay(
+                                review.respondedAt ?? review.updatedAt,
+                              )} · awaiting a superseding edition`
+                            : `Published${
+                                review.sentAt ? ` ${fmtDay(review.sentAt)}` : ''
+                              } · due ${fmtDay(review.dueAt)}`}
+                        {review.isOverdue && !review.outcome
+                          ? ' · overdue'
+                          : ''}
                       </p>
                       {review.lifecycleStatus === 'draft' &&
                         !actions.publish && (
@@ -899,7 +925,8 @@ export function ProjectApprovalDocument({
                           </p>
                         )}
                       {boundPhaseCompleted &&
-                        review.lifecycleStatus === 'pending' && (
+                        (review.lifecycleStatus === 'pending' ||
+                          review.lifecycleStatus === 'responded') && (
                           <p
                             role="status"
                             className="mt-2 text-[13px] italic text-[var(--text-muted)]"
@@ -1213,10 +1240,7 @@ export function ProjectApprovalDocument({
                       </GateFieldset>
 
                       <GateFieldset part="authority">
-                        <GatePlain>
-                          Decision lead — the designated project client · frozen
-                          at publish
-                        </GatePlain>
+                        <GatePlain>{decisionLeadLine(clientName)}</GatePlain>
                       </GateFieldset>
 
                       <GateFieldset part="confirmation">

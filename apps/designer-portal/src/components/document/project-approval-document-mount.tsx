@@ -21,10 +21,12 @@ export function toProjectApprovalPhases(rows: unknown): ProjectApprovalPhase[] {
 export function ProjectApprovalDocumentMount({
   projectId,
   clientProfileId,
+  clientName,
   phases,
 }: {
   projectId: string | null;
   clientProfileId: string | null;
+  clientName?: string | null;
   phases: unknown;
 }) {
   if (!projectId) return null;
@@ -32,6 +34,7 @@ export function ProjectApprovalDocumentMount({
     <ProjectApprovalDocument
       projectId={projectId}
       clientProfileId={clientProfileId}
+      clientName={clientName}
       phases={toProjectApprovalPhases(phases)}
     />
   );

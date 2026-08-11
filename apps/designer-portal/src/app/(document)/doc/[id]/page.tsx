@@ -675,6 +675,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           clientProfileId={
             row.engagement_kind === 'project' ? (project?.client_id ?? null) : null
           }
+          clientName={row.client_name}
           phases={phases}
         />
 
