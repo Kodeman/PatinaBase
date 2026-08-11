@@ -18,7 +18,7 @@ describe('MarkSignedSheet date validity', () => {
     jest.useRealTimers();
   });
 
-  it('does not submit while the direct-entry date is partial or invalid', () => {
+  it('never hands the mutation a partial or invalid date', () => {
     render(
       <MarkSignedSheet
         proposalId="proposal-1"
@@ -29,12 +29,21 @@ describe('MarkSignedSheet date validity', () => {
       />,
     );
 
-    const date = screen.getByRole('textbox', { name: 'Date signed' });
+    fireEvent.change(screen.getByLabelText('Signed by'), {
+      target: { value: 'Harper Vale' },
+    });
+
+    // The native date control refuses a partial entry outright, so the garbage
+    // never becomes state — the field clears rather than carrying '8/3/'.
+    const date = screen.getByLabelText('Date signed');
     fireEvent.change(date, { target: { value: '8/3/' } });
+    expect(date).toHaveValue('');
+
     fireEvent.click(screen.getByRole('button', { name: /record signed/i }));
 
-    expect(mutate).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: /record signed/i })).toBeDisabled();
+    expect(mutate).toHaveBeenCalledTimes(1);
+    expect(mutate.mock.calls[0][0]).not.toHaveProperty('signedDate', '8/3/');
+    expect(mutate.mock.calls[0][0].signedDate).toBeUndefined();
   });
 
   it('prefills Chicago local today and preserves the selected calendar day', () => {
@@ -49,11 +58,10 @@ describe('MarkSignedSheet date validity', () => {
     );
 
     // 00:30 UTC on Aug 1 is still July 31 in America/Chicago.
-    const date = screen.getByRole('textbox', { name: 'Date signed' });
-    expect(date).toHaveValue('07/31/2026');
+    const date = screen.getByLabelText('Date signed');
+    expect(date).toHaveValue('2026-07-31');
 
-    fireEvent.change(date, { target: { value: '08/15/2026' } });
-    fireEvent.blur(date);
+    fireEvent.change(date, { target: { value: '2026-08-15' } });
     fireEvent.click(screen.getByRole('button', { name: /record signed/i }));
 
     expect(mutate).toHaveBeenCalledWith(

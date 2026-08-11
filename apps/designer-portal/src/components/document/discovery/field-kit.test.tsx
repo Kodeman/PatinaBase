@@ -41,7 +41,7 @@ describe('Discovery field semantics', () => {
     expect(screen.getByRole('button', { name: 'Remove row 1' })).toBeVisible();
   });
 
-  it('offers direct MM/DD/YYYY entry and commits an ISO date-only value', () => {
+  it('offers picker or keyboard date entry and commits an ISO date-only value', () => {
     const onChange = jest.fn();
 
     render(
@@ -50,10 +50,11 @@ describe('Discovery field semantics', () => {
       </Field>,
     );
 
-    const input = screen.getByRole('textbox', { name: 'Hard date' });
-    expect(input).toHaveAccessibleDescription(/MM\/DD\/YYYY/i);
-    fireEvent.change(input, { target: { value: '11/15/2026' } });
-    fireEvent.blur(input);
+    const input = screen.getByLabelText('Hard date');
+    expect(input).toHaveAttribute('type', 'date');
+    expect(input).toHaveAccessibleDescription(/picker or keyboard/i);
+
+    fireEvent.change(input, { target: { value: '2026-11-15' } });
 
     expect(onChange).toHaveBeenLastCalledWith('2026-11-15');
   });

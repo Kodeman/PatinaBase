@@ -34,6 +34,7 @@ describe('MarkSignedSheet date-only defaults', () => {
       />,
     );
 
-    expect(screen.getByLabelText('Date signed')).toHaveValue('07/31/2026');
+    // A native date control holds the canonical ISO value, not the display form.
+    expect(screen.getByLabelText('Date signed')).toHaveValue('2026-07-31');
   });
 });

@@ -37,6 +37,13 @@ jest.mock('@/hooks/use-studio-accounts', () => ({
   useStudioMargin: () => ({ data: null }),
 }));
 
+// InvoiceFolio reconciles a returning Stripe checkout through a real
+// useMutation, which needs a QueryClientProvider this suite does not mount.
+// The folio's query states are what is under test, not the reconciliation.
+jest.mock('@/hooks/use-invoice-checkout-reconciliation', () => ({
+  useReconcileInvoiceCheckout: () => ({ mutate: jest.fn(), isPending: false }),
+}));
+
 jest.mock('../ledger-front-matter', () => ({
   LedgerFrontMatter: () => <div data-testid="ledger-front-matter">Ledger totals</div>,
 }));

@@ -199,7 +199,7 @@ describe('RecordOnPaperSheet', () => {
     );
   });
 
-  it('disables submission for a too-short name or an invalid date', () => {
+  it('disables submission for a too-short name or an invalid date', async () => {
     render(
       <RecordOnPaperSheet
         kind="trade-execution"
@@ -222,13 +222,15 @@ describe('RecordOnPaperSheet', () => {
     });
     expect(submit).not.toBeDisabled();
 
-    fireEvent.change(screen.getByLabelText('Date signed'), {
-      target: { value: '13/40/2026' },
-    });
-    expect(submit).toBeDisabled();
+    // Month 13 / day 40 is not a date; the native control refuses it, so the
+    // execution can never be recorded against a nonsense day.
+    const date = screen.getByLabelText('Date signed');
+    fireEvent.change(date, { target: { value: '13/40/2026' } });
+    expect(date).toHaveValue('');
 
     fireEvent.click(submit);
-    expect(executeTradeScope).not.toHaveBeenCalled();
+    await waitFor(() => expect(executeTradeScope).toHaveBeenCalledTimes(1));
+    expect(executeTradeScope.mock.calls[0][0].signedDate).toBeUndefined();
   });
 
   it('cancels without recording anything', () => {
