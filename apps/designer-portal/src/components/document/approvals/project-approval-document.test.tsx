@@ -20,11 +20,13 @@ let authority: Record<string, unknown> | null = null;
 let approvals: ProjectApprovalReview[] = [];
 let candidates: ProjectApprovalArtifactCandidate[] = [];
 let approvalsLoading = false;
+let approvalsFetching = false;
 
 jest.mock('@patina/supabase', () => ({
   useProjectApprovals: () => ({
     data: approvals,
     isLoading: approvalsLoading,
+    isFetching: approvalsFetching,
     isError: false,
   }),
   useProjectApprovalArtifactCandidates: () => ({
@@ -127,6 +129,7 @@ beforeEach(() => {
   authority = null;
   approvals = [];
   approvalsLoading = false;
+  approvalsFetching = false;
   candidates = [candidate];
   setAuthority.mockReset().mockResolvedValue({});
   createApproval.mockReset().mockResolvedValue({});
@@ -260,6 +263,120 @@ describe('ProjectApprovalDocument authority and composer', () => {
 });
 
 describe('ProjectApprovalDocument lifecycle and accessibility', () => {
+  it('retains exact navigation through a stale-cache background refetch', () => {
+    authority = {
+      decisionLeadId: 'client-1',
+      requiredCoapproverId: null,
+      revision: 4,
+    };
+    approvals = [
+      {
+        ...baseReview,
+        disposition: 'superseded',
+        successorDecisionId: 'decision-2',
+      },
+    ];
+    approvalsFetching = true;
+    const scrollIntoView = jest.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    const { rerender } = renderDocument();
+
+    window.dispatchEvent(
+      new CustomEvent(FOCUS_PROJECT_APPROVAL_EVENT, {
+        detail: { decisionId: 'decision-1' },
+      }),
+    );
+    expect(
+      document.getElementById('project-approval-decision-1'),
+    ).not.toHaveFocus();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+
+    approvalsFetching = false;
+    approvals = [baseReview];
+    rerender(
+      <ProjectApprovalDocument
+        projectId="project-1"
+        clientProfileId="client-1"
+        phases={[
+          {
+            id: 'phase-1',
+            name: 'Design development',
+            status: 'in_progress',
+          },
+        ]}
+      />,
+    );
+
+    expect(
+      document.getElementById('project-approval-decision-1'),
+    ).toHaveFocus();
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears a final-missing focus request after background refetch settles', () => {
+    authority = {
+      decisionLeadId: 'client-1',
+      requiredCoapproverId: null,
+      revision: 4,
+    };
+    approvals = [baseReview];
+    approvalsFetching = true;
+    const scrollIntoView = jest.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    const { rerender } = renderDocument();
+
+    window.dispatchEvent(
+      new CustomEvent(FOCUS_PROJECT_APPROVAL_EVENT, {
+        detail: { decisionId: 'decision-1' },
+      }),
+    );
+    expect(
+      document.getElementById('project-approval-decision-1'),
+    ).not.toHaveFocus();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+
+    approvalsFetching = false;
+    approvals = [];
+    rerender(
+      <ProjectApprovalDocument
+        projectId="project-1"
+        clientProfileId="client-1"
+        phases={[
+          {
+            id: 'phase-1',
+            name: 'Design development',
+            status: 'in_progress',
+          },
+        ]}
+      />,
+    );
+
+    approvals = [baseReview];
+    rerender(
+      <ProjectApprovalDocument
+        projectId="project-1"
+        clientProfileId="client-1"
+        phases={[
+          {
+            id: 'phase-1',
+            name: 'Design development',
+            status: 'in_progress',
+          },
+        ]}
+      />,
+    );
+    expect(
+      document.getElementById('project-approval-decision-1'),
+    ).not.toHaveFocus();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
   it('retains exact approval navigation until sanitized rows finish loading', () => {
     authority = {
       decisionLeadId: 'client-1',
@@ -388,6 +505,42 @@ describe('ProjectApprovalDocument lifecycle and accessibility', () => {
       behavior: 'smooth',
       block: 'center',
     });
+  });
+
+  it('uses instant scrolling when reduced motion is requested', () => {
+    authority = {
+      decisionLeadId: 'client-1',
+      requiredCoapproverId: null,
+      revision: 4,
+    };
+    approvals = [baseReview];
+    const scrollIntoView = jest.fn();
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = jest
+      .fn()
+      .mockReturnValue({
+        matches: true,
+      }) as unknown as typeof window.matchMedia;
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+
+    try {
+      renderDocument();
+      window.dispatchEvent(
+        new CustomEvent(FOCUS_PROJECT_APPROVAL_EVENT, {
+          detail: { decisionId: 'decision-1' },
+        }),
+      );
+
+      expect(scrollIntoView).toHaveBeenCalledWith({
+        behavior: 'auto',
+        block: 'center',
+      });
+    } finally {
+      window.matchMedia = originalMatchMedia;
+    }
   });
 
   it('does not focus a stale, superseded, or terminal approval row', () => {

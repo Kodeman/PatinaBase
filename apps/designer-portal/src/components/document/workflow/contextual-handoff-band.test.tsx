@@ -277,6 +277,12 @@ describe('ContextualHandoffBand', () => {
       screen.getAllByText(/09 · Contract administration/)[0],
     ).toBeVisible();
     expect(screen.getAllByText(/Exact phase|Source domain/)).toHaveLength(2);
+    expect(screen.getAllByText(/09 · Contract administration/)[0]).toHaveClass(
+      'text-[var(--color-quiet-ink)]',
+    );
+    expect(screen.getByText('Responsibility in context')).toHaveClass(
+      'text-[var(--color-quiet-ink)]',
+    );
     expect(
       screen.getByText(/Issued drawing set 02 · v2.*proof aaaaaaaa/),
     ).toBeVisible();
@@ -285,6 +291,9 @@ describe('ContextualHandoffBand', () => {
     expect(screen.getByText(/Request due date passed/)).toBeVisible();
     expect(screen.queryByText(/Studio overdue/i)).toBeNull();
     expect(container.innerHTML).not.toMatch(/shadow/i);
+    expect(container.innerHTML).not.toMatch(
+      /text-\[var\(--color-(?:aged-oak|terracotta)\)\]/,
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Open approval' }));
     expect(focused).toHaveBeenCalledTimes(1);
@@ -383,6 +392,68 @@ describe('ContextualHandoffBand', () => {
     );
   });
 
+  it('keeps expanded room, error, status, and controls accessible', async () => {
+    handoffs = [siteHandoff('delivered')];
+    detail = {
+      projectId: 'project-1',
+      requestId: 'request-delivered',
+      coherent: true,
+      items: [
+        {
+          itemId: 'item-1',
+          title: 'Window measure',
+          kitCode: 'K-01',
+          version: 2,
+          roomId: null,
+          status: 'delivered',
+          deliverableId: 'delivery-1',
+        },
+      ],
+      rooms: [{ id: 'room-1', name: 'Living room' }],
+    };
+    const { container } = render(
+      <div style={{ width: 320 }}>
+        <ContextualHandoffBand projectId="project-1" />
+      </div>,
+    );
+    const review = screen.getByRole('button', {
+      name: 'Review Site Request',
+    });
+
+    fireEvent.click(review);
+    const detailRegion = document.getElementById(
+      'site-request-detail-request-delivered',
+    );
+    expect(review).toHaveAttribute('aria-expanded', 'true');
+    expect(review).toHaveAttribute('aria-controls', detailRegion?.id);
+    expect(screen.getByLabelText('Room for Window measure')).toBeVisible();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Request redo for Window measure' }),
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'A redo note is required',
+    );
+    expect(screen.getByRole('alert')).toHaveClass(
+      'text-[var(--color-charcoal)]',
+    );
+    expect(await axe(container)).toHaveNoViolations();
+
+    fireEvent.change(screen.getByLabelText('Room for Window measure'), {
+      target: { value: 'room-1' },
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Approve Window measure' }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Window measure approved',
+      ),
+    );
+    expect(container.innerHTML).not.toMatch(/overflow-x-auto|shadow/);
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
   it('requires a written note before nudging through the checked RPC', async () => {
     handoffs = [siteHandoff('sent')];
     detail = {
@@ -430,6 +501,9 @@ describe('ContextualHandoffBand', () => {
 
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Exact current-version delivery evidence is unavailable',
+    );
+    expect(screen.getByRole('alert')).toHaveClass(
+      'text-[var(--color-charcoal)]',
     );
     expect(screen.queryByRole('button', { name: /^Approve/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /^Request redo/ })).toBeNull();

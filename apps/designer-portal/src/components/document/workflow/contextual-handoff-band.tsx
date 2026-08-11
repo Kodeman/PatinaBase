@@ -90,7 +90,7 @@ function HandoffContext({ handoff }: { handoff: ProjectContextualHandoff }) {
       <p className="mt-1 break-words text-[12px] text-[var(--text-muted)]">
         Current owner · {actorLabel(handoff.responsibility.currentOwner)}
       </p>
-      <p className="mt-1 break-words font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+      <p className="mt-1 break-words font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--color-quiet-ink)]">
         {stageLabel(handoff)} ·{' '}
         {handoff.stageAttribution === 'exact_project_phase'
           ? 'Exact phase'
@@ -263,7 +263,7 @@ function SiteRequestHandoffRow({
           {detailQuery.isError && (
             <p
               role="alert"
-              className="text-[12px] text-[var(--color-terracotta)]"
+              className="text-[12px] text-[var(--color-charcoal)]"
             >
               Site Request detail could not be read. No action was taken.
             </p>
@@ -271,7 +271,7 @@ function SiteRequestHandoffRow({
           {detailQuery.data && !detailQuery.data.coherent && (
             <p
               role="alert"
-              className="text-[12px] text-[var(--color-terracotta)]"
+              className="text-[12px] text-[var(--color-charcoal)]"
             >
               Exact current-version delivery evidence is unavailable. Approve
               and redo are disabled.
@@ -326,7 +326,7 @@ function SiteRequestHandoffRow({
                             {detailQuery.data.rooms.length === 0 && (
                               <p
                                 role="alert"
-                                className="mt-1 text-[12px] text-[var(--color-terracotta)]"
+                                className="mt-1 text-[12px] text-[var(--color-charcoal)]"
                               >
                                 No same-project room is available. Approval is
                                 disabled.
@@ -496,7 +496,7 @@ function SiteRequestHandoffRow({
           role={feedback.kind === 'error' ? 'alert' : 'status'}
           className={`mt-2 break-words text-[12px] ${
             feedback.kind === 'error'
-              ? 'text-[var(--color-terracotta)]'
+              ? 'text-[var(--color-charcoal)]'
               : 'text-[var(--text-muted)]'
           }`}
         >
@@ -530,7 +530,7 @@ export function ContextualHandoffBand({ projectId }: { projectId: string }) {
         aria-label="Project handoffs"
         className="mt-6 min-w-0 max-w-full border-y border-[var(--border-subtle)] py-4"
       >
-        <p role="alert" className="text-[12px] text-[var(--color-terracotta)]">
+        <p role="alert" className="text-[12px] text-[var(--color-charcoal)]">
           Project handoffs could not be read. No workflow state was changed.
         </p>
       </section>
@@ -547,7 +547,7 @@ export function ContextualHandoffBand({ projectId }: { projectId: string }) {
       data-contextual-handoff-band
     >
       <div className="min-w-0">
-        <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+        <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--color-quiet-ink)]">
           Responsibility in context
         </p>
         <h2

@@ -148,12 +148,15 @@ export function ProjectApprovalDocument({
   } | null>(null);
 
   const pendingFocusDecisionId = useRef<string | null>(null);
-  const approvalsLoading = useRef(approvalsQuery.isLoading);
-  approvalsLoading.current = approvalsQuery.isLoading;
+  const approvalsPending = useRef(
+    approvalsQuery.isLoading || approvalsQuery.isFetching,
+  );
+  approvalsPending.current =
+    approvalsQuery.isLoading || approvalsQuery.isFetching;
 
   const settlePendingApprovalFocus = useCallback(() => {
     const decisionId = pendingFocusDecisionId.current;
-    if (!decisionId || approvalsLoading.current) return;
+    if (!decisionId || approvalsPending.current) return;
 
     pendingFocusDecisionId.current = null;
     const target = document.getElementById(`project-approval-${decisionId}`);
@@ -196,6 +199,7 @@ export function ProjectApprovalDocument({
     settlePendingApprovalFocus();
   }, [
     approvalsQuery.data,
+    approvalsQuery.isFetching,
     approvalsQuery.isLoading,
     settlePendingApprovalFocus,
   ]);
