@@ -148,6 +148,19 @@ struct SiteRequestTests {
         #expect(!SiteRequestLifecyclePolicy.allows(.close, for: .closed))
     }
 
+    @Test func closeIsGatedToCompletedRequestsOnly() {
+        // Server RPC site_request_close rejects any status other than
+        // completed (SQLSTATE 55000) — the client gate must agree.
+        #expect(SiteRequestLifecyclePolicy.allows(.close, for: .completed))
+        #expect(!SiteRequestLifecyclePolicy.allows(.close, for: .draft))
+        #expect(!SiteRequestLifecyclePolicy.allows(.close, for: .awaitingConsent))
+        #expect(!SiteRequestLifecyclePolicy.allows(.close, for: .sent))
+        #expect(!SiteRequestLifecyclePolicy.allows(.close, for: .inProgress))
+        #expect(!SiteRequestLifecyclePolicy.allows(.close, for: .delivered))
+        #expect(!SiteRequestLifecyclePolicy.allows(.close, for: .closed))
+        #expect(!SiteRequestLifecyclePolicy.allows(.close, for: .expired))
+    }
+
     @MainActor
     @Test func storeEnqueueIsIdempotentByClientDeliveryID() throws {
         let store = try CaptureStore.inMemory()
