@@ -7125,3 +7125,73 @@ mirrors the equivalent contract already carried by wave1's own
 of one silently drifting behind the other.
 
 *Entries add: I113 · last id = I113*
+
+## The client's side of the gate — 2026-08-11
+
+### I114 · Ruling VIII's ceremony lands in `project-approval-review.tsx` (ratified R8)
+
+WP3 Track D implements Ruling VIII / mockup M8 (`the-workflow-alignment-
+proposal.html`, folio 13) in the client portal only:
+`apps/client-portal/src/components/approvals/project-approval-review.tsx`. The
+three outcomes and their copy (`approved` / `changes_requested` /
+`needs_discussion`) are unchanged, verbatim, per the ruling's own instruction
+to "keep Codex's three outcomes and their copy verbatim, add the ceremony,
+import none of the pressure."
+
+The six-part gate anatomy (Ruling II, folio 08 — Artifact, Question, Scope,
+Impact, Authority, Confirmation) now renders explicitly at client scale, each
+part labeled and wrapped in its own `data-testid`. Five parts already existed
+in `ProjectApprovalReview` field-for-field; **Scope renders `context`** — the
+free-text field the designer's side also uses "by convention" per the same
+ruling, since no dedicated scope field exists in the schema. Artifact carries
+the new dynamic immutability sentence, "You are approving edition {N}, exactly
+as shown." Authority reuses the pre-existing "designated decision lead
+review" confirm step (unchanged behavior) under its anatomy label.
+Confirmation is the existing outcomes fieldset and submit act, restyled onto
+`ScoredAction` (`@/components/making/scored-action`, the client portal's own
+port of the Scored Ink grammar — no `@patina/*` package owns it yet) so the
+final act scores on the inner label span, never the 44px hit-box, per repo
+convention.
+
+Two new client-scale devices, both new local components
+(`apps/client-portal/src/components/approvals/gate-stamp.tsx`, `GateStamp`),
+follow the existing inspection-tag stamp grammar already shipped in
+`making/tracking-row.tsx`'s `StatusStamp` — doubled border, ink-only color, no
+shadow: a **seal** that settles in on `outcome === 'approved'` (a short
+scale/opacity keyframe, guarded under `prefers-reduced-motion` the same way
+`patina-strata-wash` already is in `globals.css`), and a **HELD FOR
+DISCUSSION** stamp on `outcome === 'needs_discussion'`, drawn as loud as the
+seal per M8's own note that a holding gate must never read as a soft
+approval.
+
+**Removed, per the ruling's explicit instruction:** the shipped client-side
+terracotta "Overdue" indicator (previously beside the due date). Overdue is
+the studio's condition, computed and rendered only on the three studio
+surfaces of folio 10 — a client who finds a paper counting days against them
+is a client who stops opening the paper. `isOverdue` stays on the
+`ProjectApprovalReview` type (unchanged; this is a UI-only ruling) but the
+client component never reads it.
+
+**Mockup ambiguities interpreted, not ruled:**
+- M8's state A omits the due date and checksum entirely for visual clarity.
+  Kept both — checksum is integrity evidence and the due date is exactly what
+  should remain once "Overdue" is gone (a plain date, no elapsed-time
+  judgment).
+- M8's static plate shows a single "Approve" act beneath the outcomes list.
+  The live surface keeps the generic "Submit response" label regardless of
+  which outcome is selected — renaming it to "Approve" would misdescribe the
+  act when Changes requested or Needs discussion is chosen.
+- No `--color-gold` token exists in `client-portal/globals.css` (the mockup's
+  `.s-hold` border is `var(--gold)`, `.s-seal` is `var(--mocha)`). The seal
+  uses `--color-mocha` (exact match); the hold stamp uses `--color-clay`, the
+  closest existing warm token, rather than inventing a new one or reusing the
+  terracotta this same ruling just removed.
+
+Ruling IX (the co-approver) is unaffected — it ships in schema only
+(`requiredCoapproverId`, always `null`, gates a boolean elsewhere) and this
+change does not render it. R9 verification (repo-wide grep for
+`co_approver`/`coApprover`) found no UI rendering of the co-approver schema
+anywhere in the repo as of this entry; findings reported to the dispatching
+session, nothing fixed under this ticket.
+
+*Entries add: I114 · last id = I114*
