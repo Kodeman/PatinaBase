@@ -10223,3 +10223,33 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.get_project_contextual_handoffs(uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00443_site_request_authority_action_detail.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._site_request_designer_authorized(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00443_site_request_authority_action_detail.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_site_request_action_detail(uuid,uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00443_site_request_authority_action_detail.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_site_request_action_detail(uuid,uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00443_site_request_authority_action_detail.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.site_request_close(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00443_site_request_authority_action_detail.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.site_request_close(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

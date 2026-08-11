@@ -28241,6 +28241,10 @@ export type Database = {
           role: string
         }[]
       }
+      get_site_request_action_detail: {
+        Args: { p_project_id: string; p_request_id: string }
+        Returns: Json
+      }
       get_taste_refit_designers: {
         Args: never
         Returns: {
