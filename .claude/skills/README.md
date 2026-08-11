@@ -20,7 +20,7 @@ Eleven `patina-*` skills written 2026-07-08/09 by the outgoing operator session 
 
 Standing policies encoded throughout (from Kody, 2026-07-08): prod mutations need an explicit in-session ask, but "ship X" authorizes the full chain without per-step re-asking; read-only prod is always fine; the old Coolify box is dead — never touch; the cutover punch list is active — verify infra state live before trusting any doc claim.
 
-Deliberately NOT covered (use existing tools): App Store Connect / TestFlight → the 25 `asc-*` skills in `apps/mobile/Patina/.claude/skills/` (Claude-side artifacts; the path is real regardless of which tool reads it); xcodebuild mechanics → `building-with-xcode`; generic debugging/TDD process → superpowers plugin skills; repo architecture basics → root `AGENTS.md` (drift-corrected 2026-07-09).
+Deliberately NOT covered (use existing tools): App Store Connect / TestFlight → the 25 `asc-*` skills in `apps/mobile/Patina/.claude/skills/`; xcodebuild mechanics → `building-with-xcode`; generic debugging/TDD process → superpowers plugin skills; repo architecture basics → root `CLAUDE.md` (drift-corrected 2026-07-09).
 
 ## Cowork operational skills
 
@@ -29,11 +29,9 @@ workflows — vendor sourcing, brand copy, order coordination, trade paperwork
 — not repo-engineering procedures like the eleven above. Source: the
 canonical copies live in `docs/agent-os/patina-agent-os-cowork-handoff.md`
 §B ("Section B — Skills"); keep this repo copy in sync if that doc changes.
-The `pnpm lint:skills` check (`scripts/lint-skills.mjs`,
-`.github/workflows/skills-lint.yml`, advisory — no branch protection exists)
-runs over `.claude/skills/` only — `scripts/lint-skills.mjs` hardcodes that
-root. These `.agents/` twins are unlinted mirrors regenerated from those
-sources — when a source skill changes, regenerate its twin.
+All fifteen skill folders (the eleven above plus these four) are gated by
+the same `pnpm lint:skills` check (`scripts/lint-skills.mjs`,
+`.github/workflows/skills-lint.yml`, advisory — no branch protection exists).
 
 | Skill | One-line scope |
 |---|---|

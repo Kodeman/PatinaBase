@@ -58,7 +58,7 @@ lsof -ti :3000                   # expect NO output before relaunching
 Never `next build` / `pnpm --filter <app> build` while that app's `next dev` is running — they share `.next` and corrupt it (`Cannot find module './xxxx.js'` / missing-vendor-chunk). While dev runs, the compile signal is `pnpm --filter <app> type-check`. Recovery: kill dev, `rm -rf apps/<app>/.next`, restart dev.
 
 Flag-gated UI missing in dev: PostHog flags fail closed, so with no PostHog configured every flag is `false` and gated UI is invisible. Two fixes:
-- Real flags: add to the app's `.env.local` — `NEXT_PUBLIC_POSTHOG_KEY`, `NEXT_PUBLIC_POSTHOG_HOST`, `NEXT_PUBLIC_POSTHOG_ENABLE_IN_DEV=true`. A `PreToolUse` hook in `.claude/settings.json` warns on `dev:designer|minimal|client|admin|frontend` when `apps/designer-portal/.env.local` is missing these (Claude Code only — no equivalent guard fires under Codex).
+- Real flags: add to the app's `.env.local` — `NEXT_PUBLIC_POSTHOG_KEY`, `NEXT_PUBLIC_POSTHOG_HOST`, `NEXT_PUBLIC_POSTHOG_ENABLE_IN_DEV=true`. A `PreToolUse` hook in `.claude/settings.json` warns on `dev:designer|minimal|client|admin|frontend` when `apps/designer-portal/.env.local` is missing these.
 - Deterministic override (no PostHog): `NEXT_PUBLIC_FLAG_OVERRIDES='<flag>:true'` in `.env.local`. It passes through turbo's strict env because `turbo.json` lists it in `globalPassThroughEnv`. `NEXT_PUBLIC_*` vars are inlined at dev start, so a change needs a restart.
 - Known flags: `the-document-pilot` gates `/desk` (off ⇒ you land on `/portal` — not a bug); `procurement-workspace-pilot` gates the procurement zone.
 
