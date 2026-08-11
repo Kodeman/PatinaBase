@@ -332,20 +332,56 @@ describe('deriveWorkflowStageDocument', () => {
     expect(state.activeGroups[0].blockers).toHaveLength(2);
   });
 
-  it('resolves an exact phase blocker before resuming delayed work', () => {
-    const state = deriveWorkflowStageDocument([
+  it('keeps delayed blockers informational until resume, then gates completion', () => {
+    const delayed = deriveWorkflowStageDocument([
       phase({
         phase_name: 'Delayed concept',
         phase_status: 'delayed',
         blocks_advance: true,
-        advance_blocker_count: 2,
+        advance_blocker_count: 1,
+        current_blockers: {
+          count: 1,
+          phase: [{ id: 'decision-1', title: 'Approve concept' }],
+          tasks: [],
+          ffe: [],
+        },
+      }),
+    ]);
+    const inProgress = deriveWorkflowStageDocument([
+      phase({
+        phase_name: 'Concept work',
+        phase_status: 'in_progress',
+        blocks_advance: true,
+        advance_blocker_count: 1,
+        current_blockers: {
+          count: 1,
+          phase: [{ id: 'decision-1', title: 'Approve concept' }],
+          tasks: [],
+          ffe: [],
+        },
+      }),
+      phase({
+        phase_id: 'successor',
+        phase_name: 'Design development',
+        phase_status: 'pending',
+        follows_phase_id: 'phase-1',
+        canonical_stage_key: 'design_development',
       }),
     ]);
 
-    expect(state.activeGroups[0].nextActions[0]).toEqual({
+    expect(delayed.activeGroups[0].blockers).toHaveLength(1);
+    expect(delayed.activeGroups[0].nextActions[0]).toEqual({
       phaseId: 'phase-1',
       kind: 'resume',
-      label: 'Resolve 2 phase blockers, then resume Delayed concept.',
+      label:
+        'Resume Delayed concept before following the configured schedule graph.',
+    });
+    expect(inProgress.activeGroups[0].blockers).toHaveLength(1);
+    expect(inProgress.activeGroups[0].nextActions[0]).toEqual({
+      phaseId: 'phase-1',
+      kind: 'advance',
+      label:
+        'Resolve 1 phase blocker before advancing from Concept work to Design development.',
     });
   });
 });

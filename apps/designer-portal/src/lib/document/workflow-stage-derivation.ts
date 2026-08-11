@@ -234,20 +234,18 @@ function nextActionFor(
   phase: WorkflowPhaseLike,
   phases: readonly WorkflowPhaseLike[],
 ): WorkflowNextAction {
-  const advanceBlockerCount = phase.blocks_advance
-    ? Math.max(1, phase.advance_blocker_count)
-    : 0;
-  const advanceBlockerLabel = `${advanceBlockerCount} phase blocker${advanceBlockerCount === 1 ? '' : 's'}`;
-
   if (phase.phase_status === 'delayed') {
     return {
       phaseId: phase.phase_id,
       kind: 'resume',
-      label: phase.blocks_advance
-        ? `Resolve ${advanceBlockerLabel}, then resume ${phase.phase_name}.`
-        : `Resume ${phase.phase_name} before following the configured schedule graph.`,
+      label: `Resume ${phase.phase_name} before following the configured schedule graph.`,
     };
   }
+
+  const advanceBlockerCount = phase.blocks_advance
+    ? Math.max(1, phase.advance_blocker_count)
+    : 0;
+  const advanceBlockerLabel = `${advanceBlockerCount} phase blocker${advanceBlockerCount === 1 ? '' : 's'}`;
 
   const followers = phases.filter(
     (candidate) => candidate.follows_phase_id === phase.phase_id,
