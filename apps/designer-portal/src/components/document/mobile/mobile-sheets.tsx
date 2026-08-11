@@ -12,6 +12,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMarginItems } from '@/hooks/use-margin-items';
+import { useCoordinationItems } from '@patina/supabase';
+import { excludeProjectApprovalsFromMargin } from '@/lib/document/stage2-approval-exclusions';
 import { useDocumentTime } from '@/hooks/document-time-provider';
 import {
   marginAccent,
@@ -293,10 +295,16 @@ export function MobileSheets() {
   const projectId = activeDoc?.projectId ?? null;
   const proposalId = activeDoc?.proposalId ?? null;
   const { data: items } = useMarginItems(projectId, proposalId);
+  const { data: coordinationItems } = useCoordinationItems(projectId);
+  const visibleItems = useMemo(
+    () =>
+      excludeProjectApprovalsFromMargin(items ?? [], coordinationItems ?? []),
+    [coordinationItems, items],
+  );
 
   const { raised, settled } = useMemo(
-    () => partitionMargin(items ?? [], new Date()),
-    [items],
+    () => partitionMargin(visibleItems, new Date()),
+    [visibleItems],
   );
   const allItems = useMemo(() => [...raised, ...settled], [raised, settled]);
   const sheetKind = sheet?.kind ?? null;

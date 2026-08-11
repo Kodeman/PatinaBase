@@ -11,7 +11,7 @@
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ProjectParty } from '@patina/supabase';
-import { ItemComposer } from '../item-composer';
+import { composerItemTypeOrder, ItemComposer } from '../item-composer';
 
 const createMutate = jest.fn();
 const updateMutate = jest.fn();
@@ -208,6 +208,13 @@ describe('ItemComposer court party — payload parity across the flag', () => {
 });
 
 describe('ItemComposer court party — the rules that did not move', () => {
+  it('retires sign-off from new choices while preserving historical draft editing', () => {
+    expect(composerItemTypeOrder()).not.toContain('signoff');
+    expect(
+      composerItemTypeOrder({ coordination_kind: 'signoff' }),
+    ).toContain('signoff');
+  });
+
   it('auto-selects the sole match in BOTH modes', async () => {
     mockCallSheetOn = false;
     const off = render(<ItemComposer {...baseProps([NOLAN])} />);

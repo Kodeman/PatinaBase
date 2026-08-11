@@ -41,6 +41,7 @@ import {
   useProjectFFEItems,
   useCoordinationRealtime,
   useDesignerClientForClientUser,
+  excludeProjectArtifactApprovals,
   useResolvedSchedule,
   useProjects,
   useCreateProjectPhase,
@@ -190,6 +191,10 @@ export function ScheduleSpine({
   const ripple = useRippleSession();
 
   const allItems = useMemo(() => items ?? [], [items]);
+  const displayItems = useMemo(
+    () => excludeProjectArtifactApprovals(allItems),
+    [allItems],
+  );
   const allTasks = useMemo(() => tasks ?? [], [tasks]);
   const allParties = useMemo(() => parties ?? [], [parties]);
   const composerFfe = useMemo(() => toComposerFfeItems(ffeRows), [ffeRows]);
@@ -275,12 +280,12 @@ export function ScheduleSpine({
         // Open items for this phase (null/dangling phase_id → active phase),
         // the thing holding the line first (R101.2).
         const phaseItems = sortItemsBlockingFirst(
-          itemsForPhase(allItems, phase.id, activePhaseId, validPhaseIds),
+          itemsForPhase(displayItems, phase.id, activePhaseId, validPhaseIds),
           allTasks,
         );
 
         // ── the meta line's inputs (per-state; phaseMeta drops empties) ──
-        const linkedCount = allItems.filter(
+        const linkedCount = displayItems.filter(
           (i) => i.phase_id === phase.id,
         ).length;
         const blockingCount = phaseItems.filter(
@@ -362,7 +367,7 @@ export function ScheduleSpine({
       rowById,
       resolvedMilestones,
       milestoneNameById,
-      allItems,
+      displayItems,
       allTasks,
       activePhaseId,
       validPhaseIds,
@@ -613,7 +618,11 @@ export function ScheduleSpine({
   // ── spine-LOCAL sheet state — never a route/tab (D1) ──
   const [sheet, setSheet] = useState<SheetState>(null);
 
-  const openItem = (id: string) => setSheet({ kind: 'item', id });
+  const openItem = (id: string) => {
+    if (displayItems.some((item) => item.id === id)) {
+      setSheet({ kind: 'item', id });
+    }
+  };
   const openComposer = () => setSheet({ kind: 'composer' });
   const openAddLine = () => setSheet({ kind: 'add-line' });
   const closeSheet = () => setSheet(null);
@@ -623,9 +632,9 @@ export function ScheduleSpine({
   const activeItem = useMemo(
     () =>
       sheet?.kind === 'item'
-        ? (allItems.find((i) => i.id === sheet.id) ?? null)
+        ? (displayItems.find((i) => i.id === sheet.id) ?? null)
         : null,
-    [sheet, allItems],
+    [sheet, displayItems],
   );
 
   // ── unfold state — closed/future phases only. The ACTIVE phase is expanded

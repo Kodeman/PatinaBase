@@ -312,9 +312,13 @@ export {
   PROJECT_APPROVAL_CONTRACT,
   projectApprovalKeys,
   invalidateProjectApprovalQueries,
+  parseProjectApprovalArtifactCandidate,
   parseProjectApprovalReview,
+  useProjectApprovalArtifactCandidates,
   useProjectApprovals,
   useProjectApproval,
+  useProjectApprovalByDecision,
+  useMyProjectApprovalReviews,
   useProjectDecisionAuthority,
   useSetProjectDecisionAuthority,
   useCreateProjectApproval,
@@ -327,6 +331,7 @@ export {
 } from './use-project-approvals';
 export type {
   ProjectApprovalArtifactKind,
+  ProjectApprovalArtifactCandidate,
   ProjectApprovalLifecycleStatus,
   ProjectApprovalOutcome,
   ProjectApprovalDisposition,
@@ -356,6 +361,8 @@ export {
   useUpdateProjectParty,
   useRemoveProjectParty,
   useProjectRoster,
+  isProjectArtifactApproval,
+  excludeProjectArtifactApprovals,
 } from './use-coordination';
 export type {
   Court,

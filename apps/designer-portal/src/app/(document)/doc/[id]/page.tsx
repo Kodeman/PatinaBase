@@ -59,6 +59,7 @@ import { ScheduleNavProvider } from '@/components/document/schedule/schedule-nav
 import { RippleProvider } from '@/components/document/schedule/schedule-ripple-context';
 import { ProjectScheduleHandoffMount } from '@/components/document/project-schedule-handoff-mount';
 import { WorkflowStageDocumentMount } from '@/components/document/workflow-stage-document-mount';
+import { ProjectApprovalDocumentMount } from '@/components/document/project-approval-document-mount';
 import { LetterheadInstruments } from '@/components/document/letterhead-instruments';
 import { CallSheetMount } from '@/components/document/roster/call-sheet-mount';
 import type { CallSheetOpenMode } from '@/components/document/roster/call-sheet';
@@ -666,6 +667,15 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
             row.engagement_kind === 'project' ? row.project_id : null
           }
           activeSection={row.active_section}
+        />
+        <ProjectApprovalDocumentMount
+          projectId={
+            row.engagement_kind === 'project' ? row.project_id : null
+          }
+          clientProfileId={
+            row.engagement_kind === 'project' ? (project?.client_id ?? null) : null
+          }
+          phases={phases}
         />
 
         {/* Settled bars — letterhead bar + stamp; every phase with a read-only

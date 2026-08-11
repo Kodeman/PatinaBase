@@ -25,6 +25,7 @@ import {
 } from '@patina/supabase';
 import { useSectionTasks } from '@/hooks/use-section-work';
 import { useMarginItems } from '@/hooks/use-margin-items';
+import { excludeProjectApprovalsFromMargin } from '@/lib/document/stage2-approval-exclusions';
 import { useCreateMarginNote } from '@/hooks/use-margin-notes';
 import {
   useMarkProjectFileChangeRead,
@@ -281,6 +282,11 @@ export function MarginRail({
   onNoteAnchorConsumed?: () => void;
 }) {
   const { data: items, isLoading } = useMarginItems(projectId, proposalId);
+  const { data: coordItems } = useCoordinationItems(projectId);
+  const visibleItems = useMemo(
+    () => excludeProjectApprovalsFromMargin(items ?? [], coordItems ?? []),
+    [coordItems, items],
+  );
   const { data: fileChanges } = useProjectFileChangeNotifications(projectId);
   const markFileChangeRead = useMarkProjectFileChangeRead();
   const [openId, setOpenId] = useState<string | null>(null);
@@ -296,8 +302,8 @@ export function MarginRail({
     ((ffeItems ?? []) as Array<{ id: string }>).forEach((it, i) =>
       lineRank.set(it.id, i),
     );
-    return partitionMargin(items ?? [], new Date(), { lineRank });
-  }, [items, ffeItems]);
+    return partitionMargin(visibleItems, new Date(), { lineRank });
+  }, [visibleItems, ffeItems]);
 
   // ── R55: the decision composer, opened from the margin "+ New" ──
   // designer_clients.id resolution (the band's pattern) — the composer INSERT
@@ -311,7 +317,6 @@ export function MarginRail({
   const { data: parties } = useProjectParties(projectId ?? '');
   const { data: phaseRows } = useProjectPhases(projectId ?? '');
   const { data: tasks } = useSectionTasks(projectId ?? '');
-  const { data: coordItems } = useCoordinationItems(projectId);
 
   const composerFfe = useMemo(() => toComposerFfeItems(ffeItems), [ffeItems]);
   const composerPhases = useMemo(
@@ -367,7 +372,7 @@ export function MarginRail({
     );
   };
 
-  const decisionRows = (items ?? []).filter((i) => i.kind === 'decision');
+  const decisionRows = visibleItems.filter((i) => i.kind === 'decision');
 
   const bodyFor = (row: MarginItemRow) => (
     <MarginItemBody
@@ -555,7 +560,7 @@ export function MarginRail({
         </div>
       )}
 
-      {!isLoading && (items ?? []).length === 0 && (
+      {!isLoading && visibleItems.length === 0 && (
         <p className="text-[14px] italic leading-relaxed text-[var(--color-charcoal)]">
           The margin — decisions, messages, and money gather here
         </p>

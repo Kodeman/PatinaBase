@@ -90,6 +90,12 @@ jest.mock('@/hooks/use-margin-items', () => ({
   useMarginItems: () => ({ data: [] }),
 }));
 
+jest.mock('@patina/supabase', () => ({
+  useCoordinationItems: () => ({ data: [] }),
+  isProjectArtifactApproval: (item: { approval_contract?: string | null }) =>
+    item.approval_contract === 'project_artifact_v1',
+}));
+
 jest.mock('@/hooks/document-time-provider', () => ({
   useDocumentTime: () => mockTimeState,
 }));

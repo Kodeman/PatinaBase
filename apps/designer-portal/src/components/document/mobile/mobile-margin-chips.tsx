@@ -9,6 +9,8 @@
 
 import { useMemo } from 'react';
 import { useMarginItems } from '@/hooks/use-margin-items';
+import { useCoordinationItems } from '@patina/supabase';
+import { excludeProjectApprovalsFromMargin } from '@/lib/document/stage2-approval-exclusions';
 import { marginAccent, deriveKindLine, type MarginItemRow } from '@/lib/document/margin-derivation';
 import { useMobileShell } from './mobile-shell';
 
@@ -26,16 +28,22 @@ export function MobileMarginChips({
 }) {
   const { openMarginItem } = useMobileShell();
   const { data: items } = useMarginItems(projectId, proposalId);
+  const { data: coordinationItems } = useCoordinationItems(projectId);
+  const visibleItems = useMemo(
+    () =>
+      excludeProjectApprovalsFromMargin(items ?? [], coordinationItems ?? []),
+    [coordinationItems, items],
+  );
 
   const chips = useMemo(
     () =>
-      (items ?? []).filter((i) => {
+      visibleItems.filter((i) => {
         if (i.kind === 'time') return false;
         if (anchorKind === 'line') return i.anchor_kind === 'line' && i.anchor_id === anchorId;
         // letterhead band also carries section-anchored items (no line home).
         return i.anchor_kind === 'letterhead' || i.anchor_kind === 'section';
       }),
-    [items, anchorKind, anchorId],
+    [visibleItems, anchorKind, anchorId],
   );
 
   if (chips.length === 0) return null;

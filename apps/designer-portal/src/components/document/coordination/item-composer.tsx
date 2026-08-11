@@ -62,6 +62,19 @@ import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { PartyMiniRow } from '../roster/party-mini-row';
 import { RolodexPicker } from '../roster/rolodex-picker';
 
+const NEW_ITEM_TYPE_ORDER = ITEM_TYPE_ORDER.filter(
+  (kind) => kind !== 'signoff',
+);
+
+/** New Stage-2 approvals own sign-off authoring; historical drafts remain editable. */
+export function composerItemTypeOrder(
+  editItem?: Pick<CoordinationItem, 'coordination_kind'> | null,
+): CoordinationKind[] {
+  return editItem?.coordination_kind === 'signoff'
+    ? [...ITEM_TYPE_ORDER]
+    : [...NEW_ITEM_TYPE_ORDER];
+}
+
 /** An FF&E line the composer can gate (subset of project_ffe_items). */
 export interface ComposerFfeItem {
   id: string;
@@ -466,7 +479,7 @@ export function ItemComposer({
       {/* ── What kind of item — the 5-type grid ── */}
       <label className={fieldLabelCls}>What kind of item</label>
       <div className="mb-5 grid grid-cols-2 gap-1.5 min-[560px]:grid-cols-5">
-        {ITEM_TYPE_ORDER.map((k) => {
+        {composerItemTypeOrder(editItem).map((k) => {
           const token = itemTypeToken(k);
           const on = kind === k;
           return (

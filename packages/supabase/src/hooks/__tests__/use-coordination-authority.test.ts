@@ -39,6 +39,7 @@ vi.mock('@tanstack/react-query', () => ({
 }));
 
 import {
+  excludeProjectArtifactApprovals,
   useCreateCoordinationItem,
   useDeleteCoordinationItem,
   useExtendCoordinationItem,
@@ -70,6 +71,18 @@ beforeEach(() => {
 });
 
 describe('coordination authority routing', () => {
+  it('keeps Stage-2 approvals out of generic coordination presentation without deleting legacy reads', () => {
+    const legacy = { id: 'legacy', approval_contract: null };
+    const stage2 = {
+      id: 'stage-2',
+      approval_contract: 'project_artifact_v1',
+    };
+
+    expect(excludeProjectArtifactApprovals([legacy, stage2] as any)).toEqual([
+      legacy,
+    ]);
+  });
+
   it('invalidates the project workflow after a blocker mutation', () => {
     const config = useCreateCoordinationItem('proj-1') as unknown as {
       onSuccess: (data: typeof coordinationItem) => void;
