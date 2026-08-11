@@ -39,11 +39,21 @@ describe('MarginItem', () => {
     expect(screen.getByText('Pulse body')).toBeInTheDocument();
   });
 
-  it('claims no unfold state when it cannot unfold', () => {
-    render(<MarginItem row={row({ kind: 'time' })} open={false} />);
+  it('claims no unfold state when no onToggle makes it expandable', () => {
+    // Expandability is decided by the presence of onToggle, not by the row's
+    // kind — MarginRail withholds it (only) for `time` rows, but the component
+    // knows nothing about that.
+    const { rerender } = render(<MarginItem row={row()} open={false} />);
 
     const toggle = screen.getByRole('button', { name: /Weekly pulse/ });
     expect(toggle).not.toHaveAttribute('aria-expanded');
     expect(toggle).toBeDisabled();
+
+    // Same row kind, now given an onToggle: it becomes an expandable control.
+    rerender(<MarginItem row={row()} open={false} onToggle={jest.fn()} />);
+
+    const expandable = screen.getByRole('button', { name: /Weekly pulse/ });
+    expect(expandable).toHaveAttribute('aria-expanded', 'false');
+    expect(expandable).not.toBeDisabled();
   });
 });
