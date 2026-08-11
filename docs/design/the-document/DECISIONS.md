@@ -7049,3 +7049,54 @@ a transition is a **design question, not an implementation one** — it goes to 
 design session, not into the code, until ruled.
 
 *Entries add: I110–I111 · last id = I111*
+
+## The Document — the guide strip, corrected (WP1 review) — 2026-08-11
+
+### I112 · Three corrections to I111, and what the guide now costs
+
+Adversarial review of the WP1 fixes found one claim in I111 false and two
+consequences undisclosed. I111 stands as written (this log is append-only); this
+entry is the correction of record.
+
+**(a) The enrichment scoping does not reduce network — I111's claim is wrong.**
+I111 said the Desk read was "scoped to documents the Desk's side feeds can key
+on… a Discovery relationship no longer pays". It does not pay *on this page*,
+but it pays anyway: `<CommandBar/>` mounts in `(document)/layout.tsx` and calls
+`useDeskEngagements()` with no options on **every** document route, so the
+six-query composition and its 60s poll are already running under the same query
+key (`['document-state','desk']`) whatever `/doc/[id]` requests. A disabled
+TanStack observer also still reads that cache, so the page was handed real Desk
+data for documents it had declared out of scope.
+
+The scoping's real effect is **guidance semantics, not traffic**: which failures
+are allowed to blank the strip (I111 §3), and which compositions are allowed to
+answer for a document (§4). Both now hold, because the `enabled` predicate also
+gates the *selector call*, and because `partitionDesk` reports the engagement
+ids it actually composed — absence from the composition is `undefined`
+(unanswered), never `null` (need-free). The `enabled` gating itself is kept: it
+is harmless, and it becomes correct the day the CommandBar stops holding the key
+hot. **Anyone chasing the cold-open cost of a document should start at the
+CommandBar, not here.**
+
+**(b) The `'loading'` guide state is gone.** Nothing produces it once the strip
+stops waiting on the Desk, so the variant was removed rather than left as a
+state the model claims but never enters. Consequence for the week-one watch:
+`guideShown` events carrying `state: 'loading'` **go to zero from this deploy** —
+that is the removal, not a regression in instrumentation.
+
+**(c) The headline can change after first paint, and it is announced.** The
+strip renders the document's own derivation immediately and upgrades in place if
+the Desk composition later contributes a need the row alone cannot carry. So on
+one document view a designer may see the headline change under them; the
+`aria-live` region announces the change (as it does for any guide change); and
+`guideShown` can fire **twice for a single document view** — once local, once
+enriched. Anyone reading guide funnels should count document views, not
+`guideShown` events. Keyboard focus survives the swap (an anchor action becoming
+a link replaces the element), which is a fix, not a mitigation of the flip.
+
+**Flagged for the R5 design pass, not decided here:** whether an in-place
+headline change is acceptable studio behavior at all, or whether the enriched
+answer should arrive more quietly. This is a design question about how the
+document speaks; it stays out of the code until ruled.
+
+*Entries add: I112 · last id = I112*
