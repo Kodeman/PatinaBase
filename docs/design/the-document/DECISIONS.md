@@ -7125,3 +7125,138 @@ mirrors the equivalent contract already carried by wave1's own
 of one silently drifting behind the other.
 
 *Entries add: I113 · last id = I113*
+
+## The Document — handoffs, overdue, the guide, and the Desk key to one gate (WP3 Track B) — 2026-08-11
+
+Four ratified rulings, implemented together because they are one idea read at
+four scales: a gate is a party, a set of terms, a due moment, and one act.
+
+### I114 · The handoff band dissolves; the margin already is the band (ratified R3)
+
+`contextual-handoff-band.tsx` and its test are deleted, and
+`workflow-stage-document-mount.tsx` no longer mounts anything in their place.
+Every row the 00442/00443 projection produces is, by definition, a thing
+waiting on a named party — which is the definition of a margin item — so each
+one now renders in the rail through `margin-handoff-item.tsx`, leading the
+raised items because a thing waiting on someone else outranks the studio's own
+notes.
+
+**The projection is kept whole.** `use-project-contextual-handoffs.ts` is
+untouched; the new item reads it and never re-resolves sender, recipient,
+owner, or provenance for itself. What came off is register, not fact: the
+artifact checksum, the "Exact phase / Source domain" attribution, and the
+`nudgeSent` / `dueReminderSent` booleans no longer appear on a designer-facing
+surface. Stage provenance survives as microtext
+(`Stage 06 · Design Development · FF&E · edition 3`), read from
+`RESIDENTIAL_WORKFLOW_STAGES` — the band's local `STAGE_LABELS` map, which
+disagreed with the canonical titles on all eleven stages (the wave1 review's
+§2.9), dies with the band.
+
+**One act per item, and the four acts keep their names and their 1:1 mutations.**
+`nudge` → `useNudgeSiteRequest`, `approve` → `useApproveSiteRequestItem`,
+`redo` → `useRequestSiteRequestRedo`, `close` → `useCloseSiteRequest`. The
+acts that need their own terms (a nudge note, a redo note, a room for an
+approval) unfold the item and collect them there, so the face of the margin
+still carries exactly one act. A fifth disposition, `open`, carries no mutation
+of its own: it hands publishing and outcome selection to the Stage-2 approval
+ceremony, which owns them (I113).
+
+**The approval lane gained a real nudge.** The projection reports a
+project-approval handoff's `sourceId` as the `client_decisions` row id
+(00442 line 36, `decision.id AS source_id`), so the item's nudge rides
+`useSendDecisionReminder` — the reminder RPC the decision rail already owns —
+rather than inventing one. Before this, an approval handoff had no studio act
+at all except navigation.
+
+**Metadata sits at the 12px floor.** The item does not reuse `MItemContent`,
+whose kind line is 8px and detail 10.5px; mockup M4's shipped-size note pins
+the portal's 12px metadata floor, and the item carries its own type layers to
+hold it. The rest of the margin's grammar is unchanged, so `MItemContent`'s
+sizes are a **standing divergence, not a decision** — whether the whole margin
+should rise to the floor is a design question and is not answered here.
+
+### I115 · Overdue is one derivation with three renderings (ratified R4)
+
+`overdue-condition.ts` is the only place the overdue fact is computed. It
+imports nothing, exports exactly a derivation and three pure readings of it,
+and stores nothing:
+
+1. **the margin item's terracotta stamp** — `overdueStampLabel` → "Overdue · 6 days";
+2. **the guide's sentence** — `overdueElapsedPhrase`, which changes the
+   sentence's tense from what is pending to how long it has been pending;
+3. **the Desk's order** — `overdueSortTier`, a new leading tier on
+   `needSortKey` so the folio rises to first position.
+
+Position is the whole of the pressure. The folio gains no count, no colour
+change, and no second act; the module has no surface through which a badge, a
+banner, a push, an auto-approval, or a modal could be added, and a test asserts
+its export list to keep it that way.
+
+**The server can withhold the condition but never assert it early.**
+`deriveOverdue(dueAt, now, serverOverdue)` takes the projection's own answer
+where one exists, so a stale client clock cannot invent an overdue item; a
+`false` from the server wins, and a `true` on a date that has not arrived does
+not. Bare `DATE` values parse as local midnight, or the elapsed count slips a
+day in negative-offset zones.
+
+### I116 · The guide's act derives from the nearest open gate (ratified R5)
+
+`deriveDocumentGuide` gains one input, `gate`, and one branch. Precedence is
+now: availability → paused → **gate** → operational need → proposal lifecycle →
+stage copy. An open gate IS the project's current state, so nothing else gets
+to decide what the strip says; a paused project still outranks it, because a
+gate cannot resume lifecycle work.
+
+The branch is keyed by `canonical_stage_key`: the eyebrow is the canonical
+stage title, the headline is `gateSentence`, and the act is `gateActionLabel`
+("Nudge Marta", "Publish the Direction approval"). Three WP1 contracts are
+held, not bent:
+
+- **`withInputs()` never overrides a branch's action** (I111 §1). The gate
+  branch resolves to `actionable` or `waiting`, never `needs_input`, so the
+  input-derived act cannot displace it; the top input still rides along.
+- **The act names a mounted control** (I110). `handoffAnchorId(sourceId)` is
+  published by the margin item's own act button, and the guide's destination is
+  an ordinary `anchor` — no new destination variant, and no invented surface.
+- **The guide never activates what it names.** The destination omits
+  `activate`, so the gate act scrolls and focuses but cannot toggle an item the
+  designer already opened. This is the same hazard I111 §6 closed for
+  `pulse_due`, avoided here by not arming it at all.
+
+`undefined` and `null` keep meaning different things, per I111 §4: `undefined`
+is "the gate read has not answered" and the guide keeps its own derivation;
+`null` is "no gate is open".
+
+### I117 · Desk need lines key to the same gate, and Studio Pulse gets one sentence (ratified R6)
+
+The folio's need line is the gate's sentence — the party, the artifact, and the
+elapsed time — through `folioNeedLine` in `folder-card.tsx`. Where the folio's
+need is not a gate, the need keeps its own line unchanged.
+
+**The Desk's reach is bounded by its own read, and this is a real limit.**
+`document_state` carries no `canonical_stage_key` (00434 added it to
+`project_phases` / `proposal_phases` only), and the handoffs projection is
+per-project, so the Desk cannot key a folio to the canonical stage the way an
+open document can. The gate's terms therefore come from the document's own
+section — the same vocabulary the folio tab already wears — and only the
+`overdue_decision` need currently resolves to a gate. **Widening this is a data
+question, not a presentation one**, and it is not answered here.
+
+`deriveNeed` itself is untouched: the gate sentence is applied at the folio,
+so the guide's needs-attention branch and every existing need assertion keep
+their meaning.
+
+**Studio Pulse gains exactly one aggregate sentence** —
+"3 folios need your hand, 1 overdue, 2 pieces are in production." —
+rendered once, carrying no act and no badge. The disclosure's existing
+count-and-preview line is left alone, and its four populations keep their own
+hooks, flags, errors, and deep links. **The deck says the sentence "replaces
+the pulse panel"; this implements it as an addition**, because dismantling four
+independently-owned populations is a larger change than the ruling's text
+authorizes. Whether the panel beneath the sentence should go is a design
+question that goes back to the session.
+
+The 2–4 folio ceiling is untouched by all of the above: `partitionDesk` still
+returns every folder, and the preview limit remains the renderer's decision.
+
+*Entries add: I114–I117 · last id = I117*
