@@ -22,18 +22,31 @@
 
 // deno-lint-ignore-file no-explicit-any
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { deliverDecisionNotification } from '../_shared/decision-notify.ts';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { deliverDecisionNotification } from "../_shared/decision-notify.ts";
+import {
+  type EmbeddedApprovalArtifact,
+  resolveApprovalArtifactCitation,
+} from "../_shared/project-approval-notification.ts";
 
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 interface ResolvedDecision {
   id: string;
   title: string;
   due_date: string | null;
   designer_id: string | null;
-  designer: { id: string | null; full_name: string | null; email: string | null } | null;
+  approval_contract: string | null;
+  approval_artifact:
+    | EmbeddedApprovalArtifact
+    | EmbeddedApprovalArtifact[]
+    | null;
+  designer: {
+    id: string | null;
+    full_name: string | null;
+    email: string | null;
+  } | null;
 }
 
 Deno.serve(async (req: Request) => {
@@ -42,10 +55,14 @@ Deno.serve(async (req: Request) => {
     const body = await req.json();
     decisionId = body?.decision_id;
   } catch {
-    return new Response(JSON.stringify({ error: 'invalid_body' }), { status: 400 });
+    return new Response(JSON.stringify({ error: "invalid_body" }), {
+      status: 400,
+    });
   }
   if (!decisionId) {
-    return new Response(JSON.stringify({ error: 'decision_id_required' }), { status: 400 });
+    return new Response(JSON.stringify({ error: "decision_id_required" }), {
+      status: 400,
+    });
   }
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -53,35 +70,64 @@ Deno.serve(async (req: Request) => {
   // Look up the decision + the owning designer's profile (full_name + email).
   // client_decisions.designer_id is NOT NULL (00064), but the join is defensive.
   const { data, error } = await supabase
-    .from('client_decisions')
+    .from("client_decisions")
     .select(`
-      id, title, due_date, designer_id,
+      id, title, due_date, designer_id, approval_contract,
+      approval_artifact:project_approval_artifacts(
+        source_kind, source_version, artifact_hash, artifact_title
+      ),
       designer:profiles!designer_id(id, full_name, email)
     `)
-    .eq('id', decisionId)
+    .eq("id", decisionId)
     .single();
 
   if (error || !data) {
-    console.error('decision-resolved-notify: lookup failed', decisionId, error);
-    return new Response(JSON.stringify({ error: 'decision_not_found' }), { status: 404 });
+    console.error("decision-resolved-notify: lookup failed", decisionId, error);
+    return new Response(JSON.stringify({ error: "decision_not_found" }), {
+      status: 404,
+    });
   }
 
   const decision = data as unknown as ResolvedDecision;
   const recipientUserId = decision.designer?.id ?? decision.designer_id ?? null;
   const recipientEmail = decision.designer?.email ?? null;
   const recipientName = decision.designer?.full_name ?? null;
+  const artifact = decision.approval_contract === "project_artifact_v1"
+    ? resolveApprovalArtifactCitation(decision.approval_artifact)
+    : null;
+  if (decision.approval_contract === "project_artifact_v1" && !artifact) {
+    console.error(
+      "decision-resolved-notify: Stage-2 artifact evidence incomplete",
+      decision.id,
+    );
+    return new Response(
+      JSON.stringify({ error: "approval_artifact_not_found" }),
+      { status: 409, headers: { "Content-Type": "application/json" } },
+    );
+  }
 
   // deliverDecisionNotification: idempotent in-app RPC (no-op since the hook
   // already wrote the row) + the resolved EMAIL via the compliance chokepoint.
   const result = await deliverDecisionNotification(
     supabase,
-    'decision_resolved',
-    { id: decision.id, title: decision.title, dueDate: decision.due_date },
+    "decision_resolved",
+    {
+      id: decision.id,
+      title: decision.title,
+      dueDate: decision.due_date,
+      artifact,
+    },
     { userId: recipientUserId, email: recipientEmail, name: recipientName },
   );
 
-  if (result.emailSkipped && result.reason && result.reason !== 'already_sent') {
-    console.warn('decision-resolved-notify: email skipped', decision.id, result.reason);
+  if (
+    result.emailSkipped && result.reason && result.reason !== "already_sent"
+  ) {
+    console.warn(
+      "decision-resolved-notify: email skipped",
+      decision.id,
+      result.reason,
+    );
   }
 
   return new Response(
@@ -92,6 +138,6 @@ Deno.serve(async (req: Request) => {
       email_skipped: result.emailSkipped,
       reason: result.reason ?? null,
     }),
-    { headers: { 'Content-Type': 'application/json' } },
+    { headers: { "Content-Type": "application/json" } },
   );
 });

@@ -2,13 +2,14 @@
 // Extracted so they can be unit-tested with `deno test` without a live DB.
 
 import {
-  renderBrandedShell,
-  heading,
-  paragraph,
-  muted,
   ctaButton,
+  heading,
+  muted,
+  paragraph,
+  renderBrandedShell,
   spacer,
 } from "../_shared/branded-email.ts";
+import type { ApprovalArtifactCitation } from "../_shared/decision-notify.ts";
 
 const SERIF = "'Fraunces', Georgia, 'Times New Roman', serif";
 const SANS =
@@ -20,6 +21,8 @@ export interface ReminderDigestItem {
   category: ReminderDigestCategory;
   title: string;
   link: string | null;
+  decisionId?: string;
+  artifact?: ApprovalArtifactCitation | null;
 }
 
 export interface RenderedDigest {
@@ -64,6 +67,37 @@ const CATEGORY_LABELS: Record<ReminderDigestCategory, string> = {
 // Stable render order.
 const CATEGORY_ORDER: ReminderDigestCategory[] = ["proposal", "decision"];
 
+export function artifactCitationsForDigest(
+  items: ReminderDigestItem[],
+): Array<Record<string, unknown>> {
+  return items.flatMap((item) => {
+    if (!item.decisionId || !item.artifact) return [];
+    return [{
+      decisionId: item.decisionId,
+      artifactKind: item.artifact.kind,
+      artifactVersion: item.artifact.version,
+      artifactChecksum: item.artifact.checksum,
+      artifactTitle: item.artifact.title,
+    }];
+  });
+}
+
+function renderArtifactCitation(
+  artifact: ApprovalArtifactCitation | null | undefined,
+): string {
+  if (!artifact) return "";
+  return `<div style="margin:4px 0 0;color:#6D675E;font-family:${SANS};font-size:12px;line-height:1.45;">` +
+    `${escapeHtml(artifact.title)} · ` +
+    `<span style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">${
+      escapeHtml(artifact.kind)
+    }</span> ` +
+    `v${artifact.version}<br>` +
+    `SHA-256: <span style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all;">${
+      escapeHtml(artifact.checksum)
+    }</span>` +
+    `</div>`;
+}
+
 /**
  * Build the single daily reminder digest email from a user's accumulated
  * unread reminder items. Groups by category with a simple bulleted list — no
@@ -74,10 +108,9 @@ export function buildReminderDigestEmail(
   baseUrl: string,
 ): RenderedDigest {
   const count = items.length;
-  const subject =
-    count === 1
-      ? "A reminder from Patina"
-      : `${count} reminders from Patina`;
+  const subject = count === 1
+    ? "A reminder from Patina"
+    : `${count} reminders from Patina`;
 
   const sections = CATEGORY_ORDER.map((category) => {
     const group = items.filter((i) => i.category === category);
@@ -88,18 +121,21 @@ export function buildReminderDigestEmail(
         const body = it.link
           ? `<a href="${it.link}" style="color:#4E7A66;text-decoration:underline;">${label}</a>`
           : label;
-        return `<li style="margin:0 0 8px;color:#4B463E;font-family:${SANS};font-size:15px;line-height:1.5;">${body}</li>`;
+        return `<li style="margin:0 0 8px;color:#4B463E;font-family:${SANS};font-size:15px;line-height:1.5;">${body}${
+          renderArtifactCitation(it.artifact)
+        }</li>`;
       })
       .join("");
     return `
       <div style="margin:0 0 24px;">
-        <h2 style="color:#1F1B16;font-family:${SERIF};font-size:17px;font-weight:600;letter-spacing:-0.01em;margin:0 0 8px;">${CATEGORY_LABELS[category]}</h2>
+        <h2 style="color:#1F1B16;font-family:${SERIF};font-size:17px;font-weight:600;letter-spacing:-0.01em;margin:0 0 8px;">${
+      CATEGORY_LABELS[category]
+    }</h2>
         <ul style="padding-left:18px;margin:0;">${lis}</ul>
       </div>`;
   }).join("");
 
-  const body =
-    heading("Your daily summary") +
+  const body = heading("Your daily summary") +
     paragraph("A few things are waiting for you.") +
     (sections || paragraph("Nothing new right now.")) +
     spacer(6) +

@@ -10055,3 +10055,75 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.get_project_decision_reviews(uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00437_project_approval_notification_traceability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._enqueue_decision_notification( uuid, public.decision_notification_kind ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_notification_traceability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.stamp_client_decision_reminder(uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_notification_traceability.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.stamp_client_decision_reminder(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_notification_traceability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.stamp_project_approval_reminder_delivery( uuid, uuid ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_notification_traceability.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.stamp_project_approval_reminder_delivery( uuid, uuid ) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_notification_traceability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_decision_reviews(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_notification_traceability.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_decision_reviews(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_notification_traceability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_decision_status_transition() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_notification_traceability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.withdraw_project_approval_decision( uuid, timestamptz, text, text ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_notification_traceability.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.withdraw_project_approval_decision( uuid, timestamptz, text, text ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_notification_traceability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_approval_artifact_candidates(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_notification_traceability.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_approval_artifact_candidates(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

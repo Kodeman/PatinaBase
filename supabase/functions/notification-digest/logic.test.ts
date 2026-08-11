@@ -7,6 +7,7 @@ import {
   assertStringIncludes,
 } from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import {
+  artifactCitationsForDigest,
   buildReminderDigestEmail,
   isReminderDigestDue,
   type ReminderDigestItem,
@@ -35,7 +36,11 @@ Deno.test("isReminderDigestDue: true for an unparseable watermark", () => {
 
 Deno.test("buildReminderDigestEmail: singular vs plural subject", () => {
   const one = buildReminderDigestEmail(
-    [{ category: "proposal", title: "Living Room Refresh", link: "https://x/p/1" }],
+    [{
+      category: "proposal",
+      title: "Living Room Refresh",
+      link: "https://x/p/1",
+    }],
     "https://client.patina.cloud",
   );
   assertStringIncludes(one.subject, "reminder");
@@ -53,10 +58,21 @@ Deno.test("buildReminderDigestEmail: singular vs plural subject", () => {
 
 Deno.test("buildReminderDigestEmail: lists every item and groups by category", () => {
   const items: ReminderDigestItem[] = [
-    { category: "proposal", title: "Living Room Refresh", link: "https://x/p/1" },
-    { category: "decision", title: "Pick a sofa fabric", link: "https://x/d/9" },
+    {
+      category: "proposal",
+      title: "Living Room Refresh",
+      link: "https://x/p/1",
+    },
+    {
+      category: "decision",
+      title: "Pick a sofa fabric",
+      link: "https://x/d/9",
+    },
   ];
-  const { html } = buildReminderDigestEmail(items, "https://client.patina.cloud");
+  const { html } = buildReminderDigestEmail(
+    items,
+    "https://client.patina.cloud",
+  );
   assertStringIncludes(html, "Living Room Refresh");
   assertStringIncludes(html, "Pick a sofa fabric");
   assertStringIncludes(html, "https://x/p/1");
@@ -72,4 +88,41 @@ Deno.test("buildReminderDigestEmail: escapes HTML in titles", () => {
   );
   assert(!html.includes("<script>alert(1)</script>"));
   assertStringIncludes(html, "&lt;script&gt;");
+});
+
+Deno.test("Stage-2 digest item cites immutable artifact and logs no reviewer IDs", () => {
+  const checksum = "c".repeat(64);
+  const items: ReminderDigestItem[] = [{
+    category: "decision",
+    title: "Approve the issue",
+    link: "https://client.patina.cloud/decisions",
+    decisionId: "decision-1",
+    artifact: {
+      kind: "spec_book_artifact",
+      version: 6,
+      checksum,
+      title: "Client <specification> book",
+    },
+  }];
+  const { html } = buildReminderDigestEmail(
+    items,
+    "https://client.patina.cloud",
+  );
+  assertStringIncludes(html, "spec_book_artifact");
+  assertStringIncludes(html, "v6");
+  assertStringIncludes(html, checksum);
+  assertStringIncludes(html, "Client &lt;specification&gt; book");
+
+  const citations = artifactCitationsForDigest(items);
+  assertEquals(citations, [{
+    decisionId: "decision-1",
+    artifactKind: "spec_book_artifact",
+    artifactVersion: 6,
+    artifactChecksum: checksum,
+    artifactTitle: "Client <specification> book",
+  }]);
+  const serialized = JSON.stringify(citations).toLowerCase();
+  assert(!serialized.includes("reviewer"));
+  assert(!serialized.includes("approver"));
+  assert(!serialized.includes("leadid"));
 });

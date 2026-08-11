@@ -26,7 +26,7 @@
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendCompliantEmail } from "./send-email.ts";
-import { renderBrandedShell, paragraph, escapeHtml } from "./branded-email.ts";
+import { escapeHtml, paragraph, renderBrandedShell } from "./branded-email.ts";
 
 // The three decision notification kinds. These mirror the
 // decision_notification_kind enum (00173) and the NotificationType members
@@ -91,10 +91,18 @@ export interface DecisionRecipient {
   name: string | null;
 }
 
+export interface ApprovalArtifactCitation {
+  kind: "plan_issue" | "spec_book_artifact" | "budget_version";
+  version: number;
+  checksum: string;
+  title: string;
+}
+
 export interface DecisionContext {
   id: string;
   title: string | null;
   dueDate: string | null;
+  artifact?: ApprovalArtifactCitation | null;
 }
 
 export interface DeliverDecisionNotificationResult {
@@ -189,7 +197,7 @@ async function loadPreferences(
       timezone: "America/New_York",
     };
   }
-  return data as PrefRow;
+  return data as unknown as PrefRow;
 }
 
 /**
@@ -227,7 +235,46 @@ export interface DecisionCobrand {
   studioLogoUrl?: string;
 }
 
-function renderDecisionEmail(
+function renderArtifactCitation(
+  artifact: ApprovalArtifactCitation | null | undefined,
+): string {
+  if (!artifact) return "";
+  return [
+    paragraph(
+      `Approval artifact: <strong style="color:#1F1B16; font-weight:600;">${
+        escapeHtml(artifact.title)
+      }</strong> ` +
+        `(<span style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">${
+          escapeHtml(artifact.kind)
+        }</span>, ` +
+        `version ${artifact.version}).`,
+    ),
+    paragraph(
+      `SHA-256 checksum: <span style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all;">${
+        escapeHtml(artifact.checksum)
+      }</span>`,
+    ),
+  ].join("");
+}
+
+export function decisionNotificationMetadata(
+  kind: DecisionNotificationKind,
+  decision: DecisionContext,
+): Record<string, unknown> {
+  const metadata: Record<string, unknown> = {
+    decisionId: decision.id,
+    kind,
+  };
+  if (decision.artifact) {
+    metadata.artifactKind = decision.artifact.kind;
+    metadata.artifactVersion = decision.artifact.version;
+    metadata.artifactChecksum = decision.artifact.checksum;
+    metadata.artifactTitle = decision.artifact.title;
+  }
+  return metadata;
+}
+
+export function renderDecisionEmail(
   kind: DecisionNotificationKind,
   recipientName: string,
   decision: DecisionContext,
@@ -235,6 +282,7 @@ function renderDecisionEmail(
 ): RenderedEmail {
   const name = recipientName || "there";
   const title = decision.title || "a decision";
+  const artifactCitation = renderArtifactCitation(decision.artifact);
 
   if (kind === "decision_resolved") {
     // Designer-facing — never co-branded (the designer IS the studio).
@@ -246,7 +294,12 @@ function renderDecisionEmail(
         eyebrow: "Resolved",
         body: [
           paragraph(`Hi ${escapeHtml(name)},`),
-          paragraph(`Your client has responded to the decision <strong style="color:#1F1B16; font-weight:600;">${escapeHtml(title)}</strong>.`),
+          paragraph(
+            `Your client has responded to the decision <strong style="color:#1F1B16; font-weight:600;">${
+              escapeHtml(title)
+            }</strong>.`,
+          ),
+          artifactCitation,
           paragraph("Open your Patina dashboard to review their selection."),
           paragraph("— Patina"),
         ].join(""),
@@ -259,14 +312,22 @@ function renderDecisionEmail(
       subject: `Overdue: "${title}" still needs your decision`,
       html: renderBrandedShell({
         title: `Overdue: "${title}" still needs your decision`,
-        preview: `"${title}" has passed its due date and still needs your decision.`,
+        preview:
+          `"${title}" has passed its due date and still needs your decision.`,
         eyebrow: "Overdue",
         studioName: cobrand.studioName,
         studioLogoUrl: cobrand.studioLogoUrl,
         body: [
           paragraph(`Hi ${escapeHtml(name)},`),
-          paragraph(`The decision <strong style="color:#1F1B16; font-weight:600;">${escapeHtml(title)}</strong> has passed its due date and is still waiting on you.`),
-          paragraph("Open your Patina dashboard to review the options and pick one."),
+          paragraph(
+            `The decision <strong style="color:#1F1B16; font-weight:600;">${
+              escapeHtml(title)
+            }</strong> has passed its due date and is still waiting on you.`,
+          ),
+          artifactCitation,
+          paragraph(
+            "Open your Patina dashboard to review the options and pick one.",
+          ),
           paragraph("— Patina"),
         ].join(""),
       }),
@@ -276,15 +337,19 @@ function renderDecisionEmail(
   // decision_required
   const dueClause = decision.dueDate
     ? (() => {
-        const hoursLeft = Math.max(
-          0,
-          Math.round(
-            (new Date(decision.dueDate as string).getTime() - Date.now()) /
-              (1000 * 60 * 60),
-          ),
-        );
-        return paragraph(`It's due in approximately <strong style="color:#1F1B16; font-weight:600;">${hoursLeft} hour${hoursLeft === 1 ? "" : "s"}</strong>.`);
-      })()
+      const hoursLeft = Math.max(
+        0,
+        Math.round(
+          (new Date(decision.dueDate as string).getTime() - Date.now()) /
+            (1000 * 60 * 60),
+        ),
+      );
+      return paragraph(
+        `It's due in approximately <strong style="color:#1F1B16; font-weight:600;">${hoursLeft} hour${
+          hoursLeft === 1 ? "" : "s"
+        }</strong>.`,
+      );
+    })()
     : "";
 
   return {
@@ -297,9 +362,16 @@ function renderDecisionEmail(
       studioLogoUrl: cobrand.studioLogoUrl,
       body: [
         paragraph(`Hi ${escapeHtml(name)},`),
-        paragraph(`Your designer is waiting on a decision: <strong style="color:#1F1B16; font-weight:600;">${escapeHtml(title)}</strong>.`),
+        paragraph(
+          `Your designer is waiting on a decision: <strong style="color:#1F1B16; font-weight:600;">${
+            escapeHtml(title)
+          }</strong>.`,
+        ),
+        artifactCitation,
         dueClause,
-        paragraph("Open your Patina dashboard to review the options and pick one."),
+        paragraph(
+          "Open your Patina dashboard to review the options and pick one.",
+        ),
         paragraph("— Patina"),
       ].join(""),
     }),
@@ -411,7 +483,12 @@ export async function deliverDecisionNotification(
   // clients (no auth user) no log row is written, and email idempotency falls
   // back to the caller's own guard: decision-reminders' reminder_sent_at stamp
   // and expire-decisions' one-shot pending→expired transition.
-  const rendered = renderDecisionEmail(kind, recipient.name ?? "", decision, cobrand);
+  const rendered = renderDecisionEmail(
+    kind,
+    recipient.name ?? "",
+    decision,
+    cobrand,
+  );
   const result = await sendCompliantEmail(supabase, {
     to: recipient.email,
     subject: rendered.subject,
@@ -420,7 +497,7 @@ export async function deliverDecisionNotification(
     notificationType: KIND_TO_LOG_TYPE[kind],
     category: "operational",
     templateId: `decision-${kind.replace("decision_", "")}`,
-    metadata: { decisionId: decision.id, kind },
+    metadata: decisionNotificationMetadata(kind, decision),
   });
 
   return {

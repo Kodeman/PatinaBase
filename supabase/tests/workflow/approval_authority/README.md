@@ -15,6 +15,10 @@ The tests are split on the migration boundary:
   publish/respond/withdraw/supersede API, legacy RPC compatibility, Stage-2
   expiry exclusion, and the distinction between an overdue condition and a
   lifecycle state.
+- `00437_notification_traceability_contract_test.sql` checks frozen-lead
+  notification routing, immutable artifact citations, the service-only Edge
+  delivery stamp, the studio-only artifact-candidate projection, usable
+  authority revision projection, and evidenced draft withdrawal.
 
 Both files use `to_regclass`, `to_regprocedure`, and catalog lookups before any
 future relation or function is referenced. On a schema missing the named
@@ -28,6 +32,9 @@ psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
 psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
   -v ON_ERROR_STOP=1 \
   -f supabase/tests/workflow/approval_authority/00436_lifecycle_compatibility_contract_test.sql
+psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
+  -v ON_ERROR_STOP=1 \
+  -f supabase/tests/workflow/approval_authority/00437_notification_traceability_contract_test.sql
 ```
 
 ## Preserved contract
@@ -67,6 +74,16 @@ completed-phase trigger, and workflow projection. Overdue is derived from an
 unanswered pending request's due date, never a status and never auto-approval.
 Generic expire/reopen paths must reject Stage 2, and the due-expiry worker must
 exclude it.
+
+00437 keeps communication explicitly non-authoritative. Required, overdue,
+resolved, and reminder communications cite immutable artifact kind, version,
+checksum, and title without reviewer identities. Scheduled Stage-2 reminders
+target the snapshotted lead and may stamp delivery only through a checked
+service RPC; legacy direct-contact reminders retain their installed path. A
+studio may withdraw an exact current-leaf draft or pending request through the
+same immutable receipt rail, with no notification for an abandoned draft.
+The composer discovers only resolver-eligible plan/spec/budget sources through
+a sanitized studio-only candidate projection.
 
 ## Behavioral assertion matrix
 

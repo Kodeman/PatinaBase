@@ -28132,6 +28132,10 @@ export type Database = {
         Args: { p_product_id: string }
         Returns: Json
       }
+      get_project_approval_artifact_candidates: {
+        Args: { p_project_id: string }
+        Returns: Json
+      }
       get_project_authority_summary: {
         Args: { p_project_id: string }
         Returns: Json
@@ -30078,6 +30082,54 @@ export type Database = {
       }
       stamp_client_decision_reminder: {
         Args: { p_decision_id: string }
+        Returns: {
+          answer: string | null
+          answered_at: string | null
+          answered_by: string | null
+          approval_contract: string | null
+          blocking_status: string
+          blocks_kind: string
+          blocks_milestone_id: string | null
+          client_consent_method: string | null
+          client_consented_at: string | null
+          client_signature: string | null
+          context: string | null
+          coordination_kind: string
+          court: string
+          court_party_id: string | null
+          created_at: string
+          decision_kind: string
+          decision_type: string
+          designer_client_id: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          linked_phase: string | null
+          linked_proposal_id: string | null
+          phase_id: string | null
+          predecessor_decision_id: string | null
+          project_id: string | null
+          recommended_option_id: string | null
+          reminder_sent_at: string | null
+          responded_at: string | null
+          room_id: string | null
+          section_key: string | null
+          selected_by: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      stamp_project_approval_reminder_delivery: {
+        Args: { p_decision_id: string; p_decision_lead_id: string }
         Returns: {
           answer: string | null
           answered_at: string | null
