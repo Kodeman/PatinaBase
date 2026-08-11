@@ -175,8 +175,9 @@ describe('project contextual handoff read model', () => {
       parseProjectContextualHandoff({
         ...SITE_HANDOFF,
         sourceState: 'awaiting_consent',
-        expectedResponse: 'await_site_party_consent',
+        expectedResponse: 'provide_sms_consent',
         actionKind: 'open_site_request',
+        isOverdue: false,
         responsibility: {
           sender: { kind: 'studio', label: null },
           recipient: { kind: 'site_party', label: 'Frozen Field Party' },
@@ -191,6 +192,66 @@ describe('project contextual handoff read model', () => {
     );
   });
 
+  it('rejects mismatched state, action, response, and responsibility routes', () => {
+    expect(() =>
+      parseProjectContextualHandoff({
+        ...APPROVAL_HANDOFF,
+        actionKind: 'publish_approval_request',
+      }),
+    ).toThrow(/route/);
+
+    expect(() =>
+      parseProjectContextualHandoff({
+        ...SITE_HANDOFF,
+        responsibility: {
+          ...SITE_HANDOFF.responsibility,
+          currentOwner: { kind: 'site_party', label: 'Wrong owner' },
+        },
+      }),
+    ).toThrow(/route/);
+
+    expect(() =>
+      parseProjectContextualHandoff({
+        ...SITE_HANDOFF,
+        sourceState: 'awaiting_consent',
+        expectedResponse: 'provide_sms_consent',
+        actionKind: 'open_site_request',
+        isOverdue: true,
+        responsibility: {
+          sender: { kind: 'studio', label: null },
+          recipient: { kind: 'site_party', label: 'Frozen Field Party' },
+          currentOwner: { kind: 'site_party', label: null },
+        },
+      }),
+    ).toThrow(/overdue/);
+  });
+
+  it('rejects invalid timestamps, checksums, and non-positive artifact versions', () => {
+    expect(() =>
+      parseProjectContextualHandoff({
+        ...APPROVAL_HANDOFF,
+        dueAt: 'not-a-timestamp',
+      }),
+    ).toThrow(/dueAt/);
+
+    expect(() =>
+      parseProjectContextualHandoff({
+        ...APPROVAL_HANDOFF,
+        artifact: { ...APPROVAL_HANDOFF.artifact, checksum: 'not-a-hash' },
+      }),
+    ).toThrow(/checksum/);
+
+    expect(() =>
+      parseProjectContextualHandoff({
+        ...SITE_HANDOFF,
+        artifact: {
+          ...SITE_HANDOFF.artifact,
+          items: [{ ...SITE_HANDOFF.artifact.items[0], version: 0 }],
+        },
+      }),
+    ).toThrow(/version/);
+  });
+
   it('fails closed when the RPC does not return an array', async () => {
     rpc.mockResolvedValue({ data: null, error: null });
     const query = useProjectContextualHandoffs(
@@ -201,83 +262,28 @@ describe('project contextual handoff read model', () => {
 });
 
 describe('Site Request coherent action detail', () => {
-  it('keeps only exact current-version delivered identities', async () => {
-    const itemsEq = vi.fn().mockResolvedValue({
-      data: [
-        {
-          id: 'item-1',
-          request_id: 'request-1',
-          status: 'delivered',
-          current_version_id: 'version-1',
-          current_version_number: 2,
-          sort_order: 0,
-        },
-      ],
+  it('uses one sanitized RPC and keeps only its exact coherent projection', async () => {
+    rpc.mockResolvedValue({
+      data: {
+        projectId: 'project-1',
+        requestId: 'request-1',
+        coherent: true,
+        items: [
+          {
+            itemId: 'item-1',
+            title: 'Window measure',
+            kitCode: 'K-01',
+            version: 2,
+            roomId: null,
+            status: 'delivered',
+            deliverableId: 'delivery-1',
+            privatePayload: 'strip me',
+          },
+        ],
+        rooms: [{ id: 'room-1', name: 'Living room', secret: 'strip me' }],
+        rawRequest: 'must not survive',
+      },
       error: null,
-    });
-    const versionsIn = vi.fn().mockResolvedValue({
-      data: [
-        {
-          id: 'version-1',
-          item_id: 'item-1',
-          title: 'Window measure',
-          kit_code: 'K-01',
-          version_number: 2,
-          room_id: null,
-        },
-      ],
-      error: null,
-    });
-    const deliveriesOrder = vi.fn().mockResolvedValue({
-      data: [
-        {
-          id: 'delivery-1',
-          request_id: 'request-1',
-          item_id: 'item-1',
-          item_version_id: 'version-1',
-          status: 'delivered',
-          attempt_number: 3,
-          delivered_at: '2026-08-11T12:00:00.000Z',
-        },
-        {
-          id: 'wrong-version-delivery',
-          request_id: 'request-1',
-          item_id: 'item-1',
-          item_version_id: 'version-old',
-          status: 'delivered',
-          attempt_number: 9,
-          delivered_at: '2026-08-11T13:00:00.000Z',
-        },
-      ],
-      error: null,
-    });
-    from.mockImplementation((table: string) => {
-      if (table === 'site_requests') {
-        return {
-          select: () => ({
-            eq: () => ({
-              maybeSingle: vi.fn().mockResolvedValue({
-                data: { id: 'request-1', project_id: 'project-1' },
-                error: null,
-              }),
-            }),
-          }),
-        };
-      }
-      if (table === 'site_request_items') {
-        return { select: () => ({ eq: itemsEq }) };
-      }
-      if (table === 'site_request_item_versions') {
-        return { select: () => ({ in: versionsIn }) };
-      }
-      if (table === 'site_deliverables') {
-        return {
-          select: () => ({
-            eq: () => ({ eq: () => ({ order: deliveriesOrder }) }),
-          }),
-        };
-      }
-      throw new Error(`Unexpected table ${table}`);
     });
 
     const query = useSiteRequestActionDetail(
@@ -289,6 +295,14 @@ describe('Site Request coherent action detail', () => {
       'project-1',
       'request-1',
     ]);
+    expect(query).toEqual(
+      expect.objectContaining({
+        enabled: true,
+        refetchOnWindowFocus: true,
+        refetchInterval: 30_000,
+        refetchIntervalInBackground: false,
+      }),
+    );
     await expect(query.queryFn()).resolves.toEqual({
       projectId: 'project-1',
       requestId: 'request-1',
@@ -304,94 +318,25 @@ describe('Site Request coherent action detail', () => {
           deliverableId: 'delivery-1',
         },
       ],
+      rooms: [{ id: 'room-1', name: 'Living room' }],
     });
+    expect(rpc).toHaveBeenCalledWith('get_site_request_action_detail', {
+      p_project_id: 'project-1',
+      p_request_id: 'request-1',
+    });
+    expect(from).not.toHaveBeenCalled();
   });
 
-  it('marks mismatched current-version evidence incoherent instead of guessing', async () => {
-    from.mockImplementation((table: string) => {
-      if (table === 'site_requests') {
-        return {
-          select: () => ({
-            eq: () => ({
-              maybeSingle: vi.fn().mockResolvedValue({
-                data: { id: 'request-1', project_id: 'project-1' },
-                error: null,
-              }),
-            }),
-          }),
-        };
-      }
-      if (table === 'site_request_items') {
-        return {
-          select: () => ({
-            eq: vi.fn().mockResolvedValue({
-              data: [
-                {
-                  id: 'item-1',
-                  request_id: 'request-1',
-                  status: 'delivered',
-                  current_version_id: 'version-1',
-                  current_version_number: 2,
-                  sort_order: 0,
-                },
-              ],
-              error: null,
-            }),
-          }),
-        };
-      }
-      if (table === 'site_request_item_versions') {
-        return {
-          select: () => ({
-            in: vi.fn().mockResolvedValue({
-              data: [
-                {
-                  id: 'version-1',
-                  item_id: 'different-item',
-                  title: 'Wrong identity',
-                  kit_code: 'K-01',
-                  version_number: 2,
-                  room_id: 'room-1',
-                },
-              ],
-              error: null,
-            }),
-          }),
-        };
-      }
-      if (table === 'site_deliverables') {
-        return {
-          select: () => ({
-            eq: () => ({
-              eq: () => ({
-                order: vi.fn().mockResolvedValue({ data: [], error: null }),
-              }),
-            }),
-          }),
-        };
-      }
-      throw new Error(`Unexpected table ${table}`);
-    });
-
-    const query = useSiteRequestActionDetail(
-      'project-1',
-      'request-1',
-    ) as unknown as QueryConfig;
-    await expect(query.queryFn()).resolves.toEqual(
-      expect.objectContaining({ coherent: false, items: [] }),
-    );
-  });
-
-  it('fails closed when the request does not belong to the exact project', async () => {
-    from.mockReturnValue({
-      select: () => ({
-        eq: () => ({
-          maybeSingle: vi.fn().mockResolvedValue({
-            data: { id: 'request-1', project_id: 'different-project' },
-            error: null,
-          }),
-        }),
-      }),
+  it('preserves the existence-safe incoherent response without raw reads', async () => {
+    rpc.mockResolvedValue({
+      data: {
+        projectId: 'project-1',
+        requestId: 'request-1',
+        coherent: false,
+        items: [],
+        rooms: [],
+      },
+      error: null,
     });
 
     const query = useSiteRequestActionDetail(
@@ -403,9 +348,67 @@ describe('Site Request coherent action detail', () => {
       requestId: 'request-1',
       coherent: false,
       items: [],
+      rooms: [],
     });
-    expect(from).toHaveBeenCalledTimes(1);
-    expect(from).toHaveBeenCalledWith('site_requests');
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it('rejects incoherent identities, evidence, and room choices', async () => {
+    rpc.mockResolvedValue({
+      data: {
+        projectId: 'different-project',
+        requestId: 'request-1',
+        coherent: true,
+        items: [],
+        rooms: [],
+      },
+      error: null,
+    });
+    const query = useSiteRequestActionDetail(
+      'project-1',
+      'request-1',
+    ) as unknown as QueryConfig;
+    await expect(query.queryFn()).rejects.toThrow(/identity/);
+
+    rpc.mockResolvedValue({
+      data: {
+        projectId: 'project-1',
+        requestId: 'request-1',
+        coherent: true,
+        items: [
+          {
+            itemId: 'item-1',
+            title: 'Window measure',
+            kitCode: 'K-01',
+            version: 0,
+            roomId: 'foreign-room',
+            status: 'delivered',
+            deliverableId: null,
+          },
+        ],
+        rooms: [{ id: 'room-1', name: 'Living room' }],
+      },
+      error: null,
+    });
+    await expect(query.queryFn()).rejects.toThrow(/item/);
+  });
+
+  it('is fully disabled with no RPC or table read while closed', async () => {
+    const query = useSiteRequestActionDetail(
+      'project-1',
+      undefined,
+    ) as unknown as QueryConfig;
+
+    expect(query.enabled).toBe(false);
+    await expect(query.queryFn()).resolves.toEqual({
+      projectId: 'project-1',
+      requestId: '',
+      coherent: false,
+      items: [],
+      rooms: [],
+    });
+    expect(rpc).not.toHaveBeenCalled();
+    expect(from).not.toHaveBeenCalled();
   });
 });
 

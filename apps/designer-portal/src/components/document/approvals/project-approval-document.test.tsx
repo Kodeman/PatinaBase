@@ -19,11 +19,12 @@ const supersedeApproval = jest.fn();
 let authority: Record<string, unknown> | null = null;
 let approvals: ProjectApprovalReview[] = [];
 let candidates: ProjectApprovalArtifactCandidate[] = [];
+let approvalsLoading = false;
 
 jest.mock('@patina/supabase', () => ({
   useProjectApprovals: () => ({
     data: approvals,
-    isLoading: false,
+    isLoading: approvalsLoading,
     isError: false,
   }),
   useProjectApprovalArtifactCandidates: () => ({
@@ -125,6 +126,7 @@ const renderDocument = () =>
 beforeEach(() => {
   authority = null;
   approvals = [];
+  approvalsLoading = false;
   candidates = [candidate];
   setAuthority.mockReset().mockResolvedValue({});
   createApproval.mockReset().mockResolvedValue({});
@@ -258,6 +260,108 @@ describe('ProjectApprovalDocument authority and composer', () => {
 });
 
 describe('ProjectApprovalDocument lifecycle and accessibility', () => {
+  it('retains exact approval navigation until sanitized rows finish loading', () => {
+    authority = {
+      decisionLeadId: 'client-1',
+      requiredCoapproverId: null,
+      revision: 4,
+    };
+    approvalsLoading = true;
+    const scrollIntoView = jest.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    const { rerender } = renderDocument();
+
+    window.dispatchEvent(
+      new CustomEvent(FOCUS_PROJECT_APPROVAL_EVENT, {
+        detail: { decisionId: 'decision-1' },
+      }),
+    );
+
+    approvalsLoading = false;
+    approvals = [baseReview];
+    rerender(
+      <ProjectApprovalDocument
+        projectId="project-1"
+        clientProfileId="client-1"
+        phases={[
+          {
+            id: 'phase-1',
+            name: 'Design development',
+            status: 'in_progress',
+          },
+        ]}
+      />,
+    );
+
+    expect(
+      document.getElementById('project-approval-decision-1'),
+    ).toHaveFocus();
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears a requested ID when the loaded row is stale and does not revive it', () => {
+    authority = {
+      decisionLeadId: 'client-1',
+      requiredCoapproverId: null,
+      revision: 4,
+    };
+    approvalsLoading = true;
+    const { rerender } = renderDocument();
+
+    window.dispatchEvent(
+      new CustomEvent(FOCUS_PROJECT_APPROVAL_EVENT, {
+        detail: { decisionId: 'stale-decision' },
+      }),
+    );
+
+    approvalsLoading = false;
+    approvals = [
+      {
+        ...baseReview,
+        decisionId: 'stale-decision',
+        disposition: 'superseded',
+        successorDecisionId: 'decision-1',
+      },
+    ];
+    rerender(
+      <ProjectApprovalDocument
+        projectId="project-1"
+        clientProfileId="client-1"
+        phases={[
+          {
+            id: 'phase-1',
+            name: 'Design development',
+            status: 'in_progress',
+          },
+        ]}
+      />,
+    );
+    expect(
+      document.getElementById('project-approval-stale-decision'),
+    ).not.toHaveFocus();
+
+    approvals = [{ ...baseReview, decisionId: 'stale-decision' }];
+    rerender(
+      <ProjectApprovalDocument
+        projectId="project-1"
+        clientProfileId="client-1"
+        phases={[
+          {
+            id: 'phase-1',
+            name: 'Design development',
+            status: 'in_progress',
+          },
+        ]}
+      />,
+    );
+    expect(
+      document.getElementById('project-approval-stale-decision'),
+    ).not.toHaveFocus();
+  });
+
   it('focuses the exact canonical approval row from a contextual handoff', () => {
     authority = {
       decisionLeadId: 'client-1',
@@ -286,7 +390,7 @@ describe('ProjectApprovalDocument lifecycle and accessibility', () => {
     });
   });
 
-  it('does not focus a stale or superseded approval row', () => {
+  it('does not focus a stale, superseded, or terminal approval row', () => {
     authority = {
       decisionLeadId: 'client-1',
       requiredCoapproverId: null,
@@ -298,6 +402,12 @@ describe('ProjectApprovalDocument lifecycle and accessibility', () => {
         decisionId: 'stale-decision',
         disposition: 'superseded',
         successorDecisionId: 'decision-1',
+      },
+      {
+        ...baseReview,
+        decisionId: 'terminal-decision',
+        lifecycleStatus: 'responded',
+        outcome: 'approved',
       },
     ];
     renderDocument();
@@ -311,6 +421,31 @@ describe('ProjectApprovalDocument lifecycle and accessibility', () => {
     expect(
       document.getElementById('project-approval-stale-decision'),
     ).not.toHaveFocus();
+
+    window.dispatchEvent(
+      new CustomEvent(FOCUS_PROJECT_APPROVAL_EVENT, {
+        detail: { decisionId: 'terminal-decision' },
+      }),
+    );
+    expect(
+      document.getElementById('project-approval-terminal-decision'),
+    ).not.toHaveFocus();
+  });
+
+  it('removes the exact navigation listener on unmount', () => {
+    const add = jest.spyOn(window, 'addEventListener');
+    const remove = jest.spyOn(window, 'removeEventListener');
+    const { unmount } = renderDocument();
+    const listener = add.mock.calls.find(
+      ([eventName]) => eventName === FOCUS_PROJECT_APPROVAL_EVENT,
+    )?.[1];
+
+    expect(listener).toBeDefined();
+    unmount();
+    expect(remove).toHaveBeenCalledWith(FOCUS_PROJECT_APPROVAL_EVENT, listener);
+
+    add.mockRestore();
+    remove.mockRestore();
   });
 
   it('keeps publish review-count gated and offers only valid active-leaf actions', async () => {

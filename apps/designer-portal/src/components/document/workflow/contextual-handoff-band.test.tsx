@@ -11,6 +11,13 @@ const nudge = jest.fn();
 const approve = jest.fn();
 const redo = jest.fn();
 const close = jest.fn();
+const mockUseSiteRequestActionDetail = jest.fn(
+  (_projectId: string, _requestId: string | undefined) => ({
+    data: detail,
+    isLoading: false,
+    isError: false,
+  }),
+);
 
 let handoffs: ProjectContextualHandoff[] = [];
 let detail: {
@@ -26,6 +33,7 @@ let detail: {
     status: string;
     deliverableId: string | null;
   }>;
+  rooms: Array<{ id: string; name: string }>;
 } | null = null;
 
 jest.mock('@patina/supabase', () => ({
@@ -34,11 +42,10 @@ jest.mock('@patina/supabase', () => ({
     isLoading: false,
     isError: false,
   }),
-  useSiteRequestActionDetail: () => ({
-    data: detail,
-    isLoading: false,
-    isError: false,
-  }),
+  useSiteRequestActionDetail: (
+    projectId: string,
+    requestId: string | undefined,
+  ) => mockUseSiteRequestActionDetail(projectId, requestId),
   useNudgeSiteRequest: () => ({ mutateAsync: nudge, isPending: false }),
   useApproveSiteRequestItem: () => ({
     mutateAsync: approve,
@@ -117,14 +124,14 @@ function siteHandoff(
     },
     expectedResponse:
       sourceState === 'awaiting_consent'
-        ? 'await_site_party_consent'
+        ? 'provide_sms_consent'
         : sourceState === 'delivered'
           ? 'review_delivered_items'
           : sourceState === 'completed'
             ? 'close_completed_request'
             : 'deliver_current_item_versions',
     dueAt: '2026-08-10T12:00:00.000Z',
-    isOverdue: true,
+    isOverdue: sourceState !== 'awaiting_consent',
     escalation: { nudgeSent: false, dueReminderSent: true },
     artifact: {
       kind: 'site_request_item_set',
@@ -156,6 +163,7 @@ function siteHandoff(
 beforeEach(() => {
   handoffs = [];
   detail = null;
+  mockUseSiteRequestActionDetail.mockClear();
   nudge.mockReset().mockResolvedValue({});
   approve.mockReset().mockResolvedValue({});
   redo.mockReset().mockResolvedValue({});
@@ -163,6 +171,94 @@ beforeEach(() => {
 });
 
 describe('ContextualHandoffBand', () => {
+  it('uses the authoritative 00433 labels for core, FF&E, and construction stages', () => {
+    handoffs = [
+      {
+        ...approvalHandoff,
+        sourceId: 'decision-core',
+        canonicalStageKey: 'scope_engagement',
+        workflowTrack: 'core',
+      },
+      {
+        ...approvalHandoff,
+        sourceId: 'decision-ffe',
+        canonicalStageKey: 'bidding_permitting_procurement',
+        workflowTrack: 'ffe',
+      },
+      {
+        ...approvalHandoff,
+        sourceId: 'decision-construction',
+        canonicalStageKey: 'contract_administration',
+        workflowTrack: 'construction',
+      },
+    ];
+    render(<ContextualHandoffBand projectId="project-1" />);
+
+    expect(
+      screen.getByText('03 · Scope & engagement · Core · Exact phase'),
+    ).toBeVisible();
+    expect(
+      screen.getByText(
+        '08 · Bidding, permitting & procurement · FF&E · Exact phase',
+      ),
+    ).toBeVisible();
+    expect(
+      screen.getByText(
+        '09 · Contract administration · Construction · Exact phase',
+      ),
+    ).toBeVisible();
+  });
+
+  it('enables exact Site Request detail only while an eligible row is open', () => {
+    handoffs = [siteHandoff('delivered')];
+    render(<ContextualHandoffBand projectId="project-1" />);
+
+    expect(mockUseSiteRequestActionDetail).toHaveBeenLastCalledWith(
+      'project-1',
+      undefined,
+    );
+
+    const review = screen.getByRole('button', {
+      name: 'Review Site Request',
+    });
+    expect(review).toHaveAttribute(
+      'aria-controls',
+      'site-request-detail-request-delivered',
+    );
+    fireEvent.click(review);
+    expect(mockUseSiteRequestActionDetail).toHaveBeenLastCalledWith(
+      'project-1',
+      'request-delivered',
+    );
+    expect(
+      document.getElementById('site-request-detail-request-delivered'),
+    ).toBeInTheDocument();
+
+    fireEvent.click(review);
+    expect(mockUseSiteRequestActionDetail).toHaveBeenLastCalledWith(
+      'project-1',
+      undefined,
+    );
+  });
+
+  it('never enables detail reads for completed or awaiting-consent rows', async () => {
+    handoffs = [siteHandoff('completed'), siteHandoff('awaiting_consent')];
+    render(<ContextualHandoffBand projectId="project-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close Site Request' }));
+    fireEvent.click(screen.getByRole('button', { name: 'View Site Request' }));
+
+    await waitFor(() => expect(close).toHaveBeenCalledTimes(1));
+
+    expect(mockUseSiteRequestActionDetail).toHaveBeenCalled();
+    expect(
+      mockUseSiteRequestActionDetail.mock.calls.every(
+        ([projectId, requestId]) =>
+          projectId === 'project-1' && requestId === undefined,
+      ),
+    ).toBe(true);
+  });
+
   it('renders semantic responsibility, stage, artifact, escalation, and neutral due context', async () => {
     handoffs = [approvalHandoff, siteHandoff('delivered')];
     const focused = jest.fn();
@@ -236,6 +332,7 @@ describe('ContextualHandoffBand', () => {
           deliverableId: 'delivery-1',
         },
       ],
+      rooms: [{ id: 'room-1', name: 'Living room' }],
     };
     render(<ContextualHandoffBand projectId="project-1" />);
 
@@ -245,13 +342,20 @@ describe('ContextualHandoffBand', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Approve Window measure' }),
     );
+    expect(approve).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('Room for Window measure'), {
+      target: { value: 'room-1' },
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Approve Window measure' }),
+    );
     await waitFor(() =>
       expect(approve).toHaveBeenCalledWith({
         projectId: 'project-1',
         requestId: 'request-delivered',
         itemId: 'item-1',
         deliverableId: 'delivery-1',
-        roomId: null,
+        roomId: 'room-1',
       }),
     );
 
@@ -286,6 +390,7 @@ describe('ContextualHandoffBand', () => {
       requestId: 'request-sent',
       coherent: true,
       items: [],
+      rooms: [],
     };
     render(<ContextualHandoffBand projectId="project-1" />);
 
@@ -316,6 +421,7 @@ describe('ContextualHandoffBand', () => {
       requestId: 'request-delivered',
       coherent: false,
       items: [],
+      rooms: [],
     };
     render(<ContextualHandoffBand projectId="project-1" />);
     fireEvent.click(

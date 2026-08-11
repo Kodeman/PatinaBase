@@ -365,6 +365,7 @@ export type {
   SiteRequestContextualHandoff,
   ProjectContextualHandoff,
   SiteRequestActionItem,
+  SiteRequestRoomChoice,
   SiteRequestActionDetail,
   ProjectContextualHandoffInvalidationScope,
 } from './use-project-contextual-handoffs';

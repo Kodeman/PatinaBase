@@ -19,15 +19,15 @@ import { focusProjectApproval } from '../approvals/project-approval-navigation';
 const STAGE_LABELS: Record<string, string> = {
   inquiry_qualification: '01 · Inquiry & qualification',
   discovery_programming: '02 · Discovery & programming',
-  proposal_agreement: '03 · Proposal & agreement',
-  onboarding_existing_conditions: '04 · Onboarding & existing conditions',
+  scope_engagement: '03 · Scope & engagement',
+  kickoff_existing_conditions: '04 · Kickoff & existing conditions',
   concept_schematic: '05 · Concept / schematic',
   design_development: '06 · Design development',
   documentation_authorization: '07 · Documentation & authorization',
   bidding_permitting_procurement: '08 · Bidding, permitting & procurement',
   contract_administration: '09 · Contract administration',
   delivery_installation: '10 · Delivery & installation',
-  closeout_handoff: '11 · Closeout & handoff',
+  closeout_post_occupancy: '11 · Closeout & post-occupancy',
 };
 
 function sentence(value: string): string {
@@ -47,7 +47,11 @@ function stageLabel(handoff: ProjectContextualHandoff): string {
       sentence(handoff.canonicalStageKey))
     : 'Project phase';
   const track = handoff.workflowTrack
-    ? ` · ${sentence(handoff.workflowTrack)}`
+    ? ` · ${
+        handoff.workflowTrack === 'ffe'
+          ? 'FF&E'
+          : sentence(handoff.workflowTrack)
+      }`
     : '';
   return `${stage}${track}`;
 }
@@ -170,21 +174,25 @@ function SiteRequestHandoffRow({
   const needsDetail = ['sent', 'in_progress', 'delivered'].includes(
     handoff.sourceState,
   );
+  const [open, setOpen] = useState(false);
   const detailQuery = useSiteRequestActionDetail(
     handoff.projectId,
-    needsDetail ? handoff.sourceId : undefined,
+    open && needsDetail ? handoff.sourceId : undefined,
   );
   const nudge = useNudgeSiteRequest();
   const approve = useApproveSiteRequestItem();
   const redo = useRequestSiteRequestRedo();
   const close = useCloseSiteRequest();
-  const [open, setOpen] = useState(false);
   const [nudgeNote, setNudgeNote] = useState('');
   const [redoNotes, setRedoNotes] = useState<Record<string, string>>({});
+  const [approvalRooms, setApprovalRooms] = useState<Record<string, string>>(
+    {},
+  );
   const [feedback, setFeedback] = useState<{
     kind: 'status' | 'error';
     text: string;
   } | null>(null);
+  const detailRegionId = `site-request-detail-${handoff.sourceId}`;
 
   const run = async (operation: () => Promise<unknown>, success: string) => {
     setFeedback(null);
@@ -231,6 +239,9 @@ function SiteRequestHandoffRow({
           regionKey="contextual-handoffs"
           variant="primary"
           aria-expanded={handoff.sourceState === 'completed' ? undefined : open}
+          aria-controls={
+            handoff.sourceState === 'completed' ? undefined : detailRegionId
+          }
           loading={close.isPending}
           loadingLabel="Closing…"
           onClick={onPrimaryAction}
@@ -240,7 +251,10 @@ function SiteRequestHandoffRow({
       </article>
 
       {open && handoff.sourceState !== 'awaiting_consent' && (
-        <div className="mt-3 min-w-0 border-l-2 border-[var(--color-pearl)] pl-3">
+        <div
+          id={detailRegionId}
+          className="mt-3 min-w-0 border-l-2 border-[var(--color-pearl)] pl-3"
+        >
           {detailQuery.isLoading && (
             <p role="status" className="text-[12px] text-[var(--text-muted)]">
               Reading exact Site Request evidence…
@@ -266,102 +280,152 @@ function SiteRequestHandoffRow({
 
           {detailQuery.data?.coherent && (
             <div className="grid min-w-0 grid-cols-1 gap-4">
-              {detailQuery.data.items.map((item) => (
-                <div
-                  key={item.itemId}
-                  className="min-w-0 border-b border-[var(--border-subtle)] pb-3 last:border-b-0"
-                >
-                  <p className="break-words text-[13px] font-medium text-[var(--color-charcoal)]">
-                    {item.title}
-                  </p>
-                  <p className="mt-1 break-words font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                    {item.kitCode} · v{item.version} · {sentence(item.status)}
-                  </p>
-                  {item.status === 'delivered' && item.deliverableId && (
-                    <>
-                      <DocumentActionRow
-                        surfaceKey="open-document"
-                        regionKey={`site-request-${handoff.sourceId}-${item.itemId}`}
-                        className="mt-2 flex-wrap"
-                        aria-label={`${item.title} review actions`}
-                      >
+              {detailQuery.data.items.map((item) => {
+                const approvalRoomId =
+                  item.roomId ?? approvalRooms[item.itemId] ?? '';
+                return (
+                  <div
+                    key={item.itemId}
+                    className="min-w-0 border-b border-[var(--border-subtle)] pb-3 last:border-b-0"
+                  >
+                    <p className="break-words text-[13px] font-medium text-[var(--color-charcoal)]">
+                      {item.title}
+                    </p>
+                    <p className="mt-1 break-words font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                      {item.kitCode} · v{item.version} · {sentence(item.status)}
+                    </p>
+                    {item.status === 'delivered' && item.deliverableId && (
+                      <>
+                        {item.roomId === null && (
+                          <div className="mt-3 min-w-0">
+                            <label
+                              htmlFor={`site-room-${item.itemId}`}
+                              className="block text-[12px] text-[var(--color-charcoal)]"
+                            >
+                              Room for {item.title}
+                            </label>
+                            <select
+                              id={`site-room-${item.itemId}`}
+                              required
+                              value={approvalRooms[item.itemId] ?? ''}
+                              onChange={(event) =>
+                                setApprovalRooms((current) => ({
+                                  ...current,
+                                  [item.itemId]: event.target.value,
+                                }))
+                              }
+                              className="mt-1 min-h-11 w-full min-w-0 max-w-full rounded-[3px] border border-[var(--border-subtle)] bg-transparent px-3 py-2 text-[14px] text-[var(--color-charcoal)] outline-none focus-visible:border-[var(--color-clay)] focus-visible:ring-2 focus-visible:ring-[var(--color-clay)]/30"
+                            >
+                              <option value="">Select a project room</option>
+                              {detailQuery.data.rooms.map((room) => (
+                                <option key={room.id} value={room.id}>
+                                  {room.name}
+                                </option>
+                              ))}
+                            </select>
+                            {detailQuery.data.rooms.length === 0 && (
+                              <p
+                                role="alert"
+                                className="mt-1 text-[12px] text-[var(--color-terracotta)]"
+                              >
+                                No same-project room is available. Approval is
+                                disabled.
+                              </p>
+                            )}
+                          </div>
+                        )}
+                        <DocumentActionRow
+                          surfaceKey="open-document"
+                          regionKey={`site-request-${handoff.sourceId}-${item.itemId}`}
+                          className="mt-2 flex-wrap"
+                          aria-label={`${item.title} review actions`}
+                        >
+                          <DocumentAction
+                            actionKey="approve-site-request-item"
+                            variant="primary"
+                            loading={approve.isPending}
+                            loadingLabel="Approving…"
+                            disabled={!approvalRoomId}
+                            aria-label={`Approve ${item.title}`}
+                            onClick={() => {
+                              if (!approvalRoomId) {
+                                setFeedback({
+                                  kind: 'error',
+                                  text: `Choose a project room before approving ${item.title}.`,
+                                });
+                                return;
+                              }
+                              void run(
+                                () =>
+                                  approve.mutateAsync({
+                                    projectId: handoff.projectId,
+                                    requestId: handoff.sourceId,
+                                    itemId: item.itemId,
+                                    deliverableId: item.deliverableId as string,
+                                    roomId: approvalRoomId,
+                                  }),
+                                `${item.title} approved.`,
+                              );
+                            }}
+                          >
+                            Approve
+                          </DocumentAction>
+                        </DocumentActionRow>
+                        <label
+                          htmlFor={`site-redo-${item.itemId}`}
+                          className="mt-3 block text-[12px] text-[var(--color-charcoal)]"
+                        >
+                          Redo note for {item.title}
+                        </label>
+                        <textarea
+                          id={`site-redo-${item.itemId}`}
+                          required
+                          maxLength={4000}
+                          value={redoNotes[item.itemId] ?? ''}
+                          onChange={(event) =>
+                            setRedoNotes((current) => ({
+                              ...current,
+                              [item.itemId]: event.target.value,
+                            }))
+                          }
+                          className="mt-1 min-h-[88px] w-full min-w-0 max-w-full resize-y rounded-[3px] border border-[var(--border-subtle)] bg-transparent px-3 py-2 text-[14px] text-[var(--color-charcoal)] outline-none focus-visible:border-[var(--color-clay)] focus-visible:ring-2 focus-visible:ring-[var(--color-clay)]/30"
+                        />
                         <DocumentAction
-                          actionKey="approve-site-request-item"
-                          variant="primary"
-                          loading={approve.isPending}
-                          loadingLabel="Approving…"
-                          aria-label={`Approve ${item.title}`}
-                          onClick={() =>
+                          actionKey="redo-site-request-item"
+                          surfaceKey="open-document"
+                          regionKey={`site-request-${handoff.sourceId}-${item.itemId}`}
+                          variant="danger"
+                          loading={redo.isPending}
+                          loadingLabel="Requesting…"
+                          aria-label={`Request redo for ${item.title}`}
+                          onClick={() => {
+                            const note = redoNotes[item.itemId] ?? '';
+                            if (!note.trim()) {
+                              setFeedback({
+                                kind: 'error',
+                                text: 'A redo note is required.',
+                              });
+                              return;
+                            }
                             void run(
                               () =>
-                                approve.mutateAsync({
+                                redo.mutateAsync({
                                   projectId: handoff.projectId,
                                   requestId: handoff.sourceId,
                                   itemId: item.itemId,
-                                  deliverableId: item.deliverableId as string,
-                                  roomId: item.roomId,
+                                  note,
                                 }),
-                              `${item.title} approved.`,
-                            )
-                          }
+                              `Redo requested for ${item.title}.`,
+                            );
+                          }}
                         >
-                          Approve
+                          Request redo
                         </DocumentAction>
-                      </DocumentActionRow>
-                      <label
-                        htmlFor={`site-redo-${item.itemId}`}
-                        className="mt-3 block text-[12px] text-[var(--color-charcoal)]"
-                      >
-                        Redo note for {item.title}
-                      </label>
-                      <textarea
-                        id={`site-redo-${item.itemId}`}
-                        required
-                        maxLength={4000}
-                        value={redoNotes[item.itemId] ?? ''}
-                        onChange={(event) =>
-                          setRedoNotes((current) => ({
-                            ...current,
-                            [item.itemId]: event.target.value,
-                          }))
-                        }
-                        className="mt-1 min-h-[88px] w-full min-w-0 max-w-full resize-y rounded-[3px] border border-[var(--border-subtle)] bg-transparent px-3 py-2 text-[14px] text-[var(--color-charcoal)] outline-none focus-visible:border-[var(--color-clay)] focus-visible:ring-2 focus-visible:ring-[var(--color-clay)]/30"
-                      />
-                      <DocumentAction
-                        actionKey="redo-site-request-item"
-                        surfaceKey="open-document"
-                        regionKey={`site-request-${handoff.sourceId}-${item.itemId}`}
-                        variant="danger"
-                        loading={redo.isPending}
-                        loadingLabel="Requesting…"
-                        aria-label={`Request redo for ${item.title}`}
-                        onClick={() => {
-                          const note = redoNotes[item.itemId] ?? '';
-                          if (!note.trim()) {
-                            setFeedback({
-                              kind: 'error',
-                              text: 'A redo note is required.',
-                            });
-                            return;
-                          }
-                          void run(
-                            () =>
-                              redo.mutateAsync({
-                                projectId: handoff.projectId,
-                                requestId: handoff.sourceId,
-                                itemId: item.itemId,
-                                note,
-                              }),
-                            `Redo requested for ${item.title}.`,
-                          );
-                        }}
-                      >
-                        Request redo
-                      </DocumentAction>
-                    </>
-                  )}
-                </div>
-              ))}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
 
               {['sent', 'in_progress', 'delivered'].includes(
                 handoff.sourceState,
@@ -417,7 +481,11 @@ function SiteRequestHandoffRow({
       )}
 
       {open && handoff.sourceState === 'awaiting_consent' && (
-        <p role="status" className="mt-2 text-[12px] text-[var(--text-muted)]">
+        <p
+          id={detailRegionId}
+          role="status"
+          className="mt-2 text-[12px] text-[var(--text-muted)]"
+        >
           Waiting for the site party’s consent. This handoff is informational;
           no studio lifecycle action is available.
         </p>

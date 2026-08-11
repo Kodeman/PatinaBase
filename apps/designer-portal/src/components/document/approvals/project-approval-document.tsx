@@ -1,6 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from 'react';
 import {
   useCreateProjectApproval,
   useProjectApprovalArtifactCandidates,
@@ -140,29 +147,58 @@ export function ProjectApprovalDocument({
     text: string;
   } | null>(null);
 
+  const pendingFocusDecisionId = useRef<string | null>(null);
+  const approvalsLoading = useRef(approvalsQuery.isLoading);
+  approvalsLoading.current = approvalsQuery.isLoading;
+
+  const settlePendingApprovalFocus = useCallback(() => {
+    const decisionId = pendingFocusDecisionId.current;
+    if (!decisionId || approvalsLoading.current) return;
+
+    pendingFocusDecisionId.current = null;
+    const target = document.getElementById(`project-approval-${decisionId}`);
+    if (!target || target.dataset.projectApprovalCurrentLeaf !== 'true') return;
+
+    const reduceMotion =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    target.scrollIntoView?.({
+      behavior: reduceMotion ? 'auto' : 'smooth',
+      block: 'center',
+    });
+    target.focus({ preventScroll: true });
+  }, []);
+
   useEffect(() => {
     const onFocusApproval = (event: Event) => {
       const decisionId = (
         event as CustomEvent<FocusProjectApprovalDetail | undefined>
       ).detail?.decisionId;
       if (!decisionId) return;
-      const target = document.getElementById(`project-approval-${decisionId}`);
-      if (!target || target.dataset.projectApprovalCurrentLeaf !== 'true')
-        return;
-      target.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
-      target.focus({ preventScroll: true });
+      pendingFocusDecisionId.current = decisionId;
+      settlePendingApprovalFocus();
     };
 
     window.addEventListener(
       FOCUS_PROJECT_APPROVAL_EVENT,
       onFocusApproval as EventListener,
     );
-    return () =>
+    return () => {
+      pendingFocusDecisionId.current = null;
       window.removeEventListener(
         FOCUS_PROJECT_APPROVAL_EVENT,
         onFocusApproval as EventListener,
       );
-  }, []);
+    };
+  }, [settlePendingApprovalFocus]);
+
+  useEffect(() => {
+    settlePendingApprovalFocus();
+  }, [
+    approvalsQuery.data,
+    approvalsQuery.isLoading,
+    settlePendingApprovalFocus,
+  ]);
 
   const phaseById = useMemo(
     () => new Map(phases.map((phase) => [phase.id, phase])),

@@ -65,6 +65,12 @@ interface ContextualHandoffBase {
 
 export interface ProjectApprovalContextualHandoff extends ContextualHandoffBase {
   sourceKind: 'project_approval';
+  sourceState:
+    | 'review_required'
+    | 'ready_to_publish'
+    | 'response_required'
+    | 'changes_requested'
+    | 'needs_discussion';
   escalation: null;
   artifact: ProjectApprovalHandoffArtifact;
 }
@@ -94,8 +100,13 @@ export interface SiteRequestActionItem {
   kitCode: string;
   version: number;
   roomId: string | null;
-  status: string;
+  status: 'open' | 'delivered' | 'redo_requested' | 'approved';
   deliverableId: string | null;
+}
+
+export interface SiteRequestRoomChoice {
+  id: string;
+  name: string;
 }
 
 export interface SiteRequestActionDetail {
@@ -103,6 +114,7 @@ export interface SiteRequestActionDetail {
   requestId: string;
   coherent: boolean;
   items: SiteRequestActionItem[];
+  rooms: SiteRequestRoomChoice[];
 }
 
 export const projectContextualHandoffKeys = {
@@ -175,6 +187,18 @@ function booleanValue(
   return value;
 }
 
+function timestampValue(
+  row: Record<string, unknown>,
+  key: string,
+  label: string,
+): string {
+  const value = stringValue(row, key, label);
+  if (Number.isNaN(Date.parse(value))) {
+    throw new Error(`${label} has invalid ${key}`);
+  }
+  return value;
+}
+
 function parseActor(value: unknown, field: string): ContextualHandoffActor {
   const actor = recordValue(value, `Contextual handoff ${field}`);
   const kind = stringValue(actor, 'kind', `Contextual handoff ${field}`);
@@ -199,28 +223,46 @@ function parseResponsibility(value: unknown): ContextualHandoffResponsibility {
 
 function parseApprovalArtifact(value: unknown): ProjectApprovalHandoffArtifact {
   const row = recordValue(value, 'Contextual handoff approval artifact');
+  const version = numberValue(
+    row,
+    'version',
+    'Contextual handoff approval artifact',
+  );
+  if (!Number.isInteger(version) || version <= 0) {
+    throw new Error('Contextual handoff approval artifact has invalid version');
+  }
+  const checksum = stringValue(
+    row,
+    'checksum',
+    'Contextual handoff approval artifact',
+  );
+  if (!/^[0-9a-f]{64}$/i.test(checksum)) {
+    throw new Error(
+      'Contextual handoff approval artifact has invalid checksum',
+    );
+  }
   return {
     kind: stringValue(row, 'kind', 'Contextual handoff approval artifact'),
-    version: numberValue(
-      row,
-      'version',
-      'Contextual handoff approval artifact',
-    ),
-    checksum: stringValue(
-      row,
-      'checksum',
-      'Contextual handoff approval artifact',
-    ),
+    version,
+    checksum,
     title: stringValue(row, 'title', 'Contextual handoff approval artifact'),
   };
 }
 
 function parseSiteArtifactItem(value: unknown): SiteRequestHandoffArtifactItem {
   const row = recordValue(value, 'Contextual handoff artifact item');
+  const version = numberValue(
+    row,
+    'version',
+    'Contextual handoff artifact item',
+  );
+  if (!Number.isInteger(version) || version <= 0) {
+    throw new Error('Contextual handoff artifact item has invalid version');
+  }
   return {
     title: stringValue(row, 'title', 'Contextual handoff artifact item'),
     kitCode: stringValue(row, 'kitCode', 'Contextual handoff artifact item'),
-    version: numberValue(row, 'version', 'Contextual handoff artifact item'),
+    version,
     status: stringValue(row, 'status', 'Contextual handoff artifact item'),
     hasDeliveredEvidence: booleanValue(
       row,
@@ -233,6 +275,132 @@ function parseSiteArtifactItem(value: unknown): SiteRequestHandoffArtifactItem {
       'Contextual handoff artifact item',
     ),
   };
+}
+
+interface HandoffRoute {
+  expectedResponse: string;
+  actionKind: string;
+  sender: ContextualHandoffActorKind;
+  recipient: ContextualHandoffActorKind;
+  currentOwner: ContextualHandoffActorKind;
+  canBeOverdue: boolean;
+}
+
+const APPROVAL_ROUTES: Record<
+  ProjectApprovalContextualHandoff['sourceState'],
+  HandoffRoute
+> = {
+  review_required: {
+    expectedResponse: 'confirm_artifact_review',
+    actionKind: 'open_approval_review',
+    sender: 'studio',
+    recipient: 'client',
+    currentOwner: 'client',
+    canBeOverdue: false,
+  },
+  ready_to_publish: {
+    expectedResponse: 'publish_confirmed_approval',
+    actionKind: 'publish_approval_request',
+    sender: 'client',
+    recipient: 'studio',
+    currentOwner: 'studio',
+    canBeOverdue: false,
+  },
+  response_required: {
+    expectedResponse: 'select_approval_outcome',
+    actionKind: 'open_approval_response',
+    sender: 'studio',
+    recipient: 'client',
+    currentOwner: 'client',
+    canBeOverdue: true,
+  },
+  changes_requested: {
+    expectedResponse: 'revise_and_resubmit',
+    actionKind: 'supersede_approval_request',
+    sender: 'client',
+    recipient: 'studio',
+    currentOwner: 'studio',
+    canBeOverdue: false,
+  },
+  needs_discussion: {
+    expectedResponse: 'resolve_client_discussion',
+    actionKind: 'open_approval_discussion',
+    sender: 'client',
+    recipient: 'studio',
+    currentOwner: 'studio',
+    canBeOverdue: false,
+  },
+};
+
+const SITE_REQUEST_ROUTES: Record<
+  SiteRequestContextualHandoff['sourceState'],
+  HandoffRoute
+> = {
+  awaiting_consent: {
+    expectedResponse: 'provide_sms_consent',
+    actionKind: 'open_site_request',
+    sender: 'studio',
+    recipient: 'site_party',
+    currentOwner: 'site_party',
+    canBeOverdue: false,
+  },
+  sent: {
+    expectedResponse: 'acknowledge_and_begin',
+    actionKind: 'open_site_request',
+    sender: 'studio',
+    recipient: 'site_party',
+    currentOwner: 'site_party',
+    canBeOverdue: true,
+  },
+  in_progress: {
+    expectedResponse: 'deliver_current_item_versions',
+    actionKind: 'continue_site_request',
+    sender: 'studio',
+    recipient: 'site_party',
+    currentOwner: 'site_party',
+    canBeOverdue: true,
+  },
+  delivered: {
+    expectedResponse: 'review_delivered_items',
+    actionKind: 'review_site_request',
+    sender: 'site_party',
+    recipient: 'studio',
+    currentOwner: 'studio',
+    canBeOverdue: true,
+  },
+  completed: {
+    expectedResponse: 'close_completed_request',
+    actionKind: 'close_site_request',
+    sender: 'site_party',
+    recipient: 'studio',
+    currentOwner: 'studio',
+    canBeOverdue: false,
+  },
+};
+
+function assertHandoffRoute(
+  route: HandoffRoute | undefined,
+  handoff: {
+    expectedResponse: string;
+    actionKind: string;
+    responsibility: ContextualHandoffResponsibility;
+    isOverdue: boolean;
+  },
+  label: string,
+): void {
+  if (
+    !route ||
+    handoff.expectedResponse !== route.expectedResponse ||
+    handoff.actionKind !== route.actionKind ||
+    handoff.responsibility.sender.kind !== route.sender ||
+    handoff.responsibility.recipient.kind !== route.recipient ||
+    handoff.responsibility.currentOwner.kind !== route.currentOwner
+  ) {
+    throw new Error(`${label} has an invalid route`);
+  }
+  if (handoff.isOverdue && !route.canBeOverdue) {
+    throw new Error(`${label} has invalid overdue state`);
+  }
 }
 
 function parseSiteArtifact(value: unknown): SiteRequestHandoffArtifact {
@@ -322,19 +490,39 @@ export function parseProjectContextualHandoff(
       'expectedResponse',
       'Project contextual handoff',
     ),
-    dueAt: stringValue(row, 'dueAt', 'Project contextual handoff'),
+    dueAt: timestampValue(row, 'dueAt', 'Project contextual handoff'),
     isOverdue: booleanValue(row, 'isOverdue', 'Project contextual handoff'),
     actionKind: stringValue(row, 'actionKind', 'Project contextual handoff'),
-    updatedAt: stringValue(row, 'updatedAt', 'Project contextual handoff'),
+    updatedAt: timestampValue(row, 'updatedAt', 'Project contextual handoff'),
   };
 
   if (sourceKind === 'project_approval') {
     if (row.escalation !== null) {
       throw new Error('Project approval handoff has invalid escalation');
     }
+    if (
+      !Object.prototype.hasOwnProperty.call(
+        APPROVAL_ROUTES,
+        base.sourceState,
+      ) ||
+      base.phaseId === null ||
+      base.stageAttribution !== 'exact_project_phase' ||
+      (base.canonicalStageKey === null) !== (base.workflowTrack === null)
+    ) {
+      throw new Error('Project approval handoff has an invalid route');
+    }
+    assertHandoffRoute(
+      APPROVAL_ROUTES[
+        base.sourceState as ProjectApprovalContextualHandoff['sourceState']
+      ],
+      base,
+      'Project approval handoff',
+    );
     return {
       ...base,
       sourceKind,
+      sourceState:
+        base.sourceState as ProjectApprovalContextualHandoff['sourceState'],
       escalation: null,
       artifact: parseApprovalArtifact(row.artifact),
     };
@@ -351,6 +539,21 @@ export function parseProjectContextualHandoff(
   ) {
     throw new Error('Site Request handoff has invalid sourceState');
   }
+  if (
+    base.phaseId !== null ||
+    base.canonicalStageKey !== 'contract_administration' ||
+    base.workflowTrack !== null ||
+    base.stageAttribution !== 'source_domain'
+  ) {
+    throw new Error('Site Request handoff has an invalid route');
+  }
+  assertHandoffRoute(
+    SITE_REQUEST_ROUTES[
+      base.sourceState as SiteRequestContextualHandoff['sourceState']
+    ],
+    base,
+    'Site Request handoff',
+  );
   const escalation = recordValue(
     row.escalation,
     'Contextual handoff escalation',
@@ -400,87 +603,84 @@ export function useProjectContextualHandoffs(
   });
 }
 
-type SiteRequestItemRead = {
-  id: string;
-  request_id: string;
-  status: string;
-  current_version_id: string | null;
-  current_version_number: number;
-  sort_order: number;
-};
-
-type SiteRequestVersionRead = {
-  id: string;
-  item_id: string;
-  title: string;
-  kit_code: string;
-  version_number: number;
-  room_id: string | null;
-};
-
-type SiteRequestDeliverableRead = {
-  id: string;
-  request_id: string;
-  item_id: string;
-  item_version_id: string;
-  status: string;
-  attempt_number: number;
-  delivered_at: string | null;
-};
-
 function incoherentSiteRequestDetail(
   projectId: string,
   requestId: string,
 ): SiteRequestActionDetail {
-  return { projectId, requestId, coherent: false, items: [] };
+  return { projectId, requestId, coherent: false, items: [], rooms: [] };
 }
 
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0;
+function parseSiteRequestRoomChoice(value: unknown): SiteRequestRoomChoice {
+  const row = recordValue(value, 'Site Request room choice');
+  return {
+    id: stringValue(row, 'id', 'Site Request room choice'),
+    name: stringValue(row, 'name', 'Site Request room choice'),
+  };
 }
 
-function isSiteRequestItemRead(value: unknown): value is SiteRequestItemRead {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  const row = value as Record<string, unknown>;
-  return (
-    isNonEmptyString(row.id) &&
-    isNonEmptyString(row.request_id) &&
-    isNonEmptyString(row.status) &&
-    isNonEmptyString(row.current_version_id) &&
-    Number.isInteger(row.current_version_number) &&
-    Number.isInteger(row.sort_order)
+function parseSiteRequestActionItem(value: unknown): SiteRequestActionItem {
+  const row = recordValue(value, 'Site Request action item');
+  const version = numberValue(row, 'version', 'Site Request action item');
+  const status = stringValue(row, 'status', 'Site Request action item');
+  if (!Number.isInteger(version) || version <= 0) {
+    throw new Error('Site Request action item has invalid version');
+  }
+  if (!['open', 'delivered', 'redo_requested', 'approved'].includes(status)) {
+    throw new Error('Site Request action item has invalid status');
+  }
+  const deliverableId = nullableStringValue(
+    row,
+    'deliverableId',
+    'Site Request action item',
   );
+  if (status === 'delivered' && deliverableId === null) {
+    throw new Error('Site Request action item has invalid delivered evidence');
+  }
+  return {
+    itemId: stringValue(row, 'itemId', 'Site Request action item'),
+    title: stringValue(row, 'title', 'Site Request action item'),
+    kitCode: stringValue(row, 'kitCode', 'Site Request action item'),
+    version,
+    roomId: nullableStringValue(row, 'roomId', 'Site Request action item'),
+    status: status as SiteRequestActionItem['status'],
+    deliverableId,
+  };
 }
 
-function isSiteRequestVersionRead(
+export function parseSiteRequestActionDetail(
   value: unknown,
-): value is SiteRequestVersionRead {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  const row = value as Record<string, unknown>;
-  return (
-    isNonEmptyString(row.id) &&
-    isNonEmptyString(row.item_id) &&
-    isNonEmptyString(row.title) &&
-    isNonEmptyString(row.kit_code) &&
-    Number.isInteger(row.version_number) &&
-    (row.room_id === null || isNonEmptyString(row.room_id))
-  );
-}
+  expectedProjectId: string,
+  expectedRequestId: string,
+): SiteRequestActionDetail {
+  const row = recordValue(value, 'Site Request action detail');
+  const projectId = stringValue(row, 'projectId', 'Site Request action detail');
+  const requestId = stringValue(row, 'requestId', 'Site Request action detail');
+  if (projectId !== expectedProjectId || requestId !== expectedRequestId) {
+    throw new Error('Site Request action detail has invalid identity');
+  }
+  const coherent = booleanValue(row, 'coherent', 'Site Request action detail');
+  if (!Array.isArray(row.items) || !Array.isArray(row.rooms)) {
+    throw new Error('Site Request action detail has invalid collections');
+  }
+  const items = row.items.map(parseSiteRequestActionItem);
+  const rooms = row.rooms.map(parseSiteRequestRoomChoice);
+  if (!coherent) {
+    if (items.length > 0 || rooms.length > 0) {
+      throw new Error('Site Request action detail has incoherent evidence');
+    }
+    return { projectId, requestId, coherent, items: [], rooms: [] };
+  }
 
-function isSiteRequestDeliverableRead(
-  value: unknown,
-): value is SiteRequestDeliverableRead {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  const row = value as Record<string, unknown>;
-  return (
-    isNonEmptyString(row.id) &&
-    isNonEmptyString(row.request_id) &&
-    isNonEmptyString(row.item_id) &&
-    isNonEmptyString(row.item_version_id) &&
-    row.status === 'delivered' &&
-    Number.isInteger(row.attempt_number) &&
-    (row.delivered_at === null || isNonEmptyString(row.delivered_at))
-  );
+  const itemIds = new Set(items.map((item) => item.itemId));
+  const roomIds = new Set(rooms.map((room) => room.id));
+  if (
+    itemIds.size !== items.length ||
+    roomIds.size !== rooms.length ||
+    items.some((item) => item.roomId !== null && !roomIds.has(item.roomId))
+  ) {
+    throw new Error('Site Request action detail has incoherent item evidence');
+  }
+  return { projectId, requestId, coherent, items, rooms };
 }
 
 export function useSiteRequestActionDetail(
@@ -497,122 +697,12 @@ export function useSiteRequestActionDetail(
       if (!projectId || !requestId) {
         return incoherentSiteRequestDetail(projectId ?? '', requestId ?? '');
       }
-      const supabase = createBrowserClient();
-      const { data: requestData, error: requestError } = await supabase
-        .from('site_requests')
-        .select('id, project_id')
-        .eq('id', requestId)
-        .maybeSingle();
-      if (requestError) throw requestError;
-      if (
-        !requestData ||
-        requestData.id !== requestId ||
-        requestData.project_id !== projectId
-      ) {
-        return incoherentSiteRequestDetail(projectId, requestId);
-      }
-      const { data: itemData, error: itemError } = await supabase
-        .from('site_request_items')
-        .select(
-          'id, request_id, status, current_version_id, current_version_number, sort_order',
-        )
-        .eq('request_id', requestId);
-      if (itemError) throw itemError;
-
-      if (!(itemData ?? []).every(isSiteRequestItemRead)) {
-        return incoherentSiteRequestDetail(projectId, requestId);
-      }
-      const items = (itemData ?? []) as SiteRequestItemRead[];
-      const itemIds = new Set(items.map((item) => item.id));
-      const currentVersionIds = new Set(
-        items.map((item) => item.current_version_id),
+      const { data, error } = await createBrowserClient().rpc(
+        'get_site_request_action_detail',
+        { p_project_id: projectId, p_request_id: requestId },
       );
-      if (
-        itemIds.size !== items.length ||
-        currentVersionIds.size !== items.length ||
-        items.some(
-          (item) =>
-            item.request_id !== requestId ||
-            !item.current_version_id ||
-            !Number.isInteger(item.current_version_number),
-        )
-      ) {
-        return incoherentSiteRequestDetail(projectId, requestId);
-      }
-      if (items.length === 0) {
-        return { projectId, requestId, coherent: true, items: [] };
-      }
-
-      const versionIds = items.map((item) => item.current_version_id as string);
-      const { data: versionData, error: versionError } = await supabase
-        .from('site_request_item_versions')
-        .select('id, item_id, title, kit_code, version_number, room_id')
-        .in('id', versionIds);
-      if (versionError) throw versionError;
-
-      const { data: deliverableData, error: deliverableError } = await supabase
-        .from('site_deliverables')
-        .select(
-          'id, request_id, item_id, item_version_id, status, attempt_number, delivered_at',
-        )
-        .eq('request_id', requestId)
-        .eq('status', 'delivered')
-        .order('attempt_number', { ascending: false });
-      if (deliverableError) throw deliverableError;
-
-      if (
-        !(versionData ?? []).every(isSiteRequestVersionRead) ||
-        !(deliverableData ?? []).every(isSiteRequestDeliverableRead)
-      ) {
-        return incoherentSiteRequestDetail(projectId, requestId);
-      }
-      const versions = (versionData ?? []) as SiteRequestVersionRead[];
-      const deliverables = (deliverableData ??
-        []) as SiteRequestDeliverableRead[];
-      const versionById = new Map<string, SiteRequestVersionRead>();
-      for (const version of versions) {
-        if (versionById.has(version.id)) {
-          return incoherentSiteRequestDetail(projectId, requestId);
-        }
-        versionById.set(version.id, version);
-      }
-
-      const actionItems: SiteRequestActionItem[] = [];
-      for (const item of [...items].sort(
-        (a, b) => a.sort_order - b.sort_order,
-      )) {
-        const currentVersionId = item.current_version_id as string;
-        const version = versionById.get(currentVersionId);
-        if (
-          !version ||
-          version.item_id !== item.id ||
-          version.version_number !== item.current_version_number
-        ) {
-          return incoherentSiteRequestDetail(projectId, requestId);
-        }
-        const deliverable = deliverables.find(
-          (candidate) =>
-            candidate.request_id === requestId &&
-            candidate.item_id === item.id &&
-            candidate.item_version_id === currentVersionId &&
-            candidate.status === 'delivered' &&
-            typeof candidate.delivered_at === 'string',
-        );
-        if (item.status === 'delivered' && !deliverable) {
-          return incoherentSiteRequestDetail(projectId, requestId);
-        }
-        actionItems.push({
-          itemId: item.id,
-          title: version.title,
-          kitCode: version.kit_code,
-          version: version.version_number,
-          roomId: version.room_id,
-          status: item.status,
-          deliverableId: deliverable?.id ?? null,
-        });
-      }
-
-      return { projectId, requestId, coherent: true, items: actionItems };
+      if (error) throw error;
+      return parseSiteRequestActionDetail(data, projectId, requestId);
     },
     ...handoffForegroundRefresh,
   });
