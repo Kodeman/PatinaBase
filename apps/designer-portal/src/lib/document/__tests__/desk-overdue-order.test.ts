@@ -1,10 +1,19 @@
 /**
- * Rulings IV and VI on the Desk — an overdue folio rises, and its need line
- * keys to the gate. The 2–4 folio ceiling is untouched by either.
+ * Ruling IV on the Desk — the overdue condition, and the ordering it was
+ * supposed to produce.
+ *
+ * The ordering assertions here exist to pin a fact rather than a change: an
+ * overdue folio ALREADY sorts above every other folio, because
+ * `overdue_decision` is both the only urgent need and rank 0. A leading
+ * overdue tier was added and then removed after these tests proved it inert.
+ *
+ * Ruling VI's folio need line is NOT implemented — see DECISIONS I117. The
+ * Desk's read carries no gate to key to, and synthesising one from
+ * `active_section` produced confident fiction over a count of overdue
+ * decisions.
  */
 
 import { partitionDesk, type DocumentStateRow } from '../desk-derivation';
-import { deskGateSentence } from '../workflow-gate';
 import { NOT_OVERDUE } from '../overdue-condition';
 
 const NOW = new Date('2026-05-12T09:00:00.000Z');
@@ -83,8 +92,8 @@ describe('the overdue condition rides the folder', () => {
   });
 });
 
-describe('the Desk re-sorts upward', () => {
-  it('rises the overdue folio to first position', () => {
+describe('an overdue folio already sorts first, with no added tier', () => {
+  it('rises above a non-gate need', () => {
     const { folders } = partitionDesk([dueTask, overdueDecision], NOW);
     expect(folders.map((folder) => folder.row.engagement_id)).toEqual([
       'merriweather',
@@ -92,11 +101,36 @@ describe('the Desk re-sorts upward', () => {
     ]);
   });
 
+  it('orders several overdue folios by their earliest due date', () => {
+    const older = row({
+      engagement_id: 'older',
+      overdue_decision_count: 1,
+      earliest_overdue_due: '2026-05-01T09:00:00.000Z',
+      updated_at: '2026-05-11T12:00:00.000Z',
+    });
+    const { folders } = partitionDesk([overdueDecision, older], NOW);
+    expect(folders.map((folder) => folder.row.engagement_id)).toEqual([
+      'older',
+      'merriweather',
+    ]);
+  });
+
+  it('keeps a still-needed folio in place when its due date is missing', () => {
+    // The removed overdue tier demoted this row below every non-gate folio,
+    // because deriveOverdue answers NOT_OVERDUE without a due moment.
+    const undated = row({
+      engagement_id: 'undated',
+      overdue_decision_count: 1,
+      earliest_overdue_due: null,
+    });
+    const { folders } = partitionDesk([dueTask, undated], NOW);
+    expect(folders[0].row.engagement_id).toBe('undated');
+  });
+
   it('changes nothing else about the folio — no count, no second act', () => {
     const { folders } = partitionDesk([overdueDecision], NOW);
     const [folio] = folders;
     expect(folio.need.actionLabel).toBe('Review decisions');
-    expect(Object.keys(folio.need)).not.toContain('badge');
     expect(folio.need.stamp.label).toBe('DECISION DUE');
   });
 
@@ -108,33 +142,13 @@ describe('the Desk re-sorts upward', () => {
         earliest_overdue_due: '2026-05-06T09:00:00.000Z',
       }),
     );
-    // partitionDesk never truncates folders; the 2–4 ceiling is a preview
-    // decision made by the Desk's own renderer and is not moved here.
     expect(partitionDesk(many, NOW).folders).toHaveLength(6);
   });
 });
 
-describe('the folio need line keys to the gate', () => {
-  it('names the party, the artifact, and the elapsed time', () => {
+describe('the folio need line is NOT gate-keyed (recorded shortfall)', () => {
+  it('prints the need’s own truthful line', () => {
     const { folders } = partitionDesk([overdueDecision], NOW);
-    expect(
-      deskGateSentence({
-        clientName: folders[0].row.client_name,
-        activeSection: folders[0].row.active_section,
-        overdue: folders[0].overdue ?? NOT_OVERDUE,
-      }),
-    ).toBe("Marta's Direction approval has waited 6 days.");
-  });
-
-  it('leaves a non-gate need its own line', () => {
-    const { folders } = partitionDesk([dueTask], NOW);
-    expect(
-      deskGateSentence({
-        clientName: folders[0].row.client_name,
-        activeSection: folders[0].row.active_section,
-        overdue: folders[0].overdue ?? NOT_OVERDUE,
-      }),
-    ).toBeNull();
-    expect(folders[0].need.text).toContain('Confirm the credenza finish');
+    expect(folders[0].need.text).toBe('1 decision overdue — oldest due May 6');
   });
 });

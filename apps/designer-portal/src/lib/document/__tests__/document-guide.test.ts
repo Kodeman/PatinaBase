@@ -405,16 +405,28 @@ describe('the guide surfaces the gate (Ruling V)', () => {
   });
 
   it('names the publish act from the gate rather than the stage default', () => {
+    // Projection-realistic: confirmations complete addresses the row to the
+    // studio, so the sentence must not hand the act to the household.
     const gate = deriveGate(
-      handoff({ sourceState: 'ready_to_publish' as never, isOverdue: false }),
+      handoff({
+        sourceState: 'ready_to_publish' as never,
+        isOverdue: false,
+        expectedResponse: 'publish_confirmed_approval',
+        responsibility: {
+          sender: { kind: 'client', label: null },
+          recipient: { kind: 'studio', label: null },
+          currentOwner: { kind: 'studio', label: null },
+        },
+      } as never),
       GATE_NOW,
       'Marta',
     );
     const guide = deriveDocumentGuide({ row: row('project'), gate });
 
     expect(guide.state).toBe('actionable');
-    expect(guide.headline).toBe('Direction approval is ready for Marta.');
+    expect(guide.headline).toBe('Direction approval is ready to publish.');
     expect(guide.action?.label).toBe('Publish the Direction approval');
+    expect(guide.headline).not.toContain('Marta');
   });
 
   it('never activates the control it names, so it cannot close an open item', () => {

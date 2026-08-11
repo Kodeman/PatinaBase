@@ -41,7 +41,7 @@ jest.mock('../approvals/project-approval-navigation', () => ({
   focusProjectApproval: (id: string) => mockFocusApproval(id),
 }));
 
-import { MarginHandoffs } from '../margin-handoff-item';
+import { MarginHandoffs, useHandoffGates } from '../margin-handoff-item';
 
 const NOW = new Date('2026-05-12T09:00:00.000Z');
 
@@ -114,11 +114,33 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
-function renderHandoffs(handoffs: ProjectContextualHandoff[]) {
-  mockHandoffsQuery.mockReturnValue({ data: handoffs, isError: false });
-  return render(
-    <MarginHandoffs projectId="project-1" clientName="Marta Chen" />,
+/** The rail's own wiring: one hook, one clock, then the presentational list. */
+function Harness({
+  approvalSurfaceMounted = true,
+}: {
+  approvalSurfaceMounted?: boolean;
+}) {
+  const { gates, handoffsById, isError } = useHandoffGates({
+    projectId: 'project-1',
+    clientName: 'Marta Chen',
+    now: NOW,
+  });
+  return (
+    <MarginHandoffs
+      gates={gates}
+      handoffsById={handoffsById}
+      isError={isError}
+      approvalSurfaceMounted={approvalSurfaceMounted}
+    />
   );
+}
+
+function renderHandoffs(
+  handoffs: ProjectContextualHandoff[],
+  options: { approvalSurfaceMounted?: boolean } = {},
+) {
+  mockHandoffsQuery.mockReturnValue({ data: handoffs, isError: false });
+  return render(<Harness {...options} />);
 }
 
 describe('the handoff as a margin item', () => {
@@ -157,7 +179,7 @@ describe('the handoff as a margin item', () => {
 
   it('reports a failed read without claiming a workflow change', () => {
     mockHandoffsQuery.mockReturnValue({ data: undefined, isError: true });
-    render(<MarginHandoffs projectId="project-1" clientName="Marta Chen" />);
+    render(<Harness />);
 
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Project handoffs could not be read. No workflow state was changed.',
@@ -349,5 +371,35 @@ describe('fold and unfold', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(
       'A redo note is required.',
     );
+  });
+});
+
+describe('acts that nothing is listening for are not offered', () => {
+  it('withholds the open act where the approval ceremony is not mounted', () => {
+    renderHandoffs(
+      [
+        {
+          ...approval,
+          sourceState: 'ready_to_publish',
+          isOverdue: false,
+          expectedResponse: 'publish_confirmed_approval',
+          responsibility: {
+            sender: { kind: 'client', label: null },
+            recipient: { kind: 'studio', label: null },
+            currentOwner: { kind: 'studio', label: null },
+          },
+        } as unknown as ProjectContextualHandoff,
+      ],
+      { approvalSurfaceMounted: false },
+    );
+
+    // The item still states the gate; it just offers no button into nothing.
+    expect(screen.getByText(/Direction approval/)).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Publish' })).toBeNull();
+  });
+
+  it('keeps the nudge, which needs no ceremony', () => {
+    renderHandoffs([approval], { approvalSurfaceMounted: false });
+    expect(screen.getByRole('button', { name: 'Nudge' })).toBeVisible();
   });
 });

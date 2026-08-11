@@ -18,6 +18,13 @@ const code = (...parts: string[]) =>
     .replace(/^\s*\/\/.*$/gm, '');
 
 const marginRail = code('components', 'document', 'margin-rail.tsx');
+const chips = code(
+  'components',
+  'document',
+  'mobile',
+  'mobile-margin-chips.tsx',
+);
+const spine = code('components', 'document', 'mobile', 'mobile-sheets.tsx');
 const handoffItem = code('components', 'document', 'margin-handoff-item.tsx');
 const mount = code(
   'components',
@@ -71,6 +78,29 @@ describe('the margin carries the handoffs instead', () => {
   it('mounts them in the rail', () => {
     expect(marginRail).toMatch(/from '\.\/margin-handoff-item'/);
     expect(marginRail).toContain('<MarginHandoffs');
+  });
+
+  it('never prints the empty-margin line beneath visible handoffs', () => {
+    // The line speaks for the whole margin, so it is gated on the gates too.
+    expect(marginRail).toMatch(
+      /visibleItems\.length === 0 &&\s*handoffGates\.gates\.length === 0/,
+    );
+  });
+
+  it('counts and lists them on the mobile surfaces too', () => {
+    // Mobile must not under-report the highest-ranked thing in the margin.
+    for (const source of [chips, spine]) {
+      expect(source).toContain('useHandoffGates');
+    }
+    expect(spine).toContain('raised.length + handoffGates.length');
+  });
+
+  it('threads one clock rather than reading its own', () => {
+    // A stamp and a guide sentence derived from two `new Date()` calls can
+    // disagree across a midnight.
+    expect(marginRail).toContain(
+      'useHandoffGates({ projectId, clientName, now })',
+    );
   });
 
   it('reads the 00442/00443 projection whole, through its own hook', () => {

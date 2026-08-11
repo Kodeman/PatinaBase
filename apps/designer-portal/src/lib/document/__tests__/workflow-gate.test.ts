@@ -7,7 +7,7 @@ import type { ProjectContextualHandoff } from '@patina/supabase';
 import {
   deriveGate,
   deriveGates,
-  deskGateSentence,
+  gateActVerb,
   gateActionLabel,
   gateSentence,
   gateStageLabel,
@@ -19,9 +19,45 @@ import { deriveOverdue, NOT_OVERDUE } from '../overdue-condition';
 
 const NOW = new Date('2026-05-12T09:00:00.000Z');
 
+/**
+ * The projection moves sourceState, expectedResponse, sender, recipient, and
+ * currentOwner together (00442). A fixture that pins one without the others
+ * describes a row the read model cannot emit, so this builder derives the
+ * whole cluster from the state — the review found two fixtures that had paired
+ * `ready_to_publish` with a client recipient, which the projection never does.
+ */
+const APPROVAL_SHAPE: Record<
+  string,
+  { expectedResponse: string; party: 'client' | 'studio' }
+> = {
+  review_required: {
+    expectedResponse: 'confirm_artifact_review',
+    party: 'client',
+  },
+  ready_to_publish: {
+    expectedResponse: 'publish_confirmed_approval',
+    party: 'studio',
+  },
+  response_required: {
+    expectedResponse: 'select_approval_outcome',
+    party: 'client',
+  },
+  changes_requested: {
+    expectedResponse: 'revise_and_resubmit',
+    party: 'studio',
+  },
+  needs_discussion: {
+    expectedResponse: 'resolve_client_discussion',
+    party: 'studio',
+  },
+};
+
 function approval(
   overrides: Partial<ProjectContextualHandoff> = {},
 ): ProjectContextualHandoff {
+  const state = (overrides.sourceState as string) ?? 'response_required';
+  const shape = APPROVAL_SHAPE[state];
+  const other = shape.party === 'client' ? 'studio' : 'client';
   return {
     sourceKind: 'project_approval',
     sourceId: 'decision-1',
@@ -30,13 +66,13 @@ function approval(
     canonicalStageKey: 'design_development',
     workflowTrack: 'ffe',
     stageAttribution: 'exact_project_phase',
-    sourceState: 'response_required',
+    sourceState: state,
     responsibility: {
-      sender: { kind: 'studio', label: null },
-      recipient: { kind: 'client', label: null },
-      currentOwner: { kind: 'client', label: null },
+      sender: { kind: other, label: null },
+      recipient: { kind: shape.party, label: null },
+      currentOwner: { kind: shape.party, label: null },
     },
-    expectedResponse: 'select_approval_outcome',
+    expectedResponse: shape.expectedResponse,
     dueAt: '2026-05-06T09:00:00.000Z',
     isOverdue: true,
     escalation: null,
@@ -93,6 +129,24 @@ describe('lane attribution and provenance', () => {
     expect(deriveGate(approval(), NOW, null).lane).toBe('With the client');
   });
 
+  it('attributes a studio-owned approval to the studio, not the household', () => {
+    // The projection addresses this state to the studio (confirmations done).
+    const publish = approval({ sourceState: 'ready_to_publish' as never });
+    expect(publish.responsibility.recipient.kind).toBe('studio');
+    expect(deriveGate(publish, NOW, 'Marta Chen').lane).toBe('With the studio');
+    expect(deriveGate(publish, NOW, 'Marta Chen').studioLane).toBe(true);
+  });
+
+  it('overrides a client-addressed row whose act is the studio’s own review', () => {
+    // 00442 sets recipient='client' on an unconfirmed draft, but the act it
+    // waits on is `confirm_artifact_review` — studio work. The lane must not
+    // claim "With Marta" for something Marta cannot do.
+    const review = approval({ sourceState: 'review_required' as never });
+    expect(review.responsibility.recipient.kind).toBe('client');
+    expect(review.expectedResponse).toBe('confirm_artifact_review');
+    expect(deriveGate(review, NOW, 'Marta Chen').lane).toBe('With the studio');
+  });
+
   it('keeps the site party label the projection snapshotted', () => {
     expect(deriveGate(siteRequest(), NOW, 'Marta Chen').lane).toBe(
       'With Hale Joinery',
@@ -145,8 +199,8 @@ describe('the one act, mapped 1:1', () => {
   });
 
   it.each([
-    ['sent', 'nudge', 'Open'],
-    ['in_progress', 'nudge', 'Open'],
+    ['sent', 'nudge', 'Nudge'],
+    ['in_progress', 'nudge', 'Nudge'],
     ['delivered', 'approve', 'Review'],
     ['completed', 'close', 'Close'],
   ])(
@@ -234,7 +288,7 @@ describe('the gate rendered as a sentence', () => {
     );
   });
 
-  it('reads the deck’s publish state as a gate that is ready for the party', () => {
+  it('reads the publish state as the studio’s own next act', () => {
     expect(
       gateSentence(
         deriveGate(
@@ -246,7 +300,7 @@ describe('the gate rendered as a sentence', () => {
           'Marta',
         ),
       ),
-    ).toBe('Direction approval is ready for Marta.');
+    ).toBe('Direction approval is ready to publish.');
   });
 
   it('names the act for what it does', () => {
@@ -267,61 +321,56 @@ describe('the gate rendered as a sentence', () => {
     );
   });
 
+  it('names the same act with the same verb at both scales', () => {
+    // The margin prints the verb alone; the guide prints verb + object. A
+    // margin reading "Open" beside a guide reading "Nudge" was the drift.
+    for (const handoff of [
+      approval(),
+      approval({ sourceState: 'ready_to_publish' as never }),
+      approval({ sourceState: 'review_required' as never }),
+      siteRequest(),
+      siteRequest({ sourceState: 'sent' as never }),
+      siteRequest({ sourceState: 'completed' as never }),
+    ]) {
+      const gate = deriveGate(handoff, NOW, 'Marta');
+      const verb = gateActVerb(gate.act!.kind, gate.sourceState);
+      expect(gate.act!.label).toBe(verb);
+      expect(gateActionLabel(gate).startsWith(`${verb} `)).toBe(true);
+    }
+  });
+
   it('publishes one anchor per gate so the guide names a mounted control', () => {
     expect(handoffAnchorId('decision-1')).toBe('document-handoff-decision-1');
   });
 });
 
-describe('the Desk keys to the same gate', () => {
-  it('states the party, the artifact, and the elapsed time', () => {
-    expect(
-      deskGateSentence({
-        clientName: 'Marta',
-        activeSection: 'direction',
-        overdue: { isOverdue: true, days: 6 },
-      }),
-    ).toBe("Marta's Direction approval has waited 6 days.");
-  });
-
-  it('leaves the need its own line where the folio has no gate', () => {
-    expect(
-      deskGateSentence({
-        clientName: 'Marta',
-        activeSection: 'direction',
-        overdue: NOT_OVERDUE,
-      }),
-    ).toBeNull();
-  });
-});
-
 describe('Studio Pulse gets exactly one aggregate sentence', () => {
   it('states the shape of the week in a single line', () => {
-    expect(
-      studioPulseGateSentence({
-        folderCount: 3,
-        overdueCount: 1,
-        inProductionCount: 2,
-      }),
-    ).toBe('3 folios need your hand, 1 overdue, 2 pieces are in production.');
+    expect(studioPulseGateSentence({ overdueCount: 1, onTheWayCount: 2 })).toBe(
+      '1 decision is overdue, and 2 pieces are on the way.',
+    );
   });
 
-  it('reads as prose at one of everything', () => {
-    expect(
-      studioPulseGateSentence({
-        folderCount: 1,
-        overdueCount: 0,
-        inProductionCount: 1,
-      }),
-    ).toBe('1 folio needs your hand, 1 piece is in production.');
+  it('uses the Desk’s own word for an in-flight piece', () => {
+    // "In production" would claim a fabrication state the read model never
+    // reports; deriveMotion calls these pieces "on the way".
+    const sentence = studioPulseGateSentence({
+      overdueCount: 0,
+      onTheWayCount: 1,
+    });
+    expect(sentence).toBe('1 piece is on the way.');
+    expect(sentence).not.toContain('production');
+  });
+
+  it('does not restate the folio count the Desk eyebrow already carries', () => {
+    expect(studioPulseGateSentence({ overdueCount: 2, onTheWayCount: 0 })).toBe(
+      '2 decisions are overdue.',
+    );
   });
 
   it('says so plainly when nothing is waiting', () => {
-    expect(
-      studioPulseGateSentence({
-        folderCount: 0,
-        overdueCount: 0,
-        inProductionCount: 0,
-      }),
-    ).toBe('Nothing is waiting on the studio.');
+    expect(studioPulseGateSentence({ overdueCount: 0, onTheWayCount: 0 })).toBe(
+      'Nothing is overdue, and nothing is on the way.',
+    );
   });
 });
