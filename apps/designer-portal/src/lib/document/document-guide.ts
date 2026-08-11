@@ -343,6 +343,14 @@ export function deriveDocumentGuide({
 
   // The gate outranks the operational signals: an open gate IS the project's
   // current state, and nothing else gets to decide what the strip says.
+  //
+  // Both absent sentinels fall through to the same place. Unlike the Desk's
+  // operational need — where `null` means "answered: no need" and suppresses a
+  // local re-derivation — a gate has no local derivation to suppress: the strip
+  // has nothing to say ABOUT a gate that the row alone could tell it. So
+  // `undefined` (not yet answered) and `null` (answered, none open) are read
+  // alike here, and the input keeps both spellings only to stay legible
+  // alongside `operationalNeed`.
   if (gate) {
     return withInputs(gateGuide(gate, row), inputFacts);
   }
