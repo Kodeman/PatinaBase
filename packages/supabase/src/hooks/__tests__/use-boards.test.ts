@@ -83,7 +83,15 @@ const fromSpy = vi.fn((table: string) => {
 });
 
 const rpc = vi.fn();
-const supabaseClient = { from: fromSpy, rpc };
+const createSignedUrls = vi.fn(async (paths: string[]) => ({
+  data: paths.map((path) => ({ path, signedUrl: `https://storage.example/signed/${path}` })),
+  error: null,
+}));
+const supabaseClient = {
+  from: fromSpy,
+  rpc,
+  storage: { from: vi.fn(() => ({ createSignedUrls })) },
+};
 
 vi.mock('@supabase/ssr', () => ({
   createBrowserClient: () => supabaseClient,
@@ -115,6 +123,7 @@ beforeEach(() => {
   invalidateQueries.mockReset();
   fromSpy.mockClear();
   rpc.mockReset();
+  createSignedUrls.mockClear();
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -612,5 +621,6 @@ describe('useProjectOwnedBoards', () => {
     );
     expect(result[0].project_id).toBe('proj-1');
     expect(result[0].item_count).toBe(1);
+    expect(createSignedUrls).toHaveBeenCalledWith(['x.jpg'], 3600);
   });
 });

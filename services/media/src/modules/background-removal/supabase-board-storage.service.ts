@@ -46,6 +46,13 @@ export class SupabaseBoardStorageService {
 
   parseCanonicalPublicUrl(source: string): string | null {
     if (!this.supabaseUrl) return null;
+    const bare = source.trim().replace(/^\/+/, '');
+    if (!/^https?:\/\//i.test(bare)) {
+      const objectPath = bare.startsWith(`${BOARD_BUCKET}/`)
+        ? bare.slice(BOARD_BUCKET.length + 1)
+        : bare;
+      return validObjectSegments(objectPath.split('/')) ? objectPath : null;
+    }
     try {
       const base = new URL(this.supabaseUrl);
       const candidate = new URL(source);
@@ -53,14 +60,21 @@ export class SupabaseBoardStorageService {
         candidate.origin !== base.origin ||
         candidate.username ||
         candidate.password ||
-        candidate.search ||
         candidate.hash
       ) {
         return null;
       }
       const basePath = base.pathname.replace(/\/$/, '');
-      const prefix = `${basePath}/storage/v1/object/public/${BOARD_BUCKET}/`;
-      if (!candidate.pathname.startsWith(prefix)) return null;
+      const prefixes = [
+        `${basePath}/storage/v1/object/public/${BOARD_BUCKET}/`,
+        `${basePath}/storage/v1/object/authenticated/${BOARD_BUCKET}/`,
+        `${basePath}/storage/v1/object/sign/${BOARD_BUCKET}/`,
+        `${basePath}/storage/v1/render/image/public/${BOARD_BUCKET}/`,
+        `${basePath}/storage/v1/render/image/authenticated/${BOARD_BUCKET}/`,
+        `${basePath}/storage/v1/render/image/sign/${BOARD_BUCKET}/`,
+      ];
+      const prefix = prefixes.find((value) => candidate.pathname.startsWith(value));
+      if (!prefix) return null;
       const rawParts = candidate.pathname.slice(prefix.length).split('/');
       const parts = rawParts.map((part) => decodeURIComponent(part));
       if (!validObjectSegments(parts)) return null;
@@ -75,9 +89,7 @@ export class SupabaseBoardStorageService {
     if (!validObjectSegments(objectPath.split('/'))) {
       throw new BackgroundRemovalStorageError();
     }
-    return `${this.supabaseUrl}/storage/v1/object/public/${BOARD_BUCKET}/${encodedObjectPath(
-      objectPath,
-    )}`;
+    return objectPath;
   }
 
   async readCanonicalPublicUrl(
@@ -98,7 +110,7 @@ export class SupabaseBoardStorageService {
       const bytes = await readResponseBuffer(response, this.policy.maxSourceBytes, 'storage');
       return {
         objectPath,
-        publicUrl: this.publicUrl(objectPath),
+        publicUrl: objectPath,
         bytes,
         declaredMime: response.headers.get('content-type') ?? undefined,
       };
@@ -131,7 +143,7 @@ export class SupabaseBoardStorageService {
         },
       );
       if (!response.ok) throw new BackgroundRemovalStorageError();
-      return this.publicUrl(objectPath);
+      return objectPath;
     } catch (error) {
       if (error instanceof BackgroundRemovalStorageError) throw error;
       throw new BackgroundRemovalStorageError();

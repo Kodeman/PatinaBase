@@ -10,6 +10,10 @@ import {
   PROPOSAL_CLIENT_MUTATION_KEY,
 } from '../lib/proposal-client-query-invalidation';
 import {
+  normalizeBoardMediaValue,
+  signBoardMediaValue,
+} from '../lib/board-storage';
+import {
   summarizeBoardVerdicts,
   type BoardItemVerdictProjection,
   type BoardVerdictCounts,
@@ -307,8 +311,10 @@ export function useBoards(ownerInput: BoardOwnerInput) {
 
       if (error) throw error;
 
+      const signedRows = await signBoardMediaValue(supabase, data ?? []);
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return ((data ?? []) as any[]).map((row) => {
+      return (signedRows as any[]).map((row) => {
         const { proposal_board_items: items, ...board } = row;
         return summarizeBoard(board, (items ?? []) as BoardCoverItem[]);
       });
@@ -402,7 +408,8 @@ export function useBoard(boardId: string | null | undefined) {
       if (error) throw error;
       if (!data) return null;
 
-      const { proposal_board_items: items, ...board } = data;
+      const signed = await signBoardMediaValue(supabase, data);
+      const { proposal_board_items: items, ...board } = signed;
       return {
         ...(board as ProposalBoard),
         proposal_id: board.proposal_id ?? null,
@@ -444,8 +451,10 @@ export function useBoardsWithItems(ownerInput: BoardOwnerInput) {
 
       if (error) throw error;
 
+      const signedRows = await signBoardMediaValue(supabase, data ?? []);
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return ((data ?? []) as any[]).map((row) => {
+      return (signedRows as any[]).map((row) => {
         const { proposal_board_items: items, ...board } = row;
         return {
           ...(board as ProposalBoard),
@@ -478,7 +487,11 @@ export function useUpsertBoard() {
         const updates: Record<string, unknown> = {};
         if (input.name !== undefined) updates.name = input.name;
         if (input.scopeRoomId !== undefined) updates.scope_room_id = input.scopeRoomId;
-        if (input.coverImageUrl !== undefined) updates.cover_image_url = input.coverImageUrl;
+        if (input.coverImageUrl !== undefined) {
+          updates.cover_image_url = normalizeBoardMediaValue({
+            cover_image_url: input.coverImageUrl,
+          }).cover_image_url;
+        }
         if (input.canvasWidth !== undefined) updates.canvas_width = input.canvasWidth;
         if (input.canvasHeight !== undefined) updates.canvas_height = input.canvasHeight;
         if (input.backgroundColor !== undefined) updates.background_color = input.backgroundColor;
@@ -511,7 +524,9 @@ export function useUpsertBoard() {
           : { proposal_id: owner.id }),
         name: input.name,
         scope_room_id: input.scopeRoomId ?? null,
-        cover_image_url: input.coverImageUrl ?? null,
+        cover_image_url: normalizeBoardMediaValue({
+          cover_image_url: input.coverImageUrl ?? null,
+        }).cover_image_url,
         ...(input.canvasWidth !== undefined ? { canvas_width: input.canvasWidth } : {}),
         ...(input.canvasHeight !== undefined ? { canvas_height: input.canvasHeight } : {}),
         ...(input.backgroundColor !== undefined
@@ -662,9 +677,9 @@ export function useAddBoardItem() {
         product_id: input.productId ?? null,
         capture_id: input.captureId ?? null,
         palette_id: input.paletteId ?? null,
-        image_url: input.imageUrl ?? null,
+        image_url: normalizeBoardMediaValue({ image_url: input.imageUrl ?? null }).image_url,
         content: input.content ?? null,
-        data: input.data ?? {},
+        data: normalizeBoardMediaValue(input.data ?? {}),
       };
 
       const { data, error } = await supabase
@@ -719,9 +734,11 @@ export function useUpdateBoardItem() {
       if (input.productId !== undefined) updates.product_id = input.productId;
       if (input.captureId !== undefined) updates.capture_id = input.captureId;
       if (input.paletteId !== undefined) updates.palette_id = input.paletteId;
-      if (input.imageUrl !== undefined) updates.image_url = input.imageUrl;
+      if (input.imageUrl !== undefined) {
+        updates.image_url = normalizeBoardMediaValue({ image_url: input.imageUrl }).image_url;
+      }
       if (input.content !== undefined) updates.content = input.content;
-      if (input.data !== undefined) updates.data = input.data;
+      if (input.data !== undefined) updates.data = normalizeBoardMediaValue(input.data);
 
       const { data, error } = await supabase
         .from('proposal_board_items')
@@ -809,7 +826,7 @@ export function useApplyBoardRoomState() {
         p_board_id: boardId,
         p_owner_kind: owner.kind,
         p_owner_id: owner.id,
-        p_state: state,
+        p_state: normalizeBoardMediaValue(state),
       });
       if (error) throw error;
     },
@@ -910,7 +927,8 @@ export function useProjectBoards(projectId: string | null | undefined) {
         .order('created_at', { ascending: true });
 
       if (error) throw error;
-      return ((data ?? []) as ProjectBoard[]).map((board) => ({
+      const signedRows = await signBoardMediaValue(supabase, data ?? []);
+      return (signedRows as ProjectBoard[]).map((board) => ({
         ...board,
         sections: board.sections ?? [],
       }));
@@ -943,8 +961,10 @@ export function useProjectOwnedBoards(projectId: string | null | undefined) {
 
       if (error) throw error;
 
+      const signedRows = await signBoardMediaValue(supabase, data ?? []);
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return ((data ?? []) as any[]).map((row) => {
+      return (signedRows as any[]).map((row) => {
         const { proposal_board_items: items, ...board } = row;
         return summarizeBoard(board, (items ?? []) as BoardCoverItem[]);
       });

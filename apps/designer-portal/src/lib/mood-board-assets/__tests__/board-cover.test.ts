@@ -15,7 +15,7 @@ describe('mood board cover generation', () => {
     const renderer = jest.fn().mockResolvedValue(raster);
     const storage = {
       upload: jest.fn().mockResolvedValue(undefined),
-      publicUrl: jest.fn().mockReturnValue('https://assets.example/cover.png'),
+      createSignedUrl: jest.fn().mockResolvedValue('https://assets.example/signed-cover.png'),
     };
 
     const result = await generateAndUploadMoodBoardCover({
@@ -30,13 +30,17 @@ describe('mood board cover generation', () => {
       },
       renderer: renderer as never,
       storage,
+      createVersionId: () => 'version_1',
     });
-    expect(result.path).toBe('proposal_1/boards/board_1/cover.png');
-    expect(result.url).toBe('https://assets.example/cover.png');
+    expect(result.path).toBe('proposal_1/boards/board_1/cover-version_1.png');
+    expect(result.url).toBe('https://assets.example/signed-cover.png');
     expect(result.raster).toBe(raster);
     expect(storage.upload).toHaveBeenCalledWith(
-      'proposal_1/boards/board_1/cover.png',
+      'proposal_1/boards/board_1/cover-version_1.png',
       blob,
+    );
+    expect(storage.createSignedUrl).toHaveBeenCalledWith(
+      'proposal_1/boards/board_1/cover-version_1.png',
     );
   });
 

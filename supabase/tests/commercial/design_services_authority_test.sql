@@ -192,7 +192,7 @@ DO $$ BEGIN
   ) ~ 'FROM public\.projects project\s+WHERE project.id = NEW.project_id\s+FOR UPDATE',
     'time ceiling classifier must serialize on the stable project row';
   ASSERT pg_get_functiondef(
-    'public.countersign_design_services_agreement(uuid,text)'::regprocedure
+    'public._countersign_design_services_agreement_impl(uuid,text)'::regprocedure
   ) ~ 'PERFORM 1 FROM public\.projects\s+WHERE id = v_project_id\s+FOR UPDATE',
     'addendum countersign must serialize on the shared project row';
   ASSERT EXISTS (
@@ -669,11 +669,9 @@ BEGIN
   ASSERT (SELECT count(*) FROM public.project_ffe_items
           WHERE project_id = v_project_id) = 0,
     'client directly read commercial-origin FF&E';
-  -- Named rather than counted: the legacy-origin project also carries the
-  -- 00422 cross-project probe line, and both are legitimately client-visible.
-  ASSERT EXISTS (SELECT 1 FROM public.project_ffe_items
-                 WHERE id = 'd5750000-0000-4000-8000-000000000001'),
-    'legacy client FF&E visibility regressed';
+  ASSERT NOT EXISTS (SELECT 1 FROM public.project_ffe_items
+                     WHERE id = 'd5750000-0000-4000-8000-000000000001'),
+    'client directly read a legacy raw FF&E row';
   ASSERT (SELECT count(*) FROM public.commercial_document_signatures
           WHERE proposal_id = 'd5300000-0000-4000-8000-000000000001') = 0,
     'client directly read commercial signatures';

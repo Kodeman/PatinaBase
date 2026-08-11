@@ -36,12 +36,12 @@ function prepared(assetId: string): PreparedBoardImage {
 function storage(): BoardAssetStorage & {
   upload: jest.Mock;
   remove: jest.Mock;
-  getPublicUrl: jest.Mock;
+  createSignedUrl: jest.Mock;
 } {
   return {
     upload: jest.fn(async (path: string) => ({ path })),
     remove: jest.fn(async () => undefined),
-    getPublicUrl: jest.fn((path: string) => `https://storage.example/${path}`),
+    createSignedUrl: jest.fn(async (path: string) => `https://storage.example/signed/${path}`),
   };
 }
 
@@ -64,10 +64,10 @@ describe('canonical mood-board asset upload', () => {
       'asset-id-thumb.webp',
     ]);
     expect(result).toMatchObject({
-      image_url: 'https://storage.example/owner-id/boards/board-id/asset-id.webp',
+      image_url: 'https://storage.example/signed/owner-id/boards/board-id/asset-id.webp',
       data: {
         thumbnail_url:
-          'https://storage.example/owner-id/boards/board-id/asset-id-thumb.webp',
+          'https://storage.example/signed/owner-id/boards/board-id/asset-id-thumb.webp',
       },
       assets: {
         display: { path: 'owner-id/boards/board-id/asset-id.webp' },

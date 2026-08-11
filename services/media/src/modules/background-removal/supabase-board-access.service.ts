@@ -138,6 +138,13 @@ export class SupabaseBoardAccessService {
       });
     }
 
+    const mediaAllowed = await this.rpc<boolean>(userJwt, 'can_process_board_item_media', {
+      p_board_id: boardId,
+      p_item_id: itemId,
+      p_reference: sourceUrl,
+    });
+    if (mediaAllowed !== true) throw this.notFound();
+
     return {
       ...board,
       item: {

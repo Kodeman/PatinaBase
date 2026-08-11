@@ -9,9 +9,51 @@ import {
   UrlError,
 } from '../capture-from-url/ssrf.ts';
 import {
+  boardStoragePath,
   hydrateCompositionImages,
   loadCompositionImage,
+  resolvePrivateBoardImageSources,
+  serviceMayResolveBoardProjection,
 } from './image-loader.ts';
+
+Deno.test('private board references normalize and resolve before PDF hydration', () => {
+  const path = 'owner/boards/board/image.png';
+  assertEquals(boardStoragePath(path), path);
+  assertEquals(
+    boardStoragePath(`https://storage.example/storage/v1/object/public/proposal-mood-boards/${path}?download=1`),
+    path,
+  );
+  assertEquals(boardStoragePath('https://images.example/product.png'), null);
+  assertEquals(
+    resolvePrivateBoardImageSources(
+      [
+        { imageUrl: path, key: 'private' },
+        { imageUrl: 'https://images.example/product.png', key: 'external' },
+      ],
+      new Map([[path, 'https://storage.example/signed-image']]),
+    ),
+    [
+      { imageUrl: 'https://storage.example/signed-image', key: 'private' },
+      { imageUrl: 'https://images.example/product.png', key: 'external' },
+    ],
+  );
+});
+
+Deno.test('service PDF signing fails closed on an incoherent board projection', async () => {
+  const calls: unknown[] = [];
+  const allowed = await serviceMayResolveBoardProjection({
+    rpc(name, args) {
+      calls.push({ name, args });
+      return Promise.resolve({ data: false, error: null });
+    },
+  }, 'board-a');
+
+  assertEquals(allowed, false);
+  assertEquals(calls, [{
+    name: 'board_media_projection_is_allowed',
+    args: { p_board_id: 'board-a' },
+  }]);
+});
 
 Deno.test('composition image hydration caches successes and collapses failures to null', async () => {
   let calls = 0;

@@ -63,10 +63,10 @@ function setup() {
     upload: jest
       .fn()
       .mockResolvedValueOnce(
-        `https://supabase.example/storage/v1/object/public/proposal-mood-boards/${OWNER_ID}/boards/${BOARD_ID}/${REQUEST_ID}-original.png`,
+        `${OWNER_ID}/boards/${BOARD_ID}/${REQUEST_ID}-original.png`,
       )
       .mockResolvedValueOnce(
-        `https://supabase.example/storage/v1/object/public/proposal-mood-boards/${OWNER_ID}/boards/${BOARD_ID}/${REQUEST_ID}-cutout.png`,
+        `${OWNER_ID}/boards/${BOARD_ID}/${REQUEST_ID}-cutout.png`,
       ),
   };
   const external = {

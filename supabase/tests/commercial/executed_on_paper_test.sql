@@ -439,7 +439,8 @@ DECLARE v_def text;
 BEGIN
   SELECT pg_get_functiondef(p.oid) INTO v_def
   FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-  WHERE n.nspname = 'public' AND p.proname = 'record_paper_client_signature';
+  WHERE n.nspname = 'public'
+    AND p.proname = '_record_paper_client_signature_impl';
   ASSERT position('NOT public._can_author_proposal(v_proposal.designer_id)' IN v_def) > 0,
     'FALSIFY setup: the actor predicate must be findable in the live definition';
   EXECUTE replace(v_def,

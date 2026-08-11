@@ -25,7 +25,7 @@ describe('mood board cover lifecycle', () => {
     jest.restoreAllMocks();
   });
 
-  it('turns an edit into render, stable-path upload, and board persistence after 30s', async () => {
+  it('turns an edit into render, versioned upload, and board persistence after 30s', async () => {
     const blob = new Blob(['cover'], { type: 'image/png' });
     const renderer = jest.fn().mockResolvedValue({
       blob,
@@ -38,7 +38,7 @@ describe('mood board cover lifecycle', () => {
     });
     const storage = {
       upload: jest.fn().mockResolvedValue(undefined),
-      publicUrl: jest.fn().mockReturnValue('https://assets.example/cover.png'),
+      createSignedUrl: jest.fn().mockResolvedValue('https://assets.example/signed-cover.png'),
     };
     const persist = jest.fn().mockResolvedValue(undefined);
     const lifecycle = createMoodBoardCoverLifecycle({
@@ -49,6 +49,7 @@ describe('mood board cover lifecycle', () => {
           input: current.input,
           renderer: renderer as never,
           storage,
+          createVersionId: () => 'version_1',
         });
         await persist({
           boardId: current.boardId,
@@ -82,12 +83,12 @@ describe('mood board cover lifecycle', () => {
 
     expect(renderer).toHaveBeenCalledWith(editedInput);
     expect(storage.upload).toHaveBeenCalledWith(
-      'proposal_1/boards/board_1/cover.png',
+      'proposal_1/boards/board_1/cover-version_1.png',
       blob,
     );
     expect(persist).toHaveBeenCalledWith({
       boardId: 'board_1',
-      coverImageUrl: 'https://assets.example/cover.png',
+      coverImageUrl: 'https://assets.example/signed-cover.png',
     });
   });
 

@@ -256,6 +256,7 @@ public actor ProposalsAPIClient {
 
     static let listReadRPC = "list_client_proposals"
     static let detailReadRPC = "get_client_proposal_bundle"
+    private static let boardBucket = "proposal-mood-boards"
 
     private struct ClientProposalBundleParams: Encodable {
         let p_proposal_id: String
@@ -275,10 +276,93 @@ public actor ProposalsAPIClient {
     /// One atomic proposal document. The function rejects draft/revised copies,
     /// foreign clients, and unauthenticated callers before building the DTO.
     public func fetchProposalBundle(id: String) async throws -> RemoteProposalBundle {
-        try await client
+        let bundle: RemoteProposalBundle = try await client
             .rpc(Self.detailReadRPC, params: ClientProposalBundleParams(p_proposal_id: id))
             .execute()
             .value
+        return try await signBoardMedia(in: bundle)
+    }
+
+    /// Mirrors migration 00434 + the shared web parser: legacy public URLs,
+    /// authenticated/signed URLs and bare keys resolve to one bucket path.
+    private static func canonicalBoardPath(_ reference: String?) -> String? {
+        guard let raw = reference?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty else { return nil }
+        let withoutQuery = raw.split(separator: "?", maxSplits: 1).first.map(String.init) ?? raw
+        let markers = [
+            "/storage/v1/object/public/\(boardBucket)/",
+            "/storage/v1/object/authenticated/\(boardBucket)/",
+            "/storage/v1/object/sign/\(boardBucket)/",
+            "/storage/v1/render/image/public/\(boardBucket)/",
+            "/storage/v1/render/image/authenticated/\(boardBucket)/",
+            "/storage/v1/render/image/sign/\(boardBucket)/",
+        ]
+        for marker in markers {
+            if let range = withoutQuery.range(of: marker) {
+                let path = String(withoutQuery[range.upperBound...])
+                return safeBoardPath(path) ? path : nil
+            }
+        }
+        if withoutQuery.lowercased().hasPrefix("http://") ||
+            withoutQuery.lowercased().hasPrefix("https://") { return nil }
+        var path = withoutQuery.drop(while: { $0 == "/" }).description
+        if path.hasPrefix("\(boardBucket)/") {
+            path.removeFirst(boardBucket.count + 1)
+        }
+        return safeBoardPath(path) ? path : nil
+    }
+
+    private static func safeBoardPath(_ path: String) -> Bool {
+        !path.isEmpty && !path.split(separator: "/", omittingEmptySubsequences: false)
+            .contains(where: { $0 == ".." || $0.isEmpty })
+    }
+
+    private func signBoardMedia(in bundle: RemoteProposalBundle) async throws -> RemoteProposalBundle {
+        var paths = Set<String>()
+        for board in bundle.boards {
+            if let path = Self.canonicalBoardPath(board.cover_image_url) { paths.insert(path) }
+            for item in board.items ?? [] {
+                if let path = Self.canonicalBoardPath(item.image_url) { paths.insert(path) }
+            }
+        }
+
+        var signedByPath: [String: String] = [:]
+        for path in paths {
+            let signed = try await client.storage
+                .from(Self.boardBucket)
+                .createSignedURL(path: path, expiresIn: 3600)
+            signedByPath[path] = signed.absoluteString
+        }
+        func resolved(_ reference: String?) -> String? {
+            guard let reference else { return nil }
+            guard let path = Self.canonicalBoardPath(reference) else { return reference }
+            return signedByPath[path]
+        }
+
+        let boards = bundle.boards.map { board in
+            RemoteProposalBoard(
+                id: board.id,
+                name: board.name,
+                cover_image_url: resolved(board.cover_image_url),
+                sort_order: board.sort_order,
+                items: board.items?.map { item in
+                    RemoteProposalBoardItem(
+                        type: item.type,
+                        image_url: resolved(item.image_url),
+                        z_index: item.z_index
+                    )
+                }
+            )
+        }
+        return RemoteProposalBundle(
+            proposal: bundle.proposal,
+            sections: bundle.sections,
+            payment_milestones: bundle.payment_milestones,
+            phases: bundle.phases,
+            exclusions: bundle.exclusions,
+            scope_rooms: bundle.scope_rooms,
+            boards: boards
+        )
     }
 
     /// The proposal id linked to an activated project (`proposals.project_id`),

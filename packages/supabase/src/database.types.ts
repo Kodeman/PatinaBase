@@ -890,6 +890,7 @@ export type Database = {
           id: string
           items: Json
           kind: string
+          media_references_validated_at: string | null
           name: string
           sections: Json
           studio_id: string | null
@@ -907,6 +908,7 @@ export type Database = {
           id?: string
           items?: Json
           kind: string
+          media_references_validated_at?: string | null
           name: string
           sections?: Json
           studio_id?: string | null
@@ -924,6 +926,7 @@ export type Database = {
           id?: string
           items?: Json
           kind?: string
+          media_references_validated_at?: string | null
           name?: string
           sections?: Json
           studio_id?: string | null
@@ -4917,6 +4920,8 @@ export type Database = {
       document_shares: {
         Row: {
           board_id: string | null
+          board_payload: Json | null
+          board_payload_hash: string | null
           created_at: string
           created_by: string | null
           expires_at: string | null
@@ -4933,6 +4938,8 @@ export type Database = {
         }
         Insert: {
           board_id?: string | null
+          board_payload?: Json | null
+          board_payload_hash?: string | null
           created_at?: string
           created_by?: string | null
           expires_at?: string | null
@@ -4949,6 +4956,8 @@ export type Database = {
         }
         Update: {
           board_id?: string | null
+          board_payload?: Json | null
+          board_payload_hash?: string | null
           created_at?: string
           created_by?: string | null
           expires_at?: string | null
@@ -24751,6 +24760,19 @@ export type Database = {
         Args: { p_snapshot: Json }
         Returns: string
       }
+      _countersign_design_services_agreement_impl: {
+        Args: { p_proposal_id: string; p_signer_name: string }
+        Returns: Json
+      }
+      _create_furnishings_authorization_from_schedule_impl: {
+        Args: {
+          p_deposit_percent?: number
+          p_ffe_item_ids: string[]
+          p_name: string
+          p_project_id: string
+        }
+        Returns: Json
+      }
       _custom_commission_milestone_json: {
         Args: { p_milestone_id: string }
         Returns: Json
@@ -24893,6 +24915,14 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      _instantiate_product_configuration_template_impl: {
+        Args: {
+          p_name?: string
+          p_project_id: string
+          p_template_configuration_id: string
+        }
+        Returns: Json
       }
       _is_design_services_project: {
         Args: { p_project_id: string }
@@ -25060,6 +25090,17 @@ export type Database = {
         }
         Returns: Json
       }
+      _place_product_configuration_in_project_impl: {
+        Args: {
+          p_category?: string
+          p_configuration_id: string
+          p_project_id: string
+          p_room_id?: string
+          p_slot_id?: string
+          p_source?: Json
+        }
+        Returns: Json
+      }
       _plan_room_canonical_json: { Args: { p_value: Json }; Returns: string }
       _plan_room_rev_letter: { Args: { p_n: number }; Returns: string }
       _plan_room_set_doc_visibility: {
@@ -25092,6 +25133,10 @@ export type Database = {
       }
       _product_configuration_json: {
         Args: { p_configuration_id: string }
+        Returns: Json
+      }
+      _promote_configuration_to_library_impl: {
+        Args: { p_configuration_id: string; p_name?: string }
         Returns: Json
       }
       _proposal_phase_effect_snapshot: {
@@ -25176,6 +25221,15 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      _record_paper_client_signature_impl: {
+        Args: {
+          p_paper_signed_on: string
+          p_proposal_id: string
+          p_scan_document_id?: string
+          p_signed_name: string
+        }
+        Returns: Json
+      }
       _repair_legacy_proposal_phase_topology: {
         Args: { p_proposal_id: string }
         Returns: boolean
@@ -25232,6 +25286,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      _save_product_configuration_impl: {
+        Args: { p_input: Json }
+        Returns: Json
       }
       _scope_change_requester_can_author: {
         Args: { p_actor: string; p_owner: string }
@@ -25895,6 +25953,71 @@ export type Database = {
         Args: { p_claim_token: string; p_dispatch_id: string }
         Returns: Json
       }
+      board_json_has_explicit_media_reference: {
+        Args: { p_object_name: string; p_value: Json }
+        Returns: boolean
+      }
+      board_json_media_references_are_allowed: {
+        Args: {
+          p_target_designer?: string
+          p_target_studio?: string
+          p_value: Json
+        }
+        Returns: boolean
+      }
+      board_json_media_references_have_live_source: {
+        Args: {
+          p_target_designer?: string
+          p_target_studio?: string
+          p_value: Json
+        }
+        Returns: boolean
+      }
+      board_json_references_storage_object: {
+        Args: { p_object_name: string; p_value: Json }
+        Returns: boolean
+      }
+      board_media_owners_share_studio: {
+        Args: {
+          p_source_designer: string
+          p_target_designer: string
+          p_target_studio?: string
+        }
+        Returns: boolean
+      }
+      board_media_projection_is_allowed: {
+        Args: { p_board_id: string }
+        Returns: boolean
+      }
+      board_media_reference_has_live_source: {
+        Args: {
+          p_reference: string
+          p_target_designer?: string
+          p_target_studio?: string
+        }
+        Returns: boolean
+      }
+      board_media_reference_is_allowed: {
+        Args: {
+          p_reference: string
+          p_target_designer?: string
+          p_target_studio?: string
+        }
+        Returns: boolean
+      }
+      board_storage_reference_path: {
+        Args: { p_reference: string }
+        Returns: string
+      }
+      build_board_share_payload: {
+        Args: {
+          p_board_id: string
+          p_expires_at: string
+          p_label: string
+          p_share_id: string
+        }
+        Returns: Json
+      }
       calculate_engagement_score: {
         Args: { p_user_id: string }
         Returns: number
@@ -25912,6 +26035,14 @@ export type Database = {
         Returns: boolean
       }
       can_manage_invoice: { Args: { p_invoice_id: string }; Returns: boolean }
+      can_process_board_item_media: {
+        Args: { p_board_id: string; p_item_id: string; p_reference: string }
+        Returns: boolean
+      }
+      can_read_board_storage_object: {
+        Args: { p_object_name: string }
+        Returns: boolean
+      }
       can_submit_item_feedback_anchor: {
         Args: {
           p_board_item_id: string
@@ -27627,6 +27758,10 @@ export type Database = {
         Args: { _project_id: string; _user_id?: string }
         Returns: boolean
       }
+      is_released_board_storage_object: {
+        Args: { p_object_name: string }
+        Returns: boolean
+      }
       is_studio_comember: { Args: { p_owner: string }; Returns: boolean }
       issue_invoice: {
         Args: { p_due_date?: string; p_invoice_id: string }
@@ -28767,6 +28902,7 @@ export type Database = {
           id: string
           items: Json
           kind: string
+          media_references_validated_at: string | null
           name: string
           sections: Json
           studio_id: string | null

@@ -14,7 +14,7 @@ export interface BoardAssetStorage {
     file: File,
     options: { contentType: string; cacheControl: string; upsert: false },
   ): Promise<{ path: string }>;
-  getPublicUrl(path: string): string;
+  createSignedUrl(path: string): Promise<string>;
   remove(paths: string[]): Promise<void>;
 }
 
@@ -69,8 +69,11 @@ export function createBoardAssetStorage(): BoardAssetStorage {
       if (!data?.path) throw new Error('Board asset upload returned no path');
       return { path: data.path };
     },
-    getPublicUrl(path) {
-      return bucket.getPublicUrl(path).data.publicUrl;
+    async createSignedUrl(path) {
+      const { data, error } = await bucket.createSignedUrl(path, 3600);
+      if (error) throw new Error(error.message);
+      if (!data?.signedUrl) throw new Error('Board asset signing returned no URL');
+      return data.signedUrl;
     },
     async remove(paths) {
       if (paths.length === 0) return;
@@ -125,8 +128,10 @@ export async function uploadPreparedBoardImage(options: {
     );
     uploadedPaths.push(thumbnail.path);
 
-    const displayUrl = storage.getPublicUrl(display.path);
-    const thumbnailUrl = storage.getPublicUrl(thumbnail.path);
+    const [displayUrl, thumbnailUrl] = await Promise.all([
+      storage.createSignedUrl(display.path),
+      storage.createSignedUrl(thumbnail.path),
+    ]);
     return {
       image_url: displayUrl,
       data: { thumbnail_url: thumbnailUrl },

@@ -10,6 +10,63 @@ import {
 const MAX_REDIRECTS = 3;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const TIMEOUT_MS = 5_000;
+const BOARD_BUCKET = 'proposal-mood-boards';
+
+export async function serviceMayResolveBoardProjection(
+  admin: {
+    rpc(name: string, args: Record<string, unknown>): Promise<{
+      data: unknown;
+      error: unknown;
+    }>;
+  },
+  boardId: string,
+): Promise<boolean> {
+  const { data, error } = await admin.rpc('board_media_projection_is_allowed', {
+    p_board_id: boardId,
+  });
+  if (error) throw error;
+  return data === true;
+}
+
+const BOARD_MARKERS = [
+  `/storage/v1/object/public/${BOARD_BUCKET}/`,
+  `/storage/v1/object/authenticated/${BOARD_BUCKET}/`,
+  `/storage/v1/object/sign/${BOARD_BUCKET}/`,
+  `/storage/v1/render/image/public/${BOARD_BUCKET}/`,
+  `/storage/v1/render/image/authenticated/${BOARD_BUCKET}/`,
+  `/storage/v1/render/image/sign/${BOARD_BUCKET}/`,
+];
+
+/** Canonical 00434 board reference parser for server-side PDF hydration. */
+export function boardStoragePath(value: string | null): string | null {
+  const raw = value?.trim();
+  if (!raw) return null;
+  const withoutQuery = raw.split('?', 1)[0];
+  for (const marker of BOARD_MARKERS) {
+    const index = withoutQuery.indexOf(marker);
+    if (index >= 0) {
+      const path = withoutQuery.slice(index + marker.length);
+      return path && !/(^|\/)\.\.(\/|$)/.test(path) ? path : null;
+    }
+  }
+  if (/^https?:\/\//i.test(withoutQuery)) return null;
+  const unprefixed = withoutQuery.replace(/^\/+/, '');
+  const path = unprefixed.startsWith(`${BOARD_BUCKET}/`)
+    ? unprefixed.slice(BOARD_BUCKET.length + 1)
+    : unprefixed;
+  return path && !/(^|\/)\.\.(\/|$)/.test(path) ? path : null;
+}
+
+export function resolvePrivateBoardImageSources<T extends CompositionImageSource>(
+  sources: readonly T[],
+  signedByPath: ReadonlyMap<string, string>,
+): T[] {
+  return sources.map((source) => {
+    const path = boardStoragePath(source.imageUrl);
+    if (!path) return { ...source };
+    return { ...source, imageUrl: signedByPath.get(path) ?? null };
+  });
+}
 
 function isRedirect(status: number): boolean {
   return status === 301 || status === 302 || status === 303 || status === 307 ||

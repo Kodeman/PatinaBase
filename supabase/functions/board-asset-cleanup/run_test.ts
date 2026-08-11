@@ -174,6 +174,7 @@ Deno.test(
         project_id: null,
         cover_image_url: null,
       }],
+      shares: [],
     };
     const referenced = [
       pastedFromSecondBoard,

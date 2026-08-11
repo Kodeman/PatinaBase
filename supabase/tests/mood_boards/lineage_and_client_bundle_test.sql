@@ -205,9 +205,10 @@ BEGIN
   BEGIN
     DELETE FROM public.project_boards
     WHERE id = 'c4072000-0000-4000-8000-000000000001';
-    RAISE EXCEPTION 'source snapshot unexpectedly deleted through live lineage';
-  EXCEPTION WHEN foreign_key_violation THEN
-    NULL;
+    ASSERT NOT FOUND,
+      'immutable project-board snapshot unexpectedly deleted';
+  EXCEPTION
+    WHEN insufficient_privilege OR object_not_in_prerequisite_state THEN NULL;
   END;
 END;
 $$;

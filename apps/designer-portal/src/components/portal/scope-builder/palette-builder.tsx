@@ -297,14 +297,17 @@ function ImageTab({
       setUploading(true);
       try {
         const supabase = createBrowserClient();
-        const path = `${paletteId}/${crypto.randomUUID()}.${file.name.split('.').pop() ?? 'jpg'}`;
+        const path = `${proposalId}/palettes/${paletteId}/${crypto.randomUUID()}.${file.name.split('.').pop() ?? 'jpg'}`;
         const { error } = await supabase.storage.from('proposal-mood-boards').upload(path, file, {
-          upsert: true,
+          upsert: false,
           contentType: file.type,
         });
         if (error) throw error;
-        const { data } = supabase.storage.from('proposal-mood-boards').getPublicUrl(path);
-        upsertPalette.mutate({ proposalId, paletteId, sourceImageUrl: data.publicUrl });
+        const { data, error: signError } = await supabase.storage
+          .from('proposal-mood-boards')
+          .createSignedUrl(path, 3600);
+        if (signError) throw signError;
+        upsertPalette.mutate({ proposalId, paletteId, sourceImageUrl: data.signedUrl });
       } finally {
         setUploading(false);
       }
