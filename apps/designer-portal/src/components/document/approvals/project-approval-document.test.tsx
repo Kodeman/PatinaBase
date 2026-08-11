@@ -114,6 +114,7 @@ const renderDocument = () =>
     <ProjectApprovalDocument
       projectId="project-1"
       clientProfileId="client-1"
+      clientName="Marta Chen"
       phases={[
         {
           id: 'phase-1',
@@ -201,6 +202,32 @@ describe('ProjectApprovalDocument authority and composer', () => {
     expect(screen.getByLabelText('Exact project phase')).toHaveTextContent(
       'Design development',
     );
+  });
+
+  it('stages the authoring flow as the six named gate parts', () => {
+    authority = {
+      projectId: 'project-1',
+      decisionLeadId: 'client-1',
+      requiredCoapproverId: null,
+      revision: 4,
+    };
+    const { container } = renderDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'New approval' }));
+
+    const parts = Array.from(
+      container.querySelectorAll('form [data-gate-part]'),
+    );
+    expect(parts.map((part) => part.getAttribute('data-gate-part'))).toEqual([
+      'artifact',
+      'question',
+      'scope',
+      'impact',
+      'authority',
+      'confirmation',
+    ]);
+    expect(parts.every((part) => part.tagName === 'FIELDSET')).toBe(true);
+    expect(screen.getByRole('group', { name: 'Artifact' })).toBeVisible();
+    expect(screen.getByLabelText('Scope note')).toBeVisible();
   });
 
   it('sends the exact phase/artifact, preserves all three signed zero deltas, and reuses the key on retry', async () => {
@@ -609,7 +636,7 @@ describe('ProjectApprovalDocument lifecycle and accessibility', () => {
     approvals = [baseReview];
     const { rerender } = renderDocument();
 
-    expect(screen.getByRole('button', { name: 'Publish' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Publish for approval' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Withdraw' })).toBeEnabled();
     expect(
       screen.queryByRole('button', { name: 'Supersede with new artifact' }),
@@ -629,7 +656,7 @@ describe('ProjectApprovalDocument lifecycle and accessibility', () => {
         ]}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish for approval' }));
     await waitFor(() =>
       expect(publishApproval).toHaveBeenCalledWith({
         projectId: 'project-1',
@@ -730,6 +757,330 @@ describe('ProjectApprovalDocument lifecycle and accessibility', () => {
     expect(
       screen.getByText(/This approval belongs to a completed phase/),
     ).toHaveAttribute('role', 'status');
+  });
+
+  it('unfolds a live leaf as the six-part gate, in order', () => {
+    authority = {
+      decisionLeadId: 'client-1',
+      requiredCoapproverId: null,
+      revision: 4,
+    };
+    approvals = [{ ...baseReview, lifecycleStatus: 'pending' }];
+    const { container } = renderDocument();
+
+    const row = container.querySelector('[data-gate-state="open"]');
+    expect(row).not.toBeNull();
+    expect(
+      Array.from(row!.querySelectorAll('[data-gate-part]')).map((part) =>
+        part.getAttribute('data-gate-part'),
+      ),
+    ).toEqual([
+      'artifact',
+      'question',
+      'scope',
+      'impact',
+      'authority',
+      'confirmation',
+    ]);
+  });
+
+  it('states the artifact at its frozen edition and proof', () => {
+    authority = {
+      decisionLeadId: 'client-1',
+      requiredCoapproverId: null,
+      revision: 4,
+    };
+    approvals = [{ ...baseReview, lifecycleStatus: 'pending' }];
+    renderDocument();
+
+    expect(
+      screen.getByText(`Edition 2 · frozen at publish · proof ${'a'.repeat(8)}`),
+    ).toBeVisible();
+  });
+
+  it('renders SCOPE from the bound phase, and the note only when one was written', () => {
+    authority = {
+      decisionLeadId: 'client-1',
+      requiredCoapproverId: null,
+      revision: 4,
+    };
+    approvals = [{ ...baseReview, lifecycleStatus: 'pending' }];
+    const { rerender } = renderDocument();
+
+    expect(
+      screen.getByText(
+        'Bound to Design development — the sole phase this decision releases.',
+      ),
+    ).toBeVisible();
+    expect(screen.queryByText('Main floor only; study excluded.')).toBeNull();
+
+    approvals = [
+      {
+        ...baseReview,
+        lifecycleStatus: 'pending',
+        context: 'Main floor only; study excluded.',
+      },
+    ];
+    rerender(
+      <ProjectApprovalDocument
+        projectId="project-1"
+        clientProfileId="client-1"
+        phases={[
+          { id: 'phase-1', name: 'Design development', status: 'in_progress' },
+        ]}
+      />,
+    );
+    expect(
+      screen.getByText('Main floor only; study excluded.'),
+    ).toBeVisible();
+  });
+
+  it('signs every impact, and says so when a delta is zero', () => {
+    authority = {
+      decisionLeadId: 'client-1',
+      requiredCoapproverId: null,
+      revision: 4,
+    };
+    approvals = [
+      {
+        ...baseReview,
+        lifecycleStatus: 'pending',
+        costCentsDelta: 420000,
+        scheduleDaysDelta: 6,
+        leadTimeDaysDelta: 0,
+      },
+    ];
+    renderDocument();
+
+    expect(
+      screen.getByText('+$4,200 · +6 days · lead time unchanged'),
+    ).toBeVisible();
+  });
+
+  it('collapses an approved gate to a seal and an Approved stamp', () => {
+    authority = {
+      decisionLeadId: 'client-1',
+      requiredCoapproverId: null,
+      revision: 4,
+    };
+    approvals = [
+      {
+        ...baseReview,
+        lifecycleStatus: 'responded',
+        outcome: 'approved',
+        respondedAt: '2026-05-12T12:00:00.000Z',
+        context: 'Main floor released · 3 rooms · study excluded',
+      },
+    ];
+    const { container } = renderDocument();
+
+    expect(
+      container.querySelector('[data-gate-state="sealed"]'),
+    ).not.toBeNull();
+    expect(screen.getByText(/^Approved · /)).toBeVisible();
+    expect(
+      screen.getByText('Main floor released · 3 rooms · study excluded'),
+    ).toBeVisible();
+    // The ceremony is folded away, not left open beside its own seal.
+    expect(container.querySelector('[data-gate-part]')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Publish for approval' })).toBeNull();
+  });
+
+  it('links the superseded edition under the seal and focuses it in place', () => {
+    authority = {
+      decisionLeadId: 'client-1',
+      requiredCoapproverId: null,
+      revision: 4,
+    };
+    approvals = [
+      {
+        ...baseReview,
+        decisionId: 'decision-1',
+        artifactVersion: 2,
+        disposition: 'superseded',
+        successorDecisionId: 'decision-2',
+      },
+      {
+        ...baseReview,
+        decisionId: 'decision-2',
+        artifactVersion: 3,
+        artifactChecksum: 'b'.repeat(64),
+        lifecycleStatus: 'responded',
+        outcome: 'approved',
+        predecessorDecisionId: 'decision-1',
+        respondedAt: '2026-05-12T12:00:00.000Z',
+      },
+    ];
+    const scrollIntoView = jest.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    renderDocument();
+
+    const link = screen.getByRole('button', {
+      name: 'Edition 2 superseded — view',
+    });
+    fireEvent.click(link);
+
+    expect(document.getElementById('project-approval-decision-1')).toHaveFocus();
+    expect(scrollIntoView).toHaveBeenCalled();
+  });
+
+  it('keeps a bounced gate unfolded — changes requested is not settled', () => {
+    authority = {
+      decisionLeadId: 'client-1',
+      requiredCoapproverId: null,
+      revision: 4,
+    };
+    approvals = [
+      {
+        ...baseReview,
+        lifecycleStatus: 'responded',
+        outcome: 'changes_requested',
+        respondedAt: '2026-05-12T12:00:00.000Z',
+        costCentsDelta: 420050,
+      },
+    ];
+    const { container } = renderDocument();
+
+    expect(container.querySelector('[data-gate-state="open"]')).not.toBeNull();
+    expect(container.querySelector('[data-gate-state="sealed"]')).toBeNull();
+    expect(
+      Array.from(container.querySelectorAll('[data-gate-part]')).map((part) =>
+        part.getAttribute('data-gate-part'),
+      ),
+    ).toEqual([
+      'artifact',
+      'question',
+      'scope',
+      'impact',
+      'authority',
+      'confirmation',
+    ]);
+    // The question and its impact stay readable while the client waits.
+    expect(screen.getByText('Approve this exact drawing set?')).toBeVisible();
+    expect(
+      screen.getByText('+$4,200.50 · -2 days · +7 lead-time days'),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Supersede with new artifact' }),
+    ).toBeEnabled();
+  });
+
+  it('names the decision lead on every gate surface, with a role fallback', () => {
+    authority = {
+      projectId: 'project-1',
+      decisionLeadId: 'client-1',
+      requiredCoapproverId: null,
+      revision: 4,
+    };
+    approvals = [{ ...baseReview, lifecycleStatus: 'pending' }];
+    const { rerender } = renderDocument();
+
+    expect(
+      screen.getByText('Decision lead — Marta Chen · frozen at publish'),
+    ).toBeVisible();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Supersede with new artifact' }),
+    );
+    expect(
+      screen.getAllByText('Decision lead — Marta Chen · frozen at publish'),
+    ).toHaveLength(2);
+
+    rerender(
+      <ProjectApprovalDocument
+        projectId="project-1"
+        clientProfileId="client-1"
+        clientName={null}
+        phases={[
+          { id: 'phase-1', name: 'Design development', status: 'in_progress' },
+        ]}
+      />,
+    );
+    expect(
+      screen.getAllByText(
+        'Decision lead — the designated project client · frozen at publish',
+      ).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('states which edition settled on the seal', () => {
+    authority = {
+      decisionLeadId: 'client-1',
+      requiredCoapproverId: null,
+      revision: 4,
+    };
+    approvals = [
+      {
+        ...baseReview,
+        lifecycleStatus: 'responded',
+        outcome: 'approved',
+        respondedAt: '2026-05-12T12:00:00.000Z',
+      },
+    ];
+    renderDocument();
+
+    expect(
+      screen.getByText(`Edition 2 · frozen at publish · proof ${'a'.repeat(8)}`),
+    ).toBeVisible();
+  });
+
+  it('renders whole dollars without decimals and part-dollars with two', () => {
+    authority = {
+      decisionLeadId: 'client-1',
+      requiredCoapproverId: null,
+      revision: 4,
+    };
+    approvals = [
+      {
+        ...baseReview,
+        lifecycleStatus: 'pending',
+        costCentsDelta: 420000,
+        scheduleDaysDelta: 0,
+        leadTimeDaysDelta: 0,
+      },
+    ];
+    const { rerender } = renderDocument();
+    expect(
+      screen.getByText('+$4,200 · schedule unchanged · lead time unchanged'),
+    ).toBeVisible();
+
+    approvals = [
+      {
+        ...baseReview,
+        lifecycleStatus: 'pending',
+        costCentsDelta: -420050,
+        scheduleDaysDelta: 0,
+        leadTimeDaysDelta: 0,
+      },
+    ];
+    rerender(
+      <ProjectApprovalDocument
+        projectId="project-1"
+        clientProfileId="client-1"
+        clientName="Marta Chen"
+        phases={[
+          { id: 'phase-1', name: 'Design development', status: 'in_progress' },
+        ]}
+      />,
+    );
+    expect(
+      screen.getByText('-$4,200.50 · schedule unchanged · lead time unchanged'),
+    ).toBeVisible();
+  });
+
+  it('carries no shadow anywhere in the ceremony (D4)', () => {
+    authority = {
+      decisionLeadId: 'client-1',
+      requiredCoapproverId: null,
+      revision: 4,
+    };
+    approvals = [{ ...baseReview, lifecycleStatus: 'pending' }];
+    const { container } = renderDocument();
+
+    expect(container.innerHTML).not.toMatch(/shadow/);
   });
 
   it('has named controls, 44px actions, and a one-column 320px base layout', async () => {

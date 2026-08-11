@@ -14,7 +14,7 @@ async function expectNoHorizontalOverflow(page: AuthenticatedPage) {
     .toBe(true);
 }
 
-test('workflow document reflows at 320px without horizontal overflow', async ({
+test('section stage line reflows at 320px without horizontal overflow', async ({
   authenticatedPage: page,
 }) => {
   await page.setViewportSize({ width: 320, height: 900 });

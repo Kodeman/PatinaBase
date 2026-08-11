@@ -58,7 +58,7 @@ import { AccountBand } from '@/components/document/account-band';
 import { ScheduleNavProvider } from '@/components/document/schedule/schedule-nav-context';
 import { RippleProvider } from '@/components/document/schedule/schedule-ripple-context';
 import { ProjectScheduleHandoffMount } from '@/components/document/project-schedule-handoff-mount';
-import { WorkflowStageDocumentMount } from '@/components/document/workflow-stage-document-mount';
+import { SectionStageLineMount } from '@/components/document/section-stage-line-mount';
 import { ProjectApprovalDocumentMount } from '@/components/document/project-approval-document-mount';
 import { LetterheadInstruments } from '@/components/document/letterhead-instruments';
 import { CallSheetMount } from '@/components/document/roster/call-sheet-mount';
@@ -662,7 +662,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           anchorKind="letterhead"
         />
 
-        <WorkflowStageDocumentMount
+        <SectionStageLineMount
           projectId={
             row.engagement_kind === 'project' ? row.project_id : null
           }
@@ -675,6 +675,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           clientProfileId={
             row.engagement_kind === 'project' ? (project?.client_id ?? null) : null
           }
+          clientName={row.client_name}
           phases={phases}
         />
 

@@ -66,6 +66,81 @@ export function eligibleSupersessionCandidates(
   );
 }
 
+/**
+ * Whole dollars carry no decimals; anything else carries both, so 420050 cents
+ * reads "$4,200.50" rather than "$4,200.5".
+ */
+function formatUsdFromCents(cents: number): string {
+  const whole = cents % 100 === 0;
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: whole ? 0 : 2,
+    maximumFractionDigits: whole ? 0 : 2,
+  }).format(cents / 100);
+}
+
+/**
+ * R2 · IMPACT — the deltas, signed, and explicitly unchanged when zero. A zero
+ * delta is stored evidence, so it is stated rather than omitted.
+ */
+export function formatGateImpact(review: {
+  costCentsDelta: number;
+  scheduleDaysDelta: number;
+  leadTimeDaysDelta: number;
+}): string {
+  const signed = (value: number) => (value > 0 ? '+' : '-');
+  const cost =
+    review.costCentsDelta === 0
+      ? 'cost unchanged'
+      : `${signed(review.costCentsDelta)}${formatUsdFromCents(
+          Math.abs(review.costCentsDelta),
+        )}`;
+  const schedule =
+    review.scheduleDaysDelta === 0
+      ? 'schedule unchanged'
+      : `${signed(review.scheduleDaysDelta)}${Math.abs(
+          review.scheduleDaysDelta,
+        )} day${Math.abs(review.scheduleDaysDelta) === 1 ? '' : 's'}`;
+  const leadTime =
+    review.leadTimeDaysDelta === 0
+      ? 'lead time unchanged'
+      : `${signed(review.leadTimeDaysDelta)}${Math.abs(
+          review.leadTimeDaysDelta,
+        )} lead-time day${
+          Math.abs(review.leadTimeDaysDelta) === 1 ? '' : 's'
+        }`;
+
+  return `${cost} · ${schedule} · ${leadTime}`;
+}
+
+export interface GateScope {
+  /** What the record structurally binds — never inferred. */
+  binding: string;
+  /** The author's stated qualification, verbatim, when one was written. */
+  note: string | null;
+}
+
+/**
+ * R2 · SCOPE — rendered from the decision's structured binding rather than a
+ * new column. The server enforces one direction only: this decision binds
+ * exactly one project phase. It does NOT follow that the phase has one
+ * decision — supersession chains and parallel gates stack against the same
+ * phase — so the copy asserts the binding's singularity, never the phase's.
+ */
+export function gateScope(
+  review: { context: string | null },
+  boundPhaseName: string | null,
+): GateScope {
+  const note = review.context?.trim();
+  return {
+    binding: boundPhaseName
+      ? `Bound to ${boundPhaseName} — the sole phase this decision releases.`
+      : 'Bound to the recorded project phase — the sole phase this decision releases.',
+    note: note ? note : null,
+  };
+}
+
 export function newApprovalIdempotencyKey(): string {
   return (
     globalThis.crypto?.randomUUID?.() ??
