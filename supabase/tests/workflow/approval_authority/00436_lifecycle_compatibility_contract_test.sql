@@ -275,6 +275,38 @@ BEGIN
 END;
 $$;
 
+-- 00439 removes raw Stage-2 parent reads from clients. Keep this compatibility
+-- assertion server-side so a rejected installed response can still prove that
+-- it left no state/evidence behind without weakening production RLS.
+CREATE OR REPLACE FUNCTION pg_temp.stage2_response_evidence_is_absent(
+  p_decision_id uuid
+)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT EXISTS (
+      SELECT 1
+      FROM public.client_decisions AS decision
+      WHERE decision.id = p_decision_id
+        AND decision.status = 'pending'
+    )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM public.client_decision_options AS option
+      WHERE option.decision_id = p_decision_id
+        AND option.selected
+    )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM public.project_approval_action_receipts AS receipt
+      WHERE receipt.decision_id = p_decision_id
+        AND receipt.action_kind = 'responded'
+    );
+$$;
+
 
 CREATE TEMP TABLE approval_lifecycle_results (
   label text PRIMARY KEY,
@@ -991,16 +1023,8 @@ BEGIN
     'installed terminal replay accepted changed consent/signature evidence';
   ASSERT v_orphan_signature_denied,
     'Stage-2 response accepted a signature without a consent method';
-  ASSERT EXISTS (
-    SELECT 1 FROM public.client_decisions
-    WHERE id = v_pending_id AND status = 'pending'
-  ) AND NOT EXISTS (
-    SELECT 1 FROM public.client_decision_options
-    WHERE decision_id = v_pending_id AND selected
-  ) AND NOT EXISTS (
-    SELECT 1 FROM public.project_approval_action_receipts
-    WHERE decision_id = v_pending_id AND action_kind = 'responded'
-  ), 'rejected unbound signature left response evidence behind';
+  ASSERT pg_temp.stage2_response_evidence_is_absent(v_pending_id),
+    'rejected unbound signature left response evidence behind';
 END;
 $$;
 

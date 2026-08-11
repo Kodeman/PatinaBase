@@ -28140,6 +28140,10 @@ export type Database = {
         Args: { p_project_id: string }
         Returns: Json
       }
+      get_project_decision_review: {
+        Args: { p_decision_id: string }
+        Returns: Json
+      }
       get_project_decision_reviews: {
         Args: { p_project_id: string }
         Returns: Json
@@ -28492,6 +28496,7 @@ export type Database = {
         Args: { p_project_id: string }
         Returns: Json
       }
+      list_my_project_decision_reviews: { Args: never; Returns: Json }
       list_product_configurations: {
         Args: { p_product_id: string; p_project_id?: string }
         Returns: Json

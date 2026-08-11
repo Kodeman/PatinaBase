@@ -10133,3 +10133,57 @@ DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._enqueue_decision_notification( uuid, public.decision_notification_kind ) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00439_stage2_client_access_repair.sql
+DO $g$ BEGIN
+  REVOKE ALL ON SCHEMA app_private FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00439_stage2_client_access_repair.sql
+DO $g$ BEGIN
+  GRANT USAGE ON SCHEMA app_private TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00439_stage2_client_access_repair.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION app_private.project_decision_review_for_actor(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00439_stage2_client_access_repair.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_decision_review(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00439_stage2_client_access_repair.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_decision_review(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00439_stage2_client_access_repair.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.list_my_project_decision_reviews() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00439_stage2_client_access_repair.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.list_my_project_decision_reviews() TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00439_stage2_client_access_repair.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION app_private.is_decision_comment_client(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00439_stage2_client_access_repair.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION app_private.is_decision_comment_client(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
