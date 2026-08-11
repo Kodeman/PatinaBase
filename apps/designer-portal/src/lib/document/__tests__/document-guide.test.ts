@@ -78,17 +78,19 @@ describe('deriveDocumentGuide', () => {
     expect(paused.headline).toBe('This project is paused');
   });
 
-  it('keeps row-only guidance quiet while enriched signals load', () => {
-    const guide = deriveDocumentGuide({ row: row('brief'), availability: 'loading' });
-    expect(guide).toMatchObject({
-      state: 'loading', headline: 'Checking what needs attention', action: null,
-    });
+  it('withholds the retry instruction when nothing here can be retried', () => {
+    const guide = deriveDocumentGuide({ row: row('brief'), availability: 'unavailable' });
+
+    expect(guide.state).toBe('unavailable');
+    expect(guide.action).toBeNull();
+    expect(guide.reason).not.toMatch(/try again/i);
   });
 
   it('offers an explicit retry only when the failed source is retryable here', () => {
     const guide = deriveDocumentGuide({
       row: row('brief'), availability: 'unavailable', retryAvailable: true,
     });
+    expect(guide.reason).toMatch(/try again/i);
     expect(guide.action).toEqual({
       key: 'retry-guidance',
       label: 'Try again',
