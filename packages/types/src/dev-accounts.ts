@@ -90,7 +90,7 @@ export type PortalType = 'admin' | 'designer' | 'client';
  */
 const PORTAL_ROLE_MAPPING: Record<PortalType, string[]> = {
   admin: ['super_admin', 'admin', 'support'],
-  designer: ['super_admin', 'admin', 'designer', 'studio_manager', 'manufacturer'],
+  designer: ['super_admin', 'admin', 'designer', 'studio_manager'],
   client: ['client'],
 };
 
