@@ -1,10 +1,10 @@
 -- =====================================================================================
--- 00441 — Project contextual handoff read model
+-- 00443 — Awaiting-consent Site Request contextual handoff
 --
--- One designer-studio-only projection unifies active Stage-2 approval responsibility
--- and Field Site Request responsibility. It is deliberately read-only and redacted:
--- immutable/frozen evidence informs semantic routing, while actor ids, reviewer ids,
--- contact details, raw snapshots, payloads, storage paths, and access tokens stay private.
+-- Lineage: restates the complete 00442 body. The only behavioral delta is to
+-- retain a canonically sent Site Request while it waits for the frozen party's
+-- SMS consent. Waiting is navigable but never classified as overdue and exposes
+-- no lifecycle mutation rail, token, contact detail, or mutable party identity.
 -- =====================================================================================
 
 CREATE OR REPLACE FUNCTION public.get_project_contextual_handoffs(
@@ -241,22 +241,24 @@ BEGIN
       request.project_id,
       request.status AS source_state,
       CASE request.status
+        WHEN 'awaiting_consent' THEN 'provide_sms_consent'
         WHEN 'sent' THEN 'acknowledge_and_begin'
         WHEN 'in_progress' THEN 'deliver_current_item_versions'
         WHEN 'delivered' THEN 'review_delivered_items'
         ELSE 'close_completed_request'
       END AS expected_response,
       CASE request.status
+        WHEN 'awaiting_consent' THEN 'open_site_request'
         WHEN 'sent' THEN 'open_site_request'
         WHEN 'in_progress' THEN 'continue_site_request'
         WHEN 'delivered' THEN 'review_site_request'
         ELSE 'close_site_request'
       END AS action_kind,
-      CASE WHEN request.status IN ('sent', 'in_progress')
+      CASE WHEN request.status IN ('awaiting_consent', 'sent', 'in_progress')
            THEN 'site_party' ELSE 'studio' END AS current_owner,
-      CASE WHEN request.status IN ('sent', 'in_progress')
+      CASE WHEN request.status IN ('awaiting_consent', 'sent', 'in_progress')
            THEN 'studio' ELSE 'site_party' END AS sender,
-      CASE WHEN request.status IN ('sent', 'in_progress')
+      CASE WHEN request.status IN ('awaiting_consent', 'sent', 'in_progress')
            THEN 'site_party' ELSE 'studio' END AS recipient,
       request.assignee_name_snapshot,
       request.due_at,
@@ -317,7 +319,9 @@ BEGIN
       WHERE item.request_id = request.id
     ) AS item_evidence ON true
     WHERE request.project_id = p_project_id
-      AND request.status IN ('sent', 'in_progress', 'delivered', 'completed')
+      AND request.status IN (
+        'awaiting_consent', 'sent', 'in_progress', 'delivered', 'completed'
+      )
       AND request.created_by IS NOT NULL
   ),
   handoffs AS (

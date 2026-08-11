@@ -54,7 +54,7 @@ const PROPOSAL_BOARD_STORAGE_MARKERS = [
 /**
  * Recover the canonical bucket-relative key used by private mood-board media.
  * This intentionally mirrors `board_storage_reference_path` in migration
- * 00434 and the mobile parser: legacy public URLs, authenticated/signed URLs,
+ * 00435 and the mobile parser: legacy public URLs, authenticated/signed URLs,
  * render URLs and bare keys all resolve to the same persisted object name.
  */
 export function proposalBoardUrlToPath(

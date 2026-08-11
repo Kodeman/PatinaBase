@@ -1,4 +1,4 @@
--- Frozen-authority Stage-2 option visibility contract (00440).
+-- Frozen-authority Stage-2 option visibility contract (00441).
 \set ON_ERROR_STOP on
 
 BEGIN;
@@ -37,7 +37,7 @@ BEGIN
     WHERE schemaname = 'public'
       AND tablename = 'client_decision_options'
       AND policyname = 'client_decision_options_studio_select'
-  ), '00440 removed the installed studio option read policy';
+  ), '00441 removed the installed studio option read policy';
 
   ASSERT has_table_privilege(
     'authenticated', 'public.client_decision_options', 'SELECT'

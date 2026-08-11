@@ -25,7 +25,7 @@ export type ProjectApprovalOutcome =
   | 'needs_discussion';
 export type ProjectApprovalDisposition = 'active' | 'withdrawn' | 'superseded';
 
-/** Studio-safe immutable artifact identity returned by the 00437 candidate RPC. */
+/** Studio-safe immutable artifact identity returned by the 00438 candidate RPC. */
 export interface ProjectApprovalArtifactCandidate {
   artifactKind: ProjectApprovalArtifactKind;
   artifactId: string;
@@ -61,7 +61,7 @@ export interface ProjectApprovalReview {
   requiredReviewCount: number;
   /**
    * Frozen, non-identifying CAS value required by confirm_project_decision_review.
-   * Optional until the sanitized 00437 projection is present; callers must never
+   * Optional until the sanitized 00438 projection is present; callers must never
    * guess it when absent.
    */
   authorityRevision: number | null;
@@ -198,7 +198,7 @@ interface ProjectApprovalRpcClient {
 
 function getRpcClient(): ProjectApprovalRpcClient {
   // database.types.ts currently marks p_required_coapprover_id as non-null even
-  // though 00435 explicitly requires NULL. Keep that generated mismatch at this
+  // though 00436 explicitly requires NULL. Keep that generated mismatch at this
   // boundary; every authority write below still sends an explicit null.
   return createBrowserClient() as unknown as ProjectApprovalRpcClient;
 }
@@ -422,7 +422,7 @@ export function useProjectApproval(
   };
 }
 
-/** Exact sanitized read for notification/deep-link consumers (00439). */
+/** Exact sanitized read for notification/deep-link consumers (00440). */
 export function useProjectApprovalByDecision(decisionId: string | undefined) {
   return useQuery({
     queryKey: projectApprovalKeys.decision(decisionId ?? ''),
@@ -439,7 +439,7 @@ export function useProjectApprovalByDecision(decisionId: string | undefined) {
   });
 }
 
-/** Caller-global sanitized inbox read for installed native/portal clients (00439). */
+/** Caller-global sanitized inbox read for installed native/portal clients (00440). */
 export function useMyProjectApprovalReviews() {
   return useQuery({
     queryKey: projectApprovalKeys.mine(),

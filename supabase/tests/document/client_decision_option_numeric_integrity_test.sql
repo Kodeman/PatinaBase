@@ -109,7 +109,7 @@ $$;
 GRANT EXECUTE ON FUNCTION pg_temp.assume_decision_numeric_actor(uuid)
   TO authenticated;
 
--- 00434 intentionally removed raw client reads of legacy FF&E working rows.
+-- 00435 intentionally removed raw client reads of legacy FF&E working rows.
 -- This test-only server helper verifies the canonical apply side effect without
 -- reopening that private table to the addressed client.
 CREATE OR REPLACE FUNCTION pg_temp.decision_ffe_count(p_decision_id uuid)

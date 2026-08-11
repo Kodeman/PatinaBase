@@ -2,7 +2,7 @@
  * Canonical residential workflow vocabulary shared by product surfaces.
  *
  * Stage keys and track keys are persistence contracts defined by migration
- * 00433. Schedule lanes and responsibility lanes are deliberately separate:
+ * 00434. Schedule lanes and responsibility lanes are deliberately separate:
  * schedule lanes describe graph topology, while responsibility lanes describe
  * who owns the work.
  */

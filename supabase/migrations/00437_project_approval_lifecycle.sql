@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00436 — Project approval lifecycle, compatibility, and phase authority
+-- 00437 — Project approval lifecycle, compatibility, and phase authority
 --
 -- Stage-2 decisions retain the installed client_decisions wire vocabulary.
 -- Immutable receipts carry withdraw/supersede dispositions, overdue remains a
@@ -2791,7 +2791,7 @@ COMMENT ON FUNCTION public.advance_project_phase(uuid, uuid, text) IS
   'terminal is target-branch '
   'terminal, never project closeout.';
 
--- 00433 workflow read model, with the exact shared blocker predicate.
+-- 00434 workflow read model, with the exact shared blocker predicate.
 CREATE OR REPLACE FUNCTION public.get_project_workflow(p_project_id uuid)
 RETURNS TABLE (
   phase_id uuid,

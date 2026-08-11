@@ -1,4 +1,4 @@
--- Fixture-backed Stage-2 client access and authority-drift contract (00439).
+-- Fixture-backed Stage-2 client access and authority-drift contract (00440).
 \set ON_ERROR_STOP on
 
 BEGIN;
@@ -26,7 +26,7 @@ BEGIN
   WHERE NOT present;
 
   IF COALESCE(cardinality(v_missing), 0) > 0 THEN
-    RAISE EXCEPTION '00439 client access repair is not installed: %',
+    RAISE EXCEPTION '00440 client access repair is not installed: %',
       array_to_string(v_missing, ', ')
       USING ERRCODE = '55000';
   END IF;

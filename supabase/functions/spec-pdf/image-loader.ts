@@ -37,7 +37,7 @@ const BOARD_MARKERS = [
   `/storage/v1/render/image/sign/${BOARD_BUCKET}/`,
 ];
 
-/** Canonical 00434 board reference parser for server-side PDF hydration. */
+/** Canonical 00435 board reference parser for server-side PDF hydration. */
 export function boardStoragePath(value: string | null): string | null {
   const raw = value?.trim();
   if (!raw) return null;

@@ -171,7 +171,7 @@ beforeEach(() => {
 });
 
 describe('ContextualHandoffBand', () => {
-  it('uses the authoritative 00433 labels for core, FF&E, and construction stages', () => {
+  it('uses the authoritative 00434 labels for core, FF&E, and construction stages', () => {
     handoffs = [
       {
         ...approvalHandoff,

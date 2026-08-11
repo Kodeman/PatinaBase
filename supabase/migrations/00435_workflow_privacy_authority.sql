@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00434 — Workflow privacy and immutable release authority
+-- 00435 — Workflow privacy and immutable release authority
 --
 -- Working board rows/media are studio-private. Client and guest surfaces read
 -- only released projections: issued proposal compositions, frozen project
@@ -243,7 +243,7 @@ BEGIN
   END IF;
 
   -- Only a server-validated template can preserve authority after its live
-  -- source board is deleted. Unverified pre-00434 templates fail closed.
+  -- source board is deleted. Unverified pre-00435 templates fail closed.
   RETURN EXISTS (
     SELECT 1
     FROM public.board_templates AS template

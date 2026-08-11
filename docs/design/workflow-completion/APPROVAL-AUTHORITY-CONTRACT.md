@@ -1,8 +1,8 @@
 # Project Approval Authority Contract
 
 **Status:** Stage 2 implementation handoff  
-**Depends on:** `00434` privacy and immutable-review remediation  
-**Schema waves:** `00435` authority/evidence, `00436` compatibility/routing
+**Depends on:** `00435` privacy and immutable-review remediation  
+**Schema waves:** `00436` authority/evidence, `00437` compatibility/routing
 
 ## Decision
 
@@ -62,7 +62,7 @@ server-side. A caller-supplied URL or mutable row version is not sufficient evid
 
 ## Required checked commands
 
-`00435` owns additive schema and transaction-safe commands:
+`00436` owns additive schema and transaction-safe commands:
 
 - `set_project_decision_authority`
 - `create_project_approval_decision`
@@ -74,7 +74,7 @@ Creation atomically writes the decision, immutable artifact snapshot, and the th
 outcome options. Evidence and confirmations are insert-only through checked RPCs;
 direct update/delete is rejected for authenticated and service roles.
 
-`00436` owns compatibility routing:
+`00437` owns compatibility routing:
 
 - `respond_project_approval`
 - `get_project_decision_reviews`

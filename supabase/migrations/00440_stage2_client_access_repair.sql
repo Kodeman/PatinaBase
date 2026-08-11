@@ -1,5 +1,5 @@
 -- =====================================================================================
--- 00439 — Stage-2 client access repair
+-- 00440 — Stage-2 client access repair
 --
 -- Stage-2 client reads resolve immutable artifact/authority evidence through
 -- sanitized projections. Raw client/coordination policies remain available for

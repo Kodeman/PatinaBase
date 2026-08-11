@@ -1,4 +1,4 @@
--- Fixture-backed Stage 2 lifecycle/compatibility contract (00436).
+-- Fixture-backed Stage 2 lifecycle/compatibility contract (00437).
 \set ON_ERROR_STOP on
 
 BEGIN;
@@ -10,12 +10,12 @@ BEGIN
   SELECT array_agg(label ORDER BY label)
   INTO v_missing
   FROM (VALUES
-    ('00435 classifier column', EXISTS (
+    ('00436 classifier column', EXISTS (
       SELECT 1 FROM information_schema.columns
       WHERE table_schema = 'public' AND table_name = 'client_decisions'
         AND column_name = 'approval_contract'
     )),
-    ('00435 outcome column', EXISTS (
+    ('00436 outcome column', EXISTS (
       SELECT 1 FROM information_schema.columns
       WHERE table_schema = 'public' AND table_name = 'client_decision_options'
         AND column_name = 'approval_outcome'
@@ -46,10 +46,10 @@ BEGIN
   WHERE NOT present;
 
   IF COALESCE(cardinality(v_missing), 0) > 0 THEN
-    RAISE EXCEPTION '00436 approval lifecycle contract is not installed: %',
+    RAISE EXCEPTION '00437 approval lifecycle contract is not installed: %',
       array_to_string(v_missing, ', ')
       USING ERRCODE = '55000',
-            HINT = 'Apply 00434, 00435, and 00436, then rerun this contract test.';
+            HINT = 'Apply 00435, 00436, and 00437, then rerun this contract test.';
   END IF;
 END
 $preflight$;
@@ -275,7 +275,7 @@ BEGIN
 END;
 $$;
 
--- 00439 removes raw Stage-2 parent reads from clients. Keep this compatibility
+-- 00440 removes raw Stage-2 parent reads from clients. Keep this compatibility
 -- assertion server-side so a rejected installed response can still prove that
 -- it left no state/evidence behind without weakening production RLS.
 CREATE OR REPLACE FUNCTION pg_temp.stage2_response_evidence_is_absent(
@@ -761,7 +761,7 @@ END;
 $$;
 RESET ROLE;
 
--- Stage one pre-00436 malformed extra option without blessing a production
+-- Stage one pre-00437 malformed extra option without blessing a production
 -- writer. Both response entry points must fail closed on total child count.
 SET LOCAL session_replication_role = replica;
 INSERT INTO public.client_decision_options (

@@ -283,7 +283,7 @@ public actor ProposalsAPIClient {
         return try await signBoardMedia(in: bundle)
     }
 
-    /// Mirrors migration 00434 + the shared web parser: legacy public URLs,
+    /// Mirrors migration 00435 + the shared web parser: legacy public URLs,
     /// authenticated/signed URLs and bare keys resolve to one bucket path.
     private static func canonicalBoardPath(_ reference: String?) -> String? {
         guard let raw = reference?.trimmingCharacters(in: .whitespacesAndNewlines),

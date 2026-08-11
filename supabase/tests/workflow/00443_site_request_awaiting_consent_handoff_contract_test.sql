@@ -1,4 +1,4 @@
--- Fixture-backed awaiting-consent contextual handoff contract (00442).
+-- Fixture-backed awaiting-consent contextual handoff contract (00443).
 \set ON_ERROR_STOP on
 
 BEGIN;
@@ -289,7 +289,7 @@ DECLARE
 BEGIN
   PERFORM public.site_request_claim_dispatch(v_outbox_id, now());
   PERFORM public.site_request_complete_dispatch(
-    v_outbox_id, 'sent', 'sms-00442', NULL, now()
+    v_outbox_id, 'sent', 'sms-00443', NULL, now()
   );
 END
 $service_dispatch$;

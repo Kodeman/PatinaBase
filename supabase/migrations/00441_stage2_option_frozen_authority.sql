@@ -1,5 +1,5 @@
 -- =====================================================================================
--- 00440 — Stage-2 option visibility follows frozen decision authority
+-- 00441 — Stage-2 option visibility follows frozen decision authority
 --
 -- A studio may legitimately update designer_clients.client_id. Legacy option reads
 -- continue to follow that mutable relationship, but immutable Stage-2 approval options

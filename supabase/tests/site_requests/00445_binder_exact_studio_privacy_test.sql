@@ -1,4 +1,4 @@
--- Site Binder exact-design-studio privacy contract (00444).
+-- Site Binder exact-design-studio privacy contract (00445).
 \set ON_ERROR_STOP on
 
 BEGIN;
@@ -53,7 +53,7 @@ BEGIN
       AND policy.cmd = 'SELECT'
       AND policy.qual LIKE '%is_design_studio_comember%'
       AND policy.qual NOT LIKE '%is_studio_comember(%'
-  ) = 4, '00443 exact upstream Site Request policy spine drifted';
+  ) = 4, '00444 exact upstream Site Request policy spine drifted';
   ASSERT (
     SELECT count(*)
     FROM pg_policies AS policy
@@ -123,9 +123,9 @@ SET email = EXCLUDED.email,
 
 INSERT INTO public.organizations (id, type, name, slug, status)
 VALUES
-  ('a4441000-0000-4000-8000-000000000001', 'design_studio', '00444 Design Studio', 'binder-design-studio', 'active'),
-  ('a4441000-0000-4000-8000-000000000002', 'contractor', '00444 Contractor', 'binder-contractor', 'active'),
-  ('a4441000-0000-4000-8000-000000000003', 'manufacturer', '00444 Manufacturer', 'binder-manufacturer', 'active');
+  ('a4441000-0000-4000-8000-000000000001', 'design_studio', '00445 Design Studio', 'binder-design-studio', 'active'),
+  ('a4441000-0000-4000-8000-000000000002', 'contractor', '00445 Contractor', 'binder-contractor', 'active'),
+  ('a4441000-0000-4000-8000-000000000003', 'manufacturer', '00445 Manufacturer', 'binder-manufacturer', 'active');
 
 INSERT INTO public.organization_members (
   id, user_id, organization_id, role, status, joined_at
@@ -141,7 +141,7 @@ INSERT INTO public.projects (
   id, name, designer_id, created_by, studio_id, status
 ) VALUES (
   'a4442000-0000-4000-8000-000000000001',
-  '00444 Binder Privacy Project',
+  '00445 Binder Privacy Project',
   'a4440000-0000-4000-8000-000000000001',
   'a4440000-0000-4000-8000-000000000001',
   'a4441000-0000-4000-8000-000000000001',
@@ -189,17 +189,17 @@ BEGIN
     'a4442000-0000-4000-8000-000000000001',
     'a4442200-0000-4000-8000-000000000001',
     now() + interval '3 days',
-    'Private due context 00444',
-    'Private request note 00444',
+    'Private due context 00445',
+    'Private request note 00445',
     jsonb_build_array(jsonb_build_object(
       'client_item_id', 'a4442300-0000-4000-8000-000000000001',
       'sort_order', 0,
       'kit_code', 'K-01',
       'title', 'Sensitive Binder Measurement',
-      'guidance', 'Sensitive Binder Guidance 00444',
+      'guidance', 'Sensitive Binder Guidance 00445',
       'room_id', 'a4442100-0000-4000-8000-000000000001',
       'configuration', jsonb_build_object(
-        'internalRule', 'Sensitive Binder Configuration 00444'
+        'internalRule', 'Sensitive Binder Configuration 00445'
       )
     ))
   );
@@ -241,7 +241,7 @@ BEGIN
   v_token := v_claim->>'token';
   v_token_hash := encode(extensions.digest(v_token, 'sha256'), 'hex');
   PERFORM public.site_request_complete_dispatch(
-    v_outbox_id, 'sent', 'sms-00444-send', NULL, now()
+    v_outbox_id, 'sent', 'sms-00445-send', NULL, now()
   );
   ASSERT public.site_request_guest_bootstrap(v_token_hash) IS NOT NULL,
     'canonical guest/token bootstrap compatibility changed';
@@ -252,7 +252,7 @@ BEGIN
     'a4442400-0000-4000-8000-000000000001',
     jsonb_build_object(
       'unit_input', 'metric',
-      'privateDelivery', 'Sensitive Binder Delivery 00444'
+      'privateDelivery', 'Sensitive Binder Delivery 00445'
     ),
     jsonb_build_array(
       jsonb_build_object(
@@ -268,7 +268,7 @@ BEGIN
         'value_mm', 1814
       )
     ),
-    'Sensitive Binder Capturer 00444',
+    'Sensitive Binder Capturer 00445',
     now()
   );
 
@@ -293,10 +293,10 @@ BEGIN
   ASSERT v_result->>'binder_entry_id' IS NOT NULL,
     'exact design-studio peer could not approve canonical delivery into Binder';
   ASSERT (
-    SELECT payload::text ILIKE '%Sensitive Binder Guidance 00444%'
-       AND payload::text ILIKE '%Sensitive Binder Configuration 00444%'
-       AND payload::text ILIKE '%Sensitive Binder Delivery 00444%'
-       AND payload::text ILIKE '%Sensitive Binder Capturer 00444%'
+    SELECT payload::text ILIKE '%Sensitive Binder Guidance 00445%'
+       AND payload::text ILIKE '%Sensitive Binder Configuration 00445%'
+       AND payload::text ILIKE '%Sensitive Binder Delivery 00445%'
+       AND payload::text ILIKE '%Sensitive Binder Capturer 00445%'
        AND jsonb_array_length(payload->'dimensions') = 3
     FROM public.site_binder_entries
     WHERE deliverable_id = (
@@ -358,7 +358,7 @@ SELECT pg_temp.assert_binder_hidden(
 );
 
 -- These evidence surfaces retain historical broad helper text but traverse an
--- upstream 00443-exact table in their policy subquery. Prove the shared-org
+-- upstream 00444-exact table in their policy subquery. Prove the shared-org
 -- actor cannot exploit them before declaring Binder the sole direct leak.
 SELECT pg_temp.assume_actor('a4440000-0000-4000-8000-000000000003');
 DO $upstream_rls_remains_closed$
@@ -396,10 +396,10 @@ BEGIN
   FROM public.site_binder_entries
   WHERE request_id = v_request_id;
   ASSERT v_payload IS NOT NULL
-     AND v_payload::text ILIKE '%Sensitive Binder Guidance 00444%'
-     AND v_payload::text ILIKE '%Sensitive Binder Configuration 00444%'
-     AND v_payload::text ILIKE '%Sensitive Binder Delivery 00444%'
-     AND v_payload::text ILIKE '%Sensitive Binder Capturer 00444%',
+     AND v_payload::text ILIKE '%Sensitive Binder Guidance 00445%'
+     AND v_payload::text ILIKE '%Sensitive Binder Configuration 00445%'
+     AND v_payload::text ILIKE '%Sensitive Binder Delivery 00445%'
+     AND v_payload::text ILIKE '%Sensitive Binder Capturer 00445%',
     'exact design-studio peer lost intended Binder evidence';
   ASSERT (
     SELECT count(*) FROM public.site_binder_current

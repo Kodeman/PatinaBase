@@ -1,8 +1,8 @@
 -- =====================================================================================
--- 00444 — Exact design-studio privacy for immutable Site Binder evidence
+-- 00445 — Exact design-studio privacy for immutable Site Binder evidence
 --
 -- Lineage: 00374 created site_binder_entries, its authenticated SELECT policy,
--- and the security-invoker site_binder_current view. 00443 narrowed the four
+-- and the security-invoker site_binder_current view. 00444 narrowed the four
 -- upstream Site Request read policies and checked author rail but intentionally
 -- left this direct project-keyed evidence policy unchanged.
 --

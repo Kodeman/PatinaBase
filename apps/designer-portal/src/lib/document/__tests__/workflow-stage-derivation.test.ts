@@ -37,7 +37,7 @@ function phase(
 }
 
 describe('residential workflow persistence contract', () => {
-  it('pins migration 00433 keys and Capability Ledger titles exactly', () => {
+  it('pins migration 00434 keys and Capability Ledger titles exactly', () => {
     expect(
       RESIDENTIAL_WORKFLOW_STAGES.map(({ key, title }) => ({ key, title })),
     ).toEqual([
