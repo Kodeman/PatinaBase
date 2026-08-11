@@ -21,6 +21,11 @@ jest.mock('@/components/ui/controls', () => ({
   ),
 }));
 
+jest.mock('@patina/supabase', () => ({
+  createBrowserClient: () => ({}),
+  signBoardMediaValue: jest.fn(async (_client: unknown, value: unknown) => value),
+}));
+
 const imageItem = {
   id: 'item-1',
   type: 'image' as const,
