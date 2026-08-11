@@ -327,7 +327,6 @@ export {
   useRespondProjectApproval,
   useWithdrawProjectApproval,
   useSupersedeProjectApproval,
-  useProjectApprovalRealtime,
 } from './use-project-approvals';
 export type {
   ProjectApprovalArtifactKind,

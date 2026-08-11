@@ -25,7 +25,6 @@ jest.mock('@/hooks/use-feature-flag', () => ({
 
 jest.mock('@patina/supabase', () => ({
   useProjectApprovals: jest.fn(),
-  useProjectApprovalRealtime: jest.fn(),
 }));
 
 // A plain function component, NOT a jest.fn: `resetMocks: true` wipes mock

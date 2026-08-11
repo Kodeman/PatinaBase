@@ -7,7 +7,6 @@ const useProjectApprovalByDecision = jest.fn();
 const useClientDecision = jest.fn();
 const useDecisionComments = jest.fn();
 const useCreateDecisionComment = jest.fn();
-const useProjectApprovalRealtime = jest.fn();
 const useDecisionRealtime = jest.fn();
 
 jest.mock("@/hooks/use-decisions-client", () => ({
@@ -25,8 +24,6 @@ jest.mock("@patina/supabase", () => ({
     useCreateDecisionComment(...args),
   useProjectApprovalByDecision: (...args: unknown[]) =>
     useProjectApprovalByDecision(...args),
-  useProjectApprovalRealtime: (...args: unknown[]) =>
-    useProjectApprovalRealtime(...args),
   useDecisionRealtime: (...args: unknown[]) => useDecisionRealtime(...args),
 }));
 
@@ -121,7 +118,6 @@ it("renders authorized Stage-2 evidence and only then mounts realtime and Discus
 
   expect(await screen.findByTestId("stage2-approval-review")).toBeInTheDocument();
   expect(useClientDecision).not.toHaveBeenCalled();
-  expect(useProjectApprovalRealtime).toHaveBeenCalledWith("project-1");
   expect(useDecisionComments).toHaveBeenCalledWith("decision-1");
   expect(useCreateDecisionComment).toHaveBeenCalledTimes(1);
   expect(useDecisionRealtime).toHaveBeenCalledWith("decision-1");

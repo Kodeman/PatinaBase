@@ -37,7 +37,6 @@ import {
   parseProjectApprovalReview,
   useConfirmProjectApprovalReview,
   useCreateProjectApproval,
-  useProjectApprovalRealtime,
   useProjectApprovalByDecision,
   useProjectApprovalArtifactCandidates,
   useProjectApprovals,
@@ -476,15 +475,5 @@ describe('project approval cache and compatibility', () => {
         ['project-ffe-items', 'project-1'],
       ]),
     );
-  });
-
-  it('keeps the legacy realtime hook as a no-op without creating unavailable subscriptions', () => {
-    useProjectApprovalRealtime('project-1');
-    useProjectApprovalRealtime(undefined);
-
-    expect(channelCreate).not.toHaveBeenCalled();
-    expect(channelOn).not.toHaveBeenCalled();
-    expect(channelSubscribe).not.toHaveBeenCalled();
-    expect(removeChannel).not.toHaveBeenCalled();
   });
 });

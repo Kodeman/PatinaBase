@@ -59,7 +59,6 @@ jest.mock('@patina/supabase', () => ({
     mutateAsync: supersedeApproval,
     isPending: false,
   }),
-  useProjectApprovalRealtime: jest.fn(),
 }));
 
 jest.mock('@/lib/analytics/document-events', () => ({

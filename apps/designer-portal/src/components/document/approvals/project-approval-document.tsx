@@ -11,7 +11,6 @@ import {
 import {
   useCreateProjectApproval,
   useProjectApprovalArtifactCandidates,
-  useProjectApprovalRealtime,
   useProjectApprovals,
   useProjectDecisionAuthority,
   usePublishProjectApproval,
@@ -122,7 +121,6 @@ export function ProjectApprovalDocument({
   const publishApproval = usePublishProjectApproval();
   const withdrawApproval = useWithdrawProjectApproval();
   const supersedeApproval = useSupersedeProjectApproval();
-  useProjectApprovalRealtime(projectId);
 
   const approvals = approvalsQuery.data ?? [];
   const candidates = candidatesQuery.data ?? [];

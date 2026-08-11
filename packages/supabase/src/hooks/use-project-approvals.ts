@@ -709,14 +709,3 @@ export function useSupersedeProjectApproval() {
       ),
   );
 }
-
-/**
- * @deprecated Approval freshness is owned by foreground polling and centralized
- * mutation invalidation. This compatibility shim intentionally creates no
- * channel because tracked migrations publish none of its former source tables.
- */
-export function useProjectApprovalRealtime(
-  _projectId: string | undefined,
-): void {
-  // Kept temporarily so installed portal callers do not need an atomic cutover.
-}

@@ -9,7 +9,6 @@ import {
   useDecisionComments,
   useDecisionRealtime,
   useProjectApprovalByDecision,
-  useProjectApprovalRealtime,
 } from '@patina/supabase';
 import type {
   DecisionComment,
@@ -161,8 +160,6 @@ function AuthorizedStage2Detail({
 }: {
   approval: ProjectApprovalReviewData;
 }) {
-  useProjectApprovalRealtime(approval.projectId);
-
   return (
     <DecisionDetailShell>
       <ProjectApprovalReview approval={approval} />

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useProjectApprovalRealtime, useProjectApprovals } from '@patina/supabase';
+import { useProjectApprovals } from '@patina/supabase';
 
 import { ProjectViewWrapper } from '@/components/project-view-wrapper';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
@@ -44,7 +44,6 @@ export function ProjectSurfaceSwitch({
 }: ProjectSurfaceSwitchProps) {
   const { value: singlePane, isLoading } = useFeatureFlag('single-pane');
   const approvalsQuery = useProjectApprovals(projectId);
-  useProjectApprovalRealtime(projectId);
 
   useEffect(() => {
     clientEvents.projectView(projectId);
