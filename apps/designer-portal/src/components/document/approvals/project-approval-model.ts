@@ -3,6 +3,9 @@ import type {
   ProjectApprovalReview,
 } from '@patina/supabase';
 
+const INT32_MIN = -2147483648;
+const INT32_MAX = 2147483647;
+
 export function parseSignedDelta(value: string, label: string): number {
   const trimmed = value.trim();
   if (!trimmed) throw new Error(`${label} is required`);
@@ -12,6 +15,9 @@ export function parseSignedDelta(value: string, label: string): number {
   const parsed = Number(trimmed);
   if (!Number.isSafeInteger(parsed)) {
     throw new Error(`${label} is outside the supported range`);
+  }
+  if (parsed < INT32_MIN || parsed > INT32_MAX) {
+    throw new Error(`${label} must fit a signed 32-bit integer`);
   }
   return parsed;
 }
@@ -24,7 +30,10 @@ export function toFutureDueAt(value: string, now = new Date()): string {
   return new Date(timestamp).toISOString();
 }
 
-export function projectApprovalActions(review: ProjectApprovalReview) {
+export function projectApprovalActions(
+  review: ProjectApprovalReview,
+  { boundPhaseCompleted = false }: { boundPhaseCompleted?: boolean } = {},
+) {
   const leaf =
     review.disposition === 'active' && review.successorDecisionId === null;
   return {
@@ -39,6 +48,7 @@ export function projectApprovalActions(review: ProjectApprovalReview) {
         review.lifecycleStatus === 'pending'),
     supersede:
       leaf &&
+      !boundPhaseCompleted &&
       (review.lifecycleStatus === 'pending' ||
         review.lifecycleStatus === 'responded'),
   };

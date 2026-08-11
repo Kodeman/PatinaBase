@@ -10,7 +10,11 @@
 import { useMemo } from 'react';
 import { useMarginItems } from '@/hooks/use-margin-items';
 import { useCoordinationItems } from '@patina/supabase';
-import { excludeProjectApprovalsFromMargin } from '@/lib/document/stage2-approval-exclusions';
+import {
+  classifyMarginItems,
+  marginDecisionClassificationState,
+  MarginDecisionClassificationNotice,
+} from '@/lib/document/stage2-approval-exclusions';
 import { marginAccent, deriveKindLine, type MarginItemRow } from '@/lib/document/margin-derivation';
 import { useMobileShell } from './mobile-shell';
 
@@ -28,28 +32,53 @@ export function MobileMarginChips({
 }) {
   const { openMarginItem } = useMobileShell();
   const { data: items } = useMarginItems(projectId, proposalId);
-  const { data: coordinationItems } = useCoordinationItems(projectId);
-  const visibleItems = useMemo(
+  const coordinationQuery = useCoordinationItems(projectId);
+  const coordinationItems = coordinationQuery.data;
+  const anchoredItems = useMemo(
     () =>
-      excludeProjectApprovalsFromMargin(items ?? [], coordinationItems ?? []),
-    [coordinationItems, items],
+      (items ?? []).filter((item) => {
+        if (anchorKind === 'line') {
+          return item.anchor_kind === 'line' && item.anchor_id === anchorId;
+        }
+        return (
+          item.anchor_kind === 'letterhead' || item.anchor_kind === 'section'
+        );
+      }),
+    [anchorId, anchorKind, items],
+  );
+  const classificationState = marginDecisionClassificationState({
+    projectId,
+    coordinationItems,
+    isLoading:
+      coordinationQuery.isLoading === true ||
+      coordinationQuery.isPending === true,
+    isError: coordinationQuery.isError === true,
+  });
+  const classifiedMargin = useMemo(
+    () =>
+      classifyMarginItems(
+        anchoredItems,
+        coordinationItems ?? [],
+        classificationState,
+      ),
+    [anchoredItems, classificationState, coordinationItems],
   );
 
   const chips = useMemo(
-    () =>
-      visibleItems.filter((i) => {
-        if (i.kind === 'time') return false;
-        if (anchorKind === 'line') return i.anchor_kind === 'line' && i.anchor_id === anchorId;
-        // letterhead band also carries section-anchored items (no line home).
-        return i.anchor_kind === 'letterhead' || i.anchor_kind === 'section';
-      }),
-    [visibleItems, anchorKind, anchorId],
+    () => classifiedMargin.items.filter((item) => item.kind !== 'time'),
+    [classifiedMargin.items],
   );
+  const showDecisionNotice = classifiedMargin.withheldDecisionCount > 0;
 
-  if (chips.length === 0) return null;
+  if (chips.length === 0 && !showDecisionNotice) return null;
 
   return (
     <div className="flex flex-wrap gap-1.5 px-[0.15rem] pb-2 min-[980px]:hidden">
+      {showDecisionNotice && (
+        <MarginDecisionClassificationNotice
+          state={classifiedMargin.decisionState}
+        />
+      )}
       {chips.map((row: MarginItemRow) => {
         const accent = marginAccent(row.kind);
         return (

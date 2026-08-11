@@ -45,6 +45,13 @@ describe('designer Stage-2 cutover source contract', () => {
     'components/document/mobile/mobile-margin-chips.tsx',
     'components/document/mobile/mobile-sheets.tsx',
   ])('filters Stage-2 from generic desktop/mobile margin in %s', (file) => {
-    expect(read(file)).toContain('excludeProjectApprovalsFromMargin');
+    const source = read(file);
+    expect(source).toContain('classifyMarginItems');
+    expect(source).toContain('MarginDecisionClassificationNotice');
+  });
+
+  it('filters Stage-2 drafts before the legacy margin editor can mount', () => {
+    const margin = read('components/document/margin-rail.tsx');
+    expect(margin).toContain('legacyCoordinationDrafts(coordItems ?? [])');
   });
 });

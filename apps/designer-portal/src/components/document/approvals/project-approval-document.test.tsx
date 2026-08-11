@@ -111,7 +111,13 @@ const renderDocument = () =>
     <ProjectApprovalDocument
       projectId="project-1"
       clientProfileId="client-1"
-      phases={[{ id: 'phase-1', name: 'Design development' }]}
+      phases={[
+        {
+          id: 'phase-1',
+          name: 'Design development',
+          status: 'in_progress',
+        },
+      ]}
     />,
   );
 
@@ -141,6 +147,55 @@ describe('ProjectApprovalDocument authority and composer', () => {
       }),
     );
     expect(screen.queryByText(/co-approver/i)).not.toBeInTheDocument();
+  });
+
+  it('reassigns a stale authority to the exact current project client with nonzero CAS', async () => {
+    authority = {
+      projectId: 'project-1',
+      decisionLeadId: 'former-client',
+      requiredCoapproverId: null,
+      revision: 7,
+    };
+    renderDocument();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Assign current project client' }),
+    );
+
+    await waitFor(() =>
+      expect(setAuthority).toHaveBeenCalledWith({
+        projectId: 'project-1',
+        decisionLeadId: 'client-1',
+        expectedRevision: 7,
+      }),
+    );
+  });
+
+  it('excludes completed phases from new approval authoring', () => {
+    authority = {
+      projectId: 'project-1',
+      decisionLeadId: 'client-1',
+      requiredCoapproverId: null,
+      revision: 4,
+    };
+    render(
+      <ProjectApprovalDocument
+        projectId="project-1"
+        clientProfileId="client-1"
+        phases={[
+          { id: 'phase-0', name: 'Discovery', status: 'completed' },
+          { id: 'phase-1', name: 'Design development', status: 'in_progress' },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'New approval' }));
+    expect(screen.getByLabelText('Exact project phase')).not.toHaveTextContent(
+      'Discovery',
+    );
+    expect(screen.getByLabelText('Exact project phase')).toHaveTextContent(
+      'Design development',
+    );
   });
 
   it('sends the exact phase/artifact, preserves all three signed zero deltas, and reuses the key on retry', async () => {
@@ -222,7 +277,13 @@ describe('ProjectApprovalDocument lifecycle and accessibility', () => {
       <ProjectApprovalDocument
         projectId="project-1"
         clientProfileId="client-1"
-        phases={[{ id: 'phase-1', name: 'Design development' }]}
+        phases={[
+          {
+            id: 'phase-1',
+            name: 'Design development',
+            status: 'in_progress',
+          },
+        ]}
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
@@ -295,6 +356,37 @@ describe('ProjectApprovalDocument lifecycle and accessibility', () => {
       'Choose a genuinely new artifact',
       'Issued drawing set 03 · v2',
     ]);
+  });
+
+  it('suppresses supersession when the approval is bound to a completed phase', () => {
+    authority = {
+      decisionLeadId: 'client-1',
+      requiredCoapproverId: null,
+      revision: 4,
+    };
+    approvals = [
+      {
+        ...baseReview,
+        lifecycleStatus: 'responded',
+        outcome: 'approved',
+      },
+    ];
+    render(
+      <ProjectApprovalDocument
+        projectId="project-1"
+        clientProfileId="client-1"
+        phases={[
+          { id: 'phase-1', name: 'Design development', status: 'completed' },
+        ]}
+      />,
+    );
+
+    expect(
+      screen.queryByRole('button', { name: 'Supersede with new artifact' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/This approval belongs to a completed phase/),
+    ).toHaveAttribute('role', 'status');
   });
 
   it('has named controls, 44px actions, and a one-column 320px base layout', async () => {

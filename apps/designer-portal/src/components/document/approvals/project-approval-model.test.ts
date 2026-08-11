@@ -32,6 +32,14 @@ describe('project approval authoring rules', () => {
     expect(() => parseSignedDelta('1.5', 'Cost')).toThrow(
       'Cost must be a whole signed number',
     );
+    expect(parseSignedDelta('-2147483648', 'Cost')).toBe(-2147483648);
+    expect(parseSignedDelta('2147483647', 'Cost')).toBe(2147483647);
+    expect(() => parseSignedDelta('-2147483649', 'Cost')).toThrow(
+      'Cost must fit a signed 32-bit integer',
+    );
+    expect(() => parseSignedDelta('2147483648', 'Cost')).toThrow(
+      'Cost must fit a signed 32-bit integer',
+    );
   });
 
   it('requires a genuinely future due instant', () => {
@@ -68,6 +76,16 @@ describe('project approval authoring rules', () => {
         lifecycleStatus: 'responded',
         successorDecisionId: 'decision-2',
       }),
+    ).toEqual({ publish: false, withdraw: false, supersede: false });
+    expect(
+      projectApprovalActions(
+        {
+          ...review,
+          lifecycleStatus: 'responded',
+          outcome: 'approved',
+        },
+        { boundPhaseCompleted: true },
+      ),
     ).toEqual({ publish: false, withdraw: false, supersede: false });
   });
 

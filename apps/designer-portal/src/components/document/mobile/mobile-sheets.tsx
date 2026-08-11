@@ -13,7 +13,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMarginItems } from '@/hooks/use-margin-items';
 import { useCoordinationItems } from '@patina/supabase';
-import { excludeProjectApprovalsFromMargin } from '@/lib/document/stage2-approval-exclusions';
+import {
+  classifyMarginItems,
+  marginDecisionClassificationState,
+  MarginDecisionClassificationNotice,
+} from '@/lib/document/stage2-approval-exclusions';
 import { useDocumentTime } from '@/hooks/document-time-provider';
 import {
   marginAccent,
@@ -295,12 +299,26 @@ export function MobileSheets() {
   const projectId = activeDoc?.projectId ?? null;
   const proposalId = activeDoc?.proposalId ?? null;
   const { data: items } = useMarginItems(projectId, proposalId);
-  const { data: coordinationItems } = useCoordinationItems(projectId);
-  const visibleItems = useMemo(
+  const coordinationQuery = useCoordinationItems(projectId);
+  const coordinationItems = coordinationQuery.data;
+  const classificationState = marginDecisionClassificationState({
+    projectId,
+    coordinationItems,
+    isLoading:
+      coordinationQuery.isLoading === true ||
+      coordinationQuery.isPending === true,
+    isError: coordinationQuery.isError === true,
+  });
+  const classifiedMargin = useMemo(
     () =>
-      excludeProjectApprovalsFromMargin(items ?? [], coordinationItems ?? []),
-    [coordinationItems, items],
+      classifyMarginItems(
+        items ?? [],
+        coordinationItems ?? [],
+        classificationState,
+      ),
+    [classificationState, coordinationItems, items],
   );
+  const visibleItems = classifiedMargin.items;
 
   const { raised, settled } = useMemo(
     () => partitionMargin(visibleItems, new Date()),
@@ -510,6 +528,9 @@ export function MobileSheets() {
         <p className="mt-3 border-t border-[var(--color-pearl)] pt-2.5 font-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
           In the margin · {raised.length}
         </p>
+        <MarginDecisionClassificationNotice
+          state={classifiedMargin.decisionState}
+        />
         {open.length === 0 ? (
           <p className="py-1.5 text-[14px] italic text-[var(--text-muted)]">
             The margin — decisions, messages, and money gather here.

@@ -102,6 +102,24 @@ beforeEach(() => {
 });
 
 describe('project approval sanitized reads', () => {
+  it('refreshes project, exact, and global projections only while foregrounded', () => {
+    const queries = [
+      useProjectApprovals('project-1'),
+      useProjectApprovalByDecision('decision-1'),
+      useMyProjectApprovalReviews(),
+    ] as unknown as Array<Record<string, unknown>>;
+
+    for (const query of queries) {
+      expect(query).toEqual(
+        expect.objectContaining({
+          refetchOnWindowFocus: true,
+          refetchInterval: 30_000,
+          refetchIntervalInBackground: false,
+        }),
+      );
+    }
+  });
+
   it('reads one exact safe projection and returns null when the RPC withholds it', async () => {
     rpc.mockResolvedValueOnce({ data: REVIEW, error: null });
     const exact = useProjectApprovalByDecision('decision-1') as unknown as {
@@ -462,34 +480,109 @@ describe('project approval cache and realtime authority', () => {
     );
   });
 
-  it('uses one project channel for projection owners and cleans it up deterministically', () => {
+  it('uses one project channel for projection, exact, authority, and candidate owners', () => {
     useProjectApprovalRealtime('project-1');
 
     expect(channelSubscribe).toHaveBeenCalledTimes(1);
-    expect(channelOn.mock.calls.map((call) => call[1])).toEqual([
-      expect.objectContaining({
-        table: 'client_decisions',
-        filter: 'project_id=eq.project-1',
-      }),
-      expect.objectContaining({
-        table: 'project_approval_artifacts',
-        filter: 'project_id=eq.project-1',
-      }),
-      expect.objectContaining({
-        table: 'project_decision_review_confirmations',
-        filter: 'project_id=eq.project-1',
-      }),
-      expect.objectContaining({
-        table: 'project_approval_action_receipts',
-        filter: 'project_id=eq.project-1',
-      }),
-    ]);
+    const registrations = channelOn.mock.calls.map((call) => call[1]);
+    expect(registrations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: 'client_decisions',
+          filter: 'project_id=eq.project-1',
+        }),
+        expect.objectContaining({
+          table: 'project_approval_artifacts',
+          filter: 'project_id=eq.project-1',
+        }),
+        expect.objectContaining({
+          table: 'project_decision_review_confirmations',
+          filter: 'project_id=eq.project-1',
+        }),
+        expect.objectContaining({
+          table: 'project_approval_action_receipts',
+          filter: 'project_id=eq.project-1',
+        }),
+        expect.objectContaining({
+          table: 'project_decision_authorities',
+          filter: 'project_id=eq.project-1',
+        }),
+        expect.objectContaining({
+          table: 'plan_issues',
+          filter: 'project_id=eq.project-1',
+        }),
+        expect.objectContaining({
+          table: 'project_documents',
+          filter: 'project_id=eq.project-1',
+        }),
+        expect.objectContaining({
+          table: 'spec_books',
+          filter: 'project_id=eq.project-1',
+        }),
+        expect.objectContaining({
+          table: 'project_budget_versions',
+          filter: 'project_id=eq.project-1',
+        }),
+        expect.objectContaining({
+          table: 'project_budget_checkpoints',
+          filter: 'project_id=eq.project-1',
+        }),
+        expect.objectContaining({ table: 'spec_book_revisions' }),
+        expect.objectContaining({ table: 'spec_book_artifacts' }),
+      ]),
+    );
 
-    const invalidate = channelOn.mock.calls[0][2] as () => void;
-    invalidate();
+    const callbackFor = (table: string) =>
+      channelOn.mock.calls.find((call) => call[1].table === table)?.[2] as (
+        payload: unknown,
+      ) => void;
+
+    callbackFor('client_decisions')({
+      new: { id: 'decision-1', project_id: 'project-1' },
+      old: {},
+    });
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ['project-approvals', 'project-1'],
     });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['project-approval', 'decision-1'],
+    });
+
+    invalidateQueries.mockClear();
+    callbackFor('project_approval_artifacts')({
+      new: {
+        id: 'artifact-row-1',
+        decision_id: 'decision-2',
+        project_id: 'project-1',
+      },
+      old: {},
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['project-approval', 'decision-2'],
+    });
+    expect(invalidateQueries).not.toHaveBeenCalledWith({
+      queryKey: ['project-approval', 'artifact-row-1'],
+    });
+
+    invalidateQueries.mockClear();
+    callbackFor('project_decision_authorities')({
+      new: { project_id: 'project-1' },
+      old: {},
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['project-approval-authority', 'project-1'],
+    });
+    expect(invalidateQueries).toHaveBeenCalledTimes(1);
+
+    invalidateQueries.mockClear();
+    callbackFor('plan_issues')({
+      new: { project_id: 'project-1' },
+      old: {},
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['project-approval-artifact-candidates', 'project-1'],
+    });
+    expect(invalidateQueries).toHaveBeenCalledTimes(1);
 
     effectCleanup?.();
     expect(removeChannel).toHaveBeenCalledTimes(1);

@@ -36,6 +36,7 @@ import {
   useUpdateCoordinationItem,
   usePublishCoordinationItem,
   useDeleteCoordinationItem,
+  isProjectArtifactApproval,
   type CoordinationKind,
   type CoordinationItem,
   type Court,
@@ -365,7 +366,7 @@ export function ItemComposer({
   );
 
   const handleSave = async (asDraft: boolean) => {
-    if (saving) return;
+    if (saving || (editItem && isProjectArtifactApproval(editItem))) return;
     const title = prompt.trim();
     if (!title) return;
     setSaving(true);
@@ -444,7 +445,7 @@ export function ItemComposer({
   };
 
   const handleDelete = async () => {
-    if (!editItem || saving) return;
+    if (!editItem || saving || isProjectArtifactApproval(editItem)) return;
     setSaving(true);
     try {
       await deleteItem.mutateAsync({ itemId: editItem.id, designerClientId });
@@ -455,6 +456,18 @@ export function ItemComposer({
   };
 
   const canSave = prompt.trim().length > 0 && !saving;
+
+  if (editItem && isProjectArtifactApproval(editItem)) {
+    return (
+      <p
+        role="alert"
+        className="rounded-[5px] border border-[var(--color-terracotta)] bg-[var(--doc-paper)] p-3 text-[13px] text-[var(--color-charcoal)]"
+      >
+        This exact-artifact request belongs in the Client approvals record and
+        cannot be edited with legacy decision controls.
+      </p>
+    );
+  }
 
   return (
     // The inner paper panel inside DocSheet's charcoal frame: 1px ink-border edge,

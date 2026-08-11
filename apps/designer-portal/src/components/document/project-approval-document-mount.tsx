@@ -9,9 +9,11 @@ export function toProjectApprovalPhases(rows: unknown): ProjectApprovalPhase[] {
   if (!Array.isArray(rows)) return [];
   return rows.flatMap((value) => {
     if (!value || typeof value !== 'object') return [];
-    const row = value as { id?: unknown; name?: unknown };
-    return typeof row.id === 'string' && typeof row.name === 'string'
-      ? [{ id: row.id, name: row.name }]
+    const row = value as { id?: unknown; name?: unknown; status?: unknown };
+    return typeof row.id === 'string' &&
+      typeof row.name === 'string' &&
+      typeof row.status === 'string'
+      ? [{ id: row.id, name: row.name, status: row.status }]
       : [];
   });
 }

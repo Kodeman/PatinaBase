@@ -27,6 +27,7 @@ import {
 export interface ProjectApprovalPhase {
   id: string;
   name: string;
+  status: string;
 }
 
 interface ApprovalFormState {
@@ -136,8 +137,16 @@ export function ProjectApprovalDocument({
   } | null>(null);
 
   const phaseById = useMemo(
-    () => new Map(phases.map((phase) => [phase.id, phase.name])),
+    () => new Map(phases.map((phase) => [phase.id, phase])),
     [phases],
+  );
+  const availablePhases = useMemo(
+    () => phases.filter((phase) => phase.status !== 'completed'),
+    [phases],
+  );
+  const availablePhaseIds = useMemo(
+    () => new Set(availablePhases.map((phase) => phase.id)),
+    [availablePhases],
   );
 
   const updateForm = (patch: Partial<ApprovalFormState>) =>
@@ -175,8 +184,8 @@ export function ProjectApprovalDocument({
         throw new Error('Assign the project decision lead first.');
       const artifact = findArtifact(candidates, form.artifactValue);
       if (!artifact) throw new Error('Choose an issued artifact.');
-      if (!phaseById.has(form.phaseId))
-        throw new Error('Choose the exact project phase.');
+      if (!availablePhaseIds.has(form.phaseId))
+        throw new Error('Choose a live project phase.');
       const title = form.title.trim();
       const question = form.question.trim();
       if (!title || !question)
@@ -346,7 +355,7 @@ export function ProjectApprovalDocument({
             Client approvals
           </h2>
         </div>
-        {authorityMatches && (
+        {authorityMatches && availablePhases.length > 0 && (
           <DocumentAction
             actionKey="compose-project-approval"
             surfaceKey="open-document"
@@ -388,13 +397,32 @@ export function ProjectApprovalDocument({
           </DocumentAction>
         </div>
       )}
-      {authority && !authorityMatches && (
-        <p
-          role="alert"
-          className="mt-4 text-[13px] text-[var(--color-terracotta)]"
-        >
-          Decision authority does not match this project’s client. Resolve the
-          project record before authoring approvals.
+      {authority && !authorityMatches && clientProfileId && (
+        <div className="mt-4 border-l-2 border-[var(--color-terracotta)] pl-3">
+          <p
+            role="alert"
+            className="text-[13px] text-[var(--color-terracotta)]"
+          >
+            Decision authority does not match this project’s current client.
+          </p>
+          <DocumentAction
+            actionKey="reassign-project-decision-lead"
+            surfaceKey="open-document"
+            regionKey="project-approvals"
+            variant="primary"
+            loading={setAuthority.isPending}
+            loadingLabel="Assigning…"
+            onClick={assignAuthority}
+          >
+            Assign current project client
+          </DocumentAction>
+        </div>
+      )}
+
+      {authorityMatches && availablePhases.length === 0 && (
+        <p role="status" className="mt-4 text-[13px] text-[var(--text-muted)]">
+          Add or reopen a project phase before authoring a new approval.
+          Completed phases cannot receive a new unresolved blocker.
         </p>
       )}
 
@@ -408,7 +436,7 @@ export function ProjectApprovalDocument({
         </p>
       )}
 
-      {composing && authorityMatches && (
+      {composing && authorityMatches && availablePhases.length > 0 && (
         <form
           onSubmit={submitDraft}
           className="mt-5 min-w-0 border-t border-[var(--color-pearl)] pt-5"
@@ -448,7 +476,7 @@ export function ProjectApprovalDocument({
                 required
               >
                 <option value="">Choose a phase</option>
-                {phases.map((phase) => (
+                {availablePhases.map((phase) => (
                   <option key={phase.id} value={phase.id}>
                     {phase.name}
                   </option>
@@ -584,7 +612,11 @@ export function ProjectApprovalDocument({
         )}
         <ol className="mt-2 min-w-0">
           {approvals.map((review) => {
-            const actions = projectApprovalActions(review);
+            const boundPhase = phaseById.get(review.phaseId);
+            const boundPhaseCompleted = boundPhase?.status === 'completed';
+            const actions = projectApprovalActions(review, {
+              boundPhaseCompleted,
+            });
             const eligibleArtifacts = eligibleSupersessionCandidates(
               review,
               candidates,
@@ -606,8 +638,8 @@ export function ProjectApprovalDocument({
                       {review.question}
                     </p>
                     <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                      {phaseById.get(review.phaseId) ?? 'Bound project phase'} ·
-                      artifact v{review.artifactVersion}
+                      {boundPhase?.name ?? 'Bound project phase'} · artifact v
+                      {review.artifactVersion}
                     </p>
                   </div>
                   <span className="shrink-0 rounded-[3px] border border-[var(--color-pearl)] px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
@@ -628,6 +660,19 @@ export function ProjectApprovalDocument({
                     <p className="mt-2 text-[12px] italic text-[var(--text-muted)]">
                       Publish unlocks after every frozen reviewer has confirmed
                       the exact artifact.
+                    </p>
+                  )}
+                {boundPhaseCompleted &&
+                  review.disposition === 'active' &&
+                  review.successorDecisionId === null &&
+                  (review.lifecycleStatus === 'pending' ||
+                    review.lifecycleStatus === 'responded') && (
+                    <p
+                      role="status"
+                      className="mt-2 text-[12px] italic text-[var(--text-muted)]"
+                    >
+                      This approval belongs to a completed phase and cannot be
+                      superseded there. Author a new approval in a live phase.
                     </p>
                   )}
                 <DocumentActionRow

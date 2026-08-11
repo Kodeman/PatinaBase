@@ -25,7 +25,12 @@ import {
 } from '@patina/supabase';
 import { useSectionTasks } from '@/hooks/use-section-work';
 import { useMarginItems } from '@/hooks/use-margin-items';
-import { excludeProjectApprovalsFromMargin } from '@/lib/document/stage2-approval-exclusions';
+import {
+  classifyMarginItems,
+  legacyCoordinationDrafts,
+  marginDecisionClassificationState,
+  MarginDecisionClassificationNotice,
+} from '@/lib/document/stage2-approval-exclusions';
 import { useCreateMarginNote } from '@/hooks/use-margin-notes';
 import {
   useMarkProjectFileChangeRead,
@@ -282,11 +287,22 @@ export function MarginRail({
   onNoteAnchorConsumed?: () => void;
 }) {
   const { data: items, isLoading } = useMarginItems(projectId, proposalId);
-  const { data: coordItems } = useCoordinationItems(projectId);
-  const visibleItems = useMemo(
-    () => excludeProjectApprovalsFromMargin(items ?? [], coordItems ?? []),
-    [coordItems, items],
+  const coordinationQuery = useCoordinationItems(projectId);
+  const coordItems = coordinationQuery.data;
+  const classificationState = marginDecisionClassificationState({
+    projectId,
+    coordinationItems: coordItems,
+    isLoading:
+      coordinationQuery.isLoading === true ||
+      coordinationQuery.isPending === true,
+    isError: coordinationQuery.isError === true,
+  });
+  const classifiedMargin = useMemo(
+    () =>
+      classifyMarginItems(items ?? [], coordItems ?? [], classificationState),
+    [classificationState, coordItems, items],
   );
+  const visibleItems = classifiedMargin.items;
   const { data: fileChanges } = useProjectFileChangeNotifications(projectId);
   const markFileChangeRead = useMarkProjectFileChangeRead();
   const [openId, setOpenId] = useState<string | null>(null);
@@ -324,7 +340,7 @@ export function MarginRail({
     [phaseRows],
   );
   const draftItems = useMemo(
-    () => (coordItems ?? []).filter((i) => i.status === 'draft'),
+    () => legacyCoordinationDrafts(coordItems ?? []),
     [coordItems],
   );
 
@@ -462,6 +478,10 @@ export function MarginRail({
           </DocumentAction>
         </DocumentActionGroup>
       </div>
+
+      <MarginDecisionClassificationNotice
+        state={classifiedMargin.decisionState}
+      />
 
       {/* R55: unsent drafts live here — editable in the margin until published. */}
       {draftItems.length > 0 && (
