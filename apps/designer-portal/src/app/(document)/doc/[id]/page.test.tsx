@@ -8,6 +8,8 @@ const mockRetryDocumentResolution = jest.fn();
 const mockHistoryToggled = jest.fn();
 const mockDiscoveryFacetOpen = jest.fn();
 let mockDiscoveryFacetExpanded = false;
+const mockPulseToggle = jest.fn();
+let mockPulseExpanded = false;
 let mockDocumentQuery: Record<string, unknown>;
 let mockDiscoveryQuery: Record<string, unknown> = { data: undefined, isLoading: false, isError: false };
 let mockDraftingState: Record<string, unknown> = { gaps: [], isLoading: false, error: null };
@@ -104,7 +106,24 @@ jest.mock('@/components/document/schedule/schedule-ripple-context', () => ({
   RippleProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 jest.mock('@/components/document/project-schedule-handoff-mount', () => ({ ProjectScheduleHandoffMount: () => null }));
-jest.mock('@/components/document/margin-rail', () => ({ MarginRail: () => null, ResponsiveMarginRail: () => null }));
+jest.mock('@/components/document/margin-rail', () => ({
+  MarginRail: () => null,
+  ResponsiveMarginRail: ({ children }: { children: ReactNode }) => <>{children}</>,
+}));
+// Stands in for the real MarginItem the pulse need focuses: same id, and the
+// same aria-expanded contract the activate guard reads.
+jest.mock('@/components/document/discovery/discovery-margin', () => ({
+  DiscoveryMargin: () => (
+    <button
+      id="document-pulse-control-desktop"
+      type="button"
+      aria-expanded={mockPulseExpanded}
+      onClick={mockPulseToggle}
+    >
+      Weekly pulse
+    </button>
+  ),
+}));
 jest.mock('@/components/document/doc-colophon', () => ({ DocColophon: () => null }));
 
 jest.mock('@/components/document/phase-timeline', () => ({
@@ -253,6 +272,8 @@ describe('DocumentPage guide activation', () => {
     mockHistoryToggled.mockReset();
     mockDiscoveryFacetOpen.mockReset();
     mockDiscoveryFacetExpanded = false;
+    mockPulseToggle.mockReset();
+    mockPulseExpanded = false;
     mockDiscoveryQuery = { data: undefined, isLoading: false, isError: false };
     mockDraftingState = { gaps: [], isLoading: false, error: null };
     mockProposalData = undefined;
@@ -568,6 +589,28 @@ describe('DocumentPage guide activation', () => {
     render(<DocumentPage params={fulfilledParams} />);
     fireEvent.click(screen.getByRole('button', { name: 'Review decisions' }));
     expect(screen.getByText('Decision controls')).toHaveFocus();
+  });
+
+  it.each([
+    [false, 1],
+    [true, 0],
+  ])('activates a closed pulse item and leaves an open one alone (open=%s)', (expanded, clicks) => {
+    const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+    mockDocumentQuery = {
+      ...mockDocumentQuery,
+      data: { kind: 'engagement', row: {
+        ...current, engagement_kind: 'relationship', active_section: 'discovery',
+        engagement_id: 'relationship-1', lead_id: null, client_profile_id: 'client-1',
+        unsent_pulse_count: 1, pulse_week_of: '2026-08-03',
+      } },
+    };
+    mockPulseExpanded = expanded;
+
+    render(<DocumentPage params={fulfilledParams} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Review and send' }));
+
+    expect(mockPulseToggle).toHaveBeenCalledTimes(clicks);
+    expect(screen.getByRole('button', { name: 'Weekly pulse' })).toHaveFocus();
   });
 
   it('treats a proposal query error as unknown guidance', () => {

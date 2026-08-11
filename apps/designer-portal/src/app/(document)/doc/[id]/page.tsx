@@ -280,6 +280,10 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           (responsiveFocusId ? document.getElementById(responsiveFocusId) : null) ??
           section?.querySelector<HTMLElement>('[data-settled-heading]') ?? section;
         focusTarget?.focus({ preventScroll: true });
+        // Idempotence rests on the target declaring its own state: an expandable
+        // focus target must publish aria-expanded, or a second activation would
+        // toggle it shut. Non-expandable targets (the mobile margin chip, which
+        // opens a sheet rather than toggling) carry none and stay safe to press.
         if (
           activate &&
           focusTarget instanceof HTMLButtonElement &&
