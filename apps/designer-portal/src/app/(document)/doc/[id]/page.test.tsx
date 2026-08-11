@@ -328,14 +328,44 @@ describe('DocumentPage guide activation', () => {
     );
   });
 
-  it('shows unknown guidance while fresh operational signals load', () => {
+  it('renders document-local guidance without waiting on the Desk read', () => {
     mockDeskLoading = true;
+    mockDeskData = { folders: [], chips: [] };
 
     render(<DocumentPage params={fulfilledParams} />);
 
-    expect(screen.getByText('Checking what needs attention')).toBeInTheDocument();
-    expect(screen.queryByText('Review the inquiry')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Review the brief' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Checking what needs attention')).not.toBeInTheDocument();
+    expect(screen.getByText('Review the inquiry')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Review the brief' })).toBeInTheDocument();
+  });
+
+  it('never runs the Desk read for a document its side feeds cannot key on', () => {
+    const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+    mockDocumentQuery = {
+      ...mockDocumentQuery,
+      data: { kind: 'engagement', row: {
+        ...current, engagement_kind: 'relationship', active_section: 'discovery',
+        engagement_id: 'relationship-1', lead_id: null, client_profile_id: 'client-1',
+      } },
+    };
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(mockUseDeskEngagements).toHaveBeenCalledWith({ enabled: false });
+    expect(screen.getByText('Complete Discovery')).toBeInTheDocument();
+  });
+
+  it('skips the Desk read on a paused document', () => {
+    const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+    mockDocumentQuery = {
+      ...mockDocumentQuery,
+      data: { kind: 'engagement', row: { ...current, is_paused: true } },
+    };
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(mockUseDeskEngagements).toHaveBeenCalledWith({ enabled: false });
+    expect(screen.getByText('This project is paused')).toBeInTheDocument();
   });
 
   it('shows unavailable guidance and retries a failed operational read', () => {

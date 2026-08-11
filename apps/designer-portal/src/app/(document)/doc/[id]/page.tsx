@@ -103,6 +103,22 @@ const prettyPhase = (phase: string | null) =>
 
 type AnyRecord = any;
 
+/**
+ * Whether the Desk composition can tell this document anything its own row
+ * cannot. The Desk's side feeds are keyed narrowly: conflicts and receivables
+ * on project_id, flagged lines on a proposal engagement, a parked ceremony on a
+ * lead. A relationship (Discovery) document matches none of them, and deriveNeed
+ * refuses paused/archived rows outright — so those never pay the read.
+ */
+function deskEnrichmentApplies(row: DocumentStateRow | null): boolean {
+  if (!row || row.is_paused || row.is_archived) return false;
+  return Boolean(
+    row.project_id ||
+      (row.engagement_kind === 'proposal' && row.proposal_id) ||
+      (row.engagement_kind === 'lead' && row.lead_id),
+  );
+}
+
 function vitalsFor(row: DocumentStateRow, project: AnyRecord, proposal: AnyRecord): string {
   // Project + proposal carry the client as a first-class subtitle (the
   // HouseholdChip in the title block), so the vitals drop the client name to
@@ -161,8 +177,9 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     proposalId,
     row?.active_section === 'direction' && Boolean(proposalId),
   );
+  const deskEnrichment = deskEnrichmentApplies(row);
   const enrichedOperationalQuery = useDeskEngagements({
-    enabled: Boolean(row && !isError),
+    enabled: deskEnrichment && !isError,
   });
   const enrichedOperationalNeed = selectOperationalNeedForDocument(
     enrichedOperationalQuery.data,
@@ -405,11 +422,13 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
       (row.active_section === 'direction' && draftingState.error)
     ),
   );
-  const guideLoading = Boolean(row && enrichedOperationalQuery.isLoading);
+  // The Desk composition enriches guidance; it never gates it. A cold deep-link
+  // renders the document's own derivation on first paint and upgrades in place
+  // if the Desk read later contributes a need the row alone cannot carry.
   const guideModel = row
     ? deriveDocumentGuide({
         row,
-        availability: guideUnavailable ? 'unavailable' : guideLoading ? 'loading' : 'ready',
+        availability: guideUnavailable ? 'unavailable' : 'ready',
         retryAvailable: Boolean(enrichedOperationalQuery.isError),
         proposal: proposalGuideFacts,
         inputFacts: guideInputs,
