@@ -13,22 +13,17 @@ import {
   type SiteRequestContextualHandoff,
 } from '@patina/supabase';
 
+import { RESIDENTIAL_WORKFLOW_STAGES } from '@patina/types';
+
 import { DocumentAction, DocumentActionRow } from '../document-action';
 import { focusProjectApproval } from '../approvals/project-approval-navigation';
 
-const STAGE_LABELS: Record<string, string> = {
-  inquiry_qualification: '01 · Inquiry & qualification',
-  discovery_programming: '02 · Discovery & programming',
-  scope_engagement: '03 · Scope & engagement',
-  kickoff_existing_conditions: '04 · Kickoff & existing conditions',
-  concept_schematic: '05 · Concept / schematic',
-  design_development: '06 · Design development',
-  documentation_authorization: '07 · Documentation & authorization',
-  bidding_permitting_procurement: '08 · Bidding, permitting & procurement',
-  contract_administration: '09 · Contract administration',
-  delivery_installation: '10 · Delivery & installation',
-  closeout_post_occupancy: '11 · Closeout & post-occupancy',
-};
+const STAGE_LABELS: Record<string, string> = Object.fromEntries(
+  RESIDENTIAL_WORKFLOW_STAGES.map((stage) => [
+    stage.key,
+    `${stage.number} · ${stage.title}`,
+  ]),
+);
 
 function sentence(value: string): string {
   const text = value.replaceAll('_', ' ');

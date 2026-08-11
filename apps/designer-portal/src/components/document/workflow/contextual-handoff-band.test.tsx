@@ -195,16 +195,16 @@ describe('ContextualHandoffBand', () => {
     render(<ContextualHandoffBand projectId="project-1" />);
 
     expect(
-      screen.getByText('03 · Scope & engagement · Core · Exact phase'),
+      screen.getByText('03 · Scope & Engagement · Core · Exact phase'),
     ).toBeVisible();
     expect(
       screen.getByText(
-        '08 · Bidding, permitting & procurement · FF&E · Exact phase',
+        '08 · Bidding, Permitting & Procurement · FF&E · Exact phase',
       ),
     ).toBeVisible();
     expect(
       screen.getByText(
-        '09 · Contract administration · Construction · Exact phase',
+        '09 · Contract Administration · Construction · Exact phase',
       ),
     ).toBeVisible();
   });
@@ -274,10 +274,10 @@ describe('ContextualHandoffBand', () => {
     expect(screen.getByText('Studio → Client')).toBeVisible();
     expect(screen.getAllByText('Current owner · Client')[0]).toBeVisible();
     expect(
-      screen.getAllByText(/09 · Contract administration/)[0],
+      screen.getAllByText(/09 · Contract Administration/)[0],
     ).toBeVisible();
     expect(screen.getAllByText(/Exact phase|Source domain/)).toHaveLength(2);
-    expect(screen.getAllByText(/09 · Contract administration/)[0]).toHaveClass(
+    expect(screen.getAllByText(/09 · Contract Administration/)[0]).toHaveClass(
       'text-[var(--color-quiet-ink)]',
     );
     expect(screen.getByText('Responsibility in context')).toHaveClass(
