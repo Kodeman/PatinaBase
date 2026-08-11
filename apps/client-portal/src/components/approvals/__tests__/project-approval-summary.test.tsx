@@ -69,6 +69,25 @@ it("labels a completed-review draft as awaiting studio issue instead of a client
   expect(screen.queryByText(/Due Aug/)).not.toBeInTheDocument();
 });
 
+it("never renders Overdue for a pending, actionable, isOverdue approval — Response required stands alone", () => {
+  render(
+    <ProjectApprovalSummary
+      approval={{
+        ...approval,
+        lifecycleStatus: "pending",
+        outcome: null,
+        disposition: "active",
+        completedReviewCount: 1,
+        requiredReviewCount: 1,
+        isOverdue: true,
+      }}
+    />,
+  );
+
+  expect(screen.getByText("Response required")).toBeInTheDocument();
+  expect(screen.queryByText(/Overdue/)).not.toBeInTheDocument();
+});
+
 it("reflows as one typographic column at 320px without shadows or horizontal scroll", () => {
   Object.defineProperty(window, "innerWidth", {
     configurable: true,

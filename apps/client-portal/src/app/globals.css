@@ -15,6 +15,10 @@
   --color-sage: #A8B5A0;
   --color-dusty-blue: #8B9CAD;
   --color-terracotta: #D4A090;
+  /* The gate ceremony's hold border (Ruling VIII / M8, folio 13) — matches
+     the workflow-alignment mockup's --gold exactly. Scoped to this one use
+     (GateStamp's `hold` variant) until a second caller needs it. */
+  --color-gold: #E8C547;
 
   /* Semantic aliases */
   --bg-primary: var(--color-off-white);
@@ -618,5 +622,26 @@ a:hover {
   }
   .patina-strata-row-3 {
     animation-delay: 280ms;
+  }
+}
+
+/* Gate seal settle (Ruling VIII / M8) — the approved stamp arrives with a
+   brief settle, never a shadow: it eases from slightly small and unrotated
+   into its resting tilt and full ink. Stilled under reduced motion, same as
+   every other motion device in this file — the seal still reads as sealed,
+   it just arrives at once. */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes gate-seal-settle {
+    0% {
+      opacity: 0;
+      transform: scale(0.92) rotate(0deg);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1) rotate(-2deg);
+    }
+  }
+  .gate-seal-settle {
+    animation: gate-seal-settle 420ms var(--ease-editorial) both;
   }
 }

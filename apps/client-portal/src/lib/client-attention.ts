@@ -64,6 +64,8 @@ export function projectApprovalAttentionLabel(
     return 'Awaiting studio issue';
   }
   if (approval.lifecycleStatus === 'draft') return 'Review required';
-  if (approval.isOverdue) return 'Overdue';
+  // Elapsed time is a studio condition, never a client-side judgment
+  // (Ruling VIII) — overdue and on-time both fall through to the same
+  // plain status here.
   return 'Response required';
 }

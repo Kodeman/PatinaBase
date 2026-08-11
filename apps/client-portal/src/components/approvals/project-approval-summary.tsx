@@ -4,7 +4,6 @@ import Link from "next/link";
 
 import type { ProjectApprovalReview } from "@patina/supabase";
 import {
-  isClientActionableProjectApproval,
   isProjectApprovalAwaitingStudioIssue,
   projectApprovalAttentionLabel,
 } from "@/lib/client-attention";
@@ -39,14 +38,7 @@ export function ProjectApprovalSummary({
     >
       <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <p className="type-meta-small text-[var(--text-muted)]">
-            {status}
-            {approval.isOverdue &&
-            isClientActionableProjectApproval(approval) &&
-            status !== "Overdue"
-              ? " · Overdue"
-              : ""}
-          </p>
+          <p className="type-meta-small text-[var(--text-muted)]">{status}</p>
           <h3 className="type-item-name mt-1 break-words">
             <Link
               href={`/decisions/${approval.decisionId}`}
