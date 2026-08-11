@@ -17,9 +17,9 @@ The tests are split on the migration boundary:
   lifecycle state.
 
 Both files use `to_regclass`, `to_regprocedure`, and catalog lookups before any
-future relation or function is referenced. At integration head `7b0e83e9` they
-must stop with SQLSTATE `55000` and a list of missing Stage-2 objects. Run them
-only after `00434` and their named migration exist:
+future relation or function is referenced. On a schema missing the named
+Stage-2 migration they stop with SQLSTATE `55000` and list the absent objects.
+Run them only after `00434` and their named migration exist:
 
 ```sh
 psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
@@ -59,11 +59,14 @@ remain discussion only and never satisfy confirmation or response evidence.
 
 00436 preserves wire-compatible `client_decisions.status` values. Stage-2
 semantic outcomes are carried separately: draft publishes to pending; approval
-responds terminally; changes requested creates a revised successor which may
-publish again; needs discussion holds the gate; and only the studio may
-withdraw or supersede. Overdue is derived from an unanswered pending request's
-due date, never a status and never auto-approval. Generic expire/reopen paths
-must reject Stage 2, and the due-expiry worker must exclude it.
+responds terminally and clears the gate; changes requested and needs discussion
+respond terminally but hold the gate until the studio creates an immutable
+successor; and only the studio may withdraw or supersede. One private,
+fail-closed predicate supplies phase blockers to phase advancement, the
+completed-phase trigger, and workflow projection. Overdue is derived from an
+unanswered pending request's due date, never a status and never auto-approval.
+Generic expire/reopen paths must reject Stage 2, and the due-expiry worker must
+exclude it.
 
 ## Behavioral assertion matrix
 
@@ -77,7 +80,7 @@ does not require contract redesign.
 | authority identity | Only the configured lead may respond; an unrelated client, designer ownership, and a comment never confer authority. |
 | review confirm | Publish rejects missing/stale confirmation; exact retry is a receipt; conflicting reuse fails. |
 | three outcomes | Approved selects only the approving option; changes requested and needs discussion never approve or clear the phase gate. |
-| revision | Changes requested creates a new immutable artifact-backed successor; the predecessor is never reopened or rewritten. |
+| revision | Studio supersession creates a new immutable artifact-backed successor; the responded predecessor is never reopened or rewritten. |
 | withdraw/supersede | Studio-only actions are evidenced and idempotent; clients cannot perform them; superseding an approved request does not reverse it. |
 | overdue/expiry | Past due is metadata only; no status mutation, auto-approval, or generic expiry/reopen is permitted. |
 | tenant isolation | Same-studio readers see private evidence; addressed households see only sanitized evidence; foreign users see neither. |

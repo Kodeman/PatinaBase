@@ -25158,6 +25158,12 @@ export type Database = {
         Args: { p_value: number; p_what: string }
         Returns: number
       }
+      _client_decision_blocks_phase: {
+        Args: {
+          p_decision: Database["public"]["Tables"]["client_decisions"]["Row"]
+        }
+        Returns: boolean
+      }
       _clone_proposal_legacy_00399: {
         Args: {
           p_mode?: string
@@ -25804,6 +25810,18 @@ export type Database = {
           safe_snapshot: Json
           source_version: number
         }[]
+      }
+      _respond_project_approval_checked: {
+        Args: {
+          p_client_consent_method: string
+          p_client_signature: string
+          p_decision_id: string
+          p_expected_updated_at: string
+          p_idempotency_key: string
+          p_option_id: string
+          p_outcome: string
+        }
+        Returns: Json
       }
       _save_product_configuration_impl: {
         Args: { p_input: Json }
@@ -28118,6 +28136,10 @@ export type Database = {
         Args: { p_project_id: string }
         Returns: Json
       }
+      get_project_decision_reviews: {
+        Args: { p_project_id: string }
+        Returns: Json
+      }
       get_project_workflow: {
         Args: { p_project_id: string }
         Returns: {
@@ -29312,6 +29334,15 @@ export type Database = {
         }[]
       }
       resolve_trade_rfq_link: { Args: { p_token: string }; Returns: Json }
+      respond_project_approval: {
+        Args: {
+          p_decision_id: string
+          p_expected_updated_at: string
+          p_idempotency_key: string
+          p_payload: Json
+        }
+        Returns: Json
+      }
       retire_designer_taste: {
         Args: { p_designer_id: string }
         Returns: undefined
@@ -30175,6 +30206,15 @@ export type Database = {
         Args: { p_amount_cents: number; p_note?: string; p_token: string }
         Returns: Json
       }
+      supersede_project_approval_decision: {
+        Args: {
+          p_decision_id: string
+          p_expected_updated_at: string
+          p_idempotency_key: string
+          p_payload: Json
+        }
+        Returns: Json
+      }
       supersede_unsigned_legacy_proposals: {
         Args: {
           p_proposal_ids: string[]
@@ -30530,6 +30570,15 @@ export type Database = {
       }
       void_trade_scope: {
         Args: { p_proposal_id: string; p_reason: string }
+        Returns: Json
+      }
+      withdraw_project_approval_decision: {
+        Args: {
+          p_decision_id: string
+          p_expected_updated_at: string
+          p_idempotency_key: string
+          p_reason: string
+        }
         Returns: Json
       }
     }
