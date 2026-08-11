@@ -10127,3 +10127,9 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.get_project_approval_artifact_candidates(uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00438_project_approval_notification_requeue.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._enqueue_decision_notification( uuid, public.decision_notification_kind ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

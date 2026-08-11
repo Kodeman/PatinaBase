@@ -113,7 +113,19 @@ export interface DeliverDecisionNotificationResult {
   /** True if email was skipped (dedupe / preference / suppression / no recipient). */
   emailSkipped: boolean;
   reason?: string;
+  /** Existing email log disposition when delivery was deduplicated. */
+  existingLogStatus?: DecisionEmailLogStatus;
 }
+
+export type DecisionEmailLogStatus =
+  | "queued"
+  | "sending"
+  | "delivered"
+  | "opened"
+  | "clicked"
+  | "bounced"
+  | "failed"
+  | "suppressed";
 
 /**
  * Fire the in-app notification for a decision via the frozen spine RPC.
@@ -200,28 +212,56 @@ async function loadPreferences(
   return data as unknown as PrefRow;
 }
 
+const EXISTING_EMAIL_STATUS_PRECEDENCE: readonly DecisionEmailLogStatus[] = [
+  "clicked",
+  "opened",
+  "delivered",
+  "bounced",
+  "suppressed",
+  "sending",
+  "queued",
+];
+
 /**
- * Has an email for this (decision, kind) already been logged? Used to keep
- * email delivery idempotent across reminder / expire re-runs. We treat any
- * non-failed log row (queued / sending / delivered / opened / clicked /
- * suppressed) as "already handled" so a transient retry does not re-send.
+ * Pick the strongest non-retryable disposition for a prior email attempt.
+ * Successful/terminal evidence wins over an in-flight row. Failed attempts
+ * are deliberately ignored so the shared sender may retry them.
  */
-async function emailAlreadyLogged(
+export function classifyExistingDecisionEmailLogStatuses(
+  statuses: readonly string[],
+): DecisionEmailLogStatus | null {
+  for (const status of EXISTING_EMAIL_STATUS_PRECEDENCE) {
+    if (statuses.includes(status)) return status;
+  }
+  return null;
+}
+
+/**
+ * Return the prior non-retryable email state for this (decision, kind). This
+ * keeps delivery idempotent without collapsing in-flight and terminal states.
+ */
+async function existingEmailLogStatus(
   supabase: SupabaseClient,
   userId: string | null,
   decisionId: string,
   kind: DecisionNotificationKind,
-): Promise<boolean> {
+): Promise<DecisionEmailLogStatus | null> {
   const query = supabase
     .from("notification_log")
-    .select("id", { count: "exact", head: true })
+    .select("status")
     .eq("type", KIND_TO_LOG_TYPE[kind])
     .eq("channel", "email")
     .neq("status", "failed")
     .contains("metadata", { decisionId });
   if (userId) query.eq("user_id", userId);
-  const { count } = await query;
-  return (count ?? 0) > 0;
+  const { data, error } = await query;
+  if (error) {
+    console.error("decision notification log lookup failed", error);
+    return null;
+  }
+  return classifyExistingDecisionEmailLogStatuses(
+    ((data ?? []) as Array<{ status: string }>).map((row) => row.status),
+  );
 }
 
 interface RenderedEmail {
@@ -460,18 +500,19 @@ export async function deliverDecisionNotification(
   }
 
   // 4. Email idempotency: already logged for this (decision, kind)?
-  const alreadySent = await emailAlreadyLogged(
+  const existingLogStatus = await existingEmailLogStatus(
     supabase,
     recipient.userId,
     decision.id,
     kind,
   );
-  if (alreadySent) {
+  if (existingLogStatus) {
     return {
       inAppOk: inApp.ok,
       emailSent: false,
       emailSkipped: true,
       reason: "already_sent",
+      existingLogStatus,
     };
   }
 

@@ -22,6 +22,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { deliverDecisionNotification } from "../_shared/decision-notify.ts";
+import { reminderStampDisposition } from "./logic.ts";
 import {
   type EmbeddedApprovalArtifact,
   type EmbeddedAuthoritySnapshot,
@@ -115,6 +116,8 @@ Deno.serve(async (_req: Request) => {
     const frozenRecipient = isStage2
       ? resolveFrozenLeadRecipient(d.authority_snapshot)
       : null;
+    const stage2EvidenceCoherent = isStage2 && artifact !== null &&
+      frozenRecipient !== null;
     const dc = d.designer_client;
     const recipient = isStage2 ? frozenRecipient : {
       // Legacy compatibility: prefer the signed-up client and retain the
@@ -160,28 +163,32 @@ Deno.serve(async (_req: Request) => {
         .eq("id", d.id);
     };
 
-    if (result.emailSent) {
-      sent++;
-      // Stamp reminder_sent_at so the 48h-window query won't re-pick this row.
+    const stampDisposition = reminderStampDisposition({
+      stage2EvidenceCoherent,
+      recipientEmail: recipient?.email ?? null,
+      delivery: result,
+    });
+    if (stampDisposition) {
+      if (stampDisposition === "email_sent") sent++;
+      else if (stampDisposition === "in_app_only") inAppOnly++;
+      else skipped++;
+
+      // The Stage-2 recovery path is safe only because both the Edge evidence
+      // resolution above and the checked service RPC bind the exact frozen
+      // lead to the immutable artifact. Legacy paths retain their old writes.
       const { error: updateErr } = await stampDelivery();
       if (updateErr) {
         console.error("decision-reminders: failed to stamp", d.id, updateErr);
-      }
-    } else if (
-      result.inAppOk &&
-      (!recipient?.email || result.reason === "cadence_digest")
-    ) {
-      // Delivered in-app only — either no email target, or the client is on the
-      // daily digest (the notification-digest cron will batch the email). Stamp
-      // so the 48h-window query doesn't re-pick this row every run.
-      inAppOnly++;
-      const { error: updateErr } = await stampDelivery();
-      if (updateErr) {
-        console.error("decision-reminders: failed to stamp", d.id, updateErr);
+      } else if (stampDisposition === "terminal_log_reconciled") {
+        console.info(
+          "decision-reminders: reconciled terminal delivery log",
+          d.id,
+          result.existingLogStatus,
+        );
       }
     } else {
-      // Suppressed / preference-gated / quiet-hours / already-sent — leave the
-      // row unstamped so a later run can retry once the gate clears, but log.
+      // Preference gates, in-flight attempts, and failed attempts stay
+      // unstamped. A later run may retry only once the relevant gate clears.
       skipped++;
       if (result.reason && result.reason !== "quiet_hours") {
         console.warn("decision-reminders: skipped", d.id, result.reason);

@@ -4,6 +4,7 @@ import {
   assertStringIncludes,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
+  classifyExistingDecisionEmailLogStatuses,
   type DecisionContext,
   decisionNotificationMetadata,
   renderDecisionEmail,
@@ -63,4 +64,19 @@ Deno.test("legacy notification rendering remains artifact-optional", () => {
   });
   assertStringIncludes(rendered.html, "Choose a finish");
   assert(!rendered.html.includes("SHA-256"));
+});
+
+Deno.test("notification log status classification preserves delivery state", () => {
+  assertEquals(
+    classifyExistingDecisionEmailLogStatuses(["failed", "delivered"]),
+    "delivered",
+  );
+  assertEquals(
+    classifyExistingDecisionEmailLogStatuses(["queued", "sending"]),
+    "sending",
+  );
+  assertEquals(
+    classifyExistingDecisionEmailLogStatuses(["failed"]),
+    null,
+  );
 });

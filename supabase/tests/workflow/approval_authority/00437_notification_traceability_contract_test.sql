@@ -70,7 +70,11 @@ BEGIN
   ASSERT v_enqueue LIKE '%approval_contract%'
      AND v_enqueue LIKE '%project_decision_authority_snapshots%'
      AND v_enqueue LIKE '%project_approval_artifacts%'
-     AND v_enqueue LIKE '%decision_lead_id%',
+     AND v_enqueue LIKE '%decision_lead_id%'
+     AND v_enqueue LIKE '%v_rearm_existing%service_role%'
+     AND v_enqueue LIKE '%THEN NULL ELSE decision_notifications.read_at END%'
+     AND v_enqueue LIKE
+       '%THEN EXCLUDED.created_at ELSE decision_notifications.created_at END%',
     'Stage-2 client notifications must resolve frozen authority and artifact';
   ASSERT v_service_stamp LIKE '%service_role%'
      AND v_service_stamp LIKE '%decision_lead_id%'
@@ -511,6 +515,118 @@ BEGIN
       AND notification.user_id =
           'a4370000-0000-4000-8000-000000000003'::uuid
   ), 'mutable relationship client received the Stage-2 required notice';
+END;
+$$;
+
+-- A digest recipient can read or age the single required row before another
+-- authoritative reminder is emitted. Re-enqueue must rearm that same row for
+-- the next digest window without minting a duplicate notification.
+DO $$
+DECLARE
+  v_decision_id uuid := (
+    SELECT (payload->>'decisionId')::uuid
+    FROM approval_437_results WHERE label = 'notify'
+  );
+BEGIN
+  UPDATE public.decision_notifications
+  SET read_at = now() - interval '2 days',
+      created_at = now() - interval '3 days',
+      updated_at = now() - interval '3 days'
+  WHERE decision_id = v_decision_id
+    AND kind = 'decision_required';
+
+  INSERT INTO approval_437_results (label, payload)
+  SELECT 'required-notification-before-requeue', jsonb_build_object('id', id)
+  FROM public.decision_notifications
+  WHERE decision_id = v_decision_id
+    AND kind = 'decision_required';
+END;
+$$;
+
+SELECT pg_temp.assume_approval_actor(NULL, 'service_role');
+SET LOCAL ROLE service_role;
+DO $$
+DECLARE
+  v_decision_id uuid := (
+    SELECT (payload->>'decisionId')::uuid
+    FROM approval_437_results WHERE label = 'notify'
+  );
+  v_notification_id uuid;
+BEGIN
+  SELECT public.notify_decision_required(v_decision_id)
+  INTO v_notification_id;
+  ASSERT v_notification_id = (
+    SELECT (payload->>'id')::uuid
+    FROM approval_437_results
+    WHERE label = 'required-notification-before-requeue'
+  ), 'required notification requeue replaced the authoritative row';
+END;
+$$;
+RESET ROLE;
+
+DO $$
+DECLARE
+  v_decision_id uuid := (
+    SELECT (payload->>'decisionId')::uuid
+    FROM approval_437_results WHERE label = 'notify'
+  );
+BEGIN
+  ASSERT (
+    SELECT count(*) = 1
+       AND bool_and(read_at IS NULL)
+       AND bool_and(created_at > now() - interval '1 minute')
+       AND bool_and(updated_at > now() - interval '1 minute')
+       AND bool_and(
+         user_id = 'a4370000-0000-4000-8000-000000000002'::uuid
+       )
+    FROM public.decision_notifications
+    WHERE decision_id = v_decision_id
+      AND kind = 'decision_required'
+  ), 'required notification was not rearmed for frozen-lead digest delivery';
+END;
+$$;
+
+-- The compatibility wrapper remains studio-callable, but an authenticated
+-- author cannot abuse that access to resurrect a notification the lead read.
+DO $$
+DECLARE
+  v_decision_id uuid := (
+    SELECT (payload->>'decisionId')::uuid
+    FROM approval_437_results WHERE label = 'notify'
+  );
+BEGIN
+  UPDATE public.decision_notifications
+  SET read_at = now() - interval '1 hour',
+      created_at = now() - interval '2 days',
+      updated_at = now() - interval '1 hour'
+  WHERE decision_id = v_decision_id
+    AND kind = 'decision_required';
+END;
+$$;
+
+SELECT pg_temp.assume_approval_actor('a4370000-0000-4000-8000-000000000004');
+SET LOCAL ROLE authenticated;
+SELECT public.notify_decision_required((
+  SELECT (payload->>'decisionId')::uuid
+  FROM approval_437_results WHERE label = 'notify'
+));
+RESET ROLE;
+
+DO $$
+DECLARE
+  v_decision_id uuid := (
+    SELECT (payload->>'decisionId')::uuid
+    FROM approval_437_results WHERE label = 'notify'
+  );
+BEGIN
+  ASSERT (
+    SELECT count(*) = 1
+       AND bool_and(read_at IS NOT NULL)
+       AND bool_and(created_at < now() - interval '1 day')
+    FROM public.decision_notifications
+    WHERE decision_id = v_decision_id
+      AND kind = 'decision_required'
+  ), 'authenticated compatibility call rearmed a frozen-lead notification';
 END;
 $$;
 
