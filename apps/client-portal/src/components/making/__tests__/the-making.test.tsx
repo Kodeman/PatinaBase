@@ -398,7 +398,11 @@ describe('TheMaking — the open chapter', () => {
       'making-project-approval-gate',
       'spine-gate',
     ]);
-    expect(screen.getByText('A gate · your response is required · Overdue')).toBeInTheDocument();
+    // isOverdue is true on this fixture (projectApproval()'s default) — the gate line must
+    // stay plain regardless, per Ruling VIII: overdue is a studio condition, never rendered
+    // to the client.
+    expect(screen.getByText('A gate · your response is required')).toBeInTheDocument();
+    expect(screen.queryByText(/Overdue/)).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Respond' })).toHaveAttribute(
       'href',
       '/decisions/decision-1',

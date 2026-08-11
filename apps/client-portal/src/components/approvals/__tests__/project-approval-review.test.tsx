@@ -143,6 +143,22 @@ describe("ProjectApprovalReview", () => {
     ]) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
+
+    // The anatomy is an ORDER, not just a set — Artifact, Question, Scope,
+    // Impact, Authority, then Confirmation, each part strictly after the last.
+    const partOrder = [
+      "anatomy-artifact",
+      "anatomy-question",
+      "anatomy-scope",
+      "anatomy-impact",
+      "anatomy-authority",
+      "anatomy-confirmation",
+    ];
+    const parts = partOrder.map((testId) => screen.getByTestId(testId));
+    for (let i = 1; i < parts.length; i++) {
+      const relation = parts[i - 1].compareDocumentPosition(parts[i]);
+      expect(relation & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
   });
 
   it("states the immutability sentence with the edition number wired to the artifact, not hard-coded", () => {
@@ -178,10 +194,15 @@ describe("ProjectApprovalReview", () => {
       />,
     );
 
-    const stamp = screen.getByTestId("held-for-discussion");
-    expect(stamp).toBeInTheDocument();
-    expect(stamp).toHaveTextContent(/held for discussion/i);
-    expect(screen.getByText("Needs discussion")).toBeInTheDocument();
+    const held = screen.getByTestId("held-for-discussion");
+    expect(held).toBeInTheDocument();
+    expect(held).toHaveTextContent(/held for discussion/i);
+    // The recorded-outcome line must use the same wording as the visible
+    // stamp — a screen reader and a sighted reader should not disagree on
+    // the word for the same held gate. "Needs discussion" is the outcome
+    // picker's verbatim label; it must not leak into this recorded state.
+    expect(held).toHaveTextContent("Recorded outcome: Held for discussion");
+    expect(held.textContent).not.toMatch(/needs discussion/i);
   });
 
   it("renders a seal on the approved outcome and no held stamp", () => {

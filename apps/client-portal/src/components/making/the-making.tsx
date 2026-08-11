@@ -295,7 +295,6 @@ function ProjectApprovalGate({ approval }: { approval: ProjectApprovalReview }) 
         />
         <p className="type-meta-small">
           A gate · {approval.lifecycleStatus === 'draft' ? 'your review is required' : 'your response is required'}
-          {approval.isOverdue ? ' · Overdue' : ''}
         </p>
         <h3 id={`approval-gate-${approval.decisionId}`} className="type-item-name mt-1.5 break-words">
           {approval.question}
@@ -362,7 +361,6 @@ function DeferredProjectApprovals({
             >
               <p className="type-meta-small break-words text-[var(--text-muted)]">
                 {phaseLabel} · {action}
-                {approval.isOverdue && clientActionable ? ' · Overdue' : ''}
               </p>
               <h3 className="type-item-name mt-1 min-w-0">
                 <Link

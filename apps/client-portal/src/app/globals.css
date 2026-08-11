@@ -15,6 +15,10 @@
   --color-sage: #A8B5A0;
   --color-dusty-blue: #8B9CAD;
   --color-terracotta: #D4A090;
+  /* The gate ceremony's hold border (Ruling VIII / M8, folio 13) — matches
+     the workflow-alignment mockup's --gold exactly. Scoped to this one use
+     (GateStamp's `hold` variant) until a second caller needs it. */
+  --color-gold: #E8C547;
 
   /* Semantic aliases */
   --bg-primary: var(--color-off-white);

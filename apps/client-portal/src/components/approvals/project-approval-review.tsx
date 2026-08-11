@@ -239,13 +239,13 @@ export function ProjectApprovalReview({
           </h2>
           <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="border-t border-[var(--border-default)] pt-3">
-              <dt className="type-meta-small">Cost</dt>
+              <dt className="type-meta">Cost</dt>
               <dd className="type-body-small mt-1" data-testid="cost-delta">
                 {formatMoneyDelta(approval.costCentsDelta)}
               </dd>
             </div>
             <div className="border-t border-[var(--border-default)] pt-3">
-              <dt className="type-meta-small">Schedule</dt>
+              <dt className="type-meta">Schedule</dt>
               <dd
                 className="type-body-small mt-1"
                 data-testid="schedule-delta"
@@ -254,7 +254,7 @@ export function ProjectApprovalReview({
               </dd>
             </div>
             <div className="border-t border-[var(--border-default)] pt-3">
-              <dt className="type-meta-small">Lead time</dt>
+              <dt className="type-meta">Lead time</dt>
               <dd className="type-body-small mt-1" data-testid="lead-delta">
                 {formatDayDelta(approval.leadTimeDaysDelta, "lead-time")}
               </dd>
@@ -377,8 +377,14 @@ export function ProjectApprovalReview({
           data-testid="held-for-discussion"
         >
           <GateStamp label="Held for discussion" variant="hold" />
+          {/* The stamp reads "Held for discussion" (the gate's own state);
+              the outcome picker's copy reads "Needs discussion" (the verbatim
+              outcome label, unchanged). The recorded line here matches the
+              stamp — both describe the same held gate, and a visible reader
+              and a screen-reader announcement should not disagree on the
+              word for it. */}
           <p className="type-body-small mt-3">
-            Recorded outcome: <strong>{outcomeLabel(approval.outcome)}</strong>
+            Recorded outcome: <strong>Held for discussion</strong>
           </p>
         </div>
       )}
