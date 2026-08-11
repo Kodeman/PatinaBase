@@ -44,9 +44,11 @@ export function SectionStageLine({ model }: SectionStageLineProps) {
 
       {model ? (
         <>
-          <p className="min-w-0 break-words font-mono text-[12px] font-semibold uppercase tracking-[0.09em] text-[var(--color-aged-oak)]">
-            {model.subLabel}
-          </p>
+          {model.subLabel && (
+            <p className="min-w-0 break-words font-mono text-[12px] font-semibold uppercase tracking-[0.09em] text-[var(--color-aged-oak)]">
+              {model.subLabel}
+            </p>
+          )}
 
           {model.tracks.length > 0 && (
             <ul
@@ -76,7 +78,15 @@ export function SectionStageLine({ model }: SectionStageLineProps) {
           )}
 
           {model.unclassifiedCount > 0 && (
-            <p className={`mt-3 min-w-0 break-words ${META}`}>
+            <p
+              role={model.subLabel ? undefined : "status"}
+              data-unclassified-disclosure
+              className={
+                model.subLabel
+                  ? `mt-3 min-w-0 break-words ${META}`
+                  : `min-w-0 break-words ${META}`
+              }
+            >
               {model.unclassifiedCount} active phase
               {model.unclassifiedCount === 1 ? "" : "s"} not classified to a
               canonical stage

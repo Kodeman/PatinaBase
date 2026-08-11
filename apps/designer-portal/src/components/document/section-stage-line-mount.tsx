@@ -40,6 +40,7 @@ export function SectionStageLineMount({
           aria-label="Workflow stage"
           aria-busy="true"
           data-workflow-document
+          data-section-stage-line
           className="mt-8 min-w-0 border-y border-[var(--border-subtle)] py-4"
         >
           <p className="font-mono text-[12px] uppercase tracking-[0.09em] text-[var(--text-muted)]">
@@ -57,6 +58,7 @@ export function SectionStageLineMount({
         <section
           aria-label="Workflow stage"
           data-workflow-document
+          data-section-stage-line
           className="mt-8 min-w-0 border-y border-[var(--border-subtle)] py-4"
         >
           <p

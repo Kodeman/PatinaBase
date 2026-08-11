@@ -13,7 +13,10 @@ import {
   type ResidentialWorkflowTrackKey,
 } from "@patina/types";
 
-import type { WorkflowStageDocumentState } from "./workflow-stage-derivation";
+import type {
+  WorkflowActiveGroup,
+  WorkflowStageDocumentState,
+} from "./workflow-stage-derivation";
 
 /** Canonical stage ordinals that live inside the Project section (M1). */
 const PROJECT_BAND_FIRST_ORDINAL = 4;
@@ -28,8 +31,11 @@ export interface SectionStageTrackBand {
 
 export interface SectionStageLineModel {
   mode: "project" | "section";
-  /** "Design Development · FF&E · stage 06 of 04–09" */
-  subLabel: string;
+  /**
+   * "Design Development · FF&E · stage 06 of 04–09", or null when active work
+   * exists but no canonical stage classifies any of it.
+   */
+  subLabel: string | null;
   /** One band per track that currently carries active work, canonical order. */
   tracks: readonly SectionStageTrackBand[];
   /** Where the stage classification came from. */
@@ -68,13 +74,39 @@ function provenanceFor(state: WorkflowStageDocumentState): string {
     : "Section guidance · no project phase topology";
 }
 
+/**
+ * The furthest-advanced group on one track. Row order out of
+ * `get_project_workflow` is not a ranking, so the position a track reports must
+ * not depend on it.
+ */
+function furthestGroupOnTrack(
+  state: WorkflowStageDocumentState,
+  trackKey: ResidentialWorkflowTrackKey,
+): WorkflowActiveGroup | null {
+  let furthest: WorkflowActiveGroup | null = null;
+  for (const candidate of state.activeGroups) {
+    if (candidate.track.key !== trackKey) continue;
+    if (!furthest || candidate.stage.ordinal > furthest.stage.ordinal) {
+      furthest = candidate;
+    }
+  }
+  return furthest;
+}
+
+/** Canonical track order decides which track speaks for the section. */
+function headlineGroupFor(state: WorkflowStageDocumentState) {
+  for (const track of RESIDENTIAL_WORKFLOW_TRACKS) {
+    const group = furthestGroupOnTrack(state, track.key);
+    if (group) return group;
+  }
+  return null;
+}
+
 function trackBandsFor(
   state: WorkflowStageDocumentState,
 ): readonly SectionStageTrackBand[] {
   return RESIDENTIAL_WORKFLOW_TRACKS.flatMap((track) => {
-    const group = state.activeGroups.find(
-      (candidate) => candidate.track.key === track.key,
-    );
+    const group = furthestGroupOnTrack(state, track.key);
     return group
       ? [
           {
@@ -88,25 +120,29 @@ function trackBandsFor(
 }
 
 /**
- * Null when no active group exists — there is no stage position to state, and
- * the surface says so rather than drawing an empty rail.
+ * Null only when nothing is active at all. Active-but-unclassified phases still
+ * produce a model with no sub-label, because "no active phase is configured"
+ * would be false in exactly that case.
  */
 export function deriveSectionStageLine(
   state: WorkflowStageDocumentState,
 ): SectionStageLineModel | null {
-  const primary = state.activeGroups[0];
-  if (!primary) return null;
+  const headline = headlineGroupFor(state);
+  const unclassifiedCount = state.unclassifiedActivePhases.length;
+  if (!headline && unclassifiedCount === 0) return null;
 
   return {
     mode: state.mode,
-    subLabel: subLabelFor(
-      primary.stage.title,
-      primary.stage.number,
-      primary.stage.ordinal,
-      primary.track.label,
-    ),
+    subLabel: headline
+      ? subLabelFor(
+          headline.stage.title,
+          headline.stage.number,
+          headline.stage.ordinal,
+          headline.track.label,
+        )
+      : null,
     tracks: trackBandsFor(state),
     provenance: provenanceFor(state),
-    unclassifiedCount: state.unclassifiedActivePhases.length,
+    unclassifiedCount,
   };
 }
