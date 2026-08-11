@@ -42,6 +42,7 @@ import {
 } from '@/lib/document/margin-derivation';
 import { todayYmd } from '@/lib/document/format';
 import { MarginItem } from './margin-item';
+import { MarginHandoffs } from './margin-handoff-item';
 import { MarginItemBody } from './margin-bodies';
 import { MarginNote } from './margin-note';
 import { DocSheet, DocSheetOriginProvider } from './overlays/doc-sheet';
@@ -579,6 +580,10 @@ export function MarginRail({
           </DocumentActionRow>
         </div>
       )}
+
+      {/* Ruling III: the handoffs are margin items. They lead the rail because
+          a thing waiting on a named party outranks the studio's own notes. */}
+      <MarginHandoffs projectId={projectId} clientName={clientName} />
 
       {!isLoading && visibleItems.length === 0 && (
         <p className="text-[14px] italic leading-relaxed text-[var(--color-charcoal)]">
