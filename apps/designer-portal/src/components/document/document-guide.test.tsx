@@ -134,6 +134,36 @@ describe('DocumentGuide', () => {
     expect(elsewhere).toHaveFocus();
   });
 
+  it('does not steal focus back after the action was blurred to nothing', () => {
+    const local = model('Move the project forward');
+    const { rerender } = render(<DocumentGuide model={local} onActivate={jest.fn()} />);
+
+    // Focused, then the designer clicks dead page area: focus lands on <body>,
+    // which is exactly the state the swap-repair looks for. Having *once* held
+    // focus must not license reclaiming it 60 seconds later.
+    const button = screen.getByRole('button', { name: 'Review active work' });
+    button.focus();
+    button.blur();
+    expect(document.body).toHaveFocus();
+
+    rerender(
+      <DocumentGuide
+        model={{
+          ...local,
+          action: {
+            key: 'resolve-lines_flagged',
+            label: 'Review flagged lines',
+            destination: { kind: 'href', href: '/drafting/proposal-1' },
+          },
+        }}
+        onActivate={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('link', { name: 'Review flagged lines' })).not.toHaveFocus();
+    expect(document.body).toHaveFocus();
+  });
+
   it('announces an action change even when the headline is unchanged', async () => {
     const { rerender } = render(
       <StrictMode><DocumentGuide model={model('Same task')} onActivate={jest.fn()} /></StrictMode>,

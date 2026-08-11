@@ -22,6 +22,12 @@ export function DocumentGuide({ model, onActivate }: { model: DocumentGuideModel
   const holdFocus = () => {
     focusedIdentityRef.current = actionIdentity;
   };
+  // Cleared on the way out, so the ref means "has focus now" rather than "was
+  // focused once" — otherwise a designer who left the action for dead space
+  // would have focus pulled back here by the next enrichment tick.
+  const releaseFocus = () => {
+    focusedIdentityRef.current = null;
+  };
 
   useEffect(() => {
     const previous = previousIdentityRef.current;
@@ -85,9 +91,9 @@ export function DocumentGuide({ model, onActivate }: { model: DocumentGuideModel
         {model.action && (
           <div className="hidden min-[1180px]:block">
             {href ? (
-              <DocumentAction ref={actionRef} onFocus={holdFocus} actionKey={model.action.key} surfaceKey="open-document" regionKey="next-up" variant="primary" href={href} onClick={recordSelection}>{model.action.label}</DocumentAction>
+              <DocumentAction ref={actionRef} onFocus={holdFocus} onBlur={releaseFocus} actionKey={model.action.key} surfaceKey="open-document" regionKey="next-up" variant="primary" href={href} onClick={recordSelection}>{model.action.label}</DocumentAction>
             ) : (
-              <DocumentAction ref={actionRef} onFocus={holdFocus} actionKey={model.action.key} surfaceKey="open-document" regionKey="next-up" variant="primary" onClick={() => { recordSelection(); onActivate(); }}>{model.action.label}</DocumentAction>
+              <DocumentAction ref={actionRef} onFocus={holdFocus} onBlur={releaseFocus} actionKey={model.action.key} surfaceKey="open-document" regionKey="next-up" variant="primary" onClick={() => { recordSelection(); onActivate(); }}>{model.action.label}</DocumentAction>
             )}
           </div>
         )}

@@ -199,7 +199,10 @@ describe('RecordOnPaperSheet', () => {
     );
   });
 
-  it('disables submission for a too-short name or an invalid date', async () => {
+  // The two halves are not symmetric: a too-short name disables the act, while
+  // an invalid date cannot be entered at all — so the record proceeds date-less
+  // rather than being blocked. The title says both.
+  it('disables submission for a too-short name, and records date-less rather than on an invalid date', async () => {
     render(
       <RecordOnPaperSheet
         kind="trade-execution"

@@ -969,18 +969,22 @@ export function partitionDesk(
   flaggedLines?: ReadonlyMap<string, DeskFlaggedSignal>,
   ceremoniesByLeadId?: ReadonlyMap<string, DeskCeremonySignal>,
   ceremoniesByDesignerClientId?: ReadonlyMap<string, DeskCeremonySignal>,
-): { folders: DeskFolder[]; chips: MotionChip[]; composed: Set<string> } {
+): { folders: DeskFolder[]; chips: MotionChip[]; composed: Record<string, true> } {
   const folders: DeskFolder[] = [];
   const chips: MotionChip[] = [];
   // Every engagement this composition actually put through deriveNeed. A reader
   // asking "does this document have a need?" can only be answered `no` for an
   // engagement that is in here; anything absent — archived rows, rows outside
   // this read's RLS scope, a stale composition — is unanswered, not need-free.
-  const composed = new Set<string>();
+  //
+  // A plain object, not a Set: React Query's replaceEqualDeep does not recurse
+  // into Sets, so a Set here would make every 60s tick return a fresh result
+  // object and re-render every consumer of this query portal-wide.
+  const composed: Record<string, true> = {};
 
   for (const row of rows) {
     if (row.is_archived) continue;
-    composed.add(row.engagement_id);
+    composed[row.engagement_id] = true;
     const conflict = row.project_id
       ? (conflicts?.get(row.project_id) ?? null)
       : null;

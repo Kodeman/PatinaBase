@@ -19,9 +19,9 @@ let mockProjectQuery: Record<string, unknown> = { data: undefined, isLoading: fa
 type MockDeskData = {
   folders: Array<{ row: { engagement_id: string }; need: Record<string, unknown> | null }>;
   chips: unknown[];
-  composed: Set<string>;
+  composed: Record<string, true>;
 };
-let mockDeskData: MockDeskData = { folders: [], chips: [], composed: new Set() };
+let mockDeskData: MockDeskData = { folders: [], chips: [], composed: {} };
 let mockDeskLoading = false;
 let mockDeskError = false;
 const mockRetryDesk = jest.fn();
@@ -38,7 +38,7 @@ const mockUseDeskEngagements = jest.fn((_options?: { enabled?: boolean }) => ({
 const mockSelectOperationalNeed = jest.fn(
   (data: MockDeskData | undefined, engagementId: string | null | undefined) => {
     if (!data || !engagementId) return undefined;
-    if (!data.composed.has(engagementId)) return undefined;
+    if (data.composed[engagementId] !== true) return undefined;
     return data.folders.find((folder) => folder.row.engagement_id === engagementId)?.need ?? null;
   },
 );
@@ -248,6 +248,26 @@ jest.mock('@/lib/analytics/document-events', () => ({
   },
 }));
 
+/** A truthful matchMedia: min-width queries answer against `width`, and the
+ *  motion query answers the stated preference. Anything else is false rather
+ *  than accidentally true. */
+function setViewport({ width, reducedMotion }: { width: number; reducedMotion: boolean }) {
+  window.matchMedia = jest.fn().mockImplementation((query: string) => {
+    const minWidth = /min-width:\s*(\d+)px/.exec(query);
+    const matches = minWidth
+      ? width >= Number(minWidth[1])
+      : query.includes('prefers-reduced-motion: reduce')
+        ? reducedMotion
+        : false;
+    return {
+      matches,
+      media: query,
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+    };
+  }) as unknown as typeof window.matchMedia;
+}
+
 const fulfilledParams = {
   status: 'fulfilled',
   value: { id: 'missing-document' },
@@ -311,7 +331,7 @@ describe('DocumentPage guide activation', () => {
     mockProposalData = undefined;
     mockProposalError = false;
     mockProjectQuery = { data: undefined, isLoading: false, isError: false };
-    mockDeskData = { folders: [], chips: [], composed: new Set() };
+    mockDeskData = { folders: [], chips: [], composed: {} };
     mockDeskLoading = false;
     mockDeskError = false;
     mockRetryDesk.mockReset();
@@ -341,13 +361,10 @@ describe('DocumentPage guide activation', () => {
       isError: false,
       refetch: mockRetryDocumentResolution,
     };
-    // ≥1440px: the margin is a permanent rail, so the real ResponsiveMarginRail
-    // renders its children rather than folding them behind the sheet trigger.
-    window.matchMedia = jest.fn().mockReturnValue({
-      matches: true,
-      addEventListener: jest.fn(),
-      removeEventListener: jest.fn(),
-    }) as unknown as typeof window.matchMedia;
+    // One viewport, answered per query rather than `true` to everything: a
+    // 1440px window (so the real ResponsiveMarginRail chooses its full-rail
+    // branch because the width says so) with reduced motion asked for.
+    setViewport({ width: 1440, reducedMotion: true });
     window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
       callback(0);
       return 1;
@@ -378,7 +395,7 @@ describe('DocumentPage guide activation', () => {
         },
       }],
       chips: [],
-      composed: new Set(['lead-1']),
+      composed: { 'lead-1': true },
     };
 
     render(<DocumentPage params={fulfilledParams} />);
@@ -401,7 +418,7 @@ describe('DocumentPage guide activation', () => {
     // In flight: this engagement is not in any composition yet, so the guide has
     // only the row to work from — and must state it rather than stalling.
     mockDeskLoading = true;
-    mockDeskData = { folders: [], chips: [], composed: new Set() };
+    mockDeskData = { folders: [], chips: [], composed: {} };
 
     render(<DocumentPage params={fulfilledParams} />);
 
@@ -431,7 +448,7 @@ describe('DocumentPage guide activation', () => {
         },
       }],
       chips: [],
-      composed: new Set(['relationship-1']),
+      composed: { 'relationship-1': true },
     };
 
     render(<DocumentPage params={fulfilledParams} />);
@@ -480,7 +497,7 @@ describe('DocumentPage guide activation', () => {
     };
     // Composed and need-free: the Desk looked at this engagement and found
     // nothing, which outranks the row's own stale overdue count.
-    mockDeskData = { folders: [], chips: [], composed: new Set(['lead-1']) };
+    mockDeskData = { folders: [], chips: [], composed: { 'lead-1': true } };
 
     render(<DocumentPage params={fulfilledParams} />);
 
@@ -500,7 +517,7 @@ describe('DocumentPage guide activation', () => {
     mockDeskData = {
       folders: [{ row: { engagement_id: 'someone-else' }, need: null }],
       chips: [],
-      composed: new Set(['someone-else']),
+      composed: { 'someone-else': true },
     };
 
     render(<DocumentPage params={fulfilledParams} />);
@@ -551,7 +568,7 @@ describe('DocumentPage guide activation', () => {
         },
       }],
       chips: [],
-      composed: new Set(['proposal-1']),
+      composed: { 'proposal-1': true },
     };
 
     render(<DocumentPage params={fulfilledParams} />);

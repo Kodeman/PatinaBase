@@ -54,8 +54,10 @@ export interface DeskData {
   folders: DeskFolder[];
   chips: MotionChip[];
   /** Engagement ids this composition actually derived a need for — see
-   *  partitionDesk. Presence here is what makes a "no need" answer sayable. */
-  composed: Set<string>;
+   *  partitionDesk. Presence here is what makes a "no need" answer sayable.
+   *  A plain object so React Query's replaceEqualDeep can structurally share it
+   *  across the 60s tick (it does not recurse into Sets). */
+  composed: Record<string, true>;
 }
 
 /**
@@ -75,7 +77,7 @@ export function selectOperationalNeedForDocument(
   engagementId: string | null | undefined,
 ): NeedLine | null | undefined {
   if (!data || !engagementId) return undefined;
-  if (!data.composed.has(engagementId)) return undefined;
+  if (data.composed[engagementId] !== true) return undefined;
   return data.folders.find((folder) => folder.row.engagement_id === engagementId)?.need ?? null;
 }
 

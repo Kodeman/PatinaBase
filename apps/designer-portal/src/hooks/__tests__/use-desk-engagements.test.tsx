@@ -51,6 +51,7 @@ jest.mock('@tanstack/react-query', () => {
   };
 });
 
+import { replaceEqualDeep } from '@tanstack/react-query';
 import {
   selectOperationalNeedForDocument,
   useDeskEngagements,
@@ -127,7 +128,7 @@ describe('useDeskEngagements', () => {
     const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toEqual({ folders: [], chips: [], composed: new Set() });
+    expect(result.current.data).toEqual({ folders: [], chips: [], composed: {} });
     expect(result.current.isError).toBe(false);
     // A genuinely quiet desk on first load has nothing to compare against —
     // no breadcrumb.
@@ -177,7 +178,7 @@ describe('useDeskEngagements', () => {
       await result.current.refetch();
     });
 
-    await waitFor(() => expect(result.current.data).toEqual({ folders: [], chips: [], composed: new Set() }));
+    await waitFor(() => expect(result.current.data).toEqual({ folders: [], chips: [], composed: {} }));
     expect(mockDeskZeroRowRead).toHaveBeenCalledWith({
       previous_folder_count: 1,
       previous_chip_count: 0,
@@ -254,6 +255,21 @@ describe('selectOperationalNeedForDocument', () => {
     expect(selectOperationalNeedForDocument(data, undefined)).toBeUndefined();
   });
 
+  it('stays structurally shareable across an identical recomposition', () => {
+    // The Desk re-reads every 60s. React Query's replaceEqualDeep hands back the
+    // PREVIOUS result when the new one deep-equals it, which is what keeps every
+    // consumer of this query from re-rendering on each tick — but it does not
+    // recurse into Sets or Maps, so `composed` has to stay plain data.
+    const rows = [
+      { ...base, engagement_kind: 'project', engagement_id: 'project-1', project_id: 'project-1' },
+    ] as DocumentStateRow[];
+
+    const first = partitionDesk(rows, now);
+    const second = partitionDesk(rows, now);
+
+    expect(replaceEqualDeep(first, second)).toBe(first);
+  });
+
   it('never reads absence from a composition that did not cover the document', () => {
     // The Desk cache is shared with the CommandBar, so it is hot on documents
     // this composition never saw. Those are unanswered, not need-free.
@@ -262,7 +278,7 @@ describe('selectOperationalNeedForDocument', () => {
       now,
     );
 
-    expect(data.composed.has('project-1')).toBe(true);
+    expect(data.composed['project-1']).toBe(true);
     expect(selectOperationalNeedForDocument(data, 'some-other-engagement')).toBeUndefined();
   });
 
@@ -278,7 +294,7 @@ describe('selectOperationalNeedForDocument', () => {
       now,
     );
 
-    expect(data.composed.has('project-1')).toBe(false);
+    expect(data.composed['project-1']).toBeUndefined();
     expect(selectOperationalNeedForDocument(data, 'project-1')).toBeUndefined();
   });
 
@@ -294,7 +310,7 @@ describe('selectOperationalNeedForDocument', () => {
       now,
     );
 
-    expect(data.composed.has('project-1')).toBe(true);
+    expect(data.composed['project-1']).toBe(true);
     expect(selectOperationalNeedForDocument(data, 'project-1')).toBeNull();
   });
 });
