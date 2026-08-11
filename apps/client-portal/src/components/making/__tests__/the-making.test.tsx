@@ -244,6 +244,42 @@ function renderSurface(projectApprovals: ProjectApprovalReview[] = []) {
   );
 }
 
+function projectApproval(
+  over: Partial<ProjectApprovalReview> = {},
+): ProjectApprovalReview {
+  return {
+    decisionId: 'decision-1',
+    projectId: PROJECT_ID,
+    phaseId: 'ph-4',
+    sectionKey: null,
+    artifactKind: 'plan_issue',
+    artifactId: 'issue-1',
+    artifactVersion: 7,
+    artifactChecksum: 'a'.repeat(64),
+    artifactTitle: 'Issued set',
+    question: 'Approve issued set 7?',
+    context: null,
+    dueAt: '2026-08-01T12:00:00.000Z',
+    costCentsDelta: 0,
+    scheduleDaysDelta: 0,
+    leadTimeDaysDelta: 0,
+    lifecycleStatus: 'pending',
+    outcome: null,
+    disposition: 'active',
+    isOverdue: true,
+    completedReviewCount: 1,
+    requiredReviewCount: 1,
+    authorityRevision: 1,
+    predecessorDecisionId: null,
+    successorDecisionId: null,
+    createdAt: '2026-07-20T12:00:00.000Z',
+    sentAt: '2026-07-20T12:01:00.000Z',
+    respondedAt: null,
+    updatedAt: '2026-07-20T12:01:00.000Z',
+    ...over,
+  };
+}
+
 /** The open chapter's entries, in document order, by their testid. */
 function openChapterOrder(): string[] {
   const chapter = screen.getByTestId('spine-open-chapter');
@@ -354,36 +390,7 @@ describe('TheMaking — the open chapter', () => {
       isPending: false,
       isError: false,
     });
-    const approval: ProjectApprovalReview = {
-      decisionId: 'decision-1',
-      projectId: PROJECT_ID,
-      phaseId: 'ph-4',
-      sectionKey: null,
-      artifactKind: 'plan_issue',
-      artifactId: 'issue-1',
-      artifactVersion: 7,
-      artifactChecksum: 'a'.repeat(64),
-      artifactTitle: 'Issued set',
-      question: 'Approve issued set 7?',
-      context: null,
-      dueAt: '2026-08-01T12:00:00.000Z',
-      costCentsDelta: 0,
-      scheduleDaysDelta: 0,
-      leadTimeDaysDelta: 0,
-      lifecycleStatus: 'pending',
-      outcome: null,
-      disposition: 'active',
-      isOverdue: true,
-      completedReviewCount: 1,
-      requiredReviewCount: 1,
-      authorityRevision: 1,
-      predecessorDecisionId: null,
-      successorDecisionId: null,
-      createdAt: '2026-07-20T12:00:00.000Z',
-      sentAt: '2026-07-20T12:01:00.000Z',
-      respondedAt: null,
-      updatedAt: '2026-07-20T12:01:00.000Z',
-    };
+    const approval = projectApproval();
 
     renderSurface([approval]);
 
@@ -396,6 +403,92 @@ describe('TheMaking — the open chapter', () => {
       'href',
       '/decisions/decision-1',
     );
+  });
+
+  it('partitions current, future, and unmatched approvals by exact phase id', () => {
+    renderSurface([
+      projectApproval({ decisionId: 'current', question: 'Current approval?' }),
+      projectApproval({
+        decisionId: 'future',
+        phaseId: 'ph-5',
+        question: 'Future approval?',
+        isOverdue: false,
+      }),
+      projectApproval({
+        decisionId: 'unmatched',
+        phaseId: 'phase-not-on-spine',
+        question: 'Unmatched approval?',
+        isOverdue: false,
+      }),
+    ]);
+
+    const open = within(screen.getByTestId('spine-open-chapter'));
+    expect(open.getByText('Current approval?')).toBeInTheDocument();
+    expect(open.queryByText('Future approval?')).not.toBeInTheDocument();
+    expect(open.queryByText('Unmatched approval?')).not.toBeInTheDocument();
+
+    const later = within(screen.getByTestId('making-later-approvals'));
+    expect(later.getByText('Future approval?')).toBeInTheDocument();
+    expect(later.getByText(/Installation/)).toBeInTheDocument();
+
+    const other = within(screen.getByTestId('making-other-approvals'));
+    expect(other.getByText('Unmatched approval?')).toBeInTheDocument();
+    expect(other.getByText(/Phase not available/)).toBeInTheDocument();
+  });
+
+  it('never infers an open approval from project.currentPhase when no phase row is open', () => {
+    const noOpenMilestones = MILESTONES.map((milestone) =>
+      milestone.id === 'ph-4'
+        ? { ...milestone, status: 'upcoming' as const }
+        : milestone,
+    );
+
+    render(
+      <TheMaking
+        projectId={PROJECT_ID}
+        project={PROJECT}
+        milestones={noOpenMilestones}
+        projectApprovals={[projectApproval()]}
+      />,
+    );
+
+    expect(screen.queryByTestId('spine-open-chapter')).not.toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('making-later-approvals')).getByText(
+        'Approve issued set 7?',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps deferred approval work semantic and reflow-safe at 320px', () => {
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: 320,
+    });
+    const { container } = renderSurface([
+      projectApproval({
+        decisionId: 'future',
+        phaseId: 'ph-5',
+        question: 'Review the long future immutable edition?',
+      }),
+      projectApproval({
+        decisionId: 'unmatched',
+        phaseId: 'missing',
+        question: 'Review the unmatched immutable edition?',
+      }),
+    ]);
+
+    expect(
+      screen.getByRole('list', { name: 'Later approvals' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('list', { name: 'Other project approvals' }),
+    ).toBeInTheDocument();
+    for (const link of screen.getAllByRole('link', { name: /immutable edition/i })) {
+      expect(link).toHaveClass('min-h-11', 'break-words');
+    }
+    expect(container.querySelector('[class*="shadow"]')).toBeNull();
+    expect(container.querySelector('[class*="overflow-x"]')).toBeNull();
   });
 
   it('reads gates first, then tolls, then the pieces in motion', () => {

@@ -3,7 +3,11 @@ import { act, render, screen } from "@testing-library/react";
 
 import ClientDecisionDetailPage from "./page";
 
+const useProjectApprovalByDecision = jest.fn();
 const useClientDecision = jest.fn();
+const useDecisionComments = jest.fn();
+const useCreateDecisionComment = jest.fn();
+const useProjectApprovalRealtime = jest.fn();
 
 jest.mock("@/hooks/use-decisions-client", () => ({
   useClientDecision: (...args: unknown[]) => useClientDecision(...args),
@@ -15,13 +19,13 @@ jest.mock("@/hooks/use-auth", () => ({
 
 jest.mock("@patina/supabase", () => ({
   PROJECT_APPROVAL_CONTRACT: "project_artifact_v1",
-  useDecisionComments: () => ({ data: [], isLoading: false }),
-  useCreateDecisionComment: () => ({ mutate: jest.fn(), isPending: false }),
-  useProjectApproval: () => ({
-    data: { decisionId: "decision-1" },
-    isLoading: false,
-  }),
-  useProjectApprovalRealtime: jest.fn(),
+  useDecisionComments: (...args: unknown[]) => useDecisionComments(...args),
+  useCreateDecisionComment: (...args: unknown[]) =>
+    useCreateDecisionComment(...args),
+  useProjectApprovalByDecision: (...args: unknown[]) =>
+    useProjectApprovalByDecision(...args),
+  useProjectApprovalRealtime: (...args: unknown[]) =>
+    useProjectApprovalRealtime(...args),
 }));
 
 jest.mock("@/components/approvals/project-approval-review", () => ({
@@ -36,6 +40,28 @@ jest.mock("@/components/decision-card-client", () => ({
   ),
 }));
 
+const STAGE2_APPROVAL = {
+  decisionId: "decision-1",
+  projectId: "project-1",
+  phaseId: "phase-1",
+  lifecycleStatus: "draft",
+  disposition: "active",
+};
+
+beforeEach(() => {
+  useProjectApprovalByDecision.mockReturnValue({
+    data: null,
+    isLoading: false,
+    isError: false,
+  });
+  useClientDecision.mockReturnValue({ data: null, isLoading: false });
+  useDecisionComments.mockReturnValue({ data: [], isLoading: false });
+  useCreateDecisionComment.mockReturnValue({
+    mutate: jest.fn(),
+    isPending: false,
+  });
+});
+
 async function renderPage() {
   await act(async () => {
     render(
@@ -48,31 +74,59 @@ async function renderPage() {
   });
 }
 
-it("branches exact Stage-2 rows to the authoritative review and keeps Discussion separate", async () => {
-  useClientDecision.mockReturnValue({
-    data: {
-      id: "decision-1",
-      project_id: "project-1",
-      approval_contract: "project_artifact_v1",
-    },
-    isLoading: false,
+it("blocks legacy reads and comments while the exact canonical lookup is pending", async () => {
+  useProjectApprovalByDecision.mockReturnValue({
+    data: undefined,
+    isLoading: true,
+    isError: false,
   });
+
   await renderPage();
 
-  expect(
-    await screen.findByTestId("stage2-approval-review"),
-  ).toBeInTheDocument();
-  expect(screen.queryByTestId("legacy-decision-card")).not.toBeInTheDocument();
-  expect(
-    screen.getByRole("heading", { name: "Discussion" }),
-  ).toBeInTheDocument();
+  expect(screen.getByRole("status")).toHaveTextContent(/loading approval/i);
+  expect(useClientDecision).not.toHaveBeenCalled();
+  expect(useDecisionComments).not.toHaveBeenCalled();
+  expect(useCreateDecisionComment).not.toHaveBeenCalled();
+});
+
+it("fails closed on an exact canonical error without probing legacy or comments", async () => {
+  useProjectApprovalByDecision.mockReturnValue({
+    data: undefined,
+    isLoading: false,
+    isError: true,
+  });
+
+  await renderPage();
+
+  expect(screen.getByRole("alert")).toHaveTextContent(
+    /authoritative approval evidence is unavailable/i,
+  );
+  expect(useClientDecision).not.toHaveBeenCalled();
+  expect(useDecisionComments).not.toHaveBeenCalled();
+  expect(useCreateDecisionComment).not.toHaveBeenCalled();
+});
+
+it("renders authorized Stage-2 evidence and only then mounts realtime and Discussion", async () => {
+  useProjectApprovalByDecision.mockReturnValue({
+    data: STAGE2_APPROVAL,
+    isLoading: false,
+    isError: false,
+  });
+
+  await renderPage();
+
+  expect(await screen.findByTestId("stage2-approval-review")).toBeInTheDocument();
+  expect(useClientDecision).not.toHaveBeenCalled();
+  expect(useProjectApprovalRealtime).toHaveBeenCalledWith("project-1");
+  expect(useDecisionComments).toHaveBeenCalledWith("decision-1");
+  expect(useCreateDecisionComment).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole("heading", { name: "Discussion" })).toBeInTheDocument();
   expect(
     screen.getByText(/comments.*never submit or change an approval outcome/i),
   ).toBeInTheDocument();
-  expect(screen.getByLabelText("Add to discussion")).toBeInTheDocument();
 });
 
-it("preserves the legacy card for non-Stage-2 decisions", async () => {
+it("uses exact null as the only permission to fetch and render a verified legacy decision", async () => {
   useClientDecision.mockReturnValue({
     data: {
       id: "decision-1",
@@ -81,10 +135,70 @@ it("preserves the legacy card for non-Stage-2 decisions", async () => {
     },
     isLoading: false,
   });
+
   await renderPage();
 
   expect(await screen.findByTestId("legacy-decision-card")).toBeInTheDocument();
-  expect(
-    screen.queryByTestId("stage2-approval-review"),
-  ).not.toBeInTheDocument();
+  expect(useClientDecision).toHaveBeenCalledWith("decision-1");
+  expect(useDecisionComments).toHaveBeenCalledWith("decision-1");
+  expect(screen.getByRole("heading", { name: "Discussion" })).toBeInTheDocument();
+});
+
+it("does not mount comments when exact null is followed by legacy not-found", async () => {
+  await renderPage();
+
+  expect(screen.getByText("Decision not found.")).toBeInTheDocument();
+  expect(useClientDecision).toHaveBeenCalledWith("decision-1");
+  expect(useDecisionComments).not.toHaveBeenCalled();
+  expect(useCreateDecisionComment).not.toHaveBeenCalled();
+});
+
+it("fails closed without comments if a raw Stage-2 row appears after canonical null", async () => {
+  useClientDecision.mockReturnValue({
+    data: {
+      id: "decision-1",
+      project_id: "project-1",
+      approval_contract: "project_artifact_v1",
+    },
+    isLoading: false,
+  });
+
+  await renderPage();
+
+  expect(screen.getByRole("alert")).toHaveTextContent(
+    /authoritative approval evidence is unavailable/i,
+  );
+  expect(useDecisionComments).not.toHaveBeenCalled();
+  expect(useCreateDecisionComment).not.toHaveBeenCalled();
+});
+
+it("does not mount comments while the permitted legacy lookup is pending", async () => {
+  useClientDecision.mockReturnValue({ data: undefined, isLoading: true });
+
+  await renderPage();
+
+  expect(screen.getByRole("status")).toHaveTextContent(/loading decision/i);
+  expect(useDecisionComments).not.toHaveBeenCalled();
+  expect(useCreateDecisionComment).not.toHaveBeenCalled();
+});
+
+it("keeps the authorized detail semantic and single-column at 320px", async () => {
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    value: 320,
+  });
+  useProjectApprovalByDecision.mockReturnValue({
+    data: STAGE2_APPROVAL,
+    isLoading: false,
+    isError: false,
+  });
+
+  await renderPage();
+
+  const main = screen.getByRole("main");
+  expect(main).toHaveClass("min-w-0", "px-4");
+  expect(screen.getByLabelText("Add to discussion")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Post" })).toHaveClass("min-h-11");
+  expect(main.querySelector('[class*="shadow"]')).toBeNull();
+  expect(main.querySelector('[class*="overflow-x"]')).toBeNull();
 });

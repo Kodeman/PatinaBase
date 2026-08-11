@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import Link from 'next/link';
 
 import { invoiceBalanceCents } from '@patina/shared';
 import { useProjectInvoices } from '@patina/supabase';
@@ -313,6 +314,73 @@ function ProjectApprovalGate({ approval }: { approval: ProjectApprovalReview }) 
   );
 }
 
+interface DeferredApprovalWork {
+  approval: ProjectApprovalReview;
+  phaseLabel: string;
+}
+
+function DeferredProjectApprovals({
+  heading,
+  description,
+  items,
+  testId,
+}: {
+  heading: string;
+  description: string;
+  items: DeferredApprovalWork[];
+  testId: string;
+}) {
+  if (items.length === 0) return null;
+  const headingId = `${testId}-heading`;
+
+  return (
+    <section
+      aria-labelledby={headingId}
+      className="mt-8 min-w-0 border-t border-[var(--border-subtle)] pt-5"
+      data-testid={testId}
+    >
+      <h2 id={headingId} className="type-meta">
+        {heading}
+      </h2>
+      <p className="type-body-small mt-1 text-[var(--text-muted)]">
+        {description}
+      </p>
+      <ul aria-label={heading} className="mt-3 min-w-0 list-none p-0">
+        {items.map(({ approval, phaseLabel }) => {
+          const due = parseSpineDate(approval.dueAt);
+          const action =
+            approval.lifecycleStatus === 'draft'
+              ? 'Review required'
+              : 'Response required';
+          return (
+            <li
+              key={approval.decisionId}
+              className="min-w-0 border-b border-[var(--border-subtle)] py-4"
+            >
+              <p className="type-meta-small break-words text-[var(--text-muted)]">
+                {phaseLabel} · {action}
+                {approval.isOverdue ? ' · Overdue' : ''}
+              </p>
+              <h3 className="type-item-name mt-1 min-w-0">
+                <Link
+                  href={`/decisions/${approval.decisionId}`}
+                  className="inline-flex min-h-11 min-w-0 items-center break-words no-underline hover:underline focus-visible:focus-ring"
+                >
+                  {approval.question}
+                </Link>
+              </h3>
+              <p className="type-body-small mt-1 break-words text-[var(--text-muted)]">
+                {approval.artifactTitle} · Edition {approval.artifactVersion}
+                {due ? ` · Due ${LONG_MONTH_DAY.format(due)}` : ''}
+              </p>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
 // ─── gates: finished work awaiting acceptance ────────────────────────────────
 
 /**
@@ -546,11 +614,33 @@ export function TheMaking({
     }
     return [{ selection, proposalId }];
   });
-  const approvalGates = projectApprovals.filter(
+  const actionableProjectApprovals = projectApprovals.filter(
     (approval) =>
       approval.disposition === 'active' &&
       (approval.lifecycleStatus === 'draft' || approval.lifecycleStatus === 'pending'),
   );
+  const currentPhaseId = phases.current?.id ?? null;
+  const approvalGates = currentPhaseId
+    ? actionableProjectApprovals.filter(
+        (approval) => approval.phaseId === currentPhaseId,
+      )
+    : [];
+  const laterApprovals = actionableProjectApprovals.flatMap((approval) => {
+    const phase = phases.future.find((candidate) => candidate.id === approval.phaseId);
+    return phase ? [{ approval, phaseLabel: phase.label }] : [];
+  });
+  const otherApprovals = actionableProjectApprovals
+    .filter(
+      (approval) =>
+        approval.phaseId !== currentPhaseId &&
+        !phases.future.some((phase) => phase.id === approval.phaseId),
+    )
+    .map((approval) => ({
+      approval,
+      phaseLabel:
+        phases.settled.find((phase) => phase.id === approval.phaseId)?.label ??
+        'Phase not available',
+    }));
 
   // ── the ledger ─────────────────────────────────────────────────────────────
   const openInvoices = (invoicesQuery.data ?? [])
@@ -728,7 +818,7 @@ export function TheMaking({
   }
 
   return (
-    <div data-testid="the-making">
+    <div className="min-w-0" data-testid="the-making">
       <MakingMasthead
         projectName={project.name}
         location={project.location}
@@ -754,6 +844,19 @@ export function TheMaking({
             opening a region with nothing in it. */}
         {entries.length > 0 ? entries : undefined}
       </MakingSpine>
+
+      <DeferredProjectApprovals
+        heading="Later approvals"
+        description="Linked to a later project phase, not today’s open chapter."
+        items={laterApprovals}
+        testId="making-later-approvals"
+      />
+      <DeferredProjectApprovals
+        heading="Other project approvals"
+        description="Not linked to today’s open chapter or a scheduled future phase."
+        items={otherApprovals}
+        testId="making-other-approvals"
+      />
     </div>
   );
 }

@@ -47,3 +47,28 @@ it("links the exact approval and never collapses changes requested into discussi
     screen.getByText(/Issued construction set · Edition 7/),
   ).toBeInTheDocument();
 });
+
+it("reflows as one typographic column at 320px without shadows or horizontal scroll", () => {
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    value: 320,
+  });
+
+  const { container } = render(
+    <ProjectApprovalSummary
+      approval={{
+        ...approval,
+        question: "Approve the long immutable issued construction set edition?",
+      }}
+    />,
+  );
+
+  expect(screen.getByTestId("project-approval-summary")).toHaveClass("min-w-0");
+  expect(
+    screen.getByRole("link", {
+      name: "Approve the long immutable issued construction set edition?",
+    }),
+  ).toHaveClass("min-h-11");
+  expect(container.querySelector('[class*="shadow"]')).toBeNull();
+  expect(container.querySelector('[class*="overflow-x"]')).toBeNull();
+});

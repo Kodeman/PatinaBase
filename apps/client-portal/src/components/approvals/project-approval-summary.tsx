@@ -2,10 +2,7 @@
 
 import Link from "next/link";
 
-import {
-  useProjectApproval,
-  type ProjectApprovalReview,
-} from "@patina/supabase";
+import type { ProjectApprovalReview } from "@patina/supabase";
 
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat("en-US", {
@@ -68,43 +65,4 @@ export function ProjectApprovalSummary({
       </div>
     </article>
   );
-}
-
-/** List-route adapter that reuses the canonical project query key. */
-export function ProjectApprovalSummaryForDecision({
-  projectId,
-  decisionId,
-  fallbackTitle,
-  compact = false,
-}: {
-  projectId: string;
-  decisionId: string;
-  fallbackTitle: string;
-  compact?: boolean;
-}) {
-  const approval = useProjectApproval(projectId, decisionId);
-  if (approval.isLoading) {
-    return (
-      <div
-        className="border-b border-[var(--border-default)] py-4"
-        role="status"
-      >
-        <span className="type-body-small">Loading approval details…</span>
-      </div>
-    );
-  }
-  if (!approval.data) {
-    return (
-      <article className="border-b border-[var(--border-default)] py-4">
-        <p className="type-meta-small">Approval details unavailable</p>
-        <Link
-          href={`/decisions/${decisionId}`}
-          className="type-item-name mt-1 inline-flex min-h-11 items-center no-underline hover:underline"
-        >
-          {fallbackTitle}
-        </Link>
-      </article>
-    );
-  }
-  return <ProjectApprovalSummary approval={approval.data} compact={compact} />;
 }

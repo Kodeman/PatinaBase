@@ -91,15 +91,48 @@ describe('client project reads', () => {
     expect(mockCreateServerClient).not.toHaveBeenCalled();
   });
 
-  it('counts Stage-2 drafts with pending legacy decisions as client attention work', async () => {
+  it('combines sanitized Stage-2 reviews with explicitly legacy raw pending decisions', async () => {
     const decisionOr = jest.fn();
+    const decisionEq = jest.fn();
     const supabase = {
       auth: {
         getUser: jest.fn().mockResolvedValue({
           data: { user: { id: 'client-1' } },
         }),
       },
-      rpc: jest.fn().mockResolvedValue({ data: [], error: null }),
+      rpc: jest.fn((name: string) => {
+        if (name === 'list_my_project_decision_reviews') {
+          return Promise.resolve({
+            data: [
+              {
+                projectId: 'project-1',
+                lifecycleStatus: 'draft',
+                disposition: 'active',
+              },
+              {
+                projectId: 'project-1',
+                lifecycleStatus: 'pending',
+                disposition: 'active',
+              },
+              {
+                projectId: 'project-1',
+                lifecycleStatus: 'responded',
+                disposition: 'active',
+              },
+              {
+                projectId: 'project-1',
+                lifecycleStatus: 'draft',
+                disposition: 'withdrawn',
+              },
+            ],
+            error: null,
+          });
+        }
+        if (name === 'list_client_proposals') {
+          return Promise.resolve({ data: [], error: null });
+        }
+        throw new Error(`Unexpected RPC: ${name}`);
+      }),
       from: jest.fn((table: string) => {
         if (table === 'projects') {
           const builder = {
@@ -125,16 +158,16 @@ describe('client project reads', () => {
           const builder = {
             select: jest.fn(),
             or: decisionOr,
-            eq: jest.fn().mockResolvedValue({
-              data: [
-                { project_id: 'project-1' },
-                { project_id: 'project-1' },
-              ],
-              error: null,
-            }),
+            eq: decisionEq,
           };
           builder.select.mockReturnValue(builder);
           decisionOr.mockReturnValue(builder);
+          decisionEq
+            .mockReturnValueOnce(builder)
+            .mockResolvedValueOnce({
+              data: [{ project_id: 'project-1' }],
+              error: null,
+            });
           return builder;
         }
         if (table === 'comms_thread_participants') {
@@ -151,10 +184,20 @@ describe('client project reads', () => {
     mockCreateServerClient.mockResolvedValue(supabase);
 
     await expect(fetchClientProjects()).resolves.toEqual([
-      expect.objectContaining({ id: 'project-1', approvalsPending: 2 }),
+      expect.objectContaining({ id: 'project-1', approvalsPending: 3 }),
     ]);
+    expect(decisionEq).toHaveBeenNthCalledWith(1, 'status', 'pending');
     expect(decisionOr).toHaveBeenCalledWith(
-      'status.eq.pending,and(status.eq.draft,approval_contract.eq.project_artifact_v1)',
+      'approval_contract.is.null,approval_contract.neq.project_artifact_v1',
+    );
+    expect(decisionEq).toHaveBeenNthCalledWith(
+      2,
+      'designer_clients.client_id',
+      'client-1',
+    );
+    expect(supabase.rpc).toHaveBeenCalledWith(
+      'list_my_project_decision_reviews',
+      {},
     );
   });
 });
