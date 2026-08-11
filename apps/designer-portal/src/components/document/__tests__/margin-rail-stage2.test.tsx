@@ -45,6 +45,7 @@ jest.mock('@/hooks/use-margin-items', () => ({
 
 jest.mock('@patina/supabase', () => ({
   useCoordinationItems: () => mockCoordinationQuery,
+  useProjectContextualHandoffs: () => ({ data: [], isError: false }),
   useProjectFFEItems: () => ({ data: [] }),
   useProjectParties: () => ({ data: [] }),
   useProjectPhases: () => ({ data: [] }),

@@ -1,178 +1,228 @@
 'use client';
 
-import { useState } from 'react';
+/**
+ * Handoffs in the margin (ratified Ruling III).
+ *
+ * The contextual handoff band is dissolved. Every row its projection produces
+ * is a thing waiting on a named party, which is the definition of a margin
+ * item — so each one renders here, in the rail, under the same paper grammar as
+ * every other margin item: lane attribution, one need line, stage provenance as
+ * microtext, and exactly one act.
+ *
+ * The 00442/00443 projection is untouched and read whole. What comes off is
+ * register, not fact: no artifact checksum, no "Exact phase / Source domain",
+ * no escalation booleans on the face of the item.
+ *
+ * Metadata here sits at the portal's 12px floor rather than reusing MItemContent's
+ * 8px kind line, per the shipped-size note on mockup M4.
+ */
+
+import { useMemo, useState } from 'react';
 import {
   useApproveSiteRequestItem,
   useCloseSiteRequest,
   useNudgeSiteRequest,
   useProjectContextualHandoffs,
   useRequestSiteRequestRedo,
+  useSendDecisionReminder,
   useSiteRequestActionDetail,
-  type ContextualHandoffActor,
   type ProjectContextualHandoff,
   type SiteRequestContextualHandoff,
 } from '@patina/supabase';
 
-import { RESIDENTIAL_WORKFLOW_STAGES } from '@patina/types';
-
-import { DocumentAction, DocumentActionRow } from '../document-action';
-import { focusProjectApproval } from '../approvals/project-approval-navigation';
-
-const STAGE_LABELS: Record<string, string> = Object.fromEntries(
-  RESIDENTIAL_WORKFLOW_STAGES.map((stage) => [
-    stage.key,
-    `${stage.number} · ${stage.title}`,
-  ]),
-);
+import {
+  deriveGates,
+  handoffAnchorId,
+  type WorkflowGate,
+} from '@/lib/document/workflow-gate';
+import { overdueStampLabel } from '@/lib/document/overdue-condition';
+import { DocumentAction, DocumentActionRow } from './document-action';
+import { focusProjectApproval } from './approvals/project-approval-navigation';
 
 function sentence(value: string): string {
   const text = value.replaceAll('_', ' ');
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-function actorLabel(actor: ContextualHandoffActor): string {
-  if (actor.label) return actor.label;
-  if (actor.kind === 'site_party') return 'Site party';
-  return sentence(actor.kind);
-}
-
-function stageLabel(handoff: ProjectContextualHandoff): string {
-  const stage = handoff.canonicalStageKey
-    ? (STAGE_LABELS[handoff.canonicalStageKey] ??
-      sentence(handoff.canonicalStageKey))
-    : 'Project phase';
-  const track = handoff.workflowTrack
-    ? ` · ${
-        handoff.workflowTrack === 'ffe'
-          ? 'FF&E'
-          : sentence(handoff.workflowTrack)
-      }`
-    : '';
-  return `${stage}${track}`;
-}
-
-function formatDue(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Due date unavailable';
-  return `Due ${new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  }).format(date)}`;
-}
-
-function dueContext(handoff: ProjectContextualHandoff): string | null {
-  if (!handoff.isOverdue) return null;
-  if (
-    handoff.sourceKind === 'site_request' &&
-    (handoff.sourceState === 'delivered' || handoff.sourceState === 'completed')
-  ) {
-    return 'Request due date passed';
-  }
-  if (handoff.sourceKind === 'project_approval') {
-    return 'Client response due date passed';
-  }
-  return 'Due date passed';
-}
-
-function HandoffContext({ handoff }: { handoff: ProjectContextualHandoff }) {
+/** The terracotta stamp — one of overdue's three renderings. */
+function OverdueStamp({ gate }: { gate: WorkflowGate }) {
+  const label = overdueStampLabel(gate.overdue);
+  if (!label) return null;
   return (
-    <div className="min-w-0">
-      <p className="break-words font-heading text-[16px] text-[var(--color-charcoal)]">
-        {actorLabel(handoff.responsibility.sender)} →{' '}
-        {actorLabel(handoff.responsibility.recipient)}
-      </p>
-      <p className="mt-1 break-words text-[12px] text-[var(--text-muted)]">
-        Current owner · {actorLabel(handoff.responsibility.currentOwner)}
-      </p>
-      <p className="mt-1 break-words font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--color-quiet-ink)]">
-        {stageLabel(handoff)} ·{' '}
-        {handoff.stageAttribution === 'exact_project_phase'
-          ? 'Exact phase'
-          : 'Source domain'}
-      </p>
-      <p className="mt-2 break-words text-[13px] text-[var(--color-charcoal)]">
-        Expected · {sentence(handoff.expectedResponse)}
-      </p>
-      <p className="mt-1 break-words text-[12px] text-[var(--text-muted)]">
-        {formatDue(handoff.dueAt)}
-        {dueContext(handoff) ? ` · ${dueContext(handoff)}` : ''}
-      </p>
-      {handoff.sourceKind === 'project_approval' ? (
-        <p className="mt-1 break-words text-[12px] text-[var(--text-muted)]">
-          {handoff.artifact.title} · v{handoff.artifact.version} ·{' '}
-          {sentence(handoff.artifact.kind)} · proof{' '}
-          {handoff.artifact.checksum.slice(0, 8)}
-        </p>
-      ) : (
-        <div className="mt-1 min-w-0 text-[12px] text-[var(--text-muted)]">
-          <p className="break-words">
-            {handoff.artifact.itemCount}{' '}
-            {handoff.artifact.itemCount === 1 ? 'item' : 'items'}
-            {handoff.artifact.dueContext
-              ? ` · ${handoff.artifact.dueContext}`
-              : ''}
+    <span
+      className="inline-block shrink-0 rounded-[2px] border px-1.5 py-px font-mono text-[12px] font-semibold uppercase tracking-[0.04em]"
+      style={{
+        borderColor: 'var(--color-terracotta)',
+        color: 'var(--color-charcoal)',
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+function HandoffShell({
+  gate,
+  children,
+  action,
+}: {
+  gate: WorkflowGate;
+  children?: React.ReactNode;
+  action: React.ReactNode;
+}) {
+  return (
+    <div
+      className="mb-2 rounded-[5px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] transition-colors duration-150 hover:border-[var(--border-warm)]"
+      style={{ borderLeft: '2.5px solid var(--color-golden-hour)' }}
+      data-margin-handoff={gate.id}
+    >
+      <div className="grid grid-cols-1 gap-2 px-3 py-2.5 min-[360px]:grid-cols-[minmax(0,1fr)_auto] min-[360px]:items-start">
+        <div className="min-w-0">
+          <p className="break-words text-[13px] font-medium leading-snug text-[var(--color-charcoal)]">
+            {gate.lane} · {gate.terms}
           </p>
-          <p className="mt-1 break-words">
-            {handoff.escalation.nudgeSent ? 'Nudge sent' : 'No nudge sent'} ·{' '}
-            {handoff.escalation.dueReminderSent
-              ? 'Due reminder sent'
-              : 'No due reminder sent'}
+          <p className="mt-1 break-words font-mono text-[12px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+            {gate.provenance}
           </p>
-          <ul aria-label="Site Request artifact items" className="mt-1 min-w-0">
-            {handoff.artifact.items.map((item) => (
-              <li
-                key={`${item.kitCode}-${item.version}-${item.title}`}
-                className="break-words"
-              >
-                {item.title} · v{item.version} · {sentence(item.status)}
-              </li>
-            ))}
-          </ul>
         </div>
-      )}
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <OverdueStamp gate={gate} />
+          {action}
+        </div>
+      </div>
+      {children}
     </div>
   );
 }
 
-function ProjectApprovalHandoffRow({
-  handoff,
+function Feedback({
+  feedback,
 }: {
-  handoff: Extract<
-    ProjectContextualHandoff,
-    { sourceKind: 'project_approval' }
-  >;
+  feedback: { kind: 'status' | 'error'; text: string } | null;
 }) {
+  if (!feedback) return null;
   return (
-    <li className="min-w-0 border-b border-[var(--border-subtle)] py-4 last:border-b-0">
-      <article className="grid min-w-0 grid-cols-1 gap-2 min-[640px]:grid-cols-[minmax(0,1fr)_auto] min-[640px]:items-start">
-        <HandoffContext handoff={handoff} />
-        <DocumentAction
-          actionKey="focus-project-approval-handoff"
-          surfaceKey="open-document"
-          regionKey="contextual-handoffs"
-          variant="primary"
-          onClick={() => focusProjectApproval(handoff.sourceId)}
-        >
-          Open approval
-        </DocumentAction>
-      </article>
-    </li>
+    <p
+      role={feedback.kind === 'error' ? 'alert' : 'status'}
+      className={`mt-2 break-words text-[12px] ${
+        feedback.kind === 'error'
+          ? 'text-[var(--color-charcoal)]'
+          : 'text-[var(--text-muted)]'
+      }`}
+    >
+      {feedback.text}
+    </p>
   );
 }
 
-function SiteRequestHandoffRow({
+/**
+ * A project-approval gate. Its one act is either the nudge — the same reminder
+ * RPC the decision rail already owns, keyed on the decision the projection
+ * reports as this handoff's source — or a handoff to the approval ceremony,
+ * which owns publishing and outcome selection.
+ */
+function ProjectApprovalHandoffItem({
+  gate,
+  approvalSurfaceMounted,
+}: {
+  gate: WorkflowGate;
+  approvalSurfaceMounted: boolean;
+}) {
+  const remind = useSendDecisionReminder();
+  const [feedback, setFeedback] = useState<{
+    kind: 'status' | 'error';
+    text: string;
+  } | null>(null);
+
+  // `open` dispatches a window event the approval ceremony listens for, and
+  // that ceremony mounts only on a project engagement. Offering the act where
+  // nothing is listening would be a button that silently does nothing.
+  if (!gate.act || (gate.act.kind === 'open' && !approvalSurfaceMounted)) {
+    return <HandoffShell gate={gate} action={null} />;
+  }
+
+  if (gate.act.kind === 'nudge') {
+    return (
+      <HandoffShell
+        gate={gate}
+        action={
+          <DocumentAction
+            actionKey="nudge-project-approval"
+            surfaceKey="open-document"
+            regionKey="margin-handoffs"
+            variant="primary"
+            id={handoffAnchorId(gate.sourceId)}
+            loading={remind.isPending}
+            loadingLabel="Sending…"
+            onClick={() => {
+              setFeedback(null);
+              remind.mutate(
+                { decisionId: gate.sourceId },
+                {
+                  onSuccess: () =>
+                    setFeedback({ kind: 'status', text: 'Nudge recorded.' }),
+                  onError: (error: unknown) =>
+                    setFeedback({
+                      kind: 'error',
+                      text:
+                        error instanceof Error
+                          ? error.message
+                          : 'The nudge failed.',
+                    }),
+                },
+              );
+            }}
+          >
+            {gate.act.label}
+          </DocumentAction>
+        }
+      >
+        {feedback && (
+          <div className="px-3 pb-3">
+            <Feedback feedback={feedback} />
+          </div>
+        )}
+      </HandoffShell>
+    );
+  }
+
+  return (
+    <HandoffShell
+      gate={gate}
+      action={
+        <DocumentAction
+          actionKey="focus-project-approval-handoff"
+          surfaceKey="open-document"
+          regionKey="margin-handoffs"
+          variant="primary"
+          id={handoffAnchorId(gate.sourceId)}
+          onClick={() => focusProjectApproval(gate.sourceId)}
+        >
+          {gate.act.label}
+        </DocumentAction>
+      }
+    />
+  );
+}
+
+/**
+ * A Site Request gate. Close runs straight from the act; the acts that need
+ * their own terms — nudge, approve, redo — unfold the item and collect them
+ * there, so the face of the margin still carries one act.
+ */
+function SiteRequestHandoffItem({
+  gate,
   handoff,
 }: {
+  gate: WorkflowGate;
   handoff: SiteRequestContextualHandoff;
 }) {
-  const needsDetail = ['sent', 'in_progress', 'delivered'].includes(
-    handoff.sourceState,
-  );
   const [open, setOpen] = useState(false);
   const detailQuery = useSiteRequestActionDetail(
     handoff.projectId,
-    open && needsDetail ? handoff.sourceId : undefined,
+    open && handoff.sourceState !== 'awaiting_consent'
+      ? handoff.sourceId
+      : undefined,
   );
   const nudge = useNudgeSiteRequest();
   const approve = useApproveSiteRequestItem();
@@ -187,7 +237,7 @@ function SiteRequestHandoffRow({
     kind: 'status' | 'error';
     text: string;
   } | null>(null);
-  const detailRegionId = `site-request-detail-${handoff.sourceId}`;
+  const foldId = `site-request-detail-${handoff.sourceId}`;
 
   const run = async (operation: () => Promise<unknown>, success: string) => {
     setFeedback(null);
@@ -202,57 +252,84 @@ function SiteRequestHandoffRow({
     }
   };
 
-  const primaryLabel =
-    handoff.sourceState === 'completed'
-      ? 'Close Site Request'
-      : handoff.sourceState === 'delivered'
-        ? 'Review Site Request'
-        : 'View Site Request';
+  if (!gate.act) {
+    return (
+      <HandoffShell gate={gate} action={null}>
+        <p className="px-3 pb-3 text-[12px] text-[var(--text-muted)]">
+          Waiting for the site party&rsquo;s consent. No studio act is
+          available.
+        </p>
+      </HandoffShell>
+    );
+  }
 
-  const onPrimaryAction = () => {
-    if (handoff.sourceState === 'completed') {
-      void run(
-        () =>
-          close.mutateAsync({
-            projectId: handoff.projectId,
-            requestId: handoff.sourceId,
-          }),
-        'Site Request closed.',
-      );
-      return;
-    }
-    setOpen((current) => !current);
-  };
+  if (gate.act.kind === 'close') {
+    return (
+      <HandoffShell
+        gate={gate}
+        action={
+          <DocumentAction
+            actionKey="close-site-request"
+            surfaceKey="open-document"
+            regionKey="margin-handoffs"
+            variant="primary"
+            id={handoffAnchorId(gate.sourceId)}
+            loading={close.isPending}
+            loadingLabel="Closing…"
+            onClick={() =>
+              void run(
+                () =>
+                  close.mutateAsync({
+                    projectId: handoff.projectId,
+                    requestId: handoff.sourceId,
+                  }),
+                'Site Request closed.',
+              )
+            }
+          >
+            {gate.act.label}
+          </DocumentAction>
+        }
+      >
+        {feedback && (
+          <div className="px-3 pb-3">
+            <Feedback feedback={feedback} />
+          </div>
+        )}
+      </HandoffShell>
+    );
+  }
+
+  const canNudge = ['sent', 'in_progress', 'delivered'].includes(
+    handoff.sourceState,
+  );
 
   return (
-    <li className="min-w-0 border-b border-[var(--border-subtle)] py-4 last:border-b-0">
-      <article className="grid min-w-0 grid-cols-1 gap-2 min-[640px]:grid-cols-[minmax(0,1fr)_auto] min-[640px]:items-start">
-        <HandoffContext handoff={handoff} />
+    <HandoffShell
+      gate={gate}
+      action={
         <DocumentAction
           actionKey={handoff.actionKind}
           surfaceKey="open-document"
-          regionKey="contextual-handoffs"
+          regionKey="margin-handoffs"
           variant="primary"
-          aria-expanded={handoff.sourceState === 'completed' ? undefined : open}
-          aria-controls={
-            handoff.sourceState === 'completed' ? undefined : detailRegionId
-          }
-          loading={close.isPending}
-          loadingLabel="Closing…"
-          onClick={onPrimaryAction}
+          id={handoffAnchorId(gate.sourceId)}
+          aria-expanded={open}
+          aria-controls={foldId}
+          onClick={() => setOpen((current) => !current)}
         >
-          {primaryLabel}
+          {gate.act.label}
         </DocumentAction>
-      </article>
-
-      {open && handoff.sourceState !== 'awaiting_consent' && (
+      }
+    >
+      {open && (
         <div
-          id={detailRegionId}
-          className="mt-3 min-w-0 border-l-2 border-[var(--color-pearl)] pl-3"
+          id={foldId}
+          className="mx-3 mb-3 min-w-0 border-l-2 border-[var(--color-pearl)] pl-3"
         >
           {detailQuery.isLoading && (
             <p role="status" className="text-[12px] text-[var(--text-muted)]">
-              Reading exact Site Request evidence…
+              Reading Site Request evidence…
             </p>
           )}
           {detailQuery.isError && (
@@ -268,8 +345,8 @@ function SiteRequestHandoffRow({
               role="alert"
               className="text-[12px] text-[var(--color-charcoal)]"
             >
-              Exact current-version delivery evidence is unavailable. Approve
-              and redo are disabled.
+              Current-version delivery evidence is unavailable. Approve and redo
+              are disabled.
             </p>
           )}
 
@@ -286,7 +363,7 @@ function SiteRequestHandoffRow({
                     <p className="break-words text-[13px] font-medium text-[var(--color-charcoal)]">
                       {item.title}
                     </p>
-                    <p className="mt-1 break-words font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                    <p className="mt-1 break-words font-mono text-[12px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                       {item.kitCode} · v{item.version} · {sentence(item.status)}
                     </p>
                     {item.status === 'delivered' && item.deliverableId && (
@@ -422,9 +499,7 @@ function SiteRequestHandoffRow({
                 );
               })}
 
-              {['sent', 'in_progress', 'delivered'].includes(
-                handoff.sourceState,
-              ) && (
+              {canNudge && (
                 <div className="min-w-0">
                   <label
                     htmlFor={`site-nudge-${handoff.sourceId}`}
@@ -472,101 +547,108 @@ function SiteRequestHandoffRow({
               )}
             </div>
           )}
+
+          <Feedback feedback={feedback} />
         </div>
       )}
-
-      {open && handoff.sourceState === 'awaiting_consent' && (
-        <p
-          id={detailRegionId}
-          role="status"
-          className="mt-2 text-[12px] text-[var(--text-muted)]"
-        >
-          Waiting for the site party’s consent. This handoff is informational;
-          no studio lifecycle action is available.
-        </p>
-      )}
-
-      {feedback && (
-        <p
-          role={feedback.kind === 'error' ? 'alert' : 'status'}
-          className={`mt-2 break-words text-[12px] ${
-            feedback.kind === 'error'
-              ? 'text-[var(--color-charcoal)]'
-              : 'text-[var(--text-muted)]'
-          }`}
-        >
-          {feedback.text}
-        </p>
-      )}
-    </li>
+    </HandoffShell>
   );
 }
 
-export function ContextualHandoffBand({ projectId }: { projectId: string }) {
+export function MarginHandoffItem({
+  gate,
+  handoff,
+  approvalSurfaceMounted,
+}: {
+  gate: WorkflowGate;
+  handoff: ProjectContextualHandoff;
+  approvalSurfaceMounted: boolean;
+}) {
+  return handoff.sourceKind === 'project_approval' ? (
+    <ProjectApprovalHandoffItem
+      gate={gate}
+      approvalSurfaceMounted={approvalSurfaceMounted}
+    />
+  ) : (
+    <SiteRequestHandoffItem gate={gate} handoff={handoff} />
+  );
+}
+
+/**
+ * The project's gates, ordered. One clock is threaded in from the caller so the
+ * margin stamp and the guide sentence cannot disagree across a midnight.
+ *
+ * The rail, the mobile chips, and the mobile spine summary all read this, so no
+ * surface can under-report what the margin holds.
+ */
+export function useHandoffGates({
+  projectId,
+  clientName,
+  now,
+}: {
+  projectId: string | null;
+  clientName: string;
+  now: Date;
+}): {
+  gates: WorkflowGate[];
+  handoffsById: Map<string, ProjectContextualHandoff>;
+  isError: boolean;
+} {
   const handoffsQuery = useProjectContextualHandoffs(projectId);
-
-  if (handoffsQuery.isLoading) {
-    return (
-      <section
-        aria-label="Project handoffs"
-        aria-busy="true"
-        className="mt-6 min-w-0 max-w-full border-y border-[var(--border-subtle)] py-4"
-      >
-        <p className="text-[12px] text-[var(--text-muted)]">
-          Reading project handoffs…
-        </p>
-      </section>
-    );
-  }
-
-  if (handoffsQuery.isError) {
-    return (
-      <section
-        aria-label="Project handoffs"
-        className="mt-6 min-w-0 max-w-full border-y border-[var(--border-subtle)] py-4"
-      >
-        <p role="alert" className="text-[12px] text-[var(--color-charcoal)]">
-          Project handoffs could not be read. No workflow state was changed.
-        </p>
-      </section>
-    );
-  }
-
   const handoffs = handoffsQuery.data ?? [];
-  if (handoffs.length === 0) return null;
+  return useMemo(
+    () => ({
+      gates: projectId ? deriveGates(handoffs, now, clientName) : [],
+      handoffsById: new Map(
+        handoffs.map((handoff) => [
+          `${handoff.sourceKind}-${handoff.sourceId}`,
+          handoff,
+        ]),
+      ),
+      isError: Boolean(projectId) && handoffsQuery.isError,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [projectId, clientName, now, handoffsQuery.data, handoffsQuery.isError],
+  );
+}
+
+/**
+ * Every handoff on the project, as margin items. There is no titled region and
+ * no count: the margin already is the band.
+ */
+export function MarginHandoffs({
+  gates,
+  handoffsById,
+  isError,
+  approvalSurfaceMounted,
+}: {
+  gates: readonly WorkflowGate[];
+  handoffsById: Map<string, ProjectContextualHandoff>;
+  isError: boolean;
+  approvalSurfaceMounted: boolean;
+}) {
+  if (isError) {
+    return (
+      <p role="alert" className="mb-2 text-[12px] text-[var(--color-charcoal)]">
+        Project handoffs could not be read. No workflow state was changed.
+      </p>
+    );
+  }
 
   return (
-    <section
-      aria-labelledby="project-handoffs-title"
-      className="mt-6 min-w-0 max-w-full border-y border-[var(--border-subtle)] py-4"
-      data-contextual-handoff-band
-    >
-      <div className="min-w-0">
-        <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--color-quiet-ink)]">
-          Responsibility in context
-        </p>
-        <h2
-          id="project-handoffs-title"
-          className="font-heading text-[20px] font-medium text-[var(--color-charcoal)]"
-        >
-          Project handoffs
-        </h2>
-      </div>
-      <ol className="mt-2 grid min-w-0 grid-cols-1">
-        {handoffs.map((handoff) =>
-          handoff.sourceKind === 'project_approval' ? (
-            <ProjectApprovalHandoffRow
-              key={`${handoff.sourceKind}-${handoff.sourceId}`}
-              handoff={handoff}
-            />
-          ) : (
-            <SiteRequestHandoffRow
-              key={`${handoff.sourceKind}-${handoff.sourceId}`}
-              handoff={handoff}
-            />
-          ),
-        )}
-      </ol>
-    </section>
+    <>
+      {gates.map((gate) => {
+        const handoff = handoffsById.get(gate.id);
+        if (!handoff) return null;
+        return (
+          <MarginHandoffItem
+            key={gate.id}
+            gate={gate}
+            handoff={handoff}
+            approvalSurfaceMounted={approvalSurfaceMounted}
+          />
+        );
+      })}
+    </>
   );
 }

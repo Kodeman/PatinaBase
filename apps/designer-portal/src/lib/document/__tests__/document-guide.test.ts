@@ -1,5 +1,7 @@
 import { deriveDocumentGuide } from '../document-guide';
 import type { DocumentStateRow, SectionKey } from '../desk-derivation';
+import { deriveGate } from '../workflow-gate';
+import type { ProjectContextualHandoff } from '@patina/supabase';
 
 const row = (activeSection: SectionKey, overrides: Partial<DocumentStateRow> = {}) =>
   ({
@@ -345,5 +347,153 @@ describe('deriveDocumentGuide', () => {
         kind: 'anchor', section: 'discovery', focusId: 'discovery-facet-budget', activate: true,
       },
     });
+  });
+});
+
+// ── Ruling V — the guide surfaces the gate ─────────────────────────────────
+
+const GATE_NOW = new Date('2026-05-12T09:00:00.000Z');
+
+const handoff = (
+  overrides: Partial<ProjectContextualHandoff> = {},
+): ProjectContextualHandoff =>
+  ({
+    sourceKind: 'project_approval',
+    sourceId: 'decision-1',
+    projectId: 'project-1',
+    phaseId: 'phase-1',
+    canonicalStageKey: 'design_development',
+    workflowTrack: 'ffe',
+    stageAttribution: 'exact_project_phase',
+    sourceState: 'response_required',
+    responsibility: {
+      sender: { kind: 'studio', label: null },
+      recipient: { kind: 'client', label: null },
+      currentOwner: { kind: 'client', label: null },
+    },
+    expectedResponse: 'select_approval_outcome',
+    dueAt: '2026-05-06T09:00:00.000Z',
+    isOverdue: true,
+    escalation: null,
+    artifact: {
+      kind: 'proposal_edition',
+      version: 3,
+      checksum: 'c'.repeat(64),
+      title: 'Direction',
+    },
+    actionKind: 'open_approval_response',
+    updatedAt: '2026-05-06T09:00:00.000Z',
+    ...overrides,
+  }) as ProjectContextualHandoff;
+
+describe('the guide surfaces the gate (Ruling V)', () => {
+  it('derives its sentence and act from the nearest open gate, keyed by canonical stage', () => {
+    const gate = deriveGate(handoff(), GATE_NOW, 'Marta');
+    const guide = deriveDocumentGuide({ row: row('project'), gate });
+
+    expect(guide.headline).toBe("Marta's Direction approval has waited 6 days.");
+    expect(guide.eyebrow).toBe('Stage 06 · Design Development · gate');
+    expect(guide.action).toEqual({
+      key: 'gate-nudge',
+      label: 'Nudge Marta',
+      destination: {
+        kind: 'anchor',
+        section: 'project',
+        focusId: 'document-handoff-decision-1',
+      },
+    });
+  });
+
+  it('names the publish act from the gate rather than the stage default', () => {
+    // Projection-realistic: confirmations complete addresses the row to the
+    // studio, so the sentence must not hand the act to the household.
+    const gate = deriveGate(
+      handoff({
+        sourceState: 'ready_to_publish' as never,
+        isOverdue: false,
+        expectedResponse: 'publish_confirmed_approval',
+        responsibility: {
+          sender: { kind: 'client', label: null },
+          recipient: { kind: 'studio', label: null },
+          currentOwner: { kind: 'studio', label: null },
+        },
+      } as never),
+      GATE_NOW,
+      'Marta',
+    );
+    const guide = deriveDocumentGuide({ row: row('project'), gate });
+
+    expect(guide.state).toBe('actionable');
+    expect(guide.headline).toBe('Direction approval is ready to publish.');
+    expect(guide.action?.label).toBe('Publish the Direction approval');
+    expect(guide.headline).not.toContain('Marta');
+  });
+
+  it('never activates the control it names, so it cannot close an open item', () => {
+    const gate = deriveGate(handoff(), GATE_NOW, 'Marta');
+    const guide = deriveDocumentGuide({ row: row('project'), gate });
+
+    expect(guide.action?.destination).not.toHaveProperty('activate', true);
+  });
+
+  it('outranks the operational need, which no longer gets to decide', () => {
+    const gate = deriveGate(handoff(), GATE_NOW, 'Marta');
+    const overdue = row('project', {
+      overdue_decision_count: 2,
+      earliest_overdue_due: '2026-05-06T09:00:00Z',
+    });
+
+    expect(deriveDocumentGuide({ row: overdue, gate }).headline).toBe(
+      "Marta's Direction approval has waited 6 days.",
+    );
+    // Without a gate the row's own derivation still answers.
+    expect(
+      deriveDocumentGuide({ row: overdue, now: GATE_NOW }).headline,
+    ).toContain('2 decisions overdue');
+  });
+
+  it('yields to a paused project — a gate cannot resume lifecycle work', () => {
+    const gate = deriveGate(handoff(), GATE_NOW, 'Marta');
+    const guide = deriveDocumentGuide({
+      row: row('project', { is_paused: true }),
+      gate,
+    });
+
+    expect(guide.state).toBe('paused');
+    expect(guide.headline).toBe('This project is paused');
+  });
+
+  it('leaves the strip whole when the gate read has not answered', () => {
+    const guide = deriveDocumentGuide({ row: row('project'), gate: undefined });
+    expect(guide.state).not.toBe('unavailable');
+    expect(guide.headline).toBe('Move the project forward');
+  });
+
+  it('keeps withInputs from displacing the gate act', () => {
+    const gate = deriveGate(handoff(), GATE_NOW, 'Marta');
+    const guide = deriveDocumentGuide({
+      row: row('project'),
+      gate,
+      inputFacts: [
+        {
+          label: 'Working budget',
+          owner: 'Client',
+          blocks: 'Direction',
+          focusId: 'discovery-facet-budget',
+        },
+      ],
+    });
+
+    expect(guide.action?.key).toBe('gate-nudge');
+    expect(guide.topInput?.label).toBe('Working budget');
+  });
+
+  it('shows no checksum or escalation register in anything it says', () => {
+    const gate = deriveGate(handoff(), GATE_NOW, 'Marta');
+    const guide = deriveDocumentGuide({ row: row('project'), gate });
+    const spoken = [guide.eyebrow, guide.headline, guide.reason, guide.action?.label].join(' ');
+
+    expect(spoken).not.toContain('c'.repeat(8));
+    expect(spoken).not.toMatch(/exact phase|source domain|reminder sent/i);
   });
 });

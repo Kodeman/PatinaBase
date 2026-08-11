@@ -7225,8 +7225,6 @@ inverts that — rewriting an assertion I113 landed for a different ruling. Neit
 architectural, both are cross-ruling, so the relocation is **not** performed here.
 Kody rules.
 
-*Entries add: I114 · last id = I114*
-
 ### I115 · R2 — the gate is a boundary ceremony, and SCOPE ships without a migration (ratified R2)
 
 `project-approval-document.tsx` is restaged from a form into M2's six-part anatomy
@@ -7339,4 +7337,203 @@ matches no `/shadow/`. Every metadata string in both surfaces sits at or above t
 12px floor (`--type-metadata-min`), so the mockups' 8.5–10.5px miniature sizes do
 not ship.
 
-*Entries add: I114–I115 · last id = I115*
+
+## The Document — handoffs, overdue, the guide, and the Desk key to one gate (WP3 Track B) — 2026-08-11
+
+Four ratified rulings, implemented together because they are one idea read at
+four scales: a gate is a party, a set of terms, a due moment, and one act.
+
+### I116 · The handoff band dissolves; the margin already is the band (ratified R3)
+
+`contextual-handoff-band.tsx` and its test are deleted, and
+`workflow-stage-document-mount.tsx` no longer mounts anything in their place.
+Every row the 00442/00443 projection produces is, by definition, a thing
+waiting on a named party — which is the definition of a margin item — so each
+one now renders in the rail through `margin-handoff-item.tsx`, leading the
+raised items because a thing waiting on someone else outranks the studio's own
+notes.
+
+**The projection is kept whole.** `use-project-contextual-handoffs.ts` is
+untouched; the new item reads it and never re-resolves sender, recipient,
+owner, or provenance for itself. What came off is register, not fact: the
+artifact checksum, the "Exact phase / Source domain" attribution, and the
+`nudgeSent` / `dueReminderSent` booleans no longer appear on a designer-facing
+surface. Stage provenance survives as microtext
+(`Stage 06 · Design Development · FF&E · edition 3`), read from
+`RESIDENTIAL_WORKFLOW_STAGES` — the band's local `STAGE_LABELS` map, which
+disagreed with the canonical titles on all eleven stages (the wave1 review's
+§2.9), dies with the band.
+
+**One act per item, and the four acts keep their names and their 1:1 mutations.**
+`nudge` → `useNudgeSiteRequest`, `approve` → `useApproveSiteRequestItem`,
+`redo` → `useRequestSiteRequestRedo`, `close` → `useCloseSiteRequest`. The
+acts that need their own terms (a nudge note, a redo note, a room for an
+approval) unfold the item and collect them there, so the face of the margin
+still carries exactly one act. A fifth disposition, `open`, carries no mutation
+of its own: it hands publishing and outcome selection to the Stage-2 approval
+ceremony, which owns them (I113).
+
+**The lane reads who must act, not who the row is addressed to.** For an
+approval the lane derives from `expectedResponse`, not `responsibility.recipient`.
+The two disagree on one real state: a draft whose confirmations are incomplete is
+addressed to the client (`recipient = 'client'`, 00442) while the act it waits on
+is the studio's own `confirm_artifact_review`. Reading `recipient` there had the
+margin claim "With Marta" for work Marta cannot do. **The projection's own
+`recipient` for that state is arguably wrong and is NOT changed here** — the
+projection stays byte-identical; this is the reader's override. Correcting it at
+source is a question for Kody.
+
+**An act with nothing listening is not offered.** The `open` disposition
+dispatches a window event the Stage-2 ceremony listens for, and that ceremony
+mounts only when `engagement_kind === 'project'`. A proposal-kind engagement
+carrying a `project_id` would otherwise render a button that silently does
+nothing, so the item withholds the act (keeping the gate's sentence) when the
+ceremony is not mounted.
+
+**The approval lane gained a real nudge.** The projection reports a
+project-approval handoff's `sourceId` as the `client_decisions` row id
+(00442 line 36, `decision.id AS source_id`), so the item's nudge rides
+`useSendDecisionReminder` — the reminder RPC the decision rail already owns —
+rather than inventing one. Before this, an approval handoff had no studio act
+at all except navigation.
+
+**Two mockup divergences, declared.** M3's after-panel prints the elapsed time
+in the need line ("With Marta · Direction approval · 6 days") *and* an "Overdue ·
+6 days" stamp beside it; the item prints it once, in the stamp, because the same
+count twice on one row is a restatement, not a hierarchy. And M3 labels a
+sent/in-progress Site Request "Open" while its guide sentence offers "Nudge" —
+the item says **Nudge** at both scales, because one gate may not wear two verbs
+(see I118's shared-verb rule).
+
+**Metadata sits at the 12px floor.** The item does not reuse `MItemContent`,
+whose kind line is 8px and detail 10.5px; mockup M4's shipped-size note pins
+the portal's 12px metadata floor, and the item carries its own type layers to
+hold it. The rest of the margin's grammar is unchanged, so `MItemContent`'s
+sizes are a **standing divergence, not a decision** — whether the whole margin
+should rise to the floor is a design question and is not answered here.
+
+### I117 · Overdue is one derivation with three renderings (ratified R4)
+
+`overdue-condition.ts` is the only place the overdue fact is computed. It
+imports nothing, exports exactly a derivation and three pure readings of it,
+and stores nothing:
+
+1. **the margin item's terracotta stamp** — `overdueStampLabel` → "Overdue · 6 days";
+2. **the guide's sentence** — `overdueElapsedPhrase`, which changes the
+   sentence's tense from what is pending to how long it has been pending;
+3. **the Desk's order** — which already did what the ruling asks, and needed no
+   code at all.
+
+**Correction of record: the Desk re-sort was written, proved inert, and removed.**
+A leading `overdueSortTier` was added to `needSortKey` and then taken out when
+review asked for a test proving an order the old key would not produce. There is
+none: `overdue_decision` is both the only need with `urgent: true` and
+`NEED_RANK` 0, so an overdue folio already sorted above every other folio, and
+ties already broke on `earliest_overdue_due`. Worse, the new tier was *harmful* —
+`deriveOverdue` answers NOT_OVERDUE when `earliest_overdue_due` is null, which
+demoted a genuinely-needed folio below every non-gate one. The tier is gone and
+`desk-overdue-order.test.ts` pins the pre-existing ordering, including that
+null-due case. `DeskFolder.overdue` remains, read by the Studio Pulse sentence.
+
+Position is the whole of the pressure. The folio gains no count, no colour
+change, and no second act; the module has no surface through which a badge, a
+banner, a push, an auto-approval, or a modal could be added, and a test asserts
+its export list to keep it that way.
+
+**The server can withhold the condition but never assert it early.**
+`deriveOverdue(dueAt, now, serverOverdue)` takes the projection's own answer
+where one exists, so a stale client clock cannot invent an overdue item; a
+`false` from the server wins, and a `true` on a date that has not arrived does
+not. Bare `DATE` values parse as local midnight, or the elapsed count slips a
+day in negative-offset zones.
+
+### I118 · The guide's act derives from the nearest open gate (ratified R5)
+
+`deriveDocumentGuide` gains one input, `gate`, and one branch. Precedence is
+now: availability → paused → **gate** → operational need → proposal lifecycle →
+stage copy. An open gate IS the project's current state, so nothing else gets
+to decide what the strip says; a paused project still outranks it, because a
+gate cannot resume lifecycle work.
+
+The branch is keyed by `canonical_stage_key`: the eyebrow is the canonical
+stage title, the headline is `gateSentence`, and the act is `gateActionLabel`
+("Nudge Marta", "Publish the Direction approval"). Three WP1 contracts are
+held, not bent:
+
+- **`withInputs()` never overrides a branch's action** (I111 §1). The gate
+  branch resolves to `actionable` or `waiting`, never `needs_input`, so the
+  input-derived act cannot displace it; the top input still rides along.
+- **The act names a mounted control** (I110). `handoffAnchorId(sourceId)` is
+  published by the margin item's own act button, and the guide's destination is
+  an ordinary `anchor` — no new destination variant, and no invented surface.
+- **The guide never activates what it names.** The destination omits
+  `activate`, so the gate act scrolls and focuses but cannot toggle an item the
+  designer already opened. This is the same hazard I111 §6 closed for
+  `pulse_due`, avoided here by not arming it at all.
+
+**One gate, one verb.** `gateActVerb` is the single source of the act's word:
+the margin prints the verb alone ("Nudge"), the guide prints the verb plus its
+object ("Nudge Marta"). Before this they were written twice and drifted — the
+margin said "Open" on a Site Request whose guide said "Nudge Hale Joinery". A
+test asserts the guide's label begins with the margin's verb for every state.
+
+**Correction to the sentinel claim.** An earlier draft of this entry said
+`undefined` and `null` "keep meaning different things, per I111 §4". In the code
+they do not: `if (gate)` sends both to the same fall-through. The distinction
+I111 §4 draws is real for `operationalNeed`, where `null` suppresses a *local
+re-derivation* the row could otherwise produce. A gate has no local derivation to
+suppress — the row alone can say nothing about a gate — so "not yet answered" and
+"answered, none open" have the same consequence here, and the input keeps both
+spellings only to read consistently beside `operationalNeed`.
+
+**The act is reachable at the drawer breakpoint, and not below it.** Between
+1180px and 1440px the margin is a closed, `inert` sheet, so focusing an anchor
+inside it was a silent no-op; `jumpToSection` now raises the margin
+(`OPEN_MARGIN_EVENT`) before the focus frame. **Below 1180px it remains
+unreachable**: the rail is `display:none` there and the mobile handoff chips
+(I116) are summary-only, carrying no act. `document-pulse-control-desktop` has
+the identical pre-existing defect at both breakpoints and is untouched. Mobile
+handoff acts are unbuilt work, not a regression.
+
+### I119 · The Desk's gate keying is NOT delivered; Studio Pulse gets one sentence (ratified R6)
+
+**R6 is delivered in part, and the shortfall is the point of this entry.**
+
+**Folio need lines are NOT gate-keyed.** A first implementation printed a
+gate sentence on the folio — "Marta's Direction approval has waited 6 days." —
+composed from `client_name`, `active_section`, and the elapsed days. Review
+found it to be fiction dressed as precision: the underlying fact is
+`overdue_decision_count`, a **count of overdue decisions**, and the sentence
+invented a possessive party, a singular artifact named after the document's
+section, and an implied single gate. A folio with three overdue decisions in the
+Proposal section would have read "Marta's proposal has waited 9 days." It has
+been reverted in full. **Folios print `need.text` unchanged**, which is
+truthful: "1 decision overdue — oldest due May 6".
+
+**What blocks the real thing is data, not presentation.** `document_state`
+carries no `canonical_stage_key` (00434 added it to `project_phases` /
+`proposal_phases` only), and `get_project_contextual_handoffs` is per-project, so
+a Desk-wide read has no gate to key to. Delivering R6's need lines needs a
+**Desk-scoped gate projection** — a question for Kody, not something the
+presentation layer can synthesise. `deskGateSentence` and its `SECTION_TERMS`
+map are deleted rather than left dormant.
+
+**Studio Pulse gains exactly one aggregate sentence** — "1 decision is overdue,
+and 2 pieces are on the way." — rendered once, carrying no act and no badge. Two
+corrections from review: it says **"on the way"**, the Desk's own word for an
+in-flight piece (`deriveMotion`), where a draft said "in production" and claimed
+a fabrication state the read model never reports; and it **drops the folio
+count**, which the "Needs your hand" eyebrow already states.
+
+The disclosure's existing count-and-preview line is left alone, and its four
+populations keep their own hooks, flags, errors, and deep links. **The deck says
+the sentence "replaces the pulse panel"; this implements it as an addition**,
+because dismantling four independently-owned populations is a larger change than
+the ruling's text authorizes. Whether the panel beneath the sentence should go is
+a design question that goes back to the session.
+
+The 2–4 folio ceiling is untouched: `partitionDesk` still returns every folder,
+and the preview limit remains the renderer's decision.
+
+*Entries add: I114–I119 · last id = I119*
+

@@ -18,6 +18,7 @@ import {
   useProposalFeedback,
   useProjectRoster,
   useDiscovery,
+  useProjectContextualHandoffs,
 } from '@patina/supabase';
 import { rollupVerdicts, formatVerdictRollup } from '@patina/utils';
 import { useDocumentEngagement } from '@/hooks/use-document-state';
@@ -50,6 +51,7 @@ import { DiscoveryRecap } from '@/components/document/discovery/discovery-recap'
 import { DiscoveryMargin } from '@/components/document/discovery/discovery-margin';
 import {
   MarginRail,
+  openMarginRail,
   ResponsiveMarginRail,
 } from '@/components/document/margin-rail';
 import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
@@ -84,6 +86,7 @@ import {
   type ProposalGuideFacts,
 } from '@/lib/document/document-guide';
 import { composeDocumentGuideInputs } from '@/lib/document/document-guide-inputs';
+import { deriveGates, nearestOpenGate } from '@/lib/document/workflow-gate';
 import {
   asCommercialDocumentKind,
   asCommercialState,
@@ -191,6 +194,27 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   const enrichedOperationalNeed = deskEnrichment
     ? selectOperationalNeedForDocument(enrichedOperationalQuery.data, row?.engagement_id)
     : undefined;
+  // One clock for the document: the margin's overdue stamp and the guide's
+  // sentence read the same instant, so they cannot disagree across a midnight.
+  // Re-derived only when the gate read itself changes.
+  const handoffsQuery = useProjectContextualHandoffs(projectId || null);
+  const gateNow = useMemo(
+    () => new Date(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [handoffsQuery.dataUpdatedAt],
+  );
+  // Ruling V: the guide speaks for the nearest open gate. `undefined` while the
+  // projection has not answered — the guide then keeps its own derivation
+  // rather than claiming there is no gate.
+  const nearestGate = useMemo(
+    () =>
+      handoffsQuery.data
+        ? nearestOpenGate(
+            deriveGates(handoffsQuery.data, gateNow, row?.client_name ?? null),
+          )
+        : undefined,
+    [handoffsQuery.data, gateNow, row?.client_name],
+  );
   const authorizationDoorway = authorizationDoorwayFor({
     engagementKind: row?.engagement_kind,
     projectId: row?.project_id,
@@ -270,6 +294,9 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
       });
     }
     setOpenSection(key);
+    // A margin-owned anchor lives in a sheet that is `inert` while closed, so
+    // focus would silently no-op. Raise it before the focus frame.
+    if (focusId?.startsWith('document-handoff-')) openMarginRail();
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         const section = document.getElementById(sectionAnchorId(key));
@@ -446,6 +473,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
         proposal: proposalGuideFacts,
         inputFacts: guideInputs,
         operationalNeed: enrichedOperationalNeed,
+        gate: nearestGate,
       })
     : null;
   const activateGuide = useCallback(() => {
@@ -660,6 +688,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           projectId={row.project_id}
           proposalId={row.proposal_id}
           anchorKind="letterhead"
+          clientName={row.client_name}
         />
 
         <SectionStageLineMount
@@ -1001,6 +1030,8 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
             proposalId={row.proposal_id}
             clientName={row.client_name}
             clientUserId={row.client_profile_id}
+            now={gateNow}
+            approvalSurfaceMounted={row.engagement_kind === 'project'}
             onHoverLine={setHighlightLineId}
             pendingNoteAnchor={pendingNoteAnchor}
             onNoteAnchorConsumed={() => setPendingNoteAnchor(null)}

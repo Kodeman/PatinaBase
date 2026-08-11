@@ -10,7 +10,8 @@
  */
 
 import { useId, useState, type ReactNode } from 'react';
-import type { MotionChip } from '@/lib/document/desk-derivation';
+import type { DeskFolder, MotionChip } from '@/lib/document/desk-derivation';
+import { studioPulseGateSentence } from '@/lib/document/workflow-gate';
 import { SectionEyebrow } from '@/components/document/section-eyebrow';
 import {
   DocumentAction,
@@ -75,11 +76,14 @@ export function StudioPulseDisclosure({
   counts,
   isReady,
   hasError,
+  gateSentence,
   children,
 }: {
   counts: StudioPulseCounts;
   isReady: boolean;
   hasError: boolean;
+  /** Ruling VI — the one aggregate sentence. */
+  gateSentence?: string | null;
   children: ReactNode;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -113,6 +117,16 @@ export function StudioPulseDisclosure({
           >
             {preview}
           </p>
+          {/* Ruling VI: exactly one aggregate sentence — the shape of the week
+              in a line, so a designer can read it and stop. */}
+          {isReady && gateSentence && (
+            <p
+              data-testid="studio-pulse-gate-sentence"
+              className="doc-type-body mt-1 text-[var(--text-muted)]"
+            >
+              {gateSentence}
+            </p>
+          )}
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-x-5 gap-y-1">
@@ -160,9 +174,11 @@ export function StudioPulseDisclosure({
 
 export function StudioPulse({
   chips,
+  folders = [],
   engagementsResolved,
 }: {
   chips: readonly MotionChip[];
+  folders?: readonly DeskFolder[];
   engagementsResolved: boolean;
 }) {
   const openRequests = useOpenRequestsDeskPopulation();
@@ -181,11 +197,22 @@ export function StudioPulse({
     field: field.cards.length + field.lines.length,
   };
 
+  // The folio count is deliberately absent: the "Needs your hand" eyebrow
+  // already states it, and repeating it here reads as a second tally.
+  const gateSentence = studioPulseGateSentence({
+    overdueCount: folders.filter((folder) => folder.overdue?.isOverdue).length,
+    onTheWayCount: [...folders, ...chips].reduce(
+      (total, entry) => total + (entry.row.in_flight_count ?? 0),
+      0,
+    ),
+  });
+
   return (
     <StudioPulseDisclosure
       counts={counts}
       isReady={isReady}
       hasError={hasError}
+      gateSentence={gateSentence}
     >
       {hasError && (
         <p
