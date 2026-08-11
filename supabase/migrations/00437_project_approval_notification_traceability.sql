@@ -571,8 +571,11 @@ REVOKE ALL ON FUNCTION public.guard_decision_status_transition()
   FROM PUBLIC, anon, authenticated, service_role;
 
 COMMENT ON FUNCTION public.guard_decision_status_transition() IS
-  'Legacy decision transition guard plus an exact postgres-owned, '
-  'decision-scoped Stage-2 draft-withdrawal capability.';
+  'BEFORE UPDATE guard on client_decisions. Allows draft->pending, '
+  'pending->responded|expired, responded->pending, expired->pending, plus '
+  'one exact postgres-owned, decision-scoped Stage-2 draft->expired '
+  'withdrawal. Rejects every other status change with a check_violation '
+  'exception. No-op updates (status unchanged) always pass.';
 
 -- A mistaken, unpublished request is still an immutable Stage-2 aggregate.
 -- Give the studio the same evidenced withdrawal disposition as a pending leaf

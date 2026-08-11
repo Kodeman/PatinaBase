@@ -209,8 +209,14 @@ BEGIN
   END IF;
 
   RETURN true;
-EXCEPTION WHEN OTHERS THEN
-  RETURN true;
+EXCEPTION
+  -- Transient lock conflicts are retryable, not evidence of an unresolved
+  -- blocker; laundering them into the fail-closed answer would surface a
+  -- permanent-looking phase rejection. Every other failure still fails closed.
+  WHEN serialization_failure OR deadlock_detected THEN
+    RAISE;
+  WHEN OTHERS THEN
+    RETURN true;
 END;
 $$;
 
@@ -227,9 +233,14 @@ AS $$
 DECLARE
   v_phase_status text;
 BEGIN
-  IF NEW.phase_id IS NULL
-     OR NOT public._client_decision_blocks_phase(NEW)
-  THEN
+  -- Separate statements, not one OR expression: SQL does not guarantee OR
+  -- short-circuits, so the combined form could reach the predicate with a
+  -- NULL phase_id.
+  IF NEW.phase_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  IF NOT public._client_decision_blocks_phase(NEW) THEN
     RETURN NEW;
   END IF;
 
@@ -1534,6 +1545,12 @@ BEGIN
   END IF;
 
   IF v_approval_contract = 'project_artifact_v1' THEN
+    IF v_court IS DISTINCT FROM 'client' THEN
+      RAISE EXCEPTION
+        'only client-court decisions may be applied by the addressed client'
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
+
     RETURN public._apply_client_decision_authorized(
       p_decision_id, p_selected_option_id, v_actor,
       p_client_consent_method, p_client_signature, p_client_note, p_quantity
@@ -2612,8 +2629,13 @@ BEGIN
   v_component_terminal := v_direct_child_count = 0;
 
   -- Rescan and lock every exact-phase coordination row after the phase locks.
-  -- Only the exact pending/blocking predicate rejects; responded history does
-  -- not block. New/updated late gates serialize through the companion trigger.
+  -- The shared predicate decides: a legacy row rejects only while pending and
+  -- phase-blocking, while a Stage-2 row rejects whenever its artifact, option,
+  -- snapshot, and receipt evidence is incoherent with its status — so even a
+  -- withdrawn/superseded/responded Stage-2 row can still block. A Stage-2 row
+  -- still draft or pending blocks unconditionally, coherent or not; under
+  -- 00393 a draft never blocked.
+  -- New/updated late gates serialize through the companion trigger.
   IF p_expected_status = 'in_progress' THEN
     PERFORM decision.id
     FROM public.client_decisions AS decision

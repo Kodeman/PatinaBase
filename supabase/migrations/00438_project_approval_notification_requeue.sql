@@ -21,6 +21,10 @@ DECLARE
   v_client_id uuid;
   v_recipient_id uuid;
   v_notification_id uuid;
+  -- auth.role() reads the CALLER's JWT, not the definer, so the re-arm is
+  -- deliberately asymmetric: a service_role requeue (cron) clears read state
+  -- and restamps, while an interactive designer republish leaves the
+  -- recipient's read_at intact.
   v_rearm_existing boolean := COALESCE(auth.role(), '') = 'service_role';
 BEGIN
   SELECT decision.*
