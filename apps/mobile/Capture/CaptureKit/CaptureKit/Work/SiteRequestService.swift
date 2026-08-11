@@ -720,7 +720,7 @@ public enum SiteRequestLifecyclePolicy {
         case .revokeAccess:
             return [.awaitingConsent, .sent, .inProgress, .delivered].contains(status)
         case .close:
-            return status != .closed && status != .expired
+            return status == .completed
         }
     }
 }
