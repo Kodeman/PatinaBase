@@ -4,12 +4,36 @@ import { DocumentAction } from './document-action';
 import { useMobilePrimaryAction } from './mobile/mobile-shell';
 import type { DocumentGuideModel } from '@/lib/document/document-guide';
 import { documentEvents } from '@/lib/analytics/document-events';
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { MOBILE_ACTION_PRIORITY } from './mobile/lifecycle-mobile-action';
 
 export function DocumentGuide({ model, onActivate }: { model: DocumentGuideModel; onActivate: () => void }) {
   const href = model.action?.destination.kind === 'href' ? model.action.destination.href : null;
   const inputCount = model.topInput ? model.remainingInputCount + 1 : 0;
+
+  // Guidance enriches in place: a locally derived anchor action can become a
+  // link (or the reverse) once the Desk composition lands. React renders those
+  // as different elements, so the old one unmounts and focus falls to <body>.
+  // A designer who had tabbed to the action keeps it.
+  const actionIdentity = model.action ? `${model.action.key}:${href ? 'href' : 'press'}` : null;
+  const actionRef = useRef<HTMLButtonElement | HTMLAnchorElement | null>(null);
+  const focusedIdentityRef = useRef<string | null>(null);
+  const previousIdentityRef = useRef<string | null>(actionIdentity);
+  const holdFocus = () => {
+    focusedIdentityRef.current = actionIdentity;
+  };
+
+  useEffect(() => {
+    const previous = previousIdentityRef.current;
+    previousIdentityRef.current = actionIdentity;
+    if (previous === actionIdentity) return;
+    if (!actionIdentity || focusedIdentityRef.current !== previous) return;
+    // Only reclaim focus the swap itself dropped — if the designer has since
+    // moved to another control, activeElement is that control, not <body>.
+    if (document.activeElement !== document.body) return;
+    actionRef.current?.focus();
+    focusedIdentityRef.current = actionIdentity;
+  }, [actionIdentity]);
   const recordSelection = () => {
     if (!model.action) return;
     documentEvents.guideSelected({
@@ -61,9 +85,9 @@ export function DocumentGuide({ model, onActivate }: { model: DocumentGuideModel
         {model.action && (
           <div className="hidden min-[1180px]:block">
             {href ? (
-              <DocumentAction actionKey={model.action.key} surfaceKey="open-document" regionKey="next-up" variant="primary" href={href} onClick={recordSelection}>{model.action.label}</DocumentAction>
+              <DocumentAction ref={actionRef} onFocus={holdFocus} actionKey={model.action.key} surfaceKey="open-document" regionKey="next-up" variant="primary" href={href} onClick={recordSelection}>{model.action.label}</DocumentAction>
             ) : (
-              <DocumentAction actionKey={model.action.key} surfaceKey="open-document" regionKey="next-up" variant="primary" onClick={() => { recordSelection(); onActivate(); }}>{model.action.label}</DocumentAction>
+              <DocumentAction ref={actionRef} onFocus={holdFocus} actionKey={model.action.key} surfaceKey="open-document" regionKey="next-up" variant="primary" onClick={() => { recordSelection(); onActivate(); }}>{model.action.label}</DocumentAction>
             )}
           </div>
         )}

@@ -72,6 +72,68 @@ describe('DocumentGuide', () => {
     );
   });
 
+  it('keeps focus on the action when enrichment swaps it from button to link', () => {
+    const local = model('Move the project forward');
+    const { rerender } = render(<DocumentGuide model={local} onActivate={jest.fn()} />);
+
+    const button = screen.getByRole('button', { name: 'Review active work' });
+    button.focus();
+    expect(button).toHaveFocus();
+
+    // The Desk composition lands and the act becomes a deep link — React swaps
+    // the <button> for an <a>, which would otherwise drop focus to <body>.
+    rerender(
+      <DocumentGuide
+        model={{
+          ...local,
+          headline: '2 lines flagged on Design agreement',
+          action: {
+            key: 'resolve-lines_flagged',
+            label: 'Review flagged lines',
+            destination: { kind: 'href', href: '/drafting/proposal-1?flagged=1' },
+          },
+        }}
+        onActivate={jest.fn()}
+      />,
+    );
+
+    expect(document.body).not.toHaveFocus();
+    expect(screen.getByRole('link', { name: 'Review flagged lines' })).toHaveFocus();
+  });
+
+  it('does not steal focus back when the designer has moved on', () => {
+    const local = model('Move the project forward');
+    const { rerender } = render(
+      <>
+        <DocumentGuide model={local} onActivate={jest.fn()} />
+        <button type="button">Elsewhere</button>
+      </>,
+    );
+
+    screen.getByRole('button', { name: 'Review active work' }).focus();
+    const elsewhere = screen.getByRole('button', { name: 'Elsewhere' });
+    elsewhere.focus();
+
+    rerender(
+      <>
+        <DocumentGuide
+          model={{
+            ...local,
+            action: {
+              key: 'resolve-lines_flagged',
+              label: 'Review flagged lines',
+              destination: { kind: 'href', href: '/drafting/proposal-1' },
+            },
+          }}
+          onActivate={jest.fn()}
+        />
+        <button type="button">Elsewhere</button>
+      </>,
+    );
+
+    expect(elsewhere).toHaveFocus();
+  });
+
   it('announces an action change even when the headline is unchanged', async () => {
     const { rerender } = render(
       <StrictMode><DocumentGuide model={model('Same task')} onActivate={jest.fn()} /></StrictMode>,
