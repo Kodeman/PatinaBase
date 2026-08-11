@@ -22,8 +22,20 @@ import {
 } from '@patina/supabase';
 
 import { DocumentAction, DocumentActionRow } from '../document-action';
+import { fmtDay } from '@/lib/document/format';
+import {
+  ArtifactEdges,
+  GateCeremony,
+  GateFieldset,
+  GateImpact,
+  GatePartBlock,
+  GatePlain,
+  GateQuestion,
+} from './gate-anatomy';
 import {
   eligibleSupersessionCandidates,
+  formatGateImpact,
+  gateScope,
   newApprovalIdempotencyKey,
   parseSignedDelta,
   projectApprovalActions,
@@ -60,7 +72,9 @@ interface SupersedeState extends Omit<ApprovalFormState, 'phaseId'> {
 const INPUT =
   'min-h-11 w-full min-w-0 rounded-[5px] border border-[var(--color-pearl)] bg-white px-2.5 py-2 text-[14px] text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
 const LABEL =
-  'mb-1 block font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
+  'mb-1 block font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
+const META =
+  'font-mono text-[12px] uppercase tracking-[0.09em] text-[var(--text-muted)]';
 
 function emptyForm(): ApprovalFormState {
   return {
@@ -99,9 +113,43 @@ function readableStatus(review: ProjectApprovalReview): string {
   return review.lifecycleStatus === 'pending' ? 'Pending' : 'Expired';
 }
 
-function formatDelta(value: number, unit: string): string {
-  const sign = value > 0 ? '+' : '';
-  return `${sign}${value} ${unit}`;
+/** The paper has settled when an outcome is recorded or the leaf is closed. */
+function isSealed(review: ProjectApprovalReview): boolean {
+  return review.outcome !== null || review.disposition !== 'active';
+}
+
+function sealFor(review: ProjectApprovalReview): {
+  label: string;
+  className: string;
+} {
+  const settledOn = review.respondedAt ?? review.updatedAt;
+  const label = `${readableStatus(review)}${
+    settledOn ? ` · ${fmtDay(settledOn)}` : ''
+  }`;
+  const className =
+    review.outcome === 'approved'
+      ? 'border-[var(--color-mocha)] text-[var(--color-mocha)]'
+      : review.disposition === 'active'
+        ? 'border-[var(--color-aged-oak)] text-[var(--color-aged-oak)]'
+        : 'border-[var(--color-pearl)] text-[var(--text-muted)]';
+  return { label, className };
+}
+
+function artifactMeta(version: number, checksum: string): string {
+  return `Edition ${version} · frozen at publish · proof ${checksum.slice(0, 8)}`;
+}
+
+function focusApprovalRow(decisionId: string) {
+  const target = document.getElementById(`project-approval-${decisionId}`);
+  if (!target) return;
+  const reduceMotion =
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  target.scrollIntoView?.({
+    behavior: reduceMotion ? 'auto' : 'smooth',
+    block: 'center',
+  });
+  target.focus({ preventScroll: true });
 }
 
 export function ProjectApprovalDocument({
@@ -205,6 +253,10 @@ export function ProjectApprovalDocument({
   const phaseById = useMemo(
     () => new Map(phases.map((phase) => [phase.id, phase])),
     [phases],
+  );
+  const approvalById = useMemo(
+    () => new Map(approvals.map((review) => [review.decisionId, review])),
+    [approvals],
   );
   const availablePhases = useMemo(
     () => phases.filter((phase) => phase.status !== 'completed'),
@@ -403,6 +455,8 @@ export function ProjectApprovalDocument({
     }
   };
 
+  const composerArtifact = findArtifact(candidates, form.artifactValue);
+
   return (
     <section
       aria-labelledby="project-approvals-title"
@@ -411,7 +465,7 @@ export function ProjectApprovalDocument({
     >
       <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-2">
         <div className="min-w-0">
-          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+          <p className="font-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
             Exact artifact · named authority
           </p>
           <h2
@@ -510,149 +564,188 @@ export function ProjectApprovalDocument({
           <h3 className="font-heading text-[18px] text-[var(--color-charcoal)]">
             Draft an exact review request
           </h3>
-          <div className="mt-4 grid min-w-0 grid-cols-1 gap-4 min-[560px]:grid-cols-2">
-            <Field label="Title" id="approval-title">
-              <input
-                id="approval-title"
-                className={INPUT}
-                value={form.title}
-                onChange={(event) => updateForm({ title: event.target.value })}
-                required
-              />
-            </Field>
-            <Field label="Approval question" id="approval-question">
-              <input
-                id="approval-question"
-                className={INPUT}
-                value={form.question}
-                onChange={(event) =>
-                  updateForm({ question: event.target.value })
-                }
-                required
-              />
-            </Field>
-            <Field label="Exact project phase" id="approval-phase">
-              <select
-                id="approval-phase"
-                className={INPUT}
-                value={form.phaseId}
-                onChange={(event) =>
-                  updateForm({ phaseId: event.target.value })
-                }
-                required
-              >
-                <option value="">Choose a phase</option>
-                {availablePhases.map((phase) => (
-                  <option key={phase.id} value={phase.id}>
-                    {phase.name}
+
+          <GateCeremony label="Gate anatomy">
+            <GateFieldset part="artifact">
+              <Field label="Issued artifact" id="approval-artifact">
+                <select
+                  id="approval-artifact"
+                  className={INPUT}
+                  value={form.artifactValue}
+                  onChange={(event) =>
+                    updateForm({ artifactValue: event.target.value })
+                  }
+                  required
+                  disabled={candidatesQuery.isLoading}
+                >
+                  <option value="">
+                    {candidatesQuery.isLoading
+                      ? 'Reading issued artifacts…'
+                      : 'Choose an issued artifact'}
                   </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Issued artifact" id="approval-artifact">
-              <select
-                id="approval-artifact"
-                className={INPUT}
-                value={form.artifactValue}
-                onChange={(event) =>
-                  updateForm({ artifactValue: event.target.value })
-                }
-                required
-                disabled={candidatesQuery.isLoading}
-              >
-                <option value="">
-                  {candidatesQuery.isLoading
-                    ? 'Reading issued artifacts…'
-                    : 'Choose an issued artifact'}
-                </option>
-                {candidates.map((candidate) => (
-                  <option
-                    key={artifactValue(candidate)}
-                    value={artifactValue(candidate)}
+                  {candidates.map((candidate) => (
+                    <option
+                      key={artifactValue(candidate)}
+                      value={artifactValue(candidate)}
+                    >
+                      {candidate.artifactTitle} · v{candidate.artifactVersion}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              {composerArtifact && (
+                <div className="mt-3">
+                  <ArtifactEdges
+                    title={composerArtifact.artifactTitle}
+                    meta={artifactMeta(
+                      composerArtifact.artifactVersion,
+                      composerArtifact.artifactChecksum,
+                    )}
+                  />
+                </div>
+              )}
+            </GateFieldset>
+
+            <GateFieldset part="question">
+              <div className="grid min-w-0 grid-cols-1 gap-4 min-[560px]:grid-cols-2">
+                <Field label="Title" id="approval-title">
+                  <input
+                    id="approval-title"
+                    className={INPUT}
+                    value={form.title}
+                    onChange={(event) =>
+                      updateForm({ title: event.target.value })
+                    }
+                    required
+                  />
+                </Field>
+                <Field label="Approval question" id="approval-question">
+                  <input
+                    id="approval-question"
+                    className={INPUT}
+                    value={form.question}
+                    onChange={(event) =>
+                      updateForm({ question: event.target.value })
+                    }
+                    required
+                  />
+                </Field>
+              </div>
+            </GateFieldset>
+
+            <GateFieldset part="scope">
+              <div className="grid min-w-0 grid-cols-1 gap-4">
+                <Field label="Exact project phase" id="approval-phase">
+                  <select
+                    id="approval-phase"
+                    className={INPUT}
+                    value={form.phaseId}
+                    onChange={(event) =>
+                      updateForm({ phaseId: event.target.value })
+                    }
+                    required
                   >
-                    {candidate.artifactTitle} · v{candidate.artifactVersion}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Due date and time" id="approval-due">
-              <input
-                id="approval-due"
-                type="datetime-local"
-                className={INPUT}
-                value={form.dueAt}
-                onChange={(event) => updateForm({ dueAt: event.target.value })}
-                required
-              />
-            </Field>
-            <div className="grid min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-3 min-[560px]:col-span-2">
-              <DeltaField
-                id="approval-cost-delta"
-                label="Cost delta (cents)"
-                value={form.costCentsDelta}
-                onChange={(costCentsDelta) => updateForm({ costCentsDelta })}
-              />
-              <DeltaField
-                id="approval-schedule-delta"
-                label="Schedule delta (days)"
-                value={form.scheduleDaysDelta}
-                onChange={(scheduleDaysDelta) =>
-                  updateForm({ scheduleDaysDelta })
-                }
-              />
-              <DeltaField
-                id="approval-lead-delta"
-                label="Lead-time delta (days)"
-                value={form.leadTimeDaysDelta}
-                onChange={(leadTimeDaysDelta) =>
-                  updateForm({ leadTimeDaysDelta })
-                }
-              />
-            </div>
-            <Field
-              label="Context (optional, not an approval response)"
-              id="approval-context"
-              wide
-            >
-              <textarea
-                id="approval-context"
-                rows={3}
-                className={INPUT}
-                value={form.context}
-                onChange={(event) =>
-                  updateForm({ context: event.target.value })
-                }
-              />
-            </Field>
-          </div>
-          <DocumentActionRow
-            surfaceKey="open-document"
-            regionKey="project-approval-composer"
-            className="mt-3"
-            aria-label="Approval draft actions"
-          >
-            <DocumentAction
-              actionKey="create-project-approval-draft"
-              variant="primary"
-              type="submit"
-              loading={createApproval.isPending}
-              loadingLabel="Creating…"
-            >
-              Create review draft
-            </DocumentAction>
-            <DocumentAction
-              actionKey="cancel-project-approval-draft"
-              variant="tertiary"
-              onClick={() => setComposing(false)}
-            >
-              Cancel
-            </DocumentAction>
-          </DocumentActionRow>
+                    <option value="">Choose a phase</option>
+                    {availablePhases.map((phase) => (
+                      <option key={phase.id} value={phase.id}>
+                        {phase.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Scope note" id="approval-context">
+                  <textarea
+                    id="approval-context"
+                    rows={2}
+                    className={INPUT}
+                    placeholder="What this releases, and what it does not."
+                    value={form.context}
+                    onChange={(event) =>
+                      updateForm({ context: event.target.value })
+                    }
+                  />
+                </Field>
+                <p className={META}>
+                  The bound phase is the scope of record; the note qualifies it
+                  and is never an approval response
+                </p>
+              </div>
+            </GateFieldset>
+
+            <GateFieldset part="impact">
+              <div className="grid min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-3">
+                <DeltaField
+                  id="approval-cost-delta"
+                  label="Cost delta (cents)"
+                  value={form.costCentsDelta}
+                  onChange={(costCentsDelta) => updateForm({ costCentsDelta })}
+                />
+                <DeltaField
+                  id="approval-schedule-delta"
+                  label="Schedule delta (days)"
+                  value={form.scheduleDaysDelta}
+                  onChange={(scheduleDaysDelta) =>
+                    updateForm({ scheduleDaysDelta })
+                  }
+                />
+                <DeltaField
+                  id="approval-lead-delta"
+                  label="Lead-time delta (days)"
+                  value={form.leadTimeDaysDelta}
+                  onChange={(leadTimeDaysDelta) =>
+                    updateForm({ leadTimeDaysDelta })
+                  }
+                />
+              </div>
+            </GateFieldset>
+
+            <GateFieldset part="authority">
+              <GatePlain>
+                Decision lead — the project client · frozen at publish
+              </GatePlain>
+            </GateFieldset>
+
+            <GateFieldset part="confirmation">
+              <Field label="Due date and time" id="approval-due">
+                <input
+                  id="approval-due"
+                  type="datetime-local"
+                  className={INPUT}
+                  value={form.dueAt}
+                  onChange={(event) => updateForm({ dueAt: event.target.value })}
+                  required
+                />
+              </Field>
+              <DocumentActionRow
+                surfaceKey="open-document"
+                regionKey="project-approval-composer"
+                className="mt-3"
+                aria-label="Approval draft actions"
+              >
+                <DocumentAction
+                  actionKey="create-project-approval-draft"
+                  variant="primary"
+                  type="submit"
+                  loading={createApproval.isPending}
+                  loadingLabel="Creating…"
+                >
+                  Create review draft
+                </DocumentAction>
+                <DocumentAction
+                  actionKey="cancel-project-approval-draft"
+                  variant="tertiary"
+                  onClick={() => setComposing(false)}
+                >
+                  Cancel
+                </DocumentAction>
+              </DocumentActionRow>
+            </GateFieldset>
+          </GateCeremony>
         </form>
       )}
 
       <div className="mt-6 min-w-0 border-t border-[var(--color-pearl)] pt-4">
-        <h3 className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
+        <h3 className="font-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
           Approval record
         </h3>
         {(approvalsQuery.isLoading || authorityQuery.isLoading) && (
@@ -690,6 +783,13 @@ export function ProjectApprovalDocument({
             const withdrawing = withdrawState?.decisionId === review.decisionId;
             const superseding =
               supersedeState?.decisionId === review.decisionId;
+            const scope = gateScope(review, boundPhase?.name ?? null);
+            const sealed = isSealed(review);
+            const seal = sealFor(review);
+            const predecessor = review.predecessorDecisionId
+              ? approvalById.get(review.predecessorDecisionId)
+              : undefined;
+
             return (
               <li
                 key={review.decisionId}
@@ -705,118 +805,225 @@ export function ProjectApprovalDocument({
                     ? 'true'
                     : 'false'
                 }
+                data-gate-state={sealed ? 'sealed' : 'open'}
                 tabIndex={-1}
                 className="min-w-0 scroll-mt-6 border-b border-[var(--color-pearl)] py-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
               >
-                <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="font-heading text-[17px] text-[var(--color-charcoal)]">
-                      {review.artifactTitle}
-                    </p>
-                    <p className="mt-1 break-words text-[13px] text-[var(--color-charcoal)]">
-                      {review.question}
-                    </p>
-                    <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                      {boundPhase?.name ?? 'Bound project phase'} · artifact v
-                      {review.artifactVersion}
-                    </p>
-                  </div>
-                  <span className="shrink-0 rounded-[3px] border border-[var(--color-pearl)] px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
-                    {readableStatus(review)}
-                  </span>
-                </div>
-                <p className="mt-2 text-[12px] text-[var(--text-muted)]">
-                  Review {review.completedReviewCount} of{' '}
-                  {review.requiredReviewCount} ·{' '}
-                  {formatDelta(review.costCentsDelta, '¢')} ·{' '}
-                  {formatDelta(review.scheduleDaysDelta, 'schedule days')} ·{' '}
-                  {formatDelta(review.leadTimeDaysDelta, 'lead-time days')}
-                </p>
-                {review.lifecycleStatus === 'draft' &&
-                  !actions.publish &&
-                  review.disposition === 'active' &&
-                  review.successorDecisionId === null && (
-                    <p className="mt-2 text-[12px] italic text-[var(--text-muted)]">
-                      Publish unlocks after every frozen reviewer has confirmed
-                      the exact artifact.
-                    </p>
-                  )}
-                {boundPhaseCompleted &&
-                  review.disposition === 'active' &&
-                  review.successorDecisionId === null &&
-                  (review.lifecycleStatus === 'pending' ||
-                    review.lifecycleStatus === 'responded') && (
-                    <p
-                      role="status"
-                      className="mt-2 text-[12px] italic text-[var(--text-muted)]"
-                    >
-                      This approval belongs to a completed phase and cannot be
-                      superseded there. Author a new approval in a live phase.
-                    </p>
-                  )}
-                <DocumentActionRow
-                  surfaceKey="open-document"
-                  regionKey={`project-approval-${review.decisionId}`}
-                  className="mt-2"
-                  aria-label={`${review.artifactTitle} approval actions`}
-                >
-                  {review.lifecycleStatus === 'draft' &&
-                    review.disposition === 'active' &&
-                    review.successorDecisionId === null && (
-                      <DocumentAction
-                        actionKey="publish-project-approval"
-                        variant="primary"
-                        disabled={!actions.publish}
-                        loading={publishApproval.isPending}
-                        loadingLabel="Publishing…"
-                        onClick={() =>
-                          void publishApproval
-                            .mutateAsync({
-                              projectId,
-                              decisionId: review.decisionId,
-                            })
-                            .catch((error: unknown) =>
-                              setFeedback({
-                                kind: 'error',
-                                text:
-                                  error instanceof Error
-                                    ? error.message
-                                    : 'Approval could not be published.',
-                              }),
-                            )
-                        }
+                {sealed ? (
+                  /* State B — the section folds where it stands. */
+                  <>
+                    <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="min-w-0 break-words font-mono text-[12px] font-semibold uppercase tracking-[0.16em] text-[var(--color-mocha)]">
+                          {review.artifactTitle}
+                        </p>
+                        <p className="mt-1.5 min-w-0 break-words text-[13px] leading-relaxed text-[var(--text-muted)]">
+                          {scope.note ?? scope.binding}
+                        </p>
+                      </div>
+                      <span
+                        className={`shrink-0 rounded-[3px] border px-2 py-1 font-mono text-[12px] font-semibold uppercase tracking-[0.06em] ${seal.className}`}
                       >
-                        Publish
-                      </DocumentAction>
+                        {seal.label}
+                      </span>
+                    </div>
+                    {predecessor && (
+                      <p className="mt-3">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            focusApprovalRow(predecessor.decisionId)
+                          }
+                          className="min-h-11 font-mono text-[12px] uppercase tracking-[0.09em] text-[var(--text-muted)] underline decoration-[var(--color-aged-oak)] underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+                        >
+                          Edition {predecessor.artifactVersion} superseded — view
+                        </button>
+                      </p>
                     )}
-                  {actions.withdraw && (
-                    <DocumentAction
-                      actionKey="withdraw-project-approval"
-                      variant="danger"
-                      aria-expanded={withdrawing}
-                      onClick={() => {
-                        setSupersedeState(null);
-                        setWithdrawState({
-                          decisionId: review.decisionId,
-                          reason: '',
-                          idempotencyKey: newApprovalIdempotencyKey(),
-                        });
-                      }}
-                    >
-                      Withdraw
-                    </DocumentAction>
-                  )}
-                  {actions.supersede && (
-                    <DocumentAction
-                      actionKey="supersede-project-approval"
-                      variant="secondary"
-                      aria-expanded={superseding}
-                      onClick={() => beginSupersede(review)}
-                    >
-                      Supersede with new artifact
-                    </DocumentAction>
-                  )}
-                </DocumentActionRow>
+                  </>
+                ) : (
+                  /* State A — the boundary unfolded. */
+                  <GateCeremony label={`${review.artifactTitle} gate`}>
+                    <GatePartBlock part="artifact">
+                      <ArtifactEdges
+                        title={review.artifactTitle}
+                        meta={artifactMeta(
+                          review.artifactVersion,
+                          review.artifactChecksum,
+                        )}
+                      />
+                    </GatePartBlock>
+
+                    <GatePartBlock part="question">
+                      <GateQuestion>{review.question}</GateQuestion>
+                    </GatePartBlock>
+
+                    <GatePartBlock part="scope">
+                      <GatePlain>{scope.binding}</GatePlain>
+                      {scope.note && (
+                        <p className="mt-1 min-w-0 break-words text-[14px] leading-relaxed text-[var(--text-muted)]">
+                          {scope.note}
+                        </p>
+                      )}
+                    </GatePartBlock>
+
+                    <GatePartBlock part="impact">
+                      <GateImpact>{formatGateImpact(review)}</GateImpact>
+                    </GatePartBlock>
+
+                    <GatePartBlock part="authority">
+                      <GatePlain>
+                        Decision lead — the designated project client · frozen
+                        at publish
+                      </GatePlain>
+                      <p className={`mt-1 ${META}`}>
+                        Review {review.completedReviewCount} of{' '}
+                        {review.requiredReviewCount} confirmed
+                      </p>
+                    </GatePartBlock>
+
+                    <GatePartBlock part="confirmation">
+                      <p className={META}>
+                        {review.lifecycleStatus === 'draft'
+                          ? `Due ${fmtDay(review.dueAt)} once published`
+                          : `Published${
+                              review.sentAt ? ` ${fmtDay(review.sentAt)}` : ''
+                            } · due ${fmtDay(review.dueAt)}`}
+                        {review.isOverdue ? ' · overdue' : ''}
+                      </p>
+                      {review.lifecycleStatus === 'draft' &&
+                        !actions.publish && (
+                          <p className="mt-2 text-[13px] italic text-[var(--text-muted)]">
+                            Publish unlocks after every frozen reviewer has
+                            confirmed the exact artifact.
+                          </p>
+                        )}
+                      {boundPhaseCompleted &&
+                        review.lifecycleStatus === 'pending' && (
+                          <p
+                            role="status"
+                            className="mt-2 text-[13px] italic text-[var(--text-muted)]"
+                          >
+                            This approval belongs to a completed phase and
+                            cannot be superseded there. Author a new approval in
+                            a live phase.
+                          </p>
+                        )}
+                      <DocumentActionRow
+                        surfaceKey="open-document"
+                        regionKey={`project-approval-${review.decisionId}`}
+                        className="mt-2"
+                        aria-label={`${review.artifactTitle} approval actions`}
+                      >
+                        {review.lifecycleStatus === 'draft' && (
+                          <DocumentAction
+                            actionKey="publish-project-approval"
+                            variant="primary"
+                            disabled={!actions.publish}
+                            loading={publishApproval.isPending}
+                            loadingLabel="Publishing…"
+                            onClick={() =>
+                              void publishApproval
+                                .mutateAsync({
+                                  projectId,
+                                  decisionId: review.decisionId,
+                                })
+                                .catch((error: unknown) =>
+                                  setFeedback({
+                                    kind: 'error',
+                                    text:
+                                      error instanceof Error
+                                        ? error.message
+                                        : 'Approval could not be published.',
+                                  }),
+                                )
+                            }
+                          >
+                            Publish for approval
+                          </DocumentAction>
+                        )}
+                        {actions.withdraw && (
+                          <DocumentAction
+                            actionKey="withdraw-project-approval"
+                            variant="danger"
+                            aria-expanded={withdrawing}
+                            onClick={() => {
+                              setSupersedeState(null);
+                              setWithdrawState({
+                                decisionId: review.decisionId,
+                                reason: '',
+                                idempotencyKey: newApprovalIdempotencyKey(),
+                              });
+                            }}
+                          >
+                            Withdraw
+                          </DocumentAction>
+                        )}
+                        {actions.supersede && (
+                          <DocumentAction
+                            actionKey="supersede-project-approval"
+                            variant="secondary"
+                            aria-expanded={superseding}
+                            onClick={() => beginSupersede(review)}
+                          >
+                            Supersede with new artifact
+                          </DocumentAction>
+                        )}
+                      </DocumentActionRow>
+                    </GatePartBlock>
+                  </GateCeremony>
+                )}
+
+                {sealed && (
+                  <>
+                    {boundPhaseCompleted && review.disposition === 'active' && (
+                      <p
+                        role="status"
+                        className="mt-2 text-[13px] italic text-[var(--text-muted)]"
+                      >
+                        This approval belongs to a completed phase and cannot be
+                        superseded there. Author a new approval in a live phase.
+                      </p>
+                    )}
+                    {(actions.withdraw || actions.supersede) && (
+                      <DocumentActionRow
+                        surfaceKey="open-document"
+                        regionKey={`project-approval-${review.decisionId}`}
+                        className="mt-2"
+                        aria-label={`${review.artifactTitle} approval actions`}
+                      >
+                        {actions.withdraw && (
+                          <DocumentAction
+                            actionKey="withdraw-project-approval"
+                            variant="danger"
+                            aria-expanded={withdrawing}
+                            onClick={() => {
+                              setSupersedeState(null);
+                              setWithdrawState({
+                                decisionId: review.decisionId,
+                                reason: '',
+                                idempotencyKey: newApprovalIdempotencyKey(),
+                              });
+                            }}
+                          >
+                            Withdraw
+                          </DocumentAction>
+                        )}
+                        {actions.supersede && (
+                          <DocumentAction
+                            actionKey="supersede-project-approval"
+                            variant="secondary"
+                            aria-expanded={superseding}
+                            onClick={() => beginSupersede(review)}
+                          >
+                            Supersede with new artifact
+                          </DocumentAction>
+                        )}
+                      </DocumentActionRow>
+                    )}
+                  </>
+                )}
+
                 {withdrawing && withdrawState && (
                   <div className="mt-3 grid min-w-0 grid-cols-1 gap-2 min-[560px]:grid-cols-[minmax(0,1fr)_auto]">
                     <Field
@@ -860,6 +1067,7 @@ export function ProjectApprovalDocument({
                     </DocumentActionRow>
                   </div>
                 )}
+
                 {superseding && supersedeState && (
                   <form
                     onSubmit={(event) => submitSupersession(event, review)}
@@ -868,148 +1076,193 @@ export function ProjectApprovalDocument({
                     <h4 className="font-heading text-[16px] text-[var(--color-charcoal)]">
                       Superseding request
                     </h4>
-                    <div className="mt-3 grid min-w-0 grid-cols-1 gap-3 min-[560px]:grid-cols-2">
-                      <Field
-                        label="New issued artifact"
-                        id={`supersede-artifact-${review.decisionId}`}
-                      >
-                        <select
+
+                    <GateCeremony label="Superseding gate anatomy">
+                      <GateFieldset part="artifact">
+                        <Field
+                          label="New issued artifact"
                           id={`supersede-artifact-${review.decisionId}`}
-                          className={INPUT}
-                          value={supersedeState.artifactValue}
-                          onChange={(event) =>
-                            setSupersedeState({
-                              ...supersedeState,
-                              artifactValue: event.target.value,
-                            })
-                          }
-                          required
                         >
-                          <option value="">
-                            Choose a genuinely new artifact
-                          </option>
-                          {eligibleArtifacts.map((candidate) => (
-                            <option
-                              key={artifactValue(candidate)}
-                              value={artifactValue(candidate)}
-                            >
-                              {candidate.artifactTitle} · v
-                              {candidate.artifactVersion}
+                          <select
+                            id={`supersede-artifact-${review.decisionId}`}
+                            className={INPUT}
+                            value={supersedeState.artifactValue}
+                            onChange={(event) =>
+                              setSupersedeState({
+                                ...supersedeState,
+                                artifactValue: event.target.value,
+                              })
+                            }
+                            required
+                          >
+                            <option value="">
+                              Choose a genuinely new artifact
                             </option>
-                          ))}
-                        </select>
-                      </Field>
-                      <Field
-                        label="New due date and time"
-                        id={`supersede-due-${review.decisionId}`}
-                      >
-                        <input
+                            {eligibleArtifacts.map((candidate) => (
+                              <option
+                                key={artifactValue(candidate)}
+                                value={artifactValue(candidate)}
+                              >
+                                {candidate.artifactTitle} · v
+                                {candidate.artifactVersion}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                      </GateFieldset>
+
+                      <GateFieldset part="question">
+                        <div className="grid min-w-0 grid-cols-1 gap-3 min-[560px]:grid-cols-2">
+                          <Field
+                            label="Title"
+                            id={`supersede-title-${review.decisionId}`}
+                          >
+                            <input
+                              id={`supersede-title-${review.decisionId}`}
+                              className={INPUT}
+                              value={supersedeState.title}
+                              onChange={(event) =>
+                                setSupersedeState({
+                                  ...supersedeState,
+                                  title: event.target.value,
+                                })
+                              }
+                              required
+                            />
+                          </Field>
+                          <Field
+                            label="Approval question"
+                            id={`supersede-question-${review.decisionId}`}
+                          >
+                            <input
+                              id={`supersede-question-${review.decisionId}`}
+                              className={INPUT}
+                              value={supersedeState.question}
+                              onChange={(event) =>
+                                setSupersedeState({
+                                  ...supersedeState,
+                                  question: event.target.value,
+                                })
+                              }
+                              required
+                            />
+                          </Field>
+                        </div>
+                      </GateFieldset>
+
+                      <GateFieldset part="scope">
+                        <Field
+                          label="Scope note"
+                          id={`supersede-context-${review.decisionId}`}
+                        >
+                          <textarea
+                            id={`supersede-context-${review.decisionId}`}
+                            rows={2}
+                            className={INPUT}
+                            placeholder="What this releases, and what it does not."
+                            value={supersedeState.context}
+                            onChange={(event) =>
+                              setSupersedeState({
+                                ...supersedeState,
+                                context: event.target.value,
+                              })
+                            }
+                          />
+                        </Field>
+                        <p className={`mt-2 ${META}`}>
+                          {scope.binding}
+                        </p>
+                      </GateFieldset>
+
+                      <GateFieldset part="impact">
+                        <div className="grid min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-3">
+                          <DeltaField
+                            id={`supersede-cost-${review.decisionId}`}
+                            label="Cost delta (cents)"
+                            value={supersedeState.costCentsDelta}
+                            onChange={(costCentsDelta) =>
+                              setSupersedeState({
+                                ...supersedeState,
+                                costCentsDelta,
+                              })
+                            }
+                          />
+                          <DeltaField
+                            id={`supersede-schedule-${review.decisionId}`}
+                            label="Schedule delta (days)"
+                            value={supersedeState.scheduleDaysDelta}
+                            onChange={(scheduleDaysDelta) =>
+                              setSupersedeState({
+                                ...supersedeState,
+                                scheduleDaysDelta,
+                              })
+                            }
+                          />
+                          <DeltaField
+                            id={`supersede-lead-${review.decisionId}`}
+                            label="Lead-time delta (days)"
+                            value={supersedeState.leadTimeDaysDelta}
+                            onChange={(leadTimeDaysDelta) =>
+                              setSupersedeState({
+                                ...supersedeState,
+                                leadTimeDaysDelta,
+                              })
+                            }
+                          />
+                        </div>
+                      </GateFieldset>
+
+                      <GateFieldset part="authority">
+                        <GatePlain>
+                          Decision lead — the designated project client · frozen
+                          at publish
+                        </GatePlain>
+                      </GateFieldset>
+
+                      <GateFieldset part="confirmation">
+                        <Field
+                          label="New due date and time"
                           id={`supersede-due-${review.decisionId}`}
-                          type="datetime-local"
-                          className={INPUT}
-                          value={supersedeState.dueAt}
-                          onChange={(event) =>
-                            setSupersedeState({
-                              ...supersedeState,
-                              dueAt: event.target.value,
-                            })
-                          }
-                          required
-                        />
-                      </Field>
-                      <Field
-                        label="Title"
-                        id={`supersede-title-${review.decisionId}`}
-                      >
-                        <input
-                          id={`supersede-title-${review.decisionId}`}
-                          className={INPUT}
-                          value={supersedeState.title}
-                          onChange={(event) =>
-                            setSupersedeState({
-                              ...supersedeState,
-                              title: event.target.value,
-                            })
-                          }
-                          required
-                        />
-                      </Field>
-                      <Field
-                        label="Approval question"
-                        id={`supersede-question-${review.decisionId}`}
-                      >
-                        <input
-                          id={`supersede-question-${review.decisionId}`}
-                          className={INPUT}
-                          value={supersedeState.question}
-                          onChange={(event) =>
-                            setSupersedeState({
-                              ...supersedeState,
-                              question: event.target.value,
-                            })
-                          }
-                          required
-                        />
-                      </Field>
-                      <div className="grid min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-3 min-[560px]:col-span-2">
-                        <DeltaField
-                          id={`supersede-cost-${review.decisionId}`}
-                          label="Cost delta (cents)"
-                          value={supersedeState.costCentsDelta}
-                          onChange={(costCentsDelta) =>
-                            setSupersedeState({
-                              ...supersedeState,
-                              costCentsDelta,
-                            })
-                          }
-                        />
-                        <DeltaField
-                          id={`supersede-schedule-${review.decisionId}`}
-                          label="Schedule delta (days)"
-                          value={supersedeState.scheduleDaysDelta}
-                          onChange={(scheduleDaysDelta) =>
-                            setSupersedeState({
-                              ...supersedeState,
-                              scheduleDaysDelta,
-                            })
-                          }
-                        />
-                        <DeltaField
-                          id={`supersede-lead-${review.decisionId}`}
-                          label="Lead-time delta (days)"
-                          value={supersedeState.leadTimeDaysDelta}
-                          onChange={(leadTimeDaysDelta) =>
-                            setSupersedeState({
-                              ...supersedeState,
-                              leadTimeDaysDelta,
-                            })
-                          }
-                        />
-                      </div>
-                    </div>
-                    <DocumentActionRow
-                      surfaceKey="open-document"
-                      regionKey="supersede-project-approval"
-                      className="mt-2"
-                      aria-label="Supersession actions"
-                    >
-                      <DocumentAction
-                        actionKey="confirm-supersede-project-approval"
-                        variant="primary"
-                        type="submit"
-                        loading={supersedeApproval.isPending}
-                        loadingLabel="Superseding…"
-                      >
-                        Create superseding draft
-                      </DocumentAction>
-                      <DocumentAction
-                        actionKey="cancel-supersede-project-approval"
-                        variant="tertiary"
-                        onClick={() => setSupersedeState(null)}
-                      >
-                        Cancel
-                      </DocumentAction>
-                    </DocumentActionRow>
+                        >
+                          <input
+                            id={`supersede-due-${review.decisionId}`}
+                            type="datetime-local"
+                            className={INPUT}
+                            value={supersedeState.dueAt}
+                            onChange={(event) =>
+                              setSupersedeState({
+                                ...supersedeState,
+                                dueAt: event.target.value,
+                              })
+                            }
+                            required
+                          />
+                        </Field>
+                        <DocumentActionRow
+                          surfaceKey="open-document"
+                          regionKey="supersede-project-approval"
+                          className="mt-2"
+                          aria-label="Supersession actions"
+                        >
+                          <DocumentAction
+                            actionKey="confirm-supersede-project-approval"
+                            variant="primary"
+                            type="submit"
+                            loading={supersedeApproval.isPending}
+                            loadingLabel="Superseding…"
+                          >
+                            Create superseding draft
+                          </DocumentAction>
+                          <DocumentAction
+                            actionKey="cancel-supersede-project-approval"
+                            variant="tertiary"
+                            onClick={() => setSupersedeState(null)}
+                          >
+                            Cancel
+                          </DocumentAction>
+                        </DocumentActionRow>
+                      </GateFieldset>
+                    </GateCeremony>
                   </form>
                 )}
               </li>

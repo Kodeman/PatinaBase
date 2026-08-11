@@ -66,6 +66,73 @@ export function eligibleSupersessionCandidates(
   );
 }
 
+const USD = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
+/**
+ * R2 · IMPACT — the deltas, signed, and explicitly unchanged when zero. A zero
+ * delta is stored evidence, so it is stated rather than omitted.
+ */
+export function formatGateImpact(review: {
+  costCentsDelta: number;
+  scheduleDaysDelta: number;
+  leadTimeDaysDelta: number;
+}): string {
+  const signed = (value: number) => (value > 0 ? '+' : '-');
+  const cost =
+    review.costCentsDelta === 0
+      ? 'cost unchanged'
+      : `${signed(review.costCentsDelta)}${USD.format(
+          Math.abs(review.costCentsDelta) / 100,
+        )}`;
+  const schedule =
+    review.scheduleDaysDelta === 0
+      ? 'schedule unchanged'
+      : `${signed(review.scheduleDaysDelta)}${Math.abs(
+          review.scheduleDaysDelta,
+        )} day${Math.abs(review.scheduleDaysDelta) === 1 ? '' : 's'}`;
+  const leadTime =
+    review.leadTimeDaysDelta === 0
+      ? 'lead time unchanged'
+      : `${signed(review.leadTimeDaysDelta)}${Math.abs(
+          review.leadTimeDaysDelta,
+        )} lead-time day${
+          Math.abs(review.leadTimeDaysDelta) === 1 ? '' : 's'
+        }`;
+
+  return `${cost} · ${schedule} · ${leadTime}`;
+}
+
+export interface GateScope {
+  /** What the record structurally binds — never inferred. */
+  binding: string;
+  /** The author's stated qualification, verbatim, when one was written. */
+  note: string | null;
+}
+
+/**
+ * R2 · SCOPE — rendered from the decision's structured binding rather than a
+ * new column. One decision binds exactly one project phase, so the phase is
+ * the honest statement of what the gate releases; the free-text note carries
+ * the author's qualification when they wrote one.
+ */
+export function gateScope(
+  review: { context: string | null },
+  boundPhaseName: string | null,
+): GateScope {
+  const note = review.context?.trim();
+  return {
+    binding: boundPhaseName
+      ? `Bound to ${boundPhaseName}. No other phase is bound to this decision.`
+      : 'Bound to the recorded project phase. No other phase is bound to this decision.',
+    note: note ? note : null,
+  };
+}
+
 export function newApprovalIdempotencyKey(): string {
   return (
     globalThis.crypto?.randomUUID?.() ??
