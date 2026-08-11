@@ -10199,3 +10199,15 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION app_private.is_stage2_option_client(uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00441_project_contextual_handoffs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_contextual_handoffs(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00441_project_contextual_handoffs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_contextual_handoffs(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

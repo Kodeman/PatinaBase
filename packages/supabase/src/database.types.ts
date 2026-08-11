@@ -28140,6 +28140,10 @@ export type Database = {
         Args: { p_project_id: string }
         Returns: Json
       }
+      get_project_contextual_handoffs: {
+        Args: { p_project_id: string }
+        Returns: Json
+      }
       get_project_decision_review: {
         Args: { p_decision_id: string }
         Returns: Json
