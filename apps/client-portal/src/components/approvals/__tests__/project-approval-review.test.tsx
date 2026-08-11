@@ -41,6 +41,9 @@ const APPROVAL: ProjectApprovalReviewData = {
   lifecycleStatus: "pending",
   outcome: null,
   disposition: "active",
+  // Deliberately true: Ruling VIII removes the client-side overdue device
+  // regardless of what this field reports — the condition stays the
+  // studio's to carry, never the client's to be shown.
   isOverdue: true,
   completedReviewCount: 1,
   requiredReviewCount: 1,
@@ -66,14 +69,13 @@ beforeEach(() => {
 });
 
 describe("ProjectApprovalReview", () => {
-  it("shows the immutable citation, explicit zero impacts, overdue state, and three distinct outcomes", () => {
+  it("shows the immutable citation, explicit zero impacts, and three distinct outcomes", () => {
     render(<ProjectApprovalReview approval={APPROVAL} />);
 
     expect(
       screen.getByRole("heading", { name: APPROVAL.question }),
     ).toBeInTheDocument();
     expect(screen.getByText("Budget checkpoint 03")).toBeInTheDocument();
-    expect(screen.getByText("Edition 3")).toBeInTheDocument();
     expect(screen.getByTestId("artifact-checksum")).toHaveTextContent(
       "a".repeat(64),
     );
@@ -86,7 +88,6 @@ describe("ProjectApprovalReview", () => {
     expect(screen.getByTestId("lead-delta")).toHaveTextContent(
       "0 days — no lead-time change",
     );
-    expect(screen.getByText("Overdue")).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /Approved/ })).toBeInTheDocument();
     expect(
       screen.getByRole("radio", { name: /Changes requested/ }),
@@ -97,6 +98,107 @@ describe("ProjectApprovalReview", () => {
     expect(
       screen.getByRole("link", { name: /previous edition/i }),
     ).toHaveAttribute("href", "/decisions/decision-0");
+  });
+
+  it("keeps the three outcomes and their copy verbatim", () => {
+    render(<ProjectApprovalReview approval={APPROVAL} />);
+
+    expect(screen.getByText("Approved")).toBeInTheDocument();
+    expect(
+      screen.getByText("Accept this exact artifact and its stated impacts."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Changes requested")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Return this edition for revision and a new approval request.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Needs discussion")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Hold the gate while you and your designer talk it through.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("renders the full six-part gate anatomy — artifact, question, scope, impact, authority, confirmation", () => {
+    render(<ProjectApprovalReview approval={APPROVAL} />);
+
+    const anatomy = screen.getByTestId("gate-anatomy");
+    expect(anatomy).toBeInTheDocument();
+    expect(screen.getByTestId("anatomy-artifact")).toBeInTheDocument();
+    expect(screen.getByTestId("anatomy-question")).toBeInTheDocument();
+    expect(screen.getByTestId("anatomy-scope")).toBeInTheDocument();
+    expect(screen.getByTestId("anatomy-impact")).toBeInTheDocument();
+    expect(screen.getByTestId("anatomy-authority")).toBeInTheDocument();
+    expect(screen.getByTestId("anatomy-confirmation")).toBeInTheDocument();
+
+    for (const label of [
+      "Artifact",
+      "Question",
+      "Scope",
+      "Impact",
+      "Authority",
+      "Confirmation",
+    ]) {
+      expect(screen.getByText(label)).toBeInTheDocument();
+    }
+  });
+
+  it("states the immutability sentence with the edition number wired to the artifact, not hard-coded", () => {
+    const { rerender } = render(<ProjectApprovalReview approval={APPROVAL} />);
+    expect(screen.getByTestId("immutability-sentence")).toHaveTextContent(
+      "You are approving edition 3, exactly as shown.",
+    );
+
+    rerender(
+      <ProjectApprovalReview
+        approval={{ ...APPROVAL, artifactVersion: 7 }}
+      />,
+    );
+    expect(screen.getByTestId("immutability-sentence")).toHaveTextContent(
+      "You are approving edition 7, exactly as shown.",
+    );
+  });
+
+  it("never renders a client-side overdue indicator, even when isOverdue is true", () => {
+    render(<ProjectApprovalReview approval={{ ...APPROVAL, isOverdue: true }} />);
+    expect(screen.queryByText("Overdue")).not.toBeInTheDocument();
+    expect(screen.queryByText(/overdue/i)).not.toBeInTheDocument();
+  });
+
+  it("renders a HELD FOR DISCUSSION stamp when the recorded outcome is needs_discussion", () => {
+    render(
+      <ProjectApprovalReview
+        approval={{
+          ...APPROVAL,
+          outcome: "needs_discussion",
+          respondedAt: "2026-07-21T09:00:00.000Z",
+        }}
+      />,
+    );
+
+    const stamp = screen.getByTestId("held-for-discussion");
+    expect(stamp).toBeInTheDocument();
+    expect(stamp).toHaveTextContent(/held for discussion/i);
+    expect(screen.getByText("Needs discussion")).toBeInTheDocument();
+  });
+
+  it("renders a seal on the approved outcome and no held stamp", () => {
+    render(
+      <ProjectApprovalReview
+        approval={{
+          ...APPROVAL,
+          outcome: "approved",
+          respondedAt: "2026-07-21T09:00:00.000Z",
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId("approval-seal")).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("held-for-discussion"),
+    ).not.toBeInTheDocument();
   });
 
   it("submits only the selected outcome with CAS/idempotency and no comment field", async () => {
@@ -160,7 +262,7 @@ describe("ProjectApprovalReview", () => {
     for (const control of screen
       .getAllByRole("radio")
       .concat(screen.getAllByRole("button"))) {
-      expect(control.className).toMatch(/(?:min-h-11|h-5)/);
+      expect(control.className).toMatch(/(?:min-h-11|min-h-\[44px\]|h-5)/);
     }
   });
 });
