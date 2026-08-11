@@ -197,10 +197,11 @@ export function StudioPulse({
     field: field.cards.length + field.lines.length,
   };
 
+  // The folio count is deliberately absent: the "Needs your hand" eyebrow
+  // already states it, and repeating it here reads as a second tally.
   const gateSentence = studioPulseGateSentence({
-    folderCount: folders.length,
     overdueCount: folders.filter((folder) => folder.overdue?.isOverdue).length,
-    inProductionCount: [...folders, ...chips].reduce(
+    onTheWayCount: [...folders, ...chips].reduce(
       (total, entry) => total + (entry.row.in_flight_count ?? 0),
       0,
     ),

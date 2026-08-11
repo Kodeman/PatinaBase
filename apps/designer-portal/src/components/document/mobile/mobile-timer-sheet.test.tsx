@@ -102,6 +102,8 @@ jest.mock('@/hooks/use-margin-items', () => ({
 
 jest.mock('@patina/supabase', () => ({
   useCoordinationItems: () => mockCoordinationQuery,
+  // The mobile spine summary counts handoffs alongside margin items (I114).
+  useProjectContextualHandoffs: () => ({ data: [], isError: false }),
   isProjectArtifactApproval: (item: { approval_contract?: string | null }) =>
     item.approval_contract === 'project_artifact_v1',
 }));

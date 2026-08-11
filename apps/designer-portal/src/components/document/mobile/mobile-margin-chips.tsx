@@ -17,18 +17,21 @@ import {
 } from '@/lib/document/stage2-approval-exclusions';
 import { marginAccent, deriveKindLine, type MarginItemRow } from '@/lib/document/margin-derivation';
 import { useMobileShell } from './mobile-shell';
+import { useHandoffGates } from '../margin-handoff-item';
 
 export function MobileMarginChips({
   projectId,
   proposalId,
   anchorKind,
   anchorId = null,
+  clientName = '',
 }: {
   projectId: string | null;
   proposalId: string | null;
   /** 'line' chips sit under their FF&E row; 'letterhead' under the title. */
   anchorKind: 'line' | 'letterhead';
   anchorId?: string | null;
+  clientName?: string;
 }) {
   const { openMarginItem } = useMobileShell();
   const { data: items } = useMarginItems(projectId, proposalId);
@@ -69,8 +72,18 @@ export function MobileMarginChips({
     [classifiedMargin.items],
   );
   const showDecisionNotice = classifiedMargin.withheldDecisionCount > 0;
+  // Handoffs anchor to the document, not to a line, so they ride the
+  // letterhead chips beside the other letterhead-anchored items.
+  const handoffNow = useMemo(() => new Date(), []);
+  const { gates: handoffGates } = useHandoffGates({
+    projectId,
+    clientName,
+    now: handoffNow,
+  });
+  const anchoredGates = anchorKind === 'letterhead' ? handoffGates : [];
 
-  if (chips.length === 0 && !showDecisionNotice) return null;
+  if (chips.length === 0 && anchoredGates.length === 0 && !showDecisionNotice)
+    return null;
 
   return (
     <div className="flex flex-wrap gap-1.5 px-[0.15rem] pb-2 min-[980px]:hidden">
@@ -79,6 +92,17 @@ export function MobileMarginChips({
           state={classifiedMargin.decisionState}
         />
       )}
+      {anchoredGates.map((gate) => (
+        <span
+          key={gate.id}
+          className="inline-flex max-w-full items-center gap-1.5 rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] py-[0.32rem] pl-2 pr-2.5 text-[11px] text-[var(--color-charcoal)]"
+          style={{ borderLeft: '2.5px solid var(--color-golden-hour)' }}
+        >
+          <span className="truncate">
+            {gate.lane} · {gate.terms}
+          </span>
+        </span>
+      ))}
       {chips.map((row: MarginItemRow) => {
         const accent = marginAccent(row.kind);
         return (

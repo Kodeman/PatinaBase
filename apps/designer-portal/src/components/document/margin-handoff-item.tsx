@@ -17,7 +17,7 @@
  * 8px kind line, per the shipped-size note on mockup M4.
  */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   useApproveSiteRequestItem,
   useCloseSiteRequest,
@@ -51,7 +51,10 @@ function OverdueStamp({ gate }: { gate: WorkflowGate }) {
   return (
     <span
       className="inline-block shrink-0 rounded-[2px] border px-1.5 py-px font-mono text-[12px] font-semibold uppercase tracking-[0.04em]"
-      style={{ borderColor: 'var(--color-terracotta)', color: '#C4836F' }}
+      style={{
+        borderColor: 'var(--color-terracotta)',
+        color: 'var(--color-charcoal)',
+      }}
     >
       {label}
     </span>
@@ -69,7 +72,7 @@ function HandoffShell({
 }) {
   return (
     <div
-      className="mb-2 rounded-[5px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] transition-colors duration-150 hover:border-[#CFC8BB]"
+      className="mb-2 rounded-[5px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] transition-colors duration-150 hover:border-[var(--border-warm)]"
       style={{ borderLeft: '2.5px solid var(--color-golden-hour)' }}
       data-margin-handoff={gate.id}
     >
@@ -118,14 +121,25 @@ function Feedback({
  * reports as this handoff's source — or a handoff to the approval ceremony,
  * which owns publishing and outcome selection.
  */
-function ProjectApprovalHandoffItem({ gate }: { gate: WorkflowGate }) {
+function ProjectApprovalHandoffItem({
+  gate,
+  approvalSurfaceMounted,
+}: {
+  gate: WorkflowGate;
+  approvalSurfaceMounted: boolean;
+}) {
   const remind = useSendDecisionReminder();
   const [feedback, setFeedback] = useState<{
     kind: 'status' | 'error';
     text: string;
   } | null>(null);
 
-  if (!gate.act) return <HandoffShell gate={gate} action={null} />;
+  // `open` dispatches a window event the approval ceremony listens for, and
+  // that ceremony mounts only on a project engagement. Offering the act where
+  // nothing is listening would be a button that silently does nothing.
+  if (!gate.act || (gate.act.kind === 'open' && !approvalSurfaceMounted)) {
+    return <HandoffShell gate={gate} action={null} />;
+  }
 
   if (gate.act.kind === 'nudge') {
     return (
@@ -544,14 +558,57 @@ function SiteRequestHandoffItem({
 export function MarginHandoffItem({
   gate,
   handoff,
+  approvalSurfaceMounted,
 }: {
   gate: WorkflowGate;
   handoff: ProjectContextualHandoff;
+  approvalSurfaceMounted: boolean;
 }) {
   return handoff.sourceKind === 'project_approval' ? (
-    <ProjectApprovalHandoffItem gate={gate} />
+    <ProjectApprovalHandoffItem
+      gate={gate}
+      approvalSurfaceMounted={approvalSurfaceMounted}
+    />
   ) : (
     <SiteRequestHandoffItem gate={gate} handoff={handoff} />
+  );
+}
+
+/**
+ * The project's gates, ordered. One clock is threaded in from the caller so the
+ * margin stamp and the guide sentence cannot disagree across a midnight.
+ *
+ * The rail, the mobile chips, and the mobile spine summary all read this, so no
+ * surface can under-report what the margin holds.
+ */
+export function useHandoffGates({
+  projectId,
+  clientName,
+  now,
+}: {
+  projectId: string | null;
+  clientName: string;
+  now: Date;
+}): {
+  gates: WorkflowGate[];
+  handoffsById: Map<string, ProjectContextualHandoff>;
+  isError: boolean;
+} {
+  const handoffsQuery = useProjectContextualHandoffs(projectId);
+  const handoffs = handoffsQuery.data ?? [];
+  return useMemo(
+    () => ({
+      gates: projectId ? deriveGates(handoffs, now, clientName) : [],
+      handoffsById: new Map(
+        handoffs.map((handoff) => [
+          `${handoff.sourceKind}-${handoff.sourceId}`,
+          handoff,
+        ]),
+      ),
+      isError: Boolean(projectId) && handoffsQuery.isError,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [projectId, clientName, now, handoffsQuery.data, handoffsQuery.isError],
   );
 }
 
@@ -560,17 +617,17 @@ export function MarginHandoffItem({
  * no count: the margin already is the band.
  */
 export function MarginHandoffs({
-  projectId,
-  clientName,
+  gates,
+  handoffsById,
+  isError,
+  approvalSurfaceMounted,
 }: {
-  projectId: string | null;
-  clientName: string;
+  gates: readonly WorkflowGate[];
+  handoffsById: Map<string, ProjectContextualHandoff>;
+  isError: boolean;
+  approvalSurfaceMounted: boolean;
 }) {
-  const handoffsQuery = useProjectContextualHandoffs(projectId);
-
-  if (!projectId) return null;
-
-  if (handoffsQuery.isError) {
+  if (isError) {
     return (
       <p role="alert" className="mb-2 text-[12px] text-[var(--color-charcoal)]">
         Project handoffs could not be read. No workflow state was changed.
@@ -578,24 +635,18 @@ export function MarginHandoffs({
     );
   }
 
-  const handoffs = handoffsQuery.data ?? [];
-  if (handoffs.length === 0) return null;
-
-  const gates = deriveGates(handoffs, new Date(), clientName);
-  const byId = new Map(
-    handoffs.map((handoff) => [
-      `${handoff.sourceKind}-${handoff.sourceId}`,
-      handoff,
-    ]),
-  );
-
   return (
     <>
       {gates.map((gate) => {
-        const handoff = byId.get(gate.id);
+        const handoff = handoffsById.get(gate.id);
         if (!handoff) return null;
         return (
-          <MarginHandoffItem key={gate.id} gate={gate} handoff={handoff} />
+          <MarginHandoffItem
+            key={gate.id}
+            gate={gate}
+            handoff={handoff}
+            approvalSurfaceMounted={approvalSurfaceMounted}
+          />
         );
       })}
     </>
