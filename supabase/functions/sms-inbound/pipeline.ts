@@ -91,11 +91,21 @@ async function findOrCreateConversation(
     .maybeSingle();
   if ((existing as Conversation | null)?.id) return existing as Conversation;
 
-  const { data: created } = await supabase
+  const { data: created, error } = await supabase
     .from("sms_conversations")
     .insert({ twilio_number: twilioNumber, phone_e164: phone })
     .select("id, active_project_id, party_id, state, state_context")
     .single();
+  if (error || !created) {
+    // Lost a create race — re-read rather than dereference a null row.
+    const { data: retry } = await supabase
+      .from("sms_conversations")
+      .select("id, active_project_id, party_id, state, state_context")
+      .eq("twilio_number", twilioNumber)
+      .eq("phone_e164", phone)
+      .maybeSingle();
+    return retry as Conversation;
+  }
   return created as Conversation;
 }
 

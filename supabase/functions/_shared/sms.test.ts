@@ -5,7 +5,7 @@ import {
   assert,
   assertEquals,
 } from "https://deno.land/std@0.168.0/testing/asserts.ts";
-import { isQuietHours, sendPartySms } from "./sms.ts";
+import { flushDeferredMessages, isQuietHours, sendPartySms } from "./sms.ts";
 import { createFakeSupabase } from "../_tests/fake-supabase.ts";
 
 function envOf(map: Record<string, string>) {
@@ -209,7 +209,7 @@ Deno.test("caller-owned sensitive outbox never persists a raw guest URL", async 
   );
 });
 
-Deno.test("a Messaging Service SID (MG…) is sent as MessagingServiceSid", async () => {
+Deno.test("MG From + SMS_CONVERSATION_NUMBER keys the conversation on the physical number while Twilio still gets the MG SID", async () => {
   const fake = createFakeSupabase({
     project_parties: [party("p1", "granted")],
   });
@@ -221,6 +221,7 @@ Deno.test("a Messaging Service SID (MG…) is sent as MessagingServiceSid", asyn
       getEnv: envOf({
         SMS_DEV_MODE: "off",
         TWILIO_FROM_NUMBER: "MG0123456789abcdef",
+        SMS_CONVERSATION_NUMBER: "+15551230000",
         TWILIO_ACCOUNT_SID: "AC1",
         TWILIO_AUTH_TOKEN: "tok",
       }),
@@ -241,6 +242,189 @@ Deno.test("a Messaging Service SID (MG…) is sent as MessagingServiceSid", asyn
     "MG SID → MessagingServiceSid",
   );
   assert(!capturedBody.includes("From=MG"), "must not send From=MG…");
+  const conv = (fake._data.sms_conversations ?? [])[0] as {
+    twilio_number: string;
+  };
+  assert(conv, "a conversation should exist");
+  assertEquals(
+    conv.twilio_number,
+    "+15551230000",
+    "conversation keyed on the physical number, not the MG SID",
+  );
+});
+
+Deno.test("MG From without SMS_CONVERSATION_NUMBER refuses to send (would split the inbound thread)", async () => {
+  const fake = createFakeSupabase({
+    project_parties: [party("p1", "granted")],
+  });
+  let fetchCalls = 0;
+  const res = await sendPartySms(
+    fake as never,
+    { partyId: "p1", body: "hi there" },
+    {
+      getEnv: envOf({
+        SMS_DEV_MODE: "off",
+        TWILIO_FROM_NUMBER: "MG0123456789abcdef",
+        TWILIO_ACCOUNT_SID: "AC1",
+        TWILIO_AUTH_TOKEN: "tok",
+      }),
+      fetchImpl: (() => {
+        fetchCalls++;
+        return Promise.reject("must not call Twilio");
+      }) as unknown as typeof fetch,
+      now: new Date("2026-07-08T18:00:00Z"),
+    },
+  );
+  assert(!res.sent);
+  assertEquals(res.reason, "conversation_number_not_configured");
+  assertEquals(fetchCalls, 0, "Twilio must not be called");
+  assertEquals(
+    (fake._data.sms_conversations ?? []).length,
+    0,
+    "no conversation created",
+  );
+  assertEquals(
+    (fake._data.sms_messages ?? []).length,
+    0,
+    "no message row inserted",
+  );
+});
+
+// ── flushDeferredMessages hardening ─────────────────────────────────────────
+function flushEnv(extra: Record<string, string> = {}) {
+  return envOf({
+    SMS_DEV_MODE: "off",
+    TWILIO_FROM_NUMBER: "+15550000000",
+    TWILIO_ACCOUNT_SID: "AC1",
+    TWILIO_AUTH_TOKEN: "tok",
+    ...extra,
+  });
+}
+
+Deno.test("flush: an opted-out recipient is suppressed and never sent", async () => {
+  const now = new Date("2026-07-08T18:00:00Z"); // ~1pm Chicago — not quiet
+  const fake = createFakeSupabase({
+    sms_conversations: [
+      { id: "conv1", twilio_number: "+15550000000", phone_e164: "+15551230001" },
+    ],
+    sms_messages: [
+      {
+        id: "m1",
+        direction: "outbound",
+        twilio_status: "deferred",
+        body: "hello",
+        conversation_id: "conv1",
+        party_id: "p1",
+        template_key: "sms_daily_digest",
+        created_at: new Date(now.getTime() - 60 * 60 * 1000).toISOString(),
+      },
+    ],
+    project_parties: [
+      { id: "p1", phone_e164: "+15551230001", sms_consent_status: "opted_out" },
+    ],
+  });
+  let fetchCalls = 0;
+  const result = await flushDeferredMessages(fake as never, {
+    getEnv: flushEnv(),
+    fetchImpl: (() => {
+      fetchCalls++;
+      return Promise.reject("must not call Twilio");
+    }) as unknown as typeof fetch,
+    now,
+  });
+  assertEquals(result.flushed, 0);
+  assertEquals(result.suppressed, 1);
+  assertEquals(fetchCalls, 0);
+  const row = (fake._data.sms_messages ?? [])[0] as {
+    twilio_status: string;
+    error_message: string;
+  };
+  assertEquals(row.twilio_status, "suppressed");
+  assertEquals(row.error_message, "opted_out");
+});
+
+Deno.test("flush: a row older than 24h expires without sending", async () => {
+  const now = new Date("2026-07-08T18:00:00Z");
+  const fake = createFakeSupabase({
+    sms_conversations: [
+      { id: "conv1", twilio_number: "+15550000000", phone_e164: "+15551230002" },
+    ],
+    sms_messages: [
+      {
+        id: "m1",
+        direction: "outbound",
+        twilio_status: "deferred",
+        body: "hello",
+        conversation_id: "conv1",
+        party_id: "p1",
+        template_key: "sms_daily_digest",
+        created_at: new Date(now.getTime() - 25 * 60 * 60 * 1000)
+          .toISOString(),
+      },
+    ],
+    project_parties: [
+      { id: "p1", phone_e164: "+15551230002", sms_consent_status: "granted" },
+    ],
+  });
+  let fetchCalls = 0;
+  const result = await flushDeferredMessages(fake as never, {
+    getEnv: flushEnv(),
+    fetchImpl: (() => {
+      fetchCalls++;
+      return Promise.reject("must not call Twilio");
+    }) as unknown as typeof fetch,
+    now,
+  });
+  assertEquals(result.flushed, 0);
+  assertEquals(result.expired, 1);
+  assertEquals(fetchCalls, 0);
+  const row = (fake._data.sms_messages ?? [])[0] as {
+    twilio_status: string;
+    error_message: string;
+  };
+  assertEquals(row.twilio_status, "expired");
+  assertEquals(row.error_message, "deferred_expired");
+});
+
+Deno.test("flush: a Twilio send failure marks the row failed with the error, single attempt", async () => {
+  const now = new Date("2026-07-08T18:00:00Z");
+  const fake = createFakeSupabase({
+    sms_conversations: [
+      { id: "conv1", twilio_number: "+15550000000", phone_e164: "+15551230003" },
+    ],
+    sms_messages: [
+      {
+        id: "m1",
+        direction: "outbound",
+        twilio_status: "deferred",
+        body: "hello",
+        conversation_id: "conv1",
+        party_id: "p1",
+        template_key: "sms_daily_digest",
+        created_at: new Date(now.getTime() - 60 * 60 * 1000).toISOString(),
+      },
+    ],
+    project_parties: [
+      { id: "p1", phone_e164: "+15551230003", sms_consent_status: "granted" },
+    ],
+  });
+  let fetchCalls = 0;
+  const result = await flushDeferredMessages(fake as never, {
+    getEnv: flushEnv(),
+    fetchImpl: (() => {
+      fetchCalls++;
+      return Promise.resolve(new Response("boom", { status: 500 }));
+    }) as unknown as typeof fetch,
+    now,
+  });
+  assertEquals(result.flushed, 0);
+  assertEquals(fetchCalls, 1, "a single attempt — no retry accumulation");
+  const row = (fake._data.sms_messages ?? [])[0] as {
+    twilio_status: string;
+    error_message: string;
+  };
+  assertEquals(row.twilio_status, "failed");
+  assert(row.error_message.includes("Twilio 500"));
 });
 
 Deno.test("isQuietHours brackets the 8am–8pm window", () => {

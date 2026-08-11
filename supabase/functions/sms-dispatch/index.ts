@@ -26,10 +26,11 @@ const corsHeaders = {
 };
 
 interface SmsJob {
-  // Recipient resolution: provide a userId (preferred — consent + phone are
-  // looked up server-side) and/or an explicit `to` number.
+  // Recipient resolution: a userId — consent + phone are looked up
+  // server-side from profiles/notification_preferences. There is no raw
+  // `to`-number path; an explicit phone with no consent record to check is
+  // not a supportable send.
   userId?: string;
-  to?: string;
 
   // Field Coordination party path (00284): a project_parties id. Delegates to
   // the shared sendPartySms (party consent gate, conversation/message logging,
@@ -82,9 +83,9 @@ serve(async (req) => {
       return await handlePartySms(req, supabase, job, corsHeaders);
     }
 
-    if (!job.userId && !job.to) {
+    if (!job.userId) {
       return new Response(
-        JSON.stringify({ error: "Missing required field: userId or to" }),
+        JSON.stringify({ error: "Missing required field: userId or partyId" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -96,10 +97,10 @@ serve(async (req) => {
     }
 
     // ── Resolve recipient + enforce consent ──────────────────────────────
-    let toNumber = job.to;
+    let toNumber: string | undefined;
     let displayName: string | null = null;
 
-    if (job.userId) {
+    {
       const { data: profile } = await supabase
         .from("profiles")
         .select("phone, sms_opt_in, display_name")
@@ -143,8 +144,7 @@ serve(async (req) => {
         );
       }
 
-      // Prefer the stored profile phone over any caller-supplied number.
-      if (!toNumber) toNumber = profile.phone ?? undefined;
+      toNumber = profile.phone ?? undefined;
     }
 
     if (!toNumber) {
@@ -246,16 +246,16 @@ serve(async (req) => {
         lastError = err instanceof Error ? err.message : "Send failed";
       }
 
-      if (attempt < MAX_RETRIES - 1) {
-        const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
-        await new Promise((resolve) => setTimeout(resolve, delay));
-      }
-
       if (logId) {
         await supabase
           .from("notification_log")
           .update({ retry_count: attempt + 1 })
           .eq("id", logId);
+      }
+
+      if (attempt < MAX_RETRIES - 1) {
+        const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
+        await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
 

@@ -104,6 +104,21 @@ function twilioFromField(fromNumber: string): [string, string] {
     : ["From", fromNumber];
 }
 
+/**
+ * Resolve the phone number used to KEY sms_conversations — distinct from
+ * TWILIO_FROM_NUMBER once that becomes a Messaging Service SID (MG…), since
+ * sms-inbound always keys on the physical number Twilio delivers to
+ * (params.To); keying outbound on an MG SID would split every thread. Prefers
+ * an explicit override; falls back to TWILIO_FROM_NUMBER only when it's
+ * already a physical number.
+ */
+export function smsConversationNumber(deps: SmsDeps): string | undefined {
+  const explicit = env(deps, "SMS_CONVERSATION_NUMBER");
+  if (explicit) return explicit;
+  const fromNumber = env(deps, "TWILIO_FROM_NUMBER");
+  return fromNumber && !fromNumber.startsWith("MG") ? fromNumber : undefined;
+}
+
 interface TwilioCreds {
   accountSid: string;
   credentialSid: string;
@@ -454,9 +469,15 @@ export async function sendPartySms(
     return { sent: false, reason: "empty_body" };
   }
 
+  // Key the conversation on the physical number sms-inbound keys on — never
+  // the MG… Messaging Service SID, which would split the thread.
+  const conversationNumber = smsConversationNumber(deps);
+  if (!conversationNumber) {
+    return { sent: false, reason: "conversation_number_not_configured" };
+  }
   const convId = await findOrCreateConversation(
     supabase,
-    fromNumber,
+    conversationNumber,
     recipient.phone,
     recipient.partyId,
     recipient.projectId,
@@ -571,15 +592,24 @@ export async function sendPartySms(
   };
 }
 
+const DEFERRED_TTL_MS = 24 * 3600 * 1000;
+
 /**
  * Flush stored 'deferred' outbound rows by sending them now (field-daily). Rows
  * whose phone is still inside quiet hours are left for the next run. Reuses the
  * Twilio primitive and updates the existing row in place (no new insert).
+ *
+ * Each row is re-checked before sending — a deferred row can sit for hours,
+ * during which the recipient may have opted out or the send window may have
+ * closed for good (>24h stale): a defer is a promise to try later, not a
+ * guarantee to send at all.
  */
 export async function flushDeferredMessages(
   supabase: SupabaseClient,
   deps: SmsDeps = {},
-): Promise<{ flushed: number; skipped: number }> {
+): Promise<
+  { flushed: number; skipped: number; suppressed?: number; expired?: number }
+> {
   const now = deps.now ?? new Date();
   const fetchImpl = deps.fetchImpl ?? fetch;
   const mode = devMode(deps);
@@ -596,16 +626,35 @@ export async function flushDeferredMessages(
 
   const { data: rows } = await supabase
     .from("sms_messages")
-    .select("id, body, conversation_id")
+    .select("id, body, conversation_id, party_id, template_key, created_at")
     .eq("direction", "outbound")
     .eq("twilio_status", "deferred");
   if (!rows || rows.length === 0) return { flushed: 0, skipped: 0 };
 
   let flushed = 0;
   let skipped = 0;
+  let suppressed = 0;
+  let expired = 0;
   for (
-    const row of rows as { id: string; body: string; conversation_id: string }[]
+    const row of rows as {
+      id: string;
+      body: string;
+      conversation_id: string;
+      party_id: string | null;
+      template_key: string | null;
+      created_at: string;
+    }[]
   ) {
+    // Stale beyond 24h — never send; the digest/menu it referenced is dead.
+    if (now.getTime() - new Date(row.created_at).getTime() > DEFERRED_TTL_MS) {
+      await supabase
+        .from("sms_messages")
+        .update({ twilio_status: "expired", error_message: "deferred_expired" })
+        .eq("id", row.id);
+      expired++;
+      continue;
+    }
+
     if (isQuietHours(now, fieldTz)) {
       skipped++;
       continue;
@@ -618,6 +667,32 @@ export async function flushDeferredMessages(
     const phone = (conv as { phone_e164?: string } | null)?.phone_e164;
     if (!phone) {
       skipped++;
+      continue;
+    }
+
+    // Re-check consent — it may have changed since the row was deferred.
+    const { data: partyRows } = await supabase
+      .from("project_parties")
+      .select("sms_consent_status")
+      .eq("phone_e164", phone);
+    const consent = reduceConsent(
+      (partyRows ?? []) as { sms_consent_status: ConsentStatus }[],
+    );
+    const isInvite = row.template_key === "sms_optin_invite";
+    if (consent === "opted_out") {
+      await supabase
+        .from("sms_messages")
+        .update({ twilio_status: "suppressed", error_message: "opted_out" })
+        .eq("id", row.id);
+      suppressed++;
+      continue;
+    }
+    if (!isInvite && consent !== "granted") {
+      await supabase
+        .from("sms_messages")
+        .update({ twilio_status: "suppressed", error_message: "not_consented" })
+        .eq("id", row.id);
+      suppressed++;
       continue;
     }
 
@@ -634,6 +709,7 @@ export async function flushDeferredMessages(
         !accountSid || !credentialSid || !credentialSecret || !fromNumber ||
         (mode === "redirect" && !redirectNumber)
       ) {
+        // Not configured — leave 'deferred' so the next run retries.
         skipped++;
         continue;
       }
@@ -648,6 +724,11 @@ export async function flushDeferredMessages(
         body: sendBody,
       }, fetchImpl);
       if (!r.ok) {
+        // A single attempt only — no retry accumulation on a deferred row.
+        await supabase
+          .from("sms_messages")
+          .update({ twilio_status: "failed", error_message: r.error ?? "send_failed" })
+          .eq("id", row.id);
         skipped++;
         continue;
       }
@@ -664,5 +745,5 @@ export async function flushDeferredMessages(
       .eq("id", row.id);
     flushed++;
   }
-  return { flushed, skipped };
+  return { flushed, skipped, suppressed, expired };
 }

@@ -16,6 +16,7 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   flushDeferredMessages,
   sendPartySms,
+  smsConversationNumber,
   type SendPartySmsInput,
   type SendPartySmsResult,
   type SmsDeps,
@@ -135,7 +136,9 @@ export async function runFieldDaily(
   const now = deps.now ?? new Date();
   const today = isoDate(now);
   const cutoff48h = new Date(now.getTime() - 48 * 3600 * 1000).toISOString();
-  const twilioNumber = (deps.getEnv ?? ((k: string) => Deno.env.get(k)))("TWILIO_FROM_NUMBER") ?? "";
+  // Key digest/delivery-confirm conversations on the same physical number
+  // sendPartySms uses — never an MG… Messaging Service SID (see _shared/sms.ts).
+  const conversationNumber = smsConversationNumber(deps);
   const send = deps.sendFn ?? sendPartySms;
   const flush = deps.flushFn ?? flushDeferredMessages;
 
@@ -160,6 +163,12 @@ export async function runFieldDaily(
     party_kind: string;
   }>) {
     if (!party.phone_e164) {
+      summary.parties_skipped++;
+      continue;
+    }
+    if (!conversationNumber) {
+      // TWILIO_FROM_NUMBER is an MG… SID and no override is configured — the
+      // conversation can't be safely keyed; skip rather than split threads.
       summary.parties_skipped++;
       continue;
     }
@@ -196,7 +205,7 @@ export async function runFieldDaily(
     // Persist the menu so an inbound numbered reply resolves against it.
     const conv = await findOrCreateConversation(
       supabase,
-      twilioNumber,
+      conversationNumber,
       party.phone_e164,
       party.id,
       party.project_id,
@@ -247,10 +256,14 @@ export async function runFieldDaily(
 
     for (const party of (recvParties ?? []) as Array<{ id: string; phone_e164: string | null; project_id: string }>) {
       if (!party.phone_e164) continue;
+      if (!conversationNumber) {
+        summary.parties_skipped++;
+        continue;
+      }
 
       const conv = await findOrCreateConversation(
         supabase,
-        twilioNumber,
+        conversationNumber,
         party.phone_e164,
         party.id,
         party.project_id,
