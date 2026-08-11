@@ -17,11 +17,17 @@ const nextConfig = {
     // names http://127.0.0.1:54321 and prod names the Strata host; an unset or
     // unparseable value degrades to 'self' rather than widening the policy.
     let supabaseFrameOrigin = null;
+    let supabaseRealtimeOrigin = null;
     try {
-      supabaseFrameOrigin = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).origin;
+      const configuredSupabaseUrl = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL);
+      supabaseFrameOrigin = configuredSupabaseUrl.origin;
+      configuredSupabaseUrl.protocol = configuredSupabaseUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+      supabaseRealtimeOrigin = configuredSupabaseUrl.origin;
     } catch {
       supabaseFrameOrigin = null;
+      supabaseRealtimeOrigin = null;
     }
+    const supabaseConnectOrigins = [supabaseFrameOrigin, supabaseRealtimeOrigin].filter(Boolean).join(' ');
 
     // CSP directives - adapted for development vs production
     const cspDirectives = [
@@ -42,8 +48,8 @@ const nextConfig = {
       // Development: localhost, local network IPs, AND patina.cloud domains (for Cloudflare tunnel access)
       // Production: patina.cloud API gateway and WebSocket connections
       isDevelopment
-        ? "connect-src 'self' http://localhost:* ws://localhost:* http://192.168.1.18:* ws://192.168.1.18:* http://192.168.1.36:* ws://192.168.1.36:* http://192.168.1.16:* ws://192.168.1.16:* http://127.0.0.1:* ws://127.0.0.1:* http://*.nordicheat.org ws://*.nordicheat.org https://api.patina.cloud wss://api.patina.cloud https://*.patina.cloud wss://*.patina.cloud https://*.sanity.io wss://*.sanity.io https://us.i.posthog.com https://us-assets.i.posthog.com https://*.posthog.com"
-        : "connect-src 'self' https://bkvcixdmuyejfzcijpdg.supabase.co wss://bkvcixdmuyejfzcijpdg.supabase.co https://api.patina.cloud wss://api.patina.cloud https://*.patina.cloud wss://*.patina.cloud https://*.sanity.io wss://*.sanity.io https://us.i.posthog.com https://us-assets.i.posthog.com https://*.posthog.com",
+        ? "connect-src 'self' http://localhost:* ws://localhost:* http://192.168.1.18:* ws://192.168.1.18:* http://192.168.1.36:* ws://192.168.1.36:* http://192.168.1.16:* ws://192.168.1.16:* http://127.0.0.1:* ws://127.0.0.1:* http://*.nordicheat.org ws://*.nordicheat.org https://api.patina.cloud wss://api.patina.cloud https://*.patina.cloud wss://*.patina.cloud https://*.sanity.io wss://*.sanity.io https://us.i.posthog.com https://us-assets.i.posthog.com https://*.posthog.com" + (supabaseConnectOrigins ? ` ${supabaseConnectOrigins}` : '')
+        : "connect-src 'self' https://bkvcixdmuyejfzcijpdg.supabase.co wss://bkvcixdmuyejfzcijpdg.supabase.co https://api.patina.cloud wss://api.patina.cloud https://*.patina.cloud wss://*.patina.cloud https://*.sanity.io wss://*.sanity.io https://us.i.posthog.com https://us-assets.i.posthog.com https://*.posthog.com" + (supabaseConnectOrigins ? ` ${supabaseConnectOrigins}` : ''),
       "media-src 'self' blob:",
       ["frame-src 'self'", supabaseFrameOrigin].filter(Boolean).join(' '),
       "object-src 'none'",
