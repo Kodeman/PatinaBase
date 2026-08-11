@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
   useCreateProjectApproval,
   useProjectApprovalArtifactCandidates,
@@ -23,6 +23,10 @@ import {
   projectApprovalActions,
   toFutureDueAt,
 } from './project-approval-model';
+import {
+  FOCUS_PROJECT_APPROVAL_EVENT,
+  type FocusProjectApprovalDetail,
+} from './project-approval-navigation';
 
 export interface ProjectApprovalPhase {
   id: string;
@@ -135,6 +139,30 @@ export function ProjectApprovalDocument({
     kind: 'status' | 'error';
     text: string;
   } | null>(null);
+
+  useEffect(() => {
+    const onFocusApproval = (event: Event) => {
+      const decisionId = (
+        event as CustomEvent<FocusProjectApprovalDetail | undefined>
+      ).detail?.decisionId;
+      if (!decisionId) return;
+      const target = document.getElementById(`project-approval-${decisionId}`);
+      if (!target || target.dataset.projectApprovalCurrentLeaf !== 'true')
+        return;
+      target.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+      target.focus({ preventScroll: true });
+    };
+
+    window.addEventListener(
+      FOCUS_PROJECT_APPROVAL_EVENT,
+      onFocusApproval as EventListener,
+    );
+    return () =>
+      window.removeEventListener(
+        FOCUS_PROJECT_APPROVAL_EVENT,
+        onFocusApproval as EventListener,
+      );
+  }, []);
 
   const phaseById = useMemo(
     () => new Map(phases.map((phase) => [phase.id, phase])),
@@ -627,7 +655,20 @@ export function ProjectApprovalDocument({
             return (
               <li
                 key={review.decisionId}
-                className="min-w-0 border-b border-[var(--color-pearl)] py-4"
+                id={`project-approval-${review.decisionId}`}
+                data-project-approval-current-leaf={
+                  review.disposition === 'active' &&
+                  review.successorDecisionId === null &&
+                  (review.lifecycleStatus === 'draft' ||
+                    review.lifecycleStatus === 'pending' ||
+                    (review.lifecycleStatus === 'responded' &&
+                      (review.outcome === 'changes_requested' ||
+                        review.outcome === 'needs_discussion')))
+                    ? 'true'
+                    : 'false'
+                }
+                tabIndex={-1}
+                className="min-w-0 scroll-mt-6 border-b border-[var(--color-pearl)] py-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
               >
                 <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">

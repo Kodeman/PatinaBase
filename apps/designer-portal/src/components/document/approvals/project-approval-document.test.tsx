@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { axe, toHaveNoViolations } from 'jest-axe';
 
 import { ProjectApprovalDocument } from './project-approval-document';
+import { FOCUS_PROJECT_APPROVAL_EVENT } from './project-approval-navigation';
 import type {
   ProjectApprovalArtifactCandidate,
   ProjectApprovalReview,
@@ -257,6 +258,61 @@ describe('ProjectApprovalDocument authority and composer', () => {
 });
 
 describe('ProjectApprovalDocument lifecycle and accessibility', () => {
+  it('focuses the exact canonical approval row from a contextual handoff', () => {
+    authority = {
+      decisionLeadId: 'client-1',
+      requiredCoapproverId: null,
+      revision: 4,
+    };
+    approvals = [baseReview];
+    const scrollIntoView = jest.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    renderDocument();
+
+    window.dispatchEvent(
+      new CustomEvent(FOCUS_PROJECT_APPROVAL_EVENT, {
+        detail: { decisionId: 'decision-1' },
+      }),
+    );
+
+    const row = document.getElementById('project-approval-decision-1');
+    expect(row).toHaveFocus();
+    expect(scrollIntoView).toHaveBeenCalledWith({
+      behavior: 'smooth',
+      block: 'center',
+    });
+  });
+
+  it('does not focus a stale or superseded approval row', () => {
+    authority = {
+      decisionLeadId: 'client-1',
+      requiredCoapproverId: null,
+      revision: 4,
+    };
+    approvals = [
+      {
+        ...baseReview,
+        decisionId: 'stale-decision',
+        disposition: 'superseded',
+        successorDecisionId: 'decision-1',
+      },
+    ];
+    renderDocument();
+
+    window.dispatchEvent(
+      new CustomEvent(FOCUS_PROJECT_APPROVAL_EVENT, {
+        detail: { decisionId: 'stale-decision' },
+      }),
+    );
+
+    expect(
+      document.getElementById('project-approval-stale-decision'),
+    ).not.toHaveFocus();
+  });
+
   it('keeps publish review-count gated and offers only valid active-leaf actions', async () => {
     authority = {
       decisionLeadId: 'client-1',

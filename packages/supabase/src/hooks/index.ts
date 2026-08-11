@@ -342,6 +342,33 @@ export type {
   ProjectApprovalInvalidationScope,
 } from './use-project-approvals';
 export {
+  projectContextualHandoffKeys,
+  invalidateProjectContextualHandoffs,
+  parseProjectContextualHandoff,
+  useProjectContextualHandoffs,
+  useSiteRequestActionDetail,
+  useNudgeSiteRequest,
+  useApproveSiteRequestItem,
+  useRequestSiteRequestRedo,
+  useCloseSiteRequest,
+} from './use-project-contextual-handoffs';
+export type {
+  ContextualHandoffSourceKind,
+  ContextualHandoffActorKind,
+  ContextualHandoffStageAttribution,
+  ContextualHandoffActor,
+  ContextualHandoffResponsibility,
+  ProjectApprovalHandoffArtifact,
+  SiteRequestHandoffArtifactItem,
+  SiteRequestHandoffArtifact,
+  ProjectApprovalContextualHandoff,
+  SiteRequestContextualHandoff,
+  ProjectContextualHandoff,
+  SiteRequestActionItem,
+  SiteRequestActionDetail,
+  ProjectContextualHandoffInvalidationScope,
+} from './use-project-contextual-handoffs';
+export {
   // Project Coordination (Track 5 — the ball-in-court)
   useCoordinationItems,
   useCourtSummary,
