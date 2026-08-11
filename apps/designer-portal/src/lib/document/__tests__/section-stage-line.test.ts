@@ -58,6 +58,54 @@ describe("deriveSectionStageLine", () => {
     expect(model?.subLabel).toBe("Closeout & Post-Occupancy · Core · stage 11");
   });
 
+  it("picks the headline by canonical track order, not input row order", () => {
+    // Construction first, FF&E second, Core last: row order must not decide.
+    const model = deriveSectionStageLine(
+      deriveWorkflowStageDocument([
+        phase({
+          phase_id: "p-construction",
+          canonical_stage_key: "contract_administration",
+          workflow_track: "construction",
+        }),
+        phase({
+          phase_id: "p-ffe",
+          canonical_stage_key: "delivery_installation",
+          workflow_track: "ffe",
+        }),
+        phase({
+          phase_id: "p-core",
+          canonical_stage_key: "design_development",
+          workflow_track: "core",
+        }),
+      ]),
+    );
+
+    expect(model?.subLabel).toBe(
+      "Design Development · Core · stage 06 of 04–09",
+    );
+  });
+
+  it("picks the most-advanced stage within the headline track", () => {
+    const model = deriveSectionStageLine(
+      deriveWorkflowStageDocument([
+        phase({
+          phase_id: "p-early",
+          canonical_stage_key: "kickoff_existing_conditions",
+          workflow_track: "core",
+        }),
+        phase({
+          phase_id: "p-late",
+          canonical_stage_key: "documentation_authorization",
+          workflow_track: "core",
+        }),
+      ]),
+    );
+
+    expect(model?.subLabel).toBe(
+      "Documentation / Authorization · Core · stage 07 of 04–09",
+    );
+  });
+
   it("draws one band per live track in canonical order", () => {
     const model = deriveSectionStageLine(
       deriveWorkflowStageDocument([
@@ -84,6 +132,9 @@ describe("deriveSectionStageLine", () => {
       { key: "ffe", label: "FF&E", stageNumber: "06" },
       { key: "construction", label: "Construction", stageNumber: "05" },
     ]);
+    expect(model?.subLabel).toBe(
+      "Design Development · Core · stage 06 of 04–09",
+    );
   });
 
   it("omits a track that carries no active work", () => {
@@ -127,6 +178,20 @@ describe("deriveSectionStageLine", () => {
     );
 
     expect(model?.unclassifiedCount).toBe(1);
+  });
+
+  it("never claims nothing is active when every active phase is unclassified", () => {
+    const model = deriveSectionStageLine(
+      deriveWorkflowStageDocument([
+        phase({ phase_id: "p-1", canonical_stage_key: null }),
+        phase({ phase_id: "p-2", workflow_track: null }),
+      ]),
+    );
+
+    expect(model).not.toBeNull();
+    expect(model?.subLabel).toBeNull();
+    expect(model?.tracks).toEqual([]);
+    expect(model?.unclassifiedCount).toBe(2);
   });
 
   it("returns null when no phase is active, so the surface can say nothing is", () => {

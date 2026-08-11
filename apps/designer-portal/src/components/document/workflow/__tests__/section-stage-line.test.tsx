@@ -103,6 +103,24 @@ describe("SectionStageLine", () => {
     ).toBeVisible();
   });
 
+  it("never says nothing is active when every active phase is unclassified", () => {
+    render(
+      <SectionStageLine
+        model={modelFor([
+          phase({ phase_id: "p-1", canonical_stage_key: null }),
+          phase({ phase_id: "p-2", workflow_track: null }),
+        ])}
+      />,
+    );
+
+    expect(
+      screen.queryByText("No active or delayed phase is configured"),
+    ).toBeNull();
+    expect(
+      screen.getByText("2 active phases not classified to a canonical stage"),
+    ).toHaveAttribute("role", "status");
+  });
+
   it("states that nothing is active rather than drawing an empty rail", () => {
     render(<SectionStageLine model={null} />);
 
