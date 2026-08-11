@@ -21,7 +21,6 @@ import {
   overdueElapsedPhrase,
   type OverdueCondition,
 } from './overdue-condition';
-import type { SectionKey } from './desk-derivation';
 
 /** The four named acts, each mapping 1:1 onto one lifecycle mutation. `open`
  *  carries no mutation of its own — it hands the act to the surface that owns
@@ -45,6 +44,8 @@ export interface WorkflowGate {
   canonicalStageKey: string | null;
   /** Lane attribution — "With Marta", "With Hale Joinery". */
   lane: string;
+  /** True where the gate's next act is the studio's own. */
+  studioLane: boolean;
   /** The need line: what this gate is waiting on, in one phrase. */
   terms: string;
   /** Stage provenance, demoted to microtext. */
@@ -86,21 +87,49 @@ export function gateStageLabel(
 }
 
 /**
- * Who the gate sits with. The projection labels a site party from its own
- * snapshot; a client recipient carries no label there, so the document's own
- * client name stands in rather than a bare role noun.
+ * The one expected response a household actually owes. Every other approval
+ * response in the projection is studio work.
+ */
+const CLIENT_OWNED_RESPONSE = 'select_approval_outcome';
+
+/**
+ * Who the gate sits with.
+ *
+ * For an approval this reads `expectedResponse` — who must ACT — rather than
+ * the projection's `recipient`. The two disagree on one real state: a draft
+ * whose confirmations are incomplete is addressed to the client
+ * (`recipient = 'client'`, 00442) while the act it is waiting on is the
+ * studio's own artifact-review confirmation. Attributing that lane to the
+ * household would have the margin claim "With Marta" for work Marta cannot do.
+ * Correcting `recipient` itself belongs to the projection, which is out of
+ * scope here — this is the reader's override, not a new fact.
+ *
+ * A site party carries its own snapshot label; a client recipient carries none,
+ * so the document's client name stands in rather than a bare role noun.
  */
 function laneFor(
   handoff: ProjectContextualHandoff,
   clientName: string | null,
 ): string {
+  const withClient = clientName ? `With ${clientName}` : 'With the client';
+  if (handoff.sourceKind === 'project_approval') {
+    return handoff.expectedResponse === CLIENT_OWNED_RESPONSE
+      ? withClient
+      : 'With the studio';
+  }
   const recipient = handoff.responsibility.recipient;
   if (recipient.label) return `With ${recipient.label}`;
-  if (recipient.kind === 'client') {
-    return clientName ? `With ${clientName}` : 'With the client';
-  }
+  if (recipient.kind === 'client') return withClient;
   if (recipient.kind === 'studio') return 'With the studio';
   return 'With the site party';
+}
+
+/** True where the gate's next act belongs to the studio itself. */
+function isStudioLane(handoff: ProjectContextualHandoff): boolean {
+  return (
+    handoff.sourceKind === 'project_approval' &&
+    handoff.expectedResponse !== CLIENT_OWNED_RESPONSE
+  );
 }
 
 /** The gate's terms — the noun phrase naming what it is waiting on. Kept a
@@ -137,34 +166,51 @@ function provenanceFor(handoff: ProjectContextualHandoff): string {
 }
 
 /**
- * The one act. Each of nudge / approve / redo / close maps onto exactly one
- * lifecycle mutation; `open` hands the act to the approval ceremony, which owns
- * publishing and outcome selection. A gate waiting on a party's consent offers
- * no studio act at all — there is nothing the studio may do to it.
+ * One gate, one act, one verb. Each of nudge / approve / redo / close maps onto
+ * exactly one lifecycle mutation; `open` hands the act to the approval
+ * ceremony, which owns publishing and outcome selection.
+ *
+ * The margin prints the verb alone and the guide prints the verb plus its
+ * object, so the two scales can never name the same act differently — the
+ * margin cannot say "Open" while the guide says "Nudge".
  */
-function actFor(handoff: ProjectContextualHandoff): GateAct | null {
+export function gateActVerb(kind: GateActKind, sourceState: string): string {
+  switch (kind) {
+    case 'nudge':
+      return 'Nudge';
+    case 'approve':
+      return 'Review';
+    case 'redo':
+      return 'Redo';
+    case 'close':
+      return 'Close';
+    default:
+      if (sourceState === 'ready_to_publish') return 'Publish';
+      if (sourceState === 'review_required') return 'Review';
+      return 'Open';
+  }
+}
+
+function actKindFor(handoff: ProjectContextualHandoff): GateActKind | null {
   if (handoff.sourceKind === 'project_approval') {
-    switch (handoff.sourceState) {
-      case 'response_required':
-        return { kind: 'nudge', label: 'Nudge' };
-      case 'ready_to_publish':
-        return { kind: 'open', label: 'Publish' };
-      case 'review_required':
-        return { kind: 'open', label: 'Review' };
-      default:
-        return { kind: 'open', label: 'Open' };
-    }
+    return handoff.sourceState === 'response_required' ? 'nudge' : 'open';
   }
   switch (handoff.sourceState) {
     case 'awaiting_consent':
       return null;
     case 'completed':
-      return { kind: 'close', label: 'Close' };
+      return 'close';
     case 'delivered':
-      return { kind: 'approve', label: 'Review' };
+      return 'approve';
     default:
-      return { kind: 'nudge', label: 'Open' };
+      return 'nudge';
   }
+}
+
+function actFor(handoff: ProjectContextualHandoff): GateAct | null {
+  const kind = actKindFor(handoff);
+  if (!kind) return null;
+  return { kind, label: gateActVerb(kind, handoff.sourceState) };
 }
 
 export function deriveGate(
@@ -180,6 +226,7 @@ export function deriveGate(
     projectId: handoff.projectId,
     canonicalStageKey: handoff.canonicalStageKey,
     lane: laneFor(handoff, clientName),
+    studioLane: isStudioLane(handoff),
     terms: termsFor(handoff),
     provenance: provenanceFor(handoff),
     dueAt: handoff.dueAt,
@@ -228,16 +275,24 @@ export function gateSentence(gate: WorkflowGate): string {
   const party = gatePartyName(gate);
   // Overdue changes the sentence's tense: from what is pending to how long it
   // has been pending. That is the whole of Ruling IV's second rendering.
-  if (elapsed) return `${party}'s ${gate.terms} has waited ${elapsed}.`;
+  if (elapsed) {
+    // A studio-owned gate has no other party to name; saying "the studio's
+    // approval has waited" would address the reader in the third person.
+    return gate.studioLane
+      ? `${sentence(gate.terms)} has waited ${elapsed}.`
+      : `${party}'s ${gate.terms} has waited ${elapsed}.`;
+  }
   switch (gate.sourceState) {
+    // Confirmations are complete and publishing is the studio's own next act —
+    // the projection addresses this state to the studio, not the household.
     case 'ready_to_publish':
-      return `${gate.terms} is ready for ${party}.`;
+      return `${sentence(gate.terms)} is ready to publish.`;
     case 'review_required':
-      return `${gate.terms} is waiting on its review confirmation.`;
+      return `${sentence(gate.terms)} is waiting on its review confirmation.`;
     case 'changes_requested':
-      return `${gate.terms} came back with changes requested.`;
+      return `${sentence(gate.terms)} came back with changes requested.`;
     case 'needs_discussion':
-      return `${gate.terms} is held for discussion.`;
+      return `${sentence(gate.terms)} is held for discussion.`;
     case 'delivered':
       return `The ${gate.terms} from ${party} is ready to review.`;
     case 'completed':
@@ -254,52 +309,21 @@ export function gatePartyName(gate: WorkflowGate): string {
   return gate.lane.replace(/^With /, '');
 }
 
-/** The act label the guide offers, named for what it does. */
+/** The act label the guide offers: the margin's verb plus its object, so the
+ *  two scales always name the same act with the same word. */
 export function gateActionLabel(gate: WorkflowGate): string {
-  switch (gate.act?.kind) {
+  if (!gate.act) return 'Review now';
+  const verb = gateActVerb(gate.act.kind, gate.sourceState);
+  switch (gate.act.kind) {
     case 'nudge':
-      return `Nudge ${gatePartyName(gate)}`;
+      return `${verb} ${gatePartyName(gate)}`;
     case 'approve':
-      return 'Review the delivery';
+      return `${verb} the ${gate.terms}`;
     case 'close':
-      return 'Close the request';
-    case 'open':
-      return gate.sourceState === 'ready_to_publish'
-        ? `Publish the ${gate.terms}`
-        : 'Open the approval';
+      return `${verb} the ${gate.terms}`;
     default:
-      return 'Review now';
+      return `${verb} the ${gate.terms}`;
   }
-}
-
-// ── The Desk's side of the same rule ───────────────────────────────────────
-
-const SECTION_TERMS: Record<SectionKey, string> = {
-  brief: 'brief',
-  discovery: 'discovery',
-  direction: 'Direction approval',
-  proposal: 'proposal',
-  project: 'project approval',
-  install: 'install approval',
-  care: 'closeout approval',
-};
-
-/**
- * A Desk folio's need line keyed to its nearest open gate. The Desk reads
- * `document_state`, which carries no canonical stage key, so the gate's terms
- * come from the document's own section — the same vocabulary the folio tab
- * already wears. Returns null where the folio's need is not a gate, and the
- * need keeps its own line.
- */
-export function deskGateSentence(input: {
-  clientName: string;
-  activeSection: SectionKey;
-  overdue: OverdueCondition;
-}): string | null {
-  const elapsed = overdueElapsedPhrase(input.overdue);
-  if (!elapsed) return null;
-  const terms = SECTION_TERMS[input.activeSection];
-  return `${input.clientName}'s ${terms} has waited ${elapsed}.`;
 }
 
 /**
@@ -308,25 +332,18 @@ export function deskGateSentence(input: {
  * nothing else: no badge, no per-population tally, no second act.
  */
 export function studioPulseGateSentence(input: {
-  folderCount: number;
   overdueCount: number;
-  inProductionCount: number;
+  onTheWayCount: number;
 }): string {
-  const { folderCount, overdueCount, inProductionCount } = input;
-  if (folderCount === 0 && inProductionCount === 0) {
-    return 'Nothing is waiting on the studio.';
+  const { overdueCount, onTheWayCount } = input;
+  // "On the way" is the Desk's own word for an in-flight piece (deriveMotion).
+  // "In production" would claim a fabrication state the read model never says.
+  const onTheWay = `${onTheWayCount} ${onTheWayCount === 1 ? 'piece is' : 'pieces are'} on the way`;
+  const overdue = `${overdueCount} ${overdueCount === 1 ? 'decision is' : 'decisions are'} overdue`;
+  if (overdueCount === 0 && onTheWayCount === 0) {
+    return 'Nothing is overdue, and nothing is on the way.';
   }
-  const clauses: string[] = [];
-  if (folderCount > 0) {
-    clauses.push(
-      `${folderCount} ${folderCount === 1 ? 'folio needs' : 'folios need'} your hand`,
-    );
-    if (overdueCount > 0) clauses.push(`${overdueCount} overdue`);
-  }
-  if (inProductionCount > 0) {
-    clauses.push(
-      `${inProductionCount} ${inProductionCount === 1 ? 'piece is' : 'pieces are'} in production`,
-    );
-  }
-  return `${clauses.join(', ')}.`;
+  if (overdueCount === 0) return `${sentence(onTheWay)}.`;
+  if (onTheWayCount === 0) return `${sentence(overdue)}.`;
+  return `${sentence(overdue)}, and ${onTheWay}.`;
 }
