@@ -413,9 +413,12 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
         },
       })
     : [];
+  // A failed Desk read only blanks guidance that depended on it. A document its
+  // side feeds never key on keeps its own truthful guidance through the outage.
+  const deskGuidanceFailed = deskEnrichment && enrichedOperationalQuery.isError;
   const guideUnavailable = Boolean(
     row && (
-      enrichedOperationalQuery.isError ||
+      deskGuidanceFailed ||
       (row.engagement_kind === 'project' && projectIsError) ||
       ((row.active_section === 'direction' || row.active_section === 'proposal') && proposalIsError) ||
       (row.active_section === 'discovery' && discoveryQuery.isError) ||
@@ -429,7 +432,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     ? deriveDocumentGuide({
         row,
         availability: guideUnavailable ? 'unavailable' : 'ready',
-        retryAvailable: Boolean(enrichedOperationalQuery.isError),
+        retryAvailable: deskGuidanceFailed,
         proposal: proposalGuideFacts,
         inputFacts: guideInputs,
         operationalNeed: enrichedOperationalNeed ?? undefined,

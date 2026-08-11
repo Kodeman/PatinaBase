@@ -378,6 +378,24 @@ describe('DocumentPage guide activation', () => {
     expect(mockRetryDesk).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps guidance whole when a Desk read this document never depended on fails', () => {
+    const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+    mockDocumentQuery = {
+      ...mockDocumentQuery,
+      data: { kind: 'engagement', row: {
+        ...current, engagement_kind: 'relationship', active_section: 'discovery',
+        engagement_id: 'relationship-1', lead_id: null, client_profile_id: 'client-1',
+      } },
+    };
+    mockDeskError = true;
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(screen.queryByText('Guidance is unavailable')).not.toBeInTheDocument();
+    expect(screen.getByText('Complete Discovery')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+  });
+
   it('fetches and selects flagged-line guidance on a freshly opened Proposal', () => {
     const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
     mockDocumentQuery = {
