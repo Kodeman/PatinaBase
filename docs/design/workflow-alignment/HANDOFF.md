@@ -5,6 +5,30 @@
 
 ---
 
+## 0. Execution status — updated 2026-08-11, end of session 2 (Fable-orchestrated). READ THIS FIRST.
+
+WP0–WP2 are executed. A fresh session picks up at "Next actions" below; §§1–9 remain the program authority for WP3/WP4.
+
+**Main is reconciled and carries everything through G9** — tip `5ef7df57`, pushed:
+`f2d25818..f88fafe0` (rebased docs trio) → `09921df7` mirror-lineage restore (Kody ruled LOCAL wins all 9 divergent files; `.claude/skills` restored as the canonical real tracked directory, origin's symlink-into-`.agents` model reverted; `.agents` stays tracked content-matched — untracking is an open question) → `a45329f9` waitlist migration keeps **00433** (ruled) → `0508c967` **WP1 merge** (all six guide defects fixed; two adversarial review rounds; DECISIONS I110–I112; suites pinned; 315-suite gate was fully green at merge) → `f03f7058` dev-account role-mapping merge → `4361ad4e` CSP connect-src merge → `16861674` retune CLAUDE.md restored (ruled over origin's Herdr version) → `a20ebf4f` **G9 Field close-gating merge** → `5ef7df57` dev-env-contract test relocated to the parked turbo branch.
+
+**Wave1 branch `feat/workflow-wave1-integration`** — tip `c29a0921`, pushed; worktree `.codex/worktrees/workflow-wave1`:
+rebased onto main; migrations renumbered **00434–00445** (strict +1 verified; waitlist keeps 00433); `seed/00-legacy-grants.sql` regenerated via `python3 scripts/generate-legacy-grants.py`; tip stowaways split out earlier (`5eb02fef` → three branches; role-mapping + CSP merged to main, **`chore/turbo-dev-passthrough-env` PARKED** at `d8acee5c` carrying its dev-env-contract test — they merge together if unparked); full-stack restatement audit found **zero silent reversions** across all 17 main-installed function bodies restated by the stack (00436×11 + 00437/00438/00442/00443 hops, all composite-checked); audit corrections applied + adversarially reviewed (40001/40P01 re-raise, court assert, comment truth-fixes); `useProjectApprovalRealtime` shim retired (3 callers); handoff-band labels now derive from `residential-workflow.ts`; `approval_records` confirmed frozen (zero live callers outside services/projects); dissolve-grammar contract updated per Kody's ruling — "Request sign-off" left the work block, Stage-2 gates own sign-off authoring (DECISIONS **I113**).
+
+**Gates at pause**: designer-portal type-check ✅; client-portal type-check + build ✅; @patina/supabase 759 tests ✅; 13/13 SQL workflow suites ✅ (run against the schema-equivalent pre-renumber DB) + Deno storage suite ✅ (same run); designer-portal tests 3245/3246 — one failure in `board-image-inspector-actions.test.tsx` (mood-board cutout; unrelated to this program; appeared only in the final run — triage, possibly flaky).
+
+**⛔ The one outstanding WP2 gate item — needs Kody first**: the formal clean-replay proof (`pnpm supabase:reset` replaying 00001–00445 + re-run of all 13 SQL suites + Deno storage suite from the wave1 worktree). Blocked because `.codex/worktrees/workflow-wave1/apps/designer-portal/.env.local` points `NEXT_PUBLIC_SUPABASE_URL` at Strata prod and the reset guard (correctly) refuses; `.env*` files are hard policy-denied to agents (read AND write, even sandbox-disabled). **Kody: edit that file** (and optionally the main checkout's copy) to the local stack — `http://127.0.0.1:54321`, anon/service keys from `supabase status`, prod lines kept commented — then any session can run the reset + suites.
+
+**Deploy rules (nothing has deployed; prod untouched)**: the renumbered site-request privacy migration (**00444**, `site_request_close` completed-only) must NOT deploy to Strata until a Patina Field release containing `cbe88574` (close gated to completed; merged at `a20ebf4f`) ships. All other §6 constraints stand; prod deploys still require Kody's explicit in-session ask.
+
+**Next actions, in order**: (1) Kody's env fix → run the replay proof; (2) triage the mood-board test; (3) WP3 per §4/§WP3 on the wave1 branch — the deck mockups are the spec; note WP1's landed contracts (Desk-need sentinel `undefined`/`null` + `composed` presence set, `{kind:'retry'}` destination, `aria-expanded` on MarginItem, no `'loading'` guide state) when building R5/R6; (4) final wave1 → main merge with `merge-base --is-ancestor` proof; (5) WP4 only after its design checkpoint with Kody.
+
+**Still owed Kody (rolling)**: Direction↔stage-05 seam (§8.3) · R9 co-approver + №7/№8 (§8.4) · WP4 checkpoint · unpark-or-drop verdict on `chore/turbo-dev-passthrough-env` · whether to untrack `.agents` (both it and `.claude/skills` are now tracked, content-matched — drift risk) · signed-in walks across all WP1 surfaces · follow-up tickets: `dateValid` guard uncovered on 3 sheets, 2 pre-existing ESLint errors in `use-commercial-documents.test.ts`, pre-existing client-portal `portal-access`/`orders` test failures.
+
+**Executor mechanics learned this session**: sandbox blocks git-SSH network, docker.sock, and `.claude/worktrees` ops — retry those with `dangerouslyDisableSandbox` on that evidence; `.env*` is hard-denied to agents regardless; a first `pnpm install` in a fresh worktree can false-report success; long-context subagents stall between steps — resume them or respawn fresh with a state-verification phase; the local Supabase stack was left running; Kody's unstaged `playwright.config.ts` edit and `stash@{0}` remain untouched and must stay so.
+
+---
+
 ## 1. Mission
 
 Execute the workflow alignment program: fix the six guide defects on `main`, land the unmerged `feat/workflow-wave1-integration` stack (migrations 00433–00444, Stage-2 approvals, contextual handoffs) **reworked in place** per the nine design rulings, and build the R7 procurement lifecycle rendering. The design authority for every UI decision is the board deck; the merge-risk authority is the engineering memo. Do not re-derive either — read them.
