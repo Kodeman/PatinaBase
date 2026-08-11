@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   PhaseTimeline,
   type PhaseTimelineItem,
-  ApprovalTheater,
   ProjectCompletionCelebration,
 } from '@patina/design-system';
 import { CheckCircle, FileText } from 'lucide-react';
@@ -14,13 +13,18 @@ import { StrataMark } from '@/components/strata-mark';
 import type { MilestoneDetail } from '@/types/project';
 import { useWebSocket, useMilestoneWebSocket } from '@/lib/websocket';
 import { WebSocketMilestoneUpdate } from '@/lib/websocket';
-import { submitApprovalAction, postMessageAction } from '@/app/projects/[projectId]/actions';
-import { formatRelativeTime, formatCurrency } from '@/lib/utils/format';
+import { postMessageAction } from '@/app/projects/[projectId]/actions';
+import { formatRelativeTime } from '@/lib/utils/format';
+import type { ProjectApprovalReview } from '@patina/supabase';
+import { ProjectApprovalSummary } from '@/components/approvals/project-approval-summary';
 
 interface EnhancedTimelineProps {
   projectId: string;
   milestones: MilestoneDetail[];
   onMilestoneUpdate?: (milestone: MilestoneDetail) => void;
+  projectApprovals?: ProjectApprovalReview[];
+  projectApprovalsLoading?: boolean;
+  projectApprovalsError?: boolean;
 }
 
 const CONCURRENT_WORKSTREAM_TAG = 'Concurrent workstream';
@@ -77,9 +81,6 @@ export function timelineAuthorityFingerprint(
       add(message.body);
       add(message.createdAt);
     }
-    add(milestone.approval?.id);
-    add(milestone.approval?.status);
-    add(milestone.approval?.decidedAt);
   }
 
   return `${milestones.length}:${(hash >>> 0).toString(16).padStart(8, '0')}`;
@@ -124,7 +125,14 @@ function milestoneToPhase(milestone: MilestoneDetail): PhaseTimelineItem {
   };
 }
 
-export function EnhancedTimeline({ projectId, milestones: initialMilestones, onMilestoneUpdate }: EnhancedTimelineProps) {
+export function EnhancedTimeline({
+  projectId,
+  milestones: initialMilestones,
+  onMilestoneUpdate,
+  projectApprovals = [],
+  projectApprovalsLoading = false,
+  projectApprovalsError = false,
+}: EnhancedTimelineProps) {
   const [milestones, setMilestones] = useState<MilestoneDetail[]>(initialMilestones);
   const authorityFingerprint = useMemo(
     () => timelineAuthorityFingerprint(projectId, initialMilestones),
@@ -133,8 +141,6 @@ export function EnhancedTimeline({ projectId, milestones: initialMilestones, onM
   const [acceptedAuthority, setAcceptedAuthority] = useState(authorityFingerprint);
   const [activeMilestoneId, setActiveMilestoneId] = useState<string | null>(null);
   const [showCelebration, setShowCelebration] = useState(false);
-  const [showApprovalTheater, setShowApprovalTheater] = useState(false);
-  const [currentApproval, setCurrentApproval] = useState<any>(null);
 
   // Adopt a changed canonical phase snapshot during reconciliation. React
   // discards this render and retries before committing, so PhaseTimeline stays
@@ -208,42 +214,13 @@ export function EnhancedTimeline({ projectId, milestones: initialMilestones, onM
     )?.id;
   }, [visibleMilestones]);
 
-  // Handle approval
-  const handleApproval = useCallback(async (milestoneId: string, decision: 'approved' | 'rejected', comment?: string) => {
-    const milestone = visibleMilestones.find((row) => row.id === milestoneId);
-    if (!milestone?.approval) return;
-
-    try {
-      await submitApprovalAction({
-        projectId,
-        approvalId: milestone.approval.id,
-        decision,
-        comment
-      });
-
-      setMilestones(prev => prev.map(m => {
-        if (m.id === milestoneId && m.approval) {
-          return { ...m, approval: { ...m.approval, status: decision === 'approved' ? 'approved' : 'needs_discussion' } };
-        }
-        return m;
-      }));
-
-      setShowApprovalTheater(false);
-      setCurrentApproval(null);
-
-      if (decision === 'approved') {
-        setShowCelebration(true);
-        setTimeout(() => setShowCelebration(false), 5000);
-      }
-    } catch (error) {
-      console.error('Failed to submit approval:', error);
-    }
-  }, [projectId, visibleMilestones]);
-
   // Render expanded content for a phase
   const renderExpandedContent = useCallback((phase: PhaseTimelineItem) => {
     const milestone = visibleMilestones.find((row) => row.id === phase.id);
     if (!milestone) return null;
+    const phaseApprovals = projectApprovals.filter(
+      (approval) => approval.phaseId === milestone.id,
+    );
 
     return (
       <div className="space-y-0">
@@ -275,28 +252,14 @@ export function EnhancedTimeline({ projectId, milestones: initialMilestones, onM
           </div>
         )}
 
-        {/* Approval */}
-        {milestone.approval && milestone.approval.status === 'pending' && (
-          <div className="py-4 border-l-2 border-patina-terracotta pl-4">
-            <p className="type-meta text-patina-terracotta mb-2">Approval required</p>
-            <p className="type-body-small mb-3">{milestone.approval.summary}</p>
-            {milestone.approval.totalValue && (
-              <p className="type-data-large mb-3">
-                {formatCurrency(milestone.approval.totalValue, milestone.approval.currency || 'USD')}
-              </p>
-            )}
-            <button
-              type="button"
-              onClick={() => {
-                setCurrentApproval({ milestoneId: milestone.id, ...milestone.approval });
-                setShowApprovalTheater(true);
-              }}
-              className="rounded-[3px] bg-patina-charcoal px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
-            >
-              Review and Approve
-            </button>
+        {phaseApprovals.length > 0 && (
+          <section className="py-4" aria-label={`Approvals for ${milestone.title}`}>
+            <h4 className="type-meta mb-2">Project approvals</h4>
+            {phaseApprovals.map((approval) => (
+              <ProjectApprovalSummary key={approval.decisionId} approval={approval} compact />
+            ))}
             <StrataMark variant="micro" />
-          </div>
+          </section>
         )}
 
         {/* Documents */}
@@ -366,7 +329,16 @@ export function EnhancedTimeline({ projectId, milestones: initialMilestones, onM
         )}
       </div>
     );
-  }, [projectId, visibleMilestones]);
+  }, [projectApprovals, projectId, visibleMilestones]);
+
+  const milestoneIds = useMemo(
+    () => new Set(visibleMilestones.map((milestone) => milestone.id)),
+    [visibleMilestones],
+  );
+  const unlinkedApprovals = useMemo(
+    () => projectApprovals.filter((approval) => !milestoneIds.has(approval.phaseId)),
+    [milestoneIds, projectApprovals],
+  );
 
   return (
     <div className="relative">
@@ -378,6 +350,25 @@ export function EnhancedTimeline({ projectId, milestones: initialMilestones, onM
         </div>
       )}
 
+      {projectApprovalsLoading && (
+        <p role="status" className="type-body-small border-b border-[var(--border-default)] py-4">
+          Loading project approvals…
+        </p>
+      )}
+      {projectApprovalsError && (
+        <p role="alert" className="type-body-small border-b border-[var(--border-default)] py-4 text-[var(--color-error)]">
+          Project approvals could not be loaded. Refresh before taking action.
+        </p>
+      )}
+      {unlinkedApprovals.length > 0 && (
+        <section aria-labelledby="project-level-approvals" className="mb-6">
+          <h3 id="project-level-approvals" className="type-meta">Project-level approvals</h3>
+          {unlinkedApprovals.map((approval) => (
+            <ProjectApprovalSummary key={approval.decisionId} approval={approval} compact />
+          ))}
+        </section>
+      )}
+
       {/* Phase Timeline */}
       <PhaseTimeline
         phases={phases}
@@ -386,31 +377,6 @@ export function EnhancedTimeline({ projectId, milestones: initialMilestones, onM
         renderExpandedContent={renderExpandedContent}
         showProgressBar={true}
       />
-
-      {/* Approval Theater Modal */}
-      {showApprovalTheater && currentApproval && (
-        <ApprovalTheater
-          open={showApprovalTheater}
-          onOpenChange={(open) => {
-            if (!open) {
-              setShowApprovalTheater(false);
-              setCurrentApproval(null);
-            }
-          }}
-          approval={{
-            id: currentApproval.id || currentApproval.milestoneId,
-            title: currentApproval.title || 'Approval Required',
-            description: currentApproval.description || '',
-            type: 'design' as const,
-            status: 'pending' as const,
-            costImpact: currentApproval.totalValue ? {
-              amount: currentApproval.totalValue,
-              currency: currentApproval.currency || 'USD',
-            } : undefined,
-          }}
-          onApprove={() => handleApproval(currentApproval.milestoneId, 'approved')}
-        />
-      )}
 
       {/* Celebration Animation */}
       {showCelebration && (

@@ -80,12 +80,6 @@ export function ProjectOverview({ project, milestones = [] }: ProjectOverviewPro
         items.push({ id: `act-${m.id}-started`, type: 'milestone', title: `${m.title} is now in progress`, createdAt: m.targetDate });
       }
 
-      // Approval events
-      if (m.approval) {
-        const label = m.approval.status === 'pending' ? 'Approval requested' : `Approval ${m.approval.status}`;
-        items.push({ id: `act-${m.id}-approval`, type: 'approval', title: `${label}: ${m.title}`, createdAt: m.approval.requestedAt || m.targetDate || '' });
-      }
-
       // Document uploads
       for (const doc of m.documents) {
         if (doc.uploadedAt) {
@@ -179,7 +173,7 @@ export function ProjectOverview({ project, milestones = [] }: ProjectOverviewPro
               {project.approvalsPending && project.approvalsPending > 0 && (
                 <span className="type-meta text-patina-terracotta flex items-center gap-1">
                   <AlertCircle className="h-3 w-3" />
-                  {project.approvalsPending} Pending Approval{project.approvalsPending > 1 ? 's' : ''}
+                  {project.approvalsPending} approval task{project.approvalsPending > 1 ? 's need' : ' needs'} attention
                 </span>
               )}
               {project.unreadMessages && project.unreadMessages > 0 && (

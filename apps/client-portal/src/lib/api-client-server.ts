@@ -73,24 +73,6 @@ export const serverProjectsApi = {
     return serverFetch<any>(env.projectsApiUrl, `/projects/${projectId}/client-view`, { signal });
   },
 
-  async submitApproval(
-    projectId: string,
-    approvalId: string,
-    decision: 'approved' | 'rejected' | 'changes_requested',
-    comment?: string,
-    signal?: AbortSignal
-  ) {
-    return serverFetch<any>(
-      env.projectsApiUrl,
-      `/projects/${projectId}/approvals/${approvalId}`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ decision, comment }),
-        signal,
-      }
-    );
-  },
-
   async logEngagement(
     projectId: string,
     data: { event: string; metadata?: Record<string, unknown> },

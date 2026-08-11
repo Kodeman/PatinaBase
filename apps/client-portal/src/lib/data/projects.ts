@@ -482,11 +482,14 @@ const tallyByProject = (rows: unknown, key = 'project_id'): Map<string, number> 
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLIENT_DECISION_ATTENTION_FILTER =
+  'status.eq.pending,and(status.eq.draft,approval_contract.eq.project_artifact_v1)';
+
 async function countPendingDecisionsByProject(supabase: any, userId: string): Promise<Map<string, number>> {
   const { data, error } = await supabase
     .from('client_decisions')
     .select('project_id, designer_clients!inner(client_id)')
-    .eq('status', 'pending')
+    .or(CLIENT_DECISION_ATTENTION_FILTER)
     .eq('designer_clients.client_id', userId);
   if (error) throw error;
   return tallyByProject(data);
@@ -594,33 +597,6 @@ const PROJECT_DETAIL_SELECT =
   'start_date, kickoff_date, target_end_date, expected_completion_date, updated_at, ' +
   'project_phases(id, name, phase_key, status, lane, follows_phase_id, sort_order, start_date, target_end_date, completed_at, progress, updated_at)';
 
-// Real "approvals pending" per project = client_decisions still awaiting the
-// client's response (status 'pending'). RLS scopes client_decisions to the
-// client, so this counts only decisions addressed to them. Best-effort: a
-// failure here must never break the project read (falls back to 0).
-// (Proposal-line verdicts awaiting the client, C3, live on the proposal document
-// itself — its own rollup header — since an active project's proposal is signed.)
-const fetchPendingApprovalCounts = async (
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any,
-  projectIds: string[],
-): Promise<Map<string, number>> => {
-  const counts = new Map<string, number>();
-  if (projectIds.length === 0) return counts;
-  const { data, error } = await supabase
-    .from('client_decisions')
-    .select('project_id')
-    .in('project_id', projectIds)
-    .eq('status', 'pending');
-  if (error) return counts;
-  for (const row of asArray<any>(data)) {
-    const pid = asString(row?.project_id);
-    if (!pid) continue;
-    counts.set(pid, (counts.get(pid) ?? 0) + 1);
-  }
-  return counts;
-};
-
 export const fetchClientProjects = cache(async (): Promise<ProjectListItem[]> => {
   if (env.useProjectFixtures) return devFallbackProjects;
 
@@ -693,8 +669,6 @@ export const fetchClientProjectView = cache(async (projectId: string): Promise<C
       completed,
       nextPhase,
     } = summariseProjectPhases(row.project_phases, row.current_phase);
-
-    const pending = await fetchPendingApprovalCounts(supabase, [projectId]);
 
     const milestones: MilestoneDetail[] = phases
       .map((phase, index) =>

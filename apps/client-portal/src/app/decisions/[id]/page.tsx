@@ -3,11 +3,41 @@
 import { use, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Loader2 } from 'lucide-react';
-import { useDecisionComments, useCreateDecisionComment } from '@patina/supabase';
+import {
+  PROJECT_APPROVAL_CONTRACT,
+  useCreateDecisionComment,
+  useDecisionComments,
+  useProjectApproval,
+  useProjectApprovalRealtime,
+} from '@patina/supabase';
 import type { DecisionComment } from '@patina/supabase';
 import { useClientDecision } from '@/hooks/use-decisions-client';
 import { useAuth } from '@/hooks/use-auth';
 import { DecisionCardClient } from '@/components/decision-card-client';
+import { ProjectApprovalReview } from '@/components/approvals/project-approval-review';
+
+function Stage2ApprovalDetail({
+  projectId,
+  decisionId,
+}: {
+  projectId: string;
+  decisionId: string;
+}) {
+  useProjectApprovalRealtime(projectId);
+  const approval = useProjectApproval(projectId, decisionId);
+
+  if (approval.isLoading) {
+    return <p role="status" className="type-body-small py-8">Loading frozen approval evidence…</p>;
+  }
+  if (approval.isError || !approval.data) {
+    return (
+      <p role="alert" className="type-body-small py-8 text-[var(--color-error)]">
+        The authoritative approval evidence is unavailable. Refresh before taking action.
+      </p>
+    );
+  }
+  return <ProjectApprovalReview approval={approval.data} />;
+}
 
 function formatTimestamp(iso: string): string {
   return new Date(iso).toLocaleString('en-US', {
@@ -74,10 +104,17 @@ export default function ClientDecisionDetailPage({
         All Decisions
       </Link>
 
-      <DecisionCardClient decision={decision} />
+      {decision.approval_contract === PROJECT_APPROVAL_CONTRACT && decision.project_id ? (
+        <Stage2ApprovalDetail projectId={decision.project_id} decisionId={decision.id} />
+      ) : (
+        <DecisionCardClient decision={decision} />
+      )}
 
-      <section className="mt-8">
-        <h2 className="type-meta mb-4">Comments</h2>
+      <section className="mt-8" aria-labelledby="decision-discussion-heading">
+        <h2 id="decision-discussion-heading" className="type-meta mb-1">Discussion</h2>
+        <p className="type-body-small mb-4 text-[var(--text-muted)]">
+          Comments help you and your designer discuss the work. They never submit or change an approval outcome.
+        </p>
 
         {commentsLoading ? (
           <div className="flex items-center gap-2 type-body-small text-[var(--text-muted)]">
@@ -116,10 +153,14 @@ export default function ClientDecisionDetailPage({
 
         {user && (
           <div className="mt-4">
+            <label htmlFor="decision-discussion-comment" className="type-meta-small mb-2 block">
+              Add to discussion
+            </label>
             <textarea
+              id="decision-discussion-comment"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder="Add a comment..."
+              placeholder="Share a question or note"
               rows={3}
               className="w-full resize-none rounded-[3px] border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus-visible:focus-ring"
             />
@@ -128,7 +169,7 @@ export default function ClientDecisionDetailPage({
                 type="button"
                 onClick={handlePost}
                 disabled={createComment.isPending || draft.trim().length === 0}
-                className="inline-flex items-center gap-2 rounded-[3px] bg-patina-charcoal px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-60"
+                className="inline-flex min-h-11 items-center gap-2 rounded-[3px] bg-patina-charcoal px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-60"
               >
                 {createComment.isPending ? 'Posting...' : 'Post'}
               </button>

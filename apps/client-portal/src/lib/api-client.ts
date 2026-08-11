@@ -139,24 +139,6 @@ export const projectsApi = {
       { maxRetries: 2 }
     );
   },
-  async submitApproval(
-    projectId: string,
-    approvalId: string,
-    decision: 'approved' | 'rejected' | 'changes_requested',
-    comment?: string,
-    signal?: AbortSignal
-  ) {
-    return jsonRequest(
-      projectsBaseUrl,
-      `/projects/${projectId}/approvals/${approvalId}`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ decision, comment }),
-        signal,
-      },
-      { maxRetries: 1 } // Only retry once for mutations
-    );
-  },
   async logEngagement(
     projectId: string,
     data: { event: string; metadata?: Record<string, unknown> },

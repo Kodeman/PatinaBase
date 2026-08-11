@@ -23,6 +23,11 @@ jest.mock('@/hooks/use-feature-flag', () => ({
   useFeatureFlag: jest.fn(),
 }));
 
+jest.mock('@patina/supabase', () => ({
+  useProjectApprovals: jest.fn(),
+  useProjectApprovalRealtime: jest.fn(),
+}));
+
 // A plain function component, NOT a jest.fn: `resetMocks: true` wipes mock
 // implementations before every test, and a wiped component mock renders
 // `undefined` and throws. The props under test are written out as attributes
@@ -35,6 +40,7 @@ jest.mock('@/components/project-view-wrapper', () => ({
         data-testid="legacy-project-view"
         data-show-overview={String(props.showOverview)}
         data-emit-project-view={String(props.emitProjectView)}
+        data-approval-count={String((props.projectApprovals as unknown[])?.length ?? 0)}
       />
     );
   },
@@ -42,7 +48,12 @@ jest.mock('@/components/project-view-wrapper', () => ({
 
 jest.mock('../the-making', () => ({
   __esModule: true,
-  TheMaking: () => <div data-testid="the-making" />,
+  TheMaking: (props: Record<string, unknown>) => (
+    <div
+      data-testid="the-making"
+      data-approval-count={String((props.projectApprovals as unknown[])?.length ?? 0)}
+    />
+  ),
 }));
 
 jest.mock('@/lib/analytics/events', () => ({
@@ -52,10 +63,12 @@ jest.mock('@/lib/analytics/events', () => ({
 
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { clientEvents } from '@/lib/analytics/events';
+import { useProjectApprovals } from '@patina/supabase';
 
 import { ProjectSurfaceSwitch } from '../project-surface-switch';
 
 const flagMock = useFeatureFlag as jest.Mock;
+const approvalsMock = useProjectApprovals as jest.Mock;
 
 const PROJECT_ID = 'proj-vale';
 
@@ -81,6 +94,14 @@ function renderSwitch() {
     />,
   );
 }
+
+beforeEach(() => {
+  approvalsMock.mockReturnValue({
+    data: [{ decisionId: 'approval-1' }],
+    isLoading: false,
+    isError: false,
+  });
+});
 
 describe('ProjectSurfaceSwitch — which surface', () => {
   it('renders today’s tree while the flag is still loading', () => {
@@ -117,7 +138,20 @@ describe('ProjectSurfaceSwitch — which surface', () => {
     renderSwitch();
 
     expect(screen.getByTestId('the-making')).toBeInTheDocument();
+    expect(screen.getByTestId('the-making')).toHaveAttribute('data-approval-count', '1');
     expect(screen.queryByTestId('legacy-project-view')).not.toBeInTheDocument();
+  });
+
+  it('owns one canonical project approval query for either surface', () => {
+    flagMock.mockReturnValue({ value: false, isLoading: false });
+    renderSwitch();
+
+    expect(approvalsMock).toHaveBeenCalledTimes(1);
+    expect(approvalsMock).toHaveBeenCalledWith(PROJECT_ID);
+    expect(screen.getByTestId('legacy-project-view')).toHaveAttribute(
+      'data-approval-count',
+      '1',
+    );
   });
 });
 

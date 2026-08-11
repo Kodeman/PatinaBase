@@ -309,6 +309,34 @@ export type {
   ConsentMethod,
 } from './use-decisions';
 export {
+  PROJECT_APPROVAL_CONTRACT,
+  projectApprovalKeys,
+  invalidateProjectApprovalQueries,
+  parseProjectApprovalReview,
+  useProjectApprovals,
+  useProjectApproval,
+  useProjectDecisionAuthority,
+  useSetProjectDecisionAuthority,
+  useCreateProjectApproval,
+  useConfirmProjectApprovalReview,
+  usePublishProjectApproval,
+  useRespondProjectApproval,
+  useWithdrawProjectApproval,
+  useSupersedeProjectApproval,
+  useProjectApprovalRealtime,
+} from './use-project-approvals';
+export type {
+  ProjectApprovalArtifactKind,
+  ProjectApprovalLifecycleStatus,
+  ProjectApprovalOutcome,
+  ProjectApprovalDisposition,
+  ProjectApprovalReview,
+  ProjectDecisionAuthority,
+  ProjectApprovalCreatePayload,
+  ProjectApprovalActionResult,
+  ProjectApprovalInvalidationScope,
+} from './use-project-approvals';
+export {
   // Project Coordination (Track 5 — the ball-in-court)
   useCoordinationItems,
   useCourtSummary,

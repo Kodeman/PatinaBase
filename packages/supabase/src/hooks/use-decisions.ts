@@ -92,6 +92,12 @@ export interface ClientDecision {
   due_date: string | null;
   linked_phase: string | null;
   phase_id: string | null;
+  /** Exact Stage-2 artifact-approval classifier. Never infer this from type/kind. */
+  approval_contract?: string | null;
+  /** Immutable Stage-2 revision lineage. */
+  predecessor_decision_id?: string | null;
+  section_key?: string | null;
+  decision_kind?: string;
   decision_type: DecisionType;
   blocking_status: BlockingStatus;
   linked_proposal_id: string | null;

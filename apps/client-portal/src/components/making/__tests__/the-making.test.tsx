@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { FFEStageKey } from '@patina/types';
 
 import type { ClientProjectOverview, MilestoneDetail } from '@/types/project';
+import type { ProjectApprovalReview } from '@patina/supabase';
 
 // ── Boundaries ──────────────────────────────────────────────────────────────
 // Everything below the surface is a query. Mock the four hooks it composes
@@ -232,9 +233,14 @@ beforeEach(() => {
   bare();
 });
 
-function renderSurface() {
+function renderSurface(projectApprovals: ProjectApprovalReview[] = []) {
   return render(
-    <TheMaking projectId={PROJECT_ID} project={PROJECT} milestones={MILESTONES} />,
+    <TheMaking
+      projectId={PROJECT_ID}
+      project={PROJECT}
+      milestones={MILESTONES}
+      projectApprovals={projectApprovals}
+    />,
   );
 }
 
@@ -244,7 +250,7 @@ function openChapterOrder(): string[] {
   return Array.from(chapter.querySelectorAll('[data-testid]'))
     .map((node) => node.getAttribute('data-testid') ?? '')
     .filter((id) =>
-      ['spine-gate', 'spine-toll', 'tracking-row', 'making-pieces-head', 'making-pieces-settled'].includes(
+      ['making-project-approval-gate', 'spine-gate', 'spine-toll', 'tracking-row', 'making-pieces-head', 'making-pieces-settled'].includes(
         id,
       ),
     );
@@ -342,6 +348,56 @@ describe('TheMaking — the masthead', () => {
 // ── The open chapter ────────────────────────────────────────────────────────
 
 describe('TheMaking — the open chapter', () => {
+  it('puts an exact Stage-2 artifact decision before every other gate', () => {
+    proposalsMock.mockReturnValue({
+      data: [FURNISHINGS_PROPOSAL],
+      isPending: false,
+      isError: false,
+    });
+    const approval: ProjectApprovalReview = {
+      decisionId: 'decision-1',
+      projectId: PROJECT_ID,
+      phaseId: 'ph-4',
+      sectionKey: null,
+      artifactKind: 'plan_issue',
+      artifactId: 'issue-1',
+      artifactVersion: 7,
+      artifactChecksum: 'a'.repeat(64),
+      artifactTitle: 'Issued set',
+      question: 'Approve issued set 7?',
+      context: null,
+      dueAt: '2026-08-01T12:00:00.000Z',
+      costCentsDelta: 0,
+      scheduleDaysDelta: 0,
+      leadTimeDaysDelta: 0,
+      lifecycleStatus: 'pending',
+      outcome: null,
+      disposition: 'active',
+      isOverdue: true,
+      completedReviewCount: 1,
+      requiredReviewCount: 1,
+      authorityRevision: 1,
+      predecessorDecisionId: null,
+      successorDecisionId: null,
+      createdAt: '2026-07-20T12:00:00.000Z',
+      sentAt: '2026-07-20T12:01:00.000Z',
+      respondedAt: null,
+      updatedAt: '2026-07-20T12:01:00.000Z',
+    };
+
+    renderSurface([approval]);
+
+    expect(openChapterOrder().slice(0, 2)).toEqual([
+      'making-project-approval-gate',
+      'spine-gate',
+    ]);
+    expect(screen.getByText('A gate · your response is required · Overdue')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Respond' })).toHaveAttribute(
+      'href',
+      '/decisions/decision-1',
+    );
+  });
+
   it('reads gates first, then tolls, then the pieces in motion', () => {
     proposalsMock.mockReturnValue({
       data: [FURNISHINGS_PROPOSAL],

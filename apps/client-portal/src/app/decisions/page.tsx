@@ -1,18 +1,66 @@
 'use client';
 
-import { useAllDecisions } from '@patina/supabase';
+import { PROJECT_APPROVAL_CONTRACT, useAllDecisions } from '@patina/supabase';
 import type { ClientDecision } from '@patina/supabase';
 import { DecisionCardClient } from '@/components/decision-card-client';
 import { isClientActionableDecision } from '@/hooks/use-decisions-client';
 import { StrataMark } from '@/components/strata-mark';
 import { Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import { ProjectApprovalSummaryForDecision } from '@/components/approvals/project-approval-summary';
+
+function DecisionListRow({
+  decision,
+  compact = false,
+}: {
+  decision: ClientDecision;
+  compact?: boolean;
+}) {
+  if (
+    decision.approval_contract === PROJECT_APPROVAL_CONTRACT &&
+    decision.project_id
+  ) {
+    return (
+      <ProjectApprovalSummaryForDecision
+        projectId={decision.project_id}
+        decisionId={decision.id}
+        fallbackTitle={decision.title}
+        compact={compact}
+      />
+    );
+  }
+
+  return (
+    <div className="border-b border-[var(--border-default)] pb-3">
+      <DecisionCardClient decision={decision} compact={compact} />
+      <Link
+        href={`/decisions/${decision.id}`}
+        className="type-meta mt-2 inline-flex min-h-11 items-center underline"
+      >
+        Open decision and discussion
+      </Link>
+    </div>
+  );
+}
 
 export default function ClientDecisionsPage() {
   const { data: decisions, isLoading } = useAllDecisions();
 
   const now = new Date();
-  const pending = (decisions ?? []).filter(
+  const projectApprovals = (decisions ?? []).filter(
+    (d: ClientDecision) =>
+      d.approval_contract === PROJECT_APPROVAL_CONTRACT && !!d.project_id,
+  );
+  const activeProjectApprovals = projectApprovals.filter(
+    (d: ClientDecision) => d.status === 'draft' || d.status === 'pending',
+  );
+  const closedProjectApprovals = projectApprovals.filter(
+    (d: ClientDecision) => d.status === 'responded' || d.status === 'expired',
+  );
+  const legacyDecisions = (decisions ?? []).filter(
+    (d: ClientDecision) => d.approval_contract !== PROJECT_APPROVAL_CONTRACT,
+  );
+  const pending = legacyDecisions.filter(
     (d: ClientDecision) => d.status === 'pending'
   );
   // The client's "your move" pile: selections + sign-offs in their court.
@@ -27,7 +75,7 @@ export default function ClientDecisionsPage() {
   const awaiting = pendingMine.filter(
     (d) => !d.due_date || new Date(d.due_date) >= now
   );
-  const resolved = (decisions ?? []).filter(
+  const resolved = legacyDecisions.filter(
     (d: ClientDecision) => d.status === 'responded'
   );
 
@@ -46,10 +94,23 @@ export default function ClientDecisionsPage() {
         </div>
       )}
 
-      {!isLoading && pending.length === 0 && resolved.length === 0 && (
+      {!isLoading && activeProjectApprovals.length === 0 && closedProjectApprovals.length === 0 && pending.length === 0 && resolved.length === 0 && (
         <div className="py-16 text-center">
           <p className="type-body-small">No decisions yet. Your designer will send choices here when they need your input.</p>
         </div>
+      )}
+
+      {activeProjectApprovals.length > 0 && (
+        <section className="mt-8" aria-labelledby="project-approvals-heading">
+          <h2 id="project-approvals-heading" className="type-meta mb-4 text-patina-terracotta">
+            Project approvals ({activeProjectApprovals.length})
+          </h2>
+          <div className="space-y-0">
+            {activeProjectApprovals.map((decision: ClientDecision) => (
+              <DecisionListRow key={decision.id} decision={decision} />
+            ))}
+          </div>
+        </section>
       )}
 
       {/* Overdue decisions */}
@@ -60,9 +121,7 @@ export default function ClientDecisionsPage() {
           </h2>
           <div className="space-y-0">
             {overdue.map((decision: ClientDecision) => (
-              <Link key={decision.id} href={`/decisions/${decision.id}`} className="block no-underline">
-                <DecisionCardClient decision={decision} />
-              </Link>
+              <DecisionListRow key={decision.id} decision={decision} />
             ))}
           </div>
         </section>
@@ -76,9 +135,7 @@ export default function ClientDecisionsPage() {
           </h2>
           <div className="space-y-0">
             {awaiting.map((decision: ClientDecision) => (
-              <Link key={decision.id} href={`/decisions/${decision.id}`} className="block no-underline">
-                <DecisionCardClient decision={decision} />
-              </Link>
+              <DecisionListRow key={decision.id} decision={decision} />
             ))}
           </div>
         </section>
@@ -97,27 +154,29 @@ export default function ClientDecisionsPage() {
           </p>
           <div className="space-y-0">
             {pendingHandled.map((decision: ClientDecision) => (
-              <Link key={decision.id} href={`/decisions/${decision.id}`} className="block no-underline">
-                <DecisionCardClient decision={decision} />
-              </Link>
+              <DecisionListRow key={decision.id} decision={decision} />
             ))}
           </div>
         </section>
       )}
 
-      {pending.length > 0 && resolved.length > 0 && (
+      {(activeProjectApprovals.length > 0 || pending.length > 0) &&
+        (closedProjectApprovals.length > 0 || resolved.length > 0) && (
         <StrataMark variant="mini" />
       )}
 
       {/* Resolved decisions */}
-      {resolved.length > 0 && (
+      {(closedProjectApprovals.length > 0 || resolved.length > 0) && (
         <section className={pending.length === 0 ? 'mt-10' : 'mt-2'}>
           <h2 className="type-meta mb-4">
-            Resolved ({resolved.length})
+            History ({closedProjectApprovals.length + resolved.length})
           </h2>
           <div className="space-y-0">
+            {closedProjectApprovals.map((decision: ClientDecision) => (
+              <DecisionListRow key={decision.id} decision={decision} compact />
+            ))}
             {resolved.map((decision: ClientDecision) => (
-              <DecisionCardClient key={decision.id} decision={decision} compact />
+              <DecisionListRow key={decision.id} decision={decision} compact />
             ))}
           </div>
         </section>

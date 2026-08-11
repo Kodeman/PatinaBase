@@ -90,6 +90,73 @@ describe('client project reads', () => {
     );
     expect(mockCreateServerClient).not.toHaveBeenCalled();
   });
+
+  it('counts Stage-2 drafts with pending legacy decisions as client attention work', async () => {
+    const decisionOr = jest.fn();
+    const supabase = {
+      auth: {
+        getUser: jest.fn().mockResolvedValue({
+          data: { user: { id: 'client-1' } },
+        }),
+      },
+      rpc: jest.fn().mockResolvedValue({ data: [], error: null }),
+      from: jest.fn((table: string) => {
+        if (table === 'projects') {
+          const builder = {
+            select: jest.fn(),
+            eq: jest.fn(),
+            order: jest.fn().mockResolvedValue({
+              data: [
+                {
+                  id: 'project-1',
+                  name: 'Lake House',
+                  status: 'active',
+                  project_phases: [],
+                },
+              ],
+              error: null,
+            }),
+          };
+          builder.select.mockReturnValue(builder);
+          builder.eq.mockReturnValue(builder);
+          return builder;
+        }
+        if (table === 'client_decisions') {
+          const builder = {
+            select: jest.fn(),
+            or: decisionOr,
+            eq: jest.fn().mockResolvedValue({
+              data: [
+                { project_id: 'project-1' },
+                { project_id: 'project-1' },
+              ],
+              error: null,
+            }),
+          };
+          builder.select.mockReturnValue(builder);
+          decisionOr.mockReturnValue(builder);
+          return builder;
+        }
+        if (table === 'comms_thread_participants') {
+          const builder = {
+            select: jest.fn(),
+            eq: jest.fn().mockResolvedValue({ data: [], error: null }),
+          };
+          builder.select.mockReturnValue(builder);
+          return builder;
+        }
+        throw new Error(`Unexpected table: ${table}`);
+      }),
+    };
+    mockCreateServerClient.mockResolvedValue(supabase);
+
+    await expect(fetchClientProjects()).resolves.toEqual([
+      expect.objectContaining({ id: 'project-1', approvalsPending: 2 }),
+    ]);
+    expect(decisionOr).toHaveBeenCalledWith(
+      'status.eq.pending,and(status.eq.draft,approval_contract.eq.project_artifact_v1)',
+    );
+  });
 });
 
 describe('client project phase projection', () => {
