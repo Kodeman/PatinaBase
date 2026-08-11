@@ -72,11 +72,15 @@ describe('§7 The Week — pill chips, not plain text', () => {
 });
 
 describe('§1 The Work — the gate stamp', () => {
-  it("the gate line wears a Golden-Hour 'Gate' stamp", () => {
+  it("the gate line wears a Golden-Hour 'Gate' stamp, sign-off authoring gone to Stage-2 (R2)", () => {
     expect(work).toMatch(/from '\.\/stamp'/);
     expect(work).toContain("label: 'Gate'");
     expect(work).toContain('var(--color-golden-hour)');
-    expect(work).toContain('Request sign-off');
+    // Stage-2 approval gates (ProjectApprovalDocumentMount) now own sign-off
+    // authoring; the work block only reflects gate status — it must not
+    // re-grow the authoring affordance (ratified R2; wave1 de1dfac1).
+    expect(work).not.toContain('Request sign-off');
+    expect(work).not.toContain('useRequestSectionGate');
   });
 
   it('the tick is a stamp with the ✓ glyph, not a SaaS checkbox', () => {

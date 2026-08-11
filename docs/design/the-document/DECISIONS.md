@@ -7100,3 +7100,28 @@ answer should arrive more quietly. This is a design question about how the
 document speaks; it stays out of the code until ruled.
 
 *Entries add: I112 · last id = I112*
+
+## The Document — the work block sheds sign-off authoring — 2026-08-11
+
+### I113 · "Request sign-off" leaves the work block; Stage-2 owns it now (ratified R2)
+
+Wave1's `de1dfac1` ("cut over project approval authoring") moved sign-off
+authoring off the section gate line and onto the Stage-2 approval document
+(`ProjectApprovalDocumentMount`, mounted in `app/(document)/doc/[id]/page.tsx`
+immediately after the workflow stage document). This is a Leah-facing grammar
+change, ratified as R2: the `.gate` row in `work-block.tsx` still wears the
+Golden-Hour "Gate" stamp and still narrates status — requested/declined/
+approved — but the row no longer carries a "Request sign-off" button or the
+`useRequestSectionGate` mutation that authored one. Sign-off is now requested
+from the Stage-2 approval surface, not from inside a section's work block.
+
+`dissolve-grammar-contract.test.ts` (`§1 The Work — the gate stamp`) still
+asserted the old grammar — `expect(work).toContain('Request sign-off')` — which
+wave1 broke on contact. The assertion is replaced with its post-Stage-2
+opposite: the work block must not contain `'Request sign-off'` or
+`useRequestSectionGate`, alongside the still-true Gate-stamp assertions. This
+mirrors the equivalent contract already carried by wave1's own
+`stage2-approval-cutover-contract.test.ts`, so the two suites now agree instead
+of one silently drifting behind the other.
+
+*Entries add: I113 · last id = I113*
