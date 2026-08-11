@@ -199,8 +199,11 @@ export const RESIDENTIAL_WORKFLOW_STAGES = [
     title: 'Documentation / Authorization',
     purpose: 'Document the work and authorize the cost basis used to execute it.',
     expectedGate: 'Documents and budget snapshot approved',
-    expectedOutputs: ['Issued design documents', 'Authorized project budget'],
-    defaultDeliverables: ['Drawing / specification set', 'Budget authorization'],
+    expectedOutputs: ['Issued design documents', 'Approved budget snapshot'],
+    defaultDeliverables: [
+      'Drawing / specification set',
+      'Budget snapshot approval',
+    ],
     responsibleLaneKey: 'lead_designer_studio',
   },
   {
