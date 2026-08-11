@@ -1,5 +1,12 @@
 import { deriveNeed, type DocumentStateRow, type NeedLine, type SectionKey } from './desk-derivation';
 import type { CommercialDocumentKind, CommercialState } from './commercial-documents';
+import {
+  gateActionLabel,
+  gateSentence,
+  gateStageLabel,
+  handoffAnchorId,
+  type WorkflowGate,
+} from './workflow-gate';
 
 export type LegacyProposalLifecycle =
   | 'draft'
@@ -76,6 +83,9 @@ interface DeriveDocumentGuideInput {
   operationalNeed?: NeedLine | null;
   proposal?: ProposalGuideFacts | null;
   inputFacts?: readonly DocumentGuideInputFact[];
+  /** The nearest open gate on this project (Ruling V). `undefined` means the
+   *  gate read has not answered; `null` means it answered that none is open. */
+  gate?: WorkflowGate | null;
 }
 
 const stageCopy: Record<SectionKey, Omit<DocumentGuideModel, 'stage' | 'topInput' | 'remainingInputCount'>> = {
@@ -156,6 +166,38 @@ function withInputs(
     action: inputAction,
     topInput: firstInput,
     remainingInputCount: Math.max(0, (inputFacts?.length ?? 0) - 1),
+  };
+}
+
+/**
+ * Ruling V — the guide's sentence and its act both come from the nearest open
+ * gate, keyed by the gate's canonical stage. The act names the gate's own
+ * control in the margin; it neither invents a surface nor activates it, so the
+ * guide can never toggle an item the designer already opened.
+ */
+function gateGuide(
+  gate: WorkflowGate,
+  row: DocumentStateRow,
+): Omit<DocumentGuideModel, 'topInput' | 'remainingInputCount'> {
+  const stage = row.active_section;
+  const stageLabel = gateStageLabel(gate.canonicalStageKey);
+  return {
+    // A gate the studio can move reads as actionable; one whose next move
+    // belongs to the other party reads as waiting. Neither carries a count.
+    state: gate.act?.kind === 'nudge' ? 'waiting' : 'actionable',
+    stage,
+    eyebrow: stageLabel ? `${stageLabel} · gate` : `${stageCopy[stage].eyebrow} · gate`,
+    headline: gateSentence(gate),
+    reason: gate.provenance,
+    action: {
+      key: `gate-${gate.act?.kind ?? 'open'}`,
+      label: gateActionLabel(gate),
+      destination: {
+        kind: 'anchor',
+        section: stage,
+        focusId: handoffAnchorId(gate.sourceId),
+      },
+    },
   };
 }
 
@@ -271,6 +313,7 @@ export function deriveDocumentGuide({
   proposal,
   operationalNeed,
   inputFacts,
+  gate,
 }: DeriveDocumentGuideInput): DocumentGuideModel {
   const stage = row.active_section;
   if (availability === 'unavailable') {
@@ -296,6 +339,12 @@ export function deriveDocumentGuide({
         destination: { kind: 'anchor', section: stage, focusId: 'document-project-status' },
       },
     }, inputFacts);
+  }
+
+  // The gate outranks the operational signals: an open gate IS the project's
+  // current state, and nothing else gets to decide what the strip says.
+  if (gate) {
+    return withInputs(gateGuide(gate, row), inputFacts);
   }
 
   const need = operationalNeed === undefined ? deriveNeed(row, now) : operationalNeed;

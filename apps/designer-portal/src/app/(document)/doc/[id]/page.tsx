@@ -18,6 +18,7 @@ import {
   useProposalFeedback,
   useProjectRoster,
   useDiscovery,
+  useProjectContextualHandoffs,
 } from '@patina/supabase';
 import { rollupVerdicts, formatVerdictRollup } from '@patina/utils';
 import { useDocumentEngagement } from '@/hooks/use-document-state';
@@ -84,6 +85,7 @@ import {
   type ProposalGuideFacts,
 } from '@/lib/document/document-guide';
 import { composeDocumentGuideInputs } from '@/lib/document/document-guide-inputs';
+import { deriveGates, nearestOpenGate } from '@/lib/document/workflow-gate';
 import {
   asCommercialDocumentKind,
   asCommercialState,
@@ -191,6 +193,19 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   const enrichedOperationalNeed = deskEnrichment
     ? selectOperationalNeedForDocument(enrichedOperationalQuery.data, row?.engagement_id)
     : undefined;
+  // Ruling V: the guide speaks for the nearest open gate. `undefined` while the
+  // projection has not answered — the guide then keeps its own derivation
+  // rather than claiming there is no gate.
+  const handoffsQuery = useProjectContextualHandoffs(projectId || null);
+  const nearestGate = useMemo(
+    () =>
+      handoffsQuery.data
+        ? nearestOpenGate(
+            deriveGates(handoffsQuery.data, new Date(), row?.client_name ?? null),
+          )
+        : undefined,
+    [handoffsQuery.data, row?.client_name],
+  );
   const authorizationDoorway = authorizationDoorwayFor({
     engagementKind: row?.engagement_kind,
     projectId: row?.project_id,
@@ -446,6 +461,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
         proposal: proposalGuideFacts,
         inputFacts: guideInputs,
         operationalNeed: enrichedOperationalNeed,
+        gate: nearestGate,
       })
     : null;
   const activateGuide = useCallback(() => {
