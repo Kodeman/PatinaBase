@@ -127,6 +127,7 @@ describe('deriveDocumentGuide', () => {
   ] as const)('uses live proposal facts for %s/%s/%s', (status, documentKind, commercialState, headline, label) => {
     const guide = deriveDocumentGuide({
       row: row('proposal'),
+      now: new Date('2026-08-10T12:00:00Z'),
       proposal: { status, documentKind, commercialState, projectId: commercialState === 'executed' ? 'project-1' : null },
     });
     expect(guide.headline).toBe(headline);
@@ -210,6 +211,7 @@ describe('deriveDocumentGuide', () => {
   it('treats a revised legacy proposal as superseded follow-up', () => {
     const guide = deriveDocumentGuide({
       row: row('proposal'),
+      now: new Date('2026-08-10T12:00:00Z'),
       proposal: { status: 'revised', documentKind: 'legacy', commercialState: null, projectId: null },
     });
     expect(guide.eyebrow).toContain('superseded');
