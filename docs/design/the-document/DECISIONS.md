@@ -7208,22 +7208,36 @@ section that seals) and stage 05 concept/schematic (a stage that completes) over
 without agreeing. The sub-label deliberately omits the "of 04–09" band for stages
 outside 04–09 rather than picking a side; the mapping goes to a design session.
 
-**Open, not resolved here — where the line hangs (M1).** R1 places the sub-label
-and bands *on the Project section bar*; M1-after draws them inside the open Project
-row. They currently mount as a free-standing band under the letterhead, at the
-deleted mount's position. Assessed cost of relocating: **contained in `page.tsx`,
-but it crosses two other rulings.** The move itself is small — the active section is
-already one wrapper (`<div data-active-section>` inside ScheduleNavProvider /
-RippleProvider, which render no DOM), and every section branch renders inside it, so
-`<SectionStageLine>` would go at the head of that div and land exactly where M1
-draws it. No section composition needs restructuring. What it costs: (1) the mount
-also renders `ContextualHandoffBand`, which belongs to R3 — the two must be split so
-the band keeps its current position, changing a surface this ruling does not own;
-and (2) `stage2-approval-cutover-contract.test.ts` asserts the stage surface
-precedes `<ProjectApprovalDocumentMount>` in source order, and the relocation
-inverts that — rewriting an assertion I113 landed for a different ruling. Neither is
-architectural, both are cross-ruling, so the relocation is **not** performed here.
-Kody rules.
+**Closed at wave1 integration — where the line hangs (M1).** R1 places the
+sub-label and bands *on the Project section bar*; M1-after draws them inside the
+open Project row. Track A shipped them as a free-standing band under the
+letterhead, at the deleted mount's position, and left the relocation open because
+it crossed two other rulings. Both crossings resolved once tracks A, B, and D were
+merged, and **Kody ruled the relocation in**, so it is performed at integration:
+
+`<SectionStageLineMount>` now renders at the head of `<div data-active-section>`
+(inside ScheduleNavProvider / RippleProvider, which render no DOM), which is where
+every section branch already renders — so the stage line reads as the open
+section's own sub-label, exactly as M1-after draws it. No section composition was
+restructured.
+
+The two crossings, and what became of them: (1) the mount also rendered
+`ContextualHandoffBand`, which R3 dissolves outright — the band's import and all
+three of its renders are gone from `section-stage-line-mount.tsx`, and handoffs now
+live in the margin rail through `MarginHandoffs` (I116), so nothing needed
+splitting; and (2) `stage2-approval-cutover-contract.test.ts` asserted the stage
+surface preceded `<ProjectApprovalDocumentMount>` in source order. The relocation
+inverts that order, so the assertion is restated rather than dropped: the approval
+mount must still lead at the letterhead (after `<MobileMarginChips>`), and
+`<SectionStageLineMount>` must now appear inside `data-active-section` and after
+it. I113's intent — the approval mount sits at the document head, keyed on
+`projects.client_id` — is unchanged and still asserted.
+
+With the placement in-section, the free-standing band chrome went with it: the
+`border-y` rule and its `py-4` are removed from both `SectionStageLine` and the
+mount's loading and error states. M1-after draws no box around the sub-label — the
+section row it sits in already carries the boundary — and a bordered band inside a
+bordered row would have doubled the edge.
 
 ### I115 · R2 — the gate is a boundary ceremony, and SCOPE ships without a migration (ratified R2)
 

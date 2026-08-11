@@ -6,13 +6,20 @@ const read = (relative: string) =>
   fs.readFileSync(path.join(ROOT, relative), 'utf8');
 
 describe('designer Stage-2 cutover source contract', () => {
-  it('mounts the project approval document immediately after workflow with projects.client_id', () => {
+  it('mounts the project approval document at the letterhead with projects.client_id, ahead of the in-section stage line', () => {
     const page = read('app/(document)/doc/[id]/page.tsx');
+    // I113 pinned the approval mount immediately after the workflow surface.
+    // R1's relocation (I114) moved the stage line into the open section, so the
+    // approval mount now leads at the letterhead and the stage line follows it
+    // from inside <div data-active-section>. Both ends still have to be true.
     expect(page).toMatch(
-      /<SectionStageLineMount[\s\S]*?<ProjectApprovalDocumentMount/,
+      /<MobileMarginChips[\s\S]*?<ProjectApprovalDocumentMount/,
     );
-    expect(page.indexOf('<ProjectApprovalDocumentMount')).toBeGreaterThan(
-      page.indexOf('<SectionStageLineMount'),
+    expect(page).toMatch(
+      /data-active-section[\s\S]{0,1500}?<SectionStageLineMount/,
+    );
+    expect(page.indexOf('<SectionStageLineMount')).toBeGreaterThan(
+      page.indexOf('<ProjectApprovalDocumentMount'),
     );
     expect(page).toContain('project?.client_id ?? null');
     expect(page).not.toMatch(

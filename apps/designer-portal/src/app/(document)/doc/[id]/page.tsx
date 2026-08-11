@@ -691,12 +691,6 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           clientName={row.client_name}
         />
 
-        <SectionStageLineMount
-          projectId={
-            row.engagement_kind === 'project' ? row.project_id : null
-          }
-          activeSection={row.active_section}
-        />
         <ProjectApprovalDocumentMount
           projectId={
             row.engagement_kind === 'project' ? row.project_id : null
@@ -840,6 +834,17 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
               if (files.length) setFolioDrop(files);
             }}
           >
+            {/* R1 / M1-after (I114): the stage sub-label and its track bands are
+                the head of the OPEN section, not a free-standing band under the
+                letterhead. They ride inside <div data-active-section> so they
+                read as the section's own sub-label, exactly as the deck draws
+                the open Project row. */}
+            <SectionStageLineMount
+              projectId={
+                row.engagement_kind === 'project' ? row.project_id : null
+              }
+              activeSection={row.active_section}
+            />
             {row.active_section === 'brief' && row.lead_id && <BriefSection leadId={row.lead_id} />}
             {row.active_section === 'discovery' && row.engagement_id && row.designer_id && (
               <DiscoverySection

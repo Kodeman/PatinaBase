@@ -36,7 +36,7 @@ export function SectionStageLine({ model }: SectionStageLineProps) {
       aria-labelledby={headingId}
       data-workflow-document
       data-section-stage-line
-      className="mt-8 min-w-0 max-w-full overflow-x-clip border-y border-[var(--border-subtle)] py-4"
+      className="mb-1 min-w-0 max-w-full overflow-x-clip"
     >
       <h3 id={headingId} className="sr-only">
         Workflow stage
