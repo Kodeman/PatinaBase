@@ -181,10 +181,14 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   const enrichedOperationalQuery = useDeskEngagements({
     enabled: deskEnrichment && !isError,
   });
-  const enrichedOperationalNeed = selectOperationalNeedForDocument(
-    enrichedOperationalQuery.data,
-    row?.engagement_id,
-  );
+  // Gated on the same predicate as the query, not on the query's own state: the
+  // CommandBar in (document)/layout.tsx holds this key hot on every document
+  // route, so `data` is present even where this page asked for nothing. Reading
+  // it there would let a composition that never covered this document answer
+  // "no need" for it.
+  const enrichedOperationalNeed = deskEnrichment
+    ? selectOperationalNeedForDocument(enrichedOperationalQuery.data, row?.engagement_id)
+    : undefined;
   const authorizationDoorway = authorizationDoorwayFor({
     engagementKind: row?.engagement_kind,
     projectId: row?.project_id,

@@ -969,12 +969,18 @@ export function partitionDesk(
   flaggedLines?: ReadonlyMap<string, DeskFlaggedSignal>,
   ceremoniesByLeadId?: ReadonlyMap<string, DeskCeremonySignal>,
   ceremoniesByDesignerClientId?: ReadonlyMap<string, DeskCeremonySignal>,
-): { folders: DeskFolder[]; chips: MotionChip[] } {
+): { folders: DeskFolder[]; chips: MotionChip[]; composed: Set<string> } {
   const folders: DeskFolder[] = [];
   const chips: MotionChip[] = [];
+  // Every engagement this composition actually put through deriveNeed. A reader
+  // asking "does this document have a need?" can only be answered `no` for an
+  // engagement that is in here; anything absent — archived rows, rows outside
+  // this read's RLS scope, a stale composition — is unanswered, not need-free.
+  const composed = new Set<string>();
 
   for (const row of rows) {
     if (row.is_archived) continue;
+    composed.add(row.engagement_id);
     const conflict = row.project_id
       ? (conflicts?.get(row.project_id) ?? null)
       : null;
@@ -1016,5 +1022,5 @@ export function partitionDesk(
     return ka[0] - kb[0] || ka[1] - kb[1] || ka[2] - kb[2];
   });
 
-  return { folders, chips: chips.slice(0, MAX_MOTION_CHIPS) };
+  return { folders, chips: chips.slice(0, MAX_MOTION_CHIPS), composed };
 }

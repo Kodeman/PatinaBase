@@ -127,7 +127,7 @@ describe('useDeskEngagements', () => {
     const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toEqual({ folders: [], chips: [] });
+    expect(result.current.data).toEqual({ folders: [], chips: [], composed: new Set() });
     expect(result.current.isError).toBe(false);
     // A genuinely quiet desk on first load has nothing to compare against —
     // no breadcrumb.
@@ -177,7 +177,7 @@ describe('useDeskEngagements', () => {
       await result.current.refetch();
     });
 
-    await waitFor(() => expect(result.current.data).toEqual({ folders: [], chips: [] }));
+    await waitFor(() => expect(result.current.data).toEqual({ folders: [], chips: [], composed: new Set() }));
     expect(mockDeskZeroRowRead).toHaveBeenCalledWith({
       previous_folder_count: 1,
       previous_chip_count: 0,
@@ -252,5 +252,49 @@ describe('selectOperationalNeedForDocument', () => {
     expect(selectOperationalNeedForDocument(undefined, 'project-1')).toBeUndefined();
     expect(selectOperationalNeedForDocument(data, null)).toBeUndefined();
     expect(selectOperationalNeedForDocument(data, undefined)).toBeUndefined();
+  });
+
+  it('never reads absence from a composition that did not cover the document', () => {
+    // The Desk cache is shared with the CommandBar, so it is hot on documents
+    // this composition never saw. Those are unanswered, not need-free.
+    const data = partitionDesk(
+      [{ ...base, engagement_kind: 'project', engagement_id: 'project-1', project_id: 'project-1' }],
+      now,
+    );
+
+    expect(data.composed.has('project-1')).toBe(true);
+    expect(selectOperationalNeedForDocument(data, 'some-other-engagement')).toBeUndefined();
+  });
+
+  it('treats an archived engagement as uncomposed rather than need-free', () => {
+    const data = partitionDesk(
+      [{
+        ...base,
+        engagement_kind: 'project',
+        engagement_id: 'project-1',
+        project_id: 'project-1',
+        is_archived: true,
+      }],
+      now,
+    );
+
+    expect(data.composed.has('project-1')).toBe(false);
+    expect(selectOperationalNeedForDocument(data, 'project-1')).toBeUndefined();
+  });
+
+  it('composes a paused engagement, so its no-need answer is sayable', () => {
+    const data = partitionDesk(
+      [{
+        ...base,
+        engagement_kind: 'project',
+        engagement_id: 'project-1',
+        project_id: 'project-1',
+        is_paused: true,
+      }],
+      now,
+    );
+
+    expect(data.composed.has('project-1')).toBe(true);
+    expect(selectOperationalNeedForDocument(data, 'project-1')).toBeNull();
   });
 });

@@ -53,20 +53,29 @@ const getSupabase = () => createBrowserClient() as any;
 export interface DeskData {
   folders: DeskFolder[];
   chips: MotionChip[];
+  /** Engagement ids this composition actually derived a need for — see
+   *  partitionDesk. Presence here is what makes a "no need" answer sayable. */
+  composed: Set<string>;
 }
 
 /**
  * One sentinel each, and they mean different things: `undefined` = the Desk has
- * not answered for this document (no composition yet, or nothing to ask about),
- * so the caller derives locally; `null` = the Desk answered and this document
- * has no need. deriveDocumentGuide reads the pair the same way, so a genuine
- * "no need" is honored instead of being re-derived from the row.
+ * not answered for this document, so the caller derives locally; `null` = this
+ * composition looked at the engagement and found no need. deriveDocumentGuide
+ * reads the pair the same way, so a genuine "no need" is honored instead of
+ * being re-derived from the row.
+ *
+ * Absence from `folders` alone is NOT an answer — the Desk's cache is shared
+ * with the CommandBar and is hot on every document route, so a document the
+ * composition never covered (archived, outside this read, a different studio's)
+ * would otherwise read as need-free. Only `composed` membership licenses `null`.
  */
 export function selectOperationalNeedForDocument(
   data: DeskData | undefined,
   engagementId: string | null | undefined,
 ): NeedLine | null | undefined {
   if (!data || !engagementId) return undefined;
+  if (!data.composed.has(engagementId)) return undefined;
   return data.folders.find((folder) => folder.row.engagement_id === engagementId)?.need ?? null;
 }
 
