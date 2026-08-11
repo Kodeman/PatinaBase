@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Feasibility analysis for moving Patina from Supabase to a Cloudflare-only platform.">
+  <title>Patina — Cloudflare-only platform feasibility</title>
+  <style>
+    :root {
+      --paper: #f1e9dc;
+      --paper-2: #fbf8f1;
+      --ink: #1e2527;
+      --muted: #505451;
+      --oxide: #914027;
+      --blueprint: #315e72;
+      --brass: #b99a5a;
+      --sage: #687769;
+      --focus: #114d62;
+      --focus-edge: #fbf8f1;
+      --rule: rgba(30, 37, 39, .23);
+      --shadow: 0 22px 70px rgba(24, 28, 29, .18);
+      --display: Georgia, 'Times New Roman', serif;
+      --body: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --utility: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      overflow: hidden;
+      color: var(--ink);
+      background: #242b2c;
+      font-family: var(--body);
+      -webkit-font-smoothing: antialiased;
+    }
+    button, a { font: inherit; }
+    a { color: inherit; }
+    button:focus-visible, a:focus-visible, [tabindex="-1"]:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; box-shadow: 0 0 0 6px var(--focus-edge); }
+
+    .deck { height: 100%; position: relative; isolation: isolate; }
+    .slide {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) clamp(72px, 8vw, 126px);
+      grid-template-rows: minmax(0, 1fr);
+      background-color: var(--paper);
+      background-image:
+        linear-gradient(rgba(30,37,39,.028) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(30,37,39,.018) 1px, transparent 1px);
+      background-size: 100% 9px, 9px 100%;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateX(18px);
+      transition: opacity .28s ease, transform .28s ease, visibility .28s;
+    }
+    .slide.is-active { opacity: 1; visibility: visible; transform: none; z-index: 2; }
+    .sheet {
+      min-width: 0;
+      min-height: 0;
+      padding: clamp(28px, 4vw, 68px) clamp(28px, 5.4vw, 92px) clamp(56px, 6vw, 90px);
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      gap: clamp(18px, 2.6vw, 38px);
+    }
+    .masthead, .footline { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+    .masthead { border-bottom: 1px solid var(--rule); padding-bottom: 12px; }
+    .kicker, .folio, .label, .caption, .tag, .footline {
+      font-family: var(--utility);
+      text-transform: uppercase;
+      letter-spacing: .12em;
+      font-size: clamp(9px, .72vw, 12px);
+      line-height: 1.35;
+    }
+    .kicker { color: var(--oxide); font-weight: 750; }
+    .folio, .caption, .footline { color: var(--muted); }
+    .footline { align-self: end; border-top: 1px solid var(--rule); padding-top: 11px; }
+    .content { min-height: 0; display: grid; align-content: center; }
+    h1, h2, h3, p { margin: 0; }
+    h1, h2, .display { font-family: var(--display); font-weight: 400; letter-spacing: -.035em; }
+    h1 { font-size: clamp(48px, 7.7vw, 124px); line-height: .88; max-width: 12ch; }
+    h2 { font-size: clamp(38px, 5.4vw, 84px); line-height: .95; max-width: 13ch; }
+    h3 { font-size: clamp(16px, 1.45vw, 24px); line-height: 1.16; }
+    p { font-size: clamp(13px, 1.12vw, 18px); line-height: 1.5; }
+    .lede { font-size: clamp(17px, 1.55vw, 25px); line-height: 1.4; max-width: 42ch; }
+    .oxide { color: var(--oxide); }
+    .blue { color: var(--blueprint); }
+    .muted { color: var(--muted); }
+    .rule-top { border-top: 2px solid var(--ink); padding-top: 16px; }
+
+    .sample-rail {
+      border-left: 1px solid rgba(255,255,255,.28);
+      background: var(--ink);
+      color: var(--paper-2);
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      align-items: start;
+      padding: clamp(20px, 2.7vw, 42px) clamp(12px, 1.6vw, 24px);
+      overflow: hidden;
+    }
+    .rail-brand { writing-mode: vertical-rl; transform: rotate(180deg); font: 700 10px/1 var(--utility); letter-spacing: .2em; text-transform: uppercase; }
+    .swatches { align-self: center; display: grid; gap: 8px; width: 100%; }
+    .swatch {
+      width: 100%; aspect-ratio: 1.65; border: 1px solid rgba(255,255,255,.32);
+      background: var(--swatch); position: relative;
+    }
+    .swatch::after { content: attr(data-code); position: absolute; inset: auto 5px 4px; color: rgba(255,255,255,.88); font: 8px/1 var(--utility); }
+    .swatch.is-topic { outline: 2px solid var(--paper-2); outline-offset: 3px; }
+    .rail-count { font: 11px/1 var(--utility); letter-spacing: .08em; }
+
+    .hero-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(240px, .75fr); gap: clamp(28px, 7vw, 116px); align-items: end; }
+    .thesis-note { border-left: 5px solid var(--oxide); padding: 2px 0 2px 20px; max-width: 34ch; }
+    .verdict { display: grid; grid-template-columns: .72fr 1.28fr; gap: clamp(22px, 4vw, 68px); align-items: stretch; }
+    .verdict-mark { background: var(--blueprint); color: var(--paper-2); display: grid; place-items: center; padding: 26px; min-height: 240px; }
+    .verdict-mark strong { font: 400 clamp(55px, 8vw, 132px)/.8 var(--display); letter-spacing: -.07em; }
+    .verdict-copy { display: grid; align-content: space-between; gap: 26px; }
+    .confidence { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+    .confidence div { background: var(--paper-2); padding: 18px; }
+    .confidence b { display: block; font: 400 clamp(22px, 2.8vw, 44px)/1 var(--display); margin-bottom: 8px; }
+
+    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(12px, 1.5vw, 24px); }
+    .card { background: rgba(251,248,241,.7); border-top: 4px solid var(--ink); padding: clamp(16px, 2vw, 28px); display: grid; align-content: start; gap: 12px; }
+    .card.blue-card { border-color: var(--blueprint); }
+    .card.oxide-card { border-color: var(--oxide); }
+    .card ul, .plain-list { margin: 0; padding: 0; list-style: none; }
+    .card li, .plain-list li { border-top: 1px solid var(--rule); padding: 8px 0; font-size: clamp(11px, .95vw, 15px); line-height: 1.35; }
+
+    .map { width: 100%; border-collapse: collapse; font-size: clamp(10px, .9vw, 15px); }
+    .map th { text-align: left; font: 700 clamp(9px,.72vw,11px)/1.2 var(--utility); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding: 0 12px 10px; }
+    .map td { border-top: 1px solid var(--rule); padding: clamp(8px, 1vw, 14px) 12px; vertical-align: top; }
+    .map td:first-child { font-weight: 700; }
+    .status { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+    .status::before { content: ''; width: 8px; height: 8px; background: var(--status); border-radius: 50%; }
+
+    .architecture { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: clamp(10px, 1.5vw, 22px); align-items: center; }
+    .arch-stack { display: grid; gap: 8px; }
+    .arch-node { background: var(--paper-2); border: 1px solid var(--blueprint); padding: clamp(11px,1.35vw,20px); }
+    .arch-node strong { display: block; font-size: clamp(12px,1.05vw,17px); margin-bottom: 4px; }
+    .arch-node small { color: var(--muted); font-size: clamp(9px,.76vw,12px); line-height: 1.35; }
+    .arrow { font: 400 clamp(24px,3vw,50px)/1 var(--display); color: var(--oxide); }
+    .arch-band { grid-column: 1 / -1; background: var(--ink); color: var(--paper-2); padding: 13px 18px; display: flex; justify-content: space-between; gap: 20px; font: 10px/1.3 var(--utility); text-transform: uppercase; letter-spacing: .08em; }
+
+    .split { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(24px, 5vw, 82px); align-items: start; }
+    .big-quote { font: 400 clamp(29px, 4vw, 64px)/1.05 var(--display); letter-spacing: -.03em; }
+    .gap-stack { display: grid; gap: 12px; }
+    .gap { display: grid; grid-template-columns: 44px 1fr; gap: 14px; padding: 14px 0; border-top: 1px solid var(--rule); }
+    .gap b { font: 400 25px/1 var(--display); color: var(--oxide); }
+    .gap p { font-size: clamp(11px, .95vw, 15px); }
+    .gap strong { display: block; margin-bottom: 3px; }
+
+    .timeline { display: grid; grid-template-columns: repeat(5, 1fr); position: relative; gap: 0; }
+    .timeline::before { content: ''; position: absolute; left: 0; right: 0; top: 25px; height: 2px; background: var(--ink); }
+    .phase { position: relative; padding: 62px clamp(9px,1vw,16px) 0 0; }
+    .phase::before { content: ''; position: absolute; top: 16px; left: 0; width: 18px; height: 18px; border: 8px solid var(--paper); background: var(--oxide); outline: 2px solid var(--ink); }
+    .phase .label { color: var(--oxide); margin-bottom: 8px; }
+    .phase h3 { margin-bottom: 9px; }
+    .phase p { font-size: clamp(10px,.82vw,13px); color: var(--muted); }
+
+    .matrix-wrap { max-width: 100%; overflow-x: auto; }
+    .matrix { width: 100%; border-collapse: collapse; border-top: 2px solid var(--ink); border-left: 1px solid var(--rule); }
+    .matrix th, .matrix td { padding: clamp(9px,1vw,15px); border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); font-size: clamp(10px,.88vw,14px); text-align: left; vertical-align: top; }
+    .matrix thead th { font: 700 clamp(8px,.7vw,11px)/1.25 var(--utility); text-transform: uppercase; letter-spacing: .08em; background: rgba(49,94,114,.09); }
+    .matrix tbody th { font-weight: 600; background: transparent; }
+    .matrix .yes { background: rgba(104,119,105,.16); }
+    .matrix .warn { background: rgba(185,154,90,.17); }
+    .matrix .no { background: rgba(182,83,54,.13); }
+
+    .risk-grid { display: grid; grid-template-columns: 1.05fr .95fr; gap: clamp(20px,4vw,62px); }
+    .risk-register { counter-reset: risk; display: grid; }
+    .risk-row { counter-increment: risk; display: grid; grid-template-columns: 42px 1fr auto; gap: 12px; padding: 11px 0; border-top: 1px solid var(--rule); align-items: baseline; }
+    .risk-row::before { content: 'R' counter(risk); font: 700 10px/1 var(--utility); color: var(--oxide); }
+    .risk-row span { font-size: clamp(11px,.92vw,15px); }
+    .risk-row b { font: 700 9px/1 var(--utility); letter-spacing: .08em; text-transform: uppercase; }
+    .decision-box { background: var(--blueprint); color: var(--paper-2); padding: clamp(22px,3vw,44px); display: grid; gap: 18px; align-content: start; }
+    .decision-box h3 { font: 400 clamp(26px,3vw,48px)/1 var(--display); }
+    .decision-box li { border-color: rgba(255,255,255,.25); }
+
+    .sources { columns: 2; column-gap: 44px; }
+    .source { break-inside: avoid; display: grid; grid-template-columns: 30px 1fr; gap: 10px; border-top: 1px solid var(--rule); padding: 10px 0; }
+    .source b { font: 700 9px/1 var(--utility); color: var(--oxide); }
+    .source a { font-size: clamp(10px,.78vw,13px); line-height: 1.3; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+
+    .controls { position: fixed; z-index: 10; right: calc(clamp(72px,8vw,126px) + 18px); bottom: 16px; display: flex; gap: 8px; }
+    .controls button { width: 38px; height: 38px; border: 1px solid var(--ink); background: var(--paper-2); color: var(--ink); cursor: pointer; }
+    .controls button:hover { background: var(--ink); color: var(--paper-2); }
+    .progress { position: fixed; z-index: 12; left: 0; bottom: 0; height: 5px; width: 100%; background: rgba(255,255,255,.13); }
+    .progress span { display: block; height: 100%; background: var(--oxide); transform-origin: left; transition: transform .28s ease; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
+    @media (max-width: 760px), (max-aspect-ratio: 3/4) {
+      body { overflow: auto; }
+      .deck { min-height: 100%; height: auto; }
+      .slide { position: relative; display: none; min-height: 100svh; grid-template-columns: 1fr 52px; transform: none; }
+      .slide.is-active { display: grid; }
+      .sheet { padding: 22px 18px 68px; gap: 20px; }
+      .hero-grid, .verdict, .split, .risk-grid { grid-template-columns: 1fr; }
+      .cards { grid-template-columns: 1fr; }
+      .card { padding: 14px; }
+      .confidence { grid-template-columns: 1fr 1fr 1fr; }
+      .architecture { grid-template-columns: 1fr; }
+      .arrow { transform: rotate(90deg); justify-self: center; }
+      .timeline { grid-template-columns: 1fr; padding-left: 28px; }
+      .timeline::before { top: 0; bottom: 0; left: 8px; width: 2px; height: auto; }
+      .phase { padding: 5px 0 16px 24px; }
+      .phase::before { top: 4px; left: -28px; }
+      .matrix { min-width: 620px; }
+      .sources { columns: 1; }
+      .sample-rail { padding: 18px 9px; }
+      .swatch::after { display: none; }
+      .controls { right: 66px; }
+      .controls button { width: 44px; height: 44px; }
+    }
+
+    @media (max-height: 720px) and (min-aspect-ratio: 4/3) {
+      .slide { overflow-y: auto; align-items: start; }
+      .sheet { min-height: 100vh; height: auto; padding-top: 22px; padding-bottom: 64px; gap: 14px; }
+      .content { align-content: start; }
+      h1 { font-size: clamp(46px, 7vw, 94px); }
+      h2 { font-size: clamp(34px, 4.7vw, 66px); }
+      .cards, .architecture, .timeline, .matrix-wrap { margin-top: 18px !important; }
+    }
+
+    @media (pointer: coarse) {
+      .controls button { width: 48px; height: 48px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+    }
+
+    @media print {
+      @page { size: 13.333in 7.5in; margin: 0; }
+      body { background: white; overflow: visible; }
+      .deck { height: auto; }
+      .slide { position: relative; opacity: 1; visibility: visible; transform: none; break-after: page; width: 13.333in; height: 7.5in; display: grid !important; overflow: hidden; }
+      .slide:last-child { break-after: auto; }
+      .controls, .progress { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="deck" aria-label="Cloudflare-only platform feasibility presentation">
+    <section class="slide is-active" aria-labelledby="s1-title">
+      <div class="sheet">
+        <header class="masthead"><span class="kicker">Platform study · August 2026</span><span class="folio">01 / 14</span></header>
+        <div class="content hero-grid">
+          <div><h1 id="s1-title">Can Patina leave <span class="oxide">Supabase?</span></h1></div>
+          <div class="thesis-note"><p class="lede">A Cloudflare-only platform is technically feasible. It is not a vendor swap; it is an auth, data, and authorization re-platform.</p><p class="caption" style="margin-top:16px">Scope: “Cloudflare-only” means hosting and control-plane primitives—not Stripe, APNs, email/SMS, accounting, or device-platform vendors.</p></div>
+        </div>
+        <footer class="footline"><span>Feasibility analysis — not a production plan</span><span>Architecture decision material</span></footer>
+      </div>
+      <aside class="sample-rail" aria-labelledby="rail-1"><span class="rail-brand" id="rail-1">Patina / material library</span><div class="swatches" aria-hidden="true"><div class="swatch is-topic" style="--swatch:#914027" data-code="OX-01"></div><div class="swatch" style="--swatch:#315e72" data-code="BP-02"></div><div class="swatch" style="--swatch:#b99a5a" data-code="BR-03"></div></div><span class="rail-count">01</span></aside>
+    </section>
+
+    <section class="slide" aria-labelledby="s2-title">
+      <div class="sheet">
+        <header class="masthead"><span class="kicker">Executive verdict</span><span class="folio">02 / 14</span></header>
+        <div class="content verdict">
+          <div class="verdict-mark"><strong>NO*</strong></div>
+          <div class="verdict-copy">
+            <div><h2 id="s2-title">Technically feasible. Not like-for-like.</h2><p class="lede" style="margin-top:20px"><strong>Conditional no</strong> to an immediate full migration. <strong>Yes</strong> to a 6–8 week spike. The hard part is recreating the integrated semantics Supabase supplies around Postgres—not finding compute or storage.</p></div>
+            <div class="confidence"><div><b>High</b><span class="caption">Compute · object storage · delivery</span></div><div><b>Med.</b><span class="caption">Realtime · background work</span></div><div><b>Low</b><span class="caption">Drop-in auth + RLS parity</span></div></div>
+          </div>
+        </div>
+        <footer class="footline"><span>* “No” means not yet—not technically impossible</span><span>Recommended posture: prove before committing</span></footer>
+      </div>
+      <aside class="sample-rail" aria-labelledby="rail-2"><span class="rail-brand" id="rail-2">Decision sample</span><div class="swatches" aria-hidden="true"><div class="swatch" style="--swatch:#914027" data-code="RISK"></div><div class="swatch is-topic" style="--swatch:#315e72" data-code="NO*"></div><div class="swatch" style="--swatch:#687769" data-code="PROVE"></div></div><span class="rail-count">02</span></aside>
+    </section>
+
+    <section class="slide" aria-labelledby="s3-title">
+      <div class="sheet">
+        <header class="masthead"><span class="kicker">Starting point</span><span class="folio">03 / 14</span></header>
+        <div class="content">
+          <h2 id="s3-title">Supabase is the <span class="blue">substrate</span>, not a sidecar.</h2>
+          <div class="cards" style="margin-top:clamp(24px,4vw,58px)">
+            <article class="card oxide-card"><span class="label">Database surface</span><h3>Postgres is deeply expressed</h3><ul><li>413 SQL migrations</li><li>313 tables · 34 views · 527 functions</li><li>1,142 generated relationship entries</li><li>899 CREATE POLICY matches · 300 RLS enablements*</li></ul></article>
+            <article class="card blue-card"><span class="label">Application coupling</span><h3>Auth and access share context</h3><ul><li>1,617 auth.* · 900 SECURITY DEFINER refs*</li><li>1,563 direct .from calls across 378 files</li><li>239 RPC calls · 363 auth calls</li><li>108 production hook modules</li></ul></article>
+            <article class="card"><span class="label">Runtime surface</span><h3>Large, but unevenly coupled</h3><ul><li>73 functional directories / entrypoints</li><li>68 directly instantiate or import a Supabase client</li><li>Realtime in 13 files · 17 literal bucket inserts</li><li>40 Prisma models; media already uses R2</li></ul></article>
+          </div>
+        </div>
+        <footer class="footline"><span>* Historical SQL matches are cumulative, not current-object counts</span><span>Measured repository evidence · August 2026</span></footer>
+      </div>
+      <aside class="sample-rail" aria-labelledby="rail-3"><span class="rail-brand" id="rail-3">Existing grain</span><div class="swatches" aria-hidden="true"><div class="swatch is-topic" style="--swatch:#1e2527" data-code="PG"></div><div class="swatch" style="--swatch:#315e72" data-code="EDGE"></div><div class="swatch" style="--swatch:#b99a5a" data-code="AUTH"></div></div><span class="rail-count">03</span></aside>
+    </section>
+
+    <section class="slide" aria-labelledby="s4-title">
+      <div class="sheet">
+        <header class="masthead"><span class="kicker">Capability mapping</span><span class="folio">04 / 14</span></header>
+        <div class="content">
+          <h2 id="s4-title">Most boxes have a Cloudflare match. <span class="oxide">Semantics do not.</span></h2>
+          <table class="map" style="margin-top:clamp(20px,3vw,42px)">
+            <thead><tr><th>Supabase capability</th><th>Cloudflare direction</th><th>Fit</th><th>Translation cost</th></tr></thead>
+            <tbody>
+              <tr><td>Postgres database</td><td>D1: SQLite, 10 GB per database, single-threaded execution</td><td><span class="status" style="--status:var(--brass)">Partial</span></td><td>Highest: shard design, SQL, transactions, tooling</td></tr>
+              <tr><td>GoTrue customer auth</td><td>Custom Workers identity service, or external IdP</td><td><span class="status" style="--status:var(--oxide)">Gap</span></td><td>Security-critical product ownership</td></tr>
+              <tr><td>Row-level security</td><td>Authorization middleware + mandatory repository layer</td><td><span class="status" style="--status:var(--oxide)">Rebuild</span></td><td>Policy translation and exhaustive tests</td></tr>
+              <tr><td>Realtime changes</td><td>Durable Objects + WebSockets; domain events via Queues</td><td><span class="status" style="--status:var(--brass)">Redesign</span></td><td>Channel ownership and consistency model</td></tr>
+              <tr><td>Storage</td><td>R2 + signed access through Workers</td><td><span class="status" style="--status:var(--sage)">Strong</span></td><td>Already partly adopted</td></tr>
+              <tr><td>Edge functions / cron</td><td>Workers + Queues / Workflows + Cron Triggers</td><td><span class="status" style="--status:var(--sage)">Strong</span></td><td>Queues are at-least-once and unordered: require idempotency + outbox</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <footer class="footline"><span>Cloudflare primitives are composable, not an integrated BaaS</span><span>Fit reflects architecture, not benchmark results</span></footer>
+      </div>
+      <aside class="sample-rail" aria-labelledby="rail-4"><span class="rail-brand" id="rail-4">Translation ledger</span><div class="swatches" aria-hidden="true"><div class="swatch" style="--swatch:#687769" data-code="FIT"></div><div class="swatch is-topic" style="--swatch:#b99a5a" data-code="PART"></div><div class="swatch" style="--swatch:#914027" data-code="GAP"></div></div><span class="rail-count">04</span></aside>
+    </section>
+
+    <section class="slide" aria-labelledby="s5-title">
+      <div class="sheet">
+        <header class="masthead"><span class="kicker">The four hard gaps</span><span class="folio">05 / 14</span></header>
+        <div class="content split">
+          <div><h2 id="s5-title">The difficult work sits at the <span class="oxide">seams.</span></h2><p class="big-quote rule-top" style="margin-top:28px">“Same features” is the wrong test. Preserve the same invariants.</p></div>
+          <div class="gap-stack">
+            <div class="gap"><b>01</b><p><strong>Customer identity</strong>Password lifecycle, social login, MFA, account recovery, abuse controls, session revocation, and mobile token handling become Patina’s responsibility.</p></div>
+            <div class="gap"><b>02</b><p><strong>Database authorization</strong>D1 does not provide Postgres row-level security. Every read and write must pass an application policy boundary with no bypass path.</p></div>
+            <div class="gap"><b>03</b><p><strong>Relational behavior</strong>D1’s SQLite model, 10 GB/database ceiling, and single-threaded execution change partitioning, concurrency, extensions, SQL, transactions, Prisma, and operations.</p></div>
+            <div class="gap"><b>04</b><p><strong>Realtime coherence</strong>Durable Objects plus hibernating WebSockets fit room coordination, but provide no database CDC. Changes become explicit domain events with recovery and ordering rules.</p></div>
+          </div>
+        </div>
+        <footer class="footline"><span>These gaps compound: identity → policy → data → events</span><span>Security review is a release gate</span></footer>
+      </div>
+      <aside class="sample-rail" aria-labelledby="rail-5"><span class="rail-brand" id="rail-5">Joint inspection</span><div class="swatches" aria-hidden="true"><div class="swatch is-topic" style="--swatch:#914027" data-code="SEAM"></div><div class="swatch" style="--swatch:#1e2527" data-code="DATA"></div><div class="swatch" style="--swatch:#315e72" data-code="RT"></div></div><span class="rail-count">05</span></aside>
+    </section>
+
+    <section class="slide" aria-labelledby="s6-title">
+      <div class="sheet">
+        <header class="masthead"><span class="kicker">Target architecture</span><span class="folio">06 / 14</span></header>
+        <div class="content">
+          <h2 id="s6-title">A Cloudflare-native <span class="blue">composition</span></h2>
+          <div class="architecture" style="margin-top:clamp(24px,4vw,58px)">
+            <div class="arch-stack"><div class="arch-node"><strong>Users + devices</strong><small>Four portals · two iOS apps · extension</small></div><div class="arch-node"><strong>Cloudflare edge</strong><small>DNS · CDN · WAF · rate limits · Turnstile</small></div></div>
+            <div class="arrow">→</div>
+            <div class="arch-stack"><div class="arch-node"><strong>Workers API gateway</strong><small>Session verification · authorization · routing</small></div><div class="arch-node"><strong>Domain Workers</strong><small>Projects · commerce · catalog · agent queue</small></div><div class="arch-node"><strong>Containers</strong><small>Retained NestJS and specialized workloads</small></div></div>
+            <div class="arrow">→</div>
+            <div class="arch-stack"><div class="arch-node"><strong>D1 databases</strong><small>Bounded contexts; explicit ownership</small></div><div class="arch-node"><strong>Durable Objects</strong><small>Realtime rooms · coordination · state machines</small></div><div class="arch-node"><strong>R2 · Queues · Workflows</strong><small>Objects · events · long-running work</small></div></div>
+            <div class="arch-band"><span>Observability: Workers logs + Analytics Engine + external retention as required</span><span>Secrets: Workers Secrets</span></div>
+          </div>
+        </div>
+        <footer class="footline"><span>Direction, not final topology</span><span>Database count and boundaries require discovery</span></footer>
+      </div>
+      <aside class="sample-rail" aria-labelledby="rail-6"><span class="rail-brand" id="rail-6">Blueprint plate</span><div class="swatches" aria-hidden="true"><div class="swatch is-topic" style="--swatch:#315e72" data-code="EDGE"></div><div class="swatch" style="--swatch:#687769" data-code="STATE"></div><div class="swatch" style="--swatch:#1e2527" data-code="OPS"></div></div><span class="rail-count">06</span></aside>
+    </section>
+
+    <section class="slide" aria-labelledby="s7-title">
+      <div class="sheet">
+        <header class="masthead"><span class="kicker">Data model implications</span><span class="folio">07 / 14</span></header>
+        <div class="content split">
+          <div><h2 id="s7-title">Do not pour Postgres into a <span class="oxide">SQLite-shaped mold.</span></h2><p class="lede" style="margin-top:24px">The durable design unit becomes the bounded context. Each domain owns its database, API, authorization rules, and emitted events.</p></div>
+          <div class="cards" style="grid-template-columns:1fr 1fr">
+            <article class="card blue-card"><span class="label">Keep relational</span><h3>Strong local invariants</h3><ul><li>Foreign keys inside a context</li><li>Short, explicit transactions</li><li>Idempotency keys</li><li>Append-only audit records</li></ul></article>
+            <article class="card oxide-card"><span class="label">Make explicit</span><h3>Cross-domain behavior</h3><ul><li>No cross-database joins</li><li>Denormalized read models</li><li>Event-driven propagation</li><li>Reconciliation jobs</li></ul></article>
+            <article class="card" style="grid-column:1/-1"><span class="label">Migration consequence</span><h3>SQL compatibility is only the first test.</h3><p>Inventory Postgres extensions, stored procedures, triggers, policy expressions, JSON operators, transaction assumptions, Prisma queries, and reporting joins. Classify each as retain, rewrite, or retire.</p></article>
+          </div>
+        </div>
+        <footer class="footline"><span>Agent queue audit guarantees must survive the move</span><span>Payable-state tables remain the source of truth</span></footer>
+      </div>
+      <aside class="sample-rail" aria-labelledby="rail-7"><span class="rail-brand" id="rail-7">Data grain</span><div class="swatches" aria-hidden="true"><div class="swatch is-topic" style="--swatch:#1e2527" data-code="D1"></div><div class="swatch" style="--swatch:#914027" data-code="TXN"></div><div class="swatch" style="--swatch:#b99a5a" data-code="EVT"></div></div><span class="rail-count">07</span></aside>
+    </section>
+
+    <section class="slide" aria-labelledby="s8-title">
+      <div class="sheet">
+        <header class="masthead"><span class="kicker">Security model</span><span class="folio">08 / 14</span></header>
+        <div class="content">
+          <h2 id="s8-title">Replace implicit trust with <span class="blue">one guarded path.</span></h2>
+          <div class="cards" style="margin-top:clamp(24px,4vw,58px)">
+            <article class="card oxide-card"><span class="label">Identity</span><h3>Authenticate at the edge</h3><p>Issue short-lived sessions, rotate refresh tokens, bind privileged actions to recent authentication, and preserve revocation.</p></article>
+            <article class="card blue-card"><span class="label">Authorization</span><h3>Policy before repository</h3><p>Typed domain actions evaluate actor, tenant, resource, and purpose. D1 bindings remain inaccessible outside approved repositories.</p></article>
+            <article class="card"><span class="label">Evidence</span><h3>Audit every transition</h3><p>Carry actor identity through queues and workflows. Preserve append-only audits, request IDs, and traceable administrative access.</p></article>
+          </div>
+          <div class="arch-band" style="margin-top:18px"><span>Browser / app → session verifier → policy engine → domain service → D1</span><span>Deny by default · test policy matrices</span></div>
+        </div>
+        <footer class="footline"><span>Cloudflare Access is an internal-access product, not a direct GoTrue replacement</span><span>Independent threat model required</span></footer>
+      </div>
+      <aside class="sample-rail" aria-labelledby="rail-8"><span class="rail-brand" id="rail-8">Guarded joinery</span><div class="swatches" aria-hidden="true"><div class="swatch" style="--swatch:#914027" data-code="ID"></div><div class="swatch is-topic" style="--swatch:#315e72" data-code="POL"></div><div class="swatch" style="--swatch:#1e2527" data-code="AUD"></div></div><span class="rail-count">08</span></aside>
+    </section>
+
+    <section class="slide" aria-labelledby="s9-title">
+      <div class="sheet">
+        <header class="masthead"><span class="kicker">Migration path</span><span class="folio">09 / 14</span></header>
+        <div class="content">
+          <h2 id="s9-title">Strangle by domain; never big-bang the database.</h2>
+          <div class="timeline" style="margin-top:clamp(30px,5vw,70px)">
+            <article class="phase"><div class="label">0 · Discovery</div><h3>Prove constraints</h3><p>Inventory SQL and policies. Benchmark representative queries. Threat-model auth.</p></article>
+            <article class="phase"><div class="label">1 · Foundation</div><h3>Build paved road</h3><p>Identity gateway, policy SDK, migrations, observability, audit envelope.</p></article>
+            <article class="phase"><div class="label">2 · Low-risk pilot</div><h3>Move one context</h3><p>Choose read-heavy, reversible data. Shadow reads and compare behavior.</p></article>
+            <article class="phase"><div class="label">3 · Domain waves</div><h3>Expand gradually</h3><p>Dual-write only where bounded. Backfill, reconcile, cut over per context.</p></article>
+            <article class="phase"><div class="label">4 · Core cutover</div><h3>Retire Supabase</h3><p>Move auth and final write paths only after rollback drills and acceptance gates.</p></article>
+          </div>
+        </div>
+        <footer class="footline"><span>Every wave needs rollback, reconciliation, and behavior probes</span><span>Mobile token compatibility spans release cycles</span></footer>
+      </div>
+      <aside class="sample-rail" aria-labelledby="rail-9"><span class="rail-brand" id="rail-9">Cut sequence</span><div class="swatches" aria-hidden="true"><div class="swatch" style="--swatch:#687769" data-code="P0"></div><div class="swatch is-topic" style="--swatch:#b99a5a" data-code="P2"></div><div class="swatch" style="--swatch:#914027" data-code="P4"></div></div><span class="rail-count">09</span></aside>
+    </section>
+
+    <section class="slide" aria-labelledby="s10-title">
+      <div class="sheet">
+        <header class="masthead"><span class="kicker">Effort range</span><span class="folio">10 / 14</span></header>
+        <div class="content split">
+          <div><h2 id="s10-title">Three paths. Three very different <span class="oxide">commitments.</span></h2><p class="lede" style="margin-top:24px">These ranges are an <strong>order-of-magnitude hypothesis</strong>; only the spike can turn them into a delivery estimate.</p><p class="caption" style="margin-top:16px">Basis: repository coupling inventory plus architecture decomposition; assumes a 4–7 person experienced team, staged coexistence, security/data review, and roughly 25% uncertainty contingency.</p></div>
+          <div class="matrix-wrap" data-horizontal-scroll><table class="matrix" aria-label="Architecture-level effort ranges">
+            <thead><tr><th scope="col">Option</th><th scope="col">Engineering effort</th><th scope="col">Calendar range</th><th scope="col">Defining choice</th></tr></thead>
+            <tbody><tr><th scope="row">Hybrid optimization</th><td class="yes">12–24 eng-months</td><td class="yes">4–8 months</td><td class="yes">Keep Postgres / auth</td></tr>
+            <tr><th scope="row">Full D1 + external IdP</th><td class="warn">24–45 eng-months</td><td class="warn">8–15 months</td><td class="warn">Not literally CF-only</td></tr>
+            <tr><th scope="row">Literal Cloudflare-only</th><td class="no">35–60+ eng-months</td><td class="no">12–24 months</td><td class="no">Custom consumer auth</td></tr>
+            <tr><th scope="row">Uncertainty driver</th><td class="warn">Policy + SQL rewrite</td><td class="warn">Mobile release cycles</td><td class="warn">Operational maturity</td></tr></tbody>
+          </table></div>
+        </div>
+        <footer class="footline"><span>Architecture-level ranges—not staffing or delivery commitments</span><span>Estimate narrows after discovery</span></footer>
+      </div>
+      <aside class="sample-rail" aria-labelledby="rail-10"><span class="rail-brand" id="rail-10">Range board</span><div class="swatches" aria-hidden="true"><div class="swatch" style="--swatch:#687769" data-code="LOW"></div><div class="swatch is-topic" style="--swatch:#b99a5a" data-code="MID"></div><div class="swatch" style="--swatch:#914027" data-code="HIGH"></div></div><span class="rail-count">10</span></aside>
+    </section>
+
+    <section class="slide" aria-labelledby="s11-title">
+      <div class="sheet">
+        <header class="masthead"><span class="kicker">Cost + operations</span><span class="folio">11 / 14</span></header>
+        <div class="content">
+          <h2 id="s11-title">Lower platform concentration; higher <span class="oxide">ownership.</span></h2>
+          <div class="matrix-wrap" data-horizontal-scroll style="margin-top:clamp(24px,4vw,56px)"><table class="matrix" aria-label="Cost and operations tradeoffs">
+            <thead><tr><th scope="col">Dimension</th><th scope="col">Supabase-first today</th><th scope="col">Cloudflare-only</th><th scope="col">Likely direction</th></tr></thead>
+            <tbody><tr><th scope="row">Vendor footprint</th><td>Cloudflare + Supabase</td><td>Cloudflare hosting primitives; external business/device services remain</td><td class="warn">Narrower platform procurement</td></tr>
+            <tr><th scope="row">Unit economics</th><td>Integrated database platform</td><td>Usage across D1, DO, Queues, Workers, R2</td><td class="warn">Model with real traffic</td></tr>
+            <tr><th scope="row">Engineering labor</th><td>Managed auth, RLS, database tooling</td><td>Patina owns integration and policy</td><td class="no">Materially higher</td></tr>
+            <tr><th scope="row">Failure domains</th><td>Cross-vendor platform dependencies</td><td>Concentrated hosting vendor; distinct primitive and external-service failures remain</td><td class="warn">Concentrated, not eliminated</td></tr>
+            <tr><th scope="row">Portability</th><td>Postgres ecosystem</td><td>Cloudflare-specific state primitives</td><td class="no">Potentially lower</td></tr>
+            <tr><th scope="row">Escape hatches</th><td>Managed Postgres</td><td>Hyperdrive still needs an external DB; Containers have ephemeral disk</td><td class="no">Not literal CF-only</td></tr></tbody>
+          </table></div>
+          <p class="caption" style="margin-top:16px">No exact savings claim is credible before collecting query counts, stored bytes, egress, active sessions, Durable Object messages, queue volume, CPU time, retention, and staff/on-call costs.</p>
+        </div>
+        <footer class="footline"><span>Compare total cost of ownership, not invoices alone</span><span>Prices and limits require validation at decision time</span></footer>
+      </div>
+      <aside class="sample-rail" aria-labelledby="rail-11"><span class="rail-brand" id="rail-11">Cost ledger</span><div class="swatches" aria-hidden="true"><div class="swatch" style="--swatch:#687769" data-code="BILL"></div><div class="swatch is-topic" style="--swatch:#b99a5a" data-code="LABOR"></div><div class="swatch" style="--swatch:#1e2527" data-code="LOCK"></div></div><span class="rail-count">11</span></aside>
+    </section>
+
+    <section class="slide" aria-labelledby="s12-title">
+      <div class="sheet">
+        <header class="masthead"><span class="kicker">Risk register</span><span class="folio">12 / 14</span></header>
+        <div class="content risk-grid">
+          <div><h2 id="s12-title">The migration can be safe only if these risks are <span class="oxide">designed down.</span></h2><div class="risk-register" style="margin-top:24px"><div class="risk-row"><span>Authorization regression leaks tenant data</span><b>Critical</b></div><div class="risk-row"><span>D1 behavior breaks transactional invariants</span><b>High</b></div><div class="risk-row"><span>Dual-write drift corrupts cutover confidence</span><b>High</b></div><div class="risk-row"><span>Custom auth increases attack and support surface</span><b>High</b></div><div class="risk-row"><span>Cloudflare coupling narrows future options</span><b>Medium</b></div><div class="risk-row"><span>Long coexistence slows feature delivery</span><b>Medium</b></div></div></div>
+          <aside class="decision-box"><span class="label">Kill criteria</span><h3>Stop the full-exit track if…</h3><ul class="plain-list"><li>Representative transactional workloads fail acceptance tests.</li><li>Policy parity cannot be demonstrated automatically.</li><li>Customer auth requires unacceptable bespoke ownership.</li><li>TCO does not justify migration and ongoing labor.</li><li>Rollback cannot be rehearsed without data loss.</li></ul></aside>
+        </div>
+        <footer class="footline"><span>Risk rating is qualitative pending discovery</span><span>Do not weaken invariants to meet a migration date</span></footer>
+      </div>
+      <aside class="sample-rail" aria-labelledby="rail-12"><span class="rail-brand" id="rail-12">Defect samples</span><div class="swatches" aria-hidden="true"><div class="swatch is-topic" style="--swatch:#914027" data-code="CRIT"></div><div class="swatch" style="--swatch:#b99a5a" data-code="HIGH"></div><div class="swatch" style="--swatch:#687769" data-code="MED"></div></div><span class="rail-count">12</span></aside>
+    </section>
+
+    <section class="slide" aria-labelledby="s13-title">
+      <div class="sheet">
+        <header class="masthead"><span class="kicker">Recommendation</span><span class="folio">13 / 14</span></header>
+        <div class="content split">
+          <div><span class="label oxide">Recommended now</span><h2 id="s13-title" style="margin-top:14px">Authorize a bounded <span class="blue">spike</span>, not a migration.</h2><p class="lede" style="margin-top:24px">Spend 6–8 weeks answering the few questions that can invalidate the thesis before committing to a multi-quarter program.</p></div>
+          <div class="cards" style="grid-template-columns:1fr 1fr">
+            <article class="card blue-card"><span class="label">Gate A · Data</span><h3>Capacity + load</h3><p>Prove D1 size/headroom and 2× representative write load; document SQL incompatibilities.</p></article>
+            <article class="card oxide-card"><span class="label">Gate B · Security</span><h3>Policy + identity</h3><p>Demonstrate authorization parity and make an explicit customer-identity decision.</p></article>
+            <article class="card"><span class="label">Gate C · State</span><h3>Recovery + money</h3><p>Prove Durable Object recovery/order and payment idempotency under replay.</p></article>
+            <article class="card"><span class="label">Gate D · Operations</span><h3>Restore + decide</h3><p>Run a restore drill, then choose hybrid, D1 + external IdP, or literal Cloudflare-only.</p></article>
+          </div>
+        </div>
+        <footer class="footline"><span>Default hypothesis: hybrid may dominate full exit on risk-adjusted value</span><span>Decision owner: architecture + product + security</span></footer>
+      </div>
+      <aside class="sample-rail" aria-labelledby="rail-13"><span class="rail-brand" id="rail-13">Decision gate</span><div class="swatches" aria-hidden="true"><div class="swatch is-topic" style="--swatch:#315e72" data-code="PROVE"></div><div class="swatch" style="--swatch:#b99a5a" data-code="GATE"></div><div class="swatch" style="--swatch:#687769" data-code="GO"></div></div><span class="rail-count">13</span></aside>
+    </section>
+
+    <section class="slide" aria-labelledby="s14-title">
+      <div class="sheet">
+        <header class="masthead"><span class="kicker">Primary references</span><span class="folio">14 / 14</span></header>
+        <div class="content">
+          <h2 id="s14-title">Sources + scope notes</h2>
+          <div class="sources" style="margin-top:clamp(20px,3vw,42px)">
+            <div class="source"><b>01</b><a href="https://developers.cloudflare.com/d1/platform/limits/" target="_blank" rel="noreferrer">D1 platform limits — size and execution constraints</a></div>
+            <div class="source"><b>02</b><a href="https://developers.cloudflare.com/d1/sql-api/sql-statements/" target="_blank" rel="noreferrer">D1 supported SQL statements</a></div>
+            <div class="source"><b>03</b><a href="https://developers.cloudflare.com/durable-objects/best-practices/websockets/" target="_blank" rel="noreferrer">Durable Objects — hibernating WebSockets</a></div>
+            <div class="source"><b>04</b><a href="https://developers.cloudflare.com/r2/reference/consistency/" target="_blank" rel="noreferrer">R2 consistency model</a></div>
+            <div class="source"><b>05</b><a href="https://developers.cloudflare.com/r2/api/s3/presigned-urls/" target="_blank" rel="noreferrer">R2 presigned URLs</a></div>
+            <div class="source"><b>06</b><a href="https://developers.cloudflare.com/queues/reference/delivery-guarantees/" target="_blank" rel="noreferrer">Queues delivery guarantees</a></div>
+            <div class="source"><b>07</b><a href="https://developers.cloudflare.com/workers/configuration/cron-triggers/" target="_blank" rel="noreferrer">Cron Triggers</a></div>
+            <div class="source"><b>08</b><a href="https://developers.cloudflare.com/workflows/reference/limits/" target="_blank" rel="noreferrer">Workflows limits</a></div>
+            <div class="source"><b>09</b><a href="https://developers.cloudflare.com/containers/platform-details/architecture/" target="_blank" rel="noreferrer">Containers architecture and ephemeral disk</a></div>
+            <div class="source"><b>10</b><a href="https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/" target="_blank" rel="noreferrer">Access-protected web applications</a></div>
+            <div class="source"><b>11</b><a href="https://developers.cloudflare.com/hyperdrive/" target="_blank" rel="noreferrer">Hyperdrive connects Workers to an external database</a></div>
+            <div class="source"><b>12</b><span style="font-size:clamp(10px,.78vw,13px);line-height:1.3">Patina repository architecture and measured codebase inventory. Historical migration matches are cumulative. Effort ranges are architecture-level assumptions; validate current limits, workload traces, and pricing before an ADR.</span></div>
+          </div>
+        </div>
+        <footer class="footline"><span>Prepared 11 August 2026</span><span>Use ← →, space, swipe, or controls to navigate</span></footer>
+      </div>
+      <aside class="sample-rail" aria-labelledby="rail-14"><span class="rail-brand" id="rail-14">Reference shelf</span><div class="swatches" aria-hidden="true"><div class="swatch" style="--swatch:#914027" data-code="CF"></div><div class="swatch is-topic" style="--swatch:#f1e9dc" data-code="DOC"></div><div class="swatch" style="--swatch:#315e72" data-code="PTN"></div></div><span class="rail-count">14</span></aside>
+    </section>
+  </main>
+
+  <nav class="controls" aria-label="Slide controls">
+    <button type="button" id="prev" aria-label="Previous slide">←</button>
+    <button type="button" id="next" aria-label="Next slide">→</button>
+  </nav>
+  <div class="progress" role="progressbar" aria-label="Presentation progress" aria-valuemin="1" aria-valuenow="1"><span></span></div>
+  <p id="announce" class="sr-only" aria-live="polite"></p>
+
+  <script>
+    (() => {
+      const slides = [...document.querySelectorAll('.slide')];
+      const progress = document.querySelector('.progress');
+      const bar = progress.querySelector('span');
+      const announce = document.getElementById('announce');
+      const clampIndex = value => Math.max(0, Math.min(slides.length - 1, value));
+      const parseHashIndex = () => {
+        const parsed = Number.parseInt(location.hash.slice(1), 10);
+        return clampIndex(Number.isFinite(parsed) ? parsed - 1 : 0);
+      };
+      const hasInteractiveOrigin = target => target instanceof Element && Boolean(target.closest('a, button, input, select, textarea, summary, [contenteditable=""], [contenteditable="true"], [role="button"]'));
+      let index = parseHashIndex();
+      progress.setAttribute('aria-valuemax', String(slides.length));
+
+      function show(next, { updateHash = true, moveFocus = false } = {}) {
+        index = clampIndex(next);
+        slides.forEach((slide, i) => {
+          const active = i === index;
+          slide.classList.toggle('is-active', active);
+          slide.setAttribute('aria-hidden', String(!active));
+          if ('inert' in slide) slide.inert = !active;
+        });
+        const current = index + 1;
+        progress.setAttribute('aria-valuenow', current);
+        bar.style.transform = `scaleX(${current / slides.length})`;
+        announce.textContent = `Slide ${current} of ${slides.length}: ${slides[index].querySelector('h1, h2').textContent}`;
+        document.title = `${current}/${slides.length} — Patina Cloudflare feasibility`;
+        if (updateHash) history.replaceState(null, '', `#${current}`);
+        if (moveFocus) {
+          const heading = slides[index].querySelector('h1, h2');
+          heading.setAttribute('tabindex', '-1');
+          heading.focus({ preventScroll: true });
+        }
+      }
+
+      document.getElementById('prev').addEventListener('click', () => show(index - 1, { moveFocus: true }));
+      document.getElementById('next').addEventListener('click', () => show(index + 1, { moveFocus: true }));
+      document.addEventListener('keydown', event => {
+        if (hasInteractiveOrigin(event.target)) return;
+        if (['ArrowRight', 'PageDown', ' '].includes(event.key)) { event.preventDefault(); show(index + 1, { moveFocus: true }); }
+        if (['ArrowLeft', 'PageUp'].includes(event.key)) { event.preventDefault(); show(index - 1, { moveFocus: true }); }
+        if (event.key === 'Home') { event.preventDefault(); show(0, { moveFocus: true }); }
+        if (event.key === 'End') { event.preventDefault(); show(slides.length - 1, { moveFocus: true }); }
+      });
+      window.addEventListener('hashchange', () => show(parseHashIndex(), { updateHash: false }));
+      let touchX = null;
+      document.addEventListener('touchstart', event => {
+        touchX = event.target instanceof Element && event.target.closest('[data-horizontal-scroll], .matrix-wrap, table')
+          ? null
+          : event.changedTouches[0].clientX;
+      }, { passive: true });
+      document.addEventListener('touchend', e => {
+        if (touchX === null) return;
+        const delta = e.changedTouches[0].clientX - touchX;
+        if (Math.abs(delta) > 55) show(index + (delta < 0 ? 1 : -1));
+        touchX = null;
+      }, { passive: true });
+      show(index, { updateHash: false });
+    })();
+  </script>
+</body>
+</html>
