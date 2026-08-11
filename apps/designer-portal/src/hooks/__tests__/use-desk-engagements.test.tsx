@@ -232,4 +232,25 @@ describe('selectOperationalNeedForDocument', () => {
     const data = compose();
     expect(selectOperationalNeedForDocument(data, data.folders[0].row.engagement_id)?.kind).toBe(kind);
   });
+
+  it('answers null when the Desk composed this document and found no need', () => {
+    const data = partitionDesk(
+      [{ ...base, engagement_kind: 'project', engagement_id: 'project-1', project_id: 'project-1' }],
+      now,
+    );
+
+    expect(data.folders).toHaveLength(0);
+    expect(selectOperationalNeedForDocument(data, 'project-1')).toBeNull();
+  });
+
+  it('answers undefined when the Desk has not answered for this document', () => {
+    const data = partitionDesk(
+      [{ ...base, engagement_kind: 'project', engagement_id: 'project-1', project_id: 'project-1' }],
+      now,
+    );
+
+    expect(selectOperationalNeedForDocument(undefined, 'project-1')).toBeUndefined();
+    expect(selectOperationalNeedForDocument(data, null)).toBeUndefined();
+    expect(selectOperationalNeedForDocument(data, undefined)).toBeUndefined();
+  });
 });

@@ -435,7 +435,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
         retryAvailable: deskGuidanceFailed,
         proposal: proposalGuideFacts,
         inputFacts: guideInputs,
-        operationalNeed: enrichedOperationalNeed ?? undefined,
+        operationalNeed: enrichedOperationalNeed,
       })
     : null;
   const activateGuide = useCallback(() => {

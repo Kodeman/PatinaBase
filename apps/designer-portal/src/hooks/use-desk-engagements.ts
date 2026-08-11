@@ -32,6 +32,7 @@ import {
   type DeskFolder,
   type DocumentStateRow,
   type MotionChip,
+  type NeedLine,
 } from '@/lib/document/desk-derivation';
 import { buildDeskConflicts } from '@/lib/document/desk-conflicts';
 import { buildDeskReceivables } from '@/lib/document/desk-receivables';
@@ -54,11 +55,18 @@ export interface DeskData {
   chips: MotionChip[];
 }
 
+/**
+ * One sentinel each, and they mean different things: `undefined` = the Desk has
+ * not answered for this document (no composition yet, or nothing to ask about),
+ * so the caller derives locally; `null` = the Desk answered and this document
+ * has no need. deriveDocumentGuide reads the pair the same way, so a genuine
+ * "no need" is honored instead of being re-derived from the row.
+ */
 export function selectOperationalNeedForDocument(
   data: DeskData | undefined,
   engagementId: string | null | undefined,
-) {
-  if (!data || !engagementId) return null;
+): NeedLine | null | undefined {
+  if (!data || !engagementId) return undefined;
   return data.folders.find((folder) => folder.row.engagement_id === engagementId)?.need ?? null;
 }
 

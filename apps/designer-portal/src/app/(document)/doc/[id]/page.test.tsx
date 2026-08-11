@@ -21,15 +21,19 @@ let mockDeskData: {
 let mockDeskLoading = false;
 let mockDeskError = false;
 const mockRetryDesk = jest.fn();
-const mockUseDeskEngagements = jest.fn((_options?: { enabled?: boolean }) => ({
-  data: mockDeskData,
+// A disabled query never resolves data — mirror that, or a test cannot tell
+// "the Desk answered no need" apart from "the Desk was never asked".
+const mockUseDeskEngagements = jest.fn((options?: { enabled?: boolean }) => ({
+  data: options?.enabled === false ? undefined : mockDeskData,
   isLoading: mockDeskLoading,
   isError: mockDeskError,
   refetch: mockRetryDesk,
 }));
 const mockSelectOperationalNeed = jest.fn(
-  (data: typeof mockDeskData | undefined, engagementId: string | null | undefined) =>
-    data?.folders.find((folder) => folder.row.engagement_id === engagementId)?.need ?? null,
+  (data: typeof mockDeskData | undefined, engagementId: string | null | undefined) => {
+    if (!data || !engagementId) return undefined;
+    return data.folders.find((folder) => folder.row.engagement_id === engagementId)?.need ?? null;
+  },
 );
 
 jest.mock('@portabletext/react', () => ({
@@ -376,6 +380,21 @@ describe('DocumentPage guide activation', () => {
     expect(screen.getByText('Guidance is unavailable')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(mockRetryDesk).toHaveBeenCalledTimes(1);
+  });
+
+  it('honors a Desk answer of no need over re-deriving one from the row', () => {
+    const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+    mockDocumentQuery = {
+      ...mockDocumentQuery,
+      data: { kind: 'engagement', row: { ...current, overdue_decision_count: 1 } },
+    };
+    mockDeskData = { folders: [], chips: [] };
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(mockSelectOperationalNeed).toHaveReturnedWith(null);
+    expect(screen.queryByText(/decision overdue/)).not.toBeInTheDocument();
+    expect(screen.getByText('Review the inquiry')).toBeInTheDocument();
   });
 
   it('keeps guidance whole when a Desk read this document never depended on fails', () => {

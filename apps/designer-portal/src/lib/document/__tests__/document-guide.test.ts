@@ -276,6 +276,16 @@ describe('deriveDocumentGuide', () => {
     });
   });
 
+  it('trusts an explicit no-need answer instead of re-deriving one from the row', () => {
+    const overdue = row('project', { overdue_decision_count: 2, earliest_overdue_due: '2026-08-01' });
+    const now = new Date('2026-08-10T12:00:00Z');
+
+    expect(deriveDocumentGuide({ row: overdue, now }).headline).toContain('2 decisions overdue');
+    expect(deriveDocumentGuide({ row: overdue, now, operationalNeed: null }).headline).toBe(
+      'Move the project forward',
+    );
+  });
+
   it('keeps a paused Discovery document on its own resume act', () => {
     const guide = deriveDocumentGuide({
       row: row('discovery', { is_paused: true }),
