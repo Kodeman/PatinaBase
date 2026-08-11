@@ -322,4 +322,162 @@ BEGIN
 END;
 $$;
 
+-- A curated proposal proves that activation may preserve the complete signed
+-- studio snapshot without exposing that raw evidence or its internal fields to
+-- the addressed client. The client can only consume the checked bundle DTO.
+INSERT INTO public.proposals (
+  id,
+  designer_id,
+  client_id,
+  designer_client_id,
+  title,
+  total_amount,
+  status,
+  client_visibility_tier,
+  valid_until
+)
+SELECT
+  'c4073000-0000-4000-8000-000000000002',
+  'a0000000-0000-0000-0000-000000000004',
+  'a0000000-0000-0000-0000-000000000005',
+  relationship.id,
+  'Curated activation privacy fixture',
+  0,
+  'draft',
+  'curated',
+  now() + interval '30 days'
+FROM public.designer_clients AS relationship
+WHERE relationship.designer_id =
+    'a0000000-0000-0000-0000-000000000004'
+  AND relationship.client_id =
+    'a0000000-0000-0000-0000-000000000005'
+ORDER BY relationship.created_at, relationship.id
+LIMIT 1;
+
+INSERT INTO public.proposal_boards (
+  id,
+  proposal_id,
+  name,
+  sections,
+  status,
+  sort_order
+)
+VALUES (
+  'c4073100-0000-4000-8000-000000000002',
+  'c4073000-0000-4000-8000-000000000002',
+  'Curated internal composition',
+  '[{"id":"private-zone","name":"Internal Zone"}]'::jsonb,
+  'active',
+  0
+);
+
+INSERT INTO public.proposal_board_items (
+  id,
+  board_id,
+  type,
+  z_index,
+  data
+)
+VALUES (
+  'c4073200-0000-4000-8000-000000000002',
+  'c4073100-0000-4000-8000-000000000002',
+  'image',
+  0,
+  '{
+    "name":"Internal sourcing item",
+    "section_id":"private-zone",
+    "price_cents":51000,
+    "cost_cents":27000,
+    "trade_cost_cents":24500,
+    "vendor_name":"Trade-only vendor",
+    "source_url":"https://trade.invalid/internal-sku",
+    "lead_time_weeks":18,
+    "internal_note":"margin review",
+    "internal_notes":"designer-only history"
+  }'::jsonb
+);
+
+SET LOCAL session_replication_role = replica;
+UPDATE public.proposals
+SET status = 'sent', sent_at = now()
+WHERE id = 'c4073000-0000-4000-8000-000000000002';
+SET LOCAL session_replication_role = origin;
+
+CREATE TEMP TABLE curated_activation_result (
+  project_id uuid NOT NULL
+) ON COMMIT DROP;
+GRANT SELECT, INSERT ON curated_activation_result TO authenticated;
+
+SELECT pg_temp.assume_mood_board_actor(
+  'a0000000-0000-0000-0000-000000000005'
+);
+SET LOCAL ROLE authenticated;
+INSERT INTO curated_activation_result (project_id)
+SELECT (
+  public.sign_proposal(
+    'c4073000-0000-4000-8000-000000000002',
+    'Privacy Client'
+  )->>'project_id'
+)::uuid;
+
+DO $$
+DECLARE
+  v_bundle jsonb;
+  v_raw_count integer;
+BEGIN
+  SELECT count(*) INTO v_raw_count
+  FROM public.project_boards AS board
+  WHERE board.project_id = (
+    SELECT result.project_id FROM curated_activation_result AS result
+  );
+  ASSERT v_raw_count = 0,
+    format(
+      'curated client read %s raw project snapshots; required=0',
+      v_raw_count
+    );
+
+  v_bundle := public.get_client_proposal_bundle(
+    'c4073000-0000-4000-8000-000000000002'
+  );
+  ASSERT v_bundle IS NOT NULL,
+    'curated client must retain its checked proposal bundle';
+  ASSERT v_bundle->'boards' = '[]'::jsonb,
+    'curated client bundle must omit board compositions';
+  ASSERT NOT (
+    v_bundle::text ~
+      'price_cents|cost_cents|trade_cost_cents|vendor_name|source_url|lead_time_weeks|internal_note|internal_notes'
+  ), 'curated client bundle leaked internal commercial/source fields';
+END;
+$$;
+RESET ROLE;
+
+SELECT pg_temp.assume_mood_board_actor(
+  'a0000000-0000-0000-0000-000000000004'
+);
+SET LOCAL ROLE authenticated;
+DO $$
+DECLARE
+  v_items jsonb;
+BEGIN
+  SELECT board.items INTO v_items
+  FROM public.project_boards AS board
+  WHERE board.project_id = (
+    SELECT result.project_id FROM curated_activation_result AS result
+  );
+
+  ASSERT v_items IS NOT NULL,
+    'studio author must read the activated project-board snapshot';
+  ASSERT v_items::text ~ 'price_cents'
+     AND v_items::text ~ 'cost_cents'
+     AND v_items::text ~ 'trade_cost_cents'
+     AND v_items::text ~ 'vendor_name'
+     AND v_items::text ~ 'source_url'
+     AND v_items::text ~ 'lead_time_weeks'
+     AND v_items::text ~ 'internal_note'
+     AND v_items::text ~ 'internal_notes',
+    'activation fixture did not preserve the complete signed studio snapshot';
+END;
+$$;
+RESET ROLE;
+
 ROLLBACK;

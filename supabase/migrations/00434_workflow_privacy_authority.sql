@@ -1229,11 +1229,7 @@ CREATE POLICY project_boards_participant_select
     EXISTS (
       SELECT 1 FROM public.projects AS project
       WHERE project.id = project_boards.project_id
-        AND (
-          public.is_design_studio_comember(project.designer_id)
-          OR project.client_id = auth.uid()
-          OR public.is_project_team_member(project.id)
-        )
+        AND public.is_design_studio_comember(project.designer_id)
     )
   );
 REVOKE INSERT, UPDATE, DELETE ON public.project_boards

@@ -495,6 +495,14 @@ WHERE id = 'a3470000-0000-4000-8000-000000000001';
 
 INSERT INTO workflow_privacy_results
 SELECT
+  'B09C_CLIENT_CANNOT_READ_FROZEN_PROJECT_BOARD',
+  count(*) = 0,
+  format('client frozen-project-board row count=%s; required=0', count(*))
+FROM public.project_boards
+WHERE id = 'a3480000-0000-4000-8000-000000000001';
+
+INSERT INTO workflow_privacy_results
+SELECT
   'B20_CLIENT_STORAGE_ACCESS_IS_EXACT_RELEASED_REFERENCE',
   public.can_read_board_storage_object(
     'a3450000-0000-4000-8000-000000000001/boards/a3460000-0000-4000-8000-000000000001/released.webp'
@@ -595,10 +603,18 @@ END;
 $$;
 RESET ROLE;
 
--- Active team membership may authorize a separately scoped read, but it can
--- never rewrite an activated/signed snapshot.
+-- Active project-team membership is coordination authority, not authority to
+-- read or rewrite an activated/signed commercial snapshot.
 SELECT pg_temp.assume_workflow_actor('a3400000-0000-4000-8000-000000000005');
 SET LOCAL ROLE authenticated;
+INSERT INTO workflow_privacy_results
+SELECT
+  'B14A_PROJECT_TEAM_CANNOT_READ_FROZEN_PROJECT_BOARD',
+  count(*) = 0,
+  format('project-team frozen-project-board row count=%s; required=0', count(*))
+FROM public.project_boards
+WHERE id = 'a3480000-0000-4000-8000-000000000001';
+
 DO $$
 DECLARE
   v_denied boolean := false;
@@ -637,6 +653,14 @@ SELECT
   format('own-studio working-board row count=%s; required=1', count(*))
 FROM public.proposal_boards
 WHERE id = 'a3460000-0000-4000-8000-000000000002';
+
+INSERT INTO workflow_privacy_results
+SELECT
+  'B10A_OWN_STUDIO_CAN_READ_FROZEN_PROJECT_BOARD',
+  count(*) = 1,
+  format('own-studio frozen-project-board row count=%s; required=1', count(*))
+FROM public.project_boards
+WHERE id = 'a3480000-0000-4000-8000-000000000001';
 
 DO $$
 DECLARE
