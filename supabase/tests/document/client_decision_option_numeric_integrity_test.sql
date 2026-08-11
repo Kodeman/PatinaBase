@@ -109,6 +109,52 @@ $$;
 GRANT EXECUTE ON FUNCTION pg_temp.assume_decision_numeric_actor(uuid)
   TO authenticated;
 
+-- 00434 intentionally removed raw client reads of legacy FF&E working rows.
+-- This test-only server helper verifies the canonical apply side effect without
+-- reopening that private table to the addressed client.
+CREATE OR REPLACE FUNCTION pg_temp.decision_ffe_count(p_decision_id uuid)
+RETURNS bigint
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT count(*)
+  FROM public.project_ffe_items
+  WHERE source_decision_id = p_decision_id
+$$;
+
+CREATE OR REPLACE FUNCTION pg_temp.decision_ffe_total_is(
+  p_decision_id uuid,
+  p_quantity integer,
+  p_unit_price_cents integer,
+  p_line_total_cents integer
+)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.project_ffe_items
+    WHERE source_decision_id = p_decision_id
+      AND quantity = p_quantity
+      AND unit_price_cents = p_unit_price_cents
+      AND line_total_cents = p_line_total_cents
+  )
+$$;
+
+REVOKE ALL ON FUNCTION pg_temp.decision_ffe_count(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION pg_temp.decision_ffe_total_is(
+  uuid, integer, integer, integer
+) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION pg_temp.decision_ffe_count(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION pg_temp.decision_ffe_total_is(
+  uuid, integer, integer, integer
+) TO authenticated;
+
 -- Clean environments validate immediately. NOT VALID additions remain safe
 -- for production environments that contain historical invalid rows.
 DO $$
@@ -451,10 +497,9 @@ BEGIN
           FROM public.client_decision_options
           WHERE id = 'f9200000-0000-4000-8000-000000000002'),
     'overflowing apply must roll back option selection and quantity';
-  ASSERT NOT EXISTS (
-    SELECT 1 FROM public.project_ffe_items
-    WHERE source_decision_id = 'f9100000-0000-4000-8000-000000000003'
-  ), 'overflowing apply must not create a partial FF&E row';
+  ASSERT pg_temp.decision_ffe_count(
+    'f9100000-0000-4000-8000-000000000003'
+  ) = 0, 'overflowing apply must not create a partial FF&E row';
 
   v_result := public.apply_client_decision(
     'f9100000-0000-4000-8000-000000000004',
@@ -463,12 +508,14 @@ BEGIN
   );
   ASSERT v_result.status = 'responded',
     'the exact INTEGER line-total boundary must remain applicable';
-  ASSERT (SELECT quantity = 1
-                 AND unit_price_cents = 2147483647
-                 AND line_total_cents = 2147483647
-          FROM public.project_ffe_items
-          WHERE source_decision_id = 'f9100000-0000-4000-8000-000000000004'),
+  ASSERT pg_temp.decision_ffe_total_is(
+    'f9100000-0000-4000-8000-000000000004', 1, 2147483647, 2147483647
+  ),
     'boundary apply must create a truthful FF&E total';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.project_ffe_items
+    WHERE source_decision_id = 'f9100000-0000-4000-8000-000000000004'
+  ), 'addressed client must not regain raw legacy FF&E working-row access';
 END;
 $$;
 
