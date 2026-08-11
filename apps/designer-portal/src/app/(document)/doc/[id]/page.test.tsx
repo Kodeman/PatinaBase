@@ -378,8 +378,15 @@ describe('DocumentPage guide activation', () => {
     render(<DocumentPage params={fulfilledParams} />);
 
     expect(screen.getByText('Guidance is unavailable')).toBeInTheDocument();
+    const activeSection = document.querySelector<HTMLElement>('[data-active-section]');
+    activeSection!.scrollIntoView = jest.fn();
+
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
     expect(mockRetryDesk).toHaveBeenCalledTimes(1);
+    // The retry destination dispatches on its own kind — it never falls through
+    // to the anchor branch and scrolls the document.
+    expect(activeSection!.scrollIntoView).not.toHaveBeenCalled();
   });
 
   it('honors a Desk answer of no need over re-deriving one from the row', () => {

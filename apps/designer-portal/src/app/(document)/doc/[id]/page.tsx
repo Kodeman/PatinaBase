@@ -439,12 +439,12 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
       })
     : null;
   const activateGuide = useCallback(() => {
-    if (guideModel?.action?.key === 'retry-guidance') {
+    const destination = guideModel?.action?.destination;
+    if (!destination) return;
+    if (destination.kind === 'retry') {
       void enrichedOperationalQuery.refetch();
       return;
     }
-    const destination = guideModel?.action?.destination;
-    if (!destination) return;
     if (destination.kind === 'anchor') {
       jumpToSection(destination.section, destination.focusId, destination.activate);
     }

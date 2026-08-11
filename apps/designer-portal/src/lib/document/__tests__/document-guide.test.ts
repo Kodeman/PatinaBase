@@ -89,7 +89,11 @@ describe('deriveDocumentGuide', () => {
     const guide = deriveDocumentGuide({
       row: row('brief'), availability: 'unavailable', retryAvailable: true,
     });
-    expect(guide.action).toMatchObject({ key: 'retry-guidance', label: 'Try again' });
+    expect(guide.action).toEqual({
+      key: 'retry-guidance',
+      label: 'Try again',
+      destination: { kind: 'retry' },
+    });
   });
 
   it('puts an operational need ahead of stage guidance', () => {

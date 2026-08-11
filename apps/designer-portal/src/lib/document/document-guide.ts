@@ -39,6 +39,9 @@ export type DocumentGuideState =
 
 export type DocumentGuideDestination =
   | { kind: 'href'; href: string }
+  /** Re-read whatever source left guidance unavailable. It moves nowhere, so it
+   *  must not borrow a section anchor's shape to say so. */
+  | { kind: 'retry' }
   | { kind: 'anchor'; section: SectionKey; focusId?: string; activate?: boolean }
   | { kind: 'ledger'; name: string; context?: { page?: string; invoiceId?: string; projectId?: string } };
 
@@ -283,10 +286,7 @@ export function deriveDocumentGuide({
       state: 'unavailable', stage, eyebrow: 'Next up', headline: 'Guidance is unavailable',
       reason: 'Try again before acting so missing data is never mistaken for an empty section.',
       action: retryAvailable
-        ? {
-            key: 'retry-guidance', label: 'Try again',
-            destination: { kind: 'anchor', section: stage },
-          }
+        ? { key: 'retry-guidance', label: 'Try again', destination: { kind: 'retry' } }
         : null,
     }, undefined);
   }
