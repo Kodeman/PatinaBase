@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 
 import ClientDecisionDetailPage from "./page";
 
@@ -8,6 +8,7 @@ const useClientDecision = jest.fn();
 const useDecisionComments = jest.fn();
 const useCreateDecisionComment = jest.fn();
 const useProjectApprovalRealtime = jest.fn();
+const useDecisionRealtime = jest.fn();
 
 jest.mock("@/hooks/use-decisions-client", () => ({
   useClientDecision: (...args: unknown[]) => useClientDecision(...args),
@@ -26,6 +27,7 @@ jest.mock("@patina/supabase", () => ({
     useProjectApprovalByDecision(...args),
   useProjectApprovalRealtime: (...args: unknown[]) =>
     useProjectApprovalRealtime(...args),
+  useDecisionRealtime: (...args: unknown[]) => useDecisionRealtime(...args),
 }));
 
 jest.mock("@/components/approvals/project-approval-review", () => ({
@@ -87,6 +89,7 @@ it("blocks legacy reads and comments while the exact canonical lookup is pending
   expect(useClientDecision).not.toHaveBeenCalled();
   expect(useDecisionComments).not.toHaveBeenCalled();
   expect(useCreateDecisionComment).not.toHaveBeenCalled();
+  expect(useDecisionRealtime).not.toHaveBeenCalled();
 });
 
 it("fails closed on an exact canonical error without probing legacy or comments", async () => {
@@ -104,6 +107,7 @@ it("fails closed on an exact canonical error without probing legacy or comments"
   expect(useClientDecision).not.toHaveBeenCalled();
   expect(useDecisionComments).not.toHaveBeenCalled();
   expect(useCreateDecisionComment).not.toHaveBeenCalled();
+  expect(useDecisionRealtime).not.toHaveBeenCalled();
 });
 
 it("renders authorized Stage-2 evidence and only then mounts realtime and Discussion", async () => {
@@ -120,6 +124,7 @@ it("renders authorized Stage-2 evidence and only then mounts realtime and Discus
   expect(useProjectApprovalRealtime).toHaveBeenCalledWith("project-1");
   expect(useDecisionComments).toHaveBeenCalledWith("decision-1");
   expect(useCreateDecisionComment).toHaveBeenCalledTimes(1);
+  expect(useDecisionRealtime).toHaveBeenCalledWith("decision-1");
   expect(screen.getByRole("heading", { name: "Discussion" })).toBeInTheDocument();
   expect(
     screen.getByText(/comments.*never submit or change an approval outcome/i),
@@ -141,6 +146,7 @@ it("uses exact null as the only permission to fetch and render a verified legacy
   expect(await screen.findByTestId("legacy-decision-card")).toBeInTheDocument();
   expect(useClientDecision).toHaveBeenCalledWith("decision-1");
   expect(useDecisionComments).toHaveBeenCalledWith("decision-1");
+  expect(useDecisionRealtime).toHaveBeenCalledWith("decision-1");
   expect(screen.getByRole("heading", { name: "Discussion" })).toBeInTheDocument();
 });
 
@@ -151,6 +157,7 @@ it("does not mount comments when exact null is followed by legacy not-found", as
   expect(useClientDecision).toHaveBeenCalledWith("decision-1");
   expect(useDecisionComments).not.toHaveBeenCalled();
   expect(useCreateDecisionComment).not.toHaveBeenCalled();
+  expect(useDecisionRealtime).not.toHaveBeenCalled();
 });
 
 it("fails closed without comments if a raw Stage-2 row appears after canonical null", async () => {
@@ -170,6 +177,7 @@ it("fails closed without comments if a raw Stage-2 row appears after canonical n
   );
   expect(useDecisionComments).not.toHaveBeenCalled();
   expect(useCreateDecisionComment).not.toHaveBeenCalled();
+  expect(useDecisionRealtime).not.toHaveBeenCalled();
 });
 
 it("does not mount comments while the permitted legacy lookup is pending", async () => {
@@ -180,6 +188,53 @@ it("does not mount comments while the permitted legacy lookup is pending", async
   expect(screen.getByRole("status")).toHaveTextContent(/loading decision/i);
   expect(useDecisionComments).not.toHaveBeenCalled();
   expect(useCreateDecisionComment).not.toHaveBeenCalled();
+  expect(useDecisionRealtime).not.toHaveBeenCalled();
+});
+
+it("announces a comment read failure without replacing the authorized discussion", async () => {
+  useProjectApprovalByDecision.mockReturnValue({
+    data: STAGE2_APPROVAL,
+    isLoading: false,
+    isError: false,
+  });
+  useDecisionComments.mockReturnValue({
+    data: undefined,
+    isLoading: false,
+    isError: true,
+    error: new Error("do not disclose"),
+  });
+
+  await renderPage();
+
+  expect(screen.getByRole("alert")).toHaveTextContent(
+    /comments could not be read/i,
+  );
+  expect(screen.queryByText(/do not disclose/i)).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Add to discussion")).toBeInTheDocument();
+});
+
+it("announces a post failure and retains the client's draft", async () => {
+  useProjectApprovalByDecision.mockReturnValue({
+    data: STAGE2_APPROVAL,
+    isLoading: false,
+    isError: false,
+  });
+  useCreateDecisionComment.mockReturnValue({
+    mutate: jest.fn((_input, options) => options.onError(new Error("private"))),
+    isPending: false,
+  });
+
+  await renderPage();
+
+  const field = screen.getByLabelText("Add to discussion");
+  fireEvent.change(field, { target: { value: "Please clarify the finish." } });
+  fireEvent.click(screen.getByRole("button", { name: "Post" }));
+
+  expect(screen.getByRole("alert")).toHaveTextContent(
+    /draft is still here/i,
+  );
+  expect(field).toHaveValue("Please clarify the finish.");
+  expect(screen.queryByText("private")).not.toBeInTheDocument();
 });
 
 it("keeps the authorized detail semantic and single-column at 320px", async () => {

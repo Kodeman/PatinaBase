@@ -52,6 +52,9 @@ it("drives Stage-2 discovery from the sanitized global list without raw-row dupl
         projectId: "project-1",
         lifecycleStatus: "draft",
         disposition: "active",
+        completedReviewCount: 0,
+        requiredReviewCount: 1,
+        outcome: null,
         question: "Approve issued set 7?",
         isOverdue: true,
       },
@@ -90,6 +93,35 @@ it("drives Stage-2 discovery from the sanitized global list without raw-row dupl
   expect(
     screen.queryByRole("button", { name: "Choose legacy option" }),
   ).not.toBeInTheDocument();
+});
+
+it("separates completed-review drafts as awaiting studio issue, not client approval work", () => {
+  useMyProjectApprovalReviews.mockReturnValue({
+    data: [
+      {
+        decisionId: "approval-review-complete",
+        projectId: "project-1",
+        lifecycleStatus: "draft",
+        disposition: "active",
+        completedReviewCount: 1,
+        requiredReviewCount: 1,
+        outcome: null,
+        question: "Issue the reviewed set?",
+        isOverdue: false,
+      },
+    ],
+    isLoading: false,
+  });
+
+  render(<ClientDecisionsPage />);
+
+  expect(
+    screen.getByRole("heading", { name: "Awaiting studio issue (1)" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByRole("heading", { name: /project approvals/i }),
+  ).not.toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: /history/i })).not.toBeInTheDocument();
 });
 
 it("keeps the server-projected Stage-2 history separate from active review work", () => {
@@ -151,6 +183,9 @@ it("keeps the 320px list semantic, single-column, and free of shadow or overflow
         projectId: "project-1",
         lifecycleStatus: "pending",
         disposition: "active",
+        completedReviewCount: 1,
+        requiredReviewCount: 1,
+        outcome: null,
         question: "Approve the very long immutable issued construction set?",
         isOverdue: false,
       },

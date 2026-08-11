@@ -48,6 +48,27 @@ it("links the exact approval and never collapses changes requested into discussi
   ).toBeInTheDocument();
 });
 
+it("labels a completed-review draft as awaiting studio issue instead of a client gate", () => {
+  render(
+    <ProjectApprovalSummary
+      approval={{
+        ...approval,
+        lifecycleStatus: "draft",
+        outcome: null,
+        completedReviewCount: 1,
+        requiredReviewCount: 1,
+        isOverdue: true,
+      }}
+    />,
+  );
+
+  expect(screen.getByText("Awaiting studio issue")).toBeInTheDocument();
+  expect(screen.queryByText("Review required")).not.toBeInTheDocument();
+  expect(screen.queryByText("Response required")).not.toBeInTheDocument();
+  expect(screen.queryByText(/Overdue/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/Due Aug/)).not.toBeInTheDocument();
+});
+
 it("reflows as one typographic column at 320px without shadows or horizontal scroll", () => {
   Object.defineProperty(window, "innerWidth", {
     configurable: true,

@@ -3,6 +3,11 @@
 import Link from "next/link";
 
 import type { ProjectApprovalReview } from "@patina/supabase";
+import {
+  isClientActionableProjectApproval,
+  isProjectApprovalAwaitingStudioIssue,
+  projectApprovalAttentionLabel,
+} from "@/lib/client-attention";
 
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat("en-US", {
@@ -15,14 +20,7 @@ function formatDate(value: string): string {
 export function projectApprovalStatusLabel(
   approval: ProjectApprovalReview,
 ): string {
-  if (approval.disposition === "withdrawn") return "Withdrawn";
-  if (approval.disposition === "superseded") return "Superseded";
-  if (approval.outcome === "approved") return "Approved";
-  if (approval.outcome === "changes_requested") return "Changes requested";
-  if (approval.outcome === "needs_discussion") return "Needs discussion";
-  if (approval.lifecycleStatus === "draft") return "Review required";
-  if (approval.isOverdue) return "Overdue";
-  return "Response required";
+  return projectApprovalAttentionLabel(approval);
 }
 
 export function ProjectApprovalSummary({
@@ -33,6 +31,7 @@ export function ProjectApprovalSummary({
   compact?: boolean;
 }) {
   const status = projectApprovalStatusLabel(approval);
+  const awaitingStudioIssue = isProjectApprovalAwaitingStudioIssue(approval);
   return (
     <article
       className="min-w-0 border-b border-[var(--border-default)] py-4"
@@ -42,7 +41,11 @@ export function ProjectApprovalSummary({
         <div className="min-w-0">
           <p className="type-meta-small text-[var(--text-muted)]">
             {status}
-            {approval.isOverdue && status !== "Overdue" ? " · Overdue" : ""}
+            {approval.isOverdue &&
+            isClientActionableProjectApproval(approval) &&
+            status !== "Overdue"
+              ? " · Overdue"
+              : ""}
           </p>
           <h3 className="type-item-name mt-1 break-words">
             <Link
@@ -58,10 +61,12 @@ export function ProjectApprovalSummary({
             </p>
           )}
         </div>
-        <p className="type-meta flex-none">
-          Due{" "}
-          <time dateTime={approval.dueAt}>{formatDate(approval.dueAt)}</time>
-        </p>
+        {!awaitingStudioIssue && (
+          <p className="type-meta flex-none">
+            Due{" "}
+            <time dateTime={approval.dueAt}>{formatDate(approval.dueAt)}</time>
+          </p>
+        )}
       </div>
     </article>
   );

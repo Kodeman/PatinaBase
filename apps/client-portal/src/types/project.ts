@@ -127,5 +127,7 @@ export interface ProjectListItem {
   currentPhase?: string;
   nextMilestoneTitle?: string;
   approvalsPending: number;
+  /** Legacy decision and proposal work only; Stage-2 is counted globally. */
+  nonStage2ApprovalsPending: number;
   unreadMessages: number;
 }

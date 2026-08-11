@@ -22,6 +22,11 @@ import { useHydrated } from '@/hooks/use-hydrated';
 import { partitionProposals, useClientProposals } from '@/hooks/use-proposals-client';
 import { makingEvents, type MakingGateKind } from '@/lib/analytics/events';
 import {
+  isClientActionableProjectApproval,
+  isProjectApprovalAwaitingStudioIssue,
+  projectApprovalAttentionLabel,
+} from '@/lib/client-attention';
+import {
   commercialSummaryFromProposal,
   type ClientSelection,
   type CommercialDocumentKind,
@@ -348,10 +353,8 @@ function DeferredProjectApprovals({
       <ul aria-label={heading} className="mt-3 min-w-0 list-none p-0">
         {items.map(({ approval, phaseLabel }) => {
           const due = parseSpineDate(approval.dueAt);
-          const action =
-            approval.lifecycleStatus === 'draft'
-              ? 'Review required'
-              : 'Response required';
+          const action = projectApprovalAttentionLabel(approval);
+          const clientActionable = isClientActionableProjectApproval(approval);
           return (
             <li
               key={approval.decisionId}
@@ -359,7 +362,7 @@ function DeferredProjectApprovals({
             >
               <p className="type-meta-small break-words text-[var(--text-muted)]">
                 {phaseLabel} · {action}
-                {approval.isOverdue ? ' · Overdue' : ''}
+                {approval.isOverdue && clientActionable ? ' · Overdue' : ''}
               </p>
               <h3 className="type-item-name mt-1 min-w-0">
                 <Link
@@ -371,7 +374,7 @@ function DeferredProjectApprovals({
               </h3>
               <p className="type-body-small mt-1 break-words text-[var(--text-muted)]">
                 {approval.artifactTitle} · Edition {approval.artifactVersion}
-                {due ? ` · Due ${LONG_MONTH_DAY.format(due)}` : ''}
+                {due && clientActionable ? ` · Due ${LONG_MONTH_DAY.format(due)}` : ''}
               </p>
             </li>
           );
@@ -615,10 +618,19 @@ export function TheMaking({
     return [{ selection, proposalId }];
   });
   const actionableProjectApprovals = projectApprovals.filter(
-    (approval) =>
-      approval.disposition === 'active' &&
-      (approval.lifecycleStatus === 'draft' || approval.lifecycleStatus === 'pending'),
+    isClientActionableProjectApproval,
   );
+  const awaitingStudioIssueApprovals = projectApprovals
+    .filter(isProjectApprovalAwaitingStudioIssue)
+    .map((approval) => ({
+      approval,
+      phaseLabel:
+        phases.current?.id === approval.phaseId
+          ? phases.current.label
+          : phases.future.find((phase) => phase.id === approval.phaseId)?.label ??
+            phases.settled.find((phase) => phase.id === approval.phaseId)?.label ??
+            'Phase not available',
+    }));
   const currentPhaseId = phases.current?.id ?? null;
   const approvalGates = currentPhaseId
     ? actionableProjectApprovals.filter(
@@ -856,6 +868,12 @@ export function TheMaking({
         description="Not linked to today’s open chapter or a scheduled future phase."
         items={otherApprovals}
         testId="making-other-approvals"
+      />
+      <DeferredProjectApprovals
+        heading="Awaiting studio issue"
+        description="Your review is complete. The studio is preparing the approval for issue."
+        items={awaitingStudioIssueApprovals}
+        testId="making-awaiting-studio-issue"
       />
     </div>
   );

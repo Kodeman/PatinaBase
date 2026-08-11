@@ -7,6 +7,7 @@ import {
   PROJECT_APPROVAL_CONTRACT,
   useCreateDecisionComment,
   useDecisionComments,
+  useDecisionRealtime,
   useProjectApprovalByDecision,
   useProjectApprovalRealtime,
 } from '@patina/supabase';
@@ -42,17 +43,29 @@ function BackToDecisions({ all = false }: { all?: boolean }) {
 
 function DecisionDiscussion({ decisionId }: { decisionId: string }) {
   const { user } = useAuth();
-  const { data: comments, isLoading: commentsLoading } =
-    useDecisionComments(decisionId);
+  const {
+    data: comments,
+    isLoading: commentsLoading,
+    isError: commentsError,
+  } = useDecisionComments(decisionId);
   const createComment = useCreateDecisionComment();
   const [draft, setDraft] = useState('');
+  const [postFailed, setPostFailed] = useState(false);
+  useDecisionRealtime(decisionId);
 
   const handlePost = () => {
     const body = draft.trim();
     if (!body) return;
+    setPostFailed(false);
     createComment.mutate(
       { decisionId, body },
-      { onSuccess: () => setDraft('') },
+      {
+        onSuccess: () => {
+          setDraft('');
+          setPostFailed(false);
+        },
+        onError: () => setPostFailed(true),
+      },
     );
   };
 
@@ -75,6 +88,10 @@ function DecisionDiscussion({ decisionId }: { decisionId: string }) {
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
           Loading comments...
         </div>
+      ) : commentsError ? (
+        <p role="alert" className="type-body-small text-[var(--color-error)]">
+          Comments could not be read just now. Refresh to try again.
+        </p>
       ) : ordered.length === 0 ? (
         <p className="type-body-small text-[var(--text-muted)]">
           No comments yet. Add a note for your designer below.
@@ -128,6 +145,11 @@ function DecisionDiscussion({ decisionId }: { decisionId: string }) {
               {createComment.isPending ? 'Posting...' : 'Post'}
             </button>
           </div>
+          {postFailed && (
+            <p role="alert" className="type-body-small mt-2 text-[var(--color-error)]">
+              Comment could not be posted. Your draft is still here; try again.
+            </p>
+          )}
         </div>
       )}
     </section>

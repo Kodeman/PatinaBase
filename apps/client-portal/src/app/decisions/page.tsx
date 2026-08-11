@@ -12,6 +12,10 @@ import { StrataMark } from '@/components/strata-mark';
 import { Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { ProjectApprovalSummary } from '@/components/approvals/project-approval-summary';
+import {
+  isClientActionableProjectApproval,
+  isProjectApprovalAwaitingStudioIssue,
+} from '@/lib/client-attention';
 
 function LegacyDecisionListRow({
   decision,
@@ -47,14 +51,15 @@ export default function ClientDecisionsPage() {
   const now = new Date();
   const projectApprovals = projectApprovalReviews ?? [];
   const activeProjectApprovals = projectApprovals.filter(
-    (approval: ProjectApprovalReview) =>
-      approval.disposition === 'active' &&
-      (approval.lifecycleStatus === 'draft' ||
-        approval.lifecycleStatus === 'pending'),
+    isClientActionableProjectApproval,
+  );
+  const awaitingStudioProjectApprovals = projectApprovals.filter(
+    isProjectApprovalAwaitingStudioIssue,
   );
   const closedProjectApprovals = projectApprovals.filter(
     (approval: ProjectApprovalReview) =>
-      !activeProjectApprovals.includes(approval),
+      !activeProjectApprovals.includes(approval) &&
+      !awaitingStudioProjectApprovals.includes(approval),
   );
   const legacyDecisions = (decisions ?? []).filter(
     (d: ClientDecision) => d.approval_contract !== PROJECT_APPROVAL_CONTRACT,
@@ -80,6 +85,7 @@ export default function ClientDecisionsPage() {
   const isLoading = legacyLoading || projectApprovalsLoading;
   const hasAnyDecision =
     activeProjectApprovals.length > 0 ||
+    awaitingStudioProjectApprovals.length > 0 ||
     closedProjectApprovals.length > 0 ||
     pending.length > 0 ||
     resolved.length > 0;
@@ -118,6 +124,24 @@ export default function ClientDecisionsPage() {
           </h2>
           <ul aria-label="Project approvals" className="min-w-0 list-none space-y-0 p-0">
             {activeProjectApprovals.map((approval: ProjectApprovalReview) => (
+              <li key={approval.decisionId} className="min-w-0">
+                <ProjectApprovalSummary approval={approval} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {awaitingStudioProjectApprovals.length > 0 && (
+        <section className="mt-8" aria-labelledby="awaiting-studio-issue-heading">
+          <h2 id="awaiting-studio-issue-heading" className="type-meta mb-1">
+            Awaiting studio issue ({awaitingStudioProjectApprovals.length})
+          </h2>
+          <p className="type-body-small mb-4 text-[var(--text-muted)]">
+            Your review is complete. The studio is preparing the approval for issue.
+          </p>
+          <ul aria-label="Awaiting studio issue" className="min-w-0 list-none space-y-0 p-0">
+            {awaitingStudioProjectApprovals.map((approval: ProjectApprovalReview) => (
               <li key={approval.decisionId} className="min-w-0">
                 <ProjectApprovalSummary approval={approval} />
               </li>
@@ -179,14 +203,16 @@ export default function ClientDecisionsPage() {
         </section>
       )}
 
-      {(activeProjectApprovals.length > 0 || pending.length > 0) &&
+      {(activeProjectApprovals.length > 0 ||
+        awaitingStudioProjectApprovals.length > 0 ||
+        pending.length > 0) &&
         (closedProjectApprovals.length > 0 || resolved.length > 0) && (
         <StrataMark variant="mini" />
       )}
 
       {/* Resolved decisions */}
       {(closedProjectApprovals.length > 0 || resolved.length > 0) && (
-        <section className={pending.length === 0 && activeProjectApprovals.length === 0 ? 'mt-10' : 'mt-2'}>
+        <section className={pending.length === 0 && activeProjectApprovals.length === 0 && awaitingStudioProjectApprovals.length === 0 ? 'mt-10' : 'mt-2'}>
           <h2 className="type-meta mb-4">
             History ({closedProjectApprovals.length + resolved.length})
           </h2>

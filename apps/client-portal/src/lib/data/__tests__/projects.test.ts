@@ -91,9 +91,10 @@ describe('client project reads', () => {
     expect(mockCreateServerClient).not.toHaveBeenCalled();
   });
 
-  it('combines sanitized Stage-2 reviews with explicitly legacy raw pending decisions', async () => {
+  it('counts only actionable sanitized Stage-2 reviews and defaulted legacy client work', async () => {
     const decisionOr = jest.fn();
     const decisionEq = jest.fn();
+    const decisionSelect = jest.fn();
     const supabase = {
       auth: {
         getUser: jest.fn().mockResolvedValue({
@@ -108,28 +109,51 @@ describe('client project reads', () => {
                 projectId: 'project-1',
                 lifecycleStatus: 'draft',
                 disposition: 'active',
+                completedReviewCount: 0,
+                requiredReviewCount: 1,
+                outcome: null,
               },
               {
                 projectId: 'project-1',
                 lifecycleStatus: 'pending',
                 disposition: 'active',
+                completedReviewCount: 1,
+                requiredReviewCount: 1,
+                outcome: null,
+              },
+              {
+                projectId: 'project-1',
+                lifecycleStatus: 'draft',
+                disposition: 'active',
+                completedReviewCount: 1,
+                requiredReviewCount: 1,
+                outcome: null,
               },
               {
                 projectId: 'project-1',
                 lifecycleStatus: 'responded',
                 disposition: 'active',
+                completedReviewCount: 1,
+                requiredReviewCount: 1,
+                outcome: 'approved',
               },
               {
                 projectId: 'project-1',
                 lifecycleStatus: 'draft',
                 disposition: 'withdrawn',
+                completedReviewCount: 0,
+                requiredReviewCount: 1,
+                outcome: null,
               },
             ],
             error: null,
           });
         }
         if (name === 'list_client_proposals') {
-          return Promise.resolve({ data: [], error: null });
+          return Promise.resolve({
+            data: [{ project_id: 'project-1', status: 'sent' }],
+            error: null,
+          });
         }
         throw new Error(`Unexpected RPC: ${name}`);
       }),
@@ -156,16 +180,21 @@ describe('client project reads', () => {
         }
         if (table === 'client_decisions') {
           const builder = {
-            select: jest.fn(),
+            select: decisionSelect,
             or: decisionOr,
             eq: decisionEq,
           };
-          builder.select.mockReturnValue(builder);
+          decisionSelect.mockReturnValue(builder);
           decisionOr.mockReturnValue(builder);
           decisionEq
             .mockReturnValueOnce(builder)
             .mockResolvedValueOnce({
-              data: [{ project_id: 'project-1' }],
+              data: [
+                { project_id: 'project-1', court: null, coordination_kind: null },
+                { project_id: 'project-1', court: 'client', coordination_kind: 'signoff' },
+                { project_id: 'project-1', court: 'designer', coordination_kind: 'selection' },
+                { project_id: 'project-1', court: 'client', coordination_kind: 'rfi' },
+              ],
               error: null,
             });
           return builder;
@@ -184,8 +213,15 @@ describe('client project reads', () => {
     mockCreateServerClient.mockResolvedValue(supabase);
 
     await expect(fetchClientProjects()).resolves.toEqual([
-      expect.objectContaining({ id: 'project-1', approvalsPending: 3 }),
+      expect.objectContaining({
+        id: 'project-1',
+        approvalsPending: 5,
+        nonStage2ApprovalsPending: 3,
+      }),
     ]);
+    expect(decisionSelect).toHaveBeenCalledWith(
+      'project_id, court, coordination_kind, designer_clients!inner(client_id)',
+    );
     expect(decisionEq).toHaveBeenNthCalledWith(1, 'status', 'pending');
     expect(decisionOr).toHaveBeenCalledWith(
       'approval_contract.is.null,approval_contract.neq.project_artifact_v1',

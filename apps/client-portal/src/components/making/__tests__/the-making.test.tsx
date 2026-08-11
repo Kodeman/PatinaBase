@@ -436,6 +436,36 @@ describe('TheMaking — the open chapter', () => {
     expect(other.getByText(/Phase not available/)).toBeInTheDocument();
   });
 
+  it('keeps a completed-review draft out of the client gate and labels the studio handoff', () => {
+    renderSurface([
+      projectApproval({
+        decisionId: 'review-complete',
+        lifecycleStatus: 'draft',
+        completedReviewCount: 1,
+        requiredReviewCount: 1,
+        question: 'Issue the reviewed construction set?',
+        isOverdue: true,
+      }),
+    ]);
+
+    expect(screen.queryByTestId('making-project-approval-gate')).not.toBeInTheDocument();
+    expect(screen.getByTestId('making-awaiting-studio-issue')).toHaveTextContent(
+      'Awaiting studio issue',
+    );
+    expect(screen.getByTestId('making-awaiting-studio-issue')).toHaveTextContent(
+      'Issue the reviewed construction set?',
+    );
+    expect(screen.getByTestId('making-awaiting-studio-issue')).not.toHaveTextContent(
+      /Overdue|Due August/,
+    );
+    expect(screen.getByTestId('making-standing-sentence')).toHaveTextContent(
+      'Nothing waits on you today.',
+    );
+    expect(makingEvents.surfaceViewed).toHaveBeenCalledWith(
+      expect.objectContaining({ gateCount: 0 }),
+    );
+  });
+
   it('never infers an open approval from project.currentPhase when no phase row is open', () => {
     const noOpenMilestones = MILESTONES.map((milestone) =>
       milestone.id === 'ph-4'
@@ -476,6 +506,13 @@ describe('TheMaking — the open chapter', () => {
         phaseId: 'missing',
         question: 'Review the unmatched immutable edition?',
       }),
+      projectApproval({
+        decisionId: 'studio-issue',
+        lifecycleStatus: 'draft',
+        completedReviewCount: 1,
+        requiredReviewCount: 1,
+        question: 'Issue the reviewed immutable edition?',
+      }),
     ]);
 
     expect(
@@ -483,6 +520,9 @@ describe('TheMaking — the open chapter', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole('list', { name: 'Other project approvals' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('list', { name: 'Awaiting studio issue' }),
     ).toBeInTheDocument();
     for (const link of screen.getAllByRole('link', { name: /immutable edition/i })) {
       expect(link).toHaveClass('min-h-11', 'break-words');

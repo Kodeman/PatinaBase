@@ -7,6 +7,7 @@ import {
   useSelectDecisionOption,
 } from '@patina/supabase';
 import type { ClientDecision } from '@patina/supabase';
+import { isClientActionableLegacyDecision } from '@/lib/client-attention';
 
 /**
  * Fetch a single decision and auto-mark it as viewed by the client.
@@ -41,10 +42,7 @@ export function useClientDecision(decisionId: string) {
 /** A coordination item the client acts on directly: a selection or sign-off in
  *  their own court. Defaults reproduce the legacy decision exactly. */
 export function isClientActionableDecision(decision: ClientDecision): boolean {
-  const court = decision.court ?? 'client';
-  if (court !== 'client') return false;
-  const kind = decision.coordination_kind ?? 'selection';
-  return kind === 'selection' || kind === 'signoff';
+  return isClientActionableLegacyDecision(decision);
 }
 
 // Re-export for convenience
