@@ -318,7 +318,7 @@ export function StepDetails(props: StepDetailsProps) {
             </div>
             <p className="mt-2 text-[0.62rem] italic text-[var(--color-aged-oak,#867257)]">
               Balance {formatDollars(splitBalanceCents)} will become due
-              automatically when item enters &ldquo;Shipped&rdquo; stage.
+              automatically when item enters &ldquo;In transit&rdquo; stage.
             </p>
           </>
         )}

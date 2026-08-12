@@ -85,7 +85,7 @@ describe('StageSelect PO-sync indicator', () => {
     expect(screen.getAllByRole('option')).toHaveLength(8);
 
     // A manual pick (the override) still goes through to the parent.
-    fireEvent.click(screen.getByRole('option', { name: /Delivered/ }));
+    fireEvent.click(screen.getByRole('option', { name: /Received/ }));
     await waitFor(() => expect(onChangeStatus).toHaveBeenCalledWith('delivered'));
   });
 

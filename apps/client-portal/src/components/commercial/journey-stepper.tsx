@@ -9,10 +9,10 @@ import type { FFEStageKey, TradeScopeProgressState } from '@patina/types';
  */
 export const GOODS_JOURNEY_STAGES = [
   'Agreed',
-  'Ordered',
+  'Released to maker',
   'In production',
-  'Shipped',
-  'Delivered',
+  'In transit',
+  'Received',
   'Installed',
 ] as const;
 

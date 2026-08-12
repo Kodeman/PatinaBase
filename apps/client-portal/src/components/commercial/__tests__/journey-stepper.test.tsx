@@ -40,7 +40,7 @@ describe('JourneyStepper', () => {
 
   it('marks the stage matching the current status as the current step', () => {
     render(<JourneyStepper status="shipped" />);
-    expect(screen.getByText('Shipped')).toHaveAttribute('aria-current', 'step');
+    expect(screen.getByText('In transit')).toHaveAttribute('aria-current', 'step');
     expect(screen.getByText('Agreed')).not.toHaveAttribute('aria-current');
     expect(screen.getByText('Installed')).not.toHaveAttribute('aria-current');
   });

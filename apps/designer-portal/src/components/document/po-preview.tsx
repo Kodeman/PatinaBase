@@ -360,7 +360,7 @@ export function PoPreview({
               onClick={() => void stamp('mark_sent')}
               title="For orders placed through a vendor portal, phone, or showroom — stamps the sent date without emailing."
             >
-              Ordered by phone / portal — mark as sent
+              Released by phone / portal — mark as sent
             </DocumentAction>
           )}
           <span className="ml-auto text-[11px] text-[var(--text-muted)]">
