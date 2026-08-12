@@ -68,6 +68,12 @@ export interface ProcurementLifecycleInput {
   purchase_order?: ProcurementLifecyclePurchaseOrder | null;
   /** `damage_claims!ffe_item_id` — item-grain claims only (00196). */
   item_claims?: ProcurementLifecycleClaim[] | null;
+  /**
+   * Which register the reading is for. `purchase_order` marks the ledger's
+   * PO-grain call, where item-level disposition is invisible by construction
+   * — use `derivePurchaseOrderLifecycle` rather than setting this by hand.
+   */
+  grain?: 'ffe_item' | 'purchase_order';
 }
 
 /** Deposits that have not cleared. Vacuously empty when the terms carry none. */
@@ -80,36 +86,39 @@ function unpaidDeposits(
 }
 
 /**
- * The "Expected" column at ledger density — the confirmed ETA where the vendor
- * gave one, else the nearest payment date the book is waiting on. Existing data
- * only: a line with neither expects nothing, and says so with null rather than
- * a guess.
+ * The "Expected" column at ledger density — the SHIPMENT expectation, and only
+ * that. `confirmed_eta` or nothing.
+ *
+ * A payment due date must never surface here (folio 14: no payment surfaces,
+ * not a deposit field, not a balance). A column headed "Expected" beside goods
+ * that quietly showed a money date would be exactly the commercial claim №7
+ * has not made. A line with no confirmed ETA expects nothing, and says so.
  */
 export function procurementExpected(
   po: ProcurementLifecyclePurchaseOrder | null | undefined,
 ): string | null {
-  if (po?.confirmed_eta) return po.confirmed_eta;
-  const upcoming = (po?.payments ?? [])
-    .filter((p) => p.state !== 'paid' && p.state !== 'refunded' && p.due_date)
-    .map((p) => p.due_date as string)
-    .sort();
-  return upcoming[0] ?? null;
+  return po?.confirmed_eta ?? null;
 }
 
 /**
  * Derive the fifteen-step reading for one FF&E line on the studio rail.
  *
- * Evidence mapping (each cited to the column that carries it):
- *   01 Cleared to produce  PO exists AND every deposit-kind payment is paid
- *                          (no deposit rows ⇒ vacuously true)
+ * Evidence mapping (each cited to the column that ACTUALLY fired — the
+ * `source` string is the reading's audit trail and must never name a column
+ * that was not consulted):
+ *   01 Cleared to produce  a LIVE PO (not draft, not cancelled) AND every
+ *                          deposit-kind payment paid (no deposit rows ⇒
+ *                          vacuously true)
  *   02 Released to maker   purchase_orders.sent_at
  *   03 Acknowledged        purchase_orders.acknowledged_at
  *   05 Released ┐          purchase_orders.status='in_production'
- *   06 In production ┘     (dated by project_ffe_items.last_status_change_at)
- *   08 In transit          status='shipped' (+ confirmed_eta as the date)
+ *   06 In production ┘     or project_ffe_items.status='production'
+ *   08 In transit          status='shipped' — UNDATED (no departure fact
+ *                          exists; confirmed_eta is an expectation and belongs
+ *                          only to the ledger's Expected column)
  *   09 Received / inspect  purchase_orders.delivered_date, or the item machine
- *   10 Accepted or issue   the inspection's item-grain write
- *                          (received_quantity) and/or damage_claims.ffe_item_id
+ *   10 Accepted or issue   damage_claims.ffe_item_id and/or the clean-outcome
+ *                          write-back project_ffe_items.received_quantity
  *   13 Installed           project_ffe_items.status='installed'
  */
 export function deriveProcurementLifecycle(
@@ -122,9 +131,17 @@ export function deriveProcurementLifecycle(
   // A derived operational seal, NOT a client ceremony: it reads the deposit
   // rows the book already has. No amount, no balance, no funds-held device
   // is rendered from this anywhere (folio 14 — no payment surfaces).
+  //
+  // A DRAFT PO has not cleared anything — it is a document being written, and
+  // the vacuous-deposit rule (absent terms are not unmet terms) must not turn
+  // an unwritten order into a released one. A CANCELLED PO has un-cleared
+  // whatever it once had. Neither takes a position on the trail, which is also
+  // what keeps the ledger saying "draft" and "cancelled" out loud.
   const deposits = (po?.payments ?? []).filter((p) => p.kind === 'deposit');
   const outstandingDeposits = unpaidDeposits(po);
-  const depositsClear = po !== null && outstandingDeposits.length === 0;
+  const liveOrder =
+    po !== null && po.status !== 'draft' && po.status !== 'cancelled';
+  const depositsClear = liveOrder && outstandingDeposits.length === 0;
   if (depositsClear) {
     const paidDates = deposits
       .map((p) => p.paid_date)
@@ -158,62 +175,71 @@ export function deriveProcurementLifecycle(
   // One fact evidences both: the book has no separate release moment, and
   // production cannot have started without one. The item row carries the only
   // date (the PO keeps no status-transition history).
-  const inProduction =
-    po?.status === 'in_production' || item.status === 'production';
-  if (inProduction) {
+  const poInProduction = po?.status === 'in_production';
+  const itemInProduction = item.status === 'production';
+  if (poInProduction || itemInProduction) {
     const at = item.last_status_change_at ?? '';
-    evidence.released = {
-      at,
-      source: 'purchase_orders.status=in_production',
-    };
-    evidence.in_production = {
-      at,
-      source: 'purchase_orders.status=in_production',
-    };
+    // Name the column that actually fired, not the one that usually does.
+    const source = poInProduction
+      ? 'purchase_orders.status=in_production'
+      : 'project_ffe_items.status=production';
+    evidence.released = { at, source };
+    evidence.in_production = { at, source };
   }
 
   // ── 08 · In transit ────────────────────────────────────────────────────
-  // confirmed_eta is an EXPECTATION, not a departure — it is carried as the
-  // step's date because it is the only date a shipped PO has, and the source
-  // string says exactly which column it came from.
-  const inTransit = po?.status === 'shipped' || item.status === 'shipped';
-  if (inTransit) {
+  // UNDATED, deliberately. The book records no departure — `confirmed_eta` is
+  // an expectation about arrival, and dating a shipping step with it would
+  // report a fact that does not exist. The ETA renders once, in the ledger's
+  // Expected column, under the `~` convention that marks it as approximate.
+  const poShipped = po?.status === 'shipped';
+  const itemShipped = item.status === 'shipped';
+  if (poShipped || itemShipped) {
     evidence.in_transit = {
-      at: po?.confirmed_eta ?? item.last_status_change_at ?? '',
-      source: po?.confirmed_eta
-        ? 'purchase_orders.status=shipped + confirmed_eta'
-        : 'purchase_orders.status=shipped',
+      at: '',
+      source: poShipped
+        ? 'purchase_orders.status=shipped'
+        : 'project_ffe_items.status=shipped',
     };
   }
 
   // ── 09 · Received / inspect ────────────────────────────────────────────
-  const inspected = item.received_quantity != null;
-  const delivered =
-    Boolean(po?.delivered_date) ||
-    po?.status === 'delivered' ||
-    item.status === 'delivered';
-  if (delivered || inspected) {
+  // `delivered_date` is stamped when the FIRST receiving_inspections row is
+  // logged, whatever its outcome (00150) — so it, not the count, is the fact
+  // that an inspection happened.
+  const claims = item.item_claims ?? [];
+  const openClaims = claims.filter((c) => OPEN_CLAIM_STATES.has(c.state));
+  const deliveredDate = po?.delivered_date ?? null;
+  const poDelivered = po?.status === 'delivered';
+  const itemDelivered = item.status === 'delivered';
+  if (deliveredDate || poDelivered || itemDelivered) {
     evidence.received_inspect = {
-      at: po?.delivered_date ?? item.last_status_change_at ?? '',
-      source: po?.delivered_date
+      at: deliveredDate ?? item.last_status_change_at ?? '',
+      source: deliveredDate
         ? 'purchase_orders.delivered_date'
-        : 'project_ffe_items.status=delivered',
+        : poDelivered
+          ? 'purchase_orders.status=delivered'
+          : 'project_ffe_items.status=delivered',
     };
   }
 
   // ── 10 · Accepted or issue ─────────────────────────────────────────────
-  // `receiving_inspections` is PO-grain and has no FF&E link, so the item-grain
-  // trace of an inspection is the count 00184's trigger writes back, plus any
-  // claim attributed to THIS line. A PO-grain claim never reads on a line.
-  const claims = item.item_claims ?? [];
-  const openClaims = claims.filter((c) => OPEN_CLAIM_STATES.has(c.state));
-  if (inspected || claims.length > 0) {
-    const claimDate = claims
-      .map((c) => c.created_at)
-      .filter((d): d is string => Boolean(d))
-      .sort()[0];
+  // Two dispositions, two traces. A claim is the ISSUE half. The count that
+  // 00184's trigger writes back is the ACCEPTED half — the trigger only fires
+  // on a clean outcome, which is exactly why a non-null count means accepted
+  // rather than merely inspected.
+  const countedClean = item.received_quantity != null;
+  if (countedClean || claims.length > 0) {
+    // Open claims outrank resolved ones — an unresolved issue is the live
+    // fact. Among open claims, the earliest is the one that has been waiting.
+    const dateFrom = (rows: ProcurementLifecycleClaim[]) =>
+      rows
+        .map((c) => c.created_at)
+        .filter((d): d is string => Boolean(d))
+        .sort()[0];
+    const claimDate = dateFrom(openClaims) ?? dateFrom(claims);
     evidence.accepted_or_issue = {
-      at: claimDate ?? po?.delivered_date ?? '',
+      at: claimDate ?? deliveredDate ?? '',
       source: claims.length
         ? 'damage_claims.ffe_item_id'
         : 'project_ffe_items.received_quantity',
@@ -232,34 +258,89 @@ export function deriveProcurementLifecycle(
   // Derived OPERATIONAL seals. They read the book's own facts; no
   // client_decisions row is consulted and no client act settles one.
   const acknowledged = Boolean(po?.acknowledged_at);
+  // An inspection HAPPENED when delivered_date was stamped (00150 writes it on
+  // the first inspection row, any outcome) or a claim exists — never from the
+  // count, which 00184 writes only on a clean outcome and which would
+  // therefore report a damaged receipt as un-inspected.
+  const inspectionLogged = Boolean(deliveredDate) || claims.length > 0;
+  // The count governs ONE term: whether everything ordered actually turned up.
   const shortReceipt =
-    inspected &&
+    item.received_quantity != null &&
     item.quantity != null &&
-    (item.received_quantity as number) < item.quantity;
+    item.received_quantity < item.quantity;
 
   const gates: ProcurementGatePredicates = {
     complete_to_produce: {
       settled: acknowledged && depositsClear,
+      // Uncleared terms are a LIVE condition — the order is standing on them
+      // right now, whatever the maker has started. A missing acknowledgment is
+      // NOT: if the work is in production the vendor plainly received the
+      // order, and the gap is an unrecorded seal, not a blockage. So terms
+      // hold the gate open; a missing acknowledgment lets it go quiet.
+      holdsOpen: outstandingDeposits.length > 0,
+      // Actor-neutral: the gate reports that the ORDER's terms are outstanding,
+      // never that money is owed by anyone (№7 open, folio 14).
       qualifier: !acknowledged
         ? 'awaiting acknowledgment'
         : outstandingDeposits.length
-          ? 'deposit outstanding'
+          ? 'terms outstanding'
           : undefined,
     },
-    received_and_dispositioned: {
-      settled: inspected && !shortReceipt && openClaims.length === 0,
-      qualifier: !inspected
-        ? 'awaiting inspection'
-        : openClaims.length
-          ? 'open claim'
-          : shortReceipt
-            ? 'short receipt'
-            : undefined,
-    },
+    received_and_dispositioned:
+      item.grain === 'purchase_order'
+        ? // Disposition is item-level; a register of orders cannot see it, so
+          // it never seals here and never invents a term. It stays a real
+          // destination though — receipt IS the next thing that happens to
+          // these goods, and the book may honestly say so (M7's book plate).
+          { settled: false }
+        : {
+            settled:
+              inspectionLogged && !shortReceipt && openClaims.length === 0,
+            // Every one of these is a live condition, not a missing signature:
+            // the goods are short, damaged, or unlooked-at right now. The gate
+            // stops the work even though a claim technically evidences step 10
+            // and puts the trail's position past the gate.
+            holdsOpen:
+              openClaims.length > 0 || shortReceipt || !inspectionLogged,
+            // An open claim is the loudest fact about a receipt and outranks
+            // everything else the gate could say about it.
+            qualifier: openClaims.length
+              ? 'open claim'
+              : shortReceipt
+                ? 'short receipt'
+                : !inspectionLogged
+                  ? 'awaiting inspection'
+                  : undefined,
+          },
     // №8 docket: nothing in the schema records warehouse custody or site
     // readiness. The gate is drawn, and it is drawn empty.
     warehouse_and_site_ready: { settled: false, noRecord: true },
   };
 
   return assembleProcurementReading('studio', evidence, gates);
+}
+
+/**
+ * The ledger's entry point — a reading at PURCHASE-ORDER grain.
+ *
+ * The orders book is a register of orders, not of lines, and feeding a PO's
+ * status into the item-status field would be a category error: the two
+ * vocabularies overlap but are not the same machine.
+ *
+ * **Gate G2 cannot settle at this grain, by construction.** Disposition is
+ * item-level — counts and claims hang off FF&E lines, and one PO can carry
+ * twenty of them. So G2 is declared record-less here: it reads `unreached`
+ * while the order is still in flight (which is what lets the book name it as
+ * the next gate, per M7), and goes quiet once delivery is past rather than
+ * inventing an "awaiting inspection" the register cannot see.
+ */
+export function derivePurchaseOrderLifecycle(
+  po: ProcurementLifecyclePurchaseOrder,
+): ProcurementLifecycleReading {
+  return deriveProcurementLifecycle({
+    // No item machine at this grain — the PO speaks for itself.
+    status: '',
+    purchase_order: po,
+    grain: 'purchase_order',
+  });
 }
