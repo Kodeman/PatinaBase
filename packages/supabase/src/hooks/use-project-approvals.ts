@@ -440,6 +440,8 @@ export function useProjectApprovalByDecision(decisionId: string | undefined) {
     },
     enabled: !!decisionId,
     ...approvalForegroundRefresh,
+    // TODO(wave1-reconciliation): remove silent once wave1 schema is applied to prod
+    meta: { errorSurface: 'silent' },
   });
 }
 
@@ -461,6 +463,8 @@ export function useMyProjectApprovalReviews() {
       return data.map(parseProjectApprovalReview);
     },
     ...approvalForegroundRefresh,
+    // TODO(wave1-reconciliation): remove silent once wave1 schema is applied to prod
+    meta: { errorSurface: 'silent' },
   });
 }
 
