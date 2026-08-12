@@ -41,6 +41,36 @@ Migration numbers in `docs/design/workflow-alignment/wave1-engineering-review.md
 and `docs/design/workflow-alignment/HANDOFF.md` predate this renumber; both carry a
 dated 2026-08-12 erratum block pointing here.
 
+### 0.1 Rails — how this runbook reaches prod
+
+There is no stored prod database password on this machine, and raw `psql` has never
+been the way this project touches Strata. Everything below runs on three rails:
+
+1. **Apply = `supabase db push`** (Supabase CLI v2.72.7, already `--linked` to
+   `bkvcixdmuyejfzcijpdg`). The CLI authenticates with the access token in the macOS
+   keychain (service **"Supabase CLI"**) — no password prompt, no connection string.
+   This is the rail that pushed `00458` on 2026-08-12. Useful flags: `--dry-run`,
+   `--include-all`, `--linked` (default true), `-p/--password`, `--db-url`.
+2. **Ad-hoc SQL = Dashboard SQL Editor, or a Claude session's Supabase MCP
+   `execute_sql`.** The CLI has **no** ad-hoc query command, so every SQL block in
+   this runbook (§2 snapshot, §3 ledger assertions, §5 post-apply checks, §6
+   `COMMENT`, §7 reader-loss query) runs one of these two ways:
+   - **Preferred:** Supabase Dashboard → SQL Editor. It executes as `postgres`, which
+     is sufficient privilege for every query here.
+   - **Alternative:** the Supabase MCP `execute_sql` tool from a Claude Code session —
+     same access-token rail, same project, convenient for capturing output into a
+     transcript.
+3. **Raw `psql` = explicit fallback only.** If both rails above are unavailable:
+
+   ```
+   postgresql://postgres.bkvcixdmuyejfzcijpdg@aws-1-us-east-1.pooler.supabase.com:5432/postgres
+   ```
+
+   That is the **session** pooler — port **5432**, never 6543 (transaction pooler;
+   it will not carry `\i`, session-level `SET LOCAL`, or an explicit multi-statement
+   transaction reliably). The password is **not stored on this machine**; retrieve it
+   from Dashboard → Project Settings → Database when the fallback is actually needed.
+
 ---
 
 ## 1. Apply sequence
@@ -48,6 +78,52 @@ dated 2026-08-12 erratum block pointing here.
 Apply **in order**, one file at a time, verifying between each. Twelve of the
 thirteen apply; **position 12 (`00471`) is HELD** per the 2026-08-12 ruling and is
 skipped — it stays unapplied until the Field gate in §7 clears.
+
+### 1.0 One-file-at-a-time mechanics (quarantine directory)
+
+`supabase db push` applies **every** pending file in `supabase/migrations/` in one
+run. It has no "apply just this one" flag. To get the one-at-a-time discipline this
+runbook requires, quarantine the whole pending set first and re-admit files one by
+one.
+
+**Setup — before applying anything:**
+
+```bash
+mkdir -p supabase/migrations-held
+git mv supabase/migrations/0046*.sql \
+       supabase/migrations/0047[0-2]_*.sql \
+       supabase/migrations-held/
+ls supabase/migrations-held/     # expect exactly 00460 … 00472 (13 files)
+```
+
+**Then, for each file in the §1 order:**
+
+```bash
+# 1. Re-admit exactly one file.
+git mv supabase/migrations-held/<NNNNN>_<slug>.sql supabase/migrations/
+
+# 2. Confirm the CLI sees exactly that one pending file — and nothing else.
+supabase db push --dry-run
+
+# 3. Apply it.
+supabase db push
+
+# 4. Run that step's verification (§3 after 00460, §4 before/§5.3 after 00462,
+#    §5 checks as they become relevant) BEFORE re-admitting the next file.
+```
+
+If `--dry-run` lists more than the single file you just moved, **stop** — something
+else is pending and the one-at-a-time discipline is already broken.
+
+`00471` is never re-admitted during this apply: it stays in
+`supabase/migrations-held/` (see §6/§7). `00472` is re-admitted last, after the §1.1
+grep check passes.
+
+> ⛔ **Never use `supabase migration repair --status applied` to "skip" 00471.** That
+> writes a ledger row claiming 00471 ran when it did not — a lie in the ledger that a
+> later operator, or a `db pull`, will act on. The hold is recorded in prose (§6) and
+> enforced by the file's absence from `supabase/migrations/`, never by a forged
+> ledger entry.
 
 | # | Migration | Apply? | Notes |
 | --- | --- | --- | --- |
@@ -72,8 +148,9 @@ held means 00472 lands on a base its lineage comment does not describe. Before
 applying 00472, confirm it does not reference an object that only 00471 creates:
 
 ```bash
+# Run this while 00472 is still quarantined, before re-admitting it (§1.0).
 grep -nE 'get_site_request_action_detail|site_request_close' \
-  supabase/migrations/00472_site_binder_exact_studio_privacy.sql
+  supabase/migrations-held/00472_site_binder_exact_studio_privacy.sql
 ```
 
 If that returns nothing, 00472 is independent of 00471 and applies safely. **If it
@@ -84,8 +161,10 @@ compensate — fix forward later, after 00471 lands.
 
 ## 2. Pre-apply snapshot
 
-Capture the current prod posture **before touching anything**. Save the output; it is
-the only rollback reference for the privacy changes.
+Capture the current prod posture **before touching anything**. Run these on a query
+rail from §0.1 — Dashboard SQL Editor (preferred) or MCP `execute_sql`. Save the
+output somewhere off the database; it is the only rollback reference for the privacy
+changes.
 
 ```sql
 -- 2.1 Function bodies for everything wave1 redefines.
@@ -137,7 +216,7 @@ ORDER BY p.proname, r.rolname;
 The out-of-band FF&E applies may have left `supabase_migrations.schema_migrations`
 rows with a NULL `name` or NULL `statements`. `supabase db push` tolerates that on
 read but the repair path does not. **After the first successful apply (`00460`),
-assert the ledger row is complete:**
+assert the ledger row is complete** (query rail per §0.1)**:**
 
 ```sql
 SELECT version, name, (statements IS NOT NULL) AS has_statements
@@ -197,7 +276,21 @@ rolls back — which is the desired behavior. Do **not** split 00462 into pieces
 policy set that matches neither the old nor the new posture. If 00462 fails, fix the
 file, then re-run it whole.
 
-If you apply by hand via `psql` rather than `supabase db push`, wrap it explicitly:
+**Primary apply stays `supabase db push`** (per §1.0): re-admit only
+`00462_workflow_privacy_authority.sql`, `--dry-run` to confirm it is the sole pending
+file, then push. The file lands whole or not at all.
+
+**Checkpointing.** `db push` offers no inside-the-transaction checkpoint — by the
+time you can run a query, the file has already committed. So run the **§5.3 posture
+checks immediately after the push** (Dashboard SQL Editor / MCP `execute_sql`), and
+treat them as the gate. If a check fails, the response is a **PITR restore to the
+timestamp noted in step 1** — not `ROLLBACK`, which is no longer available. This is
+why step 1 is non-negotiable.
+
+**FALLBACK — raw `psql` only.** If, and only if, you are applying by hand outside the
+CLI, you get a real in-transaction checkpoint. Connect on the §0.1 session-pooler URI
+(port 5432, password from Dashboard → Project Settings → Database — it is not stored
+on this machine):
 
 ```sql
 BEGIN;
@@ -206,9 +299,16 @@ BEGIN;
 COMMIT;  -- or ROLLBACK if any check fails
 ```
 
+Note that a hand-applied file does **not** write a `supabase_migrations` ledger row;
+if you take this path you own reconciling the ledger afterward — and per §1.0, never
+by forging one with `migration repair`.
+
 ---
 
 ## 5. Post-apply verification
+
+All queries in this section run on a §0.1 query rail — Dashboard SQL Editor
+(preferred) or MCP `execute_sql`.
 
 ### 5.1 Object existence — RPC expectation
 
@@ -363,7 +463,34 @@ Every `a_guard*` trigger must sort **first** within its table and be `BEFORE`.
 
 With 00471 held, the prod ledger will read `… 00470, 00472`. That gap is
 intentional and must be recorded so a later operator does not "repair" it by
-applying 00471 blind:
+applying 00471 blind.
+
+### 6.1 The file stays quarantined (this is the real enforcement)
+
+`supabase db push` applies **everything** pending. The moment
+`00471_site_request_authority_action_detail.sql` sits in `supabase/migrations/`, the
+very next push by anyone — for an unrelated migration — applies it and silently
+breaks the gate.
+
+So the hold is enforced by file location, not by discipline:
+
+- **`00471` remains in `supabase/migrations-held/`.** Commit it there. Future pushes
+  are then safe by construction.
+- Drop a one-line `supabase/migrations-held/README.md` explaining why, e.g.:
+
+  ```bash
+  printf '%s\n' 'Migrations quarantined from `supabase db push`. 00471 is HELD — see docs/ops/wave1-prod-reconciliation-plan.md §7.' \
+    > supabase/migrations-held/README.md
+  ```
+
+- When the §7 gate clears: `git mv supabase/migrations-held/00471_*.sql
+  supabase/migrations/`, `supabase db push --dry-run` to confirm it is the only
+  pending file, then `supabase db push`.
+
+### 6.2 Schema comment
+
+Also record the hold in the database itself, via the §0.1 query rail (Dashboard SQL
+Editor or MCP `execute_sql`):
 
 ```sql
 COMMENT ON SCHEMA public IS
@@ -432,10 +559,15 @@ FROM loss;
 -- Expect 0. Anything above 0 needs Kody's explicit acceptance before 00471 applies.
 ```
 
-> Both predicates read `auth.uid()` internally, so evaluate them per-user by
-> setting the session claim (`SET LOCAL request.jwt.claims = ...`) inside a loop, or
-> run the equivalent against the underlying membership tables. The shape above
-> documents the intent; adapt the session-claim mechanics to your psql session.
+> Run this on a §0.1 query rail — Dashboard SQL Editor (preferred) or MCP
+> `execute_sql`. Both execute as `postgres`, which clears the privilege bar.
+>
+> Both predicates read `auth.uid()` internally, so the query as written cannot
+> evaluate them per-user in a single pass. Either evaluate per-user by setting the
+> claim (`SET LOCAL request.jwt.claims = ...`) once per user and re-running the
+> `loss` CTE, or — simpler on these rails — rewrite the two predicates against the
+> underlying membership tables so the whole thing runs as one set-based query. The
+> shape above documents the intent, not the literal statement to paste.
 
 ---
 
