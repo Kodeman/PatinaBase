@@ -23,7 +23,12 @@ test('section stage line reflows at 320px without horizontal overflow', async ({
   });
 
   const workflow = page.locator('[data-workflow-document]');
-  await expect(workflow).toBeVisible();
+  // The default 5s expect timeout is shorter than a Next dev cold-compile of
+  // the /doc route, so this fails on "Picking up…" whenever the suite runs
+  // alongside other Document specs and the dev server is under load (the same
+  // reason playwright.config.ts lifts the per-test timeout to 60s). The reflow
+  // assertions below are unchanged — this only waits long enough to make them.
+  await expect(workflow).toBeVisible({ timeout: 30_000 });
   await expect
     .poll(async () => {
       const bounds = await workflow.evaluate((element) => ({
