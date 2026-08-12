@@ -157,3 +157,76 @@ Deno.test("LLM <0.5 routes to designer review", async () => {
     .find((m) => m.direction === "inbound" && m.needs_review);
   assert(msg, "message flagged needs_review");
 });
+
+// ── project-chooser loop fix ─────────────────────────────────────────────────
+function multiProjectSeed(conversation: Record<string, unknown>) {
+  return baseSeed({
+    projects: [
+      { id: "proj1", name: "Maple St", designer_id: "dz1" },
+      { id: "proj2", name: "Feldman", designer_id: "dz1" },
+    ],
+    project_parties: [
+      { id: "p1", phone_e164: "+15551110004", project_id: "proj1", party_kind: "sub", sms_consent_status: "granted" },
+      { id: "p2", phone_e164: "+15551110004", project_id: "proj2", party_kind: "sub", sms_consent_status: "granted" },
+    ],
+    project_tasks: [
+      { id: "task2", title: "Confirm the number", due_date: null, owner_party_id: "p2", status: "todo", project_id: "proj2" },
+    ],
+    sms_conversations: [conversation],
+  });
+}
+
+Deno.test("freeform with active_project_id set skips the chooser", async () => {
+  const rpcCalls: Array<Record<string, unknown>> = [];
+  const fake: FakeSupabase = createFakeSupabase(
+    multiProjectSeed({
+      id: "conv1", twilio_number: TO, phone_e164: "+15551110004", state: "idle",
+      active_project_id: "proj2", party_id: "p2", state_context: {},
+    }),
+    { apply_field_effect: (args) => { rpcCalls.push(args); return { data: { summary_text: "Got it.", remaining_count: 0 }, error: null }; } },
+  );
+  const parseFn = (): Promise<FieldParseResult> =>
+    Promise.resolve({ intent: "note", target_ref: null, new_date: null, note: "cant get the number until Thursday", confidence: 0.9 });
+  const res = await processInbound(
+    params({ From: "+15551110004", Body: "cant get the number until Thursday", MessageSid: "SMactive" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG, parseFn },
+  );
+  assertEquals(res.disposition, "applied");
+  assertEquals(rpcCalls.length, 1, "no chooser loop — the update is applied straight through");
+});
+
+Deno.test("chooser resolution processes the stashed triggering text and preserves state_context.menu", async () => {
+  const rpcCalls: Array<Record<string, unknown>> = [];
+  const fake: FakeSupabase = createFakeSupabase(
+    multiProjectSeed({
+      id: "conv1", twilio_number: TO, phone_e164: "+15551110004", state: "awaiting_project_choice",
+      active_project_id: null, party_id: null,
+      state_context: {
+        chooser: [{ n: 1, project_id: "proj1", party_id: "p1" }, { n: 2, project_id: "proj2", party_id: "p2" }],
+        pending_body: "cant get the number until Thursday",
+        menu: [{ n: 1, kind: "task", id: "digest1", project_id: "proj1" }],
+        menu_created_at: "2026-08-12T00:00:00.000Z",
+      },
+    }),
+    { apply_field_effect: (args) => { rpcCalls.push(args); return { data: { summary_text: "Got it.", remaining_count: 0 }, error: null }; } },
+  );
+  const parseFn = (): Promise<FieldParseResult> =>
+    Promise.resolve({ intent: "note", target_ref: null, new_date: null, note: "cant get the number until Thursday", confidence: 0.9 });
+  const res = await processInbound(
+    params({ From: "+15551110004", Body: "2", MessageSid: "SMchoice" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG, parseFn },
+  );
+  // The chosen project's stashed freeform text is processed now — not a
+  // second "text me your update" brush-off — and the pipeline never asks
+  // "which project" again.
+  assertEquals(res.disposition, "applied");
+  assertEquals(rpcCalls.length, 1);
+  assert(!res.twiml.includes("Text me your update"));
+  assert(!res.twiml.includes("Which project?"));
+  const conv = (fake._data.sms_conversations as Array<{ state: string; active_project_id: string; state_context: { menu?: unknown; chooser?: unknown; pending_body?: unknown } }>)[0];
+  assertEquals(conv.state, "idle");
+  assertEquals(conv.active_project_id, "proj2");
+  assert(conv.state_context.menu, "digest menu preserved through the chooser resolution");
+  assertEquals(conv.state_context.chooser, undefined);
+  assertEquals(conv.state_context.pending_body, undefined);
+});

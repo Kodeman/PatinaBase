@@ -267,7 +267,7 @@ export async function processInbound(
   const parseFn = deps.parseFn ?? parseFieldMessage;
   const from = params.From;
   const to = params.To;
-  const body = (params.Body ?? "").trim();
+  let body = (params.Body ?? "").trim();
   const upper = body.toUpperCase();
 
   // (c) idempotency claim on a per-conversation message row.
@@ -386,13 +386,29 @@ export async function processInbound(
     const chooser = (conv.state_context?.chooser ?? []) as Array<{ n: number; project_id: string; party_id: string }>;
     const pick = chooser.find((c) => c.n === choice);
     if (pick) {
+      // Merge — never overwrite — state_context: a digest `menu` (or other
+      // stashed keys) predating the chooser must survive the resolution.
+      const mergedContext = { ...conv.state_context };
+      delete mergedContext.chooser;
+      const pendingText = typeof mergedContext.pending_body === "string" ? mergedContext.pending_body : "";
+      delete mergedContext.pending_body;
       await supabase.from("sms_conversations")
-        .update({ state: "idle", active_project_id: pick.project_id, party_id: pick.party_id, state_context: {} })
+        .update({ state: "idle", active_project_id: pick.project_id, party_id: pick.party_id, state_context: mergedContext })
         .eq("id", conv.id);
-      await stampMessage(supabase, messageId, pick.party_id, pick.project_id, { path: "menu", disambiguated: true });
-      return await reply(supabase, conv.id,
-        `Got it — working on ${projectNames[pick.project_id] ?? "that project"}. Text me your update.`,
-        pick.party_id, pick.project_id, "project_chosen");
+      if (!pendingText) {
+        await stampMessage(supabase, messageId, pick.party_id, pick.project_id, { path: "menu", disambiguated: true });
+        return await reply(supabase, conv.id,
+          `Got it — working on ${projectNames[pick.project_id] ?? "that project"}. Text me your update.`,
+          pick.party_id, pick.project_id, "project_chosen");
+      }
+      // Carry the freeform text that triggered the chooser through the
+      // normal freeform path, now scoped to the just-picked project — don't
+      // drop it and don't make the party re-send it.
+      body = pendingText;
+      conv.state = "idle";
+      conv.active_project_id = pick.project_id;
+      conv.party_id = pick.party_id;
+      conv.state_context = mergedContext;
     }
     // Not a valid choice → fall through to fresh parse.
   }
@@ -435,8 +451,16 @@ export async function processInbound(
     }
   }
 
+  // A conversation already pinned to one of this party's projects (freshly
+  // chosen or from an earlier turn) never needs the chooser again — and the
+  // LLM should only see that project's items, not every project on the phone.
+  const activePartyForConv = conv.active_project_id
+    ? parties.find((p) => p.project_id === conv.active_project_id)
+    : undefined;
+  const partiesForItems = activePartyForConv ? [activePartyForConv] : parties;
+
   // (h) LLM parse against every open item across the phone's parties.
-  const candidateItems = await loadCandidateItems(supabase, parties, projectNames);
+  const candidateItems = await loadCandidateItems(supabase, partiesForItems, projectNames);
   const recent = await loadRecentMessages(supabase, conv.id);
   const parsed = await parseFn({
     body,
@@ -452,14 +476,14 @@ export async function processInbound(
   const bucket = parsed.confidence >= 0.8 ? "high" : parsed.confidence >= 0.5 ? "mid" : "low";
 
   // Multi-project ambiguity with no resolved target → project chooser.
-  if (!targetItem && projectIds.length > 1 && parsed.intent !== "note" && parsed.intent !== "question") {
+  if (!targetItem && !activePartyForConv && projectIds.length > 1 && parsed.intent !== "note" && parsed.intent !== "question") {
     const chooser = projectIds.map((pid, i) => ({
       n: i + 1,
       project_id: pid,
       party_id: parties.find((p) => p.project_id === pid)!.id,
     }));
     await supabase.from("sms_conversations")
-      .update({ state: "awaiting_project_choice", state_context: { chooser, pending_body: body } })
+      .update({ state: "awaiting_project_choice", state_context: { ...conv.state_context, chooser, pending_body: body } })
       .eq("id", conv.id);
     const list = chooser.map((c) => `${c.n}) ${projectNames[c.project_id] ?? "Project"}`).join(" ");
     await captureServerEvent("sms-inbound", "sms_parse_outcome",
@@ -468,8 +492,8 @@ export async function processInbound(
     return await reply(supabase, conv.id, `Which project? ${list} — reply a number.`, null, null, "project_chooser");
   }
 
-  const effectParty = targetItem?.party_id ?? parties[0].id;
-  const effectProject = targetItem?.project_id ?? parties[0].project_id;
+  const effectParty = targetItem?.party_id ?? activePartyForConv?.id ?? parties[0].id;
+  const effectProject = targetItem?.project_id ?? activePartyForConv?.project_id ?? parties[0].project_id;
   const effect = buildEffect(parsed, media);
 
   // (i) Confidence gate.
