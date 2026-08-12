@@ -230,7 +230,10 @@ serve(async (req) => {
         );
 
         if (result.success) {
-          await updateLog(supabase, logId, "delivered", undefined, result.id);
+          // Twilio ACCEPTED the send — not proof of delivery. Stay 'sending'
+          // (provider_id links this row to the sms-status webhook, which
+          // flips it to 'delivered'/'failed' when the real callback arrives).
+          await updateLog(supabase, logId, "sending", undefined, result.id);
           return new Response(
             JSON.stringify({
               success: true,

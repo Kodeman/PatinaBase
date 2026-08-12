@@ -9,6 +9,10 @@
 //   (c) update the matching sms_messages row: twilio_status always; error_code
 //       / error_message only when Twilio's callback included them — an absent
 //       param must never null out a previously recorded error.
+//   (d) flip the LINKED notification_log row (matched by provider_id =
+//       MessageSid, channel = sms) from its acceptance-time 'sending' to
+//       'delivered'/'failed' — only sms-dispatch and site-request-dispatch
+//       write that link; other channels (email/APNs/Stripe) are untouched.
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { verifyTwilioSignature } from "../_shared/twilio-verify.ts";
@@ -91,6 +95,35 @@ export async function handleStatusCallback(
       error: (error as { message?: string }).message,
     });
     return response(500);
+  }
+
+  // (d) Flip the linked notification_log row, if one exists, from its
+  // acceptance-time 'sending' to a terminal status. Only 'delivered' and
+  // 'failed'/'undelivered' are terminal here — intermediate callbacks
+  // (queued/sending/sent/accepted/...) leave notification_log alone; it's
+  // already 'sending'. Best-effort: a missing/failed update here must not
+  // fail the webhook — Twilio already got its 204 for the sms_messages write.
+  const notifStatus = messageStatus === "delivered"
+    ? "delivered"
+    : (messageStatus === "failed" || messageStatus === "undelivered")
+    ? "failed"
+    : null;
+  if (notifStatus) {
+    const notifUpdate: Record<string, unknown> = { status: notifStatus };
+    if (notifStatus === "delivered") notifUpdate.sent_at = new Date().toISOString();
+    if (update.error_message !== undefined) notifUpdate.error = update.error_message;
+    const { error: notifError } = await deps.supabase
+      .from("notification_log")
+      .update(notifUpdate)
+      .eq("provider_id", messageSid)
+      .eq("channel", "sms");
+    if (notifError) {
+      console.error("sms-status notification_log flip failed", {
+        messageSid,
+        messageStatus,
+        error: (notifError as { message?: string }).message,
+      });
+    }
   }
 
   return response(204);
