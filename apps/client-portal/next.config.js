@@ -225,6 +225,19 @@ const nextConfig = {
     '@patina/types',
     '@patina/utils',
   ],
+
+  experimental: {
+    // Default Server Actions body limit is 1MB. The no-login field page
+    // (src/app/field/[token]/) lets guests attach a phone camera photo
+    // (2-6MB raw) to a Problem report via a Server Action — the default
+    // limit rejects the request during body parsing, before the action
+    // handler runs, which surfaces the root error boundary. The client
+    // already downscales the photo before submit (field-actions.tsx), but
+    // this raises the ceiling as the backstop for whatever gets through.
+    serverActions: {
+      bodySizeLimit: '10mb',
+    },
+  },
 };
 
 module.exports = withPWA(nextConfig);

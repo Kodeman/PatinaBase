@@ -25,6 +25,8 @@ export interface FieldActionResult {
   summaryText?: string;
   remainingCount?: number;
   error?: string;
+  /** Non-fatal — the report still went through, but something (e.g. the photo) didn't. */
+  warning?: string;
 }
 
 interface ResolvedGuest {
@@ -92,6 +94,7 @@ export async function reportProblem(
 
   let media: string[] = [];
   let effectNote = note.trim();
+  let warning: string | undefined;
 
   const photo = photoFormData?.get('photo');
   if (photo instanceof File && photo.size > 0) {
@@ -107,6 +110,14 @@ export async function reportProblem(
       // no sms_messages row to carry it — without this the photo is orphaned.
       const marker = `[photo: ${path}]`;
       effectNote = effectNote ? `${effectNote}\n${marker}` : marker;
+    } else {
+      // Upload failed — the report still matters more than the photo, so it
+      // still goes through. The note carries a plain marker so the designer
+      // isn't left assuming a photo they'll never see, and the guest gets a
+      // non-fatal warning back instead of losing the whole submission.
+      const marker = '[photo failed to upload]';
+      effectNote = effectNote ? `${effectNote}\n${marker}` : marker;
+      warning = 'Your note was sent, but the photo failed to upload — try again with a smaller photo if it matters.';
     }
   }
 
@@ -123,7 +134,7 @@ export async function reportProblem(
   if (error) return { ok: false, error: friendlyError(error) };
 
   revalidatePath(`/field/${token}`);
-  return { ok: true, summaryText: data?.summary_text, remainingCount: data?.remaining_count };
+  return { ok: true, summaryText: data?.summary_text, remainingCount: data?.remaining_count, warning };
 }
 
 /**

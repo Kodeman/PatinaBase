@@ -10,6 +10,7 @@
 import { useState, useTransition } from 'react';
 import { Badge, Button, Textarea } from '@patina/design-system';
 import { completeItem, confirmDelivery, reportProblem } from './actions';
+import { downscalePhoto } from './downscale-photo';
 import {
   formatShortDate,
   getCoordinationKindLabel,
@@ -39,7 +40,16 @@ export function FieldTaskRow({ token, target, title, dueDate, kindLabel, blocked
   const [note, setNote] = useState('');
   const [photo, setPhoto] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  async function handlePhotoChange(file: File | null) {
+    if (!file) {
+      setPhoto(null);
+      return;
+    }
+    setPhoto(await downscalePhoto(file));
+  }
 
   function handleDone() {
     setError(null);
@@ -75,6 +85,7 @@ export function FieldTaskRow({ token, target, title, dueDate, kindLabel, blocked
       setStatus('problem');
       setSummary(result.summaryText ?? 'Sent to your designer.');
       setRemaining(result.remainingCount ?? null);
+      setWarning(result.warning ?? null);
       setShowProblemForm(false);
     });
   }
@@ -88,6 +99,7 @@ export function FieldTaskRow({ token, target, title, dueDate, kindLabel, blocked
           {summary}
           {typeof remaining === 'number' ? ` · ${remaining} left` : ''}
         </p>
+        {warning && <p className="type-body-small mt-1 text-[var(--color-terracotta)]">{warning}</p>}
       </li>
     );
   }
@@ -142,7 +154,7 @@ export function FieldTaskRow({ token, target, title, dueDate, kindLabel, blocked
               type="file"
               accept="image/*"
               capture="environment"
-              onChange={(e) => setPhoto(e.target.files?.[0] ?? null)}
+              onChange={(e) => void handlePhotoChange(e.target.files?.[0] ?? null)}
               className="block w-full text-sm"
             />
           </label>
