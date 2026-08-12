@@ -290,6 +290,44 @@ Deno.test("MG From without SMS_CONVERSATION_NUMBER refuses to send (would split 
   );
 });
 
+Deno.test("MG-prefixed SMS_CONVERSATION_NUMBER is treated as unset and refuses to send", async () => {
+  const fake = createFakeSupabase({
+    project_parties: [party("p1", "granted")],
+  });
+  let fetchCalls = 0;
+  const res = await sendPartySms(
+    fake as never,
+    { partyId: "p1", body: "hi there" },
+    {
+      getEnv: envOf({
+        SMS_DEV_MODE: "off",
+        TWILIO_FROM_NUMBER: "MG0123456789abcdef",
+        SMS_CONVERSATION_NUMBER: "MG9999999999abcdef",
+        TWILIO_ACCOUNT_SID: "AC1",
+        TWILIO_AUTH_TOKEN: "tok",
+      }),
+      fetchImpl: (() => {
+        fetchCalls++;
+        return Promise.reject("must not call Twilio");
+      }) as unknown as typeof fetch,
+      now: new Date("2026-07-08T18:00:00Z"),
+    },
+  );
+  assert(!res.sent);
+  assertEquals(res.reason, "conversation_number_not_configured");
+  assertEquals(fetchCalls, 0, "Twilio must not be called");
+  assertEquals(
+    (fake._data.sms_conversations ?? []).length,
+    0,
+    "no conversation created",
+  );
+  assertEquals(
+    (fake._data.sms_messages ?? []).length,
+    0,
+    "no message row inserted",
+  );
+});
+
 // ── flushDeferredMessages hardening ─────────────────────────────────────────
 function flushEnv(extra: Record<string, string> = {}) {
   return envOf({
@@ -341,6 +379,46 @@ Deno.test("flush: an opted-out recipient is suppressed and never sent", async ()
   };
   assertEquals(row.twilio_status, "suppressed");
   assertEquals(row.error_message, "opted_out");
+});
+
+Deno.test("flush: a deferred sms_optin_invite with no project_parties rows on the phone is suppressed as not_invitable", async () => {
+  const now = new Date("2026-07-08T18:00:00Z"); // ~1pm Chicago — not quiet
+  const fake = createFakeSupabase({
+    sms_conversations: [
+      { id: "conv1", twilio_number: "+15550000000", phone_e164: "+15551239999" },
+    ],
+    sms_messages: [
+      {
+        id: "m1",
+        direction: "outbound",
+        twilio_status: "deferred",
+        body: "Reply YES for updates",
+        conversation_id: "conv1",
+        party_id: null,
+        template_key: "sms_optin_invite",
+        created_at: new Date(now.getTime() - 60 * 60 * 1000).toISOString(),
+      },
+    ],
+    project_parties: [],
+  });
+  let fetchCalls = 0;
+  const result = await flushDeferredMessages(fake as never, {
+    getEnv: flushEnv(),
+    fetchImpl: (() => {
+      fetchCalls++;
+      return Promise.reject("must not call Twilio");
+    }) as unknown as typeof fetch,
+    now,
+  });
+  assertEquals(result.flushed, 0);
+  assertEquals(result.suppressed, 1);
+  assertEquals(fetchCalls, 0);
+  const row = (fake._data.sms_messages ?? [])[0] as {
+    twilio_status: string;
+    error_message: string;
+  };
+  assertEquals(row.twilio_status, "suppressed");
+  assertEquals(row.error_message, "not_invitable");
 });
 
 Deno.test("flush: a row older than 24h expires without sending", async () => {

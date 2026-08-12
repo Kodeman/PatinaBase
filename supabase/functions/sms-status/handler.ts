@@ -71,10 +71,12 @@ export async function handleStatusCallback(
   }
 
   const update: Record<string, unknown> = { twilio_status: messageStatus };
-  // Only set when the callback included them — an absent param must not
-  // overwrite a previously recorded error with null.
-  if (params.ErrorCode !== undefined) update.error_code = params.ErrorCode;
-  if (params.ErrorMessage !== undefined) {
+  // Only set when the callback included them AND they're non-empty — an
+  // absent (or blank) param must not overwrite a previously recorded error.
+  if (params.ErrorCode !== undefined && params.ErrorCode !== "") {
+    update.error_code = params.ErrorCode;
+  }
+  if (params.ErrorMessage !== undefined && params.ErrorMessage !== "") {
     update.error_message = params.ErrorMessage;
   }
 

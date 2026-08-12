@@ -32,7 +32,7 @@ Register ONE campaign under the brand:
    - STOP reply: `You're opted out of Patina project texts. No more messages will be sent. Reply START to rejoin.`
    - HELP reply: `Patina relays project updates for your design studio. ~1 msg/day. Reply STOP to opt out. Questions: hello@patina.cloud`
 4. Set the Messaging Service **inbound webhook** to the deployed `sms-inbound` function URL: `https://bkvcixdmuyejfzcijpdg.supabase.co/functions/v1/sms-inbound` (validated live 2026-07-09: reachable with **no `?apikey=`**, unsigned POSTs 403). The URL must equal `SMS_INBOUND_PUBLIC_URL` **byte-for-byte** — the Twilio signature is computed over it.
-5. Optional: set the status callback URL to the same function (delivery receipts update `sms_messages.twilio_status`).
+5. Set the Delivery Status Callback URL to the deployed `sms-status` function URL: `https://bkvcixdmuyejfzcijpdg.supabase.co/functions/v1/sms-status`. The URL must equal `SMS_STATUS_CALLBACK_URL` **byte-for-byte** — the Twilio signature is computed over it. Delivery receipts (and any `ErrorCode`) land in `sms_messages.twilio_status`/`error_code`.
 
 ## 4. Secrets (Strata edge function secrets / Vault, 00258 pattern)
 
@@ -41,6 +41,7 @@ Register ONE campaign under the brand:
 | `TWILIO_ACCOUNT_SID` | Console → Account Info |
 | `TWILIO_AUTH_TOKEN` | Console → Account Info (also used for inbound signature verification) |
 | `TWILIO_FROM_NUMBER` | The **Messaging Service SID** (`MG…`) — preferred over the raw number |
+| `SMS_CONVERSATION_NUMBER` | The physical E.164 number used to key `sms_conversations`. **REQUIRED** when `TWILIO_FROM_NUMBER` is a Messaging Service `MG…` SID — outbound and inbound conversations both key on this number |
 | `SMS_INBOUND_PUBLIC_URL` | Exact public URL registered in step 3.4 |
 | `SMS_DEV_MODE` | unset in prod; `dry_run` local/e2e; `redirect` + `SMS_DEV_REDIRECT_NUMBER` for staging rehearsal |
 | `CLAUDE_API_KEY` | already provisioned (companion/aesthete) |

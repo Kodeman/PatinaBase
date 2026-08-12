@@ -114,7 +114,9 @@ function twilioFromField(fromNumber: string): [string, string] {
  */
 export function smsConversationNumber(deps: SmsDeps): string | undefined {
   const explicit = env(deps, "SMS_CONVERSATION_NUMBER");
-  if (explicit) return explicit;
+  // An MG… value here is a misconfiguration, not a valid override — treat it
+  // as unset so it can never key a conversation (would split every thread).
+  if (explicit && !explicit.startsWith("MG")) return explicit;
   const fromNumber = env(deps, "TWILIO_FROM_NUMBER");
   return fromNumber && !fromNumber.startsWith("MG") ? fromNumber : undefined;
 }
@@ -463,18 +465,22 @@ export async function sendPartySms(
     }
   }
 
+  // Key the conversation on the physical number sms-inbound keys on — never
+  // the MG… Messaging Service SID, which would split the thread. Checked
+  // fail-closed BEFORE resolveBody() so a misconfigured conversation number
+  // never mints (or revokes) a field-link token for a send that can't be
+  // logged.
+  const conversationNumber = smsConversationNumber(deps);
+  if (!conversationNumber) {
+    return { sent: false, reason: "conversation_number_not_configured" };
+  }
+
   // ── Resolve body ──────────────────────────────────────────────────────────
   const body = await resolveBody(supabase, input, recipient, clientPortalUrl);
   if (!body || !body.trim()) {
     return { sent: false, reason: "empty_body" };
   }
 
-  // Key the conversation on the physical number sms-inbound keys on — never
-  // the MG… Messaging Service SID, which would split the thread.
-  const conversationNumber = smsConversationNumber(deps);
-  if (!conversationNumber) {
-    return { sent: false, reason: "conversation_number_not_configured" };
-  }
   const convId = await findOrCreateConversation(
     supabase,
     conversationNumber,
@@ -687,7 +693,21 @@ export async function flushDeferredMessages(
       suppressed++;
       continue;
     }
-    if (!isInvite && consent !== "granted") {
+    if (isInvite) {
+      // The invite is meaningful only for a pending (or already-granted)
+      // party — including the no-party-rows case (reduces to 'not_asked').
+      if (consent !== "pending" && consent !== "granted") {
+        await supabase
+          .from("sms_messages")
+          .update({
+            twilio_status: "suppressed",
+            error_message: "not_invitable",
+          })
+          .eq("id", row.id);
+        suppressed++;
+        continue;
+      }
+    } else if (consent !== "granted") {
       await supabase
         .from("sms_messages")
         .update({ twilio_status: "suppressed", error_message: "not_consented" })
