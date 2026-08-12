@@ -7,19 +7,19 @@
 
 ## Locked decisions (seeded from spec §2, v1.0 April 2026)
 
-| ID | Decision |
-|----|----------|
-| D1 | Strict one document at a time. No split view, no peek/hold. Esc or "Put down" is the only exit; switching costs one trip through the Desk or a ⌘K jump. |
-| D2 | Interruptions are designer-driven, never system-dictated. Nothing breaks through by default; per-designer break-through rules, shipping with zero enabled. |
-| D3 | Mobile pattern: margin items collapse to anchored chips; spine becomes a bottom sheet. Dedicated mobile milestone gates the default flip (D7). |
-| D4 | No shadows. Anywhere. No exceptions. Value contrast + flat stacked edges + folder tab; mechanically enforced via lint, CI-blocking. |
-| D5 | The Weekly Pulse lives in the margin (kind `pulse`, anchored to the Project section). Friday unsent Pulses rise on the Desk. |
-| D6 | Documents visible to all studio members; no exclusive holds. Soft presence line in the spine; per-member "needs *your* hand". |
-| D7 | Ship alongside, phase in. Parallel flagged route against real data; zones dissolve only after validation + mobile pattern. |
-| D8 | Studio Drawer persistent on every screen; ledgers open as overlay sheets; collapsed by default, no badges, no pulsing counts. |
-| D9 | Time: capture in the document (spine timer), review in the drawer (Hours ledger). |
-| D10 | Suggestive, adjustable capture. Timer counts, designer adjusts up or down, nothing auto-trims. <60s discards silently. Idle detection only annotates. |
-| D11 | Timer auto-starts on pick up — provisional, pending Leah's gut-check; fall back to one-tap start if it feels surveilling. |
+| ID  | Decision                                                                                                                                                   |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | Strict one document at a time. No split view, no peek/hold. Esc or "Put down" is the only exit; switching costs one trip through the Desk or a ⌘K jump.    |
+| D2  | Interruptions are designer-driven, never system-dictated. Nothing breaks through by default; per-designer break-through rules, shipping with zero enabled. |
+| D3  | Mobile pattern: margin items collapse to anchored chips; spine becomes a bottom sheet. Dedicated mobile milestone gates the default flip (D7).             |
+| D4  | No shadows. Anywhere. No exceptions. Value contrast + flat stacked edges + folder tab; mechanically enforced via lint, CI-blocking.                        |
+| D5  | The Weekly Pulse lives in the margin (kind `pulse`, anchored to the Project section). Friday unsent Pulses rise on the Desk.                               |
+| D6  | Documents visible to all studio members; no exclusive holds. Soft presence line in the spine; per-member "needs _your_ hand".                              |
+| D7  | Ship alongside, phase in. Parallel flagged route against real data; zones dissolve only after validation + mobile pattern.                                 |
+| D8  | Studio Drawer persistent on every screen; ledgers open as overlay sheets; collapsed by default, no badges, no pulsing counts.                              |
+| D9  | Time: capture in the document (spine timer), review in the drawer (Hours ledger).                                                                          |
+| D10 | Suggestive, adjustable capture. Timer counts, designer adjusts up or down, nothing auto-trims. <60s discards silently. Idle detection only annotates.      |
+| D11 | Timer auto-starts on pick up — provisional, pending Leah's gut-check; fall back to one-tap start if it feels surveilling.                                  |
 
 ---
 
@@ -27,7 +27,7 @@
 
 ### O1 · Document identity vs codebase lifecycle split — 2026-06-11
 
-**Conflict:** Spec §1 says one document per *client relationship*; spec §3 routes `/doc/[projectId]`. Codebase: the lifecycle is split across `designer_clients` (lead→proposal→active→completed→nurture), `proposals` (own status chain, version supersede), and `projects` — and a project row **only exists after signing** (`activate_proposal_as_project`). A client may have several projects; projects can also be created manually with no proposal lineage.
+**Conflict:** Spec §1 says one document per _client relationship_; spec §3 routes `/doc/[projectId]`. Codebase: the lifecycle is split across `designer_clients` (lead→proposal→active→completed→nurture), `proposals` (own status chain, version supersede), and `projects` — and a project row **only exists after signing** (`activate_proposal_as_project`). A client may have several projects; projects can also be created manually with no proposal lineage.
 **Proposed resolution (CODEBASE-MAP §4):** document = project when one exists; pre-signing, document = live proposal chain (or lead). Desk unions the three shapes. A client with two projects shows two folders. Manual projects render Brief→Proposal as ghost sections. Also: no "direction shared" marker exists — Direction is proposed as "latest proposal in draft".
 **Blocks:** Slice 1.
 
@@ -83,11 +83,10 @@ Document surfaces use the CSS vars in `apps/designer-portal/src/app/globals.css`
 
 The spec/CLAUDE.md reference a "strata monorepo", `@strata/*` packages, and React 18. Reality: patina-merged, `@patina/*`, React 19, Next.js 15. The workstream CLAUDE.md was placed at `apps/designer-portal/CLAUDE.md` with a dated correction note. Also: only prototype v0.3 (`patina-the-document-prototype-v3.html`) exists in `docs/design/the-document/` (no `prototypes/` subdir, no v0.1/v0.2, no concept deck) — references resolved to the file that exists.
 
-
 ## Rulings — design session, 2026-06-11
- 
+
 ### R1 · Ruling on O1 — Document identity — 2026-06-11
- 
+
 A document = one **engagement**: the project once one exists (`/doc/[projectId]`);
 pre-signing, the live proposal chain (keyed by chain root); pre-proposal, the
 lead/designer_client. The Desk unions all three shapes. A client with N projects
@@ -100,23 +99,23 @@ Project. Edge cases blessed as audited: `on_hold` = paused in-motion chip, never
 "needs your hand"; `archived` = ⌘K/People only; declined/expired proposals hold
 at Proposal-active with the state in the need line. Spec §1/§3/§4 updated to
 engagement language in v1.1.
- 
+
 ### R2 · Ruling on O2 — Stamp vocabulary — 2026-06-11
- 
+
 Stamps render the codebase FF&E machine 1:1: SPECIFIED / QUOTED / APPROVED /
 ORDERED / PRODUCTION / SHIPPED / DELIVERED / INSTALLED, with
-`src/components/portal/ffe/stages.ts` STAGE_CONFIG as the canonical label/color
+`src/components/portal/ffe/stages.ts` STAGE*CONFIG as the canonical label/color
 source. RECEIVED is a derived ninth state: `status='delivered'` + clean
 receiving inspection logged — "delivered, awaiting inspection" is therefore a
 visible studio to-do and a valid need-line input. DAMAGED derives from
 inspection outcome / open damage claim, with claim state in the unfold.
 DECISION DUE derives from `blocked_by_decision_id` → pending blocking decision
-and always displays the *current* due date; extensions are narrated by the
+and always displays the \_current* due date; extensions are narrated by the
 decision margin item, never a stamp. EXTENDED and RETURNED are dropped from v1
 (no data). Spec §6 vocabulary superseded.
- 
+
 ### R3 · Ruling on O4 — Shadow ban scope & defense — 2026-06-11
- 
+
 CI-blocking lint scoped to Document directories (/desk, /doc, document/drawer/
 ledger component dirs) from the Slice 1 PR; widened app-wide at the dissolve
 step. Defense is two ESLint rules (flat config): (1) `no-restricted-syntax`
@@ -127,9 +126,9 @@ enter only through Document-local `Doc*` wrappers that bake in `shadow-none`
 plus the paper treatment (ink border, flat edges, spec §10 recipes). Wrappers
 are portal-local first, promoted per the catalog-ui precedent when the client
 portal mirrors need them. Old zones untouched until dissolve (D7 upheld).
- 
+
 ### R4 · Ruling on O3 — Time system unification — 2026-06-11
- 
+
 Extend `project_time_entries` additively; never fork. `duration_minutes`
 remains canonical (invoice guard triggers, `project_unbilled_time` view, and
 shipped data untouched); add `raw_seconds` (pre-adjustment elapsed, audit
@@ -147,11 +146,12 @@ phase-in and dissolves with them. Granularity ruled at implementation level
 (designer-invisible): minutes canonical + raw_seconds additive. D10/D11
 otherwise stand; D11 auto-start remains provisional pending Leah's first
 session.
- 
+
 ### R5 · Ruling on O5 — Destinies for unmapped surfaces — 2026-06-11
- 
+
 Four destinies exist: document section / ledger / margin / quiet exile
 (⌘K-reachable, no nav presence). Assignments:
+
 - **Reviews** → Care section + margin item on arrival; aggregate column in People.
 - **Nurture** → dissolves: due follow-ups rise on the Desk as need lines; the
   cadence lives in Care; the queue becomes a People filter.
@@ -214,7 +214,7 @@ A document in hand fills the entire viewport. No charcoal surround, no page
 border or radius, no stacked edge — those are Desk-state devices, for objects
 ON the desk; in hand, the paper IS the screen (D1 expressed spatially). The
 Studio Drawer is the only persistent layer above the paper — the desk edge
-still showing beneath the work. Ledger sheets, the log strip, Doc* popovers,
+still showing beneath the work. Ledger sheets, the log strip, Doc\* popovers,
 and ⌘K are the only other overlays; nothing else coexists with an open
 document. The spine and margin become sticky full-height rails (Put down,
 timer, presence, and margin items always reachable); main content scrolls
@@ -351,6 +351,7 @@ narrates it (R2: the stamp shows only the current date). Invoice send =
 `issue_invoice` RPC + the existing `invoice-send` edge function.
 
 ### R13 · Pulse email leg — v1 as built; email gates the flip — 2026-06-12
+
 Slice 3's Pulse ships as logged (portal message + existing comms
 notification): for the pilot, Leah's clients get a Friday inbox touch via the
 comms-notification email, which is acceptable scaffolding. The full-body
@@ -361,6 +362,7 @@ No schema change required per I12. Flip gates now: D3/D13 mobile validation ·
 Pulse email leg · idle annotation (D10) · R5 destinies staged.
 
 ### R14 · The Note — sixth margin kind — 2026-06-12
+
 Ratifying Leah's Session 01 finding: designer-authored marginalia, the most
 literal margin item of all. Spec: kind `note`, Mocha-adjacent accent (distinct
 from time; suggest Aged Oak), authored by any studio member, anchored like all
@@ -379,6 +381,7 @@ machinery is fresh; storage is additive (margin_notes or equivalent — naming
 to repo conventions).
 
 ### R15 · Strata Mark fill-state + the breath — 2026-06-12
+
 Ratifying Leah's Question 9, moderated. The mark becomes a progress device:
 its three lines render as fill-state mapped to the engagement's three
 movements — line 1 fills through SHAPING (Brief→Direction), line 2 at
@@ -526,6 +529,7 @@ delivery-week notifications). The document currently renders the PO cell
 (number/placed/ack), Movement, and Receiving — but the SEND act and the
 expediting signals have no document-model home.
 **Proposed resolution (CODEBASE-MAP §11):**
+
 1. **Unfold** — the Purchase order cell narrates the send lifecycle
    ("PO-00012 · sent to vendor Jun 12 · acknowledged"); a **Send to
    vendor** action (po-send: PDF + email) joins the action row for
@@ -540,12 +544,12 @@ expediting signals have no document-model home.
    the existing invoice/auto-draft narration.
 4. **Spec §6** gains the PARTIAL receiving state (already truthful in the
    unfold's "N of M inspected" cell).
-**Sequencing proposal:** rides Slice 6 as "Orders ledger v2 + the send
-weave" (alongside ⌘K and front-matter), unless the session prefers a
-dedicated slice before the mobile build. Designer-visible calls needed:
-send-action placement (unfold vs ledger vs both), need-line thresholds,
-and whether vendor email send requires a confirm step inside the paper.
-**Blocks:** nothing current — Slice 6 scoping only.
+   **Sequencing proposal:** rides Slice 6 as "Orders ledger v2 + the send
+   weave" (alongside ⌘K and front-matter), unless the session prefers a
+   dedicated slice before the mobile build. Designer-visible calls needed:
+   send-action placement (unfold vs ledger vs both), need-line thresholds,
+   and whether vendor email send requires a confirm step inside the paper.
+   **Blocks:** nothing current — Slice 6 scoping only.
 
 ### R18 · Ruling on O7 — the send weave — 2026-06-12
 
@@ -570,10 +574,10 @@ receiving state. O7 RESOLVED.
 
 ### R16 · Slice 4/5 blessings + refinements — 2026-06-12
 
-*Provenance: ratified via spec v1.3 §2 (the table text below is quoted
+_Provenance: ratified via spec v1.3 §2 (the table text below is quoted
 verbatim). The session's long-form text did not reach this log — only the
 §2 one-liner arrived (same gap as O6); a correcting entry can follow if
-longer text exists.*
+longer text exists._
 
 Slice 4/5 blesses: write-first close-out is a D10 refinement (truth logged,
 fully editable; Esc = discard stands) · pause-as-segment · activity default
@@ -583,25 +587,24 @@ project-exists ⇒ line 2 filled regardless of lineage · tab fallback = first
 word of document title, never a role noun · claim need lines must be
 engagement-scoped (AP-012 check).
 
-*Implementation note: the build-bearing items (fill-state line-2 rule, tab
+_Implementation note: the build-bearing items (fill-state line-2 rule, tab
 fallback, same-truck narration) are HELD until after Session 02 per the
 session's build-hold directive; they land with Slice 5.5 alongside the
-R18 weave.*
+R18 weave._
 
 ### R17 · Activation vendor_id gap — fix before Session 02 — 2026-06-12
 
-*Provenance: ratified via spec v1.3 §2, quoted verbatim (long-form text
-not received — see R16 note).*
+_Provenance: ratified via spec v1.3 §2, quoted verbatim (long-form text
+not received — see R16 note)._
 
 `activate_proposal_as_project` drops `vendor_id` (main-lineage bug,
 procurement session owns) — fix + backfill land **before Session 02**, or
 the session script gains a seam answer.
 
-
 ### R16 (full text) · Slice 4/5 review — blesses and small rulings — 2026-06-12
 
-*Correcting entry: the session's long-form text, superseding the §2-quoted
-placeholder above (which noted it had not arrived).*
+_Correcting entry: the session's long-form text, superseding the §2-quoted
+placeholder above (which noted it had not arrived)._
 
 **Write-first close-out (I16): blessed as a D10 refinement.** Capture remains
 suggestive because the designer retains full edit/delete (Hours inline edits);
@@ -623,16 +626,15 @@ one claim must never produce two folders.
 
 ### R17 (full text) · vendor_id activation gap — priority — 2026-06-12
 
-*Correcting entry: the session's long-form text, superseding the §2-quoted
+_Correcting entry: the session's long-form text, superseding the §2-quoted
 placeholder above. Status: LANDED on main as `00199_activation_carry_vendor_id`
-(`83a2171c`) — function fix + backfill, applied and verified locally.*
+(`83a2171c`) — function fix + backfill, applied and verified locally._
 
 The `activate_proposal_as_project` vendor_id drop is a main-lineage bug
 (procurement session owns the RPC fix + backfill migration), but its symptom
 lands on Middlewest's REAL activated projects — Leah cannot mount the Order
 Assistant on un-ordered lines. Fix + backfill land BEFORE Session 02, or the
 session script gains a seam answer for it.
-
 
 ## Pilot record
 
@@ -685,9 +687,6 @@ persists quietly until acted upon or the next pick-up chains it out. If
 any auto-dismiss exists, remove it. The strip's quietness is correct;
 its patience must match.
 
-
-
-
 ## Implementation decisions — Slice 6 (2026-06-12)
 
 ### I19 · Slice 6 increment 1 — motion, capture, command, interruptions — 2026-06-12
@@ -724,8 +723,6 @@ mobile build BLOCKED** — the canonical mobile prototype
 authority); Leah device validation + Desk precision at R10 (async Q1/Q2,
 missed twice) are externally gated. Migrations now 00191–00201.
 
-
-
 ### I20 · Slice 6 increment 2 — the Pulse email leg (R13) — 2026-06-12
 
 R13's flip gate built. The Friday email arrives where the client lives:
@@ -755,8 +752,6 @@ satisfied).** Remaining gates are the externally-blocked three: D13 mobile
 build (missing prototype) · Leah device validation · Desk precision at R10
 (async Q1/Q2). Prod needs `RESEND_API_KEY` (already true for all email).
 
-
-
 ### I21 · Slice 6 increment 3 — the D13 mobile build — 2026-06-12
 
 The canonical mobile prototype `patina-the-document-mobile-d3-v1.html`
@@ -765,18 +760,18 @@ look/feel/motion authority; demo body elided as scaffolding). The React
 shell ports its INTENT (never markup), active only below the 980px
 breakpoint; the desktop spine rail, margin rail, and Studio Drawer nav all
 hide there. The three rulings, built:
-  • **D3-1 unified bar** (`mobile-bar.tsx`): one bar owns the thumb edge —
-    Desk = drawer handle + "in hand today"; document = section handle
-    (→ spine sheet, labelled with the active section) + timer glance
-    (→ timer sheet, live from the time provider) + drawer book.
-  • **D3-2 anchored chips** (`mobile-margin-chips.tsx`): margin items render
-    as chips beneath their FF&E line (line anchor) and the letterhead
-    (letterhead/section anchors); a tap raises the full item as a paper
-    sheet with its actions — the SAME body as the desktop rail, via the
-    extracted `MarginItemBody`.
-  • **D3-3 the spine sheet doubles** (`mobile-sheets.tsx`): a paper sheet
-    with Put-down + the seven sections on top, "In the margin · N" beneath,
-    each summary row jumping to its margin item.
+• **D3-1 unified bar** (`mobile-bar.tsx`): one bar owns the thumb edge —
+Desk = drawer handle + "in hand today"; document = section handle
+(→ spine sheet, labelled with the active section) + timer glance
+(→ timer sheet, live from the time provider) + drawer book.
+• **D3-2 anchored chips** (`mobile-margin-chips.tsx`): margin items render
+as chips beneath their FF&E line (line anchor) and the letterhead
+(letterhead/section anchors); a tap raises the full item as a paper
+sheet with its actions — the SAME body as the desktop rail, via the
+extracted `MarginItemBody`.
+• **D3-3 the spine sheet doubles** (`mobile-sheets.tsx`): a paper sheet
+with Put-down + the seven sections on top, "In the margin · N" beneath,
+each summary row jumping to its margin item.
 Materials honored: paper sheets for document parts (spine, item, timer),
 charcoal sheets for desk books (the drawer's five books open the existing
 DocSheet ledgers via the `open-ledger` event). Scrim dimming, no shadows
@@ -905,6 +900,7 @@ and cleared to become the default.
 ### Pre-flip checklist — confirmed (B3) — 2026-06-12
 
 The three owed confirmations, verified before the toggle:
+
 - **R17 vendor_id — LANDED.** `00199_activation_carry_vendor_id` is on main
   (`83a2171c`); `activate_proposal_as_project` carries `v_item.vendor_id`
   onto FF&E lines (verified in `pg_proc.prosrc`) + backfill via
@@ -975,7 +971,6 @@ DocSheet). Accounts/People front-matter (revenue/AR · pipeline conversion)
 await those ledgers being built; the Aesthete-fold Accounts rendering stays
 the design-session deliverable. 392/392 jest; lint/tsc clean.
 
-
 ## Rulings — design session, 2026-06-12 (the Dissolve design package)
 
 > Source for all entries below: the live old-portal walk (the-document-parity-map.md)
@@ -1023,7 +1018,7 @@ and on FF&E line unfolds (cut sheets, spec PDFs). Drag-anywhere-on-a-section
 renders literally: a re-uploaded file stacks behind its predecessor using
 the Desk's stacked-edge recipe** — one click slides older versions out.
 Letterhead unfold "The folio · N files" lists all, grouped by section.
-Files open in a full-screen paper viewer (Doc* wrapper), never a new tab.
+Files open in a full-screen paper viewer (Doc\* wrapper), never a new tab.
 Per-file client_visible flag, DEFAULT STUDIO-ONLY — the folio respects the
 same private layer as Notes; the client mirror renders only flagged files.
 
@@ -1099,17 +1094,18 @@ with PO context.
 ### R30 · Via Patina — the marketplace rail — 2026-06-12
 
 Resolves C-10. Catalog vendors carry the Via-Patina mark (Strata micro-mark
-+ "PATINA CATALOG" chip) on unfold PO cells and vendor pages. Ordering via
-Patina = the same Order Assistant with a fulfillment branch (Patina handles
-production/freight/claims) and the same review-then-send: the preview shows
-what Patina receives. The PO cell narrates PATINA HANDLED thereafter — a
-PO-cell state, never a line stamp. Vendor-pane "Order all via Patina"
-batches through the same preview-as-confirm. **The brand moment ships with
-v1: at the instant of ordering, one quiet line shows the commission flowing
-to her own book and the Pledge's share of it** ("Commission to your
-Accounts: ~$336 · the Pledge returns $84 as teaching royalty"). Ledger rows
-land in the Accounts book (stub the destination until B-2 builds; never
-stub the line itself).
+
+- "PATINA CATALOG" chip) on unfold PO cells and vendor pages. Ordering via
+  Patina = the same Order Assistant with a fulfillment branch (Patina handles
+  production/freight/claims) and the same review-then-send: the preview shows
+  what Patina receives. The PO cell narrates PATINA HANDLED thereafter — a
+  PO-cell state, never a line stamp. Vendor-pane "Order all via Patina"
+  batches through the same preview-as-confirm. **The brand moment ships with
+  v1: at the instant of ordering, one quiet line shows the commission flowing
+  to her own book and the Pledge's share of it** ("Commission to your
+  Accounts: ~$336 · the Pledge returns $84 as teaching royalty"). Ledger rows
+  land in the Accounts book (stub the destination until B-2 builds; never
+  stub the line itself).
 
 ### R31 · The Engine — a presence, not a place — 2026-06-12
 
@@ -1346,6 +1342,7 @@ role noun) · on_date milestones now draft via `milestone-date-invoices-daily`
 pg_cron, on_signing stays manual.
 
 **R28 — audit-first findings:**
+
 - **00207 was a latent bug, not just an addition:** the shipped Orders-ledger
   vendor directory already rendered `trade_account_email` / `trade_portal_url`
   but NO migration ever defined them — they read undefined on every row.
@@ -1438,13 +1435,14 @@ Canonical reference: patina-strata-mark-progress-system.html.
 **The three-hue gradient (NEW — extends R15's single-hue fade).** Each line
 carries its own MOVEMENT color, fading back through time rather than one hue
 at decreasing opacity:
-  - Line 1 · Mocha #5C4A3C — Shaping (Brief→Direction), the deepest layer
-  - Line 2 · Clay #C4A57B — Commitment (the signing), the middle layer
-  - Line 3 · Dusty Blue #8B9CAD — Delivery (Project→Care), the newest layer,
-    rendered at ~55% opacity so the canonical gradient fade survives.
-The brand's 100/80/60 width ratios and the soft third line are preserved; the
-movement-to-line mapping is exactly R15's. Movement hues are for the mark
-ONLY — never the stamp palette (sage/terracotta) and never equalize the three.
+
+- Line 1 · Mocha #5C4A3C — Shaping (Brief→Direction), the deepest layer
+- Line 2 · Clay #C4A57B — Commitment (the signing), the middle layer
+- Line 3 · Dusty Blue #8B9CAD — Delivery (Project→Care), the newest layer,
+  rendered at ~55% opacity so the canonical gradient fade survives.
+  The brand's 100/80/60 width ratios and the soft third line are preserved; the
+  movement-to-line mapping is exactly R15's. Movement hues are for the mark
+  ONLY — never the stamp palette (sage/terracotta) and never equalize the three.
 
 **The fill API (build contract).** One CSS custom property per line, `--f`
 (0..1), drives a left-clipped color fill over a ghost track; unfilled = track.
@@ -1539,9 +1537,9 @@ The brand-critical rendering, and the one named design deliverable the flip left
 
 The Pledge mechanic, as confirmed this session (correct against brand if it differs): ordering via Patina earns the designer a commission, and 25% of it is the **Pledge** — rendered **two-sided**: what it returns to her, and what it gives to the commons (R30's worked example: a $336 commission, $84 at 25%).
 
-The **Earnings page reads in two bands.** *What you earn* gathers design fees and Via-Patina commissions — client-work income. *What teaching returns* gathers teaching royalties and the running Pledge — taught-taste income. Keeping them apart lets the Designer-Taught loop speak in its own voice instead of dissolving into the invoice stream. The **Pledge is twinned, and the two directions never blur**: each Pledge event renders as a pair of distinctly labelled sub-lines — **returned to you** (royalty income, accruing to a year-to-date total: "the Pledge, returned to you: $X") and **given to the commons** (the share that funds the shared catalog and maker community). Money she keeps and money she contributes are labelled on the face of the line, so "is this mine?" is answered without a tooltip. R30's order-moment line now shows both halves at the instant of ordering, then lands both in this band.
+The **Earnings page reads in two bands.** _What you earn_ gathers design fees and Via-Patina commissions — client-work income. _What teaching returns_ gathers teaching royalties and the running Pledge — taught-taste income. Keeping them apart lets the Designer-Taught loop speak in its own voice instead of dissolving into the invoice stream. The **Pledge is twinned, and the two directions never blur**: each Pledge event renders as a pair of distinctly labelled sub-lines — **returned to you** (royalty income, accruing to a year-to-date total: "the Pledge, returned to you: $X") and **given to the commons** (the share that funds the shared catalog and maker community). Money she keeps and money she contributes are labelled on the face of the line, so "is this mine?" is answered without a tooltip. R30's order-moment line now shows both halves at the instant of ordering, then lands both in this band.
 
-Teaching also appears in the Accounts **front-matter as one quiet stat pair** — a teaching lens beside Revenue · AR · margin — to make the loop visible where the book opens. This is rendered strictly as a single mono lens pair (for example "Taught this month · royalties returned"), never a dashboard: a deliberate, bounded extension of R5's "no dashboard book," and it must stay one line and not grow furniture. Teaching *progress* — accuracy, impact — stays where R32 put it, in the Library Room's foot line; Accounts shows only the monetary face, and the front-matter pair links into the Library for the progress detail.
+Teaching also appears in the Accounts **front-matter as one quiet stat pair** — a teaching lens beside Revenue · AR · margin — to make the loop visible where the book opens. This is rendered strictly as a single mono lens pair (for example "Taught this month · royalties returned"), never a dashboard: a deliberate, bounded extension of R5's "no dashboard book," and it must stay one line and not grow furniture. Teaching _progress_ — accuracy, impact — stays where R32 put it, in the Library Room's foot line; Accounts shows only the monetary face, and the front-matter pair links into the Library for the progress detail.
 
 **Open (brand input, not ruled here):** the commission rate and the Designer-Selections-vs-Style-Matches split that feed these lines are a marketplace-config / brand decision. The rendering is built to receive them; promote them to spec §14 at the v1.4 cut.
 
@@ -1551,13 +1549,13 @@ R31 ruled the Engine "a presence, not a place." This deepens it to what Claude C
 
 **⌘K speaks by read intent, with no mode.** One box: a destination-like input jumps (the existing ⌘K behavior); a question-like input asks the Engine, whose answer renders inline beneath the query as **paper result-lines** — each a product or idea in document grammar carrying one act, **Place → [document]**. No toggle, no "ask mode," no chat affordance. Ask-and-place; the Engine is summoned where asking already happens and leaves no surface behind it. While it works, the Engine "thinking" state uses the R35 Strata sweep, never a spinner.
 
-**No thread, no history, no avatar — but the placement carries provenance.** The ask itself does not persist; what persists is the *act* — a placed item wears a quiet "via the Engine" mark in the document and its folio, and the Engine profile updates silently (the teaching). This holds R31's no-room rule while giving trust a faint, honest footprint ("where did this come from?") without reconstructing a conversation log. The **Library's librarian** is the second and only other home: the standing input at the top of the Library Room (R32, built in R39) takes the longer work — style recommendations, market trends, deeper sittings — in the same paper grammar and the same no-history stance ("Ask the librarian … every ask teaches your eye"). Two homes, both places where asking is already native. `/portal/companion` retires at the dissolve, re-skinned rather than rebuilt: its backend capability is reused behind these two surfaces while the conversational web surface is exiled (⌘K-reachable only until removal). Always the Engine / Designer-Taught Intelligence in copy — never "AI."
+**No thread, no history, no avatar — but the placement carries provenance.** The ask itself does not persist; what persists is the _act_ — a placed item wears a quiet "via the Engine" mark in the document and its folio, and the Engine profile updates silently (the teaching). This holds R31's no-room rule while giving trust a faint, honest footprint ("where did this come from?") without reconstructing a conversation log. The **Library's librarian** is the second and only other home: the standing input at the top of the Library Room (R32, built in R39) takes the longer work — style recommendations, market trends, deeper sittings — in the same paper grammar and the same no-history stance ("Ask the librarian … every ask teaches your eye"). Two homes, both places where asking is already native. `/portal/companion` retires at the dissolve, re-skinned rather than rebuilt: its backend capability is reused behind these two surfaces while the conversational web surface is exiled (⌘K-reachable only until removal). Always the Engine / Designer-Taught Intelligence in copy — never "AI."
 
 ### R39 · The Library — the first Room, on a reusable Rooms shell (D14) — 2026-06-13
 
-R32 builds the Library as the *first Room*; D14 ruled the Sheets-versus-Rooms model but no Room has been built yet. This rules the build order and what the Room is. Canonical look/feel: `patina-library-room-prototype.html` — the Room shell and the Library together; the Desk marks a Room "walk in" and a book "a sheet" ("A Room is a place you walk into. A book is a sheet you pull"), and exiting reads "Putting the Library down…".
+R32 builds the Library as the _first Room_; D14 ruled the Sheets-versus-Rooms model but no Room has been built yet. This rules the build order and what the Room is. Canonical look/feel: `patina-library-room-prototype.html` — the Room shell and the Library together; the Desk marks a Room "walk in" and a book "a sheet" ("A Room is a place you walk into. A book is a sheet you pull"), and exiting reads "Putting the Library down…".
 
-**Build the Rooms shell first; the Library is its first tenant.** The reusable physics land as a foundation before any Library content: entering a Room runs the normal **put-down** of the current document (D1 — a Room *is* the thing in hand, so the timer chains out through the log offer), the **Drawer persists** inside the Room (D8), the Room renders **full-bleed paper** (D12) with **zero shadows** (D4), the Drawer marks room-weight objects with a **doorway affordance** (a spine tick and "↗" so the hand learns which pull opens which physics), and **leaving a Room returns you to wherever you were.** This costs more upfront than a one-off surface, but it validates the physics once and makes the second Room nearly free.
+**Build the Rooms shell first; the Library is its first tenant.** The reusable physics land as a foundation before any Library content: entering a Room runs the normal **put-down** of the current document (D1 — a Room _is_ the thing in hand, so the timer chains out through the log offer), the **Drawer persists** inside the Room (D8), the Room renders **full-bleed paper** (D12) with **zero shadows** (D4), the Drawer marks room-weight objects with a **doorway affordance** (a spine tick and "↗" so the hand learns which pull opens which physics), and **leaving a Room returns you to wherever you were.** This costs more upfront than a one-off surface, but it validates the physics once and makes the second Room nearly free.
 
 The Library itself is **three shelves separated by Strata rules** (R32, unchanged): **My Library** (raw captures — Chrome extension, photos, URL paste — landing raw, no taxonomy, no queue, taught when ready), **Studio Library** (proven, promoted from captures), and **Patina Catalog** (the marketplace, with Via-Patina marks and maker nomination), with capture → promote → nominate as the movement between shelves. The Engine stands at the top as the librarian (R38). **Teaching happens while browsing** (R32): needs-teaching cards carry a Golden-Hour tag; a tap opens Quick Tags inline on the card, and Deep Analysis opens as a paper sheet over the Room for fifteen-minute sittings. Teaching stats compress to one quiet line in the Room's foot ("taught today · accuracy · future matches improved") — present, never gamified. Authoring a new piece opens the Composing Page (R40). The old Teaching Queue page and the Products zone dissolve into this Room.
 
@@ -1567,7 +1565,7 @@ Ratifies `patina-composing-page-prototype.html` as the canonical pattern for "de
 
 Three weights, one continuum — **inline · sheet · room**: the same compositional act can happen inline (Quick Tags on a card, R32), as a sheet over a surface, or as a full room/page (the Composing Page) for the deepest work. The weight changes; the grammar does not.
 
-First instance — **Compose a piece** (a catalog product), reached from the Library (R39): three movements mapping to the three Strata lines — *the record* (identity + the piece: name, maker, dimensions, materials), *the catalog* (commerce + the folio: trade/retail price, lead time, min order, images & cut sheets — the same folio as R24), and *the eye* (the teaching — style & character, the exact Quick-Tags act of R32, here as one section of the larger composition). It is **composed from both sides of the marketplace**: the maker fills price and lead time in their own portal; the designer adds the eye — one page, two authors. The librarian (the Engine, R38) stands by, but nothing is required to save — a piece can rest at draft and be taught later from the shelf. This pattern governs detailed creation flows generally, not the Library alone; other "compose" surfaces adopt it as they arrive.
+First instance — **Compose a piece** (a catalog product), reached from the Library (R39): three movements mapping to the three Strata lines — _the record_ (identity + the piece: name, maker, dimensions, materials), _the catalog_ (commerce + the folio: trade/retail price, lead time, min order, images & cut sheets — the same folio as R24), and _the eye_ (the teaching — style & character, the exact Quick-Tags act of R32, here as one section of the larger composition). It is **composed from both sides of the marketplace**: the maker fills price and lead time in their own portal; the designer adds the eye — one page, two authors. The librarian (the Engine, R38) stands by, but nothing is required to save — a piece can rest at draft and be taught later from the shelf. This pattern governs detailed creation flows generally, not the Library alone; other "compose" surfaces adopt it as they arrive.
 
 ### Spec cut — v1.4 (flip-state consolidation) — 2026-06-13
 
@@ -1589,7 +1587,8 @@ Built on `the-document/track3-rooms-library`. **No migrations** — presentation
 **Slice 2 — the Library, first Room.** Three Strata-ruled shelves on the real catalog (`useLayerProducts` / `useLayerCounts`; layer enum `personal | studio | catalog`) — re-housed, data layer untouched. Capture lands raw in My Library (`useCaptureProduct`; verified end-to-end — the count ticked and the card appeared with its Promote CTA). Promote (personal→studio) reuses `PromoteToStudioModal`; nominate (studio→catalog) reuses `NominateToCatalogModal` from Studio cards (vendor resolved on click, studio from `useOrganizations`). Teaching in place: inline **Quick Tags** (a doc-grammar panel over `useStyleArchetypes` + `useAssignStyle`) and **Deep Analysis** as a paper sheet over the Room (`RoomSheet`) reusing the proven `StyleAttributionPanel` + `StyleSpectrumSlider` + `ClientMatchingPanel` → `useSubmitTeaching`. The foot compresses teaching to one quiet line (`useDesignerTeachingStats`); gamification (badges, daily-goal bars) stripped per R32/R37. The **librarian** input stands atop the Room (R38) but the ASK is deferred to slice 3 (the Engine) — present, honestly noted, no companion call. The old Teaching Queue page and the Products zone stay URL/⌘K-reachable (staged exile, D7).
 
 **Flagged for the design session (none blocking slices 1–2):**
-1. **Non-project Room time.** The library-room prototype's Hours sheet shows a "Sourcing · the Library" line, implying a Room logs its own time. The shipped time system is project-scoped and R39's physics list requires only putting the held *document* down — slice 1 does that and does NOT capture Library time. Wants a ruling if "studio time" inside a Room is intended.
+
+1. **Non-project Room time.** The library-room prototype's Hours sheet shows a "Sourcing · the Library" line, implying a Room logs its own time. The shipped time system is project-scoped and R39's physics list requires only putting the held _document_ down — slice 1 does that and does NOT capture Library time. Wants a ruling if "studio time" inside a Room is intended.
 2. **Via-Patina mark + Golden-Hour signal are derived, not columns.** The Catalog "Patina" mark renders off `layer='catalog'`; "needs teaching" renders off `teaching_queue` membership. Nothing invented; a distinct Via-Patina / Golden-Hour signal would need an additive read view (R30 territory).
 3. **Foot stat granularity.** `designer_teaching_stats` is lifetime, not per-day — the foot reads "taught" (lifetime), not "taught today". A daily cut needs a new read.
 4. **Grammar seam.** Promote / Nominate reuse the existing portal-grammar modals (functional, correct movement); a doc-grammar re-skin is a follow-up, not a slice-2 blocker.
@@ -1600,7 +1599,7 @@ Built on `the-document/track3-rooms-library`. **No migrations** — presentation
 
 Continues `the-document/track3-rooms-library`. Migration **00208** (additive: `project_ffe_items.added_via`). type-check + lint green; live-verified end-to-end on real data (both homes → ask → real result-lines → Place → the "via the Engine" mark + SPECIFIED stamp on the FF&E line); adversarially reviewed (3 confirmed fixes, 2 false alarms refuted).
 
-**The ask sources from the real catalog, not the companion edge fn — deliberately.** R38 says reuse `/portal/companion`'s backend, but the audit found its product extraction stubbed (`parseAIResponse` returns null) AND `companion-message` **persists** conversation (`companion_messages`) — which R38 forbids for the Engine ("no thread, no history; the ask does not persist"). So the Engine answers from a **non-persisting cross-layer catalog search** (`useCrossLayerSearch`) — the designer's own taught/captured shelves, which *is* Designer-Taught Intelligence. Only the **placement** persists. This honors the no-persistence rule, is reliable, and is locally verifiable (the edge fns aren't served in local dev — `useCompanionQuickActions` already treats them as optional). **Follow-up:** LLM-curated re-ranking via a NON-persisting companion path (Claude tool_use, no message write) is a one-line swap of the result-line source.
+**The ask sources from the real catalog, not the companion edge fn — deliberately.** R38 says reuse `/portal/companion`'s backend, but the audit found its product extraction stubbed (`parseAIResponse` returns null) AND `companion-message` **persists** conversation (`companion_messages`) — which R38 forbids for the Engine ("no thread, no history; the ask does not persist"). So the Engine answers from a **non-persisting cross-layer catalog search** (`useCrossLayerSearch`) — the designer's own taught/captured shelves, which _is_ Designer-Taught Intelligence. Only the **placement** persists. This honors the no-persistence rule, is reliable, and is locally verifiable (the edge fns aren't served in local dev — `useCompanionQuickActions` already treats them as optional). **Follow-up:** LLM-curated re-ranking via a NON-persisting companion path (Claude tool_use, no message write) is a one-line swap of the result-line source.
 
 **⌘K (3a) — no mode.** A destination-like input filters documents/ledgers/actions (jump, unchanged); a non-empty query always also offers an **"Ask the Engine"** row (last option) — when nothing matches, it is the natural Enter target. Choosing it answers INLINE in the same paper panel: the R35 sweep while reading, then paper **result-lines** (real piece · maker · layer), each carrying **Place → [document]**. The held document (resolved from `/doc/[id]` via the desk data) is the place target; off-document, a quiet "Place into" picker of active projects. No route change, no persistence; "← results" / Esc steps back.
 
@@ -1628,17 +1627,17 @@ Continues `the-document/track3-rooms-library`. Migration **00209** (additive: `i
 
 **Review fixes (3):** (1) server-side status guard on `chase_invoice` (a direct RPC call can't stamp a paid/void invoice); (2) corrected the `useChaseInvoice` comment (it does NOT clear the Desk — the Receivables page does, separately) to kill a maintenance trap; (3) Ledger "owed" tail now only reads for issued receivables (a draft isn't owed). Also fixed a bare-DATE timezone off-by-one in desk-derivation's `fmtDay` (the invoice due_date rendered a day early).
 
-**Open input carried forward (R37, §14.15):** the Earnings page builds the *What you earn* band on real earnings (design fees + Via-Patina commissions); the *What teaching returns* band + the twinned 25% Pledge are the Aesthete fold (slice 5). There is **no `teaching_royalty` earnings source_type and no stored commission/Pledge rate** in the schema yet — flagged here, to be wired from brand/marketplace config in slice 5 (render real-or-placeholder, never invent the rate).
+**Open input carried forward (R37, §14.15):** the Earnings page builds the _What you earn_ band on real earnings (design fees + Via-Patina commissions); the _What teaching returns_ band + the twinned 25% Pledge are the Aesthete fold (slice 5). There is **no `teaching_royalty` earnings source_type and no stored commission/Pledge rate** in the schema yet — flagged here, to be wired from brand/marketplace config in slice 5 (render real-or-placeholder, never invent the rate).
 
 ### I32 · Dissolve Track 3 — the Aesthete fold (R37, slice 5) — 2026-06-13
 
 Continues `the-document/track3-rooms-library`. **No migration** — the Pledge is a client-side read model computed from existing `designer_earnings`. type-check + lint green; **live-verified** (a test commission temporarily seeded then removed: $336 commission → $84 Pledge, R30's exact worked example, rendered twinned).
 
-**The Earnings page now reads in two bands (R37).** *What you earn* (slice 4) gathers design fees + Via-Patina commissions; *What teaching returns* (new) gathers the Designer-Taught loop's income — the **two-sided 25% Pledge**. Each Pledge event renders the twinned, distinctly-labelled sub-lines — **returned to you** (sage) and **given to the commons** (clay) — never blurred; the brand-critical **"returned to you, YTD"** crescendo accrues at the band head. A one-line **teaching lens** ("N taught · $X returned → Library ↗") joins the front-matter beside Revenue·A/R·margin and links into the Library Room for the progress detail (R37: the monetary face here, the progress in the Library's foot).
+**The Earnings page now reads in two bands (R37).** _What you earn_ (slice 4) gathers design fees + Via-Patina commissions; _What teaching returns_ (new) gathers the Designer-Taught loop's income — the **two-sided 25% Pledge**. Each Pledge event renders the twinned, distinctly-labelled sub-lines — **returned to you** (sage) and **given to the commons** (clay) — never blurred; the brand-critical **"returned to you, YTD"** crescendo accrues at the band head. A one-line **teaching lens** ("N taught · $X returned → Library ↗") joins the front-matter beside Revenue·A/R·margin and links into the Library Room for the progress detail (R37: the monetary face here, the progress in the Library's foot).
 
 **The Pledge is computed, not stored — 25% is confirmed, the commons split is NOT.** `pledge.ts`: `PLEDGE_RATE = 0.25` (R37/R30, confirmed). The Pledge = 25% × the Via-Patina commission (`product_commission` earnings — real). Per R30's worked example ("the Pledge returns $84 as teaching royalty") **returned-to-you = the full Pledge** (real, accrues YTD — satisfies the acceptance). `COMMONS_MATCH_RATE = null` (OPEN §14.15): the commons share renders "—" with a visible flag ("the commons share awaits brand config — never invented"). There is **no `teaching_royalty` source_type and no stored rate** — the structure is built to receive the config; nothing is invented.
 
-**⚠ Open — needs design ruling (R30 vs R37 tension):** R30's example frames the Pledge as *returning* to the designer ("returns $84 as teaching royalty"), but R37 says "money she **contributes**" to the commons — i.e. the commons share may be carved OUT of her Pledge rather than a separate match alongside it. The build follows R30 (returned = full Pledge; commons = a separate, pending rate) so the YTD crescendo is real, but the commons mechanic (carve-out vs match) + its rate are the design session's to rule. Flagged, not silently chosen.
+**⚠ Open — needs design ruling (R30 vs R37 tension):** R30's example frames the Pledge as _returning_ to the designer ("returns $84 as teaching royalty"), but R37 says "money she **contributes**" to the commons — i.e. the commons share may be carved OUT of her Pledge rather than a separate match alongside it. The build follows R30 (returned = full Pledge; commons = a separate, pending rate) so the YTD crescendo is real, but the commons mechanic (carve-out vs match) + its rate are the design session's to rule. Flagged, not silently chosen.
 
 **Money-unit correction (caught in build):** the Track-3 audit map called `designer_earnings` money "dollars," but the schema (`net_amount` integer) and the live `/portal/earnings` page (`cents/100`) prove it is **CENTS**. The earnings surfaces format with `fmtUsd` (cents); the misleading `fmtUsdFromDollars` helper was removed. (Invisible at the seed's $0 earnings; a 100× error with real data — fixed before it shipped.)
 
@@ -1646,11 +1645,11 @@ Continues `the-document/track3-rooms-library`. **No migration** — the Pledge i
 
 Continues `the-document/track3-rooms-library`. **No migration** — reuses the shipped catalog tables. type-check + lint green; **live-verified** (entered from the Library; "Heirloom Oak Dining Table" by "Nordic Atelier" → the mark advanced to 17% / DRAFT off the fill; Save draft wrote a real `products` row, layer `personal`/status `draft`; test row removed).
 
-**The anti-wizard, as a Room (R40).** `/compose` is a full-bleed paper Room (reuses RoomShell). The page is a paper artifact that **builds itself**: five sections fill in **any order**, each shows its own completion, and the piece is a usable draft at every percent. There is **no Next/Back/Step N of M** — the **Strata Mark is the only progress indicator**: the three movements map to the three lines (*the record* = identity + the piece → line 1; *the catalog* = commerce + the folio → line 2; *the eye* = the teaching → line 3), and the state band reads **Capture → Draft → Catalog-ready** off the same fill (`compose-progress.ts`, pure). A sticky live preview + the librarian's offer line (⌘K, never blocks) sit at the top.
+**The anti-wizard, as a Room (R40).** `/compose` is a full-bleed paper Room (reuses RoomShell). The page is a paper artifact that **builds itself**: five sections fill in **any order**, each shows its own completion, and the piece is a usable draft at every percent. There is **no Next/Back/Step N of M** — the **Strata Mark is the only progress indicator**: the three movements map to the three lines (_the record_ = identity + the piece → line 1; _the catalog_ = commerce + the folio → line 2; _the eye_ = the teaching → line 3), and the state band reads **Capture → Draft → Catalog-ready** off the same fill (`compose-progress.ts`, pure). A sticky live preview + the librarian's offer line (⌘K, never blocks) sit at the top.
 
 **It writes a real catalog draft (no migration).** `useComposePiece` creates/updates a `products` row on the designer's own shelf (`layer 'personal'`, `status 'draft'`) — saveable at any completeness; `savedId` is held so re-saves UPDATE (no duplicates). The eye reuses `product_styles` (the same upsert `useAssignStyle` uses) — the exact Quick-Tags act of R32, here one section of the larger composition. **Percent-composed is DERIVED from what's filled** (the "draft/percent-composed read" the plan called for) — no stored progress column. Prices: the form takes dollars, persisted as integer cents (`price_trade`/`price_retail`); **min-order is dropped (no column)** — schema is authority. **Two-sided authorship** holds in copy (the maker fills price/lead time in their portal; the designer adds the eye); nothing is required to save.
 
-**Nested-Room return (RoomShell `backTo`).** Compose is always reached from the Library, but `rememberRoomOrigin` no-ops on a Room path (the single origin slot holds the surface *before* the Library), so the leave read "← the Desk." Added an optional `backTo`/`backLabel` to RoomShell: a nested Room returns to its parent and leaves the stashed origin intact (so leaving the Library still returns to the real prior surface). `isRoomPath` now also covers `/compose`. Verified: "← the Library."
+**Nested-Room return (RoomShell `backTo`).** Compose is always reached from the Library, but `rememberRoomOrigin` no-ops on a Room path (the single origin slot holds the surface _before_ the Library), so the leave read "← the Desk." Added an optional `backTo`/`backLabel` to RoomShell: a nested Room returns to its parent and leaves the stashed origin intact (so leaving the Library still returns to the real prior surface). `isRoomPath` now also covers `/compose`. Verified: "← the Library."
 
 **The Composing Page is the pattern, not the one screen (R40).** This is the model's answer to the wizard/modal/multi-step form generally — `inline · sheet · room`, one grammar, three weights. Other "compose" surfaces adopt it as they arrive.
 
@@ -1663,8 +1662,9 @@ Continues `the-document/track3-rooms-library`. **No migration** — reuses the s
 Reviews the Track 3 build (I29–I33, slices 1–6 on `the-document/track3-rooms-library`): the Rooms shell + the Library, the Engine, the Accounts book, the Aesthete fold, the Composing Page. Built fast, additive-only (00208 `added_via`, 00209 `chase_invoice`), live-verified, each slice adversarially self-reviewed with fixes applied. The substance is sound; this ruling blesses it, rules the four designer-visible questions Claude Code raised, and names the gates to merge.
 
 **Blessed as built:**
-- **The Engine's no-persistence deviation (I30).** R38 said reuse `/portal/companion`; the audit found that backend *persists* messages — which R38 forbids ("the ask does not persist") — so Claude Code answered instead from a non-persisting cross-layer catalog search over the designer's own taught/captured shelves. That *is* Designer-Taught Intelligence, and choosing the rule over the instruction is exactly right. Blessed. The follow-up — LLM re-ranking via a non-persisting companion path (no message write) — is a code-only swap when wanted.
-- **The Desk-receivable model (I31).** An overdue invoice rises as an `overdue_invoice` need (ranked just under a blocking decision) whose folder opens the Accounts book onto Receivables — the *act surface*, not the document — and the manual chase carries its own `ar_last_chased_at` stamp so it never perturbs the automated reminder cadence. One act clears both surfaces. The action test (R22) applied to money, done right. Blessed.
+
+- **The Engine's no-persistence deviation (I30).** R38 said reuse `/portal/companion`; the audit found that backend _persists_ messages — which R38 forbids ("the ask does not persist") — so Claude Code answered instead from a non-persisting cross-layer catalog search over the designer's own taught/captured shelves. That _is_ Designer-Taught Intelligence, and choosing the rule over the instruction is exactly right. Blessed. The follow-up — LLM re-ranking via a non-persisting companion path (no message write) — is a code-only swap when wanted.
+- **The Desk-receivable model (I31).** An overdue invoice rises as an `overdue_invoice` need (ranked just under a blocking decision) whose folder opens the Accounts book onto Receivables — the _act surface_, not the document — and the manual chase carries its own `ar_last_chased_at` stamp so it never perturbs the automated reminder cadence. One act clears both surfaces. The action test (R22) applied to money, done right. Blessed.
 - The Composing Page writing a real `products` draft with **derived** percent (no stored progress column), the **cents** money-unit correction (a caught 100× error), and the derived Via-Patina / Golden-Hour signals (no invented columns) — all blessed as built.
 
 **Ruling — the Pledge is a separate match on top (resolves the R30/R37 tension).** "Returned to you" is the **full 25%** — R30's $84 on $336 stands and the YTD crescendo is real; "given to the commons" is a **separate Patina contribution alongside it**, never a carve-out of her share. The Pledge is generative — it does not shrink what she keeps. Rates ship as **visible provisional defaults** (tune later, the send-weave precedent), wired as named constants and flagged in-product as provisional: `PLEDGE_RATE = 25%` (confirmed); `COMMONS_MATCH_RATE` provisional **10%** of the commission, clearly labelled provisional; the **Designer-Selections vs Style-Matches commission differential** is an upstream earnings/marketplace concern (provisional-equal until brand differentiates) — the document renders whatever commission lands and needs no change when the split is set. §14.15 stays open for the FINAL brand/finance numbers; the build no longer renders "—".
@@ -1676,6 +1676,7 @@ Reviews the Track 3 build (I29–I33, slices 1–6 on `the-document/track3-rooms
 **Ruling — Promote / Nominate may keep portal grammar for now.** The reused `PromoteToStudioModal` / `NominateToCatalogModal` are functional and the movement is correct; a document-grammar re-skin is a **follow-up polish, explicitly non-blocking** for the merge (F4).
 
 **Fixes (F1–F4):**
+
 1. **F1 — land the screenshots.** Track 3 committed none (only track-1/2 + the slice dirs exist). Capture and commit the ≥1280 set for each new surface — the Library, the Engine ask-and-place, the Accounts three pages + the Desk receivable, the Aesthete fold's twinned Pledge, the Composing Page; the ~390px set rides the L4 walk. The record cannot show its own surfaces until this lands.
 2. **F2 — the provisional rate constants.** Wire `COMMONS_MATCH_RATE` (provisional 10%) and the commission handling as named, tunable constants beside the R10 / R22 / send-weave set; render the commons line as a real provisional number, flagged provisional in-product — never present a provisional as final.
 3. **F3 — daily teaching read** (above): the Library foot reads "taught today," not lifetime.
@@ -1758,7 +1759,7 @@ same PR. The remaining gate is the **L4 device walk** (human, Kody + Leah — th
 ### L4 · Leah's phone — the Rooms shell + Track 3 surfaces — 2026-06-14
 
 **Gate:** the R39/R41 device check — the Rooms **physics** are new (a full-screen
-paper place you *walk into*), so they get validated on a real phone before they're
+paper place you _walk into_), so they get validated on a real phone before they're
 trusted for every future Room. Per R41 the walk covers **three** surfaces: the
 Library Room, the Composing Page, and the Engine ask-and-place.
 
@@ -1768,6 +1769,7 @@ today" foot (F3), the paper Promote/Nominate sheets (F4), and the live Engine we
 all present in what she tapped. Flag default-on; rollback = the toggle.
 
 **Signal: GREEN — all three surfaces, clean.**
+
 - **The Library Room** — GREEN. The Rooms physics held one-handed: the doorway
   read as walk-in vs pull, full-bleed paper, the Drawer persisted, no
   shadow/zone/badge, walking in put a held document down (timer chained out),
@@ -1788,7 +1790,7 @@ a 390px viewport (`SHOT_W=390 SHOT_H=844 SHOT_PREFIX=mobile-`), corroborating th
 green walk: the Library Room, foot, Quick Tags, Deep Analysis, Promote sheet, the
 Engine ask→placed, the Composing Page, the Desk receivable, and the Accounts
 pages all render in mobile form. **Harness-render note (NOT a gate failure, device
-walk was green):** at a strict 390px headless frame the *overlay* surfaces (the ⌘K
+walk was green):** at a strict 390px headless frame the _overlay_ surfaces (the ⌘K
 command bar, the ledger DocSheets) and the Room head action row sit a touch wide —
 right-edge content (e.g. the commons dollar figure on the Aesthete fold, the
 "Capture" head button) clips. Full-page surfaces (Library, Compose, Desk) are
@@ -1820,8 +1822,8 @@ become **eight facets that compose in any order** (R40 anti-wizard): Rooms
 in scope · FF&E schedule · Palette · Mood boards · Phases & fees ·
 Exclusions · Payments · Change-order terms. **The Strata Mark is the only
 progress** (R35) — no "step N of 8" — filling across three movements:
-*scope* (Rooms + FF&E, line 1) · *the offer* (Phases, Exclusions, Payments,
-Terms, line 2) · *the vision* (Palette, Boards, line 3). Each facet is a
+_scope_ (Rooms + FF&E, line 1) · _the offer_ (Phases, Exclusions, Payments,
+Terms, line 2) · _the vision_ (Palette, Boards, line 3). Each facet is a
 checkable section showing its own completion and summary; draft saves at any
 percentage (the proposal is a real, usable draft throughout). The drawer bar
 persists inside (D8) — the Library is one tap away for FF&E selections.
@@ -1856,7 +1858,7 @@ which **supersedes v1 and carries the feedback forward** (the matrix's
 useCreateProposalRevision); v1 is kept in version history on the document,
 never deleted (D7). Signature settles the Proposal section and opens the
 Project in the same document — nothing converts (R23, the lead→proposal
-spine). Proposal *list/filter* and *tracking dashboard* (matrix ABSENT) stay
+spine). Proposal _list/filter_ and _tracking dashboard_ (matrix ABSENT) stay
 TRANSFORMED into Desk need-derivation and the margin, per the matrix's own
 "TRANSFORMED ≠ gap" caveat — not rebuilt as zones.
 
@@ -1865,6 +1867,7 @@ TRANSFORMED into Desk need-derivation and the margin, per the matrix's own
 Defines how an authoring/sent proposal surfaces on the Desk, completing the
 thread from Drafting Room to Desk. The Desk's two populations (R1/R22)
 classify a proposal by its lifecycle state, derived — never a list:
+
 - **Drafting, actively** → quiet; nothing waits, nothing shows.
 - **Drafting, untouched** past a threshold → an **in-motion chip**
   (`drafting` kind) — one quiet line ("Aspen Loft — drafting, untouched
@@ -1878,8 +1881,8 @@ classify a proposal by its lifecycle state, derived — never a list:
 - **Signed** → the folder resolves; the engagement re-enters the Desk as a
   **project** with its first real need. The Drafting Room's send is the hinge
   that drives this whole chain.
-The Drafting Room is reachable only through the document (Desk → folder →
-document → Proposal section → the Room doorway), consistent with D14/D1.
+  The Drafting Room is reachable only through the document (Desk → folder →
+  document → Proposal section → the Room doorway), consistent with D14/D1.
 
 ### I35 · Track 4 — Proposal Authoring built (R42–R45) — 2026-06-14
 
@@ -1888,7 +1891,7 @@ Proposal authoring landed as one program on `the-document/track4-proposal-author
 #1 P0 gap. **Audit-first finding:** the data layer was far more complete than "20
 absent" implied — all `proposal_*` tables, hooks, and the `send_proposal`/
 `clone_proposal`/`activate_proposal_as_project` RPCs already existed; this was
-mostly a new *surface* over existing data (like the Library Room).
+mostly a new _surface_ over existing data (like the Library Room).
 
 **Migrations (additive, D7):** `00210` — `sign_proposal` (SECURITY DEFINER, client-
 invoked): one transaction settles an `approval` `client_decision` (R23), flips the
@@ -1924,11 +1927,11 @@ smoke green (sign creates exactly one approval decision + a project, idempotent 
 re-sign); both portals type-check with **zero Track-4 errors** (260 designer + 91
 client errors are all pre-existing email/scans/msw noise); 186 document/Desk Jest
 tests pass incl. the two new contract suites. **Live Chrome walk GREEN** against
-real seed data: the Desk shows the accepted proposal as a *Signed — open the
-project* folder, the sent one as a *sent, unopened 1d* chip, and a fresh draft
+real seed data: the Desk shows the accepted proposal as a _Signed — open the
+project_ folder, the sent one as a _sent, unopened 1d_ chip, and a fresh draft
 correctly absent (actively-drafting = quiet); the draft document shows the
-*Into the Drafting Room ↗* doorway + *Send* instrument; the Room renders the
-three movements, the Strata Mark (17% drafted), and the live *Client's copy* rail
+_Into the Drafting Room ↗_ doorway + _Send_ instrument; the Room renders the
+three movements, the Strata Mark (17% drafted), and the live _Client's copy_ rail
 excluding cost; the Send sheet opens as an overlay over an intact document.
 
 **Provisional / needs-Leah (shipped truthful, revisit):** `DRAFTING_UNTOUCHED_CHIP_DAYS`
@@ -2158,9 +2161,9 @@ Resolves the Decisions zone's seven P0 composition rows. The legacy create/edit 
 
 The sheet composes: **decision_kind** (the taxonomy — Material/Color · Product · Layout · Finish · …) · **title** · **context** (the client-facing explanation) · **options** via a `DecisionOptionBuilder` carrying full attributes (name, price, quantity, image/swatch, designer note, the recommended "pick") · **materialize options from the Library** (the draft-product-seeding path, `useMaterializeDraftOptions` — the librarian seeds options one tap away) · **due date** · **link to a project phase** · **blocking** (a toggle plus the FF&E line it gates). The **lifecycle** is draft → publish → delete: save as **draft** (unsent, client-invisible, editable in the margin — `useCreateDecision` / `useUpdateDecision`); **publish** to the client (draft→pending, `usePublishDraftDecision`); **delete** (destructive). Editing an unsent draft re-opens the composer on it.
 
-**The authoring side of the one-act invariant (§5):** publishing a *blocking* decision lights the `decision_due` stamp on its FF&E line the instant it goes pending — the mirror image of Track 5's resolve cascade (which clears the stamp and unblocks procurement). The clearing/resolve half is Track 5's `resolve_coordination_item`, unchanged; this ruling owns only the create→publish→light direction.
+**The authoring side of the one-act invariant (§5):** publishing a _blocking_ decision lights the `decision_due` stamp on its FF&E line the instant it goes pending — the mirror image of Track 5's resolve cascade (which clears the stamp and unblocks procurement). The clearing/resolve half is Track 5's `resolve_coordination_item`, unchanged; this ruling owns only the create→publish→light direction.
 
-**The composer is the authoring front door for the generalized item, too.** A selection is the default decision; an RFI, submittal, sign-off, or punch (Track 5's coordination kinds) is *composed* through this same sheet — the composer writes the row, Track 5 resolves it. One create-surface, one resolve-path. Declined from scope: a full-page composer, a modal, a separate "+ New" picker route, decision *analytics* (P2), and internal-only designer notes surfaced in the client-visible margin.
+**The composer is the authoring front door for the generalized item, too.** A selection is the default decision; an RFI, submittal, sign-off, or punch (Track 5's coordination kinds) is _composed_ through this same sheet — the composer writes the row, Track 5 resolves it. One create-surface, one resolve-path. Declined from scope: a full-page composer, a modal, a separate "+ New" picker route, decision _analytics_ (P2), and internal-only designer notes surfaced in the client-visible margin.
 
 ### R56 · The enriched decision detail — the deep margin sheet — 2026-06-15
 
@@ -2174,16 +2177,17 @@ The audit confirmed what the handoff predicted: R55's "front door for Track 5" w
 
 **Built (additive, NO migration — new sheet surfaces + 3 hooks over the existing data layer):**
 
-- **`ItemComposer` generalized** (`components/document/coordination/item-composer.tsx`): added the **FF&E-line gate** picker (the missing R55 piece — selecting FF&E lines sets `blocksKind='ffe'` + `blockedFfeItemIds`, which lights the stamp on publish), the **subject-matter taxonomy** chips, a **separate client-facing context** field (R55 lists title *and* context), the **phase link** (`phase_id`, hidden when a project has no phases), and **edit mode** (hydrate a draft → update → optionally publish; "EDIT DRAFT" header). The blocks-kind ladder is a tested pure helper `deriveBlocksKind` (ffe > phase > task > none).
+- **`ItemComposer` generalized** (`components/document/coordination/item-composer.tsx`): added the **FF&E-line gate** picker (the missing R55 piece — selecting FF&E lines sets `blocksKind='ffe'` + `blockedFfeItemIds`, which lights the stamp on publish), the **subject-matter taxonomy** chips, a **separate client-facing context** field (R55 lists title _and_ context), the **phase link** (`phase_id`, hidden when a project has no phases), and **edit mode** (hydrate a draft → update → optionally publish; "EDIT DRAFT" header). The blocks-kind ladder is a tested pure helper `deriveBlocksKind` (ffe > phase > task > none).
 - **Margin "+ New"** (`margin-rail.tsx`): a "+ New" affordance beside "+ Note" opens the composer as a `DocSheet` (document stays mounted, D1; zero shadow, D4), gated on a resolved `designer_clients.id` (the band's `useDesignerClientForClientUser` pattern — the historical RLS-bug guard). A **"Drafts · N"** disclosure lists unsent drafts (read from `useCoordinationItems` filtered to `status='draft'`); clicking one re-opens the composer in edit mode. Threaded `clientUserId` from `doc/[id]/page.tsx`. The band's "+ New open item" gets the same enriched composer.
 - **Three lifecycle hooks** (`use-coordination.ts`): `useUpdateCoordinationItem` (patch + option-replace + FF&E/task re-tag), `usePublishCoordinationItem` (draft→pending with the §5 invalidation set the legacy `usePublishDraftDecision` omits), `useDeleteCoordinationItem` (clears the dependency web first so no line is stranded blocked, then deletes). `CreateCoordinationItemInput` gained `decisionType` + `phaseId`.
 
 **Reconciliations (implementation-authority calls; surfaced here per the workstream):**
-1. The handoff's *"decision_kind taxonomy (Material/Color/Product/Layout/Finish)"* maps to the **`decision_type`** column (00084), **not** the literal `decision_kind` column (00202: choice|approval, the section-gate axis — left at 'choice', untouched). "Finish" folds into the existing seven values (no CHECK-redefine migration).
+
+1. The handoff's _"decision_kind taxonomy (Material/Color/Product/Layout/Finish)"_ maps to the **`decision_type`** column (00084), **not** the literal `decision_kind` column (00202: choice|approval, the section-gate axis — left at 'choice', untouched). "Finish" folds into the existing seven values (no CHECK-redefine migration).
 2. **Light-on-publish**: a draft sets `blocked=true` at create but the stamp stays dark (status='draft'); publishing flips status→pending and the stamp lights — no new stamp logic, just the two ends of `project_ffe_items.blocked` (R55 owns the light; Track 5's `resolve_coordination_item` owns the clear).
 3. Phase link writes the real FK `phase_id`, not the legacy free-text `linked_phase`.
 
-**Verified:** designer + supabase type-checks clean (Track-A files zero errors; only the pre-existing `packages/email` React-18/19 noise remains); `deriveBlocksKind` unit 25/25; a self-rolling-back **SQL smoke** proving draft(dark)→publish(lit)→`resolve_coordination_item`(cleared); and a **LIVE CHROME WALK GREEN end-to-end** on Olsen Lake House (`b65803e7-…`, designer@patina.dev): margin "+ New" → compose a blocking selection gating *Cloud Pendant Cluster 19* → **Publish lights the `DECISION DUE` stamp** + the court bar, the open item, and a margin decision all update in one act → **record the pick → the stamp clears to SHIPPED, the court empties, FF&E returns to 3-of-3, the margin folds to Settled** (one act); plus save-as-draft → "Drafts · 1" (client-invisible) → re-open hydrated → delete (inline two-tap confirm). Demo aid: `scripts/the-document-decision-composer-demo.sql` (wires Olsen a client so the composer resolves).
+**Verified:** designer + supabase type-checks clean (Track-A files zero errors; only the pre-existing `packages/email` React-18/19 noise remains); `deriveBlocksKind` unit 25/25; a self-rolling-back **SQL smoke** proving draft(dark)→publish(lit)→`resolve_coordination_item`(cleared); and a **LIVE CHROME WALK GREEN end-to-end** on Olsen Lake House (`b65803e7-…`, designer@patina.dev): margin "+ New" → compose a blocking selection gating _Cloud Pendant Cluster 19_ → **Publish lights the `DECISION DUE` stamp** + the court bar, the open item, and a margin decision all update in one act → **record the pick → the stamp clears to SHIPPED, the court empties, FF&E returns to 3-of-3, the margin folds to Settled** (one act); plus save-as-draft → "Drafts · 1" (client-invisible) → re-open hydrated → delete (inline two-tap confirm). Demo aid: `scripts/the-document-decision-composer-demo.sql` (wires Olsen a client so the composer resolves).
 
 ⚠ **Owed / notes:** screenshots-to-disk + the ~390px mobile fold (the `save_to_disk` no-file env constraint, as Track 5 — captured in-conversation only); during the walk two **local-only** infra artifacts surfaced and were cleared by a PostgREST restart (a stale schema cache blocking writes, and the Track-5 `project_parties` RLS-recursion noise — both fixed on `main`, not code); **Track B (R56)** — the enriched margin `DecisionBody` — is the next PR.
 
@@ -2261,11 +2265,11 @@ finished-rooms gallery (completed projects).
 which **draw from the same directory** (segment by role/status/history/trust).
 **People on the Desk:** nurture-due / reconnect surfaces as a Desk **need-line** (a
 `desk-derivation` extension — a dormant high-trust tie is a need); the inbox
-*notifications* tab + the Sales Pipeline stay TRANSFORMED into the Desk/margin
+_notifications_ tab + the Sales Pipeline stay TRANSFORMED into the Desk/margin
 model (not rebuilt). **Cross-link contract (not rebuilt here):** maker/GC
 terms+orders live in the Orders book; GC open-items in the coordination view; team
 invite/management stays /portal/team (the colophon handles margin-visibility);
-lead detail cross-links to the Brief. The People Room is the *people* layer over
+lead detail cross-links to the Brief. The People Room is the _people_ layer over
 those, not a re-home of them.
 
 ### I40 · The People Room — Wave 0 architect foundation built (R57–R60) — 2026-06-16
@@ -2309,6 +2313,7 @@ already complete: `document_state` (00211) unions Shape **C** `lead` (Brief acti
 So a captured lead **already** surfaces as a Brief folder; triage is the missing act.
 
 **The three triage verbs (prototype P0 §G1):**
+
 - **Accept → Discovery.** New mutation **`useBeginDiscovery`** (`@patina/supabase`,
   Wave 0): sets `leads.status='accepted'` + upserts `designer_clients.status='lead'`
   → the folder flips Brief→Discovery ("Schedule the discovery call"). **Conflict
@@ -2425,6 +2430,7 @@ by a self-composing structured-capture body (`components/document/discovery/`). 
 layer was genuinely missing (audit-first): the five essentials had no Discovery-stage home.
 
 **Migration `00224_client_discovery.sql` (additive, D7):**
+
 - `client_discovery` — a 1:1 structured table keyed on `designer_clients.id` (Shape D),
   NOT enriching the hot `designer_clients` row. Typed scalars (project_type, budget_min/max,
   target/hard dates, style_tag_ids) + jsonb for the list-shaped fields (rooms, lifestyle,
@@ -2438,10 +2444,11 @@ layer was genuinely missing (audit-first): the five essentials had no Discovery-
   showed "Seeded from Discovery · budget 60,000–80,000" + PER-ROOM BUDGETS Living/Dining.
 
 **Design rulings resolved (the audit's C1–C4, ratified with Kody):**
+
 - **C1 / margin at Discovery.** R66's load-bearing split (structured facts in the blocks; the
   call's tone as an unstructured Note in the margin) needs the margin to work pre-project.
   `margin_notes` gains a nullable `designer_client_id` (relaxed `chk_margin_notes_engagement`).
-  Since the Note is the *only* margin kind possible at Discovery (no project/proposal → the
+  Since the Note is the _only_ margin kind possible at Discovery (no project/proposal → the
   project/proposal-keyed `margin_items` view can't reach it), the Discovery margin reads
   relationship-keyed notes **directly** from `margin_notes` (`use-discovery-margin.ts`, mapped to
   the view's note-branch shape). The rail can only write a Note (no structured-upsert access), so
@@ -2484,7 +2491,7 @@ constraint (schema + RLS + UI in place, verified by construction). NOT yet on pr
 
 ### R67 · The maker's nameplate + the Account sheet — account visibility in the Desk — 2026-06-22
 
-Closes a review finding: the Desk (now the default landing surface) gave the designer **zero account visibility**. You could not tell *what account you were logged into*, and there was **no path** to settings, profile, security, devices, or sign-out from inside the Document model — that machinery existed only on the dissolving `/portal` zone shell (its `AccountMenu` + `/portal/settings/*` pages were never reachable from `/desk`, and ⌘K had no account actions). Ruled in a design review with Kody.
+Closes a review finding: the Desk (now the default landing surface) gave the designer **zero account visibility**. You could not tell _what account you were logged into_, and there was **no path** to settings, profile, security, devices, or sign-out from inside the Document model — that machinery existed only on the dissolving `/portal` zone shell (its `AccountMenu` + `/portal/settings/*` pages were never reachable from `/desk`, and ⌘K had no account actions). Ruled in a design review with Kody.
 
 **Account enters the Document vocabulary, not a new top bar (D1).** No utility bar, no header. Identity lives on the one chrome D1 already sanctions — the **Studio Drawer** — and its actions live in a **Drawer-weight sheet** (D14, like Orders/Accounts/Hours). "Date + ⌘K are the only chrome" is a statement about the **Desk page**; the drawer is already-accepted persistent chrome, so the nameplate is consistent with it.
 
@@ -2492,11 +2499,11 @@ Closes a review finding: the Desk (now the default landing surface) gave the des
 
 **Identity shown = person + studio (the literal question).** Name · email · **studio/org name + role** (the first `design_studio` membership, graceful person-only fallback when there's no org). Structured to carry a multi-studio switcher later; single active studio in v1.
 
-**The Account sheet — settings re-skinned into the language, not linked-out.** A charcoal `DocSheet` with an identity front-matter (person + studio + the availability selector, the same declared-status model as the old AccountMenu) and **R28 page links** (DM-mono, never tabs): **Profile · Notifications · Security · Devices**, plus **Sign out** at the foot. Each page is the *same data layer* as the corresponding `/portal/settings` page — only the presentation moves to charcoal/paper. No bounce back to the old light-theme zone shell.
+**The Account sheet — settings re-skinned into the language, not linked-out.** A charcoal `DocSheet` with an identity front-matter (person + studio + the availability selector, the same declared-status model as the old AccountMenu) and **R28 page links** (DM-mono, never tabs): **Profile · Notifications · Security · Devices**, plus **Sign out** at the foot. Each page is the _same data layer_ as the corresponding `/portal/settings` page — only the presentation moves to charcoal/paper. No bounce back to the old light-theme zone shell.
 
 **Disambiguation (load-bearing).** The drawer's **"Accounts" book is the studio's MONEY ledger** (R36); this is the designer's **LOGIN account**. They never share a label — the login account is reached **only through the nameplate / ⌘K**, never as a drawer book.
 
-**Reachable three ways, one surface.** The sheet is opened by the desktop nameplate, the mobile drawer sheet's identity header (D13), and ⌘K (`Settings`, `Sign out`) — all via a single `document:open-account` event (the InterruptionSettings pattern). The identity is answered by the persistent nameplate; ⌘K carries the *actions*.
+**Reachable three ways, one surface.** The sheet is opened by the desktop nameplate, the mobile drawer sheet's identity header (D13), and ⌘K (`Settings`, `Sign out`) — all via a single `document:open-account` event (the InterruptionSettings pattern). The identity is answered by the persistent nameplate; ⌘K carries the _actions_.
 
 **Additive, no migration (D7).** Every data layer already exists (`profiles` incl. `availability_status` 00183, `user_settings`/`notification_preferences` via `/api/user/preferences`, Supabase MFA, `organizations`). The old `/portal/settings/*` routes + portal `AccountMenu` stay untouched during the phase-in; a later dissolve slice can redirect/remove them. **Leah-facing** (a new interaction pattern) — logged here for the spec fold.
 
@@ -2507,6 +2514,7 @@ Closes a review finding: the Desk (now the default landing surface) gave the des
 ### I42 · The maker's nameplate + the Account sheet are live
 
 Built R67 on branch `the-document/account-visibility`, additive, zero migrations. New `components/document/account/`:
+
 - **`account-sheet.tsx`** — the always-mounted sheet (in `(document)/layout.tsx` beside `InterruptionSettings`); owns `open` state + the `document:open-account` listener and exports `openAccount()`. Identity front-matter + availability selector (reuses `useAvailability`/`useSetAvailability`; the **sole** `useAvailabilityRealtime` subscriber so the channel isn't double-bound) + R28 page links + Sign out.
 - **`account-profile-page.tsx`** — display name/bio (`useUpdateProfile`), avatar (`useUploadAvatar`), password (`useUpdatePassword`).
 - **`account-notifications-page.tsx`** — the four email toggles via the canonical `/api/user/preferences` fetch/PATCH (same endpoint as the old settings + the public preferences page).
@@ -2527,9 +2535,10 @@ Modified: `studio-drawer.tsx` (nameplate + divider in place of the "Studio" span
 
 ### R68 · The household — view / set / change / edit the client on an open document
 
-The client a document is *for* had no standing surface: it was a passive name in the letterhead vitals, and the only place to attach or change one was the buried `ClientPicker` inside the Send sheet (discovered only when Send failed). Distinct concept from R67 (the **login account** = the maker) and the project money **Account band** — hence named **"the household"**, never "Account".
+The client a document is _for_ had no standing surface: it was a passive name in the letterhead vitals, and the only place to attach or change one was the buried `ClientPicker` inside the Send sheet (discovered only when Send failed). Distinct concept from R67 (the **login account** = the maker) and the project money **Account band** — hence named **"the household"**, never "Account".
 
 **Ruling.** A quiet mono `HouseholdChip` rides under the letterhead (project + proposal engagements) showing `For {familyLabel}` — or a clay **"No client linked · attach one"** so the gap is visible at the letterhead, not at send time. It opens a `HouseholdSheet` (a charcoal `DocSheet`, the SendSheet's sibling — D1/D4) with four capabilities:
+
 - **View** — name · email · phone · relationship status (resolved `useDesignerClientForClientUser` → `useClient`; name renders immediately, contact hydrates on the join).
 - **Set / Change** — the existing `ClientPicker` (carries "+ Add new client" + "Clear selection"). Writes through the new `set_document_client` RPC (00225).
 - **Edit** — the relationship's working name/email (captured clients without a Patina account) + notes (`useUpdateClientContact`). A profiled client's name/email/phone stay read-only — they belong to the client's own account.
@@ -2538,13 +2547,13 @@ The client a document is *for* had no standing surface: it was a passive name in
 
 **Gating.** Changing the client is gated to **draft** for proposals — a `sent`/`accepted` proposal keeps its client so a signature can't be mis-attributed (the sheet says so and points to Revise). Projects and unlinked drafts change freely.
 
-**Open question (non-blocking, shipped conservative).** When a project's client is *changed* mid-engagement, the RPC advances the **new** client's relationship but deliberately does **not** demote the **prior** client's `designer_clients.status` (non-destructive, D7) — the old relationship simply stops being linked. If the design session wants the prior household auto-demoted (e.g. back to `nurture`) or a confirmation step on re-pointing an active project, that's a follow-up ruling.
+**Open question (non-blocking, shipped conservative).** When a project's client is _changed_ mid-engagement, the RPC advances the **new** client's relationship but deliberately does **not** demote the **prior** client's `designer_clients.status` (non-destructive, D7) — the old relationship simply stops being linked. If the design session wants the prior household auto-demoted (e.g. back to `nurture`) or a confirmation step on re-pointing an active project, that's a follow-up ruling.
 
-**The "the Flats" fix.** `useFamilyLabel` had naively pluralized the *last word* of the client name, and `document_state.client_name` is the linked profile's `full_name` — which a seed had set to the project title "Reyes — Garden Flat", yielding "the Flats". Replaced by shared `lib/document/family-label.ts`: take the household part before a `—`/separator, then pluralize the surname with the -es rule ("Reyes" → **"the Reyeses"**), falling back to "the client" for generic/blank names.
+**The "the Flats" fix.** `useFamilyLabel` had naively pluralized the _last word_ of the client name, and `document_state.client_name` is the linked profile's `full_name` — which a seed had set to the project title "Reyes — Garden Flat", yielding "the Flats". Replaced by shared `lib/document/family-label.ts`: take the household part before a `—`/separator, then pluralize the surname with the -es rule ("Reyes" → **"the Reyeses"**), falling back to "the client" for generic/blank names.
 
 ### R68.1 · The Direction work band — making "draft the proposal" obvious (refinement)
 
-The first cut shipped the draft/send actions as a *weighted* mono row (clay "Draft the proposal" vs muted "Send"). Live smoke confirmed it still read as one more tiny line while the empty **"$0"** proposal preview (`proposal-blocks-readonly.tsx` always renders the Investment + Payment blocks) dominated the eye — typographic weight can't beat a `1.2rem` number.
+The first cut shipped the draft/send actions as a _weighted_ mono row (clay "Draft the proposal" vs muted "Send"). Live smoke confirmed it still read as one more tiny line while the empty **"$0"** proposal preview (`proposal-blocks-readonly.tsx` always renders the Investment + Payment blocks) dominated the eye — typographic weight can't beat a `1.2rem` number.
 
 **Ruling.** The draft state now carries a **work band** — the same grammar as Discovery's readiness band (the designer's known "next move" device): a tinted band (`rgba(229,221,208,0.5)` drafting / `rgba(168,181,160,0.16)` ready) with the `StrataMark size="lg" fill` (the shared drafting fill), a state sentence (**Not started yet** / **A draft taking shape · N% written** / **Ready to send**), and **one SOLID clay-filled CTA** that swaps **"Open the Drafting Room →"** → **"Send the proposal →"** at 100%. The non-lead act steps back to a quiet mono second below; live/terminal states keep their quiet instrument rows untouched. The empty proposal preview now collapses to **"Nothing drafted yet."** instead of the `$0` husk.
 
@@ -2554,7 +2563,7 @@ The first cut shipped the draft/send actions as a *weighted* mono row (clay "Dra
 
 ### R69 · The running-timer readout rests at minute resolution — no per-second motion
 
-Reported live (Kody): with a document open and a timer running, the elapsed clock **re-counted every second** in the always-on chrome — the spine timer (desktop left rail) and the mobile bottom bar both rendered live `mm:ss`. That ticking in the periphery pulled the eye off the text box / dropdown being filled in. The clock is the system's only *unbounded* per-second motion: it's not the breath (R15, a slow bounded swell on the active marker) and not a notification — it's just a counter changing in the corner. It also contradicts the Studio Drawer's own discipline (D8: "no badges, no unread counts, no pulsing"), where "In hand today" already rests at minute granularity for exactly this reason.
+Reported live (Kody): with a document open and a timer running, the elapsed clock **re-counted every second** in the always-on chrome — the spine timer (desktop left rail) and the mobile bottom bar both rendered live `mm:ss`. That ticking in the periphery pulled the eye off the text box / dropdown being filled in. The clock is the system's only _unbounded_ per-second motion: it's not the breath (R15, a slow bounded swell on the active marker) and not a notification — it's just a counter changing in the corner. It also contradicts the Studio Drawer's own discipline (D8: "no badges, no unread counts, no pulsing"), where "In hand today" already rests at minute granularity for exactly this reason.
 
 **Ruling.** The **at-rest** running readout drops to **minute resolution** (`fmtElapsedQuiet`: "under a min" → "1 min" → "1h 23m", floored, never rounded up) so the digits change at most once a minute — the corner goes still while you type. The sage "In hand" running dot is unchanged, so "it's running" still reads at a glance. The precise `mm:ss` survives only where the timer is opened **on purpose** — the mobile timer sheet (`mobile-sheets.tsx`), a focused view, not peripheral chrome. The provider's 1s tick is untouched (that sheet still wants live seconds when open; the per-second re-render is cheap and confined to timer components — the form inputs never consumed the timer context, so this was always a pure visual-motion issue, not focus theft).
 
@@ -2568,7 +2577,7 @@ Reported live (Kody): with a document open and a timer running, the elapsed cloc
 
 The Library Room (R32/R39) let you browse three shelves, but tapping a `LibraryCard` did nothing — there was no way to open a single piece and see, let alone edit, the ~35 real columns a `products` row carries (identity, form & material, pricing, sourcing, media, teaching, provenance). **The Piece** closes that: a Room reached by tapping a card's image or title, a sibling of the Composing Page (R40) and the Drafting Room (R42).
 
-**The shape.** A full-bleed paper Room (`RoomShell`, `backTo="/library"`) — not a sheet — at `/library/[id]` (`room-origin` already classifies it as a Room labelled "the Library", so no plumbing). A **letterhead hero** (folio gallery + the piece named in the hand + the Strata Mark *completeness* fill reading **Capture → Draft → Catalog-ready** off the same `pieceFill`) over three Movements reusing the Composing grammar verbatim — **the record** (identity · the piece · the story · categorization) · **the catalog** (commerce · sourcing · listing metadata) · **the eye** (teaching, delegating to the existing `DeepAnalysisSheet`) — and a quiet **colophon** of provenance/lifecycle. System columns (`embedding`, `aesthete_vector`, `search_vector`) are hidden; read-only/derived fields (slug, quality_score, audit) read as quiet metadata.
+**The shape.** A full-bleed paper Room (`RoomShell`, `backTo="/library"`) — not a sheet — at `/library/[id]` (`room-origin` already classifies it as a Room labelled "the Library", so no plumbing). A **letterhead hero** (folio gallery + the piece named in the hand + the Strata Mark _completeness_ fill reading **Capture → Draft → Catalog-ready** off the same `pieceFill`) over three Movements reusing the Composing grammar verbatim — **the record** (identity · the piece · the story · categorization) · **the catalog** (commerce · sourcing · listing metadata) · **the eye** (teaching, delegating to the existing `DeepAnalysisSheet`) — and a quiet **colophon** of provenance/lifecycle. System columns (`embedding`, `aesthete_vector`, `search_vector`) are hidden; read-only/derived fields (slug, quality_score, audit) read as quiet metadata.
 
 **Save model.** R40's law applied to an existing row: **every facet self-saves on blur** (chips/toggles immediately), no Save button. New `usePieceField` hook = a raw `products` UPDATE with optimistic write to `['product', id]` + rollback, and the two invalidations `useUpdateProduct` was missing (`['layer-products']`, `['layer-counts']`) so the shelf reflects an edit. RLS 0-row writes (PGRST116) surface as "no permission"; CHECK violations (23514) as "a Studio piece needs this field."
 
@@ -2579,6 +2588,7 @@ The Library Room (R32/R39) let you browse three shelves, but tapping a `LibraryC
 **Verified.** db reads clean; designer-portal `next build` green + the route in the manifest; type-check clean for all new files; a 6-dimension adversarial review (40 agents) → 15 confirmed findings → 13 fixed, 2 deferred (below); **live Chrome walk green** as `designer@patina.dev`: personal piece editable (SKU self-save persisted to DB), catalog piece read-only specimen sheet + Save/Add rail + correct cents→dollars, Add-to-a-project picker opens. D4 shadow audit clean.
 
 **Deferred (logged, not blocking).**
+
 - **O1 (still open):** the `Movement`/section-rule device is copied locally into `piece-room.tsx` (≈25 lines) rather than shared with Compose/Drafting — de-dup into `components/document/` later.
 - The `#b89a2e` draft-amber literal (Compose/Drafting/card) wants promoting to a token — pre-existing, untouched here.
 - The **studio** path renders the sourcing bundle with soft "studio needs" hints, but no studio rows are seeded locally to walk it; logic is the same surface, verified by review.
@@ -2601,6 +2611,7 @@ Directed by Kody (design authority) from a self-contained restyle spec. (R71 is 
 **5 — The white dock (shared chrome).** 60px, `--bg-surface`, hairline top border. Left: the **Patina wordmark** (Playfair, `0.2em`, → `/desk`) + a quiet breadcrumb. Center: the five room doors with **Lucide** icons (1.5px), Clay-6% hover, a 2px Clay active underline (per-door correct — matched by href, not the generic `isRoomPath`). Right: the in-hand readout (**"Hands free"** off a document; the day's minutes inside one), a **notification bell** (`Bell` + a Clay dot from `useUnreadInboxCount`, → `/portal/inbox`), and the **identity nameplate** (restyled light) opening the existing `AccountSheet` (per Kody — no new upward popover this pass). `DoorwayTick` and the per-book spine bars retire. The dock renders ≥980px (MobileBar below); no horizontal overflow at 980.
 
 **Provisional / to confirm with Leah.**
+
 - White tab ink on the lighter status hues (terracotta / clay / golden) is low-contrast for the small mono label — spec-mandated white; revisit if it reads poorly.
 - Bell destination `/portal/inbox` leaves the document model (no doc-model inbox surface exists yet) — provisional.
 - Folio meta line keeps **Section · Phase** (the Desk read model carries no location/budget for the mockup's "Wauwatosa · $15k–$25k").
@@ -2705,7 +2716,7 @@ The interactive 3D `RoomScanViewer` opens as a doc-file-viewer-sibling sheet fro
 
 Full notification-settings depth (RMS-07), sessions & sign-out-others (RMS-09), declined-lead history in People (CRM-20 — noting it contradicts R61's letter today), bulk archive (PRJ-12), and the LIB-13/17/27 library-depth trio all **defer**: none block the dissolve; each folds in when its track touches the surface. The public email-unsubscribe landing (RMS-10) survives the dissolve as a standalone page regardless.
 
-**Execution ruling (Kody):** *full send* — funnel repair first, then Wave 0 seam freeze, then Tracks 7 · 8 · 9 · 11-M as parallel worktree builds, then Wave 2 (the Post · 11-R), then the R21 dissolve.
+**Execution ruling (Kody):** _full send_ — funnel repair first, then Wave 0 seam freeze, then Tracks 7 · 8 · 9 · 11-M as parallel worktree builds, then Wave 2 (the Post · 11-R), then the R21 dissolve.
 
 ---
 
@@ -2720,7 +2731,6 @@ Commit `a256ef3c`. All ten walk findings fixed and re-walked green the same day:
 Four parallel worktree builds over frozen seams, merged same-day (T9 `6bb6c19f` → T11-M `60eaef9e` → T7 `f22c8776` → T8 + integration): **R79/R80/R81** (OpenProjectSheet + `open_project_direct` 00237 · self-save vitals/phases + Care "Close the book" + `close_project` 00238 · the Amendment sheet), **R74–R77** (Invoice folio + anti-wizard composer, zero migrations — 00177/00178/00187/00204 carried it · Export week → composer · FF&E Bill acts + coverage stamps · full Hours ledger), **R78** (maker path on '+ Add' · Makers marketplace lens, save-as-admission · maker profile depth + Orders cross-links), **R84** (ack logging · mark-sent · inline ETA · damage-claim lifecycle · multi-line Order Assistant/order-all · ledger lenses · receiving KPI strip). Orchestrator integration pass: ⌘K "Open a project" + "Draw an invoice" (capture-lead pending-flag pattern), Hours ledger drawer pre-addressing, line-unfold "Bill →", account-band "Amendment →". **All six P0 rows closed** (BIL-02/03/04/05/09, PRC-03). Verified: tsc 0 new · 325 doc jest · next build green · db reset clean through 00238 · live Chrome walk (open-a-project → project doc with vitals/Sharing/Close-the-book · Amendment sheet · folio-first Accounts ledger + folio acts · composer entries). ⚠ Owed: margin MONEY fold for open amendments (helpers ready in amendment-derivation.ts) · ⌘K "add a maker" + FF&E add-a-vendor doorway · AccountBand passes clientName='' to the Amendment sheet (familyLabel falls back to "the client") · `apply_scope_change` (00084) lacks an internal ownership guard (pre-existing; follow-up migration candidate) · phase-estimates placed in the letterhead "Phases" fold not the Work block (design flag) · screenshots in-conversation only.
 
 ---
-
 
 ---
 
@@ -2743,6 +2753,7 @@ Branch `the-document/track8-accounts-writes`, four slices, ZERO migrations (0017
 **Verified.** designer-portal tsc: zero non-`packages/email` errors; packages/supabase tsc clean; 306 document jest (incl. client-mirror + dissolve-grammar contracts) + 20 use-invoices vitest green; D4 shadow grep green.
 
 **Provisional / owed (post-merge wiring):**
+
 - ⌘K "draw an invoice" row → `openInvoiceComposer()` (command-bar not touched this wave).
 - Studio drawer: pass `initialContext={sheetContext}` to `<HoursLedger />` (one line) so the Account band's "Hours · this project ↗" lands pre-filtered; the link ships now and opens unfiltered until then.
 - The per-line Bill act in the line unfold (Track 11-M's surface).
@@ -2787,6 +2798,7 @@ Worktree branch, four slices, **one additive migration (00252)**.
 **Verified.** 00252 applied locally clean (column + widened owner CHECK + 3 table policies + 2 storage policies; proposal-anchored insert smoke-tested with project_id null). designer-portal + client-portal tsc: **zero errors in every touched file** (remaining app errors are the pre-existing unbuilt-`@patina/api-routes` / demo-page baseline). 334 designer document jest green incl. the two proposal contracts (12 assertions). D4 shadow grep clean on all touched files. No toasts — every new Document mutation carries `errorSurface:'inline'`.
 
 **Provisional / owed (integration):**
+
 - ⌘K "draft a proposal" row → mount `DraftProposalSheet` + trigger it (command-bar left to integration).
 - The client's proposal copy does not yet RENDER the flagged proposal-folio files — 00252 opens the client read leg (the data path is ready); a small flagged-file list on `apps/client-portal proposals/[id]` is the remaining leg of "space plans reach the client copy."
 - `proposalTierVisibility`'s `paymentSchedule`-at-curated call awaits a design ruling (see the ⚠ above).
@@ -2815,6 +2827,7 @@ Five parallel worktree builds over frozen seams (command-bar left frozen; ⌘K w
 **Verified (integration on main):** tsc 0 new errors, 399 designer document+help jest green, `next build` exit 0, db reset clean through **00253**, `project_documents.proposal_id` column + the `apply_scope_change` guard SQL-confirmed.
 
 **Deferred / owed:**
+
 - **Margin MONEY fold for open amendments** — needs a new margin kind + read-model change (not cheap); the Amendment sheet's own on-project strip already surfaces open amendments. Helpers ready in `lib/document/amendment-derivation.ts`.
 - **FF&E line-unfold "add a vendor" doorway** — the ⌘K "Add a maker" now covers vendor creation globally; the per-line doorway is a further convenience, deferred.
 - **Client proposal-folio render** (R85b's client leg is data-ready; the client-portal file list is owed), the **R86 `paymentSchedule`-at-curated** ruling, the **R82 bell-landing/dot** flags, and the **spec v1.7 fold** (R61–R90).
@@ -2822,9 +2835,9 @@ Five parallel worktree builds over frozen seams (command-bar left frozen; ⌘K w
 
 ---
 
-*Entries: D1–D14 · O1–O7 (resolved) · I1–I48 · R1–R70 (+R68.1) · R72–R91 (R71 = proposal-watch, logged in the project) · L1–L4 · THE GO · FLIP CONFIRMED · last id = I48 (rulings end at R91)*
+_Entries: D1–D14 · O1–O7 (resolved) · I1–I48 · R1–R70 (+R68.1) · R72–R91 (R71 = proposal-watch, logged in the project) · L1–L4 · THE GO · FLIP CONFIRMED · last id = I48 (rulings end at R91)_
 
-*Entries add: I47 · migration 00252 · last id = I47*
+_Entries add: I47 · migration 00252 · last id = I47_
 
 ---
 
@@ -2837,6 +2850,7 @@ When a client signs a physical contract, the designer needs a way to move the pr
 Because it delegates to the same activation, the whole proposal (rooms, FF&E, phases, milestones) carries into the new active project exactly as a digital sign would.
 
 **The rulings inside R92:**
+
 - **Issued proposals only.** Signability is `('sent','viewed','expired')`. A `draft` (never issued) is out — the designer Sends it first; the act does **not** appear in the Drafting Room. `declined` (explicit client rejection → must be re-issued) and `revised` (superseded) are excluded.
 - **A paper signature is not time-boxed** — there is no `valid_until` expiry guard, so a proposal that lapsed digitally (`expired`) can still be recorded.
 - **The engagement event is `'signed_offline'`**; the signer's printed name lands on `signed_by_name` / `client_signature`; `signed_ip` is null. The optional signing date the designer enters seeds the activated project's `start_date` (phase/milestone anchoring).
@@ -2846,7 +2860,7 @@ Because it delegates to the same activation, the whole proposal (rooms, FF&E, ph
 
 **Verified.** db reset clean through **00254**; SQL smoke green — the CHECK admits `'paper'`; the designer path produces `accepted` + back-linked proposal, exactly one `paper` approval decision, an `active` project matching the returned id, and a `signed_offline` event; idempotent on re-call (same project, no duplicate approval/project); a **client** caller is rejected (`insufficient_privilege`) and `declined`/`draft` raise `check_violation`. `@patina/supabase` + designer-portal tsc: **zero errors**. Additive only (D7): `sign_proposal` and the legacy /portal sign route untouched. ⚠ Not on prod (rides the 00230–00254 catch-up); live Chrome walk owed. Spec v1.7 fold still owed (R61–R92).
 
-*Entries add: R92 · migration 00254 · last id = R92*
+_Entries add: R92 · migration 00254 · last id = R92_
 
 ---
 
@@ -2862,7 +2876,7 @@ Program source: the Programa parity-or-beyond plan (Kody's ruling round 2026-07-
 
 **Verified at merge (integration branch).** `db reset` clean through **00261**; SQL smoke: clone carries boards+items on the integrated DB; `@patina/supabase` vitest **320/320** (incl. one pre-existing red fixed: the damage-claim insert test read the W5-T2 array shape as a single object); designer jest post/reassign suites **50/50**; deno **17/17**; turbo builds designer+client green. **Owed:** browser e2e run (blocked on designer `.env.local` + the CLI 2.72.7 legacy-key gap), live send smoke (`EMAIL_DEV_MODE`), Post visual check — all ride the Wave-1 walk; `database.types.ts` regen (the committed file is stale against main's own aesthete tables — a separate chore, not folded into a feature merge).
 
-*Entries add: I49 · migrations 00260–00261 · last id = I49*
+_Entries add: I49 · migrations 00260–00261 · last id = I49_
 
 ---
 
@@ -2880,7 +2894,7 @@ Program source: the Programa parity-or-beyond plan (Kody's ruling round 2026-07-
 
 **Owed.** Visual Leah-walk screenshots of the S surfaces (the e2e drove the board editor live; no eyes on the unfold yet — folded into Wave 2's screenshot pass) · detail-mode pick-snapshot enrichment (`lead_time_weeks`/`source_url` at handlePick) · cross-room line drag (needs a drop-zone ruling — zones currently mean capture-drop) · batch RPC if schedules outgrow per-item bulk loops.
 
-*Entries add: I50 · migrations 00262–00264 · last id = I50*
+_Entries add: I50 · migrations 00262–00264 · last id = I50_
 
 ---
 
@@ -2898,7 +2912,7 @@ Program source: the Programa parity-or-beyond plan (Kody's ruling round 2026-07-
 
 **Owed.** C6 designer EMAIL leg (in-app path complete; email follows the decision-resolved-notify precedent) · the board-presentation screenshot (needs a seeded sectioned board) · `sourceUrls` is a no-op toggle until a per-line source renders in the client doc · spec-pdf `itemDetails` gating (forward-compat stub) · post-sale custom-field editing UI (the FF&E drawer is the natural home) · re-enable the client-portal playwright webServer.
 
-*Entries add: I51 · migrations 00266–00269 · last id = I51*
+_Entries add: I51 · migrations 00266–00269 · last id = I51_
 
 ---
 
@@ -2914,7 +2928,7 @@ Program source: the Programa parity-or-beyond plan (Kody's ruling round 2026-07-
 
 **Owed at program close.** Leah-walk screenshots for board presentation + the Alternatives band (local seeds carry no product embeddings, so the band silent-degrades — seed embeddings or walk on Strata) · the C6 designer-email leg · the 00255 feedback-layer anon grants (inherited) · post-sale custom-field editing UI · spec-pdf `itemDetails` gating · **prod deploy of the whole program** (migrations 00260–00273 + edge fns spec-pdf / capture-from-url / quote-request-send — rides the Strata cutover) · rulings queue: markup-setting-not-owner-gated · project-less C4 · post-sale money edits.
 
-*Entries add: I52 · migrations 00270–00273 · last id = I52*
+_Entries add: I52 · migrations 00270–00273 · last id = I52_
 
 ## The Field Coordination program — waves 0–5 · 2026-07-08
 
@@ -2934,7 +2948,7 @@ Program source: the Programa parity-or-beyond plan (Kody's ruling round 2026-07-
 
 **Owed at program close.** Twilio Brand+Campaign registration (1–4 wks — runbook `docs/field/sms-10dlc-runbook.md`, START NOW) + 5 secrets + Messaging-Service webhook pointing · **prod deploy** (migrations 00281–00284 + edge fns sms-dispatch/field-daily/sms-inbound + config.toml verify_jwt entry + pg_cron — and validate the Kong `?apikey=` question against Strata for the signed webhook URL) · client-portal server-side PostHog (field_link_opened/field_action_applied noted in code, no server client exists in that app) · receiver SMS → `receiving_inspections` auto-create (deliberate v1 lighter path) · notFound() 200-status pattern on guest links (pre-existing, affects /share too — DeadLink is the house workaround) · winter cron/FIELD_TZ check at cutover · Wave P (Programa-parity PM) unscoped by ruling.
 
-*Entries add: I53 · migrations 00281–00284 · last id = I53*
+_Entries add: I53 · migrations 00281–00284 · last id = I53_
 
 ## The Document — the discoverability review (R93–R96) — 2026-07-09
 
@@ -2962,13 +2976,14 @@ AMENDS D14's presentation only — the weights and physics D14 set stand untouch
 
 **Foundation (F1–F6) ships with no ruling required** — none of it touches a locked decision, so none of it needed Kody's round: palette/door/help instrumentation, a flight-ledger read on PostHog OAuth (**owed** — the instrumentation writes events; nothing reads them back into a ledger yet, blocked on the OAuth connection), the People search repair, the ⌘K person deep-link, the `/help` door, and the Bell label.
 
-*Entries add: R93–R96 · I54 · last id = I54*
+_Entries add: R93–R96 · I54 · last id = I54_
 
 ## R97 · The Walkthrough — help, taught at the Desk (2026-07-10)
 
 **Amends R94, narrowly.** R94's "no tours" holds as the default physics of the document world. One exception is ratified: a **first-signin coachmark walkthrough of the Desk** (tour id `desk-walkthrough`, six steps, about a minute), plus explicit-replay entries (⌘K "Take the walkthrough", the /help pinned row, `/desk?tour=desk-walkthrough`). No other tour, coachmark sequence, or re-arming is licensed by this ruling.
 
 Terms:
+
 1. **The tour never leaves /desk** and never picks a document up — R4's timer must never lie. No step may route into `/doc/`.
 2. **Gate:** the auto-offer (WelcomeModal) fires only for accounts created on/after `DESK_WALKTHROUGH_SHIP_DATE` (constant in `desk-walkthrough.tsx` — bump to the prod deploy date at ship), on a ≥980px viewport, after help-state hydration and the desk read resolving. **Existing designers are never auto-modaled** — they receive a one-time R94 margin note (`desk-walkthrough-offer`) whose named act starts the tour.
 3. **Dismissal semantics:** declining the welcome ("Explore on my own", Esc) records `tours['desk-walkthrough'] = { abandoned, atStep: 0 }` — the durable, cross-device welcome-shown marker. Replay entries stay live regardless (restart clears persisted state through the backend).
@@ -2976,12 +2991,13 @@ Terms:
 5. **Suppression:** the `desk-first-touch` margin note is suppressed while the welcome or tour is active, and marked seen on completion — the tour taught ⌘K.
 
 Adjacent rulings folded in:
+
 - **The I54 registry** gains an optional `help: { surfaceKey, blurb }` per surface — pure data, consumed by the contextual help panel's intro line. R95's "labels + doorways only" is respected: blurbs do not render on the Contents page in this wave.
 - **/portal/help is retired to redirects** → `/help`. The re-homed Help Center is the single center; the old routes survive as doorways, not pages.
 - **The ? doorway:** sheet heads, ledger front-matter, and the court bar may carry a quiet DM-mono `?` that opens the contextual help panel scoped to their surface — reactive, user-invoked, no floating chrome. Term-level hover tooltips (stamps et al.) remain unlicensed.
 - **Content pipeline:** desk help content lives in Sanity (`kv3qrinl`, keys under `designer-portal/document/*` + the tour prefix), authored as drafts, published only at Kody's gate; repo microcopy (registry blurbs, margin notes, empty states) travels through PRs.
 
-*Entries add: R97 · last id = R97*
+_Entries add: R97 · last id = R97_
 
 ## The Designer Handoff — scan→request pipeline, Wave 1B portal (2026-07-11)
 
@@ -2995,7 +3011,7 @@ The open Brief also gains a **scan strip** (`BriefScanStrip`, between the facts 
 
 **Gate:** behind the PostHog flag `design-request-pool`, fail-closed while loading (mirrors `procurement-workspace-pilot`'s gate). **Pending a Leah walk before flag-enable** — this is a new Leah-facing surface on the Desk, and per the program's own risk log it needs her eyeball before it goes live for real designers, same bar as any other Desk-population change.
 
-*Entries add: R98 · last id = R98*
+_Entries add: R98 · last id = R98_
 
 ## The Document — the Schedule package: the Spine & the Rule (R99–R101 · O8) — 2026-07-15
 
@@ -3017,7 +3033,7 @@ chain (see R100). There is nothing to sync because there is only one schedule.
 beneath the project title on scroll at reduced height (labels fold into the
 line; diamonds and the today rule remain). It is three things at once:
 
-- *The glance* — a full-width drawn rule. Phase labels sit above the line at
+- _The glance_ — a full-width drawn rule. Phase labels sit above the line at
   natural width, staggered to a second row when they would collide; **nothing
   ever truncates.** Weight encodes status: light for closed, bold for active,
   muted Aged Oak for ahead. Today is a strong vertical Charcoal rule with its
@@ -3025,10 +3041,10 @@ line; diamonds and the today rule remain). It is three things at once:
   Overlapping phases (procurement is the canonical case) render as a parallel
   hairline beneath the main rule, spanning their true dates — the component
   stops lying about sequence.
-- *The minimap* — click a phase label and the spine scrolls there and unfolds
+- _The minimap_ — click a phase label and the spine scrolls there and unfolds
   it; click a diamond and the spine opens that milestone's phase with the row
   highlighted.
-- *The time surface* — phase boundaries are drag handles; milestones slide
+- _The time surface_ — phase boundaries are drag handles; milestones slide
   along the line. All time edits pass the ripple (R100). Anchored entries
   refuse the drag with a firm nudge ("Install is anchored — unpin to move
   it").
@@ -3118,7 +3134,7 @@ Three calls that gate the build, interviewed and ruled 2026-07-15.
 
 **1 · The client does not see the spine in Slice 01.** Studio-only first; the
 client-facing schedule arrives later as the Almanac projection (a filtered
-view of the same milestones and stamps). *Rejected:* a filtered spine from
+view of the same milestones and stamps). _Rejected:_ a filtered spine from
 day one — real earlier client value, but it roughly doubles Slice 01's
 surface (auth scoping, row filtering, a second audience to QA) and delivers
 the client a diluted studio tool instead of the view built for them; a
@@ -3127,7 +3143,7 @@ read-only "peek" link — a third artifact to maintain for marginal value.
 **2 · Inside an open phase, items sort blocking-first, then due date.** The
 thing holding the line surfaces first — the exception-first instinct that
 runs Mission Control runs here too. Ball-in-court survives as a chip on
-every row, but it is no longer the grouping. *Rejected:* court groups
+every row, but it is no longer the grouping. _Rejected:_ court groups
 (continuity with the old Coordination section, but they bury a blocker in
 whosever court it happens to sit); straight due-date order (simplest, but it
 hides blockage semantics entirely). The old Coordination grouping dies
@@ -3137,7 +3153,7 @@ consciously here, not by accident.
 client signs against commitments — install day, the sign-off gates — not
 against working scaffolding; working milestones are composed after
 signature. The baseline therefore freezes exactly what was promised.
-*Rejected:* the full chain with all milestones (strongest baseline, but
+_Rejected:_ the full chain with all milestones (strongest baseline, but
 every working milestone becomes a "promise" and proposals get heavy);
 phases only (cleanest proposal, but the baseline can't hold the schedule
 accountable for the dates that matter most).
@@ -3153,7 +3169,7 @@ studio eyes only — not every slip needs a client-facing scar. **Leaning
 client-facing dates (anchored milestones, install); the full ledger stays
 studio-side. Slice 05 builds studio-side only until this is ruled.
 
-*Entries add: R99–R101 · O8 · last id = O8*
+_Entries add: R99–R101 · O8 · last id = O8_
 
 ### I55 · Schedule package landed — ids substituted, landing scripts authored — 2026-07-15
 
@@ -3176,7 +3192,7 @@ non-consecutive ids, never rewrites historical trailers, and recomputes
 each batch's footer from the post-append contents — the corruption alarm
 the package specifies.
 
-*Entries add: I55 · last id = I55*
+_Entries add: I55 · last id = I55_
 
 ### I56 · §0 audit — the schedule builds on what exists — 2026-07-15
 
@@ -3232,7 +3248,7 @@ migration UPDATE cannot flag-and-wait, and the live data is known-dirty
 resolver's fallback; chain adoption becomes a Slice 03 compose-time human
 act, assisted, confirmed, never silent.
 
-*Entries add: I56 · last id = I56*
+_Entries add: I56 · last id = I56_
 
 ### O9 · Open — where do The Work's task rows live in the spine grammar? — 2026-07-15
 
@@ -3245,7 +3261,7 @@ item's sheet through the spine's sheet state — pending a ruling: do task
 rows become a fourth row type inside phases, stay a separate band beneath
 the spine, or fold into items? Resolve at the Slice 01 review.
 
-*Entries add: O9 · last id = O9*
+_Entries add: O9 · last id = O9_
 
 ### I57 · Slice 01 built — the Spine renders behind the gate — 2026-07-15
 
@@ -3284,7 +3300,7 @@ and O9 — the task rows' place in the spine grammar. The screenshot drop
 follows as the FIRST REVIEW MILESTONE; the flip gate stays off until the
 ruling blesses the dissolve.
 
-*Entries add: I57 · last id = I57*
+_Entries add: I57 · last id = I57_
 
 ### R102 · Slice 01 review — good to go; Slice 02 (the Rule) begins — 2026-07-15
 
@@ -3301,7 +3317,7 @@ spine through Slice 02. Slice 02 builds on the branch stacked over
 slice-01 (`schedule/slice-02`); the Rule replaces the old phase bar
 behind the same gate, and its review milestone gates Slice 03.
 
-*Entries add: R102 · last id = R102*
+_Entries add: R102 · last id = R102_
 
 ### I58 · Slice 02 built — the Rule renders behind the gate — 2026-07-15
 
@@ -3336,7 +3352,7 @@ status weight per R99's words vs the prototype's past/future ink split
 — both readings are defensible, the authority should pick); and
 `delayed` phases reading as `ahead` weight on the rule.
 
-*Entries add: I58 · last id = I58*
+_Entries add: I58 · last id = I58_
 
 ### R103 · Slice 02 review — accepted; Slice 03 (Compose) begins — 2026-07-15
 
@@ -3352,7 +3368,7 @@ ink; `delayed` reading as `ahead` weight; the 20px thread-lane pitch).
 O9 remains open. Slice 03 builds on `schedule/slice-03`, stacked on
 slice-02; its review milestone gates Slice 04 (Adjust).
 
-*Entries add: R103 · last id = R103*
+_Entries add: R103 · last id = R103_
 
 ### R104 · Process ruling — continuous execution through Slice 05 — 2026-07-15
 
@@ -3364,7 +3380,7 @@ DECISIONS entries, and its escalation list; the design authority
 reviews all three in one consolidated pass at the end. The flip gate
 stays off throughout; nothing ships to production.
 
-*Entries add: R104 · last id = R104*
+_Entries add: R104 · last id = R104_
 
 ### I59 · Slice 03 built — Compose: the schedule is born and grows inline — 2026-07-15
 
@@ -3421,7 +3437,7 @@ name-only phase needs two Enters; chip-unpin failures show no inline
 error; the weeks-mirror rounds 1–3d to 0w in summary totals; the
 accordion hosts milestones under "Deliverables, gates & key dates."
 
-*Entries add: I59 · last id = I59*
+_Entries add: I59 · last id = I59_
 
 ### I60 · Slice 04 built — Adjust: the ripple previews before it takes — 2026-07-15
 
@@ -3520,7 +3536,7 @@ cutting a `schedule_revisions` row, but that INSERT will need either a
 permissive policy or a SECURITY DEFINER wrapper (the function itself is
 SECURITY INVOKER) before Slice 05 can land it.
 
-*Entries add: I60 · last id = I60*
+_Entries add: I60 · last id = I60_
 
 ### I61 · Slice 05 built — Memory: the schedule earns its patina — 2026-07-15
 
@@ -3649,7 +3665,7 @@ compose gap (I59 — thread-lane phases still expose no compose actions of
 their own); and touch treatment for the Rule's drag surfaces (flagged
 since I60 — pointer-only mechanics, still untested on touch).
 
-*Entries add: I61 · last id = I61*
+_Entries add: I61 · last id = I61_
 
 ### R105 · The consolidated review — slices 03–05 accepted; O8 and O9 ruled in direction — 2026-07-15
 
@@ -3701,7 +3717,7 @@ Backlogged with owners noted: thread-lane compose actions, the
 `designer_clients` multi-row ambiguity, the draft-proposal modal bug,
 the O9 migration workstream, the O8 client projection.
 
-*Entries add: R105 · last id = R105*
+_Entries add: R105 · last id = R105_
 
 ### R106 · The Arrival Arc — accept, ceremony, introduction, discovery — 2026-07-16
 
@@ -3711,18 +3727,18 @@ the O9 migration workstream, the O8 client projection.
 
 **The ruling: accept is a threshold, not a button.** The arc is — request card → accept → **the Match Ceremony** → introduction sent with offered times → in-motion chip while she considers → she picks → Discovery, scheduled, inside the Document.
 
-**1 · Accept claims immediately.** On accept the request is claimed and the client's iOS app shows a held state at once: *"Middle Studio has taken your request in hand — introduction on its way."* Truth-framed: it reports what happened, it does not speak in the designer's voice. No client sits claimed and greeted by silence, and the system never impersonates her hand.
+**1 · Accept claims immediately.** On accept the request is claimed and the client's iOS app shows a held state at once: _"Middle Studio has taken your request in hand — introduction on its way."_ Truth-framed: it reports what happened, it does not speak in the designer's voice. No client sits claimed and greeted by silence, and the system never impersonates her hand.
 
 **2 · The Match Ceremony (new surface).** Full-screen, typography-first, zero shadows. It was considered as a lighter Desk-card flip and rejected: the arrival deserves weight, and the ceremony gives the intro and the scheduling one home instead of splitting the moment in two.
 
-- *What it presents — meet the client.* Name, their ask verbatim, the scanned room (scan preview), style tags and types, budget band, room type. The request payload honored as an arrival, not a form.
-- *What it asks — the designer's hand.* A scaffolded composer: a context line assembled from the payload ("Elena scanned her living room · leans warm-minimal · 25–40k") sits above; the words below are hers. Nothing pre-written, nothing auto-sent. Optional voice-note attachment.
-- *The offered times.* She picks 2–3 concrete slots, manually in v1 — no calendar dependency. Scheduling rides inside the introduction; one moment, not two.
-- *The threshold act.* One send. Intro, optional voice note, and slots travel together. On send the **Document is created**, seeded from the request — client linked, request linked, scan into the Discovery fold, style tags into the Brief, budget band carried — and the designer lands in the Document at Discovery. The document begins with the introduction; nothing "converts."
+- _What it presents — meet the client._ Name, their ask verbatim, the scanned room (scan preview), style tags and types, budget band, room type. The request payload honored as an arrival, not a form.
+- _What it asks — the designer's hand._ A scaffolded composer: a context line assembled from the payload ("Elena scanned her living room · leans warm-minimal · 25–40k") sits above; the words below are hers. Nothing pre-written, nothing auto-sent. Optional voice-note attachment.
+- _The offered times._ She picks 2–3 concrete slots, manually in v1 — no calendar dependency. Scheduling rides inside the introduction; one moment, not two.
+- _The threshold act._ One send. Intro, optional voice note, and slots travel together. On send the **Document is created**, seeded from the request — client linked, request linked, scan into the Discovery fold, style tags into the Brief, budget band carried — and the designer lands in the Document at Discovery. The document begins with the introduction; nothing "converts."
 
-**3 · Put-downable, not atomic.** Leaving mid-ceremony parks it as a Needs Your Hand card — *"Introduce yourself to Elena"* — draft preserved. This passes the action test: the act available is writing, so it earns a Desk folder. The Document is not created until the ceremony completes. (The atomic alternative — backing out un-claims — was rejected: it punishes a designer accepting on her phone between site visits. The skip-with-system-fallback alternative was rejected as against the grain; revisit only if unanswered ceremonies prove common in pilot.)
+**3 · Put-downable, not atomic.** Leaving mid-ceremony parks it as a Needs Your Hand card — _"Introduce yourself to Elena"_ — draft preserved. This passes the action test: the act available is writing, so it earns a Desk folder. The Document is not created until the ceremony completes. (The atomic alternative — backing out un-claims — was rejected: it punishes a designer accepting on her phone between site visits. The skip-with-system-fallback alternative was rejected as against the grain; revisit only if unanswered ceremonies prove common in pilot.)
 
-**4 · The waiting state is a chip.** After send: in-motion chip, *"Elena Vasquez — intro sent, awaiting her pick."* The only act left is waiting; per R22 that is chip tier, never a Desk folder. When she picks: the chip becomes *"Discovery · Thu 2pm"*, linking to the Document's Discovery fold, and The Post letters it (*"Elena chose Thursday 2pm"* — named, deep-linked, per the P3 fix). At 48h of silence the chip warms to a nudge — an act exists again. If the offered slots go stale before she picks, the chip asks for fresh times.
+**4 · The waiting state is a chip.** After send: in-motion chip, _"Elena Vasquez — intro sent, awaiting her pick."_ The only act left is waiting; per R22 that is chip tier, never a Desk folder. When she picks: the chip becomes _"Discovery · Thu 2pm"_, linking to the Document's Discovery fold, and The Post letters it (_"Elena chose Thursday 2pm"_ — named, deep-linked, per the P3 fix). At 48h of silence the chip warms to a nudge — an act exists again. If the offered slots go stale before she picks, the chip asks for fresh times.
 
 **5 · The Discovery fold, at this stage, holds:** the scheduled time, the scan (pulled from the linked request — this is P9's display side), the style tags, and a reference to the intro thread. Discovery is no longer an empty apology.
 
@@ -3732,7 +3748,7 @@ the O9 migration workstream, the O8 client projection.
 
 **Rejected alternatives, for the record:** landing directly in the Document on accept; Desk-card flip; editable template intro; calendar-link scheduling; client-proposes-first. Full reasoning in the session record.
 
-*Entries add: R106 · last id = R106*
+_Entries add: R106 · last id = R106_
 
 ### I62 · Arrival Arc Phase 0 — linkage census (T0.1): Elena is a no-login household; budget_range has drifted — 2026-07-16
 
@@ -3748,19 +3764,19 @@ Mechanism confirmed live: when a token refresh fails (expired access + invalid r
 
 ### I65 · Arrival Arc Phase 0 — accept-path runtime ledger (T0.3): two real bugs and a stale premise — 2026-07-16
 
-Pool claim behaves exactly as read: designer_id set, status stays 'new', two in_app notification_log rows (homeowner "Your design request was accepted", designer "You accepted a design request"), lands on the Brief with TriageBar. TriageBar accept sets status='accepted' and the 00289 trigger writes the homeowner "Designer matched … You're all set." — the exact row the arc's ceremony guard (provisional 00332) must suppress. Corrections and finds: (1) client_discovery is NOT created at accept — it lazy-seeds on the Discovery fold's first render; the ceremony's atomic create is a change, not parity. (2) REAL BUG: useBeginDiscovery's existing-row branch silently downgraded a seeded ACTIVE designer_clients relationship to status='lead', overwriting lead_id/source — ceremony_complete must never downgrade an existing active/proposal relationship (guard: create fresh or refuse, never downgrade). (3) REAL BUG: document_state's relationship shape excludes rows when any project exists for the (designer, client) pair — a repeat client's new Discovery-stage relationship is invisible, and /doc/{dc.id} renders "No document answers to this name." A fresh homeowner resolves cleanly; the arc's post-ceremony landing would 404 for exactly repeat clients unless Shape D's exclusion is scoped (e.g. exclude only non-'lead' rows) — needs a ruling. (4) STALE PREMISE: "Schedule the discovery call" is not an inert in-document chip — it is the desk-derivation In Motion label for relationship cards (desk-derivation.ts ~672), and the in-document Discovery fold is fully interactive since R61 (checklist overlay, scan attach, essentials). The R106 problem statement's R22-violation framing was written against a pre-R61 build; the chip-state work still replaces that label, but the premise reads as "the label is ceremony-blind", not "the fold is dead". (5) notification_log is not in the supabase_realtime publication — The Post/bell reflect new letters only after reload; 2.6's "within one refresh" stands; live lettering is a possible fast-follow. (6) Local dev: invoke_edge_function is a silent no-op without app.settings.supabase_url/service_role_key seeded — Wave 2 local verification must seed the vault or inspect the pg_net queue. (7) _pending/00106 (drop client_messages): keep parked; preconditions 3–5 unverified and the arc is actively touching accept notifications.
+Pool claim behaves exactly as read: designer_id set, status stays 'new', two in_app notification_log rows (homeowner "Your design request was accepted", designer "You accepted a design request"), lands on the Brief with TriageBar. TriageBar accept sets status='accepted' and the 00289 trigger writes the homeowner "Designer matched … You're all set." — the exact row the arc's ceremony guard (provisional 00332) must suppress. Corrections and finds: (1) client_discovery is NOT created at accept — it lazy-seeds on the Discovery fold's first render; the ceremony's atomic create is a change, not parity. (2) REAL BUG: useBeginDiscovery's existing-row branch silently downgraded a seeded ACTIVE designer_clients relationship to status='lead', overwriting lead_id/source — ceremony_complete must never downgrade an existing active/proposal relationship (guard: create fresh or refuse, never downgrade). (3) REAL BUG: document_state's relationship shape excludes rows when any project exists for the (designer, client) pair — a repeat client's new Discovery-stage relationship is invisible, and /doc/{dc.id} renders "No document answers to this name." A fresh homeowner resolves cleanly; the arc's post-ceremony landing would 404 for exactly repeat clients unless Shape D's exclusion is scoped (e.g. exclude only non-'lead' rows) — needs a ruling. (4) STALE PREMISE: "Schedule the discovery call" is not an inert in-document chip — it is the desk-derivation In Motion label for relationship cards (desk-derivation.ts ~672), and the in-document Discovery fold is fully interactive since R61 (checklist overlay, scan attach, essentials). The R106 problem statement's R22-violation framing was written against a pre-R61 build; the chip-state work still replaces that label, but the premise reads as "the label is ceremony-blind", not "the fold is dead". (5) notification_log is not in the supabase_realtime publication — The Post/bell reflect new letters only after reload; 2.6's "within one refresh" stands; live lettering is a possible fast-follow. (6) Local dev: invoke_edge_function is a silent no-op without app.settings.supabase_url/service_role_key seeded — Wave 2 local verification must seed the vault or inspect the pg_net queue. (7) \_pending/00106 (drop client_messages): keep parked; preconditions 3–5 unverified and the arc is actively touching accept notifications.
 
 ### I66 · Arrival Arc Phase 0 — notification-dispatch contract + APNs prerequisites (T0.4) — 2026-07-16
 
 notification-dispatch, email channel, non-sequence: an unknown template_id silently sends the generic "You have a new notification from Patina" fallback (the subject falls back independently via a type-keyed kebab-case map to "Notification from Patina"). Templates live in email_templates (DB, live-read — an INSERT takes effect with no redeploy). LIVE PROD GAP FOUND: design-request-claimed (invoked by claim_design_request since 00286) was never seeded — every claim email to date has sent generic boilerplate. Verdict: the arc's template migration (provisional 00336) is required — two new rows (held-state, introduction-delivered) with BOTH html_content and subject_default populated, plus a repair row for design-request-claimed. invoke_edge_function is fire-and-forget pg_net (async; downstream 500s never propagate) — the double-wrapped best-effort pattern stands. branded-email.ts blast radius if the shell itself is edited: 19 functions (11 direct + 8 transitive); template-row seeding touches none. APNs: topic cloud.patina.app (identical in both configs), team VP22LXHT7L, entitlement aps-environment=development; Release signing is Apple Development (never a true distribution archive), so every token registered today is sandbox — device_push_tokens.environment must be captured per-token at registration and drive api.push vs api.sandbox.push host selection, never inferred from build config. ES256: jose v5 is already in-repo (HS256 uses); importPKCS8 + kid header is a dependency extension, not a new library. Deno fetch HTTP/2 to APNs has no in-repo precedent — first-deploy smoke risk, not a blocker. verify_jwt: platform default true suffices (invoke_edge_function sends a service-role Bearer); optional intent stanza per the catalog-normalizer style. Secrets owed: APNS_AUTH_KEY (.p8 contents), APNS_KEY_ID, APNS_TEAM_ID, APNS_TOPIC.
 
-*Entries add: I62–I66 · last id = I66*
+_Entries add: I62–I66 · last id = I66_
 
 ### I67 · Arrival Arc — built and shipped to Strata behind the arrival-arc flag — 2026-07-16
 
 R106 delivered in four gated waves, all in one day. Wave 1 (spine): document_state v11 (00327 — Shape B no-login rescue via the new proposals.designer_client_id, Shape C/D display_name preference, Shape D lead_id emission, ALL THREE Shape-D exclusions engagement-scoped for linked rows with the pair heuristic preserved for legacy lead_id-null rows) + 00328 backfill (Elena's proposal hand-linked; two safe general predicates; unambiguous legacy proposal stamping); the uuid-null AppError killed at useClientProjects with a null-client_id guard; person records list linked documents through both legs; the Desk no longer trusts an auth-degraded 0-row read (keepPreviousData + session check + breadcrumb + whole-desk error state). Phase-1 gate passed with screenshots: zero AppErrors, linked documents, twenty clean loads. Wave 2 (the accept contract): match_ceremonies (00329, one row per lead, draft→sent→picked) + accept_design_request (00330, claim + stub + truth-framed held letter) + ceremony_complete (00331, one transaction: relationship without ever downgrading an engaged row — the designer_clients unique index re-scoped to non-lead rows, open_project_direct and activate_proposal_as_project regrafted single-delta — discovery seeded with defensive budget parsing, thread + intro head message, letters) + the 00332 trigger guard + client_pick (00333, homeowner-callable, Post letter named and deep-linked) + refresh_offered_slots (00334) + device_push_tokens (00335, environment per-token) + email templates (00336 — including the repair of design-request-claimed, which had sent generic boilerplate since 00286) + the apns-send edge function (ES256 via jose, per-token host, clean skip until secrets). Portal: the Match Ceremony at /ceremony/{leadId} (scene-03 structure, send asleep until words + two slots, 800ms row-backed autosave, put-down/resume across hard reload), flag-gated entry from both accept paths, the parked "Introduce yourself to {name}" card, four chip states (nameless pronoun-neutral texts — the wrapper carries the name; nudge and stale derived at read, no cron), the Discovery fold's schedule line + re-offer control + intro-thread reference, the flag-off hardening of useAcceptLead/useBeginDiscovery (multi-row pairs + the no-downgrade guard). The full arc is pinned by a committed e2e spec (e2e/document/arrival-arc.spec.ts) asserting every Phase-2 acceptance beat. Wave 3 (iOS): stages held/introduced/booked (reviewing re-labeled, Kody-blessed; intro-row precedence, terminal wins), the match_ceremonies to-one embed decode with fixtures, studio-name enrichment persisted to the offline receipt, MatchIntroductionView (three movements per scene 05, no voice note per ruling), one-tap client_pick with optimistic flip and the already_picked/slot_stale/not_found branches, EKEventEditViewController calendar sheet (iOS 17+ no-permission path), APNs registration (authorization asked at first submit success, token upserted with provisioning-profile-derived environment, sign-out cleanup). 288 tests / 35 suites green on the merged tree. Wave 4 (ship, 2026-07-16 ~17:00Z): 00327–00336 applied to Strata and object-probed; prod relationship count 3→2 (Elena's D+B duplicate collapsed to one named doc); apns-send ACTIVE returning the designed apns_not_configured skip; designer portal deployed (12dae0d4, ceremony route marker-verified in the built worker); PostHog flag arrival-arc (id 765596, project 326191) active for kody@kochaver.com only, fail-closed for everyone else. OBSERVED IN PASSING: the live schedule-spine flag (764880) is at 100% general rollout with no property conditions, contradicting its kody-only intent note — surfaced to Kody, untouched. OWED: Kody's APNs .p8 secrets (then re-invoke apns-send to confirm real delivery), Kody's authenticated prod walk of the full arc, the iOS TestFlight/device pass, and two pre-existing bugs flagged for a future wave (the doc header's "No client linked" on no-login Shape-B docs; useClientRoomScans called with a profile id where a designer_clients id belongs). Voice note and A/B-shape request lineage remain deliberately deferred.
 
-*Entries add: I67 · last id = I67*
+_Entries add: I67 · last id = I67_
 
 ### R107 · The Room View — the room as material, in Patina's hand — 2026-07-16
 
@@ -3770,9 +3786,9 @@ R106 delivered in four gated waves, all in one day. Wave 1 (spine): document_sta
 
 **The ruling in one line: the scan becomes a Patina drawing — not a scan viewer.**
 
-**1 · Placement: The Rooms, a Studio room.** Rooms joins Library and People as a top-level Studio room — every scanned room across every client, one roster. Each card: client, room type, dimensions, area, scan quality, and its Document reference. Opening a card opens the Room View. References inside a Document (the Discovery fold's scan, a Project room section, the ceremony's preview) open the *same* Room View scoped back to that Document — one viewer, two doors, and the room always knows its Document. The truth-keeping rule: the Rooms index is a lens over the same rows the Documents own; nothing is copied.
+**1 · Placement: The Rooms, a Studio room.** Rooms joins Library and People as a top-level Studio room — every scanned room across every client, one roster. Each card: client, room type, dimensions, area, scan quality, and its Document reference. Opening a card opens the Room View. References inside a Document (the Discovery fold's scan, a Project room section, the ceremony's preview) open the _same_ Room View scoped back to that Document — one viewer, two doors, and the room always knows its Document. The truth-keeping rule: the Rooms index is a lens over the same rows the Documents own; nothing is copied.
 
-**2 · Substance: parametric re-render, Patina's hand — mesh toggle named for later.** The research settled this fork. RoomPlan's own USDZ is not a photoreal capture — it is already parametric geometry (walls as planes, furniture as oriented bounding boxes in 16 categories, no ceilings), so "showing the real scan" buys almost nothing over re-rendering the CapturedRoom JSON ourselves — and browser-side USD demands WASM, SharedArrayBuffer, and COEP/COOP headers we refuse to carry. The iOS app already uploads the structured JSON (surfaces with dimensions, 4×4 transforms, confidence; objects with W×H×D oriented boxes; the floor polygon). The Room View renders that geometry in the brand's hand: Aged Oak line-work and quiet fills on Off-White, the drawing language the ceremony prototype already speaks. **Confidence renders honestly** — low-confidence walls and objects draw lighter and dashed, because a drawing that hides its uncertainty lies. An **"as captured" mesh toggle is named for a later stage** (verification disputes: *did the scan really miss that radiator?*): the ingest job converts USDZ→GLB server-side from day one as cheap archival insurance, but no mesh ships in v1 and no USD machinery ever enters the browser.
+**2 · Substance: parametric re-render, Patina's hand — mesh toggle named for later.** The research settled this fork. RoomPlan's own USDZ is not a photoreal capture — it is already parametric geometry (walls as planes, furniture as oriented bounding boxes in 16 categories, no ceilings), so "showing the real scan" buys almost nothing over re-rendering the CapturedRoom JSON ourselves — and browser-side USD demands WASM, SharedArrayBuffer, and COEP/COOP headers we refuse to carry. The iOS app already uploads the structured JSON (surfaces with dimensions, 4×4 transforms, confidence; objects with W×H×D oriented boxes; the floor polygon). The Room View renders that geometry in the brand's hand: Aged Oak line-work and quiet fills on Off-White, the drawing language the ceremony prototype already speaks. **Confidence renders honestly** — low-confidence walls and objects draw lighter and dashed, because a drawing that hides its uncertainty lies. An **"as captured" mesh toggle is named for a later stage** (verification disputes: _did the scan really miss that radiator?_): the ingest job converts USDZ→GLB server-side from day one as cheap archival insurance, but no mesh ships in v1 and no USD machinery ever enters the browser.
 
 **3 · The mode grammar: Plan · Orbit · Walk — one geometry, three distances.** Borrowed from the Matterport trinity (floor plan / dollhouse / walkthrough) and scaled to a single working room:
 
@@ -3782,7 +3798,7 @@ R106 delivered in four gated waves, all in one day. Wave 1 (spine): document_sta
 
 V1 is Plan + Orbit, one toggle apart, same geometry source. No tabs — a Strata rule.
 
-**4 · Stage one — Understand (v1).** The comprehension instrument. The facts rail: area, wall lengths, wall height (RoomPlan gives no ceiling data — wall height stands in, labeled as such), window and door count, scan date, scan quality. Hover any wall, opening, or detected object for its true dimensions. A two-point measure tool in Plan. Detected existing furniture renders ghosted with its category label — present but quiet, because it is the client's *current* room, not the proposal. Openings marked with swing/direction where the data carries it.
+**4 · Stage one — Understand (v1).** The comprehension instrument. The facts rail: area, wall lengths, wall height (RoomPlan gives no ceiling data — wall height stands in, labeled as such), window and door count, scan date, scan quality. Hover any wall, opening, or detected object for its true dimensions. A two-point measure tool in Plan. Detected existing furniture renders ghosted with its category label — present but quiet, because it is the client's _current_ room, not the proposal. Openings marked with swing/direction where the data carries it.
 
 **5 · Stage two — Annotate.** The room becomes a communication surface. Pins anchor to geometry — a wall, a point, a zone — and each pin is a note that flows into the Document's margin with a room-reference, so the room talks to the thread and the thread can point back into the room. Named **frames**: saved viewpoints from Orbit ("from the entry," "toward the west light") captured as images into the folio and boards. Nothing in the room is a dead end into chat — annotation is Document material.
 
@@ -3829,7 +3845,7 @@ No USD tooling anywhere (media 3D module is @gltf-transform GLB-only, USDZ input
 
 (a) Kody ruling 2026-07-16: ALL Document scan doors (Discovery fold, ceremony preview, letterhead "The scan" instrument, Folio) convert to the Room View — supersedes the package's two-door minimum; the old mesh ScanViewerSheet loses its remaining doors. (b) A3 deep-link fix NOT landed: DocumentGate (client-side fail-closed `the-document-pilot`) can bounce hard-refreshed `/room/[id]` to /portal while the flag resolves — known gap, in-app navigation is the v1 path, documented in the route header, not silently shipped. (c) Telemetry names ship verbatim from the ruling (`room_opened`, `mode_switched`, `measure_used` + 5 reserved) despite the family-prefix convention preference — names freeze on ship, `room_id` is the family carrier. (d) Ceremony door visible only to Kody until the `arrival-arc` flag widens (scoping fact). (e) No new feature flag — rides `the-document-pilot` (Kody ruling).
 
-*Entries add: R107 · I68–I74 · last id = I74*
+_Entries add: R107 · I68–I74 · last id = I74_
 
 ### I75 · The Room View — built and shipped to Strata — 2026-07-17
 
@@ -3843,7 +3859,7 @@ Fixed en route, pre-existing: /desk production build failure (useSearchParams wi
 
 Known gaps/owed: A3 deep-link (hard refresh of /room/[id] can bounce via DocumentGate — in-app nav is the v1 path); Kody's authenticated prod walk owed; local loader needs the HS256 vault key (documented in the fixture README); roster visible to all designers (rides the-document-pilot GA, per ruling I74e).
 
-*Entries add: I75 · last id = I75*
+_Entries add: I75 · last id = I75_
 
 ### I76 · Scan photos — rulings (Kody) — 2026-07-17
 
@@ -3873,7 +3889,7 @@ The `confirm-scan-bundle` edge function reads `body.scanId`; both iOS apps send 
 
 `c4485bf3` shows 200 `room_scan_images` rows against `room_scans.image_count = 40` — traced to source, not a guess. The 00032 AFTER-INSERT trigger counts truthfully (200, including retried batch inserts); the client's own explicit `image_count` patch then overwrites the trigger's count with its stale local tally (40). Rules going forward: reads dedupe defensively (by `scan_id` + `image_url`); the derivative sweep short-circuits duplicates by filename stem; Field's new upload lane relies on the trigger alone and drops the explicit patch entirely.
 
-*Entries add: I76–I82 · last id = I82*
+_Entries add: I76–I82 · last id = I82_
 
 ### I83 · Room View photos — built and shipped to Strata — 2026-07-17
 
@@ -3887,7 +3903,7 @@ Prod acceptance on the real fleet: backlog cleared 233/233 derived, 0 failed. `f
 
 Owed: Kody's authenticated prod walk of the photo surfaces; Field's posed-photo device pass via TestFlight. ⚠ Kody's local Capture pbxproj device-build mods were stashed (`stash@{0}`) to allow this program's fast-forward pull — reconcile in Xcode before the next device build.
 
-*Entries add: I83 · last id = I83*
+_Entries add: I83 · last id = I83_
 
 ### R108 · Field Capture P1 boundary — six rulings — 2026-07-17
 
@@ -3897,7 +3913,7 @@ patina-field-capture-architecture.html). Interview format; all six ruled.
 **R108.1 — Anchor entry: typed only.** P1 ships typed anchor entry
 (read from tape or laser, keyed against taps on the live model). DISTO
 BLE is not scoped for P2 — it waits for field evidence of transcription
-friction. Rationale: the accuracy contract is the anchor *values*, not
+friction. Rationale: the accuracy contract is the anchor _values_, not
 the transport; typed entry captures 100% of the benefit at zero
 integration risk.
 
@@ -3937,7 +3953,7 @@ leave P1 half-useful. Scope cost accepted knowingly — adds a
 parametric-graph → DXF serializer (ezdxf-class, layered walls/
 openings/dims) to the P1 server work; days, not weeks.
 
-*Entries add: R108 · last id = R108*
+_Entries add: R108 · last id = R108_
 
 ### I84 · Field Capture P1 — item-1 repo audit: found/absent + pre-emptions — 2026-07-17
 
@@ -3980,17 +3996,17 @@ tables, and R108.4's infra target is retired. Pre-emptions below gate item 2+.
   00019/00020/00027/00032/00077/00082/00265/00338). Bundle state
   (bundle_manifest_url, artifacts_sha256, upload_progress, scan_schema_version)
   already on room_scans (00077/00082). anchors/measurements overlap the
-  room_scan_geometry(_elements) spine (00337) — but that spine is parsed
+  room_scan_geometry(\_elements) spine (00337) — but that spine is parsed
   RoomPlan output; typed ground-truth anchors and per-dimension tolerance
   provenance do NOT exist anywhere (genuinely new; no tolerance column in the
   entire schema). pipeline_events would confusion-collide with
   pipeline_stage_events (00305, different domain); assets with
   svc_media.media_assets. House style is text + CHECK, not native enums.
 - **Storage: FOUND.** room-scans bucket (private, 500 MB, MIME list 00077, path
-  {artifactType}/{userId}/{scanId}/…, policy fix 00287, photo_derivatives/
+  {artifactType}/{userId}/{scanId}/…, policy fix 00287, photo*derivatives/
   family 00340); capture-media (00234); field-media (00282). Cron sweeps live:
-  parse-room-scan */10, convert-room-scan-glb */15, derive-scan-photo-media
-  */5, all via invoke_edge_function with job_runs telemetry.
+  parse-room-scan */10, convert-room-scan-glb \_/15, derive-scan-photo-media
+  \*/5, all via invoke_edge_function with job_runs telemetry.
 - **Ingest/validation: PARTIAL.** confirm-scan-bundle edge fn is live but thin —
   HEAD reachability + photo-count parity only, no checksum walk; called by
   Patina, never by Field. Item 2's manifest spec + CLI validator is genuinely
@@ -4022,7 +4038,7 @@ tables, and R108.4's infra target is retired. Pre-emptions below gate item 2+.
    live namespace). Bundle state rides the existing room_scans columns +
    manifest object; no modification of existing tables in P1.
 2. **Migration numbering (blessed):** mint at 00341. 00341–00349 verified free
-   across main + all 504 branches; 00350–00354 already exist as files on boh/*
+   across main + all 504 branches; 00350–00354 already exist as files on boh/\*
    branches — the BOH reservation is materialized, not soft.
 3. **R108.4 conflict (ESCALATED at M1):** "homelab GPU via Coolify" targets
    retired infra (CLAUDE.md: box dead, no homelab hosts). P1 requires no GPU —
@@ -4037,7 +4053,7 @@ tables, and R108.4's infra target is retired. Pre-emptions below gate item 2+.
    item 3 is new work even with v3 ports; background-resumable upload ports
    from Patina's BackgroundScanUploader.
 
-*Entries add: I84 · last id = I84*
+_Entries add: I84 · last id = I84_
 
 ### R109 · Field Capture M1 passed — R108.4 amended: native Linux GPU worker, no Coolify — 2026-07-17
 
@@ -4059,7 +4075,7 @@ CPU-bound and run on the same box from day one; the GPU earns its keep
 at P2 splat training. Package design lands in
 docs/design/field-capture/scan-pipeline-worker-design.md.
 
-*Entries add: R109 · last id = R109*
+_Entries add: R109 · last id = R109_
 
 ### R110 · Field Capture M2 passed — first real-room bundle end-to-end — 2026-07-17
 
@@ -4074,18 +4090,18 @@ items 9–11 open against the R109 worker design.
 Two field defects found and fixed during the walk, both regression-guarded:
 
 1. Storage MIME allow-list rejected the new artifact kinds — the uploader
-sent semantic MIMEs (x-ndjson, x-tar) the 00077 bucket list refuses. Fix
-ef6fac59: octet-stream transport types + a drift-guard test pinning every
-descriptor against the allow-list; spec B-17 splits semantic (manifest)
-from transport (storage) MIME.
+   sent semantic MIMEs (x-ndjson, x-tar) the 00077 bucket list refuses. Fix
+   ef6fac59: octet-stream transport types + a drift-guard test pinning every
+   descriptor against the allow-list; spec B-17 splits semantic (manifest)
+   from transport (storage) MIME.
 
 2. confirm-scan-bundle HEAD-checked raw /object/public/ URLs on the
-private room-scans bucket — 409 on every bundle despite all artifacts
-present. Latent since 00082; exposed by the first caller that ever
-depended on its verdict. Fix 8df0d005 (fn v18 on Strata): verify via
-/object/info/authenticated with the caller's JWT. Open follow-up: the
-photos-manifest count cross-check still reads the raw URL (informational
-only, never 409s).
+   private room-scans bucket — 409 on every bundle despite all artifacts
+   present. Latent since 00082; exposed by the first caller that ever
+   depended on its verdict. Fix 8df0d005 (fn v18 on Strata): verify via
+   /object/info/authenticated with the caller's JWT. Open follow-up: the
+   photos-manifest count cross-check still reads the raw URL (informational
+   only, never 409s).
 
 Wording: the escalate-class coach/anchor/scorecard strings shipped as
 placeholders, were seen during the walk, and stand as accepted-for-P1
@@ -4095,7 +4111,7 @@ Device-owed edges carried forward, not gating M2: airplane-mode resume,
 500 MB unattended background completion, background-relaunch session
 rehydration, sharpness-threshold calibration, voice-note audio seam.
 
-*Entries add: R110 · last id = R110*
+_Entries add: R110 · last id = R110_
 
 ### R111 · Field Capture M3 passed — drawing set accepted after one revision round — 2026-07-17
 
@@ -4104,20 +4120,20 @@ r1 verdict: model-space 2D "looks great"; four revisions ruled by Kody and
 applied (commits 0a36870d + e51ccb0e):
 
 1. DXF paperspace layout populated — the Layout tab is now a plottable A3
-sheet (viewport onto the approved model + branded title block); model
-space unchanged.
+   sheet (viewport onto the approved model + branded title block); model
+   space unchanged.
 2. Sloped ceilings render — RoomPlan supplied polygonCorners on one flat
-wall only, so the slope is synthesized as corner-height chords between
-walls of differing heights (2.48 m → 2.85 m in the review room); genuinely
-sloped polygons draw verbatim when future captures carry them. Ceiling
-note reads SLOPED; true ceiling planes remain P2.
+   wall only, so the slope is synthesized as corner-height chords between
+   walls of differing heights (2.48 m → 2.85 m in the review room); genuinely
+   sloped polygons draw verbatim when future captures carry them. Ceiling
+   note reads SLOPED; true ceiling planes remain P2.
 3. Patina brand on every title block — PATINA wordmark + strata-mark
-motif, monochrome plottable line art derived from the icon mark, deck
-type grain, in SVG/PDF and the DXF paperspace.
+   motif, monochrome plottable line art derived from the icon mark, deck
+   type grain, in SVG/PDF and the DXF paperspace.
 4. iOS anchor coach steers to SC-08's recipe (two long spans + one
-ceiling height): short-span nudge (< 2.5 m or < half the larger plan
-dimension), staged prompts, "recipe met" confirmation — advisory only;
-R108.5's soft gate unchanged.
+   ceiling height): short-span nudge (< 2.5 m or < half the larger plan
+   dimension), staged prompts, "recipe met" confirmation — advisory only;
+   R108.5's soft gate unchanged.
 
 r2 set accepted by Kody: **M3 PASSED.** Items 12–13 open.
 
@@ -4127,7 +4143,7 @@ system refused false precision exactly as R108.5 intends. D4 (outlines
 drawn from scale×model while dim text carries snapped values;
 sub-drawing-scale) stands accepted for P1.
 
-*Entries add: R111 · last id = R111*
+_Entries add: R111 · last id = R111_
 
 ### R112 · Field Capture P1 build complete — items 12–13 closed; M4 is operational — 2026-07-17
 
@@ -4173,7 +4189,7 @@ index on field_captures.provenance at inbox scale; voice-note audio
 seam; background-upload device edges; sharpness calibration; associative
 DXF dimensions.
 
-*Entries add: R112 · last id = R112*
+_Entries add: R112 · last id = R112_
 
 ### I85 · Field Capture — first complete production run; box-ops findings — 2026-07-18
 
@@ -4187,6 +4203,7 @@ verified (the long-span coach exists to change this on the next scan).
 Room File renders on the project page behind the room-file flag.
 
 Operational findings, all fixed durably in-repo during the run:
+
 1. Legacy pre-B-19 manifests (shipped app builds) list a photosManifest
    artifact that never uploads — ingest now normalizes it away
    (77416c06; ingest.legacy_manifest_normalized event).
@@ -4208,7 +4225,7 @@ retention reaps its partial objects.
 M4 remaining: Leah's device build + flag, pilot day per
 m4-pilot-checklist.md.
 
-*Entries add: I85 · last id = I85*
+_Entries add: I85 · last id = I85_
 
 ### R113 · Field Capture M4 passed by Kody's ruling — P1 CLOSED; P2 opens — 2026-07-18
 
@@ -4242,7 +4259,7 @@ device edges; sharpness calibration; associative DXF dimensions;
 measurements 'mesh' source-class widening; arrival-arc/schedule-spine
 flag rollout misconfig (flagged 2026-07-18, awaiting Kody's call).
 
-*Entries add: R113 · last id = R113*
+_Entries add: R113 · last id = R113_
 
 ### R114 · Field Capture P2 boundary — six rulings on the P2 package — 2026-07-18
 
@@ -4280,7 +4297,7 @@ she is available; not a predecessor to P2 server-side work.
 holds for GPU stages, same flip trigger, plus a per-room GPU-cost
 ceiling; pilot volume stays on Kody's box.
 
-*Entries add: R114 · last id = R114*
+_Entries add: R114 · last id = R114_
 
 ### I86 · Field Capture P2 · item-1 audit + M1 gate deliverables (spec + additive schema) — 2026-07-18
 
@@ -4350,7 +4367,7 @@ gates the prod push.
 3. splat is a parallel branch off refine (not off drawings) — the item-7 enqueue
    point is refine-complete, concurrent with fuse+solve, per §10.1.
 
-*Entries add: I86 · last id = I86*
+_Entries add: I86 · last id = I86_
 
 ### R115 · Field Capture P2-M1 passed — stage contracts + schema approved — 2026-07-18
 
@@ -4369,7 +4386,7 @@ adversarial review, gate. Kody's prod bundle 95266be1 is the standing
 subject through P2-M2 (first dense mesh vs the P1 certificate) and
 P2-M3 (walkthrough + click-to-measure).
 
-*Entries add: R115 · last id = R115*
+_Entries add: R115 · last id = R115_
 
 ### I87 · Field Capture P2 item 4 · COLMAP known-pose engine + evidence correction — 2026-07-18
 
@@ -4433,7 +4450,7 @@ no-go until the version/API/GPU/Field-raster fixture, local-scratch real-scan
 evidence (including no-op rejection), queue replay/order/race tests, and aligned
 pose consumer contracts for Fuse/Splat pass.
 
-*Entries add: I87 · last id = I87*
+_Entries add: I87 · last id = I87_
 
 ### I88 · Field Capture P2 item 3 · DeskDev GPU box acceptance — 2026-07-19
 
@@ -4467,7 +4484,7 @@ evidence and a physical Field/Core Image HEIC/Linux-materializer fixture. GPU
 stages stay unregistered and must not be enabled; scan `95266be1` remains
 local-scratch-only until those gates pass.
 
-*Entries add: I88 · last id = I88*
+_Entries add: I88 · last id = I88_
 
 ### I89 · Field Capture P2 item 4 · conservative lease-deadline prerequisite — 2026-07-19
 
@@ -4501,7 +4518,7 @@ automatic and manual suspend on DeskDev before enabling Refine, or first move
 to a suspend-aware clock/live lease revalidation contract. Scan `95266be1`
 remains local-scratch-only until the remaining item-4 gates pass.
 
-*Entries add: I89 · last id = I89*
+_Entries add: I89 · last id = I89_
 
 ### I90 · Field Capture P2 item 4A · COLMAP gate passed; disabled Refine foundations hardened — 2026-07-23
 
@@ -4544,7 +4561,7 @@ same-evidence improvement on scan `95266be1`, Fuse/Splat/mesh-solve/Present,
 host-suspend mitigation, registration, and GPU-stage enablement. No GPU queue
 task may be claimed yet.
 
-*Entries add: I90 · last id = I90*
+_Entries add: I90 · last id = I90_
 
 ### I91 · Field Capture P2 item 4 · disabled Refine boundaries — 2026-07-23
 
@@ -4577,7 +4594,7 @@ lifecycle, or concrete killable deadline-enforced adapters. Local-scratch
 proof, Fuse/Splat/mesh-solve/Present, host-suspend mitigation, stage
 registration, and GPU enablement remain hard gates. No GPU task may be claimed.
 
-*Entries add: I91 · last id = I91*
+_Entries add: I91 · last id = I91_
 
 ### I92 · Field Capture P2 item 4A · physical Field raster gate passed — 2026-07-24
 
@@ -4618,7 +4635,7 @@ backend, local-scratch `95266be1` proof, queue handler and replay/downstream
 join, Fuse/Splat/mesh-solve/Present, host-suspend mitigation, registration, and
 GPU enablement remain hard gates. No GPU task may be claimed.
 
-*Entries add: I92 · last id = I92*
+_Entries add: I92 · last id = I92_
 
 ### I93 · Field Capture P2 item 4 · disabled physical raster adapter deployed — 2026-07-24
 
@@ -4673,7 +4690,7 @@ any queue handler, registration, or GPU-stage enablement. Host suspend must
 also be disabled or the lease clock contract made suspend-aware before Refine
 can run.
 
-*Entries add: I93 · last id = I93*
+_Entries add: I93 · last id = I93_
 
 ### I94 · Field Capture P2 item 4 · disabled acquisition and native lifecycle prerequisites — 2026-07-24
 
@@ -4724,7 +4741,7 @@ evidence rejection and comparable improvement on local-scratch scan
 Fuse/Splat/mesh-solve/Present, host-suspend mitigation, registration, and GPU
 enablement remain hard gates. No GPU task may be claimed.
 
-*Entries add: I94 · last id = I94*
+_Entries add: I94 · last id = I94_
 
 ### I95 · Field Capture P2 item 4 · disabled evidence and COLMAP protocol foundations — 2026-07-24
 
@@ -4770,7 +4787,7 @@ command-group quiescence, complete command-exception normalization, the
 `scan_pipeline.refine` stays unregistered and persistent/default stages remain
 `ingest,solve,drawings`.
 
-*Entries add: I95 · last id = I95*
+_Entries add: I95 · last id = I95_
 
 ### I96 · Field Capture P2 item 4 · disabled packet extraction and command supervision foundations — 2026-07-24
 
@@ -4827,7 +4844,7 @@ parent-side alignment/pose verification, evidence composition, physical
 queue replay/fork, downstream four-manifest join, registration, and every GPU
 queue stage remain hard gates.
 
-*Entries add: I96 · last id = I96*
+_Entries add: I96 · last id = I96_
 
 ### I97 · Inked Instruments — one legible next action across The Document — 2026-07-26
 
@@ -4868,7 +4885,7 @@ never enter the event. Impressions deduplicate per mounted presentation and
 disabled actions do not emit selections. The change rides the existing
 `the-document-pilot` audience with no additional flag.
 
-*Entries add: I97 · last id = I97*
+_Entries add: I97 · last id = I97_
 
 ### I97 (Field Capture P2) · item 4 · parent-owned lease, pinned toolchain, packet ledgers, and the frozen output handoff — 2026-07-27
 
@@ -4964,7 +4981,7 @@ that two green local gate environments and every review round to that point had
 missed. `_parse_linux_process_stat` rejected `pgrp == 0`, which every Linux
 kernel thread legitimately reports — no session, no process group — and on the
 qualified host 283 of 547 live PIDs read that way, so the native quiescence scan
-raised on the first kernel thread it walked past and every *successful* native
+raised on the first kernel thread it walked past and every _successful_ native
 Refine call failed `REFINE_ENGINE_CLEANUP_FAILED`. macOS has no `/proc` and a
 container has its own PID namespace with no kernel threads in it, which is why
 neither gate could see it. Zero is now read as the legitimate value it is rather
@@ -5017,7 +5034,7 @@ reprojection/registration/verified-loop evidence on local-scratch scan
 `95266be1`, queue replay/fork, the downstream four-manifest join, registration,
 and every GPU queue stage remain hard gates.
 
-*Entries add: I97 · last id = I97*
+_Entries add: I97 · last id = I97_
 
 ### R116 · Field Capture P2 item 4 CLOSED — qualified-host acceptance; two scoped exceptions carried — 2026-07-27
 
@@ -5052,8 +5069,8 @@ closed. The clause is satisfied as written. Containment stays open and is
 carried to item 7's composition.
 
 **Two exceptions are carried, not closed.** (1) Escaped-descendant
-containment, above. (2) Precedence over the `drain_errors` branch *in
-isolation* is in-repo coverage, not a host measurement: on that host the
+containment, above. (2) Precedence over the `drain_errors` branch _in
+isolation_ is in-repo coverage, not a host measurement: on that host the
 drain fault surfaced as a cleanup error, so no case produced `drain_errors`
 non-empty with `cleanup_errors` empty to compare against. Neither exception
 may be quietly dropped from the packet.
@@ -5074,7 +5091,7 @@ click-to-measure), and M4 (a maker quotes without a site visit) remain his
 to call, and every downstream hard gate named in I97 remains open. Item 6
 is next.
 
-*Entries add: R116 · last id = R116*
+_Entries add: R116 · last id = R116_
 
 ### R117 · Field Capture P2 — 100-frame pilot accepted for `95266be1`; the 200–400 band recorded UNQUALIFIED — 2026-07-27
 
@@ -5104,7 +5121,7 @@ headroom was 22 GiB free when this was ruled. The band is unproven because
 no scan in it has been captured, not because a packet could not carry one.
 
 **`PILOT_200_400_FRAME_RANGE_QUALIFIED` therefore stays `False`,** and this
-entry is the record of *why* it stays `False`. Qualifying it requires a
+entry is the record of _why_ it stays `False`. Qualifying it requires a
 longer capture — a real Field session that fires at least 200 keyframes —
 and then the evidence that band would have to carry. Nothing shorter
 substitutes, and the flag is not to be flipped on this ruling.
@@ -5126,7 +5143,7 @@ mesh from `95266be1` judged against the P1 certificate), M3 (walkthrough
 and click-to-measure) and M4 (a maker quotes without a site visit). Item 7
 composes at 100 frames.
 
-*Entries add: R117 · last id = R117*
+_Entries add: R117 · last id = R117_
 
 ### R118 · Field Capture P2 · Refine qualifies at capture resolution; the 360x640 raster pin is superseded — 2026-07-28
 
@@ -5158,7 +5175,7 @@ profile.
 **Why capture resolution and not a downscale.** Three reasons, the first
 measured and the other two read off the code.
 
-1. The packet layer is *already built* for 1440x1920 and is inside budget at
+1. The packet layer is _already built_ for 1440x1920 and is inside budget at
    it. One frame is a P6 file of `17 + 1440*1920*3 = 8_294_417` bytes; 100
    frames pack into 7 chunks and 8 pinned files at 0.77 GiB, and the 400-frame
    contract maximum into 25 and 26 — inside the 64-file and 4 GiB ceilings
@@ -5210,7 +5227,7 @@ unqualified per R117 and is untouched here. No claim is made that a
 reconstruction at capture resolution will succeed, only that it is the profile
 worth qualifying.
 
-*Entries add: R118 · last id = R118*
+_Entries add: R118 · last id = R118_
 
 ### I98 · Field Capture P2 · the raster profile becomes a declared, bounded parameter (R118 build) — 2026-07-28
 
@@ -5239,7 +5256,7 @@ reads the fixture's `captureProfile` (manifest `schemaVersion` 2) and derives
 the entire marker set by exact integer arithmetic from the declared profile,
 comparing the manifest's list against it. A trusted marker list would let a
 forged fixture define its own passing criteria. Provenance — which API produced
-the dimensions, which frame semantics, device model, OS — is *required* and
+the dimensions, which frame semantics, device model, OS — is _required_ and
 bounded, not tolerated. The receipt is bumped to v3 and records which profile
 was qualified on what provenance.
 
@@ -5247,7 +5264,7 @@ was qualified on what provenance.
 the helper's existing `MAX_DIMENSION` on every decoded plane and the bound
 `_metadata_positive_int` already applies to every reported dimension. The
 canonical PPM size is bounded by `RefineMaterializationLimits().max_raster_bytes`
-read *live* rather than restated — 128 MiB, verified numerically identical to
+read _live_ rather than restated — 128 MiB, verified numerically identical to
 `NATIVE_CHILD_MAX_PINNED_FILE_BYTES`. At a 4096 axis the widest admissible
 profile is 48 MiB, so the axis bound binds first and the byte bound is what
 keeps the guarantee true if the axis bound is ever raised; the code says so
@@ -5275,8 +5292,8 @@ same literal in `install.sh` and `install-path-guard.py` moves with it or the
 installer refuses to build. I92 covers the old helper bytes only. Re-qualification
 is mandatory, not elective.
 
-**Verification.** On the qualified x86_64 host at the integration merge: **2038
-passed, 1 failed, 0 skipped** — an *empty* skip list, which is the point; all 83
+**Verification.** On the qualified x86*64 host at the integration merge: **2038
+passed, 1 failed, 0 skipped** — an \_empty* skip list, which is the point; all 83
 macOS skips are Linux-gated and every one executed. The single failure,
 `test_validator_drift::test_vendored_validator_is_byte_identical`, needs
 `/home/kody/scripts/validate_capture_bundle.py`, which is absent from that host,
@@ -5294,13 +5311,13 @@ the integration merge rather than taken on report.
 
 **Three exceptions carried, none of them silent.**
 
-1. *The reference design is refused; the reference profile is not.* A 640x360
+1. _The reference design is refused; the reference profile is not._ A 640x360
    fixture carrying genuine device provenance still qualifies end to end, so
    the previously qualified profile remains qualifiable. A fixture
    self-identifying as `deviceModel: "reference-design"` is refused
    (`FIELD_RASTER_PROFILE_NOT_PHYSICAL`) — a synthetic drawing must not be able
    to qualify itself. Both halves are intended.
-2. *`refine_lifecycle.main()` is broken and stays broken.* It has constructed
+2. _`refine_lifecycle.main()` is broken and stays broken._ It has constructed
    `PackagedLibheifFieldRasterMaterializer()` with no arguments since item 7
    (`64f31021`), a latent `TypeError` in a hand-typed entry point with no
    console script and no test; it now misses two required keyword arguments
@@ -5308,7 +5325,7 @@ the integration merge rather than taken on report.
    literal or a read of the keyframe index — that is composition, and belongs
    to whoever composes item 7. Deliberately unfixed rather than patched with a
    constant this ruling forbids.
-3. *The installed helper filename stays `-v2` while the protocol is v3.*
+3. _The installed helper filename stays `-v2` while the protocol is v3._
    `install-path-guard.py` names it in the release's required-executable list,
    so renaming it would make a new guard refuse an already-installed release on
    a host agents may not touch. Drift is already caught closed: the manifest
@@ -5327,7 +5344,7 @@ selected video format is unverified on device; it is an operator cross-check in
 the runbook, with an explicit instruction not to qualify if the configuration
 and a real scan's keyframe index disagree.
 
-*Entries add: I98 · last id = I98*
+_Entries add: I98 · last id = I98_
 
 ### I99 · Field Capture P2 · capture-resolution raster qualified on the physical device; I92 superseded — 2026-07-28
 
@@ -5358,7 +5375,7 @@ BuiltInWideAngleCamera`. Four independent links, each measured:
 1. The device's own Diagnostics row reported 1920x1440 off
    `ARWorldTrackingConfiguration.videoFormat.imageResolution`, read from
    `SharedARCaptureRig.makeConfiguration()` before any session runs. The
-   manifest records that `videoFormat` was *unassigned*, so this is ARKit's
+   manifest records that `videoFormat` was _unassigned_, so this is ARKit's
    default for this device and configuration — the provenance states its own
    weakness rather than hiding it.
 2. **The RoomPlan cross-check passed**, which is the link R118 flagged as
@@ -5389,7 +5406,7 @@ install; no agent ran `install.sh`, used `sudo`, or wrote outside `~/`.
   tolerance is 64 and search radius 3 px. The discrete mapping
   `(x,y)=(nativeHeight-1-y,x)` holds at capture resolution.
 - **Orientation is physical, not metadata.** `orientationProof` records
-  *absent* embedded EXIF/XMP orientation with zero metadata blocks, so the
+  _absent_ embedded EXIF/XMP orientation with zero metadata blocks, so the
   right-rotation is a real raster transform. This is the defect class item 4A
   existed to catch, re-proved at the new profile rather than inherited.
 - **Decode fidelity.** libheif 1.17.6 with libde265 1.0.15, exactly one
@@ -5402,7 +5419,7 @@ install; no agent ran `install.sh`, used `sudo`, or wrote outside `~/`.
   discrete marker pixels, `H-cy` for the continuous principal point — and both
   are correct for their quantity; conflating them would be a one-pixel error.
 - **Safety.** `databaseWrites: false`, `storageCalls: false`, `queueClaims:
-  false`, `inputFilesMutated: false`, `externalSystemsTouched: []`,
+false`, `inputFilesMutated: false`, `externalSystemsTouched: []`,
   `controlledPhysicalDeviceInputOnly: true`.
 
 **What is deliberately still not claimed.** The fixture's synthetic intrinsics
@@ -5414,7 +5431,7 @@ convention only: no reconstruction has been run, no `*_QUALIFIED` flag is
 flipped by this entry, Refine remains disabled and uncomposed, and the
 200-400 frame band stays unqualified per R117.
 
-*Entries add: I99 · last id = I99*
+_Entries add: I99 · last id = I99_
 
 ### R119 · Field Capture P2 · four rulings after the capture-resolution qualification — 2026-07-28
 
@@ -5475,7 +5492,7 @@ consequence of this entry. The 200-400 frame band remains unqualified per R117.
 3 now supplies the profile it may name, but the repair belongs with the
 composition that follows the floor, not before it.
 
-*Entries add: R119 · last id = R119*
+_Entries add: R119 · last id = R119_
 
 ### I100 · Field Capture P2 · the Refine lifecycle is composed and the qualified profile pinned; build work closed — 2026-07-28
 
@@ -5489,12 +5506,12 @@ remains is operational and belongs to the program owner. Integration line
 `QUALIFIED_CAPTURE_RASTER_PROFILE = FieldRasterProfile(1440, 1920)` lives in
 `refine_lifecycle.py`, deliberately **not** in `field_raster_materializer.py` —
 R118/I98 moved that adapter off a compiled-in size on purpose, and what R119
-ruling 3 pins is narrower: *which declaration the composed path may make*.
+ruling 3 pins is narrower: _which declaration the composed path may make_.
 `require_qualified_raster_profile()` runs before anything is acquired, in six
 clauses with six distinct messages: a receipt must be in force; it must still
 cover the packaged helper source; the pinned profile must reproduce the
-receipt's own 8_294_417-byte PPM; the adapter must declare a profile; the
-declaration must be a `FieldRasterProfile`; and it must be *the* one. Neither
+receipt's own 8*294_417-byte PPM; the adapter must declare a profile; the
+declaration must be a `FieldRasterProfile`; and it must be \_the* one. Neither
 design R119 rejected exists: there is no `--profile` flag, no environment
 variable, and no receipt lookup, and a test reads the argument parser to prove
 the surface is absent rather than merely unused.
@@ -5519,7 +5536,7 @@ exactly `{FIELD_RASTER_CAPTURE_PROFILE_QUALIFIED}`.
 because a repair must name a capture profile and none was qualified; R119
 ruling 3 supplied one. The construction moved into
 `build_composed_invocation(arguments)` so it is reachable from a test — that
-extraction *is* the fix's testability. `main()` now runs end to end under
+extraction _is_ the fix's testability. `main()` now runs end to end under
 `python -m`, exiting 2 with one diagnostic and writing nothing, because the
 owner-installed toolchain manifest does not yet exist.
 
@@ -5534,18 +5551,18 @@ every engine raster is 8_294_417 bytes, and that `materializer_id` is the
 packaged adapter's and ends `-1440x1920`.
 
 **Adversarial cases constructed, not asserted.** A real adapter at 360x640 —
-*the previously qualified I92 profile* — is refused
+_the previously qualified I92 profile_ — is refused
 `REFINE_RASTER_PROFILE_UNQUALIFIED`, as are 1920x1440 (the native pair, the
 plausible mistake), 1080x1920, and ±1 px on each axis. Refusal happens before
 acquisition: a counting acquirer records zero calls and both scratch and
 publish directories are empty. The converse is covered too — a qualified
-declaration with an unqualified *bundle* is refused per frame, which is what a
+declaration with an unqualified _bundle_ is refused per frame, which is what a
 run from any other device would look like.
 
 **One surviving mutation, reported rather than absorbed.** The clause "the
 pinned profile reproduces the receipt's PPM size" survived the first sweep
 because no input could reach it — precisely the failure mode this program keeps
-finding. The guard was kept (it refuses a *run*, where the assertion only
+finding. The guard was kept (it refuses a _run_, where the assertion only
 refuses a commit), given a reaching test, and re-verified RED against a fresh
 control. The sweep's own log retained a stale pre-fix survivor line, and the
 author flagged that rather than letting it read as the verdict.
@@ -5570,7 +5587,7 @@ byte-identical to `6743e66eb06369d18e34b0054d10734e03a109ec`.
 docstring, not only here.** No COLMAP, CUDA or GPU has ever run; the path fails
 closed at the toolchain preflight because the manifest is an owner-installed
 artifact. No real Field HEIC has been decoded on this path — the Linux test
-drives the real adapter, real descriptor pinning and a real helper *process*,
+drives the real adapter, real descriptor pinning and a real helper _process_,
 but the helper is a stand-in writing canonical PPM; libheif on a real capture
 needs the root-owned installed release. No archive this repository has parsed
 came out of COLMAP; every sparse model in the suite is packed byte by byte by
@@ -5585,7 +5602,7 @@ how long 100 frames actually take; and whether the resulting evidence clears
 `evaluate_refinement_evidence` rather than merely clearing the non-vacuity
 floors. Nothing before that run can answer any of them.
 
-*Entries add: I100 · last id = I100*
+_Entries add: I100 · last id = I100_
 
 ### R120 · Field Capture P2 · the capture app's transport archives contradicted their own index; the app is the side that changes — 2026-07-28
 
@@ -5616,8 +5633,8 @@ bundle that cannot describe its own contents, and would leave the app free to
 keep emitting archives that no reader can join to an index.
 
 **Why no test caught it.** The existing tar tests pass arbitrary names straight
-to `TarArchive.write`, so they exercise the *writer* and never the *naming
-rule*; the rule lived only as a closure at one call site, where nothing could
+to `TarArchive.write`, so they exercise the _writer_ and never the _naming
+rule_; the rule lived only as a closure at one call site, where nothing could
 reach it. The fix therefore extracts `TarArchive.bundleEntries(directory:files:)`
 — a named function is what gives the rule somewhere to be tested. Proven
 non-vacuous: reverting it to the shipped bare-filename form reddens the new
@@ -5657,7 +5674,7 @@ gated on a device walk rather than on any code.
 `depth.tar`: it carried the identical defect, and leaving a known-broken
 sibling in place to be rediscovered later is not a saving.
 
-*Entries add: R120 · last id = R120*
+_Entries add: R120 · last id = R120_
 
 ### I101 · Field Capture P2 · first real Refine run reaches the native boundary; real keyframes decoded — 2026-07-28
 
@@ -5705,6 +5722,7 @@ reconstruction actually takes; and whether the resulting evidence clears
 `evaluate_refinement_evidence` rather than merely the non-vacuity floors of
 R119. None of them can be answered while the native backend is a stub, which is
 what R121 addresses.
+
 ### R121 · Field Capture P2 · the native COLMAP backend is unfrozen and composed; DeskDev privilege granted — 2026-07-28
 
 Two grants from the program owner on 2026-07-28, both reversing constraints
@@ -5748,16 +5766,16 @@ the evidence clears `evaluate_refinement_evidence` rather than merely clearing
 the non-vacuity floors. A run that fails any of these is a result and is to be
 recorded as one.
 
-*Entries add: I101 · R121 · last id = R121*
+_Entries add: I101 · R121 · last id = R121_
 
 ### I102 · Field Capture P2 · the real COLMAP child body; the first end-to-end engine run, and what refused it — 2026-07-28
 
-R121's authorisation is built.  `refine_colmap_backend.py` — pinned byte-identical
+R121's authorisation is built. `refine_colmap_backend.py` — pinned byte-identical
 to `6743e66e` since I96 and named as untouchable in every agent brief since — now
 carries the I87 primary plan as executable code, and that code has run COLMAP
 4.0.2 against a real Field capture on the qualified host.
 
-**What the child does, in the order it does it.**  `run_refine_colmap_native`
+**What the child does, in the order it does it.** `run_refine_colmap_native`
 loads the pinned `/opt/colmap/4.0.2` toolchain FIRST, so a drifted box is refused
 while the lease is still empty; then extracts the packet; then GPU SIFT
 (`CameraMode.PER_IMAGE`), the device intrinsics rewritten over COLMAP's guesses
@@ -5768,76 +5786,76 @@ already-isolated process group), bundle adjustment at `TWO_CAMS_FROM_WORLD` with
 intrinsics fixed, and last the Sim(3) rebase back into the seed's metric frame.
 It writes the seven closed output tokens and returns the report the parent parses.
 
-**The child computes its proposal with the PARENT's own code.**  It writes its
+**The child computes its proposal with the PARENT's own code.** It writes its
 three sparse-model archives, then re-reads them through
 `refine_model_alignment.read_sparse_model_snapshot` and solves the centres-only
-similarity with `refine_adapter.estimate_sim3`.  Agreement then means the two
+similarity with `refine_adapter.estimate_sim3`. Agreement then means the two
 sides read one archive the same way, not that two implementations converged.
 That is the second in-package edge into `refine_model_alignment`, and it is
 pinned by test rather than left incidental.
 
 **Two ledgers were added to the packet, because evidence needs provenance the
-child cannot have.**  The engine request describes ENGINE images; the evidence
+child cannot have.** The engine request describes ENGINE images; the evidence
 builder needs the capture archive key, member, digest and size per frame plus the
-raster adapter's identity, and only the parent holds those.  `build_colmap_packet`
+raster adapter's identity, and only the parent holds those. `build_colmap_packet`
 now emits `source-ledger-v1.json` and `adapter-ledger-v1.json` — two member roles
 the extractor already knew how to parse and that nothing had ever produced.
 
-**THE RUN.**  Scan `004aa5b0-bfaa-4577-93f8-c06d9f38f1fc`, 49 keyframes, the
+**THE RUN.** Scan `004aa5b0-bfaa-4577-93f8-c06d9f38f1fc`, 49 keyframes, the
 R120-fixed bundle, from a root-owned R121 release built beside the live one so
-`patina-scan-worker` was never touched.  **28.6-29.4 s wall across four runs, peak RSS 596-660 MB**, under a
+`patina-scan-worker` was never touched. **28.6-29.4 s wall across four runs, peak RSS 596-660 MB**, under a
 3600 s lease — the first measurement this repository has ever had of a real
-reconstruction.  Inside it: GPU SIFT 3.2 s for **341_749 features** over 49
+reconstruction. Inside it: GPU SIFT 3.2 s for **341_749 features** over 49
 frames (min 250, max 13_425, mean 6_974); guided matching and geometric
 verification **4.14 s**; bundle adjustment **0.56 s, 34 iterations, 87_950
-residuals, CONVERGENCE, initial cost 1.01046 px, final 0.682295 px**.  Four
+residuals, CONVERGENCE, initial cost 1.01046 px, final 0.682295 px**. Four
 minutes was never the constraint; R119 ruling 2's whole-lease budget was not
 needed either.
 
-**R121's three questions, answered.**  COLMAP executes under the pinned manifest
-and the lease: yes.  How long 49 frames take: 29 s.  Whether the evidence
-clears `evaluate_refinement_evidence`: **NO.**  The run was refused
+**R121's three questions, answered.** COLMAP executes under the pinned manifest
+and the lease: yes. How long 49 frames take: 29 s. Whether the evidence
+clears `evaluate_refinement_evidence`: **NO.** The run was refused
 `REFINE_EVIDENCE_REGRESSION / comparable_geometric_evidence_regressed` with
 coverage 1.0000 -> 1.0000, reprojection RMSE **2.015458 -> 1.351599 px (-32.9%)**,
 loop translation-direction RMSE 17.165228 -> 17.080197 deg, and loop rotation RMSE
 **4.915408 -> 4.930533 deg — worse by 0.015 deg, 0.31%** — over **four** verified
-non-temporal loop edges, on 42_587 common observations.  One comparable metric
-regressed and the rule is that none may.  Bundle adjustment reduced reprojection
+non-temporal loop edges, on 42_587 common observations. One comparable metric
+regressed and the rule is that none may. Bundle adjustment reduced reprojection
 error by a third and moved the long-baseline rotations very slightly the wrong
 way; with a sample of four edges that difference is not distinguishable from
-noise.  Nothing was tuned to make it pass.
+noise. Nothing was tuned to make it pass.
 
-**The R119 floors faced real output and cleared it.**  The refusal is downstream
+**The R119 floors faced real output and cleared it.** The refusal is downstream
 of them: `anchor_seed_snapshot_to_request`, `verify_child_alignment_proposal`,
 `require_refined_poses_moved` and `require_refined_shape_changed` all passed on
-bytes a real engine wrote.  The gauge-invariant shape floor in particular was
+bytes a real engine wrote. The gauge-invariant shape floor in particular was
 built against a recorded fixture and has now been satisfied by a genuine
 refinement rather than by a construction.
 
-**Three defects only a real run could reach.**  (1) The packet writer emitted
+**Three defects only a real run could reach.** (1) The packet writer emitted
 USTAR members at mode 0644 with NUL device fields; the child's extractor requires
-0600 and canonical zero-valued octal, and refused every parent-built packet.  It
+0600 and canonical zero-valued octal, and refused every parent-built packet. It
 had been wrong since the writer existed — the parent's tests read its archives
 with `tarfile`, which does not care, and the extractor's tests hand-build their
-own headers, so the two implementations had never been compared.  They are now,
-directly.  (2) COLMAP 4.0.2 really does emit tracks that observe one image twice;
-the evidence builder's membership key forbids it.  Such tracks are excluded from
+own headers, so the two implementations had never been compared. They are now,
+directly. (2) COLMAP 4.0.2 really does emit tracks that observe one image twice;
+the evidence builder's membership key forbids it. Such tracks are excluded from
 BOTH models by a structural criterion that never looks at a residual, and the
 counts are carried into telemetry and `adapter-v2.json` rather than absorbed.
 (3) `pycolmap`'s `TwoViewGeometry.cam2_from_cam1` is optional and really returns
 `None`.
 
 **The seed anchor's rotation tolerance was unreachable by ANY child, and the fix
-was the metric, not the floor.**  The device's `cam_from_world` matrices arrive
+was the metric, not the floor.** The device's `cam_from_world` matrices arrive
 orthonormal only to `3.3e-7`; `acos(1 - x) ~ sqrt(2x)`, so
 `_separation_from_submitted_frames` reported `4.899e-4` rad of "drift" against a
 seed the child had not moved at all — 490x the `1e-6` tolerance, and set by the
-reference's own representation error rather than by the snapshot.  The tolerances
+reference's own representation error rather than by the snapshot. The tolerances
 are UNCHANGED; the submitted matrix is now projected onto SO(3) before the
-angular comparison, so the number is a rotation difference.  Both directions are
+angular comparison, so the number is a rotation difference. Both directions are
 constructed: an exact-copy snapshot against a defective reference now measures
 below `1e-8`, and a genuinely turned snapshot is still refused at 1.5x and 10x
-the tolerance.  Both refusals carry their margins, as does the evidence verdict —
+the tolerance. Both refusals carry their margins, as does the evidence verdict —
 the first real run reported only that something "drifted".
 
 **Seven posture flags moved, none of them decorative.**
@@ -5846,14 +5864,14 @@ the first real run reported only that something "drifted".
 `PARENT_ALIGNMENT_VERIFICATION_COMPOSED_INTO_REFINE` and
 `NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT` each rest on the host run;
 `COMMAND_EXCEPTION_NORMALIZATION_QUALIFIED` rests on a constructed test, because
-it names a property of the guard rather than of the box.  **`PRIMARY_EXECUTION_
+it names a property of the guard rather than of the box. **`PRIMARY_EXECUTION_
 QUALIFIED` stays False**: the plan executed and was then refused, and a path
 qualified only up to the point where it is refused is not qualified.
 `RUNNER_PATH_REOPEN_COMPOSITION_QUALIFIED` stays False because the run stops
 upstream of the artifact builder; `SEQUENTIAL_COMMAND_QUIESCENCE_QUALIFIED`
 because the plan has one CLI phase; `MEASUREMENT_SNAPSHOT_QUALIFIED` because that
 row schema is unused; `FALLBACK_QUALIFIED` and
-`PILOT_200_400_FRAME_RANGE_QUALIFIED` per I90 and R117.  The posture test that
+`PILOT_200_400_FRAME_RANGE_QUALIFIED` per I90 and R117. The posture test that
 was supposed to make a quiet flip impossible only scanned names ending
 `_QUALIFIED` and was blind to three of these; it now scans every module-level
 boolean in the package and compares the true set for equality.
@@ -5862,31 +5880,31 @@ boolean in the package and compares the true set for equality.
 `DEFAULT_STAGES = "ingest,solve,drawings"`; `scan_pipeline.refine` unregistered;
 the raster pin exactly 1440x1920; `DEFAULT_LEASE_SECONDS = 3600.0`.
 
-**Verification.**  macOS: **2081 passed, 0 failed, 85 skipped**.  Qualified
+**Verification.** macOS: **2081 passed, 0 failed, 85 skipped**. Qualified
 x86_64 host: **2081 passed, 84 failed, 1 skipped**, against a base-commit control
 at `9ef18190` on the same host and venv (**2065 passed, 84 failed**) showing **the
-identical 84** — zero new, zero fixed.  Those 84 are 82 `test_install_script.py` (root/systemd/staged
+identical 84** — zero new, zero fixed. Those 84 are 82 `test_install_script.py` (root/systemd/staged
 installer), `test_packaging` (real wheel build) and the known
 `test_validator_drift`; they are properties of running from a checkout rather
 than from `install.sh`, and the control is what proves none of them is ours.
 A mutation sweep against the FULL tree ran a no-op control to 0 extra red before
-any count was read, then killed every clause it tried.  Three survivors were reported rather than absorbed — the evidence
+any count was read, then killed every clause it tried. Three survivors were reported rather than absorbed — the evidence
 refusal's numbers, the candidate-graph agreement check and the source-ledger
 row binding — and each was given a reaching test before the sweep was rerun; the
 graph check had to be EXTRACTED from behind the GPU to be reachable at all, which
 is the same move this codebase made for `copy_exact`.
 
-**What is still not true.**  No run has published anything.  The 200-400 band is
-untouched.  Fuse, Splat and Present are not composed.  The pin covers one device,
+**What is still not true.** No run has published anything. The 200-400 band is
+untouched. Fuse, Splat and Present are not composed. The pin covers one device,
 one OS, one capture and one COLMAP build; four verified loop edges is a thin
 basis for any statement about this subject, and whether the loop-rotation
 regression is a property of the capture, of the candidate graph's 0.25-1.5 m
 spatial band, or of `evaluate_refinement_evidence`'s all-metrics-must-not-regress
 rule is an open question this run cannot settle.
 
-*Entries add: I102 · last id = I102*
+_Entries add: I102 · last id = I102_
 
-*Entries add: I102 · last id = I102*
+_Entries add: I102 · last id = I102_
 
 ### I103 · Field Capture P2 · the evidence harness; seven runs over two rooms, and what the loop comparables actually do — 2026-07-28
 
@@ -6021,7 +6039,7 @@ test count. The 93 are 82 `test_install_script`, 8 `test_field_raster_materializ
 `test_validator_drift`; they are properties of running from a checkout rather
 than from `install.sh`, and the control is what proves none of them is ours.
 
-*Entries add: I103 · last id = I103*
+_Entries add: I103 · last id = I103_
 
 ### I104 · Field Capture P2 · Refine completes end to end on a real capture; the verdict tracks loop-edge count — 2026-07-29
 
@@ -6038,11 +6056,11 @@ run in this program stopped short of publication.
 normally, and a deliberate single sweep with no revisits, against the existing
 49-frame first room.
 
-| capture | frames | verified edges | reprojection | loop rotation | loop translation | verdict |
-|---|---|---|---|---|---|---|
-| room 2, normal | 100 | **31** | −29.63% | −0.60% | −3.00% | **PASS** |
-| room 1 | 49 | **4** | −32.94% | **+0.31%** | −0.50% | REFUSED |
-| single sweep | 31 | — | — | — | — | FAILED (cheirality) |
+| capture        | frames | verified edges | reprojection | loop rotation | loop translation | verdict             |
+| -------------- | ------ | -------------- | ------------ | ------------- | ---------------- | ------------------- |
+| room 2, normal | 100    | **31**         | −29.63%      | −0.60%        | −3.00%           | **PASS**            |
+| room 1         | 49     | **4**          | −32.94%      | **+0.31%**    | −0.50%           | REFUSED             |
+| single sweep   | 31     | —              | —            | —             | —                | FAILED (cheirality) |
 
 **The verdict tracks the verified loop-edge count, not the quality of the
 refinement.** At 31 edges all three loop comparables move the same direction and
@@ -6116,7 +6134,7 @@ and shape floors stay as built. `PRIMARY_EXECUTION_QUALIFIED` stays `False`
 until a path is qualified beyond its refusal — one PASS on one capture is not
 that.
 
-*Entries add: I104 · R122 · last id = R122*
+_Entries add: I104 · R122 · last id = R122_
 
 ### I105 · Field Capture P2 · the loop-candidate policy learns where the camera points; the three captures re-run — 2026-07-29
 
@@ -6339,7 +6357,7 @@ carry the non-resolving public form; only the two columns I104 names were fixed.
 No iOS build or device pass has been run against either Swift change. The
 200-400 band is untouched. Fuse, Splat and Present are not composed.
 
-*Entries add: I105 · last id = I105*
+_Entries add: I105 · last id = I105_
 
 ### R123 · Field Capture P2 · the loop comparables become advisory; the direction test is the wrong shape — 2026-07-29
 
@@ -6347,7 +6365,7 @@ The program owner ruled on 2026-07-29, on the evidence of I103, I104 and I105:
 **`evaluate_refinement_evidence` stops vetoing on the two loop comparables.**
 Reprojection, registration coverage and the optional external error remain hard
 gates. The loop numbers are still computed, still validated, and are to be
-reported *more* prominently than before — what is removed is their power to
+reported _more_ prominently than before — what is removed is their power to
 refuse, not their existence.
 
 **Why the direction test is wrong in principle, not merely in practice.** The
@@ -6358,7 +6376,7 @@ geometry: it minimises reprojection over tracks. So after refinement the
 trajectory has moved toward the reprojection optimum while the two-view
 estimates stand exactly where matching left them. On these captures those
 estimates come from 0.25-0.5 m baselines, which is where two-view geometry is
-weakest. A small positive drift is therefore the *expected* behaviour of a
+weakest. A small positive drift is therefore the _expected_ behaviour of a
 successful refinement, not a symptom of a failing one. The rule asked whether a
 quantity had decreased when nothing in the optimiser was trying to decrease it.
 
@@ -6366,7 +6384,7 @@ quantity had decreased when nothing in the optimiser was trying to decrease it.
 verified loop evidence on the best capture (31 → 90 edges) and the variance
 across the program collapsed exactly as a noise-dominated statistic should:
 +20.31, −5.27, +2.30, −18.08, −1.28, −0.60, +0.54, **+0.22** percent at 8, 9,
-12, 15, 25, 31, 43 and 90 edges. But what survives the collapse is a *positive*
+12, 15, 25, 31, 43 and 90 edges. But what survives the collapse is a _positive_
 residual. **Room 2 at 90 verified edges — the healthiest loop evidence this
 program has produced — still regresses and would still be refused.** An
 edge-count floor does not rescue any capture; it relocates the same refusal onto
@@ -6384,7 +6402,7 @@ materialisation, packet and toolchain chain ahead of them.
 
 **The replacement is a magnitude bound, and it is deferred on purpose.** The
 meaningful question is not "did the disagreement grow?" but "is the refined
-trajectory *grossly* inconsistent with the image evidence?" — an absolute
+trajectory _grossly_ inconsistent with the image evidence?" — an absolute
 ceiling, not a direction. That threshold is **not** to be derived from the three
 captures now in hand: fitting a bound to the runs one wants to pass is the
 inversion R122 was written to prevent, and R119's floors were built on the
@@ -6404,7 +6422,7 @@ stay as built. `PRIMARY_EXECUTION_QUALIFIED` and
 `PILOT_200_400_FRAME_RANGE_QUALIFIED` stay `False`; a passing run under a
 relaxed gate is not a qualified path.
 
-*Entries add: R123 · last id = R123*
+_Entries add: R123 · last id = R123_
 
 ### I106 · Field Capture P2 · the loop comparables become advisory; three of three real captures pass and publish — 2026-07-29
 
@@ -6579,7 +6597,7 @@ still `False` — R123 says explicitly that a passing run under a relaxed gate i
 not a qualified path, and three passes bought under a removed veto are exactly
 that.
 
-*Entries add: I106 · last id = I106*
+_Entries add: I106 · last id = I106_
 
 ### I107 — The Scored Ink: DocumentAction sheds its box (2026-07-29)
 
@@ -6608,7 +6626,7 @@ implementation. Supersedes I91’s visual prescription while keeping its protect
   surfaces and court-bar’s parallel dark button still wear the old grammar; swept
   separately so this ruling stays a primitive change.
 
-*Entries add: I107 · last id = I107*
+_Entries add: I107 · last id = I107_
 
 ### I108 — Scored Ink sweep: the ad-hoc controls fall in line (2026-07-29)
 
@@ -6638,7 +6656,7 @@ Follow-up sweep against I107’s grammar, executed off the audit in
   People-room analog of Library’s ask send button — rather than a plain clash
   to fix on sight. Needs a design ruling before it’s touched either way.
 
-*Entries add: I108 · last id = I108*
+_Entries add: I108 · last id = I108_
 
 ### I109 — The R21 dissolve executed (2026-07-29)
 
@@ -6653,7 +6671,7 @@ land on `/desk`.
 this dissolve mounted it in the (document) layout on the reasoning that every
 `toast()` reached from a /desk or /doc surface had been silently no-oping since
 R83. That reversed a ruling by accident: R83 removed the toast layer from
-(document) surfaces *entirely* — a failure is reported as a quiet inline band at
+(document) surfaces _entirely_ — a failure is reported as a quiet inline band at
 the act site, where the designer is already looking, not as a floating card in
 the corner that outlives the moment. The provider is gone again and the layout
 header now says so, so the next dissolve doesn't re-litigate it. Two consequences,
@@ -6685,7 +6703,7 @@ both handled honestly:
   - `use-time-tracking.ts` — the timer notices ("You already have a timer
     running", "Could not start the timer"). Note the hook already has the pattern
     at line 261 (`R83 — document surfaces render failures inline; no global
-    toast`) for its other legs; the start path was missed.
+toast`) for its other legs; the start path was missed.
   - `send-sheet.tsx` — the email-failure warning (proposal marked sent, notice
     undelivered). Its neighbouring `linkError` band is the model to follow.
 
@@ -6693,7 +6711,7 @@ both handled honestly:
 round). The R91 mechanism only works if the page answers with no session — the
 unsubscribe link printed in every email footer is clicked by someone signed out,
 and the page's own token-apply flow is the validation. They are public but not
-*landing*: an authenticated designer reaching them is NOT bounced to /desk (the
+_landing_: an authenticated designer reaching them is NOT bounced to /desk (the
 `/` landing bounce is now keyed on its own predicate), and the designer-role gate
 still covers every other route. The signed-out bounce also carries the SEARCH in
 its `callbackUrl` now, not just the pathname — every desk doorway is addressed by
@@ -6761,8 +6779,8 @@ destination:
 - **A desk doorway.** The money/time/post/account zones did not move to new
   routes — they became sheets over the Desk, and a sheet has no address. So the
   address is a param: `/desk?book=orders|accounts|hours|post[&page=…][&vendorId=]
-  [&projectId=][&invoiceId=]` and `/desk?account=profile|notifications|security|
-  devices|studio`. `desk-doorway.tsx` dispatches the SAME CustomEvents ⌘K already
+[&projectId=][&invoiceId=]` and `/desk?account=profile|notifications|security|
+devices|studio`. `desk-doorway.tsx` dispatches the SAME CustomEvents ⌘K already
   uses (`document:open-ledger`, `document:open-post`, `document:open-account`) —
   no second opening mechanism exists, so a cold URL and a keystroke can never
   drift — then strips the address back to `/desk`. **Two corrections from the
@@ -6805,7 +6823,7 @@ dissolved:
   the redirect lands on the `/rooms` roster — a 1:1 map would have 404'd every
   bookmark silently.
 - **Taste judgments** → `/library/judgments`, a Room off the Library. Absent from
-  all 235 matrix rows, yet the Library already *counts* them: library-foot's
+  all 235 matrix rows, yet the Library already _counts_ them: library-foot's
   "Pairs weighed" and your-eye's "Learned from N pairs weighed" would have become
   permanently unfillable.
 - **Your Eye** → `/people?view=your-eye`, the seventh People rail view. The
@@ -6886,7 +6904,7 @@ redirect to the nearest surface is a soft landing rather than parity:
   met a Stripe return with a "confirming payment…" spinner that polled until the
   webhook landed, then highlighted the row that had just changed. The return now
   lands in the open Orders book, which shows each PO's payment state on load: the
-  truth is there, but the *moment* isn't narrated, so a designer who beats the
+  truth is there, but the _moment_ isn't narrated, so a designer who beats the
   webhook home sees the old state with nothing telling them why. **NAMED
   FOLLOW-UP:** a payment-confirm affordance in the Orders book. Its cost is
   larger than the first cut of this entry claimed. The doorway does receive
@@ -6917,7 +6935,7 @@ redirect to the nearest surface is a soft landing rather than parity:
   unauthenticated GET of `/preferences?token=…` must land on `/preferences` with
   a 200, not a 307 to `/auth/signin`.
 - **The bare-tree catchall gap** (review round, closed) — main funnelled a deep
-  bare path (`/catalog/foo/bar`) *through* `/portal` and let the `/portal`
+  bare path (`/catalog/foo/bar`) _through_ `/portal` and let the `/portal`
   catchall answer it. The first cut of the table named the bare paths directly but
   copied only their specific rows, so those URLs 404'd. `:path*` mirrors now sit
   at the foot of `/catalog`, `/vendors`, `/leads`, `/teaching` and
@@ -6943,7 +6961,7 @@ walking, not designers living in the zones. Recorded here because the instrument
 died with the portal layout that mounted it and cannot be re-read: it lived in
 PostHog project **"Patina Website" (326191)**.
 
-*Entries add: I109 · last id = I109*
+_Entries add: I109 · last id = I109_
 
 ## The Document — the guide strip and its WP1 repair — 2026-08-11
 
@@ -7048,7 +7066,7 @@ lands after first paint (the accepted cost of defect 2); whether that flip wants
 a transition is a **design question, not an implementation one** — it goes to the
 design session, not into the code, until ruled.
 
-*Entries add: I110–I111 · last id = I111*
+_Entries add: I110–I111 · last id = I111_
 
 ## The Document — the guide strip, corrected (WP1 review) — 2026-08-11
 
@@ -7060,7 +7078,7 @@ entry is the correction of record.
 
 **(a) The enrichment scoping does not reduce network — I111's claim is wrong.**
 I111 said the Desk read was "scoped to documents the Desk's side feeds can key
-on… a Discovery relationship no longer pays". It does not pay *on this page*,
+on… a Discovery relationship no longer pays". It does not pay _on this page_,
 but it pays anyway: `<CommandBar/>` mounts in `(document)/layout.tsx` and calls
 `useDeskEngagements()` with no options on **every** document route, so the
 six-query composition and its 60s poll are already running under the same query
@@ -7071,7 +7089,7 @@ data for documents it had declared out of scope.
 The scoping's real effect is **guidance semantics, not traffic**: which failures
 are allowed to blank the strip (I111 §3), and which compositions are allowed to
 answer for a document (§4). Both now hold, because the `enabled` predicate also
-gates the *selector call*, and because `partitionDesk` reports the engagement
+gates the _selector call_, and because `partitionDesk` reports the engagement
 ids it actually composed — absence from the composition is `undefined`
 (unanswered), never `null` (need-free). The `enabled` gating itself is kept: it
 is harmless, and it becomes correct the day the CommandBar stops holding the key
@@ -7099,7 +7117,7 @@ headline change is acceptable studio behavior at all, or whether the enriched
 answer should arrive more quietly. This is a design question about how the
 document speaks; it stays out of the code until ruled.
 
-*Entries add: I112 · last id = I112*
+_Entries add: I112 · last id = I112_
 
 ## The Document — the work block sheds sign-off authoring — 2026-08-11
 
@@ -7124,7 +7142,7 @@ mirrors the equivalent contract already carried by wave1's own
 `stage2-approval-cutover-contract.test.ts`, so the two suites now agree instead
 of one silently drifting behind the other.
 
-*Entries add: I113 · last id = I113*
+_Entries add: I113 · last id = I113_
 
 ### I114 · R1 — the eleven stages become the derivation layer (ratified R1)
 
@@ -7155,7 +7173,7 @@ active group is simply absent. Hue is bound to the track, not to band position, 
 Core is mocha whether it is drawn first or alone.
 
 **(b) The bands carry no progress semantics.** Per M1's figcap the fills mark
-*which* track, never how much of it is done. They are therefore all `w-full`, and
+_which_ track, never how much of it is done. They are therefore all `w-full`, and
 `section-stage-line.test.tsx` asserts that equality so a future "helpful" progress
 fill fails the suite rather than the review.
 
@@ -7185,7 +7203,7 @@ first.
 Two truths the deleted rail carried are kept as single quiet lines rather than
 dropped silently: active phases that no canonical stage classifies are counted
 ("1 active phase not classified to a canonical stage"), and a workflow read error
-still says the stage position is unavailable *and* that the schedule itself is
+still says the stage position is unavailable _and_ that the schedule itself is
 unchanged. The `[data-workflow-document]` hook survives on the new surface, so
 `e2e/document/workflow-stage-responsive.spec.ts` still gates 320px reflow.
 
@@ -7209,7 +7227,7 @@ without agreeing. The sub-label deliberately omits the "of 04–09" band for sta
 outside 04–09 rather than picking a side; the mapping goes to a design session.
 
 **Closed at wave1 integration — where the line hangs (M1).** R1 places the
-sub-label and bands *on the Project section bar*; M1-after draws them inside the
+sub-label and bands _on the Project section bar_; M1-after draws them inside the
 open Project row. Track A shipped them as a free-standing band under the
 letterhead, at the deleted mount's position, and left the relocation open because
 it crossed two other rulings. Both crossings resolved once tracks A, B, and D were
@@ -7252,7 +7270,7 @@ the shape a designer fills in is the shape the client reads.
 Each approval row renders one of two states. **State A** unfolds the ceremony in
 place. **State B** collapses to a seal: the artifact name, the edition that
 settled (`Edition N · frozen at publish · proof …` — a settled gate must say
-*which* edition settled, or the seal is unfalsifiable), one settled line, and the
+_which_ edition settled, or the seal is unfalsifiable), one settled line, and the
 stamp — "Approved · <date>" in mocha for the approved case. That settled line is
 the author's scope note when one was written and the structural binding otherwise,
 following M2's State B, which shows scope prose ("Main floor released · 3 rooms ·
@@ -7262,7 +7280,7 @@ predecessor row, never a navigation; M2's note that "nothing between State A and
 State B is a navigation" is honoured literally.
 
 **Sealed means settled, not merely answered.** `changes_requested` and
-`needs_discussion` are *bounced* gates: the client has spoken, but the question is
+`needs_discussion` are _bounced_ gates: the client has spoken, but the question is
 still live and the same component still marks those rows the current leaf
 (`data-project-approval-current-leaf`). Collapsing them to a seal would have hidden
 the question and its impact from the designer who has to act on them, and would
@@ -7277,7 +7295,7 @@ doing the job by convention", and calls that one field "the whole of what this
 ceremony asks of the schema". We did not add it, and the reasoning is a risk
 judgement rather than a design one:
 
-- A `scope_note` column is additive, but *reaching* it is not.
+- A `scope_note` column is additive, but _reaching_ it is not.
   `create_project_approval_decision`, `supersede_project_approval_decision`,
   `get_project_decision_reviews`, `get_project_decision_review`, and
   `list_my_project_decision_reviews` would each need restating — and whole-body RPC
@@ -7351,7 +7369,6 @@ matches no `/shadow/`. Every metadata string in both surfaces sits at or above t
 12px floor (`--type-metadata-min`), so the mockups' 8.5–10.5px miniature sizes do
 not ship.
 
-
 ## The Document — handoffs, overdue, the guide, and the Desk key to one gate (WP3 Track B) — 2026-08-11
 
 Four ratified rulings, implemented together because they are one idea read at
@@ -7412,7 +7429,7 @@ rather than inventing one. Before this, an approval handoff had no studio act
 at all except navigation.
 
 **Two mockup divergences, declared.** M3's after-panel prints the elapsed time
-in the need line ("With Marta · Direction approval · 6 days") *and* an "Overdue ·
+in the need line ("With Marta · Direction approval · 6 days") _and_ an "Overdue ·
 6 days" stamp beside it; the item prints it once, in the stamp, because the same
 count twice on one row is a restatement, not a hierarchy. And M3 labels a
 sent/in-progress Site Request "Open" while its guide sentence offers "Nudge" —
@@ -7443,7 +7460,7 @@ A leading `overdueSortTier` was added to `needSortKey` and then taken out when
 review asked for a test proving an order the old key would not produce. There is
 none: `overdue_decision` is both the only need with `urgent: true` and
 `NEED_RANK` 0, so an overdue folio already sorted above every other folio, and
-ties already broke on `earliest_overdue_due`. Worse, the new tier was *harmful* —
+ties already broke on `earliest_overdue_due`. Worse, the new tier was _harmful_ —
 `deriveOverdue` answers NOT_OVERDUE when `earliest_overdue_due` is null, which
 demoted a genuinely-needed folio below every non-gate one. The tier is gone and
 `desk-overdue-order.test.ts` pins the pre-existing ordering, including that
@@ -7494,8 +7511,8 @@ test asserts the guide's label begins with the margin's verb for every state.
 **Correction to the sentinel claim.** An earlier draft of this entry said
 `undefined` and `null` "keep meaning different things, per I111 §4". In the code
 they do not: `if (gate)` sends both to the same fall-through. The distinction
-I111 §4 draws is real for `operationalNeed`, where `null` suppresses a *local
-re-derivation* the row could otherwise produce. A gate has no local derivation to
+I111 §4 draws is real for `operationalNeed`, where `null` suppresses a _local
+re-derivation_ the row could otherwise produce. A gate has no local derivation to
 suppress — the row alone can say nothing about a gate — so "not yet answered" and
 "answered, none open" have the same consequence here, and the input keeps both
 spellings only to read consistently beside `operationalNeed`.
@@ -7620,6 +7637,7 @@ client surface reads it toward client-facing copy anymore. The legacy
 untouched — Kody is being looped in on those separately.
 
 **Mockup ambiguities interpreted, not ruled:**
+
 - M8's state A omits the due date and checksum entirely for visual clarity.
   Kept both — checksum is integrity evidence and the due date is exactly what
   should remain once "Overdue" is gone (a plain date, no elapsed-time
@@ -7652,8 +7670,7 @@ offered. No surface, in this repo, renders the co-approver's identity or
 status to a screen. Findings reported to the dispatching session; nothing
 fixed under this ticket (designer-portal is out of scope for WP3 Track D).
 
-*Entries add: I114–I120 · last id = I120*
-
+_Entries add: I114–I120 · last id = I120_
 
 ### I121 · R7's lifecycle is ONE contract read by TWO rails (WP4 checkpoint ruling)
 
@@ -7705,7 +7722,7 @@ happened yet", and a trail that cannot tell them apart is exactly the thing
 The same rule governs steps that DO have facts: **steps do not imply one another
 on Rail B.** A delivered line whose PO was never marked sent reads step 02 as
 `no-record`. Rail A's chain is ordered and is the deliberate exception, and even
-there the implied steps settle *undated* rather than borrowing a date they do
+there the implied steps settle _undated_ rather than borrowing a date they do
 not have.
 
 What each missing fact would cost is priced in
@@ -7743,7 +7760,7 @@ over facts the book already holds:
   is PO-grain with no FF&E link, so the item-grain traces are `delivered_date`
   and the claims. **"Inspection logged" is `delivered_date`, NOT the count**:
   00150 stamps the date on the first inspection row whatever its outcome, while
-  00184 writes `received_quantity` only on a *clean* one — reading the count
+  00184 writes `received_quantity` only on a _clean_ one — reading the count
   would have reported every damaged receipt as never inspected. The count
   governs one term only, whether everything ordered turned up.
 - **G3 Warehouse + site ready** — **no fact exists on either rail.** It is drawn,
@@ -7765,7 +7782,7 @@ unresolved claim, a short receipt, uncleared order terms — keeps its gate `ope
 even once the trail's position has moved past it
 (a claim evidences step 10, which sits past G2, so position alone would have
 silenced the loudest fact about a receipt). The distinction is the whole design:
-*a live stop stops; an unrecorded seal goes quiet.*
+_a live stop stops; an unrecorded seal goes quiet._
 
 An inspection nobody logged is deliberately NOT such a condition: it is a
 missing record, and by the argument above a missing record goes quiet. A line
@@ -7805,9 +7822,9 @@ GOODS: it never mounts on a trade/service line, and on a furnishings line only
 once there is something to read (a linked PO or an evidenced step) — no
 eighteen-row empty scaffold under a line nobody has ordered. The orders book
 gets the same grammar at ledger density through its own PO-grain entry point —
-the row's Stamp becomes the lifecycle *position* rather than the status word,
+the row's Stamp becomes the lifecycle _position_ rather than the status word,
 plus "Next gate" and "Expected"; **the fifteen steps never enumerate at ledger
-density.** "Expected" is a *shipment* expectation only (`confirmed_eta`): a
+density.** "Expected" is a _shipment_ expectation only (`confirmed_eta`): a
 payment due date must never appear in a column about goods, and R18's
 unscheduled "NO DATE" mark survives untouched. Zero shadows. All trail type
 ≥12px — M7's miniature stamps are a plate device and do not ship, so the shared
@@ -7828,4 +7845,74 @@ stand at position 4. M7's "Awaiting inputs · Complete to produce · COM open" r
 is unreachable until §5.1 is built, and the trail renders honestly without it
 rather than faking the step.
 
-*Entries add: I121–I123 · last id = I123*
+### I124 · WP4 Track 3 — Rail A's own operator surfaces adopt the R7 grammar (admin portal, additive)
+
+The Back-of-House fulfillment surfaces (`apps/admin-portal/.../fulfillment`)
+now read `deriveFulfillmentLifecycle` (`@patina/types`, unchanged — Track 1
+owns the contract and it was frozen for this track) in two places, neither of
+which changes a schema, a route, or a byte of fulfillment logic.
+
+**Line detail — the Order Workbench's vendor PO cards.** Each `PoLine`
+(`po-draft-card.tsx`) carries a collapsed "Lifecycle" `<details>` disclosure
+that reveals the full numbered trail for that one line, derived from its own
+`lineState`. It sits OUTSIDE the draggable row's ref (dnd-kit's pointer
+listeners live on the row div alone), so opening the disclosure can never be
+mistaken for a drag gesture. Rail A's off-trail rule is enforced at the call
+site, not just in the mapper: a `cancelled` line renders its operational word
+("Cancelled — no trail position") and the trail component is never invoked at
+all — no reading is derived, let alone stamped.
+
+**Queue rows — the additive glance.** `derived_status` on
+`fulfillment_queue_v` (00353) is not a new fact to feed the mapper; it is
+_literally_ the same order-items `line_state` chain value at the order's MIN
+stage that the row's existing stage dots and next-action verb already read.
+Feeding it to `deriveFulfillmentLifecycle` alongside `stage_entered_at`
+therefore reads no fact the row didn't already carry — it just asks the
+fifteen-step contract to say what position that fact represents. The result
+(a 12px current-position stamp + `nextGate`) is appended to the row's existing
+meta line, after the vendor/designer/unmapped/exception chips — additive,
+never replacing the operational verb or the derived_status word, per the
+checkpoint's unified-contract ruling that BOH operators keep their working
+vocabulary. `derived_status` is not ALWAYS a chain word, though: 00353's view
+overrides it to `needs_mapping` (any unmapped line) or `exception` (any open
+exception) BEFORE the chain fallback — exactly the queue's highest-priority
+band, Needs Action Now. Neither override is a chain state, so the glance
+renders nothing there; that is the honest answer, not a gap — an order
+sitting on an unmapped line or an open exception isn't progressing through
+the chain at all, there is no single position left to stamp, and the row's
+own unmapped/exception chips already carry the signal a glance would only
+repeat.
+
+**Component sharing, decided against.** `ProcurementTrail` is duplicated
+locally at `apps/admin-portal/.../fulfillment/shared/procurement-trail.tsx`
+rather than imported from the designer portal's `procurement-trail.tsx`. The
+two portals share no components package, and the piece — three small
+subcomponents over the same `@patina/types` shapes — is well under the size
+where a new cross-portal dependency would pay for itself. The port keeps M7's
+grammar token-substituted, floor enforced (12px minimum everywhere in both new
+files, −1.5° rotation stamps, dashed-empty future, quiet no-record microcopy,
+oak gate bars only when reached) and substitutes admin-portal's own
+`--text-muted` token everywhere the Document reaches for a `--color-quiet-ink`
+admin-portal doesn't define. (Adversarial review caught a rem-vs-px drift on
+first pass — the trail's own "Lifecycle" header and two of the line-detail's
+new strings shipped at 8.8–9.6px; fixed to the 12px floor before merge.) Keep
+the two in sync by hand if the contract's rendering grammar changes; nothing
+here is a shared import to forget.
+
+**Noted, not made — a contract change that wasn't needed but a data gap that
+was found.** The Workbench's `FulfillmentWorkbenchLine` DTO carries `lineState`
+but not `line_state_entered_at`, `shipments`, or `exceptions` — the order-detail
+API route (`/api/admin/fulfillment/orders/[orderId]`) never selected them,
+because nothing before this track needed a line's own dates or shipment/
+exception evidence at that grain. The line-detail trail therefore derives a
+fully honest but UNDATED reading from `lineState` alone: every settled step
+still resolves to the correct state (chain-implied steps read `settled` with
+no date, exactly as `deriveFulfillmentLifecycle` already handles for the
+chain-derived case), but no step carries an `evidence.at`, and step 10
+(Accepted or issue) can never appear because no exception rows are fetched.
+Wiring those three columns into the existing route's existing queries would
+close the gap — no schema change, no contract change, just wider SELECTs —
+and is left for whoever next touches that route, since "no fulfillment-logic
+changes" this track kept to strictly meant not touching the API layer at all.
+
+_Entries add: I124 · last id = I124_
