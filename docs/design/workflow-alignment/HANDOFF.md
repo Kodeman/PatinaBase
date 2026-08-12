@@ -7,6 +7,15 @@
 
 ## 0. Execution status — updated 2026-08-12 — PROGRAM COMPLETE — WP0–WP4 merged to main. READ THIS FIRST.
 
+> **Erratum (2026-08-12):** the wave1 migrations were renumbered **`00434`–`00445` →
+> `00461`–`00472`** to clear the FF&E ledger block that had been applied to Strata
+> out-of-band at `00433`–`00445` (those thirteen FF&E files are now materialized on
+> `main` with provenance headers). Every migration number in §0 and §§1–9 below
+> predates that renumber — in particular, the `00444` deploy gate discussed here is
+> now **`00471`**, and it remains HELD. The current mapping, apply sequence, and
+> operator procedure live in **`docs/ops/wave1-prod-reconciliation-plan.md`**; the
+> renumbered contract tests are inventoried there in §8.1.
+
 WP0–WP4 are executed. A fresh session picks up at "Next actions" below; §§1–9 remain the program's historical record.
 
 **Main is reconciled and carries everything through G9** — tip `5ef7df57`, pushed:

@@ -38,8 +38,8 @@ Two ledgers drifted apart:
 | 00445 | **00472** | `site_binder_exact_studio_privacy` |
 
 Migration numbers in `docs/design/workflow-alignment/wave1-engineering-review.md`
-and `HANDOFF.md` predate this renumber; that review carries a dated erratum
-pointing here.
+and `docs/design/workflow-alignment/HANDOFF.md` predate this renumber; both carry a
+dated 2026-08-12 erratum block pointing here.
 
 ---
 
@@ -467,6 +467,42 @@ verification.
 reconciliation branch — 00001→00472 including all thirteen materialized FF&E files
 and the edited 00462, zero errors, all seeds applied. The §5.3 posture checks were
 run against that reset database and all passed.
+
+### 8.1 Contract test inventory
+
+These are the wave1 contract tests, renumbered alongside their migrations. Run each
+against the freshly reset local stack with `ON_ERROR_STOP=1`; a clean run ends in
+`ROLLBACK` with no raised assertion.
+
+```bash
+psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' -v ON_ERROR_STOP=1 -f <file>
+```
+
+| Migration | Test file |
+| --- | --- |
+| 00461 | `supabase/tests/workflow/canonical_workflow_spine_test.sql` |
+| 00462 | `supabase/tests/workflow/board_privacy_contract_test.sql` |
+| 00462 | `supabase/tests/workflow/commercial_privacy_contract_test.sql` |
+| 00462 | `supabase/tests/workflow/configuration_privacy_contract_test.sql` |
+| 00462 | `supabase/tests/workflow/storage_privacy_contract_test.ts` (Deno/TS, not psql) |
+| 00463 | `supabase/tests/workflow/approval_authority/00463_authority_evidence_contract_test.sql` |
+| 00464 | `supabase/tests/workflow/approval_authority/00464_lifecycle_compatibility_contract_test.sql` |
+| 00465 | `supabase/tests/workflow/approval_authority/00465_notification_traceability_contract_test.sql` |
+| 00467 | `supabase/tests/workflow/approval_authority/00467_client_access_contract_test.sql` |
+| 00468 | `supabase/tests/workflow/approval_authority/00468_stage2_option_privacy_contract_test.sql` |
+| 00469 | `supabase/tests/workflow/00469_project_contextual_handoffs_contract_test.sql` |
+| 00470 | `supabase/tests/workflow/00470_site_request_awaiting_consent_handoff_contract_test.sql` |
+| **00471** | `supabase/tests/site_requests/00471_authority_and_action_detail_test.sql` — **covers the HELD migration.** Passes locally (where 00471 is applied); it will **fail against prod** while 00471 is held. Do not treat that failure as a regression. |
+| 00472 | `supabase/tests/site_requests/00472_binder_exact_studio_privacy_test.sql` — asserts the 00471-exact upstream policy spine, so it also depends on 00471 being applied. |
+
+> ⚠ **00472's test depends on 00471.** Its line-56 assertion checks the *"00471 exact
+> upstream Site Request policy spine"*. The **migration** 00472 is independent of
+> 00471 (verified — see §1.1), but its **contract test** is not. With 00471 held on
+> prod, expect the 00472 test to fail there while passing locally. Both tests were
+> verified passing against the local reset stack on 2026-08-12.
+
+`supabase/tests/workflow/approval_authority/README.md` carries the detailed
+assertion matrix for the Stage-2 tests and has been renumbered to match.
 
 ---
 

@@ -1,4 +1,4 @@
--- Site Request exact-studio authority and action-detail contract (00444).
+-- Site Request exact-studio authority and action-detail contract (00471).
 \set ON_ERROR_STOP on
 
 BEGIN;
@@ -137,9 +137,9 @@ SET email = EXCLUDED.email,
 
 INSERT INTO public.organizations (id, type, name, slug, status)
 VALUES
-  ('a4431000-0000-4000-8000-000000000001', 'design_studio', '00444 Design Studio', 'site-authority-design-studio', 'active'),
-  ('a4431000-0000-4000-8000-000000000002', 'contractor', '00444 Contractor', 'site-authority-contractor', 'active'),
-  ('a4431000-0000-4000-8000-000000000003', 'manufacturer', '00444 Manufacturer', 'site-authority-manufacturer', 'active');
+  ('a4431000-0000-4000-8000-000000000001', 'design_studio', '00471 Design Studio', 'site-authority-design-studio', 'active'),
+  ('a4431000-0000-4000-8000-000000000002', 'contractor', '00471 Contractor', 'site-authority-contractor', 'active'),
+  ('a4431000-0000-4000-8000-000000000003', 'manufacturer', '00471 Manufacturer', 'site-authority-manufacturer', 'active');
 
 INSERT INTO public.organization_members (
   id, user_id, organization_id, role, status, joined_at
@@ -155,7 +155,7 @@ INSERT INTO public.projects (
   id, name, designer_id, created_by, studio_id, status
 ) VALUES (
   'a4432000-0000-4000-8000-000000000001',
-  '00444 Site Request Authority Project',
+  '00471 Site Request Authority Project',
   'a4430000-0000-4000-8000-000000000001',
   'a4430000-0000-4000-8000-000000000001',
   'a4431000-0000-4000-8000-000000000001',
@@ -173,7 +173,7 @@ INSERT INTO public.project_parties (
 ) VALUES (
   'a4432200-0000-4000-8000-000000000001',
   'a4432000-0000-4000-8000-000000000001',
-  'gc', 'Private 00444 Field Party', '3125550443',
+  'gc', 'Private 00471 Field Party', '3125550443',
   'General contractor', 'granted', now()
 );
 
@@ -303,7 +303,7 @@ BEGIN
   v_token := v_claim->>'token';
   v_token_hash := encode(extensions.digest(v_token, 'sha256'), 'hex');
   PERFORM public.site_request_complete_dispatch(
-    v_outbox_id, 'sent', 'sms-00444-send', NULL, now()
+    v_outbox_id, 'sent', 'sms-00471-send', NULL, now()
   );
   ASSERT public.site_request_guest_bootstrap(v_token_hash) IS NOT NULL,
     'service/guest bootstrap path broke before action-detail review';
@@ -462,7 +462,7 @@ BEGIN
      ) = 2,
     'action detail leaked or misordered same-project room choices';
   ASSERT v_detail::text NOT ILIKE '%3125550443%'
-     AND v_detail::text NOT ILIKE '%private 00444 field party%'
+     AND v_detail::text NOT ILIKE '%private 00471 field party%'
      AND v_detail::text NOT ILIKE '%private request note%'
      AND v_detail::text NOT ILIKE '%private field guidance%'
      AND v_detail::text NOT ILIKE '%privateinternal%'
