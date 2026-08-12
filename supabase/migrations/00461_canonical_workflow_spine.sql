@@ -1,5 +1,5 @@
 -- ============================================================================
--- 00434 — canonical residential workflow spine
+-- 00461 — canonical residential workflow spine
 --
 -- Extends the existing proposal/template -> project phase path. This is not a
 -- second lifecycle engine: project_phases remains the sole project schedule
@@ -246,7 +246,7 @@ COMMENT ON COLUMN public.project_phases.source_template_version IS
 -- input. Checked paths use a transaction-local, parent-scoped capability;
 -- proposal activation reuses the exact project batch authority introduced in
 -- 00398. Direct authenticated/service-role writes may still create honest NULL
--- rows and may update every pre-00434 field, but cannot forge these snapshots.
+-- rows and may update every pre-00461 field, but cannot forge these snapshots.
 CREATE OR REPLACE FUNCTION public.guard_phase_workflow_metadata()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -364,14 +364,14 @@ CREATE TRIGGER y_guard_phase_workflow_metadata_trg
   BEFORE INSERT OR UPDATE ON public.project_phases
   FOR EACH ROW EXECUTE FUNCTION public.guard_phase_workflow_metadata();
 
--- Replace broad pre-00434 table grants with equivalent column grants that omit
+-- Replace broad pre-00461 table grants with equivalent column grants that omit
 -- the four new server-owned columns. The trigger remains the enforcement
 -- backstop for definer paths and any future broad grant drift.
 REVOKE INSERT, UPDATE ON TABLE public.proposal_phases
   FROM authenticated, service_role;
 -- 00399 deliberately preserves table-level INSERT for installed rollback
 -- builders. The server-owned trigger is therefore the INSERT authority for an
--- authenticated session; service_role receives only the pre-00434 columns.
+-- authenticated session; service_role receives only the pre-00461 columns.
 GRANT INSERT ON TABLE public.proposal_phases TO authenticated;
 GRANT INSERT (
   id, proposal_id, name, phase_key, duration_weeks, fee_cents,
@@ -607,10 +607,10 @@ END
 $$;
 
 COMMENT ON COLUMN public.proposal_phase_template_applications.template_version IS
-  'Template version used by applications created after 00434. NULL preserves '
+  'Template version used by applications created after 00461. NULL preserves '
   'honest provenance for receipts created before template versioning existed.';
 
--- Keep every pre-00434 receipt fingerprint byte-for-byte compatible. Metadata
+-- Keep every pre-00461 receipt fingerprint byte-for-byte compatible. Metadata
 -- is provenance, not authored proposal copy, and therefore stays outside the
 -- immutable effect receipt.
 CREATE OR REPLACE FUNCTION public._proposal_phase_effect_snapshot(

@@ -1,5 +1,5 @@
 -- =====================================================================================
--- 00442 — Project contextual handoff read model
+-- 00469 — Project contextual handoff read model
 --
 -- One designer-studio-only projection unifies active Stage-2 approval responsibility
 -- and Field Site Request responsibility. It is deliberately read-only and redacted:

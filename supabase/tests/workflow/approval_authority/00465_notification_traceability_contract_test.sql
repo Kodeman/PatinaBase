@@ -1,4 +1,4 @@
--- Fixture-backed Stage-2 notification/reminder traceability contract (00438).
+-- Fixture-backed Stage-2 notification/reminder traceability contract (00465).
 \set ON_ERROR_STOP on
 
 BEGIN;
@@ -28,7 +28,7 @@ BEGIN
   WHERE NOT present;
 
   IF COALESCE(cardinality(v_missing), 0) > 0 THEN
-    RAISE EXCEPTION '00438 notification traceability is not installed: %',
+    RAISE EXCEPTION '00465 notification traceability is not installed: %',
       array_to_string(v_missing, ', ')
       USING ERRCODE = '55000';
   END IF;

@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00435 — Workflow privacy and immutable release authority
+-- 00462 — Workflow privacy and immutable release authority
 --
 -- Working board rows/media are studio-private. Client and guest surfaces read
 -- only released projections: issued proposal compositions, frozen project
@@ -243,7 +243,7 @@ BEGIN
   END IF;
 
   -- Only a server-validated template can preserve authority after its live
-  -- source board is deleted. Unverified pre-00435 templates fail closed.
+  -- source board is deleted. Unverified pre-00462 templates fail closed.
   RETURN EXISTS (
     SELECT 1
     FROM public.board_templates AS template
@@ -878,182 +878,7 @@ UPDATE storage.buckets
 SET public = false
 WHERE id = 'proposal-mood-boards';
 
-DROP POLICY IF EXISTS "Proposal mood boards are publicly readable"
-  ON storage.objects;
-DROP POLICY IF EXISTS "Authorized actors can read proposal mood board media"
-  ON storage.objects;
-CREATE POLICY "Authorized actors can read proposal mood board media"
-  ON storage.objects FOR SELECT TO authenticated
-  USING (
-    bucket_id = 'proposal-mood-boards'
-    AND public.can_read_board_storage_object(storage.objects.name)
-  );
-
--- Correct the historical inner-table `name` shadowing while reasserting the
--- author policies. Released keys cannot be replaced or removed.
-DROP POLICY IF EXISTS "Designers can replace their proposal mood boards"
-  ON storage.objects;
-CREATE POLICY "Designers can replace their proposal mood boards"
-  ON storage.objects FOR UPDATE TO authenticated
-  USING (
-    bucket_id = 'proposal-mood-boards'
-    AND NOT public.is_released_board_storage_object(storage.objects.name)
-    AND (
-      EXISTS (
-        SELECT 1
-        FROM public.proposal_boards AS board
-        JOIN public.proposals AS proposal ON proposal.id = board.proposal_id
-        LEFT JOIN public.profiles AS media_owner
-          ON media_owner.id::text = (storage.foldername(storage.objects.name))[1]
-        WHERE (storage.foldername(storage.objects.name))[2] = 'boards'
-          AND board.id::text = (storage.foldername(storage.objects.name))[3]
-          AND public.is_design_studio_comember(proposal.designer_id)
-          AND (
-            (storage.foldername(storage.objects.name))[1] = proposal.id::text
-            OR public.board_media_owners_share_studio(
-              media_owner.id, proposal.designer_id, NULL
-            )
-          )
-      )
-      OR EXISTS (
-        SELECT 1 FROM public.proposals AS proposal
-        WHERE (storage.foldername(storage.objects.name))[2] = 'palettes'
-          AND proposal.id::text = (storage.foldername(storage.objects.name))[1]
-          AND public.is_design_studio_comember(proposal.designer_id)
-      )
-    )
-  )
-  WITH CHECK (
-    bucket_id = 'proposal-mood-boards'
-    AND NOT public.is_released_board_storage_object(storage.objects.name)
-    AND (
-      EXISTS (
-        SELECT 1
-        FROM public.proposal_boards AS board
-        JOIN public.proposals AS proposal ON proposal.id = board.proposal_id
-        LEFT JOIN public.profiles AS media_owner
-          ON media_owner.id::text = (storage.foldername(storage.objects.name))[1]
-        WHERE (storage.foldername(storage.objects.name))[2] = 'boards'
-          AND board.id::text = (storage.foldername(storage.objects.name))[3]
-          AND public.is_design_studio_comember(proposal.designer_id)
-          AND (
-            (storage.foldername(storage.objects.name))[1] = proposal.id::text
-            OR public.board_media_owners_share_studio(
-              media_owner.id, proposal.designer_id, NULL
-            )
-          )
-      )
-      OR EXISTS (
-        SELECT 1 FROM public.proposals AS proposal
-        WHERE (storage.foldername(storage.objects.name))[2] = 'palettes'
-          AND proposal.id::text = (storage.foldername(storage.objects.name))[1]
-          AND public.is_design_studio_comember(proposal.designer_id)
-      )
-    )
-  );
-
-DROP POLICY IF EXISTS "Designers can delete their proposal mood boards"
-  ON storage.objects;
-CREATE POLICY "Designers can delete their proposal mood boards"
-  ON storage.objects FOR DELETE TO authenticated
-  USING (
-    bucket_id = 'proposal-mood-boards'
-    AND NOT public.is_released_board_storage_object(storage.objects.name)
-    AND (
-      EXISTS (
-        SELECT 1
-        FROM public.proposal_boards AS board
-        JOIN public.proposals AS proposal ON proposal.id = board.proposal_id
-        LEFT JOIN public.profiles AS media_owner
-          ON media_owner.id::text = (storage.foldername(storage.objects.name))[1]
-        WHERE (storage.foldername(storage.objects.name))[2] = 'boards'
-          AND board.id::text = (storage.foldername(storage.objects.name))[3]
-          AND public.is_design_studio_comember(proposal.designer_id)
-          AND (
-            (storage.foldername(storage.objects.name))[1] = proposal.id::text
-            OR public.board_media_owners_share_studio(
-              media_owner.id, proposal.designer_id, NULL
-            )
-          )
-      )
-      OR EXISTS (
-        SELECT 1 FROM public.proposals AS proposal
-        WHERE (storage.foldername(storage.objects.name))[2] = 'palettes'
-          AND proposal.id::text = (storage.foldername(storage.objects.name))[1]
-          AND public.is_design_studio_comember(proposal.designer_id)
-      )
-    )
-  );
-
-DROP POLICY IF EXISTS "Designers can replace project board images"
-  ON storage.objects;
-CREATE POLICY "Designers can replace project board images"
-  ON storage.objects FOR UPDATE TO authenticated
-  USING (
-    bucket_id = 'proposal-mood-boards'
-    AND NOT public.is_released_board_storage_object(storage.objects.name)
-    AND EXISTS (
-      SELECT 1
-      FROM public.proposal_boards AS board
-      JOIN public.projects AS project ON project.id = board.project_id
-      LEFT JOIN public.profiles AS media_owner
-        ON media_owner.id::text = (storage.foldername(storage.objects.name))[1]
-      WHERE (storage.foldername(storage.objects.name))[2] = 'boards'
-        AND board.id::text = (storage.foldername(storage.objects.name))[3]
-        AND public.is_design_studio_comember(project.designer_id)
-        AND (
-          (storage.foldername(storage.objects.name))[1] = project.id::text
-          OR public.board_media_owners_share_studio(
-            media_owner.id, project.designer_id, NULL
-          )
-        )
-    )
-  )
-  WITH CHECK (
-    bucket_id = 'proposal-mood-boards'
-    AND NOT public.is_released_board_storage_object(storage.objects.name)
-    AND EXISTS (
-      SELECT 1
-      FROM public.proposal_boards AS board
-      JOIN public.projects AS project ON project.id = board.project_id
-      LEFT JOIN public.profiles AS media_owner
-        ON media_owner.id::text = (storage.foldername(storage.objects.name))[1]
-      WHERE (storage.foldername(storage.objects.name))[2] = 'boards'
-        AND board.id::text = (storage.foldername(storage.objects.name))[3]
-        AND public.is_design_studio_comember(project.designer_id)
-        AND (
-          (storage.foldername(storage.objects.name))[1] = project.id::text
-          OR public.board_media_owners_share_studio(
-            media_owner.id, project.designer_id, NULL
-          )
-        )
-    )
-  );
-
-DROP POLICY IF EXISTS "Designers can delete project board images"
-  ON storage.objects;
-CREATE POLICY "Designers can delete project board images"
-  ON storage.objects FOR DELETE TO authenticated
-  USING (
-    bucket_id = 'proposal-mood-boards'
-    AND NOT public.is_released_board_storage_object(storage.objects.name)
-    AND EXISTS (
-      SELECT 1
-      FROM public.proposal_boards AS board
-      JOIN public.projects AS project ON project.id = board.project_id
-      LEFT JOIN public.profiles AS media_owner
-        ON media_owner.id::text = (storage.foldername(storage.objects.name))[1]
-      WHERE (storage.foldername(storage.objects.name))[2] = 'boards'
-        AND board.id::text = (storage.foldername(storage.objects.name))[3]
-        AND public.is_design_studio_comember(project.designer_id)
-        AND (
-          (storage.foldername(storage.objects.name))[1] = project.id::text
-          OR public.board_media_owners_share_studio(
-            media_owner.id, project.designer_id, NULL
-          )
-        )
-    )
-  );
+-- Storage policy re-openings removed per 2026-08-12 ruling: FF&E posture retained (see docs/ops/wave1-prod-reconciliation-plan.md).
 
 CREATE OR REPLACE FUNCTION public.guard_released_board_storage_object()
 RETURNS trigger
@@ -1462,13 +1287,11 @@ BEGIN
     LEFT JOIN public.projects AS project ON project.id = board.project_id
     WHERE board.id = p_board_id
       AND board.status = 'active'
-      AND (
-        (board.proposal_id IS NOT NULL
-          AND proposal.status IN ('draft','sent','viewed','accepted','declined','expired')
-          AND public.is_design_studio_comember(proposal.designer_id))
-        OR (board.project_id IS NOT NULL
-          AND public.is_design_studio_comember(project.designer_id))
-      )
+      -- Project-board token sharing kept closed per 2026-08-12 ruling.
+      AND board.project_id IS NULL
+      AND board.proposal_id IS NOT NULL
+      AND proposal.status IN ('draft','sent','viewed','accepted','declined','expired')
+      AND public.is_design_studio_comember(proposal.designer_id)
   ) THEN
     RAISE EXCEPTION 'board not found or not accessible'
       USING ERRCODE = 'insufficient_privilege';
@@ -1536,6 +1359,8 @@ BEGIN
   LEFT JOIN public.projects AS project ON project.id = board.project_id
   WHERE share.token_hash = v_hash
     AND share.board_id IS NOT NULL
+    -- Project-board token sharing kept closed per 2026-08-12 ruling.
+    AND board.project_id IS NULL
     AND share.status = 'active'
     AND (share.expires_at IS NULL OR share.expires_at > now())
     AND share.board_payload IS NOT NULL
@@ -1567,6 +1392,9 @@ REVOKE ALL ON FUNCTION public.resolve_board_share(text)
   FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.resolve_board_share(text)
   TO authenticated, service_role;
+-- anon restored per 2026-08-12 ruling: share links work unauthenticated;
+-- function fails closed on bad tokens.
+GRANT EXECUTE ON FUNCTION public.resolve_board_share(text) TO anon;
 
 -- ── 5. Immutable commercial inserts prove source and signing state ───────
 

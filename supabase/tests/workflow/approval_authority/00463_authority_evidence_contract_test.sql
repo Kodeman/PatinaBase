@@ -1,5 +1,5 @@
--- Failing-first Stage 2 authority/evidence contract (00436).
--- This file intentionally fails its preflight until 00436 exists. It performs
+-- Failing-first Stage 2 authority/evidence contract (00463).
+-- This file intentionally fails its preflight until 00463 exists. It performs
 -- no fixture writes before that boundary and never fabricates household membership.
 \set ON_ERROR_STOP on
 
@@ -64,10 +64,10 @@ BEGIN
   WHERE NOT present;
 
   IF COALESCE(cardinality(v_missing), 0) > 0 THEN
-    RAISE EXCEPTION '00436 approval-authority contract is not installed: %',
+    RAISE EXCEPTION '00463 approval-authority contract is not installed: %',
       array_to_string(v_missing, ', ')
       USING ERRCODE = '55000',
-            HINT = 'Apply 00435 and 00436, then rerun this contract test.';
+            HINT = 'Apply 00462 and 00463, then rerun this contract test.';
   END IF;
 END
 $preflight$;
@@ -194,7 +194,7 @@ BEGIN
       )
     GROUP BY table_name
     HAVING count(*) = 9
-  ), 'receipts must carry the complete 00436/00437 idempotency shape';
+  ), 'receipts must carry the complete 00463/00464 idempotency shape';
 
   ASSERT EXISTS (
     SELECT 1 FROM pg_constraint c
@@ -1313,7 +1313,7 @@ BEGIN
         OR option.cost_cents_delta IS NOT NULL
         OR option.schedule_days_delta IS NOT NULL
       )
-  ), '00436 backfilled or rewrote legacy decision option evidence';
+  ), '00463 backfilled or rewrote legacy decision option evidence';
 END;
 $$;
 

@@ -1,4 +1,4 @@
--- Fixture-backed contextual handoff projection contract (00442).
+-- Fixture-backed contextual handoff projection contract (00469).
 \set ON_ERROR_STOP on
 
 BEGIN;

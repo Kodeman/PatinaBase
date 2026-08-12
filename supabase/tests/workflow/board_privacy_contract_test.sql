@@ -287,7 +287,7 @@ WHERE id = 'a3468000-0000-4000-8000-000000000001';
 DELETE FROM public.proposal_boards
 WHERE id = 'a3460000-0000-4000-8000-000000000005';
 
--- Simulate an unverifiable pre-00435 Studio A template carrying Studio B's
+-- Simulate an unverifiable pre-00462 Studio A template carrying Studio B's
 -- known key. No validated provenance may be inferred from its own payload.
 ALTER TABLE public.board_templates
   DISABLE TRIGGER a_guard_board_template_media_reference_trg;
