@@ -1,8 +1,11 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import type { FulfillmentQueueRow } from '@patina/fulfillment';
 import { describeNextAction, formatStageAge, isBreachedAge } from '@patina/fulfillment';
+import { deriveFulfillmentLifecycle, FULFILLMENT_LINE_STATES } from '@patina/types';
 import { ListRow } from '@/components/portal';
+import { LineLifecycleGlance } from '../shared/line-lifecycle-glance';
 
 // A single Fulfillment Queue row (S1, spec §5.1): mono order number + client
 // name, a meta line (vendor count / designer-sourced / unmapped / exception
@@ -11,6 +14,19 @@ import { ListRow } from '@/components/portal';
 // whatever the queue view gives it: an unrecognized next_action_kind still
 // renders (describeNextAction falls back to a neutral verb) — this row is
 // never dropped for that reason.
+//
+// WP4 Track 3 adds the R7 lifecycle glance (12px current-position stamp +
+// "Next gate") to the meta line, ADDITIVE beside the row's existing
+// derived_status/next-action vocabulary — never replacing it (the
+// checkpoint's unified-contract ruling). `derived_status` is literally the
+// same order_items.line_state chain value `deriveFulfillmentLifecycle`
+// already reads (00353's fulfillment_order_status_v), at the order's MIN
+// stage — the same "furthest-behind line" the row's own stage dots and
+// next-action verb are already derived from, so this is not a new fact, just
+// the fifteen-step reading of one the queue already carries. An unrecognized
+// derived_status (only possible if every line on the order is cancelled, an
+// edge the queue view otherwise excludes) renders no glance rather than
+// fabricating a position.
 
 // The order's SIX lifecycle stages (R3.4, C1 fix) — fixed dots on EVERY row
 // from intake (all empty) through delivered (all filled), replacing the old
@@ -70,18 +86,32 @@ export interface QueueRowProps {
   onOpen: () => void;
 }
 
+const RECOGNIZED_LINE_STATES = new Set<string>(FULFILLMENT_LINE_STATES);
+
 export function QueueRow({ row, selected, onOpen }: QueueRowProps) {
   const breached = isBreachedAge(row.breached);
   const verb = describeNextAction({ kind: row.next_action_kind, params: row.next_action_params ?? undefined });
   const age = formatStageAge(row.stage_age_business_hours);
 
-  const metaParts: Array<string | undefined | false> = [
+  // `derived_status` is the order's min-stage line_state word (00353) — the
+  // same fact the stage dots and next-action verb already read. Feed it to
+  // Rail A's mapper for the additive glance; skip entirely on a status the
+  // chain doesn't recognize rather than guessing a position.
+  const lifecycleReading = RECOGNIZED_LINE_STATES.has(row.derived_status)
+    ? deriveFulfillmentLifecycle({
+        line_state: row.derived_status,
+        line_state_entered_at: row.stage_entered_at,
+      })
+    : null;
+
+  const metaParts: Array<string | ReactNode | undefined | false> = [
     row.vendor_count > 0 ? `${row.vendor_count} vendor${row.vendor_count === 1 ? '' : 's'}` : undefined,
     row.designer_attribution ? 'designer-sourced' : undefined,
     row.has_unmapped ? `${row.unmapped_count} unmapped` : undefined,
     row.open_exceptions > 0
       ? `${row.open_exceptions} exception${row.open_exceptions === 1 ? '' : 's'}`
       : undefined,
+    lifecycleReading ? <LineLifecycleGlance key="lifecycle" reading={lifecycleReading} /> : undefined,
   ];
 
   return (

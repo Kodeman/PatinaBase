@@ -7810,4 +7810,65 @@ stand at position 4. M7's "Awaiting inputs · Complete to produce · COM open" r
 is unreachable until §5.1 is built, and the trail renders honestly without it
 rather than faking the step.
 
-*Entries add: I121–I123 · last id = I123*
+### I124 · WP4 Track 3 — Rail A's own operator surfaces adopt the R7 grammar (admin portal, additive)
+
+The Back-of-House fulfillment surfaces (`apps/admin-portal/.../fulfillment`)
+now read `deriveFulfillmentLifecycle` (`@patina/types`, unchanged — Track 1
+owns the contract and it was frozen for this track) in two places, neither of
+which changes a schema, a route, or a byte of fulfillment logic.
+
+**Line detail — the Order Workbench's vendor PO cards.** Each `PoLine`
+(`po-draft-card.tsx`) carries a collapsed "Lifecycle" `<details>` disclosure
+that reveals the full numbered trail for that one line, derived from its own
+`lineState`. It sits OUTSIDE the draggable row's ref (dnd-kit's pointer
+listeners live on the row div alone), so opening the disclosure can never be
+mistaken for a drag gesture. Rail A's off-trail rule is enforced at the call
+site, not just in the mapper: a `cancelled` line renders its operational word
+("Cancelled — no trail position") and the trail component is never invoked at
+all — no reading is derived, let alone stamped.
+
+**Queue rows — the additive glance.** `derived_status` on
+`fulfillment_queue_v` (00353) is not a new fact to feed the mapper; it is
+*literally* the same order-items `line_state` chain value at the order's MIN
+stage that the row's existing stage dots and next-action verb already read.
+Feeding it to `deriveFulfillmentLifecycle` alongside `stage_entered_at`
+therefore reads no fact the row didn't already carry — it just asks the
+fifteen-step contract to say what position that fact represents. The result
+(a 12px current-position stamp + `nextGate`) is appended to the row's existing
+meta line, after the vendor/designer/unmapped/exception chips — additive,
+never replacing the operational verb or the derived_status word, per the
+checkpoint's unified-contract ruling that BOH operators keep their working
+vocabulary. A `derived_status` the chain doesn't recognize (only reachable if
+every line on an order is cancelled, which the queue view's own `min_stage_idx`
+math otherwise excludes) renders no glance — never a guessed position.
+
+**Component sharing, decided against.** `ProcurementTrail` is duplicated
+locally at `apps/admin-portal/.../fulfillment/shared/procurement-trail.tsx`
+rather than imported from the designer portal's `procurement-trail.tsx`. The
+two portals share no components package, and the piece — three small
+subcomponents over the same `@patina/types` shapes — is well under the size
+where a new cross-portal dependency would pay for itself. The port keeps M7's
+grammar byte-for-byte (12px floor, −1.5° rotation stamps, dashed-empty future,
+quiet no-record microcopy, oak gate bars only when reached) and substitutes
+admin-portal's own `--text-muted` token everywhere the Document reaches for a
+`--color-quiet-ink` admin-portal doesn't define. Keep the two in sync by hand
+if the contract's rendering grammar changes; nothing here is a shared import
+to forget.
+
+**Noted, not made — a contract change that wasn't needed but a data gap that
+was found.** The Workbench's `FulfillmentWorkbenchLine` DTO carries `lineState`
+but not `line_state_entered_at`, `shipments`, or `exceptions` — the order-detail
+API route (`/api/admin/fulfillment/orders/[orderId]`) never selected them,
+because nothing before this track needed a line's own dates or shipment/
+exception evidence at that grain. The line-detail trail therefore derives a
+fully honest but UNDATED reading from `lineState` alone: every settled step
+still resolves to the correct state (chain-implied steps read `settled` with
+no date, exactly as `deriveFulfillmentLifecycle` already handles for the
+chain-derived case), but no step carries an `evidence.at`, and step 10
+(Accepted or issue) can never appear because no exception rows are fetched.
+Wiring those three columns into the existing route's existing queries would
+close the gap — no schema change, no contract change, just wider SELECTs —
+and is left for whoever next touches that route, since "no fulfillment-logic
+changes" this track kept to strictly meant not touching the API layer at all.
+
+*Entries add: I124 · last id = I124*

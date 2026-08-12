@@ -1,8 +1,11 @@
 'use client';
 
+import { Fragment } from 'react';
 import Link from 'next/link';
 import { useDroppable, useDraggable } from '@dnd-kit/core';
 import { formatCents, type FulfillmentWorkbenchLine } from '@patina/fulfillment';
+import { deriveFulfillmentLifecycle } from '@patina/types';
+import { ProcurementTrail } from '../shared/procurement-trail';
 
 // A single vendor PO card on the Workbench's RIGHT side (S2, spec §5.2) —
 // proposed (pre-confirm, grouped client-side) or real (post-confirm). Header:
@@ -11,6 +14,15 @@ import { formatCents, type FulfillmentWorkbenchLine } from '@patina/fulfillment'
 // left — the ①-thread that is the screen's signature. The card is a dnd-kit
 // droppable; while a line hovers it, `data-warm` flips and the border/bg warm
 // toward clay (the presentation's "the destination PO warms").
+//
+// This is the BOH order-detail line view — WP4 Track 3's home for the R7
+// stamp trail (`<ProcurementTrail>`, ported locally from the Document's
+// `procurement-trail.tsx`). Each line carries a collapsed "Lifecycle"
+// disclosure reading `deriveFulfillmentLifecycle` over its own `lineState`
+// (Rail A honesty rule: a cancelled line takes NO trail position — it renders
+// its operational "Cancelled" state and nothing else). The disclosure sits
+// OUTSIDE the draggable row so opening it can never fight dnd-kit's pointer
+// listeners.
 
 const TRANSMISSION_LABEL: Record<string, string> = {
   email: 'email',
@@ -41,35 +53,65 @@ function PoLine({ line, draggable }: { line: FulfillmentWorkbenchLine; draggable
     id: line.id,
     disabled: !draggable,
   });
+  // Rail A honesty rule: a cancelled line is fully off-trail — it never gets
+  // a reading, only its own operational word (matches
+  // `deriveFulfillmentLifecycle`'s cancelled branch in @patina/types).
+  const cancelled = line.lineState === 'cancelled';
+  const reading = cancelled ? null : deriveFulfillmentLifecycle({ line_state: line.lineState });
+
   return (
-    <div
-      ref={setNodeRef}
-      data-testid="wb-po-line"
-      data-line-id={line.id}
-      data-line-index={line.lineIndex}
-      className="flex items-baseline gap-2 py-1 text-[0.72rem]"
-      style={{
-        color: 'var(--color-mocha)',
-        opacity: isDragging ? 0.35 : 1,
-        cursor: draggable ? 'grab' : 'default',
-      }}
-      {...(draggable ? attributes : {})}
-      {...(draggable ? listeners : {})}
-    >
-      <span style={{ fontFamily: 'var(--font-meta)', color: 'var(--color-clay)' }}>
-        {line.circledIndex}
-      </span>
-      <span className="min-w-0 flex-1 truncate">
-        {line.itemName}
-        {line.qty > 1 ? ` · ×${line.qty}` : ''}
-      </span>
-      <span
-        className="tabular-nums text-[0.66rem] text-[var(--text-muted)]"
-        style={{ fontFamily: 'var(--font-meta)' }}
+    <Fragment>
+      <div
+        ref={setNodeRef}
+        data-testid="wb-po-line"
+        data-line-id={line.id}
+        data-line-index={line.lineIndex}
+        className="flex items-baseline gap-2 py-1 text-[0.72rem]"
+        style={{
+          color: 'var(--color-mocha)',
+          opacity: isDragging ? 0.35 : 1,
+          cursor: draggable ? 'grab' : 'default',
+        }}
+        {...(draggable ? attributes : {})}
+        {...(draggable ? listeners : {})}
       >
-        {line.unitCostCents != null ? formatCents(line.unitCostCents * line.qty) : '—'}
-      </span>
-    </div>
+        <span style={{ fontFamily: 'var(--font-meta)', color: 'var(--color-clay)' }}>
+          {line.circledIndex}
+        </span>
+        <span className="min-w-0 flex-1 truncate">
+          {line.itemName}
+          {line.qty > 1 ? ` · ×${line.qty}` : ''}
+        </span>
+        <span
+          className="tabular-nums text-[0.66rem] text-[var(--text-muted)]"
+          style={{ fontFamily: 'var(--font-meta)' }}
+        >
+          {line.unitCostCents != null ? formatCents(line.unitCostCents * line.qty) : '—'}
+        </span>
+      </div>
+      {cancelled ? (
+        <div
+          data-testid="wb-po-line-cancelled"
+          className="mb-1 pb-1 pl-5 text-[0.6rem] uppercase tracking-[0.08em]"
+          style={{ fontFamily: 'var(--font-meta)', color: 'var(--color-terracotta)' }}
+        >
+          Cancelled — no trail position
+        </div>
+      ) : (
+        <details data-testid="wb-po-line-lifecycle" className="mb-1 pl-5">
+          <summary
+            className="cursor-pointer text-[0.6rem] uppercase tracking-[0.08em]"
+            style={{ fontFamily: 'var(--font-meta)', color: 'var(--color-clay)' }}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            Lifecycle
+          </summary>
+          <div className="pt-1">
+            <ProcurementTrail reading={reading!} />
+          </div>
+        </details>
+      )}
+    </Fragment>
   );
 }
 
