@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reading Programa — A Feature Study &amp; Patina Gap Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&family=Hanken+Grotesk:wght@300;400;500;600&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#1a1814;
+  --ink-soft:#3d3830;
+  --paper:#f5f1e8;
+  --paper-warm:#ede7d9;
+  --verdigris:#3e7a6e;
+  --verdigris-deep:#2c5a51;
+  --brass:#b08d3f;
+  --brass-soft:#c9a95c;
+  --rust:#a5502e;
+  --hairline:rgba(26,24,20,.16);
+  --hairline-light:rgba(245,241,232,.22);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  font-family:'Hanken Grotesk',sans-serif;
+  background:var(--paper);
+  color:var(--ink);
+  overflow-x:hidden;
+}
+.deck{height:100vh;overflow-y:scroll;scroll-snap-type:y mandatory}
+section.slide{
+  min-height:100vh;height:100vh;
+  scroll-snap-align:start;
+  padding:6vh 8vw;
+  display:flex;flex-direction:column;justify-content:center;
+  position:relative;border-bottom:1px solid var(--hairline);
+}
+section.dark{background:var(--ink);color:var(--paper)}
+section.dark .kicker{color:var(--brass-soft)}
+section.dark .hairline{border-color:var(--hairline-light)}
+.kicker{
+  font-family:'IBM Plex Mono',monospace;font-size:.72rem;letter-spacing:.22em;
+  text-transform:uppercase;color:var(--rust);margin-bottom:1.6rem;
+}
+h1{font-family:'Fraunces',serif;font-weight:400;font-size:clamp(2.4rem,5.2vw,4.6rem);line-height:1.05;letter-spacing:-.01em}
+h2{font-family:'Fraunces',serif;font-weight:400;font-size:clamp(1.9rem,3.6vw,3rem);line-height:1.12;margin-bottom:1.6rem;letter-spacing:-.01em}
+h3{font-family:'Fraunces',serif;font-weight:500;font-size:1.12rem;margin-bottom:.5rem}
+p.lede{font-size:clamp(1rem,1.5vw,1.22rem);font-weight:300;line-height:1.65;max-width:62ch;color:var(--ink-soft)}
+section.dark p.lede{color:rgba(245,241,232,.82)}
+.hairline{border-top:1px solid var(--hairline);margin:1.8rem 0}
+.grid{display:grid;gap:1.4rem}
+.g2{grid-template-columns:1fr 1fr}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)}
+.card{
+  border:1px solid var(--hairline);padding:1.2rem 1.3rem;background:rgba(255,255,255,.35);
+}
+section.dark .card{background:rgba(245,241,232,.05);border-color:var(--hairline-light)}
+.card h3{font-size:1.02rem}
+.card p{font-size:.86rem;line-height:1.55;color:var(--ink-soft);font-weight:300}
+section.dark .card p{color:rgba(245,241,232,.72)}
+.mono{font-family:'IBM Plex Mono',monospace}
+.tag{
+  display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:.62rem;
+  letter-spacing:.14em;text-transform:uppercase;padding:.22rem .55rem;border:1px solid;
+  margin-bottom:.7rem;
+}
+.tag.v{color:var(--verdigris-deep);border-color:var(--verdigris)}
+.tag.b{color:var(--brass);border-color:var(--brass)}
+.tag.r{color:var(--rust);border-color:var(--rust)}
+section.dark .tag.v{color:#7fbfb0;border-color:#7fbfb0}
+section.dark .tag.b{color:var(--brass-soft);border-color:var(--brass-soft)}
+section.dark .tag.r{color:#d07a52;border-color:#d07a52}
+ul.spec{list-style:none;font-size:.9rem;font-weight:300;line-height:1.5}
+ul.spec li{padding:.5rem 0;border-bottom:1px solid var(--hairline);display:flex;gap:.8rem;align-items:baseline}
+section.dark ul.spec li{border-color:var(--hairline-light)}
+ul.spec li::before{content:"—";color:var(--brass);flex:0 0 auto}
+ul.spec li strong{font-weight:500}
+table{width:100%;border-collapse:collapse;font-size:.82rem;font-weight:300}
+th{
+  font-family:'IBM Plex Mono',monospace;font-size:.62rem;letter-spacing:.16em;text-transform:uppercase;
+  text-align:left;padding:.6rem .7rem;border-bottom:2px solid var(--ink);font-weight:500;
+}
+td{padding:.58rem .7rem;border-bottom:1px solid var(--hairline);vertical-align:top;line-height:1.45}
+td.cap{font-weight:500}
+.pill{font-family:'IBM Plex Mono',monospace;font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;padding:.18rem .5rem;white-space:nowrap}
+.pill.lead{background:var(--verdigris);color:var(--paper)}
+.pill.gap{background:var(--rust);color:var(--paper)}
+.pill.build{background:var(--brass);color:var(--ink)}
+.pill.watch{background:transparent;border:1px solid var(--ink-soft);color:var(--ink-soft)}
+.pill.skip{background:transparent;border:1px dashed var(--hairline);color:var(--ink-soft)}
+.slidenum{
+  position:absolute;bottom:2.4rem;right:8vw;font-family:'IBM Plex Mono',monospace;
+  font-size:.66rem;letter-spacing:.18em;color:var(--ink-soft);opacity:.6;
+}
+section.dark .slidenum{color:rgba(245,241,232,.5)}
+.foot{
+  position:absolute;bottom:2.4rem;left:8vw;font-family:'IBM Plex Mono',monospace;
+  font-size:.62rem;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-soft);opacity:.55;
+}
+section.dark .foot{color:rgba(245,241,232,.5)}
+.flow{display:flex;align-items:stretch;gap:0;margin:2rem 0;flex-wrap:wrap}
+.flow .step{
+  flex:1 1 0;min-width:120px;border:1px solid var(--hairline);padding:.9rem .9rem;position:relative;
+  background:rgba(255,255,255,.35);
+}
+.flow .step + .step{margin-left:-1px}
+.flow .step .n{font-family:'IBM Plex Mono',monospace;font-size:.6rem;letter-spacing:.16em;color:var(--rust);display:block;margin-bottom:.35rem}
+.flow .step h3{font-size:.92rem;margin-bottom:.25rem}
+.flow .step p{font-size:.74rem;line-height:1.45;color:var(--ink-soft);font-weight:300}
+.big-stat{font-family:'Fraunces',serif;font-size:clamp(2rem,4vw,3.2rem);font-weight:300;line-height:1}
+.big-stat small{font-family:'IBM Plex Mono',monospace;font-size:.66rem;letter-spacing:.16em;text-transform:uppercase;display:block;margin-top:.5rem;color:var(--ink-soft)}
+section.dark .big-stat small{color:rgba(245,241,232,.6)}
+.rail{
+  position:fixed;right:1.1rem;top:50%;transform:translateY(-50%);z-index:50;
+  display:flex;flex-direction:column;gap:.55rem;
+}
+.rail a{width:6px;height:6px;border-radius:50%;background:var(--ink-soft);opacity:.3;transition:.2s}
+.rail a.on{opacity:1;background:var(--rust);transform:scale(1.4)}
+.title-flourish{width:64px;height:1px;background:var(--brass);margin:2.2rem 0}
+.two-col{display:grid;grid-template-columns:1.1fr .9fr;gap:3.5rem;align-items:start}
+@media(max-width:900px){
+  .g2,.g3,.g4,.two-col{grid-template-columns:1fr}
+  section.slide{height:auto;min-height:100vh;padding:10vh 6vw}
+  .deck{scroll-snap-type:none}
+}
+.reveal{opacity:0;transform:translateY(14px);transition:opacity .7s ease,transform .7s ease}
+.reveal.in{opacity:1;transform:none}
+.threat{border-left:3px solid var(--rust);padding:.9rem 1.1rem;background:rgba(165,80,46,.06);font-size:.88rem;font-weight:300;line-height:1.55}
+section.dark .threat{background:rgba(165,80,46,.14)}
+.win{border-left:3px solid var(--verdigris);padding:.9rem 1.1rem;background:rgba(62,122,110,.07);font-size:.88rem;font-weight:300;line-height:1.55}
+</style>
+</head>
+<body>
+<div class="rail" id="rail"></div>
+<div class="deck" id="deck">
+
+<!-- 1 · TITLE -->
+<section class="slide dark" id="s1">
+  <div class="kicker">Patina · Competitive Study · July 2026</div>
+  <h1>Reading Programa,<br>closely.</h1>
+  <div class="title-flourish"></div>
+  <p class="lede">A first-hand walkthrough of Programa's marketing site and a live trial workspace — every module opened, every dialog read — distilled into a feature landscape and a gap map for the Patina Designer Portal.</p>
+  <div class="foot">programa.design · app.programa.design/pulse</div>
+  <div class="slidenum">01 / 16</div>
+</section>
+
+<!-- 2 · METHOD -->
+<section class="slide" id="s2">
+  <div class="kicker">Method &amp; Scope</div>
+  <h2>What was actually opened.</h2>
+  <div class="grid g3">
+    <div class="card reveal"><span class="tag b">Marketing</span><h3>Feature pages</h3><p>Features overview, Schedules &amp; Specification, Web Clipper, Product Library, Client Dashboard, Project Management, pricing, and the public changelog back through Q2 2026.</p></div>
+    <div class="card reveal"><span class="tag v">Live app</span><h3>Trial workspace</h3><p>Pulse, Demo Project (39-item schedule), product detail panel and all four tabs, Financial view, Share dialog, quote requests, PO builder, task board and task detail, Meetings, Shared Files, Presentations, Pinboard, Studio, Time Tracking, Invoices, Libraries, Address Book, Settings &amp; Integrations.</p></div>
+    <div class="card reveal"><span class="tag r">Signals</span><h3>Roadmap tells</h3><p>Release notes and the published Q3 roadmap: Schedules 3.0, project profitability, the Brands program, and their expanding machine-assistance layer.</p></div>
+  </div>
+  <div class="hairline"></div>
+  <p class="lede" style="font-size:.95rem">Companion document: <span class="mono">programa-feature-spec-and-patina-gap-plan.md</span> carries the full inventory, field-level specs, and build sequencing.</p>
+  <div class="slidenum">02 / 16</div>
+</section>
+
+<!-- 3 · SHAPE -->
+<section class="slide" id="s3">
+  <div class="kicker">The Shape of Programa</div>
+  <h2>An operations system wearing a design tool's clothes.</h2>
+  <p class="lede">Programa's center of gravity is the <strong>Schedule</strong> — a live, image-rich specification document. Everything else radiates from it: pricing, approvals, procurement, billing.</p>
+  <div class="flow">
+    <div class="step reveal"><span class="n">01</span><h3>Capture</h3><p>Web Clipper · URL paste · Product Library · manual · CSV import</p></div>
+    <div class="step reveal"><span class="n">02</span><h3>Specify</h3><p>Schedules with rooms, doc codes, custom fields, statuses</p></div>
+    <div class="step reveal"><span class="n">03</span><h3>Approve</h3><p>Client Dashboard · per-line approve / reject / comment</p></div>
+    <div class="step reveal"><span class="n">04</span><h3>Procure</h3><p>Quote requests · purchase orders · supplier emails</p></div>
+    <div class="step reveal"><span class="n">05</span><h3>Bill</h3><p>Invoices · Programa Pay · Xero / QuickBooks</p></div>
+    <div class="step reveal"><span class="n">06</span><h3>Run</h3><p>Tasks · phases · timelines · time tracking · Pulse</p></div>
+  </div>
+  <div class="grid g3">
+    <div class="reveal"><div class="big-stat">$71<small>per month, first seat (+$31 per extra seat)</small></div></div>
+    <div class="reveal"><div class="big-stat">1<small>plan — all features, unlimited projects</small></div></div>
+    <div class="reveal"><div class="big-stat">7 days<small>trial, no credit card</small></div></div>
+  </div>
+  <div class="slidenum">03 / 16</div>
+</section>
+
+<!-- 4 · SCHEDULES -->
+<section class="slide" id="s4">
+  <div class="kicker">Module 01 · Schedules &amp; Specification</div>
+  <h2>The spine: a spreadsheet that grew up.</h2>
+  <div class="two-col">
+    <ul class="spec">
+      <li><span><strong>Sections by room</strong> (Seating, Tables…) with per-section item counts and totals; drag-and-drop, bulk actions, collapse.</span></li>
+      <li><span><strong>Four ways in:</strong> Web Clipper, Product Library, paste a URL, or manual entry — plus Excel/CSV import with a "smart importer" for messy files.</span></li>
+      <li><span><strong>Doc codes</strong> (CH02, TB01…) with live duplicate detection; every spec field plus unlimited custom fields.</span></li>
+      <li><span><strong>Product record:</strong> name, description, brand, SKU, qty, lead-time dropdown, product URL, linked supplier contact, W/L/H/D, color, finish, material, category, custom specs, client-facing and internal notes, image gallery with inset flag.</span></li>
+      <li><span><strong>Item statuses</strong> drive workflow: Internal Review → Client Review → Approved → Ordered, with per-item assignee.</span></li>
+      <li><span><strong>Per-item PDF</strong> spec sheets; live-link sharing kills the final_v7.pdf problem.</span></li>
+    </ul>
+    <div>
+      <div class="card"><span class="tag b">Observed</span><h3>Item panel tabs</h3><p class="mono" style="font-size:.8rem">Summary · Financial · Procurement · Attachments · Approvals</p><p style="margin-top:.6rem">One record carries the spec, the money, the paper trail, and the client's verdict. That's the design lesson worth stealing.</p></div>
+      <div class="card" style="margin-top:1rem"><span class="tag r">Coming</span><h3>Schedules 3.0</h3><p>Announced as the next chapter: one source of truth per project with flexible organizing, filtering, sharing, and presenting.</p></div>
+    </div>
+  </div>
+  <div class="slidenum">04 / 16</div>
+</section>
+
+<!-- 5 · MONEY LAYER -->
+<section class="slide dark" id="s5">
+  <div class="kicker">Module 02 · The Money Layer</div>
+  <h2>Every line item knows its margin.</h2>
+  <p class="lede">A second lens over the same schedule. Toggle from Summary to Financial and the document re-renders as a P&amp;L.</p>
+  <div class="grid g4" style="margin-top:2rem">
+    <div class="card reveal"><h3>Per item</h3><p>RRP · trade price · trade discount % · markup % · client price · client savings % · net profit — each in any currency.</p></div>
+    <div class="card reveal"><h3>Per section &amp; total</h3><p>Section subtotals excl. tax, schedule-level client price and total profit, one-toggle bulk markup.</p></div>
+    <div class="card reveal"><h3>Downstream</h3><p>Products flow into quotes, POs, and invoices without re-entry; time entries become billable lines.</p></div>
+    <div class="card reveal"><h3>Coming</h3><p>Project budgets, advanced time billing, cashflow and per-project profitability — pitched as living inside the project, not the accounting stack.</p></div>
+  </div>
+  <div class="hairline"></div>
+  <p class="lede" style="font-size:.95rem">The pitch: your books know if the studio is profitable; Programa wants to know if <em>this project</em> is.</p>
+  <div class="slidenum">05 / 16</div>
+</section>
+
+<!-- 6 · CLIENT DASHBOARD -->
+<section class="slide" id="s6">
+  <div class="kicker">Module 03 · Client Dashboard &amp; Approvals</div>
+  <h2>The client sees a curated slice, and answers in-line.</h2>
+  <div class="two-col">
+    <ul class="spec">
+      <li><span><strong>Two publish paths:</strong> to a branded Client Dashboard (added by email) or to the open web as a live link.</span></li>
+      <li><span><strong>Visibility toggles per share:</strong> supplier, brand, product URL, pricing, details — each on/off per audience.</span></li>
+      <li><span><strong>Per-line verdicts:</strong> approve / reject / comment with threaded replies attached to the product itself.</span></li>
+      <li><span><strong>Access control:</strong> add stakeholders by email, regenerate links, revoke instantly.</span></li>
+      <li><span><strong>Shared Files:</strong> a per-project folder of documents surfaced on the same dashboard.</span></li>
+      <li><span><strong>Approval history</strong> logged on the item's Approvals tab; pending approvals roll up to the project overview.</span></li>
+    </ul>
+    <div class="win reveal">This is the strongest single module in the product — the approval loop closes <em>inside the spec document</em>, and the paper trail rides the item forever. Patina's portal must match this loop before it can beat it.</div>
+  </div>
+  <div class="slidenum">06 / 16</div>
+</section>
+
+<!-- 7 · PROCUREMENT -->
+<section class="slide" id="s7">
+  <div class="kicker">Module 04 · Procurement</div>
+  <h2>From approved line to supplier email in two clicks.</h2>
+  <div class="grid g2">
+    <div class="card reveal"><span class="tag v">Quotes</span><h3>Send Quote Requests</h3><p>One action emails each supplier automatically with project name and address, product info, and quantities — scoped so each supplier sees only their own items, never the whole schedule.</p></div>
+    <div class="card reveal"><span class="tag v">Orders</span><h3>Purchase Orders</h3><p>Numbered POs (PO00001…) built by selecting products from a schedule. Supplier send-to, issue and delivery dates, tax rate, a supplier note, running subtotal/tax/total, PDF preview, draft state, and preview-&amp;-send by email.</p></div>
+  </div>
+  <div class="hairline"></div>
+  <div class="grid g2">
+    <div class="card reveal"><h3>Item status chain</h3><p class="mono" style="font-size:.8rem">Internal Review → Client Review → Approved → Ordered</p><p style="margin-top:.5rem">Procurement state lives on the same record the client approved.</p></div>
+    <div class="threat reveal">Roadmap tell: the "Brands" program — quoting, procurement, supplier collaboration, purchasing — is Programa building toward the maker side of the market. That is Patina's revenue thesis. They are walking toward it from the designer side.</div>
+  </div>
+  <div class="slidenum">07 / 16</div>
+</section>
+
+<!-- 8 · CAPTURE -->
+<section class="slide dark" id="s8">
+  <div class="kicker">Module 05 · Capture &amp; Product Library</div>
+  <h2>Their capture is good. Ours is deeper.</h2>
+  <div class="grid g2">
+    <div>
+      <span class="tag b">Programa</span>
+      <ul class="spec">
+        <li><span><strong>Web Clipper</strong> with Smart Fill — pulls name, pricing, imagery, URL, description from supplier pages into a schedule, the library, or both.</span></li>
+        <li><span><strong>Add from URL</strong> — paste a link, get a populated record.</span></li>
+        <li><span><strong>Refresh from source</strong> — re-sync a product's details from its original URL in one click.</span></li>
+        <li><span><strong>Product Library</strong> — studio-wide database searchable by brand, supplier, SKU, tag, name; custom products; file import; demo seed data.</span></li>
+        <li><span><strong>Image Library + Address Book</strong> round out the shared asset layer.</span></li>
+      </ul>
+    </div>
+    <div>
+      <span class="tag v">Patina today</span>
+      <ul class="spec">
+        <li><span><strong>Chrome extension (T-01)</strong> — structured capture, recognized-data states, richer than a clipper.</span></li>
+        <li><span><strong>iOS field capture (T-03)</strong> — camera-first, offline-first, Action Button / Control Center / Share Sheet / Siri entries. Programa has no field-capture story at all.</span></li>
+        <li><span><strong>Capture Inbox (T-05)</strong> — captured-vs-verified split, completeness scoring, keyboard triage, duplicate merge. Programa has nothing like a verification pipeline.</span></li>
+      </ul>
+      <div class="win" style="margin-top:1rem">Hold this lead. The gap analysis says: don't rebuild their clipper — finish the verified-record pipeline theirs can't match, and add their two cheap tricks (URL paste-in, refresh-from-source).</div>
+    </div>
+  </div>
+  <div class="slidenum">08 / 16</div>
+</section>
+
+<!-- 9 · VISUAL LAYER -->
+<section class="slide" id="s9">
+  <div class="kicker">Module 06 · Pinboards &amp; Presentations</div>
+  <h2>The visual layer clients actually look at.</h2>
+  <div class="grid g2">
+    <div class="card reveal"><span class="tag b">Pinboards</span><h3>Mood boards in minutes</h3><p>Sections by room, revision, or site visit. Auto-snap layout, drag from device, import from Pinterest, pull from the Image and Product Libraries, or clip from the web. Presentation Mode for clients, Detail Mode for notes and links. Shareable and archivable per section.</p></div>
+    <div class="card reveal"><span class="tag b">Presentations</span><h3>Paged client decks</h3><p>Multi-page canvas with selectable page sizes, "pins" that pull live products from schedules, duplicate/copy-to, PDF export, and web sharing. Positioned as the stage for the project's content.</p></div>
+  </div>
+  <div class="hairline"></div>
+  <ul class="spec">
+    <li><span><strong>Canva Share</strong> is a first-class project file type alongside Schedule, Presentation, and Pinboard.</span></li>
+    <li><span>Project <strong>Files</strong> hub lists all artifacts with type, share status, and last-updated — one flat surface per project.</span></li>
+  </ul>
+  <div class="slidenum">09 / 16</div>
+</section>
+
+<!-- 10 · RUNNING -->
+<section class="slide" id="s10">
+  <div class="kicker">Module 07 · Studio Management</div>
+  <h2>Projects, phases, and the whole-studio view.</h2>
+  <div class="two-col">
+    <ul class="spec">
+      <li><span><strong>Views:</strong> Board, List, Timeline per project; a Studio view runs the same lenses across every project at once.</span></li>
+      <li><span><strong>Phases</strong> (Concept, Schematic, Design Development, Project Admin — or custom) tag tasks; kanban columns To Do / In Progress / In Review / Done.</span></li>
+      <li><span><strong>Tasks</strong> carry subtasks, members, target and key dates, labels, comments, up to 50 attachments, and a per-task timer.</span></li>
+      <li><span><strong>New Timeline:</strong> drag a phase and dependents move with it — rescheduling as scenario-testing, plus a cross-project clash view.</span></li>
+      <li><span><strong>Project Overview</strong> dashboard: active/overdue tasks, pending approvals, time tracked, total schedule value, invoice count.</span></li>
+      <li><span><strong>Meetings (beta):</strong> record or upload a transcript; it returns decisions, action items, and open questions.</span></li>
+    </ul>
+    <div class="card"><span class="tag r">Read</span><h3>Assessment</h3><p>Competent, not exceptional — a design-flavored Asana. Its power is adjacency: tasks link to products and schedules, and approvals feed the same overview. Patina should not chase full PM; it should make project state legible around the Document.</p></div>
+  </div>
+  <div class="slidenum">10 / 16</div>
+</section>
+
+<!-- 11 · BACK OFFICE -->
+<section class="slide dark" id="s11">
+  <div class="kicker">Module 08 · Back Office</div>
+  <h2>Time, invoices, payments, books.</h2>
+  <div class="grid g3">
+    <div class="card reveal"><h3>Time Tracking</h3><p>Global start/pause/resume timer with smart project assignment, manual entries attachable to tasks, grouping by project/person/date, export, and time-to-invoice-line conversion.</p></div>
+    <div class="card reveal"><h3>Invoicing + Programa Pay</h3><p>Invoices assembled from schedule products, tracked time, and custom lines. Branded, mobile payment portal for card and bank transfer, chargeback protection, "paid 3× sooner" pitch, business + payments onboarding flow.</p></div>
+    <div class="card reveal"><h3>Accounting sync</h3><p>Xero and QuickBooks integrations sync transactions and attachments. Tax settings, invoice settings, and studio branding live in workspace settings.</p></div>
+  </div>
+  <div class="hairline"></div>
+  <p class="lede" style="font-size:.95rem">This is where the $71/seat gets justified — and where a payments margin quietly accrues to Programa. Patina's answer is strategic, not imitative: our revenue is the maker commission, so the back office can stay thin.</p>
+  <div class="slidenum">11 / 16</div>
+</section>
+
+<!-- 12 · INTELLIGENCE -->
+<section class="slide" id="s12">
+  <div class="kicker">Module 09 · Their Assistance Layer</div>
+  <h2>They are walking into our territory.</h2>
+  <div class="grid g2">
+    <ul class="spec">
+      <li><span><strong>Pulse</strong> — a per-user command center: onboarding, "today's focus," and machine-suggested actions with feedback thumbs.</span></li>
+      <li><span><strong>Smart Search</strong> — cross-entity (products, projects, schedules, tasks, contacts), forgiving of imprecise names, keyboard-first.</span></li>
+      <li><span><strong>Meeting Notes</strong> — transcript → decisions, actions, open questions, per project.</span></li>
+      <li><span><strong>Alternative Product Recommendations</strong> — when a client rejects an item with a comment, the system reads product + comment and proposes an alternatives shortlist in Pulse and the Approvals tab.</span></li>
+      <li><span><strong>SketchUp extension (beta)</strong> — Product Library inside SketchUp, 3D Warehouse match-finding from saved product data, product images as materials, spec-vs-model sense checks.</span></li>
+    </ul>
+    <div>
+      <div class="threat reveal">Alternative Product Recommendations is a generic first pass at the exact problem Patina's Designer-Taught Intelligence exists to solve — theirs reasons from one rejection comment; ours is built to reason from a designer's accumulated taste. The moat is real but the clock is now running.</div>
+      <div class="card" style="margin-top:1rem"><span class="tag r">Roadmap</span><h3>Their stated Q3</h3><p>Studio operations depth (profitability, budgets, cashflow) · the Brands program (maker-side workflows) · more assistance features following Meeting Notes and Smart Search.</p></div>
+    </div>
+  </div>
+  <div class="slidenum">12 / 16</div>
+</section>
+
+<!-- 13 · WHERE PATINA LEADS -->
+<section class="slide" id="s13">
+  <div class="kicker">Position</div>
+  <h2>Where Patina already leads.</h2>
+  <div class="grid g2">
+    <div class="card reveal"><span class="tag v">Lead</span><h3>Capture depth</h3><p>Extension + iOS field capture + verification inbox is a three-surface pipeline with provenance and completeness scoring. Programa's clipper is one surface with no verification concept and no mobile field story.</p></div>
+    <div class="card reveal"><span class="tag v">Lead</span><h3>Designer-Taught Intelligence</h3><p>The expertise layer — annotations, context, ratings, taste — is a dataset Programa doesn't collect. Their recommendations start from a comment; ours can start from a designer's whole judgment history.</p></div>
+    <div class="card reveal"><span class="tag v">Lead</span><h3>Business model geometry</h3><p>Maker-paid commission means Patina's designer tooling can be free where Programa charges $71+/seat. Free tooling as moat is a pricing attack they can't follow without abandoning their revenue line.</p></div>
+    <div class="card reveal"><span class="tag v">Lead</span><h3>Two-sided by design</h3><p>Vendor and designer pipelines make Patina natively a network. Programa is only now reaching for brands from a single-sided SaaS base.</p></div>
+  </div>
+  <div class="slidenum">13 / 16</div>
+</section>
+
+<!-- 14 · GAP MAP -->
+<section class="slide" id="s14">
+  <div class="kicker">The Gap Map</div>
+  <h2>Capability by capability.</h2>
+  <table>
+    <thead><tr><th style="width:26%">Capability</th><th style="width:27%">Programa</th><th style="width:27%">Patina</th><th>Disposition</th></tr></thead>
+    <tbody>
+      <tr><td class="cap">Web / URL capture</td><td>Clipper + Smart Fill + refresh-from-URL</td><td>Extension, richer states; no URL paste-in or re-sync yet</td><td><span class="pill lead">Extend lead</span></td></tr>
+      <tr><td class="cap">Field / mobile capture</td><td>None</td><td>iOS app, offline-first, spec'd</td><td><span class="pill lead">Lead</span></td></tr>
+      <tr><td class="cap">Verification pipeline</td><td>None</td><td>Capture Inbox, captured→verified</td><td><span class="pill lead">Lead</span></td></tr>
+      <tr><td class="cap">Product library</td><td>Shipped, searchable, shared</td><td>Catalog + expertise layer in build</td><td><span class="pill build">P0 · finish</span></td></tr>
+      <tr><td class="cap">Specification document</td><td>Schedules — the core</td><td>Not built</td><td><span class="pill gap">P0 · build</span></td></tr>
+      <tr><td class="cap">Client share + approvals</td><td>Dashboard, per-line verdicts, visibility toggles</td><td>Not built</td><td><span class="pill gap">P0 · build</span></td></tr>
+      <tr><td class="cap">Per-item financials</td><td>Full trade/markup/margin model</td><td>Not built</td><td><span class="pill build">P1</span></td></tr>
+      <tr><td class="cap">Quotes &amp; POs</td><td>Scoped RFQ emails, PDF POs</td><td>Not built — but maker network changes the shape</td><td><span class="pill build">P1 · reframe</span></td></tr>
+      <tr><td class="cap">Mood boards / presentations</td><td>Pinboards, paged decks, Canva, Pinterest</td><td>Not built</td><td><span class="pill build">P2</span></td></tr>
+      <tr><td class="cap">Tasks / phases / timeline</td><td>Full PM suite + cross-project view</td><td>Not built</td><td><span class="pill watch">P2 · light</span></td></tr>
+      <tr><td class="cap">Time / invoicing / payments</td><td>Timers, Programa Pay, Xero/QB</td><td>Out of scope by model</td><td><span class="pill skip">Skip / partner</span></td></tr>
+      <tr><td class="cap">Taste-based recommendations</td><td>First move: rejection-comment alternatives</td><td>Designer-Taught Intelligence — the thesis</td><td><span class="pill lead">Leapfrog</span></td></tr>
+      <tr><td class="cap">Maker-side platform</td><td>Roadmap ("Brands")</td><td>Native to the model</td><td><span class="pill lead">Race — win it</span></td></tr>
+    </tbody>
+  </table>
+  <div class="slidenum">14 / 16</div>
+</section>
+
+<!-- 15 · SEQUENCE -->
+<section class="slide dark" id="s15">
+  <div class="kicker">Build Order</div>
+  <h2>Match the loop, then break it open.</h2>
+  <div class="flow">
+    <div class="step reveal"><span class="n">Phase A · Parity spine</span><h3>The Spec Document</h3><p>Schedule-equivalent inside the Document model: sections, doc codes, statuses, item records fed by the verified catalog. Plus URL paste-in and refresh-from-source in capture.</p></div>
+    <div class="step reveal"><span class="n">Phase B · Close the loop</span><h3>Client share &amp; verdicts</h3><p>Publish a curated view with field-visibility controls; per-line approve/reject/comment; approval history on the record. This is the module clients compare directly.</p></div>
+    <div class="step reveal"><span class="n">Phase C · Money &amp; makers</span><h3>Financial lens + orders</h3><p>Trade/markup/client-price fields and totals as a view over the same document; quote requests and POs that ride the maker network instead of cold email.</p></div>
+    <div class="step reveal"><span class="n">Phase D · The moat</span><h3>Taught intelligence</h3><p>Rejection-aware alternatives seeded from the expertise layer — reasoning from taste history, not one comment. The feature Programa just previewed, done the way only Patina can.</p></div>
+  </div>
+  <p class="lede" style="font-size:.95rem;margin-top:1.2rem">Deliberately not chased: full PM, time tracking, invoicing, payments. The commission model keeps tooling free and the surface focused.</p>
+  <div class="slidenum">15 / 16</div>
+</section>
+
+<!-- 16 · CLOSE -->
+<section class="slide dark" id="s16">
+  <div class="kicker">Thesis</div>
+  <h1 style="font-size:clamp(1.9rem,4vw,3.4rem)">Programa monetizes the studio's workflow.<br><span style="color:var(--brass-soft)">Patina monetizes the maker's gratitude</span> — and can give designers the workflow for free.</h1>
+  <div class="title-flourish"></div>
+  <p class="lede">Parity where clients are watching — the spec document and the approval loop. Leverage where only Patina can play — verified capture, taught intelligence, the maker network. Full detail in the companion markdown.</p>
+  <div class="foot">Patina · Middlewest Studio · July 2026</div>
+  <div class="slidenum">16 / 16</div>
+</section>
+
+</div>
+<script>
+const slides=[...document.querySelectorAll('section.slide')];
+const rail=document.getElementById('rail');
+slides.forEach((s,i)=>{const a=document.createElement('a');a.href='#'+s.id;rail.appendChild(a)});
+const dots=[...rail.children];
+const io=new IntersectionObserver(es=>{es.forEach(e=>{
+  if(e.isIntersecting){const i=slides.indexOf(e.target);dots.forEach((d,j)=>d.classList.toggle('on',j===i));
+    e.target.querySelectorAll('.reveal').forEach((r,k)=>setTimeout(()=>r.classList.add('in'),120*k));}
+})},{threshold:.5});
+slides.forEach(s=>io.observe(s));
+document.addEventListener('keydown',e=>{
+  const cur=slides.findIndex(s=>{const r=s.getBoundingClientRect();return r.top>-innerHeight/2&&r.top<innerHeight/2});
+  if(e.key==='ArrowDown'||e.key==='ArrowRight'||e.key==='PageDown'){e.preventDefault();slides[Math.min(cur+1,slides.length-1)].scrollIntoView({behavior:'smooth'})}
+  if(e.key==='ArrowUp'||e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();slides[Math.max(cur-1,0)].scrollIntoView({behavior:'smooth'})}
+  if(e.key==='f'||e.key==='F'){document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen()}
+});
+</script>
+</body>
+</html>

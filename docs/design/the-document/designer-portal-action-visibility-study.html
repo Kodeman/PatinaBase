@@ -1,0 +1,2792 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Patina Designer Portal — Action Visibility Study</title>
+  <meta
+    name="description"
+    content="A review and three interactive UI directions for making Patina's designer-portal actions easier to find without losing The Document's editorial character."
+  >
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Inter:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;1,400;1,500&display=swap");
+
+    :root {
+      --av-off-white: #faf7f2;
+      --av-paper: #fcfaf6;
+      --av-white: #ffffff;
+      --av-pearl: #e5e2dd;
+      --av-warm-border: #d8ccbc;
+      --av-clay: #c4a57b;
+      --av-aged-oak: #8b7355;
+      --av-oak-accessible: #6f5a43;
+      --av-mocha: #5c4a3c;
+      --av-charcoal: #2c2926;
+      --av-bark: #423c36;
+      --av-sage: #a8b5a0;
+      --av-sage-deep: #65735e;
+      --av-blue: #8b9cad;
+      --av-terracotta: #d4a090;
+      --av-terracotta-deep: #9e5e4c;
+      --av-gold: #e8c547;
+      --av-rail: #25221f;
+      --av-serif: "Playfair Display", Georgia, "Times New Roman", serif;
+      --av-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --av-mono: "DM Mono", "SFMono-Regular", Consolas, monospace;
+      --av-page: min(1180px, calc(100vw - 3rem));
+      --av-shadow: 0 18px 50px rgba(54, 43, 33, 0.11);
+      --av-ease: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      background: var(--av-off-white);
+    }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 12% 7%, rgba(196, 165, 123, 0.08), transparent 24rem),
+        var(--av-off-white);
+      color: var(--av-charcoal);
+      font-family: var(--av-sans);
+      line-height: 1.55;
+    }
+
+    button,
+    textarea {
+      font: inherit;
+    }
+
+    button,
+    a {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    button:focus-visible,
+    a:focus-visible,
+    textarea:focus-visible {
+      outline: 2px solid var(--av-charcoal);
+      outline-offset: 3px;
+    }
+
+    .av-skip {
+      position: fixed;
+      z-index: 200;
+      left: 1rem;
+      top: 1rem;
+      transform: translateY(-180%);
+      background: var(--av-charcoal);
+      color: var(--av-off-white);
+      padding: 0.7rem 1rem;
+      border-radius: 4px;
+      font-family: var(--av-mono);
+      font-size: 0.72rem;
+      text-decoration: none;
+    }
+
+    .av-skip:focus {
+      transform: translateY(0);
+    }
+
+    .av-shell {
+      display: grid;
+      grid-template-columns: 220px minmax(0, 1fr);
+      min-width: 0;
+      min-height: 100vh;
+    }
+
+    .av-rail {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid rgba(44, 41, 38, 0.13);
+      background: rgba(250, 247, 242, 0.92);
+      backdrop-filter: blur(18px);
+      padding: 1.5rem 1.25rem;
+    }
+
+    .av-mark {
+      display: inline-flex;
+      flex-direction: column;
+      gap: 3px;
+      width: 48px;
+      margin-bottom: 1.1rem;
+    }
+
+    .av-mark i {
+      display: block;
+      height: 2px;
+      background: var(--av-aged-oak);
+      transform-origin: left;
+    }
+
+    .av-mark i:nth-child(1) { width: 100%; }
+    .av-mark i:nth-child(2) { width: 72%; background: var(--av-clay); }
+    .av-mark i:nth-child(3) { width: 43%; background: var(--av-clay); opacity: 0.55; }
+
+    .av-rail-brand {
+      margin: 0;
+      font-family: var(--av-serif);
+      font-size: 1.15rem;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .av-rail-sub {
+      margin: 0.25rem 0 1.8rem;
+      color: var(--av-oak-accessible);
+      font-family: var(--av-mono);
+      font-size: 0.61rem;
+      letter-spacing: 0.12em;
+      line-height: 1.7;
+      text-transform: uppercase;
+    }
+
+    .av-nav {
+      display: grid;
+      gap: 0.2rem;
+    }
+
+    .av-nav a {
+      position: relative;
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      border-radius: 4px;
+      padding: 0.45rem 0.55rem;
+      color: var(--av-mocha);
+      font-size: 0.79rem;
+      text-decoration: none;
+      transition: background 180ms ease, color 180ms ease;
+    }
+
+    .av-nav a:hover,
+    .av-nav a[aria-current="true"] {
+      background: rgba(196, 165, 123, 0.13);
+      color: var(--av-charcoal);
+    }
+
+    .av-nav a[aria-current="true"]::before {
+      content: "";
+      position: absolute;
+      inset-block: 0.45rem;
+      left: -1px;
+      width: 2px;
+      background: var(--av-clay);
+    }
+
+    .av-nav-num {
+      color: var(--av-oak-accessible);
+      font-family: var(--av-mono);
+      font-size: 0.58rem;
+      letter-spacing: 0.08em;
+    }
+
+    .av-rail-note {
+      margin-top: auto;
+      padding-top: 1rem;
+      border-top: 1px solid var(--av-pearl);
+      color: var(--av-oak-accessible);
+      font-family: var(--av-mono);
+      font-size: 0.58rem;
+      letter-spacing: 0.07em;
+      line-height: 1.7;
+      text-transform: uppercase;
+    }
+
+    .av-main {
+      width: 100%;
+      max-width: 100vw;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .av-section {
+      width: var(--av-page);
+      margin: 0 auto;
+      padding: clamp(4.5rem, 9vw, 8rem) 0;
+      border-bottom: 1px solid rgba(44, 41, 38, 0.12);
+    }
+
+    .av-cover {
+      min-height: 88vh;
+      display: grid;
+      align-content: center;
+      border-bottom: 1px solid rgba(44, 41, 38, 0.14);
+      padding-block: 5rem;
+    }
+
+    .av-kicker,
+    .av-folio,
+    .av-mini-label {
+      margin: 0;
+      color: var(--av-oak-accessible);
+      font-family: var(--av-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.13em;
+      text-transform: uppercase;
+    }
+
+    .av-cover-title {
+      max-width: 950px;
+      margin: 1.2rem 0 1.4rem;
+      font-family: var(--av-serif);
+      font-size: clamp(3.2rem, 8vw, 7rem);
+      font-weight: 400;
+      letter-spacing: -0.045em;
+      line-height: 0.91;
+    }
+
+    .av-cover-title em {
+      color: var(--av-aged-oak);
+      font-weight: 400;
+    }
+
+    .av-cover-dek {
+      max-width: 700px;
+      margin: 0;
+      color: var(--av-mocha);
+      font-family: var(--av-serif);
+      font-size: clamp(1.15rem, 2.2vw, 1.55rem);
+      font-style: italic;
+      line-height: 1.5;
+    }
+
+    .av-cover-rule {
+      display: grid;
+      grid-template-columns: minmax(80px, 260px) 1fr;
+      align-items: center;
+      gap: 1.2rem;
+      margin-top: 3.5rem;
+      color: var(--av-oak-accessible);
+      font-family: var(--av-mono);
+      font-size: 0.62rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .av-cover-rule::before {
+      content: "";
+      height: 1px;
+      background: linear-gradient(90deg, var(--av-charcoal), var(--av-clay));
+    }
+
+    .av-section-head {
+      display: grid;
+      grid-template-columns: minmax(0, 760px) minmax(180px, 1fr);
+      gap: 2.5rem;
+      align-items: end;
+      margin-bottom: 2.8rem;
+    }
+
+    .av-h2 {
+      margin: 0.55rem 0 0;
+      font-family: var(--av-serif);
+      font-size: clamp(2.25rem, 5vw, 4.4rem);
+      font-weight: 400;
+      letter-spacing: -0.035em;
+      line-height: 1.02;
+    }
+
+    .av-h2 em {
+      color: var(--av-aged-oak);
+      font-weight: 400;
+    }
+
+    .av-section-summary {
+      margin: 0;
+      color: var(--av-mocha);
+      font-size: 0.95rem;
+      line-height: 1.7;
+    }
+
+    .av-pull {
+      max-width: 850px;
+      margin: 0 0 2.2rem;
+      font-family: var(--av-serif);
+      font-size: clamp(1.65rem, 3.2vw, 2.6rem);
+      line-height: 1.22;
+    }
+
+    .av-pull em {
+      color: var(--av-aged-oak);
+    }
+
+    .av-finding-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1px;
+      border: 1px solid var(--av-pearl);
+      background: var(--av-pearl);
+    }
+
+    .av-finding {
+      min-height: 220px;
+      background: rgba(252, 250, 246, 0.98);
+      padding: 1.45rem;
+    }
+
+    .av-finding-num {
+      color: var(--av-clay);
+      font-family: var(--av-mono);
+      font-size: 0.62rem;
+      letter-spacing: 0.11em;
+    }
+
+    .av-finding h3 {
+      margin: 1.25rem 0 0.65rem;
+      font-family: var(--av-serif);
+      font-size: 1.3rem;
+      font-weight: 500;
+      line-height: 1.15;
+    }
+
+    .av-finding p {
+      margin: 0;
+      color: var(--av-mocha);
+      font-size: 0.81rem;
+      line-height: 1.65;
+    }
+
+    .av-evidence {
+      margin-top: 2rem;
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(260px, 0.55fr);
+      gap: 1.5rem;
+      align-items: stretch;
+    }
+
+    .av-evidence-shot {
+      overflow: hidden;
+      border: 1px solid var(--av-warm-border);
+      border-radius: 7px;
+      background: var(--av-paper);
+      box-shadow: var(--av-shadow);
+    }
+
+    .av-evidence-shot img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      min-height: 340px;
+      object-fit: cover;
+      object-position: center 58%;
+    }
+
+    .av-evidence-note {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      border-left: 2px solid var(--av-clay);
+      background: rgba(196, 165, 123, 0.08);
+      padding: 1.5rem;
+    }
+
+    .av-evidence-note strong {
+      display: block;
+      margin-bottom: 0.7rem;
+      font-family: var(--av-serif);
+      font-size: 1.35rem;
+      font-weight: 500;
+    }
+
+    .av-evidence-note p {
+      margin: 0;
+      color: var(--av-mocha);
+      font-size: 0.84rem;
+      line-height: 1.7;
+    }
+
+    .av-evidence-note small {
+      margin-top: 1.2rem;
+      color: var(--av-oak-accessible);
+      font-family: var(--av-mono);
+      font-size: 0.58rem;
+      letter-spacing: 0.08em;
+      line-height: 1.6;
+      text-transform: uppercase;
+    }
+
+    .av-priority-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      border-top: 1px solid var(--av-charcoal);
+    }
+
+    .av-priority {
+      display: grid;
+      grid-template-columns: 70px minmax(180px, 0.85fr) minmax(260px, 1.4fr) 84px;
+      gap: 1.5rem;
+      align-items: start;
+      padding: 1.25rem 0;
+      border-bottom: 1px solid var(--av-pearl);
+    }
+
+    .av-priority-code,
+    .av-effort {
+      color: var(--av-oak-accessible);
+      font-family: var(--av-mono);
+      font-size: 0.62rem;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+    }
+
+    .av-priority strong {
+      font-family: var(--av-serif);
+      font-size: 1.05rem;
+      font-weight: 500;
+    }
+
+    .av-priority p {
+      margin: 0;
+      color: var(--av-mocha);
+      font-size: 0.82rem;
+      line-height: 1.65;
+    }
+
+    .av-effort {
+      justify-self: end;
+      border: 1px solid var(--av-warm-border);
+      border-radius: 99px;
+      padding: 0.2rem 0.55rem;
+    }
+
+    .av-principle {
+      margin: 2rem 0 0;
+      border-left: 3px solid var(--av-charcoal);
+      padding: 0.3rem 0 0.3rem 1.2rem;
+      color: var(--av-mocha);
+      font-family: var(--av-serif);
+      font-size: 1.3rem;
+      font-style: italic;
+    }
+
+    .av-direction {
+      position: relative;
+    }
+
+    .av-direction::before {
+      content: "";
+      position: absolute;
+      inset: 2.5rem 0 auto;
+      height: 1px;
+      background: linear-gradient(90deg, var(--av-clay), transparent 70%);
+      opacity: 0.55;
+    }
+
+    .av-direction-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(250px, 0.48fr);
+      gap: 2.4rem;
+      align-items: start;
+      margin-bottom: 2rem;
+    }
+
+    .av-direction-number {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      border: 1px solid var(--av-clay);
+      border-radius: 3px;
+      padding: 0.25rem 0.65rem;
+      color: var(--av-oak-accessible);
+      font-family: var(--av-mono);
+      font-size: 0.61rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      transform: rotate(-1deg);
+    }
+
+    .av-direction-title {
+      margin: 1rem 0 0.6rem;
+      font-family: var(--av-serif);
+      font-size: clamp(2.4rem, 5vw, 4.6rem);
+      font-weight: 400;
+      letter-spacing: -0.04em;
+      line-height: 0.98;
+    }
+
+    .av-direction-title em {
+      color: var(--av-aged-oak);
+      font-weight: 400;
+    }
+
+    .av-direction-dek {
+      max-width: 700px;
+      margin: 0;
+      color: var(--av-mocha);
+      font-size: 0.95rem;
+      line-height: 1.75;
+    }
+
+    .av-tradeoffs {
+      border-top: 1px solid var(--av-charcoal);
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .av-tradeoffs li {
+      display: grid;
+      grid-template-columns: 72px 1fr;
+      gap: 0.75rem;
+      padding: 0.7rem 0;
+      border-bottom: 1px solid var(--av-pearl);
+      color: var(--av-mocha);
+      font-size: 0.74rem;
+      line-height: 1.55;
+    }
+
+    .av-tradeoffs b {
+      color: var(--av-oak-accessible);
+      font-family: var(--av-mono);
+      font-size: 0.57rem;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .av-tag-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin: 1.2rem 0 0;
+    }
+
+    .av-tag {
+      border: 1px solid var(--av-warm-border);
+      border-radius: 99px;
+      padding: 0.3rem 0.65rem;
+      color: var(--av-oak-accessible);
+      background: rgba(255, 255, 255, 0.44);
+      font-family: var(--av-mono);
+      font-size: 0.56rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .av-demo-wrap {
+      position: relative;
+      border: 1px solid rgba(44, 41, 38, 0.2);
+      border-radius: 10px;
+      background: var(--av-paper);
+      box-shadow: var(--av-shadow);
+      overflow: hidden;
+    }
+
+    .av-demo-toolbar {
+      min-height: 58px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      border-bottom: 1px solid var(--av-pearl);
+      background: rgba(252, 250, 246, 0.95);
+      padding: 0.55rem 0.8rem 0.55rem 1rem;
+    }
+
+    .av-demo-label {
+      color: var(--av-oak-accessible);
+      font-family: var(--av-mono);
+      font-size: 0.58rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .av-segment {
+      display: inline-flex;
+      gap: 3px;
+      border: 1px solid var(--av-warm-border);
+      border-radius: 5px;
+      background: var(--av-off-white);
+      padding: 3px;
+    }
+
+    .av-segment button {
+      min-height: 36px;
+      border: 0;
+      border-radius: 3px;
+      background: transparent;
+      padding: 0.35rem 0.75rem;
+      color: var(--av-oak-accessible);
+      cursor: pointer;
+      font-family: var(--av-mono);
+      font-size: 0.58rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .av-segment button[aria-selected="true"] {
+      background: var(--av-charcoal);
+      color: var(--av-off-white);
+    }
+
+    .av-demo {
+      position: relative;
+      min-height: 720px;
+      overflow: hidden;
+      background:
+        repeating-linear-gradient(0deg, rgba(92, 74, 60, 0.012) 0 1px, transparent 1px 3px),
+        var(--av-off-white);
+    }
+
+    .av-demo-screen[hidden] {
+      display: none;
+    }
+
+    .av-demo-screen {
+      min-height: 720px;
+      padding-bottom: 72px;
+    }
+
+    .av-proto-masthead {
+      min-height: 76px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      border-bottom: 1px solid rgba(44, 41, 38, 0.14);
+      padding: 0 2rem;
+      background: rgba(252, 250, 246, 0.88);
+    }
+
+    .av-proto-back,
+    .av-proto-ident {
+      color: var(--av-oak-accessible);
+      font-family: var(--av-mono);
+      font-size: 0.6rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .av-proto-ident {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-weight: 500;
+      letter-spacing: 0.17em;
+    }
+
+    .av-mini-mark {
+      display: inline-flex;
+      flex-direction: column;
+      gap: 2px;
+      width: 28px;
+    }
+
+    .av-mini-mark i {
+      display: block;
+      height: 1.5px;
+      background: var(--av-aged-oak);
+    }
+
+    .av-mini-mark i:nth-child(2) { width: 72%; background: var(--av-clay); }
+    .av-mini-mark i:nth-child(3) { width: 44%; background: var(--av-clay); opacity: 0.5; }
+
+    .av-proto-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .av-btn {
+      min-height: 42px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.45rem;
+      border-radius: 4px;
+      padding: 0.65rem 0.85rem;
+      cursor: pointer;
+      font-family: var(--av-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.075em;
+      line-height: 1;
+      text-transform: uppercase;
+      transition: transform 180ms var(--av-ease), background 180ms ease, border-color 180ms ease;
+    }
+
+    .av-btn:hover {
+      transform: translateY(-1px);
+    }
+
+    .av-btn-primary {
+      border: 1px solid var(--av-charcoal);
+      background: var(--av-charcoal);
+      color: var(--av-off-white);
+      box-shadow: inset 0 -2px var(--av-clay);
+    }
+
+    .av-btn-secondary {
+      border: 1px solid var(--av-aged-oak);
+      background: var(--av-paper);
+      color: var(--av-charcoal);
+    }
+
+    .av-btn-tertiary {
+      min-height: 42px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--av-mocha);
+      text-decoration: underline;
+      text-decoration-color: rgba(139, 115, 85, 0.45);
+      text-underline-offset: 4px;
+    }
+
+    .av-btn-clay {
+      border: 1px solid var(--av-aged-oak);
+      background: var(--av-clay);
+      color: var(--av-charcoal);
+    }
+
+    .av-proto-body {
+      width: min(1030px, calc(100% - 3rem));
+      margin: 0 auto;
+      padding: 2.5rem 0 4rem;
+    }
+
+    .av-desk-head {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 1.5rem;
+      margin-bottom: 2.6rem;
+    }
+
+    .av-greeting {
+      margin: 0;
+      font-family: var(--av-serif);
+      font-size: clamp(1.8rem, 4vw, 2.7rem);
+      font-weight: 400;
+      line-height: 1.05;
+    }
+
+    .av-greeting em {
+      color: var(--av-aged-oak);
+      font-weight: 400;
+    }
+
+    .av-date {
+      margin: 0.5rem 0 0;
+      color: var(--av-oak-accessible);
+      font-family: var(--av-mono);
+      font-size: 0.6rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .av-eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      margin: 0 0 1.8rem;
+      color: var(--av-oak-accessible);
+      font-family: var(--av-mono);
+      font-size: 0.61rem;
+      font-weight: 500;
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+    }
+
+    .av-eyebrow::before {
+      content: "";
+      width: 34px;
+      height: 6px;
+      border-top: 2px solid var(--av-mocha);
+      border-bottom: 1px solid var(--av-clay);
+    }
+
+    .av-eyebrow span {
+      color: var(--av-terracotta-deep);
+    }
+
+    .av-folio-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 2.7rem 2.2rem;
+    }
+
+    .av-folio-card {
+      position: relative;
+      border: 1px solid var(--av-pearl);
+      border-radius: 0 8px 8px 8px;
+      background: var(--av-white);
+      box-shadow:
+        5px 5px 0 #f7f2eb,
+        9px 9px 0 #f1ebe2;
+      padding: 1.6rem;
+    }
+
+    .av-folio-tab {
+      position: absolute;
+      left: -1px;
+      top: -25px;
+      height: 25px;
+      display: flex;
+      align-items: center;
+      border-radius: 6px 6px 0 0;
+      background: var(--av-terracotta);
+      padding: 0 0.85rem;
+      color: var(--av-charcoal);
+      font-family: var(--av-mono);
+      font-size: 0.55rem;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .av-folio-tab.sage { background: var(--av-sage); }
+    .av-folio-tab.blue { background: var(--av-blue); }
+
+    .av-folio-card h4 {
+      margin: 0;
+      font-family: var(--av-serif);
+      font-size: 1.55rem;
+      font-weight: 500;
+      line-height: 1.1;
+    }
+
+    .av-folio-meta {
+      margin: 0.35rem 0 1rem;
+      color: var(--av-oak-accessible);
+      font-size: 0.7rem;
+    }
+
+    .av-folio-need {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      border-top: 1px solid var(--av-pearl);
+      padding-top: 1rem;
+    }
+
+    .av-folio-need p {
+      margin: 0;
+      color: var(--av-mocha);
+      font-size: 0.79rem;
+      line-height: 1.5;
+    }
+
+    .av-status {
+      flex: 0 0 auto;
+      border: 1px solid currentColor;
+      border-radius: 3px;
+      padding: 0.25rem 0.5rem;
+      color: var(--av-terracotta-deep);
+      font-family: var(--av-mono);
+      font-size: 0.55rem;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      transform: rotate(-1deg);
+    }
+
+    .av-folio-action {
+      width: 100%;
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-top: 1rem;
+      border: 0;
+      border-top: 1px solid var(--av-charcoal);
+      background: transparent;
+      padding: 0.8rem 0 0;
+      color: var(--av-charcoal);
+      cursor: pointer;
+      font-family: var(--av-mono);
+      font-size: 0.63rem;
+      font-weight: 500;
+      letter-spacing: 0.075em;
+      text-transform: uppercase;
+    }
+
+    .av-drawer {
+      position: absolute;
+      inset: auto 0 0;
+      min-height: 62px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      border-top: 1px solid rgba(44, 41, 38, 0.18);
+      background: rgba(252, 250, 246, 0.96);
+      padding: 0.7rem 1.3rem;
+    }
+
+    .av-drawer-brand {
+      font-family: var(--av-serif);
+      font-size: 0.87rem;
+      font-weight: 500;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    .av-drawer-links {
+      display: flex;
+      align-items: center;
+      gap: 0.2rem;
+    }
+
+    .av-drawer-links button {
+      min-height: 38px;
+      border: 0;
+      border-radius: 3px;
+      background: transparent;
+      padding: 0.35rem 0.65rem;
+      color: var(--av-mocha);
+      cursor: pointer;
+      font-size: 0.73rem;
+    }
+
+    .av-drawer-links button:hover {
+      background: rgba(196, 165, 123, 0.11);
+    }
+
+    .av-drawer-state {
+      color: var(--av-oak-accessible);
+      font-family: var(--av-mono);
+      font-size: 0.55rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .av-doc-grid {
+      display: grid;
+      grid-template-columns: 152px minmax(0, 1fr) 215px;
+      min-height: 644px;
+    }
+
+    .av-doc-spine {
+      border-right: 1px solid var(--av-pearl);
+      padding: 1.7rem 1rem;
+      background: rgba(239, 233, 221, 0.36);
+    }
+
+    .av-put-down {
+      color: var(--av-oak-accessible);
+      font-family: var(--av-mono);
+      font-size: 0.57rem;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+    }
+
+    .av-spine-list {
+      display: grid;
+      gap: 1rem;
+      margin: 2rem 0 0;
+    }
+
+    .av-spine-item {
+      color: var(--av-oak-accessible);
+      font-family: var(--av-serif);
+      font-size: 0.8rem;
+    }
+
+    .av-spine-item.active {
+      color: var(--av-charcoal);
+      font-weight: 500;
+    }
+
+    .av-spine-item small {
+      display: block;
+      margin-top: 0.15rem;
+      font-family: var(--av-mono);
+      font-size: 0.48rem;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+    }
+
+    .av-doc-paper {
+      min-width: 0;
+      padding: 2rem clamp(1.3rem, 3vw, 2.6rem);
+    }
+
+    .av-doc-letterhead {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 1rem;
+      border-bottom: 1px solid var(--av-pearl);
+      padding-bottom: 1.15rem;
+    }
+
+    .av-doc-letterhead h3 {
+      margin: 0.7rem 0 0;
+      font-family: var(--av-serif);
+      font-size: clamp(1.75rem, 3vw, 2.45rem);
+      font-weight: 500;
+      line-height: 1.06;
+    }
+
+    .av-doc-vitals {
+      margin: 0.35rem 0 0;
+      color: var(--av-oak-accessible);
+      font-size: 0.69rem;
+    }
+
+    .av-doc-action-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin: 1rem 0 1.6rem;
+    }
+
+    .av-doc-section {
+      position: relative;
+      border-top: 1px solid var(--av-charcoal);
+      padding: 1.15rem 0 1.4rem;
+    }
+
+    .av-doc-section-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .av-doc-section h4 {
+      margin: 0;
+      font-family: var(--av-serif);
+      font-size: 1.18rem;
+      font-weight: 500;
+    }
+
+    .av-doc-section-count {
+      color: var(--av-oak-accessible);
+      font-family: var(--av-mono);
+      font-size: 0.53rem;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+    }
+
+    .av-task {
+      min-height: 42px;
+      display: grid;
+      grid-template-columns: 16px minmax(0, 1fr) auto;
+      gap: 0.65rem;
+      align-items: center;
+      border-bottom: 1px dashed var(--av-pearl);
+      color: var(--av-mocha);
+      font-size: 0.75rem;
+    }
+
+    .av-task-box {
+      width: 14px;
+      height: 14px;
+      border: 1.5px solid var(--av-aged-oak);
+      border-radius: 2px;
+    }
+
+    .av-task-due {
+      color: var(--av-terracotta-deep);
+      font-family: var(--av-mono);
+      font-size: 0.5rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .av-piece-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 1rem;
+      align-items: center;
+      padding: 0.8rem 0;
+      border-bottom: 1px solid var(--av-pearl);
+    }
+
+    .av-piece-row strong {
+      display: block;
+      font-family: var(--av-serif);
+      font-size: 0.92rem;
+      font-weight: 500;
+    }
+
+    .av-piece-row small {
+      color: var(--av-oak-accessible);
+      font-size: 0.62rem;
+    }
+
+    .av-piece-price {
+      color: var(--av-mocha);
+      font-family: var(--av-serif);
+      font-size: 0.9rem;
+    }
+
+    .av-doc-margin {
+      border-left: 1px dashed rgba(44, 41, 38, 0.18);
+      padding: 1.7rem 1rem;
+      background: rgba(239, 233, 221, 0.18);
+    }
+
+    .av-margin-title {
+      margin: 0 0 1rem;
+      color: var(--av-oak-accessible);
+      font-family: var(--av-mono);
+      font-size: 0.57rem;
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+    }
+
+    .av-margin-note {
+      border-left: 2px solid var(--av-clay);
+      background: rgba(255, 255, 255, 0.52);
+      padding: 0.8rem;
+      margin-bottom: 0.7rem;
+    }
+
+    .av-margin-note b {
+      display: block;
+      margin-bottom: 0.25rem;
+      color: var(--av-oak-accessible);
+      font-family: var(--av-mono);
+      font-size: 0.49rem;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+    }
+
+    .av-margin-note span {
+      display: block;
+      color: var(--av-mocha);
+      font-size: 0.68rem;
+      line-height: 1.5;
+    }
+
+    /* Direction B — contextual action margin */
+    .av-b-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 260px;
+      min-height: 648px;
+    }
+
+    .av-b-main {
+      min-width: 0;
+      padding: 2.5rem;
+    }
+
+    .av-b-margin {
+      border-left: 1px solid var(--av-warm-border);
+      background:
+        linear-gradient(90deg, rgba(196, 165, 123, 0.08), transparent 20%),
+        #f4eee4;
+      padding: 2rem 1.3rem;
+    }
+
+    .av-b-margin-inner {
+      position: sticky;
+      top: 1rem;
+    }
+
+    .av-b-context-kicker {
+      margin: 0;
+      color: var(--av-oak-accessible);
+      font-family: var(--av-mono);
+      font-size: 0.57rem;
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+    }
+
+    .av-b-context-title {
+      margin: 1rem 0 0.55rem;
+      font-family: var(--av-serif);
+      font-size: 1.6rem;
+      font-weight: 500;
+      line-height: 1.1;
+    }
+
+    .av-b-context-detail {
+      min-height: 4.5rem;
+      margin: 0 0 1.2rem;
+      color: var(--av-mocha);
+      font-size: 0.76rem;
+      line-height: 1.55;
+    }
+
+    .av-b-context-actions {
+      display: grid;
+      gap: 0.55rem;
+    }
+
+    .av-b-context-actions .av-btn {
+      width: 100%;
+      justify-content: space-between;
+    }
+
+    .av-b-divider {
+      margin: 1.5rem 0 1rem;
+      border: 0;
+      border-top: 1px solid var(--av-warm-border);
+    }
+
+    .av-b-begin {
+      display: grid;
+      gap: 0.25rem;
+    }
+
+    .av-b-begin button {
+      min-height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border: 0;
+      background: transparent;
+      padding: 0.3rem 0;
+      color: var(--av-mocha);
+      cursor: pointer;
+      font-family: var(--av-serif);
+      font-size: 0.9rem;
+      text-align: left;
+    }
+
+    .av-b-begin button span {
+      color: var(--av-aged-oak);
+      font-family: var(--av-mono);
+      font-size: 0.65rem;
+    }
+
+    .av-b-card {
+      cursor: pointer;
+      transition: outline 150ms ease, transform 180ms var(--av-ease);
+    }
+
+    .av-b-card:hover,
+    .av-b-card[aria-pressed="true"] {
+      transform: translateY(-3px);
+      outline: 2px solid var(--av-clay);
+      outline-offset: 4px;
+    }
+
+    .av-b-doc-main {
+      display: grid;
+      grid-template-columns: 138px minmax(0, 1fr);
+      min-width: 0;
+    }
+
+    /* Direction C — attached bookbinder tabs */
+    .av-c-demo {
+      background:
+        repeating-linear-gradient(0deg, rgba(92, 74, 60, 0.015) 0 1px, transparent 1px 4px),
+        #f8f4ed;
+    }
+
+    .av-ticket-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      justify-content: flex-end;
+    }
+
+    .av-ticket {
+      position: relative;
+      min-height: 43px;
+      border: 1px solid var(--av-warm-border);
+      border-radius: 2px;
+      background: var(--av-paper);
+      padding: 0.65rem 0.95rem 0.65rem 1.2rem;
+      color: var(--av-charcoal);
+      cursor: pointer;
+      font-family: var(--av-mono);
+      font-size: 0.61rem;
+      font-weight: 500;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      box-shadow: 3px 3px 0 rgba(196, 165, 123, 0.15);
+    }
+
+    .av-ticket::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 5px;
+      background: var(--av-clay);
+    }
+
+    .av-ticket.primary {
+      border-color: var(--av-charcoal);
+    }
+
+    .av-ticket.primary::before {
+      width: 8px;
+      background: var(--av-charcoal);
+      box-shadow: inset -2px 0 var(--av-clay);
+    }
+
+    .av-tab-card {
+      overflow: visible;
+      padding-right: 2.9rem;
+    }
+
+    .av-pull-tab {
+      position: absolute;
+      z-index: 2;
+      right: -1px;
+      top: 50%;
+      min-width: 50px;
+      min-height: 112px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--av-aged-oak);
+      border-right: 0;
+      border-radius: 5px 0 0 5px;
+      background: var(--av-clay);
+      color: var(--av-charcoal);
+      cursor: pointer;
+      font-family: var(--av-mono);
+      font-size: 0.58rem;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      transform: translate(54%, -50%);
+      writing-mode: vertical-rl;
+    }
+
+    .av-pull-tab.terra {
+      background: var(--av-terracotta);
+    }
+
+    .av-pull-tab.sage {
+      background: var(--av-sage);
+    }
+
+    .av-c-section {
+      padding-right: 3.6rem;
+    }
+
+    .av-c-section-tab {
+      position: absolute;
+      right: -1px;
+      top: -1px;
+      min-height: 39px;
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid var(--av-aged-oak);
+      border-top: 0;
+      background: var(--av-clay);
+      padding: 0.5rem 0.85rem;
+      color: var(--av-charcoal);
+      cursor: pointer;
+      font-family: var(--av-mono);
+      font-size: 0.57rem;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .av-c-section-tab.secondary {
+      background: var(--av-paper);
+      color: var(--av-mocha);
+    }
+
+    .av-caution {
+      margin-top: 1.3rem;
+      border: 1px dashed var(--av-warm-border);
+      padding: 1rem 1.2rem;
+      color: var(--av-mocha);
+      font-size: 0.76rem;
+      line-height: 1.6;
+    }
+
+    .av-caution b {
+      color: var(--av-terracotta-deep);
+      font-family: var(--av-mono);
+      font-size: 0.57rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .av-recommendation {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.75fr);
+      gap: 3rem;
+      align-items: start;
+    }
+
+    .av-recommend-card {
+      position: relative;
+      border: 1px solid var(--av-warm-border);
+      background: var(--av-paper);
+      padding: clamp(1.5rem, 4vw, 2.7rem);
+      box-shadow: 8px 8px 0 #f1ebe2;
+    }
+
+    .av-recommend-stamp {
+      display: inline-block;
+      border: 2px solid var(--av-sage-deep);
+      border-radius: 3px;
+      padding: 0.42rem 0.8rem;
+      color: var(--av-sage-deep);
+      font-family: var(--av-mono);
+      font-size: 0.63rem;
+      font-weight: 500;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      transform: rotate(-1.5deg);
+    }
+
+    .av-recommend-card h3 {
+      margin: 1.5rem 0 0.8rem;
+      font-family: var(--av-serif);
+      font-size: clamp(2rem, 4vw, 3.2rem);
+      font-weight: 400;
+      line-height: 1.02;
+    }
+
+    .av-recommend-card p {
+      color: var(--av-mocha);
+      font-size: 0.9rem;
+      line-height: 1.75;
+    }
+
+    .av-recommend-card ol {
+      margin: 1.4rem 0 0;
+      padding-left: 1.15rem;
+      color: var(--av-mocha);
+      font-size: 0.82rem;
+    }
+
+    .av-recommend-card li {
+      margin: 0.55rem 0;
+      padding-left: 0.35rem;
+    }
+
+    .av-scorecard {
+      border-top: 1px solid var(--av-charcoal);
+    }
+
+    .av-score-row {
+      display: grid;
+      grid-template-columns: 1fr repeat(3, 56px);
+      gap: 0.5rem;
+      align-items: center;
+      min-height: 54px;
+      border-bottom: 1px solid var(--av-pearl);
+      font-size: 0.72rem;
+    }
+
+    .av-score-row.head {
+      min-height: 42px;
+      color: var(--av-oak-accessible);
+      font-family: var(--av-mono);
+      font-size: 0.54rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .av-score {
+      text-align: center;
+      font-family: var(--av-mono);
+      color: var(--av-oak-accessible);
+    }
+
+    .av-score.best {
+      color: var(--av-charcoal);
+      font-weight: 500;
+      background: rgba(168, 181, 160, 0.2);
+      border-radius: 3px;
+      padding-block: 0.25rem;
+    }
+
+    .av-feedback {
+      display: grid;
+      grid-template-columns: minmax(0, 0.85fr) minmax(300px, 1.15fr);
+      gap: 2.5rem;
+      align-items: start;
+    }
+
+    .av-choice-list {
+      display: grid;
+      gap: 0.7rem;
+    }
+
+    .av-choice {
+      min-height: 62px;
+      display: grid;
+      grid-template-columns: 26px minmax(0, 1fr);
+      align-items: center;
+      gap: 0.8rem;
+      border: 1px solid var(--av-warm-border);
+      border-radius: 5px;
+      background: var(--av-paper);
+      padding: 0.7rem 0.9rem;
+      cursor: pointer;
+      color: var(--av-charcoal);
+      text-align: left;
+    }
+
+    .av-choice:hover,
+    .av-choice[aria-pressed="true"] {
+      border-color: var(--av-charcoal);
+      box-shadow: inset 4px 0 var(--av-clay);
+    }
+
+    .av-choice-mark {
+      width: 18px;
+      height: 18px;
+      border: 1px solid var(--av-aged-oak);
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+    }
+
+    .av-choice[aria-pressed="true"] .av-choice-mark::after {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--av-charcoal);
+    }
+
+    .av-choice strong {
+      display: block;
+      font-family: var(--av-serif);
+      font-size: 1rem;
+      font-weight: 500;
+    }
+
+    .av-choice small {
+      color: var(--av-oak-accessible);
+      font-size: 0.65rem;
+    }
+
+    .av-feedback-panel {
+      border: 1px solid var(--av-warm-border);
+      background: #f3ece1;
+      padding: 1.3rem;
+    }
+
+    .av-feedback-panel label {
+      display: block;
+      margin-bottom: 0.6rem;
+      color: var(--av-oak-accessible);
+      font-family: var(--av-mono);
+      font-size: 0.59rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .av-feedback-panel textarea {
+      width: 100%;
+      min-height: 180px;
+      resize: vertical;
+      border: 1px solid var(--av-warm-border);
+      border-radius: 4px;
+      background: var(--av-paper);
+      padding: 1rem;
+      color: var(--av-charcoal);
+      font-size: 0.84rem;
+      line-height: 1.6;
+    }
+
+    .av-feedback-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      margin-top: 0.8rem;
+    }
+
+    .av-copy-status {
+      color: var(--av-oak-accessible);
+      font-family: var(--av-mono);
+      font-size: 0.56rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .av-colophon {
+      width: var(--av-page);
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      gap: 2rem;
+      padding: 2rem 0 3rem;
+      color: var(--av-oak-accessible);
+      font-family: var(--av-mono);
+      font-size: 0.56rem;
+      letter-spacing: 0.07em;
+      line-height: 1.6;
+      text-transform: uppercase;
+    }
+
+    .av-toast {
+      position: fixed;
+      z-index: 180;
+      left: 50%;
+      bottom: 1.5rem;
+      transform: translate(-50%, 140%);
+      max-width: min(480px, calc(100vw - 2rem));
+      border: 1px solid rgba(250, 247, 242, 0.18);
+      border-radius: 5px;
+      background: var(--av-charcoal);
+      color: var(--av-off-white);
+      padding: 0.8rem 1rem;
+      box-shadow: 0 16px 40px rgba(44, 41, 38, 0.24);
+      font-size: 0.76rem;
+      opacity: 0;
+      transition: transform 260ms var(--av-ease), opacity 200ms ease;
+    }
+
+    .av-toast.show {
+      transform: translate(-50%, 0);
+      opacity: 1;
+    }
+
+    @media (max-width: 1020px) {
+      .av-shell {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .av-rail {
+        position: sticky;
+        width: 100%;
+        min-width: 0;
+        height: auto;
+        flex-direction: row;
+        align-items: center;
+        gap: 1rem;
+        overflow: hidden;
+        border-right: 0;
+        border-bottom: 1px solid rgba(44, 41, 38, 0.13);
+        padding: 0.65rem 1rem;
+      }
+
+      .av-mark,
+      .av-rail-sub,
+      .av-rail-note {
+        display: none;
+      }
+
+      .av-rail-brand {
+        flex: 0 0 auto;
+        font-size: 0.86rem;
+      }
+
+      .av-nav {
+        flex: 1 1 auto;
+        min-width: 0;
+        max-width: 100%;
+        display: flex;
+        gap: 0.15rem;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+
+      .av-nav::-webkit-scrollbar {
+        display: none;
+      }
+
+      .av-nav a {
+        min-height: 38px;
+        flex: 0 0 auto;
+        font-size: 0.68rem;
+      }
+
+      .av-section {
+        padding-block: 4.7rem;
+      }
+
+      .av-doc-grid {
+        grid-template-columns: 120px minmax(0, 1fr);
+      }
+
+      .av-doc-margin {
+        display: none;
+      }
+    }
+
+    @media (max-width: 780px) {
+      :root {
+        --av-page: min(calc(100% - 2rem), 680px);
+      }
+
+      .av-section-head,
+      .av-direction-head,
+      .av-recommendation,
+      .av-feedback,
+      .av-evidence {
+        grid-template-columns: 1fr;
+      }
+
+      .av-finding-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .av-finding {
+        min-height: 0;
+      }
+
+      .av-priority {
+        grid-template-columns: 52px 1fr auto;
+        gap: 0.8rem;
+      }
+
+      .av-priority p {
+        grid-column: 2 / -1;
+      }
+
+      .av-demo-toolbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .av-proto-masthead {
+        align-items: flex-start;
+        flex-direction: column;
+        padding-block: 1rem;
+      }
+
+      .av-proto-actions,
+      .av-ticket-actions {
+        width: 100%;
+        justify-content: flex-start;
+      }
+
+      .av-desk-head {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .av-folio-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .av-doc-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .av-doc-spine {
+        display: none;
+      }
+
+      .av-doc-letterhead {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .av-b-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .av-b-main {
+        padding: 2rem 1.4rem;
+      }
+
+      .av-b-margin {
+        border-left: 0;
+        border-top: 1px solid var(--av-warm-border);
+      }
+
+      .av-b-doc-main {
+        grid-template-columns: 1fr;
+      }
+
+      .av-drawer {
+        overflow-x: auto;
+        justify-content: flex-start;
+      }
+
+      .av-drawer-state {
+        display: none;
+      }
+
+      .av-pull-tab {
+        right: 0;
+        transform: translate(34%, -50%);
+      }
+
+      .av-colophon {
+        flex-direction: column;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .av-cover-title {
+        font-size: 3.35rem;
+      }
+
+      .av-nav-num {
+        display: none;
+      }
+
+      .av-proto-body {
+        width: calc(100% - 1.5rem);
+      }
+
+      .av-folio-card {
+        padding: 1.25rem;
+      }
+
+      .av-folio-need {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .av-piece-row {
+        grid-template-columns: 1fr auto;
+      }
+
+      .av-piece-row .av-status {
+        grid-column: 1;
+      }
+
+      .av-score-row {
+        grid-template-columns: 1fr repeat(3, 42px);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html {
+        scroll-behavior: auto;
+      }
+
+      *,
+      *::before,
+      *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <a class="av-skip" href="#main">Skip to the review</a>
+
+  <div class="av-shell">
+    <aside class="av-rail" aria-label="Review navigation">
+      <div>
+        <span class="av-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <p class="av-rail-brand">Patina</p>
+        <p class="av-rail-sub">Designer portal<br>Action visibility study</p>
+      </div>
+      <nav class="av-nav">
+        <a href="#premise"><span class="av-nav-num">00</span> Premise</a>
+        <a href="#findings"><span class="av-nav-num">01</span> Findings</a>
+        <a href="#updates"><span class="av-nav-num">02</span> Updates</a>
+        <a href="#direction-a"><span class="av-nav-num">A</span> Instruments</a>
+        <a href="#direction-b"><span class="av-nav-num">B</span> Margin</a>
+        <a href="#direction-c"><span class="av-nav-num">C</span> Tabs</a>
+        <a href="#recommendation"><span class="av-nav-num">03</span> Ruling</a>
+        <a href="#feedback"><span class="av-nav-num">04</span> Feedback</a>
+      </nav>
+      <p class="av-rail-note">Prepared 26 July 2026<br>Static prototype · no data sent</p>
+    </aside>
+
+    <main class="av-main" id="main">
+      <section class="av-section av-cover" id="premise" aria-labelledby="cover-title">
+        <span class="av-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <p class="av-kicker">Trial follow-up · The Document · Designer portal</p>
+        <h1 class="av-cover-title" id="cover-title">Keep the paper.<br><em>Give verbs ink.</em></h1>
+        <p class="av-cover-dek">
+          The portal’s editorial restraint is working. The control hierarchy is not.
+          Actions frequently wear the same size, color, and cadence as captions—so designers
+          can read the page before they can tell what to do with it.
+        </p>
+        <div class="av-cover-rule">
+          <span>Three optional directions · same content · different action grammar</span>
+        </div>
+      </section>
+
+      <section class="av-section" id="findings" aria-labelledby="findings-title">
+        <div class="av-section-head">
+          <div>
+            <p class="av-folio">01 · Current-state review</p>
+            <h2 class="av-h2" id="findings-title">The actions are present.<br><em>Their weight is missing.</em></h2>
+          </div>
+          <p class="av-section-summary">
+            Scope: the modern designer workspace—Desk, open document, Library, People,
+            and the shared drawer. The earlier wayfinding work is already in place; this review
+            addresses the local controls that remain hard to spot after a designer arrives.
+          </p>
+        </div>
+
+        <p class="av-pull">
+          In two seconds, the eye finds the greeting, folio titles, and section labels.
+          It does <em>not consistently find the next meaningful act.</em>
+        </p>
+
+        <div class="av-finding-grid">
+          <article class="av-finding">
+            <span class="av-finding-num">F-01</span>
+            <h3>Controls and captions share one voice</h3>
+            <p>
+              9–11px uppercase mono is used for metadata, status, navigation, and actionable
+              text. “Message Sarah,” “+ Task,” and “Studio eyes only” can carry similar visual weight.
+            </p>
+          </article>
+          <article class="av-finding">
+            <span class="av-finding-num">F-02</span>
+            <h3>Primary actions move from page to page</h3>
+            <p>
+              Library uses a strong dark Capture button, People uses a quiet outlined Add button,
+              Desk uses naked text links, and the document letterhead uses tiny inline instruments.
+            </p>
+          </article>
+          <article class="av-finding">
+            <span class="av-finding-num">F-03</span>
+            <h3>Whole-card targets hide their destination</h3>
+            <p>
+              Desk folios lift on hover and open as one large target, but the visible face describes
+              state rather than naming the action. Touch users never receive the hover clue.
+            </p>
+          </article>
+          <article class="av-finding">
+            <span class="av-finding-num">F-04</span>
+            <h3>Actions are scattered across the frame</h3>
+            <p>
+              A designer may need to scan the masthead, folio face, section footer, right margin,
+              bottom drawer, and ⌘K before finding the relevant verb.
+            </p>
+          </article>
+          <article class="av-finding">
+            <span class="av-finding-num">F-05</span>
+            <h3>Clay cannot carry small text alone</h3>
+            <p>
+              The current clay on off-white is roughly 2.18:1 contrast. It works as material,
+              border, fill, or a large mark—not as the sole signal for small actionable copy.
+            </p>
+          </article>
+          <article class="av-finding">
+            <span class="av-finding-num">F-06</span>
+            <h3>Mobile exposes the hierarchy gap</h3>
+            <p>
+              The fixed bottom bar is visible, but page-local actions still recede into content.
+              Small labels and tight hit areas are harder to parse when the page becomes one column.
+            </p>
+          </article>
+        </div>
+
+        <div class="av-evidence">
+          <figure class="av-evidence-shot">
+            <img
+              src="screenshots/help-walkthrough/step-1-desk.png"
+              alt="Current light Desk showing folio cards, quiet text actions in the masthead, and the persistent studio drawer"
+            >
+          </figure>
+          <aside class="av-evidence-note">
+            <div>
+              <strong>What the screenshot gets right</strong>
+              <p>
+                The page feels composed, calm, and specific to a design studio. The folios lead,
+                the drawer is learnable, and the palette remains disciplined.
+              </p>
+            </div>
+            <div>
+              <strong>Where the eye stalls</strong>
+              <p>
+                “Capture a lead,” “Open a project,” and “Find anything” look like one metadata line.
+                The cards communicate what is due, but not the verb that resolves it.
+              </p>
+              <small>Representative shipped capture · confirmed against current source</small>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="av-section" id="updates" aria-labelledby="updates-title">
+        <div class="av-section-head">
+          <div>
+            <p class="av-folio">02 · Proposed system updates</p>
+            <h2 class="av-h2" id="updates-title">The floor beneath<br><em>every direction.</em></h2>
+          </div>
+          <p class="av-section-summary">
+            These are not three competing visual concepts. They are shared usability repairs.
+            The directions that follow differ in where the emphasis lives and how much chrome they add.
+          </p>
+        </div>
+
+        <ol class="av-priority-list">
+          <li class="av-priority">
+            <span class="av-priority-code">P0.1</span>
+            <strong>Define three action weights</strong>
+            <p>Primary: one per region. Secondary: outlined. Tertiary: plain text with an underline or arrow. Do not use metadata styling for executable controls.</p>
+            <span class="av-effort">S</span>
+          </li>
+          <li class="av-priority">
+            <span class="av-priority-code">P0.2</span>
+            <strong>Name the result</strong>
+            <p>Use specific verb + object labels—“Review decision,” “Send Friday update,” “Request sign-off”—instead of status-only stamps or generic “Add.”</p>
+            <span class="av-effort">S</span>
+          </li>
+          <li class="av-priority">
+            <span class="av-priority-code">P0.3</span>
+            <strong>Standardize action slots</strong>
+            <p>Reserve predictable homes: one page action in the masthead, one next action on a folio, one action at a section head, and confirmation controls at a sheet footer.</p>
+            <span class="av-effort">M</span>
+          </li>
+          <li class="av-priority">
+            <span class="av-priority-code">P0.4</span>
+            <strong>Raise size and contrast</strong>
+            <p>Use at least 12px for utility labels, 44px hit targets, and charcoal/mocha action text. Keep clay as a material cue—fill, edge, rule, or underline.</p>
+            <span class="av-effort">M</span>
+          </li>
+          <li class="av-priority">
+            <span class="av-priority-code">P1.1</span>
+            <strong>Show the folio’s next act</strong>
+            <p>Keep the whole card clickable, but add a persistent named action. State explains why; the control explains what happens next.</p>
+            <span class="av-effort">M</span>
+          </li>
+          <li class="av-priority">
+            <span class="av-priority-code">P1.2</span>
+            <strong>Make priority lifecycle-aware</strong>
+            <p>The emphasized verb should follow the work: review → send → nudge → mark signed. Only one action earns the dark ink at a time.</p>
+            <span class="av-effort">L</span>
+          </li>
+          <li class="av-priority">
+            <span class="av-priority-code">P1.3</span>
+            <strong>Use a mobile action dock</strong>
+            <p>Move the current screen’s primary act into a labeled, thumb-reachable dock; keep Studio navigation distinct from the work’s next step.</p>
+            <span class="av-effort">M</span>
+          </li>
+        </ol>
+        <p class="av-principle">
+          Preserve the editorial hierarchy by spending boldness on verbs—not by making every container louder.
+        </p>
+      </section>
+
+      <section class="av-section av-direction" id="direction-a" aria-labelledby="direction-a-title">
+        <div class="av-direction-head">
+          <div>
+            <span class="av-direction-number">Direction A · Recommended base</span>
+            <h2 class="av-direction-title" id="direction-a-title">Inked <em>Instruments</em></h2>
+            <p class="av-direction-dek">
+              Introduce a restrained, repeatable button grammar: charcoal for the single next act,
+              an aged-oak outline for secondary acts, and underlined text for tertiary acts. Folios
+              gain a named footer action. Nothing changes the page’s structure; the verbs simply
+              receive enough ink to be read as controls.
+            </p>
+            <div class="av-tag-row">
+              <span class="av-tag">Lowest structural change</span>
+              <span class="av-tag">Strong consistency</span>
+              <span class="av-tag">Good mobile translation</span>
+            </div>
+          </div>
+          <ul class="av-tradeoffs">
+            <li><b>Best for</b><span>A system-wide first move that can roll out component by component.</span></li>
+            <li><b>Gain</b><span>Fastest recognition with the least added chrome.</span></li>
+            <li><b>Risk</b><span>Too many teams can still declare their action “primary” without a one-per-region rule.</span></li>
+            <li><b>Effort</b><span>Medium—shared primitive plus placement cleanup.</span></li>
+          </ul>
+        </div>
+
+        <div class="av-demo-wrap" data-demo>
+          <div class="av-demo-toolbar">
+            <span class="av-demo-label">Interactive prototype · click the controls</span>
+            <div class="av-segment" role="tablist" aria-label="Direction A surface">
+              <button type="button" role="tab" aria-selected="true" data-screen-target="desk">Desk</button>
+              <button type="button" role="tab" aria-selected="false" data-screen-target="document">Open document</button>
+            </div>
+          </div>
+          <div class="av-demo">
+            <div class="av-demo-screen" data-screen="desk">
+              <header class="av-proto-masthead">
+                <span class="av-proto-ident"><span class="av-mini-mark" aria-hidden="true"><i></i><i></i><i></i></span>The Desk</span>
+                <div class="av-proto-actions">
+                  <button class="av-btn av-btn-primary" type="button" data-toast="Capture-lead sheet would open.">＋ Capture a lead</button>
+                  <button class="av-btn av-btn-secondary" type="button" data-toast="Open-project sheet would open.">＋ Open a project</button>
+                  <button class="av-btn av-btn-tertiary" type="button" data-toast="The populated command bar would open.">Find anything <span aria-hidden="true">⌘K</span></button>
+                </div>
+              </header>
+              <div class="av-proto-body">
+                <div class="av-desk-head">
+                  <div>
+                    <h3 class="av-greeting">Good morning, <em>Leah</em></h3>
+                    <p class="av-date">Friday · July 26</p>
+                  </div>
+                  <p class="av-mini-label">One page act gets dark ink</p>
+                </div>
+                <h4 class="av-eyebrow">Needs your hand <span>2</span></h4>
+                <div class="av-folio-grid">
+                  <article class="av-folio-card">
+                    <span class="av-folio-tab">Aspen · Project</span>
+                    <h4>Aspen Loft Refresh</h4>
+                    <p class="av-folio-meta">Project · Design</p>
+                    <div class="av-folio-need">
+                      <p>One decision overdue—oldest due July 24.</p>
+                      <span class="av-status">Decision due</span>
+                    </div>
+                    <button class="av-folio-action" type="button" data-toast="Opening the overdue decision for review.">
+                      <span>Review overdue decision</span><span aria-hidden="true">→</span>
+                    </button>
+                  </article>
+                  <article class="av-folio-card">
+                    <span class="av-folio-tab sage">Whitfield · Project</span>
+                    <h4>Whitfield Living &amp; Dining</h4>
+                    <p class="av-folio-meta">Project · Friday pulse</p>
+                    <div class="av-folio-need">
+                      <p>Friday update drafted—ready for your eye.</p>
+                      <span class="av-status" style="color:var(--av-sage-deep)">Draft ready</span>
+                    </div>
+                    <button class="av-folio-action" type="button" data-toast="Opening the Friday update draft.">
+                      <span>Review &amp; send Friday update</span><span aria-hidden="true">→</span>
+                    </button>
+                  </article>
+                </div>
+              </div>
+              <footer class="av-drawer">
+                <span class="av-drawer-brand">Patina</span>
+                <div class="av-drawer-links">
+                  <button type="button" data-toast="Walking into the Library.">▣ Library</button>
+                  <button type="button" data-toast="Opening the Orders sheet.">◇ Orders</button>
+                  <button type="button" data-toast="Opening the Accounts sheet.">▤ Accounts</button>
+                  <button type="button" data-toast="Walking into the People Room.">♙ People</button>
+                </div>
+                <span class="av-drawer-state">Hands free · The Post</span>
+              </footer>
+            </div>
+
+            <div class="av-demo-screen" data-screen="document" hidden>
+              <div class="av-doc-grid">
+                <aside class="av-doc-spine">
+                  <span class="av-put-down">← Put down</span>
+                  <div class="av-spine-list">
+                    <span class="av-spine-item">Brief<small>Settled</small></span>
+                    <span class="av-spine-item">Discovery<small>Settled · Jun 12</small></span>
+                    <span class="av-spine-item">Direction<small>Settled</small></span>
+                    <span class="av-spine-item active">Project<small>Active · Week 4</small></span>
+                  </div>
+                </aside>
+                <main class="av-doc-paper">
+                  <header class="av-doc-letterhead">
+                    <div>
+                      <span class="av-mini-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+                      <h3>Whitfield Living &amp; Dining</h3>
+                      <p class="av-doc-vitals">Sarah Whitfield · Design · $100,000</p>
+                    </div>
+                    <button class="av-btn av-btn-primary" type="button" data-toast="Opening the Friday update draft.">Review Friday update →</button>
+                  </header>
+                  <div class="av-doc-action-row">
+                    <button class="av-btn av-btn-secondary" type="button" data-toast="Opening the client preview.">Preview as Sarah</button>
+                    <button class="av-btn av-btn-tertiary" type="button" data-toast="Opening a note composer to Sarah.">Message Sarah</button>
+                  </div>
+                  <section class="av-doc-section">
+                    <div class="av-doc-section-head">
+                      <h4>Project · FF&amp;E</h4>
+                      <span class="av-doc-section-count">2 of 3 underway</span>
+                    </div>
+                    <div class="av-task"><span class="av-task-box"></span><span>Order fabric memos for the sofa</span><span class="av-task-due">Due Jul 29</span></div>
+                    <div class="av-task"><span class="av-task-box"></span><span>Site-measure the dining wall</span><span class="av-task-due">Due Aug 02</span></div>
+                    <div class="av-doc-action-row">
+                      <button class="av-btn av-btn-secondary" type="button" data-toast="Adding a task to Project · FF&E.">＋ Add task</button>
+                      <button class="av-btn av-btn-tertiary" type="button" data-toast="Preparing a sign-off request for Sarah.">Request sign-off</button>
+                    </div>
+                  </section>
+                  <section class="av-doc-section">
+                    <div class="av-doc-section-head">
+                      <h4>Living room</h4>
+                      <span class="av-doc-section-count">$0 of $32,000 placed</span>
+                    </div>
+                    <div class="av-piece-row">
+                      <div><strong>Brass Pendant Cluster</strong><small>Cisco Brothers</small></div>
+                      <span class="av-status">Decision due</span>
+                      <span class="av-piece-price">$3,960</span>
+                    </div>
+                  </section>
+                </main>
+                <aside class="av-doc-margin">
+                  <p class="av-margin-title">In the margin</p>
+                  <div class="av-margin-note"><b>Decision · overdue</b><span>Pendant finish—aged brass vs polished.</span></div>
+                  <div class="av-margin-note"><b>Friday pulse · ready</b><span>Draft is ready for your eye.</span></div>
+                </aside>
+              </div>
+              <footer class="av-drawer">
+                <span class="av-drawer-brand">Patina</span>
+                <div class="av-drawer-links">
+                  <button type="button" data-toast="Walking into the Library.">▣ Library</button>
+                  <button type="button" data-toast="Opening the Orders sheet.">◇ Orders</button>
+                  <button type="button" data-toast="Opening the Accounts sheet.">▤ Accounts</button>
+                  <button type="button" data-toast="Walking into the People Room.">♙ People</button>
+                </div>
+                <span class="av-drawer-state">In hand today · 42m</span>
+              </footer>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="av-section av-direction" id="direction-b" aria-labelledby="direction-b-title">
+        <div class="av-direction-head">
+          <div>
+            <span class="av-direction-number">Direction B · Strongest guidance</span>
+            <h2 class="av-direction-title" id="direction-b-title">The Action <em>Margin</em></h2>
+            <p class="av-direction-dek">
+              Keep the paper itself almost untouched. A persistent sidecar names what is in hand,
+              explains why it matters, and holds the current primary and secondary acts. Selecting
+              a folio or moving through a document updates the margin. This makes the next step
+              impossible to miss while preserving the reading surface.
+            </p>
+            <div class="av-tag-row">
+              <span class="av-tag">Highest discoverability</span>
+              <span class="av-tag">Contextual</span>
+              <span class="av-tag">More permanent chrome</span>
+            </div>
+          </div>
+          <ul class="av-tradeoffs">
+            <li><b>Best for</b><span>Dense project documents where the correct action changes with context.</span></li>
+            <li><b>Gain</b><span>One stable place to look on every page.</span></li>
+            <li><b>Risk</b><span>Competes with the existing note margin and needs a clear mobile collapse.</span></li>
+            <li><b>Effort</b><span>High—selection state, action registry, and responsive behavior.</span></li>
+          </ul>
+        </div>
+
+        <div class="av-demo-wrap" data-demo>
+          <div class="av-demo-toolbar">
+            <span class="av-demo-label">Interactive prototype · select a folio to change the margin</span>
+            <div class="av-segment" role="tablist" aria-label="Direction B surface">
+              <button type="button" role="tab" aria-selected="true" data-screen-target="desk">Desk</button>
+              <button type="button" role="tab" aria-selected="false" data-screen-target="document">Open document</button>
+            </div>
+          </div>
+          <div class="av-demo">
+            <div class="av-demo-screen" data-screen="desk">
+              <div class="av-b-layout">
+                <main class="av-b-main">
+                  <div class="av-desk-head">
+                    <div>
+                      <h3 class="av-greeting">Good morning, <em>Leah</em></h3>
+                      <p class="av-date">Friday · July 26</p>
+                    </div>
+                    <button class="av-btn av-btn-tertiary" type="button" data-toast="The populated command bar would open.">Find anything ⌘K</button>
+                  </div>
+                  <h4 class="av-eyebrow">Needs your hand <span>2</span></h4>
+                  <div class="av-folio-grid">
+                    <button
+                      class="av-folio-card av-b-card"
+                      type="button"
+                      aria-pressed="true"
+                      data-context-title="Aspen Loft Refresh"
+                      data-context-detail="One overdue decision is holding the pendant order. Sarah needs your finish recommendation."
+                      data-context-action="Review overdue decision"
+                    >
+                      <span class="av-folio-tab">Aspen · Project</span>
+                      <h4>Aspen Loft Refresh</h4>
+                      <p class="av-folio-meta">Project · Design</p>
+                      <div class="av-folio-need">
+                        <p>One decision overdue—oldest due July 24.</p>
+                        <span class="av-status">Decision due</span>
+                      </div>
+                    </button>
+                    <button
+                      class="av-folio-card av-b-card"
+                      type="button"
+                      aria-pressed="false"
+                      data-context-title="Whitfield Living & Dining"
+                      data-context-detail="The Friday update is drafted from this week’s work and ready for your review."
+                      data-context-action="Review Friday update"
+                    >
+                      <span class="av-folio-tab sage">Whitfield · Project</span>
+                      <h4>Whitfield Living &amp; Dining</h4>
+                      <p class="av-folio-meta">Project · Friday pulse</p>
+                      <div class="av-folio-need">
+                        <p>Friday update drafted—ready for your eye.</p>
+                        <span class="av-status" style="color:var(--av-sage-deep)">Draft ready</span>
+                      </div>
+                    </button>
+                  </div>
+                </main>
+                <aside class="av-b-margin" aria-live="polite">
+                  <div class="av-b-margin-inner av-context">
+                    <p class="av-b-context-kicker">Next in hand</p>
+                    <h4 class="av-b-context-title">Aspen Loft Refresh</h4>
+                    <p class="av-b-context-detail">One overdue decision is holding the pendant order. Sarah needs your finish recommendation.</p>
+                    <div class="av-b-context-actions">
+                      <button class="av-btn av-btn-primary av-b-context-primary" type="button" data-toast="Opening the selected item.">Review overdue decision <span aria-hidden="true">→</span></button>
+                      <button class="av-btn av-btn-secondary" type="button" data-toast="Opening a note composer.">Message Sarah</button>
+                    </div>
+                    <hr class="av-b-divider">
+                    <p class="av-b-context-kicker">Begin something</p>
+                    <div class="av-b-begin">
+                      <button type="button" data-toast="Capture-lead sheet would open.">Capture a lead <span>＋</span></button>
+                      <button type="button" data-toast="Open-project sheet would open.">Open a project <span>＋</span></button>
+                      <button type="button" data-toast="Drafting-room picker would open.">Draft a proposal <span>↗</span></button>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+              <footer class="av-drawer">
+                <span class="av-drawer-brand">Patina</span>
+                <div class="av-drawer-links">
+                  <button type="button" data-toast="Walking into the Library.">▣ Library</button>
+                  <button type="button" data-toast="Opening the Orders sheet.">◇ Orders</button>
+                  <button type="button" data-toast="Opening the Accounts sheet.">▤ Accounts</button>
+                  <button type="button" data-toast="Walking into the People Room.">♙ People</button>
+                </div>
+                <span class="av-drawer-state">Hands free · The Post</span>
+              </footer>
+            </div>
+
+            <div class="av-demo-screen" data-screen="document" hidden>
+              <div class="av-b-layout">
+                <div class="av-b-doc-main">
+                  <aside class="av-doc-spine">
+                    <span class="av-put-down">← Put down</span>
+                    <div class="av-spine-list">
+                      <span class="av-spine-item">Brief<small>Settled</small></span>
+                      <span class="av-spine-item">Discovery<small>Settled</small></span>
+                      <span class="av-spine-item active">Project<small>Active · Week 4</small></span>
+                    </div>
+                  </aside>
+                  <main class="av-doc-paper">
+                    <header class="av-doc-letterhead">
+                      <div>
+                        <span class="av-mini-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+                        <h3>Whitfield Living &amp; Dining</h3>
+                        <p class="av-doc-vitals">Sarah Whitfield · Design · $100,000</p>
+                      </div>
+                    </header>
+                    <div class="av-doc-action-row">
+                      <button class="av-btn av-btn-tertiary" type="button" data-toast="Opening the client preview.">Preview as Sarah</button>
+                      <button class="av-btn av-btn-tertiary" type="button" data-toast="Opening a note composer.">Message Sarah</button>
+                    </div>
+                    <section class="av-doc-section">
+                      <div class="av-doc-section-head">
+                        <h4>Project · FF&amp;E</h4>
+                        <span class="av-doc-section-count">2 of 3 underway</span>
+                      </div>
+                      <div class="av-task"><span class="av-task-box"></span><span>Order fabric memos for the sofa</span><span class="av-task-due">Due Jul 29</span></div>
+                      <div class="av-task"><span class="av-task-box"></span><span>Site-measure the dining wall</span><span class="av-task-due">Due Aug 02</span></div>
+                    </section>
+                    <section class="av-doc-section">
+                      <div class="av-doc-section-head">
+                        <h4>Living room</h4>
+                        <span class="av-doc-section-count">$0 of $32,000 placed</span>
+                      </div>
+                      <div class="av-piece-row">
+                        <div><strong>Brass Pendant Cluster</strong><small>Cisco Brothers</small></div>
+                        <span class="av-status">Decision due</span>
+                        <span class="av-piece-price">$3,960</span>
+                      </div>
+                    </section>
+                  </main>
+                </div>
+                <aside class="av-b-margin">
+                  <div class="av-b-margin-inner">
+                    <p class="av-b-context-kicker">This document · next</p>
+                    <h4 class="av-b-context-title">Friday update is ready</h4>
+                    <p class="av-b-context-detail">Four project changes are already drafted. Review the language, then send it to Sarah.</p>
+                    <div class="av-b-context-actions">
+                      <button class="av-btn av-btn-primary" type="button" data-toast="Opening the Friday update draft.">Review Friday update <span aria-hidden="true">→</span></button>
+                      <button class="av-btn av-btn-secondary" type="button" data-toast="Preparing a sign-off request.">Request sign-off</button>
+                      <button class="av-btn av-btn-tertiary" type="button" data-toast="Adding a task.">＋ Add task</button>
+                    </div>
+                    <hr class="av-b-divider">
+                    <p class="av-b-context-kicker">Margin notes · 2</p>
+                    <div class="av-margin-note"><b>Decision · overdue</b><span>Pendant finish—aged brass vs polished.</span></div>
+                  </div>
+                </aside>
+              </div>
+              <footer class="av-drawer">
+                <span class="av-drawer-brand">Patina</span>
+                <div class="av-drawer-links">
+                  <button type="button" data-toast="Walking into the Library.">▣ Library</button>
+                  <button type="button" data-toast="Opening the Orders sheet.">◇ Orders</button>
+                  <button type="button" data-toast="Opening the Accounts sheet.">▤ Accounts</button>
+                  <button type="button" data-toast="Walking into the People Room.">♙ People</button>
+                </div>
+                <span class="av-drawer-state">In hand today · 42m</span>
+              </footer>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="av-section av-direction" id="direction-c" aria-labelledby="direction-c-title">
+        <div class="av-direction-head">
+          <div>
+            <span class="av-direction-number">Direction C · Most expressive</span>
+            <h2 class="av-direction-title" id="direction-c-title">Bookbinder <em>Tabs</em></h2>
+            <p class="av-direction-dek">
+              Make the action a physical part of the paper object: a pull tab on a folio,
+              a clipped tab on a section rule, and ticket-like actions in page heads.
+              This is the most distinctively Patina direction—memorable, tactile, and legible—
+              but it must be reserved for true next steps or the desk becomes a filing cabinet.
+            </p>
+            <div class="av-tag-row">
+              <span class="av-tag">Most ownable</span>
+              <span class="av-tag">Highest character</span>
+              <span class="av-tag">Needs strict restraint</span>
+            </div>
+          </div>
+          <ul class="av-tradeoffs">
+            <li><b>Best for</b><span>Priority folios and section-level actions that deserve a physical invitation.</span></li>
+            <li><b>Gain</b><span>Action affordances become part of the Document metaphor.</span></li>
+            <li><b>Risk</b><span>Tabs can create visual noise and horizontal pressure on mobile.</span></li>
+            <li><b>Effort</b><span>Medium–high—new components and responsive rules.</span></li>
+          </ul>
+        </div>
+
+        <div class="av-demo-wrap" data-demo>
+          <div class="av-demo-toolbar">
+            <span class="av-demo-label">Interactive prototype · actions attach to their paper</span>
+            <div class="av-segment" role="tablist" aria-label="Direction C surface">
+              <button type="button" role="tab" aria-selected="true" data-screen-target="desk">Desk</button>
+              <button type="button" role="tab" aria-selected="false" data-screen-target="document">Open document</button>
+            </div>
+          </div>
+          <div class="av-demo av-c-demo">
+            <div class="av-demo-screen" data-screen="desk">
+              <header class="av-proto-masthead">
+                <span class="av-proto-ident"><span class="av-mini-mark" aria-hidden="true"><i></i><i></i><i></i></span>The Desk</span>
+                <div class="av-ticket-actions">
+                  <button class="av-ticket primary" type="button" data-toast="Capture-lead sheet would open.">Capture a lead ＋</button>
+                  <button class="av-ticket" type="button" data-toast="Open-project sheet would open.">Open a project ＋</button>
+                  <button class="av-ticket" type="button" data-toast="The command bar would open.">Find anything ⌘K</button>
+                </div>
+              </header>
+              <div class="av-proto-body">
+                <div class="av-desk-head">
+                  <div>
+                    <h3 class="av-greeting">Good morning, <em>Leah</em></h3>
+                    <p class="av-date">Friday · July 26</p>
+                  </div>
+                  <p class="av-mini-label">Pull only what needs your hand</p>
+                </div>
+                <h4 class="av-eyebrow">Needs your hand <span>2</span></h4>
+                <div class="av-folio-grid">
+                  <article class="av-folio-card av-tab-card">
+                    <span class="av-folio-tab">Aspen · Project</span>
+                    <h4>Aspen Loft Refresh</h4>
+                    <p class="av-folio-meta">Project · Design</p>
+                    <div class="av-folio-need">
+                      <p>One decision overdue—oldest due July 24.</p>
+                      <span class="av-status">Decision due</span>
+                    </div>
+                    <button class="av-pull-tab terra" type="button" data-toast="Pulling the overdue decision into view.">Review →</button>
+                  </article>
+                  <article class="av-folio-card av-tab-card">
+                    <span class="av-folio-tab sage">Whitfield · Project</span>
+                    <h4>Whitfield Living &amp; Dining</h4>
+                    <p class="av-folio-meta">Project · Friday pulse</p>
+                    <div class="av-folio-need">
+                      <p>Friday update drafted—ready for your eye.</p>
+                      <span class="av-status" style="color:var(--av-sage-deep)">Draft ready</span>
+                    </div>
+                    <button class="av-pull-tab sage" type="button" data-toast="Pulling the Friday update into view.">Review →</button>
+                  </article>
+                </div>
+                <p class="av-caution"><b>Restraint rule</b> A folio gets one attached tab only when it appears under “Needs your hand.” In-motion items and settled sections remain tab-free.</p>
+              </div>
+              <footer class="av-drawer">
+                <span class="av-drawer-brand">Patina</span>
+                <div class="av-drawer-links">
+                  <button type="button" data-toast="Walking into the Library.">▣ Library</button>
+                  <button type="button" data-toast="Opening the Orders sheet.">◇ Orders</button>
+                  <button type="button" data-toast="Opening the Accounts sheet.">▤ Accounts</button>
+                  <button type="button" data-toast="Walking into the People Room.">♙ People</button>
+                </div>
+                <span class="av-drawer-state">Hands free · The Post</span>
+              </footer>
+            </div>
+
+            <div class="av-demo-screen" data-screen="document" hidden>
+              <div class="av-doc-grid">
+                <aside class="av-doc-spine">
+                  <span class="av-put-down">← Put down</span>
+                  <div class="av-spine-list">
+                    <span class="av-spine-item">Brief<small>Settled</small></span>
+                    <span class="av-spine-item">Discovery<small>Settled</small></span>
+                    <span class="av-spine-item active">Project<small>Active · Week 4</small></span>
+                  </div>
+                </aside>
+                <main class="av-doc-paper">
+                  <header class="av-doc-letterhead">
+                    <div>
+                      <span class="av-mini-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+                      <h3>Whitfield Living &amp; Dining</h3>
+                      <p class="av-doc-vitals">Sarah Whitfield · Design · $100,000</p>
+                    </div>
+                    <div class="av-ticket-actions">
+                      <button class="av-ticket primary" type="button" data-toast="Pulling the Friday update into view.">Friday update →</button>
+                      <button class="av-ticket" type="button" data-toast="Opening the client preview.">Client view</button>
+                    </div>
+                  </header>
+                  <div class="av-doc-action-row">
+                    <button class="av-btn av-btn-tertiary" type="button" data-toast="Opening a note composer.">Message Sarah</button>
+                  </div>
+                  <section class="av-doc-section av-c-section">
+                    <div class="av-doc-section-head">
+                      <h4>Project · FF&amp;E</h4>
+                      <span class="av-doc-section-count">2 of 3 underway</span>
+                    </div>
+                    <div class="av-task"><span class="av-task-box"></span><span>Order fabric memos for the sofa</span><span class="av-task-due">Due Jul 29</span></div>
+                    <div class="av-task"><span class="av-task-box"></span><span>Site-measure the dining wall</span><span class="av-task-due">Due Aug 02</span></div>
+                    <button class="av-c-section-tab" type="button" data-toast="Adding a task to Project · FF&E.">＋ Add task</button>
+                  </section>
+                  <section class="av-doc-section av-c-section">
+                    <div class="av-doc-section-head">
+                      <h4>Living room</h4>
+                      <span class="av-doc-section-count">$0 of $32,000 placed</span>
+                    </div>
+                    <div class="av-piece-row">
+                      <div><strong>Brass Pendant Cluster</strong><small>Cisco Brothers</small></div>
+                      <span class="av-status">Decision due</span>
+                      <span class="av-piece-price">$3,960</span>
+                    </div>
+                    <button class="av-c-section-tab secondary" type="button" data-toast="Preparing a decision request for Sarah.">Ask Sarah →</button>
+                  </section>
+                </main>
+                <aside class="av-doc-margin">
+                  <p class="av-margin-title">In the margin</p>
+                  <div class="av-margin-note"><b>Decision · overdue</b><span>Pendant finish—aged brass vs polished.</span></div>
+                  <div class="av-margin-note"><b>Friday pulse · ready</b><span>Draft is ready for your eye.</span></div>
+                </aside>
+              </div>
+              <footer class="av-drawer">
+                <span class="av-drawer-brand">Patina</span>
+                <div class="av-drawer-links">
+                  <button type="button" data-toast="Walking into the Library.">▣ Library</button>
+                  <button type="button" data-toast="Opening the Orders sheet.">◇ Orders</button>
+                  <button type="button" data-toast="Opening the Accounts sheet.">▤ Accounts</button>
+                  <button type="button" data-toast="Walking into the People Room.">♙ People</button>
+                </div>
+                <span class="av-drawer-state">In hand today · 42m</span>
+              </footer>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="av-section" id="recommendation" aria-labelledby="recommendation-title">
+        <div class="av-section-head">
+          <div>
+            <p class="av-folio">03 · Recommended ruling</p>
+            <h2 class="av-h2" id="recommendation-title">Start systemic.<br><em>Add context selectively.</em></h2>
+          </div>
+          <p class="av-section-summary">
+            The best answer is not to choose the loudest concept. It is to establish
+            a reliable action grammar everywhere, then add stronger contextual guidance
+            only where complex documents prove they need it.
+          </p>
+        </div>
+
+        <div class="av-recommendation">
+          <article class="av-recommend-card">
+            <span class="av-recommend-stamp">Recommended · A, then a measured B pilot</span>
+            <h3>Ship Inked Instruments as the base system.</h3>
+            <p>
+              It repairs the immediate trial issue without changing The Document’s architecture:
+              stronger labels, predictable slots, explicit folio actions, accessible contrast, and
+              larger targets. Then test the Action Margin inside one action-dense project document.
+              Borrow Bookbinder Tabs only for high-priority folios if the team wants a more ownable signature.
+            </p>
+            <ol>
+              <li>Prototype the shared action primitive and apply it to Desk, RoomShell, letterhead instruments, and WorkBlock.</li>
+              <li>Instrument primary-action impressions and selections by surface—not just ⌘K and drawer opens.</li>
+              <li>Run five task-based sessions: capture lead, review decision, send update, add task, request sign-off.</li>
+              <li>If document-level time-to-action remains slow, pilot the Action Margin on Project · FF&amp;E only.</li>
+            </ol>
+          </article>
+
+          <div class="av-scorecard" aria-label="Direction scorecard">
+            <div class="av-score-row head"><span>Criterion</span><span>A</span><span>B</span><span>C</span></div>
+            <div class="av-score-row"><span>Immediate discoverability</span><span class="av-score best">4/5</span><span class="av-score">5/5</span><span class="av-score">4/5</span></div>
+            <div class="av-score-row"><span>Editorial restraint</span><span class="av-score best">5/5</span><span class="av-score">3/5</span><span class="av-score">4/5</span></div>
+            <div class="av-score-row"><span>Cross-portal consistency</span><span class="av-score best">5/5</span><span class="av-score">3/5</span><span class="av-score">3/5</span></div>
+            <div class="av-score-row"><span>Mobile translation</span><span class="av-score best">5/5</span><span class="av-score">3/5</span><span class="av-score">3/5</span></div>
+            <div class="av-score-row"><span>Implementation cost</span><span class="av-score best">3/5</span><span class="av-score">5/5</span><span class="av-score">4/5</span></div>
+            <div class="av-score-row"><span>Distinctive character</span><span class="av-score">3/5</span><span class="av-score">4/5</span><span class="av-score best">5/5</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="av-section" id="feedback" aria-labelledby="feedback-title">
+        <div class="av-section-head">
+          <div>
+            <p class="av-folio">04 · Direction check</p>
+            <h2 class="av-h2" id="feedback-title">What should we<br><em>carry forward?</em></h2>
+          </div>
+          <p class="av-section-summary">
+            Choose the closest direction, then note what to keep or reject. The page stores
+            the choice only in this browser and can copy a compact feedback brief—nothing is sent.
+          </p>
+        </div>
+
+        <div class="av-feedback">
+          <div class="av-choice-list" role="group" aria-label="Preferred direction">
+            <button class="av-choice" type="button" aria-pressed="false" data-choice="A · Inked Instruments">
+              <span class="av-choice-mark" aria-hidden="true"></span>
+              <span><strong>A · Inked Instruments</strong><small>Quiet system, stronger controls</small></span>
+            </button>
+            <button class="av-choice" type="button" aria-pressed="false" data-choice="B · Action Margin">
+              <span class="av-choice-mark" aria-hidden="true"></span>
+              <span><strong>B · Action Margin</strong><small>Stable contextual next step</small></span>
+            </button>
+            <button class="av-choice" type="button" aria-pressed="false" data-choice="C · Bookbinder Tabs">
+              <span class="av-choice-mark" aria-hidden="true"></span>
+              <span><strong>C · Bookbinder Tabs</strong><small>Physical, expressive affordances</small></span>
+            </button>
+            <button class="av-choice" type="button" aria-pressed="false" data-choice="Hybrid · A base with selected B or C moments">
+              <span class="av-choice-mark" aria-hidden="true"></span>
+              <span><strong>Hybrid</strong><small>A as the base, B or C where earned</small></span>
+            </button>
+          </div>
+
+          <div class="av-feedback-panel">
+            <label for="av-feedback-notes">Notes for the next pass</label>
+            <textarea id="av-feedback-notes" placeholder="What feels right? What feels too loud? Which surface should be prototyped next—Desk, document, Library, or People?"></textarea>
+            <div class="av-feedback-actions">
+              <button class="av-btn av-btn-primary" id="av-copy-feedback" type="button">Copy feedback brief</button>
+              <span class="av-copy-status" id="av-copy-status" aria-live="polite"></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <footer class="av-colophon">
+        <span>Patina · Designer portal · Action visibility study</span>
+        <span>Source-reviewed against current Document components · 26 July 2026</span>
+      </footer>
+    </main>
+  </div>
+
+  <div class="av-toast" id="av-toast" role="status" aria-live="polite"></div>
+
+  <script>
+    (function () {
+      var toast = document.getElementById("av-toast");
+      var toastTimer = null;
+
+      function showToast(message) {
+        if (!toast || !message) return;
+        toast.textContent = message;
+        toast.classList.add("show");
+        window.clearTimeout(toastTimer);
+        toastTimer = window.setTimeout(function () {
+          toast.classList.remove("show");
+        }, 2200);
+      }
+
+      document.addEventListener("click", function (event) {
+        var action = event.target.closest("[data-toast]");
+        if (action) showToast(action.getAttribute("data-toast"));
+      });
+
+      Array.prototype.forEach.call(document.querySelectorAll("[data-demo]"), function (demo) {
+        var tabs = demo.querySelectorAll("[data-screen-target]");
+        var screens = demo.querySelectorAll("[data-screen]");
+        Array.prototype.forEach.call(tabs, function (tab) {
+          tab.addEventListener("click", function () {
+            var target = tab.getAttribute("data-screen-target");
+            Array.prototype.forEach.call(tabs, function (candidate) {
+              candidate.setAttribute("aria-selected", String(candidate === tab));
+            });
+            Array.prototype.forEach.call(screens, function (screen) {
+              screen.hidden = screen.getAttribute("data-screen") !== target;
+            });
+          });
+        });
+      });
+
+      Array.prototype.forEach.call(document.querySelectorAll(".av-b-card"), function (card) {
+        card.addEventListener("click", function () {
+          var screen = card.closest("[data-screen]");
+          if (!screen) return;
+          Array.prototype.forEach.call(screen.querySelectorAll(".av-b-card"), function (candidate) {
+            candidate.setAttribute("aria-pressed", String(candidate === card));
+          });
+          var context = screen.querySelector(".av-context");
+          if (!context) return;
+          var title = context.querySelector(".av-b-context-title");
+          var detail = context.querySelector(".av-b-context-detail");
+          var primary = context.querySelector(".av-b-context-primary");
+          if (title) title.textContent = card.getAttribute("data-context-title") || "";
+          if (detail) detail.textContent = card.getAttribute("data-context-detail") || "";
+          if (primary) {
+            primary.innerHTML = (card.getAttribute("data-context-action") || "Open") + ' <span aria-hidden="true">→</span>';
+          }
+          showToast("The action margin now follows " + (card.getAttribute("data-context-title") || "the selected folio") + ".");
+        });
+      });
+
+      var storedChoice = "";
+      try {
+        storedChoice = window.localStorage.getItem("patina-action-visibility-choice") || "";
+      } catch (error) {
+        storedChoice = "";
+      }
+
+      var choiceButtons = document.querySelectorAll("[data-choice]");
+      function selectChoice(button) {
+        Array.prototype.forEach.call(choiceButtons, function (candidate) {
+          candidate.setAttribute("aria-pressed", String(candidate === button));
+        });
+        try {
+          window.localStorage.setItem("patina-action-visibility-choice", button.getAttribute("data-choice") || "");
+        } catch (error) {
+          /* Local storage is optional. */
+        }
+      }
+
+      Array.prototype.forEach.call(choiceButtons, function (button) {
+        if (button.getAttribute("data-choice") === storedChoice) selectChoice(button);
+        button.addEventListener("click", function () {
+          selectChoice(button);
+        });
+      });
+
+      var copyButton = document.getElementById("av-copy-feedback");
+      var copyStatus = document.getElementById("av-copy-status");
+      var notes = document.getElementById("av-feedback-notes");
+      if (copyButton) {
+        copyButton.addEventListener("click", function () {
+          var selected = document.querySelector("[data-choice][aria-pressed='true']");
+          var brief = [
+            "Patina designer portal — action visibility feedback",
+            "Preferred direction: " + (selected ? selected.getAttribute("data-choice") : "Not selected"),
+            "Notes: " + (notes && notes.value.trim() ? notes.value.trim() : "None yet")
+          ].join("\n");
+
+          var done = function () {
+            if (copyStatus) copyStatus.textContent = "Copied";
+            window.setTimeout(function () {
+              if (copyStatus) copyStatus.textContent = "";
+            }, 2200);
+          };
+
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(brief).then(done).catch(function () {
+              window.prompt("Copy this feedback brief:", brief);
+            });
+          } else {
+            window.prompt("Copy this feedback brief:", brief);
+          }
+        });
+      }
+
+      var railLinks = document.querySelectorAll(".av-nav a");
+      var sections = Array.prototype.map.call(railLinks, function (link) {
+        return document.querySelector(link.getAttribute("href"));
+      }).filter(Boolean);
+
+      if ("IntersectionObserver" in window) {
+        var observer = new IntersectionObserver(function (entries) {
+          entries.forEach(function (entry) {
+            if (!entry.isIntersecting) return;
+            Array.prototype.forEach.call(railLinks, function (link) {
+              link.setAttribute("aria-current", String(link.getAttribute("href") === "#" + entry.target.id));
+            });
+          });
+        }, { rootMargin: "-24% 0px -64% 0px", threshold: 0 });
+        sections.forEach(function (section) { observer.observe(section); });
+      }
+    })();
+  </script>
+</body>
+</html>

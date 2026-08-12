@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Patina Field · Site Portal — Screens &amp; Flows</title>
+<!-- Patina · T-03 Site Portal — screen system + flows · pairs with Field-Site-Portal-PRD-v1.md · 2026-07-17 -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..620;1,9..144,300..620&family=Hanken+Grotesk:ital,wght@0,300..700;1,300..700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#211E17; --ink-70:rgba(33,30,23,.72); --ink-55:rgba(33,30,23,.55); --ink-38:rgba(33,30,23,.38);
+  --hair:rgba(33,30,23,.16); --hair-soft:rgba(33,30,23,.09);
+  --paper:#F4EFE4; --screen:#FBF8F0; --well:#ECE5D4;
+  --verdigris:#446B5C; --verdigris-deep:#38584B; --verdigris-wash:rgba(68,107,92,.10);
+  --brass:#9A742A; --brass-wash:rgba(154,116,42,.12);
+  --rust:#A44E24; --rust-wash:rgba(164,78,36,.10);
+  --serif:'Fraunces',Georgia,serif;
+  --sans:'Hanken Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1140px;margin:0 auto;padding:56px clamp(20px,5vw,72px) 90px}
+
+/* ---------- document scaffolding ---------- */
+.doc-head{border-bottom:2px solid var(--ink);padding-bottom:32px}
+.doc-head .id{display:flex;align-items:center;gap:12px;margin-bottom:26px}
+.mark line{stroke:var(--ink);stroke-width:2.2}
+.wordmark{font-family:var(--mono);font-size:10.5px;letter-spacing:.22em}
+h1{font-family:var(--serif);font-weight:420;font-size:clamp(34px,5.4vw,62px);line-height:1.06;letter-spacing:-.012em;max-width:18ch}
+h1 em{font-style:italic;font-weight:380;color:var(--verdigris-deep)}
+.doc-lede{margin-top:18px;font-size:clamp(14.5px,1.35vw,17px);color:var(--ink-70);max-width:62ch}
+.doc-meta{margin-top:24px;display:flex;gap:30px;flex-wrap:wrap;font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-55)}
+.doc-meta b{color:var(--ink);font-weight:500}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--verdigris);margin-bottom:14px}
+.eyebrow .dim{color:var(--ink-38)}
+.sec{margin-top:72px}
+h2{font-family:var(--serif);font-size:clamp(26px,3.4vw,40px);font-weight:420;letter-spacing:-.01em;max-width:24ch}
+h2 em{font-style:italic;font-weight:380;color:var(--verdigris-deep)}
+.sec-lede{margin-top:12px;font-size:14.5px;color:var(--ink-70);max-width:62ch}
+.group{margin-top:56px;padding-top:10px}
+.group .gk{font-family:var(--mono);font-size:10px;letter-spacing:.22em;color:var(--brass);text-transform:uppercase}
+.group h2{margin-top:8px}
+
+/* ---------- foundations ---------- */
+.sws{display:flex;gap:16px;flex-wrap:wrap;margin-top:20px}
+.sw{width:98px}
+.sw i{display:block;height:46px;border-radius:9px;border:1px solid var(--hair-soft);font-style:normal}
+.sw span{font-family:var(--mono);font-size:8.5px;letter-spacing:.07em;color:var(--ink-55);display:block;margin-top:7px;line-height:1.6}
+.typerow{margin-top:26px;border-top:1px solid var(--hair-soft);padding-top:6px}
+.typerow div{display:flex;align-items:baseline;gap:18px;padding:10px 0;border-bottom:1px solid var(--hair-soft);flex-wrap:wrap}
+.typerow .tl{font-family:var(--mono);font-size:9px;letter-spacing:.16em;color:var(--ink-55);width:118px;text-transform:uppercase}
+.spec-serif{font-family:var(--serif);font-size:24px;font-weight:460}
+.spec-sans{font-size:15px}
+.spec-mono{font-family:var(--mono);font-size:12px;letter-spacing:.06em}
+.prins{margin-top:26px;max-width:66ch;font-size:14.5px;color:var(--ink-70)}
+.prins b{color:var(--ink)}
+
+/* ---------- flows ---------- */
+.fl{border-top:2px solid var(--ink);padding:20px 0 10px;margin-top:26px}
+.fl-k{font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;color:var(--verdigris)}
+.fl-name{font-family:var(--serif);font-size:21px;font-weight:500;margin-top:5px}
+.fl-note{font-size:12.5px;color:var(--ink-55);margin-top:4px;max-width:60ch}
+.fl-track{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-top:14px}
+.fnode{border:1px solid var(--hair);background:var(--screen);padding:7px 12px}
+.fnode .fr{font-family:var(--mono);font-size:8px;letter-spacing:.14em;color:var(--verdigris);display:block}
+.fnode .fn{font-size:11.5px;font-weight:600}
+.fnode.ext{border-style:dashed;background:transparent}
+.fnode.ext .fr{color:var(--brass)}
+.fdec{border:1px solid var(--brass);background:var(--brass-wash);padding:7px 12px}
+.fdec .fr{color:var(--brass)}
+.farrow{font-family:var(--mono);color:var(--brass);font-size:13px}
+.fbranch{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin:10px 0 4px 30px;padding:6px 0 6px 16px;border-left:1px dashed var(--hair)}
+.fbl{font-family:var(--mono);font-size:8.5px;letter-spacing:.14em}
+.fbl.ok{color:var(--verdigris)}
+.fbl.no{color:var(--rust)}
+.fret{font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;color:var(--ink-38)}
+
+/* ---------- screen index ---------- */
+.idx-wrap{overflow-x:auto;margin-top:20px}
+.idx{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px;min-width:560px}
+.idx th{text-align:left;font-weight:500;letter-spacing:.14em;font-size:8.5px;color:var(--ink-55);padding:8px 10px;border-bottom:1px solid var(--hair);text-transform:uppercase}
+.idx td{padding:7px 10px;border-bottom:1px solid var(--hair-soft);white-space:nowrap}
+.idx td:nth-child(2){white-space:normal;font-family:var(--sans);font-size:12.5px}
+.idx a{color:var(--verdigris);text-decoration:none;border-bottom:1px solid var(--verdigris-wash)}
+
+/* ---------- screen blocks ---------- */
+.shot{margin-top:48px;padding-top:30px;border-top:1px solid var(--hair)}
+.shot-head{display:flex;align-items:baseline;gap:13px;flex-wrap:wrap;margin-bottom:20px}
+.sref{font-family:var(--mono);font-size:11.5px;letter-spacing:.16em;color:var(--verdigris)}
+.shot-head h3{font-family:var(--serif);font-size:clamp(20px,2.3vw,26px);font-weight:500}
+.ptag{font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;border:1px solid;border-radius:99px;padding:2px 9px}
+.ptag.p1{color:var(--verdigris);border-color:var(--verdigris)}
+.ptag.p2{color:var(--brass);border-color:var(--brass)}
+.ptag.p3{color:var(--ink-55);border-color:var(--hair)}
+.fref2{font-family:var(--mono);font-size:9px;letter-spacing:.16em;color:var(--ink-38);margin-left:auto}
+.shot-grid{display:grid;grid-template-columns:auto minmax(280px,1fr);gap:40px;align-items:start}
+.annots{list-style:none;counter-reset:a;max-width:47ch}
+.annots li{counter-increment:a;position:relative;padding:11px 0 11px 32px;border-top:1px solid var(--hair-soft);font-size:13.5px;color:var(--ink-70);line-height:1.5}
+.annots li:last-child{border-bottom:1px solid var(--hair-soft)}
+.annots li::before{content:counter(a);position:absolute;left:0;top:13px;width:17px;height:17px;border-radius:50%;background:var(--verdigris);color:var(--screen);font-family:var(--mono);font-size:8.5px;display:flex;align-items:center;justify-content:center}
+.annots b{color:var(--ink);font-weight:600}
+.mini-p{font-family:var(--mono);font-size:8px;letter-spacing:.12em;color:var(--brass);border:1px solid var(--brass);border-radius:99px;padding:1px 6px;margin-right:4px;white-space:nowrap}
+
+/* ---------- phone frame + shared mock parts ---------- */
+.ph{width:238px;border:1.5px solid var(--ink);border-radius:30px;padding:8px;background:var(--paper)}
+.ph-scr{background:var(--screen);border:1px solid var(--hair-soft);border-radius:22px;height:492px;display:flex;flex-direction:column;overflow:hidden}
+.ph-status{display:flex;justify-content:space-between;padding:9px 14px 5px;font-family:var(--mono);font-size:8px;letter-spacing:.08em;color:var(--ink-38)}
+.ph-app{display:flex;align-items:center;gap:7px;padding:5px 14px 9px;border-bottom:1px solid var(--hair-soft)}
+.ph-app .mk line{stroke:var(--ink);stroke-width:1.6}
+.ph-app .t{font-family:var(--mono);font-size:8px;letter-spacing:.18em}
+.ph-body{flex:1;padding:11px 14px 12px;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.ph-h{font-family:var(--serif);font-size:16.5px;font-weight:500;line-height:1.2}
+.ph-sub{font-size:9.5px;color:var(--ink-55);margin-top:3px}
+.ph-lab{font-family:var(--mono);font-size:7.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-38);margin:11px 0 5px}
+.ph-btn{margin-top:auto;background:var(--verdigris);color:var(--screen);font-size:10.5px;font-weight:600;text-align:center;padding:10px;border-radius:11px}
+.ph-btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--hair)}
+.ph-btn.push{margin-top:8px}
+.ph-cap{font-family:var(--mono);font-size:9.5px;letter-spacing:.18em;color:var(--ink-55);text-align:center;margin-top:12px;text-transform:uppercase}
+.an{display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;border-radius:50%;background:var(--verdigris);color:var(--screen);font-family:var(--mono);font-size:7.5px;font-style:normal;vertical-align:1px;margin-left:5px}
+.an.b{background:var(--brass)}
+.chiprow{display:flex;gap:5px;flex-wrap:wrap}
+.chip{font-size:8.5px;font-weight:600;border:1px solid var(--hair);border-radius:99px;padding:4px 9px;color:var(--ink-55)}
+.chip.on{border-color:var(--verdigris);background:var(--verdigris-wash);color:var(--verdigris-deep)}
+.row{display:flex;align-items:flex-start;gap:8px;padding:7.5px 0;border-top:1px solid var(--hair-soft)}
+.row:first-of-type{border-top:0}
+.row .rt{flex:1;min-width:0}
+.row .rt b{display:block;font-size:9.8px;font-weight:600;line-height:1.3}
+.row .rt span{display:block;font-size:8.3px;color:var(--ink-55);margin-top:1.5px;line-height:1.35}
+.row .st{font-family:var(--mono);font-size:7px;letter-spacing:.08em;white-space:nowrap;padding-top:2px}
+.st.done{color:var(--verdigris)} .st.now{color:var(--brass)} .st.wait{color:var(--ink-38)} .st.bad{color:var(--rust)}
+.dot{width:13px;height:13px;border-radius:50%;flex:0 0 auto;margin-top:1px;border:1.4px solid var(--hair);position:relative}
+.dot.done{border-color:var(--verdigris);background:var(--verdigris)}
+.dot.done::after{content:"";position:absolute;left:3.2px;top:5.6px;width:5.5px;height:3px;border-left:1.4px solid var(--screen);border-bottom:1.4px solid var(--screen);transform:rotate(-45deg) translateY(-1px)}
+.dot.now{border-color:var(--brass)}
+.dot.now::after{content:"";position:absolute;inset:2.6px;border-radius:50%;background:var(--brass)}
+.prog{height:2px;background:var(--hair-soft);border-radius:2px;margin-top:6px}
+.prog i{display:block;height:100%;background:var(--verdigris);border-radius:2px;font-style:normal}
+.assign{display:flex;align-items:center;gap:8px;border:1px solid var(--hair);border-radius:11px;padding:8px 10px}
+.assign .av{width:22px;height:22px;border-radius:50%;background:var(--well);font-family:var(--mono);font-size:8px;display:flex;align-items:center;justify-content:center;color:var(--ink-55)}
+.assign b{font-size:9.5px;display:block}
+.assign span{font-size:8px;color:var(--ink-55);display:block}
+.field{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid var(--hair);padding:6.5px 1px;gap:8px}
+.field .fl2{font-family:var(--mono);font-size:8px;letter-spacing:.1em;color:var(--ink-55);white-space:nowrap}
+.field .fv{font-size:11px;font-weight:600;text-align:right}
+.field .fv.empty{color:var(--ink-38);font-weight:400}
+.suggest{display:inline-flex;align-items:center;gap:5px;margin-top:8px;background:var(--brass-wash);border:1px solid var(--brass);border-radius:8px;padding:5px 8px;font-size:8.2px;font-weight:600}
+.suggest i{font-family:var(--mono);font-style:normal;font-size:7px;letter-spacing:.1em;color:var(--brass)}
+.warn{display:block;margin-top:7px;background:var(--rust-wash);border-left:2px solid var(--rust);border-radius:0 6px 6px 0;padding:5px 8px;font-size:8.2px;color:var(--ink-70)}
+.photo-well{border:1px dashed var(--hair);border-radius:10px;padding:9px;text-align:center;font-size:8.5px;color:var(--ink-55);margin-top:9px}
+.cam{background:var(--ink);border-radius:12px;position:relative;flex:1;min-height:200px;display:flex;flex-direction:column;justify-content:space-between;padding:10px;overflow:hidden}
+.cam .rec{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:8px;letter-spacing:.1em;color:var(--paper)}
+.cam .rec i{width:7px;height:7px;border-radius:50%;background:var(--rust);font-style:normal;animation:blink 1.4s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+.cam .chapters{display:flex;gap:4px}
+.cam .chapters i{height:3px;flex:1;background:rgba(244,239,228,.25);border-radius:2px;font-style:normal}
+.cam .chapters i.done{background:var(--verdigris)} .cam .chapters i.now{background:var(--brass)}
+.prompt{background:var(--screen);border-radius:9px;padding:8px 9px;margin-top:8px}
+.prompt .pk{font-family:var(--mono);font-size:6.8px;letter-spacing:.14em;color:var(--brass);margin-bottom:3px}
+.prompt b{font-size:9.3px;line-height:1.35;display:block}
+.prompt span{font-size:8px;color:var(--ink-55);display:block;margin-top:2px}
+.dimtable{font-family:var(--mono);font-size:9px;line-height:1.9;border:1px solid var(--hair-soft);border-radius:9px;padding:7px 10px;margin-top:5px}
+.dimtable em{font-style:normal;color:var(--ink-38);letter-spacing:.05em}
+.dimtable .sub{display:block;font-size:6.8px;color:var(--ink-38);line-height:1.4;margin:-2px 0 3px}
+.dimtable .old{color:var(--ink-38);text-decoration:line-through;text-decoration-color:var(--hair)}
+.appr{display:flex;gap:6px;margin-top:7px}
+.a{flex:1;text-align:center;font-size:8.6px;font-weight:700;border-radius:8px;padding:6px 0}
+.a.ok{background:var(--verdigris);color:var(--screen)}
+.a.redo{border:1px solid var(--rust);color:var(--rust)}
+.note-pin{background:var(--rust-wash);border-left:2px solid var(--rust);font-size:8.2px;color:var(--ink-70);padding:5px 8px;margin-top:6px;border-radius:0 6px 6px 0}
+.thumbs{display:flex;gap:4px;margin-top:6px}
+.thumbs i{flex:1;aspect-ratio:1;background:var(--well);border-radius:6px;position:relative;font-style:normal}
+.thumbs i::after{content:"";position:absolute;inset:28% 30%;border:1px solid var(--ink-38);border-radius:2px}
+.thumbs i.big{flex:2.2;aspect-ratio:auto;min-height:64px}
+.binder-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-top:1px solid var(--hair-soft);gap:6px}
+.binder-row b{font-size:11px;font-weight:600;display:block}
+.binder-row span{font-family:var(--mono);font-size:7.4px;letter-spacing:.04em;color:var(--ink-55);display:block;margin-top:2px}
+.binder-row .go{font-family:var(--serif);color:var(--ink-38);font-size:13px}
+.need{font-family:var(--mono);font-size:7px;letter-spacing:.08em;color:var(--brass);border:1px solid var(--brass);border-radius:99px;padding:2.5px 7px;white-space:nowrap}
+.mini-time{font-family:var(--mono);font-size:7.6px;letter-spacing:.05em;color:var(--ink-38);margin-top:9px;border-top:1px solid var(--hair-soft);padding-top:7px}
+.mdia{border:1px solid var(--hair-soft);border-radius:10px;background:var(--paper);padding:8px;margin-top:3px}
+.mdia svg{display:block;width:100%;height:auto}
+.mdia .wall{fill:none;stroke:var(--ink);stroke-width:1.4}
+.mdia .win{fill:var(--screen);stroke:var(--ink-55);stroke-width:1}
+.mdia .dim{stroke:var(--verdigris);stroke-width:1}
+.mdia text{font-family:var(--mono);font-size:7.5px;fill:var(--verdigris)}
+
+/* mock parts new to this doc */
+.tabbar{display:flex;border-top:1px solid var(--hair-soft)}
+.tab{flex:1;text-align:center;font-family:var(--mono);font-size:6.8px;letter-spacing:.12em;color:var(--ink-38);padding:8px 0 9px}
+.tab.on{color:var(--verdigris);box-shadow:inset 0 2px 0 var(--verdigris)}
+.act{font-size:8.4px;color:var(--ink-55);padding:5px 0;border-top:1px solid var(--hair-soft)}
+.act:first-of-type{border-top:0}
+.act b{color:var(--ink);font-weight:600}
+.bcard{border:1px solid var(--hair);border-radius:12px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.bcard b{font-size:10.5px;display:block}
+.bcard span{font-family:var(--mono);font-size:7.2px;color:var(--ink-55);display:block;margin-top:2px}
+.sms{background:var(--well);border-radius:13px 13px 13px 4px;padding:8px 10px;font-size:8.8px;line-height:1.45;max-width:94%}
+.sms .lnk{color:var(--verdigris);text-decoration:underline}
+.sms-time{font-family:var(--mono);font-size:6.5px;color:var(--ink-38);margin:3px 0 8px 2px}
+.land{border:1px solid var(--hair);border-radius:14px;padding:12px;background:var(--screen)}
+.land .lk{font-family:var(--mono);font-size:6.8px;letter-spacing:.16em;color:var(--verdigris);margin-bottom:5px}
+.land b{font-size:11px;display:block}
+.land p{font-size:8.8px;color:var(--ink-70);margin-top:3px;line-height:1.45}
+.fine{font-size:7.4px;color:var(--ink-38);margin-top:6px;line-height:1.4}
+.kb{margin-top:8px;background:var(--well);border-radius:8px;padding:6px;display:grid;gap:3px}
+.kb i{display:block;height:13px;border-radius:3px;background:var(--screen);font-style:normal}
+.kb i:nth-child(2){margin:0 9%}
+.kb i:nth-child(3){margin:0 24%}
+.notefield{border:1px solid var(--verdigris);border-radius:9px;padding:7px 9px;font-size:8.8px;line-height:1.45;margin-top:6px}
+.caret{display:inline-block;width:1px;height:9px;background:var(--verdigris);vertical-align:-1px;animation:blink 1.1s infinite}
+.vid{background:var(--ink);border-radius:12px;height:112px;position:relative;display:flex;align-items:center;justify-content:center}
+.vid .play{width:26px;height:26px;border-radius:50%;border:1.4px solid var(--paper);color:var(--paper);display:flex;align-items:center;justify-content:center;font-size:9px}
+.scrub{height:3px;background:var(--hair-soft);border-radius:2px;margin:9px 2px 0;position:relative}
+.scrub b{position:absolute;left:0;top:0;height:100%;width:34%;background:var(--verdigris);border-radius:2px}
+.scrub i{position:absolute;top:-2.5px;width:1.5px;height:8px;background:var(--brass);font-style:normal}
+.tr-line{font-size:8.3px;color:var(--ink-70);padding:4.5px 0;border-top:1px solid var(--hair-soft);line-height:1.4}
+.tr-line .tt{font-family:var(--mono);font-size:6.8px;color:var(--verdigris);margin-right:5px}
+.tr-line mark{background:var(--brass-wash);color:var(--ink);padding:0 2px}
+.srch{display:flex;gap:6px;align-items:center;border:1px solid var(--hair);border-radius:10px;padding:7px 9px;font-size:9.5px}
+.srch span{color:var(--ink-38)}
+.kchip{font-family:var(--mono);font-size:6.5px;letter-spacing:.1em;border:1px solid var(--hair);border-radius:4px;padding:1.5px 4px;color:var(--ink-55);white-space:nowrap}
+.mgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:2px}
+.mgrid i{aspect-ratio:1;background:var(--well);border-radius:6px;position:relative;font-style:normal}
+.mgrid i::after{content:attr(data-k);position:absolute;right:3px;bottom:2px;font-family:var(--mono);font-size:6px;color:var(--ink-38)}
+.ghost{position:absolute;inset:15% 11% 32%;border:1.4px dashed rgba(244,239,228,.8);border-radius:6px}
+.refthumb{position:absolute;top:8px;right:8px;width:46px;height:34px;background:var(--well);border-radius:5px;border:1px solid var(--paper);font-family:var(--mono);font-size:5.4px;color:var(--ink-55);display:flex;align-items:flex-end;justify-content:center;padding-bottom:2px;letter-spacing:.06em}
+.shutter{display:flex;justify-content:center;padding-bottom:2px}
+.shutter i{width:29px;height:29px;border-radius:50%;border:2px solid var(--paper);font-style:normal}
+.pane{border-radius:10px;overflow:hidden;position:relative}
+.pane.sample{background:var(--well);height:86px;display:flex;flex-direction:column;justify-content:space-between;padding:7px 9px}
+.pane.live{background:var(--ink);height:96px;display:flex;flex-direction:column;justify-content:flex-end;padding:7px 9px;margin-top:6px}
+.pane .pl{font-family:var(--mono);font-size:6.6px;letter-spacing:.14em}
+.pane.sample .pl{color:var(--ink-55)} .pane.live .pl{color:var(--paper)}
+.pane .pn{font-size:9.5px;font-weight:600}
+.pane.live .pn{color:var(--paper)}
+.bigok{width:52px;height:52px;border-radius:50%;background:var(--verdigris);color:var(--screen);font-size:20px;display:flex;align-items:center;justify-content:center;margin:8px auto 10px}
+.pill{font-size:8.2px;color:var(--ink-70);background:var(--brass-wash);border:1px solid var(--brass);border-radius:8px;padding:6px 8px;margin-top:8px;line-height:1.4}
+.upd{font-family:var(--mono);font-size:6.4px;color:var(--brass);border:1px solid var(--brass);border-radius:99px;padding:1.5px 5px;white-space:nowrap}
+.markup{position:relative;background:var(--well);border-radius:10px;height:118px;margin-top:3px;overflow:hidden}
+.markup svg{position:absolute;inset:0;width:100%;height:100%}
+.markup .arr{stroke:var(--verdigris);stroke-width:1.6;fill:none}
+.markup .arrh{fill:var(--verdigris)}
+.mlab{position:absolute;font-family:var(--mono);font-size:7px;background:var(--screen);border:1px solid var(--verdigris);color:var(--verdigris-deep);border-radius:5px;padding:1.5px 5px}
+.mtools{display:flex;gap:5px;margin-top:6px}
+.center{text-align:center}
+.soft{font-size:8.6px;color:var(--ink-70);line-height:1.45}
+
+/* ---------- footer ---------- */
+.doc-foot{margin-top:80px;border-top:2px solid var(--ink);padding-top:22px;display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.doc-foot p{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:var(--ink-55);text-transform:uppercase}
+
+@media (max-width:920px){
+  .shot-grid{grid-template-columns:1fr}
+  .shot-grid > div:first-child{display:flex;justify-content:center}
+  .fref2{margin-left:0}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="doc-head">
+  <div class="id">
+    <svg class="mark" width="34" height="22" viewBox="0 0 34 22" aria-hidden="true"><line x1="0" y1="3" x2="34" y2="3"/><line x1="0" y1="11" x2="25" y2="11"/><line x1="0" y1="19" x2="16" y2="19"/></svg>
+    <span class="wordmark">PATINA FIELD · SITE PORTAL</span>
+  </div>
+  <h1>Screens &amp; flows — the site portal, <em>drawn out.</em></h1>
+  <p class="doc-lede">The complete screen system for the T-03 expansion: twenty screens across both sides of the loop, annotated to spec, with the four flows that connect them. Pairs with <b>Field-Site-Portal-PRD-v1</b> — annotation numbers reference the badges inside each mock; FR/O references point into the PRD.</p>
+  <div class="doc-meta">
+    <span>Status — <b>Draft v1</b></span>
+    <span>Date — <b>07·17·26</b></span>
+    <span>Screens — <b>20</b></span>
+    <span>Flows — <b>4</b></span>
+    <span>Sample data — <b>Killkenny West</b></span>
+  </div>
+</header>
+
+<!-- ================= FOUNDATIONS ================= -->
+<section class="sec">
+  <div class="eyebrow">00 <span class="dim">— FOUNDATIONS</span></div>
+  <h2>Same grain as the rest of Field.</h2>
+  <div class="sws">
+    <div class="sw"><i style="background:#211E17"></i><span>INK<br>#211E17</span></div>
+    <div class="sw"><i style="background:#F4EFE4"></i><span>PAPER<br>#F4EFE4</span></div>
+    <div class="sw"><i style="background:#FBF8F0"></i><span>SCREEN<br>#FBF8F0</span></div>
+    <div class="sw"><i style="background:#446B5C"></i><span>VERDIGRIS<br>#446B5C · primary</span></div>
+    <div class="sw"><i style="background:#9A742A"></i><span>BRASS<br>#9A742A · propose</span></div>
+    <div class="sw"><i style="background:#A44E24"></i><span>RUST<br>#A44E24 · return</span></div>
+  </div>
+  <div class="typerow">
+    <div><span class="tl">Display</span><span class="spec-serif">Fraunces — headings, room names, the designer's surfaces</span></div>
+    <div><span class="tl">Body / UI</span><span class="spec-sans">Hanken Grotesk — labels, list rows, everything a thumb touches</span></div>
+    <div><span class="tl">Data</span><span class="spec-mono">IBM PLEX MONO — dims, states, provenance, folios</span></div>
+  </div>
+  <p class="prins"><b>The rules that shaped every screen:</b> typography-first, hairline Strata rules over boxes, no shadows on content. One item in hand — the checklist holds the rest. The Binder grows; nothing converts, nothing silently overwrites. Verdigris acts, brass proposes, rust returns. Designer-Taught Intelligence proposes and a human confirms. And a GC's patience is a design constraint: names first, scope stated plainly, no account as toll.</p>
+</section>
+
+<!-- ================= FLOWS ================= -->
+<section class="sec" id="flows">
+  <div class="eyebrow">01 <span class="dim">— FLOWS</span></div>
+  <h2>Four flows carry <em>the whole loop.</em></h2>
+
+  <div class="fl">
+    <div class="fl-k">F-A · COMPOSE &amp; SEND</div>
+    <div class="fl-name">The designer asks</div>
+    <div class="fl-track">
+      <div class="fnode"><span class="fr">S-01</span><span class="fn">Site hub</span></div><span class="farrow">⟶</span>
+      <div class="fnode"><span class="fr">S-02</span><span class="fn">Composer</span></div><span class="farrow">⟶</span>
+      <div class="fnode"><span class="fr">S-03 · P2</span><span class="fn">Item editor</span></div><span class="farrow">⟶</span>
+      <div class="fnode"><span class="fr">S-04</span><span class="fn">Assign &amp; send</span></div><span class="farrow">⟶</span>
+      <div class="fnode ext"><span class="fr">SMS</span><span class="fn">Link out</span></div><span class="farrow">⟶</span>
+      <div class="fnode"><span class="fr">S-05</span><span class="fn">Tracker</span></div>
+    </div>
+  </div>
+
+  <div class="fl">
+    <div class="fl-k">F-B · GUEST DELIVERY</div>
+    <div class="fl-name">The site answers</div>
+    <div class="fl-track">
+      <div class="fnode ext"><span class="fr">SMS</span><span class="fn">Text arrives</span></div><span class="farrow">⟶</span>
+      <div class="fnode"><span class="fr">S-13</span><span class="fn">Landing</span></div><span class="farrow">⟶</span>
+      <div class="fnode"><span class="fr">S-14</span><span class="fn">Checklist</span></div><span class="farrow">⟶</span>
+      <div class="fnode"><span class="fr">S-15–18</span><span class="fn">Guided capture, per item</span></div><span class="farrow">⟲</span>
+      <span class="fret">BACK TO S-14 UNTIL DONE</span><span class="farrow">⟶</span>
+      <div class="fnode"><span class="fr">S-19</span><span class="fn">Delivered</span></div><span class="farrow">⟶</span>
+      <div class="fnode ext"><span class="fr">PUSH</span><span class="fn">Designer notified</span></div>
+    </div>
+  </div>
+
+  <div class="fl">
+    <div class="fl-k">F-C · REVIEW LOOP</div>
+    <div class="fl-name">Approve, or pin a note</div>
+    <div class="fl-track">
+      <div class="fnode ext"><span class="fr">PUSH</span><span class="fn">Delivery lands</span></div><span class="farrow">⟶</span>
+      <div class="fnode"><span class="fr">S-06</span><span class="fn">Review inbox</span></div><span class="farrow">⟶</span>
+      <div class="fnode"><span class="fr">S-07/08/09</span><span class="fn">Item review</span></div><span class="farrow">⟶</span>
+      <div class="fdec"><span class="fr">DECISION</span><span class="fn">Approve · Redo</span></div>
+    </div>
+    <div class="fbranch"><span class="fbl ok">APPROVE ⟶</span>
+      <div class="fnode"><span class="fr">S-10/11</span><span class="fn">Binder entry filed</span></div>
+    </div>
+    <div class="fbranch"><span class="fbl no">REDO ⟶</span>
+      <div class="fnode ext"><span class="fr">SMS</span><span class="fn">Item returned</span></div><span class="farrow">⟶</span>
+      <div class="fnode"><span class="fr">S-20</span><span class="fn">Redo · recapture</span></div><span class="farrow">⟶</span>
+      <span class="fret">↩ RE-DELIVERS TO S-06</span>
+    </div>
+  </div>
+
+  <div class="fl">
+    <div class="fl-k">F-D · THE LOOP CLOSES</div>
+    <div class="fl-name">The Binder asks next</div>
+    <div class="fl-track">
+      <div class="fnode"><span class="fr">S-10</span><span class="fn">Binder · gap sense</span></div><span class="farrow">⟶</span>
+      <div class="fnode"><span class="fr">S-02</span><span class="fn">Composer, prefilled</span></div><span class="farrow">⟶</span>
+      <span class="fret">RUNS F-A AGAIN</span>
+      <span class="farrow" style="margin-left:14px">·</span>
+      <div class="fnode"><span class="fr">S-12 · P3</span><span class="fn">Ask the Binder</span></div>
+      <span class="fret">READS THE SAME TRUTH</span>
+    </div>
+  </div>
+</section>
+
+<!-- ================= INDEX ================= -->
+<section class="sec">
+  <div class="eyebrow">02 <span class="dim">— SCREEN INDEX</span></div>
+  <h2>Twenty screens, <em>two sides.</em></h2>
+  <div class="idx-wrap"><table class="idx">
+    <tr><th>Ref</th><th>Screen</th><th>Side</th><th>Phase</th><th>Flows</th></tr>
+    <tr><td><a href="#s01">S-01</a></td><td>Site tab · project hub</td><td>Designer</td><td>P1</td><td>A · D</td></tr>
+    <tr><td><a href="#s02">S-02</a></td><td>Request composer</td><td>Designer</td><td>P1</td><td>A</td></tr>
+    <tr><td><a href="#s03">S-03</a></td><td>Item editor · markup</td><td>Designer</td><td>P2</td><td>A</td></tr>
+    <tr><td><a href="#s04">S-04</a></td><td>Assign &amp; send</td><td>Designer</td><td>P1</td><td>A</td></tr>
+    <tr><td><a href="#s05">S-05</a></td><td>Request tracker</td><td>Designer</td><td>P1</td><td>A</td></tr>
+    <tr><td><a href="#s06">S-06</a></td><td>Delivery review · inbox</td><td>Designer</td><td>P1</td><td>C</td></tr>
+    <tr><td><a href="#s07">S-07</a></td><td>Review · measure item</td><td>Designer</td><td>P1</td><td>C</td></tr>
+    <tr><td><a href="#s08">S-08</a></td><td>Review · photos + redo note</td><td>Designer</td><td>P1</td><td>C</td></tr>
+    <tr><td><a href="#s09">S-09</a></td><td>Walkthrough player</td><td>Designer</td><td>P2/P3</td><td>C</td></tr>
+    <tr><td><a href="#s10">S-10</a></td><td>Site Binder · rooms</td><td>Designer</td><td>P1</td><td>C · D</td></tr>
+    <tr><td><a href="#s11">S-11</a></td><td>Binder · room detail</td><td>Designer</td><td>P1</td><td>C · D</td></tr>
+    <tr><td><a href="#s12">S-12</a></td><td>Ask the Binder</td><td>Designer</td><td>P3</td><td>D</td></tr>
+    <tr><td><a href="#s13">S-13</a></td><td>Text link · landing</td><td>Pro</td><td>P1</td><td>B</td></tr>
+    <tr><td><a href="#s14">S-14</a></td><td>Checklist</td><td>Pro</td><td>P1</td><td>B</td></tr>
+    <tr><td><a href="#s15">S-15</a></td><td>Guided measure</td><td>Pro</td><td>P1</td><td>B</td></tr>
+    <tr><td><a href="#s16">S-16</a></td><td>Guided photos · ghost frame</td><td>Pro</td><td>P1</td><td>B</td></tr>
+    <tr><td><a href="#s17">S-17</a></td><td>Walkthrough capture</td><td>Pro</td><td>P2</td><td>B</td></tr>
+    <tr><td><a href="#s18">S-18</a></td><td>Verify · side-by-side</td><td>Pro</td><td>P2</td><td>B</td></tr>
+    <tr><td><a href="#s19">S-19</a></td><td>Delivered · done</td><td>Pro</td><td>P1</td><td>B</td></tr>
+    <tr><td><a href="#s20">S-20</a></td><td>Returned item · redo</td><td>Pro</td><td>P1</td><td>C</td></tr>
+  </table></div>
+</section>
+
+<!-- ================= DESIGNER SCREENS ================= -->
+<section class="sec group">
+  <div class="gk">SCREENS · A</div>
+  <h2>The designer's side.</h2>
+
+  <!-- S-01 -->
+  <article class="shot" id="s01">
+    <div class="shot-head"><span class="sref">S-01</span><h3>Site tab · project hub</h3><span class="ptag p1">P1</span><span class="fref2">FLOWS A · D</span></div>
+    <div class="shot-grid">
+      <div><div class="ph"><div class="ph-scr">
+        <div class="ph-status"><span>9:02</span><span>PATINA</span></div>
+        <div class="ph-app"><svg class="mk" width="14" height="10" viewBox="0 0 14 10"><line x1="0" y1="1.5" x2="14" y2="1.5"/><line x1="0" y1="5" x2="10" y2="5"/><line x1="0" y1="8.5" x2="6" y2="8.5"/></svg><span class="t">FIELD</span><span class="chip on" style="margin-left:auto">Killkenny West</span></div>
+        <div class="ph-body">
+          <div class="ph-h">Site</div>
+          <div class="ph-sub">Lot 121 · Kippley build</div>
+          <div class="ph-lab">Open requests · 2 <i class="an">2</i></div>
+          <div class="row"><div class="rt"><b>Pre-drywall pass · 7 items</b><span>Dan K. · 5 delivered · due Fri</span></div><span class="st now">IN PROGRESS</span></div>
+          <div class="row"><div class="rt"><b>Vanity verify · 1 item</b><span>sent 9:02a · unopened</span></div><span class="st wait">SENT</span></div>
+          <div class="ph-lab">Ground truth <i class="an">3</i></div>
+          <div class="bcard"><div><b>Site Binder</b><span>4 rooms · 26 dims · 64 photos · 3 clips</span></div><span class="go" style="font-family:var(--serif);color:var(--ink-38)">›</span></div>
+          <div class="ph-lab">Activity <i class="an">4</i></div>
+          <div class="act"><b>2:41p</b> — Dan delivered Kitchen dims</div>
+          <div class="act"><b>9:02a</b> — You sent Vanity verify</div>
+          <div class="ph-btn push">New site request <i class="an b">5</i></div>
+        </div>
+        <div class="tabbar"><span class="tab">CAPTURE</span><span class="tab">LIBRARY</span><span class="tab on">SITE <i class="an">1</i></span></div>
+      </div></div><div class="ph-cap">Designer · project hub</div></div>
+      <ol class="annots">
+        <li><b>Site joins Capture and Library</b> as Field's third tab — project-scoped, like the Binder it fronts. No new app to learn.</li>
+        <li><b>Request rows are live.</b> Delivered counts tick in as the pro works. States: SENT · IN PROGRESS · DELIVERED · CLOSED.</li>
+        <li><b>The Binder card is one tap to ground truth;</b> its counts double as a coverage read for the whole site.</li>
+        <li><b>Activity is the thread of record</b> — the timeline that used to live across three text conversations.</li>
+        <li><b>New request starts F-A</b> with this project preselected; rooms are already loaded.</li>
+      </ol>
+    </div>
+  </article>
+
+  <!-- S-02 -->
+  <article class="shot" id="s02">
+    <div class="shot-head"><span class="sref">S-02</span><h3>Request composer</h3><span class="ptag p1">P1</span><span class="fref2">FLOW A</span></div>
+    <div class="shot-grid">
+      <div><div class="ph"><div class="ph-scr">
+        <div class="ph-status"><span>9:04</span><span>PATINA</span></div>
+        <div class="ph-app"><svg class="mk" width="14" height="10" viewBox="0 0 14 10"><line x1="0" y1="1.5" x2="14" y2="1.5"/><line x1="0" y1="5" x2="10" y2="5"/><line x1="0" y1="8.5" x2="6" y2="8.5"/></svg><span class="t">FIELD</span><span class="chip on" style="margin-left:auto">Killkenny West</span></div>
+        <div class="ph-body">
+          <div class="ph-h">New site request</div>
+          <div class="ph-sub">Lot 121 · pre-drywall</div>
+          <div class="ph-lab">Kits <i class="an">1</i></div>
+          <div class="chiprow"><span class="chip on">Measure Set</span><span class="chip on">Detail Photos</span><span class="chip">Walkthrough</span></div>
+          <div class="ph-lab">Items · 3 <i class="an">2</i></div>
+          <div class="row"><div class="rt"><b>Kitchen — west wall, counter run</b><span>3 dims · sketch attached</span></div><span class="st done">K-01</span></div>
+          <div class="row"><div class="rt"><b>Primary bath — vanity alcove</b><span>4 angles · tape in frame</span></div><span class="st done">K-02</span></div>
+          <div class="row"><div class="rt"><b>Panel box — door open</b><span>1 closeup · legible labels</span></div><span class="st done">K-02</span></div>
+          <div class="ph-lab">Deliver by <i class="an">3</i></div>
+          <div class="field"><span class="fl2">DUE</span><span class="fv">Fri Jul 24 · before drywall</span></div>
+          <div class="ph-lab">Send to <i class="an">4</i></div>
+          <div class="assign"><div class="av">DK</div><div><b>Dan K.</b><span>Kippley Custom Carpentry · by text link</span></div></div>
+          <div class="ph-btn">Send request <i class="an b">5</i></div>
+        </div>
+      </div></div><div class="ph-cap">Designer · composer</div></div>
+      <ol class="annots">
+        <li><b>Kit chips prefill item templates.</b> Mixing kits in one request is the normal case, not the edge.</li>
+        <li><b>Items reorder by drag;</b> tapping one opens the item editor (S-03). Each row previews its ask so the request scans at a glance.</li>
+        <li><b>Due accepts dates or milestone language</b> — "before drywall" is a first-class value, because that's how sites actually schedule.</li>
+        <li><b>Assignee from contacts or typed fresh.</b> One pro per request in v1 (O1); the phone number is the identity.</li>
+        <li><b>Send stays disabled</b> until ≥1 item and an assignee exist. Sending freezes item definitions — later edits version to v2, never mutate mid-capture (FR-1).</li>
+      </ol>
+    </div>
+  </article>
+
+  <!-- S-03 -->
+  <article class="shot" id="s03">
+    <div class="shot-head"><span class="sref">S-03</span><h3>Item editor · markup</h3><span class="ptag p2">P2</span><span class="fref2">FLOW A</span></div>
+    <div class="shot-grid">
+      <div><div class="ph"><div class="ph-scr">
+        <div class="ph-status"><span>9:06</span><span>PATINA</span></div>
+        <div class="ph-app"><svg class="mk" width="14" height="10" viewBox="0 0 14 10"><line x1="0" y1="1.5" x2="14" y2="1.5"/><line x1="0" y1="5" x2="10" y2="5"/><line x1="0" y1="8.5" x2="6" y2="8.5"/></svg><span class="t">FIELD</span><span class="chip" style="margin-left:auto">item 1 of 3</span></div>
+        <div class="ph-body">
+          <div class="ph-h">Kitchen · west wall</div>
+          <div class="ph-sub">K-01 Measure Set</div>
+          <div class="markup"><svg viewBox="0 0 210 118" aria-hidden="true">
+            <line class="arr" x1="52" y1="96" x2="52" y2="40"/>
+            <polygon class="arrh" points="52,32 48,42 56,42"/>
+            <polygon class="arrh" points="52,104 48,94 56,94"/>
+          </svg><span class="mlab" style="left:60px;top:56px">A · floor → sill <i class="an">1</i></span></div>
+          <div class="mtools"><span class="chip on">Arrow</span><span class="chip">Box</span><span class="chip">Label</span><i class="an">2</i></div>
+          <div class="ph-lab">Dims <i class="an">3</i></div>
+          <div class="field"><span class="fl2">A</span><span class="fv">floor → sill</span></div>
+          <div class="field"><span class="fl2">B</span><span class="fv">sill → head</span></div>
+          <div class="field"><span class="fl2">C</span><span class="fv">run length</span></div>
+          <div class="ph-lab">Room <i class="an">4</i></div>
+          <div class="chiprow"><span class="chip on">Kitchen</span><span class="chip">Primary bath</span><span class="chip">＋</span></div>
+          <div class="ph-lab">Guidance <i class="an">5</i></div>
+          <div class="notefield">Inside face to inside face — ignore the trim.</div>
+          <div class="ph-btn">Save item</div>
+        </div>
+      </div></div><div class="ph-cap">Designer · item editor</div></div>
+      <ol class="annots">
+        <li><b>Markup draws on a photo or plan page</b> — and this exact graphic renders behind the pro's capture fields on S-15. One artifact, both ends of the loop.</li>
+        <li><b>Three tools only: arrow, box, label.</b> Restraint keeps site markup legible on a cracked screen in sunlight.</li>
+        <li><b>Labels auto-letter A, B, C</b> and bind to dim fields; a rename ripples through to the pro's keypad.</li>
+        <li><b>Room binding pre-files the approval</b> — the Binder knows where this lands before it's ever captured (FR-6).</li>
+        <li><b>Guidance is the designer's voice, verbatim.</b> The margin's rule applies here too: her hand, never a system paraphrase.</li>
+      </ol>
+    </div>
+  </article>
+
+  <!-- S-04 -->
+  <article class="shot" id="s04">
+    <div class="shot-head"><span class="sref">S-04</span><h3>Assign &amp; send</h3><span class="ptag p1">P1</span><span class="fref2">FLOW A</span></div>
+    <div class="shot-grid">
+      <div><div class="ph"><div class="ph-scr">
+        <div class="ph-status"><span>9:08</span><span>PATINA</span></div>
+        <div class="ph-app"><svg class="mk" width="14" height="10" viewBox="0 0 14 10"><line x1="0" y1="1.5" x2="14" y2="1.5"/><line x1="0" y1="5" x2="10" y2="5"/><line x1="0" y1="8.5" x2="6" y2="8.5"/></svg><span class="t">FIELD</span><span class="chip on" style="margin-left:auto">Killkenny West</span></div>
+        <div class="ph-body">
+          <div class="ph-h">Send request</div>
+          <div class="ph-sub">7 items · due Fri Jul 24</div>
+          <div class="ph-lab">To <i class="an">1</i></div>
+          <div class="assign"><div class="av">DK</div><div><b>Dan K.</b><span>(608) 555-0142 · Kippley Custom Carpentry</span></div></div>
+          <div class="ph-lab">Note to Dan</div>
+          <div class="notefield" style="border-color:var(--hair)">Pre-drywall pass — the panel box closeup matters most.</div>
+          <div class="ph-lab">What Dan receives <i class="an">2</i></div>
+          <div class="sms">Leah at Middlewest Studio needs 7 site items for Killkenny West — due Fri. Open your checklist: <span class="lnk">patina.link/r/8kq2</span></div>
+          <p class="fine">Link is scoped to this request · no account needed <i class="an">3</i></p>
+          <div class="ph-btn">Send request <i class="an b">4</i></div>
+        </div>
+      </div></div><div class="ph-cap">Designer · assign &amp; send</div></div>
+      <ol class="annots">
+        <li><b>Contact from the phone book or typed fresh.</b> The pro's number is the identity until they ever choose an account.</li>
+        <li><b>The preview is the exact SMS sent</b> — no surprise framing. The ask rides the trust that already exists between Leah and Dan.</li>
+        <li><b>Scope stated plainly to both parties.</b> The pro sees this request only — said before entry, enforced by the token (FR-2).</li>
+        <li><b>Send mints the token, dispatches the SMS,</b> and flips to the tracker (S-05). A later resend voids this link.</li>
+      </ol>
+    </div>
+  </article>
+
+  <!-- S-05 -->
+  <article class="shot" id="s05">
+    <div class="shot-head"><span class="sref">S-05</span><h3>Request tracker</h3><span class="ptag p1">P1</span><span class="fref2">FLOW A</span></div>
+    <div class="shot-grid">
+      <div><div class="ph"><div class="ph-scr">
+        <div class="ph-status"><span>2:43</span><span>PATINA</span></div>
+        <div class="ph-app"><svg class="mk" width="14" height="10" viewBox="0 0 14 10"><line x1="0" y1="1.5" x2="14" y2="1.5"/><line x1="0" y1="5" x2="10" y2="5"/><line x1="0" y1="8.5" x2="6" y2="8.5"/></svg><span class="t">FIELD</span><span class="chip on" style="margin-left:auto">Killkenny West</span></div>
+        <div class="ph-body">
+          <div class="ph-h">Pre-drywall pass</div>
+          <div class="ph-sub">Dan K. · sent Tue 9:08a · opened 2:31p · active 12m ago <i class="an">1</i></div>
+          <div class="ph-lab">5 of 7 delivered</div>
+          <div class="prog"><i style="width:71%"></i></div>
+          <div class="ph-lab">Items</div>
+          <div class="row"><span class="dot done"></span><div class="rt"><b>Measure · Kitchen west wall</b><span>delivered 2:41p</span></div></div>
+          <div class="row"><span class="dot done"></span><div class="rt"><b>Photos · Stair landing</b><span>delivered 2:12p</span></div></div>
+          <div class="row"><span class="dot done"></span><div class="rt"><b>Photos · Panel box</b><span>delivered 2:14p</span></div></div>
+          <div class="row"><span class="dot now"></span><div class="rt"><b>Photos · Vanity alcove <span class="upd">UPDATED</span> <i class="an">4</i></b><span>2 of 4 · uploading <i class="an">2</i></span></div></div>
+          <div class="row"><span class="dot"></span><div class="rt"><b>Walkthrough · Second floor</b><span>not started</span></div></div>
+          <div class="mini-time">Items lock at send — edits create v2</div>
+          <div class="ph-btn ghost">Nudge Dan <i class="an">3</i></div>
+        </div>
+      </div></div><div class="ph-cap">Designer · tracker</div></div>
+      <ol class="annots">
+        <li><b>Presence is opened / last-active only</b> — never location. Trust runs both directions across this link.</li>
+        <li><b>Upload states are honest.</b> Captured is not delivered; the tracker claims only what the server has received (FR-10).</li>
+        <li><b>Nudge sends one SMS, capped 1/day</b> per request. The due−24h reminder fires automatically (FR-9) so nobody has to be the nag.</li>
+        <li><b>Post-send edits badge as UPDATED</b> on the pro's side and version the item — never a silent change under someone mid-capture (FR-1).</li>
+      </ol>
+    </div>
+  </article>
+
+  <!-- S-06 -->
+  <article class="shot" id="s06">
+    <div class="shot-head"><span class="sref">S-06</span><h3>Delivery review · inbox</h3><span class="ptag p1">P1</span><span class="fref2">FLOW C</span></div>
+    <div class="shot-grid">
+      <div><div class="ph"><div class="ph-scr">
+        <div class="ph-status"><span>4:14</span><span>PATINA</span></div>
+        <div class="ph-app"><svg class="mk" width="14" height="10" viewBox="0 0 14 10"><line x1="0" y1="1.5" x2="14" y2="1.5"/><line x1="0" y1="5" x2="10" y2="5"/><line x1="0" y1="8.5" x2="6" y2="8.5"/></svg><span class="t">FIELD</span><span class="chip on" style="margin-left:auto">Killkenny West</span></div>
+        <div class="ph-body">
+          <div class="ph-h">Review</div>
+          <div class="ph-sub">3 items waiting</div>
+          <div class="ph-lab">Delivery · Dan K. · Tue 4:12p <i class="an">1</i></div>
+          <div class="row"><div class="rt"><b>Measure · Kitchen west wall</b><span>filed to Kitchen <i class="an">4</i></span></div><span class="st done">APPROVED</span></div>
+          <div class="row"><div class="rt"><b>Photos · Vanity alcove</b><span>4 angles</span></div><span class="st now">REVIEW <i class="an">2</i></span></div>
+          <div class="row"><div class="rt"><b>Photos · Panel box</b><span>1 closeup</span></div><span class="st now">REVIEW</span></div>
+          <div class="row"><div class="rt"><b>Walkthrough · Second floor</b><span>6:12 · uploading 82% <i class="an">3</i></span></div><span class="st wait">UPLOADING</span></div>
+          <div class="mini-time">Approvals file instantly · redos return with your note</div>
+          <div class="ph-btn">Review next</div>
+        </div>
+      </div></div><div class="ph-cap">Designer · review inbox</div></div>
+      <ol class="annots">
+        <li><b>Grouped by delivery, itemized inside</b> — never a camera-roll dump. The unit of review is the ask, not the file.</li>
+        <li><b>Item-granular by design.</b> No bulk approve in v1 — approval has to mean something for the Binder to be trusted (FR-5).</li>
+        <li><b>Uploading items queue visibly;</b> review unlocks on server receipt, not on the pro's tap.</li>
+        <li><b>Approved rows say where they filed.</b> Tapping through lands in the room (S-11) — the chain from ask to truth stays visible.</li>
+      </ol>
+    </div>
+  </article>
+
+  <!-- S-07 -->
+  <article class="shot" id="s07">
+    <div class="shot-head"><span class="sref">S-07</span><h3>Review · measure item</h3><span class="ptag p1">P1</span><span class="fref2">FLOW C</span></div>
+    <div class="shot-grid">
+      <div><div class="ph"><div class="ph-scr">
+        <div class="ph-status"><span>4:15</span><span>PATINA</span></div>
+        <div class="ph-app"><svg class="mk" width="14" height="10" viewBox="0 0 14 10"><line x1="0" y1="1.5" x2="14" y2="1.5"/><line x1="0" y1="5" x2="10" y2="5"/><line x1="0" y1="8.5" x2="6" y2="8.5"/></svg><span class="t">FIELD</span><span class="chip on" style="margin-left:auto">Killkenny West</span></div>
+        <div class="ph-body">
+          <div class="ph-h">Measure · Kitchen west wall</div>
+          <div class="ph-sub">Dan K. · Tue 2:41p</div>
+          <div class="ph-lab">Dims <i class="an">1</i></div>
+          <div class="dimtable">
+            <em>A · FLOOR → SILL</em> &nbsp;41 ⅜ in<span class="sub">Dan K. · 2:38p · proof ✓</span>
+            <em>B · SILL → HEAD</em> &nbsp;25 ¾ in<span class="sub">Dan K. · 2:39p · proof ✓</span>
+            <em>C · RUN LENGTH</em> &nbsp;&nbsp;96 ¼ in<span class="sub">Dan K. · 2:41p · tape read, confirmed</span>
+          </div>
+          <span class="warn"><b>Differs from Binder</b> — C was 95 ¾ on May 12. Both will stay in history. <i class="an">3</i></span>
+          <div class="ph-lab">Proof</div>
+          <div class="thumbs"><i></i><i></i><i></i></div>
+          <div class="appr"><div class="a ok">Approve <i class="an b">2</i></div><div class="a redo">Redo…</div></div>
+          <div class="mini-time">Approve files to Kitchen · redo requires a note</div>
+          <div class="ph-btn ghost">Next item</div>
+        </div>
+      </div></div><div class="ph-cap">Designer · measure review</div></div>
+      <ol class="annots">
+        <li><b>Every value carries provenance</b> — capturer, timestamp, proof. The trust chain is visible, not implied (FR-3).</li>
+        <li><b>Approve files to the room instantly;</b> Redo requires a note and reopens only this item. The rest of the delivery stands.</li>
+        <li><span class="mini-p">P3</span><b>Conflict surfacing.</b> A delta against an existing Binder dim appears at review; the designer chooses, and both values persist in history either way.</li>
+      </ol>
+    </div>
+  </article>
+
+  <!-- S-08 -->
+  <article class="shot" id="s08">
+    <div class="shot-head"><span class="sref">S-08</span><h3>Review · photos + redo note</h3><span class="ptag p1">P1</span><span class="fref2">FLOW C</span></div>
+    <div class="shot-grid">
+      <div><div class="ph"><div class="ph-scr">
+        <div class="ph-status"><span>4:17</span><span>PATINA</span></div>
+        <div class="ph-app"><svg class="mk" width="14" height="10" viewBox="0 0 14 10"><line x1="0" y1="1.5" x2="14" y2="1.5"/><line x1="0" y1="5" x2="10" y2="5"/><line x1="0" y1="8.5" x2="6" y2="8.5"/></svg><span class="t">FIELD</span><span class="chip on" style="margin-left:auto">Killkenny West</span></div>
+        <div class="ph-body">
+          <div class="ph-h">Photos · Vanity alcove</div>
+          <div class="ph-sub">4 angles · Dan K. · Tue 4:12p</div>
+          <div class="thumbs"><i class="big"></i><i></i><i></i></div>
+          <div class="ph-lab">Send back — why? <i class="an">2</i></div>
+          <div class="chiprow"><span class="chip on">Glare</span><span class="chip">Wrong angle</span><span class="chip">Closer</span></div>
+          <div class="notefield">Re-shoot in daylight — glare hides the grout line.<span class="caret"></span> <i class="an">1</i></div>
+          <div class="kb" aria-hidden="true"><i></i><i></i><i></i></div>
+          <div class="appr"><div class="a redo" style="flex:2">Send back with note <i class="an">3</i></div><div class="a ok">Approve</div></div>
+        </div>
+      </div></div><div class="ph-cap">Designer · redo composer</div></div>
+      <ol class="annots">
+        <li><b>The note is the designer's voice, verbatim, pinned to the item.</b> It renders word-for-word on the pro's S-20 — her hand, never a system paraphrase.</li>
+        <li><b>Quick reasons prefill the common asks</b> — glare, wrong angle, closer. Tapping composes; it never sends on its own.</li>
+        <li><b>Send-back reopens just this item.</b> Scope of the return is exact, so correction never reads as rejection of the whole delivery.</li>
+      </ol>
+    </div>
+  </article>
+
+  <!-- S-09 -->
+  <article class="shot" id="s09">
+    <div class="shot-head"><span class="sref">S-09</span><h3>Walkthrough player</h3><span class="ptag p2">P2</span><span class="ptag p3">TRANSCRIPT P3</span><span class="fref2">FLOW C</span></div>
+    <div class="shot-grid">
+      <div><div class="ph"><div class="ph-scr">
+        <div class="ph-status"><span>4:20</span><span>PATINA</span></div>
+        <div class="ph-app"><svg class="mk" width="14" height="10" viewBox="0 0 14 10"><line x1="0" y1="1.5" x2="14" y2="1.5"/><line x1="0" y1="5" x2="10" y2="5"/><line x1="0" y1="8.5" x2="6" y2="8.5"/></svg><span class="t">FIELD</span><span class="chip" style="margin-left:auto">6:12</span></div>
+        <div class="ph-body">
+          <div class="ph-h">Second floor</div>
+          <div class="ph-sub">Walkthrough · Dan K. · Tue</div>
+          <div class="vid"><span class="play">▶</span></div>
+          <div class="scrub"><b></b><i style="left:13%"></i><i style="left:33%"></i><i style="left:64%"></i><i style="left:84%"></i><i class="an" style="position:absolute;right:-2px;top:-18px">1</i></div>
+          <div class="ph-lab">Chapters <i class="an">2</i></div>
+          <div class="row"><div class="rt"><b>Entry &amp; hall</b></div><span class="st wait">0:00</span></div>
+          <div class="row"><div class="rt"><b>Primary bath</b></div><span class="st now">2:04</span></div>
+          <div class="row"><div class="rt"><b>Mechanical</b></div><span class="st wait">5:18</span></div>
+          <div class="ph-lab">Transcript · <span style="color:var(--verdigris)">"panel"</span> <i class="an">3</i></div>
+          <div class="tr-line"><span class="tt">5:24</span>…the <mark>panel</mark> box is here behind the door, labels are legible… <i class="an">4</i></div>
+          <div class="ph-btn ghost">Open in room · Mechanical</div>
+        </div>
+      </div></div><div class="ph-cap">Designer · walkthrough player</div></div>
+      <ol class="annots">
+        <li><b>The scrubber wears chapter ticks</b> — the pro's "next room" stamps from S-17, carried straight into playback.</li>
+        <li><b>Chapters are editable;</b> a corrected boundary is a training signal for the splitter (§13 of the PRD).</li>
+        <li><span class="mini-p">P3</span><b>Transcript search.</b> "Where does he show the panel box" becomes a query, not a scrub.</li>
+        <li><b>A tapped line seeks the moment.</b> Clip-share into a maker brief arrives with P4 exports.</li>
+      </ol>
+    </div>
+  </article>
+
+  <!-- S-10 -->
+  <article class="shot" id="s10">
+    <div class="shot-head"><span class="sref">S-10</span><h3>Site Binder · rooms</h3><span class="ptag p1">P1</span><span class="fref2">FLOWS C · D</span></div>
+    <div class="shot-grid">
+      <div><div class="ph"><div class="ph-scr">
+        <div class="ph-status"><span>9:02</span><span>PATINA</span></div>
+        <div class="ph-app"><svg class="mk" width="14" height="10" viewBox="0 0 14 10"><line x1="0" y1="1.5" x2="14" y2="1.5"/><line x1="0" y1="5" x2="10" y2="5"/><line x1="0" y1="8.5" x2="6" y2="8.5"/></svg><span class="t">FIELD</span><span class="chip on" style="margin-left:auto">Killkenny West</span></div>
+        <div class="ph-body">
+          <div class="ph-h">Site Binder</div>
+          <div class="ph-sub">Lot 121 · updated Tue 4:12p</div>
+          <div class="ph-lab">Rooms <i class="an">1</i></div>
+          <div class="binder-row"><div><b>Kitchen</b><span>12 dims · 34 photos · 2 clips</span></div><span class="go">›</span></div>
+          <div class="binder-row"><div><b>Primary bath</b><span>8 dims · 21 photos · 1 clip</span></div><span class="go">›</span></div>
+          <div class="binder-row"><div><b>Mudroom</b><span>2 photos · no dimensions yet</span></div><span class="need">NEEDS MEASURE <i class="an">2</i></span></div>
+          <div class="binder-row"><div><b>Stair &amp; landing</b><span>6 dims · 9 photos</span></div><span class="go">›</span></div>
+          <div class="suggest"><i>GAP SENSE</i> Mudroom has no dims — draft a Measure Set? <i class="an b">3</i></div>
+          <div class="mini-time">Last delivery · Tue 4:12p · Dan K. — full history →</div>
+          <div class="ph-btn ghost">Search the Binder <i class="an">4</i></div>
+        </div>
+      </div></div><div class="ph-cap">Designer · Binder rooms</div></div>
+      <ol class="annots">
+        <li><b>Rooms are the Binder's spine.</b> Coverage counts read as a health check for the whole site at a glance.</li>
+        <li><b>Gaps announce themselves</b> — a room without dims wears it plainly, in brass, not as a guilt trip.</li>
+        <li><span class="mini-p">P3</span><b>Gap sense drafts the missing Measure Set,</b> prefilled. Nothing sends without the designer's confirm — it proposes, she decides.</li>
+        <li><span class="mini-p">P3</span><b>Search spans the whole Binder</b> (S-12). P1 ships rooms and entries; the intelligence layer arrives on ground truth already accrued.</li>
+      </ol>
+    </div>
+  </article>
+
+  <!-- S-11 -->
+  <article class="shot" id="s11">
+    <div class="shot-head"><span class="sref">S-11</span><h3>Binder · room detail</h3><span class="ptag p1">P1</span><span class="fref2">FLOWS C · D</span></div>
+    <div class="shot-grid">
+      <div><div class="ph"><div class="ph-scr">
+        <div class="ph-status"><span>9:03</span><span>PATINA</span></div>
+        <div class="ph-app"><svg class="mk" width="14" height="10" viewBox="0 0 14 10"><line x1="0" y1="1.5" x2="14" y2="1.5"/><line x1="0" y1="5" x2="10" y2="5"/><line x1="0" y1="8.5" x2="6" y2="8.5"/></svg><span class="t">FIELD</span><span class="chip on" style="margin-left:auto">Binder</span></div>
+        <div class="ph-body">
+          <div class="ph-h">Kitchen</div>
+          <div class="ph-sub">12 dims · 34 photos · 2 clips</div>
+          <div class="ph-lab">Dims <i class="an">1</i></div>
+          <div class="dimtable">
+            <em>C · RUN LENGTH</em> &nbsp;96 ¼ in<span class="sub">Dan K. · Jul 21 · proof ✓</span>
+            <em class="old">C · RUN LENGTH</em> <span class="old">95 ¾ in</span><span class="sub">May 12 · superseded <i class="an">2</i></span>
+            <em>A · FLOOR → SILL</em> &nbsp;41 ⅜ in<span class="sub">Dan K. · Jul 21 · proof ✓</span>
+          </div>
+          <div class="ph-lab">Media <i class="an">3</i></div>
+          <div class="mgrid"><i data-k="PH"></i><i data-k="PH"></i><i data-k="CL"></i><i data-k="PH"></i><i data-k="PH"></i><i data-k="PH"></i></div>
+          <div class="ph-lab">History <i class="an">4</i></div>
+          <div class="act"><b>Jul 21</b> — 3 entries · Dan K. · Pre-drywall pass</div>
+          <div class="ph-btn ghost">Request for this room <i class="an">5</i></div>
+        </div>
+      </div></div><div class="ph-cap">Designer · room detail</div></div>
+      <ol class="annots">
+        <li><b>Dims render with who, when, proof</b> — the trust chain visible on every value, so a number in the Binder is a number you can spec against.</li>
+        <li><b>Superseded values stay in history.</b> The Binder grows; it never silently overwrites (FR-5, §4).</li>
+        <li><b>Everything here passed review.</b> The approval gate is the only door in; media filters by kind.</li>
+        <li><b>History reads as deliveries,</b> each mapping back to its request — provenance at the room level, not just the value level.</li>
+        <li><b>Room-scoped compose prefills S-02.</b> The loop closes exactly where the gap is felt.</li>
+      </ol>
+    </div>
+  </article>
+
+  <!-- S-12 -->
+  <article class="shot" id="s12">
+    <div class="shot-head"><span class="sref">S-12</span><h3>Ask the Binder</h3><span class="ptag p3">P3</span><span class="fref2">FLOW D</span></div>
+    <div class="shot-grid">
+      <div><div class="ph"><div class="ph-scr">
+        <div class="ph-status"><span>9:05</span><span>PATINA</span></div>
+        <div class="ph-app"><svg class="mk" width="14" height="10" viewBox="0 0 14 10"><line x1="0" y1="1.5" x2="14" y2="1.5"/><line x1="0" y1="5" x2="10" y2="5"/><line x1="0" y1="8.5" x2="6" y2="8.5"/></svg><span class="t">FIELD</span><span class="chip on" style="margin-left:auto">Binder</span></div>
+        <div class="ph-body">
+          <div class="ph-h">Ask the Binder</div>
+          <div class="srch" style="margin-top:8px">panel box<span> · Killkenny West</span> <i class="an">1</i></div>
+          <div class="ph-lab">4 results</div>
+          <div class="row"><span class="kchip">CLIP</span><div class="rt"><b>Second floor · 5:24</b><span>"…the panel box is here behind the door…" <i class="an">2</i></span></div><span class="st now">▶</span></div>
+          <div class="row"><span class="kchip">PHOTO</span><div class="rt"><b>Panel box · door open</b><span>Mechanical · Jul 21 · Dan K.</span></div><span class="st wait">›</span></div>
+          <div class="row"><span class="kchip">DIM</span><div class="rt"><b>Panel wall width · 38 in</b><span>Hall · Jul 21</span></div><span class="st wait">›</span></div>
+          <div class="row"><span class="kchip">NOTE</span><div class="rt"><b>Condition — double-tapped breaker</b><span>flagged May 12</span></div><span class="st wait">›</span></div>
+          <div class="mini-time">Searches this project only <i class="an">3</i></div>
+          <div class="ph-btn ghost">Refine</div>
+        </div>
+      </div></div><div class="ph-cap">Designer · Binder search</div></div>
+      <ol class="annots">
+        <li><b>One query spans dims, notes, titles, and transcripts</b> — pgvector underneath, plain language on top.</li>
+        <li><b>Transcript hits open the player at the timestamp</b> (S-09). The answer is the moment, not the file.</li>
+        <li><b>Scoped to the project.</b> Search never crosses clients; a Binder is a confidence.</li>
+      </ol>
+    </div>
+  </article>
+</section>
+
+<!-- ================= PRO SCREENS ================= -->
+<section class="sec group">
+  <div class="gk">SCREENS · B</div>
+  <h2>The pro's side.</h2>
+
+  <!-- S-13 -->
+  <article class="shot" id="s13">
+    <div class="shot-head"><span class="sref">S-13</span><h3>Text link · landing</h3><span class="ptag p1">P1</span><span class="fref2">FLOW B</span></div>
+    <div class="shot-grid">
+      <div><div class="ph"><div class="ph-scr">
+        <div class="ph-status"><span>9:11</span><span>MESSAGES</span></div>
+        <div class="ph-body">
+          <div class="sms-time">Today 9:08 AM</div>
+          <div class="sms">Leah at Middlewest Studio needs 7 site items for Killkenny West — due Fri. Open your checklist: <span class="lnk">patina.link/r/8kq2</span> <i class="an">1</i></div>
+          <div class="ph-lab" style="margin-top:14px">The link opens <i class="an">4</i></div>
+          <div class="land">
+            <svg class="mark" width="20" height="13" viewBox="0 0 20 13" aria-hidden="true" style="margin-bottom:6px"><line x1="0" y1="1.5" x2="20" y2="1.5" style="stroke-width:1.6"/><line x1="0" y1="6.5" x2="15" y2="6.5" style="stroke-width:1.6"/><line x1="0" y1="11.5" x2="9" y2="11.5" style="stroke-width:1.6"/></svg>
+            <div class="lk">PATINA · SITE REQUEST</div>
+            <b>Leah · Middlewest Studio <i class="an">2</i></b>
+            <p>requests 7 site items — Killkenny West · due Fri</p>
+            <p style="margin-top:6px;color:var(--ink-55)">You'll see this request only. No account needed. <i class="an">3</i></p>
+            <div class="ph-btn push" style="margin-top:12px">Open checklist</div>
+            <p class="fine">Opens instantly — no install on this step</p>
+          </div>
+        </div>
+      </div></div><div class="ph-cap">Pro · text &amp; landing</div></div>
+      <ol class="annots">
+        <li><b>The ask arrives in the pro's native channel</b> and reads like a person, not a platform. No onboarding voice, no product pitch.</li>
+        <li><b>Names first.</b> The request rides the trust that already exists between Leah and Dan — Patina just carries it.</li>
+        <li><b>Scope is consent:</b> stated before entry, enforced by the token after it (FR-2). He sees this request, nothing else.</li>
+        <li><b>Universal link:</b> the full app if it's installed, an App Clip if not (PRD §12, proposal). The store is never the first step.</li>
+      </ol>
+    </div>
+  </article>
+
+  <!-- S-14 -->
+  <article class="shot" id="s14">
+    <div class="shot-head"><span class="sref">S-14</span><h3>Checklist</h3><span class="ptag p1">P1</span><span class="fref2">FLOW B</span></div>
+    <div class="shot-grid">
+      <div><div class="ph"><div class="ph-scr">
+        <div class="ph-status"><span>2:09</span><span>PATINA</span></div>
+        <div class="ph-app"><svg class="mk" width="14" height="10" viewBox="0 0 14 10"><line x1="0" y1="1.5" x2="14" y2="1.5"/><line x1="0" y1="5" x2="10" y2="5"/><line x1="0" y1="8.5" x2="6" y2="8.5"/></svg><span class="t">SITE REQUEST</span><span class="chip" style="margin-left:auto">GUEST <i class="an">1</i></span></div>
+        <div class="ph-body">
+          <div class="ph-h">For the Killkenny West site</div>
+          <div class="ph-sub">From Leah · Middlewest Studio · due Fri</div>
+          <div class="ph-lab">4 of 7 delivered <i class="an">2</i></div>
+          <div class="prog"><i style="width:57%"></i></div>
+          <div class="ph-lab">Items</div>
+          <div class="row"><span class="dot done"></span><div class="rt"><b>Measure · Kitchen west wall</b><span>delivered 2:41p</span></div></div>
+          <div class="row"><span class="dot done"></span><div class="rt"><b>Photos · Stair landing</b><span>delivered</span></div></div>
+          <div class="row"><span class="dot done"></span><div class="rt"><b>Photos · Panel box</b><span>delivered</span></div></div>
+          <div class="row"><span class="dot done"></span><div class="rt"><b>Photos · Mudroom corner</b><span>delivered</span></div></div>
+          <div class="row"><span class="dot now"></span><div class="rt"><b>Photos · Vanity alcove</b><span>2 of 4 shots</span></div></div>
+          <div class="row"><span class="dot"></span><div class="rt"><b>Walkthrough · Second floor</b><span>about 6 min</span></div></div>
+          <div class="mini-time">Works offline — uploads when signal returns <i class="an">4</i></div>
+          <div class="ph-btn">Continue · Vanity alcove <i class="an b">3</i></div>
+        </div>
+      </div></div><div class="ph-cap">Pro · checklist</div></div>
+      <ol class="annots">
+        <li><b>Guest state is visible and unashamed</b> — no account nag in the header, ever. The chip is a fact, not a funnel.</li>
+        <li><b>Progress is server-acknowledged.</b> Captured-but-uploading never counts as delivered (FR-10) — the number Leah sees is the number Dan sees.</li>
+        <li><b>One item in hand.</b> The button always names the next ask; the list holds the rest. Nobody juggles seven things on a ladder.</li>
+        <li><b>Everything captures at zero bars;</b> uploads resume in the background when signal returns (E7).</li>
+      </ol>
+    </div>
+  </article>
+
+  <!-- S-15 -->
+  <article class="shot" id="s15">
+    <div class="shot-head"><span class="sref">S-15</span><h3>Guided measure</h3><span class="ptag p1">P1</span><span class="fref2">FLOW B</span></div>
+    <div class="shot-grid">
+      <div><div class="ph"><div class="ph-scr">
+        <div class="ph-status"><span>2:36</span><span>PATINA</span></div>
+        <div class="ph-app"><svg class="mk" width="14" height="10" viewBox="0 0 14 10"><line x1="0" y1="1.5" x2="14" y2="1.5"/><line x1="0" y1="5" x2="10" y2="5"/><line x1="0" y1="8.5" x2="6" y2="8.5"/></svg><span class="t">SITE REQUEST</span><span class="chip" style="margin-left:auto">ITEM 1 OF 7</span></div>
+        <div class="ph-body">
+          <div class="ph-h">Kitchen · west wall</div>
+          <div class="ph-sub">"Inside face to inside face — ignore the trim."</div>
+          <div class="ph-lab">Where <i class="an">1</i></div>
+          <div class="mdia"><svg viewBox="0 0 210 92" aria-hidden="true">
+            <rect class="wall" x="10" y="8" width="190" height="70"/>
+            <rect class="win" x="82" y="22" width="56" height="30"/>
+            <line class="dim" x1="66" y1="78" x2="66" y2="52"/><text x="57" y="68">A</text>
+            <line class="dim" x1="150" y1="52" x2="150" y2="22"/><text x="155" y="40">B</text>
+            <line class="dim" x1="10" y1="86" x2="200" y2="86"/><text x="101" y="90">C</text>
+          </svg></div>
+          <div class="field"><span class="fl2">A · FLOOR → SILL</span><span class="fv">41 ⅜ in</span></div>
+          <div class="field"><span class="fl2">B · SILL → HEAD</span><span class="fv">25 ¾ in</span></div>
+          <div class="field"><span class="fl2">C · RUN LENGTH</span><span class="fv empty">— <i class="an">2</i></span></div>
+          <span class="suggest"><i>TAPE READ</i> 96 ¼ in — tap to confirm <i class="an b">4</i></span>
+          <div class="photo-well">Tape in frame? Add a proof shot ＋ <i class="an">3</i></div>
+          <div class="ph-btn">Mark delivered</div>
+        </div>
+      </div></div><div class="ph-cap">Pro · guided measure</div></div>
+      <ol class="annots">
+        <li><b>The diagram is the designer's markup from S-03</b> — the same artifact she drew, now sitting behind his keypad. "Which wall" never needs a phone call.</li>
+        <li><b>Fractions keypad to 1/16 in, metric toggle.</b> Values store canonical mm regardless of what's typed (FR-3) — display is a preference, truth is a number.</li>
+        <li><b>The proof shot attaches to the dim, not the item.</b> Provenance travels with the value all the way into the Binder.</li>
+        <li><span class="mini-p">P3</span><b>Tape read proposes; the pro confirms with a tap.</b> Never auto-committed — the confirm rule holds on both sides of the link.</li>
+      </ol>
+    </div>
+  </article>
+
+  <!-- S-16 -->
+  <article class="shot" id="s16">
+    <div class="shot-head"><span class="sref">S-16</span><h3>Guided photos · ghost frame</h3><span class="ptag p1">P1</span><span class="fref2">FLOW B</span></div>
+    <div class="shot-grid">
+      <div><div class="ph"><div class="ph-scr">
+        <div class="ph-status"><span>2:52</span><span>PATINA</span></div>
+        <div class="ph-app"><svg class="mk" width="14" height="10" viewBox="0 0 14 10"><line x1="0" y1="1.5" x2="14" y2="1.5"/><line x1="0" y1="5" x2="10" y2="5"/><line x1="0" y1="8.5" x2="6" y2="8.5"/></svg><span class="t">SITE REQUEST</span><span class="chip" style="margin-left:auto">ITEM 5 OF 7</span></div>
+        <div class="ph-body">
+          <div class="cam" style="min-height:240px">
+            <span style="font-family:var(--mono);font-size:7.5px;letter-spacing:.14em;color:var(--paper)">PHOTOS · VANITY ALCOVE</span>
+            <div class="ghost"></div>
+            <i class="an b" style="position:absolute;left:13%;top:17%">1</i>
+            <div class="refthumb">MATCH THIS</div>
+            <div>
+              <div class="prompt"><div class="pk">SHOT 2 OF 4 <i class="an b">2</i></div><b>Straight on — include the sconce.</b></div>
+              <div class="shutter" style="margin-top:9px"><i></i></div>
+            </div>
+          </div>
+          <span class="warn">Low light — steady the phone or flip the work lamp on. <i class="an">3</i></span>
+          <div class="ph-btn ghost">Skip this shot</div>
+        </div>
+      </div></div><div class="ph-cap">Pro · ghost frame</div></div>
+      <ol class="annots">
+        <li><b>Reference thumb plus ghost frame</b> make "the angle" unambiguous without a call. The designer's framing, projected onto his viewfinder.</li>
+        <li><b>Auto-advance through the shot list on capture.</b> Skip is allowed — and recorded in the delivery, so absence is information too.</li>
+        <li><b>Low-light and blur warnings fire before delivery,</b> not at review. The redo loop starts on site, silently, where it's cheap.</li>
+      </ol>
+    </div>
+  </article>
+
+  <!-- S-17 -->
+  <article class="shot" id="s17">
+    <div class="shot-head"><span class="sref">S-17</span><h3>Walkthrough capture</h3><span class="ptag p2">P2</span><span class="fref2">FLOW B</span></div>
+    <div class="shot-grid">
+      <div><div class="ph"><div class="ph-scr">
+        <div class="ph-status"><span>3:04</span><span>PATINA</span></div>
+        <div class="ph-app"><svg class="mk" width="14" height="10" viewBox="0 0 14 10"><line x1="0" y1="1.5" x2="14" y2="1.5"/><line x1="0" y1="5" x2="10" y2="5"/><line x1="0" y1="8.5" x2="6" y2="8.5"/></svg><span class="t">SITE REQUEST</span><span class="chip" style="margin-left:auto">ITEM 6 OF 7</span></div>
+        <div class="ph-body">
+          <div class="cam" style="min-height:260px">
+            <div>
+              <div class="rec"><i></i>REC · 02:14</div>
+              <div class="chapters" style="margin-top:7px"><i class="done"></i><i class="done"></i><i class="now"></i><i></i><i></i></div>
+            </div>
+            <div class="prompt"><div class="pk">ROOM 3 OF 5 · PRIMARY BATH <i class="an b">1</i></div><b>Slow pan, floor to ceiling — end on the vanity trap shutoffs.</b></div>
+          </div>
+          <div class="ph-btn">Next room → <i class="an b">2</i></div>
+          <div class="mini-time">Keeps recording if you switch apps · soft cap 10:00 <i class="an">3</i></div>
+        </div>
+      </div></div><div class="ph-cap">Pro · walkthrough</div></div>
+      <ol class="annots">
+        <li><b>Prompt cards pace a walking route the designer set;</b> her voice-note prompts play here too (P2). The video answers her questions because it was asked them.</li>
+        <li><b>"Next room" stamps a chapter</b> — the seam the player and the transcript both use later (S-09). One tap on site, structure forever.</li>
+        <li><b>Recording survives backgrounding;</b> length soft-caps per O5. Honest states over lost footage, always.</li>
+      </ol>
+    </div>
+  </article>
+
+  <!-- S-18 -->
+  <article class="shot" id="s18">
+    <div class="shot-head"><span class="sref">S-18</span><h3>Verify · side-by-side</h3><span class="ptag p2">P2</span><span class="fref2">FLOW B</span></div>
+    <div class="shot-grid">
+      <div><div class="ph"><div class="ph-scr">
+        <div class="ph-status"><span>3:18</span><span>PATINA</span></div>
+        <div class="ph-app"><svg class="mk" width="14" height="10" viewBox="0 0 14 10"><line x1="0" y1="1.5" x2="14" y2="1.5"/><line x1="0" y1="5" x2="10" y2="5"/><line x1="0" y1="8.5" x2="6" y2="8.5"/></svg><span class="t">SITE REQUEST</span><span class="chip" style="margin-left:auto">ITEM 7 OF 7</span></div>
+        <div class="ph-body">
+          <div class="ph-h">Verify · Kitchen slab</div>
+          <div class="ph-sub">Against the approved sample</div>
+          <div class="pane sample" style="margin-top:9px"><span class="pl">APPROVED SAMPLE <i class="an">1</i></span><span class="pn">Taj Mahal quartzite · Lot 4</span></div>
+          <div class="pane live"><span class="pl">THE SLAB ON SITE</span></div>
+          <div class="appr"><div class="a ok">Match</div><div class="a redo">No match <i class="an">2</i></div></div>
+          <div class="notefield">Veining reads heavier than the sample.<span class="caret"></span> <i class="an">3</i></div>
+          <div class="mini-time">A no-match reaches Leah as a priority ping</div>
+          <div class="ph-btn">Mark delivered</div>
+        </div>
+      </div></div><div class="ph-cap">Pro · verify</div></div>
+      <ol class="annots">
+        <li><b>The approved sample travels from the Library</b> — Field's two worlds meet on one screen. What was chosen in the showroom faces what showed up on the truck.</li>
+        <li><b>The result is structured pass/fail plus proof,</b> and "no match" pings the designer as priority (§10). A problem found today is a change order avoided next month.</li>
+        <li><b>The note rides along either way.</b> "Veining reads heavier" is data too — it files with the check, not into a text thread.</li>
+      </ol>
+    </div>
+  </article>
+
+  <!-- S-19 -->
+  <article class="shot" id="s19">
+    <div class="shot-head"><span class="sref">S-19</span><h3>Delivered · done</h3><span class="ptag p1">P1</span><span class="fref2">FLOW B</span></div>
+    <div class="shot-grid">
+      <div><div class="ph"><div class="ph-scr">
+        <div class="ph-status"><span>3:24</span><span>PATINA</span></div>
+        <div class="ph-app"><svg class="mk" width="14" height="10" viewBox="0 0 14 10"><line x1="0" y1="1.5" x2="14" y2="1.5"/><line x1="0" y1="5" x2="10" y2="5"/><line x1="0" y1="8.5" x2="6" y2="8.5"/></svg><span class="t">SITE REQUEST</span><span class="chip" style="margin-left:auto">GUEST</span></div>
+        <div class="ph-body">
+          <div class="bigok">✓</div>
+          <div class="ph-h center">7 of 7 delivered</div>
+          <div class="ph-sub center">Leah's been notified.</div>
+          <div class="pill">2 uploading in background — keep the phone on wifi tonight. <i class="an">1</i></div>
+          <div style="flex:1"></div>
+          <div class="ph-lab center">Next time, skip the link?</div>
+          <div class="ph-btn ghost" style="margin-top:6px">Save my info <i class="an">2</i></div>
+          <p class="fine center">Not now</p>
+          <div class="mini-time center">This link stays live for redos until the request closes. <i class="an">3</i></div>
+        </div>
+      </div></div><div class="ph-cap">Pro · delivered</div></div>
+      <ol class="annots">
+        <li><b>Completion is honest about pending uploads</b> — delivered means received, and the state says exactly what to do about the rest (FR-10, E7).</li>
+        <li><b>The account is an invitation, never a toll.</b> His number already carries the history if he joins later — every delivery seeds the maker-and-trade network Patina runs on.</li>
+        <li><b>Token grace runs to close + 7 days</b> for redos, then expires (§12). Access ends when the work does, not before.</li>
+      </ol>
+    </div>
+  </article>
+
+  <!-- S-20 -->
+  <article class="shot" id="s20">
+    <div class="shot-head"><span class="sref">S-20</span><h3>Returned item · redo</h3><span class="ptag p1">P1</span><span class="fref2">FLOW C</span></div>
+    <div class="shot-grid">
+      <div><div class="ph"><div class="ph-scr">
+        <div class="ph-status"><span>4:31</span><span>PATINA</span></div>
+        <div class="ph-app"><svg class="mk" width="14" height="10" viewBox="0 0 14 10"><line x1="0" y1="1.5" x2="14" y2="1.5"/><line x1="0" y1="5" x2="10" y2="5"/><line x1="0" y1="8.5" x2="6" y2="8.5"/></svg><span class="t">SITE REQUEST</span><span class="chip" style="margin-left:auto">RETURNED</span></div>
+        <div class="ph-body">
+          <div class="ph-h">1 item returned</div>
+          <div class="ph-sub">From Leah · Tue 4:26p</div>
+          <div class="row" style="margin-top:6px"><div class="rt"><b>Photos · Vanity alcove</b><span>4 angles · delivered Tue 4:12p</span></div><span class="st bad">RETURNED</span></div>
+          <div class="note-pin">Re-shoot in daylight — glare hides the grout line. <i class="an">1</i></div>
+          <div class="ph-lab">Your originals</div>
+          <div class="thumbs"><i></i><i></i><i></i></div>
+          <div class="mini-time">Everything else stands — only this item reopened. <i class="an">3</i></div>
+          <div class="ph-btn">Recapture <i class="an b">2</i></div>
+        </div>
+      </div></div><div class="ph-cap">Pro · returned item</div></div>
+      <ol class="annots">
+        <li><b>The designer's note, verbatim</b> — her hand, not a system paraphrase. The margin's rule crosses the link intact.</li>
+        <li><b>Recapture supersedes; the original stays in item history</b> (FR-5). Nothing is deleted to make room for better.</li>
+        <li><b>The scope of the return is explicit.</b> Trust survives correction when correction is exact.</li>
+      </ol>
+    </div>
+  </article>
+</section>
+
+<footer class="doc-foot">
+  <p>PAIRS WITH FIELD-SITE-PORTAL-PRD-V1 · STRATA/PRDS</p>
+  <p>PATINA FIELD · 07·17·26</p>
+</footer>
+
+</div>
+</body>
+</html>

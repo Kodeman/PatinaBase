@@ -1,0 +1,2740 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1d1b18">
+  <link rel="icon" href="data:,">
+  <title>Patina iOS — Product Direction Proposal</title>
+  <style>
+    :root {
+      --ink: #1d1b18;
+      --ink-soft: #38332d;
+      --bone: #f7f2e9;
+      --paper: #fffdf8;
+      --parchment: #e8ddcc;
+      --line: rgba(29, 27, 24, 0.16);
+      --clay: #a87851;
+      --clay-deep: #7f5435;
+      --verdigris: #728276;
+      --moss: #455b4c;
+      --signal: #c76548;
+      --gold: #d4ad6e;
+      --display: "Iowan Old Style", "Baskerville", "Times New Roman", serif;
+      --sans: "Avenir Next", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      --mono: "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
+      --ease: cubic-bezier(.2,.8,.2,1);
+    }
+
+    * { box-sizing: border-box; }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: var(--ink);
+      color: var(--ink);
+      font-family: var(--sans);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button { font: inherit; }
+
+    .deck {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      isolation: isolate;
+    }
+
+    .deck::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 90;
+      opacity: .22;
+      background-image:
+        url("data:image/svg+xml,%3Csvg viewBox='0 0 220 220' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.95' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.12'/%3E%3C/svg%3E");
+      mix-blend-mode: multiply;
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      opacity: 0;
+      visibility: hidden;
+      transform: translate3d(2.2%, 0, 0);
+      transition:
+        opacity 420ms var(--ease),
+        transform 520ms var(--ease),
+        visibility 0s linear 520ms;
+      overflow: hidden;
+      background: var(--bone);
+    }
+
+    .slide.active {
+      opacity: 1;
+      visibility: visible;
+      transform: translate3d(0, 0, 0);
+      transition-delay: 0s;
+      z-index: 2;
+    }
+
+    .slide.was-active {
+      transform: translate3d(-2.2%, 0, 0);
+    }
+
+    .slide.dark {
+      color: var(--bone);
+      background:
+        radial-gradient(circle at 84% 17%, rgba(168, 120, 81, .25), transparent 25%),
+        radial-gradient(circle at 12% 80%, rgba(114, 130, 118, .18), transparent 30%),
+        var(--ink);
+    }
+
+    .slide.paper { background: var(--paper); }
+
+    .slide.clay {
+      color: var(--bone);
+      background:
+        linear-gradient(135deg, rgba(255,255,255,.06), transparent 40%),
+        #8a5e40;
+    }
+
+    .slide::after {
+      content: "";
+      position: absolute;
+      left: -8%;
+      right: -8%;
+      bottom: 0;
+      height: 4px;
+      opacity: .42;
+      background:
+        linear-gradient(90deg,
+          transparent 0 7%,
+          var(--clay) 7% 28%,
+          var(--gold) 28% 47%,
+          var(--verdigris) 47% 69%,
+          var(--clay-deep) 69% 91%,
+          transparent 91%);
+      transform: rotate(-.35deg);
+    }
+
+    .slide__inner {
+      position: relative;
+      width: min(100%, 1600px);
+      height: 100%;
+      min-height: 0;
+      margin: 0 auto;
+      padding: clamp(32px, 4vw, 70px) clamp(38px, 5.3vw, 90px) clamp(52px, 5vw, 80px);
+      z-index: 1;
+    }
+
+    .kicker {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 0 0 18px;
+      color: var(--clay-deep);
+      font-family: var(--mono);
+      font-size: clamp(10px, .84vw, 14px);
+      line-height: 1;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+
+    .dark .kicker,
+    .clay .kicker { color: #e5c99f; }
+
+    .kicker::before {
+      content: "";
+      width: 32px;
+      height: 18px;
+      flex: 0 0 32px;
+      background: currentColor;
+      -webkit-mask: url("assets/strata-mark.svg") center / contain no-repeat;
+      mask: url("assets/strata-mark.svg") center / contain no-repeat;
+    }
+
+    h1,
+    h2,
+    h3,
+    p { margin-top: 0; }
+
+    h1,
+    h2,
+    h3 {
+      font-family: var(--display);
+      font-weight: 400;
+      letter-spacing: -.035em;
+    }
+
+    h1 {
+      max-width: 1000px;
+      margin-bottom: 24px;
+      font-size: clamp(54px, 7.2vw, 116px);
+      line-height: .91;
+    }
+
+    h2 {
+      max-width: 1140px;
+      margin-bottom: 22px;
+      font-size: clamp(40px, 4.7vw, 76px);
+      line-height: .98;
+    }
+
+    h3 {
+      margin-bottom: 10px;
+      font-size: clamp(22px, 2vw, 34px);
+      line-height: 1.06;
+    }
+
+    .lede {
+      max-width: 900px;
+      color: var(--ink-soft);
+      font-size: clamp(17px, 1.45vw, 24px);
+      line-height: 1.46;
+      letter-spacing: -.01em;
+    }
+
+    .dark .lede,
+    .clay .lede { color: rgba(247,242,233,.76); }
+
+    .micro {
+      color: rgba(29,27,24,.61);
+      font-size: clamp(10px, .78vw, 13px);
+      line-height: 1.5;
+    }
+
+    .dark .micro,
+    .clay .micro { color: rgba(247,242,233,.58); }
+
+    .mono {
+      font-family: var(--mono);
+      letter-spacing: .02em;
+    }
+
+    .serif { font-family: var(--display); }
+    .clay-text { color: var(--clay-deep); }
+    .signal-text { color: var(--signal); }
+
+    .rule {
+      width: 100%;
+      height: 1px;
+      margin: 22px 0;
+      background: var(--line);
+    }
+
+    .eyebrow {
+      margin-bottom: 7px;
+      color: var(--clay-deep);
+      font-family: var(--mono);
+      font-size: clamp(9px, .72vw, 12px);
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .dark .eyebrow,
+    .clay .eyebrow { color: #e5c99f; }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 5px 10px;
+      border: 1px solid rgba(29,27,24,.2);
+      border-radius: 999px;
+      color: var(--ink-soft);
+      background: rgba(255,255,255,.38);
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+    }
+
+    .tag.recommended {
+      color: #fff8ef;
+      border-color: var(--clay-deep);
+      background: var(--clay-deep);
+    }
+
+    .tag.warn {
+      color: #7d3624;
+      border-color: rgba(199,101,72,.38);
+      background: rgba(199,101,72,.13);
+    }
+
+    .number {
+      display: block;
+      color: var(--clay-deep);
+      font-family: var(--display);
+      font-size: clamp(50px, 6vw, 96px);
+      line-height: .9;
+      letter-spacing: -.055em;
+    }
+
+    .dark .number,
+    .clay .number { color: #e5c99f; }
+
+    .quote {
+      max-width: 1060px;
+      font-family: var(--display);
+      font-size: clamp(30px, 3.6vw, 60px);
+      line-height: 1.04;
+      letter-spacing: -.035em;
+    }
+
+    .quote mark {
+      padding: 0 .08em;
+      color: inherit;
+      background: linear-gradient(transparent 66%, rgba(212,173,110,.42) 66%);
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: clamp(26px, 4vw, 64px);
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: clamp(16px, 2.4vw, 38px);
+    }
+
+    .split-40 {
+      display: grid;
+      grid-template-columns: minmax(0, .82fr) minmax(0, 1.18fr);
+      gap: clamp(30px, 5vw, 80px);
+      height: calc(100% - 34px);
+      align-items: center;
+    }
+
+    .split-60 {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr);
+      gap: clamp(30px, 5vw, 80px);
+      height: calc(100% - 34px);
+      align-items: center;
+    }
+
+    .panel {
+      padding: clamp(18px, 2vw, 32px);
+      border: 1px solid var(--line);
+      background: rgba(255,253,248,.62);
+    }
+
+    .dark .panel {
+      border-color: rgba(247,242,233,.16);
+      background: rgba(255,255,255,.045);
+    }
+
+    .panel p:last-child { margin-bottom: 0; }
+
+    .list-clean {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .list-clean li {
+      position: relative;
+      padding: 13px 0 13px 24px;
+      border-bottom: 1px solid var(--line);
+      font-size: clamp(14px, 1.08vw, 18px);
+      line-height: 1.35;
+    }
+
+    .list-clean li:last-child { border-bottom: 0; }
+
+    .list-clean li::before {
+      content: "◆";
+      position: absolute;
+      left: 0;
+      top: 16px;
+      color: var(--clay);
+      font-size: 8px;
+    }
+
+    .dark .list-clean li { border-color: rgba(247,242,233,.14); }
+
+    .phone {
+      position: relative;
+      flex: 0 0 auto;
+      width: clamp(112px, 14vw, 224px);
+      aspect-ratio: 1206 / 2622;
+      overflow: hidden;
+      border: clamp(5px, .6vw, 9px) solid #171614;
+      border-radius: clamp(22px, 2.8vw, 42px);
+      background: #111;
+      box-shadow: 0 24px 56px rgba(29,27,24,.22);
+    }
+
+    .phone.small { width: clamp(94px, 10.6vw, 170px); }
+    .phone.medium { width: clamp(112px, 12.7vw, 204px); }
+    .phone.large { width: clamp(170px, 20vw, 315px); }
+
+    .phone::after {
+      content: "";
+      position: absolute;
+      top: 7px;
+      left: 50%;
+      width: 28%;
+      height: 1.8%;
+      border-radius: 999px;
+      transform: translateX(-50%);
+      background: #171614;
+      z-index: 4;
+    }
+
+    .phone img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: cover;
+    }
+
+    .phones {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: clamp(12px, 1.8vw, 28px);
+      min-width: 0;
+    }
+
+    .phones.stagger .phone:nth-child(2) { transform: translateY(22px); }
+    .phones.stagger .phone:nth-child(3) { transform: translateY(-14px); }
+
+    .caption {
+      margin-top: 10px;
+      color: rgba(29,27,24,.58);
+      font-family: var(--mono);
+      font-size: clamp(8px, .65vw, 11px);
+      line-height: 1.35;
+      text-align: center;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+
+    .dark .caption { color: rgba(247,242,233,.56); }
+
+    .annotated {
+      position: relative;
+    }
+
+    .collision-ring {
+      position: absolute;
+      z-index: 5;
+      right: -3%;
+      width: 36%;
+      aspect-ratio: 1;
+      border: 3px solid var(--signal);
+      border-radius: 50%;
+      box-shadow: 0 0 0 5px rgba(199,101,72,.14);
+    }
+
+    .collision-ring::after {
+      content: "";
+      position: absolute;
+      right: -60%;
+      top: 48%;
+      width: 58%;
+      height: 2px;
+      background: var(--signal);
+      transform: rotate(-7deg);
+      transform-origin: left;
+    }
+
+    .at-reveal { top: 74%; }
+    .at-style { top: 81%; }
+    .at-profile { top: 60%; }
+
+    .thread {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      margin-top: 26px;
+      border: 1px solid var(--line);
+      background: var(--line);
+    }
+
+    .thread__item {
+      min-height: 168px;
+      padding: 23px;
+      background: var(--paper);
+    }
+
+    .thread__item .index {
+      display: block;
+      margin-bottom: 26px;
+      color: var(--clay);
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    .thread__item p {
+      margin: 0;
+      color: var(--ink-soft);
+      font-size: clamp(13px, 1vw, 16px);
+      line-height: 1.42;
+    }
+
+    .product-shape-slide h2 {
+      margin-bottom: 16px;
+      font-size: clamp(38px, 4.3vw, 70px);
+    }
+
+    .product-shape-slide .lede {
+      font-size: clamp(16px, 1.25vw, 21px);
+    }
+
+    .product-shape-slide .grid-3 { margin-top: 18px !important; }
+    .product-shape-slide .panel { padding: clamp(14px, 1.5vw, 24px); }
+    .product-shape-slide .grid-3 + .panel { margin-top: 12px !important; }
+    .product-shape-slide .list-clean li { padding: 10px 0 10px 22px; }
+    .product-shape-slide .list-clean li::before { top: 13px; }
+
+    .journey {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 10px;
+      margin-top: 26px;
+    }
+
+    .journey::before {
+      content: "";
+      position: absolute;
+      top: 22px;
+      left: 5%;
+      right: 5%;
+      height: 1px;
+      background: var(--line);
+    }
+
+    .journey__step {
+      position: relative;
+      padding-top: 48px;
+      font-size: clamp(10px, .82vw, 13px);
+      line-height: 1.35;
+      text-align: center;
+    }
+
+    .journey__step::before {
+      content: "";
+      position: absolute;
+      z-index: 1;
+      top: 16px;
+      left: 50%;
+      width: 12px;
+      height: 12px;
+      border: 4px solid var(--bone);
+      border-radius: 50%;
+      transform: translateX(-50%);
+      background: var(--clay);
+      box-shadow: 0 0 0 1px var(--clay);
+    }
+
+    .journey__step.highlight::before {
+      background: var(--signal);
+      box-shadow: 0 0 0 6px rgba(199,101,72,.12);
+    }
+
+    .promise {
+      display: grid;
+      grid-template-columns: .9fr 1.1fr;
+      gap: 26px;
+      padding: 18px 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .promise:last-child { border-bottom: 1px solid var(--line); }
+
+    .promise p {
+      margin: 0;
+      font-size: clamp(13px, 1vw, 17px);
+      line-height: 1.42;
+    }
+
+    .promise .current {
+      color: var(--signal);
+      font-family: var(--display);
+      font-size: clamp(21px, 1.8vw, 30px);
+      line-height: 1.08;
+    }
+
+    .metric-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+      margin-top: 24px;
+    }
+
+    .metric {
+      min-height: 144px;
+      padding: 22px;
+      border-top: 3px solid var(--clay);
+      background: rgba(255,255,255,.46);
+    }
+
+    .metric strong {
+      display: block;
+      margin-bottom: 8px;
+      font-family: var(--display);
+      font-size: clamp(28px, 3vw, 48px);
+      font-weight: 400;
+      line-height: 1;
+    }
+
+    .metric span {
+      display: block;
+      color: var(--ink-soft);
+      font-size: clamp(11px, .9vw, 15px);
+      line-height: 1.35;
+    }
+
+    .access-pair {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      align-items: end;
+    }
+
+    .access-pair .phone { width: min(100%, 145px); }
+
+    .principles {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      margin-top: 36px;
+      border: 1px solid rgba(247,242,233,.16);
+      background: rgba(247,242,233,.16);
+    }
+
+    .principle {
+      min-height: 255px;
+      padding: clamp(22px, 2.4vw, 38px);
+      background: var(--ink);
+    }
+
+    .principle .number {
+      margin-bottom: 32px;
+      font-size: clamp(42px, 4vw, 66px);
+    }
+
+    .principle p {
+      color: rgba(247,242,233,.67);
+      font-size: clamp(13px, 1vw, 17px);
+      line-height: 1.48;
+    }
+
+    .ia-map {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    .ia-column {
+      min-height: 202px;
+      padding: 20px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.48);
+    }
+
+    .ia-column .glyph {
+      display: grid;
+      width: 36px;
+      height: 36px;
+      margin-bottom: 22px;
+      place-items: center;
+      border: 1px solid currentColor;
+      border-radius: 50%;
+      font-family: var(--display);
+      font-size: 18px;
+    }
+
+    .ia-column h3 { font-size: clamp(20px, 1.7vw, 28px); }
+    .ia-column p {
+      margin-bottom: 0;
+      color: var(--ink-soft);
+      font-size: clamp(11px, .85vw, 14px);
+      line-height: 1.46;
+    }
+
+    .companion-band {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 16px;
+      align-items: center;
+      min-height: 78px;
+      padding: 14px 18px;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      color: var(--ink);
+      background: transparent;
+    }
+
+    .companion-band .orb,
+    .companion-orb {
+      display: grid;
+      flex: 0 0 auto;
+      width: 44px;
+      height: 44px;
+      place-items: center;
+      border-radius: 50%;
+      background: #292623;
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,.18),
+        0 0 0 5px rgba(232,221,204,.3);
+    }
+
+    .companion-band .orb img,
+    .companion-orb img {
+      width: 82%;
+      height: 82%;
+      object-fit: contain;
+    }
+
+    .companion-band strong {
+      display: block;
+      margin-bottom: 3px;
+      font-family: var(--display);
+      font-size: clamp(16px, 1.35vw, 22px);
+      font-weight: 400;
+    }
+
+    .companion-band p {
+      margin: 0;
+      color: var(--ink-soft);
+      font-size: clamp(10px, .78vw, 13px);
+      line-height: 1.35;
+    }
+
+    .companion-states {
+      color: var(--clay-deep);
+      font-family: var(--mono);
+      font-size: clamp(8px, .64vw, 10px);
+      letter-spacing: .07em;
+      text-align: right;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .concept-phone {
+      position: relative;
+      width: clamp(205px, 22vw, 328px);
+      aspect-ratio: 1206 / 2622;
+      overflow: hidden;
+      padding: 28px 18px 18px;
+      border: 8px solid #171614;
+      border-radius: 38px;
+      background: #f8f3ea;
+      box-shadow: 0 28px 72px rgba(29,27,24,.24);
+    }
+
+    .concept-phone::before {
+      content: "";
+      position: absolute;
+      z-index: 5;
+      top: 9px;
+      left: 50%;
+      width: 26%;
+      height: 17px;
+      border-radius: 999px;
+      transform: translateX(-50%);
+      background: #171614;
+    }
+
+    .concept-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 18px 2px 10px;
+      color: #6e5b49;
+      font-family: var(--mono);
+      font-size: 8px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .concept-title {
+      margin: 0 0 12px;
+      font-family: var(--display);
+      font-size: clamp(24px, 2.2vw, 34px);
+      line-height: .94;
+    }
+
+    .concept-hero {
+      position: relative;
+      height: 34%;
+      overflow: hidden;
+      padding: 15px;
+      border-radius: 4px 22px 4px 4px;
+      color: #fff9f0;
+      background:
+        radial-gradient(circle at 76% 24%, rgba(255,255,255,.26), transparent 18%),
+        linear-gradient(145deg, #5c6a5e, #9b7657 56%, #d0ae7b);
+    }
+
+    .concept-hero::before,
+    .concept-hero::after {
+      content: "";
+      position: absolute;
+      inset: 40% -10% auto;
+      height: 38%;
+      border: 1px solid rgba(255,255,255,.24);
+      border-radius: 50%;
+      transform: rotate(-12deg);
+    }
+
+    .concept-hero::after {
+      inset: 58% -18% auto;
+      transform: rotate(8deg);
+    }
+
+    .concept-hero .now {
+      position: relative;
+      z-index: 2;
+      font-family: var(--mono);
+      font-size: 8px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .concept-hero strong {
+      position: absolute;
+      z-index: 2;
+      left: 15px;
+      right: 15px;
+      bottom: 14px;
+      font-family: var(--display);
+      font-size: clamp(17px, 1.5vw, 24px);
+      font-weight: 400;
+      line-height: 1.02;
+    }
+
+    .concept-next {
+      margin-top: 12px;
+      padding: 13px;
+      border: 1px solid rgba(29,27,24,.13);
+      background: #fffdf8;
+    }
+
+    .concept-next span {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--clay-deep);
+      font-family: var(--mono);
+      font-size: 7px;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+
+    .concept-next b {
+      display: block;
+      font-family: var(--display);
+      font-size: clamp(13px, 1.15vw, 18px);
+      font-weight: 400;
+    }
+
+    .concept-room {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .concept-room i {
+      display: block;
+      width: 36%;
+      aspect-ratio: 1.2;
+      border-radius: 3px;
+      background:
+        linear-gradient(35deg, transparent 42%, rgba(255,255,255,.35) 43% 47%, transparent 48%),
+        #cdbba4;
+    }
+
+    .concept-room div {
+      flex: 1;
+      padding-top: 4px;
+      color: #6e6257;
+      font-size: 9px;
+      line-height: 1.4;
+    }
+
+    .concept-room div strong {
+      display: block;
+      color: var(--ink);
+      font-family: var(--display);
+      font-size: 13px;
+      font-weight: 400;
+    }
+
+    .companion-hearth {
+      position: absolute;
+      z-index: 4;
+      left: 0;
+      right: 0;
+      bottom: 8px;
+      display: grid;
+      grid-template-columns: 1fr;
+      align-items: center;
+      justify-items: center;
+      gap: 4px;
+      min-height: 78px;
+      padding: 4px 12px;
+      pointer-events: none;
+    }
+
+    .companion-hearth .companion-orb {
+      width: 46px;
+      height: 46px;
+    }
+
+    .companion-hearth .companion-message {
+      max-width: 80%;
+      color: #8e785f;
+      font-family: var(--mono);
+      font-size: 6px;
+      line-height: 1.2;
+      letter-spacing: .09em;
+      text-align: center;
+      text-transform: uppercase;
+    }
+
+    .companion-hearth .companion-message span {
+      display: none;
+    }
+
+    .companion-hearth .companion-message strong {
+      display: block;
+      overflow: hidden;
+      color: inherit;
+      font: inherit;
+      font-weight: 500;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .companion-hearth .companion-open {
+      display: none;
+    }
+
+    .morph-layout {
+      display: grid;
+      grid-template-columns: minmax(0, .88fr) minmax(0, 1.12fr);
+      gap: clamp(34px, 5vw, 80px);
+      height: calc(100% - 34px);
+      align-items: center;
+    }
+
+    .morph-rules {
+      margin-top: 28px;
+      border-top: 1px solid rgba(247,242,233,.16);
+    }
+
+    .morph-rule {
+      display: grid;
+      grid-template-columns: 112px minmax(0, 1fr);
+      gap: 18px;
+      padding: 16px 0;
+      border-bottom: 1px solid rgba(247,242,233,.16);
+    }
+
+    .morph-rule span {
+      color: #e5c99f;
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: .09em;
+      text-transform: uppercase;
+    }
+
+    .morph-rule p {
+      margin: 0;
+      color: rgba(247,242,233,.7);
+      font-size: clamp(12px, .92vw, 15px);
+      line-height: 1.45;
+    }
+
+    .morph-stage {
+      position: relative;
+      width: min(100%, 610px);
+      height: min(58vh, 470px);
+      min-height: 400px;
+      overflow: hidden;
+      border: 1px solid rgba(247,242,233,.14);
+      background:
+        radial-gradient(circle at 50% 46%, rgba(168,120,81,.14), transparent 38%),
+        linear-gradient(rgba(247,242,233,.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(247,242,233,.035) 1px, transparent 1px);
+      background-size: auto, 42px 42px, 42px 42px;
+    }
+
+    .morph-stage::before {
+      content: "LIVE MOTION STUDY";
+      position: absolute;
+      top: 18px;
+      left: 20px;
+      color: rgba(247,242,233,.42);
+      font-family: var(--mono);
+      font-size: 8px;
+      letter-spacing: .11em;
+    }
+
+    .morph-shell {
+      position: absolute;
+      z-index: 2;
+      top: 48%;
+      left: 50%;
+      width: 76px;
+      height: 76px;
+      overflow: hidden;
+      border: 1px solid rgba(247,242,233,.13);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      color: var(--bone);
+      background: #292623;
+      box-shadow:
+        0 24px 70px rgba(0,0,0,.34),
+        0 0 0 7px rgba(232,221,204,.14);
+      animation: companion-shell-morph 11s cubic-bezier(.2,.84,.22,1) infinite;
+      will-change: width, height, border-radius, transform;
+    }
+
+    .morph-mark {
+      position: absolute;
+      z-index: 4;
+      top: 50%;
+      left: 50%;
+      width: 64px;
+      height: 64px;
+      object-fit: contain;
+      transform: translate(-50%, -50%);
+      animation: companion-mark-morph 11s cubic-bezier(.2,.84,.22,1) infinite;
+      will-change: top, left, width, height, transform;
+    }
+
+    .morph-progress,
+    .morph-expanded {
+      position: absolute;
+      z-index: 3;
+      opacity: 0;
+    }
+
+    .morph-progress {
+      top: 50%;
+      left: 86px;
+      right: 24px;
+      transform: translateY(-50%);
+      animation: companion-progress-copy 11s ease infinite;
+    }
+
+    .morph-progress span,
+    .morph-expanded span {
+      display: block;
+      margin-bottom: 5px;
+      color: #d5ae74;
+      font-family: var(--mono);
+      font-size: 8px;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+
+    .morph-progress strong,
+    .morph-expanded strong {
+      display: block;
+      font-family: var(--display);
+      font-size: 18px;
+      font-weight: 400;
+      line-height: 1.1;
+    }
+
+    .morph-progress-track {
+      height: 3px;
+      margin-top: 10px;
+      overflow: hidden;
+      border-radius: 99px;
+      background: rgba(247,242,233,.14);
+    }
+
+    .morph-progress-track i {
+      display: block;
+      width: 62%;
+      height: 100%;
+      border-radius: inherit;
+      background: #d5ae74;
+    }
+
+    .morph-expanded {
+      top: 26px;
+      left: 94px;
+      right: 28px;
+      animation: companion-expanded-copy 11s ease infinite;
+    }
+
+    .morph-expanded strong {
+      font-size: 22px;
+    }
+
+    .morph-expanded p {
+      margin: 8px 0 0;
+      color: rgba(247,242,233,.62);
+      font-size: 11px;
+      line-height: 1.4;
+    }
+
+    .morph-quiz-progress {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+      margin-top: 20px;
+    }
+
+    .morph-quiz-progress i {
+      height: 4px;
+      border-radius: 99px;
+      background: rgba(247,242,233,.14);
+    }
+
+    .morph-quiz-progress i:nth-child(-n+3) { background: #d5ae74; }
+
+    .morph-rest-hint {
+      position: absolute;
+      z-index: 3;
+      top: calc(48% + 57px);
+      left: 50%;
+      color: rgba(229,201,159,.76);
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      transform: translateX(-50%);
+      animation: companion-rest-hint 11s ease infinite;
+    }
+
+    .morph-timeline {
+      position: absolute;
+      right: 20px;
+      bottom: 17px;
+      left: 20px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      color: rgba(247,242,233,.42);
+      font-family: var(--mono);
+      font-size: 8px;
+      letter-spacing: .08em;
+      text-align: center;
+      text-transform: uppercase;
+    }
+
+    .morph-timeline span {
+      padding-top: 9px;
+      border-top: 1px solid rgba(247,242,233,.14);
+    }
+
+    @keyframes companion-shell-morph {
+      0%, 17%, 100% {
+        width: 76px;
+        height: 76px;
+        border-radius: 50%;
+        transform: translate(-50%, -50%) translateY(10px);
+      }
+      27%, 49% {
+        width: 306px;
+        height: 82px;
+        border-radius: 41px;
+        transform: translate(-50%, -50%);
+      }
+      61%, 89% {
+        width: 364px;
+        height: 226px;
+        border-radius: 34px;
+        transform: translate(-50%, -50%) translateY(-4px);
+      }
+      96% {
+        width: 76px;
+        height: 76px;
+        border-radius: 50%;
+        transform: translate(-50%, -50%) translateY(10px);
+      }
+    }
+
+    @keyframes companion-mark-morph {
+      0%, 17%, 100% {
+        top: 50%;
+        left: 50%;
+        width: 64px;
+        height: 64px;
+        transform: translate(-50%, -50%);
+      }
+      27%, 49% {
+        top: 50%;
+        left: 39px;
+        width: 62px;
+        height: 62px;
+        transform: translate(-50%, -50%);
+      }
+      61%, 89% {
+        top: 31px;
+        left: 34px;
+        width: 58px;
+        height: 58px;
+        transform: translate(-50%, -50%);
+      }
+      96% {
+        top: 50%;
+        left: 50%;
+        width: 64px;
+        height: 64px;
+        transform: translate(-50%, -50%);
+      }
+    }
+
+    @keyframes companion-progress-copy {
+      0%, 21%, 54%, 100% { opacity: 0; transform: translateY(-46%); }
+      29%, 47% { opacity: 1; transform: translateY(-50%); }
+    }
+
+    @keyframes companion-expanded-copy {
+      0%, 56%, 94%, 100% { opacity: 0; transform: translateY(6px); }
+      65%, 88% { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes companion-rest-hint {
+      0%, 16%, 97%, 100% { opacity: 1; transform: translate(-50%, 0); }
+      23%, 92% { opacity: 0; transform: translate(-50%, 4px); }
+    }
+
+    .transforms {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+      margin-top: 24px;
+    }
+
+    .transform {
+      position: relative;
+      min-height: 360px;
+      padding: 24px;
+      border: 1px solid var(--line);
+      background: rgba(255,253,248,.58);
+      overflow: hidden;
+    }
+
+    .transform::after {
+      content: "";
+      position: absolute;
+      right: -22px;
+      bottom: -22px;
+      width: 92px;
+      height: 92px;
+      border: 1px solid rgba(168,120,81,.2);
+      border-radius: 50%;
+    }
+
+    .transform .from-to {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 8px;
+      align-items: center;
+      margin: 22px 0 18px;
+      font-family: var(--mono);
+      font-size: clamp(9px, .7vw, 11px);
+      line-height: 1.35;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+
+    .transform .from {
+      color: rgba(29,27,24,.5);
+      text-decoration: line-through;
+    }
+
+    .transform .arrow { color: var(--clay); }
+    .transform .to { color: var(--clay-deep); }
+
+    .transform p {
+      color: var(--ink-soft);
+      font-size: clamp(12px, .93vw, 15px);
+      line-height: 1.48;
+    }
+
+    .material-strip {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      height: 52px;
+      margin-top: 22px;
+      overflow: hidden;
+      border-radius: 2px 16px 2px 2px;
+    }
+
+    .material-strip i:nth-child(1) { background: #836043; }
+    .material-strip i:nth-child(2) { background: #ccb795; }
+    .material-strip i:nth-child(3) { background: #667469; }
+    .material-strip i:nth-child(4) { background: #9b6b52; }
+    .material-strip i:nth-child(5) { background: #e6dac7; }
+
+    .queue {
+      display: grid;
+      gap: 9px;
+      margin-top: 12px;
+    }
+
+    .queue-section {
+      padding: 12px;
+      border: 1px solid rgba(29,27,24,.12);
+      background: #fffdf8;
+    }
+
+    .queue-section.hot {
+      border-left: 4px solid var(--signal);
+    }
+
+    .queue-section .label {
+      color: var(--clay-deep);
+      font-family: var(--mono);
+      font-size: 7px;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+
+    .queue-section strong {
+      display: block;
+      margin-top: 5px;
+      font-family: var(--display);
+      font-size: 12px;
+      font-weight: 400;
+    }
+
+    .queue-section small {
+      display: block;
+      margin-top: 3px;
+      color: #766b60;
+      font-size: 7px;
+    }
+
+    .option-table {
+      display: grid;
+      grid-template-columns: .6fr repeat(3, 1fr);
+      margin-top: 26px;
+      border-top: 1px solid var(--line);
+      border-left: 1px solid var(--line);
+    }
+
+    .option-table > div {
+      min-height: 58px;
+      padding: 13px 15px;
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      font-size: clamp(10px, .8vw, 13px);
+      line-height: 1.35;
+      background: rgba(255,255,255,.34);
+    }
+
+    .option-table .head {
+      min-height: 110px;
+      background: rgba(232,221,204,.52);
+    }
+
+    .option-table .head.reco {
+      color: var(--bone);
+      background: var(--clay-deep);
+    }
+
+    .option-table .rowhead {
+      color: var(--clay-deep);
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      background: transparent;
+    }
+
+    .option-table h3 {
+      margin: 9px 0 4px;
+      font-size: clamp(20px, 1.8vw, 28px);
+    }
+
+    .option-table p {
+      margin: 0;
+      color: inherit;
+      opacity: .72;
+    }
+
+    .options-slide h2 {
+      margin-bottom: 12px;
+      font-size: clamp(38px, 4.2vw, 66px);
+    }
+
+    .options-slide .lede {
+      margin-bottom: 0;
+      font-size: clamp(15px, 1.2vw, 20px);
+    }
+
+    .options-slide .option-table { margin-top: 17px; }
+    .options-slide .option-table > div {
+      min-height: 50px;
+      padding: 10px 13px;
+    }
+
+    .options-slide .option-table .head {
+      min-height: 92px;
+    }
+
+    .options-slide .option-table h3 {
+      margin-top: 6px;
+      font-size: clamp(19px, 1.55vw, 25px);
+    }
+
+    .options-slide .panel {
+      margin-top: 12px !important;
+      padding: 14px 18px;
+    }
+
+    .roadmap {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1px;
+      margin-top: 34px;
+      border: 1px solid rgba(247,242,233,.16);
+      background: rgba(247,242,233,.16);
+    }
+
+    .phase {
+      min-height: 350px;
+      padding: clamp(20px, 2.1vw, 32px);
+      background: var(--ink);
+    }
+
+    .phase .time {
+      display: block;
+      margin-bottom: 30px;
+      color: #e5c99f;
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .phase h3 {
+      min-height: 66px;
+      font-size: clamp(23px, 2vw, 33px);
+    }
+
+    .phase ul {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .phase li {
+      padding: 9px 0;
+      border-bottom: 1px solid rgba(247,242,233,.11);
+      color: rgba(247,242,233,.64);
+      font-size: clamp(11px, .82vw, 14px);
+      line-height: 1.35;
+    }
+
+    .phase li:last-child { border: 0; }
+
+    .scorecard {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1px;
+      border: 1px solid var(--line);
+      background: var(--line);
+    }
+
+    .score {
+      min-height: 100px;
+      padding: 18px 20px;
+      background: var(--paper);
+    }
+
+    .score strong {
+      display: block;
+      margin-bottom: 5px;
+      font-family: var(--display);
+      font-size: clamp(18px, 1.4vw, 23px);
+      font-weight: 400;
+    }
+
+    .score span {
+      display: block;
+      color: rgba(29,27,24,.62);
+      font-size: clamp(10px, .78vw, 13px);
+      line-height: 1.38;
+    }
+
+    .ask {
+      position: relative;
+      padding: clamp(25px, 3vw, 46px);
+      color: var(--bone);
+      background: var(--clay-deep);
+    }
+
+    .ask::after {
+      content: "";
+      position: absolute;
+      right: 26px;
+      bottom: 22px;
+      width: 76px;
+      height: 76px;
+      border: 1px solid rgba(247,242,233,.24);
+      border-radius: 50%;
+    }
+
+    .ask ol {
+      margin: 22px 0 0;
+      padding-left: 23px;
+    }
+
+    .ask li {
+      padding: 8px 0;
+      color: rgba(247,242,233,.8);
+      font-size: clamp(12px, .95vw, 16px);
+      line-height: 1.35;
+    }
+
+    .method-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      margin-top: 32px;
+      border: 1px solid rgba(247,242,233,.16);
+      background: rgba(247,242,233,.16);
+    }
+
+    .method {
+      min-height: 240px;
+      padding: 28px;
+      background: var(--ink);
+    }
+
+    .method p {
+      color: rgba(247,242,233,.68);
+      font-size: clamp(12px, .92vw, 15px);
+      line-height: 1.55;
+    }
+
+    .method code {
+      color: #e5c99f;
+      font-family: var(--mono);
+      font-size: .9em;
+    }
+
+    .cover {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(300px, .75fr);
+      gap: 50px;
+      height: 100%;
+      align-items: center;
+    }
+
+    .cover .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 11px 24px;
+      margin-top: 40px;
+      color: rgba(247,242,233,.58);
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+
+    .strata-orb {
+      position: relative;
+      width: min(34vw, 470px);
+      aspect-ratio: 1;
+      margin-left: auto;
+      overflow: hidden;
+      border: 1px solid rgba(247,242,233,.18);
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at 64% 33%, rgba(255,255,255,.14), transparent 17%),
+        linear-gradient(145deg, #2a302b, #77543e 52%, #b88d61);
+      box-shadow: inset 0 0 90px rgba(0,0,0,.24), 0 50px 110px rgba(0,0,0,.28);
+    }
+
+    .strata-orb::before,
+    .strata-orb::after {
+      content: "";
+      position: absolute;
+      left: -18%;
+      right: -18%;
+      height: 26%;
+      border: 1px solid rgba(247,242,233,.23);
+      border-radius: 50%;
+      transform: rotate(-17deg);
+    }
+
+    .strata-orb::before { top: 27%; }
+    .strata-orb::after { top: 46%; transform: rotate(11deg); }
+
+    .strata-orb img {
+      position: absolute;
+      z-index: 2;
+      top: 48%;
+      left: 50%;
+      width: 82%;
+      height: 82%;
+      object-fit: contain;
+      transform: translate(-50%, -50%);
+      filter: drop-shadow(0 7px 20px rgba(29,27,24,.24));
+    }
+
+    .strata-orb span {
+      position: absolute;
+      z-index: 3;
+      left: 50%;
+      bottom: 13%;
+      transform: translateX(-50%);
+      color: rgba(247,242,233,.72);
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .side-note {
+      position: absolute;
+      right: clamp(38px, 5.3vw, 90px);
+      bottom: 24px;
+      color: rgba(29,27,24,.42);
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .mobile-hint { display: none; }
+
+    .dark .side-note { color: rgba(247,242,233,.38); }
+
+    .deck-controls {
+      position: fixed;
+      z-index: 100;
+      right: 18px;
+      top: 17px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px;
+      border: 1px solid rgba(247,242,233,.2);
+      border-radius: 999px;
+      color: var(--bone);
+      background: rgba(29,27,24,.84);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 8px 24px rgba(0,0,0,.18);
+    }
+
+    .deck-controls button {
+      display: grid;
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      place-items: center;
+      border: 0;
+      border-radius: 50%;
+      color: inherit;
+      background: transparent;
+      cursor: pointer;
+    }
+
+    .deck-controls button:hover,
+    .deck-controls button:focus-visible {
+      outline: none;
+      background: rgba(247,242,233,.14);
+    }
+
+    .counter {
+      min-width: 50px;
+      font-family: var(--mono);
+      font-size: 10px;
+      text-align: center;
+    }
+
+    .progress {
+      position: fixed;
+      z-index: 110;
+      left: 0;
+      bottom: 0;
+      width: 100%;
+      height: 3px;
+      background: rgba(247,242,233,.12);
+    }
+
+    .progress span {
+      display: block;
+      width: 0;
+      height: 100%;
+      background: linear-gradient(90deg, var(--clay), var(--gold), var(--verdigris));
+      transition: width 420ms var(--ease);
+    }
+
+    .overview .slide {
+      position: relative;
+      inset: auto;
+      display: block;
+      width: calc(33.333vw - 20px);
+      height: calc((33.333vw - 20px) * .5625);
+      opacity: 1;
+      visibility: visible;
+      transform: none !important;
+      transition: none;
+      cursor: pointer;
+      box-shadow: 0 12px 40px rgba(0,0,0,.28);
+    }
+
+    .overview .deck {
+      display: flex;
+      flex-wrap: wrap;
+      align-content: flex-start;
+      gap: 14px;
+      height: auto;
+      min-height: 100%;
+      padding: 16px;
+      background: #24211e;
+    }
+
+    body.overview {
+      height: auto;
+      min-height: 100%;
+      overflow: auto;
+      background: #24211e;
+    }
+
+    .overview .slide__inner {
+      width: 177.778%;
+      height: 177.778%;
+      transform: scale(.5625);
+      transform-origin: top left;
+    }
+
+    .overview .deck-controls,
+    .overview .progress { display: none; }
+
+    @media screen and (max-width: 900px), screen and (max-aspect-ratio: 4/3) {
+      .slide { overflow: auto; }
+      .slide__inner {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        min-height: 100%;
+        height: auto;
+        padding: 54px 26px 106px;
+      }
+      .cover,
+      .split-40,
+      .split-60,
+      .morph-layout {
+        grid-template-columns: 1fr;
+        height: auto;
+      }
+      .morph-stage {
+        justify-self: center;
+        width: min(100%, 610px);
+        height: 420px;
+        min-height: 380px;
+      }
+      .strata-orb {
+        width: min(62vw, 390px);
+        margin: 0 auto;
+      }
+      .grid-3,
+      .thread,
+      .transforms,
+      .principles,
+      .roadmap,
+      .method-grid {
+        grid-template-columns: 1fr;
+      }
+      .ia-map { grid-template-columns: repeat(2, 1fr); }
+      .companion-band {
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 10px 13px;
+      }
+      .companion-band .orb {
+        grid-row: 1 / span 2;
+        align-self: start;
+      }
+      .companion-states {
+        grid-column: 2;
+        text-align: left;
+        white-space: normal;
+      }
+      .option-table { min-width: 800px; }
+      .option-table-wrap {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        overflow-x: auto;
+      }
+      .mobile-hint {
+        display: block;
+        margin: 15px 0 8px;
+        color: var(--clay-deep);
+        font-family: var(--mono);
+        font-size: 9px;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+      }
+      .phones { flex-wrap: wrap; }
+      .side-note { display: none; }
+      .deck-controls {
+        top: auto;
+        right: 14px;
+        bottom: 14px;
+      }
+      html, body { overflow: auto; }
+      .deck { min-height: 100%; }
+      .slide:not(.active) { display: none; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .slide,
+      .progress span { transition: none; }
+      .morph-shell {
+        width: 306px;
+        height: 82px;
+        border-radius: 41px;
+        transform: translate(-50%, -50%);
+        animation: none;
+      }
+      .morph-mark {
+        top: 50%;
+        left: 39px;
+        width: 62px;
+        height: 62px;
+        animation: none;
+      }
+      .morph-progress {
+        opacity: 1;
+        transform: translateY(-50%);
+        animation: none;
+      }
+      .morph-expanded,
+      .morph-rest-hint {
+        opacity: 0;
+        animation: none;
+      }
+    }
+
+    @media print {
+      @page { size: 16in 9in; margin: 0; }
+      html, body {
+        width: auto;
+        height: auto;
+        overflow: visible;
+        background: white;
+      }
+      .deck {
+        position: static;
+        display: block;
+        width: 16in;
+        height: auto;
+        overflow: visible;
+        isolation: auto;
+      }
+      body.overview .deck {
+        display: block;
+        width: 16in;
+        height: auto;
+        padding: 0;
+      }
+      .deck::before { display: none; }
+      .slide {
+        position: static;
+        inset: auto;
+        display: block;
+        width: 16in;
+        height: 9in;
+        break-after: page;
+        break-inside: avoid;
+        page-break-after: always;
+        page-break-inside: avoid;
+        opacity: 1;
+        visibility: visible;
+        transform: none;
+        transition: none;
+      }
+      body.overview .slide {
+        width: 16in;
+        height: 9in;
+        cursor: default;
+        box-shadow: none;
+      }
+      .slide::after { display: none; }
+      .slide + .slide {
+        break-before: page;
+        page-break-before: always;
+      }
+      .slide:last-child {
+        break-after: auto;
+        page-break-after: auto;
+      }
+      .slide__inner,
+      body.overview .slide__inner {
+        width: min(100%, 1600px);
+        height: 100%;
+        padding: .55in .75in .65in;
+        transform: none;
+      }
+      .strata-orb,
+      .phone,
+      .concept-phone { box-shadow: none; }
+      .morph-shell {
+        width: 306px;
+        height: 82px;
+        border-radius: 41px;
+        transform: translate(-50%, -50%);
+        animation: none;
+      }
+      .morph-mark {
+        top: 50%;
+        left: 39px;
+        width: 62px;
+        height: 62px;
+        animation: none;
+      }
+      .morph-progress {
+        opacity: 1;
+        transform: translateY(-50%);
+        animation: none;
+      }
+      .morph-expanded,
+      .morph-rest-hint {
+        opacity: 0;
+        animation: none;
+      }
+      .deck-controls,
+      .progress { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="deck" aria-label="Patina iOS product direction proposal">
+    <section class="slide dark active" data-title="Make Patina feel inevitable">
+      <div class="slide__inner">
+        <div class="cover">
+          <div>
+            <p class="kicker">Patina / iOS product direction</p>
+            <h1>Make Patina feel <em>inevitable.</em></h1>
+            <p class="lede">A leadership proposal to make the Companion Patina’s visible center of gravity—present through the life of a room, and never in the way.</p>
+            <div class="meta">
+              <span>Leadership review</span>
+              <span>July 2026</span>
+              <span>Consumer iOS app</span>
+              <span>Simulator + source review</span>
+            </div>
+          </div>
+          <div class="strata-orb" aria-hidden="true">
+            <img src="assets/strata-mark.svg" alt="">
+            <span>the companion · Patina made visible</span>
+          </div>
+        </div>
+        <div class="side-note">01 / Direction</div>
+      </div>
+    </section>
+
+    <section class="slide paper" data-title="Executive verdict">
+      <div class="slide__inner">
+        <p class="kicker">Executive verdict</p>
+        <div class="split-60">
+          <div>
+            <h2>Patina is not under-designed. It is <em>under-prioritized.</em></h2>
+            <p class="lede">The craft is already unusually coherent. The next constraint is deciding what the product wants to be every time it opens.</p>
+            <div class="thread">
+              <div class="thread__item">
+                <span class="index">PROTECT</span>
+                <h3>The Companion</h3>
+                <p>A recognizable character that can carry Patina’s warmth, memory, and point of view.</p>
+              </div>
+              <div class="thread__item">
+                <span class="index">REFINE</span>
+                <h3>Its choreography</h3>
+                <p>Give it defined states, a reserved home, and behavior worthy of a brand asset.</p>
+              </div>
+              <div class="thread__item">
+                <span class="index">FOCUS</span>
+                <h3>One relationship</h3>
+                <p>Let the Companion connect discovery, rooms, and Studio without becoming a utility drawer.</p>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="panel">
+              <span class="number">72</span>
+              <h3>recent review items closed</h3>
+              <p class="micro">Two internal UX programs—26 recommendations followed by 46 findings—show that the team can execute. Do not spend the next quarter reopening solved hygiene.</p>
+            </div>
+            <div class="panel" style="margin-top: 16px; border-left: 4px solid var(--clay);">
+              <p class="quote" style="font-size: clamp(24px, 2.4vw, 39px); margin: 0;">Keep the character. <mark>Give it a system.</mark></p>
+            </div>
+          </div>
+        </div>
+        <div class="side-note">02 / Verdict</div>
+      </div>
+    </section>
+
+    <section class="slide product-shape-slide" data-title="Three products sharing one screen">
+      <div class="slide__inner">
+        <p class="kicker">Current product shape</p>
+        <h2>Three strong products are sharing one front door.</h2>
+        <p class="lede">Breadth can become Patina’s moat. First, each mode needs a clear role—and the home experience needs one governing idea.</p>
+        <div class="grid-3" style="margin-top: 28px;">
+          <article class="panel">
+            <p class="eyebrow">01 / Discovery</p>
+            <h3>The daily edit</h3>
+            <p>Stories, recommendations, saved pieces, and the pleasure of looking.</p>
+            <ul class="list-clean">
+              <li>Daily Room</li>
+              <li>Browse and save</li>
+              <li>Style discovery</li>
+            </ul>
+          </article>
+          <article class="panel">
+            <p class="eyebrow">02 / Spatial intelligence</p>
+            <h3>The room model</h3>
+            <p>Scanning, dimensions, room context, and recommendations that understand place.</p>
+            <ul class="list-clean">
+              <li>Room scan and reveal</li>
+              <li>Manual fallback</li>
+              <li>Room-aware picks</li>
+            </ul>
+          </article>
+          <article class="panel">
+            <p class="eyebrow">03 / Client relationship</p>
+            <h3>The Studio</h3>
+            <p>Designer help, projects, decisions, messages, proposals, money, and documents.</p>
+            <ul class="list-clean">
+              <li>Design requests</li>
+              <li>Project attention</li>
+              <li>Shared record</li>
+            </ul>
+          </article>
+        </div>
+        <div class="panel" style="margin-top: 18px; display: flex; align-items: center; gap: 22px; border-left: 4px solid var(--signal);">
+          <span class="tag warn">Core opportunity</span>
+          <p style="margin: 0; font-family: var(--display); font-size: clamp(20px, 2vw, 32px);">The Companion is the thread that can make these three products feel like one Patina.</p>
+        </div>
+        <div class="side-note">03 / Product shape</div>
+      </div>
+    </section>
+
+    <section class="slide paper" data-title="First five minutes">
+      <div class="slide__inner">
+        <p class="kicker">Activation</p>
+        <div class="split-40">
+          <div>
+            <h2>The first five minutes explain Patina before they <em>prove</em> it.</h2>
+            <p class="lede">After entry, a new customer sees three promise slides and five style questions before the first useful artifact. “Skip” only advances to the quiz.</p>
+            <div class="journey" aria-label="Current onboarding journey">
+              <div class="journey__step">Welcome</div>
+              <div class="journey__step">Story</div>
+              <div class="journey__step">Scan</div>
+              <div class="journey__step">Style</div>
+              <div class="journey__step highlight">5 questions</div>
+              <div class="journey__step">Result</div>
+            </div>
+            <div class="rule"></div>
+            <p class="eyebrow">Design criterion</p>
+            <p class="quote" style="font-size: clamp(27px, 2.8vw, 45px);">Deliver a meaningful exchange in <mark>under 90 seconds</mark>: a taste insight, a saved piece, or a room.</p>
+          </div>
+          <div>
+            <div class="phones stagger" aria-label="Current onboarding screens">
+              <figure style="margin: 0;">
+                <div class="phone medium"><img src="assets/onboarding-story.png" alt="Patina onboarding story screen"></div>
+                <figcaption class="caption">Promise 01</figcaption>
+              </figure>
+              <figure style="margin: 0;">
+                <div class="phone medium"><img src="assets/onboarding-scan.png" alt="Patina onboarding scan screen"></div>
+                <figcaption class="caption">Promise 02</figcaption>
+              </figure>
+              <figure style="margin: 0;">
+                <div class="phone medium"><img src="assets/onboarding-style.png" alt="Patina onboarding style screen"></div>
+                <figcaption class="caption">Promise 03</figcaption>
+              </figure>
+            </div>
+          </div>
+        </div>
+        <div class="side-note">04 / First value</div>
+      </div>
+    </section>
+
+    <section class="slide" data-title="Keep the Companion">
+      <div class="slide__inner">
+        <p class="kicker">System-level friction</p>
+        <div class="split-40">
+          <div>
+            <h2>Keep the Companion. Fix its <em>choreography.</em></h2>
+            <p class="lede">The collisions are not reasons to remove Patina’s most distinctive interaction. They show that the Companion deserves first-class layout, motion, and accessibility rules.</p>
+            <div class="promise">
+              <p class="current">Room reveal</p>
+              <p>The bubble lands on the primary confirmation action.</p>
+            </div>
+            <div class="promise">
+              <p class="current">Style quiz</p>
+              <p>It competes with progress and the next-step control.</p>
+            </div>
+            <div class="promise">
+              <p class="current">Profile / Studio</p>
+              <p>It covers navigation rows, including design help and messages.</p>
+            </div>
+            <p class="micro" style="margin-top: 18px;"><strong>Collapsed is the default:</strong> a centered strata circle with one quiet hint beneath it. Its shell expands only when scan progress, a quiz, or a real decision needs room. Content never renders beneath the active shape.</p>
+          </div>
+          <div class="phones">
+            <figure style="margin: 0;">
+              <div class="phone medium annotated">
+                <img src="assets/room-reveal.png" alt="Room reveal with companion overlapping the confirmation area">
+                <span class="collision-ring at-reveal" aria-hidden="true"></span>
+              </div>
+              <figcaption class="caption">Primary action</figcaption>
+            </figure>
+            <figure style="margin: 0;">
+              <div class="phone medium annotated">
+                <img src="assets/style-palette.png" alt="Style quiz with companion near the bottom progress control">
+                <span class="collision-ring at-style" aria-hidden="true"></span>
+              </div>
+              <figcaption class="caption">Progress control</figcaption>
+            </figure>
+            <figure style="margin: 0;">
+              <div class="phone medium annotated">
+                <img src="assets/profile.png" alt="Profile with companion overlapping a navigation row">
+                <span class="collision-ring at-profile" aria-hidden="true"></span>
+              </div>
+              <figcaption class="caption">Navigation row</figcaption>
+            </figure>
+          </div>
+        </div>
+        <div class="side-note">05 / Companion</div>
+      </div>
+    </section>
+
+    <section class="slide clay" data-title="Trust before polish">
+      <div class="slide__inner">
+        <p class="kicker">P0 / Product trust</p>
+        <div class="split-60">
+          <div>
+            <h2>Before visual polish, make the camera promise match the pipeline.</h2>
+            <p class="lede">The permission screen currently says Patina does not capture photos or video, that camera data stays on-device, and that only dimensions are stored.</p>
+            <p class="quote" style="margin: 38px 0 18px;">Trust is not legal copy at the edge of the experience. It is <mark>the product.</mark></p>
+            <p class="micro">Source inspection shows the scan workflow can capture and upload scan artifacts. Leadership should align product behavior, retention policy, and plain-language consent before using the camera story as a growth surface.</p>
+          </div>
+          <div>
+            <div class="panel" style="border-color: rgba(247,242,233,.22); background: rgba(29,27,24,.15);">
+              <p class="eyebrow">Copy says</p>
+              <h3>“We don’t capture photos or video.”</h3>
+              <p style="color: rgba(247,242,233,.7); line-height: 1.5;">“Camera data stays on your device.”<br>“Only room dimensions are stored—not images.”</p>
+            </div>
+            <div style="display: grid; place-items: center; height: 58px; color: #f2d2a5; font-size: 28px;">↓</div>
+            <div class="panel" style="border-color: rgba(247,242,233,.22); background: rgba(29,27,24,.28);">
+              <p class="eyebrow">Required decision</p>
+              <h3>Make one account of reality.</h3>
+              <ul class="list-clean">
+                <li>Truth-map each captured artifact</li>
+                <li>State where it goes and for how long</li>
+                <li>Ask in context, immediately before capture</li>
+                <li>Give a meaningful non-camera route</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="side-note">06 / Trust</div>
+      </div>
+    </section>
+
+    <section class="slide paper" data-title="Accessibility is layout">
+      <div class="slide__inner">
+        <p class="kicker">P0 / Inclusive quality</p>
+        <div class="split-60">
+          <div>
+            <h2>Accessibility is a layout program—not token work.</h2>
+            <p class="lede">Patina scales its type. Several defining screens do not recompose around the larger type, so the content becomes clipped, layered, or unusable.</p>
+            <div class="metric-row">
+              <div class="metric">
+                <strong>27–36 pt</strong>
+                <span>Observed heights for representative chips, links, icons, and step controls.</span>
+              </div>
+              <div class="metric">
+                <strong>0 calls</strong>
+                <span>The 44×44 hit-target helper exists, but no production call sites were found.</span>
+              </div>
+              <div class="metric">
+                <strong>2.18–4.20:1</strong>
+                <span>Representative small-copy color pairs fall below the 4.5:1 normal-text benchmark.</span>
+              </div>
+            </div>
+            <div class="panel" style="margin-top: 19px; border-left: 4px solid var(--signal);">
+              <p class="eyebrow">Acceptance bar</p>
+              <p style="margin: 0; font-size: clamp(14px, 1.1vw, 18px); line-height: 1.5;">No truncation at Accessibility Extra Extra Extra Large. No primary or repeated control below 44×44. No small essential text below contrast target.</p>
+            </div>
+          </div>
+          <div class="access-pair">
+            <figure style="margin: 0;">
+              <div class="phone small"><img src="assets/onboarding-story.png" alt="Onboarding at standard type size"></div>
+              <figcaption class="caption">Standard type</figcaption>
+            </figure>
+            <figure style="margin: 0;">
+              <div class="phone small"><img src="assets/onboarding-ax5.png" alt="Onboarding clipped at the largest accessibility type size"></div>
+              <figcaption class="caption signal-text">AX5 / clipped</figcaption>
+            </figure>
+            <figure style="margin: 0;">
+              <div class="phone small"><img src="assets/home.png" alt="Home at standard type size"></div>
+              <figcaption class="caption">Standard type</figcaption>
+            </figure>
+            <figure style="margin: 0;">
+              <div class="phone small"><img src="assets/home-ax5.png" alt="Home layout breaking at the largest accessibility type size"></div>
+              <figcaption class="caption signal-text">AX5 / layered</figcaption>
+            </figure>
+          </div>
+        </div>
+        <div class="side-note">07 / Accessibility</div>
+      </div>
+    </section>
+
+    <section class="slide dark" data-title="A companion for the life of a room">
+      <div class="slide__inner">
+        <p class="kicker">Recommended product thesis</p>
+        <h2>A companion for the life of a room.</h2>
+        <p class="lede">The Companion is not a chatbot or a shortcut menu. It is Patina made visible: a steady presence that remembers the room, notices the grain and materials someone returns to, and helps the work move forward.</p>
+        <div class="principles">
+          <article class="principle">
+            <span class="number">01</span>
+            <h3>Present, never in the way</h3>
+            <p>At rest it is the centered strata circle already in the app, with a subtle hint beneath it and no content inside its reserved region.</p>
+          </article>
+          <article class="principle">
+            <span class="number">02</span>
+            <h3>Specific to this room</h3>
+            <p>It speaks from real context: the room, saved pieces, honest materials, designer work, and what changed.</p>
+          </article>
+          <article class="principle">
+            <span class="number">03</span>
+            <h3>Grows with the relationship</h3>
+            <p>It begins as a guide, becomes a room memory, and later carries the thread between client and Studio.</p>
+          </article>
+        </div>
+        <p class="quote" style="margin: 34px 0 0; font-size: clamp(25px, 2.6vw, 42px); color: rgba(247,242,233,.9);">The Companion should always answer: <mark>what changed, what it noticed, and what comes next.</mark></p>
+        <div class="side-note">08 / Product thesis</div>
+      </div>
+    </section>
+
+    <section class="slide" data-title="The Companion Hearth">
+      <div class="slide__inner">
+        <p class="kicker">Recommended product shell</p>
+        <div class="split-60">
+          <div>
+            <h2>Keep the Companion visible. Give it a home.</h2>
+            <p class="lede">The Companion Hearth is reserved space—not another bar. At rest, Patina collapses to the current centered circle and strata mark, with only a quiet contextual hint below.</p>
+            <div class="ia-map">
+              <article class="ia-column">
+                <span class="glyph">T</span>
+                <h3>Today</h3>
+                <p>One daily edit, one next action, and what changed in the relationship.</p>
+              </article>
+              <article class="ia-column">
+                <span class="glyph">S</span>
+                <h3>Spaces</h3>
+                <p>Rooms, scans, saved pieces by room, and room-aware discovery.</p>
+              </article>
+              <article class="ia-column">
+                <span class="glyph">S</span>
+                <h3>Studio</h3>
+                <p>Designer relationship, projects, decisions, messages, money, and records.</p>
+              </article>
+              <div class="companion-band">
+                <span class="orb"><img src="assets/strata-mark.svg" alt=""></span>
+                <div>
+                  <strong>One mark crosses every realm.</strong>
+                  <p>The strata stays recognizable while its dark shell takes only the space the current communication needs.</p>
+                </div>
+                <span class="companion-states">Collapsed → Progress → Expanded</span>
+              </div>
+            </div>
+            <p class="micro" style="margin-top: 16px;">Today, Spaces, and Studio remain stable realms beneath the surface. The centered Companion signals one relationship across them; ordinary back, header, and deep-link behavior stays predictable.</p>
+          </div>
+          <div style="display: grid; place-items: center;">
+            <div class="concept-phone" role="img" aria-label="Conceptual Patina Today screen with a persistent Companion Hearth">
+              <div class="concept-top"><span>Wednesday</span><span>Patina</span></div>
+              <h3 class="concept-title">Good morning,<br>Alex.</h3>
+              <div class="concept-hero">
+                <span class="now">Today’s edit</span>
+                <strong>Warm oak that settles the room.</strong>
+              </div>
+              <div class="concept-next">
+                <span>Next for your living room</span>
+                <b>Review 3 pieces that fit the scan</b>
+              </div>
+              <div class="concept-room">
+                <i aria-hidden="true"></i>
+                <div><strong>Living room</strong>Scan current · 4 saved pieces</div>
+              </div>
+              <div class="companion-hearth" aria-label="Companion ready with a room-specific next step">
+                <span class="companion-orb"><img src="assets/strata-mark.svg" alt=""></span>
+                <span class="companion-message"><span>Patina noticed</span><strong>3 pieces fit this room</strong></span>
+                <span class="companion-open">↑</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="side-note">09 / Companion Hearth</div>
+      </div>
+    </section>
+
+    <section class="slide dark" data-title="One mark, three states">
+      <div class="slide__inner">
+        <p class="kicker">Companion motion system</p>
+        <div class="morph-layout">
+          <div>
+            <h2>One mark. As much room as the moment needs.</h2>
+            <p class="lede">The current strata circle is the anchor. The same dark shell widens for scan progress, then deepens for a quiz or decision—without swapping in a different component.</p>
+            <div class="morph-rules">
+              <div class="morph-rule">
+                <span>Collapsed</span>
+                <p>Centered circle, strata visible, with a short contextual hint below. This is the quiet default whenever the page can speak for itself.</p>
+              </div>
+              <div class="morph-rule">
+                <span>Progress</span>
+                <p>The circle becomes a compact capsule for bounded feedback such as room-scan status. It collapses when the work completes.</p>
+              </div>
+              <div class="morph-rule">
+                <span>Expanded</span>
+                <p>The shell gains depth for quiz progress, rationale, or a choice. A full sheet is reserved for longer conversation and review.</p>
+              </div>
+            </div>
+            <p class="micro" style="margin-top: 18px;">Motion direction: matched geometry with a 420–520ms spring; the shell moves first and copy follows about 80ms later. With Reduce Motion, use a short crossfade and no ambient pulse.</p>
+          </div>
+          <div class="morph-stage" role="img" aria-label="Animated concept showing the Patina strata Companion morphing from a collapsed center circle to scan progress and an expanded quiz card">
+            <div class="morph-shell" aria-hidden="true">
+              <img class="morph-mark" src="assets/strata-mark.svg" alt="">
+              <div class="morph-progress">
+                <span>Room scan · 62%</span>
+                <strong>Measuring the room…</strong>
+                <div class="morph-progress-track"><i></i></div>
+              </div>
+              <div class="morph-expanded">
+                <span>Style quiz · 3 of 5</span>
+                <strong>Which material feels most like home?</strong>
+                <p>Your answer helps Patina understand the warmth and texture you return to.</p>
+                <div class="morph-quiz-progress"><i></i><i></i><i></i><i></i><i></i></div>
+              </div>
+            </div>
+            <div class="morph-rest-hint" aria-hidden="true">Next steps</div>
+            <div class="morph-timeline" aria-hidden="true">
+              <span>Collapsed</span>
+              <span>Scan progress</span>
+              <span>Quiz / expanded</span>
+            </div>
+          </div>
+        </div>
+        <div class="side-note">10 / Motion</div>
+      </div>
+    </section>
+
+    <section class="slide paper" data-title="Transform the defining moments">
+      <div class="slide__inner">
+        <p class="kicker">Experience direction</p>
+        <h2>Transform the three moments that define belief.</h2>
+        <p class="lede">This is where the Companion stops feeling like an interface and starts feeling like a relationship.</p>
+        <div class="transforms">
+          <article class="transform">
+            <p class="eyebrow">First run</p>
+            <h3>Meet it through value</h3>
+            <div class="from-to">
+              <span class="from">3 abstract slides</span><span class="arrow">→</span><span class="to">1 useful exchange</span>
+            </div>
+            <p>Open with one clear promise, then let the customer make something. The centered strata circle introduces itself through one useful observation—not a tutorial—and collapses when the page can carry the story.</p>
+            <p><strong>Use art-directed room and material photography.</strong> The current illustration language reads as placeholder, not taste authority.</p>
+          </article>
+          <article class="transform">
+            <p class="eyebrow">Style</p>
+            <h3>Let it explain taste</h3>
+            <div class="from-to">
+              <span class="from">“Warm Modern”</span><span class="arrow">→</span><span class="to">“Here’s what I noticed”</span>
+            </div>
+            <p>Replace flat gradients and emoji with real rooms, linen, woods, and metals. The Companion expands for quiz progress, names the signals it heard, then returns to its centered circle.</p>
+            <div class="material-strip" aria-label="Example material palette"><i></i><i></i><i></i><i></i><i></i></div>
+          </article>
+          <article class="transform">
+            <p class="eyebrow">Today</p>
+            <h3>Let it carry the next move</h3>
+            <div class="from-to">
+              <span class="from">Stacked destinations</span><span class="arrow">→</span><span class="to">Companion-led day</span>
+            </div>
+            <p>The collapsed circle and its quiet hint carry the single most useful next move. It expands only when the customer asks why or starts the action.</p>
+            <p><strong>As the relationship grows, its role changes:</strong> guide for a guest, room memory after a scan, project thread for a client.</p>
+          </article>
+        </div>
+        <div class="side-note">11 / Defining moments</div>
+      </div>
+    </section>
+
+    <section class="slide" data-title="Studio as an attention queue">
+      <div class="slide__inner">
+        <p class="kicker">Studio refinement</p>
+        <div class="split-60">
+          <div>
+            <h2>Let the Companion turn Studio into an attention queue.</h2>
+            <p class="lede">The current hub exposes the breadth of the relationship as a flat set of destinations. The collapsed Companion can quietly carry what needs attention, then expand only for the decision itself.</p>
+            <div class="grid-2" style="margin-top: 28px;">
+              <div class="panel">
+                <p class="eyebrow">Current</p>
+                <h3>Ten equal rows</h3>
+                <p class="micro">Projects, messages, decisions, proposals, invoices, budget, documents, marketplace, and help all carry similar visual weight.</p>
+              </div>
+              <div class="panel" style="border-left: 4px solid var(--clay);">
+                <p class="eyebrow">Proposed</p>
+                <h3>Attention, then record</h3>
+                <p class="micro">Awaiting you → In progress → Conversation → Money &amp; documents → Archive.</p>
+              </div>
+            </div>
+            <p class="quote" style="margin: 30px 0 0; font-size: clamp(26px, 2.7vw, 44px);">Organize the Studio around <mark>state</mark>, not database nouns.</p>
+          </div>
+          <div class="phones">
+            <figure style="margin: 0;">
+              <div class="phone medium"><img src="assets/studio-hub.png" alt="Current Patina Studio hub with a long flat list of destinations"></div>
+              <figcaption class="caption">Current hub</figcaption>
+            </figure>
+            <figure style="margin: 0;">
+              <div class="concept-phone" style="width: clamp(170px, 17.2vw, 270px);" role="img" aria-label="Conceptual Studio screen organized as an attention queue">
+                <div class="concept-top"><span>Studio</span><span>2 need you</span></div>
+                <h3 class="concept-title">Your project,<br>in motion.</h3>
+                <div class="queue">
+                  <div class="queue-section hot">
+                    <span class="label">Awaiting you · 2</span>
+                    <strong>Choose the dining pendant</strong>
+                    <small>Decision due Friday</small>
+                  </div>
+                  <div class="queue-section hot">
+                    <span class="label">Awaiting you</span>
+                    <strong>Review invoice 1042</strong>
+                    <small>$2,480 · Elm console</small>
+                  </div>
+                  <div class="queue-section">
+                    <span class="label">In progress</span>
+                    <strong>Living room sourcing</strong>
+                    <small>3 pieces shortlisted</small>
+                  </div>
+                  <div class="queue-section">
+                    <span class="label">Conversation</span>
+                    <strong>New note from Maya</strong>
+                    <small>12 minutes ago</small>
+                  </div>
+                </div>
+                <div class="companion-hearth" aria-label="Companion ready with two Studio items">
+                  <span class="companion-orb"><img src="assets/strata-mark.svg" alt=""></span>
+                  <span class="companion-message"><span>Patina noticed</span><strong>2 things need your eye</strong></span>
+                  <span class="companion-open">↑</span>
+                </div>
+              </div>
+              <figcaption class="caption">Proposed queue</figcaption>
+            </figure>
+          </div>
+        </div>
+        <div class="side-note">12 / Studio</div>
+      </div>
+    </section>
+
+    <section class="slide paper options-slide" data-title="Three strategic options">
+      <div class="slide__inner">
+        <p class="kicker">Decision options</p>
+        <h2>Three credible paths. One recommended.</h2>
+        <p class="lede">The planning ranges are directional. Scope should be locked after an instrumented baseline and an interactive prototype.</p>
+        <p class="mobile-hint">Swipe the table to compare all three paths →</p>
+        <div class="option-table-wrap">
+          <div class="option-table" role="table" aria-label="Strategic direction options">
+            <div class="head rowhead" role="columnheader">Path</div>
+            <div class="head" role="columnheader">
+              <span class="tag">Lowest risk</span>
+              <h3>A. Companion polish</h3>
+              <p>Stabilize the current character.</p>
+            </div>
+            <div class="head reco" role="columnheader">
+              <span class="tag" style="color: #fff8ef; border-color: rgba(255,255,255,.35); background: transparent;">Recommended</span>
+              <h3>B. Companion system</h3>
+              <p>Make it Patina’s relationship layer.</p>
+            </div>
+            <div class="head" role="columnheader">
+              <span class="tag">North star</span>
+              <h3>C. Living Companion</h3>
+              <p>Let it grow with every room.</p>
+            </div>
+
+            <div class="rowhead" role="rowheader">Includes</div>
+            <div>Trust and accessibility P0s, the current strata circle, a reserved Hearth, responsive placement, real imagery, and content cleanup.</div>
+            <div>Everything in A, plus collapsed / progress / expanded geometry, seamless morphing, contextual memory, taste portrait, adaptive Today, and the Studio queue.</div>
+            <div>Everything in B, plus room-first visual planning, long-lived room memory, and a Companion that carries designer collaboration over time.</div>
+
+            <div class="rowhead" role="rowheader">Range</div>
+            <div><strong>4–6 weeks</strong><br>Small product and design surface.</div>
+            <div><strong>8–12 weeks</strong><br>Prototype, validate, then staged implementation.</div>
+            <div><strong>4–6 months</strong><br>Research, spatial tech, content, and workflow change.</div>
+
+            <div class="rowhead" role="rowheader">Upside</div>
+            <div>Fast quality lift without changing the product model.</div>
+            <div>Turns an existing brand asset into a coherent, defensible interaction system.</div>
+            <div>Strongest long-term differentiation and clearest expression of “Where Time Adds Value.”</div>
+
+            <div class="rowhead" role="rowheader">Risk</div>
+            <div>The Companion still carries too many jobs without a defined model.</div>
+            <div>Requires disciplined states, language, motion, memory, and one cross-functional owner.</div>
+            <div>High spatial, content, privacy, and expectation risk before Companion habits are proven.</div>
+          </div>
+        </div>
+        <div class="panel" style="margin-top: 17px; display: flex; align-items: center; gap: 18px; border-left: 4px solid var(--clay-deep);">
+          <span class="tag recommended">Choose B</span>
+          <p style="margin: 0; font-family: var(--display); font-size: clamp(18px, 1.7vw, 28px);">Build the Companion system now. Let the Living Companion remain the horizon—not the next dependency.</p>
+        </div>
+        <div class="side-note">13 / Options</div>
+      </div>
+    </section>
+
+    <section class="slide dark" data-title="A 90-day path">
+      <div class="slide__inner">
+        <p class="kicker">Recommended sequence</p>
+        <h2>A 90-day path from character to system.</h2>
+        <p class="lede">Sequence the work so the Companion becomes safer, clearer, and more valuable in every phase.</p>
+        <div class="roadmap">
+          <article class="phase">
+            <span class="time">Weeks 0–2</span>
+            <h3>Establish the trust floor</h3>
+            <ul>
+              <li>Align capture, storage, retention, and copy</li>
+              <li>Enforce the Companion safe-zone contract</li>
+              <li>Adopt 44×44 touch targets</li>
+              <li>Baseline Companion use and dismissals</li>
+            </ul>
+          </article>
+          <article class="phase">
+            <span class="time">Weeks 2–4</span>
+            <h3>Define the Companion canon</h3>
+            <ul>
+              <li>Collapsed, progress, and expanded geometry</li>
+              <li>Strata mark, Hearth, and placement rules</li>
+              <li>Morph, voice, haptic, and interruption rules</li>
+              <li>AX5, VoiceOver, and reduced-motion specs</li>
+            </ul>
+          </article>
+          <article class="phase">
+            <span class="time">Weeks 4–8</span>
+            <h3>Prove the relationship</h3>
+            <ul>
+              <li>Art-direction and image system</li>
+              <li>First useful Companion exchange</li>
+              <li>Taste portrait with plain rationale</li>
+              <li>Adaptive Today and Studio prompts</li>
+            </ul>
+          </article>
+          <article class="phase">
+            <span class="time">Weeks 8–12</span>
+            <h3>Ship the Companion beta</h3>
+            <ul>
+              <li>Collapsed circle, progress capsule, and expanded sheet behind a rollout flag</li>
+              <li>Context and memory contracts</li>
+              <li>Studio attention queue</li>
+              <li>Behavior and accessibility acceptance</li>
+            </ul>
+          </article>
+        </div>
+        <p class="micro" style="margin-top: 18px;">Do not begin by making the Companion talk more. Begin by making every state clear, useful, quiet, and trustworthy.</p>
+        <div class="side-note">14 / Roadmap</div>
+      </div>
+    </section>
+
+    <section class="slide paper" data-title="Scorecard and leadership ask">
+      <div class="slide__inner">
+        <p class="kicker">Decision and scorecard</p>
+        <div class="grid-2" style="height: calc(100% - 42px); align-items: center;">
+          <div>
+            <h2>Measure whether the Companion earns its place.</h2>
+            <div class="scorecard">
+              <div class="score">
+                <strong>Time to first exchange</strong>
+                <span>First useful taste insight, saved piece, or room artifact.</span>
+              </div>
+              <div class="score">
+                <strong>Companion task completion</strong>
+                <span>Progress or expanded state → the suggested action completed.</span>
+              </div>
+              <div class="score">
+                <strong>Room activation</strong>
+                <span>Scan or manual-room start → useful room saved.</span>
+              </div>
+              <div class="score">
+                <strong>Design-request completion</strong>
+                <span>Start → review → send, segmented by guest and signed-in.</span>
+              </div>
+              <div class="score">
+                <strong>Morph comprehension</strong>
+                <span>State understood, hint acted on, dismissals, obstruction, and return use.</span>
+              </div>
+              <div class="score">
+                <strong>Inclusive acceptance</strong>
+                <span>AX5 reflow, 44×44 targets, contrast, VoiceOver, and Reduce Motion.</span>
+              </div>
+            </div>
+            <p class="micro" style="margin-top: 16px;">Set numeric targets after a two-week instrumentation baseline; do not invent baselines to justify the redesign.</p>
+          </div>
+          <div class="ask">
+            <p class="eyebrow">Leadership ask</p>
+            <h2 style="font-size: clamp(37px, 4vw, 64px);">Approve the Companion as a system—not an ornament.</h2>
+            <ol>
+              <li>Choose <strong>Companion system</strong> as the 90-day direction.</li>
+              <li>Name one owner across product, design, content, and engineering.</li>
+              <li>Fund a short art-direction, voice, and motion sprint around the character.</li>
+              <li>Gate implementation on a tested prototype, truthful privacy copy, and accessibility acceptance.</li>
+            </ol>
+          </div>
+        </div>
+        <div class="side-note">15 / Decision</div>
+      </div>
+    </section>
+
+    <section class="slide dark" data-title="Review method and scope">
+      <div class="slide__inner">
+        <p class="kicker">Appendix / Review method</p>
+        <h2>Evidence, scope, and confidence.</h2>
+        <p class="lede">This proposal is grounded in the current consumer app, its SwiftUI architecture, live simulator behavior, and the two completed internal review programs.</p>
+        <div class="method-grid">
+          <article class="method">
+            <p class="eyebrow">Build reviewed</p>
+            <h3>Current local app</h3>
+            <p>Bundle <code>cloud.patina.app</code><br>Version <code>1.0 (1)</code><br>Source revision <code>09923909</code><br>Review date <code>2026-07-29</code></p>
+          </article>
+          <article class="method">
+            <p class="eyebrow">Verification</p>
+            <h3>Simulator-observed</h3>
+            <p>iPhone 17 Pro<br><code>973D1724-90BF-4A0A-B02D-481D561547B3</code><br>Light and dark appearance<br>Standard and AX5 Dynamic Type</p>
+          </article>
+          <article class="method">
+            <p class="eyebrow">Boundary</p>
+            <h3>Not claimed here</h3>
+            <p>Camera, LiDAR, AR accuracy, and physical-device performance were not revalidated. Signed-in Studio evidence includes the repository’s July 28 validation captures.</p>
+          </article>
+        </div>
+        <div class="grid-2" style="margin-top: 30px;">
+          <div class="panel">
+            <p class="eyebrow">Scope</p>
+            <p style="margin: 0; color: rgba(247,242,233,.72);">Consumer Patina iOS only. Patina Field, web portals, and operational redesign are outside this review.</p>
+          </div>
+          <div class="panel" style="border-left: 4px solid var(--clay);">
+            <p class="eyebrow">Deliverable integrity</p>
+            <p style="margin: 0; color: rgba(247,242,233,.72);">No Swift, project, database, or production behavior was changed. This HTML proposal and its review assets are the only deliverables.</p>
+          </div>
+        </div>
+        <p class="quote" style="margin: 34px 0 0; font-size: clamp(27px, 3vw, 49px);">The opportunity is not to add more Patina.<br>It is to let the Companion make <mark>Patina unmistakable.</mark></p>
+        <div class="side-note">16 / Method</div>
+      </div>
+    </section>
+  </main>
+
+  <nav class="deck-controls" aria-label="Presentation controls">
+    <button type="button" id="prev" aria-label="Previous slide" title="Previous slide (←)">←</button>
+    <span class="counter" aria-live="polite"><span id="current">01</span> / <span id="total">16</span></span>
+    <button type="button" id="next" aria-label="Next slide" title="Next slide (→)">→</button>
+    <button type="button" id="overview" aria-label="Toggle slide overview" title="Overview (O)">⌘</button>
+    <button type="button" id="fullscreen" aria-label="Toggle fullscreen" title="Fullscreen (F)">⛶</button>
+  </nav>
+  <div class="progress" aria-hidden="true"><span id="progress"></span></div>
+
+  <script>
+    (() => {
+      const slides = [...document.querySelectorAll(".slide")];
+      const current = document.getElementById("current");
+      const total = document.getElementById("total");
+      const progress = document.getElementById("progress");
+      let index = Math.max(0, Math.min(
+        slides.length - 1,
+        Number((location.hash.match(/\d+/) || [1])[0]) - 1
+      ));
+
+      total.textContent = String(slides.length).padStart(2, "0");
+
+      function render(nextIndex, updateHash = true) {
+        const previous = index;
+        index = Math.max(0, Math.min(slides.length - 1, nextIndex));
+        slides.forEach((slide, i) => {
+          slide.classList.toggle("active", i === index);
+          slide.classList.toggle("was-active", i < index);
+          slide.setAttribute("aria-hidden", i === index ? "false" : "true");
+        });
+        current.textContent = String(index + 1).padStart(2, "0");
+        progress.style.width = `${((index + 1) / slides.length) * 100}%`;
+        document.title = `${String(index + 1).padStart(2, "0")} — ${slides[index].dataset.title} · Patina iOS`;
+        if (updateHash && previous !== index) history.replaceState(null, "", `#slide-${index + 1}`);
+      }
+
+      function go(delta) {
+        document.body.classList.remove("overview");
+        render(index + delta);
+      }
+
+      document.getElementById("prev").addEventListener("click", () => go(-1));
+      document.getElementById("next").addEventListener("click", () => go(1));
+      document.getElementById("overview").addEventListener("click", () => {
+        document.body.classList.toggle("overview");
+      });
+      document.getElementById("fullscreen").addEventListener("click", async () => {
+        if (!document.fullscreenElement) await document.documentElement.requestFullscreen?.();
+        else await document.exitFullscreen?.();
+      });
+
+      slides.forEach((slide, slideIndex) => {
+        slide.addEventListener("click", () => {
+          if (document.body.classList.contains("overview")) {
+            document.body.classList.remove("overview");
+            render(slideIndex);
+          }
+        });
+      });
+
+      addEventListener("keydown", (event) => {
+        if (["ArrowRight", "PageDown", " "].includes(event.key)) {
+          event.preventDefault();
+          go(1);
+        } else if (["ArrowLeft", "PageUp"].includes(event.key)) {
+          event.preventDefault();
+          go(-1);
+        } else if (event.key === "Home") {
+          render(0);
+        } else if (event.key === "End") {
+          render(slides.length - 1);
+        } else if (event.key.toLowerCase() === "o") {
+          document.body.classList.toggle("overview");
+        } else if (event.key.toLowerCase() === "f") {
+          document.getElementById("fullscreen").click();
+        } else if (event.key === "Escape") {
+          document.body.classList.remove("overview");
+        }
+      });
+
+      let touchStart = null;
+      addEventListener("touchstart", (event) => {
+        touchStart = event.changedTouches[0].clientX;
+      }, { passive: true });
+      addEventListener("touchend", (event) => {
+        if (touchStart === null) return;
+        const delta = event.changedTouches[0].clientX - touchStart;
+        if (Math.abs(delta) > 50) go(delta < 0 ? 1 : -1);
+        touchStart = null;
+      }, { passive: true });
+
+      addEventListener("hashchange", () => {
+        const requested = Number((location.hash.match(/\d+/) || [1])[0]) - 1;
+        render(requested, false);
+      });
+
+      render(index, false);
+    })();
+  </script>
+</body>
+</html>
