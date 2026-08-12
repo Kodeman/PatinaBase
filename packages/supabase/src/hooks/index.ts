@@ -387,6 +387,7 @@ export {
   useAddProjectParty,
   useUpdateProjectParty,
   useRemoveProjectParty,
+  useRecordPartySmsConsent,
   useProjectRoster,
   isProjectArtifactApproval,
   excludeProjectArtifactApprovals,
@@ -412,6 +413,7 @@ export type {
   UpdateProjectPartyPatch,
   UpdateProjectPartyInput,
   RemoveProjectPartyInput,
+  RecordPartySmsConsentInput,
   ProjectRosterRow,
 } from './use-coordination';
 // Field Coordination (Wave 5) — SMS triage, cross-project field rollup, and the

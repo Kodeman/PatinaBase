@@ -27,6 +27,7 @@ import {
   useFieldMediaUrl,
   useOrganizations,
   useProjectParties,
+  useRecordPartySmsConsent,
   fieldLinkUrl,
   type PartyRole,
   type PartySmsMessage,
@@ -143,6 +144,7 @@ export function PartyProfileSheet({
   const createLink = useCreateFieldLink();
   const revokeLink = useRevokeFieldLink();
   const send = useSendPartySms();
+  const recordConsent = useRecordPartySmsConsent();
 
   // Call Sheet Wave 2 — the promote band (slide 10). Gated on the flag AND on
   // finding this party's real project_parties row (the mutation needs the
@@ -183,6 +185,22 @@ export function PartyProfileSheet({
   const [copied, setCopied] = useState(false);
   const [body, setBody] = useState('');
   const [linkError, setLinkError] = useState<string | null>(null);
+
+  // Invite-to-texts (existing parties only — AddPersonSheet owns the
+  // create-time path). Self-clears whenever a different party opens, same
+  // as the promote band's justPromotedPartyId above.
+  const [inviteConsent, setInviteConsent] = useState(false);
+  const [inviteSource, setInviteSource] = useState<
+    '' | 'verbal' | 'written' | 'web_form' | 'other'
+  >('');
+  const [inviteEvidence, setInviteEvidence] = useState('');
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  useEffect(() => {
+    setInviteConsent(false);
+    setInviteSource('');
+    setInviteEvidence('');
+    setInviteError(null);
+  }, [partyId]);
 
   const meta = (person?.meta ?? {}) as Record<string, unknown>;
   const consent = (person?.status_raw ??
@@ -246,6 +264,40 @@ export function PartyProfileSheet({
     send.mutate(
       { partyId, body: body.trim() },
       { onSuccess: () => setBody('') },
+    );
+  };
+
+  const doInvite = () => {
+    if (!partyId) return;
+    setInviteError(null);
+    if (!phone?.trim()) {
+      setInviteError('Texting updates needs a phone number — add one first.');
+      return;
+    }
+    if (!inviteSource || !inviteEvidence.trim()) {
+      setInviteError(
+        'Record how and where they gave prior consent before sending a text.',
+      );
+      return;
+    }
+    recordConsent.mutate(
+      {
+        partyId,
+        phone,
+        smsConsentSource: inviteSource,
+        smsConsentEvidence: inviteEvidence.trim(),
+      },
+      {
+        onSuccess: () => {
+          setInviteConsent(false);
+          setInviteSource('');
+          setInviteEvidence('');
+        },
+        onError: (e) =>
+          setInviteError(
+            e instanceof Error ? e.message : 'Could not invite them just now.',
+          ),
+      },
     );
   };
 
@@ -401,13 +453,123 @@ export function PartyProfileSheet({
               )}
             </DocumentActionRow>
           </>
+        ) : consent === 'pending' ? (
+          <p className="rounded-[7px] border border-[var(--color-pearl)] bg-white/50 px-3 py-2.5 text-[0.74rem] leading-relaxed text-[var(--color-aged-oak)]">
+            Invite sent — waiting on their reply. You can text them once they
+            reply YES.
+          </p>
+        ) : consent === 'opted_out' ? (
+          <p className="rounded-[7px] border border-[var(--color-pearl)] bg-white/50 px-3 py-2.5 text-[0.74rem] leading-relaxed text-[var(--color-aged-oak)]">
+            They opted out by text. Only they can rejoin by replying START.
+          </p>
+        ) : consent === 'not_asked' && phone ? (
+          <div>
+            <p className="mb-2.5 text-[0.74rem] leading-relaxed text-[var(--color-aged-oak)]">
+              Invite {person?.display_name ?? 'them'} to texts — they get a
+              confirmation to reply YES before anything sends.
+            </p>
+            <label className="flex cursor-pointer items-start gap-2.5 text-[0.74rem] text-[var(--color-mocha)]">
+              <input
+                type="checkbox"
+                checked={inviteConsent}
+                onChange={(e) => setInviteConsent(e.target.checked)}
+                className="mt-0.5 h-4 w-4 cursor-pointer rounded border-[var(--color-pearl)] accent-[var(--color-clay)]"
+              />
+              <span>
+                They gave prior express consent for text updates
+                <span className="mt-0.5 block text-[0.64rem] text-[var(--color-aged-oak)]">
+                  Optional and never preselected. They agreed to Patina
+                  project texts (~1/day, rates may apply, reply STOP to quit).
+                </span>
+              </span>
+            </label>
+
+            {inviteConsent && (
+              <div className="mt-3 rounded border border-[var(--color-pearl)] bg-[var(--color-linen)]/45 p-3">
+                <label htmlFor="invite-consent-source" className={META}>
+                  How consent was given
+                </label>
+                <select
+                  id="invite-consent-source"
+                  value={inviteSource}
+                  onChange={(e) =>
+                    setInviteSource(
+                      e.target.value as
+                        | ''
+                        | 'verbal'
+                        | 'written'
+                        | 'web_form'
+                        | 'other',
+                    )
+                  }
+                  className="mb-3 w-full rounded-[7px] border border-[var(--color-pearl)] bg-white px-3.5 py-2.5 text-[0.82rem] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
+                >
+                  <option value="">Choose a method…</option>
+                  <option value="verbal">Verbal agreement</option>
+                  <option value="written">Written agreement</option>
+                  <option value="web_form">Website or form</option>
+                  <option value="other">Other documented consent</option>
+                </select>
+
+                <label htmlFor="invite-consent-evidence" className={META}>
+                  Consent record
+                </label>
+                <textarea
+                  id="invite-consent-evidence"
+                  value={inviteEvidence}
+                  onChange={(e) => setInviteEvidence(e.target.value)}
+                  placeholder="Where and when they agreed, e.g. signed site kickoff form on Aug 8"
+                  rows={3}
+                  className="w-full resize-none rounded-[7px] border border-[var(--color-pearl)] bg-white px-3.5 py-2.5 text-[0.82rem] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
+                />
+                <p className="mt-2 text-[0.62rem] leading-relaxed text-[var(--color-aged-oak)]">
+                  Keep the underlying form, message, or signed record. Patina
+                  stores this note, time, disclosure version, and the person
+                  recording it.
+                </p>
+              </div>
+            )}
+
+            {inviteError && (
+              <p
+                role="alert"
+                className="mt-2 text-[0.7rem] text-[var(--color-terracotta)]"
+              >
+                {inviteError}
+              </p>
+            )}
+
+            <DocumentActionRow
+              surfaceKey="people"
+              regionKey="field-invite-to-texts"
+              className="mt-3"
+              aria-label="Invite to texts actions"
+            >
+              <DocumentAction
+                actionKey="invite-party-to-texts"
+                variant="primary"
+                onClick={doInvite}
+                disabled={!inviteConsent || recordConsent.isPending}
+                loading={recordConsent.isPending}
+                loadingLabel="Inviting…"
+                title={
+                  !inviteConsent
+                    ? 'Check the consent box above first'
+                    : undefined
+                }
+                aria-label={
+                  !inviteConsent
+                    ? 'Invite to texts — check the consent box above first'
+                    : undefined
+                }
+              >
+                Invite to texts
+              </DocumentAction>
+            </DocumentActionRow>
+          </div>
         ) : (
           <p className="rounded-[7px] border border-[var(--color-pearl)] bg-white/50 px-3 py-2.5 text-[0.74rem] leading-relaxed text-[var(--color-aged-oak)]">
-            {consent === 'pending'
-              ? 'Waiting on their opt-in — an invite text was sent. You can text them once they reply YES.'
-              : consent === 'opted_out'
-                ? 'This party opted out of texts. Reach them another way.'
-                : 'Add a phone and turn on “Text updates” to invite them, then you can text here.'}
+            Add a phone number to invite this party to texts.
           </p>
         )}
       </section>

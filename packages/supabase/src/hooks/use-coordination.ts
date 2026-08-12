@@ -513,6 +513,162 @@ export function useUpdateProjectParty() {
   });
 }
 
+export interface RecordPartySmsConsentInput {
+  partyId: string;
+  /** The party's current phone — required client-side (mirrors
+   *  useAddProjectParty's `wantsText` guard): consent for texts is
+   *  meaningless without a number to text. Also pinned into the UPDATE's
+   *  WHERE clause (F4) so a phone edit racing this submit can't re-target
+   *  the attestation onto a number the designer never actually saw consent
+   *  for. */
+  phone: string | null | undefined;
+  smsConsentSource: 'verbal' | 'written' | 'web_form' | 'other';
+  smsConsentEvidence: string;
+}
+
+/** The five evidence columns `fc_dispatch_optin_invite` (00432) reads, plus
+ *  `sms_consent_status` — the exact six-column bundle every write (and every
+ *  not_asked revert) in this hook sets together. */
+const NOT_ASKED_CONSENT_COLUMNS = {
+  sms_consent_status: 'not_asked' as const,
+  sms_consent_source: null,
+  sms_consent_evidence: null,
+  sms_consent_recorded_at: null,
+  sms_consent_recorded_by: null,
+  sms_consent_disclosure_version: null,
+};
+
+/**
+ * Invite an EXISTING party to texts — the only writer of consent columns
+ * outside `useAddProjectParty`'s create path. Flips `not_asked` → `pending`
+ * with the same six-column evidence bundle `fc_dispatch_optin_invite` (00432)
+ * requires to treat the UPDATE as a fresh invite-eligible transition: source,
+ * evidence, recorded_at, recorded_by, disclosure_version, plus the status
+ * flip itself. `sms_consent_recorded_by`'s `DEFAULT auth.uid()` (00432) is
+ * INSERT-only, so an UPDATE must stamp the attester explicitly or the audit
+ * trail silently loses who recorded consent.
+ *
+ * Three guards run before/around the write:
+ *  · a phone-global opt-out check (F3) — a STOP opts out every row sharing a
+ *    phone_e164 (00432's sendPartySms contract), so a sibling row still
+ *    sitting at not_asked on the same number must never be invited;
+ *  · `.eq('sms_consent_status', 'not_asked')` + `.eq('phone', input.phone)`
+ *    (F4) make the only legal transition — and the exact phone the designer
+ *    saw — explicit server-side; a zero-row match (guard column or phone
+ *    moved under us) surfaces as a friendly race message, not a raw
+ *    PostgREST error;
+ *  · a post-write phone_e164 check (F2) — the trigger gates dispatch on the
+ *    normalized `phone_e164`, not the raw `phone` column, so a row whose
+ *    number fails to normalize is reverted straight back to `not_asked`
+ *    (never left stranded at `pending` with no invite and no way back).
+ *
+ * `granted` never routes here (TCPA: consent, once given, isn't re-recorded)
+ * and `opted_out` is never designer-flippable — only the recipient's own
+ * STOP/START reply changes that state. This hook cannot express either.
+ */
+export function useRecordPartySmsConsent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: RecordPartySmsConsentInput) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const phone = input.phone?.trim();
+      if (!phone) {
+        throw new Error(
+          'Texting updates needs a phone number — add one first.',
+        );
+      }
+      const consentEvidence = input.smsConsentEvidence?.trim() || null;
+      if (!input.smsConsentSource || !consentEvidence) {
+        throw new Error(
+          'Record how and where this person gave prior consent before sending a text.',
+        );
+      }
+
+      // F3 — a STOP reply opts out every row on that phone_e164; a sibling
+      // row still at not_asked must not silently re-invite a number that
+      // already opted out on another party/project row.
+      const { data: selfRow, error: selfError } = await supabase
+        .from('project_parties')
+        .select('phone_e164')
+        .eq('id', input.partyId)
+        .maybeSingle();
+      if (selfError) throw selfError;
+      const phoneE164 = selfRow?.phone_e164 ?? null;
+      if (phoneE164) {
+        const { data: optedOutSiblings, error: siblingError } = await supabase
+          .from('project_parties')
+          .select('id')
+          .eq('phone_e164', phoneE164)
+          .eq('sms_consent_status', 'opted_out')
+          .limit(1);
+        if (siblingError) throw siblingError;
+        if (optedOutSiblings && optedOutSiblings.length > 0) {
+          throw new Error(
+            'This number already opted out of Patina texts. Only they can rejoin by replying START.',
+          );
+        }
+      }
+
+      // F1 — sms_consent_recorded_by's DEFAULT auth.uid() only fires on
+      // INSERT; stamp the attester explicitly on this UPDATE.
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+      const recordedBy = userData?.user?.id ?? null;
+
+      const { data, error } = await supabase
+        .from('project_parties')
+        .update({
+          sms_consent_status: 'pending',
+          sms_consent_source: input.smsConsentSource,
+          sms_consent_evidence: consentEvidence,
+          sms_consent_recorded_at: new Date().toISOString(),
+          sms_consent_recorded_by: recordedBy,
+          sms_consent_disclosure_version: 'field-sms-v1',
+        })
+        .eq('id', input.partyId)
+        .eq('phone', phone)
+        .eq('sms_consent_status', 'not_asked')
+        .select()
+        .single();
+      if (error) {
+        // F6 — zero rows matched (the guard column or the phone moved under
+        // us between render and submit): a friendly race message, not the
+        // raw PostgREST "no rows" error.
+        if (error.code === 'PGRST116') {
+          throw new Error(
+            "This person's texting status just changed — refresh to see it.",
+          );
+        }
+        throw error;
+      }
+
+      // F2 — the trigger gates dispatch on phone_e164 (NULL for unparseable
+      // input), not the raw `phone` column just pinned above. A row that
+      // flipped to pending with no valid E.164 gets no invite and no way
+      // back without this revert.
+      if (!data.phone_e164) {
+        const { error: revertError } = await supabase
+          .from('project_parties')
+          .update(NOT_ASKED_CONSENT_COLUMNS)
+          .eq('id', input.partyId);
+        if (revertError) throw revertError;
+        throw new Error(
+          "That phone can't receive texts — fix the number first.",
+        );
+      }
+
+      return data as ProjectParty;
+    },
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: ['project-parties', data.project_id] });
+      void queryClient.invalidateQueries({ queryKey: ['project-roster', data.project_id] });
+      // The party's row in the People Room roster (people_directory, 00281).
+      void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
+    },
+  });
+}
+
 export interface RemoveProjectPartyInput {
   id: string;
   projectId: string;
