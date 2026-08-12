@@ -131,6 +131,17 @@ test('an overdue gate wears the stamp, and only an overdue gate does', async ({
   await expect(marginItem(page, ids.pending)).toBeVisible();
   await expect(marginItem(page, ids.pending)).not.toContainText(/Overdue/);
 
+  // The stamp must never tax the need line's own measure. At the ≥1440px
+  // permanent rail the item is ~195px wide; before the stamp moved to its
+  // own row, sharing the right-hand column with the act collapsed this to
+  // 0px (one character per line). It now has to keep a legible column even
+  // with the stamp present.
+  const needLine = marginItem(page, ids.overdue).locator('p').first();
+  const box = await needLine.boundingBox();
+  expect(box).not.toBeNull();
+  console.log(`overdue need-line width: ${box?.width}px`);
+  expect(box!.width).toBeGreaterThanOrEqual(90);
+
   // Ruling IV, second rendering: the same derivation, read as a sentence.
   await expect(page.locator('#document-next-up')).toContainText(
     /has waited \d+ days?\./,

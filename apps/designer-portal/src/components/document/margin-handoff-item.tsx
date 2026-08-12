@@ -70,24 +70,34 @@ function HandoffShell({
   children?: React.ReactNode;
   action: React.ReactNode;
 }) {
+  // The stamp is a mark on the item, not a sibling competing with the act for
+  // the right-hand grid column. Sharing that column forced the need line's
+  // column to a hard 0px at the ≥1440px rail width (item ~195px) once both a
+  // stamp and an act needed to fit beside it. Its own row, above the need
+  // line, keeps the stamp legible without taxing the text column at all.
+  const stampLabel = overdueStampLabel(gate.overdue);
   return (
     <div
       className="mb-2 rounded-[5px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] transition-colors duration-150 hover:border-[var(--border-warm)]"
       style={{ borderLeft: '2.5px solid var(--color-golden-hour)' }}
       data-margin-handoff={gate.id}
     >
-      <div className="grid grid-cols-1 gap-2 px-3 py-2.5 min-[360px]:grid-cols-[minmax(0,1fr)_auto] min-[360px]:items-start">
-        <div className="min-w-0">
-          <p className="break-words text-[13px] font-medium leading-snug text-[var(--color-charcoal)]">
-            {gate.lane} · {gate.terms}
-          </p>
-          <p className="mt-1 break-words font-mono text-[12px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-            {gate.provenance}
-          </p>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <OverdueStamp gate={gate} />
-          {action}
+      <div className="px-3 py-2.5">
+        {stampLabel && (
+          <div className="mb-1.5 flex justify-end">
+            <OverdueStamp gate={gate} />
+          </div>
+        )}
+        <div className="grid grid-cols-1 gap-2 min-[360px]:grid-cols-[minmax(0,1fr)_auto] min-[360px]:items-start">
+          <div className="min-w-0">
+            <p className="break-words text-[13px] font-medium leading-snug text-[var(--color-charcoal)]">
+              {gate.lane} · {gate.terms}
+            </p>
+            <p className="mt-1 break-words font-mono text-[12px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+              {gate.provenance}
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center">{action}</div>
         </div>
       </div>
       {children}
