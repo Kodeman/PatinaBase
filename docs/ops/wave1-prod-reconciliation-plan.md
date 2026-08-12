@@ -580,6 +580,11 @@ pnpm supabase:start
 pnpm supabase:reset      # replays 00001 -> 00472 + all seeds
 ```
 
+> ⚠ **After the §6.1 quarantine, local replay excludes 00471.** `supabase db reset`
+> replays only what is in `supabase/migrations/`, so once 00471 is committed to
+> `supabase/migrations-held/` a fresh local reset covers 00001→00472 **minus 00471** —
+> local and prod stay deliberately in step. To exercise 00471 locally, see §8.1.
+
 > ⚠ **Check `.env.local` first.** `apps/*/.env.local` has pointed at Strata **prod**
 > before. Before any destructive local action confirm every portal's
 > `NEXT_PUBLIC_SUPABASE_URL` reads `http://127.0.0.1:54321` — not a
@@ -595,7 +600,9 @@ the freshly reset local stack. A green replay plus a green ceremony run is the m
 and deploy bar. Note that **no CI runs any of this** — local verification is the only
 verification.
 
-**Replay status as of 2026-08-12:** `supabase db reset` completed clean on the
+**Replay status as of 2026-08-12** (historical record — this run predates the §6.1
+quarantine, when 00471 was still in `supabase/migrations/`; it stands as written and
+is not reproducible verbatim afterward)**:** `supabase db reset` completed clean on the
 reconciliation branch — 00001→00472 including all thirteen materialized FF&E files
 and the edited 00462, zero errors, all seeds applied. The §5.3 posture checks were
 run against that reset database and all passed.
@@ -632,6 +639,24 @@ psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' -v ON_ERROR_STOP=
 > 00471 (verified — see §1.1), but its **contract test** is not. With 00471 held on
 > prod, expect the 00472 test to fail there while passing locally. Both tests were
 > verified passing against the local reset stack on 2026-08-12.
+
+> ⚠ **After the §6.1 quarantine, both 00471 tests fail locally too.** The two rows
+> above say "passes locally (where 00471 is applied)" — that stops being true once
+> 00471 lives in `supabase/migrations-held/`, because a fresh `pnpm supabase:reset`
+> no longer applies it. **This failure is expected, not a regression.** To exercise
+> either test locally while the hold stands:
+>
+> ```bash
+> cp supabase/migrations-held/00471_site_request_authority_action_detail.sql \
+>    supabase/migrations/          # cp, NOT git mv — the held file must stay put
+> pnpm supabase:reset
+> # run the 00471 / 00472 tests
+> rm supabase/migrations/00471_site_request_authority_action_detail.sql
+> ```
+>
+> Delete the copy before committing or pushing anything. A stray 00471 in
+> `supabase/migrations/` re-arms the exact hazard §6.1 exists to prevent — the next
+> `supabase db push` would apply it to prod.
 
 `supabase/tests/workflow/approval_authority/README.md` carries the detailed
 assertion matrix for the Stage-2 tests and has been renumbered to match.
