@@ -312,7 +312,7 @@ export interface ProcurementItemRow {
     sent_at: string | null;
     /** When the vendor confirmed receipt (00186) — the "Ack" column. */
     acknowledged_at: string | null;
-    /** PO creation timestamp — the "Ordered" column. */
+    /** PO creation timestamp — the "Released to maker" column. */
     created_at: string;
     vendor?: { id: string; name: string } | null;
     payments?: POPayment[];

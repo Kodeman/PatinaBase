@@ -18,10 +18,10 @@ type ClientVisibleStatus = (typeof STATUS_ORDER)[number];
 
 const STATUS_LABEL: Record<ClientVisibleStatus, string> = {
   approved: 'Approved',
-  ordered: 'Ordered',
+  ordered: 'Released to maker',
   production: 'In production',
-  shipped: 'Shipped',
-  delivered: 'Delivered',
+  shipped: 'In transit',
+  delivered: 'Received',
   installed: 'Installed',
 };
 

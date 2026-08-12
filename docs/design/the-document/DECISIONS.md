@@ -7654,3 +7654,92 @@ fixed under this ticket (designer-portal is out of scope for WP3 Track D).
 
 *Entries add: I114–I120 · last id = I120*
 
+## WP4 Track 2 — the "Ordered" retirement sweep — 2026-08-12
+
+### I121 · Rendered FF&E stage labels drop the commercial-claim register (ratified — deck folio 12/14)
+
+Kody's ruling: one sweep, every surface, rendered labels only — internal enum
+values, DB values, and PO entity names untouched. Replacement labels are the
+lifecycle step names, actor-neutral, per the deck: `ordered` → **"Released to
+maker"** · `shipped` → **"In transit"** · `delivered` → **"Received"** ·
+`production` → "In production" (unchanged) · `installed` → "Installed"
+(unchanged) · `specified`/`quoted`/`approved` labels unchanged (no
+commercial claim to begin with).
+
+**Sites changed** (four known + two found on sweep):
+- `apps/designer-portal/src/components/portal/ffe/stages.ts` —
+  `STAGE_CONFIG` labels for `ordered`/`shipped`/`delivered`. This is the
+  single source both the per-project FF&E board and the Procurement → By
+  Status view read from, so both surfaces pick up the change for free.
+- `apps/client-portal/src/components/ffe-status.tsx` — `statusLabels`.
+- `apps/client-portal/src/components/commercial/journey-stepper.tsx` —
+  `GOODS_JOURNEY_STAGES` (the six-stop client goods journey; consumed
+  positionally by `tracking-row.tsx` and `the-making.tsx`, so both update
+  with the constant).
+- `apps/client-portal/src/components/project/FFEPipelinePanel.tsx` —
+  `STATUS_LABEL`.
+- `apps/client-portal/src/components/making/tracking-row.tsx` — inline
+  `STAGE_PHASE` array comments and a docblock line that quoted the old
+  words; not rendered copy, updated for accuracy alongside the constant they
+  annotate.
+- `packages/supabase/src/hooks/use-procurement.ts` — a doc-comment on
+  `purchase_order.created_at` naming the admin "By Status" column it backs;
+  updated to match the new label since the column itself already reads from
+  `STAGE_CONFIG`.
+
+Tests updated alongside: `apps/designer-portal/src/components/portal/ffe/
+__tests__/stage-select.test.tsx` (option-name query), `apps/client-portal/
+src/components/commercial/__tests__/journey-stepper.test.tsx` (`getByText`
+assertion), `apps/client-portal/src/components/making/__tests__/
+the-making.test.tsx` (`data-journey-stop` assertion).
+
+**Left alone, with reasons — a careful grep surfaced a second, unrelated
+"Authorized" vocabulary that this ruling does not reach:**
+- `apps/designer-portal/src/lib/document/authorization-derivation.ts`,
+  `authority-hours.ts`, `project-commerce.ts` (trade-scope section), and
+  `apps/client-portal/src/components/commercial-document-shell.tsx`
+  ("Authorized furnishings") — all belong to the **Authorized Schedule**
+  feature (shipped 2026-08-05): "Authorized" here means the *client has
+  signed the instrument*, a design-services/trade-scope authorization
+  concept with its own ratified vocabulary, unrelated to an FF&E item's
+  procurement stage. `authorization-derivation.ts` is explicitly the second
+  stamp track alongside the (out-of-scope) `stamp-derivation.ts`. Renaming
+  this would rip out a different, already-shipped feature's language, not
+  retire a commercial claim on an FF&E item.
+- `apps/admin-portal/src/lib/concierge-stages.ts`, `.../fulfillment/
+  workbench/po-draft-column.tsx`, `.../fulfillment/queue/queue-row.tsx`,
+  `packages/fulfillment/src/shipments.ts` — internal Mission Control /
+  fulfillment-ops tooling for Patina staff literally tracking PO and freight
+  state ("PO Sent", "Freight Booked", inspection-window countdowns). Staff
+  need the literal operational state, not client-facing lifecycle prose;
+  this is not the "commercial claim" register the ruling targets.
+- `apps/designer-portal/src/lib/document/feedback.ts` (`shipped: 'Shipped'`)
+  — the Feedback layer's own status vocabulary ("this bug report shipped"),
+  a software-development-lifecycle sense of "shipped," not FF&E goods.
+- `apps/client-portal/src/components/messages/ReadReceipt.tsx` — message
+  read/delivered state, an SMS-style receipt, not commercial goods.
+- `apps/admin-portal/.../communications/campaigns/[id]/page.tsx` —
+  "Delivered"/"Bounced" email-campaign delivery stats.
+- `apps/designer-portal/src/components/portal/procurement/order-assistant/
+  index.tsx` — "Order placed via Patina …" toast copy after a designer
+  completes a PO through the Order Assistant. A one-time confirmation of the
+  act, not a persistent stage label, and it does not contain the forbidden
+  word "Ordered." "Order Assistant" is this tool's established name.
+- `packages/patina-design-system/src/components/Timeline/{Timeline.tsx,
+  Timeline.stories.tsx}` — generic component doc/story example data
+  ("Order placed", "Shipped", "Delivered"), not live application copy; the
+  component is not consumed anywhere in-repo under that prop shape.
+- `apps/designer-portal/src/components/document/ffe-section.tsx` — imports
+  `STAGE_CONFIG` from `stages.ts` rather than duplicating labels, so it
+  inherits the fix without a direct edit; left untouched per the
+  `components/document/` exclusion regardless.
+- `supabase/functions/**` (edge-function email templates, e.g. `_shared/
+  po-emails.ts`, `_shared/fulfillment-templates.ts`) — out of the stated
+  sweep scope (portals + packages); flagged here as a candidate for a
+  follow-up pass if Kody wants the retirement to reach transactional email.
+
+**Noted, not changed:** `apps/designer-portal/src/components/portal/ffe/
+stages.ts` had `production: 'Production'` where the client portal already
+said "In production" — a pre-existing cross-portal inconsistency, not a
+commercial-claim word. Left as-is; out of this ticket's scope.
+
