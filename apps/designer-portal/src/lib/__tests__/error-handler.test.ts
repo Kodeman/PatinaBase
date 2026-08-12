@@ -10,6 +10,7 @@ jest.mock('@patina/supabase', () => ({
 import {
   AppError,
   handleApiError,
+  getErrorMessage,
   isAuthError,
   isSessionExpiredError,
 } from '../error-handler';
@@ -81,6 +82,22 @@ describe('error-handler — session expiry detection (PT-D-2-T6-1)', () => {
       expect(appError.statusCode).toBe(409);
       expect(appError.message).toBe(
         'This item is on an invoice — void the invoice before removing it.'
+      );
+    });
+
+    it('surfaces the real PostgrestError message instead of the generic UNKNOWN_ERROR copy', () => {
+      // handleApiError's string-constructor fallback path assigns code
+      // UNKNOWN_ERROR and stashes the real error text as `message`. That
+      // real text must survive to getErrorMessage, not get masked by the
+      // canned "An unexpected error occurred" string.
+      const postgrestShapedError = {
+        code: '42P01',
+        message: 'relation "project_approvals" does not exist',
+      };
+      const appError = handleApiError(postgrestShapedError);
+      expect(appError.code).toBe('UNKNOWN_ERROR');
+      expect(getErrorMessage(appError)).toBe(
+        'relation "project_approvals" does not exist'
       );
     });
 

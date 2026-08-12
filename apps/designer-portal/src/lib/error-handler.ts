@@ -100,9 +100,16 @@ function getUserFriendlyMessage(code: string, fallback: string): string {
     REQUEST_FAILED_SESSION_ALIVE:
       "That didn't go through. You're still signed in — try again.",
 
-    // Generic
-    UNKNOWN_ERROR: 'An unexpected error occurred',
   };
+
+  // UNKNOWN_ERROR is the code AppError's string constructor assigns while
+  // stashing the real error text as `message` (see `AppError` above and the
+  // string-constructor path in `handleApiError`). Returning a canned string
+  // here would mask that real message behind "An unexpected error occurred"
+  // for every error that takes this path — return the fallback instead.
+  if (code === 'UNKNOWN_ERROR') {
+    return fallback;
+  }
 
   return messages[code] || fallback;
 }
