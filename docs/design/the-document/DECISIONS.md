@@ -7729,10 +7729,15 @@ over facts the book already holds:
 
 - **G1 Complete to produce** — `acknowledged_at` set AND every deposit-kind
   `po_payments` row `paid`. **A PO with no deposit rows settles it vacuously**,
-  which is the ratified reading: absent terms are not unmet terms — but only for
-  a LIVE order. A `draft` or `cancelled` PO takes no position on the trail at
-  all, so an unwritten order is never promoted to "Cleared to produce" and the
-  orders book keeps saying "draft" and "cancelled" out loud.
+  which is the ratified reading: absent terms are not unmet terms — but not for
+  a `draft` order, which is a document being written, so an unwritten order is
+  never promoted to "Cleared to produce" and the orders book keeps saying
+  "draft" out loud. A **`cancelled` order evidences nothing at all** — not step
+  01, not its send date, not a delivery — exactly as on Rail A: the order was
+  withdrawn, so the trail reports no position rather than leaving the work
+  standing where it stopped. The gate's qualifier names the term that actually
+  holds it open, so uncleared terms come first (`terms outstanding`) and the
+  acknowledgment is the fallback.
 - **G2 Received and dispositioned** — an inspection logged, the count not short,
   and no `drafted` / `vendor_notified` claim on the line. `receiving_inspections`
   is PO-grain with no FF&E link, so the item-grain traces are `delivered_date`
@@ -7756,15 +7761,28 @@ signature, not a blockage, and drawing a stop under finished work would be a lie
 about the present.
 
 The counterweight is `holdsOpen`. A term that is a **live condition** — an
-unresolved claim, a short receipt, an inspection never logged, uncleared order
-terms — keeps its gate `open` even once the trail's position has moved past it
+unresolved claim, a short receipt, uncleared order terms — keeps its gate `open`
+even once the trail's position has moved past it
 (a claim evidences step 10, which sits past G2, so position alone would have
 silenced the loudest fact about a receipt). The distinction is the whole design:
 *a live stop stops; an unrecorded seal goes quiet.*
 
+An inspection nobody logged is deliberately NOT such a condition: it is a
+missing record, and by the argument above a missing record goes quiet. A line
+installed months ago whose receipt was never written down reads
+`passed-unsealed`, not blocked; while the work is still standing at the gate,
+position alone keeps it open.
+
 An open gate names the term holding it — the qualifier is read off the unmet
 predicate, never written by hand, and G2's ladder puts `open claim` above
 `short receipt` above `awaiting inspection`.
+
+**Steps 01 and 08 render undated.** The only date the clearing could carry is
+`po_payments.paid_date`, and a payment date IS a payment fact — putting it
+beside "Cleared to produce" would render money on the glass while №7 is open.
+The step says the work is cleared, not when anybody paid. **The date returns if
+№7 settles.** The `source` string still names `po_payments`, because it is an
+internal audit trail and is never rendered.
 
 **"Next gate" is a position, not a to-do list**: the first unsettled, sealable
 gate at or ahead of the live step. A gate the work has already gone past is

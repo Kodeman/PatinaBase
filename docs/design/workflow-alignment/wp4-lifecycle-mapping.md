@@ -85,6 +85,13 @@ one it used.
 | 14 | Punch / service | **none — §5.5** | — |
 | 15 | Closed | **none — §5.6** | — |
 
+**Step 01 renders undated.** The only date the clearing could carry is
+`po_payments.paid_date`, and a payment date *is* a payment fact — rendering it
+beside "Cleared to produce" would put money on the glass while №7 is open. The
+step says the work is cleared, not when anybody paid; **the date can return if
+№7 settles.** The `source` string still names `po_payments` internally, because
+it is an audit trail and is never rendered.
+
 **Step 08 renders undated.** The book records no departure: `confirmed_eta` is
 an expectation about *arrival*, and dating a shipping step with it would report
 a fact that does not exist. The ETA appears exactly once, in the ledger's
@@ -95,9 +102,15 @@ missing departure fact is docketed at §5.7.
 because an unresolved issue is the live fact. With no open claim it falls back
 to the earliest claim of any state, then to `delivered_date`.
 
-**A draft or cancelled PO takes no position on the trail at all**, which is what
-keeps the orders book saying "draft" and "cancelled" out loud rather than
-promoting an unwritten order to "Cleared to produce".
+**A draft PO takes no position on the trail**, which is what keeps the orders
+book saying "draft" out loud rather than promoting an unwritten order to
+"Cleared to produce".
+
+**A cancelled PO evidences NOTHING** — not step 01, not its send date, not its
+acknowledgment, not a delivery. Exactly as on Rail A: the order was withdrawn,
+so the trail reports no position rather than leaving the work standing wherever
+it stopped. (The orders register has always filtered cancelled rows out of the
+ledger anyway, pre-dating this work.)
 
 **Steps do not imply one another on this rail.** A delivered line whose PO was
 never marked sent reads step 02 as `no-record`, because that is what the book
@@ -130,8 +143,11 @@ goes quiet.*
 
 - **G1 Complete to produce** — settled when `acknowledged_at` is set **and**
   every deposit-kind payment is `paid`. Uncleared terms `holdOpen`; a missing
-  acknowledgment does not. Qualifier: `awaiting acknowledgment`, else
-  `terms outstanding` — **never funds language** (№7, folio 14).
+  acknowledgment does not. The qualifier names the term that ACTUALLY holds it
+  open, so uncleared terms come first: `terms outstanding`, else
+  `awaiting acknowledgment` — **never funds language** (№7, folio 14). The
+  acknowledgment branch is currently unreachable in rendering, for the reason
+  given at the end of §5: the trail cannot stand at position 4.
 - **G2 Received and dispositioned** — settled when an inspection was logged,
   the count is not short, and no claim on the line is `drafted`/`vendor_notified`.
   **"Inspection logged" is `delivered_date` (or a claim), NOT `received_quantity`**
@@ -140,7 +156,11 @@ goes quiet.*
   count would report a damaged receipt as never inspected. The count governs one
   term only: whether everything ordered turned up. Qualifier ladder, in order:
   `open claim` → `short receipt` → `awaiting inspection`. All three hold the
-  gate open.
+  gate open — **except `awaiting inspection`, which does NOT hold it open**: an
+  inspection nobody logged is a missing record, so once the work has moved on
+  the gate goes quiet (`passed-unsealed`) rather than marking finished goods as
+  blocked. While the work is still standing at the gate, position alone keeps it
+  open and names the term.
 - **G3 Warehouse + site ready** — no fact exists on either rail. It is
   `sealable: false`: drawn (its emptiness is the honest report on §5.3) but
   **never named as a next gate**, because promising a stop that will never come
@@ -312,8 +332,13 @@ judgment call against the real schema.
    acts. Rows *gained* the M7 columns rather than changing grain — a regrain
    would have deleted working machinery for a mockup detail. **Gate G2 cannot
    settle at this grain** (disposition is item-level), so it never claims a seal
-   and never invents an "awaiting" term there — but it stays a legitimate
-   destination, because receipt genuinely is the next thing that happens.
+   and offers no qualifier — the register has nothing to name. Nothing at this
+   grain can evidence steps 10+ either, since the PO status machine stops at
+   `delivered`, so the gate never goes quiet: it reads `unreached` before
+   delivery and `open` indefinitely from delivery onward. That is honest —
+   receipt genuinely is the next thing that happens to these goods, which is
+   what M7's book plate names — and it resolves only if line-grain data reaches
+   the register.
 7. **`po_payment_state` has four values, not three** — `refunded` was added by
    `ALTER TYPE` in 00277. A refunded deposit is treated as **not** paid.
 8. **"Expected" is a shipment expectation only.** An earlier pass let it fall
