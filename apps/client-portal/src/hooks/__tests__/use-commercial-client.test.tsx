@@ -11,6 +11,7 @@ import {
   useClientSelections,
   useDeclineCommercialDocument,
   useProjectCommercialSummary,
+  useProjectWorkingBudget,
 } from '../use-commercial-client';
 
 jest.mock('@patina/supabase', () => ({
@@ -92,6 +93,40 @@ describe('commercial client hooks', () => {
       'list_furnishings_authorizations',
     ]);
     expect(result.current.data?.authority?.id).toBe('a1');
+  });
+
+  it('loads only the working budget with the canonical budget key', async () => {
+    const rpc = jest.fn().mockResolvedValue({
+      data: {
+        id: 'b1',
+        projectId: 'p1',
+        version: 3,
+        targetTotalCents: 50_000,
+        checkpoint: { evidenceFingerprint: 'fingerprint-1' },
+      },
+      error: null,
+    });
+    mockCreateBrowserClient.mockReturnValue({ rpc });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const canonicalWrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+
+    const { result } = renderHook(() => useProjectWorkingBudget('p1'), {
+      wrapper: canonicalWrapper,
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith('get_project_working_budget', {
+      p_project_id: 'p1',
+    });
+    expect(queryClient.getQueryData(commercialKeys.budget('p1'))).toEqual(
+      result.current.data,
+    );
+    expect(result.current.data?.checkpoint?.evidenceFingerprint).toBe(
+      'fingerprint-1',
+    );
   });
 
   it('invalidates proposal, list, commercial, and project projections after signing', async () => {

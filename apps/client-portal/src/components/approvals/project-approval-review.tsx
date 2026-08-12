@@ -12,6 +12,7 @@ import {
 } from "@patina/supabase";
 
 import { ScoredAction } from "@/components/making/scored-action";
+import { useProjectWorkingBudget } from "@/hooks/use-commercial-client";
 import { GateStamp } from "./gate-stamp";
 
 /* ── The client's side of the gate (Ruling VIII, folio 13, mockup M8) ───────
@@ -67,6 +68,13 @@ function formatMoneyDelta(cents: number): string {
   return `${cents > 0 ? "+" : "−"}${amount}`;
 }
 
+function formatMoney(cents: number, currency: string): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+  }).format(cents / 100);
+}
+
 function formatDayDelta(days: number, noun: string): string {
   if (days === 0) return `0 days — no ${noun} change`;
   return `${days > 0 ? "+" : "−"}${Math.abs(days)} ${Math.abs(days) === 1 ? "day" : "days"}`;
@@ -84,6 +92,9 @@ export function ProjectApprovalReview({
   const router = useRouter();
   const confirmReview = useConfirmProjectApprovalReview();
   const respond = useRespondProjectApproval();
+  const workingBudget = useProjectWorkingBudget(
+    approval.artifactKind === "budget_version" ? approval.projectId : "",
+  );
   const [selectedOutcome, setSelectedOutcome] =
     useState<ProjectApprovalOutcome | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -100,6 +111,12 @@ export function ProjectApprovalReview({
     approval.disposition === "active" &&
     reviewComplete &&
     approval.outcome === null;
+  const approvedBudget = workingBudget.data;
+  const budgetMatchesArtifact =
+    approvedBudget?.id === approval.artifactId &&
+    approvedBudget.version === approval.artifactVersion &&
+    approvedBudget.checkpoint?.evidenceFingerprint ===
+      approval.artifactChecksum;
 
   async function handleConfirmReview() {
     if (!canConfirm || approval.authorityRevision === null) return;
@@ -183,17 +200,86 @@ export function ProjectApprovalReview({
                 </time>
               </dd>
             </div>
-            <div className="min-w-0 sm:col-span-2">
-              <dt className="type-meta">SHA-256 artifact checksum</dt>
-              <dd
-                className="mt-1 min-w-0 break-all font-mono text-xs"
-                data-testid="artifact-checksum"
-              >
-                {approval.artifactChecksum}
-              </dd>
-            </div>
           </dl>
         </section>
+
+        {approval.artifactKind === "budget_version" && (
+          <section
+            aria-labelledby="budget-details-heading"
+            className="border-t border-[var(--border-default)] py-5"
+            data-testid="budget-details"
+          >
+            <h2 id="budget-details-heading" className="type-meta">
+              Budget details
+            </h2>
+            {workingBudget.isLoading ? (
+              <p
+                role="status"
+                className="type-body-small mt-2 text-[var(--text-muted)]"
+                data-testid="budget-details-loading"
+              >
+                Budget details are loading…
+              </p>
+            ) : workingBudget.isError ||
+              !approvedBudget ||
+              !budgetMatchesArtifact ? (
+              <p
+                className="type-body-small mt-2 text-[var(--text-muted)]"
+                data-testid="budget-details-unavailable"
+              >
+                Budget details are unavailable for this exact approved edition.
+              </p>
+            ) : (
+              <div data-testid="approved-budget-details">
+                <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  {[
+                    ["Target", approvedBudget.targetTotalCents],
+                    ["Low", approvedBudget.lowTotalCents],
+                    ["High", approvedBudget.highTotalCents],
+                  ].map(([label, cents]) => (
+                    <div key={label}>
+                      <dt className="type-meta">{label}</dt>
+                      <dd className="type-body-small mt-1">
+                        {formatMoney(cents as number, approvedBudget.currency)}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+                {approvedBudget.lines.length > 0 && (
+                  <div className="mt-5 divide-y divide-[var(--border-subtle)]">
+                    {approvedBudget.lines.map((line, index) => (
+                      <div
+                        key={`${line.roomName}-${line.category}-${index}`}
+                        className="py-3"
+                      >
+                        <h3 className="type-item-name">
+                          {line.roomName} · {line.category}
+                        </h3>
+                        <dl className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                          {[
+                            ["Low", line.lowCents],
+                            ["Target", line.targetCents],
+                            ["High", line.highCents],
+                          ].map(([label, cents]) => (
+                            <div key={label}>
+                              <dt className="type-meta">{label}</dt>
+                              <dd className="type-body-small mt-1">
+                                {formatMoney(
+                                  cents as number,
+                                  approvedBudget.currency,
+                                )}
+                              </dd>
+                            </div>
+                          ))}
+                        </dl>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+        )}
 
         {/* ── Question — one sentence, answerable ──────────────────────────── */}
         <section
