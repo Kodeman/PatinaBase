@@ -11,7 +11,7 @@
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ProjectParty } from '@patina/supabase';
-import { ItemComposer } from '../item-composer';
+import { composerItemTypeOrder, ItemComposer } from '../item-composer';
 
 const createMutate = jest.fn();
 const updateMutate = jest.fn();
@@ -23,6 +23,8 @@ jest.mock('@patina/supabase', () => ({
   useUpdateCoordinationItem: () => ({ mutateAsync: updateMutate }),
   usePublishCoordinationItem: () => ({ mutateAsync: publishMutate }),
   useDeleteCoordinationItem: () => ({ mutateAsync: deleteMutate }),
+  isProjectArtifactApproval: (item: { approval_contract?: string | null }) =>
+    item.approval_contract === 'project_artifact_v1',
 }));
 
 // The option builder is a different surface with its own suite; the composer
@@ -208,6 +210,50 @@ describe('ItemComposer court party — payload parity across the flag', () => {
 });
 
 describe('ItemComposer court party — the rules that did not move', () => {
+  it('retires sign-off from new choices while preserving historical draft editing', () => {
+    expect(composerItemTypeOrder()).not.toContain('signoff');
+    expect(composerItemTypeOrder({ coordination_kind: 'signoff' })).toContain(
+      'signoff',
+    );
+  });
+
+  it('defensively refuses to mount legacy mutation controls for a Stage-2 draft', () => {
+    render(
+      <ItemComposer
+        {...baseProps([])}
+        editItem={
+          {
+            id: 'stage-2-draft',
+            status: 'draft',
+            approval_contract: 'project_artifact_v1',
+            coordination_kind: 'signoff',
+            court: 'client',
+            court_party_id: null,
+            title: 'Approve issued plans',
+            context: null,
+            phase_id: 'phase-1',
+            due_date: '2099-01-01',
+            blocks_kind: 'phase',
+            updated_at: '2026-08-10T00:00:00.000Z',
+            options: [],
+          } as any
+        }
+      />,
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Client approvals record',
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Publish' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /delete/i }),
+    ).not.toBeInTheDocument();
+    expect(updateMutate).not.toHaveBeenCalled();
+    expect(deleteMutate).not.toHaveBeenCalled();
+  });
+
   it('auto-selects the sole match in BOTH modes', async () => {
     mockCallSheetOn = false;
     const off = render(<ItemComposer {...baseProps([NOLAN])} />);

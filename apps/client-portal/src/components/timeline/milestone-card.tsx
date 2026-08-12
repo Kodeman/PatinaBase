@@ -2,21 +2,17 @@
 
 import { MessageComposer, MessageThread, StatusDot, statusTextColor, type ThreadMessage } from '@patina/design-system';
 import {
-  AlertTriangle,
   CalendarDays,
   CheckCircle2,
   ChevronDown,
   Circle,
   FileText,
-  Loader2,
   MessageCircle,
 } from 'lucide-react';
 import { useMemo, useState, useTransition } from 'react';
 
-import { postMessageAction, submitApprovalAction } from '@/app/projects/[projectId]/actions';
-import { MilestoneDecisions } from './milestone-decisions';
+import { postMessageAction } from '@/app/projects/[projectId]/actions';
 import {
-  formatCurrency,
   formatDate,
   formatRelativeTime,
   formatStatusLabel,
@@ -31,10 +27,8 @@ interface MilestoneCardProps {
 }
 
 export function MilestoneCard({ projectId, milestone, isExpanded, onToggle }: MilestoneCardProps) {
-  const [decisionComment, setDecisionComment] = useState('');
   const [error, setError] = useState<string | undefined>();
   const [messagePending, startMessageTransition] = useTransition();
-  const [approvalPending, startApprovalTransition] = useTransition();
 
   const summary = useMemo(() => {
     const targetDate = formatDate(milestone.targetDate);
@@ -106,31 +100,6 @@ export function MilestoneCard({ projectId, milestone, isExpanded, onToggle }: Mi
         })();
       });
     });
-
-  const handleDecision = (decision: 'approved' | 'changes_requested') => {
-    if (!milestone.approval) {
-      return;
-    }
-
-    if (decision === 'changes_requested' && decisionComment.trim().length === 0) {
-      setError('Please share a short note so our team knows what to adjust.');
-      return;
-    }
-
-    setError(undefined);
-    startApprovalTransition(async () => {
-      const result = await submitApprovalAction({
-        projectId,
-        approvalId: milestone.approval!.id,
-        decision,
-        comment: decision === 'changes_requested' ? decisionComment : undefined,
-      });
-
-      if (!result.success) {
-        setError(result.error);
-      }
-    });
-  };
 
   const statusClass = statusTextColor(milestone.status);
 
@@ -305,61 +274,6 @@ export function MilestoneCard({ projectId, milestone, isExpanded, onToggle }: Mi
 
               {/* Sidebar */}
               <aside className="space-y-8">
-                {/* Approval */}
-                {milestone.approval ? (
-                  <section className="border-l-2 border-patina-terracotta pl-4">
-                    <p className="type-meta text-patina-terracotta flex items-center gap-1.5">
-                      <AlertTriangle className="h-3.5 w-3.5" />
-                      Your approval is requested
-                    </p>
-                    {milestone.approval.summary ? (
-                      <p className="type-body-small mt-2">{milestone.approval.summary}</p>
-                    ) : null}
-                    {typeof milestone.approval.totalValue === 'number' ? (
-                      <p className="type-data-large mt-3">
-                        {formatCurrency(milestone.approval.totalValue, milestone.approval.currency)}
-                      </p>
-                    ) : null}
-                    {milestone.approval.dueDate ? (
-                      <p className="type-meta mt-2">
-                        Decision requested by {formatDate(milestone.approval.dueDate)}
-                      </p>
-                    ) : null}
-                    <textarea
-                      value={decisionComment}
-                      onChange={(event) => setDecisionComment(event.target.value)}
-                      placeholder="Share optional feedback or revision notes"
-                      className="mt-4 w-full resize-none rounded-[3px] border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus-visible:focus-ring"
-                      rows={3}
-                    />
-                    <div className="mt-3 grid gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleDecision('approved')}
-                        disabled={approvalPending}
-                        className="inline-flex items-center justify-center gap-2 rounded-[3px] bg-patina-charcoal px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {approvalPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                        Approve milestone
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDecision('changes_requested')}
-                        disabled={approvalPending}
-                        className="inline-flex items-center justify-center gap-2 rounded-[3px] border border-[var(--border-default)] bg-transparent px-4 py-2.5 text-sm font-medium text-[var(--text-primary)] transition hover:border-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {approvalPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertTriangle className="h-4 w-4 text-patina-terracotta" />}
-                        Request changes
-                      </button>
-                    </div>
-                  </section>
-                ) : null}
-
-                <MilestoneDecisions
-                  projectId={projectId}
-                  phase={milestone.phase ?? milestone.title}
-                />
-
                 {/* Activity moments */}
                 {milestone.messages.length > 0 ? (
                   <section>

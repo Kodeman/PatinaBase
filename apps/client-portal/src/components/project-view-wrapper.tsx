@@ -22,6 +22,7 @@ import { ClientSelections } from '@/components/commercial/client-selections';
 import { useClientSelections } from '@/hooks/use-commercial-client';
 import type { MilestoneDetail } from '@/types/project';
 import { useProjectPhaseRealtime } from '@/hooks/use-project-phase-realtime';
+import type { ProjectApprovalReview } from '@patina/supabase';
 
 interface ProjectViewWrapperProps {
   projectId: string;
@@ -40,6 +41,9 @@ interface ProjectViewWrapperProps {
    * so this fires before the flag can flip).
    */
   emitProjectView?: boolean;
+  projectApprovals?: ProjectApprovalReview[];
+  projectApprovalsLoading?: boolean;
+  projectApprovalsError?: boolean;
 }
 
 export function ProjectViewWrapper({
@@ -49,7 +53,10 @@ export function ProjectViewWrapper({
   userId,
   authToken,
   showOverview = false,
-  emitProjectView = true
+  emitProjectView = true,
+  projectApprovals = [],
+  projectApprovalsLoading = false,
+  projectApprovalsError = false,
 }: ProjectViewWrapperProps) {
   // Pull live session for WS auth — props may not be threaded from parent.
   const { session, user } = useAuth();
@@ -129,6 +136,9 @@ export function ProjectViewWrapper({
       <AuthoritativeEnhancedTimeline
         projectId={projectId}
         milestones={milestones}
+        projectApprovals={projectApprovals}
+        projectApprovalsLoading={projectApprovalsLoading}
+        projectApprovalsError={projectApprovalsError}
         onMilestoneUpdate={(milestone) => {
           console.log('Milestone updated:', milestone.id, milestone.status);
         }}

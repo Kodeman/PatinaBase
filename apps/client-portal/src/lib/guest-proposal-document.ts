@@ -1,4 +1,5 @@
 import type { BoardsBlockBoard } from '@patina/design-system';
+import { signBoardMediaValue } from '@patina/supabase';
 import type { ShareVisibility } from '@patina/utils';
 
 type UnknownRecord = Record<string, unknown>;
@@ -18,7 +19,25 @@ export const GUEST_EXCLUSION_SELECT = 'description,category';
 export const GUEST_SCOPE_ROOM_SELECT = 'name,room_type,budget_cents';
 export const GUEST_SCOPE_ROOM_PRIVATE_SELECT = 'name,room_type';
 export const GUEST_BOARD_SELECT =
-  'name,canvas_width,canvas_height,background_color,proposal_board_items(type,x,y,width,height,z_index,rotation,image_url,content,data)';
+  'id,name,canvas_width,canvas_height,background_color,proposal_board_items(type,x,y,width,height,z_index,rotation,image_url,content,data)';
+
+export async function signServiceAuthorizedBoards(
+  admin: any,
+  rows: unknown[],
+): Promise<unknown[]> {
+  const allowedRows = (
+    await Promise.all(rows.map(async (row) => {
+      const board = row as { id?: unknown };
+      if (typeof board.id !== 'string') return null;
+      const { data, error } = await admin.rpc(
+        'board_media_projection_is_allowed',
+        { p_board_id: board.id },
+      );
+      return !error && data === true ? row : null;
+    }))
+  ).filter((row): row is unknown => row !== null);
+  return signBoardMediaValue(admin, allowedRows);
+}
 
 export interface GuestProposalDocumentItem {
   id: string;

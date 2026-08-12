@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import type { BoardOwnerRef } from '@patina/types';
 import { createBrowserClient } from '../client';
+import { signBoardMediaValue } from '../lib/board-storage';
 import { summarizeBoardCoverUrls } from './use-boards';
 import {
   summarizeBoardVerdicts,
@@ -50,7 +51,9 @@ export function useRecentBoards(limit = 8) {
         .limit(safeLimit);
       if (error) throw error;
 
-      return ((data ?? []) as Array<Record<string, unknown>>).flatMap((row) => {
+      const signedRows = await signBoardMediaValue(supabase, data ?? []);
+
+      return (signedRows as Array<Record<string, unknown>>).flatMap((row) => {
         const proposalId = typeof row.proposal_id === 'string' ? row.proposal_id : null;
         const projectId = typeof row.project_id === 'string' ? row.project_id : null;
         if ((proposalId ? 1 : 0) + (projectId ? 1 : 0) !== 1) return [];

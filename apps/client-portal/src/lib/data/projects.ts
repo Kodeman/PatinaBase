@@ -5,6 +5,10 @@ import { cache } from 'react';
 import { createServerClient } from '@patina/supabase/server';
 
 import { env } from '../env';
+import {
+  isClientActionableLegacyDecision,
+  isClientActionableProjectApproval,
+} from '../client-attention';
 import type {
   ClientProjectView,
   DocumentAttachment,
@@ -165,6 +169,7 @@ const mapProjectListItem = (input: any): ProjectListItem => ({
   currentPhase: asString(input?.currentPhase || input?.phase),
   nextMilestoneTitle: asString(input?.nextMilestone?.title || input?.nextMilestoneTitle),
   approvalsPending: asNumber(input?.approvalsPending || input?.pendingApprovals, 0),
+  nonStage2ApprovalsPending: asNumber(input?.nonStage2ApprovalsPending, 0),
   unreadMessages: asNumber(input?.unreadMessages || input?.pendingMessages, 0),
 });
 
@@ -182,6 +187,7 @@ const devFallbackProjects: ProjectListItem[] = [
     currentPhase: 'design_refinement',
     nextMilestoneTitle: 'Design Approval',
     approvalsPending: 1,
+    nonStage2ApprovalsPending: 1,
     unreadMessages: 3,
   },
   {
@@ -195,6 +201,7 @@ const devFallbackProjects: ProjectListItem[] = [
     currentPhase: 'Discovery',
     nextMilestoneTitle: 'Concept Presentation',
     approvalsPending: 0,
+    nonStage2ApprovalsPending: 0,
     unreadMessages: 1,
   },
 ];
@@ -457,11 +464,10 @@ export const summariseProjectPhases = (
 // individually — so a per-project map is the only shape that keeps both correct.
 //
 // Scoping rules:
-//  • decisions  → client_decisions joined to designer_clients.client_id = auth.uid()
-//                 (client_decisions has no client_id column of its own; the
-//                 deciding client is identified via designer_clients). Mirrors the
-//                 notification-bell scoping so a designer can't see other clients'
-//                 pending decisions as "approvals".
+//  • Stage-2    → the frozen-lead sanitized list RPC. Raw Stage-2 rows are
+//                 deliberately outside the client read model.
+//  • legacy     → pending client_decisions joined to designer_clients.client_id
+//                 = auth.uid(), with project_artifact_v1 explicitly excluded.
 //  • proposals  → proposals.client_id = auth.uid(), status in (sent, viewed).
 //  • unread     → comms messages in the client's project threads created after
 //                 their last_read_at and not authored by them (mirrors the inbox
@@ -482,14 +488,33 @@ const tallyByProject = (rows: unknown, key = 'project_id'): Map<string, number> 
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function countPendingDecisionsByProject(supabase: any, userId: string): Promise<Map<string, number>> {
+const LEGACY_DECISION_CONTRACT_FILTER =
+  'approval_contract.is.null,approval_contract.neq.project_artifact_v1';
+
+async function countLegacyPendingDecisionsByProject(
+  supabase: any,
+  userId: string,
+): Promise<Map<string, number>> {
   const { data, error } = await supabase
     .from('client_decisions')
-    .select('project_id, designer_clients!inner(client_id)')
+    .select('project_id, court, coordination_kind, designer_clients!inner(client_id)')
     .eq('status', 'pending')
+    .or(LEGACY_DECISION_CONTRACT_FILTER)
     .eq('designer_clients.client_id', userId);
   if (error) throw error;
-  return tallyByProject(data);
+  return tallyByProject(asArray<any>(data).filter(isClientActionableLegacyDecision));
+}
+
+async function countStage2ReviewsByProject(supabase: any): Promise<Map<string, number>> {
+  const { data, error } = await supabase.rpc(
+    'list_my_project_decision_reviews',
+    {},
+  );
+  if (error) throw error;
+  return tallyByProject(
+    asArray<any>(data).filter(isClientActionableProjectApproval),
+    'projectId',
+  );
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -566,20 +591,43 @@ async function computeProjectCounts(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
   userId: string,
-): Promise<{ approvalsByProject: Map<string, number>; unreadByProject: Map<string, number> }> {
+): Promise<{
+  approvalsByProject: Map<string, number>;
+  nonStage2ApprovalsByProject: Map<string, number>;
+  unreadByProject: Map<string, number>;
+}> {
   try {
-    const [decisions, proposals, unreadByProject] = await Promise.all([
-      countPendingDecisionsByProject(supabase, userId),
+    const [legacyDecisions, stage2Reviews, proposals, unreadByProject] = await Promise.all([
+      countLegacyPendingDecisionsByProject(supabase, userId),
+      countStage2ReviewsByProject(supabase),
       countAwaitingProposalsByProject(supabase),
       countUnreadMessagesByProject(supabase, userId),
     ]);
     const approvalsByProject = new Map<string, number>();
-    for (const [pid, n] of decisions) approvalsByProject.set(pid, (approvalsByProject.get(pid) ?? 0) + n);
-    for (const [pid, n] of proposals) approvalsByProject.set(pid, (approvalsByProject.get(pid) ?? 0) + n);
-    return { approvalsByProject, unreadByProject };
+    const nonStage2ApprovalsByProject = new Map<string, number>();
+    for (const [pid, n] of legacyDecisions) {
+      approvalsByProject.set(pid, (approvalsByProject.get(pid) ?? 0) + n);
+      nonStage2ApprovalsByProject.set(
+        pid,
+        (nonStage2ApprovalsByProject.get(pid) ?? 0) + n,
+      );
+    }
+    for (const [pid, n] of stage2Reviews) approvalsByProject.set(pid, (approvalsByProject.get(pid) ?? 0) + n);
+    for (const [pid, n] of proposals) {
+      approvalsByProject.set(pid, (approvalsByProject.get(pid) ?? 0) + n);
+      nonStage2ApprovalsByProject.set(
+        pid,
+        (nonStage2ApprovalsByProject.get(pid) ?? 0) + n,
+      );
+    }
+    return { approvalsByProject, nonStage2ApprovalsByProject, unreadByProject };
   } catch (error) {
     console.warn('[Client Portal] Project count computation failed — counts default to 0', error);
-    return { approvalsByProject: new Map(), unreadByProject: new Map() };
+    return {
+      approvalsByProject: new Map(),
+      nonStage2ApprovalsByProject: new Map(),
+      unreadByProject: new Map(),
+    };
   }
 }
 
@@ -593,33 +641,6 @@ const PROJECT_DETAIL_SELECT =
   'id, name, site_address, status, current_phase, notes, kickoff_message, brief_document_url, ' +
   'start_date, kickoff_date, target_end_date, expected_completion_date, updated_at, ' +
   'project_phases(id, name, phase_key, status, lane, follows_phase_id, sort_order, start_date, target_end_date, completed_at, progress, updated_at)';
-
-// Real "approvals pending" per project = client_decisions still awaiting the
-// client's response (status 'pending'). RLS scopes client_decisions to the
-// client, so this counts only decisions addressed to them. Best-effort: a
-// failure here must never break the project read (falls back to 0).
-// (Proposal-line verdicts awaiting the client, C3, live on the proposal document
-// itself — its own rollup header — since an active project's proposal is signed.)
-const fetchPendingApprovalCounts = async (
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any,
-  projectIds: string[],
-): Promise<Map<string, number>> => {
-  const counts = new Map<string, number>();
-  if (projectIds.length === 0) return counts;
-  const { data, error } = await supabase
-    .from('client_decisions')
-    .select('project_id')
-    .in('project_id', projectIds)
-    .eq('status', 'pending');
-  if (error) return counts;
-  for (const row of asArray<any>(data)) {
-    const pid = asString(row?.project_id);
-    if (!pid) continue;
-    counts.set(pid, (counts.get(pid) ?? 0) + 1);
-  }
-  return counts;
-};
 
 export const fetchClientProjects = cache(async (): Promise<ProjectListItem[]> => {
   if (env.useProjectFixtures) return devFallbackProjects;
@@ -638,7 +659,11 @@ export const fetchClientProjects = cache(async (): Promise<ProjectListItem[]> =>
       .order('updated_at', { ascending: false });
     if (error) throw error;
 
-    const { approvalsByProject, unreadByProject } = await computeProjectCounts(supabase, user.id);
+    const {
+      approvalsByProject,
+      nonStage2ApprovalsByProject,
+      unreadByProject,
+    } = await computeProjectCounts(supabase, user.id);
 
     return asArray<any>(data).map((row) => {
       const { progressPercentage, currentPhaseLabel, nextPhase } = summariseProjectPhases(
@@ -656,6 +681,8 @@ export const fetchClientProjects = cache(async (): Promise<ProjectListItem[]> =>
         progressPercentage,
         nextMilestoneTitle: nextPhase?.name,
         approvalsPending: approvalsByProject.get(projectId) ?? 0,
+        nonStage2ApprovalsPending:
+          nonStage2ApprovalsByProject.get(projectId) ?? 0,
         unreadMessages: unreadByProject.get(projectId) ?? 0,
       });
     });
@@ -693,8 +720,6 @@ export const fetchClientProjectView = cache(async (projectId: string): Promise<C
       completed,
       nextPhase,
     } = summariseProjectPhases(row.project_phases, row.current_phase);
-
-    const pending = await fetchPendingApprovalCounts(supabase, [projectId]);
 
     const milestones: MilestoneDetail[] = phases
       .map((phase, index) =>

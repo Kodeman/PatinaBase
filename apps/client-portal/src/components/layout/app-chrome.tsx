@@ -1,9 +1,11 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
+import { useMyProjectApprovalReviews } from '@patina/supabase';
 
 import { ClientHeader } from './client-header';
 import type { ProjectListItem } from '../../types/project';
+import { isClientActionableProjectApproval } from '../../lib/client-attention';
 
 // Routes that must NOT get the app chrome (auth, public token views, quiz,
 // demo, and the role-mismatch interstitials). Everything else is an
@@ -42,8 +44,30 @@ export function AppChrome({ projects, children }: AppChromeProps) {
     return <>{children}</>;
   }
 
+  return (
+    <AuthenticatedAppChrome projects={projects} pathname={pathname}>
+      {children}
+    </AuthenticatedAppChrome>
+  );
+}
+
+function AuthenticatedAppChrome({
+  projects,
+  pathname,
+  children,
+}: AppChromeProps & { pathname: string }) {
+  const { data: projectApprovals } = useMyProjectApprovalReviews();
+
   const activeProjectId = pathname.match(/^\/projects\/([^/]+)/)?.[1];
-  const approvalsPending = projects.reduce((total, p) => total + (p.approvalsPending ?? 0), 0);
+  const nonStage2ApprovalsPending = projects.reduce(
+    (total, project) => total + project.nonStage2ApprovalsPending,
+    0,
+  );
+  const stage2ApprovalsPending = (projectApprovals ?? []).filter(
+    isClientActionableProjectApproval,
+  ).length;
+  const approvalsPending =
+    nonStage2ApprovalsPending + stage2ApprovalsPending;
   const unreadMessages = projects.reduce((total, p) => total + (p.unreadMessages ?? 0), 0);
 
   return (

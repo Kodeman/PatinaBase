@@ -13,7 +13,7 @@ type Story = StoryObj<typeof meta>
 
 // NOTE: Storybook needs an image that responds with permissive CORS so
 // the canvas isn't tainted. Unsplash's CDN does. Real production images
-// will come from the proposal-mood-boards bucket which is public-read.
+// are resolved to short-lived signed URLs from the private proposal-mood-boards bucket.
 const SAMPLE_IMAGE =
   'https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=800&q=80'
 

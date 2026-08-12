@@ -25,15 +25,21 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendCompliantEmail } from "../_shared/send-email.ts";
 import {
+  artifactCitationsForDigest,
   buildReminderDigestEmail,
   isReminderDigestDue,
   type ReminderDigestItem,
 } from "./logic.ts";
+import {
+  type EmbeddedApprovalArtifact,
+  resolveApprovalArtifactCitation,
+  toOne,
+} from "../_shared/project-approval-notification.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const CLIENT_PORTAL_URL =
-  Deno.env.get("CLIENT_PORTAL_URL") ?? "https://client.patina.cloud";
+const CLIENT_PORTAL_URL = Deno.env.get("CLIENT_PORTAL_URL") ??
+  "https://client.patina.cloud";
 
 // Look-back window for reminders to include. Slightly over 24h so daily runs
 // with jitter never drop a row; the min-interval guard prevents double-send.
@@ -70,7 +76,8 @@ async function collectItems(
     const deepLink = typeof meta.deep_link === "string" ? meta.deep_link : null;
     items.push({
       category: "proposal",
-      title: (meta.message as string) || (meta.subject as string) || "A proposal is waiting for your review",
+      title: (meta.message as string) || (meta.subject as string) ||
+        "A proposal is waiting for your review",
       link: deepLink ? `${CLIENT_PORTAL_URL}${deepLink}` : null,
     });
   }
@@ -78,7 +85,18 @@ async function collectItems(
   // ── Decision reminders (decision_notifications rows) ────────────────────
   const { data: decisions } = await supabase
     .from("decision_notifications")
-    .select("id, kind, created_at, decision:client_decisions(title)")
+    .select(`
+      id, user_id, kind, created_at,
+      decision:client_decisions(
+        id, title, approval_contract,
+        approval_artifact:project_approval_artifacts(
+          source_kind, source_version, artifact_hash, artifact_title
+        ),
+        authority_snapshot:project_decision_authority_snapshots(
+          decision_lead_id
+        )
+      )
+    `)
     .eq("user_id", userId)
     .in("kind", ["decision_required", "decision_overdue"])
     .is("read_at", null)
@@ -86,14 +104,47 @@ async function collectItems(
     .order("created_at", { ascending: false })
     .limit(50);
 
-  for (const row of (decisions ?? []) as Array<{ kind: string; decision: any }>) {
+  for (
+    const row of (decisions ?? []) as Array<{
+      user_id: string;
+      kind: string;
+      decision: any;
+    }>
+  ) {
     // Embedded to-one can arrive as an object or a single-element array.
     const dec = Array.isArray(row.decision) ? row.decision[0] : row.decision;
+    const isStage2 = dec?.approval_contract === "project_artifact_v1";
+    const artifact = isStage2
+      ? resolveApprovalArtifactCitation(
+        dec?.approval_artifact as
+          | EmbeddedApprovalArtifact
+          | EmbeddedApprovalArtifact[]
+          | null,
+      )
+      : null;
+    const snapshot = toOne(
+      dec?.authority_snapshot as
+        | { decision_lead_id: string | null }
+        | Array<{ decision_lead_id: string | null }>
+        | null,
+    );
+    if (
+      isStage2 &&
+      (!artifact || snapshot?.decision_lead_id !== row.user_id)
+    ) {
+      console.error(
+        "[notification-digest] Stage-2 item failed frozen evidence check",
+        dec?.id,
+      );
+      continue;
+    }
     const title = dec?.title || "A decision needs your input";
     items.push({
       category: "decision",
       title: row.kind === "decision_overdue" ? `${title} (overdue)` : title,
       link: `${CLIENT_PORTAL_URL}/decisions`,
+      decisionId: dec?.id,
+      artifact,
     });
   }
 
@@ -102,7 +153,15 @@ async function collectItems(
 
 async function dispatchReminderDigests(
   supabase: SupabaseClient,
-): Promise<{ scanned: number; sent: number; empty: number; skipped: number; errors: number }> {
+): Promise<
+  {
+    scanned: number;
+    sent: number;
+    empty: number;
+    skipped: number;
+    errors: number;
+  }
+> {
   const stats = { scanned: 0, sent: 0, empty: 0, skipped: 0, errors: 0 };
   const now = new Date();
   const sinceIso = new Date(now.getTime() - WINDOW_MS).toISOString();
@@ -144,7 +203,10 @@ async function dispatchReminderDigests(
           continue;
         }
 
-        const { subject, html } = buildReminderDigestEmail(items, CLIENT_PORTAL_URL);
+        const { subject, html } = buildReminderDigestEmail(
+          items,
+          CLIENT_PORTAL_URL,
+        );
         const result = await sendCompliantEmail(supabase, {
           to: profile.email as string,
           subject,
@@ -153,7 +215,10 @@ async function dispatchReminderDigests(
           notificationType: "reminder_digest",
           category: "operational",
           templateId: "reminder-digest",
-          metadata: { item_count: items.length },
+          metadata: {
+            item_count: items.length,
+            artifactCitations: artifactCitationsForDigest(items),
+          },
           unsubscribeBaseUrl: CLIENT_PORTAL_URL,
         });
 
@@ -193,7 +258,11 @@ Deno.serve(async () => {
       `[notification-digest] scanned=${stats.scanned} sent=${stats.sent} empty=${stats.empty} skipped=${stats.skipped} errors=${stats.errors}`,
     );
     return new Response(
-      JSON.stringify({ success: true, ...stats, checked_at: new Date().toISOString() }),
+      JSON.stringify({
+        success: true,
+        ...stats,
+        checked_at: new Date().toISOString(),
+      }),
       { headers: { "Content-Type": "application/json" } },
     );
   } catch (error) {

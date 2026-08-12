@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 import type { Database } from '../database.types';
 import { invalidateFfeCaches } from './use-procurement';
+import { invalidateProjectWorkflow } from './use-project-workflow';
 
 const getSupabase = () => createBrowserClient();
 
@@ -247,6 +248,7 @@ export function useUpdateFFEItemStatus() {
       // unitPriceCents/line_total_cents may have changed (price param) — the
       // package financials cache reads these columns for its rollup.
       queryClient.invalidateQueries({ queryKey: ['project-financials', projectId] });
+      void invalidateProjectWorkflow(queryClient, projectId);
     },
   });
 }
@@ -512,6 +514,7 @@ export function useCreateProjectPhase() {
     onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: ['project-phases', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project-v2', projectId] });
+      void invalidateProjectWorkflow(queryClient, projectId);
     },
   });
 }
@@ -601,6 +604,7 @@ export function useUpdateProjectPhaseStatus() {
       queryClient.invalidateQueries({ queryKey: ['project-v2', projectId] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['document-state'] });
+      void invalidateProjectWorkflow(queryClient, projectId);
     },
   });
 }
@@ -644,6 +648,7 @@ export function useUpdateProjectPhaseDates() {
     onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: ['project-phases', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project-v2', projectId] });
+      void invalidateProjectWorkflow(queryClient, projectId);
     },
   });
 }

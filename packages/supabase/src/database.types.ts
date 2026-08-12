@@ -890,6 +890,7 @@ export type Database = {
           id: string
           items: Json
           kind: string
+          media_references_validated_at: string | null
           name: string
           sections: Json
           studio_id: string | null
@@ -907,6 +908,7 @@ export type Database = {
           id?: string
           items?: Json
           kind: string
+          media_references_validated_at?: string | null
           name: string
           sections?: Json
           studio_id?: string | null
@@ -924,6 +926,7 @@ export type Database = {
           id?: string
           items?: Json
           kind?: string
+          media_references_validated_at?: string | null
           name?: string
           sections?: Json
           studio_id?: string | null
@@ -1486,9 +1489,11 @@ export type Database = {
       }
       client_decision_options: {
         Row: {
+          approval_outcome: string | null
           approves: boolean
           client_note: string | null
           configuration_id: string | null
+          cost_cents_delta: number | null
           cost_delta_cents: number | null
           created_at: string
           decision_id: string
@@ -1501,14 +1506,17 @@ export type Database = {
           price: number | null
           product_id: string | null
           quantity: number | null
+          schedule_days_delta: number | null
           selected: boolean | null
           selection_snapshot: Json | null
           sort_order: number | null
         }
         Insert: {
+          approval_outcome?: string | null
           approves?: boolean
           client_note?: string | null
           configuration_id?: string | null
+          cost_cents_delta?: number | null
           cost_delta_cents?: number | null
           created_at?: string
           decision_id: string
@@ -1521,14 +1529,17 @@ export type Database = {
           price?: number | null
           product_id?: string | null
           quantity?: number | null
+          schedule_days_delta?: number | null
           selected?: boolean | null
           selection_snapshot?: Json | null
           sort_order?: number | null
         }
         Update: {
+          approval_outcome?: string | null
           approves?: boolean
           client_note?: string | null
           configuration_id?: string | null
+          cost_cents_delta?: number | null
           cost_delta_cents?: number | null
           created_at?: string
           decision_id?: string
@@ -1541,6 +1552,7 @@ export type Database = {
           price?: number | null
           product_id?: string | null
           quantity?: number | null
+          schedule_days_delta?: number | null
           selected?: boolean | null
           selection_snapshot?: Json | null
           sort_order?: number | null
@@ -1609,6 +1621,7 @@ export type Database = {
           answer: string | null
           answered_at: string | null
           answered_by: string | null
+          approval_contract: string | null
           blocking_status: string
           blocks_kind: string
           blocks_milestone_id: string | null
@@ -1629,6 +1642,7 @@ export type Database = {
           linked_phase: string | null
           linked_proposal_id: string | null
           phase_id: string | null
+          predecessor_decision_id: string | null
           project_id: string | null
           recommended_option_id: string | null
           reminder_sent_at: string | null
@@ -1646,6 +1660,7 @@ export type Database = {
           answer?: string | null
           answered_at?: string | null
           answered_by?: string | null
+          approval_contract?: string | null
           blocking_status?: string
           blocks_kind?: string
           blocks_milestone_id?: string | null
@@ -1666,6 +1681,7 @@ export type Database = {
           linked_phase?: string | null
           linked_proposal_id?: string | null
           phase_id?: string | null
+          predecessor_decision_id?: string | null
           project_id?: string | null
           recommended_option_id?: string | null
           reminder_sent_at?: string | null
@@ -1683,6 +1699,7 @@ export type Database = {
           answer?: string | null
           answered_at?: string | null
           answered_by?: string | null
+          approval_contract?: string | null
           blocking_status?: string
           blocks_kind?: string
           blocks_milestone_id?: string | null
@@ -1703,6 +1720,7 @@ export type Database = {
           linked_phase?: string | null
           linked_proposal_id?: string | null
           phase_id?: string | null
+          predecessor_decision_id?: string | null
           project_id?: string | null
           recommended_option_id?: string | null
           reminder_sent_at?: string | null
@@ -1779,6 +1797,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "project_rooms"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_decisions_stage2_predecessor_fkey"
+            columns: ["predecessor_decision_id"]
+            isOneToOne: false
+            referencedRelation: "client_decisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_decisions_stage2_predecessor_fkey"
+            columns: ["predecessor_decision_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["blocking_item_id"]
           },
         ]
       }
@@ -4917,6 +4949,8 @@ export type Database = {
       document_shares: {
         Row: {
           board_id: string | null
+          board_payload: Json | null
+          board_payload_hash: string | null
           created_at: string
           created_by: string | null
           expires_at: string | null
@@ -4933,6 +4967,8 @@ export type Database = {
         }
         Insert: {
           board_id?: string | null
+          board_payload?: Json | null
+          board_payload_hash?: string | null
           created_at?: string
           created_by?: string | null
           expires_at?: string | null
@@ -4949,6 +4985,8 @@ export type Database = {
         }
         Update: {
           board_id?: string | null
+          board_payload?: Json | null
+          board_payload_hash?: string | null
           created_at?: string
           created_by?: string | null
           expires_at?: string | null
@@ -8952,6 +8990,7 @@ export type Database = {
           phases: Json
           slug: string
           updated_at: string
+          version: number
         }
         Insert: {
           created_at?: string
@@ -8963,6 +9002,7 @@ export type Database = {
           phases: Json
           slug: string
           updated_at?: string
+          version?: number
         }
         Update: {
           created_at?: string
@@ -8974,6 +9014,7 @@ export type Database = {
           phases?: Json
           slug?: string
           updated_at?: string
+          version?: number
         }
         Relationships: [
           {
@@ -12075,6 +12116,198 @@ export type Database = {
         }
         Relationships: []
       }
+      project_approval_action_receipts: {
+        Row: {
+          action_kind: string
+          actor_id: string
+          created_at: string
+          decision_id: string
+          id: string
+          idempotency_key: string
+          project_id: string
+          request_hash: string
+          result: Json
+          successor_decision_id: string | null
+        }
+        Insert: {
+          action_kind: string
+          actor_id: string
+          created_at?: string
+          decision_id: string
+          id?: string
+          idempotency_key: string
+          project_id: string
+          request_hash: string
+          result: Json
+          successor_decision_id?: string | null
+        }
+        Update: {
+          action_kind?: string
+          actor_id?: string
+          created_at?: string
+          decision_id?: string
+          id?: string
+          idempotency_key?: string
+          project_id?: string
+          request_hash?: string
+          result?: Json
+          successor_decision_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_approval_action_receipts_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_approval_action_receipts_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_approval_action_receipts_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: false
+            referencedRelation: "client_decisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_approval_action_receipts_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["blocking_item_id"]
+          },
+          {
+            foreignKeyName: "project_approval_action_receipts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_approval_action_receipts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_approval_action_receipts_successor_decision_id_fkey"
+            columns: ["successor_decision_id"]
+            isOneToOne: false
+            referencedRelation: "client_decisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_approval_action_receipts_successor_decision_id_fkey"
+            columns: ["successor_decision_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["blocking_item_id"]
+          },
+        ]
+      }
+      project_approval_artifacts: {
+        Row: {
+          artifact_hash: string
+          artifact_title: string
+          context: string | null
+          cost_cents_delta: number
+          created_at: string
+          decision_id: string
+          due_at: string
+          id: string
+          lead_time_days_delta: number
+          phase_id: string
+          project_id: string
+          question: string
+          schedule_days_delta: number
+          source_id: string
+          source_kind: string
+          source_snapshot: Json
+          source_version: number
+        }
+        Insert: {
+          artifact_hash: string
+          artifact_title: string
+          context?: string | null
+          cost_cents_delta: number
+          created_at?: string
+          decision_id: string
+          due_at: string
+          id?: string
+          lead_time_days_delta: number
+          phase_id: string
+          project_id: string
+          question: string
+          schedule_days_delta: number
+          source_id: string
+          source_kind: string
+          source_snapshot: Json
+          source_version: number
+        }
+        Update: {
+          artifact_hash?: string
+          artifact_title?: string
+          context?: string | null
+          cost_cents_delta?: number
+          created_at?: string
+          decision_id?: string
+          due_at?: string
+          id?: string
+          lead_time_days_delta?: number
+          phase_id?: string
+          project_id?: string
+          question?: string
+          schedule_days_delta?: number
+          source_id?: string
+          source_kind?: string
+          source_snapshot?: Json
+          source_version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_approval_artifacts_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: true
+            referencedRelation: "client_decisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_approval_artifacts_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: true
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["blocking_item_id"]
+          },
+          {
+            foreignKeyName: "project_approval_artifacts_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "project_phases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_approval_artifacts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_approval_artifacts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_billing_authorities: {
         Row: {
           billing_cadence: string
@@ -12680,6 +12913,276 @@ export type Database = {
             columns: ["source_proposal_id"]
             isOneToOne: false
             referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_decision_authorities: {
+        Row: {
+          assigned_at: string
+          assigned_by: string
+          decision_lead_id: string
+          project_id: string
+          required_coapprover_id: string | null
+          revision: number
+          updated_at: string
+        }
+        Insert: {
+          assigned_at?: string
+          assigned_by: string
+          decision_lead_id: string
+          project_id: string
+          required_coapprover_id?: string | null
+          revision: number
+          updated_at?: string
+        }
+        Update: {
+          assigned_at?: string
+          assigned_by?: string
+          decision_lead_id?: string
+          project_id?: string
+          required_coapprover_id?: string | null
+          revision?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_decision_authorities_assigned_by_fkey"
+            columns: ["assigned_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_decision_authorities_assigned_by_fkey"
+            columns: ["assigned_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_decision_authorities_decision_lead_id_fkey"
+            columns: ["decision_lead_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_decision_authorities_decision_lead_id_fkey"
+            columns: ["decision_lead_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_decision_authorities_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_decision_authorities_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_decision_authorities_required_coapprover_id_fkey"
+            columns: ["required_coapprover_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_decision_authorities_required_coapprover_id_fkey"
+            columns: ["required_coapprover_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_decision_authority_snapshots: {
+        Row: {
+          assigned_by: string
+          authority_revision: number
+          decision_id: string
+          decision_lead_id: string
+          id: string
+          project_id: string
+          required_coapprover_id: string | null
+          snapshotted_at: string
+        }
+        Insert: {
+          assigned_by: string
+          authority_revision: number
+          decision_id: string
+          decision_lead_id: string
+          id?: string
+          project_id: string
+          required_coapprover_id?: string | null
+          snapshotted_at?: string
+        }
+        Update: {
+          assigned_by?: string
+          authority_revision?: number
+          decision_id?: string
+          decision_lead_id?: string
+          id?: string
+          project_id?: string
+          required_coapprover_id?: string | null
+          snapshotted_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_decision_authority_snapshot_required_coapprover_id_fkey"
+            columns: ["required_coapprover_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_decision_authority_snapshot_required_coapprover_id_fkey"
+            columns: ["required_coapprover_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_decision_authority_snapshots_assigned_by_fkey"
+            columns: ["assigned_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_decision_authority_snapshots_assigned_by_fkey"
+            columns: ["assigned_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_decision_authority_snapshots_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: true
+            referencedRelation: "client_decisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_decision_authority_snapshots_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: true
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["blocking_item_id"]
+          },
+          {
+            foreignKeyName: "project_decision_authority_snapshots_decision_lead_id_fkey"
+            columns: ["decision_lead_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_decision_authority_snapshots_decision_lead_id_fkey"
+            columns: ["decision_lead_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_decision_authority_snapshots_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_decision_authority_snapshots_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_decision_review_confirmations: {
+        Row: {
+          approver_id: string
+          approver_role: string
+          artifact_hash: string
+          authority_revision: number
+          confirmed_at: string
+          decision_id: string
+          id: string
+          project_id: string
+          review_method: string
+        }
+        Insert: {
+          approver_id: string
+          approver_role: string
+          artifact_hash: string
+          authority_revision: number
+          confirmed_at?: string
+          decision_id: string
+          id?: string
+          project_id: string
+          review_method: string
+        }
+        Update: {
+          approver_id?: string
+          approver_role?: string
+          artifact_hash?: string
+          authority_revision?: number
+          confirmed_at?: string
+          decision_id?: string
+          id?: string
+          project_id?: string
+          review_method?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_decision_review_confirmations_approver_id_fkey"
+            columns: ["approver_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_decision_review_confirmations_approver_id_fkey"
+            columns: ["approver_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_decision_review_confirmations_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: false
+            referencedRelation: "client_decisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_decision_review_confirmations_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["blocking_item_id"]
+          },
+          {
+            foreignKeyName: "project_decision_review_confirmations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_decision_review_confirmations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
@@ -13406,6 +13909,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "project_parties_sms_consent_recorded_by_fkey"
+            columns: ["sms_consent_recorded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_parties_sms_consent_recorded_by_fkey"
+            columns: ["sms_consent_recorded_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "project_parties_studio_contact_id_fkey"
             columns: ["studio_contact_id"]
             isOneToOne: false
@@ -13555,6 +14072,7 @@ export type Database = {
       project_phases: {
         Row: {
           anchor_date: string | null
+          canonical_stage_key: string | null
           completed_at: string | null
           created_at: string
           deliverables: Json | null
@@ -13574,13 +14092,17 @@ export type Database = {
           revisions_used: number | null
           sort_order: number
           source_proposal_phase_id: string | null
+          source_template_slug: string | null
+          source_template_version: number | null
           start_date: string | null
           status: string
           target_end_date: string | null
           updated_at: string
+          workflow_track: string | null
         }
         Insert: {
           anchor_date?: string | null
+          canonical_stage_key?: string | null
           completed_at?: string | null
           created_at?: string
           deliverables?: Json | null
@@ -13600,13 +14122,17 @@ export type Database = {
           revisions_used?: number | null
           sort_order?: number
           source_proposal_phase_id?: string | null
+          source_template_slug?: string | null
+          source_template_version?: number | null
           start_date?: string | null
           status?: string
           target_end_date?: string | null
           updated_at?: string
+          workflow_track?: string | null
         }
         Update: {
           anchor_date?: string | null
+          canonical_stage_key?: string | null
           completed_at?: string | null
           created_at?: string
           deliverables?: Json | null
@@ -13626,10 +14152,13 @@ export type Database = {
           revisions_used?: number | null
           sort_order?: number
           source_proposal_phase_id?: string | null
+          source_template_slug?: string | null
+          source_template_version?: number | null
           start_date?: string | null
           status?: string
           target_end_date?: string | null
           updated_at?: string
+          workflow_track?: string | null
         }
         Relationships: [
           {
@@ -15387,6 +15916,7 @@ export type Database = {
           proposal_id: string
           request_id: string
           template_slug: string
+          template_version: number | null
         }
         Insert: {
           created_at?: string
@@ -15396,6 +15926,7 @@ export type Database = {
           proposal_id: string
           request_id: string
           template_slug: string
+          template_version?: number | null
         }
         Update: {
           created_at?: string
@@ -15405,6 +15936,7 @@ export type Database = {
           proposal_id?: string
           request_id?: string
           template_slug?: string
+          template_version?: number | null
         }
         Relationships: [
           {
@@ -15451,6 +15983,7 @@ export type Database = {
       proposal_phases: {
         Row: {
           anchor_date: string | null
+          canonical_stage_key: string | null
           created_at: string
           deliverables: Json | null
           duration_days: number | null
@@ -15465,10 +15998,14 @@ export type Database = {
           proposal_id: string
           revision_limit: number | null
           sort_order: number
+          source_template_slug: string | null
+          source_template_version: number | null
           updated_at: string
+          workflow_track: string | null
         }
         Insert: {
           anchor_date?: string | null
+          canonical_stage_key?: string | null
           created_at?: string
           deliverables?: Json | null
           duration_days?: number | null
@@ -15483,10 +16020,14 @@ export type Database = {
           proposal_id: string
           revision_limit?: number | null
           sort_order?: number
+          source_template_slug?: string | null
+          source_template_version?: number | null
           updated_at?: string
+          workflow_track?: string | null
         }
         Update: {
           anchor_date?: string | null
+          canonical_stage_key?: string | null
           created_at?: string
           deliverables?: Json | null
           duration_days?: number | null
@@ -15501,7 +16042,10 @@ export type Database = {
           proposal_id?: string
           revision_limit?: number | null
           sort_order?: number
+          source_template_slug?: string | null
+          source_template_version?: number | null
           updated_at?: string
+          workflow_track?: string | null
         }
         Relationships: [
           {
@@ -24517,6 +25061,7 @@ export type Database = {
           answer: string | null
           answered_at: string | null
           answered_by: string | null
+          approval_contract: string | null
           blocking_status: string
           blocks_kind: string
           blocks_milestone_id: string | null
@@ -24537,6 +25082,7 @@ export type Database = {
           linked_phase: string | null
           linked_proposal_id: string | null
           phase_id: string | null
+          predecessor_decision_id: string | null
           project_id: string | null
           recommended_option_id: string | null
           reminder_sent_at: string | null
@@ -24611,6 +25157,12 @@ export type Database = {
       _cents_to_int4: {
         Args: { p_value: number; p_what: string }
         Returns: number
+      }
+      _client_decision_blocks_phase: {
+        Args: {
+          p_decision: Database["public"]["Tables"]["client_decisions"]["Row"]
+        }
+        Returns: boolean
       }
       _clone_proposal_legacy_00399: {
         Args: {
@@ -24706,6 +25258,28 @@ export type Database = {
       _configuration_snapshot_hash: {
         Args: { p_snapshot: Json }
         Returns: string
+      }
+      _countersign_design_services_agreement_impl: {
+        Args: { p_proposal_id: string; p_signer_name: string }
+        Returns: Json
+      }
+      _create_furnishings_authorization_from_schedule_impl: {
+        Args: {
+          p_deposit_percent?: number
+          p_ffe_item_ids: string[]
+          p_name: string
+          p_project_id: string
+        }
+        Returns: Json
+      }
+      _create_project_approval_decision_checked: {
+        Args: {
+          p_idempotency_key: string
+          p_payload: Json
+          p_predecessor_decision_id: string
+          p_project_id: string
+        }
+        Returns: Json
       }
       _custom_commission_milestone_json: {
         Args: { p_milestone_id: string }
@@ -24849,6 +25423,14 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      _instantiate_product_configuration_template_impl: {
+        Args: {
+          p_name?: string
+          p_project_id: string
+          p_template_configuration_id: string
+        }
+        Returns: Json
       }
       _is_design_services_project: {
         Args: { p_project_id: string }
@@ -25016,6 +25598,17 @@ export type Database = {
         }
         Returns: Json
       }
+      _place_product_configuration_in_project_impl: {
+        Args: {
+          p_category?: string
+          p_configuration_id: string
+          p_project_id: string
+          p_room_id?: string
+          p_slot_id?: string
+          p_source?: Json
+        }
+        Returns: Json
+      }
       _plan_room_canonical_json: { Args: { p_value: Json }; Returns: string }
       _plan_room_rev_letter: { Args: { p_n: number }; Returns: string }
       _plan_room_set_doc_visibility: {
@@ -25048,6 +25641,11 @@ export type Database = {
       }
       _product_configuration_json: {
         Args: { p_configuration_id: string }
+        Returns: Json
+      }
+      _project_approval_hash: { Args: { p_value: Json }; Returns: string }
+      _promote_configuration_to_library_impl: {
+        Args: { p_configuration_id: string; p_name?: string }
         Returns: Json
       }
       _proposal_phase_effect_snapshot: {
@@ -25132,6 +25730,15 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      _record_paper_client_signature_impl: {
+        Args: {
+          p_paper_signed_on: string
+          p_proposal_id: string
+          p_scan_document_id?: string
+          p_signed_name: string
+        }
+        Returns: Json
+      }
       _repair_legacy_proposal_phase_topology: {
         Args: { p_proposal_id: string }
         Returns: boolean
@@ -25149,6 +25756,7 @@ export type Database = {
           answer: string | null
           answered_at: string | null
           answered_by: string | null
+          approval_contract: string | null
           blocking_status: string
           blocks_kind: string
           blocks_milestone_id: string | null
@@ -25169,6 +25777,7 @@ export type Database = {
           linked_phase: string | null
           linked_proposal_id: string | null
           phase_id: string | null
+          predecessor_decision_id: string | null
           project_id: string | null
           recommended_option_id: string | null
           reminder_sent_at: string | null
@@ -25188,6 +25797,35 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      _resolve_project_approval_artifact: {
+        Args: {
+          p_project_id: string
+          p_source_id: string
+          p_source_kind: string
+        }
+        Returns: {
+          artifact_hash: string
+          artifact_title: string
+          safe_snapshot: Json
+          source_version: number
+        }[]
+      }
+      _respond_project_approval_checked: {
+        Args: {
+          p_client_consent_method: string
+          p_client_signature: string
+          p_decision_id: string
+          p_expected_updated_at: string
+          p_idempotency_key: string
+          p_option_id: string
+          p_outcome: string
+        }
+        Returns: Json
+      }
+      _save_product_configuration_impl: {
+        Args: { p_input: Json }
+        Returns: Json
       }
       _scope_change_requester_can_author: {
         Args: { p_actor: string; p_owner: string }
@@ -25528,6 +26166,7 @@ export type Database = {
           answer: string | null
           answered_at: string | null
           answered_by: string | null
+          approval_contract: string | null
           blocking_status: string
           blocks_kind: string
           blocks_milestone_id: string | null
@@ -25548,6 +26187,7 @@ export type Database = {
           linked_phase: string | null
           linked_proposal_id: string | null
           phase_id: string | null
+          predecessor_decision_id: string | null
           project_id: string | null
           recommended_option_id: string | null
           reminder_sent_at: string | null
@@ -25587,6 +26227,7 @@ export type Database = {
           answer: string | null
           answered_at: string | null
           answered_by: string | null
+          approval_contract: string | null
           blocking_status: string
           blocks_kind: string
           blocks_milestone_id: string | null
@@ -25607,6 +26248,7 @@ export type Database = {
           linked_phase: string | null
           linked_proposal_id: string | null
           phase_id: string | null
+          predecessor_decision_id: string | null
           project_id: string | null
           recommended_option_id: string | null
           reminder_sent_at: string | null
@@ -25851,6 +26493,71 @@ export type Database = {
         Args: { p_claim_token: string; p_dispatch_id: string }
         Returns: Json
       }
+      board_json_has_explicit_media_reference: {
+        Args: { p_object_name: string; p_value: Json }
+        Returns: boolean
+      }
+      board_json_media_references_are_allowed: {
+        Args: {
+          p_target_designer?: string
+          p_target_studio?: string
+          p_value: Json
+        }
+        Returns: boolean
+      }
+      board_json_media_references_have_live_source: {
+        Args: {
+          p_target_designer?: string
+          p_target_studio?: string
+          p_value: Json
+        }
+        Returns: boolean
+      }
+      board_json_references_storage_object: {
+        Args: { p_object_name: string; p_value: Json }
+        Returns: boolean
+      }
+      board_media_owners_share_studio: {
+        Args: {
+          p_source_designer: string
+          p_target_designer: string
+          p_target_studio?: string
+        }
+        Returns: boolean
+      }
+      board_media_projection_is_allowed: {
+        Args: { p_board_id: string }
+        Returns: boolean
+      }
+      board_media_reference_has_live_source: {
+        Args: {
+          p_reference: string
+          p_target_designer?: string
+          p_target_studio?: string
+        }
+        Returns: boolean
+      }
+      board_media_reference_is_allowed: {
+        Args: {
+          p_reference: string
+          p_target_designer?: string
+          p_target_studio?: string
+        }
+        Returns: boolean
+      }
+      board_storage_reference_path: {
+        Args: { p_reference: string }
+        Returns: string
+      }
+      build_board_share_payload: {
+        Args: {
+          p_board_id: string
+          p_expires_at: string
+          p_label: string
+          p_share_id: string
+        }
+        Returns: Json
+      }
       calculate_engagement_score: {
         Args: { p_user_id: string }
         Returns: number
@@ -25868,6 +26575,14 @@ export type Database = {
         Returns: boolean
       }
       can_manage_invoice: { Args: { p_invoice_id: string }; Returns: boolean }
+      can_process_board_item_media: {
+        Args: { p_board_id: string; p_item_id: string; p_reference: string }
+        Returns: boolean
+      }
+      can_read_board_storage_object: {
+        Args: { p_object_name: string }
+        Returns: boolean
+      }
       can_submit_item_feedback_anchor: {
         Args: {
           p_board_item_id: string
@@ -26124,6 +26839,14 @@ export type Database = {
       compute_house_taste_draft: { Args: never; Returns: string }
       concierge_checklist_template: { Args: { p_stage: string }; Returns: Json }
       concierge_damage_photo_checklist: { Args: never; Returns: Json }
+      confirm_project_decision_review: {
+        Args: {
+          p_decision_id: string
+          p_idempotency_key: string
+          p_payload: Json
+        }
+        Returns: Json
+      }
       consume_board_unfurl_quota: {
         Args: { p_user_id?: string }
         Returns: Json
@@ -26173,6 +26896,7 @@ export type Database = {
           answer: string | null
           answered_at: string | null
           answered_by: string | null
+          approval_contract: string | null
           blocking_status: string
           blocks_kind: string
           blocks_milestone_id: string | null
@@ -26193,6 +26917,7 @@ export type Database = {
           linked_phase: string | null
           linked_proposal_id: string | null
           phase_id: string | null
+          predecessor_decision_id: string | null
           project_id: string | null
           recommended_option_id: string | null
           reminder_sent_at: string | null
@@ -26311,6 +27036,14 @@ export type Database = {
         }
         Returns: Json
       }
+      create_project_approval_decision: {
+        Args: {
+          p_idempotency_key: string
+          p_payload: Json
+          p_project_id: string
+        }
+        Returns: Json
+      }
       create_project_phase: {
         Args: {
           p_anchor_date?: string
@@ -26328,6 +27061,7 @@ export type Database = {
         }
         Returns: {
           anchor_date: string | null
+          canonical_stage_key: string | null
           completed_at: string | null
           created_at: string
           deliverables: Json | null
@@ -26347,10 +27081,13 @@ export type Database = {
           revisions_used: number | null
           sort_order: number
           source_proposal_phase_id: string | null
+          source_template_slug: string | null
+          source_template_version: number | null
           start_date: string | null
           status: string
           target_end_date: string | null
           updated_at: string
+          workflow_track: string | null
         }
         SetofOptions: {
           from: "*"
@@ -26375,6 +27112,7 @@ export type Database = {
         }
         Returns: {
           anchor_date: string | null
+          canonical_stage_key: string | null
           created_at: string
           deliverables: Json | null
           duration_days: number | null
@@ -26389,7 +27127,10 @@ export type Database = {
           proposal_id: string
           revision_limit: number | null
           sort_order: number
+          source_template_slug: string | null
+          source_template_version: number | null
           updated_at: string
+          workflow_track: string | null
         }
         SetofOptions: {
           from: "*"
@@ -26795,6 +27536,7 @@ export type Database = {
           answer: string | null
           answered_at: string | null
           answered_by: string | null
+          approval_contract: string | null
           blocking_status: string
           blocks_kind: string
           blocks_milestone_id: string | null
@@ -26815,6 +27557,7 @@ export type Database = {
           linked_phase: string | null
           linked_proposal_id: string | null
           phase_id: string | null
+          predecessor_decision_id: string | null
           project_id: string | null
           recommended_option_id: string | null
           reminder_sent_at: string | null
@@ -26854,6 +27597,7 @@ export type Database = {
           answer: string | null
           answered_at: string | null
           answered_by: string | null
+          approval_contract: string | null
           blocking_status: string
           blocks_kind: string
           blocks_milestone_id: string | null
@@ -26874,6 +27618,7 @@ export type Database = {
           linked_phase: string | null
           linked_proposal_id: string | null
           phase_id: string | null
+          predecessor_decision_id: string | null
           project_id: string | null
           recommended_option_id: string | null
           reminder_sent_at: string | null
@@ -27387,9 +28132,50 @@ export type Database = {
         Args: { p_product_id: string }
         Returns: Json
       }
+      get_project_approval_artifact_candidates: {
+        Args: { p_project_id: string }
+        Returns: Json
+      }
       get_project_authority_summary: {
         Args: { p_project_id: string }
         Returns: Json
+      }
+      get_project_contextual_handoffs: {
+        Args: { p_project_id: string }
+        Returns: Json
+      }
+      get_project_decision_review: {
+        Args: { p_decision_id: string }
+        Returns: Json
+      }
+      get_project_decision_reviews: {
+        Args: { p_project_id: string }
+        Returns: Json
+      }
+      get_project_workflow: {
+        Args: { p_project_id: string }
+        Returns: {
+          advance_blocker_count: number
+          blocks_advance: boolean
+          canonical_stage_key: string
+          completed_at: string
+          current_blockers: Json
+          deliverables: Json
+          follows_phase_id: string
+          gate_note: string
+          lane: string
+          phase_id: string
+          phase_key: string
+          phase_name: string
+          phase_status: string
+          progress: number
+          sort_order: number
+          source_proposal_phase_id: string
+          start_date: string
+          target_end_date: string
+          template_provenance: Json
+          workflow_track: string
+        }[]
       }
       get_project_working_budget: {
         Args: { p_project_id: string }
@@ -27454,6 +28240,10 @@ export type Database = {
           quality_score: number
           role: string
         }[]
+      }
+      get_site_request_action_detail: {
+        Args: { p_project_id: string; p_request_id: string }
+        Returns: Json
       }
       get_taste_refit_designers: {
         Args: never
@@ -27546,8 +28336,16 @@ export type Database = {
         Args: { p_product_id: string }
         Returns: boolean
       }
+      is_project_approval_reviewer: {
+        Args: { p_decision_id: string }
+        Returns: boolean
+      }
       is_project_team_member: {
         Args: { _project_id: string; _user_id?: string }
+        Returns: boolean
+      }
+      is_released_board_storage_object: {
+        Args: { p_object_name: string }
         Returns: boolean
       }
       is_studio_comember: { Args: { p_owner: string }; Returns: boolean }
@@ -27706,6 +28504,7 @@ export type Database = {
         Args: { p_project_id: string }
         Returns: Json
       }
+      list_my_project_decision_reviews: { Args: never; Returns: Json }
       list_product_configurations: {
         Args: { p_product_id: string; p_project_id?: string }
         Returns: Json
@@ -27764,6 +28563,7 @@ export type Database = {
           answer: string | null
           answered_at: string | null
           answered_by: string | null
+          approval_contract: string | null
           blocking_status: string
           blocks_kind: string
           blocks_milestone_id: string | null
@@ -27784,6 +28584,7 @@ export type Database = {
           linked_phase: string | null
           linked_proposal_id: string | null
           phase_id: string | null
+          predecessor_decision_id: string | null
           project_id: string | null
           recommended_option_id: string | null
           reminder_sent_at: string | null
@@ -28016,6 +28817,7 @@ export type Database = {
           answer: string | null
           answered_at: string | null
           answered_by: string | null
+          approval_contract: string | null
           blocking_status: string
           blocks_kind: string
           blocks_milestone_id: string | null
@@ -28036,6 +28838,7 @@ export type Database = {
           linked_phase: string | null
           linked_proposal_id: string | null
           phase_id: string | null
+          predecessor_decision_id: string | null
           project_id: string | null
           recommended_option_id: string | null
           reminder_sent_at: string | null
@@ -28252,6 +29055,7 @@ export type Database = {
         }
         Returns: {
           anchor_date: string | null
+          canonical_stage_key: string | null
           created_at: string
           deliverables: Json | null
           duration_days: number | null
@@ -28266,7 +29070,10 @@ export type Database = {
           proposal_id: string
           revision_limit: number | null
           sort_order: number
+          source_template_slug: string | null
+          source_template_version: number | null
           updated_at: string
+          workflow_track: string | null
         }
         SetofOptions: {
           from: "*"
@@ -28281,6 +29088,7 @@ export type Database = {
           answer: string | null
           answered_at: string | null
           answered_by: string | null
+          approval_contract: string | null
           blocking_status: string
           blocks_kind: string
           blocks_milestone_id: string | null
@@ -28301,6 +29109,7 @@ export type Database = {
           linked_phase: string | null
           linked_proposal_id: string | null
           phase_id: string | null
+          predecessor_decision_id: string | null
           project_id: string | null
           recommended_option_id: string | null
           reminder_sent_at: string | null
@@ -28454,6 +29263,7 @@ export type Database = {
           answer: string | null
           answered_at: string | null
           answered_by: string | null
+          approval_contract: string | null
           blocking_status: string
           blocks_kind: string
           blocks_milestone_id: string | null
@@ -28474,6 +29284,7 @@ export type Database = {
           linked_phase: string | null
           linked_proposal_id: string | null
           phase_id: string | null
+          predecessor_decision_id: string | null
           project_id: string | null
           recommended_option_id: string | null
           reminder_sent_at: string | null
@@ -28540,6 +29351,15 @@ export type Database = {
         }[]
       }
       resolve_trade_rfq_link: { Args: { p_token: string }; Returns: Json }
+      respond_project_approval: {
+        Args: {
+          p_decision_id: string
+          p_expected_updated_at: string
+          p_idempotency_key: string
+          p_payload: Json
+        }
+        Returns: Json
+      }
       retire_designer_taste: {
         Args: { p_designer_id: string }
         Returns: undefined
@@ -28686,6 +29506,7 @@ export type Database = {
           id: string
           items: Json
           kind: string
+          media_references_validated_at: string | null
           name: string
           sections: Json
           studio_id: string | null
@@ -28963,6 +29784,15 @@ export type Database = {
       }
       set_plan_sheet_state: {
         Args: { p_sheet_id: string; p_state: string }
+        Returns: Json
+      }
+      set_project_decision_authority: {
+        Args: {
+          p_decision_lead_id: string
+          p_expected_revision: number
+          p_project_id: string
+          p_required_coapprover_id: string
+        }
         Returns: Json
       }
       set_project_operational_status: {
@@ -29269,6 +30099,7 @@ export type Database = {
           answer: string | null
           answered_at: string | null
           answered_by: string | null
+          approval_contract: string | null
           blocking_status: string
           blocks_kind: string
           blocks_milestone_id: string | null
@@ -29289,6 +30120,55 @@ export type Database = {
           linked_phase: string | null
           linked_proposal_id: string | null
           phase_id: string | null
+          predecessor_decision_id: string | null
+          project_id: string | null
+          recommended_option_id: string | null
+          reminder_sent_at: string | null
+          responded_at: string | null
+          room_id: string | null
+          section_key: string | null
+          selected_by: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      stamp_project_approval_reminder_delivery: {
+        Args: { p_decision_id: string; p_decision_lead_id: string }
+        Returns: {
+          answer: string | null
+          answered_at: string | null
+          answered_by: string | null
+          approval_contract: string | null
+          blocking_status: string
+          blocks_kind: string
+          blocks_milestone_id: string | null
+          client_consent_method: string | null
+          client_consented_at: string | null
+          client_signature: string | null
+          context: string | null
+          coordination_kind: string
+          court: string
+          court_party_id: string | null
+          created_at: string
+          decision_kind: string
+          decision_type: string
+          designer_client_id: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          linked_phase: string | null
+          linked_proposal_id: string | null
+          phase_id: string | null
+          predecessor_decision_id: string | null
           project_id: string | null
           recommended_option_id: string | null
           reminder_sent_at: string | null
@@ -29391,6 +30271,15 @@ export type Database = {
         Args: { p_amount_cents: number; p_note?: string; p_token: string }
         Returns: Json
       }
+      supersede_project_approval_decision: {
+        Args: {
+          p_decision_id: string
+          p_expected_updated_at: string
+          p_idempotency_key: string
+          p_payload: Json
+        }
+        Returns: Json
+      }
       supersede_unsigned_legacy_proposals: {
         Args: {
           p_proposal_ids: string[]
@@ -29491,6 +30380,7 @@ export type Database = {
           answer: string | null
           answered_at: string | null
           answered_by: string | null
+          approval_contract: string | null
           blocking_status: string
           blocks_kind: string
           blocks_milestone_id: string | null
@@ -29511,6 +30401,7 @@ export type Database = {
           linked_phase: string | null
           linked_proposal_id: string | null
           phase_id: string | null
+          predecessor_decision_id: string | null
           project_id: string | null
           recommended_option_id: string | null
           reminder_sent_at: string | null
@@ -29544,6 +30435,7 @@ export type Database = {
           answer: string | null
           answered_at: string | null
           answered_by: string | null
+          approval_contract: string | null
           blocking_status: string
           blocks_kind: string
           blocks_milestone_id: string | null
@@ -29564,6 +30456,7 @@ export type Database = {
           linked_phase: string | null
           linked_proposal_id: string | null
           phase_id: string | null
+          predecessor_decision_id: string | null
           project_id: string | null
           recommended_option_id: string | null
           reminder_sent_at: string | null
@@ -29594,6 +30487,7 @@ export type Database = {
         }
         Returns: {
           anchor_date: string | null
+          canonical_stage_key: string | null
           completed_at: string | null
           created_at: string
           deliverables: Json | null
@@ -29613,10 +30507,13 @@ export type Database = {
           revisions_used: number | null
           sort_order: number
           source_proposal_phase_id: string | null
+          source_template_slug: string | null
+          source_template_version: number | null
           start_date: string | null
           status: string
           target_end_date: string | null
           updated_at: string
+          workflow_track: string | null
         }
         SetofOptions: {
           from: "*"
@@ -29634,6 +30531,7 @@ export type Database = {
         }
         Returns: {
           anchor_date: string | null
+          canonical_stage_key: string | null
           created_at: string
           deliverables: Json | null
           duration_days: number | null
@@ -29648,7 +30546,10 @@ export type Database = {
           proposal_id: string
           revision_limit: number | null
           sort_order: number
+          source_template_slug: string | null
+          source_template_version: number | null
           updated_at: string
+          workflow_track: string | null
         }
         SetofOptions: {
           from: "*"
@@ -29734,6 +30635,15 @@ export type Database = {
       }
       void_trade_scope: {
         Args: { p_proposal_id: string; p_reason: string }
+        Returns: Json
+      }
+      withdraw_project_approval_decision: {
+        Args: {
+          p_decision_id: string
+          p_expected_updated_at: string
+          p_idempotency_key: string
+          p_reason: string
+        }
         Returns: Json
       }
     }

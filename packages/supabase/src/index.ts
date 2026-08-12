@@ -34,6 +34,17 @@ export {
 } from './auth';
 export { getCookieDomain } from './lib/cookie-domain';
 export {
+  normalizeBoardMediaValue,
+  signBoardMediaReference,
+  signBoardMediaValue,
+  type BoardStorageSigningClient,
+} from './lib/board-storage';
+export {
+  normalizeProposalBoardReference,
+  proposalBoardUrlToPath,
+  PROPOSAL_BOARD_BUCKET,
+} from './lib/storage-url';
+export {
   invalidateProposalClientQueries,
   proposalClientQueryKeys,
   PROPOSAL_CLIENT_MUTATION_KEY,

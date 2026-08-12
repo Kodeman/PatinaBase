@@ -152,9 +152,9 @@ BEGIN
     SELECT 1
     FROM storage.buckets AS bucket
     WHERE bucket.id = 'proposal-mood-boards'
-      AND bucket.public
+      AND NOT bucket.public
       AND 'image/gif' = ANY (bucket.allowed_mime_types)
-  ), 'proposal-mood-boards must stay public and accept GIF uploads';
+  ), 'proposal-mood-boards must stay private and accept GIF uploads';
 
   ASSERT NOT EXISTS (
     SELECT 1
@@ -251,12 +251,12 @@ RESET ROLE;
 SET LOCAL ROLE anon;
 DO $$
 BEGIN
-  ASSERT EXISTS (
+  ASSERT NOT EXISTS (
     SELECT 1
     FROM storage.objects
     WHERE bucket_id = 'proposal-mood-boards'
       AND name = 'b3900000-0000-4000-8000-000000000001/boards/c4061000-0000-4000-8000-000000000001/co-member.gif'
-  ), 'public bucket object must remain anonymously readable';
+  ), 'private working object must not be anonymously readable';
 END;
 $$;
 
@@ -377,10 +377,11 @@ BEGIN
 
   v_data := v_payload #> '{board,items,0,data}';
   ASSERT v_data->>'section_id' = 'hero'
-     AND v_data->>'vendor_name' = 'Visible vendor'
-     AND (v_data->>'price_cents')::integer = 12500,
-    'explicit client-safe board data must remain available';
+     AND v_data->>'name' = 'Reference image',
+    'explicit client-safe visual board data must remain available';
   ASSERT NOT (v_data ? 'cost_cents')
+     AND NOT (v_data ? 'vendor_name')
+     AND NOT (v_data ? 'price_cents')
      AND NOT (v_data ? 'internal_note')
      AND NOT (v_data ? 'proposal_id'),
     'arbitrary/internal item data must not escape the resolver allowlist';

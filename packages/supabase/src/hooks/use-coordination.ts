@@ -7,6 +7,7 @@ import { createBrowserClient } from '../client';
 import type { ProductConfigurationSelection, PartyKind as SharedPartyKind } from '@patina/types';
 import type { ClientDecisionOption, DecisionType } from './use-decisions';
 import { peopleKeys } from './use-people';
+import { invalidateProjectWorkflow } from './use-project-workflow';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Track 5 — Project Coordination data layer (the ball-in-court).
@@ -118,6 +119,8 @@ export interface CoordinationItem {
   context: string | null;
   due_date: string | null;
   status: CoordinationStatus;
+  /** Stage-2 artifact approvals reuse client_decisions but have their own UI. */
+  approval_contract: string | null;
   // Track 5 axis (00213).
   coordination_kind: CoordinationKind;
   court: Court;
@@ -209,6 +212,7 @@ export interface ResolveCoordinationItemInput {
 
 const COORDINATION_SELECT = `
   id, designer_client_id, designer_id, project_id, title, context, due_date, status,
+  approval_contract,
   coordination_kind, court, court_party_id, blocks_kind, answer, answered_at, answered_by,
   blocking_status, section_key, decision_kind, decision_type, phase_id,
   reminder_sent_at, sent_at, responded_at,
@@ -217,6 +221,19 @@ const COORDINATION_SELECT = `
   court_party:project_parties!court_party_id(*),
   latest_thread_post:comms_threads!coordination_item_id(thread_id:id, last_message_at, title)
 `;
+
+export function isProjectArtifactApproval(
+  item: Pick<CoordinationItem, 'approval_contract'>,
+): boolean {
+  return item.approval_contract === 'project_artifact_v1';
+}
+
+/** Presentation-only filter. Authoritative blocker consumers still read all rows. */
+export function excludeProjectArtifactApprovals<T extends Pick<CoordinationItem, 'approval_contract'>>(
+  items: readonly T[],
+): T[] {
+  return items.filter((item) => !isProjectArtifactApproval(item));
+}
 
 /** The 5 coordination kinds (selection IS the shipped path; the other four are
  *  the new generalization). The read model includes all so the band shows them
@@ -305,7 +322,8 @@ export function useCourtSummary(projectId: string | null | undefined) {
       if (error) throw error;
       return (data ?? []).map(normalizeThreadPost) as CoordinationItem[];
     },
-    select: (items: CoordinationItem[]): CourtCount[] => summarizeCourts(items),
+    select: (items: CoordinationItem[]): CourtCount[] =>
+      summarizeCourts(excludeProjectArtifactApprovals(items)),
   });
 }
 
@@ -694,6 +712,7 @@ export function useResolveCoordinationItem(projectId: string | null | undefined)
         void queryClient.invalidateQueries({ queryKey: ['project-decisions', pid] });
         void queryClient.invalidateQueries({ queryKey: ['project-ffe-items', pid] });
         void queryClient.invalidateQueries({ queryKey: ['project-ffe', pid] });
+        void invalidateProjectWorkflow(queryClient, pid);
       }
     },
   });
@@ -954,6 +973,7 @@ export function useCoordinationRealtime(projectId: string | null | undefined) {
       queryClient.invalidateQueries({ queryKey: ['section-tasks', projectId] });
       queryClient.invalidateQueries({ queryKey: ['margin-items'] });
       queryClient.invalidateQueries({ queryKey: ['document-state'] });
+      void invalidateProjectWorkflow(queryClient, projectId);
     };
 
     const channel: RealtimeChannel = supabase
@@ -974,6 +994,16 @@ export function useCoordinationRealtime(projectId: string | null | undefined) {
           event: '*',
           schema: 'public',
           table: 'project_tasks',
+          filter: `project_id=eq.${projectId}`,
+        },
+        invalidate,
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'project_ffe_items',
           filter: `project_id=eq.${projectId}`,
         },
         invalidate,
@@ -1003,6 +1033,7 @@ function invalidateCoordination(
     void queryClient.invalidateQueries({ queryKey: ['section-tasks', projectId] });
     void queryClient.invalidateQueries({ queryKey: ['project-decisions', projectId] });
     void queryClient.invalidateQueries({ queryKey: ['project-ffe-items', projectId] });
+    void invalidateProjectWorkflow(queryClient, projectId);
   }
   if (designerClientId) {
     void queryClient.invalidateQueries({ queryKey: ['client-decisions', designerClientId] });

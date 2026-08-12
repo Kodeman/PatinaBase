@@ -12,6 +12,7 @@ import {
   proposalSendSnapshotsMatch,
   type ProposalSendSnapshot,
 } from '../lib/proposal-payment-schedule';
+import { signBoardMediaValue } from '../lib/board-storage';
 import type {
   ProposalExclusion,
   ProposalPaymentMilestone,
@@ -425,7 +426,7 @@ export function useClientSafeProposalBundle(proposalId: string) {
         { p_proposal_id: proposalId },
       );
       if (error) throw error;
-      return data as ClientProposalBundle;
+      return signBoardMediaValue(supabase, data as ClientProposalBundle);
     },
   });
 }

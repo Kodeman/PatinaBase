@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 
 jest.mock('@patina/supabase', () => ({
+  excludeProjectArtifactApprovals: (items: unknown[]) => items,
   useCoordinationItems: () => ({ data: [] }),
   useProjectParties: () => ({ data: [] }),
   useProjectFFEItems: () => ({ data: [] }),

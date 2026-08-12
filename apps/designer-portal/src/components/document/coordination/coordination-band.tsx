@@ -32,6 +32,7 @@ import {
   useProjectPhases,
   useCoordinationRealtime,
   useDesignerClientForClientUser,
+  excludeProjectArtifactApprovals,
 } from '@patina/supabase';
 import { useSectionTasks } from '@/hooks/use-section-work';
 import { groupByCourt } from '@/lib/document/coordination-derivation';
@@ -79,6 +80,10 @@ export function CoordinationBand({
   useCoordinationRealtime(projectId);
 
   const allItems = useMemo(() => items ?? [], [items]);
+  const displayItems = useMemo(
+    () => excludeProjectArtifactApprovals(allItems),
+    [allItems],
+  );
   const allTasks = useMemo(() => tasks ?? [], [tasks]);
   const allParties = useMemo(() => parties ?? [], [parties]);
   const courtSummary = useMemo(() => summary ?? [], [summary]);
@@ -89,20 +94,24 @@ export function CoordinationBand({
   const composerPhases = useMemo(() => toComposerPhases(phaseRows), [phaseRows]);
 
   // The open items, grouped by court (designer-first, empties dropped, due-sorted).
-  const groups = useMemo(() => groupByCourt(allItems), [allItems]);
+  const groups = useMemo(() => groupByCourt(displayItems), [displayItems]);
 
   // ── band-LOCAL sheet state — never a route/tab (D1) ──
   const [sheet, setSheet] = useState<SheetState>(null);
 
-  const openItem = (id: string) => setSheet({ kind: 'item', id });
+  const openItem = (id: string) => {
+    if (displayItems.some((item) => item.id === id)) {
+      setSheet({ kind: 'item', id });
+    }
+  };
   const openComposer = () => setSheet({ kind: 'composer' });
   const closeSheet = () => setSheet(null);
 
   // The item currently in the OpenItemSheet (resolved fresh from the live query so
   // the sheet always reads the latest row after an optimistic update).
   const activeItem = useMemo(
-    () => (sheet?.kind === 'item' ? allItems.find((i) => i.id === sheet.id) ?? null : null),
-    [sheet, allItems],
+    () => (sheet?.kind === 'item' ? displayItems.find((i) => i.id === sheet.id) ?? null : null),
+    [sheet, displayItems],
   );
 
   // Smooth-scroll a court bar pill to its group's anchor.

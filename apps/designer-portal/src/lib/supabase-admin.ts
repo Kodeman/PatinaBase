@@ -9,8 +9,15 @@ if (typeof window !== 'undefined') {
 }
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { User } from '@supabase/supabase-js';
 import { createAdminClient } from '@patina/supabase/client';
 import { createServerClient } from '@patina/supabase/server';
+
+// Written out rather than inferred: the generated Database type is large enough
+// that TypeScript refuses to serialize this signature (TS7056).
+type DesignerAdminAuth =
+  | { error: NextResponse }
+  | { user: User; adminClient: ReturnType<typeof createAdminClient> };
 
 /**
  * Validate the caller is authenticated and has a designer-domain or admin-domain role.
@@ -18,7 +25,9 @@ import { createServerClient } from '@patina/supabase/server';
  *
  * Permitted role domains: 'designer' | 'admin'
  */
-export async function getAuthenticatedDesignerAdmin(request: NextRequest) {
+export async function getAuthenticatedDesignerAdmin(
+  request: NextRequest,
+): Promise<DesignerAdminAuth> {
   // Validate the caller's session cookie
   const supabase = await createServerClient();
   const {

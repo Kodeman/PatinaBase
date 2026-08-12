@@ -90,6 +90,152 @@ describe('client project reads', () => {
     );
     expect(mockCreateServerClient).not.toHaveBeenCalled();
   });
+
+  it('counts only actionable sanitized Stage-2 reviews and defaulted legacy client work', async () => {
+    const decisionOr = jest.fn();
+    const decisionEq = jest.fn();
+    const decisionSelect = jest.fn();
+    const supabase = {
+      auth: {
+        getUser: jest.fn().mockResolvedValue({
+          data: { user: { id: 'client-1' } },
+        }),
+      },
+      rpc: jest.fn((name: string) => {
+        if (name === 'list_my_project_decision_reviews') {
+          return Promise.resolve({
+            data: [
+              {
+                projectId: 'project-1',
+                lifecycleStatus: 'draft',
+                disposition: 'active',
+                completedReviewCount: 0,
+                requiredReviewCount: 1,
+                outcome: null,
+              },
+              {
+                projectId: 'project-1',
+                lifecycleStatus: 'pending',
+                disposition: 'active',
+                completedReviewCount: 1,
+                requiredReviewCount: 1,
+                outcome: null,
+              },
+              {
+                projectId: 'project-1',
+                lifecycleStatus: 'draft',
+                disposition: 'active',
+                completedReviewCount: 1,
+                requiredReviewCount: 1,
+                outcome: null,
+              },
+              {
+                projectId: 'project-1',
+                lifecycleStatus: 'responded',
+                disposition: 'active',
+                completedReviewCount: 1,
+                requiredReviewCount: 1,
+                outcome: 'approved',
+              },
+              {
+                projectId: 'project-1',
+                lifecycleStatus: 'draft',
+                disposition: 'withdrawn',
+                completedReviewCount: 0,
+                requiredReviewCount: 1,
+                outcome: null,
+              },
+            ],
+            error: null,
+          });
+        }
+        if (name === 'list_client_proposals') {
+          return Promise.resolve({
+            data: [{ project_id: 'project-1', status: 'sent' }],
+            error: null,
+          });
+        }
+        throw new Error(`Unexpected RPC: ${name}`);
+      }),
+      from: jest.fn((table: string) => {
+        if (table === 'projects') {
+          const builder = {
+            select: jest.fn(),
+            eq: jest.fn(),
+            order: jest.fn().mockResolvedValue({
+              data: [
+                {
+                  id: 'project-1',
+                  name: 'Lake House',
+                  status: 'active',
+                  project_phases: [],
+                },
+              ],
+              error: null,
+            }),
+          };
+          builder.select.mockReturnValue(builder);
+          builder.eq.mockReturnValue(builder);
+          return builder;
+        }
+        if (table === 'client_decisions') {
+          const builder = {
+            select: decisionSelect,
+            or: decisionOr,
+            eq: decisionEq,
+          };
+          decisionSelect.mockReturnValue(builder);
+          decisionOr.mockReturnValue(builder);
+          decisionEq
+            .mockReturnValueOnce(builder)
+            .mockResolvedValueOnce({
+              data: [
+                { project_id: 'project-1', court: null, coordination_kind: null },
+                { project_id: 'project-1', court: 'client', coordination_kind: 'signoff' },
+                { project_id: 'project-1', court: 'designer', coordination_kind: 'selection' },
+                { project_id: 'project-1', court: 'client', coordination_kind: 'rfi' },
+              ],
+              error: null,
+            });
+          return builder;
+        }
+        if (table === 'comms_thread_participants') {
+          const builder = {
+            select: jest.fn(),
+            eq: jest.fn().mockResolvedValue({ data: [], error: null }),
+          };
+          builder.select.mockReturnValue(builder);
+          return builder;
+        }
+        throw new Error(`Unexpected table: ${table}`);
+      }),
+    };
+    mockCreateServerClient.mockResolvedValue(supabase);
+
+    await expect(fetchClientProjects()).resolves.toEqual([
+      expect.objectContaining({
+        id: 'project-1',
+        approvalsPending: 5,
+        nonStage2ApprovalsPending: 3,
+      }),
+    ]);
+    expect(decisionSelect).toHaveBeenCalledWith(
+      'project_id, court, coordination_kind, designer_clients!inner(client_id)',
+    );
+    expect(decisionEq).toHaveBeenNthCalledWith(1, 'status', 'pending');
+    expect(decisionOr).toHaveBeenCalledWith(
+      'approval_contract.is.null,approval_contract.neq.project_artifact_v1',
+    );
+    expect(decisionEq).toHaveBeenNthCalledWith(
+      2,
+      'designer_clients.client_id',
+      'client-1',
+    );
+    expect(supabase.rpc).toHaveBeenCalledWith(
+      'list_my_project_decision_reviews',
+      {},
+    );
+  });
 });
 
 describe('client project phase projection', () => {

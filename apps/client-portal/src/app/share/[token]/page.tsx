@@ -12,6 +12,7 @@
 
 import type { ComponentProps } from 'react';
 import { createServiceClient } from '@patina/supabase/server';
+import { signBoardMediaValue } from '@patina/supabase';
 import {
   BoardComposition,
   type BoardsBlockBoard,
@@ -28,6 +29,7 @@ import {
   GUEST_SCOPE_ROOM_PRIVATE_SELECT,
   GUEST_SCOPE_ROOM_SELECT,
   GUEST_SECTION_SELECT,
+  signServiceAuthorizedBoards,
 } from '@/lib/guest-proposal-document';
 import { captureMoodBoardShareViewed } from '@/lib/analytics/mood-board-server';
 
@@ -72,7 +74,8 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
     { p_token: token },
   );
   if (!boardResolveError && resolvedBoard?.board) {
-    const board = resolvedBoard.board as BoardsBlockBoard;
+    const signedResolvedBoard = await signBoardMediaValue(admin, resolvedBoard);
+    const board = signedResolvedBoard.board as BoardsBlockBoard;
     if (typeof board.id === 'string' && typeof resolvedBoard.shareId === 'string') {
       await captureMoodBoardShareViewed({
         boardId: board.id,
@@ -181,7 +184,7 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
       .order('sort_order', { ascending: true })
       .order('created_at', { ascending: true })
       .order('z_index', { ascending: true, referencedTable: 'proposal_board_items' });
-    boardRows = data ?? [];
+    boardRows = await signServiceAuthorizedBoards(admin, data ?? []);
   }
 
   const bundle = buildGuestProposalDocumentBundle({

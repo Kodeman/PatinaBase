@@ -95,14 +95,12 @@ describe('I91 shared action grammar', () => {
     expect(drafting).toContain('backLabel={exitLabel}');
   });
 
-  it('keeps work-block commits primary and utilities secondary or tertiary', () => {
-    expect(work).toMatch(
-      /actionKey="request-signoff"[\s\S]*?variant="primary"[\s\S]*?actionKey="add-task"[\s\S]*?variant="secondary"/,
-    );
+  it('keeps task commits primary and retires legacy section sign-off creation', () => {
+    expect(work).toContain('actionKey="add-task"');
     expect(work).toMatch(/actionKey="create-task"[\s\S]*?variant="primary"/);
-    expect(work).toMatch(
-      /actionKey="submit-signoff-request"[\s\S]*?variant="primary"[\s\S]*?actionKey="cancel-signoff-request"[\s\S]*?variant="tertiary"/,
-    );
+    expect(work).not.toContain('actionKey="request-signoff"');
+    expect(work).not.toContain('actionKey="submit-signoff-request"');
+    expect(work).not.toContain('actionKey="request-signoff-again"');
   });
 
   it('adapts People profile actions to one role-led primary', () => {

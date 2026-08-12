@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import Link from 'next/link';
 
 import { invoiceBalanceCents } from '@patina/shared';
 import { useProjectInvoices } from '@patina/supabase';
-import type { Invoice, Proposal } from '@patina/supabase';
+import type { Invoice, ProjectApprovalReview, Proposal } from '@patina/supabase';
 
 import {
   GOODS_JOURNEY_STAGES,
@@ -20,6 +21,11 @@ import {
 import { useHydrated } from '@/hooks/use-hydrated';
 import { partitionProposals, useClientProposals } from '@/hooks/use-proposals-client';
 import { makingEvents, type MakingGateKind } from '@/lib/analytics/events';
+import {
+  isClientActionableProjectApproval,
+  isProjectApprovalAwaitingStudioIssue,
+  projectApprovalAttentionLabel,
+} from '@/lib/client-attention';
 import {
   commercialSummaryFromProposal,
   type ClientSelection,
@@ -265,6 +271,117 @@ function SignatureGate({
   );
 }
 
+function ProjectApprovalGate({ approval }: { approval: ProjectApprovalReview }) {
+  const ink = useSpineInk();
+  const due = parseSpineDate(approval.dueAt);
+  const act = approval.lifecycleStatus === 'draft' ? 'Review exact edition' : 'Respond';
+
+  return (
+    <GateRow>
+      <section
+        aria-labelledby={`approval-gate-${approval.decisionId}`}
+        className="relative my-1 min-w-0 border-y border-[var(--border-default)] bg-[var(--bg-warm)] px-5 py-5 sm:px-6"
+        data-testid="making-project-approval-gate"
+      >
+        <span
+          aria-hidden
+          className="absolute -left-[13px] -top-[3px] h-[5px] w-[26px]"
+          style={{ backgroundColor: ink.color }}
+        />
+        <span
+          aria-hidden
+          className="absolute -bottom-[2px] -left-[9px] h-[3px] w-[22px]"
+          style={{ backgroundColor: `color-mix(in srgb, ${ink.color} 50%, transparent)` }}
+        />
+        <p className="type-meta-small">
+          A gate · {approval.lifecycleStatus === 'draft' ? 'your review is required' : 'your response is required'}
+        </p>
+        <h3 id={`approval-gate-${approval.decisionId}`} className="type-item-name mt-1.5 break-words">
+          {approval.question}
+        </h3>
+        <p className="type-body-small mt-2 break-words text-[var(--text-muted)]">
+          {approval.artifactTitle} · Edition {approval.artifactVersion}
+          {due ? ` · Due ${LONG_MONTH_DAY.format(due)}` : ''}
+        </p>
+        <div className="mt-4">
+          <ScoredAction
+            actionKey="gate_project_approval"
+            regionKey="gate"
+            variant="primary"
+            href={`/decisions/${approval.decisionId}`}
+          >
+            {act}
+          </ScoredAction>
+        </div>
+      </section>
+    </GateRow>
+  );
+}
+
+interface DeferredApprovalWork {
+  approval: ProjectApprovalReview;
+  phaseLabel: string;
+}
+
+function DeferredProjectApprovals({
+  heading,
+  description,
+  items,
+  testId,
+}: {
+  heading: string;
+  description: string;
+  items: DeferredApprovalWork[];
+  testId: string;
+}) {
+  if (items.length === 0) return null;
+  const headingId = `${testId}-heading`;
+
+  return (
+    <section
+      aria-labelledby={headingId}
+      className="mt-8 min-w-0 border-t border-[var(--border-subtle)] pt-5"
+      data-testid={testId}
+    >
+      <h2 id={headingId} className="type-meta">
+        {heading}
+      </h2>
+      <p className="type-body-small mt-1 text-[var(--text-muted)]">
+        {description}
+      </p>
+      <ul aria-label={heading} className="mt-3 min-w-0 list-none p-0">
+        {items.map(({ approval, phaseLabel }) => {
+          const due = parseSpineDate(approval.dueAt);
+          const action = projectApprovalAttentionLabel(approval);
+          const clientActionable = isClientActionableProjectApproval(approval);
+          return (
+            <li
+              key={approval.decisionId}
+              className="min-w-0 border-b border-[var(--border-subtle)] py-4"
+            >
+              <p className="type-meta-small break-words text-[var(--text-muted)]">
+                {phaseLabel} · {action}
+              </p>
+              <h3 className="type-item-name mt-1 min-w-0">
+                <Link
+                  href={`/decisions/${approval.decisionId}`}
+                  className="inline-flex min-h-11 min-w-0 items-center break-words no-underline hover:underline focus-visible:focus-ring"
+                >
+                  {approval.question}
+                </Link>
+              </h3>
+              <p className="type-body-small mt-1 break-words text-[var(--text-muted)]">
+                {approval.artifactTitle} · Edition {approval.artifactVersion}
+                {due && clientActionable ? ` · Due ${LONG_MONTH_DAY.format(due)}` : ''}
+              </p>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
 // ─── gates: finished work awaiting acceptance ────────────────────────────────
 
 /**
@@ -400,9 +517,19 @@ export interface TheMakingProps {
   project: ClientProjectOverview;
   /** Server-fetched phases. `tags` includes 'Concurrent workstream' for thread-lane phases. */
   milestones: MilestoneDetail[];
+  projectApprovals?: ProjectApprovalReview[];
+  projectApprovalsLoading?: boolean;
+  projectApprovalsError?: boolean;
 }
 
-export function TheMaking({ projectId, project, milestones }: TheMakingProps) {
+export function TheMaking({
+  projectId,
+  project,
+  milestones,
+  projectApprovals = [],
+  projectApprovalsLoading = false,
+  projectApprovalsError = false,
+}: TheMakingProps) {
   // ── every hook, before any branch ──────────────────────────────────────────
   const hydrated = useHydrated();
   const { user } = useAuth();
@@ -488,6 +615,42 @@ export function TheMaking({ projectId, project, milestones }: TheMakingProps) {
     }
     return [{ selection, proposalId }];
   });
+  const actionableProjectApprovals = projectApprovals.filter(
+    isClientActionableProjectApproval,
+  );
+  const awaitingStudioIssueApprovals = projectApprovals
+    .filter(isProjectApprovalAwaitingStudioIssue)
+    .map((approval) => ({
+      approval,
+      phaseLabel:
+        phases.current?.id === approval.phaseId
+          ? phases.current.label
+          : phases.future.find((phase) => phase.id === approval.phaseId)?.label ??
+            phases.settled.find((phase) => phase.id === approval.phaseId)?.label ??
+            'Phase not available',
+    }));
+  const currentPhaseId = phases.current?.id ?? null;
+  const approvalGates = currentPhaseId
+    ? actionableProjectApprovals.filter(
+        (approval) => approval.phaseId === currentPhaseId,
+      )
+    : [];
+  const laterApprovals = actionableProjectApprovals.flatMap((approval) => {
+    const phase = phases.future.find((candidate) => candidate.id === approval.phaseId);
+    return phase ? [{ approval, phaseLabel: phase.label }] : [];
+  });
+  const otherApprovals = actionableProjectApprovals
+    .filter(
+      (approval) =>
+        approval.phaseId !== currentPhaseId &&
+        !phases.future.some((phase) => phase.id === approval.phaseId),
+    )
+    .map((approval) => ({
+      approval,
+      phaseLabel:
+        phases.settled.find((phase) => phase.id === approval.phaseId)?.label ??
+        'Phase not available',
+    }));
 
   // ── the ledger ─────────────────────────────────────────────────────────────
   const openInvoices = (invoicesQuery.data ?? [])
@@ -502,14 +665,17 @@ export function TheMaking({ projectId, project, milestones }: TheMakingProps) {
   // Papers and acceptances are counted apart: one is a document waiting for a
   // name, the other is finished work waiting to be accepted, and the sentence
   // says so in different words. Telemetry and the sub-line still want the sum.
-  const gateCount = signatureGates.length + acceptanceGates.length;
+  const gateCount = approvalGates.length + signatureGates.length + acceptanceGates.length;
   const namesAtStop = (stop: number) =>
     goods
       .filter((selection) => journeyStageIndexForStatus(selection.status) === stop)
       .map((selection) => selection.name);
 
   const openChapterLoading =
-    proposalsQuery.isPending || selectionsQuery.isPending || invoicesQuery.isPending;
+    projectApprovalsLoading ||
+    proposalsQuery.isPending ||
+    selectionsQuery.isPending ||
+    invoicesQuery.isPending;
 
   const standing: StandingSentenceInput | null =
     hydrated && today && !openChapterLoading
@@ -559,7 +725,12 @@ export function TheMaking({ projectId, project, milestones }: TheMakingProps) {
   if (openChapterLoading) {
     entries.push(<OpenChapterSkeleton key="pending" />);
   } else {
-    // 1 · gates — papers first, then finished work
+    // 1 · gates — artifact decisions first, then papers and finished work
+    for (const approval of approvalGates) {
+      entries.push(
+        <ProjectApprovalGate key={`approval:${approval.decisionId}`} approval={approval} />,
+      );
+    }
     for (const proposal of signatureGates) {
       entries.push(
         <SignatureGate key={`sign:${proposal.id}`} proposal={proposal} projectId={projectId} />,
@@ -579,6 +750,13 @@ export function TheMaking({ projectId, project, milestones }: TheMakingProps) {
       entries.push(
         <QuietLine key="papers-dark" testId="making-papers-unavailable">
           Your papers could not be read just now
+        </QuietLine>,
+      );
+    }
+    if (projectApprovalsError) {
+      entries.push(
+        <QuietLine key="approvals-dark" testId="making-approvals-unavailable">
+          Project approvals could not be read just now
         </QuietLine>,
       );
     }
@@ -650,7 +828,7 @@ export function TheMaking({ projectId, project, milestones }: TheMakingProps) {
   }
 
   return (
-    <div data-testid="the-making">
+    <div className="min-w-0" data-testid="the-making">
       <MakingMasthead
         projectName={project.name}
         location={project.location}
@@ -676,6 +854,25 @@ export function TheMaking({ projectId, project, milestones }: TheMakingProps) {
             opening a region with nothing in it. */}
         {entries.length > 0 ? entries : undefined}
       </MakingSpine>
+
+      <DeferredProjectApprovals
+        heading="Later approvals"
+        description="Linked to a later project phase, not today’s open chapter."
+        items={laterApprovals}
+        testId="making-later-approvals"
+      />
+      <DeferredProjectApprovals
+        heading="Other project approvals"
+        description="Not linked to today’s open chapter or a scheduled future phase."
+        items={otherApprovals}
+        testId="making-other-approvals"
+      />
+      <DeferredProjectApprovals
+        heading="Awaiting studio issue"
+        description="Your review is complete. The studio is preparing the approval for issue."
+        items={awaitingStudioIssueApprovals}
+        testId="making-awaiting-studio-issue"
+      />
     </div>
   );
 }

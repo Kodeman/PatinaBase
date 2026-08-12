@@ -16,6 +16,9 @@ let mockDraftingState: Record<string, unknown> = { gaps: [], isLoading: false, e
 let mockProposalData: Record<string, unknown> | undefined;
 let mockProposalError = false;
 let mockProjectQuery: Record<string, unknown> = { data: undefined, isLoading: false, isError: false };
+// Ruling V: the nearest open gate feeds the guide. Empty by default so the
+// existing guide branches keep asserting the derivations they were written for.
+let mockContextualHandoffsQuery: Record<string, unknown> = { data: [], isError: false };
 type MockDeskData = {
   folders: Array<{ row: { engagement_id: string }; need: Record<string, unknown> | null }>;
   chips: unknown[];
@@ -60,9 +63,15 @@ jest.mock('@patina/supabase', () => ({
   useDiscovery: () => mockDiscoveryQuery,
   // Read by the real MarginRail.
   useProjectFFEItems: () => ({ data: [] }),
+  useProjectContextualHandoffs: () => mockContextualHandoffsQuery,
   useProjectParties: () => ({ data: [] }),
   useCoordinationItems: () => ({ data: [] }),
   useDesignerClientForClientUser: () => ({ data: null }),
+  useProjectWorkflow: () => ({
+    data: [],
+    isLoading: false,
+    isError: false,
+  }),
 }));
 
 // The project document's own sections are not what these tests exercise; the
@@ -70,6 +79,9 @@ jest.mock('@patina/supabase', () => ({
 jest.mock('@/components/document/ffe-section', () => ({ FFESection: () => null }));
 jest.mock('@/components/document/coordination/coordination-band', () => ({ CoordinationBand: () => null }));
 jest.mock('@/components/document/schedule/schedule-spine', () => ({ ScheduleSpine: () => null }));
+jest.mock('@/components/document/approvals/project-approval-document', () => ({
+  ProjectApprovalDocument: () => null,
+}));
 jest.mock('@/components/document/commercial/project-authority-band', () => ({
   ProjectAuthorityBandForProject: () => null,
 }));
@@ -331,6 +343,7 @@ describe('DocumentPage guide activation', () => {
     mockProposalData = undefined;
     mockProposalError = false;
     mockProjectQuery = { data: undefined, isLoading: false, isError: false };
+    mockContextualHandoffsQuery = { data: [], isError: false };
     mockDeskData = { folders: [], chips: [], composed: {} };
     mockDeskLoading = false;
     mockDeskError = false;

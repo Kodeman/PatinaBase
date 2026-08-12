@@ -188,11 +188,16 @@ export interface ProposalBoardReferenceRow {
   cover_image_url: string | null;
 }
 
+export interface BoardShareReferenceRow {
+  board_payload: unknown;
+}
+
 export interface BoardReferenceDataset {
   liveItems: LiveBoardItemReferenceRow[];
   projectSnapshots: ProjectBoardReferenceRow[];
   templates: BoardTemplateReferenceRow[];
   boards: ProposalBoardReferenceRow[];
+  shares: BoardShareReferenceRow[];
 }
 
 /** Build exact persisted-field counts; counts > 0 are live, regardless of board. */
@@ -220,6 +225,9 @@ export function buildBoardReferenceCounts(
     if (ownerId) {
       addReference(counts, `${ownerId}/boards/${board.id}/cover.png`);
     }
+  }
+  for (const share of dataset.shares) {
+    addNestedImageReferences(counts, share.board_payload);
   }
 
   return counts;

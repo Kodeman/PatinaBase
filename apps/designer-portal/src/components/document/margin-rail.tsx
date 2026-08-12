@@ -25,6 +25,12 @@ import {
 } from '@patina/supabase';
 import { useSectionTasks } from '@/hooks/use-section-work';
 import { useMarginItems } from '@/hooks/use-margin-items';
+import {
+  classifyMarginItems,
+  legacyCoordinationDrafts,
+  marginDecisionClassificationState,
+  MarginDecisionClassificationNotice,
+} from '@/lib/document/stage2-approval-exclusions';
 import { useCreateMarginNote } from '@/hooks/use-margin-notes';
 import {
   useMarkProjectFileChangeRead,
@@ -36,6 +42,7 @@ import {
 } from '@/lib/document/margin-derivation';
 import { todayYmd } from '@/lib/document/format';
 import { MarginItem } from './margin-item';
+import { MarginHandoffs, useHandoffGates } from './margin-handoff-item';
 import { MarginItemBody } from './margin-bodies';
 import { MarginNote } from './margin-note';
 import { DocSheet, DocSheetOriginProvider } from './overlays/doc-sheet';
@@ -55,6 +62,17 @@ import {
   DocumentActionGroup,
   DocumentActionRow,
 } from './document-action';
+
+/**
+ * Ask the margin to open. Between 1180px and 1440px the rail is a closed,
+ * `inert` sheet, so an anchor inside it cannot be focused until it opens — a
+ * guide action naming a margin control has to raise the drawer first.
+ */
+export const OPEN_MARGIN_EVENT = 'document:open-margin' as const;
+
+export function openMarginRail(): void {
+  window.dispatchEvent(new CustomEvent(OPEN_MARGIN_EVENT));
+}
 
 const COMPACT_MARGIN_QUERY = '(min-width: 1180px)';
 const FULL_MARGIN_QUERY = '(min-width: 1440px)';
@@ -105,6 +123,12 @@ export function ResponsiveMarginRail({ children }: { children: ReactNode }) {
       compactMedia.removeEventListener('change', syncMode);
       fullMedia.removeEventListener('change', syncMode);
     };
+  }, []);
+
+  useEffect(() => {
+    const onOpenRequest = () => setOpen(true);
+    window.addEventListener(OPEN_MARGIN_EVENT, onOpenRequest);
+    return () => window.removeEventListener(OPEN_MARGIN_EVENT, onOpenRequest);
   }, []);
 
   useEffect(() => {
@@ -268,10 +292,18 @@ export function MarginRail({
   onHoverLine,
   pendingNoteAnchor = null,
   onNoteAnchorConsumed = () => {},
+  approvalSurfaceMounted = false,
+  now,
 }: {
   projectId: string | null;
   proposalId: string | null;
   clientName: string;
+  /** Whether the Stage-2 approval ceremony is mounted on this document; the
+   *  gates' `open` act dispatches to it and is withheld when it is not. */
+  approvalSurfaceMounted?: boolean;
+  /** The document's one clock, so the margin stamp and the guide sentence
+   *  cannot disagree across a midnight. */
+  now: Date;
   /** The client's AUTH uid (row.client_profile_id) — resolves designer_clients.id
    *  for the R55 decision composer's INSERT (the same FK the band resolves). */
   clientUserId?: string | null;
@@ -281,6 +313,23 @@ export function MarginRail({
   onNoteAnchorConsumed?: () => void;
 }) {
   const { data: items, isLoading } = useMarginItems(projectId, proposalId);
+  const handoffGates = useHandoffGates({ projectId, clientName, now });
+  const coordinationQuery = useCoordinationItems(projectId);
+  const coordItems = coordinationQuery.data;
+  const classificationState = marginDecisionClassificationState({
+    projectId,
+    coordinationItems: coordItems,
+    isLoading:
+      coordinationQuery.isLoading === true ||
+      coordinationQuery.isPending === true,
+    isError: coordinationQuery.isError === true,
+  });
+  const classifiedMargin = useMemo(
+    () =>
+      classifyMarginItems(items ?? [], coordItems ?? [], classificationState),
+    [classificationState, coordItems, items],
+  );
+  const visibleItems = classifiedMargin.items;
   const { data: fileChanges } = useProjectFileChangeNotifications(projectId);
   const markFileChangeRead = useMarkProjectFileChangeRead();
   const [openId, setOpenId] = useState<string | null>(null);
@@ -296,8 +345,8 @@ export function MarginRail({
     ((ffeItems ?? []) as Array<{ id: string }>).forEach((it, i) =>
       lineRank.set(it.id, i),
     );
-    return partitionMargin(items ?? [], new Date(), { lineRank });
-  }, [items, ffeItems]);
+    return partitionMargin(visibleItems, new Date(), { lineRank });
+  }, [visibleItems, ffeItems]);
 
   // ── R55: the decision composer, opened from the margin "+ New" ──
   // designer_clients.id resolution (the band's pattern) — the composer INSERT
@@ -311,7 +360,6 @@ export function MarginRail({
   const { data: parties } = useProjectParties(projectId ?? '');
   const { data: phaseRows } = useProjectPhases(projectId ?? '');
   const { data: tasks } = useSectionTasks(projectId ?? '');
-  const { data: coordItems } = useCoordinationItems(projectId);
 
   const composerFfe = useMemo(() => toComposerFfeItems(ffeItems), [ffeItems]);
   const composerPhases = useMemo(
@@ -319,7 +367,7 @@ export function MarginRail({
     [phaseRows],
   );
   const draftItems = useMemo(
-    () => (coordItems ?? []).filter((i) => i.status === 'draft'),
+    () => legacyCoordinationDrafts(coordItems ?? []),
     [coordItems],
   );
 
@@ -367,7 +415,7 @@ export function MarginRail({
     );
   };
 
-  const decisionRows = (items ?? []).filter((i) => i.kind === 'decision');
+  const decisionRows = visibleItems.filter((i) => i.kind === 'decision');
 
   const bodyFor = (row: MarginItemRow) => (
     <MarginItemBody
@@ -457,6 +505,10 @@ export function MarginRail({
           </DocumentAction>
         </DocumentActionGroup>
       </div>
+
+      <MarginDecisionClassificationNotice
+        state={classifiedMargin.decisionState}
+      />
 
       {/* R55: unsent drafts live here — editable in the margin until published. */}
       {draftItems.length > 0 && (
@@ -555,11 +607,24 @@ export function MarginRail({
         </div>
       )}
 
-      {!isLoading && (items ?? []).length === 0 && (
-        <p className="text-[14px] italic leading-relaxed text-[var(--color-charcoal)]">
-          The margin — decisions, messages, and money gather here
-        </p>
-      )}
+      {/* Ruling III: the handoffs are margin items. They lead the rail because
+          a thing waiting on a named party outranks the studio's own notes. */}
+      <MarginHandoffs
+        gates={handoffGates.gates}
+        handoffsById={handoffGates.handoffsById}
+        isError={handoffGates.isError}
+        approvalSurfaceMounted={approvalSurfaceMounted}
+      />
+
+      {/* The empty line speaks for the whole margin, so it must not appear
+          beneath handoff items that are plainly sitting in it. */}
+      {!isLoading &&
+        visibleItems.length === 0 &&
+        handoffGates.gates.length === 0 && (
+          <p className="text-[14px] italic leading-relaxed text-[var(--color-charcoal)]">
+            The margin — decisions, messages, and money gather here
+          </p>
+        )}
 
       {raised.map(renderItem)}
 

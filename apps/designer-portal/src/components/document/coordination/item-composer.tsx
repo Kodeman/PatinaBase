@@ -36,6 +36,7 @@ import {
   useUpdateCoordinationItem,
   usePublishCoordinationItem,
   useDeleteCoordinationItem,
+  isProjectArtifactApproval,
   type CoordinationKind,
   type CoordinationItem,
   type Court,
@@ -61,6 +62,19 @@ import { ComposerOptionBuilder } from './composer-option-builder';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { PartyMiniRow } from '../roster/party-mini-row';
 import { RolodexPicker } from '../roster/rolodex-picker';
+
+const NEW_ITEM_TYPE_ORDER = ITEM_TYPE_ORDER.filter(
+  (kind) => kind !== 'signoff',
+);
+
+/** New Stage-2 approvals own sign-off authoring; historical drafts remain editable. */
+export function composerItemTypeOrder(
+  editItem?: Pick<CoordinationItem, 'coordination_kind'> | null,
+): CoordinationKind[] {
+  return editItem?.coordination_kind === 'signoff'
+    ? [...ITEM_TYPE_ORDER]
+    : [...NEW_ITEM_TYPE_ORDER];
+}
 
 /** An FF&E line the composer can gate (subset of project_ffe_items). */
 export interface ComposerFfeItem {
@@ -352,7 +366,7 @@ export function ItemComposer({
   );
 
   const handleSave = async (asDraft: boolean) => {
-    if (saving) return;
+    if (saving || (editItem && isProjectArtifactApproval(editItem))) return;
     const title = prompt.trim();
     if (!title) return;
     setSaving(true);
@@ -431,7 +445,7 @@ export function ItemComposer({
   };
 
   const handleDelete = async () => {
-    if (!editItem || saving) return;
+    if (!editItem || saving || isProjectArtifactApproval(editItem)) return;
     setSaving(true);
     try {
       await deleteItem.mutateAsync({ itemId: editItem.id, designerClientId });
@@ -442,6 +456,18 @@ export function ItemComposer({
   };
 
   const canSave = prompt.trim().length > 0 && !saving;
+
+  if (editItem && isProjectArtifactApproval(editItem)) {
+    return (
+      <p
+        role="alert"
+        className="rounded-[5px] border border-[var(--color-terracotta)] bg-[var(--doc-paper)] p-3 text-[13px] text-[var(--color-charcoal)]"
+      >
+        This exact-artifact request belongs in the Client approvals record and
+        cannot be edited with legacy decision controls.
+      </p>
+    );
+  }
 
   return (
     // The inner paper panel inside DocSheet's charcoal frame: 1px ink-border edge,
@@ -466,7 +492,7 @@ export function ItemComposer({
       {/* ── What kind of item — the 5-type grid ── */}
       <label className={fieldLabelCls}>What kind of item</label>
       <div className="mb-5 grid grid-cols-2 gap-1.5 min-[560px]:grid-cols-5">
-        {ITEM_TYPE_ORDER.map((k) => {
+        {composerItemTypeOrder(editItem).map((k) => {
           const token = itemTypeToken(k);
           const on = kind === k;
           return (

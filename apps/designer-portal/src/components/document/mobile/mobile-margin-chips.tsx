@@ -9,39 +9,100 @@
 
 import { useMemo } from 'react';
 import { useMarginItems } from '@/hooks/use-margin-items';
+import { useCoordinationItems } from '@patina/supabase';
+import {
+  classifyMarginItems,
+  marginDecisionClassificationState,
+  MarginDecisionClassificationNotice,
+} from '@/lib/document/stage2-approval-exclusions';
 import { marginAccent, deriveKindLine, type MarginItemRow } from '@/lib/document/margin-derivation';
 import { useMobileShell } from './mobile-shell';
+import { useHandoffGates } from '../margin-handoff-item';
 
 export function MobileMarginChips({
   projectId,
   proposalId,
   anchorKind,
   anchorId = null,
+  clientName = '',
 }: {
   projectId: string | null;
   proposalId: string | null;
   /** 'line' chips sit under their FF&E row; 'letterhead' under the title. */
   anchorKind: 'line' | 'letterhead';
   anchorId?: string | null;
+  clientName?: string;
 }) {
   const { openMarginItem } = useMobileShell();
   const { data: items } = useMarginItems(projectId, proposalId);
-
-  const chips = useMemo(
+  const coordinationQuery = useCoordinationItems(projectId);
+  const coordinationItems = coordinationQuery.data;
+  const anchoredItems = useMemo(
     () =>
-      (items ?? []).filter((i) => {
-        if (i.kind === 'time') return false;
-        if (anchorKind === 'line') return i.anchor_kind === 'line' && i.anchor_id === anchorId;
-        // letterhead band also carries section-anchored items (no line home).
-        return i.anchor_kind === 'letterhead' || i.anchor_kind === 'section';
+      (items ?? []).filter((item) => {
+        if (anchorKind === 'line') {
+          return item.anchor_kind === 'line' && item.anchor_id === anchorId;
+        }
+        return (
+          item.anchor_kind === 'letterhead' || item.anchor_kind === 'section'
+        );
       }),
-    [items, anchorKind, anchorId],
+    [anchorId, anchorKind, items],
+  );
+  const classificationState = marginDecisionClassificationState({
+    projectId,
+    coordinationItems,
+    isLoading:
+      coordinationQuery.isLoading === true ||
+      coordinationQuery.isPending === true,
+    isError: coordinationQuery.isError === true,
+  });
+  const classifiedMargin = useMemo(
+    () =>
+      classifyMarginItems(
+        anchoredItems,
+        coordinationItems ?? [],
+        classificationState,
+      ),
+    [anchoredItems, classificationState, coordinationItems],
   );
 
-  if (chips.length === 0) return null;
+  const chips = useMemo(
+    () => classifiedMargin.items.filter((item) => item.kind !== 'time'),
+    [classifiedMargin.items],
+  );
+  const showDecisionNotice = classifiedMargin.withheldDecisionCount > 0;
+  // Handoffs anchor to the document, not to a line, so they ride the
+  // letterhead chips beside the other letterhead-anchored items.
+  const handoffNow = useMemo(() => new Date(), []);
+  const { gates: handoffGates } = useHandoffGates({
+    projectId,
+    clientName,
+    now: handoffNow,
+  });
+  const anchoredGates = anchorKind === 'letterhead' ? handoffGates : [];
+
+  if (chips.length === 0 && anchoredGates.length === 0 && !showDecisionNotice)
+    return null;
 
   return (
     <div className="flex flex-wrap gap-1.5 px-[0.15rem] pb-2 min-[980px]:hidden">
+      {showDecisionNotice && (
+        <MarginDecisionClassificationNotice
+          state={classifiedMargin.decisionState}
+        />
+      )}
+      {anchoredGates.map((gate) => (
+        <span
+          key={gate.id}
+          className="inline-flex max-w-full items-center gap-1.5 rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] py-[0.32rem] pl-2 pr-2.5 text-[11px] text-[var(--color-charcoal)]"
+          style={{ borderLeft: '2.5px solid var(--color-golden-hour)' }}
+        >
+          <span className="truncate">
+            {gate.lane} · {gate.terms}
+          </span>
+        </span>
+      ))}
       {chips.map((row: MarginItemRow) => {
         const accent = marginAccent(row.kind);
         return (

@@ -309,6 +309,66 @@ export type {
   ConsentMethod,
 } from './use-decisions';
 export {
+  PROJECT_APPROVAL_CONTRACT,
+  projectApprovalKeys,
+  invalidateProjectApprovalQueries,
+  parseProjectApprovalArtifactCandidate,
+  parseProjectApprovalReview,
+  useProjectApprovalArtifactCandidates,
+  useProjectApprovals,
+  useProjectApproval,
+  useProjectApprovalByDecision,
+  useMyProjectApprovalReviews,
+  useProjectDecisionAuthority,
+  useSetProjectDecisionAuthority,
+  useCreateProjectApproval,
+  useConfirmProjectApprovalReview,
+  usePublishProjectApproval,
+  useRespondProjectApproval,
+  useWithdrawProjectApproval,
+  useSupersedeProjectApproval,
+} from './use-project-approvals';
+export type {
+  ProjectApprovalArtifactKind,
+  ProjectApprovalArtifactCandidate,
+  ProjectApprovalLifecycleStatus,
+  ProjectApprovalOutcome,
+  ProjectApprovalDisposition,
+  ProjectApprovalReview,
+  ProjectDecisionAuthority,
+  ProjectApprovalCreatePayload,
+  ProjectApprovalActionResult,
+  ProjectApprovalInvalidationScope,
+} from './use-project-approvals';
+export {
+  projectContextualHandoffKeys,
+  invalidateProjectContextualHandoffs,
+  parseProjectContextualHandoff,
+  useProjectContextualHandoffs,
+  useSiteRequestActionDetail,
+  useNudgeSiteRequest,
+  useApproveSiteRequestItem,
+  useRequestSiteRequestRedo,
+  useCloseSiteRequest,
+} from './use-project-contextual-handoffs';
+export type {
+  ContextualHandoffSourceKind,
+  ContextualHandoffActorKind,
+  ContextualHandoffStageAttribution,
+  ContextualHandoffActor,
+  ContextualHandoffResponsibility,
+  ProjectApprovalHandoffArtifact,
+  SiteRequestHandoffArtifactItem,
+  SiteRequestHandoffArtifact,
+  ProjectApprovalContextualHandoff,
+  SiteRequestContextualHandoff,
+  ProjectContextualHandoff,
+  SiteRequestActionItem,
+  SiteRequestRoomChoice,
+  SiteRequestActionDetail,
+  ProjectContextualHandoffInvalidationScope,
+} from './use-project-contextual-handoffs';
+export {
   // Project Coordination (Track 5 — the ball-in-court)
   useCoordinationItems,
   useCourtSummary,
@@ -328,6 +388,8 @@ export {
   useUpdateProjectParty,
   useRemoveProjectParty,
   useProjectRoster,
+  isProjectArtifactApproval,
+  excludeProjectArtifactApprovals,
 } from './use-coordination';
 export type {
   Court,
@@ -1547,6 +1609,13 @@ export {
   mapMilestoneRowToScheduleInput,
 } from './use-schedule';
 export type { PhaseRow, MilestoneRow, ScheduleRevisionRow, UseResolvedScheduleResult } from './use-schedule';
+
+export {
+  invalidateProjectWorkflow,
+  projectWorkflowQueryKey,
+  useProjectWorkflow,
+  type ProjectWorkflowRow,
+} from './use-project-workflow';
 
 // The Document · Schedule (C4) — Slice 03 (Compose): write paths for
 // schedule_milestones + the project_phases chain columns, delete-with-relink,

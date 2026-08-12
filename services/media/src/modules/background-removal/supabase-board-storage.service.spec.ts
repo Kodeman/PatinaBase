@@ -20,12 +20,20 @@ describe('SupabaseBoardStorageService', () => {
     jest.useRealTimers();
   });
 
-  it('accepts only canonical proposal-mood-boards public URLs', () => {
+  it('accepts canonical bare, historical public, and signed proposal-mood-boards references', () => {
     const storage = service();
 
     expect(storage.parseCanonicalPublicUrl(`${PUBLIC_PREFIX}owner/boards/board/source.png`)).toBe(
       'owner/boards/board/source.png',
     );
+    expect(storage.parseCanonicalPublicUrl('owner/boards/board/source.png')).toBe(
+      'owner/boards/board/source.png',
+    );
+    expect(
+      storage.parseCanonicalPublicUrl(
+        `${BASE_URL}/storage/v1/object/sign/proposal-mood-boards/owner/boards/board/source.png?token=secret`,
+      ),
+    ).toBe('owner/boards/board/source.png');
     expect(
       storage.parseCanonicalPublicUrl(
         'https://attacker.example/storage/v1/object/public/proposal-mood-boards/source.png',
@@ -44,7 +52,7 @@ describe('SupabaseBoardStorageService', () => {
 
     await expect(
       storage.upload('owner/boards/board/cutout.png', Buffer.from('png'), 'image/png'),
-    ).resolves.toBe(`${PUBLIC_PREFIX}owner/boards/board/cutout.png`);
+    ).resolves.toBe('owner/boards/board/cutout.png');
 
     expect(String(request.mock.calls[0][0])).toBe(
       `${BASE_URL}/storage/v1/object/proposal-mood-boards/owner/boards/board/cutout.png`,

@@ -9155,3 +9155,1101 @@ DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.notify_project_document_change() FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00434_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_phase_workflow_metadata() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00434_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  REVOKE INSERT, UPDATE ON TABLE public.proposal_phases FROM authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00434_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  GRANT INSERT ON TABLE public.proposal_phases TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00434_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  GRANT INSERT ( id, proposal_id, name, phase_key, duration_weeks, fee_cents, revision_limit, gate_condition, deliverables, sort_order, created_at, updated_at, duration_days, anchor_date, lane, follows_phase_id ) ON TABLE public.proposal_phases TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00434_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  GRANT UPDATE ( name, phase_key, duration_weeks, fee_cents, revision_limit, gate_condition, deliverables, duration_days, anchor_date ) ON TABLE public.proposal_phases TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00434_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  GRANT UPDATE ( id, proposal_id, name, phase_key, duration_weeks, fee_cents, revision_limit, gate_condition, deliverables, sort_order, created_at, updated_at, duration_days, anchor_date, lane, follows_phase_id ) ON TABLE public.proposal_phases TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00434_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  REVOKE INSERT, UPDATE ON TABLE public.project_phases FROM authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00434_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  GRANT INSERT ( id, project_id, source_proposal_phase_id, name, phase_key, status, start_date, target_end_date, completed_at, duration_weeks, fee_cents, revision_limit, revisions_used, gate_condition, deliverables, progress, sort_order, created_at, updated_at, duration_days, anchor_date, estimated_hours, lane, follows_phase_id ) ON TABLE public.project_phases TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00434_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  GRANT UPDATE ( id, project_id, source_proposal_phase_id, name, phase_key, status, start_date, target_end_date, completed_at, duration_weeks, fee_cents, revision_limit, revisions_used, gate_condition, deliverables, progress, sort_order, created_at, updated_at, duration_days, anchor_date, estimated_hours, lane, follows_phase_id ) ON TABLE public.project_phases TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00434_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.maintain_phase_template_version() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00434_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._proposal_phase_effect_snapshot(uuid, uuid[]) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00434_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.prepare_phase_template_application() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00434_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.apply_phase_template(uuid, text, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00434_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.apply_phase_template(uuid, text, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00434_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.carry_project_phase_workflow_metadata() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00434_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.seed_project_schedule_from_template(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00434_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.seed_project_schedule_from_template(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00434_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_workflow(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00434_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_workflow(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00434_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.proposal_phase_template_applications FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00434_canonical_workflow_spine.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.proposal_phase_template_applications TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.board_storage_reference_path(text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.board_storage_reference_path(text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.board_json_references_storage_object(jsonb, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.board_media_owners_share_studio(uuid, uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.board_json_has_explicit_media_reference(jsonb, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.board_media_reference_is_allowed(text, uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.board_media_reference_has_live_source(text, uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.board_json_media_references_are_allowed(jsonb, uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.board_json_media_references_have_live_source(jsonb, uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.board_media_projection_is_allowed(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.board_media_projection_is_allowed(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.can_process_board_item_media(uuid, uuid, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.can_process_board_item_media(uuid, uuid, text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_proposal_board_media_reference() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_proposal_board_item_media_reference() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_proposal_palette_media_reference() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_board_template_media_reference() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.can_read_board_storage_object(text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.can_read_board_storage_object(text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.is_released_board_storage_object(text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_released_board_storage_object() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_project_board_snapshot() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE INSERT, UPDATE, DELETE ON public.project_boards FROM anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.project_boards TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.build_board_share_payload(uuid, uuid, text, timestamptz) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_document_share_board_payload() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_board_share(uuid, text, timestamptz) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_board_share(uuid, text, timestamptz) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.resolve_board_share(text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.resolve_board_share(text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._create_furnishings_authorization_from_schedule_impl( uuid, text, uuid[], numeric ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_furnishings_authorization_from_schedule( uuid, text, uuid[], numeric ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_furnishings_authorization_from_schedule( uuid, text, uuid[], numeric ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_furnishing_authorization_item_insert() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._countersign_design_services_agreement_impl(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._record_paper_client_signature_impl(uuid, text, date, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sign_design_services_agreement(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.sign_design_services_agreement(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sign_design_services_agreement_with_trusted_ip(uuid, text, uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.sign_design_services_agreement_with_trusted_ip(uuid, text, uuid, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.countersign_design_services_agreement(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.countersign_design_services_agreement(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.execute_furnishings_authorization(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.execute_furnishings_authorization(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.execute_furnishings_authorization_with_trusted_ip(uuid, text, uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.execute_furnishings_authorization_with_trusted_ip(uuid, text, uuid, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.execute_trade_scope(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.execute_trade_scope(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.execute_trade_scope_with_trusted_ip(uuid, text, uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.execute_trade_scope_with_trusted_ip(uuid, text, uuid, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_paper_client_signature(uuid, text, date, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_paper_client_signature(uuid, text, date, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.execute_furnishings_authorization_on_paper(uuid, text, date, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.execute_furnishings_authorization_on_paper(uuid, text, date, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.execute_trade_scope_on_paper(uuid, text, date, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.execute_trade_scope_on_paper(uuid, text, date, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_commercial_signature_insert() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._instantiate_product_configuration_template_impl(uuid, uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._place_product_configuration_in_project_impl(uuid, uuid, uuid, uuid, text, jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._promote_configuration_to_library_impl(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._save_product_configuration_impl(jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.instantiate_product_configuration_template(uuid, uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.instantiate_product_configuration_template(uuid, uuid, text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.place_product_configuration_in_project(uuid, uuid, uuid, uuid, text, jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.place_product_configuration_in_project(uuid, uuid, uuid, uuid, text, jsonb) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.promote_configuration_to_library(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.promote_configuration_to_library(uuid, text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.save_product_configuration(jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.save_product_configuration(jsonb) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00435_workflow_privacy_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_product_configuration_child() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00436_project_approval_authority_evidence.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._project_approval_hash(jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00436_project_approval_authority_evidence.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._resolve_project_approval_artifact(uuid, text, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00436_project_approval_authority_evidence.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_project_decision_authority_edge() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00436_project_approval_authority_evidence.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_stage2_client_decision_edge() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00436_project_approval_authority_evidence.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_stage2_client_decision_option_edge() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00436_project_approval_authority_evidence.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_project_approval_evidence_edge() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00436_project_approval_authority_evidence.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.is_project_approval_reviewer(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00436_project_approval_authority_evidence.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.is_project_approval_reviewer(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00436_project_approval_authority_evidence.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.project_decision_authorities FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00436_project_approval_authority_evidence.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.project_decision_authority_snapshots FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00436_project_approval_authority_evidence.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.project_approval_artifacts FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00436_project_approval_authority_evidence.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.project_decision_review_confirmations FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00436_project_approval_authority_evidence.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.project_approval_action_receipts FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00436_project_approval_authority_evidence.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.project_decision_authorities TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00436_project_approval_authority_evidence.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.project_decision_authority_snapshots TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00436_project_approval_authority_evidence.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.project_approval_artifacts TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00436_project_approval_authority_evidence.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.project_decision_review_confirmations TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00436_project_approval_authority_evidence.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.project_approval_action_receipts TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00436_project_approval_authority_evidence.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_project_decision_authority( uuid, uuid, uuid, integer ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00436_project_approval_authority_evidence.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_project_decision_authority( uuid, uuid, uuid, integer ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00436_project_approval_authority_evidence.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._create_project_approval_decision_checked( uuid, jsonb, text, uuid ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00436_project_approval_authority_evidence.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_project_approval_decision(uuid, jsonb, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00436_project_approval_authority_evidence.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_project_approval_decision(uuid, jsonb, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00436_project_approval_authority_evidence.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.confirm_project_decision_review(uuid, jsonb, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00436_project_approval_authority_evidence.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.confirm_project_decision_review(uuid, jsonb, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._client_decision_blocks_phase( public.client_decisions ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_client_decision_completed_phase_gate() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_stage2_client_decision_edge() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_stage2_client_decision_option_edge() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._respond_project_approval_checked( uuid, text, uuid, timestamptz, text, text, text ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.respond_project_approval( uuid, jsonb, timestamptz, text ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.respond_project_approval( uuid, jsonb, timestamptz, text ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.publish_client_decision(uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.publish_client_decision(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.withdraw_project_approval_decision( uuid, timestamptz, text, text ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.withdraw_project_approval_decision( uuid, timestamptz, text, text ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.supersede_project_approval_decision( uuid, jsonb, timestamptz, text ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.supersede_project_approval_decision( uuid, jsonb, timestamptz, text ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.apply_client_decision( uuid, uuid, text, text, text, integer ) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.apply_client_decision( uuid, uuid, text, text, text, integer ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._apply_client_decision_authorized( uuid, uuid, uuid, text, text, text, integer ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.reopen_client_decision(uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.reopen_client_decision(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.extend_and_reopen_client_decision( uuid, timestamptz, timestamptz ) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.extend_and_reopen_client_decision( uuid, timestamptz, timestamptz ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.expire_client_decision(uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.expire_client_decision(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.expire_due_client_decisions(timestamptz) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.expire_due_client_decisions(timestamptz) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.mark_client_decision_viewed(uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.mark_client_decision_viewed(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.stamp_client_decision_reminder(uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.stamp_client_decision_reminder(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.advance_project_phase(uuid, uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.advance_project_phase(uuid, uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_workflow(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_workflow(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_decision_reviews(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00437_project_approval_lifecycle.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_decision_reviews(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00438_project_approval_notification_traceability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._enqueue_decision_notification( uuid, public.decision_notification_kind ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00438_project_approval_notification_traceability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.stamp_client_decision_reminder(uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00438_project_approval_notification_traceability.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.stamp_client_decision_reminder(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00438_project_approval_notification_traceability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.stamp_project_approval_reminder_delivery( uuid, uuid ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00438_project_approval_notification_traceability.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.stamp_project_approval_reminder_delivery( uuid, uuid ) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00438_project_approval_notification_traceability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_decision_reviews(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00438_project_approval_notification_traceability.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_decision_reviews(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00438_project_approval_notification_traceability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_decision_status_transition() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00438_project_approval_notification_traceability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.withdraw_project_approval_decision( uuid, timestamptz, text, text ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00438_project_approval_notification_traceability.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.withdraw_project_approval_decision( uuid, timestamptz, text, text ) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00438_project_approval_notification_traceability.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_approval_artifact_candidates(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00438_project_approval_notification_traceability.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_approval_artifact_candidates(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00439_project_approval_notification_requeue.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._enqueue_decision_notification( uuid, public.decision_notification_kind ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00440_stage2_client_access_repair.sql
+DO $g$ BEGIN
+  REVOKE ALL ON SCHEMA app_private FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00440_stage2_client_access_repair.sql
+DO $g$ BEGIN
+  GRANT USAGE ON SCHEMA app_private TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00440_stage2_client_access_repair.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION app_private.project_decision_review_for_actor(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00440_stage2_client_access_repair.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_decision_review(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00440_stage2_client_access_repair.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_decision_review(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00440_stage2_client_access_repair.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.list_my_project_decision_reviews() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00440_stage2_client_access_repair.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.list_my_project_decision_reviews() TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00440_stage2_client_access_repair.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION app_private.is_decision_comment_client(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00440_stage2_client_access_repair.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION app_private.is_decision_comment_client(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00441_stage2_option_frozen_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION app_private.is_stage2_option_client(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00441_stage2_option_frozen_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION app_private.is_stage2_option_client(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00442_project_contextual_handoffs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_contextual_handoffs(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00442_project_contextual_handoffs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_contextual_handoffs(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00443_site_request_awaiting_consent_handoff.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_contextual_handoffs(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00443_site_request_awaiting_consent_handoff.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_contextual_handoffs(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00444_site_request_authority_action_detail.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._site_request_designer_authorized(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00444_site_request_authority_action_detail.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_site_request_action_detail(uuid,uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00444_site_request_authority_action_detail.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_site_request_action_detail(uuid,uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00444_site_request_authority_action_detail.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.site_request_close(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00444_site_request_authority_action_detail.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.site_request_close(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

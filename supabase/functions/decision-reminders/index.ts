@@ -20,12 +20,22 @@
 
 // deno-lint-ignore-file no-explicit-any
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { deliverDecisionNotification } from '../_shared/decision-notify.ts';
-import { resolveStudioIdentity, studioCobrand } from '../_shared/studio-identity.ts';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { deliverDecisionNotification } from "../_shared/decision-notify.ts";
+import { reminderStampDisposition } from "./logic.ts";
+import {
+  type EmbeddedApprovalArtifact,
+  type EmbeddedAuthoritySnapshot,
+  resolveApprovalArtifactCitation,
+  resolveFrozenLeadRecipient,
+} from "../_shared/project-approval-notification.ts";
+import {
+  resolveStudioIdentity,
+  studioCobrand,
+} from "../_shared/studio-identity.ts";
 
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 interface DecisionWithClient {
   id: string;
@@ -34,12 +44,25 @@ interface DecisionWithClient {
   reminder_sent_at: string | null;
   designer_id: string | null;
   project_id: string | null;
+  approval_contract: string | null;
   designer_client: {
     client_id: string | null;
     client_email: string | null;
     client_name: string | null;
-    client: { id: string | null; full_name: string | null; email: string | null } | null;
+    client: {
+      id: string | null;
+      full_name: string | null;
+      email: string | null;
+    } | null;
   } | null;
+  approval_artifact:
+    | EmbeddedApprovalArtifact
+    | EmbeddedApprovalArtifact[]
+    | null;
+  authority_snapshot:
+    | EmbeddedAuthoritySnapshot
+    | EmbeddedAuthoritySnapshot[]
+    | null;
 }
 
 Deno.serve(async (_req: Request) => {
@@ -49,25 +72,35 @@ Deno.serve(async (_req: Request) => {
   const now = new Date().toISOString();
 
   const { data, error } = await supabase
-    .from('client_decisions')
+    .from("client_decisions")
     .select(`
       id, title, due_date, reminder_sent_at, designer_id, project_id,
+      approval_contract,
       designer_client:designer_clients(
         client_id,
         client_email,
         client_name,
         client:profiles!client_id(id, full_name, email)
+      ),
+      approval_artifact:project_approval_artifacts(
+        source_kind, source_version, artifact_hash, artifact_title
+      ),
+      authority_snapshot:project_decision_authority_snapshots(
+        decision_lead_id,
+        decision_lead:profiles!decision_lead_id(id, full_name, email)
       )
     `)
-    .eq('status', 'pending')
-    .is('reminder_sent_at', null)
-    .not('due_date', 'is', null)
-    .gte('due_date', now)
-    .lte('due_date', horizon);
+    .eq("status", "pending")
+    .is("reminder_sent_at", null)
+    .not("due_date", "is", null)
+    .gte("due_date", now)
+    .lte("due_date", horizon);
 
   if (error) {
-    console.error('decision-reminders: query failed', error);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+    console.error("decision-reminders: query failed", error);
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+    });
   }
 
   const decisions = (data ?? []) as unknown as DecisionWithClient[];
@@ -76,12 +109,31 @@ Deno.serve(async (_req: Request) => {
   let skipped = 0;
 
   for (const d of decisions) {
+    const isStage2 = d.approval_contract === "project_artifact_v1";
+    const artifact = isStage2
+      ? resolveApprovalArtifactCitation(d.approval_artifact)
+      : null;
+    const frozenRecipient = isStage2
+      ? resolveFrozenLeadRecipient(d.authority_snapshot)
+      : null;
+    const stage2EvidenceCoherent = isStage2 && artifact !== null &&
+      frozenRecipient !== null;
     const dc = d.designer_client;
-    // Prefer the signed-up client (auth user) so preference checks + in-app
-    // notifications resolve; fall back to the direct contact email.
-    const recipientUserId = dc?.client?.id ?? dc?.client_id ?? null;
-    const recipientEmail = dc?.client?.email ?? dc?.client_email ?? null;
-    const recipientName = dc?.client?.full_name ?? dc?.client_name ?? null;
+    const recipient = isStage2 ? frozenRecipient : {
+      // Legacy compatibility: prefer the signed-up client and retain the
+      // direct-contact fallback for relationships without an auth profile.
+      userId: dc?.client?.id ?? dc?.client_id ?? null,
+      email: dc?.client?.email ?? dc?.client_email ?? null,
+      name: dc?.client?.full_name ?? dc?.client_name ?? null,
+    };
+    if (isStage2 && (!artifact || !recipient)) {
+      skipped++;
+      console.error(
+        "decision-reminders: Stage-2 evidence incomplete; delivery denied",
+        d.id,
+      );
+      continue;
+    }
 
     // Studio co-brand (Designer Studios): prefer a linked project's studio,
     // else the decision's designer's primary studio.
@@ -92,46 +144,60 @@ Deno.serve(async (_req: Request) => {
 
     const result = await deliverDecisionNotification(
       supabase,
-      'decision_required',
-      { id: d.id, title: d.title, dueDate: d.due_date },
-      { userId: recipientUserId, email: recipientEmail, name: recipientName },
+      "decision_required",
+      { id: d.id, title: d.title, dueDate: d.due_date, artifact },
+      recipient!,
       studioCobrand(identity),
     );
 
-    if (result.emailSent) {
-      sent++;
-      // Stamp reminder_sent_at so the 48h-window query won't re-pick this row.
-      const { error: updateErr } = await supabase
-        .from('client_decisions')
-        .update({ reminder_sent_at: new Date().toISOString() })
-        .eq('id', d.id);
-      if (updateErr) {
-        console.error('decision-reminders: failed to stamp', d.id, updateErr);
+    const stampDelivery = async () => {
+      if (isStage2) {
+        return await supabase.rpc("stamp_project_approval_reminder_delivery", {
+          p_decision_id: d.id,
+          p_decision_lead_id: recipient!.userId,
+        });
       }
-    } else if (
-      result.inAppOk &&
-      (!recipientEmail || result.reason === 'cadence_digest')
-    ) {
-      // Delivered in-app only — either no email target, or the client is on the
-      // daily digest (the notification-digest cron will batch the email). Stamp
-      // so the 48h-window query doesn't re-pick this row every run.
-      inAppOnly++;
-      await supabase
-        .from('client_decisions')
+      return await supabase
+        .from("client_decisions")
         .update({ reminder_sent_at: new Date().toISOString() })
-        .eq('id', d.id);
+        .eq("id", d.id);
+    };
+
+    const stampDisposition = reminderStampDisposition({
+      stage2EvidenceCoherent,
+      recipientEmail: recipient?.email ?? null,
+      delivery: result,
+    });
+    if (stampDisposition) {
+      if (stampDisposition === "email_sent") sent++;
+      else if (stampDisposition === "in_app_only") inAppOnly++;
+      else skipped++;
+
+      // The Stage-2 recovery path is safe only because both the Edge evidence
+      // resolution above and the checked service RPC bind the exact frozen
+      // lead to the immutable artifact. Legacy paths retain their old writes.
+      const { error: updateErr } = await stampDelivery();
+      if (updateErr) {
+        console.error("decision-reminders: failed to stamp", d.id, updateErr);
+      } else if (stampDisposition === "terminal_log_reconciled") {
+        console.info(
+          "decision-reminders: reconciled terminal delivery log",
+          d.id,
+          result.existingLogStatus,
+        );
+      }
     } else {
-      // Suppressed / preference-gated / quiet-hours / already-sent — leave the
-      // row unstamped so a later run can retry once the gate clears, but log.
+      // Preference gates, in-flight attempts, and failed attempts stay
+      // unstamped. A later run may retry only once the relevant gate clears.
       skipped++;
-      if (result.reason && result.reason !== 'quiet_hours') {
-        console.warn('decision-reminders: skipped', d.id, result.reason);
+      if (result.reason && result.reason !== "quiet_hours") {
+        console.warn("decision-reminders: skipped", d.id, result.reason);
       }
     }
   }
 
   return new Response(
     JSON.stringify({ scanned: decisions.length, sent, inAppOnly, skipped }),
-    { headers: { 'Content-Type': 'application/json' } },
+    { headers: { "Content-Type": "application/json" } },
   );
 });

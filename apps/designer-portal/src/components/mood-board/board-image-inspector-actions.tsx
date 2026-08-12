@@ -1,6 +1,7 @@
 'use client';
 
 import type { EditableMoodBoardItem } from '@patina/types';
+import { createBrowserClient, signBoardMediaValue } from '@patina/supabase';
 import { Button } from '@/components/ui/controls';
 import {
   useBackgroundRemovalCapability,
@@ -104,12 +105,16 @@ export function BoardImageInspectorActions({
           sourceUrl: item.imageUrl,
         }),
       });
+      const signed = await signBoardMediaValue(createBrowserClient(), {
+        image_url: result.cutoutUrl,
+        original_image_url: result.originalUrl,
+      });
       onUpdate(item.id, {
-        imageUrl: result.cutoutUrl,
+        imageUrl: signed.image_url,
         data: {
           ...(item.data ?? {}),
-          image_url: result.cutoutUrl,
-          original_image_url: result.originalUrl,
+          image_url: signed.image_url,
+          original_image_url: signed.original_image_url,
         },
       });
       const durationMs = Math.max(0, Math.round(performance.now() - started));

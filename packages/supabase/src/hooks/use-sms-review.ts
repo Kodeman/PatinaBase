@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import { invalidateProjectWorkflow } from './use-project-workflow';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SMS REVIEW — the Desk field-triage queue (Field Coordination · Wave 5)
@@ -181,6 +182,7 @@ export function useReviewSmsMessage() {
       if (input.projectId) {
         void queryClient.invalidateQueries({ queryKey: ['coordination-items', input.projectId] });
         void queryClient.invalidateQueries({ queryKey: ['section-tasks', input.projectId] });
+        void invalidateProjectWorkflow(queryClient, input.projectId);
       }
     },
   });

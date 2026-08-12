@@ -1,18 +1,70 @@
 'use client';
 
-import { useAllDecisions } from '@patina/supabase';
-import type { ClientDecision } from '@patina/supabase';
+import {
+  PROJECT_APPROVAL_CONTRACT,
+  useAllDecisions,
+  useMyProjectApprovalReviews,
+} from '@patina/supabase';
+import type { ClientDecision, ProjectApprovalReview } from '@patina/supabase';
 import { DecisionCardClient } from '@/components/decision-card-client';
 import { isClientActionableDecision } from '@/hooks/use-decisions-client';
 import { StrataMark } from '@/components/strata-mark';
 import { Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import { ProjectApprovalSummary } from '@/components/approvals/project-approval-summary';
+import {
+  isClientActionableProjectApproval,
+  isProjectApprovalAwaitingStudioIssue,
+} from '@/lib/client-attention';
+
+function LegacyDecisionListRow({
+  decision,
+  compact = false,
+}: {
+  decision: ClientDecision;
+  compact?: boolean;
+}) {
+  return (
+    <div className="border-b border-[var(--border-default)] pb-3">
+      <DecisionCardClient decision={decision} compact={compact} />
+      <Link
+        href={`/decisions/${decision.id}`}
+        className="type-meta mt-2 inline-flex min-h-11 items-center underline"
+      >
+        Open decision and discussion
+      </Link>
+    </div>
+  );
+}
 
 export default function ClientDecisionsPage() {
-  const { data: decisions, isLoading } = useAllDecisions();
+  const {
+    data: decisions,
+    isLoading: legacyLoading,
+  } = useAllDecisions();
+  const {
+    data: projectApprovalReviews,
+    isLoading: projectApprovalsLoading,
+    isError: projectApprovalsError,
+  } = useMyProjectApprovalReviews();
 
   const now = new Date();
-  const pending = (decisions ?? []).filter(
+  const projectApprovals = projectApprovalReviews ?? [];
+  const activeProjectApprovals = projectApprovals.filter(
+    isClientActionableProjectApproval,
+  );
+  const awaitingStudioProjectApprovals = projectApprovals.filter(
+    isProjectApprovalAwaitingStudioIssue,
+  );
+  const closedProjectApprovals = projectApprovals.filter(
+    (approval: ProjectApprovalReview) =>
+      !activeProjectApprovals.includes(approval) &&
+      !awaitingStudioProjectApprovals.includes(approval),
+  );
+  const legacyDecisions = (decisions ?? []).filter(
+    (d: ClientDecision) => d.approval_contract !== PROJECT_APPROVAL_CONTRACT,
+  );
+  const pending = legacyDecisions.filter(
     (d: ClientDecision) => d.status === 'pending'
   );
   // The client's "your move" pile: selections + sign-offs in their court.
@@ -27,12 +79,19 @@ export default function ClientDecisionsPage() {
   const awaiting = pendingMine.filter(
     (d) => !d.due_date || new Date(d.due_date) >= now
   );
-  const resolved = (decisions ?? []).filter(
+  const resolved = legacyDecisions.filter(
     (d: ClientDecision) => d.status === 'responded'
   );
+  const isLoading = legacyLoading || projectApprovalsLoading;
+  const hasAnyDecision =
+    activeProjectApprovals.length > 0 ||
+    awaitingStudioProjectApprovals.length > 0 ||
+    closedProjectApprovals.length > 0 ||
+    pending.length > 0 ||
+    resolved.length > 0;
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-10">
+    <main className="mx-auto min-w-0 max-w-3xl px-4 py-10 sm:px-6">
       <h1 className="type-page-title">
         Your Decisions
       </h1>
@@ -46,10 +105,49 @@ export default function ClientDecisionsPage() {
         </div>
       )}
 
-      {!isLoading && pending.length === 0 && resolved.length === 0 && (
+      {!isLoading && projectApprovalsError && (
+        <p role="alert" className="type-body-small mt-8 text-[var(--color-error)]">
+          Project approvals could not be read just now. Refresh before taking action.
+        </p>
+      )}
+
+      {!isLoading && !projectApprovalsError && !hasAnyDecision && (
         <div className="py-16 text-center">
           <p className="type-body-small">No decisions yet. Your designer will send choices here when they need your input.</p>
         </div>
+      )}
+
+      {activeProjectApprovals.length > 0 && (
+        <section className="mt-8" aria-labelledby="project-approvals-heading">
+          <h2 id="project-approvals-heading" className="type-meta mb-4 text-patina-terracotta">
+            Project approvals ({activeProjectApprovals.length})
+          </h2>
+          <ul aria-label="Project approvals" className="min-w-0 list-none space-y-0 p-0">
+            {activeProjectApprovals.map((approval: ProjectApprovalReview) => (
+              <li key={approval.decisionId} className="min-w-0">
+                <ProjectApprovalSummary approval={approval} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {awaitingStudioProjectApprovals.length > 0 && (
+        <section className="mt-8" aria-labelledby="awaiting-studio-issue-heading">
+          <h2 id="awaiting-studio-issue-heading" className="type-meta mb-1">
+            Awaiting studio issue ({awaitingStudioProjectApprovals.length})
+          </h2>
+          <p className="type-body-small mb-4 text-[var(--text-muted)]">
+            Your review is complete. The studio is preparing the approval for issue.
+          </p>
+          <ul aria-label="Awaiting studio issue" className="min-w-0 list-none space-y-0 p-0">
+            {awaitingStudioProjectApprovals.map((approval: ProjectApprovalReview) => (
+              <li key={approval.decisionId} className="min-w-0">
+                <ProjectApprovalSummary approval={approval} />
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {/* Overdue decisions */}
@@ -58,13 +156,13 @@ export default function ClientDecisionsPage() {
           <h2 className="type-meta mb-4 text-patina-terracotta">
             Overdue ({overdue.length})
           </h2>
-          <div className="space-y-0">
+          <ul className="list-none space-y-0 p-0">
             {overdue.map((decision: ClientDecision) => (
-              <Link key={decision.id} href={`/decisions/${decision.id}`} className="block no-underline">
-                <DecisionCardClient decision={decision} />
-              </Link>
+              <li key={decision.id}>
+                <LegacyDecisionListRow decision={decision} />
+              </li>
             ))}
-          </div>
+          </ul>
         </section>
       )}
 
@@ -74,13 +172,13 @@ export default function ClientDecisionsPage() {
           <h2 className="type-meta mb-4">
             Awaiting Your Response ({awaiting.length})
           </h2>
-          <div className="space-y-0">
+          <ul className="list-none space-y-0 p-0">
             {awaiting.map((decision: ClientDecision) => (
-              <Link key={decision.id} href={`/decisions/${decision.id}`} className="block no-underline">
-                <DecisionCardClient decision={decision} />
-              </Link>
+              <li key={decision.id}>
+                <LegacyDecisionListRow decision={decision} />
+              </li>
             ))}
-          </div>
+          </ul>
         </section>
       )}
 
@@ -95,33 +193,43 @@ export default function ClientDecisionsPage() {
           <p className="type-body-small mb-4 text-[var(--text-muted)]">
             In progress with your designer — no action needed from you.
           </p>
-          <div className="space-y-0">
+          <ul className="list-none space-y-0 p-0">
             {pendingHandled.map((decision: ClientDecision) => (
-              <Link key={decision.id} href={`/decisions/${decision.id}`} className="block no-underline">
-                <DecisionCardClient decision={decision} />
-              </Link>
+              <li key={decision.id}>
+                <LegacyDecisionListRow decision={decision} />
+              </li>
             ))}
-          </div>
+          </ul>
         </section>
       )}
 
-      {pending.length > 0 && resolved.length > 0 && (
+      {(activeProjectApprovals.length > 0 ||
+        awaitingStudioProjectApprovals.length > 0 ||
+        pending.length > 0) &&
+        (closedProjectApprovals.length > 0 || resolved.length > 0) && (
         <StrataMark variant="mini" />
       )}
 
       {/* Resolved decisions */}
-      {resolved.length > 0 && (
-        <section className={pending.length === 0 ? 'mt-10' : 'mt-2'}>
+      {(closedProjectApprovals.length > 0 || resolved.length > 0) && (
+        <section className={pending.length === 0 && activeProjectApprovals.length === 0 && awaitingStudioProjectApprovals.length === 0 ? 'mt-10' : 'mt-2'}>
           <h2 className="type-meta mb-4">
-            Resolved ({resolved.length})
+            History ({closedProjectApprovals.length + resolved.length})
           </h2>
-          <div className="space-y-0">
-            {resolved.map((decision: ClientDecision) => (
-              <DecisionCardClient key={decision.id} decision={decision} compact />
+          <ul className="min-w-0 list-none space-y-0 p-0">
+            {closedProjectApprovals.map((approval: ProjectApprovalReview) => (
+              <li key={approval.decisionId} className="min-w-0">
+                <ProjectApprovalSummary approval={approval} compact />
+              </li>
             ))}
-          </div>
+            {resolved.map((decision: ClientDecision) => (
+              <li key={decision.id}>
+                <LegacyDecisionListRow decision={decision} compact />
+              </li>
+            ))}
+          </ul>
         </section>
       )}
-    </div>
+    </main>
   );
 }

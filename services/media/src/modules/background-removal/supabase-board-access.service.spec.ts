@@ -83,7 +83,8 @@ describe('SupabaseBoardAccessService', () => {
             data: { image_url: 'https://images.example/stale-original.png' },
           },
         ]),
-      );
+      )
+      .mockResolvedValueOnce(jsonResponse(true));
 
     await expect(
       service().authorizeBoardItem('caller-jwt', BOARD_ID, ITEM_ID),
@@ -113,12 +114,36 @@ describe('SupabaseBoardAccessService', () => {
             data: { image_url: 'https://images.example/legacy.png' },
           },
         ]),
-      );
+      )
+      .mockResolvedValueOnce(jsonResponse(true));
 
     await expect(
       service().authorizeBoardItem('caller-jwt', BOARD_ID, ITEM_ID),
     ).resolves.toMatchObject({
       item: { sourceUrl: 'https://images.example/legacy.png' },
     });
+  });
+
+  it('rejects an exact item source when database ownership coherence fails', async () => {
+    jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        jsonResponse([{ id: BOARD_ID, proposal_id: PROPOSAL_ID, project_id: null }]),
+      )
+      .mockResolvedValueOnce(jsonResponse([{ designer_id: DESIGNER_ID, project_id: null }]))
+      .mockResolvedValueOnce(jsonResponse(true))
+      .mockResolvedValueOnce(jsonResponse(STUDIO_ID))
+      .mockResolvedValueOnce(jsonResponse([{
+        id: ITEM_ID,
+        board_id: BOARD_ID,
+        type: 'image',
+        image_url: 'other-studio/boards/other-board/private.png',
+        data: {},
+      }]))
+      .mockResolvedValueOnce(jsonResponse(false));
+
+    await expect(
+      service().authorizeBoardItem('caller-jwt', BOARD_ID, ITEM_ID),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });

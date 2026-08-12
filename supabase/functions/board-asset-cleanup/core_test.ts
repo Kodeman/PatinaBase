@@ -120,6 +120,7 @@ Deno.test("reference fixture keeps live, frozen, template, original, thumbnail, 
   const snapshot = `${BASE}/snapshot.jpg`;
   const template = `${BASE}/template.jpg`;
   const cover = `${BASE}/cover.png`;
+  const sharedEdition = `${BASE}/shared-edition.webp`;
   const orphan = `${BASE}/orphan.jpg`;
 
   const counts = buildBoardReferenceCounts({
@@ -150,9 +151,12 @@ Deno.test("reference fixture keeps live, frozen, template, original, thumbnail, 
       project_id: null,
       cover_image_url: null,
     }],
+    shares: [{
+      board_payload: { board: { items: [{ image_url: publicUrl(sharedEdition) }] } },
+    }],
   });
 
-  for (const key of [shared, original, thumbnail, snapshot, template, cover]) {
+  for (const key of [shared, original, thumbnail, snapshot, template, cover, sharedEdition]) {
     assert((counts.get(key) ?? 0) > 0, `${key} should remain live`);
   }
   assertEquals(counts.get(orphan), undefined);
@@ -165,6 +169,7 @@ Deno.test("reference fixture keeps live, frozen, template, original, thumbnail, 
       snapshot,
       template,
       cover,
+      sharedEdition,
       orphan,
     ],
     referenceCounts: counts,

@@ -8,6 +8,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import { invalidateProjectWorkflow } from './use-project-workflow';
 
 // Lazy client getter to avoid module-level initialization during SSR
 const getSupabase = () => createBrowserClient();
@@ -191,6 +192,7 @@ export function invalidateFfeCaches(queryClient: QueryClient, projectId: string)
   // Cross-project procurement views (By Status) read items under this
   // prefix; the project-scoped keys above can't reach it, so sweep it whole.
   queryClient.invalidateQueries({ queryKey: ['procurement-items'] });
+  void invalidateProjectWorkflow(queryClient, projectId);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

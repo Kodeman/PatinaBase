@@ -5,6 +5,7 @@ import {
   PROPOSAL_CLIENT_MUTATION_KEY,
 } from '../lib/proposal-client-query-invalidation';
 import type { MilestoneKind, MilestoneStatus } from '@patina/utils';
+import { invalidateProjectWorkflow } from './use-project-workflow';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // The Document · Schedule (C4) — Slice 03 (Compose) write paths, PROJECT side.
@@ -256,6 +257,7 @@ export function useUpdateProjectPhaseChain() {
     onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: ['project-phases', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project-v2', projectId] });
+      void invalidateProjectWorkflow(queryClient, projectId);
     },
   });
 }
@@ -318,6 +320,7 @@ export function useDeletePhaseWithRelink() {
       queryClient.invalidateQueries({ queryKey: ['project-phases', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project-v2', projectId] });
       queryClient.invalidateQueries({ queryKey: ['schedule-milestones', projectId] });
+      void invalidateProjectWorkflow(queryClient, projectId);
     },
   });
 }
@@ -422,6 +425,7 @@ export function useCommitScheduleEdit() {
       queryClient.invalidateQueries({ queryKey: ['schedule-milestones', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project-v2', projectId] });
       queryClient.invalidateQueries({ queryKey: ['schedule-revisions', projectId] });
+      void invalidateProjectWorkflow(queryClient, projectId);
     },
   });
 }
@@ -455,6 +459,7 @@ export function useSeedProjectScheduleFromTemplate() {
       queryClient.invalidateQueries({ queryKey: ['project-phases', projectId] });
       queryClient.invalidateQueries({ queryKey: ['schedule-milestones', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project-v2', projectId] });
+      void invalidateProjectWorkflow(queryClient, projectId);
     },
   });
 }
@@ -498,6 +503,7 @@ export function useCopyScheduleAsBuilt() {
         queryClient.invalidateQueries({ queryKey: ['project-phases', targetProjectId] });
         queryClient.invalidateQueries({ queryKey: ['schedule-milestones', targetProjectId] });
         queryClient.invalidateQueries({ queryKey: ['project-v2', targetProjectId] });
+        void invalidateProjectWorkflow(queryClient, targetProjectId);
       } else if (targetProposalId) {
         queryClient.invalidateQueries({ queryKey: ['proposal-phases', targetProposalId] });
         queryClient.invalidateQueries({ queryKey: ['scope-builder-summary', targetProposalId] });

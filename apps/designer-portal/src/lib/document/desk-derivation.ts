@@ -15,6 +15,15 @@
  *   per-studio settings when studio #2 onboards.
  */
 
+// The one exception to "dependency-free" is deliberate: overdue-condition.ts
+// imports nothing at all, and Ruling IV requires the Desk's order to read the
+// same derivation the margin stamp and the guide sentence read.
+import {
+  deriveOverdue,
+  NOT_OVERDUE,
+  type OverdueCondition,
+} from './overdue-condition';
+
 export type EngagementKind = 'project' | 'proposal' | 'lead' | 'relationship';
 
 export type SectionKey =
@@ -219,6 +228,9 @@ export interface NeedLine {
 export interface DeskFolder {
   row: DocumentStateRow;
   need: NeedLine;
+  /** Ruling IV — the one overdue derivation, read by this folio's order and by
+   *  its stamp. Undefined only where a folder was built outside partitionDesk. */
+  overdue?: OverdueCondition;
 }
 
 // ─── R53: People on the Desk (the nurture-due / reconnect surface) ──────────
@@ -952,6 +964,12 @@ function needSortKey(folder: DeskFolder): [number, number, number] {
               : need.kind === 'task_due' && row.earliest_task_due
                 ? new Date(row.earliest_task_due).getTime()
                 : new Date(row.updated_at).getTime();
+  // Ruling IV's third rendering needs no new tier: `overdue_decision` is the
+  // only urgent need AND rank 0, so an overdue folio already sorts above every
+  // other folio, and ties already break on `earliest_overdue_due` above. A
+  // leading overdue tier was measurably inert here — and actively harmful when
+  // `earliest_overdue_due` is null, since it demoted a real need below
+  // non-overdue folios.
   return [need.urgent ? 0 : 1, NEED_RANK[need.kind], date];
 }
 
@@ -1006,7 +1024,16 @@ export function partitionDesk(
           : null;
     const need = deriveNeed(row, now, conflict, receivable, flagged, ceremony);
     if (need) {
-      folders.push({ row, need });
+      // Ruling IV: the overdue condition rides the folder so the sort, the
+      // folio's need line, and the margin stamp all read one derivation.
+      folders.push({
+        row,
+        need,
+        overdue:
+          need.kind === 'overdue_decision'
+            ? deriveOverdue(row.earliest_overdue_due, now)
+            : NOT_OVERDUE,
+      });
       continue;
     }
     const motion = deriveMotion(row, now, conflict, ceremony);

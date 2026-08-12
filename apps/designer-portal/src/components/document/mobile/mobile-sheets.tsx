@@ -12,6 +12,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMarginItems } from '@/hooks/use-margin-items';
+import { useCoordinationItems } from '@patina/supabase';
+import {
+  classifyMarginItems,
+  marginDecisionClassificationState,
+  MarginDecisionClassificationNotice,
+} from '@/lib/document/stage2-approval-exclusions';
 import { useDocumentTime } from '@/hooks/document-time-provider';
 import {
   marginAccent,
@@ -21,6 +27,8 @@ import {
 } from '@/lib/document/margin-derivation';
 import { ACTIVITIES, fmtElapsed } from '@/lib/document/time-derivation';
 import { MarginItemBody } from '../margin-bodies';
+import { useHandoffGates } from '../margin-handoff-item';
+import { overdueStampLabel } from '@/lib/document/overdue-condition';
 import { StrataMark } from '../strata-mark';
 import { fillStateAtSection } from '@/lib/document/fill-state';
 import { openLedger } from '../command-bar';
@@ -293,12 +301,41 @@ export function MobileSheets() {
   const projectId = activeDoc?.projectId ?? null;
   const proposalId = activeDoc?.proposalId ?? null;
   const { data: items } = useMarginItems(projectId, proposalId);
+  const coordinationQuery = useCoordinationItems(projectId);
+  const coordinationItems = coordinationQuery.data;
+  const classificationState = marginDecisionClassificationState({
+    projectId,
+    coordinationItems,
+    isLoading:
+      coordinationQuery.isLoading === true ||
+      coordinationQuery.isPending === true,
+    isError: coordinationQuery.isError === true,
+  });
+  const classifiedMargin = useMemo(
+    () =>
+      classifyMarginItems(
+        items ?? [],
+        coordinationItems ?? [],
+        classificationState,
+      ),
+    [classificationState, coordinationItems, items],
+  );
+  const visibleItems = classifiedMargin.items;
 
   const { raised, settled } = useMemo(
-    () => partitionMargin(items ?? [], new Date()),
-    [items],
+    () => partitionMargin(visibleItems, new Date()),
+    [visibleItems],
   );
   const allItems = useMemo(() => [...raised, ...settled], [raised, settled]);
+  // Ruling III: handoffs are margin items, so the mobile summary counts and
+  // lists them too — otherwise the highest-ranked thing in the margin is the
+  // one thing mobile never mentions.
+  const handoffNow = useMemo(() => new Date(), []);
+  const { gates: handoffGates } = useHandoffGates({
+    projectId,
+    clientName: activeDoc?.clientName ?? '',
+    now: handoffNow,
+  });
   const sheetKind = sheet?.kind ?? null;
 
   useEffect(() => {
@@ -500,13 +537,39 @@ export function MobileSheets() {
         )}
 
         <p className="mt-3 border-t border-[var(--color-pearl)] pt-2.5 font-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
-          In the margin · {raised.length}
+          In the margin · {raised.length + handoffGates.length}
         </p>
-        {open.length === 0 ? (
+        <MarginDecisionClassificationNotice
+          state={classifiedMargin.decisionState}
+        />
+        {handoffGates.length > 0 && (
+          <ul className="mt-1">
+            {handoffGates.map((gate) => (
+              <li
+                key={gate.id}
+                className="mb-1.5 flex w-full items-start gap-2 rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2.5 py-2 text-left"
+                style={{ borderLeft: '2.5px solid var(--color-golden-hour)' }}
+              >
+                <span className="text-[14px] leading-snug text-[var(--color-charcoal)]">
+                  {gate.lane} · {gate.terms}
+                </span>
+                {overdueStampLabel(gate.overdue) && (
+                  <span
+                    className="ml-auto shrink-0 font-mono text-[12px] font-semibold uppercase tracking-[0.04em]"
+                    style={{ color: 'var(--color-charcoal)' }}
+                  >
+                    {overdueStampLabel(gate.overdue)}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        {open.length === 0 && handoffGates.length === 0 ? (
           <p className="py-1.5 text-[14px] italic text-[var(--text-muted)]">
             The margin — decisions, messages, and money gather here.
           </p>
-        ) : (
+        ) : open.length === 0 ? null : (
           <ul className="mt-1">
             {open.map((row) => (
               <li key={`${row.kind}-${row.item_id}`}>

@@ -14,6 +14,16 @@ const mockPause = jest.fn();
 const mockResume = jest.fn();
 const mockManualLog = jest.fn().mockResolvedValue(undefined);
 
+let mockMarginQuery: {
+  data: Array<Record<string, unknown>>;
+} = { data: [] };
+let mockCoordinationQuery: {
+  data: Array<Record<string, unknown>> | undefined;
+  isLoading?: boolean;
+  isPending?: boolean;
+  isError?: boolean;
+} = { data: [] };
+
 let mockTimeState = {
   heldProjectId: 'project-1' as string | null,
   running: true,
@@ -87,7 +97,15 @@ jest.mock('next/navigation', () => ({
 }));
 
 jest.mock('@/hooks/use-margin-items', () => ({
-  useMarginItems: () => ({ data: [] }),
+  useMarginItems: () => mockMarginQuery,
+}));
+
+jest.mock('@patina/supabase', () => ({
+  useCoordinationItems: () => mockCoordinationQuery,
+  // The mobile spine summary counts handoffs alongside margin items (I114).
+  useProjectContextualHandoffs: () => ({ data: [], isError: false }),
+  isProjectArtifactApproval: (item: { approval_contract?: string | null }) =>
+    item.approval_contract === 'project_artifact_v1',
 }));
 
 jest.mock('@/hooks/document-time-provider', () => ({
@@ -145,6 +163,27 @@ function OpenDrawer() {
   );
 }
 
+function OpenProjectSpine() {
+  const { setActiveDoc, openSpine } = useMobileShell();
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        setActiveDoc({
+          projectId: 'project-1',
+          proposalId: null,
+          clientName: 'Client',
+          title: 'Project',
+          sections: [],
+        });
+        openSpine();
+      }}
+    >
+      Open project spine
+    </button>
+  );
+}
+
 function MobileTimerFallbackDoorway() {
   const { openTimer } = useMobileShell();
   return (
@@ -183,6 +222,8 @@ describe('compact-spine timer doorway', () => {
     mockPause.mockClear();
     mockResume.mockClear();
     mockManualLog.mockClear();
+    mockMarginQuery = { data: [] };
+    mockCoordinationQuery = { data: [] };
     mockTimeState = {
       heldProjectId: 'project-1',
       running: true,
@@ -290,6 +331,62 @@ describe('compact-spine timer doorway', () => {
       'focus-visible:outline-[var(--color-clay)]',
     );
   });
+
+  it.each([
+    ['loading', { isLoading: true }, 'status'],
+    ['error', { isError: true }, 'alert'],
+  ] as const)(
+    'withholds decision bodies and announces %s classification in the mobile spine',
+    (_state, queryState, role) => {
+      setViewportWidth(320);
+      mockMarginQuery = {
+        data: [
+          {
+            kind: 'decision',
+            item_id: 'stage-2',
+            project_id: 'project-1',
+            proposal_id: null,
+            anchor_kind: 'letterhead',
+            anchor_id: null,
+            state: 'pending',
+            title: 'Stage-2 approval',
+            detail: '',
+            ts: '2026-08-11T12:00:00.000Z',
+            payload: {},
+          },
+          {
+            kind: 'message',
+            item_id: 'message-1',
+            project_id: 'project-1',
+            proposal_id: null,
+            anchor_kind: 'letterhead',
+            anchor_id: null,
+            state: 'open',
+            title: 'Client message',
+            detail: '',
+            ts: '2026-08-11T12:00:00.000Z',
+            payload: {},
+          },
+        ],
+      };
+      mockCoordinationQuery = { data: undefined, ...queryState };
+
+      render(
+        <MobileShellProvider>
+          <OpenProjectSpine />
+          <MobileSheets />
+        </MobileShellProvider>,
+      );
+
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Open project spine' }),
+      );
+
+      expect(screen.getByRole(role)).toBeVisible();
+      expect(screen.queryByText('Stage-2 approval')).not.toBeInTheDocument();
+      expect(screen.getByText('Client message')).toBeVisible();
+    },
+  );
 
   it('closes a drawer when 1180px ends its regime without restoring hidden focus', async () => {
     setViewportWidth(1179);

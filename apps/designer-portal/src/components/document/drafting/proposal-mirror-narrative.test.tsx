@@ -3,11 +3,23 @@ import {
   mapProposalMirrorBoard,
   MirrorNarrativeSection,
   MirrorPresentationAnalytics,
+  signAndMapProposalMirrorBoards,
 } from './proposal-mirror';
+import { signBoardMediaValue } from '@patina/supabase';
 
 const mockPresented = jest.fn();
 
-jest.mock('@patina/supabase', () => ({}));
+jest.mock('@patina/supabase', () => ({
+  signBoardMediaValue: jest.fn(async (_client: unknown, value: unknown) => {
+    const rows = value as Array<Record<string, unknown>>;
+    return rows.map((board) => ({
+      ...board,
+      proposal_board_items: (board.proposal_board_items as Array<Record<string, unknown>>).map(
+        (item) => ({ ...item, image_url: 'https://storage.example/signed/source.png' }),
+      ),
+    }));
+  }),
+}));
 jest.mock('@patina/utils', () => ({}));
 jest.mock('@patina/design-system', () => ({}));
 jest.mock('@/lib/analytics/mood-board-events', () => ({
@@ -38,6 +50,22 @@ describe('designer proposal mirror', () => {
       sections,
       items: [{ id: 'item-1', type: 'image' }],
     });
+  });
+
+  it('signs direct board-item references before mapping the mirror composition', async () => {
+    const client = { storage: {} };
+    const result = await signAndMapProposalMirrorBoards(client, [
+      {
+        id: 'board-1',
+        name: 'Living room direction',
+        proposal_board_items: [{ id: 'item-1', image_url: 'owner/boards/board-1/source.png' }],
+      },
+    ]);
+
+    expect(signBoardMediaValue).toHaveBeenCalledWith(client, expect.any(Array));
+    expect(result[0].items[0].image_url).toBe(
+      'https://storage.example/signed/source.png',
+    );
   });
 
   it('emits one duration-bearing presentation per board when mirror viewing ends', () => {

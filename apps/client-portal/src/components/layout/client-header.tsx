@@ -118,11 +118,16 @@ export function ClientHeader({
 
         {/* Right: utilities (compact; counts only when > 0) */}
         <div className="ml-auto flex flex-shrink-0 items-center gap-3 sm:gap-4">
-          <div className="hidden min-h-[44px] items-center gap-1.5 md:flex" title="Approvals pending">
+          <Link
+            href="/decisions"
+            className="hidden min-h-[44px] items-center gap-1.5 transition-opacity hover:opacity-70 md:flex"
+            aria-label={`Approval tasks${approvalsPending > 0 ? `, ${approvalsPending} need attention` : ''}`}
+            data-testid="header-decisions-link"
+          >
             <Bell className="h-3.5 w-3.5 text-[var(--accent-primary)]" aria-hidden />
             <span className="type-meta hidden lg:inline">approvals</span>
             <CountBadge value={approvalsPending} />
-          </div>
+          </Link>
           <Link
             href="/messages"
             className="hidden min-h-[44px] items-center gap-1.5 transition-opacity hover:opacity-70 md:flex"

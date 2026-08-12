@@ -33,6 +33,7 @@ import {
   createBrowserClient,
   parseProposalSendSnapshot,
   proposalSendSnapshotsMatch,
+  signBoardMediaValue,
   type ProposalSendSnapshot,
   useUpdateProposal,
 } from '@patina/supabase';
@@ -64,6 +65,14 @@ export function mapProposalMirrorBoard(board: AnyRow) {
     sections: Array.isArray(board.sections) ? board.sections : [],
     items: (board.proposal_board_items ?? []) as AnyRow[],
   };
+}
+
+export async function signAndMapProposalMirrorBoards(
+  supabase: AnyRow,
+  boards: AnyRow[],
+) {
+  const signedBoards = await signBoardMediaValue(supabase, boards);
+  return (signedBoards as AnyRow[]).map(mapProposalMirrorBoard);
 }
 
 type MirrorPresentationBoard = ReturnType<typeof mapProposalMirrorBoard>;
@@ -352,8 +361,9 @@ export function useProposalMirrorData(proposalId: string) {
       }));
 
       // Boards → the shared BoardComposition shape (items inlined, z-ordered).
-      const boards = ((boardsRaw ?? []) as AnyRow[]).map(
-        mapProposalMirrorBoard,
+      const boards = await signAndMapProposalMirrorBoards(
+        supabase,
+        boardsRaw ?? [],
       );
 
       const totalCents = (proposal as AnyRow)?.total_amount ?? 0;

@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { FFEStageKey } from '@patina/types';
 
 import type { ClientProjectOverview, MilestoneDetail } from '@/types/project';
+import type { ProjectApprovalReview } from '@patina/supabase';
 
 // ── Boundaries ──────────────────────────────────────────────────────────────
 // Everything below the surface is a query. Mock the four hooks it composes
@@ -232,10 +233,51 @@ beforeEach(() => {
   bare();
 });
 
-function renderSurface() {
+function renderSurface(projectApprovals: ProjectApprovalReview[] = []) {
   return render(
-    <TheMaking projectId={PROJECT_ID} project={PROJECT} milestones={MILESTONES} />,
+    <TheMaking
+      projectId={PROJECT_ID}
+      project={PROJECT}
+      milestones={MILESTONES}
+      projectApprovals={projectApprovals}
+    />,
   );
+}
+
+function projectApproval(
+  over: Partial<ProjectApprovalReview> = {},
+): ProjectApprovalReview {
+  return {
+    decisionId: 'decision-1',
+    projectId: PROJECT_ID,
+    phaseId: 'ph-4',
+    sectionKey: null,
+    artifactKind: 'plan_issue',
+    artifactId: 'issue-1',
+    artifactVersion: 7,
+    artifactChecksum: 'a'.repeat(64),
+    artifactTitle: 'Issued set',
+    question: 'Approve issued set 7?',
+    context: null,
+    dueAt: '2026-08-01T12:00:00.000Z',
+    costCentsDelta: 0,
+    scheduleDaysDelta: 0,
+    leadTimeDaysDelta: 0,
+    lifecycleStatus: 'pending',
+    outcome: null,
+    disposition: 'active',
+    isOverdue: true,
+    completedReviewCount: 1,
+    requiredReviewCount: 1,
+    authorityRevision: 1,
+    predecessorDecisionId: null,
+    successorDecisionId: null,
+    createdAt: '2026-07-20T12:00:00.000Z',
+    sentAt: '2026-07-20T12:01:00.000Z',
+    respondedAt: null,
+    updatedAt: '2026-07-20T12:01:00.000Z',
+    ...over,
+  };
 }
 
 /** The open chapter's entries, in document order, by their testid. */
@@ -244,7 +286,7 @@ function openChapterOrder(): string[] {
   return Array.from(chapter.querySelectorAll('[data-testid]'))
     .map((node) => node.getAttribute('data-testid') ?? '')
     .filter((id) =>
-      ['spine-gate', 'spine-toll', 'tracking-row', 'making-pieces-head', 'making-pieces-settled'].includes(
+      ['making-project-approval-gate', 'spine-gate', 'spine-toll', 'tracking-row', 'making-pieces-head', 'making-pieces-settled'].includes(
         id,
       ),
     );
@@ -342,6 +384,157 @@ describe('TheMaking — the masthead', () => {
 // ── The open chapter ────────────────────────────────────────────────────────
 
 describe('TheMaking — the open chapter', () => {
+  it('puts an exact Stage-2 artifact decision before every other gate', () => {
+    proposalsMock.mockReturnValue({
+      data: [FURNISHINGS_PROPOSAL],
+      isPending: false,
+      isError: false,
+    });
+    const approval = projectApproval();
+
+    renderSurface([approval]);
+
+    expect(openChapterOrder().slice(0, 2)).toEqual([
+      'making-project-approval-gate',
+      'spine-gate',
+    ]);
+    // isOverdue is true on this fixture (projectApproval()'s default) — the gate line must
+    // stay plain regardless, per Ruling VIII: overdue is a studio condition, never rendered
+    // to the client.
+    expect(screen.getByText('A gate · your response is required')).toBeInTheDocument();
+    expect(screen.queryByText(/Overdue/)).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Respond' })).toHaveAttribute(
+      'href',
+      '/decisions/decision-1',
+    );
+  });
+
+  it('partitions current, future, and unmatched approvals by exact phase id', () => {
+    renderSurface([
+      projectApproval({ decisionId: 'current', question: 'Current approval?' }),
+      projectApproval({
+        decisionId: 'future',
+        phaseId: 'ph-5',
+        question: 'Future approval?',
+        isOverdue: false,
+      }),
+      projectApproval({
+        decisionId: 'unmatched',
+        phaseId: 'phase-not-on-spine',
+        question: 'Unmatched approval?',
+        isOverdue: false,
+      }),
+    ]);
+
+    const open = within(screen.getByTestId('spine-open-chapter'));
+    expect(open.getByText('Current approval?')).toBeInTheDocument();
+    expect(open.queryByText('Future approval?')).not.toBeInTheDocument();
+    expect(open.queryByText('Unmatched approval?')).not.toBeInTheDocument();
+
+    const later = within(screen.getByTestId('making-later-approvals'));
+    expect(later.getByText('Future approval?')).toBeInTheDocument();
+    expect(later.getByText(/Installation/)).toBeInTheDocument();
+
+    const other = within(screen.getByTestId('making-other-approvals'));
+    expect(other.getByText('Unmatched approval?')).toBeInTheDocument();
+    expect(other.getByText(/Phase not available/)).toBeInTheDocument();
+  });
+
+  it('keeps a completed-review draft out of the client gate and labels the studio handoff', () => {
+    renderSurface([
+      projectApproval({
+        decisionId: 'review-complete',
+        lifecycleStatus: 'draft',
+        completedReviewCount: 1,
+        requiredReviewCount: 1,
+        question: 'Issue the reviewed construction set?',
+        isOverdue: true,
+      }),
+    ]);
+
+    expect(screen.queryByTestId('making-project-approval-gate')).not.toBeInTheDocument();
+    expect(screen.getByTestId('making-awaiting-studio-issue')).toHaveTextContent(
+      'Awaiting studio issue',
+    );
+    expect(screen.getByTestId('making-awaiting-studio-issue')).toHaveTextContent(
+      'Issue the reviewed construction set?',
+    );
+    expect(screen.getByTestId('making-awaiting-studio-issue')).not.toHaveTextContent(
+      /Overdue|Due August/,
+    );
+    expect(screen.getByTestId('making-standing-sentence')).toHaveTextContent(
+      'Nothing waits on you today.',
+    );
+    expect(makingEvents.surfaceViewed).toHaveBeenCalledWith(
+      expect.objectContaining({ gateCount: 0 }),
+    );
+  });
+
+  it('never infers an open approval from project.currentPhase when no phase row is open', () => {
+    const noOpenMilestones = MILESTONES.map((milestone) =>
+      milestone.id === 'ph-4'
+        ? { ...milestone, status: 'upcoming' as const }
+        : milestone,
+    );
+
+    render(
+      <TheMaking
+        projectId={PROJECT_ID}
+        project={PROJECT}
+        milestones={noOpenMilestones}
+        projectApprovals={[projectApproval()]}
+      />,
+    );
+
+    expect(screen.queryByTestId('spine-open-chapter')).not.toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('making-later-approvals')).getByText(
+        'Approve issued set 7?',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps deferred approval work semantic and reflow-safe at 320px', () => {
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: 320,
+    });
+    const { container } = renderSurface([
+      projectApproval({
+        decisionId: 'future',
+        phaseId: 'ph-5',
+        question: 'Review the long future immutable edition?',
+      }),
+      projectApproval({
+        decisionId: 'unmatched',
+        phaseId: 'missing',
+        question: 'Review the unmatched immutable edition?',
+      }),
+      projectApproval({
+        decisionId: 'studio-issue',
+        lifecycleStatus: 'draft',
+        completedReviewCount: 1,
+        requiredReviewCount: 1,
+        question: 'Issue the reviewed immutable edition?',
+      }),
+    ]);
+
+    expect(
+      screen.getByRole('list', { name: 'Later approvals' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('list', { name: 'Other project approvals' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('list', { name: 'Awaiting studio issue' }),
+    ).toBeInTheDocument();
+    for (const link of screen.getAllByRole('link', { name: /immutable edition/i })) {
+      expect(link).toHaveClass('min-h-11', 'break-words');
+    }
+    expect(container.querySelector('[class*="shadow"]')).toBeNull();
+    expect(container.querySelector('[class*="overflow-x"]')).toBeNull();
+  });
+
   it('reads gates first, then tolls, then the pieces in motion', () => {
     proposalsMock.mockReturnValue({
       data: [FURNISHINGS_PROPOSAL],

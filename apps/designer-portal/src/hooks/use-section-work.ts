@@ -10,7 +10,10 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createBrowserClient } from '@patina/supabase';
+import {
+  createBrowserClient,
+  invalidateProjectWorkflow,
+} from '@patina/supabase';
 import type { SectionKey } from '@/lib/document/desk-derivation';
 import { invalidateMarginSurfaces } from './use-margin-items';
 
@@ -141,6 +144,7 @@ export function useToggleSectionTask(projectId: string | null) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['section-tasks', projectId] });
       void qc.invalidateQueries({ queryKey: ['document-state'] });
+      void invalidateProjectWorkflow(qc, projectId);
     },
   });
 }

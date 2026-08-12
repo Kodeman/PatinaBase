@@ -6,10 +6,6 @@ const gatesRefetch = jest.fn();
 let tasksQuery: Record<string, unknown>;
 let gatesQuery: Record<string, unknown>;
 
-jest.mock('@patina/supabase', () => ({
-  useDesignerClientForClientUser: () => ({ data: null }),
-}));
-
 jest.mock('@/hooks/use-section-work', () => ({
   gateState: () => 'requested',
   useSectionTasks: () => tasksQuery,
@@ -17,16 +13,15 @@ jest.mock('@/hooks/use-section-work', () => ({
   useSectionLoggedMinutes: () => ({ data: 0 }),
   useCreateSectionTask: () => ({ mutate: jest.fn() }),
   useToggleSectionTask: () => ({ mutate: jest.fn() }),
-  useRequestSectionGate: () => ({ mutate: jest.fn() }),
 }));
 
-const renderWork = () =>
+const renderWork = (clientUserId: string | null = null) =>
   render(
     <WorkBlock
       projectId="project-1"
       sectionKey="project"
       sectionLabel="Project"
-      clientUserId={null}
+      clientUserId={clientUserId}
       clientName="Avery"
     />,
   );
@@ -58,5 +53,12 @@ describe('WorkBlock query states', () => {
   it('guides only after both reads succeed empty', () => {
     renderWork();
     expect(screen.getByRole('button', { name: 'Add the first task' })).toBeVisible();
+  });
+
+  it('does not offer new legacy section sign-off creation', () => {
+    renderWork('client-1');
+    expect(
+      screen.queryByRole('button', { name: /request sign-off/i }),
+    ).not.toBeInTheDocument();
   });
 });

@@ -10,7 +10,10 @@
  */
 
 import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { createBrowserClient } from '@patina/supabase';
+import {
+  createBrowserClient,
+  invalidateProjectWorkflow,
+} from '@patina/supabase';
 import { mockData } from '@/data/mock-designer-data';
 import { projectsApi } from '@/lib/api-client';
 import { withMockData } from '@/lib/mock-data';
@@ -655,6 +658,9 @@ export function useCreateTask() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(variables.projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.tasks(variables.projectId) });
+      if (isUuid(variables.projectId)) {
+        void invalidateProjectWorkflow(queryClient, variables.projectId);
+      }
     },
   });
 }
@@ -685,8 +691,16 @@ export function useUpdateTask() {
         () => Promise.resolve({ taskId, ...(data as object) })
       );
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      if (
+        data &&
+        typeof data === 'object' &&
+        'project_id' in data &&
+        typeof data.project_id === 'string'
+      ) {
+        void invalidateProjectWorkflow(queryClient, data.project_id);
+      }
     },
   });
 }
@@ -698,17 +712,30 @@ export function useDeleteTask() {
     mutationFn: async (taskId: string) => {
       if (isUuid(taskId)) {
         const supabase = getSupabase();
-        const { error } = await supabase.from('project_tasks').delete().eq('id', taskId);
+        const { data, error } = await supabase
+          .from('project_tasks')
+          .delete()
+          .eq('id', taskId)
+          .select('project_id')
+          .single();
         if (error) throw error;
-        return;
+        return data;
       }
       return withMockData(
         () => projectsApi.deleteTask(taskId),
         () => Promise.resolve()
       );
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      if (
+        data &&
+        typeof data === 'object' &&
+        'project_id' in data &&
+        typeof data.project_id === 'string'
+      ) {
+        void invalidateProjectWorkflow(queryClient, data.project_id);
+      }
     },
   });
 }
@@ -795,6 +822,7 @@ function invalidateProjectFFE(queryClient: QueryClient, projectId: string) {
   // Package read keys — project detail's useProjectV2 + package financials.
   queryClient.invalidateQueries({ queryKey: ['project-v2', projectId] });
   queryClient.invalidateQueries({ queryKey: ['project-financials', projectId] });
+  void invalidateProjectWorkflow(queryClient, projectId);
 }
 
 // Add an FF&E item directly to a project (fixed product, allowance, or TBD).

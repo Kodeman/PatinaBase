@@ -9,11 +9,9 @@
  */
 
 import { useMemo, useState } from 'react';
-import { useDesignerClientForClientUser } from '@patina/supabase';
 import {
   gateState,
   useCreateSectionTask,
-  useRequestSectionGate,
   useSectionGates,
   useSectionLoggedMinutes,
   useSectionTasks,
@@ -24,7 +22,6 @@ import { useToggleSectionTask } from '@/hooks/use-section-work';
 import { Stamp } from './stamp';
 import {
   DocumentAction,
-  DocumentActionGroup,
   DocumentActionRow,
 } from './document-action';
 import { GuidedEmptyState } from './guided-empty-state';
@@ -47,17 +44,10 @@ const fmtHours = (minutes: number) => {
   return Number.isInteger(h) ? `${h}h` : `${h.toFixed(1)}h`;
 };
 
-function plusDaysYmd(days: number) {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
 export function WorkBlock({
   projectId,
   sectionKey,
   sectionLabel,
-  clientUserId,
   clientName,
 }: {
   projectId: string;
@@ -74,21 +64,13 @@ export function WorkBlock({
     projectId,
     sectionKey,
   );
-  const { data: designerClient } = useDesignerClientForClientUser(
-    clientUserId ?? '',
-  ) as {
-    data: any;
-  };
   const createTask = useCreateSectionTask(projectId);
   const toggleTask = useToggleSectionTask(projectId);
-  const requestGate = useRequestSectionGate(projectId);
 
   const [capturing, setCapturing] = useState(false);
   const [title, setTitle] = useState('');
   const [due, setDue] = useState('');
   const [estimateH, setEstimateH] = useState('');
-  const [gateAsking, setGateAsking] = useState(false);
-  const [gateDue, setGateDue] = useState(plusDaysYmd(7));
 
   const sectionTasks = useMemo(
     () => (tasks ?? []).filter((t) => t.section_key === sectionKey),
@@ -149,15 +131,14 @@ export function WorkBlock({
     );
   }
 
-  if (sectionTasks.length === 0 && !gate && !capturing && !gateAsking) {
+  if (sectionTasks.length === 0 && !gate && !capturing) {
     return (
       <GuidedEmptyState
         className="mb-1 mt-4"
         title={`Plan the ${sectionLabel.toLowerCase()} work`}
-        description="List the concrete work here so the next action, due date, and sign-off stay visible in the document."
+        description="List the concrete work here so the next action and due date stay visible in the document."
         inputs={['Task', 'Optional due date', 'Optional estimate']}
         action={{ key: 'add-task', label: 'Add the first task', onClick: () => setCapturing(true) }}
-        secondary={clientUserId ? { key: 'request-signoff', label: 'Request sign-off', onClick: () => setGateAsking(true) } : undefined}
       />
     );
   }
@@ -291,15 +272,6 @@ export function WorkBlock({
           className="px-1 py-1.5"
           aria-label={`${sectionLabel} work actions`}
         >
-          {!gate && clientUserId && !gateAsking && (
-            <DocumentAction
-              actionKey="request-signoff"
-              variant="primary"
-              onClick={() => setGateAsking(true)}
-            >
-              Request sign-off
-            </DocumentAction>
-          )}
           <DocumentAction
             actionKey="add-task"
             variant="secondary"
@@ -308,60 +280,6 @@ export function WorkBlock({
             + Task
           </DocumentAction>
         </DocumentActionRow>
-      )}
-
-      {/* The gate line (R23): an approval gate IS a client decision — the
-          section's closing line, wearing the Gate stamp the client grants. */}
-      {gateAsking && !gate && (
-        <div className={GATE_ROW}>
-          <Stamp
-            label={GATE_STAMP.label}
-            color={GATE_STAMP.color}
-            ink={GATE_STAMP.ink}
-          />
-          <span className="text-[11px] text-[var(--color-charcoal)]">
-            Ask <strong className="font-medium">{clientName}</strong> to sign
-            off on {sectionLabel} — settles this section when they approve.
-          </span>
-          <input
-            type="date"
-            value={gateDue}
-            onChange={(e) => setGateDue(e.target.value)}
-            aria-label="Approval due"
-            className="bg-transparent font-mono text-[9.5px] text-[var(--text-muted)] outline-none"
-          />
-          <DocumentAction
-            actionKey="submit-signoff-request"
-            surfaceKey="open-document"
-            regionKey={`${sectionKey}-signoff-request`}
-            variant="primary"
-            disabled={!designerClient?.id}
-            loading={requestGate.isPending}
-            loadingLabel="Requesting…"
-            onClick={() => {
-              if (!designerClient?.id) return;
-              requestGate.mutate({
-                designerClientId: designerClient.id,
-                sectionKey,
-                sectionLabel,
-                dueDate: gateDue || null,
-              });
-              setGateAsking(false);
-            }}
-            className="ml-auto"
-          >
-            Request sign-off
-          </DocumentAction>
-          <DocumentAction
-            actionKey="cancel-signoff-request"
-            surfaceKey="open-document"
-            regionKey={`${sectionKey}-signoff-request`}
-            variant="tertiary"
-            onClick={() => setGateAsking(false)}
-          >
-            Cancel
-          </DocumentAction>
-        </div>
       )}
 
       {gate && (
@@ -385,29 +303,6 @@ export function WorkBlock({
                   ? ` — “${gate.options.find((o) => o.selected)?.client_note}”`
                   : ''}
               </span>
-              {clientUserId && (
-                <DocumentAction
-                  actionKey="request-signoff-again"
-                  surfaceKey="open-document"
-                  regionKey={`${sectionKey}-declined-signoff`}
-                  variant="primary"
-                  disabled={!designerClient?.id}
-                  loading={requestGate.isPending}
-                  loadingLabel="Requesting…"
-                  onClick={() => {
-                    if (!designerClient?.id) return;
-                    requestGate.mutate({
-                      designerClientId: designerClient.id,
-                      sectionKey,
-                      sectionLabel,
-                      dueDate: plusDaysYmd(7),
-                    });
-                  }}
-                  className="ml-auto"
-                >
-                  Request again
-                </DocumentAction>
-              )}
             </>
           )}
           {gateState(gate) === 'approved' && (

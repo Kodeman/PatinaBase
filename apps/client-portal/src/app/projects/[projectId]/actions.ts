@@ -10,36 +10,6 @@ interface ActionResult {
   error?: string;
 }
 
-export async function submitApprovalAction(params: {
-  projectId: string;
-  approvalId: string;
-  decision: 'approved' | 'rejected' | 'changes_requested';
-  comment?: string;
-}): Promise<ActionResult> {
-  try {
-    await getProjectsClient().submitApproval(
-      params.projectId,
-      params.approvalId,
-      params.decision,
-      params.comment
-    );
-
-    await getProjectsClient().logEngagement(params.projectId, {
-      event: 'client_portal.approval_submitted',
-      metadata: {
-        approvalId: params.approvalId,
-        decision: params.decision,
-      },
-    });
-
-    revalidatePath(`/projects/${params.projectId}`);
-    return { success: true };
-  } catch (error) {
-    console.error('[client-portal] failed to submit approval', error);
-    return { success: false, error: 'We could not submit your decision. Please try again.' };
-  }
-}
-
 export async function postMessageAction(params: {
   projectId: string;
   threadId: string;

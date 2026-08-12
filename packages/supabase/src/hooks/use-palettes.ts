@@ -1,6 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 import {
+  normalizeBoardMediaValue,
+  signBoardMediaValue,
+} from '../lib/board-storage';
+import {
   invalidateProposalClientQueries,
   PROPOSAL_CLIENT_MUTATION_KEY,
 } from '../lib/proposal-client-query-invalidation';
@@ -98,7 +102,7 @@ export function usePalettes(proposalId: string | null | undefined) {
         .order('created_at', { ascending: true });
 
       if (error) throw error;
-      return (data ?? []) as ProposalPalette[];
+      return signBoardMediaValue(supabase, data ?? []) as Promise<ProposalPalette[]>;
     },
   });
 }
@@ -132,10 +136,10 @@ export function usePalette(paletteId: string | null | undefined) {
 
       if (swatchErr) throw swatchErr;
 
-      return {
+      return signBoardMediaValue(supabase, {
         ...(palette as ProposalPalette),
         swatches: (swatches ?? []) as PaletteSwatch[],
-      };
+      });
     },
   });
 }
@@ -173,7 +177,11 @@ export function useUpsertPalette() {
         const updates: Record<string, unknown> = {};
         if (input.name !== undefined) updates.name = input.name;
         if (input.scopeRoomId !== undefined) updates.scope_room_id = input.scopeRoomId;
-        if (input.sourceImageUrl !== undefined) updates.source_image_url = input.sourceImageUrl;
+        if (input.sourceImageUrl !== undefined) {
+          updates.source_image_url = normalizeBoardMediaValue({
+            source_image_url: input.sourceImageUrl,
+          }).source_image_url;
+        }
         if (input.notes !== undefined) updates.notes = input.notes;
         if (input.isPrimary !== undefined) updates.is_primary = input.isPrimary;
         if (input.sortOrder !== undefined) updates.sort_order = input.sortOrder;
@@ -196,7 +204,9 @@ export function useUpsertPalette() {
         proposal_id: input.proposalId,
         name: input.name,
         scope_room_id: input.scopeRoomId ?? null,
-        source_image_url: input.sourceImageUrl ?? null,
+        source_image_url: normalizeBoardMediaValue({
+          source_image_url: input.sourceImageUrl ?? null,
+        }).source_image_url,
         notes: input.notes ?? null,
         is_primary: input.isPrimary ?? false,
         sort_order: input.sortOrder ?? 0,

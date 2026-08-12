@@ -18,6 +18,7 @@ import {
   useProposalFeedback,
   useProjectRoster,
   useDiscovery,
+  useProjectContextualHandoffs,
 } from '@patina/supabase';
 import { rollupVerdicts, formatVerdictRollup } from '@patina/utils';
 import { useDocumentEngagement } from '@/hooks/use-document-state';
@@ -50,6 +51,7 @@ import { DiscoveryRecap } from '@/components/document/discovery/discovery-recap'
 import { DiscoveryMargin } from '@/components/document/discovery/discovery-margin';
 import {
   MarginRail,
+  openMarginRail,
   ResponsiveMarginRail,
 } from '@/components/document/margin-rail';
 import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
@@ -58,6 +60,8 @@ import { AccountBand } from '@/components/document/account-band';
 import { ScheduleNavProvider } from '@/components/document/schedule/schedule-nav-context';
 import { RippleProvider } from '@/components/document/schedule/schedule-ripple-context';
 import { ProjectScheduleHandoffMount } from '@/components/document/project-schedule-handoff-mount';
+import { SectionStageLineMount } from '@/components/document/section-stage-line-mount';
+import { ProjectApprovalDocumentMount } from '@/components/document/project-approval-document-mount';
 import { LetterheadInstruments } from '@/components/document/letterhead-instruments';
 import { CallSheetMount } from '@/components/document/roster/call-sheet-mount';
 import type { CallSheetOpenMode } from '@/components/document/roster/call-sheet';
@@ -82,6 +86,7 @@ import {
   type ProposalGuideFacts,
 } from '@/lib/document/document-guide';
 import { composeDocumentGuideInputs } from '@/lib/document/document-guide-inputs';
+import { deriveGates, nearestOpenGate } from '@/lib/document/workflow-gate';
 import {
   asCommercialDocumentKind,
   asCommercialState,
@@ -189,6 +194,27 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   const enrichedOperationalNeed = deskEnrichment
     ? selectOperationalNeedForDocument(enrichedOperationalQuery.data, row?.engagement_id)
     : undefined;
+  // One clock for the document: the margin's overdue stamp and the guide's
+  // sentence read the same instant, so they cannot disagree across a midnight.
+  // Re-derived only when the gate read itself changes.
+  const handoffsQuery = useProjectContextualHandoffs(projectId || null);
+  const gateNow = useMemo(
+    () => new Date(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [handoffsQuery.dataUpdatedAt],
+  );
+  // Ruling V: the guide speaks for the nearest open gate. `undefined` while the
+  // projection has not answered — the guide then keeps its own derivation
+  // rather than claiming there is no gate.
+  const nearestGate = useMemo(
+    () =>
+      handoffsQuery.data
+        ? nearestOpenGate(
+            deriveGates(handoffsQuery.data, gateNow, row?.client_name ?? null),
+          )
+        : undefined,
+    [handoffsQuery.data, gateNow, row?.client_name],
+  );
   const authorizationDoorway = authorizationDoorwayFor({
     engagementKind: row?.engagement_kind,
     projectId: row?.project_id,
@@ -268,6 +294,9 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
       });
     }
     setOpenSection(key);
+    // A margin-owned anchor lives in a sheet that is `inert` while closed, so
+    // focus would silently no-op. Raise it before the focus frame.
+    if (focusId?.startsWith('document-handoff-')) openMarginRail();
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         const section = document.getElementById(sectionAnchorId(key));
@@ -444,6 +473,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
         proposal: proposalGuideFacts,
         inputFacts: guideInputs,
         operationalNeed: enrichedOperationalNeed,
+        gate: nearestGate,
       })
     : null;
   const activateGuide = useCallback(() => {
@@ -658,6 +688,18 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           projectId={row.project_id}
           proposalId={row.proposal_id}
           anchorKind="letterhead"
+          clientName={row.client_name}
+        />
+
+        <ProjectApprovalDocumentMount
+          projectId={
+            row.engagement_kind === 'project' ? row.project_id : null
+          }
+          clientProfileId={
+            row.engagement_kind === 'project' ? (project?.client_id ?? null) : null
+          }
+          clientName={row.client_name}
+          phases={phases}
         />
 
         {/* Settled bars — letterhead bar + stamp; every phase with a read-only
@@ -792,6 +834,17 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
               if (files.length) setFolioDrop(files);
             }}
           >
+            {/* R1 / M1-after (I114): the stage sub-label and its track bands are
+                the head of the OPEN section, not a free-standing band under the
+                letterhead. They ride inside <div data-active-section> so they
+                read as the section's own sub-label, exactly as the deck draws
+                the open Project row. */}
+            <SectionStageLineMount
+              projectId={
+                row.engagement_kind === 'project' ? row.project_id : null
+              }
+              activeSection={row.active_section}
+            />
             {row.active_section === 'brief' && row.lead_id && <BriefSection leadId={row.lead_id} />}
             {row.active_section === 'discovery' && row.engagement_id && row.designer_id && (
               <DiscoverySection
@@ -982,6 +1035,8 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
             proposalId={row.proposal_id}
             clientName={row.client_name}
             clientUserId={row.client_profile_id}
+            now={gateNow}
+            approvalSurfaceMounted={row.engagement_kind === 'project'}
             onHoverLine={setHighlightLineId}
             pendingNoteAnchor={pendingNoteAnchor}
             onNoteAnchorConsumed={() => setPendingNoteAnchor(null)}

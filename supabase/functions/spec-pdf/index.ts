@@ -48,7 +48,13 @@ import {
 } from '../_shared/spec-pdf.ts';
 import { resolveStudioIdentity, studioDisplayName } from '../_shared/studio-identity.ts';
 import { canCallerUseOwner, ownedBoardOrNull, parseSpecPdfBody } from './core.ts';
-import { hydrateCompositionImages } from './image-loader.ts';
+import {
+  boardStoragePath,
+  hydrateCompositionImages,
+  resolvePrivateBoardImageSources,
+  serviceMayResolveBoardProjection,
+  type CompositionImageSource,
+} from './image-loader.ts';
 import { preparePdfStudioLogo } from './pdf-logo.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -174,6 +180,32 @@ function slug(s: string): string {
       .replace(/^-+|-+$/g, '')
       .slice(0, 60) || 'document'
   );
+}
+
+async function signPrivateBoardImageSources<T extends CompositionImageSource>(
+  admin: any,
+  boardId: string,
+  sources: readonly T[],
+): Promise<T[]> {
+  if (!await serviceMayResolveBoardProjection(admin, boardId)) {
+    return sources.map((source) => ({ ...source, imageUrl: null }));
+  }
+  const paths = [...new Set(sources.flatMap((source) => {
+    const path = boardStoragePath(source.imageUrl);
+    return path ? [path] : [];
+  }))];
+  if (paths.length === 0) return [...sources];
+  const { data, error } = await admin.storage
+    .from('proposal-mood-boards')
+    .createSignedUrls(paths, 3600);
+  if (error) throw error;
+  const signedByPath = new Map<string, string>();
+  for (const entry of data ?? []) {
+    if (entry.path && entry.signedUrl && !entry.error) {
+      signedByPath.set(entry.path, entry.signedUrl);
+    }
+  }
+  return resolvePrivateBoardImageSources(sources, signedByPath);
 }
 
 // ─── Handler ─────────────────────────────────────────────────────────────────
@@ -339,7 +371,8 @@ Deno.serve(async (req: Request) => {
           };
         },
       );
-      const tiles: SpecBoardTileInput[] = (await hydrateCompositionImages(rawTiles)).map(
+      const signedTiles = await signPrivateBoardImageSources(admin, board.id, rawTiles);
+      const tiles: SpecBoardTileInput[] = (await hydrateCompositionImages(signedTiles)).map(
         ({ imageDataUrl, imageRequested: _imageRequested, ...tile }) => ({
           ...tile,
           imageUrl: imageDataUrl,
@@ -391,7 +424,12 @@ Deno.serve(async (req: Request) => {
           };
         },
       );
-      const hydrated = await hydrateCompositionImages(imageSources);
+      const signedImageSources = await signPrivateBoardImageSources(
+        admin,
+        board.id,
+        imageSources,
+      );
+      const hydrated = await hydrateCompositionImages(signedImageSources);
       const pins: SpecBoardCompositionPinInput[] = hydrated.map(
         ({ item, data, imageDataUrl, imageRequested }) => ({
           id: typeof item.id === 'string' ? item.id : undefined,

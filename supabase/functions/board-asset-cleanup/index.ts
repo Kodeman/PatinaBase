@@ -21,6 +21,7 @@ import {
   BOARD_ASSET_BUCKET,
   BOARD_ASSET_GRACE_DAYS,
   type BoardReferenceDataset,
+  type BoardShareReferenceRow,
   type BoardTemplateReferenceRow,
   buildBoardReferenceCounts,
   type CandidateRow,
@@ -107,7 +108,7 @@ async function allPages<T>(
 async function loadReferenceDataset(
   admin: SupabaseClient,
 ): Promise<BoardReferenceDataset> {
-  const [liveItems, projectSnapshots, templates, boards] = await Promise.all([
+  const [liveItems, projectSnapshots, templates, boards, shares] = await Promise.all([
     allPages<LiveBoardItemReferenceRow>(
       "proposal_board_items",
       async (from, to) => {
@@ -137,8 +138,14 @@ async function loadReferenceDataset(
         .order("id", { ascending: true }).range(from, to);
       return { data: result.data, error: result.error };
     }),
+    allPages<BoardShareReferenceRow>("document_shares", async (from, to) => {
+      const result = await admin.from("document_shares")
+        .select("board_payload").not("board_id", "is", null)
+        .order("id", { ascending: true }).range(from, to);
+      return { data: result.data, error: result.error };
+    }),
   ]);
-  return { liveItems, projectSnapshots, templates, boards };
+  return { liveItems, projectSnapshots, templates, boards, shares };
 }
 
 async function listDirectory(

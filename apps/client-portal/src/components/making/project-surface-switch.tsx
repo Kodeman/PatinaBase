@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { useProjectApprovals } from '@patina/supabase';
 
 import { ProjectViewWrapper } from '@/components/project-view-wrapper';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
@@ -42,6 +43,7 @@ export function ProjectSurfaceSwitch({
   milestones,
 }: ProjectSurfaceSwitchProps) {
   const { value: singlePane, isLoading } = useFeatureFlag('single-pane');
+  const approvalsQuery = useProjectApprovals(projectId);
 
   useEffect(() => {
     clientEvents.projectView(projectId);
@@ -49,7 +51,14 @@ export function ProjectSurfaceSwitch({
 
   if (!isLoading && singlePane) {
     return (
-      <TheMaking projectId={projectId} project={project} milestones={milestones} />
+      <TheMaking
+        projectId={projectId}
+        project={project}
+        milestones={milestones}
+        projectApprovals={approvalsQuery.data ?? []}
+        projectApprovalsLoading={approvalsQuery.isLoading}
+        projectApprovalsError={approvalsQuery.isError}
+      />
     );
   }
 
@@ -60,6 +69,9 @@ export function ProjectSurfaceSwitch({
       milestones={milestones}
       showOverview={true}
       emitProjectView={false}
+      projectApprovals={approvalsQuery.data ?? []}
+      projectApprovalsLoading={approvalsQuery.isLoading}
+      projectApprovalsError={approvalsQuery.isError}
     />
   );
 }

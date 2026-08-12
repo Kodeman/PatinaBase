@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useSelectDecisionOption } from '@patina/supabase';
+import { PROJECT_APPROVAL_CONTRACT, useSelectDecisionOption } from '@patina/supabase';
 import type {
   ClientDecision,
   ClientDecisionOption,
@@ -299,6 +299,18 @@ export function DecisionCardClient({ decision, compact }: DecisionCardClientProp
     );
   };
 
+  if (decision.approval_contract === PROJECT_APPROVAL_CONTRACT) {
+    return (
+      <div className="border-b border-[var(--border-default)] py-6" data-stage2-readonly="true">
+        <p className="type-meta">Project approval</p>
+        <h3 className="type-item-name mt-1">{decision.title}</h3>
+        <p className="type-body-small mt-2">
+          Open the authoritative approval review to inspect its frozen artifact and submit an outcome.
+        </p>
+      </div>
+    );
+  }
+
   // ───────────────────────────────────────────────────────────────────────────
   // Track 5 — the read-only mirror branch. RFIs, submittals, punch items, and
   // anything sitting in the designer / GC / vendor court are the designer's to
@@ -432,7 +444,7 @@ export function DecisionCardClient({ decision, compact }: DecisionCardClientProp
       </div>
 
       {/* Options */}
-      <div className="grid gap-3 py-4" style={{ gridTemplateColumns: `repeat(${Math.min(options.length, 3)}, 1fr)` }}>
+      <div className="grid min-w-0 grid-cols-1 gap-3 py-4 sm:grid-cols-2 lg:grid-cols-3">
         {options.map((option) => (
           <OptionCard
             key={option.id}
@@ -468,7 +480,11 @@ export function DecisionCardClient({ decision, compact }: DecisionCardClientProp
           <p className="text-sm font-medium text-[var(--text-primary)] mb-2">
             Confirm your selection: {options.find((o) => o.id === selectedOptionId)?.name}
           </p>
+          <label htmlFor={`decision-note-${decision.id}`} className="type-meta-small mb-2 block">
+            Note with your selection (optional)
+          </label>
           <textarea
+            id={`decision-note-${decision.id}`}
             value={clientNote}
             onChange={(e) => setClientNote(e.target.value)}
             placeholder="Add a note (optional)"
@@ -480,7 +496,7 @@ export function DecisionCardClient({ decision, compact }: DecisionCardClientProp
               type="button"
               onClick={handleConfirm}
               disabled={selectOption.isPending}
-              className="inline-flex items-center gap-2 rounded-[3px] bg-patina-charcoal px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-60"
+              className="inline-flex min-h-11 items-center gap-2 rounded-[3px] bg-patina-charcoal px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-60"
             >
               {selectOption.isPending ? 'Submitting...' : 'Confirm Selection'}
             </button>
@@ -490,7 +506,7 @@ export function DecisionCardClient({ decision, compact }: DecisionCardClientProp
                 setShowConfirm(false);
                 setSelectedOptionId(null);
               }}
-              className="rounded-[3px] border border-[var(--border-default)] px-4 py-2.5 text-sm text-[var(--text-muted)] transition hover:text-[var(--text-primary)]"
+              className="min-h-11 rounded-[3px] border border-[var(--border-default)] px-4 py-2.5 text-sm text-[var(--text-muted)] transition hover:text-[var(--text-primary)]"
             >
               Cancel
             </button>
@@ -545,7 +561,7 @@ function OptionCard({
       type="button"
       onClick={onSelect}
       disabled={isResolved}
-      className={`relative rounded-[3px] border p-4 text-left transition ${
+      className={`relative min-h-11 min-w-0 rounded-[3px] border p-4 text-left transition ${
         isResolved ? 'cursor-default' : 'cursor-pointer hover:border-[var(--accent-primary)]'
       } ${
         isSelected

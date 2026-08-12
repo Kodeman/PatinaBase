@@ -7100,3 +7100,557 @@ answer should arrive more quietly. This is a design question about how the
 document speaks; it stays out of the code until ruled.
 
 *Entries add: I112 · last id = I112*
+
+## The Document — the work block sheds sign-off authoring — 2026-08-11
+
+### I113 · "Request sign-off" leaves the work block; Stage-2 owns it now (ratified R2)
+
+Wave1's `de1dfac1` ("cut over project approval authoring") moved sign-off
+authoring off the section gate line and onto the Stage-2 approval document
+(`ProjectApprovalDocumentMount`, mounted in `app/(document)/doc/[id]/page.tsx`
+immediately after the workflow stage document). This is a Leah-facing grammar
+change, ratified as R2: the `.gate` row in `work-block.tsx` still wears the
+Golden-Hour "Gate" stamp and still narrates status — requested/declined/
+approved — but the row no longer carries a "Request sign-off" button or the
+`useRequestSectionGate` mutation that authored one. Sign-off is now requested
+from the Stage-2 approval surface, not from inside a section's work block.
+
+`dissolve-grammar-contract.test.ts` (`§1 The Work — the gate stamp`) still
+asserted the old grammar — `expect(work).toContain('Request sign-off')` — which
+wave1 broke on contact. The assertion is replaced with its post-Stage-2
+opposite: the work block must not contain `'Request sign-off'` or
+`useRequestSectionGate`, alongside the still-true Gate-stamp assertions. This
+mirrors the equivalent contract already carried by wave1's own
+`stage2-approval-cutover-contract.test.ts`, so the two suites now agree instead
+of one silently drifting behind the other.
+
+*Entries add: I113 · last id = I113*
+
+### I114 · R1 — the eleven stages become the derivation layer (ratified R1)
+
+The workflow stage document is deleted from the glass. `workflow-stage-document.tsx`
+(347 lines: the eleven-row rail, the bracketed `Project · stages 04–09` group, and
+the eleven-row definition list) and `workflow-stage-document-mount.tsx` are gone,
+along with their two suites. The model underneath is untouched — migration 00433,
+`get_project_workflow`, `useProjectWorkflow`, and `workflow-stage-derivation.ts`
+all stay and remain the only source of stage truth. This is a render deletion, not
+a model deletion.
+
+In their place, `SectionStageLineMount` mounts at the same point in
+`app/(document)/doc/[id]/page.tsx` and renders `SectionStageLine` (M1-after): one
+mono sub-label carrying the stage, the track, and the position ("Design
+Development · FF&E · stage 06 of 04–09"); one Strata-Mark band per live track,
+drawn equal-width and colour-differentiated in the mark's own movement hues
+(Core → mocha, FF&E → clay, Construction → dusty blue); and one quiet provenance
+line naming where the classification came from. A new pure module,
+`lib/document/section-stage-line.ts`, reduces `WorkflowStageDocumentState` to that
+model, so the reduction is testable without a DOM.
+
+Four judgement calls, recorded because a designer would notice them:
+
+**(a) Bands are drawn only for tracks that carry active work.** M1's fixture has
+three live tracks and so shows three bands. Rendering a "Construction · —" band for
+a project with no construction phase would invent a track, so a track with no
+active group is simply absent. Hue is bound to the track, not to band position, so
+Core is mocha whether it is drawn first or alone.
+
+**(b) The bands carry no progress semantics.** Per M1's figcap the fills mark
+*which* track, never how much of it is done. They are therefore all `w-full`, and
+`section-stage-line.test.tsx` asserts that equality so a future "helpful" progress
+fill fails the suite rather than the review.
+
+**(c) Canonical stage titles ship, not the deck's sentence case.** M1 draws
+"Design development"; `RESIDENTIAL_WORKFLOW_STAGES[].title` says "Design
+Development". The wave1 engineering review (§2.9) already flagged two stage-label
+vocabularies shipping side by side as a real product inconsistency, so the
+canonical constant wins and the deck's rendering is treated as typography, not
+vocabulary.
+
+**(d) Provenance microcopy means template provenance.** M1-after's microcopy
+("Same derivation · same stage · same track / Eleven rows of chronology,
+withdrawn") is the deck comparing its own two panes; shipping it as product copy
+would be absurd. The line instead names the real provenance the derivation already
+computes — "Derived from residential-full-service · version 3" — and, when the
+schedule records none, says so rather than implying one.
+
+**(e) The headline is deterministic, because row order is not a ranking.** With
+several tracks live, one of them has to speak for the section. Taking the first
+active group out of `get_project_workflow` would let a row-order change silently
+rewrite the sub-label. The headline is therefore chosen by canonical track order
+(Core, then FF&E, then Construction) and, within that track, by the most-advanced
+stage ordinal. Track bands use the same "furthest on this track" rule, so a track
+that carries two active stages reports the further one rather than whichever landed
+first.
+
+Two truths the deleted rail carried are kept as single quiet lines rather than
+dropped silently: active phases that no canonical stage classifies are counted
+("1 active phase not classified to a canonical stage"), and a workflow read error
+still says the stage position is unavailable *and* that the schedule itself is
+unchanged. The `[data-workflow-document]` hook survives on the new surface, so
+`e2e/document/workflow-stage-responsive.spec.ts` still gates 320px reflow.
+
+**The empty state must not lie.** If every active phase is unclassified, there IS
+active work — so the surface never renders "No active or delayed phase is
+configured" in that case. The derivation returns a model with a null sub-label
+instead of null, and the unclassified disclosure becomes the headline (and takes
+`role="status"`, since it is then the only thing the surface says). Null is
+reserved for the one case where it is true: nothing active at all.
+
+Copy sweep (HANDOFF §7, actor-neutral lexicon):
+`packages/types/src/residential-workflow.ts` stage 03's gate becomes "Agreement
+signed and engagement **confirmed**" and stage 07's becomes "Documents and
+**budget snapshot approved**" — the live wave copy "engagement authorized" and
+"budget, and execution authority approved" settled who holds commercial authority,
+which no UI copy may do.
+
+**Open, not resolved here — the mapping.** The deck's own aside: Direction (a
+section that seals) and stage 05 concept/schematic (a stage that completes) overlap
+without agreeing. The sub-label deliberately omits the "of 04–09" band for stages
+outside 04–09 rather than picking a side; the mapping goes to a design session.
+
+**Closed at wave1 integration — where the line hangs (M1).** R1 places the
+sub-label and bands *on the Project section bar*; M1-after draws them inside the
+open Project row. Track A shipped them as a free-standing band under the
+letterhead, at the deleted mount's position, and left the relocation open because
+it crossed two other rulings. Both crossings resolved once tracks A, B, and D were
+merged, and **Kody ruled the relocation in**, so it is performed at integration:
+
+`<SectionStageLineMount>` now renders at the head of `<div data-active-section>`
+(inside ScheduleNavProvider / RippleProvider, which render no DOM), which is where
+every section branch already renders — so the stage line reads as the open
+section's own sub-label, exactly as M1-after draws it. No section composition was
+restructured.
+
+The two crossings, and what became of them: (1) the mount also rendered
+`ContextualHandoffBand`, which R3 dissolves outright — the band's import and all
+three of its renders are gone from `section-stage-line-mount.tsx`, and handoffs now
+live in the margin rail through `MarginHandoffs` (I116), so nothing needed
+splitting; and (2) `stage2-approval-cutover-contract.test.ts` asserted the stage
+surface preceded `<ProjectApprovalDocumentMount>` in source order. The relocation
+inverts that order, so the assertion is restated rather than dropped: the approval
+mount must still lead at the letterhead (after `<MobileMarginChips>`), and
+`<SectionStageLineMount>` must now appear inside `data-active-section` and after
+it. I113's intent — the approval mount sits at the document head, keyed on
+`projects.client_id` — is unchanged and still asserted.
+
+With the placement in-section, the free-standing band chrome went with it: the
+`border-y` rule and its `py-4` are removed from both `SectionStageLine` and the
+mount's loading and error states. M1-after draws no box around the sub-label — the
+section row it sits in already carries the boundary — and a bordered band inside a
+bordered row would have doubled the edge.
+
+### I115 · R2 — the gate is a boundary ceremony, and SCOPE ships without a migration (ratified R2)
+
+`project-approval-document.tsx` is restaged from a form into M2's six-part anatomy
+— ARTIFACT / QUESTION / SCOPE / IMPACT / AUTHORITY / CONFIRMATION, and no seventh
+part. A new `approvals/gate-anatomy.tsx` owns the primitives: `GateCeremony`,
+`GatePartBlock` (read-only), `GateFieldset` (authoring), `ArtifactEdges`,
+`GateQuestion`, `GatePlain`, `GateImpact`. Both authoring flows — the composer and
+the superseding request — now run through the same six parts in the same order, so
+the shape a designer fills in is the shape the client reads.
+
+Each approval row renders one of two states. **State A** unfolds the ceremony in
+place. **State B** collapses to a seal: the artifact name, the edition that
+settled (`Edition N · frozen at publish · proof …` — a settled gate must say
+*which* edition settled, or the seal is unfalsifiable), one settled line, and the
+stamp — "Approved · <date>" in mocha for the approved case. That settled line is
+the author's scope note when one was written and the structural binding otherwise,
+following M2's State B, which shows scope prose ("Main floor released · 3 rooms ·
+study excluded") rather than the binding. The superseded predecessor is linked
+under the seal ("Edition 2 superseded — view") as an in-place focus of the
+predecessor row, never a navigation; M2's note that "nothing between State A and
+State B is a navigation" is honoured literally.
+
+**Sealed means settled, not merely answered.** `changes_requested` and
+`needs_discussion` are *bounced* gates: the client has spoken, but the question is
+still live and the same component still marks those rows the current leaf
+(`data-project-approval-current-leaf`). Collapsing them to a seal would have hidden
+the question and its impact from the designer who has to act on them, and would
+have contradicted this component's own leaf marking. Sealed is therefore
+`disposition !== 'active' || outcome === 'approved'` — approved, withdrawn, or
+superseded. A bounced gate keeps the full anatomy open, with CONFIRMATION stating
+the outcome and its date and offering the superseding act.
+
+**The SCOPE decision: no migration. SCOPE renders from the structured binding.**
+The deck argues SCOPE "has no dedicated field today, only a free-text context line
+doing the job by convention", and calls that one field "the whole of what this
+ceremony asks of the schema". We did not add it, and the reasoning is a risk
+judgement rather than a design one:
+
+- A `scope_note` column is additive, but *reaching* it is not.
+  `create_project_approval_decision`, `supersede_project_approval_decision`,
+  `get_project_decision_reviews`, `get_project_decision_review`, and
+  `list_my_project_decision_reviews` would each need restating — and whole-body RPC
+  restatement is precisely the failure mode the engineering review names as the
+  stack's highest risk (§2.1: 00436 already restates eleven main-installed bodies,
+  and `_apply_client_decision_authorized` has been restated three times).
+- 00445 is the tip of a stack with **zero verification run against it** (§2.3) and
+  no wired way to run one; a migration 00446 would land on an unreplayed
+  foundation, and this worktree does not own the local replay.
+- There is an honest smaller option, so the migration is not forced.
+
+That option: a decision binds **exactly one project phase**, and that binding is
+structured, server-validated evidence — it is the real answer to "what does this
+release". SCOPE therefore renders `Bound to <phase> — the sole phase this decision
+releases.` as the scope of record, with the author's free-text note shown beneath
+it, verbatim, **only when one was written**.
+
+The copy asserts singularity in **one direction only, because only one direction is
+true**. The server enforces that this decision binds one phase; it does not follow
+that the phase has one decision — supersession chains stack editions against the
+same phase, and parallel gates may too. An earlier draft of this line read "No other
+phase is bound to this decision", which reads as mutual exclusivity and would have
+been false the moment a second gate opened on the same phase. `gateScope()` in
+`project-approval-model.ts` returns the two separately so the structural claim is
+never confused with the author's prose, and the composer's field is relabelled from
+"Context (optional, not an approval response)" to **"Scope note"** with the
+placeholder "What this releases, and what it does not." Nothing is fabricated: when
+no note exists, none is drawn. **The dedicated field remains the right long-term
+answer** and should be minted with the next migration wave that already has to
+restate those RPCs — not on top of an unverified stack for a rendering win.
+
+Three further interpretations, recorded because the mockup is ambiguous:
+
+**(a) The part labels ship in the authoring flow, not in the read-only ceremony.**
+M2's figcap says "the annotations in the left margin are pedagogical, for this deck
+only. They do not ship." The left margin holds both the part name and its italic
+gloss. We read the gloss as unambiguously pedagogical and cut it entirely. The
+names we split: a `<fieldset>` must have a `<legend>`, so the authoring flow wears
+ARTIFACT/QUESTION/SCOPE/IMPACT/AUTHORITY/CONFIRMATION visibly; the settled-facing
+State A ceremony drops the label column and separates its parts by typography and
+order alone, keeping the names as accessible group labels so the anatomy still
+reaches assistive technology. Both readings of the figcap are defensible; this one
+makes the deck's two sentences simultaneously true.
+
+**(b) AUTHORITY names the lead; the stamp does not.** M2 writes "Decision lead —
+Marta Chen · frozen at publish" in the AUTHORITY part and "Approved · M. Chen ·
+May 12" on the stamp. The contract's restriction is narrower than it first looks:
+"Internal reviewer identities are not exposed to **clients**" protects the studio's
+reviewer set on client surfaces — it says nothing about showing the designer the
+household's own name in the designer portal, which `row.client_name` already
+supplies to LetterheadInstruments on the same page. AUTHORITY therefore names the
+lead on all three gate surfaces (composer, live leaf, superseding request), with a
+role phrase — "the designated project client" — when no name is available. The
+stamp keeps outcome + date only: it is a settlement mark, not a second place to
+re-state authority, and duplicating the name there buys nothing.
+
+**(c) Due date sits under CONFIRMATION.** It is an attribute of the act of putting
+the question in the client's court, not a seventh part; IMPACT stays the three
+signed deltas only.
+
+IMPACT copy now follows M2 rather than the raw cents dump it replaced:
+`formatGateImpact()` renders "+$4,200 · +6 days · lead time unchanged" — signed, in
+dollars, and stating "unchanged" for a zero delta rather than hiding it, because a
+stored zero is evidence. CONFIRMATION's act is renamed "Publish" → **"Publish for
+approval"** per M2; its review-count gate, the completed-phase notice, withdraw,
+and supersede all keep their existing predicates untouched.
+
+D4 holds: the artifact's depth is two flat offset sheets over `--doc-sheet-3` /
+`--doc-sheet-2` / `--doc-paper`, and both new suites assert the rendered markup
+matches no `/shadow/`. Every metadata string in both surfaces sits at or above the
+12px floor (`--type-metadata-min`), so the mockups' 8.5–10.5px miniature sizes do
+not ship.
+
+
+## The Document — handoffs, overdue, the guide, and the Desk key to one gate (WP3 Track B) — 2026-08-11
+
+Four ratified rulings, implemented together because they are one idea read at
+four scales: a gate is a party, a set of terms, a due moment, and one act.
+
+### I116 · The handoff band dissolves; the margin already is the band (ratified R3)
+
+`contextual-handoff-band.tsx` and its test are deleted, and
+`workflow-stage-document-mount.tsx` no longer mounts anything in their place.
+Every row the 00442/00443 projection produces is, by definition, a thing
+waiting on a named party — which is the definition of a margin item — so each
+one now renders in the rail through `margin-handoff-item.tsx`, leading the
+raised items because a thing waiting on someone else outranks the studio's own
+notes.
+
+**The projection is kept whole.** `use-project-contextual-handoffs.ts` is
+untouched; the new item reads it and never re-resolves sender, recipient,
+owner, or provenance for itself. What came off is register, not fact: the
+artifact checksum, the "Exact phase / Source domain" attribution, and the
+`nudgeSent` / `dueReminderSent` booleans no longer appear on a designer-facing
+surface. Stage provenance survives as microtext
+(`Stage 06 · Design Development · FF&E · edition 3`), read from
+`RESIDENTIAL_WORKFLOW_STAGES` — the band's local `STAGE_LABELS` map, which
+disagreed with the canonical titles on all eleven stages (the wave1 review's
+§2.9), dies with the band.
+
+**One act per item, and the four acts keep their names and their 1:1 mutations.**
+`nudge` → `useNudgeSiteRequest`, `approve` → `useApproveSiteRequestItem`,
+`redo` → `useRequestSiteRequestRedo`, `close` → `useCloseSiteRequest`. The
+acts that need their own terms (a nudge note, a redo note, a room for an
+approval) unfold the item and collect them there, so the face of the margin
+still carries exactly one act. A fifth disposition, `open`, carries no mutation
+of its own: it hands publishing and outcome selection to the Stage-2 approval
+ceremony, which owns them (I113).
+
+**The lane reads who must act, not who the row is addressed to.** For an
+approval the lane derives from `expectedResponse`, not `responsibility.recipient`.
+The two disagree on one real state: a draft whose confirmations are incomplete is
+addressed to the client (`recipient = 'client'`, 00442) while the act it waits on
+is the studio's own `confirm_artifact_review`. Reading `recipient` there had the
+margin claim "With Marta" for work Marta cannot do. **The projection's own
+`recipient` for that state is arguably wrong and is NOT changed here** — the
+projection stays byte-identical; this is the reader's override. Correcting it at
+source is a question for Kody.
+
+**An act with nothing listening is not offered.** The `open` disposition
+dispatches a window event the Stage-2 ceremony listens for, and that ceremony
+mounts only when `engagement_kind === 'project'`. A proposal-kind engagement
+carrying a `project_id` would otherwise render a button that silently does
+nothing, so the item withholds the act (keeping the gate's sentence) when the
+ceremony is not mounted.
+
+**The approval lane gained a real nudge.** The projection reports a
+project-approval handoff's `sourceId` as the `client_decisions` row id
+(00442 line 36, `decision.id AS source_id`), so the item's nudge rides
+`useSendDecisionReminder` — the reminder RPC the decision rail already owns —
+rather than inventing one. Before this, an approval handoff had no studio act
+at all except navigation.
+
+**Two mockup divergences, declared.** M3's after-panel prints the elapsed time
+in the need line ("With Marta · Direction approval · 6 days") *and* an "Overdue ·
+6 days" stamp beside it; the item prints it once, in the stamp, because the same
+count twice on one row is a restatement, not a hierarchy. And M3 labels a
+sent/in-progress Site Request "Open" while its guide sentence offers "Nudge" —
+the item says **Nudge** at both scales, because one gate may not wear two verbs
+(see I118's shared-verb rule).
+
+**Metadata sits at the 12px floor.** The item does not reuse `MItemContent`,
+whose kind line is 8px and detail 10.5px; mockup M4's shipped-size note pins
+the portal's 12px metadata floor, and the item carries its own type layers to
+hold it. The rest of the margin's grammar is unchanged, so `MItemContent`'s
+sizes are a **standing divergence, not a decision** — whether the whole margin
+should rise to the floor is a design question and is not answered here.
+
+### I117 · Overdue is one derivation with three renderings (ratified R4)
+
+`overdue-condition.ts` is the only place the overdue fact is computed. It
+imports nothing, exports exactly a derivation and three pure readings of it,
+and stores nothing:
+
+1. **the margin item's terracotta stamp** — `overdueStampLabel` → "Overdue · 6 days";
+2. **the guide's sentence** — `overdueElapsedPhrase`, which changes the
+   sentence's tense from what is pending to how long it has been pending;
+3. **the Desk's order** — which already did what the ruling asks, and needed no
+   code at all.
+
+**Correction of record: the Desk re-sort was written, proved inert, and removed.**
+A leading `overdueSortTier` was added to `needSortKey` and then taken out when
+review asked for a test proving an order the old key would not produce. There is
+none: `overdue_decision` is both the only need with `urgent: true` and
+`NEED_RANK` 0, so an overdue folio already sorted above every other folio, and
+ties already broke on `earliest_overdue_due`. Worse, the new tier was *harmful* —
+`deriveOverdue` answers NOT_OVERDUE when `earliest_overdue_due` is null, which
+demoted a genuinely-needed folio below every non-gate one. The tier is gone and
+`desk-overdue-order.test.ts` pins the pre-existing ordering, including that
+null-due case. `DeskFolder.overdue` remains, read by the Studio Pulse sentence.
+
+Position is the whole of the pressure. The folio gains no count, no colour
+change, and no second act; the module has no surface through which a badge, a
+banner, a push, an auto-approval, or a modal could be added, and a test asserts
+its export list to keep it that way.
+
+**The server can withhold the condition but never assert it early.**
+`deriveOverdue(dueAt, now, serverOverdue)` takes the projection's own answer
+where one exists, so a stale client clock cannot invent an overdue item; a
+`false` from the server wins, and a `true` on a date that has not arrived does
+not. Bare `DATE` values parse as local midnight, or the elapsed count slips a
+day in negative-offset zones.
+
+### I118 · The guide's act derives from the nearest open gate (ratified R5)
+
+`deriveDocumentGuide` gains one input, `gate`, and one branch. Precedence is
+now: availability → paused → **gate** → operational need → proposal lifecycle →
+stage copy. An open gate IS the project's current state, so nothing else gets
+to decide what the strip says; a paused project still outranks it, because a
+gate cannot resume lifecycle work.
+
+The branch is keyed by `canonical_stage_key`: the eyebrow is the canonical
+stage title, the headline is `gateSentence`, and the act is `gateActionLabel`
+("Nudge Marta", "Publish the Direction approval"). Three WP1 contracts are
+held, not bent:
+
+- **`withInputs()` never overrides a branch's action** (I111 §1). The gate
+  branch resolves to `actionable` or `waiting`, never `needs_input`, so the
+  input-derived act cannot displace it; the top input still rides along.
+- **The act names a mounted control** (I110). `handoffAnchorId(sourceId)` is
+  published by the margin item's own act button, and the guide's destination is
+  an ordinary `anchor` — no new destination variant, and no invented surface.
+- **The guide never activates what it names.** The destination omits
+  `activate`, so the gate act scrolls and focuses but cannot toggle an item the
+  designer already opened. This is the same hazard I111 §6 closed for
+  `pulse_due`, avoided here by not arming it at all.
+
+**One gate, one verb.** `gateActVerb` is the single source of the act's word:
+the margin prints the verb alone ("Nudge"), the guide prints the verb plus its
+object ("Nudge Marta"). Before this they were written twice and drifted — the
+margin said "Open" on a Site Request whose guide said "Nudge Hale Joinery". A
+test asserts the guide's label begins with the margin's verb for every state.
+
+**Correction to the sentinel claim.** An earlier draft of this entry said
+`undefined` and `null` "keep meaning different things, per I111 §4". In the code
+they do not: `if (gate)` sends both to the same fall-through. The distinction
+I111 §4 draws is real for `operationalNeed`, where `null` suppresses a *local
+re-derivation* the row could otherwise produce. A gate has no local derivation to
+suppress — the row alone can say nothing about a gate — so "not yet answered" and
+"answered, none open" have the same consequence here, and the input keeps both
+spellings only to read consistently beside `operationalNeed`.
+
+**The act is reachable at the drawer breakpoint, and not below it.** Between
+1180px and 1440px the margin is a closed, `inert` sheet, so focusing an anchor
+inside it was a silent no-op; `jumpToSection` now raises the margin
+(`OPEN_MARGIN_EVENT`) before the focus frame. **Below 1180px it remains
+unreachable**: the rail is `display:none` there and the mobile handoff chips
+(I116) are summary-only, carrying no act. `document-pulse-control-desktop` has
+the identical pre-existing defect at both breakpoints and is untouched. Mobile
+handoff acts are unbuilt work, not a regression.
+
+### I119 · The Desk's gate keying is NOT delivered; Studio Pulse gets one sentence (ratified R6)
+
+**R6 is delivered in part, and the shortfall is the point of this entry.**
+
+**Folio need lines are NOT gate-keyed.** A first implementation printed a
+gate sentence on the folio — "Marta's Direction approval has waited 6 days." —
+composed from `client_name`, `active_section`, and the elapsed days. Review
+found it to be fiction dressed as precision: the underlying fact is
+`overdue_decision_count`, a **count of overdue decisions**, and the sentence
+invented a possessive party, a singular artifact named after the document's
+section, and an implied single gate. A folio with three overdue decisions in the
+Proposal section would have read "Marta's proposal has waited 9 days." It has
+been reverted in full. **Folios print `need.text` unchanged**, which is
+truthful: "1 decision overdue — oldest due May 6".
+
+**What blocks the real thing is data, not presentation.** `document_state`
+carries no `canonical_stage_key` (00434 added it to `project_phases` /
+`proposal_phases` only), and `get_project_contextual_handoffs` is per-project, so
+a Desk-wide read has no gate to key to. Delivering R6's need lines needs a
+**Desk-scoped gate projection** — a question for Kody, not something the
+presentation layer can synthesise. `deskGateSentence` and its `SECTION_TERMS`
+map are deleted rather than left dormant.
+
+**Studio Pulse gains exactly one aggregate sentence** — "1 decision is overdue,
+and 2 pieces are on the way." — rendered once, carrying no act and no badge. Two
+corrections from review: it says **"on the way"**, the Desk's own word for an
+in-flight piece (`deriveMotion`), where a draft said "in production" and claimed
+a fabrication state the read model never reports; and it **drops the folio
+count**, which the "Needs your hand" eyebrow already states.
+
+The disclosure's existing count-and-preview line is left alone, and its four
+populations keep their own hooks, flags, errors, and deep links. **The deck says
+the sentence "replaces the pulse panel"; this implements it as an addition**,
+because dismantling four independently-owned populations is a larger change than
+the ruling's text authorizes. Whether the panel beneath the sentence should go is
+a design question that goes back to the session.
+
+The 2–4 folio ceiling is untouched: `partitionDesk` still returns every folder,
+and the preview limit remains the renderer's decision.
+
+## The client's side of the gate — 2026-08-11
+
+### I120 · Ruling VIII's ceremony lands in `project-approval-review.tsx` (ratified R8)
+
+WP3 Track D implements Ruling VIII / mockup M8 (`the-workflow-alignment-
+proposal.html`, folio 13) in the client portal only:
+`apps/client-portal/src/components/approvals/project-approval-review.tsx`. The
+three outcomes and their copy (`approved` / `changes_requested` /
+`needs_discussion`) are unchanged, verbatim, per the ruling's own instruction
+to "keep Codex's three outcomes and their copy verbatim, add the ceremony,
+import none of the pressure."
+
+The six-part gate anatomy (Ruling II, folio 08 — Artifact, Question, Scope,
+Impact, Authority, Confirmation) now renders explicitly at client scale, each
+part labeled and wrapped in its own `data-testid`. Five parts already existed
+in `ProjectApprovalReview` field-for-field; **Scope renders `context`** — the
+free-text field the designer's side also uses "by convention" per the same
+ruling, since no dedicated scope field exists in the schema. Artifact carries
+the new dynamic immutability sentence, "You are approving edition {N}, exactly
+as shown." Authority reuses the pre-existing "designated decision lead
+review" confirm step (unchanged behavior) under its anatomy label.
+Confirmation is the existing outcomes fieldset and submit act, restyled onto
+`ScoredAction` (`@/components/making/scored-action`, the client portal's own
+port of the Scored Ink grammar — no `@patina/*` package owns it yet) so the
+final act scores on the inner label span, never the 44px hit-box, per repo
+convention.
+
+Two new client-scale devices, both new local components
+(`apps/client-portal/src/components/approvals/gate-stamp.tsx`, `GateStamp`),
+follow the existing inspection-tag stamp grammar already shipped in
+`making/tracking-row.tsx`'s `StatusStamp` — doubled border, ink-only color, no
+shadow: a **seal** that settles in on `outcome === 'approved'` (a short
+scale/opacity keyframe, guarded under `prefers-reduced-motion` the same way
+`patina-strata-wash` already is in `globals.css`), and a **HELD FOR
+DISCUSSION** stamp on `outcome === 'needs_discussion'`, drawn as loud as the
+seal per M8's own note that a holding gate must never read as a soft
+approval. Its wording matches the stamp exactly — "Recorded outcome: Held for
+discussion," not the outcome picker's "Needs discussion" label — corrected on
+review (F11): a sighted reader and a screen-reader announcement must not
+disagree on the word for the same held gate, even though "Needs discussion"
+stays the outcome picker's own verbatim copy.
+
+**Corrected on review (F3):** the Impact section's Cost/Schedule/Lead-time
+`dt` labels shipped on `type-meta-small` (≈10px), under this ceremony's own
+≥12px metadata floor — the floor this entry already claimed for Due and the
+checksum. All three now render on `type-meta` (12px), matching every other
+anatomy-part label.
+
+**Removed, per the ruling's explicit instruction, from all four client
+surfaces that read `ProjectApprovalReview.isOverdue`** — not just
+`project-approval-review.tsx`: the shipped client-side terracotta "Overdue"
+indicator. Adversarial review (F2) caught that the first pass only fixed the
+review page; the other three surfaces derive attention/status text from the
+same field and all carried the same device:
+`lib/client-attention.ts:67`'s `projectApprovalAttentionLabel` (the
+`if (approval.isOverdue) return 'Overdue'` branch is gone; overdue and
+on-time now both fall through to `'Response required'`),
+`components/approvals/project-approval-summary.tsx:44-47` (the
+`" · Overdue"` suffix on the status line), and `components/making/
+the-making.tsx`'s `ProjectApprovalGate` (:298) and `DeferredProjectApprovals`
+(:365) (` · Overdue` suffixes on the gate line and the deferred-work list
+item). Overdue is the studio's condition, computed and rendered only on the
+three studio surfaces of folio 10 — a client who finds a paper counting days
+against them is a client who stops opening the paper. `isOverdue` stays on
+the `ProjectApprovalReview` type (unchanged; this is a UI-only ruling) but no
+client surface reads it toward client-facing copy anymore. The legacy
+`ClientDecision` surfaces (`app/decisions/page.tsx`'s "Overdue (N)",
+`decision-card-client.tsx`) are a different, older system and were left
+untouched — Kody is being looped in on those separately.
+
+**Mockup ambiguities interpreted, not ruled:**
+- M8's state A omits the due date and checksum entirely for visual clarity.
+  Kept both — checksum is integrity evidence and the due date is exactly what
+  should remain once "Overdue" is gone (a plain date, no elapsed-time
+  judgment).
+- M8's static plate shows a single "Approve" act beneath the outcomes list.
+  The live surface keeps the generic "Submit response" label regardless of
+  which outcome is selected — renaming it to "Approve" would misdescribe the
+  act when Changes requested or Needs discussion is chosen.
+
+**Corrected on review (F5):** the first pass approximated the mockup's gold
+hold-border with the existing `--color-clay` token — clay is the app's
+primary CTA accent, the wrong read for a stamp that means "nothing is
+released." `--color-gold: #E8C547` (the mockup's own `--gold` value, exact)
+is now added to `client-portal/globals.css`, scoped to this one caller, with
+the hold stamp's text set to `--color-charcoal` — matching the mockup's
+`.s-hold{border-color:var(--gold);color:var(--char)}` precisely. The seal
+stays `--color-mocha` border and text, matching `.s-seal` precisely.
+
+Ruling IX (the co-approver) is unaffected — it ships in schema only
+(`requiredCoapproverId`, always `null`) and this change does not render it.
+**R9 verification, precise claim:** a repo-wide grep for
+`co_approver`/`coApprover` (migrations, tests, docs/ADRs, generated
+`database.types.ts`, `@patina/supabase` types, and every app) found exactly
+one non-schema, non-test consumer —
+`apps/designer-portal/src/components/document/approvals/project-approval-
+document.tsx:131`, which reads `authority.requiredCoapproverId === null` as
+one term of a boolean gate (`canRequestSignOff`). It renders no co-approver
+identity, count, or state — the value only steers whether a sign-off act is
+offered. No surface, in this repo, renders the co-approver's identity or
+status to a screen. Findings reported to the dispatching session; nothing
+fixed under this ticket (designer-portal is out of scope for WP3 Track D).
+
+*Entries add: I114–I120 · last id = I120*
+
