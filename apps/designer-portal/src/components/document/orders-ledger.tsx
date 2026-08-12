@@ -30,7 +30,7 @@ import {
 } from '@patina/types';
 import { clientVendorEmailHint } from '@/components/portal/procurement/po-send-actions';
 import {
-  deriveProcurementLifecycle,
+  derivePurchaseOrderLifecycle,
   procurementExpected,
 } from '@/lib/document/procurement-lifecycle';
 import { Stamp } from './stamp';
@@ -169,6 +169,28 @@ export function OrdersLedger({
     () => (orders ?? []).filter((o) => o.status !== 'cancelled'),
     [orders],
   );
+
+  // R7: one derivation per order, computed once per fetch rather than on every
+  // render of every row.
+  const lifecycleByPo = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        live: ReturnType<typeof liveStep>;
+        gate: ReturnType<typeof nextGate>;
+        expected: string | null;
+      }
+    >();
+    for (const o of orders ?? []) {
+      const reading = derivePurchaseOrderLifecycle(o);
+      map.set(o.id, {
+        live: liveStep(reading),
+        gate: nextGate(reading),
+        expected: procurementExpected(o),
+      });
+    }
+    return map;
+  }, [orders]);
 
   // Lens options derive from the unlensed book — the lens narrows the page,
   // never the vocabulary.
@@ -432,15 +454,18 @@ export function OrdersLedger({
                   // R7: the same grammar at ledger density — the row's stamp
                   // is the lifecycle POSITION, not the status word "Ordered"
                   // hid everything behind. The fifteen steps never enumerate
-                  // here; the book shows where the line stands and what stops
-                  // it next.
-                  const lifecycle = deriveProcurementLifecycle({
-                    status: po.status,
-                    purchase_order: po,
-                  });
-                  const live = liveStep(lifecycle);
-                  const gate = nextGate(lifecycle);
-                  const expected = procurementExpected(po);
+                  // here; the book shows where the order stands and what stops
+                  // it next. A draft or cancelled order takes no position, so
+                  // the row keeps saying "draft" / "cancelled" out loud.
+                  const {
+                    live: position,
+                    gate,
+                    expected,
+                  } = lifecycleByPo.get(po.id) ?? {
+                    live: null,
+                    gate: null,
+                    expected: null,
+                  };
                   // PRC-07 (R84): the ack act lives where the row narrates
                   // "no ack" — sent, unacknowledged, non-catalog, not
                   // cancelled (the portal popover's gate, vendor-section-card).
@@ -485,12 +510,13 @@ export function OrdersLedger({
                           <div className="ml-auto flex min-h-11 shrink-0 items-center gap-3">
                             <Stamp
                               label={
-                                live
-                                  ? procurementStepLabel(live.key)
+                                position
+                                  ? procurementStepLabel(position.key)
                                   : po.status.replace(/_/g, ' ')
                               }
                               color={stamp.color}
                               ink={stamp.ink}
+                              size="sm"
                             />
                             {/* Next gate — name, and the term that holds it. */}
                             <span

@@ -28,25 +28,11 @@ import {
   type ProcurementStepReading,
 } from '@patina/types';
 import { fmtDay } from '@/lib/document/format';
+import { Stamp } from './stamp';
 
-/** M7's stamp grammar at the shipping type size: 1.5px border, −1.5° rotation. */
-function TrailStamp({
-  label,
-  color,
-  ink,
-}: {
-  label: string;
-  color: string;
-  ink?: string;
-}) {
-  return (
-    <span
-      className="inline-block -rotate-[1.5deg] whitespace-nowrap rounded-[3px] border-[1.5px] bg-transparent px-[9px] py-[3px] font-mono text-[12px] font-semibold uppercase tracking-[0.08em]"
-      style={{ borderColor: color, color: ink ?? color }}
-    >
-      {label}
-    </span>
-  );
+/** M7's stamp grammar at the 12px floor — the shared mark, one size up. */
+function TrailStamp(props: { label: string; color: string; ink?: string }) {
+  return <Stamp {...props} size="sm" />;
 }
 
 function StepRow({
@@ -118,7 +104,12 @@ function GateBar({
   gate: ProcurementGateReading;
   label: string;
 }) {
-  const reached = gate.state !== 'unreached';
+  // The oak stop bar marks a gate the work is standing at or was sealed by.
+  // A gate the work has already gone past unsealed gets NO stop: finished work
+  // must never be drawn as blocked, and an unrecorded seal must never be drawn
+  // as given. It stays on the page, quiet, as the honest report that nothing
+  // was written down here.
+  const reached = gate.state === 'settled' || gate.state === 'open';
   return (
     <li
       data-trail-gate={gate.key}
@@ -156,7 +147,7 @@ function GateBar({
             {gate.qualifier}
           </span>
         )}
-        {gate.state === 'no-record' && (
+        {(gate.state === 'no-record' || gate.state === 'passed-unsealed') && (
           <span className="font-heading text-[12px] italic text-[var(--color-quiet-ink)]">
             no record
           </span>
