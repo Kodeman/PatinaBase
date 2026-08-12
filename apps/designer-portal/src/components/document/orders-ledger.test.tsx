@@ -361,11 +361,21 @@ describe('OrdersLedger · lifecycle columns (R7)', () => {
     expect(screen.queryByText('Cleared to produce')).not.toBeInTheDocument();
   });
 
-  it('still says "cancelled" for a cancelled order', () => {
-    // the register filters cancelled rows out of the ledger, so this asserts
-    // the derivation never hands the row a lifecycle word instead
-    bookOf([po({ status: 'cancelled', sent_at: '2026-05-03' })]);
+  // The ledger has always filtered cancelled orders out of the register
+  // (pre-existing, unrelated to R7), so there is no row to carry a word at
+  // all. The derivation-level guarantee — that a cancelled order takes no
+  // trail position — is asserted in procurement-lifecycle.test.ts.
+  it('keeps cancelled orders out of the register entirely, lifecycle or not', () => {
+    const { container } = bookOf([
+      po({
+        status: 'cancelled',
+        sent_at: '2026-05-03',
+        acknowledged_at: '2026-05-06',
+      }),
+    ]);
+    expect(container.querySelectorAll('[data-orders-po-row]')).toHaveLength(0);
     expect(screen.queryByText('Cleared to produce')).not.toBeInTheDocument();
+    expect(screen.queryByText('Released to maker')).not.toBeInTheDocument();
   });
 
   it('reads the lifecycle position for a live order', () => {

@@ -102,6 +102,8 @@ describe('ProcurementTrail (M7)', () => {
     expect(passed).toHaveTextContent('no record');
   });
 
+  // The qualifier names the term that ACTUALLY holds the gate open — here the
+  // uncleared terms, not the (also missing) acknowledgment.
   it('names the term holding an open gate', () => {
     trailFor({
       ...base,
@@ -111,7 +113,10 @@ describe('ProcurementTrail (M7)', () => {
         payments: [{ kind: 'deposit', state: 'due' }],
       },
     });
-    expect(screen.getByText('awaiting acknowledgment')).toBeInTheDocument();
+    expect(screen.getByText('terms outstanding')).toBeInTheDocument();
+    expect(
+      screen.queryByText('awaiting acknowledgment'),
+    ).not.toBeInTheDocument();
   });
 
   // F7 / folio 14: the gate may report outstanding terms, never money.

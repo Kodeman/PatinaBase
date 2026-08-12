@@ -128,7 +128,7 @@ describe('Rail B · step evidence (deriveProcurementLifecycle)', () => {
     });
     expect(stateOf(r, 'cleared_to_produce')).toBe('live');
     expect(evidenceOf(r, 'cleared_to_produce')).toEqual({
-      at: '2026-05-02',
+      at: '',
       source: 'po_payments.kind=deposit state=paid',
     });
   });
@@ -177,16 +177,39 @@ describe('Rail B · step evidence (deriveProcurementLifecycle)', () => {
     expect(liveStep(r)).toBeNull();
   });
 
-  it('01 NEVER settles on a cancelled PO, even with every deposit paid', () => {
+  // R2: cancellation takes the WHOLE line off the trail, not just step 01.
+  it('evidences NOTHING on a cancelled PO — not step 01, not the send, not delivery', () => {
     const r = deriveProcurementLifecycle({
       ...base,
+      status: 'delivered',
       purchase_order: {
         status: 'cancelled',
+        sent_at: '2026-05-03',
+        acknowledged_at: '2026-05-06',
+        delivered_date: '2026-06-14',
         payments: [{ kind: 'deposit', state: 'paid', paid_date: '2026-05-02' }],
       },
     });
-    expect(stateOf(r, 'cleared_to_produce')).toBe('future');
+    expect(r.steps.every((s) => s.state === 'future')).toBe(true);
     expect(liveStep(r)).toBeNull();
+    expect(nextGate(r)?.key).toBe('complete_to_produce');
+  });
+
+  // R5: the clearing's only date is a payment date, and folio 14 forbids
+  // payment facts on the glass while №7 is open.
+  it('01 settles UNDATED — a paid_date is a payment fact and must not render', () => {
+    const r = deriveProcurementLifecycle({
+      ...base,
+      purchase_order: {
+        status: 'confirmed',
+        payments: [{ kind: 'deposit', state: 'paid', paid_date: '2026-05-02' }],
+      },
+    });
+    expect(evidenceOf(r, 'cleared_to_produce')?.at).toBe('');
+    // the internal audit trail may still name the table
+    expect(evidenceOf(r, 'cleared_to_produce')?.source).toContain(
+      'po_payments',
+    );
   });
 
   it('02 settles on purchase_orders.sent_at', () => {
@@ -693,7 +716,7 @@ describe('gate G2 · Received and dispositioned', () => {
     expect(gateOf(r, 'received_and_dispositioned').state).toBe('settled');
   });
 
-  it('names the awaited inspection only when nothing was logged at all', () => {
+  it('names the awaited inspection while the work is STANDING at the gate', () => {
     const r = deriveProcurementLifecycle({
       ...base,
       status: 'delivered',
@@ -702,6 +725,38 @@ describe('gate G2 · Received and dispositioned', () => {
     expect(gateOf(r, 'received_and_dispositioned')).toMatchObject({
       state: 'open',
       qualifier: 'awaiting inspection',
+    });
+  });
+
+  // R1: an inspection nobody logged is a MISSING RECORD, not a live condition.
+  // By this contract's own passed-unsealed argument it must go quiet once the
+  // work has moved on — a credenza installed months ago is not "blocked".
+  it('goes QUIET once the work moved on and no inspection was ever logged', () => {
+    const r = deriveProcurementLifecycle({
+      ...base,
+      status: 'installed',
+      last_status_change_at: '2026-07-01',
+      received_quantity: null,
+      item_claims: [],
+    });
+    expect(liveStep(r)?.key).toBe('installed');
+    expect(gateOf(r, 'received_and_dispositioned').state).toBe(
+      'passed-unsealed',
+    );
+    expect(gateOf(r, 'received_and_dispositioned').qualifier).toBeUndefined();
+  });
+
+  // …but a live condition still stops the work, wherever the trail stands.
+  it('stays OPEN on an installed line whose claim is still unresolved', () => {
+    const r = deriveProcurementLifecycle({
+      ...base,
+      status: 'installed',
+      item_claims: [{ state: 'vendor_notified' }],
+      purchase_order: delivered,
+    });
+    expect(gateOf(r, 'received_and_dispositioned')).toMatchObject({
+      state: 'open',
+      qualifier: 'open claim',
     });
   });
 });
@@ -797,13 +852,18 @@ describe('derivePurchaseOrderLifecycle (ledger grain)', () => {
     expect(liveStep(r)).toBeNull();
   });
 
-  it('takes NO position on a cancelled order', () => {
+  // R2: a withdrawn order is off-trail. Its send date and acknowledgment are
+  // history, not a position — the trail reports nothing at all.
+  it('takes NO position on a cancelled order, whatever it once carried', () => {
     const r = derivePurchaseOrderLifecycle({
       status: 'cancelled',
       sent_at: '2026-05-03',
-      payments: [],
+      acknowledged_at: '2026-05-06',
+      delivered_date: '2026-06-14',
+      payments: [{ kind: 'deposit', state: 'paid', paid_date: '2026-05-02' }],
     });
-    expect(liveStep(r)?.key).toBe('released_to_maker');
+    expect(liveStep(r)).toBeNull();
+    expect(r.steps.every((s) => s.state === 'future')).toBe(true);
   });
 
   it('reads the position for a live order', () => {
