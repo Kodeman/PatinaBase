@@ -367,10 +367,13 @@ export function deriveProcurementLifecycle(
  *
  * **Gate G2 cannot settle at this grain, by construction.** Disposition is
  * item-level — counts and claims hang off FF&E lines, and one PO can carry
- * twenty of them. So G2 is declared record-less here: it reads `unreached`
- * while the order is still in flight (which is what lets the book name it as
- * the next gate, per M7), and goes quiet once delivery is past rather than
- * inventing an "awaiting inspection" the register cannot see.
+ * twenty of them. So G2 never seals here and never offers a qualifier, because
+ * the register has nothing to name: it reads `unreached` while the order is
+ * still in flight (which is what lets the book name it as the next gate, per
+ * M7), and from delivery onward it reads `open` indefinitely rather than going
+ * quiet — honestly, since receipt IS the next thing that happens to these
+ * goods. Disposition becomes readable here only if line-grain data reaches the
+ * register.
  */
 export function derivePurchaseOrderLifecycle(
   po: ProcurementLifecyclePurchaseOrder,
