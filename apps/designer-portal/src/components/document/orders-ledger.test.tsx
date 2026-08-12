@@ -318,3 +318,112 @@ describe('OrdersLedger quiet register', () => {
     ).not.toBeInTheDocument();
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════
+// R7 — the same grammar at ledger density
+// ══════════════════════════════════════════════════════════════════════════
+
+describe('OrdersLedger · lifecycle columns (R7)', () => {
+  beforeEach(() => {
+    mockPush.mockReset();
+    mockUseVendors.mockReturnValue({ data: { data: VENDORS } });
+    mockUseUpdatePurchaseOrderETA.mockReturnValue({
+      mutateAsync: mockMutateEta,
+    });
+  });
+
+  function bookOf(orders: unknown[]) {
+    mockUsePurchaseOrders.mockReturnValue({ data: orders, isLoading: false });
+    return render(<OrdersLedger onClose={jest.fn()} />);
+  }
+
+  const po = (over: Record<string, unknown>) => ({
+    id: 'po-x',
+    po_number: 'PO 9001',
+    vendor_po_number: 'V-9001',
+    vendor_id: 'vendor-1',
+    project_id: 'project-1',
+    project: { id: 'project-1', name: 'Oak House' },
+    total_cents: 1000,
+    status: 'draft',
+    sent_at: null,
+    acknowledged_at: null,
+    confirmed_eta: null,
+    is_patina_catalog: false,
+    payments: [],
+    ...over,
+  });
+
+  // F1 — a draft is a document being written, not a position on the trail.
+  it('still says "draft" — the vacuous-deposit rule never releases a draft', () => {
+    bookOf([po({ status: 'draft' })]);
+    expect(screen.getByText('draft')).toBeInTheDocument();
+    expect(screen.queryByText('Cleared to produce')).not.toBeInTheDocument();
+  });
+
+  it('still says "cancelled" for a cancelled order', () => {
+    // the register filters cancelled rows out of the ledger, so this asserts
+    // the derivation never hands the row a lifecycle word instead
+    bookOf([po({ status: 'cancelled', sent_at: '2026-05-03' })]);
+    expect(screen.queryByText('Cleared to produce')).not.toBeInTheDocument();
+  });
+
+  it('reads the lifecycle position for a live order', () => {
+    bookOf([po({ status: 'in_production', sent_at: '2026-05-03' })]);
+    expect(screen.getByText('In production')).toBeInTheDocument();
+    expect(screen.queryByText('in production')).not.toBeInTheDocument();
+  });
+
+  // F2 — a gate behind the work is not "next".
+  it('never names a gate the work has already passed', () => {
+    const { container } = bookOf([
+      po({
+        status: 'delivered',
+        sent_at: '2026-05-03',
+        delivered_date: '2026-06-14',
+      }),
+    ]);
+    const gate = container.querySelector('[data-orders-next-gate]');
+    expect(gate).not.toHaveTextContent('Complete to produce');
+  });
+
+  // F2/F10 — a gate that can never seal is never a destination.
+  it('never names Warehouse + site ready', () => {
+    for (const status of ['in_production', 'shipped', 'delivered']) {
+      const { container, unmount } = bookOf([
+        po({ status, sent_at: '2026-05-03', delivered_date: '2026-06-14' }),
+      ]);
+      expect(
+        container.querySelector('[data-orders-next-gate]'),
+      ).not.toHaveTextContent('Warehouse + site ready');
+      unmount();
+    }
+  });
+
+  // F5 — Expected is a shipment expectation. A money date never renders here.
+  it('shows the confirmed ETA as Expected', () => {
+    const { container } = bookOf([
+      po({ status: 'shipped', confirmed_eta: '2026-08-22' }),
+    ]);
+    expect(container.querySelector('[data-orders-expected]')).toHaveTextContent(
+      '~Aug 22',
+    );
+  });
+
+  it('NEVER renders a payment due date in Expected, and keeps the R18 unscheduled mark', () => {
+    const { container } = bookOf([
+      po({
+        status: 'shipped',
+        confirmed_eta: null,
+        payments: [
+          { kind: 'balance', state: 'due', due_date: '2026-07-01' },
+          { kind: 'deposit', state: 'pending', due_date: '2026-06-01' },
+        ],
+      }),
+    ]);
+    const expected = container.querySelector('[data-orders-expected]');
+    expect(expected).toHaveTextContent('NO DATE');
+    expect(expected).toHaveAttribute('data-orders-unscheduled');
+    expect(container.textContent).not.toMatch(/Jul 1|Jun 1/);
+  });
+});

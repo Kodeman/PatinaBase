@@ -72,7 +72,10 @@ describe('ProcurementTrail (M7)', () => {
     const c = trailFor({
       ...base,
       status: 'production',
-      purchase_order: { status: 'in_production' },
+      purchase_order: {
+        status: 'in_production',
+        payments: [{ kind: 'deposit', state: 'due' }],
+      },
     });
     const reached = c.querySelector('[data-trail-gate="complete_to_produce"]');
     expect(reached).toHaveAttribute('data-trail-state', 'open');
@@ -85,13 +88,47 @@ describe('ProcurementTrail (M7)', () => {
     expect(unreached?.className).toContain('border-[var(--color-pearl)]');
   });
 
+  // F4: finished work must never be drawn as stopped.
+  it('gives a passed-unsealed gate NO stop bar and no qualifier — only "no record"', () => {
+    const c = trailFor({
+      ...base,
+      status: 'installed',
+      purchase_order: { status: 'delivered', payments: [] },
+    });
+    const passed = c.querySelector('[data-trail-gate="complete_to_produce"]');
+    expect(passed).toHaveAttribute('data-trail-state', 'passed-unsealed');
+    expect(passed?.className).not.toContain('border-[var(--color-aged-oak)]');
+    expect(passed?.className).toContain('border-[var(--color-pearl)]');
+    expect(passed).toHaveTextContent('no record');
+  });
+
   it('names the term holding an open gate', () => {
     trailFor({
       ...base,
       status: 'production',
-      purchase_order: { status: 'in_production', payments: [] },
+      purchase_order: {
+        status: 'in_production',
+        payments: [{ kind: 'deposit', state: 'due' }],
+      },
     });
     expect(screen.getByText('awaiting acknowledgment')).toBeInTheDocument();
+  });
+
+  // F7 / folio 14: the gate may report outstanding terms, never money.
+  it('never renders funds language on an outstanding gate', () => {
+    const c = trailFor({
+      ...base,
+      status: 'production',
+      purchase_order: {
+        status: 'in_production',
+        acknowledged_at: '2026-05-06',
+        payments: [{ kind: 'deposit', state: 'due', due_date: '2026-05-01' }],
+      },
+    });
+    expect(c).toHaveTextContent('terms outstanding');
+    expect(c.textContent).not.toMatch(
+      /deposit|balance|payment|paid|owed|funds|\$/i,
+    );
   });
 
   // Charter constraints — D4 and the 12px metadata floor (I114–I120).

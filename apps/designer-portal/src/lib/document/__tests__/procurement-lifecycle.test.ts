@@ -18,6 +18,7 @@ import {
 } from '@patina/types';
 import {
   deriveProcurementLifecycle,
+  derivePurchaseOrderLifecycle,
   procurementExpected,
   type ProcurementLifecycleInput,
 } from '../procurement-lifecycle';
@@ -167,6 +168,27 @@ describe('Rail B · step evidence (deriveProcurementLifecycle)', () => {
     ).toBe('future');
   });
 
+  it('01 NEVER settles on a draft PO — a vacuous deposit cannot release a draft', () => {
+    const r = deriveProcurementLifecycle({
+      ...base,
+      purchase_order: { status: 'draft', payments: [] },
+    });
+    expect(stateOf(r, 'cleared_to_produce')).toBe('future');
+    expect(liveStep(r)).toBeNull();
+  });
+
+  it('01 NEVER settles on a cancelled PO, even with every deposit paid', () => {
+    const r = deriveProcurementLifecycle({
+      ...base,
+      purchase_order: {
+        status: 'cancelled',
+        payments: [{ kind: 'deposit', state: 'paid', paid_date: '2026-05-02' }],
+      },
+    });
+    expect(stateOf(r, 'cleared_to_produce')).toBe('future');
+    expect(liveStep(r)).toBeNull();
+  });
+
   it('02 settles on purchase_orders.sent_at', () => {
     const r = deriveProcurementLifecycle({
       ...base,
@@ -210,25 +232,42 @@ describe('Rail B · step evidence (deriveProcurementLifecycle)', () => {
     expect(stateOf(r, 'in_production')).toBe('live');
   });
 
-  it('08 settles on status=shipped and carries confirmed_eta as its date', () => {
+  it('08 settles UNDATED — confirmed_eta is an arrival guess, not a departure', () => {
     const r = deriveProcurementLifecycle({
       ...base,
       status: 'shipped',
       purchase_order: { status: 'shipped', confirmed_eta: '2026-06-11' },
     });
     expect(evidenceOf(r, 'in_transit')).toEqual({
-      at: '2026-06-11',
-      source: 'purchase_orders.status=shipped + confirmed_eta',
+      at: '',
+      source: 'purchase_orders.status=shipped',
     });
   });
 
-  it('08 names a bare shipped source when no ETA was ever confirmed', () => {
+  it('08 names the item machine when that is what fired', () => {
+    const r = deriveProcurementLifecycle({ ...base, status: 'shipped' });
+    expect(evidenceOf(r, 'in_transit')?.source).toBe(
+      'project_ffe_items.status=shipped',
+    );
+  });
+
+  it('05/06 name the item machine when the PO was not the fact', () => {
+    const r = deriveProcurementLifecycle({ ...base, status: 'production' });
+    expect(evidenceOf(r, 'in_production')?.source).toBe(
+      'project_ffe_items.status=production',
+    );
+    expect(evidenceOf(r, 'released')?.source).toBe(
+      'project_ffe_items.status=production',
+    );
+  });
+
+  it('09 names purchase_orders.status when only the PO status delivered', () => {
     const r = deriveProcurementLifecycle({
       ...base,
-      purchase_order: { status: 'shipped' },
+      purchase_order: { status: 'delivered' },
     });
-    expect(evidenceOf(r, 'in_transit')?.source).toBe(
-      'purchase_orders.status=shipped',
+    expect(evidenceOf(r, 'received_inspect')?.source).toBe(
+      'purchase_orders.status=delivered',
     );
   });
 
@@ -276,6 +315,32 @@ describe('Rail B · step evidence (deriveProcurementLifecycle)', () => {
       at: '2026-06-16',
       source: 'damage_claims.ffe_item_id',
     });
+  });
+
+  // F13: an unresolved issue is the live fact; the earliest one has waited.
+  it('10 dates from the OPEN claim, even when a resolved one came first', () => {
+    const r = deriveProcurementLifecycle({
+      ...base,
+      purchase_order: { delivered_date: '2026-06-14' },
+      item_claims: [
+        { state: 'resolved', created_at: '2026-06-15' },
+        { state: 'drafted', created_at: '2026-06-20' },
+        { state: 'vendor_notified', created_at: '2026-06-18' },
+      ],
+    });
+    expect(evidenceOf(r, 'accepted_or_issue')?.at).toBe('2026-06-18');
+  });
+
+  it('10 falls back to the earliest claim of any state when none are open', () => {
+    const r = deriveProcurementLifecycle({
+      ...base,
+      purchase_order: { delivered_date: '2026-06-14' },
+      item_claims: [
+        { state: 'resolved', created_at: '2026-06-22' },
+        { state: 'resolved', created_at: '2026-06-16' },
+      ],
+    });
+    expect(evidenceOf(r, 'accepted_or_issue')?.at).toBe('2026-06-16');
   });
 
   it('13 settles on the item machine reaching installed', () => {
@@ -442,10 +507,16 @@ describe('exactly one step may be live', () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('gate G1 · Complete to produce', () => {
-  it('settles on acknowledgment plus cleared deposits', () => {
+  // Reaching the gate's position (after step 04) needs step 05+ evidence,
+  // because step 04 itself has no fact on this rail.
+  const atGate = { status: 'production', poStatus: 'in_production' };
+
+  it('settles on acknowledgment plus cleared terms, once the trail reaches it', () => {
     const r = deriveProcurementLifecycle({
       ...base,
+      status: atGate.status,
       purchase_order: {
+        status: atGate.poStatus,
         sent_at: '2026-05-03',
         acknowledged_at: '2026-05-06',
         payments: [{ kind: 'deposit', state: 'paid', paid_date: '2026-05-02' }],
@@ -457,43 +528,90 @@ describe('gate G1 · Complete to produce', () => {
   it('settles VACUOUSLY when the PO carries no deposit rows at all', () => {
     const r = deriveProcurementLifecycle({
       ...base,
-      purchase_order: { acknowledged_at: '2026-05-06', payments: [] },
+      status: atGate.status,
+      purchase_order: {
+        status: atGate.poStatus,
+        acknowledged_at: '2026-05-06',
+        payments: [],
+      },
     });
     expect(gateOf(r, 'complete_to_produce').state).toBe('settled');
   });
 
-  it('names the missing acknowledgment when the trail is standing at it', () => {
+  // F11, both directions: a seal needs the position AND the terms.
+  it('reads UNREACHED when the terms are met but the trail has not arrived', () => {
     const r = deriveProcurementLifecycle({
       ...base,
-      status: 'production',
-      purchase_order: { status: 'in_production', payments: [] },
+      purchase_order: {
+        status: 'confirmed',
+        sent_at: '2026-05-03',
+        acknowledged_at: '2026-05-06',
+        payments: [],
+      },
     });
-    expect(gateOf(r, 'complete_to_produce')).toMatchObject({
-      state: 'open',
-      qualifier: 'awaiting acknowledgment',
-    });
+    expect(liveStep(r)?.key).toBe('acknowledged'); // step 03, before the gate
+    expect(gateOf(r, 'complete_to_produce').state).toBe('unreached');
   });
 
-  it('names an outstanding deposit once acknowledged', () => {
+  it('stays OPEN on uncleared terms — a live condition the order stands on', () => {
     const r = deriveProcurementLifecycle({
       ...base,
-      status: 'production',
+      status: atGate.status,
       purchase_order: {
+        status: atGate.poStatus,
         acknowledged_at: '2026-05-06',
-        status: 'in_production',
         payments: [{ kind: 'deposit', state: 'due' }],
       },
     });
     expect(gateOf(r, 'complete_to_produce')).toMatchObject({
       state: 'open',
-      qualifier: 'deposit outstanding',
+      qualifier: 'terms outstanding',
     });
+  });
+
+  it('names outstanding terms WITHOUT funds language (№7)', () => {
+    const r = deriveProcurementLifecycle({
+      ...base,
+      status: atGate.status,
+      purchase_order: {
+        status: atGate.poStatus,
+        acknowledged_at: '2026-05-06',
+        payments: [{ kind: 'deposit', state: 'due' }],
+      },
+    });
+    expect(gateOf(r, 'complete_to_produce').qualifier).not.toMatch(
+      /deposit|balance|payment|paid|owed|funds/i,
+    );
+  });
+
+  // A missing acknowledgment under work that is plainly under way is an
+  // unrecorded seal, not a blockage — so the gate goes quiet, not open.
+  it('goes QUIET when only the acknowledgment was never recorded', () => {
+    const r = deriveProcurementLifecycle({
+      ...base,
+      status: atGate.status,
+      purchase_order: { status: atGate.poStatus, payments: [] },
+    });
+    expect(gateOf(r, 'complete_to_produce').state).toBe('passed-unsealed');
   });
 
   it('reads UNREACHED, not open, before the trail arrives', () => {
     expect(
       gateOf(deriveProcurementLifecycle(base), 'complete_to_produce').state,
     ).toBe('unreached');
+  });
+
+  // F4: finished work is never drawn as stopped.
+  it('goes QUIET (passed-unsealed) when the work moved on and it was never sealed', () => {
+    const r = deriveProcurementLifecycle({
+      ...base,
+      status: 'installed',
+      purchase_order: { status: 'delivered', payments: [] },
+    });
+    expect(gateOf(r, 'complete_to_produce')).toMatchObject({
+      state: 'passed-unsealed',
+    });
+    expect(gateOf(r, 'complete_to_produce').qualifier).toBeUndefined();
   });
 });
 
@@ -510,7 +628,7 @@ describe('gate G2 · Received and dispositioned', () => {
     expect(gateOf(r, 'received_and_dispositioned').state).toBe('settled');
   });
 
-  it('stays OPEN on a short receipt', () => {
+  it('stays OPEN on a short receipt — a live condition, not a missing seal', () => {
     const r = deriveProcurementLifecycle({
       ...base,
       quantity: 4,
@@ -523,11 +641,11 @@ describe('gate G2 · Received and dispositioned', () => {
     });
   });
 
-  it('stays OPEN while a drafted claim is unresolved', () => {
+  // F3: the claim outranks everything else the gate could say.
+  it('stays OPEN with "open claim" on a delivered line with a drafted claim', () => {
     const r = deriveProcurementLifecycle({
       ...base,
       quantity: 1,
-      received_quantity: 1,
       item_claims: [{ state: 'drafted' }],
       purchase_order: delivered,
     });
@@ -535,6 +653,9 @@ describe('gate G2 · Received and dispositioned', () => {
       state: 'open',
       qualifier: 'open claim',
     });
+    expect(gateOf(r, 'received_and_dispositioned').qualifier).not.toBe(
+      'awaiting inspection',
+    );
   });
 
   it('stays OPEN while a notified claim is unresolved', () => {
@@ -559,10 +680,24 @@ describe('gate G2 · Received and dispositioned', () => {
     expect(gateOf(r, 'received_and_dispositioned').state).toBe('settled');
   });
 
-  it('names the awaited inspection when the goods landed but nothing was logged', () => {
+  // F3: delivered_date proves an inspection happened, whatever its outcome —
+  // received_quantity is written only on a CLEAN one (00184).
+  it('counts a damaged receipt as inspected: delivered_date is the fact, not the count', () => {
     const r = deriveProcurementLifecycle({
       ...base,
+      quantity: 1,
+      received_quantity: null,
+      item_claims: [{ state: 'resolved' }],
       purchase_order: delivered,
+    });
+    expect(gateOf(r, 'received_and_dispositioned').state).toBe('settled');
+  });
+
+  it('names the awaited inspection only when nothing was logged at all', () => {
+    const r = deriveProcurementLifecycle({
+      ...base,
+      status: 'delivered',
+      last_status_change_at: '2026-06-14',
     });
     expect(gateOf(r, 'received_and_dispositioned')).toMatchObject({
       state: 'open',
@@ -590,13 +725,18 @@ describe('gate G3 · Warehouse + site ready', () => {
   });
 });
 
-describe('nextGate', () => {
-  it('is the nearest unsettled gate', () => {
+describe('nextGate — a position ahead, not a to-do list', () => {
+  it('is the nearest unsettled gate ahead of the work', () => {
     const r = deriveProcurementLifecycle({
       ...base,
-      status: 'production',
-      purchase_order: { status: 'in_production', payments: [] },
+      purchase_order: {
+        status: 'confirmed',
+        sent_at: '2026-05-03',
+        acknowledged_at: '2026-05-06',
+        payments: [{ kind: 'deposit', state: 'due' }],
+      },
     });
+    expect(liveStep(r)?.key).toBe('acknowledged'); // step 03
     expect(nextGate(r)?.key).toBe('complete_to_produce');
   });
 
@@ -612,23 +752,108 @@ describe('nextGate', () => {
     });
     expect(nextGate(r)?.key).toBe('received_and_dispositioned');
   });
+
+  // F2: a gate the work has already gone past is not "next", however it ended.
+  it('never names a gate BEHIND the work — a delivered, unacknowledged PO', () => {
+    const r = deriveProcurementLifecycle({
+      ...base,
+      purchase_order: { status: 'delivered', delivered_date: '2026-06-14' },
+    });
+    expect(gateOf(r, 'complete_to_produce').state).not.toBe('settled');
+    expect(nextGate(r)?.key).not.toBe('complete_to_produce');
+  });
+
+  // F10: a gate the rail can never seal is not a destination.
+  it('skips no-record gates, so a post-G2 line has no next gate at all', () => {
+    const r = deriveProcurementLifecycle({
+      ...base,
+      quantity: 1,
+      received_quantity: 1,
+      purchase_order: { delivered_date: '2026-06-14' },
+    });
+    expect(gateOf(r, 'received_and_dispositioned').state).toBe('settled');
+    expect(nextGate(r)).toBeNull();
+  });
+
+  it('never names Warehouse + site ready, which can never be reached', () => {
+    for (const input of [
+      { ...base, status: 'installed' },
+      { ...base, status: 'delivered' },
+    ]) {
+      expect(nextGate(deriveProcurementLifecycle(input))?.key).not.toBe(
+        'warehouse_and_site_ready',
+      );
+    }
+  });
 });
 
 // ════════════════════════════════════════════════════════════════════════════
-// Expected — ledger density, existing data only
+// PO grain — the ledger's entry point
+// ════════════════════════════════════════════════════════════════════════════
+
+describe('derivePurchaseOrderLifecycle (ledger grain)', () => {
+  it('takes NO position on a draft order, so the row keeps saying "draft"', () => {
+    const r = derivePurchaseOrderLifecycle({ status: 'draft', payments: [] });
+    expect(liveStep(r)).toBeNull();
+  });
+
+  it('takes NO position on a cancelled order', () => {
+    const r = derivePurchaseOrderLifecycle({
+      status: 'cancelled',
+      sent_at: '2026-05-03',
+      payments: [],
+    });
+    expect(liveStep(r)?.key).toBe('released_to_maker');
+  });
+
+  it('reads the position for a live order', () => {
+    const r = derivePurchaseOrderLifecycle({
+      status: 'in_production',
+      sent_at: '2026-05-03',
+      payments: [],
+    });
+    expect(liveStep(r)?.key).toBe('in_production');
+  });
+
+  // F12: disposition is item-level; the register cannot see it.
+  it('never claims G2 at PO grain, and never invents an awaiting qualifier', () => {
+    const inFlight = derivePurchaseOrderLifecycle({
+      status: 'in_production',
+      payments: [],
+    });
+    // still ahead of the work, so the book can honestly name it as next
+    expect(gateOf(inFlight, 'received_and_dispositioned').state).toBe(
+      'unreached',
+    );
+    expect(nextGate(inFlight)?.key).toBe('received_and_dispositioned');
+
+    const landed = derivePurchaseOrderLifecycle({
+      status: 'delivered',
+      delivered_date: '2026-06-14',
+      payments: [],
+    });
+    expect(gateOf(landed, 'received_and_dispositioned').state).not.toBe(
+      'settled',
+    );
+    expect(
+      gateOf(landed, 'received_and_dispositioned').qualifier,
+    ).toBeUndefined();
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// Expected — the shipment expectation, and nothing else
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('procurementExpected', () => {
-  it('prefers the confirmed ETA', () => {
-    expect(
-      procurementExpected({
-        confirmed_eta: '2026-08-22',
-        payments: [{ kind: 'balance', state: 'due', due_date: '2026-07-01' }],
-      }),
-    ).toBe('2026-08-22');
+  it('is the confirmed ETA', () => {
+    expect(procurementExpected({ confirmed_eta: '2026-08-22' })).toBe(
+      '2026-08-22',
+    );
   });
 
-  it('falls back to the nearest unpaid payment date', () => {
+  // F5: a money date must never surface in a column about goods (folio 14).
+  it('NEVER falls back to a payment due date', () => {
     expect(
       procurementExpected({
         payments: [
@@ -636,18 +861,16 @@ describe('procurementExpected', () => {
           { kind: 'deposit', state: 'pending', due_date: '2026-07-01' },
         ],
       }),
-    ).toBe('2026-07-01');
+    ).toBeNull();
   });
 
-  it('ignores paid and refunded rows', () => {
+  it('ignores payment rows entirely, even beside a real ETA', () => {
     expect(
       procurementExpected({
-        payments: [
-          { kind: 'deposit', state: 'paid', due_date: '2026-05-01' },
-          { kind: 'balance', state: 'refunded', due_date: '2026-06-01' },
-        ],
+        confirmed_eta: '2026-08-22',
+        payments: [{ kind: 'balance', state: 'due', due_date: '2026-07-01' }],
       }),
-    ).toBeNull();
+    ).toBe('2026-08-22');
   });
 
   it('expects nothing rather than guessing', () => {
@@ -726,6 +949,37 @@ describe('Rail A · line_state chain (deriveFulfillmentLifecycle)', () => {
     const r = deriveFulfillmentLifecycle({ line_state: 'cancelled' });
     expect(r.steps.every((s) => s.state === 'future')).toBe(true);
     expect(liveStep(r)).toBeNull();
+  });
+
+  // F9: 00350's chain cancels before shipping, so anything hanging off a
+  // cancelled line is moot bookkeeping — reporting it would raise a problem
+  // nobody has.
+  it('keeps a cancelled line off-trail even with an OPEN exception on it', () => {
+    const r = deriveFulfillmentLifecycle({
+      line_state: 'cancelled',
+      exceptions: [
+        { status: 'open', type: 'backorder', opened_at: '2026-06-01' },
+      ],
+      shipments: [{ shipped_at: '2026-06-02', delivered_at: '2026-06-09' }],
+    });
+    expect(r.steps.every((s) => s.state === 'future')).toBe(true);
+    expect(stateOf(r, 'accepted_or_issue')).toBe('future');
+    expect(liveStep(r)).toBeNull();
+    expect(nextGate(r)).toBeNull();
+  });
+
+  it('reports the EARLIEST open exception when several are outstanding', () => {
+    const r = deriveFulfillmentLifecycle({
+      line_state: 'delivered',
+      exceptions: [
+        { status: 'open', type: 'delay', opened_at: '2026-06-20' },
+        { status: 'open', type: 'damage', opened_at: '2026-06-12' },
+      ],
+    });
+    expect(evidenceOf(r, 'accepted_or_issue')).toEqual({
+      at: '2026-06-12',
+      source: 'fulfillment_exceptions.damage',
+    });
   });
 
   it('prefers the shipment dates over the undated chain', () => {
