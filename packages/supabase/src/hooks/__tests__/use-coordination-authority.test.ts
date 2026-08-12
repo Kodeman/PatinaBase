@@ -46,6 +46,7 @@ import {
   useNudgeCoordinationItem,
   usePublishCoordinationItem,
   useReassignCoordinationItem,
+  useRecordPartySmsConsent,
   useResolveCoordinationItem,
   useCoordinationRealtime,
   useSubmitCoordinationRevision,
@@ -317,6 +318,98 @@ describe('coordination authority routing', () => {
     expect(rpc).toHaveBeenCalledWith('delete_client_decision_draft', {
       p_decision_id: 'coord-1',
     });
+    expect(from).not.toHaveBeenCalled();
+  });
+});
+
+describe('useRecordPartySmsConsent — the only writer of consent columns on an existing party', () => {
+  /** Chains `.update(payload).eq('id', …).eq('sms_consent_status', 'not_asked').select().single()`
+   *  and captures the update payload for inspection — the DB write IS the
+   *  contract fc_dispatch_optin_invite (00432) reads. */
+  function mockUpdateChain(result: { data: unknown; error: unknown }) {
+    const single = vi.fn().mockResolvedValue(result);
+    const select = vi.fn(() => ({ single }));
+    const eq2 = vi.fn(() => ({ select }));
+    const eq1 = vi.fn(() => ({ eq: eq2 }));
+    const update = vi.fn((_payload: Record<string, unknown>) => ({ eq: eq1 }));
+    from.mockReturnValue({ update });
+    return { update, eq1, eq2, select, single };
+  }
+
+  it('writes exactly the five not_asked→pending consent columns fc_dispatch_optin_invite expects, guarded to the not_asked row only', async () => {
+    const { update, eq1, eq2 } = mockUpdateChain({
+      data: { id: 'party-1', project_id: 'proj-1' },
+      error: null,
+    });
+    const config = useRecordPartySmsConsent() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+
+    await config.mutationFn({
+      partyId: 'party-1',
+      projectId: 'proj-1',
+      phone: '5551234567',
+      smsConsentSource: 'verbal',
+      smsConsentEvidence: 'Told me at the site kickoff on Aug 8',
+    });
+
+    expect(from).toHaveBeenCalledWith('project_parties');
+    expect(update).toHaveBeenCalledTimes(1);
+    const payload = update.mock.calls[0][0] as Record<string, unknown>;
+    expect(Object.keys(payload).sort()).toEqual(
+      [
+        'sms_consent_disclosure_version',
+        'sms_consent_evidence',
+        'sms_consent_recorded_at',
+        'sms_consent_source',
+        'sms_consent_status',
+      ].sort(),
+    );
+    expect(payload).toEqual({
+      sms_consent_status: 'pending',
+      sms_consent_source: 'verbal',
+      sms_consent_evidence: 'Told me at the site kickoff on Aug 8',
+      sms_consent_recorded_at: expect.any(String),
+      sms_consent_disclosure_version: 'field-sms-v1',
+    });
+    // Only the not_asked → pending transition is legal from this UI.
+    expect(eq1).toHaveBeenCalledWith('id', 'party-1');
+    expect(eq2).toHaveBeenCalledWith('sms_consent_status', 'not_asked');
+  });
+
+  it('refuses to write without a phone, mirroring useAddProjectParty\'s wantsText guard', async () => {
+    mockUpdateChain({ data: null, error: null });
+    const config = useRecordPartySmsConsent() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+
+    await expect(
+      config.mutationFn({
+        partyId: 'party-1',
+        projectId: 'proj-1',
+        phone: '',
+        smsConsentSource: 'verbal',
+        smsConsentEvidence: 'Told me at kickoff',
+      }),
+    ).rejects.toThrow(/phone number/i);
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it('refuses to write without non-blank evidence', async () => {
+    mockUpdateChain({ data: null, error: null });
+    const config = useRecordPartySmsConsent() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+
+    await expect(
+      config.mutationFn({
+        partyId: 'party-1',
+        projectId: 'proj-1',
+        phone: '5551234567',
+        smsConsentSource: 'verbal',
+        smsConsentEvidence: '   ',
+      }),
+    ).rejects.toThrow(/prior consent/i);
     expect(from).not.toHaveBeenCalled();
   });
 });

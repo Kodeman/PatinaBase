@@ -513,6 +513,77 @@ export function useUpdateProjectParty() {
   });
 }
 
+export interface RecordPartySmsConsentInput {
+  partyId: string;
+  /** Carried for cache scoping only — the server-side result carries the
+   *  authoritative project_id, but invalidation needs it before the mutation
+   *  resolves is unnecessary here since onSuccess reads it off the row. */
+  projectId: string;
+  /** The party's current phone — required client-side (mirrors
+   *  useAddProjectParty's `wantsText` guard): consent for texts is
+   *  meaningless without a number to text. */
+  phone: string | null | undefined;
+  smsConsentSource: 'verbal' | 'written' | 'web_form' | 'other';
+  smsConsentEvidence: string;
+}
+
+/**
+ * Invite an EXISTING party to texts — the only writer of consent columns
+ * outside `useAddProjectParty`'s create path. Flips `not_asked` → `pending`
+ * with the same five-column evidence bundle `fc_dispatch_optin_invite`
+ * (00432) requires to treat the UPDATE as a fresh invite-eligible transition:
+ * source, evidence, recorded_at, disclosure_version, plus the status flip
+ * itself. The `.eq('sms_consent_status', 'not_asked')` guard makes the only
+ * legal transition explicit server-side too — an `opted_out` or `granted`
+ * row (or a `pending` one already mid-invite) simply matches zero rows and
+ * the `.single()` read throws, rather than silently re-firing the trigger.
+ *
+ * `granted` never routes here (TCPA: consent, once given, isn't re-recorded)
+ * and `opted_out` is never designer-flippable — only the recipient's own
+ * STOP/START reply changes that state. This hook cannot express either.
+ */
+export function useRecordPartySmsConsent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: RecordPartySmsConsentInput) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      if (!input.phone?.trim()) {
+        throw new Error(
+          'Texting updates needs a phone number — add one first.',
+        );
+      }
+      const consentEvidence = input.smsConsentEvidence?.trim() || null;
+      if (!input.smsConsentSource || !consentEvidence) {
+        throw new Error(
+          'Record how and where this person gave prior consent before sending a text.',
+        );
+      }
+      const { data, error } = await supabase
+        .from('project_parties')
+        .update({
+          sms_consent_status: 'pending',
+          sms_consent_source: input.smsConsentSource,
+          sms_consent_evidence: consentEvidence,
+          sms_consent_recorded_at: new Date().toISOString(),
+          sms_consent_disclosure_version: 'field-sms-v1',
+        })
+        .eq('id', input.partyId)
+        .eq('sms_consent_status', 'not_asked')
+        .select()
+        .single();
+      if (error) throw error;
+      return data as ProjectParty;
+    },
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: ['project-parties', data.project_id] });
+      void queryClient.invalidateQueries({ queryKey: ['project-roster', data.project_id] });
+      // The party's row in the People Room roster (people_directory, 00281).
+      void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
+    },
+  });
+}
+
 export interface RemoveProjectPartyInput {
   id: string;
   projectId: string;
