@@ -161,12 +161,12 @@ export function useProjectFFEItems(projectId: string, filters?: FFEItemFilters) 
           room:project_rooms!project_room_id(id, name),
           product:products!product_id(id, name, images, brand),
           blocking_decision:client_decisions!blocked_by_decision_id(id, status, due_date),
-          item_claims:damage_claims!ffe_item_id(id, state),
+          item_claims:damage_claims!ffe_item_id(id, state, created_at),
           spec:project_ffe_specs!project_ffe_specs_ffe_item_id_fkey(
             configuration_id, configuration_snapshot,
             configuration_snapshot_hash, configuration_locked_at
           ),
-          purchase_order:purchase_orders!purchase_order_id(id, status, vendor_id, vendor_po_number, sidemark, confirmed_eta, acknowledged_at, payment_pattern, created_at, po_number, sent_at)
+          purchase_order:purchase_orders!purchase_order_id(id, status, vendor_id, vendor_po_number, sidemark, confirmed_eta, acknowledged_at, payment_pattern, created_at, po_number, sent_at, delivered_date, payments:po_payments(kind, state, due_date, paid_date))
         `)
         .eq('project_id', projectId)
         .order('sort_order', { ascending: true });

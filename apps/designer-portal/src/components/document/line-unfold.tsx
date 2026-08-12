@@ -31,7 +31,12 @@ import {
   useDocumentRooms,
 } from '@/hooks/use-document-rooms';
 import { deriveLineStamp } from '@/lib/document/stamp-derivation';
-import { poGate, type LineAuthorization } from '@/lib/document/authorization-derivation';
+import { deriveProcurementLifecycle } from '@/lib/document/procurement-lifecycle';
+import { ProcurementTrail } from './procurement-trail';
+import {
+  poGate,
+  type LineAuthorization,
+} from '@/lib/document/authorization-derivation';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { DocumentAction, DocumentActionGroup } from './document-action';
 
@@ -315,6 +320,8 @@ export function LineUnfold({
 }) {
   const stamp = deriveLineStamp(item);
   const po = item.purchase_order ?? null;
+  // R7: one derivation, read by the trail here and by the orders book.
+  const lifecycle = deriveProcurementLifecycle(item);
   const vendorId: string = item.vendor_id ?? po?.vendor_id ?? '';
   const { data: vendor } = useVendor(vendorId) as { data: FFERow | undefined };
 
@@ -400,6 +407,10 @@ export function LineUnfold({
         <MovementCell item={item} po={po} />
         <Cell label="Receiving" value={receivingValue} />
       </div>
+
+      {/* R7 (M7): the fifteen-step trail — the position, where the cells above
+          give the facts. Retires "Ordered" as the line's whole story. */}
+      <ProcurementTrail reading={lifecycle} />
 
       {/* The authorization strip — what was signed, and what that permits. */}
       {isCommercialOrigin && (
