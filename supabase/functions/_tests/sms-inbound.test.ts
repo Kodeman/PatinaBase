@@ -170,29 +170,64 @@ function multiProjectSeed(conversation: Record<string, unknown>) {
       { id: "p2", phone_e164: "+15551110004", project_id: "proj2", party_kind: "sub", sms_consent_status: "granted" },
     ],
     project_tasks: [
+      { id: "task1", title: "Set the vanity", due_date: null, owner_party_id: "p1", status: "todo", project_id: "proj1" },
       { id: "task2", title: "Confirm the number", due_date: null, owner_party_id: "p2", status: "todo", project_id: "proj2" },
     ],
     sms_conversations: [conversation],
   });
 }
 
-Deno.test("freeform with active_project_id set skips the chooser", async () => {
+const PIN_NOW = new Date("2026-08-12T12:00:00Z");
+
+/** A chooser-triggering parse: no target, and an intent the chooser gates on. */
+function chooserTriggeringParse(note = "roughed in, photos to follow"): () => Promise<FieldParseResult> {
+  return () => Promise.resolve({ intent: "punch_report", target_ref: null, new_date: null, note, confidence: 0.9 });
+}
+
+Deno.test("a fresh project_pin skips the chooser and scopes to the pinned party", async () => {
+  const rpcCalls: Array<Record<string, unknown>> = [];
+  const fake: FakeSupabase = createFakeSupabase(
+    multiProjectSeed({
+      // active_project_id is deliberately unset: only the explicit pin may scope.
+      id: "conv1", twilio_number: TO, phone_e164: "+15551110004", state: "idle",
+      active_project_id: null, party_id: "p2",
+      state_context: { project_pin: { project_id: "proj2", at: "2026-08-12T11:00:00.000Z" } },
+    }),
+    { apply_field_effect: (args) => { rpcCalls.push(args); return { data: { summary_text: "Got it.", remaining_count: 0 }, error: null }; } },
+  );
+  let seenItems: Array<{ id: string }> = [];
+  const parseFn = (input: { openItems: Array<{ id: string }> }): Promise<FieldParseResult> => {
+    seenItems = input.openItems;
+    return chooserTriggeringParse()();
+  };
+  const res = await processInbound(
+    params({ From: "+15551110004", Body: "framing's roughed in", MessageSid: "SMpinned" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG, parseFn: parseFn as never, now: PIN_NOW },
+  );
+  assertEquals(res.disposition, "applied", "a pinned conversation never re-asks which project");
+  assertEquals(rpcCalls.length, 1);
+  // The pinned project's party — NOT parties[0] (p1 on proj1).
+  assertEquals(rpcCalls[0].p_party_id, "p2");
+  assertEquals(seenItems.map((i) => i.id), ["task2"], "candidate items scoped to the pinned project");
+});
+
+Deno.test("a stale project_pin (>4h) falls back to the chooser", async () => {
   const rpcCalls: Array<Record<string, unknown>> = [];
   const fake: FakeSupabase = createFakeSupabase(
     multiProjectSeed({
       id: "conv1", twilio_number: TO, phone_e164: "+15551110004", state: "idle",
-      active_project_id: "proj2", party_id: "p2", state_context: {},
+      active_project_id: "proj2", party_id: "p2",
+      state_context: { project_pin: { project_id: "proj2", at: "2026-08-12T04:00:00.000Z" } },
     }),
     { apply_field_effect: (args) => { rpcCalls.push(args); return { data: { summary_text: "Got it.", remaining_count: 0 }, error: null }; } },
   );
-  const parseFn = (): Promise<FieldParseResult> =>
-    Promise.resolve({ intent: "note", target_ref: null, new_date: null, note: "cant get the number until Thursday", confidence: 0.9 });
   const res = await processInbound(
-    params({ From: "+15551110004", Body: "cant get the number until Thursday", MessageSid: "SMactive" }),
-    { supabase: fake as never, getEnv: NO_POSTHOG, parseFn },
+    params({ From: "+15551110004", Body: "framing's roughed in", MessageSid: "SMstale" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG, parseFn: chooserTriggeringParse() as never, now: PIN_NOW },
   );
-  assertEquals(res.disposition, "applied");
-  assertEquals(rpcCalls.length, 1, "no chooser loop — the update is applied straight through");
+  assertEquals(res.disposition, "project_chooser");
+  assertEquals(rpcCalls.length, 0);
+  assert(res.twiml.includes("Which project?"));
 });
 
 Deno.test("chooser resolution processes the stashed triggering text and preserves state_context.menu", async () => {
@@ -229,4 +264,82 @@ Deno.test("chooser resolution processes the stashed triggering text and preserve
   assert(conv.state_context.menu, "digest menu preserved through the chooser resolution");
   assertEquals(conv.state_context.chooser, undefined);
   assertEquals(conv.state_context.pending_body, undefined);
+  assertEquals(
+    (conv.state_context as { project_pin?: { project_id?: string } }).project_pin?.project_id,
+    "proj2",
+    "the explicit pick writes the pin",
+  );
+});
+
+Deno.test("an MMS with no caption replays the stashed media, not a brush-off", async () => {
+  const rpcCalls: Array<Record<string, unknown>> = [];
+  const fake: FakeSupabase = createFakeSupabase(
+    multiProjectSeed({
+      id: "conv1", twilio_number: TO, phone_e164: "+15551110004", state: "awaiting_project_choice",
+      active_project_id: null, party_id: null,
+      state_context: {
+        chooser: [{ n: 1, project_id: "proj1", party_id: "p1" }, { n: 2, project_id: "proj2", party_id: "p2" }],
+        pending_body: "",
+        pending_media: [{ path: "holding/conv1/m1/0.jpg", content_type: "image/jpeg", twilio_url: "https://x/0" }],
+      },
+    }),
+    { apply_field_effect: (args) => { rpcCalls.push(args); return { data: { summary_text: "Logged the photo.", remaining_count: 0 }, error: null }; } },
+  );
+  const parseFn = (): Promise<FieldParseResult> =>
+    Promise.resolve({ intent: "punch_report", target_ref: null, new_date: null, note: "", confidence: 0.9 });
+  const res = await processInbound(
+    params({ From: "+15551110004", Body: "2", MessageSid: "SMmms" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG, parseFn, now: PIN_NOW },
+  );
+  assertEquals(res.disposition, "applied");
+  assert(!res.twiml.includes("Text me your update"), "a caption-less photo is not brushed off");
+  assertEquals(rpcCalls.length, 1);
+  const effect = rpcCalls[0].p_effect as { media?: string[] };
+  assertEquals(effect.media, ["holding/conv1/m1/0.jpg"], "stashed media carried into the effect");
+  assertEquals(rpcCalls[0].p_party_id, "p2");
+});
+
+Deno.test("STOP while awaiting a project choice still opts out", async () => {
+  const fake: FakeSupabase = createFakeSupabase(
+    multiProjectSeed({
+      id: "conv1", twilio_number: TO, phone_e164: "+15551110004", state: "awaiting_project_choice",
+      active_project_id: null, party_id: null,
+      state_context: {
+        chooser: [{ n: 1, project_id: "proj1", party_id: "p1" }, { n: 2, project_id: "proj2", party_id: "p2" }],
+        pending_body: "concrete slipped",
+      },
+    }),
+  );
+  const res = await processInbound(
+    params({ From: "+15551110004", Body: "STOP", MessageSid: "SMstopchoice" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG, now: PIN_NOW },
+  );
+  assertEquals(res.disposition, "opted_out");
+  const parties = fake._data.project_parties as Array<{ sms_consent_status: string }>;
+  assert(parties.every((p) => p.sms_consent_status === "opted_out"), "compliance runs before conversation state");
+});
+
+Deno.test("two simultaneous chooser picks apply the stashed update exactly once", async () => {
+  const rpcCalls: Array<Record<string, unknown>> = [];
+  const fake: FakeSupabase = createFakeSupabase(
+    multiProjectSeed({
+      id: "conv1", twilio_number: TO, phone_e164: "+15551110004", state: "awaiting_project_choice",
+      active_project_id: null, party_id: null,
+      state_context: {
+        chooser: [{ n: 1, project_id: "proj1", party_id: "p1" }, { n: 2, project_id: "proj2", party_id: "p2" }],
+        pending_body: "cant get the number until Thursday",
+      },
+    }),
+    { apply_field_effect: (args) => { rpcCalls.push(args); return { data: { summary_text: "Got it.", remaining_count: 0 }, error: null }; } },
+  );
+  const parseFn = (): Promise<FieldParseResult> =>
+    Promise.resolve({ intent: "punch_report", target_ref: null, new_date: null, note: "cant get the number until Thursday", confidence: 0.9 });
+  const deps = { supabase: fake as never, getEnv: NO_POSTHOG, parseFn, now: PIN_NOW };
+  const [a, b] = await Promise.all([
+    processInbound(params({ From: "+15551110004", Body: "2", MessageSid: "SMrace1" }), deps),
+    processInbound(params({ From: "+15551110004", Body: "2", MessageSid: "SMrace2" }), deps),
+  ]);
+  const dispositions = [a.disposition, b.disposition].sort();
+  assertEquals(dispositions, ["applied", "project_choice_race"]);
+  assertEquals(rpcCalls.length, 1, "the loser of the race replays nothing");
 });

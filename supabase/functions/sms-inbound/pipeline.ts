@@ -28,6 +28,8 @@ const FIELD_KINDS = ["gc", "sub", "installer", "receiver"];
 const STOP_WORDS = ["STOP", "STOPALL", "UNSUBSCRIBE", "CANCEL", "END", "QUIT"];
 const START_WORDS = ["START", "UNSTOP"];
 const MENU_TTL_MS = 12 * 3600 * 1000;
+/** How long an explicitly-chosen project stays the conversation's scope. */
+const PROJECT_PIN_TTL_MS = 4 * 3600 * 1000;
 
 export interface InboundParams {
   From: string;
@@ -268,7 +270,7 @@ export async function processInbound(
   const from = params.From;
   const to = params.To;
   let body = (params.Body ?? "").trim();
-  const upper = body.toUpperCase();
+  let upper = body.toUpperCase();
 
   // (c) idempotency claim on a per-conversation message row.
   const conv = await findOrCreateConversation(supabase, to, from);
@@ -391,11 +393,25 @@ export async function processInbound(
       const mergedContext = { ...conv.state_context };
       delete mergedContext.chooser;
       const pendingText = typeof mergedContext.pending_body === "string" ? mergedContext.pending_body : "";
+      const pendingMedia = Array.isArray(mergedContext.pending_media)
+        ? mergedContext.pending_media as Array<{ path: string; content_type: string; twilio_url: string }>
+        : [];
       delete mergedContext.pending_body;
-      await supabase.from("sms_conversations")
+      delete mergedContext.pending_media;
+      // THE pin: only an explicit chooser pick scopes the conversation.
+      mergedContext.project_pin = { project_id: pick.project_id, at: nowIso };
+      // Conditional on the chooser state still being live: two picks racing in
+      // (Twilio retries, double-tap) must not both replay the stashed update.
+      const { data: resolvedRows } = await supabase.from("sms_conversations")
         .update({ state: "idle", active_project_id: pick.project_id, party_id: pick.party_id, state_context: mergedContext })
-        .eq("id", conv.id);
-      if (!pendingText) {
+        .eq("id", conv.id)
+        .eq("state", "awaiting_project_choice")
+        .select("id");
+      if (!resolvedRows || (resolvedRows as unknown[]).length === 0) {
+        // Another message already resolved this chooser — do nothing twice.
+        return { status: 200, twiml: twimlBody(), disposition: "project_choice_race" };
+      }
+      if (!pendingText && pendingMedia.length === 0) {
         await stampMessage(supabase, messageId, pick.party_id, pick.project_id, { path: "menu", disambiguated: true });
         return await reply(supabase, conv.id,
           `Got it — working on ${projectNames[pick.project_id] ?? "that project"}. Text me your update.`,
@@ -405,6 +421,8 @@ export async function processInbound(
       // normal freeform path, now scoped to the just-picked project — don't
       // drop it and don't make the party re-send it.
       body = pendingText;
+      upper = body.toUpperCase();
+      if (pendingMedia.length > 0) media = pendingMedia;
       conv.state = "idle";
       conv.active_project_id = pick.project_id;
       conv.party_id = pick.party_id;
@@ -418,7 +436,12 @@ export async function processInbound(
     const partyId = (conv.state_context?.pending_party_id as string | undefined) ?? conv.party_id;
     if (pending && partyId) {
       const applied = await applyEffect(supabase, partyId, pending, messageId);
-      await supabase.from("sms_conversations").update({ state: "idle", state_context: {} }).eq("id", conv.id);
+      // Clear only this branch's own keys — a digest menu or project pin in
+      // state_context must survive the confirmation.
+      const clearedContext = { ...conv.state_context };
+      delete clearedContext.pending_effect;
+      delete clearedContext.pending_party_id;
+      await supabase.from("sms_conversations").update({ state: "idle", state_context: clearedContext }).eq("id", conv.id);
       const projectId = (pending as { _project_id?: string })._project_id ?? conv.active_project_id;
       await captureServerEvent("sms-inbound", "sms_parse_outcome",
         { path: "llm", intent: String((pending as { type?: string }).type), confidence_bucket: "mid", disposition: "applied_confirmed" },
@@ -451,12 +474,17 @@ export async function processInbound(
     }
   }
 
-  // A conversation already pinned to one of this party's projects (freshly
-  // chosen or from an earlier turn) never needs the chooser again — and the
-  // LLM should only see that project's items, not every project on the phone.
-  const activePartyForConv = conv.active_project_id
-    ? parties.find((p) => p.project_id === conv.active_project_id)
-    : undefined;
+  // A conversation the party explicitly pinned (by answering the chooser)
+  // skips the chooser while the pin is fresh — and the LLM only sees that
+  // project's items. conv.active_project_id is NOT a pin: it is stamped at
+  // conversation creation by the first outbound send, so reading it as one
+  // would scope every later reply to whoever texted first.
+  const pin = conv.state_context?.project_pin as { project_id?: string; at?: string } | undefined;
+  const pinAge = pin?.at ? now.getTime() - new Date(String(pin.at)).getTime() : Infinity;
+  const pinnedRows = pin?.project_id && pinAge <= PROJECT_PIN_TTL_MS
+    ? parties.filter((p) => p.project_id === pin.project_id)
+    : [];
+  const activePartyForConv = pinnedRows.find((p) => p.id === conv.party_id) ?? pinnedRows[0];
   const partiesForItems = activePartyForConv ? [activePartyForConv] : parties;
 
   // (h) LLM parse against every open item across the phone's parties.
@@ -467,7 +495,7 @@ export async function processInbound(
     openItems: candidateItems.map((c) => ({ id: c.id, kind: c.kind, title: c.title, project_name: c.project_name, due: c.due })),
     recentMessages: recent,
     today: nowIso.slice(0, 10),
-    hasMedia: numMedia > 0,
+    hasMedia: numMedia > 0 || media.length > 0,
   }, { getEnv: deps.getEnv, fetchImpl: deps.fetchImpl });
 
   const targetItem = parsed.target_ref
@@ -483,7 +511,7 @@ export async function processInbound(
       party_id: parties.find((p) => p.project_id === pid)!.id,
     }));
     await supabase.from("sms_conversations")
-      .update({ state: "awaiting_project_choice", state_context: { ...conv.state_context, chooser, pending_body: body } })
+      .update({ state: "awaiting_project_choice", state_context: { ...conv.state_context, chooser, pending_body: body, pending_media: media } })
       .eq("id", conv.id);
     const list = chooser.map((c) => `${c.n}) ${projectNames[c.project_id] ?? "Project"}`).join(" ");
     await captureServerEvent("sms-inbound", "sms_parse_outcome",
@@ -516,7 +544,7 @@ export async function processInbound(
         state: "awaiting_confirmation",
         party_id: effectParty,
         active_project_id: effectProject,
-        state_context: { pending_effect: { ...effect, _project_id: effectProject }, pending_party_id: effectParty },
+        state_context: { ...conv.state_context, pending_effect: { ...effect, _project_id: effectProject }, pending_party_id: effectParty },
       })
       .eq("id", conv.id);
     await stampMessage(supabase, messageId, effectParty, effectProject, { path: "llm", ...parsed }, parsed.confidence);
