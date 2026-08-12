@@ -123,16 +123,24 @@ export type ProcurementStepState = 'settled' | 'live' | 'future' | 'no-record';
 /**
  * A gate's reading.
  *
- * - `settled`   — every term of the gate's predicate is satisfied.
- * - `open`      — the trail has reached the gate and a term is outstanding.
- * - `unreached` — the trail has not arrived yet.
- * - `no-record` — the trail is past the gate and the rail carries nothing that
- *                 could seal it. The gate renders quiet, never as passed.
+ * - `settled`         — the trail REACHED the gate and every term is satisfied.
+ *                       Terms met at a position the trail has not arrived at
+ *                       is not a seal; that reads `unreached`.
+ * - `open`            — the trail is standing AT the gate with a term
+ *                       outstanding. This is the ONLY reading that stops.
+ * - `unreached`       — the trail has not arrived yet.
+ * - `passed-unsealed` — the work moved BEYOND the gate without its terms ever
+ *                       being evidenced. Renders quiet: finished work must
+ *                       never be drawn as stopped, and a seal that was never
+ *                       recorded must never be drawn as given.
+ * - `no-record`       — the trail is past the gate and the rail carries nothing
+ *                       that could bear on it at all.
  */
 export type ProcurementGateState =
   | 'settled'
   | 'open'
   | 'unreached'
+  | 'passed-unsealed'
   | 'no-record';
 
 /**
@@ -164,6 +172,13 @@ export interface ProcurementGateReading {
    * density ("Complete to produce · awaiting acknowledgment").
    */
   qualifier?: string;
+  /**
+   * False when this rail holds no fact that could EVER seal the gate, whatever
+   * position the work reaches. Such a gate is drawn (its emptiness is the
+   * honest report) but is never named as somewhere the work is heading —
+   * promising a stop that will never come is its own small lie.
+   */
+  sealable?: boolean;
 }
 
 /**
@@ -202,13 +217,30 @@ export function liveStep(
 }
 
 /**
- * The nearest gate that is not settled — what the ledger's "Next gate" column
- * reads. A reading whose gates are all settled has no next gate.
+ * The next gate AHEAD OF the work — what the ledger's "Next gate" column reads.
+ *
+ * "Next" is a position, not a to-do list. A gate the work has already gone past
+ * is not next, however it ended up (settled, passed-unsealed, or no-record), so
+ * the search starts at the live step and looks forward. A gate the rail can
+ * never seal (`no-record`) is not a destination either and is skipped — naming
+ * it would promise a stop that will never come.
+ *
+ * When nothing remains ahead, the column renders "—" rather than reaching
+ * backwards for something to say.
  */
 export function nextGate(
   reading: ProcurementLifecycleReading,
 ): ProcurementGateReading | null {
-  return reading.gates.find((g) => g.state !== 'settled') ?? null;
+  const liveOrdinal = liveStep(reading)?.ordinal ?? 0;
+  return (
+    reading.gates.find(
+      (g) =>
+        g.afterStep >= liveOrdinal &&
+        g.state !== 'settled' &&
+        g.state !== 'no-record' &&
+        g.sealable !== false,
+    ) ?? null
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -236,6 +268,18 @@ export interface ProcurementGatePredicate {
   noRecord?: boolean;
   /** The unmet term, for the open reading. */
   qualifier?: string;
+  /**
+   * True when an outstanding term is a LIVE condition that stops the work
+   * wherever the trail nominally stands — an unresolved claim, a short
+   * receipt, an inspection never logged. Such a gate reads `open` even once
+   * the trail's position is past it, because the stop is real and current.
+   *
+   * Without this, a gate is judged by position alone: terms that were simply
+   * never recorded, on work that has since moved on, read `passed-unsealed`
+   * and stay quiet. An unacknowledged PO under an installed credenza is a
+   * missing signature, not a blockage, and must not be drawn as one.
+   */
+  holdsOpen?: boolean;
 }
 
 export type ProcurementGatePredicates = Record<
@@ -291,27 +335,41 @@ export function assembleProcurementReading(
   const gateReadings: ProcurementGateReading[] =
     PROCUREMENT_LIFECYCLE_GATES.map((gate) => {
       const predicate = gates[gate.key];
-      const reached = highest > gate.afterStep;
+      // `arrived` = standing at the gate or beyond. `passed` = moved beyond it.
+      const arrived = highest >= gate.afterStep;
+      const passed = highest > gate.afterStep;
+
       if (predicate.noRecord) {
         return {
           key: gate.key,
-          state: reached ? 'no-record' : 'unreached',
+          state: passed ? 'no-record' : 'unreached',
           afterStep: gate.afterStep,
+          sealable: false,
         };
+      }
+      // Terms satisfied at a position the trail has NOT reached is not a seal.
+      // A gate seals by being arrived at with its terms met, in that order.
+      if (!arrived) {
+        return { key: gate.key, state: 'unreached', afterStep: gate.afterStep };
       }
       if (predicate.settled) {
         return { key: gate.key, state: 'settled', afterStep: gate.afterStep };
       }
-      // A gate the trail has not yet arrived at is unreached, not open — an
-      // unmet term is only a stop once the work is standing at it.
-      const arrived = highest >= gate.afterStep;
+      // Terms outstanding. If the work has already moved beyond the gate and
+      // nothing live is holding it, the seal was never recorded and never will
+      // be — but it is emphatically not a stop, so it reads quiet, not open.
+      if (passed && !predicate.holdsOpen) {
+        return {
+          key: gate.key,
+          state: 'passed-unsealed',
+          afterStep: gate.afterStep,
+        };
+      }
       return {
         key: gate.key,
-        state: arrived ? 'open' : 'unreached',
+        state: 'open',
         afterStep: gate.afterStep,
-        ...(arrived && predicate.qualifier
-          ? { qualifier: predicate.qualifier }
-          : {}),
+        ...(predicate.qualifier ? { qualifier: predicate.qualifier } : {}),
       };
     });
 
@@ -330,8 +388,7 @@ export function assembleProcurementReading(
  *
  * `cancelled` is a NINTH allowed value and is deliberately absent here: it is
  * terminal but off-trail, so it evidences no step and takes no position in the
- * order. A cancelled line's shipment and exception facts still read, because a
- * crate that arrived damaged arrived damaged whatever happened to the order.
+ * order. Nothing on a cancelled line reads — see `deriveFulfillmentLifecycle`.
  */
 export const FULFILLMENT_LINE_STATES = [
   'intake',
@@ -412,6 +469,22 @@ export function deriveFulfillmentLifecycle(
   const index = FULFILLMENT_STATE_INDEX.get(line.line_state);
   const evidence: ProcurementEvidenceMap = {};
 
+  // A cancelled line is fully OFF-TRAIL. 00350's chain cancels before shipping,
+  // so any shipment or exception hanging off it is moot bookkeeping, not a
+  // reading — drawing a backorder on a cancelled line would report a problem
+  // nobody has. Nothing evidences anything.
+  if (line.line_state === 'cancelled') {
+    return assembleProcurementReading(
+      'patina',
+      {},
+      {
+        complete_to_produce: { settled: false, noRecord: true },
+        received_and_dispositioned: { settled: false, noRecord: true },
+        warehouse_and_site_ready: { settled: false, noRecord: true },
+      },
+    );
+  }
+
   if (index !== undefined) {
     // Every state at or below the current one has been passed through.
     for (const [state, position] of FULFILLMENT_STATE_INDEX) {
@@ -448,7 +521,11 @@ export function deriveFulfillmentLifecycle(
   const openExceptions = (line.exceptions ?? []).filter(
     (e) => e.status !== RESOLVED_EXCEPTION_STATUS,
   );
-  const firstOpen = openExceptions[0];
+  // Earliest open exception — the issue that has been waiting longest is the
+  // one the date should report.
+  const firstOpen = [...openExceptions].sort((a, b) =>
+    (a.opened_at ?? '').localeCompare(b.opened_at ?? ''),
+  )[0];
   if (firstOpen) {
     evidence.accepted_or_issue = {
       at: firstOpen.opened_at ?? '',
@@ -466,6 +543,9 @@ export function deriveFulfillmentLifecycle(
     complete_to_produce: { settled: false, noRecord: true },
     received_and_dispositioned: {
       settled: reachedDelivered && openExceptions.length === 0,
+      // An unresolved exception is a live stop, even though it evidences step
+      // 10 and so puts the trail's position past this gate.
+      holdsOpen: openExceptions.length > 0,
       qualifier: openExceptions.length ? 'open exception' : 'awaiting receipt',
     },
     // No warehouse or site-readiness fact exists on either rail today (№8).
