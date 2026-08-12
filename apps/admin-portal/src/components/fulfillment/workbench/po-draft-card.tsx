@@ -1,11 +1,14 @@
-'use client';
+"use client";
 
-import { Fragment } from 'react';
-import Link from 'next/link';
-import { useDroppable, useDraggable } from '@dnd-kit/core';
-import { formatCents, type FulfillmentWorkbenchLine } from '@patina/fulfillment';
-import { deriveFulfillmentLifecycle } from '@patina/types';
-import { ProcurementTrail } from '../shared/procurement-trail';
+import { Fragment } from "react";
+import Link from "next/link";
+import { useDroppable, useDraggable } from "@dnd-kit/core";
+import {
+  formatCents,
+  type FulfillmentWorkbenchLine,
+} from "@patina/fulfillment";
+import { deriveFulfillmentLifecycle } from "@patina/types";
+import { ProcurementTrail } from "../shared/procurement-trail";
 
 // A single vendor PO card on the Workbench's RIGHT side (S2, spec §5.2) —
 // proposed (pre-confirm, grouped client-side) or real (post-confirm). Header:
@@ -25,9 +28,9 @@ import { ProcurementTrail } from '../shared/procurement-trail';
 // listeners.
 
 const TRANSMISSION_LABEL: Record<string, string> = {
-  email: 'email',
-  portal: 'portal',
-  csv: 'CSV',
+  email: "email",
+  portal: "portal",
+  csv: "CSV",
 };
 
 interface PoDraftCardProps {
@@ -37,7 +40,7 @@ interface PoDraftCardProps {
   title: string;
   statusLabel: string;
   /** 'draft' | 'sent' | 'acknowledged' | … drives the chip color. */
-  statusTone: 'draft' | 'sent' | 'ack' | 'late';
+  statusTone: "draft" | "sent" | "ack" | "late";
   transmissionType?: string | null;
   sideMark?: string | null;
   costCents: number;
@@ -48,7 +51,13 @@ interface PoDraftCardProps {
   draggableLines?: boolean;
 }
 
-function PoLine({ line, draggable }: { line: FulfillmentWorkbenchLine; draggable: boolean }) {
+function PoLine({
+  line,
+  draggable,
+}: {
+  line: FulfillmentWorkbenchLine;
+  draggable: boolean;
+}) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: line.id,
     disabled: !draggable,
@@ -56,8 +65,10 @@ function PoLine({ line, draggable }: { line: FulfillmentWorkbenchLine; draggable
   // Rail A honesty rule: a cancelled line is fully off-trail — it never gets
   // a reading, only its own operational word (matches
   // `deriveFulfillmentLifecycle`'s cancelled branch in @patina/types).
-  const cancelled = line.lineState === 'cancelled';
-  const reading = cancelled ? null : deriveFulfillmentLifecycle({ line_state: line.lineState });
+  const cancelled = line.lineState === "cancelled";
+  const reading = cancelled
+    ? null
+    : deriveFulfillmentLifecycle({ line_state: line.lineState });
 
   return (
     <Fragment>
@@ -68,32 +79,39 @@ function PoLine({ line, draggable }: { line: FulfillmentWorkbenchLine; draggable
         data-line-index={line.lineIndex}
         className="flex items-baseline gap-2 py-1 text-[0.72rem]"
         style={{
-          color: 'var(--color-mocha)',
+          color: "var(--color-mocha)",
           opacity: isDragging ? 0.35 : 1,
-          cursor: draggable ? 'grab' : 'default',
+          cursor: draggable ? "grab" : "default",
         }}
         {...(draggable ? attributes : {})}
         {...(draggable ? listeners : {})}
       >
-        <span style={{ fontFamily: 'var(--font-meta)', color: 'var(--color-clay)' }}>
+        <span
+          style={{ fontFamily: "var(--font-meta)", color: "var(--color-clay)" }}
+        >
           {line.circledIndex}
         </span>
         <span className="min-w-0 flex-1 truncate">
           {line.itemName}
-          {line.qty > 1 ? ` · ×${line.qty}` : ''}
+          {line.qty > 1 ? ` · ×${line.qty}` : ""}
         </span>
         <span
           className="tabular-nums text-[0.66rem] text-[var(--text-muted)]"
-          style={{ fontFamily: 'var(--font-meta)' }}
+          style={{ fontFamily: "var(--font-meta)" }}
         >
-          {line.unitCostCents != null ? formatCents(line.unitCostCents * line.qty) : '—'}
+          {line.unitCostCents != null
+            ? formatCents(line.unitCostCents * line.qty)
+            : "—"}
         </span>
       </div>
       {cancelled ? (
         <div
           data-testid="wb-po-line-cancelled"
           className="mb-1 pb-1 pl-5 text-[0.6rem] uppercase tracking-[0.08em]"
-          style={{ fontFamily: 'var(--font-meta)', color: 'var(--color-terracotta)' }}
+          style={{
+            fontFamily: "var(--font-meta)",
+            color: "var(--color-terracotta)",
+          }}
         >
           Cancelled — no trail position
         </div>
@@ -101,7 +119,10 @@ function PoLine({ line, draggable }: { line: FulfillmentWorkbenchLine; draggable
         <details data-testid="wb-po-line-lifecycle" className="mb-1 pl-5">
           <summary
             className="cursor-pointer text-[0.6rem] uppercase tracking-[0.08em]"
-            style={{ fontFamily: 'var(--font-meta)', color: 'var(--color-clay)' }}
+            style={{
+              fontFamily: "var(--font-meta)",
+              color: "var(--color-clay)",
+            }}
             onPointerDown={(e) => e.stopPropagation()}
           >
             Lifecycle
@@ -116,10 +137,10 @@ function PoLine({ line, draggable }: { line: FulfillmentWorkbenchLine; draggable
 }
 
 const STATUS_COLOR: Record<string, string> = {
-  draft: 'var(--text-muted)',
-  sent: 'var(--color-dusty-blue)',
-  ack: 'var(--color-sage)',
-  late: 'var(--color-terracotta)',
+  draft: "var(--text-muted)",
+  sent: "var(--color-dusty-blue)",
+  ack: "var(--color-sage)",
+  late: "var(--color-terracotta)",
 };
 
 export function PoDraftCard({
@@ -134,26 +155,31 @@ export function PoDraftCard({
   droppable,
   draggableLines = false,
 }: PoDraftCardProps) {
-  const { setNodeRef, isOver } = useDroppable({ id: dropId, disabled: !droppable });
+  const { setNodeRef, isOver } = useDroppable({
+    id: dropId,
+    disabled: !droppable,
+  });
   // Real (post-confirm) POs use dropId `po:<poId>` — those open the S3 Composer.
-  const poId = dropId.startsWith('po:') ? dropId.slice(3) : null;
+  const poId = dropId.startsWith("po:") ? dropId.slice(3) : null;
 
   return (
     <div
       ref={setNodeRef}
       data-testid="wb-po-card"
       data-drop-id={dropId}
-      data-warm={droppable && isOver ? 'true' : 'false'}
+      data-warm={droppable && isOver ? "true" : "false"}
       className="mb-3 rounded-sm border p-3 transition-colors"
       style={{
-        borderColor: isOver && droppable ? 'var(--color-clay)' : 'var(--border-default)',
-        backgroundColor: isOver && droppable ? 'var(--bg-hover)' : 'var(--bg-surface)',
+        borderColor:
+          isOver && droppable ? "var(--color-clay)" : "var(--border-default)",
+        backgroundColor:
+          isOver && droppable ? "var(--bg-hover)" : "var(--bg-surface)",
       }}
     >
       <div className="mb-2 flex items-baseline justify-between gap-2">
         <span
           className="truncate text-[0.75rem] font-semibold"
-          style={{ color: 'var(--text-primary)' }}
+          style={{ color: "var(--text-primary)" }}
         >
           {title}
         </span>
@@ -161,7 +187,7 @@ export function PoDraftCard({
           {transmissionType && (
             <span
               className="text-[0.55rem] uppercase tracking-[0.1em] text-[var(--text-muted)]"
-              style={{ fontFamily: 'var(--font-meta)' }}
+              style={{ fontFamily: "var(--font-meta)" }}
             >
               {TRANSMISSION_LABEL[transmissionType] ?? transmissionType}
             </span>
@@ -169,7 +195,10 @@ export function PoDraftCard({
           <span
             data-testid="wb-po-status"
             className="text-[0.55rem] uppercase tracking-[0.12em]"
-            style={{ fontFamily: 'var(--font-meta)', color: STATUS_COLOR[statusTone] }}
+            style={{
+              fontFamily: "var(--font-meta)",
+              color: STATUS_COLOR[statusTone],
+            }}
           >
             {statusLabel}
           </span>
@@ -178,7 +207,7 @@ export function PoDraftCard({
               href={`/fulfillment/pos/${poId}`}
               data-testid="wb-po-compose"
               className="text-[0.55rem] font-medium uppercase tracking-[0.1em]"
-              style={{ color: 'var(--color-clay)' }}
+              style={{ color: "var(--color-clay)" }}
             >
               Compose ↗
             </Link>
@@ -193,9 +222,12 @@ export function PoDraftCard({
       {(sideMark || costCents > 0) && (
         <div
           className="mt-2 flex items-baseline justify-between border-t pt-1.5 text-[0.58rem] uppercase tracking-[0.08em] text-[var(--text-muted)]"
-          style={{ fontFamily: 'var(--font-meta)', borderColor: 'var(--border-subtle)' }}
+          style={{
+            fontFamily: "var(--font-meta)",
+            borderColor: "var(--border-subtle)",
+          }}
         >
-          <span>{sideMark ? `side-mark ${sideMark}` : ''}</span>
+          <span>{sideMark ? `side-mark ${sideMark}` : ""}</span>
           <span className="tabular-nums">{formatCents(costCents)}</span>
         </div>
       )}

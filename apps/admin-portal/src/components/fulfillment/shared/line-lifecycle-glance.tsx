@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * The queue/list row's ADDITIVE lifecycle glance (ruling R7, WP4 Track 3 —
@@ -21,46 +21,55 @@ import {
   nextGate,
   procurementStepLabel,
   type ProcurementLifecycleReading,
-} from '@patina/types';
+} from "@patina/types";
 
 function gateLabel(key: string): string {
   return PROCUREMENT_LIFECYCLE_GATES.find((g) => g.key === key)?.label ?? key;
 }
 
-export function LineLifecycleGlance({ reading }: { reading: ProcurementLifecycleReading }) {
+export function LineLifecycleGlance({
+  reading,
+}: {
+  reading: ProcurementLifecycleReading;
+}) {
   const live = liveStep(reading);
   const gate = nextGate(reading);
 
   return (
-    <span data-testid="lifecycle-glance" className="inline-flex items-baseline gap-2">
+    <span
+      data-testid="lifecycle-glance"
+      className="inline-flex items-baseline gap-2"
+    >
       <span
         data-testid="lifecycle-glance-stamp"
         className="inline-block -rotate-[1.5deg] whitespace-nowrap rounded-[3px] border-[1.5px] bg-transparent px-[9px] py-[3px] text-[12px] font-semibold uppercase tracking-[0.08em]"
         style={
           live
             ? {
-                fontFamily: 'var(--font-meta)',
-                borderColor: 'var(--color-clay)',
-                color: 'var(--color-charcoal)',
+                fontFamily: "var(--font-meta)",
+                borderColor: "var(--color-clay)",
+                color: "var(--color-charcoal)",
               }
             : {
-                fontFamily: 'var(--font-meta)',
-                borderColor: 'var(--color-pearl)',
-                color: 'var(--text-muted)',
+                fontFamily: "var(--font-meta)",
+                borderColor: "var(--color-pearl)",
+                color: "var(--text-muted)",
               }
         }
       >
-        {live ? `${String(live.ordinal).padStart(2, '0')} · ${procurementStepLabel(live.key)}` : '—'}
+        {live
+          ? `${String(live.ordinal).padStart(2, "0")} · ${procurementStepLabel(live.key)}`
+          : "—"}
       </span>
       <span
         data-testid="lifecycle-glance-next-gate"
         className="whitespace-nowrap text-[12px] uppercase tracking-[0.04em]"
-        style={{ fontFamily: 'var(--font-meta)', color: 'var(--text-muted)' }}
+        style={{ fontFamily: "var(--font-meta)", color: "var(--text-muted)" }}
       >
-        Next gate:{' '}
+        Next gate:{" "}
         {gate
-          ? `${gateLabel(gate.key)}${gate.state === 'open' && gate.qualifier ? ` · ${gate.qualifier}` : ''}`
-          : '—'}
+          ? `${gateLabel(gate.key)}${gate.state === "open" && gate.qualifier ? ` · ${gate.qualifier}` : ""}`
+          : "—"}
       </span>
     </span>
   );
