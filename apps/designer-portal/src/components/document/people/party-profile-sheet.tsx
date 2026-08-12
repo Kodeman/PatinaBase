@@ -268,7 +268,7 @@ export function PartyProfileSheet({
   };
 
   const doInvite = () => {
-    if (!partyId || !person?.project_id) return;
+    if (!partyId) return;
     setInviteError(null);
     if (!phone?.trim()) {
       setInviteError('Texting updates needs a phone number — add one first.');
@@ -283,7 +283,6 @@ export function PartyProfileSheet({
     recordConsent.mutate(
       {
         partyId,
-        projectId: person.project_id,
         phone,
         smsConsentSource: inviteSource,
         smsConsentEvidence: inviteEvidence.trim(),
@@ -463,7 +462,7 @@ export function PartyProfileSheet({
           <p className="rounded-[7px] border border-[var(--color-pearl)] bg-white/50 px-3 py-2.5 text-[0.74rem] leading-relaxed text-[var(--color-aged-oak)]">
             They opted out by text. Only they can rejoin by replying START.
           </p>
-        ) : phone ? (
+        ) : consent === 'not_asked' && phone ? (
           <div>
             <p className="mb-2.5 text-[0.74rem] leading-relaxed text-[var(--color-aged-oak)]">
               Invite {person?.display_name ?? 'them'} to texts — they get a
@@ -487,8 +486,11 @@ export function PartyProfileSheet({
 
             {inviteConsent && (
               <div className="mt-3 rounded border border-[var(--color-pearl)] bg-[var(--color-linen)]/45 p-3">
-                <label className={META}>How consent was given</label>
+                <label htmlFor="invite-consent-source" className={META}>
+                  How consent was given
+                </label>
                 <select
+                  id="invite-consent-source"
                   value={inviteSource}
                   onChange={(e) =>
                     setInviteSource(
@@ -501,7 +503,6 @@ export function PartyProfileSheet({
                     )
                   }
                   className="mb-3 w-full rounded-[7px] border border-[var(--color-pearl)] bg-white px-3.5 py-2.5 text-[0.82rem] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
-                  aria-label="SMS consent method"
                 >
                   <option value="">Choose a method…</option>
                   <option value="verbal">Verbal agreement</option>
@@ -510,8 +511,11 @@ export function PartyProfileSheet({
                   <option value="other">Other documented consent</option>
                 </select>
 
-                <label className={META}>Consent record</label>
+                <label htmlFor="invite-consent-evidence" className={META}>
+                  Consent record
+                </label>
                 <textarea
+                  id="invite-consent-evidence"
                   value={inviteEvidence}
                   onChange={(e) => setInviteEvidence(e.target.value)}
                   placeholder="Where and when they agreed, e.g. signed site kickoff form on Aug 8"
@@ -527,7 +531,10 @@ export function PartyProfileSheet({
             )}
 
             {inviteError && (
-              <p className="mt-2 text-[0.7rem] text-[var(--color-terracotta)]">
+              <p
+                role="alert"
+                className="mt-2 text-[0.7rem] text-[var(--color-terracotta)]"
+              >
                 {inviteError}
               </p>
             )}
@@ -545,6 +552,16 @@ export function PartyProfileSheet({
                 disabled={!inviteConsent || recordConsent.isPending}
                 loading={recordConsent.isPending}
                 loadingLabel="Inviting…"
+                title={
+                  !inviteConsent
+                    ? 'Check the consent box above first'
+                    : undefined
+                }
+                aria-label={
+                  !inviteConsent
+                    ? 'Invite to texts — check the consent box above first'
+                    : undefined
+                }
               >
                 Invite to texts
               </DocumentAction>

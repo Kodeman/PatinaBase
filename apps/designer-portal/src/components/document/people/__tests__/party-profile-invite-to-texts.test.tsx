@@ -123,7 +123,20 @@ describe('PartyProfileSheet — the invite control is hidden without a phone on 
 });
 
 describe('PartyProfileSheet — not_asked with a phone shows the invite-to-texts flow', () => {
-  it('requires a consent method and non-blank evidence before it will submit', () => {
+  it('the submit control starts disabled with a title/aria-label explaining why (F7)', () => {
+    personData.current = person({ status_raw: 'not_asked' });
+    render(
+      <PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />,
+    );
+
+    const submit = screen.getByRole('button', {
+      name: /Invite to texts — check the consent box above first/,
+    });
+    expect(submit).toBeDisabled();
+    expect(submit).toHaveAttribute('title', 'Check the consent box above first');
+  });
+
+  it('requires a consent method and non-blank evidence before it will submit, and the error is announced (role=alert, F7)', () => {
     personData.current = person({ status_raw: 'not_asked' });
     render(
       <PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />,
@@ -133,25 +146,36 @@ describe('PartyProfileSheet — not_asked with a phone shows the invite-to-texts
     // No method chosen, no evidence typed yet.
     fireEvent.click(screen.getByText('Invite to texts'));
 
-    expect(
-      screen.getByText(
-        'Record how and where they gave prior consent before sending a text.',
-      ),
-    ).toBeInTheDocument();
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent(
+      'Record how and where they gave prior consent before sending a text.',
+    );
     expect(recordConsentMutate).not.toHaveBeenCalled();
   });
 
-  it('fires the hook with the exact five-column consent bundle once the guard is satisfied', () => {
+  it('both form fields carry a real associated label (F7)', () => {
     personData.current = person({ status_raw: 'not_asked' });
     render(
       <PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />,
     );
 
     fireEvent.click(screen.getByRole('checkbox'));
-    fireEvent.change(screen.getByLabelText('SMS consent method'), {
+
+    expect(screen.getByLabelText('How consent was given')).toBeInTheDocument();
+    expect(screen.getByLabelText('Consent record')).toBeInTheDocument();
+  });
+
+  it('fires the hook with the exact four-field consent bundle once the guard is satisfied — no dead projectId (F8)', () => {
+    personData.current = person({ status_raw: 'not_asked' });
+    render(
+      <PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />,
+    );
+
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.change(screen.getByLabelText('How consent was given'), {
       target: { value: 'verbal' },
     });
-    fireEvent.change(screen.getByPlaceholderText(/Where and when they agreed/), {
+    fireEvent.change(screen.getByLabelText('Consent record'), {
       target: { value: 'Told me at the site kickoff on Aug 8' },
     });
     fireEvent.click(screen.getByText('Invite to texts'));
@@ -160,7 +184,6 @@ describe('PartyProfileSheet — not_asked with a phone shows the invite-to-texts
     const [input] = recordConsentMutate.mock.calls[0];
     expect(input).toEqual({
       partyId: 'party-1',
-      projectId: 'project-1',
       phone: '5551234567',
       smsConsentSource: 'verbal',
       smsConsentEvidence: 'Told me at the site kickoff on Aug 8',
