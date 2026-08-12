@@ -3,6 +3,7 @@
 // Run: deno test --no-check -A supabase/functions/_tests/sms-status.test.ts
 
 import {
+  assert,
   assertEquals,
 } from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import { handleStatusCallback } from "../sms-status/handler.ts";
@@ -146,4 +147,99 @@ Deno.test("an unknown MessageStatus is rejected with 400", async () => {
   });
   const res = await handleStatusCallback(req, deps(fake));
   assertEquals(res.status, 400);
+});
+
+// ── item 5: honest notification_log statuses ────────────────────────────────
+
+Deno.test("'delivered' flips the LINKED notification_log row (matched by provider_id) from sending to delivered", async () => {
+  const fake = createFakeSupabase({
+    sms_messages: [
+      { id: "m1", twilio_sid: "SM999", twilio_status: "sent", direction: "outbound", body: "hi" },
+    ],
+    notification_log: [
+      {
+        id: "n1", user_id: "u1", type: "site_request_send", channel: "sms",
+        status: "sending", provider_id: "SM999",
+      },
+    ],
+  });
+  const req = await signedRequest({ MessageSid: "SM999", MessageStatus: "delivered" });
+  const res = await handleStatusCallback(req, deps(fake));
+  assertEquals(res.status, 204);
+  const row = (fake._data.notification_log ?? [])[0] as { status: string; sent_at?: string };
+  assertEquals(row.status, "delivered");
+  assert(row.sent_at, "sent_at is stamped on delivery");
+});
+
+Deno.test("'failed' flips the LINKED notification_log row to failed and carries the error", async () => {
+  const fake = createFakeSupabase({
+    sms_messages: [
+      { id: "m1", twilio_sid: "SM998", twilio_status: "sent", direction: "outbound", body: "hi" },
+    ],
+    notification_log: [
+      {
+        id: "n1", user_id: "u1", type: "site_request_send", channel: "sms",
+        status: "sending", provider_id: "SM998",
+      },
+    ],
+  });
+  const req = await signedRequest({
+    MessageSid: "SM998",
+    MessageStatus: "failed",
+    ErrorCode: "30003",
+    ErrorMessage: "Unreachable destination handset",
+  });
+  const res = await handleStatusCallback(req, deps(fake));
+  assertEquals(res.status, 204);
+  const row = (fake._data.notification_log ?? [])[0] as { status: string; error?: string };
+  assertEquals(row.status, "failed");
+  assertEquals(row.error, "Unreachable destination handset");
+});
+
+Deno.test("an intermediate status (e.g. 'sent') leaves notification_log alone — it's already 'sending'", async () => {
+  const fake = createFakeSupabase({
+    sms_messages: [
+      { id: "m1", twilio_sid: "SM997", twilio_status: "queued", direction: "outbound", body: "hi" },
+    ],
+    notification_log: [
+      {
+        id: "n1", user_id: "u1", type: "site_request_send", channel: "sms",
+        status: "sending", provider_id: "SM997",
+      },
+    ],
+  });
+  const req = await signedRequest({ MessageSid: "SM997", MessageStatus: "sent" });
+  const res = await handleStatusCallback(req, deps(fake));
+  assertEquals(res.status, 204);
+  const row = (fake._data.notification_log ?? [])[0] as { status: string };
+  assertEquals(row.status, "sending", "an intermediate callback must not touch notification_log");
+});
+
+Deno.test("no matching notification_log row (e.g. a userId-path send with no link) does not fail the webhook", async () => {
+  const fake = createFakeSupabase({
+    sms_messages: [
+      { id: "m1", twilio_sid: "SM996", twilio_status: "sent", direction: "outbound", body: "hi" },
+    ],
+    notification_log: [],
+  });
+  const req = await signedRequest({ MessageSid: "SM996", MessageStatus: "delivered" });
+  const res = await handleStatusCallback(req, deps(fake));
+  assertEquals(res.status, 204);
+});
+
+Deno.test("a non-sms notification_log row sharing a provider_id string is never touched", async () => {
+  const fake = createFakeSupabase({
+    sms_messages: [
+      { id: "m1", twilio_sid: "SMshared", twilio_status: "sent", direction: "outbound", body: "hi" },
+    ],
+    notification_log: [
+      { id: "n1", user_id: "u1", type: "email_thing", channel: "email", status: "sending", provider_id: "SMshared" },
+    ],
+  });
+  const req = await signedRequest({ MessageSid: "SMshared", MessageStatus: "delivered" });
+  const res = await handleStatusCallback(req, deps(fake));
+  assertEquals(res.status, 204);
+  const row = (fake._data.notification_log ?? [])[0] as { status: string; channel: string };
+  assertEquals(row.channel, "email");
+  assertEquals(row.status, "sending", "channel gate keeps this email row untouched");
 });

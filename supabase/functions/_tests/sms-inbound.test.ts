@@ -159,7 +159,7 @@ Deno.test("LLM <0.5 routes to designer review", async () => {
 });
 
 // ── project-chooser loop fix ─────────────────────────────────────────────────
-function multiProjectSeed(conversation: Record<string, unknown>) {
+function multiProjectSeed(conversation: Record<string, unknown>, extra: Record<string, unknown[]> = {}) {
   return baseSeed({
     projects: [
       { id: "proj1", name: "Maple St", designer_id: "dz1" },
@@ -174,7 +174,15 @@ function multiProjectSeed(conversation: Record<string, unknown>) {
       { id: "task2", title: "Confirm the number", due_date: null, owner_party_id: "p2", status: "todo", project_id: "proj2" },
     ],
     sms_conversations: [conversation],
+    ...extra,
   });
+}
+
+/** A fetchImpl stub for MMS ingestion: any MediaUrl fetch succeeds with a tiny JPEG body. */
+function mmsFetchStub(): Promise<Response> {
+  return Promise.resolve(
+    new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "Content-Type": "image/jpeg" } }),
+  );
 }
 
 const PIN_NOW = new Date("2026-08-12T12:00:00Z");
@@ -295,7 +303,9 @@ Deno.test("an MMS with no caption replays the stashed media, not a brush-off", a
   assert(!res.twiml.includes("Text me your update"), "a caption-less photo is not brushed off");
   assertEquals(rpcCalls.length, 1);
   const effect = rpcCalls[0].p_effect as { media?: string[] };
-  assertEquals(effect.media, ["holding/conv1/m1/0.jpg"], "stashed media carried into the effect");
+  // Re-homed (item 3) now that the project is known — the effect carries the
+  // NEW project path, not the original holding/ one.
+  assertEquals(effect.media, ["project/proj2/sms/m1/0.jpg"], "stashed media carried into the effect, re-homed");
   assertEquals(rpcCalls[0].p_party_id, "p2");
 });
 
@@ -342,4 +352,236 @@ Deno.test("two simultaneous chooser picks apply the stashed update exactly once"
   const dispositions = [a.disposition, b.disposition].sort();
   assertEquals(dispositions, ["applied", "project_choice_race"]);
   assertEquals(rpcCalls.length, 1, "the loser of the race replays nothing");
+});
+
+// ── pick-reply MMS merge, pin-aware MMS paths, holding re-home, attribution ──
+
+Deno.test("a pick-reply carrying its own MMS merges it with the stashed media, not overwrites it", async () => {
+  const rpcCalls: Array<Record<string, unknown>> = [];
+  const fake: FakeSupabase = createFakeSupabase(
+    multiProjectSeed({
+      id: "conv1", twilio_number: TO, phone_e164: "+15551110005", state: "awaiting_project_choice",
+      active_project_id: null, party_id: null,
+      state_context: {
+        chooser: [{ n: 1, project_id: "proj1", party_id: "p1" }, { n: 2, project_id: "proj2", party_id: "p2" }],
+        pending_body: "",
+        pending_media: [{ path: "holding/conv1/m1/0.jpg", content_type: "image/jpeg", twilio_url: "https://x/0" }],
+      },
+    }, {
+      project_parties: [
+        { id: "p1", phone_e164: "+15551110005", project_id: "proj1", party_kind: "sub", sms_consent_status: "granted" },
+        { id: "p2", phone_e164: "+15551110005", project_id: "proj2", party_kind: "sub", sms_consent_status: "granted" },
+      ],
+    }),
+    { apply_field_effect: (args) => { rpcCalls.push(args); return { data: { summary_text: "Logged.", remaining_count: 0 }, error: null }; } },
+  );
+  const parseFn = (): Promise<FieldParseResult> =>
+    Promise.resolve({ intent: "punch_report", target_ref: null, new_date: null, note: "", confidence: 0.9 });
+  const res = await processInbound(
+    params({
+      From: "+15551110005", Body: "2", MessageSid: "SMownmedia", NumMedia: "1",
+      MediaUrl0: "https://twilio/own0", MediaContentType0: "image/png",
+    }),
+    { supabase: fake as never, getEnv: NO_POSTHOG, parseFn, fetchImpl: mmsFetchStub, now: PIN_NOW },
+  );
+  assertEquals(res.disposition, "applied");
+  assertEquals(rpcCalls.length, 1);
+  const effect = rpcCalls[0].p_effect as { media?: string[] };
+  // The stash gets re-homed (item 3) in the same pass — so what "survives"
+  // is now the project path, not the original holding/ one.
+  assert(effect.media?.includes("project/proj2/sms/m1/0.jpg"), "stashed media survives (re-homed)");
+  assertEquals(effect.media?.length, 2, "merged, not overwritten");
+  const ownPath = effect.media?.find((p) => p !== "project/proj2/sms/m1/0.jpg");
+  assert(ownPath?.startsWith("holding/"), "the pick-reply's own MMS is also present, stored via the same holding/ path (unresolved project at ingest time)");
+});
+
+Deno.test("MMS storage path prefers a fresh project_pin over active_project_id and the single-project fallback", async () => {
+  const fake: FakeSupabase = createFakeSupabase(
+    multiProjectSeed({
+      // active_project_id is deliberately the OTHER project — a stale value
+      // that must not win over the fresh, explicit pin.
+      id: "conv1", twilio_number: TO, phone_e164: "+15551110006", state: "idle",
+      active_project_id: "proj1", party_id: "p2",
+      state_context: { project_pin: { project_id: "proj2", at: "2026-08-12T11:00:00.000Z" } },
+    }, {
+      project_parties: [
+        { id: "p1", phone_e164: "+15551110006", project_id: "proj1", party_kind: "sub", sms_consent_status: "granted" },
+        { id: "p2", phone_e164: "+15551110006", project_id: "proj2", party_kind: "sub", sms_consent_status: "granted" },
+      ],
+    }),
+  );
+  await processInbound(
+    params({
+      From: "+15551110006", Body: "roof photo", MessageSid: "SMpinpath", NumMedia: "1",
+      MediaUrl0: "https://twilio/pin0", MediaContentType0: "image/jpeg",
+    }),
+    {
+      supabase: fake as never, getEnv: NO_POSTHOG, fetchImpl: mmsFetchStub, now: PIN_NOW,
+      parseFn: () => Promise.resolve({ intent: "note", target_ref: null, new_date: null, note: "roof photo", confidence: 0.9 }),
+    },
+  );
+  const upload = fake._uploads[0];
+  assert(upload, "an upload happened");
+  assert(upload.path.startsWith("project/proj2/"), `expected proj2 (the pin), got ${upload.path}`);
+});
+
+Deno.test("MMS storage path falls back to holding/ when multi-project and no fresh pin", async () => {
+  const fake: FakeSupabase = createFakeSupabase(
+    multiProjectSeed({
+      id: "conv1", twilio_number: TO, phone_e164: "+15551110007", state: "idle",
+      active_project_id: "proj1", party_id: null,
+      state_context: {},
+    }, {
+      project_parties: [
+        { id: "p1", phone_e164: "+15551110007", project_id: "proj1", party_kind: "sub", sms_consent_status: "granted" },
+        { id: "p2", phone_e164: "+15551110007", project_id: "proj2", party_kind: "sub", sms_consent_status: "granted" },
+      ],
+    }),
+  );
+  await processInbound(
+    params({
+      From: "+15551110007", Body: "site photo", MessageSid: "SMholdingpath", NumMedia: "1",
+      MediaUrl0: "https://twilio/hold0", MediaContentType0: "image/jpeg",
+    }),
+    {
+      supabase: fake as never, getEnv: NO_POSTHOG, fetchImpl: mmsFetchStub, now: PIN_NOW,
+      parseFn: () => Promise.resolve({ intent: "note", target_ref: null, new_date: null, note: "site photo", confidence: 0.9 }),
+    },
+  );
+  const upload = fake._uploads[0];
+  assert(upload, "an upload happened");
+  assert(upload.path.startsWith("holding/"), `expected holding/, got ${upload.path}`);
+});
+
+Deno.test("chooser resolution re-homes holding/ media to the picked project and updates the originating row", async () => {
+  const rpcCalls: Array<Record<string, unknown>> = [];
+  const fake: FakeSupabase = createFakeSupabase(
+    multiProjectSeed({
+      id: "conv1", twilio_number: TO, phone_e164: "+15551110008", state: "awaiting_project_choice",
+      active_project_id: null, party_id: null,
+      state_context: {
+        chooser: [{ n: 1, project_id: "proj1", party_id: "p1" }, { n: 2, project_id: "proj2", party_id: "p2" }],
+        pending_body: "",
+        pending_media: [{ path: "holding/conv1/origmsg1/0.jpg", content_type: "image/jpeg", twilio_url: "https://x/0" }],
+      },
+    }, {
+      project_parties: [
+        { id: "p1", phone_e164: "+15551110008", project_id: "proj1", party_kind: "sub", sms_consent_status: "granted" },
+        { id: "p2", phone_e164: "+15551110008", project_id: "proj2", party_kind: "sub", sms_consent_status: "granted" },
+      ],
+      sms_messages: [
+        {
+          id: "origmsg1", conversation_id: "conv1", direction: "inbound", body: "",
+          media: [{ path: "holding/conv1/origmsg1/0.jpg", content_type: "image/jpeg", twilio_url: "https://x/0" }],
+        },
+      ],
+    }),
+    { apply_field_effect: (args) => { rpcCalls.push(args); return { data: { summary_text: "Logged.", remaining_count: 0 }, error: null }; } },
+  );
+  const parseFn = (): Promise<FieldParseResult> =>
+    Promise.resolve({ intent: "punch_report", target_ref: null, new_date: null, note: "", confidence: 0.9 });
+  const res = await processInbound(
+    params({ From: "+15551110008", Body: "2", MessageSid: "SMrehome" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG, parseFn, now: PIN_NOW },
+  );
+  assertEquals(res.disposition, "applied");
+  assertEquals(fake._moves.length, 1, "one storage move happened");
+  assertEquals(fake._moves[0].from, "holding/conv1/origmsg1/0.jpg");
+  assertEquals(fake._moves[0].to, "project/proj2/sms/origmsg1/0.jpg");
+  const effect = rpcCalls[0].p_effect as { media?: string[] };
+  assertEquals(effect.media, ["project/proj2/sms/origmsg1/0.jpg"], "the effect carries the NEW path");
+  const origRow = (fake._data.sms_messages as Array<{ id: string; media: Array<{ path: string }> }>)
+    .find((m) => m.id === "origmsg1")!;
+  assertEquals(origRow.media[0].path, "project/proj2/sms/origmsg1/0.jpg", "originating row's media path is re-homed too");
+});
+
+Deno.test("a re-home move failure keeps the holding path and still replies (does not crash)", async () => {
+  const rpcCalls: Array<Record<string, unknown>> = [];
+  const fake: FakeSupabase = createFakeSupabase(
+    multiProjectSeed({
+      id: "conv1", twilio_number: TO, phone_e164: "+15551110009", state: "awaiting_project_choice",
+      active_project_id: null, party_id: null,
+      state_context: {
+        chooser: [{ n: 1, project_id: "proj1", party_id: "p1" }, { n: 2, project_id: "proj2", party_id: "p2" }],
+        pending_body: "",
+        pending_media: [{ path: "holding/conv1/origmsg2/0.jpg", content_type: "image/jpeg", twilio_url: "https://x/0" }],
+      },
+    }, {
+      project_parties: [
+        { id: "p1", phone_e164: "+15551110009", project_id: "proj1", party_kind: "sub", sms_consent_status: "granted" },
+        { id: "p2", phone_e164: "+15551110009", project_id: "proj2", party_kind: "sub", sms_consent_status: "granted" },
+      ],
+      sms_messages: [
+        {
+          id: "origmsg2", conversation_id: "conv1", direction: "inbound", body: "",
+          media: [{ path: "holding/conv1/origmsg2/0.jpg", content_type: "image/jpeg", twilio_url: "https://x/0" }],
+        },
+      ],
+    }),
+    { apply_field_effect: (args) => { rpcCalls.push(args); return { data: { summary_text: "Logged.", remaining_count: 0 }, error: null }; } },
+  );
+  fake._failMovesFor!.add("holding/conv1/origmsg2/0.jpg");
+  const parseFn = (): Promise<FieldParseResult> =>
+    Promise.resolve({ intent: "punch_report", target_ref: null, new_date: null, note: "", confidence: 0.9 });
+  const res = await processInbound(
+    params({ From: "+15551110009", Body: "2", MessageSid: "SMrehomefail" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG, parseFn, now: PIN_NOW },
+  );
+  assertEquals(res.disposition, "applied", "a move failure never crashes the reply");
+  const effect = rpcCalls[0].p_effect as { media?: string[] };
+  assertEquals(effect.media, ["holding/conv1/origmsg2/0.jpg"], "kept the holding path on move failure");
+  const origRow = (fake._data.sms_messages as Array<{ id: string; media: Array<{ path: string }> }>)
+    .find((m) => m.id === "origmsg2")!;
+  assertEquals(origRow.media[0].path, "holding/conv1/origmsg2/0.jpg", "originating row's media untouched on failure");
+});
+
+Deno.test("attribution on replay: parsed_intent/confidence stamp the ORIGINAL stashed message, not the digit reply", async () => {
+  const rpcCalls: Array<Record<string, unknown>> = [];
+  const fake: FakeSupabase = createFakeSupabase(
+    multiProjectSeed({
+      id: "conv1", twilio_number: TO, phone_e164: "+15551110010", state: "awaiting_project_choice",
+      active_project_id: null, party_id: null,
+      state_context: {
+        chooser: [{ n: 1, project_id: "proj1", party_id: "p1" }, { n: 2, project_id: "proj2", party_id: "p2" }],
+        pending_body: "roof leak in the attic",
+        pending_message_id: "origmsg3",
+      },
+    }, {
+      project_parties: [
+        { id: "p1", phone_e164: "+15551110010", project_id: "proj1", party_kind: "sub", sms_consent_status: "granted" },
+        { id: "p2", phone_e164: "+15551110010", project_id: "proj2", party_kind: "sub", sms_consent_status: "granted" },
+      ],
+      sms_messages: [
+        { id: "origmsg3", conversation_id: "conv1", direction: "inbound", body: "roof leak in the attic", created_at: "2026-08-12T11:59:00.000Z" },
+      ],
+    }),
+    { apply_field_effect: (args) => { rpcCalls.push(args); return { data: { summary_text: "Logged.", remaining_count: 0 }, error: null }; } },
+  );
+  let seenRecent: Array<{ direction: string; body: string }> = [];
+  const parseFn = (input: { recentMessages: Array<{ direction: string; body: string }> }): Promise<FieldParseResult> => {
+    seenRecent = input.recentMessages;
+    return Promise.resolve({ intent: "punch_report", target_ref: null, new_date: null, note: "roof leak in the attic", confidence: 0.9 });
+  };
+  const res = await processInbound(
+    params({ From: "+15551110010", Body: "2", MessageSid: "SMattrib" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG, parseFn: parseFn as never, now: PIN_NOW },
+  );
+  assertEquals(res.disposition, "applied");
+  assertEquals(rpcCalls.length, 1);
+  assertEquals(rpcCalls[0].p_sms_message_id, "origmsg3", "apply_field_effect provenance points at the original message");
+
+  const messages = fake._data.sms_messages as Array<
+    { id: string; twilio_sid?: string; parsed_intent?: unknown; confidence?: number; body: string }
+  >;
+  const origRow = messages.find((m) => m.id === "origmsg3")!;
+  assert(origRow.parsed_intent, "the ORIGINAL stashed message is stamped");
+  assertEquals(origRow.confidence, 0.9);
+
+  const digitRow = messages.find((m) => m.twilio_sid === "SMattrib")!;
+  assertEquals(digitRow.parsed_intent, undefined, "the digit reply is never stamped");
+
+  assert(
+    !seenRecent.some((m) => m.body === "roof leak in the attic"),
+    "the replayed original text is excluded from the LLM's recent-history feed",
+  );
 });

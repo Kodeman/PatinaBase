@@ -172,11 +172,16 @@ const deps: SiteRequestDispatchDeps = {
       .eq("id", context.party_id)
       .maybeSingle();
     if (!party?.user_id) return;
+    // result.sent means Twilio ACCEPTED the send — not proof of delivery.
+    // 'sending' (with provider_id = the Twilio sid) links this row for
+    // sms-status to flip to 'delivered'/'failed' when the real callback
+    // arrives; a send that never reached Twilio stays 'queued'.
     await client.from("notification_log").insert({
       user_id: party.user_id,
       type: `site_request_${action.replaceAll("-", "_")}`,
       channel: "sms",
-      status: result.sent ? "delivered" : "queued",
+      status: result.sent ? "sending" : "queued",
+      provider_id: result.twilioSid ?? null,
       metadata: {
         request_id: context.request_id,
         project_id: context.project_id,

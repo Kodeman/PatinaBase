@@ -271,6 +271,11 @@ export async function processInbound(
   const to = params.To;
   let body = (params.Body ?? "").trim();
   let upper = body.toUpperCase();
+  // Attribution on replay (i): when this request replays a stashed chooser
+  // message, parsed_intent/confidence and needs_review provenance stamp the
+  // ORIGINAL stashed message row, not the meaningless digit-choice reply.
+  let effectiveMessageId: string;
+  let replayExcludeFromHistory: string | null = null;
 
   // (c) idempotency claim on a per-conversation message row.
   const conv = await findOrCreateConversation(supabase, to, from);
@@ -291,6 +296,7 @@ export async function processInbound(
     return { status: 200, twiml: twimlBody(), disposition: "duplicate" };
   }
   const messageId = (claimed as Array<{ id: string }>)[0].id;
+  effectiveMessageId = messageId;
   await supabase
     .from("sms_conversations")
     .update({ last_inbound_at: nowIso })
@@ -372,8 +378,12 @@ export async function processInbound(
   const projectNames = await loadProjectNames(supabase, projectIds);
 
   // (f) MMS — fetch + store to field-media (project if known, else holding).
+  // Prefer a FRESH explicit project_pin over the merely-single-project case —
+  // conv.active_project_id is stamped at conversation creation by whoever
+  // texted first and is stale for this purpose (see the pin comment below).
   const numMedia = parseInt(params.NumMedia ?? "0", 10) || 0;
-  const bestProject = conv.active_project_id ?? (projectIds.length === 1 ? projectIds[0] : null);
+  const bestProject = freshProjectPin(conv.state_context, now) ??
+    (projectIds.length === 1 ? projectIds[0] : null);
   let media: Array<{ path: string; content_type: string; twilio_url: string }> = [];
   if (numMedia > 0) {
     media = await ingestMedia(params, deps, conv.id, messageId, bestProject);
@@ -393,11 +403,26 @@ export async function processInbound(
       const mergedContext = { ...conv.state_context };
       delete mergedContext.chooser;
       const pendingText = typeof mergedContext.pending_body === "string" ? mergedContext.pending_body : "";
-      const pendingMedia = Array.isArray(mergedContext.pending_media)
+      let pendingMedia = Array.isArray(mergedContext.pending_media)
         ? mergedContext.pending_media as Array<{ path: string; content_type: string; twilio_url: string }>
         : [];
+      const pendingMessageId = typeof mergedContext.pending_message_id === "string"
+        ? mergedContext.pending_message_id
+        : null;
       delete mergedContext.pending_body;
       delete mergedContext.pending_media;
+      delete mergedContext.pending_message_id;
+      if (pendingMessageId) {
+        // The stashed message — not this digit reply — carries the content;
+        // attribution (parsed_intent/confidence/needs_review) belongs on it.
+        effectiveMessageId = pendingMessageId;
+        replayExcludeFromHistory = pendingMessageId;
+      }
+      // Re-home any holding/ media now that a project is known — best effort;
+      // a move failure keeps the holding path rather than failing the reply.
+      if (pendingMedia.length > 0) {
+        pendingMedia = await rehomeHoldingMedia(supabase, pendingMedia, pick.project_id);
+      }
       // THE pin: only an explicit chooser pick scopes the conversation.
       mergedContext.project_pin = { project_id: pick.project_id, at: nowIso };
       // Conditional on the chooser state still being live: two picks racing in
@@ -412,7 +437,7 @@ export async function processInbound(
         return { status: 200, twiml: twimlBody(), disposition: "project_choice_race" };
       }
       if (!pendingText && pendingMedia.length === 0) {
-        await stampMessage(supabase, messageId, pick.party_id, pick.project_id, { path: "menu", disambiguated: true });
+        await stampMessage(supabase, effectiveMessageId, pick.party_id, pick.project_id, { path: "menu", disambiguated: true });
         return await reply(supabase, conv.id,
           `Got it — working on ${projectNames[pick.project_id] ?? "that project"}. Text me your update.`,
           pick.party_id, pick.project_id, "project_chosen");
@@ -422,7 +447,17 @@ export async function processInbound(
       // drop it and don't make the party re-send it.
       body = pendingText;
       upper = body.toUpperCase();
-      if (pendingMedia.length > 0) media = pendingMedia;
+      // Merge — never overwrite — this pick-reply's own MMS (if any) with the
+      // stashed media from the message that triggered the chooser.
+      if (pendingMedia.length > 0) {
+        const seenPaths = new Set(media.map((m) => m.path));
+        for (const m of pendingMedia) {
+          if (!seenPaths.has(m.path)) {
+            media.push(m);
+            seenPaths.add(m.path);
+          }
+        }
+      }
       conv.state = "idle";
       conv.active_project_id = pick.project_id;
       conv.party_id = pick.party_id;
@@ -479,17 +514,18 @@ export async function processInbound(
   // project's items. conv.active_project_id is NOT a pin: it is stamped at
   // conversation creation by the first outbound send, so reading it as one
   // would scope every later reply to whoever texted first.
-  const pin = conv.state_context?.project_pin as { project_id?: string; at?: string } | undefined;
-  const pinAge = pin?.at ? now.getTime() - new Date(String(pin.at)).getTime() : Infinity;
-  const pinnedRows = pin?.project_id && pinAge <= PROJECT_PIN_TTL_MS
-    ? parties.filter((p) => p.project_id === pin.project_id)
+  const pinnedProjectId = freshProjectPin(conv.state_context, now);
+  const pinnedRows = pinnedProjectId
+    ? parties.filter((p) => p.project_id === pinnedProjectId)
     : [];
   const activePartyForConv = pinnedRows.find((p) => p.id === conv.party_id) ?? pinnedRows[0];
   const partiesForItems = activePartyForConv ? [activePartyForConv] : parties;
 
   // (h) LLM parse against every open item across the phone's parties.
   const candidateItems = await loadCandidateItems(supabase, partiesForItems, projectNames);
-  const recent = await loadRecentMessages(supabase, conv.id);
+  // Don't double-feed the LLM: a replayed stashed message is already `body`;
+  // its own row (still in the last-5 history) must be excluded.
+  const recent = await loadRecentMessages(supabase, conv.id, replayExcludeFromHistory);
   const parsed = await parseFn({
     body,
     openItems: candidateItems.map((c) => ({ id: c.id, kind: c.kind, title: c.title, project_name: c.project_name, due: c.due })),
@@ -511,7 +547,10 @@ export async function processInbound(
       party_id: parties.find((p) => p.project_id === pid)!.id,
     }));
     await supabase.from("sms_conversations")
-      .update({ state: "awaiting_project_choice", state_context: { ...conv.state_context, chooser, pending_body: body, pending_media: media } })
+      .update({
+        state: "awaiting_project_choice",
+        state_context: { ...conv.state_context, chooser, pending_body: body, pending_media: media, pending_message_id: messageId },
+      })
       .eq("id", conv.id);
     const list = chooser.map((c) => `${c.n}) ${projectNames[c.project_id] ?? "Project"}`).join(" ");
     await captureServerEvent("sms-inbound", "sms_parse_outcome",
@@ -526,10 +565,10 @@ export async function processInbound(
 
   // (i) Confidence gate.
   if (parsed.confidence >= 0.8 && (targetItem || parsed.intent === "punch_report" || parsed.intent === "note")) {
-    const applied = await applyEffect(supabase, effectParty, effect, messageId);
-    await stampMessage(supabase, messageId, effectParty, effectProject, { path: "llm", ...parsed }, parsed.confidence);
+    const applied = await applyEffect(supabase, effectParty, effect, effectiveMessageId);
+    await stampMessage(supabase, effectiveMessageId, effectParty, effectProject, { path: "llm", ...parsed }, parsed.confidence);
     if (parsed.intent === "flag_blocker") {
-      await notifyDesigner(supabase, effectProject, "field_blocker", { message_id: messageId, note: parsed.note });
+      await notifyDesigner(supabase, effectProject, "field_blocker", { message_id: effectiveMessageId, note: parsed.note });
     }
     await captureServerEvent("sms-inbound", "sms_parse_outcome",
       { path: "llm", intent: parsed.intent, confidence_bucket: bucket, disposition: "applied" },
@@ -547,7 +586,7 @@ export async function processInbound(
         state_context: { ...conv.state_context, pending_effect: { ...effect, _project_id: effectProject }, pending_party_id: effectParty },
       })
       .eq("id", conv.id);
-    await stampMessage(supabase, messageId, effectParty, effectProject, { path: "llm", ...parsed }, parsed.confidence);
+    await stampMessage(supabase, effectiveMessageId, effectParty, effectProject, { path: "llm", ...parsed }, parsed.confidence);
     await captureServerEvent("sms-inbound", "sms_parse_outcome",
       { path: "llm", intent: parsed.intent, confidence_bucket: bucket, disposition: "clarify" },
       { getEnv: deps.getEnv, fetchImpl: deps.fetchImpl });
@@ -557,8 +596,8 @@ export async function processInbound(
   // <0.5 or question/unclear → needs_review + designer notify.
   await supabase.from("sms_messages")
     .update({ needs_review: true, confidence: parsed.confidence, parsed_intent: { path: "llm", ...parsed }, party_id: effectParty, project_id: effectProject })
-    .eq("id", messageId);
-  await notifyDesigner(supabase, effectProject, "field_needs_review", { message_id: messageId, body });
+    .eq("id", effectiveMessageId);
+  await notifyDesigner(supabase, effectProject, "field_needs_review", { message_id: effectiveMessageId, body });
   const firstName = await designerFirstName(supabase, effectProject);
   await captureServerEvent("sms-inbound", "sms_parse_outcome",
     { path: "llm", intent: parsed.intent, confidence_bucket: bucket, disposition: "needs_review" },
@@ -570,6 +609,20 @@ export async function processInbound(
 function firstInt(s: string): number | null {
   const m = s.match(/\d+/);
   return m ? parseInt(m[0], 10) : null;
+}
+
+/**
+ * A fresh explicit project pin (within PROJECT_PIN_TTL_MS) from a
+ * conversation's state_context, or null. Shared by the MMS storage-path
+ * choice and the LLM item-scoping logic below — one TTL rule, two call sites.
+ */
+function freshProjectPin(
+  stateContext: Record<string, unknown> | undefined,
+  now: Date,
+): string | null {
+  const pin = stateContext?.project_pin as { project_id?: string; at?: string } | undefined;
+  const pinAge = pin?.at ? now.getTime() - new Date(String(pin.at)).getTime() : Infinity;
+  return pin?.project_id && pinAge <= PROJECT_PIN_TTL_MS ? pin.project_id : null;
 }
 
 /** A menu reply is a bare number, or "DONE n" / "n done" (case-insensitive). */
@@ -653,16 +706,91 @@ async function loadProjectNames(supabase: SupabaseClient, ids: string[]): Promis
 async function loadRecentMessages(
   supabase: SupabaseClient,
   conversationId: string,
+  /** Exclude this row (the original stashed message when replaying its text
+   * as the current `body`) so the LLM isn't fed the same content twice. */
+  excludeId?: string | null,
 ): Promise<{ direction: string; body: string }[]> {
   const { data } = await supabase
     .from("sms_messages")
-    .select("direction, body, created_at")
+    .select("id, direction, body, created_at")
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: false })
     .limit(5);
-  return ((data ?? []) as Array<{ direction: string; body: string }>)
+  return ((data ?? []) as Array<{ id: string; direction: string; body: string }>)
+    .filter((m) => !excludeId || m.id !== excludeId)
     .reverse()
     .map((m) => ({ direction: m.direction, body: m.body ?? "" }));
+}
+
+/**
+ * Re-home holding/ media to the project path once a chooser pick resolves
+ * which project it belongs to, and repoint the originating sms_messages.media
+ * entries at the new paths. Each holding/ path encodes its own originating
+ * conversation/message id (`holding/<conversationId>/<messageId>/<file>`), so
+ * this works even if pendingMedia spans more than one stashed message. A
+ * per-item move failure keeps that item's holding path — never throws, never
+ * blocks the reply.
+ */
+async function rehomeHoldingMedia(
+  supabase: SupabaseClient,
+  media: Array<{ path: string; content_type: string; twilio_url: string }>,
+  projectId: string,
+): Promise<Array<{ path: string; content_type: string; twilio_url: string }>> {
+  const out: Array<{ path: string; content_type: string; twilio_url: string }> = [];
+  const movesByMessage = new Map<string, Array<{ oldPath: string; newPath: string }>>();
+
+  for (const m of media) {
+    if (!m.path.startsWith("holding/")) {
+      out.push(m);
+      continue;
+    }
+    const parts = m.path.split("/");
+    // holding/<conversationId>/<messageId>/<file...>
+    if (parts.length < 4) {
+      out.push(m);
+      continue;
+    }
+    const originMessageId = parts[2];
+    const filename = parts.slice(3).join("/");
+    const newPath = `project/${projectId}/sms/${originMessageId}/${filename}`;
+    try {
+      const { error } = await supabase.storage.from("field-media").move(m.path, newPath);
+      if (error) {
+        console.error("rehomeHoldingMedia move failed:", error);
+        out.push(m);
+        continue;
+      }
+      out.push({ ...m, path: newPath });
+      const moves = movesByMessage.get(originMessageId) ?? [];
+      moves.push({ oldPath: m.path, newPath });
+      movesByMessage.set(originMessageId, moves);
+    } catch (err) {
+      console.error("rehomeHoldingMedia move threw:", err);
+      out.push(m);
+    }
+  }
+
+  for (const [originMessageId, moves] of movesByMessage) {
+    try {
+      const { data: row } = await supabase
+        .from("sms_messages")
+        .select("media")
+        .eq("id", originMessageId)
+        .maybeSingle();
+      const existing = ((row as { media?: Array<{ path: string; content_type: string; twilio_url: string }> } | null)
+        ?.media) ?? [];
+      if (existing.length === 0) continue;
+      const updated = existing.map((entry) => {
+        const move = moves.find((mv) => mv.oldPath === entry.path);
+        return move ? { ...entry, path: move.newPath } : entry;
+      });
+      await supabase.from("sms_messages").update({ media: updated }).eq("id", originMessageId);
+    } catch (err) {
+      console.error("rehomeHoldingMedia sms_messages update failed:", err);
+    }
+  }
+
+  return out;
 }
 
 async function ingestMedia(

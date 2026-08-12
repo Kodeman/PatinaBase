@@ -132,6 +132,7 @@ export interface FakeSupabase {
   storage: {
     from(bucket: string): {
       upload(path: string, bytes: unknown, opts?: unknown): Promise<{ data: unknown; error: unknown }>;
+      move(fromPath: string, toPath: string): Promise<{ data: unknown; error: unknown }>;
     };
   };
   functions: {
@@ -139,7 +140,10 @@ export interface FakeSupabase {
   };
   _data: Record<string, Row[]>;
   _uploads: Array<{ bucket: string; path: string }>;
+  _moves: Array<{ bucket: string; from: string; to: string }>;
   _invocations: Array<{ name: string; body: unknown }>;
+  /** Test hook: paths that should fail on the next .move() call. */
+  _failMovesFor?: Set<string>;
 }
 
 export function createFakeSupabase(
@@ -149,7 +153,9 @@ export function createFakeSupabase(
   const store: Record<string, Row[]> = {};
   for (const [k, v] of Object.entries(initial)) store[k] = v.map(clone);
   const uploads: Array<{ bucket: string; path: string }> = [];
+  const moves: Array<{ bucket: string; from: string; to: string }> = [];
   const invocations: Array<{ name: string; body: unknown }> = [];
+  const failMovesFor = new Set<string>();
 
   return {
     from: (table: string) => new Builder(store, table),
@@ -163,6 +169,14 @@ export function createFakeSupabase(
           uploads.push({ bucket, path });
           return { data: { path }, error: null };
         },
+        // deno-lint-ignore require-await
+        move: async (fromPath: string, toPath: string) => {
+          if (failMovesFor.has(fromPath)) {
+            return { data: null, error: { message: "move failed" } };
+          }
+          moves.push({ bucket, from: fromPath, to: toPath });
+          return { data: { message: "moved" }, error: null };
+        },
       }),
     },
     functions: {
@@ -174,6 +188,8 @@ export function createFakeSupabase(
     },
     _data: store,
     _uploads: uploads,
+    _moves: moves,
     _invocations: invocations,
+    _failMovesFor: failMovesFor,
   };
 }
