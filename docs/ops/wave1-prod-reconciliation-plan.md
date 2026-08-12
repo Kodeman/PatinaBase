@@ -5,6 +5,12 @@
 **Status:** NOT EXECUTED. This document is the apply procedure only. Prod mutations
 require Kody's explicit in-session ask.
 
+**Mechanics revision 2026-08-12 (ratified in-session):** applies now run via staged
+`supabase migration up --linked` with a curated pending set — see §1.2. Per-file psql
++ `migration repair` (below and in §3/§4) is retained only as historical reference /
+fallback. PITR gate removed for this session by explicit operator approval; the §2
+snapshot (saved in `docs/ops/wave1-apply-2026-08-12/`) is the rollback reference.
+
 ---
 
 ## 0. What this reconciles
@@ -157,6 +163,68 @@ If that returns nothing, 00472 is independent of 00471 and applies safely. **If 
 returns a hit, HOLD 00472 as well** and record both gaps. Do not "fix" 00472 to
 compensate — fix forward later, after 00471 lands.
 
+### 1.2 CLI staged apply (ratified mechanics)
+
+Per the 2026-08-12 ruling, the mechanics in §1.0 (per-file `supabase db push` +
+`migration repair`) are superseded for this session by a staged
+`supabase migration up --linked` apply. The renumbered wave1 files (00460–00472) do
+not exist in the remote ledger, so the same-number-drift hazard that motivated the
+"NEVER db push" caution behind the older mechanics does not apply to this stack.
+`migration up --linked` (CLI v2.72.7) applies the pending set in version order, one
+transaction per file, stops on first error, uses the CLI's keychain-stored
+credentials (no DB password handling), and records COMPLETE ledger rows (version,
+name, statements) — eliminating the per-file `migration repair` step and the §3
+repair-incompleteness concern entirely.
+
+**00471 stays HELD** by moving its file to `supabase/migrations-held/` for the
+duration of the session and restoring it afterward. It remains tracked in git; the
+move is a working-tree hold only, not a commit-time deletion.
+
+**Stage 1 — 00460–00461 only.** Hold everything else out of
+`supabase/migrations/` (00462–00470 and 00472, in addition to 00471) so only 00460
+and 00461 are present, then:
+
+```bash
+supabase migration list --linked   # confirm exactly 00460, 00461 are pending
+supabase migration up --linked --yes
+```
+
+Verify: run the 00460/00461 object probes plus the ledger-completeness assertion
+below.
+
+**Stage 2 — reintroduce 00462 alone.**
+
+```bash
+supabase migration list --linked   # confirm exactly 00462 is pending
+supabase migration up --linked --yes
+```
+
+Run the §5.3 posture checks immediately after this stage.
+
+**Stage 3 — reintroduce 00463–00470 and 00472.**
+
+```bash
+supabase migration list --linked   # confirm exactly 00463-00470, 00472 are pending
+supabase migration up --linked --yes
+```
+
+Run the full §5 probe suite after this stage.
+
+**Before every stage:** `supabase migration list --linked` must show exactly the
+intended pending set for that stage — nothing more, nothing less. **After every
+stage:** assert the new ledger rows have `name` and `statements` populated:
+
+```sql
+SELECT version, name, (statements IS NOT NULL) AS has_statements
+FROM supabase_migrations.schema_migrations
+WHERE version >= '00460'
+ORDER BY version;
+```
+
+**Note.** `migration up --linked` does not run seeds and applies one transaction per
+file, stopping on first error — a failed file leaves prior files applied and
+correctly recorded; there is no partial-file corruption to reconcile.
+
 ---
 
 ## 2. Pre-apply snapshot
@@ -213,6 +281,10 @@ ORDER BY p.proname, r.rolname;
 
 ## 3. Post-first-repair ledger assertion
 
+Superseded by §1.2 for this session — `migration up --linked` writes complete rows;
+the assertion below still runs after stage 1 as a check, but the repair/backfill
+fallback should not be needed.
+
 The out-of-band FF&E applies may have left `supabase_migrations.schema_migrations`
 rows with a NULL `name` or NULL `statements`. `supabase db push` tolerates that on
 read but the repair path does not. **After the first successful apply (`00460`),
@@ -260,6 +332,9 @@ the "do not re-run" premise is wrong for that file.
 signatures and product configurations, and it changes storage posture. It is the
 one file in this stack whose blast radius is not cleanly reversible by a follow-up
 migration.
+
+2026-08-12: PITR gate removed for this session by explicit operator approval;
+snapshot-only rollback accepted.
 
 **Before applying 00462:**
 
@@ -473,6 +548,9 @@ very next push by anyone — for an unrelated migration — applies it and silen
 breaks the gate.
 
 So the hold is enforced by file location, not by discipline:
+
+With the CLI staged apply, the held 00471 also never enters the pending set (its
+file sits in `supabase/migrations-held/` during the session).
 
 - **`00471` remains in `supabase/migrations-held/`.** Commit it there. Future pushes
   are then safe by construction.
