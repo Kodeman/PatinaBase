@@ -7654,3 +7654,119 @@ fixed under this ticket (designer-portal is out of scope for WP3 Track D).
 
 *Entries add: I114–I120 · last id = I120*
 
+
+### I121 · R7's lifecycle is ONE contract read by TWO rails (WP4 checkpoint ruling)
+
+The fifteen steps, the three gates, and the shape of a reading live in
+`packages/types/src/procurement-lifecycle.ts`, not in the portal that happens to
+render them first. Two rails answer the same contract: the studio's own
+procurement (`purchase_orders` and friends) maps in
+`apps/designer-portal/src/lib/document/procurement-lifecycle.ts`; the Patina
+fulfilment ledger (`fulfillment_*`) maps in the types package itself, so the
+admin portal can import it in Track 3 without depending on the designer portal.
+
+Unifying was the ruling, and it is load-bearing rather than tidy. The two rails
+carry genuinely different facts — Rail A has an ordered `line_state` chain and
+no inputs-complete fact; Rail B has dated PO columns and no closure fact — and
+the whole value of R7 is that a designer reads the same fifteen words whichever
+book the line came from. A second vocabulary would have re-created the problem
+"Ordered" already caused.
+
+**The one-live-step invariant lives in the shared assembler**
+(`assembleProcurementReading`), not in either mapper, so neither rail can break
+it. The live step is the highest-ordinal evidenced step, and it is live unless
+it is terminal (step 15), in which case nothing is live and the trail has
+closed. A rail mapper's only job is to say what it found; it does not get to
+decide what is current.
+
+**The reading is total.** All fifteen steps and all three gates come back every
+time, in order, including the ones with nothing behind them. The future is part
+of the reading — that is what makes it visible and empty rather than absent.
+
+### I122 · The lifecycle is rendering grammar; the five missing facts are a docket, not a build (№8)
+
+Kody ruled at the WP4 design checkpoint: **zero new schema, and one migration is
+not authorized.** The trail draws what the orders book already knows.
+
+Five steps have no fact on the studio rail today — 04 Awaiting inputs,
+07 Ready to ship, 11 Stored, 12 Install released, 14/15 Punch·Closed. They are
+not inferred from a neighbour, not defaulted, and not blocking. This forced the
+one genuinely new idea in the contract: **`no-record` is a distinct state from
+`future`.** A step behind the trail's position with nothing behind it reads
+"no record" in quiet, unstamped microcopy; a step ahead of the position reads
+dashed-outline and empty. Collapsing the two would have been the fiction the
+ruling exists to prevent — "we never wrote this down" is not "this has not
+happened yet", and a trail that cannot tell them apart is exactly the thing
+"Ordered" was.
+
+The same rule governs steps that DO have facts: **steps do not imply one another
+on Rail B.** A delivered line whose PO was never marked sent reads step 02 as
+`no-record`. Rail A's chain is ordered and is the deliberate exception, and even
+there the implied steps settle *undated* rather than borrowing a date they do
+not have.
+
+What each missing fact would cost is priced in
+`docs/design/workflow-alignment/wp4-lifecycle-mapping.md` §5 as a future data
+wave, sequenced cheapest-and-highest-value first (07, then 04, then 11→12 as the
+pair that unlocks gate G3, then 14/15). **None of it is authorized by this
+track**, and the trail renders honestly without any of it.
+
+One select was extended — `useProjectFFEItems` now also fetches
+`purchase_orders.delivered_date`, the nested `po_payments`, and
+`damage_claims.created_at`. Every column already existed; without them steps 01,
+09 and 10 could not be evidenced at all. That is fetching, not schema.
+
+### I123 · The three gates are derived OPERATIONAL seals, not client ceremonies (ratified)
+
+R2's gate anatomy is a boundary ceremony a person performs. R7's three
+sub-seals are not that, and conflating them would have put a client act in the
+middle of a purchase order. **No `client_decisions` row is consulted, no client
+act settles one, and no gate here is authored by anybody** — each is a predicate
+over facts the book already holds:
+
+- **G1 Complete to produce** — `acknowledged_at` set AND every deposit-kind
+  `po_payments` row `paid`. **A PO with no deposit rows settles it vacuously**,
+  which is the ratified reading: absent terms are not unmet terms.
+- **G2 Received and dispositioned** — an inspection logged at item grain
+  (`received_quantity` non-null), the count not short, and no `drafted` /
+  `vendor_notified` claim on the line. `receiving_inspections` is PO-grain with
+  no FF&E link, so the item-grain trace is the count 00184's trigger writes
+  back.
+- **G3 Warehouse + site ready** — **no fact exists on either rail.** It is drawn,
+  and it is drawn empty: `unreached` before step 11, `no-record` after, never
+  settled and never open. A gate that can never pass is still worth drawing,
+  because its emptiness is the honest report on §5.3.
+
+An open gate names the term holding it (`awaiting acknowledgment`, `open claim`,
+`short receipt`) — the qualifier is read off the unmet predicate, never written
+by hand. A gate the trail has not reached is `unreached`, not `open`: an unmet
+term is only a stop once the work is standing at it.
+
+**Commercial guard (№7, still open).** The step names ARE the lexicon and ship
+verbatim — "Cleared to produce", never "Authorized"; "Released to maker", never
+"PO issued". Internal enum values and PO entity names are untouched. Nothing
+these gates read is rendered as a payment surface, a balance, or a funds-held
+indicator; G1 reads deposit rows and renders the word "deposit" only as the term
+holding a gate open. A test asserts no rendered trail copy matches
+`authoriz|PO issued|purchase authorized`.
+
+**Renderings.** The line unfold gets the full numbered trail
+(`procurement-trail.tsx`): settled stamped, live in clay, future dashed-outline
+and empty, `no-record` quiet with microcopy, gates as full-width interrupting
+bars with an oak left border once reached. The orders book gets the same grammar
+at ledger density — the row's Stamp becomes the lifecycle *position* rather than
+the status word, plus "Next gate" and "Expected" columns; **the fifteen steps
+never enumerate at ledger density.** Zero shadows. All trail type ≥12px — M7's
+miniature stamps are a plate device and do not ship, so the trail carries its
+own 12px stamp rather than the 10px `Stamp` component, which stays as-is on the
+surfaces that already use it.
+
+**Interpretations surfaced, not ruled** (full list in the mapping doc §6): the
+ledger keeps PO grain rather than re-graining to M7's line-grain plate;
+`purchase_orders.last_status_change_at` does not exist, so steps 05/06 date from
+the item's column; `confirmed_eta` dates step 08 despite being an expectation
+rather than a departure; and **a never-sent draft PO with no payment rows reads
+"Cleared to produce" as its position** under the vacuous-deposit rule — if that
+claim is too generous, the fix is a second term, not a migration.
+
+*Entries add: I121–I123 · last id = I123*
