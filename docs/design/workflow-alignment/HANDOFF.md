@@ -52,6 +52,8 @@ Flags recorded: ⚠ three functions ACTIVE on Strata with no source on main (`pr
 
 **Wave1 reconciliation E2 apply EXECUTED on Strata 2026-08-12**: the renumbered migrations were staged onto prod via `supabase migration up --linked` (00460–00470 + 00472 applied; ledger rows complete) with **00471 intentionally HELD** — the ledger gap is recorded via `COMMENT ON SCHEMA public`, gated on a Field release carrying `cbe88574` per runbook §7 (see above, still `site_request_close` completed-only). 00461 required an in-place erratum adding trigger-disable windows around its backfills, because the prod CLI applies its migrations through a login role + `SET ROLE`, so the `session_user`-based owner-maintenance bypasses the original body relied on do not hold in that context. §5.3 privacy-posture probes ran all green post-apply, and the local gate-ceremony e2e suite is 4/4. Portal hooks that were silenced (`meta: { errorSurface: 'silent' }`, `TODO(wave1-reconciliation)`) while the wave1 schema was absent from prod are desilenced on `chore/wave1-renumber-reconciliation`; the 00471-gated `useSiteRequestActionDetail` silence (`TODO(wave1-00471-held)`) stays in place until 00471 ships.
 
+**00471 hold CLEARED 2026-08-12 (same evening)**: applied to Strata after the Field release carrying `cbe88574` shipped; reader-loss query returned 0. The `useSiteRequestActionDetail` action-detail hook is desilenced — `meta: { errorSurface: 'silent' }` and the `TODO(wave1-00471-held)` comment removed, restoring normal error surfacing.
+
 ---
 
 ## 1. Mission

@@ -705,8 +705,6 @@ export function useSiteRequestActionDetail(
       return parseSiteRequestActionDetail(data, projectId, requestId);
     },
     ...handoffForegroundRefresh,
-    // TODO(wave1-00471-held): remove silent once 00471 (site_request_authority_action_detail) is applied to prod
-    meta: { errorSurface: 'silent' },
   });
 }
 
