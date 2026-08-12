@@ -276,6 +276,8 @@ export function useCoordinationItems(projectId: string | null | undefined) {
       if (error) throw error;
       return (data ?? []).map(normalizeThreadPost) as CoordinationItem[];
     },
+    // TODO(wave1-reconciliation): remove silent once wave1 schema is applied to prod
+    meta: { errorSurface: 'silent' },
   });
 }
 
@@ -324,6 +326,8 @@ export function useCourtSummary(projectId: string | null | undefined) {
     },
     select: (items: CoordinationItem[]): CourtCount[] =>
       summarizeCourts(excludeProjectArtifactApprovals(items)),
+    // TODO(wave1-reconciliation): remove silent once wave1 schema is applied to prod
+    meta: { errorSurface: 'silent' },
   });
 }
 

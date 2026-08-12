@@ -90,5 +90,7 @@ export function useProjectWorkflow(projectId: string | null | undefined) {
       if (error) throw error;
       return (data ?? []).map(projectWorkflowRowFromRpc);
     },
+    // TODO(wave1-reconciliation): remove silent once wave1 schema is applied to prod
+    meta: { errorSurface: 'silent' },
   });
 }
