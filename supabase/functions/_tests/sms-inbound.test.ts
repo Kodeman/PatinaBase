@@ -387,12 +387,15 @@ Deno.test("a pick-reply carrying its own MMS merges it with the stashed media, n
   assertEquals(res.disposition, "applied");
   assertEquals(rpcCalls.length, 1);
   const effect = rpcCalls[0].p_effect as { media?: string[] };
-  // The stash gets re-homed (item 3) in the same pass — so what "survives"
-  // is now the project path, not the original holding/ one.
+  // Both the stash AND this turn's own MMS get re-homed in the same pass —
+  // neither survives at its original holding/ path.
   assert(effect.media?.includes("project/proj2/sms/m1/0.jpg"), "stashed media survives (re-homed)");
   assertEquals(effect.media?.length, 2, "merged, not overwritten");
   const ownPath = effect.media?.find((p) => p !== "project/proj2/sms/m1/0.jpg");
-  assert(ownPath?.startsWith("holding/"), "the pick-reply's own MMS is also present, stored via the same holding/ path (unresolved project at ingest time)");
+  assert(
+    ownPath?.startsWith("project/proj2/sms/") && !ownPath.startsWith("holding/"),
+    "the pick-reply's own MMS is ALSO re-homed, not stranded at its ingest-time holding/ path",
+  );
 });
 
 Deno.test("MMS storage path prefers a fresh project_pin over active_project_id and the single-project fallback", async () => {
@@ -533,6 +536,112 @@ Deno.test("a re-home move failure keeps the holding path and still replies (does
   const origRow = (fake._data.sms_messages as Array<{ id: string; media: Array<{ path: string }> }>)
     .find((m) => m.id === "origmsg2")!;
   assertEquals(origRow.media[0].path, "holding/conv1/origmsg2/0.jpg", "originating row's media untouched on failure");
+});
+
+Deno.test("a DB-update failure after a successful move triggers a compensating move-back (row and storage stay consistent)", async () => {
+  const rpcCalls: Array<Record<string, unknown>> = [];
+  const fake: FakeSupabase = createFakeSupabase(
+    multiProjectSeed({
+      id: "conv1", twilio_number: TO, phone_e164: "+15551110011", state: "awaiting_project_choice",
+      active_project_id: null, party_id: null,
+      state_context: {
+        chooser: [{ n: 1, project_id: "proj1", party_id: "p1" }, { n: 2, project_id: "proj2", party_id: "p2" }],
+        pending_body: "",
+        pending_media: [{ path: "holding/conv1/origmsgA/0.jpg", content_type: "image/jpeg", twilio_url: "https://x/0" }],
+      },
+    }, {
+      project_parties: [
+        { id: "p1", phone_e164: "+15551110011", project_id: "proj1", party_kind: "sub", sms_consent_status: "granted" },
+        { id: "p2", phone_e164: "+15551110011", project_id: "proj2", party_kind: "sub", sms_consent_status: "granted" },
+      ],
+      sms_messages: [
+        {
+          id: "origmsgA", conversation_id: "conv1", direction: "inbound", body: "",
+          media: [{ path: "holding/conv1/origmsgA/0.jpg", content_type: "image/jpeg", twilio_url: "https://x/0" }],
+        },
+      ],
+    }),
+    { apply_field_effect: (args) => { rpcCalls.push(args); return { data: { summary_text: "Logged.", remaining_count: 0 }, error: null }; } },
+  );
+  fake._failUpdateIds!.add("origmsgA");
+  const parseFn = (): Promise<FieldParseResult> =>
+    Promise.resolve({ intent: "punch_report", target_ref: null, new_date: null, note: "", confidence: 0.9 });
+  const res = await processInbound(
+    params({ From: "+15551110011", Body: "2", MessageSid: "SMcrashwindow" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG, parseFn, now: PIN_NOW },
+  );
+  assertEquals(res.disposition, "applied", "a rehome DB failure never crashes the reply");
+  // Forward move, then a compensating move-back once the repoint threw.
+  assertEquals(fake._moves.length, 2, "forward move + compensating move-back");
+  assertEquals(
+    fake._moves[0],
+    { bucket: "field-media", from: "holding/conv1/origmsgA/0.jpg", to: "project/proj2/sms/origmsgA/0.jpg" },
+  );
+  assertEquals(
+    fake._moves[1],
+    { bucket: "field-media", from: "project/proj2/sms/origmsgA/0.jpg", to: "holding/conv1/origmsgA/0.jpg" },
+  );
+  const effect = rpcCalls[0].p_effect as { media?: string[] };
+  assertEquals(effect.media, ["holding/conv1/origmsgA/0.jpg"], "rolled back to the holding path in the returned array too");
+  const origRow = (fake._data.sms_messages as Array<{ id: string; media: Array<{ path: string }> }>)
+    .find((m) => m.id === "origmsgA")!;
+  assertEquals(
+    origRow.media[0].path,
+    "holding/conv1/origmsgA/0.jpg",
+    "the row was never repointed — consistent with the rolled-back storage",
+  );
+});
+
+Deno.test("re-home is idempotent on retry: a missing source + an already-present destination is treated as already-moved", async () => {
+  const rpcCalls: Array<Record<string, unknown>> = [];
+  const fake: FakeSupabase = createFakeSupabase(
+    multiProjectSeed({
+      id: "conv1", twilio_number: TO, phone_e164: "+15551110012", state: "awaiting_project_choice",
+      active_project_id: null, party_id: null,
+      state_context: {
+        chooser: [{ n: 1, project_id: "proj1", party_id: "p1" }, { n: 2, project_id: "proj2", party_id: "p2" }],
+        pending_body: "",
+        pending_media: [{ path: "holding/conv1/origmsgB/0.jpg", content_type: "image/jpeg", twilio_url: "https://x/0" }],
+      },
+    }, {
+      project_parties: [
+        { id: "p1", phone_e164: "+15551110012", project_id: "proj1", party_kind: "sub", sms_consent_status: "granted" },
+        { id: "p2", phone_e164: "+15551110012", project_id: "proj2", party_kind: "sub", sms_consent_status: "granted" },
+      ],
+      sms_messages: [
+        {
+          id: "origmsgB", conversation_id: "conv1", direction: "inbound", body: "",
+          // A prior attempt already moved the object but its repoint crashed
+          // before landing — the row still (stale-ly) points at holding/.
+          media: [{ path: "holding/conv1/origmsgB/0.jpg", content_type: "image/jpeg", twilio_url: "https://x/0" }],
+        },
+      ],
+    }),
+    { apply_field_effect: (args) => { rpcCalls.push(args); return { data: { summary_text: "Logged.", remaining_count: 0 }, error: null }; } },
+  );
+  fake._missingSourceFor!.add("holding/conv1/origmsgB/0.jpg");
+  fake._storageFiles!.add("field-media:project/proj2/sms/origmsgB/0.jpg");
+  const parseFn = (): Promise<FieldParseResult> =>
+    Promise.resolve({ intent: "punch_report", target_ref: null, new_date: null, note: "", confidence: 0.9 });
+  const res = await processInbound(
+    params({ From: "+15551110012", Body: "2", MessageSid: "SMretry" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG, parseFn, now: PIN_NOW },
+  );
+  assertEquals(res.disposition, "applied");
+  assertEquals(fake._moves.length, 0, "no successful move recorded — the object was already moved by a prior attempt");
+  const effect = rpcCalls[0].p_effect as { media?: string[] };
+  assertEquals(
+    effect.media,
+    ["project/proj2/sms/origmsgB/0.jpg"],
+    "treated as already-moved; the effect carries the project path",
+  );
+  const origRow = (fake._data.sms_messages as Array<{ id: string; media: Array<{ path: string }> }>)
+    .find((m) => m.id === "origmsgB")!;
+  assertEquals(
+    origRow.media[0].path,
+    "project/proj2/sms/origmsgB/0.jpg",
+    "the stale row is finally repointed on this retry",
+  );
 });
 
 Deno.test("attribution on replay: parsed_intent/confidence stamp the ORIGINAL stashed message, not the digit reply", async () => {

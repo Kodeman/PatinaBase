@@ -423,6 +423,13 @@ export async function processInbound(
       if (pendingMedia.length > 0) {
         pendingMedia = await rehomeHoldingMedia(supabase, pendingMedia, pick.project_id);
       }
+      // This turn's OWN MMS (ingested above, pre-resolution, so bestProject
+      // couldn't know the project yet and it landed in holding/ too) gets the
+      // same treatment — it must not be stranded just because it rode in on
+      // the digit reply instead of the message that triggered the chooser.
+      if (media.some((m) => m.path.startsWith("holding/"))) {
+        media = await rehomeHoldingMedia(supabase, media, pick.project_id);
+      }
       // THE pin: only an explicit chooser pick scopes the conversation.
       mergedContext.project_pin = { project_id: pick.project_id, at: nowIso };
       // Conditional on the chooser state still being live: two picks racing in
@@ -753,19 +760,13 @@ async function rehomeHoldingMedia(
     const originMessageId = parts[2];
     const filename = parts.slice(3).join("/");
     const newPath = `project/${projectId}/sms/${originMessageId}/${filename}`;
-    try {
-      const { error } = await supabase.storage.from("field-media").move(m.path, newPath);
-      if (error) {
-        console.error("rehomeHoldingMedia move failed:", error);
-        out.push(m);
-        continue;
-      }
+
+    if (await moveMediaObject(supabase, m.path, newPath)) {
       out.push({ ...m, path: newPath });
       const moves = movesByMessage.get(originMessageId) ?? [];
       moves.push({ oldPath: m.path, newPath });
       movesByMessage.set(originMessageId, moves);
-    } catch (err) {
-      console.error("rehomeHoldingMedia move threw:", err);
+    } else {
       out.push(m);
     }
   }
@@ -786,11 +787,70 @@ async function rehomeHoldingMedia(
       });
       await supabase.from("sms_messages").update({ media: updated }).eq("id", originMessageId);
     } catch (err) {
-      console.error("rehomeHoldingMedia sms_messages update failed:", err);
+      // The objects already moved but the repoint crashed before landing —
+      // left alone, the row would point at a vanished holding/ path forever.
+      // Compensate by moving each object back so storage and the (still
+      // unrepointed) row agree again; a later retry will re-attempt the move
+      // and, via moveMediaObject's idempotency check, pick up cleanly even if
+      // THIS compensating move-back also fails.
+      console.error("rehomeHoldingMedia sms_messages update failed — rolling back the move(s):", err);
+      for (const mv of moves) {
+        try {
+          const { error: compError } = await supabase.storage.from("field-media").move(mv.newPath, mv.oldPath);
+          if (compError) {
+            console.error("rehomeHoldingMedia compensating move-back failed:", compError, mv);
+            continue;
+          }
+          const idx = out.findIndex((o) => o.path === mv.newPath);
+          if (idx >= 0) out[idx] = { ...out[idx], path: mv.oldPath };
+        } catch (compErr) {
+          console.error("rehomeHoldingMedia compensating move-back threw:", compErr, mv);
+        }
+      }
     }
   }
 
   return out;
+}
+
+/**
+ * Move one object, tolerating a retry of an already-completed move: if the
+ * source is gone but the destination is already there, a prior attempt moved
+ * it but crashed before its sms_messages repoint landed — treat this as
+ * "already done" (the caller still repoints the row) rather than a failure.
+ */
+async function moveMediaObject(
+  supabase: SupabaseClient,
+  fromPath: string,
+  toPath: string,
+): Promise<boolean> {
+  try {
+    const { error } = await supabase.storage.from("field-media").move(fromPath, toPath);
+    if (!error) return true;
+    if (await storageObjectExists(supabase, toPath)) return true;
+    console.error("rehomeHoldingMedia move failed:", error);
+    return false;
+  } catch (err) {
+    if (await storageObjectExists(supabase, toPath)) return true;
+    console.error("rehomeHoldingMedia move threw:", err);
+    return false;
+  }
+}
+
+async function storageObjectExists(
+  supabase: SupabaseClient,
+  path: string,
+): Promise<boolean> {
+  const idx = path.lastIndexOf("/");
+  const dir = idx >= 0 ? path.slice(0, idx) : "";
+  const name = idx >= 0 ? path.slice(idx + 1) : path;
+  try {
+    const { data, error } = await supabase.storage.from("field-media").list(dir, { search: name });
+    if (error || !data) return false;
+    return (data as Array<{ name: string }>).some((f) => f.name === name);
+  } catch {
+    return false;
+  }
 }
 
 async function ingestMedia(

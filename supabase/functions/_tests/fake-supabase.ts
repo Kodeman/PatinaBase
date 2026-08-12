@@ -13,6 +13,11 @@ function clone<T>(o: T): T {
   return o == null ? o : (JSON.parse(JSON.stringify(o)) as T);
 }
 
+interface Controls {
+  /** Row ids that must throw (simulating a crashed/failed DB write) on .update(). */
+  failUpdateIds: Set<string>;
+}
+
 class Builder {
   private filters: Predicate[] = [];
   private _order?: { col: string; asc: boolean };
@@ -23,7 +28,7 @@ class Builder {
   private _ignoreDup = false;
   private _single: "none" | "maybe" | "one" = "none";
 
-  constructor(private store: Record<string, Row[]>, private table: string) {}
+  constructor(private store: Record<string, Row[]>, private table: string, private controls: Controls) {}
 
   select(_cols?: string): this { return this; }
   eq(col: string, val: unknown): this { this.filters.push((r) => r[col] === val); return this; }
@@ -121,6 +126,13 @@ class Builder {
 
     // update
     const matched = this.applyFilters(rows);
+    for (const m of matched) {
+      if (typeof m.id === "string" && this.controls.failUpdateIds.has(m.id)) {
+        // Simulates a write that never lands — thrown, not { error }, so it
+        // exercises callers' try/catch (a network drop, not a validated 4xx).
+        throw new Error(`simulated update failure (table=${this.table}, id=${m.id})`);
+      }
+    }
     for (const m of matched) Object.assign(m, this._payload as Row);
     return this.shape(matched.map(clone));
   }
@@ -133,6 +145,7 @@ export interface FakeSupabase {
     from(bucket: string): {
       upload(path: string, bytes: unknown, opts?: unknown): Promise<{ data: unknown; error: unknown }>;
       move(fromPath: string, toPath: string): Promise<{ data: unknown; error: unknown }>;
+      list(prefix: string, opts?: { search?: string }): Promise<{ data: unknown; error: unknown }>;
     };
   };
   functions: {
@@ -142,8 +155,14 @@ export interface FakeSupabase {
   _uploads: Array<{ bucket: string; path: string }>;
   _moves: Array<{ bucket: string; from: string; to: string }>;
   _invocations: Array<{ name: string; body: unknown }>;
-  /** Test hook: paths that should fail on the next .move() call. */
+  /** Test hook: paths that should fail on the next .move() call with a generic error. */
   _failMovesFor?: Set<string>;
+  /** Test hook: paths whose .move() should fail as "source not found" (retry-of-an-already-moved-object simulation). */
+  _missingSourceFor?: Set<string>;
+  /** Test hook / realism: `${bucket}:${path}` keys the fake .list()-based existence check reads from. .upload()/.move() keep it in sync; tests can pre-seed it directly to simulate "the destination already exists". */
+  _storageFiles?: Set<string>;
+  /** Test hook: row ids whose next .update() call throws (any table), simulating a write that crashes/never lands. */
+  _failUpdateIds?: Set<string>;
 }
 
 export function createFakeSupabase(
@@ -156,9 +175,12 @@ export function createFakeSupabase(
   const moves: Array<{ bucket: string; from: string; to: string }> = [];
   const invocations: Array<{ name: string; body: unknown }> = [];
   const failMovesFor = new Set<string>();
+  const missingSourceFor = new Set<string>();
+  const storageFiles = new Set<string>();
+  const controls: Controls = { failUpdateIds: new Set<string>() };
 
   return {
-    from: (table: string) => new Builder(store, table),
+    from: (table: string) => new Builder(store, table, controls),
     // deno-lint-ignore require-await
     rpc: async (name: string, args: Record<string, unknown> = {}) =>
       rpcHandlers[name] ? rpcHandlers[name](args) : { data: null, error: null },
@@ -167,6 +189,7 @@ export function createFakeSupabase(
         // deno-lint-ignore require-await
         upload: async (path: string) => {
           uploads.push({ bucket, path });
+          storageFiles.add(`${bucket}:${path}`);
           return { data: { path }, error: null };
         },
         // deno-lint-ignore require-await
@@ -174,8 +197,19 @@ export function createFakeSupabase(
           if (failMovesFor.has(fromPath)) {
             return { data: null, error: { message: "move failed" } };
           }
+          if (missingSourceFor.has(fromPath)) {
+            return { data: null, error: { message: "Object not found", statusCode: "404" } };
+          }
+          storageFiles.delete(`${bucket}:${fromPath}`);
+          storageFiles.add(`${bucket}:${toPath}`);
           moves.push({ bucket, from: fromPath, to: toPath });
           return { data: { message: "moved" }, error: null };
+        },
+        // deno-lint-ignore require-await
+        list: async (prefix: string, opts?: { search?: string }) => {
+          if (!opts?.search) return { data: [], error: null };
+          const key = `${bucket}:${prefix ? `${prefix}/` : ""}${opts.search}`;
+          return { data: storageFiles.has(key) ? [{ name: opts.search }] : [], error: null };
         },
       }),
     },
@@ -191,5 +225,8 @@ export function createFakeSupabase(
     _moves: moves,
     _invocations: invocations,
     _failMovesFor: failMovesFor,
+    _missingSourceFor: missingSourceFor,
+    _storageFiles: storageFiles,
+    _failUpdateIds: controls.failUpdateIds,
   };
 }

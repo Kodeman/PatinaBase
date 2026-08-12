@@ -24,7 +24,10 @@ async function getOverview(supabase: any, since: string) {
 
   const allLogs = logs || [];
   const deliveredStatuses = ['delivered', 'opened', 'clicked'];
-  const sentStatuses = [...deliveredStatuses, 'bounced', 'unconfirmed'];
+  // SENT-side: an SMS accepted by Twilio sits at 'sending' until the status
+  // webhook flips it — it was sent, so it counts toward totalSent/sendVolume,
+  // but it is NOT yet delivered (deliveredStatuses above stays untouched).
+  const sentStatuses = [...deliveredStatuses, 'sending', 'bounced', 'unconfirmed'];
 
   const totalSent = allLogs.filter((l: { status: string }) => sentStatuses.includes(l.status)).length;
   const totalDelivered = allLogs.filter((l: { status: string }) => deliveredStatuses.includes(l.status)).length;
