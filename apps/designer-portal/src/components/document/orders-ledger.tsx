@@ -22,7 +22,17 @@ import {
   useUpdatePurchaseOrderETA,
   useVendors,
 } from '@patina/supabase';
+import {
+  liveStep,
+  nextGate,
+  procurementStepLabel,
+  PROCUREMENT_LIFECYCLE_GATES,
+} from '@patina/types';
 import { clientVendorEmailHint } from '@/components/portal/procurement/po-send-actions';
+import {
+  derivePurchaseOrderLifecycle,
+  procurementExpected,
+} from '@/lib/document/procurement-lifecycle';
 import { Stamp } from './stamp';
 import { LogAckInline, PoPreview } from './po-preview';
 import { LedgerFrontMatter } from './ledger-front-matter';
@@ -159,6 +169,28 @@ export function OrdersLedger({
     () => (orders ?? []).filter((o) => o.status !== 'cancelled'),
     [orders],
   );
+
+  // R7: one derivation per order, computed once per fetch rather than on every
+  // render of every row.
+  const lifecycleByPo = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        live: ReturnType<typeof liveStep>;
+        gate: ReturnType<typeof nextGate>;
+        expected: string | null;
+      }
+    >();
+    for (const o of orders ?? []) {
+      const reading = derivePurchaseOrderLifecycle(o);
+      map.set(o.id, {
+        live: liveStep(reading),
+        gate: nextGate(reading),
+        expected: procurementExpected(o),
+      });
+    }
+    return map;
+  }, [orders]);
 
   // Lens options derive from the unlensed book — the lens narrows the page,
   // never the vocabulary.
@@ -419,6 +451,21 @@ export function OrdersLedger({
               <ul>
                 {g.pos.map((po, index) => {
                   const stamp = PO_STAMP[po.status] ?? PO_STAMP.draft;
+                  // R7: the same grammar at ledger density — the row's stamp
+                  // is the lifecycle POSITION, not the status word "Ordered"
+                  // hid everything behind. The fifteen steps never enumerate
+                  // here; the book shows where the order stands and what stops
+                  // it next. A draft or cancelled order takes no position, so
+                  // the row keeps saying "draft" / "cancelled" out loud.
+                  const {
+                    live: position,
+                    gate,
+                    expected,
+                  } = lifecycleByPo.get(po.id) ?? {
+                    live: null,
+                    gate: null,
+                    expected: null,
+                  };
                   // PRC-07 (R84): the ack act lives where the row narrates
                   // "no ack" — sent, unacknowledged, non-catalog, not
                   // cancelled (the portal popover's gate, vendor-section-card).
@@ -462,24 +509,46 @@ export function OrdersLedger({
                           </p>
                           <div className="ml-auto flex min-h-11 shrink-0 items-center gap-3">
                             <Stamp
-                              label={po.status.replace(/_/g, ' ')}
+                              label={
+                                position
+                                  ? procurementStepLabel(position.key)
+                                  : po.status.replace(/_/g, ' ')
+                              }
                               color={stamp.color}
                               ink={stamp.ink}
+                              size="sm"
                             />
+                            {/* Next gate — name, and the term that holds it. */}
                             <span
+                              data-orders-next-gate
+                              className="doc-type-meta hidden max-w-[16rem] truncate text-[var(--color-quiet-ink)] sm:inline"
+                            >
+                              {gate
+                                ? [
+                                    PROCUREMENT_LIFECYCLE_GATES.find(
+                                      (g) => g.key === gate.key,
+                                    )?.label,
+                                    gate.qualifier,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(' · ')
+                                : '—'}
+                            </span>
+                            <span
+                              data-orders-expected
                               data-orders-unscheduled={
-                                !po.confirmed_eta && po.status === 'shipped'
+                                !expected && po.status === 'shipped'
                                   ? ''
                                   : undefined
                               }
                               className={`doc-type-meta whitespace-nowrap font-heading ${
-                                !po.confirmed_eta && po.status === 'shipped'
+                                !expected && po.status === 'shipped'
                                   ? 'font-mono uppercase tracking-[0.05em] text-[#D8BE56]'
                                   : 'text-[var(--color-charcoal)]'
                               }`}
                             >
-                              {po.confirmed_eta
-                                ? `~${fmtDay(po.confirmed_eta)}`
+                              {expected
+                                ? `~${fmtDay(expected)}`
                                 : po.status === 'shipped'
                                   ? 'NO DATE'
                                   : '—'}

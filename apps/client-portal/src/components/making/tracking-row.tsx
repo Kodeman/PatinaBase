@@ -14,7 +14,7 @@ import {
 
    The six stops and the mapping onto them are NOT re-derived here: they are
    the same `GOODS_JOURNEY_STAGES` / `journeyStageIndexForStatus` the selection
-   cards already run on, so a piece cannot read "Shipped" on one surface and
+   cards already run on, so a piece cannot read "In transit" on one surface and
    "In production" on the other. Only the drawing is new — the existing
    `JourneyStepper` renders the stops as a word list, and the deck asks for a
    line of dots.
@@ -33,10 +33,10 @@ import {
  */
 const STAGE_PHASE = [
   'var(--phase-refinement)', // Agreed
-  'var(--phase-procurement)', // Ordered
+  'var(--phase-procurement)', // Released to maker
   'var(--phase-procurement)', // In production
-  'var(--phase-installation)', // Shipped
-  'var(--phase-installation)', // Delivered
+  'var(--phase-installation)', // In transit
+  'var(--phase-installation)', // Received
   'var(--phase-walkthrough)', // Installed
 ] as const;
 

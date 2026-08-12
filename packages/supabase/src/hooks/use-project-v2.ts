@@ -148,9 +148,36 @@ export interface FFEItemFilters {
   purchaseOrderId?: string;
 }
 
-export function useProjectFFEItems(projectId: string, filters?: FFEItemFilters) {
+export interface FFEItemOptions {
+  /**
+   * Fetch the extra evidence R7's procurement lifecycle needs: the PO's
+   * `delivered_date` and its nested `po_payments`. OFF by default — it adds a
+   * second-level embed, and only the designer portal's Document draws the
+   * trail. The client portal's FF&E surfaces must not pay for it.
+   */
+  withLifecycle?: boolean;
+}
+
+/** The PO embed, with the lifecycle evidence appended only when asked for. */
+function purchaseOrderEmbed(withLifecycle: boolean): string {
+  const columns =
+    'id, status, vendor_id, vendor_po_number, sidemark, confirmed_eta, acknowledged_at, payment_pattern, created_at, po_number, sent_at';
+  return withLifecycle
+    ? `purchase_order:purchase_orders!purchase_order_id(${columns}, delivered_date, payments:po_payments(kind, state, due_date, paid_date))`
+    : `purchase_order:purchase_orders!purchase_order_id(${columns})`;
+}
+
+export function useProjectFFEItems(
+  projectId: string,
+  filters?: FFEItemFilters,
+  options?: FFEItemOptions,
+) {
+  const withLifecycle = options?.withLifecycle ?? false;
   return useQuery({
-    queryKey: ['project-ffe-items', projectId, filters],
+    // The shape of the row differs, so the cache entry must too — otherwise a
+    // lifecycle-less fetch would serve a trail-drawing caller a PO with no
+    // payments and the trail would silently under-report.
+    queryKey: ['project-ffe-items', projectId, filters, { withLifecycle }],
     queryFn: async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -161,12 +188,12 @@ export function useProjectFFEItems(projectId: string, filters?: FFEItemFilters) 
           room:project_rooms!project_room_id(id, name),
           product:products!product_id(id, name, images, brand),
           blocking_decision:client_decisions!blocked_by_decision_id(id, status, due_date),
-          item_claims:damage_claims!ffe_item_id(id, state),
+          item_claims:damage_claims!ffe_item_id(id, state, created_at),
           spec:project_ffe_specs!project_ffe_specs_ffe_item_id_fkey(
             configuration_id, configuration_snapshot,
             configuration_snapshot_hash, configuration_locked_at
           ),
-          purchase_order:purchase_orders!purchase_order_id(id, status, vendor_id, vendor_po_number, sidemark, confirmed_eta, acknowledged_at, payment_pattern, created_at, po_number, sent_at)
+          ${purchaseOrderEmbed(withLifecycle)}
         `)
         .eq('project_id', projectId)
         .order('sort_order', { ascending: true });

@@ -12,10 +12,10 @@ const CLIENT_VISIBLE_STATUSES = ['approved', 'ordered', 'production', 'shipped',
 
 const statusLabels: Record<string, string> = {
   approved: 'Approved',
-  ordered: 'Ordered',
-  production: 'In Production',
-  shipped: 'Shipped',
-  delivered: 'Delivered',
+  ordered: 'Released to maker',
+  production: 'In production',
+  shipped: 'In transit',
+  delivered: 'Received',
   installed: 'Installed',
 };
 

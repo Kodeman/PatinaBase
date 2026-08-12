@@ -11,7 +11,10 @@ jest.mock('@tanstack/react-query', () => ({
 
 jest.mock('@patina/supabase', () => ({
   useUpdateDamageClaim: () => ({ mutateAsync: jest.fn(), isPending: false }),
-  useUpdatePurchaseOrderETA: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useUpdatePurchaseOrderETA: () => ({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  }),
   useVendor: () => ({ data: { id: 'vendor-1', name: 'Hollowell Woodshop' } }),
 }));
 
@@ -60,9 +63,7 @@ const authorized: LineAuthorization = {
   deltaCents: null,
 };
 
-const renderUnfold = (
-  over: Partial<Parameters<typeof LineUnfold>[0]> = {},
-) =>
+const renderUnfold = (over: Partial<Parameters<typeof LineUnfold>[0]> = {}) =>
   render(
     <LineUnfold
       item={item}
@@ -103,7 +104,9 @@ describe('LineUnfold · the authorization gate', () => {
     expect(
       screen.getByRole('button', { name: /order with assistant/i }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/signed price \$3,900 · deposit clear/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/signed price \$3,900 · deposit clear/),
+    ).toBeInTheDocument();
   });
 
   it('holds while the deposit is outstanding', () => {
@@ -126,7 +129,9 @@ describe('LineUnfold · the authorization gate', () => {
       isCommercialOrigin: true,
       auth: { ...authorized, signedLineTotalCents: 420000, deltaCents: 45000 },
     });
-    expect(screen.getByText('authorized $4,200 · now $4,650')).toBeInTheDocument();
+    expect(
+      screen.getByText('authorized $4,200 · now $4,650'),
+    ).toBeInTheDocument();
   });
 
   it('softly locks the room re-assign once the line is on an instrument', () => {
@@ -173,5 +178,62 @@ describe('LineUnfold · the authorization gate', () => {
     expect(
       screen.queryByRole('button', { name: /include in the next release/i }),
     ).not.toBeInTheDocument();
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// R7 (F6) — where the lifecycle trail is allowed to appear
+// ══════════════════════════════════════════════════════════════════════════
+
+describe('LineUnfold · the trail mount guard', () => {
+  const trail = (c: HTMLElement) => c.querySelector('[data-procurement-trail]');
+
+  it('draws the trail on a furnishings line with a purchase order behind it', () => {
+    const { container } = renderUnfold({
+      item: {
+        ...item,
+        status: 'production',
+        purchase_order: {
+          id: 'po-1',
+          status: 'in_production',
+          vendor_id: 'vendor-1',
+          sent_at: '2026-05-03',
+        },
+      },
+    });
+    expect(trail(container)).toBeInTheDocument();
+  });
+
+  // A trade scope runs its own journey — tile does not ship or arrive.
+  it('NEVER draws the trail on a trade line', () => {
+    const { container } = renderUnfold({
+      item: {
+        ...item,
+        status: 'production',
+        trade_scope_document_id: 'pcd-1',
+        purchase_order: {
+          id: 'po-1',
+          status: 'in_production',
+          vendor_id: 'vendor-1',
+        },
+      },
+    });
+    expect(trail(container)).not.toBeInTheDocument();
+  });
+
+  // No eighteen-row empty scaffold on a line nobody has ordered yet.
+  it.each(['specified', 'quoted', 'approved'])(
+    'draws no trail on a %s line with no order behind it',
+    (status) => {
+      const { container } = renderUnfold({ item: { ...item, status } });
+      expect(trail(container)).not.toBeInTheDocument();
+    },
+  );
+
+  it('draws the trail once a line carries evidence even without a PO row', () => {
+    const { container } = renderUnfold({
+      item: { ...item, status: 'installed' },
+    });
+    expect(trail(container)).toBeInTheDocument();
   });
 });

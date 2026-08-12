@@ -13,7 +13,7 @@
  * and changing it means voiding the instrument and superseding it.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   useUpdateDamageClaim,
@@ -31,7 +31,12 @@ import {
   useDocumentRooms,
 } from '@/hooks/use-document-rooms';
 import { deriveLineStamp } from '@/lib/document/stamp-derivation';
-import { poGate, type LineAuthorization } from '@/lib/document/authorization-derivation';
+import { deriveProcurementLifecycle } from '@/lib/document/procurement-lifecycle';
+import { ProcurementTrail } from './procurement-trail';
+import {
+  poGate,
+  type LineAuthorization,
+} from '@/lib/document/authorization-derivation';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { DocumentAction, DocumentActionGroup } from './document-action';
 
@@ -315,6 +320,19 @@ export function LineUnfold({
 }) {
   const stamp = deriveLineStamp(item);
   const po = item.purchase_order ?? null;
+  // R7: one derivation, read by the trail here and by the orders book.
+  const lifecycle = useMemo(() => deriveProcurementLifecycle(item), [item]);
+  // The trail belongs to GOODS. A trade scope runs its own journey (Act IV) —
+  // tile does not ship, acknowledge, or arrive — so a fifteen-step goods trail
+  // on a trade line would be fifteen rows of nonsense. And a furnishings line
+  // with nothing ordered yet has no lifecycle to read: rather than an empty
+  // scaffold implying the work is merely pending, the trail simply is not
+  // there until an order or an evidenced step gives it something to say.
+  const isTradeLine =
+    Boolean(item.trade_scope_document_id) || stamp.kind.startsWith('trade_');
+  const showTrail =
+    !isTradeLine &&
+    (Boolean(po) || lifecycle.steps.some((s) => s.state !== 'future'));
   const vendorId: string = item.vendor_id ?? po?.vendor_id ?? '';
   const { data: vendor } = useVendor(vendorId) as { data: FFERow | undefined };
 
@@ -400,6 +418,10 @@ export function LineUnfold({
         <MovementCell item={item} po={po} />
         <Cell label="Receiving" value={receivingValue} />
       </div>
+
+      {/* R7 (M7): the fifteen-step trail — the position, where the cells above
+          give the facts. Retires "Ordered" as the line's whole story. */}
+      {showTrail && <ProcurementTrail reading={lifecycle} />}
 
       {/* The authorization strip — what was signed, and what that permits. */}
       {isCommercialOrigin && (

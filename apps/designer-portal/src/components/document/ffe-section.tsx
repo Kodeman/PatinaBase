@@ -672,7 +672,13 @@ function FFESectionBody({
     id: string | null;
     name: string;
   } | null>(null);
-  const { data: items, isLoading, isError, refetch } = useProjectFFEItems(projectId) as {
+  // withLifecycle: the line unfold draws R7's trail, which needs the PO's
+  // delivered_date and payment rows. Opt-in so no other portal pays for it.
+  const { data: items, isLoading, isError, refetch } = useProjectFFEItems(
+    projectId,
+    undefined,
+    { withLifecycle: true },
+  ) as {
     data: FFERow[] | undefined;
     isLoading: boolean;
     isError: boolean;

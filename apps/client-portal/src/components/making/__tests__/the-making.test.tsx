@@ -742,7 +742,7 @@ describe('TheMaking — the open chapter', () => {
 
     expect(
       screen.getAllByTestId('tracking-row').map((row) => row.getAttribute('data-journey-stop')),
-    ).toEqual(['Shipped', 'In production', 'Agreed']);
+    ).toEqual(['In transit', 'In production', 'Agreed']);
   });
 });
 

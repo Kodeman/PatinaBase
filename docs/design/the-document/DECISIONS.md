@@ -7654,3 +7654,378 @@ fixed under this ticket (designer-portal is out of scope for WP3 Track D).
 
 *Entries add: I114–I120 · last id = I120*
 
+### I121 · R7's lifecycle is ONE contract read by TWO rails (WP4 checkpoint ruling)
+
+The fifteen steps, the three gates, and the shape of a reading live in
+`packages/types/src/procurement-lifecycle.ts`, not in the portal that happens to
+render them first. Two rails answer the same contract: the studio's own
+procurement (`purchase_orders` and friends) maps in
+`apps/designer-portal/src/lib/document/procurement-lifecycle.ts`; the Patina
+fulfilment ledger (`fulfillment_*`) maps in the types package itself, so the
+admin portal can import it in Track 3 without depending on the designer portal.
+
+Unifying was the ruling, and it is load-bearing rather than tidy. The two rails
+carry genuinely different facts — Rail A has an ordered `line_state` chain and
+no inputs-complete fact; Rail B has dated PO columns and no closure fact — and
+the whole value of R7 is that a designer reads the same fifteen words whichever
+book the line came from. A second vocabulary would have re-created the problem
+"Ordered" already caused.
+
+**The one-live-step invariant lives in the shared assembler**
+(`assembleProcurementReading`), not in either mapper, so neither rail can break
+it. The live step is the highest-ordinal evidenced step, and it is live unless
+it is terminal (step 15), in which case nothing is live and the trail has
+closed. A rail mapper's only job is to say what it found; it does not get to
+decide what is current.
+
+**The reading is total.** All fifteen steps and all three gates come back every
+time, in order, including the ones with nothing behind them. The future is part
+of the reading — that is what makes it visible and empty rather than absent.
+
+### I122 · The lifecycle is rendering grammar; the five missing facts are a docket, not a build (№8)
+
+Kody ruled at the WP4 design checkpoint: **zero new schema, and one migration is
+not authorized.** The trail draws what the orders book already knows.
+
+Five steps have no fact on the studio rail today — 04 Awaiting inputs,
+07 Ready to ship, 11 Stored, 12 Install released, 14/15 Punch·Closed. They are
+not inferred from a neighbour, not defaulted, and not blocking. (Review added
+two more entries to the docket: step 08 renders but is UNDATED because no
+departure fact exists, and Rail B has no returns concept at all — mapping
+§5.7–5.8.) This forced the
+one genuinely new idea in the contract: **`no-record` is a distinct state from
+`future`.** A step behind the trail's position with nothing behind it reads
+"no record" in quiet, unstamped microcopy; a step ahead of the position reads
+dashed-outline and empty. Collapsing the two would have been the fiction the
+ruling exists to prevent — "we never wrote this down" is not "this has not
+happened yet", and a trail that cannot tell them apart is exactly the thing
+"Ordered" was.
+
+The same rule governs steps that DO have facts: **steps do not imply one another
+on Rail B.** A delivered line whose PO was never marked sent reads step 02 as
+`no-record`. Rail A's chain is ordered and is the deliberate exception, and even
+there the implied steps settle *undated* rather than borrowing a date they do
+not have.
+
+What each missing fact would cost is priced in
+`docs/design/workflow-alignment/wp4-lifecycle-mapping.md` §5 as a future data
+wave, sequenced cheapest-and-highest-value first (07, then 04, then 11→12 as the
+pair that unlocks gate G3, then 14/15). **None of it is authorized by this
+track**, and the trail renders honestly without any of it.
+
+One select was extended — `useProjectFFEItems` now also fetches
+`purchase_orders.delivered_date`, the nested `po_payments`, and
+`damage_claims.created_at`. Every column already existed; without them steps 01,
+09 and 10 could not be evidenced at all. That is fetching, not schema.
+
+### I123 · The three gates are derived OPERATIONAL seals, not client ceremonies (ratified)
+
+R2's gate anatomy is a boundary ceremony a person performs. R7's three
+sub-seals are not that, and conflating them would have put a client act in the
+middle of a purchase order. **No `client_decisions` row is consulted, no client
+act settles one, and no gate here is authored by anybody** — each is a predicate
+over facts the book already holds:
+
+- **G1 Complete to produce** — `acknowledged_at` set AND every deposit-kind
+  `po_payments` row `paid`. **A PO with no deposit rows settles it vacuously**,
+  which is the ratified reading: absent terms are not unmet terms — but not for
+  a `draft` order, which is a document being written, so an unwritten order is
+  never promoted to "Cleared to produce" and the orders book keeps saying
+  "draft" out loud. A **`cancelled` order evidences nothing at all** — not step
+  01, not its send date, not a delivery — exactly as on Rail A: the order was
+  withdrawn, so the trail reports no position rather than leaving the work
+  standing where it stopped. The gate's qualifier names the term that actually
+  holds it open, so uncleared terms come first (`terms outstanding`) and the
+  acknowledgment is the fallback.
+- **G2 Received and dispositioned** — an inspection logged, the count not short,
+  and no `drafted` / `vendor_notified` claim on the line. `receiving_inspections`
+  is PO-grain with no FF&E link, so the item-grain traces are `delivered_date`
+  and the claims. **"Inspection logged" is `delivered_date`, NOT the count**:
+  00150 stamps the date on the first inspection row whatever its outcome, while
+  00184 writes `received_quantity` only on a *clean* one — reading the count
+  would have reported every damaged receipt as never inspected. The count
+  governs one term only, whether everything ordered turned up.
+- **G3 Warehouse + site ready** — **no fact exists on either rail.** It is drawn,
+  and it is drawn empty, and it is marked `sealable: false` so it is never named
+  as somewhere the work is heading. A gate that can never pass is still worth
+  drawing, because its emptiness is the honest report on §5.3 — but promising a
+  stop that will never come is its own small lie.
+
+**A gate seals by position AND terms, in that order.** Terms satisfied at a
+place the trail has not arrived at is not a seal; it reads `unreached`. This
+forced a fifth reading, `passed-unsealed`: work that moved BEYOND a gate whose
+terms were never evidenced. It renders quiet — no oak stop bar, no qualifier —
+because an installed credenza whose PO was never acknowledged has a missing
+signature, not a blockage, and drawing a stop under finished work would be a lie
+about the present.
+
+The counterweight is `holdsOpen`. A term that is a **live condition** — an
+unresolved claim, a short receipt, uncleared order terms — keeps its gate `open`
+even once the trail's position has moved past it
+(a claim evidences step 10, which sits past G2, so position alone would have
+silenced the loudest fact about a receipt). The distinction is the whole design:
+*a live stop stops; an unrecorded seal goes quiet.*
+
+An inspection nobody logged is deliberately NOT such a condition: it is a
+missing record, and by the argument above a missing record goes quiet. A line
+installed months ago whose receipt was never written down reads
+`passed-unsealed`, not blocked; while the work is still standing at the gate,
+position alone keeps it open.
+
+An open gate names the term holding it — the qualifier is read off the unmet
+predicate, never written by hand, and G2's ladder puts `open claim` above
+`short receipt` above `awaiting inspection`.
+
+**Steps 01 and 08 render undated.** The only date the clearing could carry is
+`po_payments.paid_date`, and a payment date IS a payment fact — putting it
+beside "Cleared to produce" would render money on the glass while №7 is open.
+The step says the work is cleared, not when anybody paid. **The date returns if
+№7 settles.** The `source` string still names `po_payments`, because it is an
+internal audit trail and is never rendered.
+
+**"Next gate" is a position, not a to-do list**: the first unsettled, sealable
+gate at or ahead of the live step. A gate the work has already gone past is
+never next, however it ended up, and when nothing remains ahead the ledger
+renders "—" rather than reaching backwards for something to say.
+
+**Commercial guard (№7, still open).** The step names ARE the lexicon and ship
+verbatim — "Cleared to produce", never "Authorized"; "Released to maker", never
+"PO issued". Internal enum values and PO entity names are untouched. Nothing
+these gates read is rendered as a payment surface, a balance, or a funds-held
+indicator; G1 reads deposit rows and renders the word "deposit" only as the term
+holding a gate open. A test asserts no rendered trail copy matches
+`authoriz|PO issued|purchase authorized`.
+
+**Renderings.** The line unfold gets the full numbered trail
+(`procurement-trail.tsx`): settled stamped, live in clay, future dashed-outline
+and empty, `no-record` quiet with microcopy, gates as full-width interrupting
+bars taking an oak left border only when `open` or `settled`. The trail is for
+GOODS: it never mounts on a trade/service line, and on a furnishings line only
+once there is something to read (a linked PO or an evidenced step) — no
+eighteen-row empty scaffold under a line nobody has ordered. The orders book
+gets the same grammar at ledger density through its own PO-grain entry point —
+the row's Stamp becomes the lifecycle *position* rather than the status word,
+plus "Next gate" and "Expected"; **the fifteen steps never enumerate at ledger
+density.** "Expected" is a *shipment* expectation only (`confirmed_eta`): a
+payment due date must never appear in a column about goods, and R18's
+unscheduled "NO DATE" mark survives untouched. Zero shadows. All trail type
+≥12px — M7's miniature stamps are a plate device and do not ship, so the shared
+`Stamp` gained a `size` prop (`xs` = the historical 10px default, unchanged
+everywhere; `sm` = 12px) and both new surfaces hold one floor with one
+component.
+
+**Interpretations surfaced, not ruled** (full list in the mapping doc §6): the
+ledger keeps PO grain rather than re-graining to M7's line-grain plate, and G2
+cannot settle there because disposition is item-level;
+`purchase_orders.last_status_change_at` does not exist, so steps 05/06 date from
+the item's column; and **step 08 renders undated**, because `confirmed_eta` is a
+guess about arrival rather than a record of departure — the missing departure
+fact (carrier, tracking, actual ship date) joins returns/RMA in the №8 docket at
+mapping §5.7–5.8. One consequence worth stating: because step 04 has no fact,
+G1 can never read `open` from a missing acknowledgment alone — the trail cannot
+stand at position 4. M7's "Awaiting inputs · Complete to produce · COM open" row
+is unreachable until §5.1 is built, and the trail renders honestly without it
+rather than faking the step.
+
+### I124 · WP4 Track 3 — Rail A's own operator surfaces adopt the R7 grammar (admin portal, additive)
+
+The Back-of-House fulfillment surfaces (`apps/admin-portal/.../fulfillment`)
+now read `deriveFulfillmentLifecycle` (`@patina/types`, unchanged — Track 1
+owns the contract and it was frozen for this track) in two places, neither of
+which changes a schema, a route, or a byte of fulfillment logic.
+
+**Line detail — the Order Workbench's vendor PO cards.** Each `PoLine`
+(`po-draft-card.tsx`) carries a collapsed "Lifecycle" `<details>` disclosure
+that reveals the full numbered trail for that one line, derived from its own
+`lineState`. It sits OUTSIDE the draggable row's ref (dnd-kit's pointer
+listeners live on the row div alone), so opening the disclosure can never be
+mistaken for a drag gesture. Rail A's off-trail rule is enforced at the call
+site, not just in the mapper: a `cancelled` line renders its operational word
+("Cancelled — no trail position") and the trail component is never invoked at
+all — no reading is derived, let alone stamped.
+
+**Queue rows — the additive glance.** `derived_status` on
+`fulfillment_queue_v` (00353) is not a new fact to feed the mapper; it is
+*literally* the same order-items `line_state` chain value at the order's MIN
+stage that the row's existing stage dots and next-action verb already read.
+Feeding it to `deriveFulfillmentLifecycle` alongside `stage_entered_at`
+therefore reads no fact the row didn't already carry — it just asks the
+fifteen-step contract to say what position that fact represents. The result
+(a 12px current-position stamp + `nextGate`) is appended to the row's existing
+meta line, after the vendor/designer/unmapped/exception chips — additive,
+never replacing the operational verb or the derived_status word, per the
+checkpoint's unified-contract ruling that BOH operators keep their working
+vocabulary. `derived_status` is not ALWAYS a chain word, though: 00353's view
+overrides it to `needs_mapping` (any unmapped line) or `exception` (any open
+exception) BEFORE the chain fallback — exactly the queue's highest-priority
+band, Needs Action Now. Neither override is a chain state, so the glance
+renders nothing there; that is the honest answer, not a gap — an order
+sitting on an unmapped line or an open exception isn't progressing through
+the chain at all, there is no single position left to stamp, and the row's
+own unmapped/exception chips already carry the signal a glance would only
+repeat.
+
+**Component sharing, decided against.** `ProcurementTrail` is duplicated
+locally at `apps/admin-portal/.../fulfillment/shared/procurement-trail.tsx`
+rather than imported from the designer portal's `procurement-trail.tsx`. The
+two portals share no components package, and the piece — three small
+subcomponents over the same `@patina/types` shapes — is well under the size
+where a new cross-portal dependency would pay for itself. The port keeps M7's
+grammar token-substituted, floor enforced (12px minimum everywhere in both new
+files, −1.5° rotation stamps, dashed-empty future, quiet no-record microcopy,
+oak gate bars only when reached) and substitutes admin-portal's own
+`--text-muted` token everywhere the Document reaches for a `--color-quiet-ink`
+admin-portal doesn't define. (Adversarial review caught a rem-vs-px drift on
+first pass — the trail's own "Lifecycle" header and two of the line-detail's
+new strings shipped at 8.8–9.6px; fixed to the 12px floor before merge.) Keep
+the two in sync by hand if the contract's rendering grammar changes; nothing
+here is a shared import to forget.
+
+**Noted, not made — a contract change that wasn't needed but a data gap that
+was found.** The Workbench's `FulfillmentWorkbenchLine` DTO carries `lineState`
+but not `line_state_entered_at`, `shipments`, or `exceptions` — the order-detail
+API route (`/api/admin/fulfillment/orders/[orderId]`) never selected them,
+because nothing before this track needed a line's own dates or shipment/
+exception evidence at that grain. The line-detail trail therefore derives a
+fully honest but UNDATED reading from `lineState` alone: every settled step
+still resolves to the correct state (chain-implied steps read `settled` with
+no date, exactly as `deriveFulfillmentLifecycle` already handles for the
+chain-derived case), but no step carries an `evidence.at`, and step 10
+(Accepted or issue) can never appear because no exception rows are fetched.
+Wiring those three columns into the existing route's existing queries would
+close the gap — no schema change, no contract change, just wider SELECTs —
+and is left for whoever next touches that route, since "no fulfillment-logic
+changes" this track kept to strictly meant not touching the API layer at all.
+
+## WP4 Track 2 — the "Ordered" retirement sweep — 2026-08-12
+
+### I125 · Rendered FF&E stage labels drop the commercial-claim register (ratified — deck folio 12/14)
+
+Kody's ruling: one sweep, every surface, rendered labels only — internal enum
+values, DB values, and PO entity names untouched. Replacement labels are the
+lifecycle step names, actor-neutral, per the deck: `ordered` → **"Released to
+maker"** · `shipped` → **"In transit"** · `delivered` → **"Received"** ·
+`production` → **"In production"** (unified — see below) · `installed` →
+"Installed" (unchanged) · `specified`/`quoted`/`approved` labels unchanged
+(no commercial claim to begin with).
+
+**Corrected on adversarial review:** the first pass of this entry claimed
+`production`'s label was "left as-is" / "not changed." That was false — the
+same edit that retired `ordered`/`shipped`/`delivered` in
+`stages.ts` also changed `production`'s label from "Production" to "In
+production" in the same hunk, healing a pre-existing three-way split
+(designer-portal said "Production," client-portal's `ffe-status.tsx` said
+"In Production" with a capital P, `FFEPipelinePanel.tsx` already said "In
+production"). The code change was correct and shipped in the original
+commit; only this entry's account of it was wrong. `ffe-status.tsx`'s "In
+Production" is now also corrected to "In production" for exact-string
+consistency across all three surfaces. Ratified: keep the unification.
+
+The review also caught three rendered misses the original grep pass didn't
+catch — status-gated copy and a quoted stage name that don't match the exact
+`'Ordered'`/`'Shipped'` string patterns the first sweep grepped for:
+- `apps/designer-portal/src/components/document/spec-books/
+  spec-book-workspace.tsx` (:473) — a configuration-lock explainer read
+  "Ordered and custom promises stay intact; changes begin on a new project
+  line." Reworded to "Released lines and their custom promises stay intact;
+  changes begin on a new project line." — same meaning, no banned word.
+- `apps/designer-portal/src/components/document/po-preview.tsx` (:363) — the
+  manual-send button read "Ordered by phone / portal — mark as sent." →
+  "Released by phone / portal — mark as sent."
+- `apps/designer-portal/src/components/portal/procurement/order-assistant/
+  step-details.tsx` (:321) — a deposit-balance note quoted the stage name:
+  `item enters "Shipped" stage` → `item enters "In transit" stage`.
+
+Both `spec-book-workspace.tsx` and `po-preview.tsx` live under
+`apps/designer-portal/src/components/document/` — the original entry's
+account of that directory ("left untouched per the `components/document/`
+exclusion") was also wrong as a blanket claim. The real exclusion is six
+specific files a sibling track owns: `orders-ledger.tsx`, `line-unfold.tsx`,
+`procurement-trail.tsx`, `lib/document/procurement-lifecycle.ts`,
+`stamp-derivation.ts`, `use-project-v2.ts` — not the whole directory. The
+sweep now correctly covers every other file under `components/document/`,
+including these two.
+
+**Sites changed** (four known + six found on sweep, across two passes):
+- `apps/designer-portal/src/components/portal/ffe/stages.ts` —
+  `STAGE_CONFIG` labels for `ordered`/`production`/`shipped`/`delivered`.
+  This is the single source both the per-project FF&E board and the
+  Procurement → By Status view read from, so both surfaces pick up the
+  change for free.
+- `apps/client-portal/src/components/ffe-status.tsx` — `statusLabels`
+  (including the `production` capitalization fix, above).
+- `apps/client-portal/src/components/commercial/journey-stepper.tsx` —
+  `GOODS_JOURNEY_STAGES` (the six-stop client goods journey; consumed
+  positionally by `tracking-row.tsx` and `the-making.tsx`, so both update
+  with the constant).
+- `apps/client-portal/src/components/project/FFEPipelinePanel.tsx` —
+  `STATUS_LABEL`.
+- `apps/client-portal/src/components/making/tracking-row.tsx` — inline
+  `STAGE_PHASE` array comments and a docblock line that quoted the old
+  words; not rendered copy, updated for accuracy alongside the constant they
+  annotate.
+- `packages/supabase/src/hooks/use-procurement.ts` — a doc-comment on
+  `purchase_order.created_at` naming the admin "By Status" column it backs;
+  updated to match the new label since the column itself already reads from
+  `STAGE_CONFIG`.
+- `apps/designer-portal/src/components/document/spec-books/
+  spec-book-workspace.tsx`, `apps/designer-portal/src/components/document/
+  po-preview.tsx`, `apps/designer-portal/src/components/portal/procurement/
+  order-assistant/step-details.tsx` — the three review-caught misses above.
+
+Tests updated alongside: `apps/designer-portal/src/components/portal/ffe/
+__tests__/stage-select.test.tsx` (option-name query), `apps/client-portal/
+src/components/commercial/__tests__/journey-stepper.test.tsx` (`getByText`
+assertion), `apps/client-portal/src/components/making/__tests__/
+the-making.test.tsx` (`data-journey-stop` assertion). No test asserted the
+three review-caught strings verbatim, so no further test edits were needed
+for those.
+
+**Left alone, with reasons — a careful grep surfaced a second, unrelated
+"Authorized" vocabulary that this ruling does not reach:**
+- `apps/designer-portal/src/lib/document/authorization-derivation.ts`,
+  `authority-hours.ts`, `project-commerce.ts` (trade-scope section), and
+  `apps/client-portal/src/components/commercial-document-shell.tsx`
+  ("Authorized furnishings") — all belong to the **Authorized Schedule**
+  feature (shipped 2026-08-05): "Authorized" here means the *client has
+  signed the instrument*, a design-services/trade-scope authorization
+  concept with its own ratified vocabulary, unrelated to an FF&E item's
+  procurement stage. `authorization-derivation.ts` is explicitly the second
+  stamp track alongside the (out-of-scope) `stamp-derivation.ts`. Renaming
+  this would rip out a different, already-shipped feature's language, not
+  retire a commercial claim on an FF&E item.
+- `apps/admin-portal/src/lib/concierge-stages.ts`, `.../fulfillment/
+  workbench/po-draft-column.tsx`, `.../fulfillment/queue/queue-row.tsx`,
+  `.../fulfillment/pos/[poId]/page.tsx` ("Delivered and inspected"),
+  `packages/fulfillment/src/shipments.ts` — internal Mission Control /
+  fulfillment-ops tooling for Patina staff literally tracking PO and freight
+  state ("PO Sent," "Freight Booked," "Delivered and inspected," inspection-
+  window countdowns). This is a separate `PoState`/`ConciergeStage`
+  vocabulary from the FF&E item's `FFEStageKey`; staff need the literal
+  operational state, not client-facing lifecycle prose. Adjudicated fine on
+  review — not the "commercial claim" register the ruling targets.
+- `apps/designer-portal/src/lib/document/feedback.ts` (`shipped: 'Shipped'`)
+  — the Feedback layer's own status vocabulary ("this bug report shipped"),
+  a software-development-lifecycle sense of "shipped," not FF&E goods.
+- `apps/client-portal/src/components/messages/ReadReceipt.tsx` — message
+  read/delivered state, an SMS-style receipt, not commercial goods.
+- `apps/admin-portal/.../communications/campaigns/[id]/page.tsx` —
+  "Delivered"/"Bounced" email-campaign delivery stats.
+- `apps/designer-portal/src/components/portal/procurement/order-assistant/
+  index.tsx` — "Order placed via Patina …" toast copy after a designer
+  completes a PO through the Order Assistant. A one-time confirmation of the
+  act, not a persistent stage label, and it does not contain the forbidden
+  word "Ordered." "Order Assistant" is this tool's established name.
+- `packages/patina-design-system/src/components/Timeline/{Timeline.tsx,
+  Timeline.stories.tsx}` — generic component doc/story example data
+  ("Order placed", "Shipped", "Delivered"), not live application copy; the
+  component is not consumed anywhere in-repo under that prop shape.
+- `apps/designer-portal/src/components/document/ffe-section.tsx` — imports
+  `STAGE_CONFIG` from `stages.ts` rather than duplicating labels, so it
+  inherits the fix without a direct edit.
+- `supabase/functions/**` (edge-function email templates, e.g. `_shared/
+  po-emails.ts`, `_shared/fulfillment-templates.ts`) — out of the stated
+  sweep scope (portals + packages); flagged here as a candidate for a
+  follow-up pass if Kody wants the retirement to reach transactional email.
+
+*Entries add: I121–I125 · last id = I125*
