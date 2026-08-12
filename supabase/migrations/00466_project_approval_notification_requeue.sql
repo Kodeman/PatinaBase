@@ -1,10 +1,10 @@
 -- =====================================================================================
--- 00439 — Stage-2 approval notification requeue and delivery reconciliation
+-- 00466 — Stage-2 approval notification requeue and delivery reconciliation
 --
 -- Service re-enqueue rearms an idempotent decision notification for unread /
 -- digest delivery while preserving its stable identity. Authenticated studio
 -- compatibility calls retain the existing read/timestamp state. Edge delivery
--- reconciliation remains evidence-bound through 00438's checked service RPC.
+-- reconciliation remains evidence-bound through 00465's checked service RPC.
 -- =====================================================================================
 
 CREATE OR REPLACE FUNCTION public._enqueue_decision_notification(

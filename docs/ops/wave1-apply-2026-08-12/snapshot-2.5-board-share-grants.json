@@ -1,0 +1,8 @@
+[
+  {"proname":"create_board_share","rolname":"anon","can_execute":false},
+  {"proname":"create_board_share","rolname":"authenticated","can_execute":true},
+  {"proname":"create_board_share","rolname":"service_role","can_execute":false},
+  {"proname":"resolve_board_share","rolname":"anon","can_execute":true},
+  {"proname":"resolve_board_share","rolname":"authenticated","can_execute":true},
+  {"proname":"resolve_board_share","rolname":"service_role","can_execute":true}
+]

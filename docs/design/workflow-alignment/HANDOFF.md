@@ -7,6 +7,15 @@
 
 ## 0. Execution status — updated 2026-08-12 — PROGRAM COMPLETE — WP0–WP4 merged to main. READ THIS FIRST.
 
+> **Erratum (2026-08-12):** the wave1 migrations were renumbered **`00434`–`00445` →
+> `00461`–`00472`** to clear the FF&E ledger block that had been applied to Strata
+> out-of-band at `00433`–`00445` (those thirteen FF&E files are now materialized on
+> `main` with provenance headers). Every migration number in §0 and §§1–9 below
+> predates that renumber — in particular, the `00444` deploy gate discussed here is
+> now **`00471`**, and it remains HELD. The current mapping, apply sequence, and
+> operator procedure live in **`docs/ops/wave1-prod-reconciliation-plan.md`**; the
+> renumbered contract tests are inventoried there in §8.1.
+
 WP0–WP4 are executed. A fresh session picks up at "Next actions" below; §§1–9 remain the program's historical record.
 
 **Main is reconciled and carries everything through G9** — tip `5ef7df57`, pushed:
@@ -40,6 +49,8 @@ Flags recorded: ⚠ three functions ACTIVE on Strata with no source on main (`pr
 **Still owed Kody (rolling)**: Direction↔stage-05 seam (§8.3) · R9 co-approver + №7/№8 (§8.4) · WP4 checkpoint · unpark-or-drop verdict on `chore/turbo-dev-passthrough-env` · whether to untrack `.agents` (both it and `.claude/skills` are now tracked, content-matched — drift risk) · signed-in walks across all WP1 surfaces · follow-up tickets: `dateValid` guard uncovered on 3 sheets, 2 pre-existing ESLint errors in `use-commercial-documents.test.ts`, pre-existing client-portal `portal-access`/`orders` test failures · mood-board `board-image-inspector-actions.tsx` catch block silently swallows non-`BackgroundRemovalClientError` failures (turned the 6d75de2e regression into a silent no-op) — surface/log decision · legacy `ClientDecision` surfaces (`client-portal app/decisions/page.tsx` "Overdue (N)", `decision-card-client.tsx`) still show overdue to clients — older decision system, outside R8's ratified scope; does the no-overdue-devices principle reach it? · below 1180px the margin rail is `display:none` and mobile handoff chips are summary-only — the guide's gate act is unreachable there; closing it = building mobile handoff acts (new work) · guide precedence: an open gate outranks every urgent operational need (damage claim, schedule conflict) per R5's "nothing else decides" — bless or add an urgency floor · 00442 projection marks `review_required` (draft + incomplete confirmations) as recipient='client' though the work is studio-side — a client-side lane override shipped; the projection fix is a migration decision · deck erratum: folio 09 cites "the 00441 and 00442 projection"; correct is 00442/00443 (00441 is stage2_option_frozen_authority) · `.claude/skills/` is deleted in main's working tree with skills relocated to `.agents/skills/` + untracked `skills-lock.json` (skills-CLI migration, uncommitted) — commit or revert; ties into the existing untrack-`.agents` question.
 
 **Executor mechanics learned this session**: sandbox blocks git-SSH network, docker.sock, and `.claude/worktrees` ops — retry those with `dangerouslyDisableSandbox` on that evidence; `.env*` is hard-denied to agents regardless; a first `pnpm install` in a fresh worktree can false-report success; long-context subagents stall between steps — resume them or respawn fresh with a state-verification phase; the local Supabase stack was left running; Kody's unstaged `playwright.config.ts` edit and `stash@{0}` remain untouched and must stay so.
+
+**Wave1 reconciliation E2 apply EXECUTED on Strata 2026-08-12**: the renumbered migrations were staged onto prod via `supabase migration up --linked` (00460–00470 + 00472 applied; ledger rows complete) with **00471 intentionally HELD** — the ledger gap is recorded via `COMMENT ON SCHEMA public`, gated on a Field release carrying `cbe88574` per runbook §7 (see above, still `site_request_close` completed-only). 00461 required an in-place erratum adding trigger-disable windows around its backfills, because the prod CLI applies its migrations through a login role + `SET ROLE`, so the `session_user`-based owner-maintenance bypasses the original body relied on do not hold in that context. §5.3 privacy-posture probes ran all green post-apply, and the local gate-ceremony e2e suite is 4/4. Portal hooks that were silenced (`meta: { errorSurface: 'silent' }`, `TODO(wave1-reconciliation)`) while the wave1 schema was absent from prod are desilenced on `chore/wave1-renumber-reconciliation`; the 00471-gated `useSiteRequestActionDetail` silence (`TODO(wave1-00471-held)`) stays in place until 00471 ships.
 
 ---
 

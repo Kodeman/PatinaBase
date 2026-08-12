@@ -7,15 +7,15 @@ public lifecycle; the projects-service `approval_records` path is legacy only.
 
 The tests are split on the migration boundary:
 
-- `00436_authority_evidence_contract_test.sql` checks household authority,
+- `00463_authority_evidence_contract_test.sql` checks household authority,
   private authority snapshots, immutable artifact/version evidence, review
   confirmations, three canonical outcomes with explicit impact deltas, RLS,
   and direct-write denial.
-- `00437_lifecycle_compatibility_contract_test.sql` checks the guarded
+- `00464_lifecycle_compatibility_contract_test.sql` checks the guarded
   publish/respond/withdraw/supersede API, legacy RPC compatibility, Stage-2
   expiry exclusion, and the distinction between an overdue condition and a
   lifecycle state.
-- `00438_notification_traceability_contract_test.sql` checks frozen-lead
+- `00465_notification_traceability_contract_test.sql` checks frozen-lead
   notification routing, immutable artifact citations, the service-only Edge
   delivery stamp, the studio-only artifact-candidate projection, usable
   authority revision projection, and evidenced draft withdrawal.
@@ -23,23 +23,23 @@ The tests are split on the migration boundary:
 Both files use `to_regclass`, `to_regprocedure`, and catalog lookups before any
 future relation or function is referenced. On a schema missing the named
 Stage-2 migration they stop with SQLSTATE `55000` and list the absent objects.
-Run them only after `00435` and their named migration exist:
+Run them only after `00462` and their named migration exist:
 
 ```sh
 psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
   -v ON_ERROR_STOP=1 \
-  -f supabase/tests/workflow/approval_authority/00436_authority_evidence_contract_test.sql
+  -f supabase/tests/workflow/approval_authority/00463_authority_evidence_contract_test.sql
 psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
   -v ON_ERROR_STOP=1 \
-  -f supabase/tests/workflow/approval_authority/00437_lifecycle_compatibility_contract_test.sql
+  -f supabase/tests/workflow/approval_authority/00464_lifecycle_compatibility_contract_test.sql
 psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
   -v ON_ERROR_STOP=1 \
-  -f supabase/tests/workflow/approval_authority/00438_notification_traceability_contract_test.sql
+  -f supabase/tests/workflow/approval_authority/00465_notification_traceability_contract_test.sql
 ```
 
 ## Preserved contract
 
-00436 extends, rather than replaces, the decision aggregate. The expected
+00463 extends, rather than replaces, the decision aggregate. The expected
 relations are `project_decision_authorities`,
 `project_decision_authority_snapshots`, `project_approval_artifacts`,
 `project_decision_review_confirmations`, and
@@ -64,7 +64,7 @@ optional co-approver field is preserved, but no successful co-approver fixture
 is allowed until a real household-membership authority source exists. Comments
 remain discussion only and never satisfy confirmation or response evidence.
 
-00437 preserves wire-compatible `client_decisions.status` values. Stage-2
+00464 preserves wire-compatible `client_decisions.status` values. Stage-2
 semantic outcomes are carried separately: draft publishes to pending; approval
 responds terminally and clears the gate; changes requested and needs discussion
 respond terminally but hold the gate until the studio creates an immutable
@@ -75,7 +75,7 @@ unanswered pending request's due date, never a status and never auto-approval.
 Generic expire/reopen paths must reject Stage 2, and the due-expiry worker must
 exclude it.
 
-00438 keeps communication explicitly non-authoritative. Required, overdue,
+00465 keeps communication explicitly non-authoritative. Required, overdue,
 resolved, and reminder communications cite immutable artifact kind, version,
 checksum, and title without reviewer identities. Scheduled Stage-2 reminders
 target the snapshotted lead and may stamp delivery only through a checked
@@ -87,7 +87,7 @@ a sanitized studio-only candidate projection.
 
 ## Behavioral assertion matrix
 
-These are the fixture-backed blocks to execute once 00436 supplies a legitimate
+These are the fixture-backed blocks to execute once 00463 supplies a legitimate
 household authority fixture. The SQL files name the same blocks so implementation
 does not require contract redesign.
 

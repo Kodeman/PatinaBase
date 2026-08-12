@@ -1,10 +1,10 @@
 -- ══════════════════════════════════════════════════════════════════════════════════════
--- 00438 — Stage-2 approval notification and reminder traceability
+-- 00465 — Stage-2 approval notification and reminder traceability
 --
 -- Stage-2 client-addressed notices resolve the immutable authority snapshot,
 -- never the mutable designer/client relationship. Reminder delivery may be
 -- stamped by the scheduled Edge worker only through one exact, service-only
--- RPC; direct service-role table updates remain blocked by the 00436 guard.
+-- RPC; direct service-role table updates remain blocked by the 00463 guard.
 -- Communication renderers consume the immutable artifact fields carried by
 -- project_approval_artifacts. Notifications remain non-authoritative and never
 -- confirm review or apply an outcome.

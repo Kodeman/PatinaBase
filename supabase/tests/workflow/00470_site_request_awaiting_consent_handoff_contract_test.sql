@@ -1,4 +1,4 @@
--- Fixture-backed awaiting-consent contextual handoff contract (00443).
+-- Fixture-backed awaiting-consent contextual handoff contract (00470).
 \set ON_ERROR_STOP on
 
 BEGIN;

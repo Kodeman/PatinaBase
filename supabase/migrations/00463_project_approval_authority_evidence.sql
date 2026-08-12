@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00436 — Project approval authority and immutable review evidence
+-- 00463 — Project approval authority and immutable review evidence
 --
 -- Extends the installed client_decisions aggregate without redefining any
 -- existing public RPC. Stage-2 creation owns one explicit household authority
@@ -7,7 +7,7 @@
 -- and one idempotency receipt in one transaction. Review confirmation is a
 -- separate authenticated click-through act bound to that exact snapshot.
 --
--- 00437 intentionally owns publish/respond/withdraw/supersede routing and the
+-- 00464 intentionally owns publish/respond/withdraw/supersede routing and the
 -- sanitized client list/detail projection. Until that migration supplies its
 -- dedicated capability, generic draft compatibility cannot mutate Stage-2.
 --
@@ -1099,7 +1099,7 @@ COMMENT ON FUNCTION public.set_project_decision_authority(
   uuid, uuid, uuid, integer
 ) IS
   'Assigns one explicit household decision lead under optimistic revision. At '
-  '00436 the lead must equal projects.client_id and coapprover must remain NULL.';
+  '00463 the lead must equal projects.client_id and coapprover must remain NULL.';
 
 -- ── Atomic Stage-2 draft creation ──────────────────────────────────────────
 

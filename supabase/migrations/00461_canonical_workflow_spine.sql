@@ -1,9 +1,17 @@
 -- ============================================================================
--- 00434 — canonical residential workflow spine
+-- 00461 — canonical residential workflow spine
 --
 -- Extends the existing proposal/template -> project phase path. This is not a
 -- second lifecycle engine: project_phases remains the sole project schedule
 -- authority and advance_project_phase remains the sole lifecycle transition.
+--
+-- 2026-08-12 erratum: the provenance backfill now runs inside an explicit
+-- DISABLE/ENABLE TRIGGER window (prod CLI applies run via login-role + SET
+-- ROLE, so session_user-based owner-maintenance bypasses do not hold at
+-- migration time). Reordering alone would not clear the pre-00461
+-- z_guard_proposal_copy_draft_only_trg on non-draft proposals, so both
+-- backfills are wrapped instead. The guard predicates themselves are
+-- unchanged.
 -- ============================================================================
 
 -- --------------------------------------------------------------------------
@@ -246,7 +254,7 @@ COMMENT ON COLUMN public.project_phases.source_template_version IS
 -- input. Checked paths use a transaction-local, parent-scoped capability;
 -- proposal activation reuses the exact project batch authority introduced in
 -- 00398. Direct authenticated/service-role writes may still create honest NULL
--- rows and may update every pre-00434 field, but cannot forge these snapshots.
+-- rows and may update every pre-00461 field, but cannot forge these snapshots.
 CREATE OR REPLACE FUNCTION public.guard_phase_workflow_metadata()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -364,14 +372,14 @@ CREATE TRIGGER y_guard_phase_workflow_metadata_trg
   BEFORE INSERT OR UPDATE ON public.project_phases
   FOR EACH ROW EXECUTE FUNCTION public.guard_phase_workflow_metadata();
 
--- Replace broad pre-00434 table grants with equivalent column grants that omit
+-- Replace broad pre-00461 table grants with equivalent column grants that omit
 -- the four new server-owned columns. The trigger remains the enforcement
 -- backstop for definer paths and any future broad grant drift.
 REVOKE INSERT, UPDATE ON TABLE public.proposal_phases
   FROM authenticated, service_role;
 -- 00399 deliberately preserves table-level INSERT for installed rollback
 -- builders. The server-owned trigger is therefore the INSERT authority for an
--- authenticated session; service_role receives only the pre-00434 columns.
+-- authenticated session; service_role receives only the pre-00461 columns.
 GRANT INSERT ON TABLE public.proposal_phases TO authenticated;
 GRANT INSERT (
   id, proposal_id, name, phase_key, duration_weeks, fee_cents,
@@ -607,10 +615,10 @@ END
 $$;
 
 COMMENT ON COLUMN public.proposal_phase_template_applications.template_version IS
-  'Template version used by applications created after 00434. NULL preserves '
+  'Template version used by applications created after 00461. NULL preserves '
   'honest provenance for receipts created before template versioning existed.';
 
--- Keep every pre-00434 receipt fingerprint byte-for-byte compatible. Metadata
+-- Keep every pre-00461 receipt fingerprint byte-for-byte compatible. Metadata
 -- is provenance, not authored proposal copy, and therefore stays outside the
 -- immutable effect receipt.
 CREATE OR REPLACE FUNCTION public._proposal_phase_effect_snapshot(
@@ -1230,6 +1238,21 @@ CREATE TRIGGER carry_project_phase_workflow_metadata
 -- Receipt-backed legacy proposal applications are the only safe provenance
 -- backfill. Rows without a receipt remain NULL. A unique blueprint match is
 -- required; combined unclassified phases receive provenance but no guessed key.
+--
+-- This one-shot migration write is the server itself, not a caller. It cannot
+-- present the per-row parent-scoped token (it is bulk and multi-parent), and
+-- the owner-maintenance bypass is unavailable on the prod CLI apply path
+-- (login role + SET ROLE postgres leaves session_user/current_setting('role')
+-- pointing away from an unassumed owner session). z_guard_proposal_copy_draft_only_trg
+-- would likewise reject provenance stamping on already-sent proposals, which
+-- is an authored-copy rule that does not govern server-derived snapshots.
+-- Both guards are therefore suspended for exactly this statement; the
+-- migration is one transaction, so no other session observes the window.
+ALTER TABLE public.proposal_phases
+  DISABLE TRIGGER y_guard_phase_workflow_metadata_trg;
+ALTER TABLE public.proposal_phases
+  DISABLE TRIGGER z_guard_proposal_copy_draft_only_trg;
+
 WITH receipt AS (
   SELECT DISTINCT ON (application.proposal_id, phase_id)
          application.proposal_id,
@@ -1284,7 +1307,17 @@ WHERE phase.id = match.phase_id
   AND phase.source_template_slug IS NULL
   AND phase.source_template_version IS NULL;
 
+ALTER TABLE public.proposal_phases
+  ENABLE TRIGGER z_guard_proposal_copy_draft_only_trg;
+ALTER TABLE public.proposal_phases
+  ENABLE TRIGGER y_guard_phase_workflow_metadata_trg;
+
 -- Existing activated phases can inherit only from their exact proposal source.
+-- Same migration-time authority problem as the proposal_phases backfill above:
+-- bulk, multi-parent, and running under a role-assumed prod apply session.
+ALTER TABLE public.project_phases
+  DISABLE TRIGGER y_guard_phase_workflow_metadata_trg;
+
 UPDATE public.project_phases AS project_phase
 SET canonical_stage_key = source.canonical_stage_key,
     workflow_track = source.workflow_track,
@@ -1299,6 +1332,9 @@ WHERE project_phase.source_proposal_phase_id = source.id
   AND project_phase.workflow_track IS NULL
   AND project_phase.source_template_slug IS NULL
   AND project_phase.source_template_version IS NULL;
+
+ALTER TABLE public.project_phases
+  ENABLE TRIGGER y_guard_phase_workflow_metadata_trg;
 
 -- Direct project seeding is the other existing template birth path. Preserve
 -- the 00398 locked/create boundary and stamp the blueprint snapshot after each

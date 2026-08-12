@@ -1,0 +1,21 @@
+[
+  {"id":"avatars","name":"avatars","public":true},
+  {"id":"capture-media","name":"capture-media","public":false},
+  {"id":"catalog-feeds","name":"catalog-feeds","public":false},
+  {"id":"comms-attachments","name":"comms-attachments","public":false},
+  {"id":"extension-releases","name":"extension-releases","public":true},
+  {"id":"feedback-screenshots","name":"feedback-screenshots","public":false},
+  {"id":"field-media","name":"field-media","public":false},
+  {"id":"portfolio-items","name":"portfolio-items","public":false},
+  {"id":"product-images","name":"product-images","public":true},
+  {"id":"project-documents","name":"project-documents","public":false},
+  {"id":"project-ffe-working","name":"project-ffe-working","public":false},
+  {"id":"project-review-media","name":"project-review-media","public":false},
+  {"id":"proposal-assets","name":"proposal-assets","public":true},
+  {"id":"proposal-mood-boards","name":"proposal-mood-boards","public":false},
+  {"id":"room-hero-frames","name":"room-hero-frames","public":true},
+  {"id":"room-scan-thumbnails","name":"room-scan-thumbnails","public":true},
+  {"id":"room-scans","name":"room-scans","public":false},
+  {"id":"site-requests","name":"site-requests","public":false},
+  {"id":"studio-logos","name":"studio-logos","public":true}
+]

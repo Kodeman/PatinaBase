@@ -1,5 +1,10 @@
 # Wave1 Workflow Stack — Engineering Review
 
+> **Erratum (2026-08-12):** the wave1 migrations discussed below were renumbered
+> `00434`–`00445` → `00461`–`00472` to clear the FF&E ledger block materialized at
+> `00433`–`00445`. Migration numbers in the body of this document predate that
+> renumber; see `docs/ops/wave1-prod-reconciliation-plan.md` for the current mapping.
+
 **Date:** 2026-08-11
 **Companion to:** `docs/design/workflow-alignment/the-workflow-alignment-proposal.html` (design deck)
 **Audience:** Kody + whoever merges the wave

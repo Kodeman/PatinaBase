@@ -1,7 +1,7 @@
 -- =====================================================================================
--- 00443 — Awaiting-consent Site Request contextual handoff
+-- 00470 — Awaiting-consent Site Request contextual handoff
 --
--- Lineage: restates the complete 00442 body. The only behavioral delta is to
+-- Lineage: restates the complete 00469 body. The only behavioral delta is to
 -- retain a canonically sent Site Request while it waits for the frozen party's
 -- SMS consent. Waiting is navigable but never classified as overdue and exposes
 -- no lifecycle mutation rail, token, contact detail, or mutable party identity.

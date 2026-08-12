@@ -1,4 +1,4 @@
--- Canonical workflow spine contract / authorization regression (00434)
+-- Canonical workflow spine contract / authorization regression (00461)
 -- Run:
 --   psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
 --     -v ON_ERROR_STOP=1 \
@@ -666,7 +666,7 @@ WHERE phase.proposal_id = 'ed200000-0000-4000-8000-000000000001'
   AND phase.phase_key = 'construction_admin';
 
 -- Send, accept without auto-activation, then cross the current public legacy
--- activation boundary. The 00434 trigger carries metadata without replacing
+-- activation boundary. The 00461 trigger carries metadata without replacing
 -- that authoritative RPC implementation.
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_workflow_actor(
@@ -1017,7 +1017,7 @@ BEGIN
     'authenticated', 'public.proposal_phases', 'name', 'INSERT, UPDATE'
   ) AND has_column_privilege(
     'authenticated', 'public.project_phases', 'name', 'INSERT, UPDATE'
-  ), 'pre-00434 authored phase columns must retain their installed privileges';
+  ), 'pre-00461 authored phase columns must retain their installed privileges';
 
   ASSERT EXISTS (
     SELECT 1
