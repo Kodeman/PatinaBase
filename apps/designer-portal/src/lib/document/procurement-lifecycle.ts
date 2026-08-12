@@ -127,28 +127,46 @@ export function deriveProcurementLifecycle(
   const po = item.purchase_order ?? null;
   const evidence: ProcurementEvidenceMap = {};
 
+  // A CANCELLED order is fully OFF-TRAIL, exactly as on Rail A. It once had a
+  // sent date and perhaps an acknowledgment, and none of that is a position
+  // any more — the order was withdrawn, so the trail reports nothing rather
+  // than leaving the work standing wherever it stopped. The register then
+  // renders the operational word "cancelled" instead of a lifecycle step.
+  if (po?.status === 'cancelled') {
+    return assembleProcurementReading(
+      'studio',
+      {},
+      {
+        complete_to_produce: { settled: false },
+        received_and_dispositioned: { settled: false },
+        // №8 docket §5.3 — flip when warehouse/site-readiness evidence lands.
+        warehouse_and_site_ready: { settled: false, noRecord: true },
+      },
+    );
+  }
+
   // ── 01 · Cleared to produce ────────────────────────────────────────────
   // A derived operational seal, NOT a client ceremony: it reads the deposit
   // rows the book already has. No amount, no balance, no funds-held device
   // is rendered from this anywhere (folio 14 — no payment surfaces).
   //
+  // UNDATED, like step 08 and for the same kind of reason. The only date the
+  // clearing carries is `po_payments.paid_date`, and a payment date IS a
+  // payment fact — rendering it beside "Cleared to produce" would put money on
+  // the glass while №7 is open. The step says the work is cleared; it does not
+  // say when anybody paid. The date can return if №7 settles.
+  //
   // A DRAFT PO has not cleared anything — it is a document being written, and
   // the vacuous-deposit rule (absent terms are not unmet terms) must not turn
-  // an unwritten order into a released one. A CANCELLED PO has un-cleared
-  // whatever it once had. Neither takes a position on the trail, which is also
-  // what keeps the ledger saying "draft" and "cancelled" out loud.
+  // an unwritten order into a released one.
   const deposits = (po?.payments ?? []).filter((p) => p.kind === 'deposit');
   const outstandingDeposits = unpaidDeposits(po);
-  const liveOrder =
-    po !== null && po.status !== 'draft' && po.status !== 'cancelled';
+  const liveOrder = po !== null && po.status !== 'draft';
   const depositsClear = liveOrder && outstandingDeposits.length === 0;
   if (depositsClear) {
-    const paidDates = deposits
-      .map((p) => p.paid_date)
-      .filter((d): d is string => Boolean(d))
-      .sort();
     evidence.cleared_to_produce = {
-      at: paidDates[paidDates.length - 1] ?? '',
+      at: '',
+      // Internal audit trail — never rendered.
       source: deposits.length
         ? 'po_payments.kind=deposit state=paid'
         : 'purchase_orders (terms carry no deposit)',
@@ -278,30 +296,48 @@ export function deriveProcurementLifecycle(
       // order, and the gap is an unrecorded seal, not a blockage. So terms
       // hold the gate open; a missing acknowledgment lets it go quiet.
       holdsOpen: outstandingDeposits.length > 0,
-      // Actor-neutral: the gate reports that the ORDER's terms are outstanding,
-      // never that money is owed by anyone (№7 open, folio 14).
-      qualifier: !acknowledged
-        ? 'awaiting acknowledgment'
-        : outstandingDeposits.length
-          ? 'terms outstanding'
+      // Name the term that ACTUALLY holds the gate open, which is why the
+      // outstanding terms come first — they are what makes it open at all.
+      // Actor-neutral: the gate reports that the ORDER's terms are
+      // outstanding, never that money is owed by anyone (№7 open, folio 14).
+      // The acknowledgment branch is a fallback and is currently unreachable
+      // in rendering: reaching this gate's position needs step 05+ evidence,
+      // so a missing acknowledgment alone always reads passed-unsealed.
+      qualifier: outstandingDeposits.length
+        ? 'terms outstanding'
+        : !acknowledged
+          ? 'awaiting acknowledgment'
           : undefined,
     },
     received_and_dispositioned:
       item.grain === 'purchase_order'
         ? // Disposition is item-level; a register of orders cannot see it, so
-          // it never seals here and never invents a term. It stays a real
-          // destination though — receipt IS the next thing that happens to
-          // these goods, and the book may honestly say so (M7's book plate).
+          // it never seals here and never invents a term — no qualifier is
+          // offered, because the register has nothing to name.
+          //
+          // Nothing at this grain can evidence steps 10+ either (the PO status
+          // machine stops at `delivered`), so the trail's position never gets
+          // past step 09 and this gate never goes quiet: before delivery it
+          // reads `unreached`, and from delivery onward it reads `open`
+          // indefinitely — honestly, since receipt IS the next thing that
+          // happens to these goods (M7's book plate names it). Disposition
+          // becomes readable here only if line-grain data reaches the register.
           { settled: false }
         : {
             settled:
               inspectionLogged && !shortReceipt && openClaims.length === 0,
-            // Every one of these is a live condition, not a missing signature:
-            // the goods are short, damaged, or unlooked-at right now. The gate
-            // stops the work even though a claim technically evidences step 10
-            // and puts the trail's position past the gate.
-            holdsOpen:
-              openClaims.length > 0 || shortReceipt || !inspectionLogged,
+            // A live condition is a fact about the goods RIGHT NOW: they came
+            // up short, or a claim on them is unresolved. Such a gate stops
+            // the work even though a claim evidences step 10 and so puts the
+            // trail's position past the gate.
+            //
+            // An inspection that was never logged is NOT one of them — that is
+            // a missing record, and by this file's own argument a missing
+            // record goes quiet rather than stopping finished work. A line
+            // installed months ago whose receipt nobody wrote down reads
+            // passed-unsealed. While the work is still standing AT the gate,
+            // position alone already keeps it open and names the term.
+            holdsOpen: openClaims.length > 0 || shortReceipt,
             // An open claim is the loudest fact about a receipt and outranks
             // everything else the gate could say about it.
             qualifier: openClaims.length
@@ -312,8 +348,10 @@ export function deriveProcurementLifecycle(
                   ? 'awaiting inspection'
                   : undefined,
           },
-    // №8 docket: nothing in the schema records warehouse custody or site
+    // №8 docket §5.3: nothing in the schema records warehouse custody or site
     // readiness. The gate is drawn, and it is drawn empty.
+    // FLIP WHEN docket §5.3 evidence lands (storage location + stored_at):
+    // drop `noRecord` and give this a real predicate.
     warehouse_and_site_ready: { settled: false, noRecord: true },
   };
 

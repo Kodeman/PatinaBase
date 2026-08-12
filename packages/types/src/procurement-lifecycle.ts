@@ -540,6 +540,8 @@ export function deriveFulfillmentLifecycle(
   return assembleProcurementReading('patina', evidence, {
     // Rail A carries no inputs-complete fact. Once the line is past step 04 the
     // gate reads no-record rather than pretending to have been passed.
+    // FLIP WHEN docket §5.1 evidence lands (a per-line inputs checklist):
+    // drop `noRecord` and give this a real predicate.
     complete_to_produce: { settled: false, noRecord: true },
     received_and_dispositioned: {
       settled: reachedDelivered && openExceptions.length === 0,
@@ -549,6 +551,8 @@ export function deriveFulfillmentLifecycle(
       qualifier: openExceptions.length ? 'open exception' : 'awaiting receipt',
     },
     // No warehouse or site-readiness fact exists on either rail today (№8).
+    // FLIP WHEN docket §5.3 evidence lands (storage location + stored_at):
+    // drop `noRecord` and give this a real predicate.
     warehouse_and_site_ready: { settled: false, noRecord: true },
   });
 }
