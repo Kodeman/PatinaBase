@@ -107,7 +107,7 @@ function PoLine({
       {cancelled ? (
         <div
           data-testid="wb-po-line-cancelled"
-          className="mb-1 pb-1 pl-5 text-[0.6rem] uppercase tracking-[0.08em]"
+          className="mb-1 pb-1 pl-5 text-[12px] uppercase tracking-[0.08em]"
           style={{
             fontFamily: "var(--font-meta)",
             color: "var(--color-terracotta)",
@@ -118,7 +118,7 @@ function PoLine({
       ) : (
         <details data-testid="wb-po-line-lifecycle" className="mb-1 pl-5">
           <summary
-            className="cursor-pointer text-[0.6rem] uppercase tracking-[0.08em]"
+            className="cursor-pointer text-[12px] uppercase tracking-[0.08em]"
             style={{
               fontFamily: "var(--font-meta)",
               color: "var(--color-clay)",

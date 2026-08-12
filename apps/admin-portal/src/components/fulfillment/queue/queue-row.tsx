@@ -25,15 +25,24 @@ import { LineLifecycleGlance } from "../shared/line-lifecycle-glance";
 // WP4 Track 3 adds the R7 lifecycle glance (12px current-position stamp +
 // "Next gate") to the meta line, ADDITIVE beside the row's existing
 // derived_status/next-action vocabulary — never replacing it (the
-// checkpoint's unified-contract ruling). `derived_status` is literally the
-// same order_items.line_state chain value `deriveFulfillmentLifecycle`
-// already reads (00353's fulfillment_order_status_v), at the order's MIN
-// stage — the same "furthest-behind line" the row's own stage dots and
-// next-action verb are already derived from, so this is not a new fact, just
-// the fifteen-step reading of one the queue already carries. An unrecognized
-// derived_status (only possible if every line on the order is cancelled, an
-// edge the queue view otherwise excludes) renders no glance rather than
-// fabricating a position.
+// checkpoint's unified-contract ruling). When `derived_status` IS a chain
+// word, it's literally the same order_items.line_state value
+// `deriveFulfillmentLifecycle` already reads (00353's
+// fulfillment_order_status_v), at the order's MIN stage — the same
+// "furthest-behind line" the row's own stage dots and next-action verb are
+// already derived from, so feeding it to the mapper is not a new fact, just
+// the fifteen-step reading of one the queue already carries.
+//
+// `derived_status` is NOT always a chain word, though: the view overrides it
+// to `needs_mapping` (any unmapped line) or `exception` (any open exception)
+// BEFORE falling back to the chain lookup — which is exactly the queue's
+// highest-priority band, Needs Action Now. Neither override is in
+// FULFILLMENT_LINE_STATES, so the glance renders nothing there, which is the
+// honest answer: an order sitting on an unmapped line or an open exception
+// isn't progressing through the chain at all, so there is no single chain
+// position left to report a stamp for — and the row's own unmapped/exception
+// chips already carry that signal, so the glance would only repeat it, not
+// add to it.
 
 // The order's SIX lifecycle stages (R3.4, C1 fix) — fixed dots on EVERY row
 // from intake (all empty) through delivered (all filled), replacing the old
@@ -105,10 +114,13 @@ export function QueueRow({ row, selected, onOpen }: QueueRowProps) {
   });
   const age = formatStageAge(row.stage_age_business_hours);
 
-  // `derived_status` is the order's min-stage line_state word (00353) — the
-  // same fact the stage dots and next-action verb already read. Feed it to
-  // Rail A's mapper for the additive glance; skip entirely on a status the
-  // chain doesn't recognize rather than guessing a position.
+  // `derived_status` is the order's min-stage line_state word WHEN the view
+  // has one to give (00353) — it's overridden to `needs_mapping` /
+  // `exception` first, ahead of any chain position, on exactly the rows the
+  // queue's own unmapped/exception chips already flag. Feed the chain word
+  // to Rail A's mapper for the additive glance; skip on anything the chain
+  // doesn't recognize (the two overrides included) rather than guessing a
+  // position — those rows have no single chain position to report.
   const lifecycleReading = RECOGNIZED_LINE_STATES.has(row.derived_status)
     ? deriveFulfillmentLifecycle({
         line_state: row.derived_status,

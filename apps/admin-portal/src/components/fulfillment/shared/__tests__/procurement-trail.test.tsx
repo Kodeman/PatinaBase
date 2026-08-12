@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { deriveFulfillmentLifecycle } from "@patina/types";
+import { expectNoSubFloorType } from "@/test-utils";
 import { ProcurementTrail } from "../procurement-trail";
 
 // The M7 stamp trail, ported locally for the admin portal (WP4 Track 3). This
@@ -69,6 +70,9 @@ describe("ProcurementTrail", () => {
     expect(
       container.querySelectorAll(".text-\\[12px\\]").length,
     ).toBeGreaterThan(0);
-    expect(container.innerHTML).not.toMatch(/text-\[1[01]px\]/);
+    // Catches BOTH unit forms — a px class under 12 (text-[10px]) and, the
+    // drift adversarial review actually caught, a rem class that resolves
+    // under 12px (text-[0.55rem] = 8.8px slipped past a px-only regex).
+    expect(() => expectNoSubFloorType(container.innerHTML)).not.toThrow();
   });
 });

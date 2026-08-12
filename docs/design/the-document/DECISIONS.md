@@ -104,13 +104,13 @@ engagement language in v1.1.
 
 Stamps render the codebase FF&E machine 1:1: SPECIFIED / QUOTED / APPROVED /
 ORDERED / PRODUCTION / SHIPPED / DELIVERED / INSTALLED, with
-`src/components/portal/ffe/stages.ts` STAGE_CONFIG as the canonical label/color
+`src/components/portal/ffe/stages.ts` STAGE*CONFIG as the canonical label/color
 source. RECEIVED is a derived ninth state: `status='delivered'` + clean
 receiving inspection logged — "delivered, awaiting inspection" is therefore a
 visible studio to-do and a valid need-line input. DAMAGED derives from
 inspection outcome / open damage claim, with claim state in the unfold.
 DECISION DUE derives from `blocked_by_decision_id` → pending blocking decision
-and always displays the _current_ due date; extensions are narrated by the
+and always displays the \_current* due date; extensions are narrated by the
 decision margin item, never a stamp. EXTENDED and RETURNED are dropped from v1
 (no data). Spec §6 vocabulary superseded.
 
@@ -4003,9 +4003,9 @@ tables, and R108.4's infra target is retired. Pre-emptions below gate item 2+.
   pipeline_stage_events (00305, different domain); assets with
   svc_media.media_assets. House style is text + CHECK, not native enums.
 - **Storage: FOUND.** room-scans bucket (private, 500 MB, MIME list 00077, path
-  {artifactType}/{userId}/{scanId}/…, policy fix 00287, photo_derivatives/
+  {artifactType}/{userId}/{scanId}/…, policy fix 00287, photo*derivatives/
   family 00340); capture-media (00234); field-media (00282). Cron sweeps live:
-  parse-room-scan _/10, convert-room-scan-glb _/15, derive-scan-photo-media
+  parse-room-scan */10, convert-room-scan-glb \_/15, derive-scan-photo-media
   \*/5, all via invoke_edge_function with job_runs telemetry.
 - **Ingest/validation: PARTIAL.** confirm-scan-bundle edge fn is live but thin —
   HEAD reachability + photo-count parity only, no checksum walk; called by
@@ -5292,8 +5292,8 @@ same literal in `install.sh` and `install-path-guard.py` moves with it or the
 installer refuses to build. I92 covers the old helper bytes only. Re-qualification
 is mandatory, not elective.
 
-**Verification.** On the qualified x86_64 host at the integration merge: **2038
-passed, 1 failed, 0 skipped** — an _empty_ skip list, which is the point; all 83
+**Verification.** On the qualified x86*64 host at the integration merge: **2038
+passed, 1 failed, 0 skipped** — an \_empty* skip list, which is the point; all 83
 macOS skips are Linux-gated and every one executed. The single failure,
 `test_validator_drift::test_vendored_validator_is_byte_identical`, needs
 `/home/kody/scripts/validate_capture_bundle.py`, which is absent from that host,
@@ -5510,8 +5510,8 @@ ruling 3 pins is narrower: _which declaration the composed path may make_.
 `require_qualified_raster_profile()` runs before anything is acquired, in six
 clauses with six distinct messages: a receipt must be in force; it must still
 cover the packaged helper source; the pinned profile must reproduce the
-receipt's own 8_294_417-byte PPM; the adapter must declare a profile; the
-declaration must be a `FieldRasterProfile`; and it must be _the_ one. Neither
+receipt's own 8*294_417-byte PPM; the adapter must declare a profile; the
+declaration must be a `FieldRasterProfile`; and it must be \_the* one. Neither
 design R119 rejected exists: there is no `--profile` flag, no environment
 variable, and no receipt lookup, and a test reads the argument parser to prove
 the surface is absent rather than merely unused.
@@ -7855,9 +7855,15 @@ fifteen-step contract to say what position that fact represents. The result
 meta line, after the vendor/designer/unmapped/exception chips — additive,
 never replacing the operational verb or the derived_status word, per the
 checkpoint's unified-contract ruling that BOH operators keep their working
-vocabulary. A `derived_status` the chain doesn't recognize (only reachable if
-every line on an order is cancelled, which the queue view's own `min_stage_idx`
-math otherwise excludes) renders no glance — never a guessed position.
+vocabulary. `derived_status` is not ALWAYS a chain word, though: 00353's view
+overrides it to `needs_mapping` (any unmapped line) or `exception` (any open
+exception) BEFORE the chain fallback — exactly the queue's highest-priority
+band, Needs Action Now. Neither override is a chain state, so the glance
+renders nothing there; that is the honest answer, not a gap — an order
+sitting on an unmapped line or an open exception isn't progressing through
+the chain at all, there is no single position left to stamp, and the row's
+own unmapped/exception chips already carry the signal a glance would only
+repeat.
 
 **Component sharing, decided against.** `ProcurementTrail` is duplicated
 locally at `apps/admin-portal/.../fulfillment/shared/procurement-trail.tsx`
@@ -7865,12 +7871,15 @@ rather than imported from the designer portal's `procurement-trail.tsx`. The
 two portals share no components package, and the piece — three small
 subcomponents over the same `@patina/types` shapes — is well under the size
 where a new cross-portal dependency would pay for itself. The port keeps M7's
-grammar byte-for-byte (12px floor, −1.5° rotation stamps, dashed-empty future,
-quiet no-record microcopy, oak gate bars only when reached) and substitutes
-admin-portal's own `--text-muted` token everywhere the Document reaches for a
-`--color-quiet-ink` admin-portal doesn't define. Keep the two in sync by hand
-if the contract's rendering grammar changes; nothing here is a shared import
-to forget.
+grammar token-substituted, floor enforced (12px minimum everywhere in both new
+files, −1.5° rotation stamps, dashed-empty future, quiet no-record microcopy,
+oak gate bars only when reached) and substitutes admin-portal's own
+`--text-muted` token everywhere the Document reaches for a `--color-quiet-ink`
+admin-portal doesn't define. (Adversarial review caught a rem-vs-px drift on
+first pass — the trail's own "Lifecycle" header and two of the line-detail's
+new strings shipped at 8.8–9.6px; fixed to the 12px floor before merge.) Keep
+the two in sync by hand if the contract's rendering grammar changes; nothing
+here is a shared import to forget.
 
 **Noted, not made — a contract change that wasn't needed but a data gap that
 was found.** The Workbench's `FulfillmentWorkbenchLine` DTO carries `lineState`

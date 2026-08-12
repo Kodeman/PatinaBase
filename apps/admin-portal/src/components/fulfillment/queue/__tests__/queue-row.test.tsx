@@ -63,4 +63,45 @@ describe("QueueRow — R7 lifecycle glance (additive, WP4 Track 3)", () => {
     // The row's own vocabulary still renders regardless.
     expect(screen.getByTestId("queue-row-verb")).toBeInTheDocument();
   });
+
+  // fulfillment_order_status_v (00353) overrides derived_status to
+  // 'needs_mapping' / 'exception' BEFORE falling back to the chain word —
+  // exactly the queue's Needs Action Now band. Neither override is a chain
+  // state, so these are the real (and only) rows the glance is absent on —
+  // not "every line cancelled", which the view's min_stage_idx math already
+  // excludes from the queue entirely.
+  it("renders no glance on an unmapped-line row — the chip already carries that signal", () => {
+    render(
+      <QueueRow
+        row={{
+          ...BASE_ROW,
+          derived_status: "needs_mapping",
+          has_unmapped: true,
+          unmapped_count: 1,
+        }}
+        selected={false}
+        onOpen={jest.fn()}
+      />,
+    );
+
+    expect(screen.queryByTestId("lifecycle-glance")).not.toBeInTheDocument();
+    expect(screen.getByText("1 unmapped")).toBeInTheDocument();
+  });
+
+  it("renders no glance on an open-exception row — the chip already carries that signal", () => {
+    render(
+      <QueueRow
+        row={{
+          ...BASE_ROW,
+          derived_status: "exception",
+          open_exceptions: 1,
+        }}
+        selected={false}
+        onOpen={jest.fn()}
+      />,
+    );
+
+    expect(screen.queryByTestId("lifecycle-glance")).not.toBeInTheDocument();
+    expect(screen.getByText("1 exception")).toBeInTheDocument();
+  });
 });

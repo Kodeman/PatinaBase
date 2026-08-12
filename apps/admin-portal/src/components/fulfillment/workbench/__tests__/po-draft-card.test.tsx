@@ -1,6 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import type { FulfillmentWorkbenchLine } from "@patina/fulfillment";
 import { PoDraftCard } from "@/components/fulfillment/workbench/po-draft-card";
+import { expectNoSubFloorType } from "@/test-utils";
 
 // WP4 Track 3: the BOH order-detail line view's R7 stamp trail. Each PO line
 // carries a collapsed "Lifecycle" disclosure reading deriveFulfillmentLifecycle
@@ -81,5 +82,39 @@ describe("PoDraftCard — R7 line-detail trail (WP4 Track 3)", () => {
       screen.queryByTestId("wb-po-line-lifecycle"),
     ).not.toBeInTheDocument();
     expect(screen.queryByTestId("lifecycle-glance")).not.toBeInTheDocument();
+  });
+
+  it("holds the 12px type floor on both new strings this track added — catches rem drift too", () => {
+    // Adversarial review caught both of this file's new strings shipping at
+    // text-[0.6rem] (9.6px) — a rem-unit drift the plain px-only regex this
+    // suite used to run missed entirely. Scoped to the two testids WP4 Track
+    // 3 actually added (not the whole card — the header's pre-existing chips
+    // sit below 12px too and are out of this track's scope to touch).
+    render(
+      <PoDraftCard
+        dropId="po:po-1"
+        title="PO-2026-01042-A · Room & Board"
+        statusLabel="Acknowledged"
+        statusTone="ack"
+        costCents={300000}
+        lines={[
+          makeLine({ id: "line-1", lineState: "acknowledged" }),
+          makeLine({ id: "line-2", lineState: "cancelled" }),
+        ]}
+        droppable={false}
+      />,
+    );
+
+    const lifecycleSummary = screen
+      .getByTestId("wb-po-line-lifecycle")
+      .querySelector("summary");
+    expect(() =>
+      expectNoSubFloorType((lifecycleSummary as HTMLElement).outerHTML),
+    ).not.toThrow();
+    expect(() =>
+      expectNoSubFloorType(
+        screen.getByTestId("wb-po-line-cancelled").outerHTML,
+      ),
+    ).not.toThrow();
   });
 });

@@ -231,7 +231,7 @@ export function ProcurementTrail({
   return (
     <div data-procurement-trail className="mb-3">
       <p
-        className="mb-1.5 text-[0.55rem] uppercase tracking-[0.08em]"
+        className="mb-1.5 text-[12px] uppercase tracking-[0.08em]"
         style={{ fontFamily: "var(--font-meta)", color: "var(--text-muted)" }}
       >
         Lifecycle
