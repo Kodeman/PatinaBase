@@ -41,6 +41,7 @@ export function FieldTaskRow({ token, target, title, dueDate, kindLabel, blocked
   const [photo, setPhoto] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
+  const [photoProcessing, setPhotoProcessing] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   async function handlePhotoChange(file: File | null) {
@@ -48,7 +49,15 @@ export function FieldTaskRow({ token, target, title, dueDate, kindLabel, blocked
       setPhoto(null);
       return;
     }
-    setPhoto(await downscalePhoto(file));
+    // Downscale is async with no synchronous result — a guest who taps Send
+    // before it resolves would otherwise silently submit with `photo` still
+    // null. Track the in-flight state so the Send button can wait it out.
+    setPhotoProcessing(true);
+    try {
+      setPhoto(await downscalePhoto(file));
+    } finally {
+      setPhotoProcessing(false);
+    }
   }
 
   function handleDone() {
@@ -66,6 +75,7 @@ export function FieldTaskRow({ token, target, title, dueDate, kindLabel, blocked
   }
 
   function handleProblemSubmit() {
+    if (photoProcessing) return;
     if (!note.trim() && !photo) {
       setError('Add a note or a photo so your designer knows what happened.');
       return;
@@ -73,9 +83,19 @@ export function FieldTaskRow({ token, target, title, dueDate, kindLabel, blocked
     setError(null);
     startTransition(async () => {
       let formData: FormData | undefined;
+      let submitWarning: string | null = null;
       if (photo) {
-        formData = new FormData();
-        formData.set('photo', photo);
+        // The downscale can fall back to the original file (canvas/codec
+        // failure, unsupported format) — if that original is still huge it
+        // would hit the Server Action's body-size ceiling and dump the guest
+        // into the error boundary, losing their note along with it. Same
+        // spirit as the upload-failure path: drop the photo, keep the report.
+        if (photo.size > 9 * 1024 * 1024) {
+          submitWarning = 'Your photo was too large to send, so only your note went through.';
+        } else {
+          formData = new FormData();
+          formData.set('photo', photo);
+        }
       }
       const result = await reportProblem(token, target, note, formData);
       if (!result.ok) {
@@ -85,7 +105,7 @@ export function FieldTaskRow({ token, target, title, dueDate, kindLabel, blocked
       setStatus('problem');
       setSummary(result.summaryText ?? 'Sent to your designer.');
       setRemaining(result.remainingCount ?? null);
-      setWarning(result.warning ?? null);
+      setWarning(submitWarning ?? result.warning ?? null);
       setShowProblemForm(false);
     });
   }
@@ -163,10 +183,10 @@ export function FieldTaskRow({ token, target, title, dueDate, kindLabel, blocked
               type="button"
               size="lg"
               className="min-h-[44px] w-full"
-              disabled={isPending}
+              disabled={isPending || photoProcessing}
               onClick={handleProblemSubmit}
             >
-              {isPending ? 'Sending…' : 'Send'}
+              {isPending ? 'Sending…' : photoProcessing ? 'Processing photo…' : 'Send'}
             </Button>
             <Button
               type="button"

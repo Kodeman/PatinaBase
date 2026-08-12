@@ -14,12 +14,29 @@ const MAX_LONG_EDGE = 1600;
 const JPEG_QUALITY = 0.8;
 const SKIP_BELOW_BYTES = 1024 * 1024; // 1MB — not worth re-encoding
 
+/**
+ * Some browsers throw on the `imageOrientation` options bag (older Safari/
+ * WebKit in particular) even though they support createImageBitmap itself —
+ * retry without options rather than losing the whole downscale to that.
+ */
+async function decodeBitmap(file: File): Promise<ImageBitmap> {
+  try {
+    return await createImageBitmap(file, { imageOrientation: 'from-image' });
+  } catch {
+    return await createImageBitmap(file);
+  }
+}
+
 export async function downscalePhoto(file: File): Promise<File> {
   if (!file.type.startsWith('image/')) return file;
   if (file.size <= SKIP_BELOW_BYTES) return file;
 
   try {
-    const bitmap = await createImageBitmap(file);
+    // `from-image` reads the EXIF orientation tag and bakes the rotation
+    // into the decoded bitmap — without it, portrait phone shots that carry
+    // a rotation tag come out sideways once the canvas re-encode below
+    // flattens the pixels without their orientation metadata.
+    const bitmap = await decodeBitmap(file);
     const { width, height } = bitmap;
     const longEdge = Math.max(width, height);
 
