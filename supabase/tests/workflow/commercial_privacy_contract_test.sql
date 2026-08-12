@@ -121,23 +121,30 @@ VALUES
   ('a3550000-0000-4000-8000-000000000002', 'a3540000-0000-4000-8000-000000000002', 'Commercial Room', 0),
   ('a3550000-0000-4000-8000-000000000003', 'a3540000-0000-4000-8000-000000000003', 'Pre-execution Room', 0);
 
+-- 2026-08-12: 00438 dropped assignment_scope auto-derivation from
+-- guard_project_ffe_selection_integrity — every row must now state its scope
+-- explicitly. All four fixture rows carry a project_room_id, so all are
+-- 'room' (the only scope the guard accepts alongside a non-null project_room_id).
+-- The commercial-authorized-sofa row also states design_disposition='selected'
+-- explicitly (column default is 'candidate') since C13 below reads it through
+-- get_client_project_selections, which only returns disposition='selected' rows.
 INSERT INTO public.project_ffe_items (
   id, project_id, project_room_id, name, ffe_category, item_type, status,
   quantity, unit_price_cents, trade_price_cents, markup_percent,
-  line_total_cents, vendor_name, sort_order
+  line_total_cents, vendor_name, sort_order, assignment_scope, design_disposition
 ) VALUES
   ('a3560000-0000-4000-8000-000000000001', 'a3540000-0000-4000-8000-000000000001',
    'a3550000-0000-4000-8000-000000000001', 'Legacy private sofa', 'Seating', 'fixed',
-   'specified', 1, 450000, 240000, 87.50, 450000, 'Private Trade Vendor', 0),
+   'specified', 1, 450000, 240000, 87.50, 450000, 'Private Trade Vendor', 0, 'room', 'candidate'),
   ('a3560000-0000-4000-8000-000000000002', 'a3540000-0000-4000-8000-000000000002',
    'a3550000-0000-4000-8000-000000000002', 'Commercial authorized sofa', 'Seating', 'fixed',
-   'specified', 1, 500000, 260000, 92.31, 500000, 'Commercial Trade Vendor', 0),
+   'specified', 1, 500000, 260000, 92.31, 500000, 'Commercial Trade Vendor', 0, 'room', 'selected'),
   ('a3560000-0000-4000-8000-000000000003', 'a3540000-0000-4000-8000-000000000002',
    'a3550000-0000-4000-8000-000000000002', 'Commercial unbound chair', 'Seating', 'fixed',
-   'specified', 1, 180000, 90000, 100.00, 180000, 'Commercial Trade Vendor', 1),
+   'specified', 1, 180000, 90000, 100.00, 180000, 'Commercial Trade Vendor', 1, 'room', 'candidate'),
   ('a3560000-0000-4000-8000-000000000004', 'a3540000-0000-4000-8000-000000000003',
    'a3550000-0000-4000-8000-000000000003', 'Unexecuted authorization chair', 'Seating', 'fixed',
-   'specified', 1, 200000, 100000, 100.00, 200000, 'Pre-execution Trade Vendor', 0);
+   'specified', 1, 200000, 100000, 100.00, 200000, 'Pre-execution Trade Vendor', 0, 'room', 'candidate');
 
 INSERT INTO public.proposals (
   id, designer_id, designer_client_id, client_id, project_id, title,

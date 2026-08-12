@@ -407,19 +407,54 @@ SELECT
     ), 'missing')
   );
 
+-- 2026-08-12: re-scoped from B02_NO_PUBLIC_WORKING_MEDIA_SELECT_POLICY to match
+-- the ratified 2026-08-12 Ruling 1 (FF&E storage posture RETAINED — see
+-- docs/ops/wave1-prod-reconciliation-plan.md §5.3): the
+-- proposal_mood_boards_proposal_* policies on storage.objects are intentionally
+-- present, the bucket stays private, and access is mediated by signed URLs, not
+-- a public SELECT policy. The prior assertion predated that ruling.
 INSERT INTO workflow_privacy_results
 SELECT
-  'B02_NO_PUBLIC_WORKING_MEDIA_SELECT_POLICY',
-  NOT EXISTS (
-    SELECT 1
-    FROM pg_policies
-    WHERE schemaname = 'storage'
-      AND tablename = 'objects'
-      AND cmd = 'SELECT'
-      AND 'public' = ANY (roles)
-      AND COALESCE(qual, '') LIKE '%proposal-mood-boards%'
+  'B02_FFE_MOOD_BOARD_POSTURE_PER_RULING1',
+  COALESCE((
+    SELECT NOT bucket.public
+    FROM storage.buckets AS bucket
+    WHERE bucket.id = 'proposal-mood-boards'
+  ), false)
+  AND (
+    SELECT count(*) FROM pg_policies
+    WHERE schemaname = 'storage' AND tablename = 'objects'
+      AND policyname LIKE 'proposal_mood_boards_proposal_%'
+  ) = 4
+  AND NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'storage' AND tablename = 'objects'
+      AND policyname IN (
+        'Proposal mood boards are publicly readable',
+        'Authorized actors can read proposal mood board media',
+        'Designers can replace their proposal mood boards',
+        'Designers can delete their proposal mood boards',
+        'Designers can replace project board images',
+        'Designers can delete project board images'
+      )
   ),
-  'PUBLIC must not SELECT proposal-mood-boards objects';
+  format(
+    'bucket public=%s ffe policy count=%s (expected 4) wave1 re-opening count=%s (expected 0)',
+    COALESCE((SELECT public::text FROM storage.buckets WHERE id = 'proposal-mood-boards'), 'missing'),
+    (SELECT count(*) FROM pg_policies
+     WHERE schemaname = 'storage' AND tablename = 'objects'
+       AND policyname LIKE 'proposal_mood_boards_proposal_%'),
+    (SELECT count(*) FROM pg_policies
+     WHERE schemaname = 'storage' AND tablename = 'objects'
+       AND policyname IN (
+         'Proposal mood boards are publicly readable',
+         'Authorized actors can read proposal mood board media',
+         'Designers can replace their proposal mood boards',
+         'Designers can delete their proposal mood boards',
+         'Designers can replace project board images',
+         'Designers can delete project board images'
+       ))
+  );
 
 -- Unrelated users and a different studio remain fail-closed.
 SELECT pg_temp.assume_workflow_actor('a3400000-0000-4000-8000-000000000003');
