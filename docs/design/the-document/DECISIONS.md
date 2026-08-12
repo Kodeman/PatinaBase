@@ -7662,16 +7662,55 @@ Kody's ruling: one sweep, every surface, rendered labels only — internal enum
 values, DB values, and PO entity names untouched. Replacement labels are the
 lifecycle step names, actor-neutral, per the deck: `ordered` → **"Released to
 maker"** · `shipped` → **"In transit"** · `delivered` → **"Received"** ·
-`production` → "In production" (unchanged) · `installed` → "Installed"
-(unchanged) · `specified`/`quoted`/`approved` labels unchanged (no
-commercial claim to begin with).
+`production` → **"In production"** (unified — see below) · `installed` →
+"Installed" (unchanged) · `specified`/`quoted`/`approved` labels unchanged
+(no commercial claim to begin with).
 
-**Sites changed** (four known + two found on sweep):
+**Corrected on adversarial review:** the first pass of this entry claimed
+`production`'s label was "left as-is" / "not changed." That was false — the
+same edit that retired `ordered`/`shipped`/`delivered` in
+`stages.ts` also changed `production`'s label from "Production" to "In
+production" in the same hunk, healing a pre-existing three-way split
+(designer-portal said "Production," client-portal's `ffe-status.tsx` said
+"In Production" with a capital P, `FFEPipelinePanel.tsx` already said "In
+production"). The code change was correct and shipped in the original
+commit; only this entry's account of it was wrong. `ffe-status.tsx`'s "In
+Production" is now also corrected to "In production" for exact-string
+consistency across all three surfaces. Ratified: keep the unification.
+
+The review also caught three rendered misses the original grep pass didn't
+catch — status-gated copy and a quoted stage name that don't match the exact
+`'Ordered'`/`'Shipped'` string patterns the first sweep grepped for:
+- `apps/designer-portal/src/components/document/spec-books/
+  spec-book-workspace.tsx` (:473) — a configuration-lock explainer read
+  "Ordered and custom promises stay intact; changes begin on a new project
+  line." Reworded to "Released lines and their custom promises stay intact;
+  changes begin on a new project line." — same meaning, no banned word.
+- `apps/designer-portal/src/components/document/po-preview.tsx` (:363) — the
+  manual-send button read "Ordered by phone / portal — mark as sent." →
+  "Released by phone / portal — mark as sent."
+- `apps/designer-portal/src/components/portal/procurement/order-assistant/
+  step-details.tsx` (:321) — a deposit-balance note quoted the stage name:
+  `item enters "Shipped" stage` → `item enters "In transit" stage`.
+
+Both `spec-book-workspace.tsx` and `po-preview.tsx` live under
+`apps/designer-portal/src/components/document/` — the original entry's
+account of that directory ("left untouched per the `components/document/`
+exclusion") was also wrong as a blanket claim. The real exclusion is six
+specific files a sibling track owns: `orders-ledger.tsx`, `line-unfold.tsx`,
+`procurement-trail.tsx`, `lib/document/procurement-lifecycle.ts`,
+`stamp-derivation.ts`, `use-project-v2.ts` — not the whole directory. The
+sweep now correctly covers every other file under `components/document/`,
+including these two.
+
+**Sites changed** (four known + six found on sweep, across two passes):
 - `apps/designer-portal/src/components/portal/ffe/stages.ts` —
-  `STAGE_CONFIG` labels for `ordered`/`shipped`/`delivered`. This is the
-  single source both the per-project FF&E board and the Procurement → By
-  Status view read from, so both surfaces pick up the change for free.
-- `apps/client-portal/src/components/ffe-status.tsx` — `statusLabels`.
+  `STAGE_CONFIG` labels for `ordered`/`production`/`shipped`/`delivered`.
+  This is the single source both the per-project FF&E board and the
+  Procurement → By Status view read from, so both surfaces pick up the
+  change for free.
+- `apps/client-portal/src/components/ffe-status.tsx` — `statusLabels`
+  (including the `production` capitalization fix, above).
 - `apps/client-portal/src/components/commercial/journey-stepper.tsx` —
   `GOODS_JOURNEY_STAGES` (the six-stop client goods journey; consumed
   positionally by `tracking-row.tsx` and `the-making.tsx`, so both update
@@ -7686,12 +7725,18 @@ commercial claim to begin with).
   `purchase_order.created_at` naming the admin "By Status" column it backs;
   updated to match the new label since the column itself already reads from
   `STAGE_CONFIG`.
+- `apps/designer-portal/src/components/document/spec-books/
+  spec-book-workspace.tsx`, `apps/designer-portal/src/components/document/
+  po-preview.tsx`, `apps/designer-portal/src/components/portal/procurement/
+  order-assistant/step-details.tsx` — the three review-caught misses above.
 
 Tests updated alongside: `apps/designer-portal/src/components/portal/ffe/
 __tests__/stage-select.test.tsx` (option-name query), `apps/client-portal/
 src/components/commercial/__tests__/journey-stepper.test.tsx` (`getByText`
 assertion), `apps/client-portal/src/components/making/__tests__/
-the-making.test.tsx` (`data-journey-stop` assertion).
+the-making.test.tsx` (`data-journey-stop` assertion). No test asserted the
+three review-caught strings verbatim, so no further test edits were needed
+for those.
 
 **Left alone, with reasons — a careful grep surfaced a second, unrelated
 "Authorized" vocabulary that this ruling does not reach:**
@@ -7708,11 +7753,14 @@ the-making.test.tsx` (`data-journey-stop` assertion).
   retire a commercial claim on an FF&E item.
 - `apps/admin-portal/src/lib/concierge-stages.ts`, `.../fulfillment/
   workbench/po-draft-column.tsx`, `.../fulfillment/queue/queue-row.tsx`,
+  `.../fulfillment/pos/[poId]/page.tsx` ("Delivered and inspected"),
   `packages/fulfillment/src/shipments.ts` — internal Mission Control /
   fulfillment-ops tooling for Patina staff literally tracking PO and freight
-  state ("PO Sent", "Freight Booked", inspection-window countdowns). Staff
-  need the literal operational state, not client-facing lifecycle prose;
-  this is not the "commercial claim" register the ruling targets.
+  state ("PO Sent," "Freight Booked," "Delivered and inspected," inspection-
+  window countdowns). This is a separate `PoState`/`ConciergeStage`
+  vocabulary from the FF&E item's `FFEStageKey`; staff need the literal
+  operational state, not client-facing lifecycle prose. Adjudicated fine on
+  review — not the "commercial claim" register the ruling targets.
 - `apps/designer-portal/src/lib/document/feedback.ts` (`shipped: 'Shipped'`)
   — the Feedback layer's own status vocabulary ("this bug report shipped"),
   a software-development-lifecycle sense of "shipped," not FF&E goods.
@@ -7731,15 +7779,11 @@ the-making.test.tsx` (`data-journey-stop` assertion).
   component is not consumed anywhere in-repo under that prop shape.
 - `apps/designer-portal/src/components/document/ffe-section.tsx` — imports
   `STAGE_CONFIG` from `stages.ts` rather than duplicating labels, so it
-  inherits the fix without a direct edit; left untouched per the
-  `components/document/` exclusion regardless.
+  inherits the fix without a direct edit.
 - `supabase/functions/**` (edge-function email templates, e.g. `_shared/
   po-emails.ts`, `_shared/fulfillment-templates.ts`) — out of the stated
   sweep scope (portals + packages); flagged here as a candidate for a
   follow-up pass if Kody wants the retirement to reach transactional email.
 
-**Noted, not changed:** `apps/designer-portal/src/components/portal/ffe/
-stages.ts` had `production: 'Production'` where the client portal already
-said "In production" — a pre-existing cross-portal inconsistency, not a
-commercial-claim word. Left as-is; out of this ticket's scope.
+*Entries add: I121 · last id = I121*
 

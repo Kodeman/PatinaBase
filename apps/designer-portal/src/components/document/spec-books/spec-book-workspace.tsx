@@ -470,7 +470,7 @@ export function SelectionEditor({
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--color-pearl)] pt-3">
               <p className="text-[10px] text-[var(--text-muted)]">
                 {revisionClosed
-                  ? "Ordered and custom promises stay intact; changes begin on a new project line."
+                  ? "Released lines and their custom promises stay intact; changes begin on a new project line."
                   : "A replacement creates a new snapshot and returns this line to approval."}
               </p>
               <Link
