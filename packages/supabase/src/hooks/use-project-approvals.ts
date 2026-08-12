@@ -387,6 +387,8 @@ export function useProjectApprovals(projectId: string | undefined) {
     },
     enabled: !!projectId,
     ...approvalForegroundRefresh,
+    // TODO(wave1-reconciliation): remove silent once wave1 schema is applied to prod
+    meta: { errorSurface: 'silent' },
   });
 }
 
@@ -408,6 +410,8 @@ export function useProjectApprovalArtifactCandidates(
     },
     enabled: !!projectId,
     ...approvalForegroundRefresh,
+    // TODO(wave1-reconciliation): remove silent once wave1 schema is applied to prod
+    meta: { errorSurface: 'silent' },
   });
 }
 
@@ -484,6 +488,8 @@ export function useProjectDecisionAuthority(projectId: string | undefined) {
     },
     enabled: !!projectId,
     ...approvalForegroundRefresh,
+    // TODO(wave1-reconciliation): remove silent once wave1 schema is applied to prod
+    meta: { errorSurface: 'silent' },
   });
 }
 
