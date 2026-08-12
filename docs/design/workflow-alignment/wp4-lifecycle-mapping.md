@@ -63,41 +63,93 @@ blocks anything.
 `apps/designer-portal/src/lib/document/procurement-lifecycle.ts`. Inputs are
 rows the existing hooks already fetch.
 
+Every `source` string names the column that **actually fired** for that reading
+— it is the audit trail, so a mapping with two possible sources reports which
+one it used.
+
 | # | Step | Evidence | Source column |
 |---|---|---|---|
-| 01 | Cleared to produce | a PO exists **and** every `deposit`-kind payment is `paid` (no deposit rows ⇒ vacuously true) | `po_payments.kind` / `.state` / `.paid_date` |
+| 01 | Cleared to produce | a **live** PO (status not `draft`, not `cancelled`) **and** every `deposit`-kind payment is `paid` (no deposit rows ⇒ vacuously true) | `po_payments.kind` / `.state` / `.paid_date` |
 | 02 | Released to maker | PO was sent | `purchase_orders.sent_at` |
 | 03 | Acknowledged | vendor acknowledged | `purchase_orders.acknowledged_at` |
 | 04 | Awaiting inputs | **none — §5.1** | — |
-| 05 | Released | production began (one fact evidences 05 and 06) | `purchase_orders.status='in_production'`, dated by `project_ffe_items.last_status_change_at` |
+| 05 | Released | production began (one fact evidences 05 and 06) | `purchase_orders.status='in_production'` **or** `project_ffe_items.status='production'`, dated by `project_ffe_items.last_status_change_at` |
 | 06 | In production | same fact | same |
 | 07 | Ready to ship | **none — §5.2** | — |
-| 08 | In transit | PO shipped | `purchase_orders.status='shipped'`, dated by `confirmed_eta` |
-| 09 | Received / inspect | goods landed | `purchase_orders.delivered_date`, else `project_ffe_items.status='delivered'` |
-| 10 | Accepted or issue | the inspection's item-grain write-back and/or a claim on this line | `project_ffe_items.received_quantity`, `damage_claims.ffe_item_id` |
+| 08 | In transit | PO shipped — **UNDATED** | `purchase_orders.status='shipped'` **or** `project_ffe_items.status='shipped'` |
+| 09 | Received / inspect | goods landed | `purchase_orders.delivered_date`, else `purchase_orders.status='delivered'`, else `project_ffe_items.status='delivered'` |
+| 10 | Accepted or issue | a claim on this line (the ISSUE half) and/or the clean-outcome write-back (the ACCEPTED half) | `damage_claims.ffe_item_id`, `project_ffe_items.received_quantity` |
 | 11 | Stored | **none — §5.3** | — |
 | 12 | Install released | **none — §5.4** | — |
 | 13 | Installed | item machine reached installed | `project_ffe_items.status='installed'` |
 | 14 | Punch / service | **none — §5.5** | — |
-| 15 | Closed | **none — §5.5** | — |
+| 15 | Closed | **none — §5.6** | — |
+
+**Step 08 renders undated.** The book records no departure: `confirmed_eta` is
+an expectation about *arrival*, and dating a shipping step with it would report
+a fact that does not exist. The ETA appears exactly once, in the ledger's
+Expected column, under the `~` convention that marks it approximate. The
+missing departure fact is docketed at §5.7.
+
+**Step 10's date** takes the earliest **open** claim; open outranks resolved,
+because an unresolved issue is the live fact. With no open claim it falls back
+to the earliest claim of any state, then to `delivered_date`.
+
+**A draft or cancelled PO takes no position on the trail at all**, which is what
+keeps the orders book saying "draft" and "cancelled" out loud rather than
+promoting an unwritten order to "Cleared to produce".
 
 **Steps do not imply one another on this rail.** A delivered line whose PO was
 never marked sent reads step 02 as `no-record`, because that is what the book
 actually knows. (Rail A's `line_state` chain is ordered and *is* an exception —
 see §3.)
 
-### Gate predicates (Rail B)
+### Gate readings
+
+A gate has five readings. **`settled` requires both position and terms** — the
+trail must have *reached* the gate AND its terms be met; terms satisfied at a
+position the work has not arrived at reads `unreached`, not `settled`.
+
+| Reading | Means | Draws |
+|---|---|---|
+| `unreached` | the work has not arrived | quiet, pearl border |
+| `open` | the work is standing at it with a term outstanding | **oak stop bar** + the term |
+| `settled` | reached, and every term met | oak bar + a Settled stamp |
+| `passed-unsealed` | the work moved past it and the terms were never evidenced | quiet, "no record" |
+| `no-record` | the rail holds nothing that could ever bear on it | quiet, "no record" |
+
+`passed-unsealed` exists so the trail **never draws finished work as stopped**.
+An installed credenza whose PO was never acknowledged has a missing signature,
+not a blockage, and an oak stop bar under it would be a lie about the present.
+
+The counterweight is `holdsOpen`: a term that is a **live condition** — an
+unresolved claim, a short receipt, an inspection never logged, uncleared order
+terms — keeps its gate `open` even once the trail's position is nominally past
+it. The distinction is the whole design: *a live stop stops; an unrecorded seal
+goes quiet.*
 
 - **G1 Complete to produce** — settled when `acknowledged_at` is set **and**
-  every deposit-kind payment is `paid`. Qualifier when open: `awaiting
-  acknowledgment`, else `deposit outstanding`.
-- **G2 Received and dispositioned** — settled when an inspection has been
-  logged at item grain (`received_quantity` is non-null), the count is not
-  short (`received_quantity = quantity`), and no claim on the line is
-  `drafted`/`vendor_notified`. Qualifier when open: `awaiting inspection`,
-  `open claim`, `short receipt`.
-- **G3 Warehouse + site ready** — no fact exists. Reads `unreached` before
-  step 11 and `no-record` after. It is never settled and never open.
+  every deposit-kind payment is `paid`. Uncleared terms `holdOpen`; a missing
+  acknowledgment does not. Qualifier: `awaiting acknowledgment`, else
+  `terms outstanding` — **never funds language** (№7, folio 14).
+- **G2 Received and dispositioned** — settled when an inspection was logged,
+  the count is not short, and no claim on the line is `drafted`/`vendor_notified`.
+  **"Inspection logged" is `delivered_date` (or a claim), NOT `received_quantity`**
+  — 00150 stamps `delivered_date` on the first inspection row whatever its
+  outcome, whereas 00184 writes the count only on a *clean* one, so reading the
+  count would report a damaged receipt as never inspected. The count governs one
+  term only: whether everything ordered turned up. Qualifier ladder, in order:
+  `open claim` → `short receipt` → `awaiting inspection`. All three hold the
+  gate open.
+- **G3 Warehouse + site ready** — no fact exists on either rail. It is
+  `sealable: false`: drawn (its emptiness is the honest report on §5.3) but
+  **never named as a next gate**, because promising a stop that will never come
+  is its own small lie.
+
+**Next gate** is a *position ahead*, not a to-do list: the first unsettled,
+sealable gate whose `afterStep` is at or beyond the live step. A gate the work
+has already gone past is never "next", however it ended up. When nothing remains
+ahead the ledger renders "—" rather than reaching backwards for something to say.
 
 These are **derived operational seals**, not client ceremonies. No
 `client_decisions` row is consulted, no client act settles one, and nothing
@@ -131,10 +183,11 @@ current state alone. Dated shipment facts override the undated implication:
 `fulfillment_shipments.delivered_at` → step 09.
 
 `cancelled` is a **ninth** allowed `line_state` value (00350) that the deck's
-eight-state list omits. It is terminal but off-trail: it evidences no step and
-takes no position in the order. Shipment and exception facts on a cancelled
-line still read, because a crate that arrived damaged arrived damaged whatever
-happened to the order.
+eight-state list omits. It is terminal and **fully off-trail**: nothing on a
+cancelled line reads — not the chain, not shipments, not exceptions. 00350's
+chain cancels before shipping, so anything hanging off a cancelled line is moot
+bookkeeping, and drawing an open backorder on it would raise a problem nobody
+has.
 
 **Exceptions** (`fulfillment_exceptions`) map onto step 10's *issue* reading —
 they are the issue half of "Accepted or issue". `status` is open unless
@@ -153,22 +206,45 @@ settles on delivery with no open exception; G3 is `no-record` as on Rail B.
 
 | Surface | File | What it shows |
 |---|---|---|
-| FF&E line unfold | `components/document/procurement-trail.tsx`, mounted in `line-unfold.tsx` | the full numbered trail — settled stamped, live in clay, future dashed-outline, `no-record` quiet, gates as full-width interrupting bars with an oak left border once reached |
-| Orders book, ledger density | `components/document/orders-ledger.tsx` | the row's Stamp becomes the lifecycle **position**; new "Next gate" (name · qualifier) and "Expected" columns. **The fifteen steps never enumerate here.** |
+| FF&E line unfold | `components/document/procurement-trail.tsx`, mounted in `line-unfold.tsx` | the full numbered trail — settled stamped, live in clay, future dashed-outline, `no-record` quiet, gates as full-width interrupting bars with an oak left border **only when `open` or `settled`** |
+| Orders book, ledger density | `components/document/orders-ledger.tsx` via `derivePurchaseOrderLifecycle` | the row's Stamp becomes the lifecycle **position** (a draft/cancelled order keeps its own word); "Next gate" (name · qualifier) and "Expected". **The fifteen steps never enumerate here.** |
+
+**Mount guard.** The trail is for GOODS. It never renders on a trade/service
+line (`trade_scope_document_id`, or a `trade_*` stamp) — a trade scope runs its
+own journey and fifteen goods steps under tile-setting would be fifteen rows of
+nonsense. On a furnishings line it renders only once there is a lifecycle to
+read: a linked PO, or at least one evidenced step. A `specified` line with
+nothing ordered gets no eighteen-row empty scaffold implying work is pending.
 
 Constraints honoured: zero shadows (D4); all trail type ≥12px — M7's miniature
-stamp sizes are a plate device and do not ship; exceptions keep the existing
-stamp kinds (`damaged`, `partial`) on the line's own stamp, so the trail adds no
-new badge genre; nothing about overdue appears on the trail (R4's device belongs
-to the margin and the Desk).
+stamp sizes are a plate device and do not ship. The shared `Stamp` gained a
+`size` prop (`xs` = the historical 10px default, unchanged everywhere;
+`sm` = 12px) so the trail and the ledger's lifecycle stamp hold one floor with
+one component. Exceptions keep the existing stamp kinds (`damaged`, `partial`)
+on the line's own stamp, so the trail adds no new badge genre; nothing about
+overdue appears on the trail (R4's device belongs to the margin and the Desk).
 
-### One hook select was extended (existing columns only)
+Both call sites memoize their derivation (`useMemo` keyed on the row / the
+fetched orders), so a reading is computed once per fetch rather than per render.
 
-`packages/supabase/src/hooks/use-project-v2.ts` — `useProjectFFEItems` now also
-requests `purchase_orders.delivered_date`, the nested `po_payments`
-(`kind, state, due_date, paid_date`), and `damage_claims.created_at`. Every one
-of these already exists in the database; none is new schema. Without them the
-trail could not evidence steps 01, 09 and 10 at all.
+### One hook select was extended — opt-in, existing columns only
+
+`packages/supabase/src/hooks/use-project-v2.ts` — `useProjectFFEItems` accepts
+`{ withLifecycle: true }`, which adds `purchase_orders.delivered_date` and the
+nested `po_payments` (`kind, state, due_date, paid_date`) to the PO embed.
+`damage_claims.created_at` is added unconditionally (one scalar on an embed
+already fetched).
+
+**It is off by default and the flag is part of the query key.** Only the
+designer portal's `ffe-section.tsx` opts in, because only the Document draws the
+trail; the client portal's `ffe-status.tsx` and `FFEPipelinePanel.tsx` fetch
+exactly what they fetched before and never pay for the second-level embed.
+Keying on the flag matters: without it a lifecycle-less cache entry could be
+served to a trail-drawing caller, whose PO would arrive with no payments and
+whose trail would silently under-report.
+
+Every column already exists in the database; none is new schema. Without them
+the trail could not evidence steps 01, 09 and 10 at all.
 
 ---
 
@@ -186,11 +262,22 @@ today, because an unevidenced step reads `no-record` rather than lying.
 | 5.2 | **07 Ready to ship** | vendor says the goods are complete and crated, before a carrier has them | One nullable timestamp on `purchase_orders` (`ready_at`) plus somewhere to log it — the existing "log ack" inline act is the natural host. Cheapest of the five. Closes the blind week between "In production" and a tracking number. |
 | 5.3 | **11 Stored** | receiver/warehouse custody: where the goods physically are between receipt and install | A location dimension the schema has nowhere for today. Minimally one nullable `storage_location` + `stored_at` on the item; properly, a receiver entity with addresses. Note this is the gating fact for **gate G3**, which is why G3 can never settle today. |
 | 5.4 | **12 Install released** | the act of releasing stored goods to a site on a date | One timestamp plus an act, but it depends on 5.3 — releasing from storage is meaningless without storage. Sequence it after 11. |
-| 5.5 | **14 Punch / service · 15 Closed** | post-install defect tracking and the line's final closure | Rail A already closes (`line_state='settled'` → step 15), so only Rail B is dark here. Closure is one timestamp; punch/service is a small defect record per line, closely related to the existing `damage_claims` shape and possibly a state extension of it rather than a new table. |
+| 5.5 | **14 Punch / service** | post-install defect tracking | A small defect record per line, closely related to the existing `damage_claims` shape — possibly a state extension of it rather than a new table. |
+| 5.6 | **15 Closed** | the line's final closure | Rail A already closes (`line_state='settled'` → step 15), so only Rail B is dark. One timestamp. |
+| 5.7 | **08's departure** (carrier / tracking / actual ship date) | when the goods actually LEFT, and how to follow them | Step 08 renders today, but **undated** — the book has no departure fact at all, only `confirmed_eta`, which is an arrival guess. Rail A already carries this (`fulfillment_shipments.shipped_at`, `carrier`, `tracking`), so this is Rail B catching up: a shipments concept on `purchase_orders`, or minimally `shipped_at` + `carrier` + `tracking`. High value for the same reason 5.2 is — it closes the blind stretch between the workshop and the door. |
+| 5.8 | **returns / RMA** | goods sent BACK | Rail B has no return concept, so step 10 currently collapses damage, short receipt, and return into one reading, and a returned item has nowhere truthful to sit. Rail A has `fulfillment_exceptions.type='return'`; Rail B would need the equivalent — most naturally as a `damage_claims` resolution path rather than a new object. |
 
-**Recommended sequence if the wave is ever funded:** 5.2 (cheapest, immediate
-read), then 5.1 (highest value), then 5.3 → 5.4 as a pair (they unlock gate
-G3 together), then 5.5. Nothing here is authorized by this track.
+**Recommended sequence if the wave is ever funded:** 5.2 and 5.7 first (cheapest
+and highest immediate read — together they make the shipping stretch legible),
+then 5.1 (highest value overall), then 5.3 → 5.4 as a pair (they unlock gate G3
+together), then 5.5/5.6, then 5.8. Nothing here is authorized by this track.
+
+**One consequence worth stating plainly:** because step 04 has no fact (§5.1),
+gate G1 can never read `open` from a *missing acknowledgment* alone — the trail
+cannot stand at position 4. G1 does read `open` on uncleared terms, which are a
+live condition. M7's book plate shows a row reading "Awaiting inputs · Complete
+to produce · COM open"; that row is not reachable until §5.1 is built, and the
+trail renders honestly without it rather than faking the step.
 
 ---
 
@@ -207,23 +294,33 @@ judgment call against the real schema.
    neither alone spans the trail: PO status has `in_production` but no
    `installed`; the item machine has `installed` and `production` but no
    `in_production`. Either satisfies its step.
-3. **`confirmed_eta` dates step 08.** It is an *expectation*, not a departure —
-   but it is the only date a shipped PO carries. The evidence `source` string
-   says so explicitly.
-4. **`receiving_inspections` is PO-grain and has no FF&E link.** The item-grain
-   trace of an inspection is the `received_quantity` count that 00184's trigger
-   writes back, so that is what steps 09/10 and gate G2 read.
-5. **A draft PO with no payment rows settles step 01 vacuously.** This follows
-   the ratified rule literally ("no deposit rows → vacuously true"). It means a
-   never-sent draft PO reads "Cleared to produce" as its position. Flagged for
-   Kody: if that is too generous a claim, the fix is to require a non-draft
-   status as a second term — one line, not a schema change.
-6. **The orders ledger keeps PO grain.** M7's book plate shows line-grain rows;
-   the shipping ledger groups POs by vendor and carries the send, bulk-ETA and
-   ack acts. Rows *gained* the M7 columns rather than changing grain — a
-   regrain would have deleted working machinery for a mockup detail.
+3. **Step 08 is undated.** `confirmed_eta` is an expectation about arrival, not
+   a departure, so it dates nothing on the trail; it renders only in the
+   ledger's Expected column. The missing departure fact is docketed at §5.7.
+4. **`receiving_inspections` is PO-grain and has no FF&E link.** Steps 09/10 and
+   gate G2 read `delivered_date` (stamped on the first inspection, any outcome)
+   as the fact that an inspection happened, and `received_quantity` (written
+   only on a clean outcome) purely as the full-count term.
+5. **A draft or cancelled PO takes no position on the trail.** The
+   vacuous-deposit rule ("no deposit rows → vacuously true") applies only to a
+   *live* order; without that term a never-sent draft would read "Cleared to
+   produce", which is a claim about an unwritten document. **Ruled during
+   review**; the ledger keeps saying "draft" and "cancelled".
+6. **The orders ledger keeps PO grain**, through its own entry point
+   `derivePurchaseOrderLifecycle`. M7's book plate shows line-grain rows; the
+   shipping ledger groups POs by vendor and carries the send, bulk-ETA and ack
+   acts. Rows *gained* the M7 columns rather than changing grain — a regrain
+   would have deleted working machinery for a mockup detail. **Gate G2 cannot
+   settle at this grain** (disposition is item-level), so it never claims a seal
+   and never invents an "awaiting" term there — but it stays a legitimate
+   destination, because receipt genuinely is the next thing that happens.
 7. **`po_payment_state` has four values, not three** — `refunded` was added by
    `ALTER TYPE` in 00277. A refunded deposit is treated as **not** paid.
+8. **"Expected" is a shipment expectation only.** An earlier pass let it fall
+   back to the nearest unpaid payment due date; that would have put a money date
+   in a column about goods, which folio 14 forbids. Removed — a line with no
+   confirmed ETA expects nothing, and the R18 unscheduled "NO DATE" mark
+   survives untouched.
 
 ---
 

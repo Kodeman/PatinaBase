@@ -7690,7 +7690,10 @@ not authorized.** The trail draws what the orders book already knows.
 
 Five steps have no fact on the studio rail today — 04 Awaiting inputs,
 07 Ready to ship, 11 Stored, 12 Install released, 14/15 Punch·Closed. They are
-not inferred from a neighbour, not defaulted, and not blocking. This forced the
+not inferred from a neighbour, not defaulted, and not blocking. (Review added
+two more entries to the docket: step 08 renders but is UNDATED because no
+departure fact exists, and Rail B has no returns concept at all — mapping
+§5.7–5.8.) This forced the
 one genuinely new idea in the contract: **`no-record` is a distinct state from
 `future`.** A step behind the trail's position with nothing behind it reads
 "no record" in quiet, unstamped microcopy; a step ahead of the position reads
@@ -7726,21 +7729,47 @@ over facts the book already holds:
 
 - **G1 Complete to produce** — `acknowledged_at` set AND every deposit-kind
   `po_payments` row `paid`. **A PO with no deposit rows settles it vacuously**,
-  which is the ratified reading: absent terms are not unmet terms.
-- **G2 Received and dispositioned** — an inspection logged at item grain
-  (`received_quantity` non-null), the count not short, and no `drafted` /
-  `vendor_notified` claim on the line. `receiving_inspections` is PO-grain with
-  no FF&E link, so the item-grain trace is the count 00184's trigger writes
-  back.
+  which is the ratified reading: absent terms are not unmet terms — but only for
+  a LIVE order. A `draft` or `cancelled` PO takes no position on the trail at
+  all, so an unwritten order is never promoted to "Cleared to produce" and the
+  orders book keeps saying "draft" and "cancelled" out loud.
+- **G2 Received and dispositioned** — an inspection logged, the count not short,
+  and no `drafted` / `vendor_notified` claim on the line. `receiving_inspections`
+  is PO-grain with no FF&E link, so the item-grain traces are `delivered_date`
+  and the claims. **"Inspection logged" is `delivered_date`, NOT the count**:
+  00150 stamps the date on the first inspection row whatever its outcome, while
+  00184 writes `received_quantity` only on a *clean* one — reading the count
+  would have reported every damaged receipt as never inspected. The count
+  governs one term only, whether everything ordered turned up.
 - **G3 Warehouse + site ready** — **no fact exists on either rail.** It is drawn,
-  and it is drawn empty: `unreached` before step 11, `no-record` after, never
-  settled and never open. A gate that can never pass is still worth drawing,
-  because its emptiness is the honest report on §5.3.
+  and it is drawn empty, and it is marked `sealable: false` so it is never named
+  as somewhere the work is heading. A gate that can never pass is still worth
+  drawing, because its emptiness is the honest report on §5.3 — but promising a
+  stop that will never come is its own small lie.
 
-An open gate names the term holding it (`awaiting acknowledgment`, `open claim`,
-`short receipt`) — the qualifier is read off the unmet predicate, never written
-by hand. A gate the trail has not reached is `unreached`, not `open`: an unmet
-term is only a stop once the work is standing at it.
+**A gate seals by position AND terms, in that order.** Terms satisfied at a
+place the trail has not arrived at is not a seal; it reads `unreached`. This
+forced a fifth reading, `passed-unsealed`: work that moved BEYOND a gate whose
+terms were never evidenced. It renders quiet — no oak stop bar, no qualifier —
+because an installed credenza whose PO was never acknowledged has a missing
+signature, not a blockage, and drawing a stop under finished work would be a lie
+about the present.
+
+The counterweight is `holdsOpen`. A term that is a **live condition** — an
+unresolved claim, a short receipt, an inspection never logged, uncleared order
+terms — keeps its gate `open` even once the trail's position has moved past it
+(a claim evidences step 10, which sits past G2, so position alone would have
+silenced the loudest fact about a receipt). The distinction is the whole design:
+*a live stop stops; an unrecorded seal goes quiet.*
+
+An open gate names the term holding it — the qualifier is read off the unmet
+predicate, never written by hand, and G2's ladder puts `open claim` above
+`short receipt` above `awaiting inspection`.
+
+**"Next gate" is a position, not a to-do list**: the first unsettled, sealable
+gate at or ahead of the live step. A gate the work has already gone past is
+never next, however it ended up, and when nothing remains ahead the ledger
+renders "—" rather than reaching backwards for something to say.
 
 **Commercial guard (№7, still open).** The step names ARE the lexicon and ship
 verbatim — "Cleared to produce", never "Authorized"; "Released to maker", never
@@ -7753,20 +7782,32 @@ holding a gate open. A test asserts no rendered trail copy matches
 **Renderings.** The line unfold gets the full numbered trail
 (`procurement-trail.tsx`): settled stamped, live in clay, future dashed-outline
 and empty, `no-record` quiet with microcopy, gates as full-width interrupting
-bars with an oak left border once reached. The orders book gets the same grammar
-at ledger density — the row's Stamp becomes the lifecycle *position* rather than
-the status word, plus "Next gate" and "Expected" columns; **the fifteen steps
-never enumerate at ledger density.** Zero shadows. All trail type ≥12px — M7's
-miniature stamps are a plate device and do not ship, so the trail carries its
-own 12px stamp rather than the 10px `Stamp` component, which stays as-is on the
-surfaces that already use it.
+bars taking an oak left border only when `open` or `settled`. The trail is for
+GOODS: it never mounts on a trade/service line, and on a furnishings line only
+once there is something to read (a linked PO or an evidenced step) — no
+eighteen-row empty scaffold under a line nobody has ordered. The orders book
+gets the same grammar at ledger density through its own PO-grain entry point —
+the row's Stamp becomes the lifecycle *position* rather than the status word,
+plus "Next gate" and "Expected"; **the fifteen steps never enumerate at ledger
+density.** "Expected" is a *shipment* expectation only (`confirmed_eta`): a
+payment due date must never appear in a column about goods, and R18's
+unscheduled "NO DATE" mark survives untouched. Zero shadows. All trail type
+≥12px — M7's miniature stamps are a plate device and do not ship, so the shared
+`Stamp` gained a `size` prop (`xs` = the historical 10px default, unchanged
+everywhere; `sm` = 12px) and both new surfaces hold one floor with one
+component.
 
 **Interpretations surfaced, not ruled** (full list in the mapping doc §6): the
-ledger keeps PO grain rather than re-graining to M7's line-grain plate;
+ledger keeps PO grain rather than re-graining to M7's line-grain plate, and G2
+cannot settle there because disposition is item-level;
 `purchase_orders.last_status_change_at` does not exist, so steps 05/06 date from
-the item's column; `confirmed_eta` dates step 08 despite being an expectation
-rather than a departure; and **a never-sent draft PO with no payment rows reads
-"Cleared to produce" as its position** under the vacuous-deposit rule — if that
-claim is too generous, the fix is a second term, not a migration.
+the item's column; and **step 08 renders undated**, because `confirmed_eta` is a
+guess about arrival rather than a record of departure — the missing departure
+fact (carrier, tracking, actual ship date) joins returns/RMA in the №8 docket at
+mapping §5.7–5.8. One consequence worth stating: because step 04 has no fact,
+G1 can never read `open` from a missing acknowledgment alone — the trail cannot
+stand at position 4. M7's "Awaiting inputs · Complete to produce · COM open" row
+is unreachable until §5.1 is built, and the trail renders honestly without it
+rather than faking the step.
 
 *Entries add: I121–I123 · last id = I123*
