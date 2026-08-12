@@ -103,6 +103,23 @@ export default defineConfig({
     env: {
       NEXT_PUBLIC_FLAG_OVERRIDES:
         'procurement-workspace-pilot:true,the-document-pilot:true',
+      /* Self-safing override: apps/designer-portal/.env.local has legitimately
+       * pointed NEXT_PUBLIC_SUPABASE_URL at Strata prod before (e2e history),
+       * and the loadEnvFile() calls above put whatever .env.local has into
+       * process.env, which this webServer block otherwise merges straight
+       * through. This suite seeds via `e2e/helpers/psql.ts`, which refuses to
+       * run against anything but a local Postgres — so the dev server it
+       * drives MUST be pointed at that same local Supabase stack, never prod,
+       * regardless of .env.local. Values are the local CLI's standard demo
+       * keys (`supabase status`) / the local-dev default JWT secret already
+       * in apps/designer-portal/.env — not secrets, safe to inline. */
+      NEXT_PUBLIC_SUPABASE_URL: 'http://127.0.0.1:54321',
+      NEXT_PUBLIC_SUPABASE_ANON_KEY:
+        'eyJhbGciOiJFUzI1NiIsImtpZCI6ImI4MTI2OWYxLTIxZDgtNGYyZS1iNzE5LWMyMjQwYTg0MGQ5MCIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjIxMDEyOTg0Njd9.gtakjfTVh_cwTPVSHT2aPLSv09paNkN0NFXqWwBivEa94oD421oqKSDmfB1mIef8J0AILHWs4DqZgf_6Kr8moA',
+      SUPABASE_URL: 'http://127.0.0.1:54321',
+      SUPABASE_SERVICE_ROLE_KEY:
+        'eyJhbGciOiJFUzI1NiIsImtpZCI6ImI4MTI2OWYxLTIxZDgtNGYyZS1iNzE5LWMyMjQwYTg0MGQ5MCIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MjEwMTI5ODQ2N30.2ryh1__R6k1MmK_gPtp9g8DcOUBhtyoZ-f6j5-HxM1mVcHxnWdGO5ePL1CmeZVwFmEki1MxYZkSp-zqLaBBExw',
+      SUPABASE_JWT_SECRET: 'super-secret-jwt-token-with-at-least-32-characters-long',
     },
   },
 });
