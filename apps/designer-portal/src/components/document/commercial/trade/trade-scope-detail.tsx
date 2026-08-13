@@ -32,6 +32,11 @@ import {
   SIGNED_ON_PAPER_NOTE,
   signedOnPaperNote,
 } from '@/lib/document/commercial-documents';
+import {
+  ScheduleImpactBlock,
+  useScheduleImpact,
+  useThreadPhaseId,
+} from '../schedule-impact-block';
 import { formatCalendarDate } from '@/lib/document/format';
 import {
   drawIsLiveBilled,
@@ -300,6 +305,19 @@ export function TradeScopeDetail({
   const [paperAct, setPaperAct] = useState<'execution' | 'acceptance' | null>(
     null,
   );
+  // R110: engagement anchors the trade thread to today. Stated before the act.
+  // Above the `!scope` return so the hook order never changes with the prop.
+  const threadPhaseId = useThreadPhaseId(projectId);
+  const engageImpact = useScheduleImpact(
+    projectId,
+    threadPhaseId
+      ? {
+          kind: 'phase-anchor',
+          phaseId: threadPhaseId,
+          anchorDate: new Date().toISOString().slice(0, 10),
+        }
+      : null,
+  );
 
   if (!scope) return null;
 
@@ -382,6 +400,8 @@ export function TradeScopeDetail({
           <Figure label="draws paid" value={String(scope.drawsPaid)} />
         </div>
 
+        {engageGate.allowed && <ScheduleImpactBlock impact={engageImpact} />}
+
         <DocumentActionGroup
           surfaceKey="trade-scope"
           regionKey="progress-acts"
@@ -395,7 +415,15 @@ export function TradeScopeDetail({
             pending={engage.isPending}
             onRun={() =>
               void run(
-                () => engage.mutateAsync(scope.proposalId),
+                () =>
+                  engage.mutateAsync({
+                    proposalId: scope.proposalId,
+                    // R110: engagement is a studio act, so the block below
+                    // stated its schedule effect first.
+                    disclosedImpact: engageImpact.computable
+                      ? engageImpact.disclosure
+                      : null,
+                  }),
                 'The trade could not be engaged.',
               )
             }

@@ -32,6 +32,11 @@ import {
 import { DateTextInput } from '../date-text-input';
 import { DocSheet } from '../overlays/doc-sheet';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
+import {
+  ScheduleImpactBlock,
+  useScheduleImpact,
+  useThreadPhaseId,
+} from './schedule-impact-block';
 
 export type RecordOnPaperKind =
   | 'design-services'
@@ -170,6 +175,19 @@ export function RecordOnPaperSheet({
   const [stage, setStage] = useState<'idle' | 'uploading' | 'recording'>(
     'idle',
   );
+
+  // R110 — the furnishings paper rail hardens the procurement thread anchor to
+  // the day the client signed, so this sheet states that effect before the act
+  // is confirmed. The other three kinds carry no schedule graft.
+  const threadPhaseId = useThreadPhaseId(
+    kind === 'furnishings' ? projectId : null,
+  );
+  const impact = useScheduleImpact(
+    kind === 'furnishings' ? projectId : null,
+    threadPhaseId && dateValid && paperSignedOn
+      ? { kind: 'phase-anchor', phaseId: threadPhaseId, anchorDate: paperSignedOn }
+      : null,
+  );
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -230,6 +248,10 @@ export function RecordOnPaperSheet({
             signedName: trimmedName,
             paperSignedOn,
             scanDocumentId,
+            // R110: this rail is studio-executed, so the sheet stated its
+            // schedule effect above; a NULL disclosure downgrades to a
+            // proposal, server-side.
+            disclosedImpact: impact.computable ? impact.disclosure : null,
           });
           break;
         case 'trade-execution':
@@ -321,6 +343,8 @@ export function RecordOnPaperSheet({
             </Field>
           )}
         </div>
+
+        {kind === 'furnishings' && <ScheduleImpactBlock impact={impact} />}
 
         {error && (
           <p

@@ -16,6 +16,12 @@ import {
   RECORD_ON_PAPER_ACT_LABEL,
   RecordOnPaperSheet,
 } from "./record-on-paper-sheet";
+import type { ScheduleDisclosedImpact } from "@/lib/document/schedule-impact";
+import {
+  ScheduleImpactBlock,
+  useEngagementStartPhaseId,
+  useScheduleImpact,
+} from "./schedule-impact-block";
 import { ServiceAgreementPreview } from "./service-agreement-preview";
 import { ServiceAgreementSendSheet } from "./service-agreement-send-sheet";
 
@@ -26,6 +32,64 @@ const toneColor = {
   sage: "var(--color-sage)",
   terracotta: "var(--color-terracotta)",
 };
+
+/**
+ * The studio's countersign, with its IMPACT stated before confirmation (R110).
+ * Its own component so the schedule read never runs ahead of the bundle's
+ * loading branches above.
+ *
+ * On an ORIGIN agreement there is no project yet — the countersign is what
+ * creates it — so the effect is genuinely uncomputable and the block says so;
+ * the server then proposes the engagement-start date instead of setting it.
+ */
+function CountersignAct({
+  projectId,
+  signerName,
+  onSignerNameChange,
+  pending,
+  onSubmit,
+}: {
+  projectId: string | null;
+  signerName: string;
+  onSignerNameChange: (value: string) => void;
+  pending: boolean;
+  onSubmit: (disclosedImpact: ScheduleDisclosedImpact | null) => void;
+}) {
+  const startPhaseId = useEngagementStartPhaseId(projectId);
+  const impact = useScheduleImpact(
+    projectId,
+    startPhaseId
+      ? {
+          kind: "phase-anchor",
+          phaseId: startPhaseId,
+          anchorDate: new Date().toISOString().slice(0, 10),
+        }
+      : null,
+  );
+  return (
+    <>
+      <div className="mt-3 flex max-w-xl flex-col gap-2 sm:flex-row">
+        <Input
+          aria-label="Studio signer name"
+          value={signerName}
+          onChange={(event) => onSignerNameChange(event.target.value)}
+          placeholder="Your full name"
+        />
+        <Button
+          className="shrink-0"
+          disabled={!signerName.trim()}
+          loading={pending}
+          onClick={() =>
+            onSubmit(impact.computable ? impact.disclosure : null)
+          }
+        >
+          Countersign agreement
+        </Button>
+      </div>
+      <ScheduleImpactBlock impact={impact} />
+    </>
+  );
+}
 
 export function ServiceAgreementInstruments({
   proposal,
@@ -81,10 +145,12 @@ export function ServiceAgreementInstruments({
     rememberRoomOrigin(pathname);
     router.push(`/drafting/${proposalId}`);
   };
-  const submitCountersign = async () => {
+  const submitCountersign = async (
+    disclosedImpact: ScheduleDisclosedImpact | null,
+  ) => {
     setResultMessage(null);
     try {
-      const result = await countersign.mutateAsync(signerName);
+      const result = await countersign.mutateAsync({ signerName, disclosedImpact });
       setResultProjectId(result.projectId);
       const executionMessage = result.newlyExecuted
         ? "Agreement executed. The project and billing authority are now active."
@@ -220,22 +286,13 @@ export function ServiceAgreementInstruments({
                 This final act creates one project and one billing authority. It
                 is safe to retry.
               </p>
-              <div className="mt-3 flex max-w-xl flex-col gap-2 sm:flex-row">
-                <Input
-                  aria-label="Studio signer name"
-                  value={signerName}
-                  onChange={(event) => setSignerName(event.target.value)}
-                  placeholder="Your full name"
-                />
-                <Button
-                  className="shrink-0"
-                  disabled={!signerName.trim()}
-                  loading={countersign.isPending}
-                  onClick={() => void submitCountersign()}
-                >
-                  Countersign agreement
-                </Button>
-              </div>
+              <CountersignAct
+                projectId={projectId}
+                signerName={signerName}
+                onSignerNameChange={setSignerName}
+                pending={countersign.isPending}
+                onSubmit={submitCountersign}
+              />
             </div>
           )}
 

@@ -1,7 +1,13 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { commercialKeys, createBrowserClient } from "@patina/supabase";
+import type { QueryClient } from "@tanstack/react-query";
+import {
+  commercialKeys,
+  createBrowserClient,
+  invalidateProjectWorkflow,
+} from "@patina/supabase";
+import type { ScheduleDisclosedImpact } from "@/lib/document/schedule-impact";
 import {
   asCommercialDocumentKind,
   asCommercialState,
@@ -25,6 +31,27 @@ import {
 } from "@/lib/document/project-commerce";
 
 const getSupabase = () => createBrowserClient() as any;
+
+/**
+ * Every cache an anchor write can move (00475 ceremonies write through
+ * `_commit_schedule_edit_authorized`, exactly as `useCommitScheduleEdit` does):
+ * the phase chain, the milestones, the project-v2 rollup the header and desk
+ * read, the revisions ledger, and the workflow spine.
+ */
+async function invalidateScheduleAfterAnchorWrite(
+  queryClient: QueryClient,
+  projectId: string | null | undefined,
+) {
+  if (!projectId) return;
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: ["project-phases", projectId] }),
+    queryClient.invalidateQueries({ queryKey: ["schedule-milestones", projectId] }),
+    queryClient.invalidateQueries({ queryKey: ["project-v2", projectId] }),
+    queryClient.invalidateQueries({ queryKey: ["schedule-revisions", projectId] }),
+    queryClient.invalidateQueries({ queryKey: ["schedule-proposals", projectId] }),
+    invalidateProjectWorkflow(queryClient, projectId),
+  ]);
+}
 
 export const commercialDocumentKeys = {
   bundle: (documentId: string) =>
@@ -415,17 +442,28 @@ function mapCountersignResult(value: any): CountersignDesignServicesResult {
   };
 }
 
+export interface CountersignDesignServicesInput {
+  signerName: string;
+  /** R110: what the ceremony stated before it was confirmed. Null downgrades
+   *  the engagement-start anchor to a proposal, server-side. */
+  disclosedImpact?: ScheduleDisclosedImpact | null;
+}
+
 export function useCountersignDesignServicesAgreement(proposalId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationKey: ["countersign-design-services", proposalId],
-    mutationFn: async (signerName: string) => {
+    mutationFn: async ({
+      signerName,
+      disclosedImpact,
+    }: CountersignDesignServicesInput) => {
       const supabase = getSupabase();
       const { data, error } = await supabase.rpc(
         "countersign_design_services_agreement",
         {
           p_proposal_id: proposalId,
           p_signer_name: signerName.trim(),
+          p_disclosed_impact: disclosedImpact ?? null,
         },
       );
       if (error) throw error;
@@ -487,6 +525,7 @@ export function useCountersignDesignServicesAgreement(proposalId: string) {
       void queryClient.invalidateQueries({
         queryKey: commercialDocumentKeys.authority(result.projectId),
       });
+      void invalidateScheduleAfterAnchorWrite(queryClient, result.projectId);
     },
   });
 }
@@ -1652,24 +1691,33 @@ export function useSendTradeScope(projectId: string) {
  * deposit. It writes one presence line per section into the schedule, so this
  * is one of the two trade mutations that must move the FF&E key.
  */
+export interface EngageTradeScopeInput {
+  proposalId: string;
+  /** R110: what the ceremony stated before it was confirmed. Null downgrades
+   *  the trade-thread anchor to a proposal, server-side. */
+  disclosedImpact?: ScheduleDisclosedImpact | null;
+}
+
 export function useEngageTradeScope(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationKey: ["engage-trade-scope", projectId],
-    mutationFn: async (proposalId: string) => {
+    mutationFn: async ({ proposalId, disclosedImpact }: EngageTradeScopeInput) => {
       const { data, error } = await getSupabase().rpc("engage_trade_scope", {
         p_proposal_id: proposalId,
+        p_disclosed_impact: disclosedImpact ?? null,
       });
       if (error) throw error;
       return data;
     },
-    onSuccess: async (_data, proposalId) => {
+    onSuccess: async (_data, { proposalId }) => {
       await Promise.all([
         invalidateProjectCommerce(queryClient, projectId),
         invalidateTradeScope(queryClient, projectId, proposalId),
         queryClient.invalidateQueries({
           queryKey: ["project-ffe-items", projectId],
         }),
+        invalidateScheduleAfterAnchorWrite(queryClient, projectId),
       ]);
     },
   });
@@ -2204,6 +2252,11 @@ export interface ExecuteOnPaperInput {
   signedName: string;
   paperSignedOn: string;
   scanDocumentId?: string | null;
+  /** R110: what the ceremony stated before it was confirmed. Null downgrades
+   *  the procurement-thread anchor to a proposal, server-side. Only the
+   *  furnishings paper rail threads it — the trade paper rails carry no
+   *  schedule graft. */
+  disclosedImpact?: ScheduleDisclosedImpact | null;
 }
 
 /**
@@ -2227,6 +2280,7 @@ export function useExecuteFurnishingsAuthorizationOnPaper(projectId: string) {
           p_signed_name: input.signedName.trim(),
           p_paper_signed_on: input.paperSignedOn,
           p_scan_document_id: input.scanDocumentId ?? null,
+          p_disclosed_impact: input.disclosedImpact ?? null,
         },
       );
       if (error) throw error;
@@ -2248,6 +2302,7 @@ export function useExecuteFurnishingsAuthorizationOnPaper(projectId: string) {
     onSuccess: async (_data, variables) => {
       await Promise.all([
         invalidateProjectCommerce(queryClient, projectId),
+        invalidateScheduleAfterAnchorWrite(queryClient, projectId),
         queryClient.invalidateQueries({
           queryKey: commercialDocumentKeys.bundle(variables.proposalId),
         }),

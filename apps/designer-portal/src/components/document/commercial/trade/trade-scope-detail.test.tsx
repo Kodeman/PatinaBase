@@ -16,6 +16,19 @@ let mockCommercialDocument: Record<string, unknown> = { data: undefined, isLoadi
 
 const mutation = (fn: jest.Mock) => ({ mutateAsync: fn, isPending: false });
 
+// Engagement states its schedule impact before the act (R110); the resolver's
+// one door reads through React Query, which these tests do not provide.
+jest.mock('@patina/supabase', () => ({
+  ...jest.requireActual('@patina/supabase'),
+  useResolvedSchedule: () => ({
+    phases: [],
+    milestones: [],
+    resolved: null,
+    isLoading: false,
+    isError: false,
+  }),
+}));
+
 jest.mock('@/hooks/use-commercial-documents', () => ({
   useTradeScopeWorkspace: () => mockWorkspace,
   useCommercialDocument: () => mockCommercialDocument,
@@ -153,7 +166,15 @@ describe('TradeScopeDetail', () => {
     const act = screen.getByRole('button', { name: /Engage Atelier Marchand/ });
     expect(act).not.toBeDisabled();
     fireEvent.click(act);
-    await waitFor(() => expect(engage).toHaveBeenCalledWith('proposal-1'));
+    // R110: the act carries what the IMPACT block stated. With no chain to
+    // compute against, the honest disclosure is null — the server proposes.
+    await waitFor(() =>
+      expect(engage).toHaveBeenCalledWith({
+        proposalId: 'proposal-1',
+        disclosedImpact: null,
+      }),
+    );
+    expect(screen.getByRole('group', { name: 'Impact' })).toBeVisible();
   });
 
   it('holds engagement with its reason when the deposit has not been paid', () => {

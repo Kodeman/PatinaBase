@@ -13,6 +13,16 @@ jest.mock("@patina/supabase", () => ({
     data: null,
   }),
   useRetryProposalSend: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  // The paper rail's IMPACT block (R110) reads the resolver's one door.
+  useResolvedSchedule: () => ({
+    phases: [],
+    milestones: [],
+    resolved: null,
+    isLoading: false,
+    isError: false,
+  }),
+  mapPhaseRowToScheduleInput: (row: unknown) => row,
+  mapMilestoneRowToScheduleInput: (row: unknown) => row,
 }));
 
 jest.mock("@/hooks/use-commercial-documents", () => ({
