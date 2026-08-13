@@ -1,7 +1,10 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 00474 — Schedule template visibility follows studio comembership (R105 residual)
+-- Two functions, one delta each — both template birth paths (proposal, project):
 -- Lineage of apply_phase_template(uuid, text, uuid):
 --   00135 → 00324 → 00399 → 00461 → 00474
+-- Lineage of seed_project_schedule_from_template(uuid, text):
+--   00324 → 00398 → 00461 → 00474
 -- Reconciles: the last narrow guard of the R105 comember-widening pass. Every
 --   other schedule authoring path (project_phases RLS 00316, schedule_milestones
 --   and schedule_revisions 00323, commit_schedule_edit / cut_schedule_revision
@@ -381,5 +384,146 @@ BEGIN
   FOREACH v_return_id IN ARRAY v_effect_phase_ids LOOP
     RETURN NEXT v_return_id;
   END LOOP;
+END;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- The same residual in the project-side template birth path.
+-- Lineage of seed_project_schedule_from_template(uuid, text):
+--   00324 -> 00398 -> 00461 -> 00474
+-- Its own project guard (above, in the body) already resolves through
+-- _can_author_proposal; only the phase_templates SELECT still demanded personal
+-- ownership, so a comember could seed a project from a system template but not
+-- from a studio-mate's. Body is 00461's verbatim; same single delta.
+-- ---------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION public.seed_project_schedule_from_template(
+  p_project_id uuid,
+  p_template_slug text
+)
+RETURNS SETOF uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_actor uuid := auth.uid();
+  v_project public.projects%ROWTYPE;
+  v_template public.phase_templates%ROWTYPE;
+  v_phase_data jsonb;
+  v_phase_id uuid;
+  v_prev_phase_id uuid := NULL;
+  v_sort integer := -1;
+  v_previous_metadata_token text := current_setting(
+    'app.phase_workflow_metadata_token', true
+  );
+  v_metadata_token_set boolean := false;
+BEGIN
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION
+      'seed_project_schedule_from_template requires an authenticated user'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  SELECT * INTO v_project
+  FROM public.projects
+  WHERE id = p_project_id
+  FOR UPDATE;
+
+  IF NOT FOUND OR NOT public._can_author_proposal(v_project.designer_id) THEN
+    RAISE EXCEPTION
+      'seed_project_schedule_from_template: project not found or access denied'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM public.project_phases
+    WHERE project_id = p_project_id
+  ) THEN
+    RAISE EXCEPTION
+      'project % already has phases; the schedule is never rebuilt (R100)',
+      p_project_id
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  SELECT * INTO v_template
+  FROM public.phase_templates
+  WHERE slug = p_template_slug
+    AND (is_system OR public._can_author_proposal(designer_id))
+  FOR SHARE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'template not found or access denied: %', p_template_slug
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  PERFORM set_config(
+    'app.phase_workflow_metadata_token',
+    format(
+      'phase_workflow_metadata:project_phases:%s:%s',
+      p_project_id,
+      pg_catalog.txid_current()
+    ),
+    true
+  );
+  v_metadata_token_set := true;
+
+  FOR v_phase_data IN
+    SELECT value
+    FROM jsonb_array_elements(v_template.phases)
+  LOOP
+    v_sort := v_sort + 1;
+
+    SELECT created.id
+    INTO v_phase_id
+    FROM public.create_project_phase(
+      p_project_id => p_project_id,
+      p_phase_key => v_phase_data->>'phase_key',
+      p_name => v_phase_data->>'name',
+      p_sort_order => v_sort,
+      p_duration_days => (v_phase_data->>'duration_days')::integer,
+      p_follows_phase_id => v_prev_phase_id,
+      p_lane => COALESCE(v_phase_data->>'lane', 'main'),
+      p_duration_weeks => (v_phase_data->>'duration_weeks')::integer,
+      p_fee_cents => COALESCE((v_phase_data->>'fee_cents')::integer, 0),
+      p_revision_limit => COALESCE(
+        (v_phase_data->>'revision_limit')::integer,
+        2
+      ),
+      p_deliverables => COALESCE(
+        v_phase_data->'deliverables',
+        '[]'::jsonb
+      )
+    ) AS created;
+
+    UPDATE public.project_phases
+    SET canonical_stage_key = NULLIF(
+          v_phase_data->>'canonical_stage_key', ''
+        ),
+        workflow_track = NULLIF(v_phase_data->>'workflow_track', ''),
+        source_template_slug = v_template.slug,
+        source_template_version = v_template.version
+    WHERE id = v_phase_id;
+
+    RETURN NEXT v_phase_id;
+    v_prev_phase_id := v_phase_id;
+  END LOOP;
+
+  PERFORM set_config(
+    'app.phase_workflow_metadata_token',
+    COALESCE(v_previous_metadata_token, ''),
+    true
+  );
+  v_metadata_token_set := false;
+EXCEPTION WHEN OTHERS THEN
+  IF v_metadata_token_set THEN
+    PERFORM set_config(
+      'app.phase_workflow_metadata_token',
+      COALESCE(v_previous_metadata_token, ''),
+      true
+    );
+  END IF;
+  RAISE;
 END;
 $$;
