@@ -58,6 +58,19 @@ describe('BoardImageInspectorActions', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it('disables mutable media transforms for private project-board sources', () => {
+    const { container } = render(
+      <BoardImageInspectorActions
+        boardId="board-1"
+        item={imageItem}
+        enabled={false}
+        onUpdate={jest.fn()}
+      />,
+    );
+    expect(container).toBeEmptyDOMElement();
+    expect(useCapability).toHaveBeenCalledWith(null);
+  });
+
   it('does not probe the media capability for a pin that cannot remove backgrounds', () => {
     const { container } = render(
       <BoardImageInspectorActions

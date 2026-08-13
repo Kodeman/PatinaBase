@@ -12,6 +12,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   useStyleArchetypes,
   useAssignStyle,
@@ -73,6 +74,8 @@ export function LibraryCard({
   // One fold, opened by the card's toggle. What it holds depends on the piece's
   // queue state: the validate lens (needs a look) or Quick Tags (needs teaching).
   const [open, setOpen] = useState(false);
+  const searchParams = useSearchParams();
+  const pieceHref = `/library/${item.id}${searchParams.size > 0 ? `?${searchParams.toString()}` : ''}`;
   const foldable = needsTeaching || needsValidation;
   const img = item.images?.[0] ?? null;
   const sub =
@@ -85,7 +88,7 @@ export function LibraryCard({
   return (
     <article className="group relative overflow-hidden rounded-[8px] border border-[var(--doc-ink-border)] bg-white transition-colors duration-200 hover:border-[var(--color-clay)] motion-reduce:transition-none">
       <Link
-        href={`/library/${item.id}`}
+        href={pieceHref}
         aria-label={`Open ${item.name}`}
         className="relative flex h-[150px] items-center justify-center overflow-hidden bg-[var(--doc-sheet-2)]"
       >
@@ -135,7 +138,7 @@ export function LibraryCard({
 
       <div className="px-3.5 py-3">
         <Link
-          href={`/library/${item.id}`}
+          href={pieceHref}
           className="block text-[14px] font-medium leading-snug text-[var(--color-charcoal)] transition-colors hover:text-[var(--text-body)] motion-reduce:transition-none"
         >
           {item.name}

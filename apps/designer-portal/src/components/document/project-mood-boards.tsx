@@ -1,12 +1,15 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { BoardComposition } from '@patina/design-system';
 import {
   useContinueBoardInProject,
   useProjectBoards,
+  useProjectFFEItems,
+  useProjectFfeReadiness,
+  useProjectReviewAttention,
   useProjectOwnedBoards,
   type ProjectBoard,
   type ProposalBoardSummary,
@@ -17,6 +20,7 @@ import { moodBoardEvents } from '@/lib/analytics/mood-board-events';
 import { BoardCoverArt } from '@/components/mood-board/board-cover-art';
 import { GuidedEmptyState } from './guided-empty-state';
 import { BoardsBuilder } from '@/components/portal/scope-builder/boards-builder';
+import { DocumentAction } from './document-action';
 
 type LiveBoardWithLineage = ProposalBoardSummary & {
   source_project_board_id?: string | null;
@@ -25,6 +29,17 @@ type LiveBoardWithLineage = ProposalBoardSummary & {
 type FrozenBoardWithSections = ProjectBoard & {
   sections?: MoodBoardSection[];
 };
+
+interface ContinueItem {
+  key: string;
+  label: string;
+  detail: string;
+  href?: string;
+  action?: () => void;
+}
+
+const EMPTY_LIVE_BOARDS: readonly LiveBoardWithLineage[] = [];
+const EMPTY_FROZEN_BOARDS: readonly FrozenBoardWithSections[] = [];
 
 function roomHref(boardId: string, pathname: string) {
   return boardRoomHref({
@@ -39,18 +54,39 @@ function roomHref(boardId: string, pathname: string) {
  * while signed snapshots stay visibly frozen and can be continued exactly
  * once through the idempotent database RPC.
  */
-export function ProjectMoodBoards({ projectId }: { projectId: string }) {
+export function ProjectMoodBoards({
+  projectId,
+  canCreate = true,
+}: {
+  projectId: string;
+  canCreate?: boolean;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const liveQuery = useProjectOwnedBoards(projectId);
   const frozenQuery = useProjectBoards(projectId);
+  const selectionsQuery = useProjectFFEItems(projectId);
+  const activeSelectionRows = useMemo(
+    () => ((selectionsQuery.data ?? []) as Array<Record<string, unknown>>)
+      .filter((row) => row.removed_at == null)
+      .filter((row) => !['not_selected', 'superseded'].includes(String(row.design_disposition))),
+    [selectionsQuery.data],
+  );
+  const readinessQuery = useProjectFfeReadiness(
+    activeSelectionRows.map((row) => String(row.id)),
+  );
+  const attentionQuery = useProjectReviewAttention(projectId);
   const continueBoard = useContinueBoardInProject();
   const [continuingId, setContinuingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [startingBoard, setStartingBoard] = useState(false);
 
-  const liveBoards = (liveQuery.data ?? []) as LiveBoardWithLineage[];
-  const frozenBoards = (frozenQuery.data ?? []) as FrozenBoardWithSections[];
+  const liveBoards = useMemo(
+    () => ((liveQuery.data ?? EMPTY_LIVE_BOARDS) as LiveBoardWithLineage[])
+      .filter((board) => board.status !== 'archived'),
+    [liveQuery.data],
+  );
+  const frozenBoards = (frozenQuery.data ?? EMPTY_FROZEN_BOARDS) as FrozenBoardWithSections[];
   const continuedBySnapshot = useMemo(
     () =>
       new Map(
@@ -63,7 +99,76 @@ export function ProjectMoodBoards({ projectId }: { projectId: string }) {
     [liveBoards],
   );
 
-  const isLoading = liveQuery.isLoading || frozenQuery.isLoading;
+  const isLoading = liveQuery.isLoading || frozenQuery.isLoading || selectionsQuery.isLoading ||
+    readinessQuery.isLoading || attentionQuery.isLoading;
+
+  const continueItems = useMemo<ContinueItem[]>(() => {
+    const rows = activeSelectionRows;
+    const result: ContinueItem[] = [];
+    const attention = attentionQuery.data?.[0];
+    if (attention) {
+      result.push({
+        key: `feedback:${attention.feedbackId}`,
+        label: attention.verdict === 'rejected'
+          ? 'Continue a client-requested change'
+          : 'Answer a client question',
+        detail: 'Open the selection from its latest published review.',
+        href: `#ffe-selection-${attention.selectionId}`,
+      });
+    }
+    const unsorted = rows
+      .filter((row) => row.assignment_scope === 'unassigned')
+      .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))[0];
+    if (unsorted) {
+      result.push({
+        key: `unsorted:${String(unsorted.id)}`,
+        label: 'Route the oldest Unsorted selection',
+        detail: 'Choose a room, Throughout, or a compatible board.',
+        href: `#ffe-selection-${String(unsorted.id)}`,
+      });
+    }
+    const lastBoard = [...liveBoards].sort((a, b) =>
+      String(b.updated_at).localeCompare(String(a.updated_at)),
+    )[0];
+    if (lastBoard) {
+      result.push({
+        key: `board:${lastBoard.id}`,
+        label: `Continue ${lastBoard.name}`,
+        detail: `${lastBoard.item_count} ${lastBoard.item_count === 1 ? 'piece' : 'pieces'} · working board`,
+        href: roomHref(lastBoard.id, pathname),
+      });
+    }
+    const readiness = new Map(
+      (readinessQuery.data ?? []).map((row) => [row.selectionId, row]),
+    );
+    const releaseGap = rows
+      .filter((row) => row.design_disposition === 'selected')
+      .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))
+      .find((row) => readiness.get(String(row.id))?.ready === false);
+    if (releaseGap) {
+      result.push({
+        key: `readiness:${String(releaseGap.id)}`,
+        label: 'Complete a release-blocking specification',
+        detail: 'Resolve the oldest selected line that is not ready for authorization.',
+        href: `#ffe-selection-${String(releaseGap.id)}`,
+      });
+    }
+    if (canCreate && rows.length === 0 && liveBoards.length === 0) {
+      result.push({
+        key: 'first-add',
+        label: 'Make the first project selection',
+        detail: 'Browse the Library, paste a link, or name a need.',
+        action: () => window.dispatchEvent(new CustomEvent('document:open-add-to-project', { detail: { source: 'empty_state' } })),
+      });
+    }
+    return result.slice(0, 3);
+  }, [activeSelectionRows, attentionQuery.data, canCreate, liveBoards, pathname, readinessQuery.data]);
+
+  useEffect(() => {
+    const openCreator = () => { if (canCreate) setStartingBoard(true); };
+    window.addEventListener('document:new-project-board', openCreator);
+    return () => window.removeEventListener('document:new-project-board', openCreator);
+  }, [canCreate]);
   if (isLoading) {
     return (
       <section aria-label="Mood boards" className="mt-9 border-t border-[var(--color-pearl)] pt-6">
@@ -72,7 +177,8 @@ export function ProjectMoodBoards({ projectId }: { projectId: string }) {
     );
   }
 
-  if (liveQuery.isError || frozenQuery.isError) {
+  if (liveQuery.isError || frozenQuery.isError || selectionsQuery.isError ||
+      readinessQuery.isError || attentionQuery.isError) {
     return (
       <section aria-labelledby="project-mood-boards" className="mt-9 border-t border-[var(--color-pearl)] pt-6">
         <h2 id="project-mood-boards" className="font-heading text-[16px] text-[var(--color-charcoal)]">
@@ -140,16 +246,48 @@ export function ProjectMoodBoards({ projectId }: { projectId: string }) {
       <div className="flex items-baseline justify-between gap-4">
         <div>
           <h2 id="project-mood-boards" className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]">
-            Mood boards
+            Working boards
           </h2>
           <p className="mt-1 text-[11px] text-[var(--text-muted)]">
-            Live working boards and the direction frozen when the proposal was signed.
+            Compose references and project selections before publishing a review.
           </p>
         </div>
-        <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
-          {liveBoards.length} live · {frozenBoards.length} frozen
+        <span className="flex items-center gap-3">
+          <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+            {liveBoards.length} live · {frozenBoards.length} frozen
+          </span>
+          {canCreate && (
+            <DocumentAction actionKey="new-project-board" surfaceKey="project" regionKey="working-boards" variant="primary" onClick={() => setStartingBoard(true)}>
+              New board
+            </DocumentAction>
+          )}
         </span>
       </div>
+
+      {continueItems.length > 0 && (
+        <div aria-label="Continue project FF&E work" className="mt-4 border-y border-[var(--color-pearl)]">
+          {continueItems.map((item) => {
+            const body = (
+              <>
+                <span className="font-heading text-[13px] text-[var(--color-charcoal)]">{item.label}</span>
+                <span className="text-[10.5px] text-[var(--text-muted)]">{item.detail}</span>
+                <span aria-hidden className="ml-auto text-[var(--color-clay)]">→</span>
+              </>
+            );
+            return item.href ? (
+              <Link key={item.key} href={item.href} className="flex min-h-12 items-center gap-3 border-b border-[var(--color-pearl)] py-2 last:border-b-0">{body}</Link>
+            ) : (
+              <button key={item.key} type="button" onClick={item.action} className="flex min-h-12 w-full items-center gap-3 border-b border-[var(--color-pearl)] py-2 text-left last:border-b-0">{body}</button>
+            );
+          })}
+        </div>
+      )}
+
+      {canCreate && startingBoard && (
+        <div className="mt-3">
+          <BoardsBuilder projectId={projectId} />
+        </div>
+      )}
 
       {liveBoards.length > 0 && (
         <div className="mt-5">
@@ -189,6 +327,17 @@ export function ProjectMoodBoards({ projectId }: { projectId: string }) {
         </div>
       )}
 
+      {canCreate && !startingBoard && liveBoards.length === 0 && (
+        <button
+          type="button"
+          onClick={() => setStartingBoard(true)}
+          className="mt-5 w-full rounded-[5px] border border-dashed border-[var(--border-default)] px-6 py-8 text-center hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+        >
+          <span className="block font-heading text-[15px] text-[var(--color-charcoal)]">Start the first working board</span>
+          <span className="mt-1 block text-[11px] text-[var(--text-muted)]">References stay loose; Library and capture products become project selections as they are placed.</span>
+        </button>
+      )}
+
       {frozenBoards.length > 0 && (
         <div className="mt-6 space-y-3">
           <h3 className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
@@ -218,7 +367,7 @@ export function ProjectMoodBoards({ projectId }: { projectId: string }) {
                     >
                       Open continued board
                     </Link>
-                  ) : (
+                  ) : canCreate ? (
                     <button
                       type="button"
                       onClick={() => void handleContinue(snapshot)}
@@ -227,6 +376,10 @@ export function ProjectMoodBoards({ projectId }: { projectId: string }) {
                     >
                       {busy ? 'Continuing…' : 'Continue in project'}
                     </button>
+                  ) : (
+                    <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+                      Historical
+                    </span>
                   )}
                 </div>
 

@@ -3,7 +3,8 @@
 import { useMemo } from 'react';
 import Image from 'next/image';
 
-import { useProjectFFEItems } from '@patina/supabase';
+import { useClientSelections } from '@/hooks/use-commercial-client';
+import type { ClientSelection } from '@/lib/commercial-documents';
 
 const STATUS_ORDER = [
   'approved',
@@ -34,29 +35,20 @@ const STATUS_TONE: Record<ClientVisibleStatus, string> = {
   installed: 'bg-green-50 text-green-800',
 };
 
-function formatEta(value: string | null | undefined): string | null {
-  if (!value) return null;
-  return new Date(value).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
 export function FFEPipelinePanel({ projectId }: { projectId: string }) {
-  const { data: rawItems = [], isLoading } = useProjectFFEItems(projectId);
+  const { data, isLoading, isError, refetch } = useClientSelections(projectId);
 
   const items = useMemo(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (rawItems as any[]).filter((item) =>
-      STATUS_ORDER.includes(item.status)
+    return (data?.selections ?? []).filter((item) =>
+      (STATUS_ORDER as readonly string[]).includes(item.logisticsStatus)
     );
-  }, [rawItems]);
+  }, [data]);
 
   const grouped = useMemo(() => {
     const map = new Map<ClientVisibleStatus, typeof items>();
     for (const status of STATUS_ORDER) map.set(status, []);
     for (const item of items) {
-      const list = map.get(item.status as ClientVisibleStatus);
+      const list = map.get(item.logisticsStatus as ClientVisibleStatus);
       if (list) list.push(item);
     }
     return map;
@@ -67,6 +59,26 @@ export function FFEPipelinePanel({ projectId }: { projectId: string }) {
       <section className="rounded-lg border border-[var(--border-default)] bg-white p-5">
         <h3 className="font-heading text-base text-[var(--text-primary)] mb-3">Procurement</h3>
         <p className="type-body-small text-[var(--text-muted)]">Loading…</p>
+      </section>
+    );
+  }
+
+  if (isError) {
+    return (
+      <section className="rounded-lg border border-[var(--border-default)] bg-white p-5">
+        <h3 className="font-heading text-base text-[var(--text-primary)] mb-3">Procurement</h3>
+        <p role="alert" className="type-body-small text-[var(--text-muted)]">
+          We couldn&rsquo;t load procurement right now.
+        </p>
+        {refetch ? (
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            className="mt-2 type-body-small text-[var(--text-primary)] underline underline-offset-2"
+          >
+            Try again
+          </button>
+        ) : null}
       </section>
     );
   }
@@ -118,14 +130,12 @@ export function FFEPipelinePanel({ projectId }: { projectId: string }) {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function FFEItemRow({ item }: { item: any }) {
-  // Strip cost / vendor / internal fields client-side. Server filtering is a
-  // Wave 3 backend hardening task; this is defense-in-depth for the UI layer.
-  const visibleName = item.name as string;
-  const room = item.room?.name as string | undefined;
-  const eta = formatEta(item.eta);
-  const blocked = !!item.blocked;
-  const productImage = (item.product?.images as string[] | undefined)?.[0];
+function FFEItemRow({ item }: { item: ClientSelection }) {
+  // This component consumes the RPC allowlist only. Price, vendor, notes and
+  // working-media paths never enter the browser through this presentation.
+  const visibleName = item.name;
+  const room = item.roomName;
+  const productImage = item.imageUrl;
 
   return (
     <li className="flex items-center gap-3 px-3 py-3">
@@ -146,9 +156,7 @@ function FFEItemRow({ item }: { item: any }) {
           {visibleName}
         </p>
         <p className="type-meta-small text-[var(--text-muted)]">
-          {room ?? '—'}
-          {eta ? ` · ETA ${eta}` : ''}
-          {blocked ? ' · Awaiting decision' : ''}
+          {room || '—'}
         </p>
       </div>
     </li>

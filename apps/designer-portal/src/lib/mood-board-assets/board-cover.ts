@@ -12,6 +12,7 @@ import { BOARD_ASSET_BUCKET } from './upload-board-assets';
 export interface MoodBoardCoverStorage {
   upload(path: string, blob: Blob): Promise<void>;
   createSignedUrl(path: string): Promise<string>;
+  remove(path: string): Promise<void>;
 }
 
 function safePathSegment(value: string, label: string): string {
@@ -21,8 +22,10 @@ function safePathSegment(value: string, label: string): string {
   return value;
 }
 
-export function createMoodBoardCoverStorage(): MoodBoardCoverStorage {
-  const bucket = createBrowserClient().storage.from(BOARD_ASSET_BUCKET);
+export function createMoodBoardCoverStorage(options: {
+  bucket?: string;
+} = {}): MoodBoardCoverStorage {
+  const bucket = createBrowserClient().storage.from(options.bucket ?? BOARD_ASSET_BUCKET);
   return {
     async upload(path, blob) {
       const { error } = await bucket.upload(path, blob, {
@@ -37,6 +40,10 @@ export function createMoodBoardCoverStorage(): MoodBoardCoverStorage {
       if (error) throw new Error(error.message);
       if (!data?.signedUrl) throw new Error('Board cover signing returned no URL');
       return data.signedUrl;
+    },
+    async remove(path) {
+      const { error } = await bucket.remove([path]);
+      if (error) throw new Error(error.message);
     },
   };
 }
@@ -66,5 +73,12 @@ export async function generateAndUploadMoodBoardCover(options: {
   const raster = await (options.renderer ?? renderMoodBoardCover)(options.input);
   const storage = options.storage ?? createMoodBoardCoverStorage();
   await storage.upload(path, raster.blob);
-  return { path, url: await storage.createSignedUrl(path), raster };
+  try {
+    return { path, url: await storage.createSignedUrl(path), raster };
+  } catch (error) {
+    // The create-only object would otherwise be orphaned under a version key
+    // no row will ever reference.
+    await storage.remove(path).catch(() => undefined);
+    throw error;
+  }
 }

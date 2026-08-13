@@ -1,13 +1,20 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
-import type { BoardOwnerRef, BoardPoint, EditableMoodBoardItem } from '@patina/types';
+import type {
+  BoardOwnerRef,
+  BoardPoint,
+  EditableMoodBoardItem,
+  ProjectFfeSelection,
+} from '@patina/types';
 import {
   createBrowserClient,
   useBoardFeedback,
   usePalettes,
   useProposal,
   useProposalCaptures,
+  usePlaceProductInProjectV2,
+  useProjectFFEItems,
   useRoomScans,
   type AddBoardItemInput,
   type ItemFeedback,
@@ -22,7 +29,14 @@ import {
   type ProductPickResult,
 } from '@/components/portal/proposals/product-picker-modal';
 import { validateBoardImageFiles } from '@/components/portal/scope-builder/board-room-controller';
-import { prepareAndUploadBoardImages } from '@/lib/mood-board-assets/upload-board-assets';
+import {
+  createBoardAssetStorage,
+  prepareAndUploadBoardImages,
+} from '@/lib/mood-board-assets/upload-board-assets';
+import {
+  prepareProjectReviewMedia,
+  type PreparedProjectReviewMedia,
+} from '@/lib/mood-board-assets/project-review-media';
 import { verdictChipSpec } from '@/lib/document/verdict-chip';
 import { BoardSuggestionsRail } from '@/components/portal/scope-builder/board-suggestions-rail';
 import {
@@ -32,6 +46,7 @@ import {
 
 export type BoardAddSource = 'rail_click' | 'file_drop' | 'suggestion';
 export type BoardAddRailTab =
+  | 'project'
   | 'library'
   | 'captures'
   | 'uploads'
@@ -40,6 +55,64 @@ export type BoardAddRailTab =
   | 'feedback';
 
 const BOARD_RAIL_TAB_KEY = 'patina:mood-board:add-rail-tab';
+
+function projectSelectionFromRow(row: Record<string, unknown>): ProjectFfeSelection {
+  const product = row.product && typeof row.product === 'object'
+    ? row.product as Record<string, unknown>
+    : null;
+  const room = row.room && typeof row.room === 'object'
+    ? row.room as Record<string, unknown>
+    : null;
+  return {
+    id: String(row.id),
+    projectId: String(row.project_id),
+    productId: typeof row.product_id === 'string' ? row.product_id : null,
+    captureId: typeof row.capture_id === 'string' ? row.capture_id : null,
+    projectRoomId: typeof row.project_room_id === 'string' ? row.project_room_id : null,
+    name: String(row.name ?? product?.name ?? 'Untitled selection'),
+    quantity: Number(row.quantity ?? 1),
+    status: String(row.status ?? 'specified') as ProjectFfeSelection['status'],
+    designDisposition: String(row.design_disposition ?? 'selected') as ProjectFfeSelection['designDisposition'],
+    assignmentScope: String(row.assignment_scope ?? (row.project_room_id ? 'room' : 'throughout')) as ProjectFfeSelection['assignmentScope'],
+    selectionThreadId: String(row.selection_thread_id ?? row.id),
+    supersedesFfeItemId: typeof row.supersedes_ffe_item_id === 'string' ? row.supersedes_ffe_item_id : null,
+    readinessStatus: typeof row.readiness_status === 'string' ? row.readiness_status : null,
+    missingRequiredFieldCount: Number(row.missing_required_field_count ?? 0),
+    latestReviewVerdict: (row.latest_review_verdict ?? null) as ProjectFfeSelection['latestReviewVerdict'],
+    createdAt: String(row.created_at ?? ''),
+    product: product ? {
+      id: String(product.id ?? row.product_id ?? ''),
+      name: String(product.name ?? row.name ?? 'Untitled selection'),
+      brand: typeof product.brand === 'string' ? product.brand : null,
+      images: Array.isArray(product.images) ? product.images.filter((value): value is string => typeof value === 'string') : null,
+    } : null,
+    room: room ? { id: String(room.id), name: String(room.name) } : null,
+  };
+}
+
+export function projectSelectionToBoardItem(
+  selection: ProjectFfeSelection,
+  point: BoardPoint,
+  zIndex: number,
+): EditableMoodBoardItem {
+  const imageUrl = selection.product?.images?.[0] ?? null;
+  return {
+    ...baseBoardItem(point, zIndex),
+    type: 'product',
+    width: 260,
+    height: 300,
+    productId: selection.productId,
+    projectFfeItemId: selection.id,
+    imageUrl,
+    data: {
+      name: selection.name,
+      vendor_name: selection.product?.brand ?? null,
+      image_url: imageUrl,
+      assignment_scope: selection.assignmentScope,
+      design_disposition: selection.designDisposition,
+    },
+  };
+}
 
 function beginRailDrag(
   event: DragEvent<HTMLElement>,
@@ -145,19 +218,53 @@ export function productPickToBoardItem(
 
 export async function uploadFilesAsBoardItems(options: {
   ownerId: string;
+  ownerKind?: BoardOwnerRef['kind'];
   boardId: string;
   files: readonly File[];
   point: BoardPoint;
   startZ: number;
   onProgress?: Parameters<typeof prepareAndUploadBoardImages>[0]['onProgress'];
+  prepareReviewMedia?: (input: {
+    projectId: string;
+    sourcePath: string;
+  }) => Promise<PreparedProjectReviewMedia>;
 }): Promise<EditableMoodBoardItem[]> {
+  const projectStorage = options.ownerKind === 'project'
+    ? createBoardAssetStorage({ bucket: 'project-ffe-working' })
+    : null;
   const uploaded = await prepareAndUploadBoardImages({
     ownerId: options.ownerId,
     boardId: options.boardId,
     files: options.files,
+    ...(projectStorage ? { storage: projectStorage } : {}),
     onProgress: options.onProgress,
   });
+  let reviewAssets: Array<PreparedProjectReviewMedia | null>;
+  let preparedCount = 0;
+  try {
+    if (options.ownerKind === 'project') {
+      reviewAssets = [];
+      for (const asset of uploaded) {
+        reviewAssets.push(await (options.prepareReviewMedia ?? prepareProjectReviewMedia)({
+            projectId: options.ownerId,
+            sourcePath: asset.assets.display.path,
+          }));
+        preparedCount += 1;
+      }
+    } else {
+      reviewAssets = uploaded.map(() => null);
+    }
+  } catch (error) {
+    if (preparedCount === 0) {
+      await projectStorage?.remove(uploaded.flatMap((asset) => [
+        asset.assets.display.path,
+        asset.assets.thumbnail.path,
+      ])).catch(() => undefined);
+    }
+    throw error;
+  }
   return uploaded.map((asset, index) => {
+    const reviewAsset = reviewAssets[index];
     const width = 280;
     const height = Math.max(120, Math.round(width / asset.aspectRatio));
     return {
@@ -178,6 +285,12 @@ export async function uploadFilesAsBoardItems(options: {
       data: {
         image_url: asset.image_url,
         thumbnail_url: asset.data.thumbnail_url,
+        ...(options.ownerKind === 'project' ? {
+          working_image_path: asset.assets.display.path,
+          working_thumbnail_path: asset.assets.thumbnail.path,
+          review_media_asset_id: reviewAsset?.assetId,
+          review_media_status: 'prepared',
+        } : {}),
         resolved_height: height,
       },
     };
@@ -555,6 +668,7 @@ function FeedbackPanel({
 export function BoardAddRail({
   owner,
   boardId,
+  projectRoomId,
   items,
   preferenceScope,
   nextPoint,
@@ -564,6 +678,7 @@ export function BoardAddRail({
 }: {
   owner: BoardOwnerRef;
   boardId: string;
+  projectRoomId?: string | null;
   items: readonly EditableMoodBoardItem[];
   /** Auth user id; keeps rail preferences isolated on shared browsers. */
   preferenceScope?: string;
@@ -578,8 +693,23 @@ export function BoardAddRail({
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [captureSearch, setCaptureSearch] = useState('');
+  const [placingProductId, setPlacingProductId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { data: captures = [], isLoading: capturesLoading } = useProposalCaptures({ status: 'inbox' });
+  const projectSelectionsQuery = useProjectFFEItems(owner.kind === 'project' ? owner.id : '');
+  const placeProduct = usePlaceProductInProjectV2();
+  const projectSelections = useMemo(
+    () => ((projectSelectionsQuery.data ?? []) as Record<string, unknown>[])
+      .filter((row) => row.removed_at == null && !['not_selected', 'superseded'].includes(String(row.design_disposition)))
+      .map(projectSelectionFromRow),
+    [projectSelectionsQuery.data],
+  );
+  const compatibleProjectSelections = useMemo(
+    () => projectSelections.filter((selection) => !projectRoomId || (
+      selection.assignmentScope === 'room' && selection.projectRoomId === projectRoomId
+    )),
+    [projectRoomId, projectSelections],
+  );
   const visibleCaptures = useMemo(() => {
     const term = captureSearch.trim().toLowerCase();
     if (!term) return captures;
@@ -603,6 +733,7 @@ export function BoardAddRail({
     try {
       const persisted = window.localStorage.getItem(tabPreferenceKey);
       if (
+        persisted === 'project' ||
         persisted === 'library' ||
         persisted === 'captures' ||
         persisted === 'uploads' ||
@@ -610,14 +741,14 @@ export function BoardAddRail({
         persisted === 'scans' ||
         persisted === 'feedback'
       ) {
-        setTab(persisted);
+        setTab(persisted === 'project' && owner.kind !== 'project' ? 'library' : persisted);
       } else {
         setTab('library');
       }
     } catch {
       // Storage is an enhancement; private browsing must not break the rail.
     }
-  }, [tabPreferenceKey]);
+  }, [owner.kind, tabPreferenceKey]);
 
   const selectTab = (next: BoardAddRailTab) => {
     setTab(next);
@@ -629,8 +760,58 @@ export function BoardAddRail({
     }
   };
 
+  const placeProjectProduct = async (
+    draft: EditableMoodBoardItem,
+    productId: string,
+    captureId: string | null,
+  ) => {
+    setPlacingProductId(productId);
+    setError(null);
+    try {
+      const response = await placeProduct.mutateAsync({
+        projectId: owner.id,
+        productId,
+        captureId,
+        itemType: 'fixed',
+        roleConfigurationIdentity: 'default',
+        assignmentScope: projectRoomId ? 'room' : 'unassigned',
+        roomId: projectRoomId ?? null,
+        boardId,
+        disposition: 'candidate',
+        duplicateMode: 'reuse',
+        placement: {
+          x: draft.x,
+          y: draft.y,
+          width: draft.width,
+          sectionId: typeof draft.data?.section_id === 'string' ? draft.data.section_id : null,
+        },
+        idempotencyKey: `board-place:${boardId}:${draft.id}`,
+      });
+      if (!response.selectionId || !response.placementId) {
+        throw new Error('The project placement did not return its selection identity.');
+      }
+      onAddItems([{
+        ...draft,
+        id: response.placementId,
+        type: 'product',
+        productId,
+        captureId,
+        projectFfeItemId: response.selectionId,
+      }], 'rail_click');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'This product could not be placed in the project.');
+    } finally {
+      setPlacingProductId(null);
+    }
+  };
+
   const addProduct = (result: ProductPickResult) => {
-    onAddItems([productPickToBoardItem(result, nextPoint(), nextZ())], 'rail_click');
+    const draft = productPickToBoardItem(result, nextPoint(), nextZ());
+    if (owner.kind === 'project') {
+      void placeProjectProduct(draft, result.productId, result.captureId ?? null);
+      return;
+    }
+    onAddItems([draft], 'rail_click');
   };
 
   const upload = async (files: readonly File[]) => {
@@ -647,6 +828,7 @@ export function BoardAddRail({
     try {
       const items = await uploadFilesAsBoardItems({
         ownerId: owner.id,
+        ownerKind: owner.kind,
         boardId,
         files,
         point: nextPoint(),
@@ -691,7 +873,15 @@ export function BoardAddRail({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div role="tablist" aria-label="Board sources" className="flex shrink-0 overflow-x-auto border-b border-[var(--border-default)]">
-        {(['library', 'captures', 'uploads', 'palettes', 'scans', 'feedback'] as const).map((value) => (
+        {([
+          ...(owner.kind === 'project' ? ['project'] as const : []),
+          'library',
+          'captures',
+          'uploads',
+          'palettes',
+          'scans',
+          'feedback',
+        ] as const).map((value) => (
           <button
             key={value}
             type="button"
@@ -700,12 +890,46 @@ export function BoardAddRail({
             onClick={() => selectTab(value)}
             className={`min-h-11 min-w-11 shrink-0 px-2 font-mono text-[8px] uppercase tracking-[0.04em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)] ${tab === value ? 'border-b-2 border-[var(--color-clay)] text-[var(--color-clay)]' : 'text-[var(--text-muted)]'}`}
           >
-            {value}
+            {value === 'project' ? 'In project' : value}
           </button>
         ))}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        {tab === 'project' && owner.kind === 'project' && (
+          <div className="space-y-2">
+            <p className="text-[11px] leading-4 text-[var(--text-muted)]">
+              Place an existing project selection on this board. The selection remains in the project if this placement is removed.
+            </p>
+            {projectSelectionsQuery.isLoading && (
+              <p className="text-[11px] text-[var(--text-muted)]">Loading project selections…</p>
+            )}
+            {!projectSelectionsQuery.isLoading && compatibleProjectSelections.length === 0 && (
+              <p className="text-[11px] text-[var(--text-muted)]">No project selections yet.</p>
+            )}
+            {compatibleProjectSelections.map((selection) => (
+              <button
+                key={selection.id}
+                type="button"
+                onClick={() => onAddItems([
+                  projectSelectionToBoardItem(selection, nextPoint(), nextZ()),
+                ], 'rail_click')}
+                className="flex min-h-11 w-full items-center justify-between gap-2 rounded-[4px] border border-[var(--border-default)] px-2.5 text-left hover:border-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-[11px] text-[var(--text-primary)]">
+                    {selection.name}
+                  </span>
+                  <span className="block truncate font-mono text-[8px] uppercase text-[var(--text-muted)]">
+                    {selection.room?.name ?? (selection.assignmentScope === 'unassigned' ? 'Unsorted' : 'Throughout')} · {selection.designDisposition.replace('_', ' ')}
+                  </span>
+                </span>
+                <span className="shrink-0 font-mono text-[8px] uppercase text-[var(--color-clay)]">Place</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {tab === 'library' && (
           <div className="space-y-3">
             <p className="text-[11px] leading-4 text-[var(--text-muted)]">
@@ -739,7 +963,15 @@ export function BoardAddRail({
                   key={capture.id}
                   type="button"
                   draggable
-                  onClick={() => onAddItems([captureToBoardItem(capture, nextPoint(), nextZ())], 'rail_click')}
+                  disabled={placingProductId === capture.product_id}
+                  onClick={() => {
+                    const draft = captureToBoardItem(capture, nextPoint(), nextZ());
+                    if (owner.kind === 'project' && capture.product_id) {
+                      void placeProjectProduct(draft, capture.product_id, capture.id);
+                      return;
+                    }
+                    onAddItems([draft], 'rail_click');
+                  }}
                   onDragStart={(event) => beginRailDrag(
                     event,
                     owner,

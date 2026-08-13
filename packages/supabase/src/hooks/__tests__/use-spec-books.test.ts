@@ -50,6 +50,20 @@ beforeEach(() => {
 });
 
 describe("useUpdateProjectFfeSpec", () => {
+  it("rejects attempts to write the compatibility readiness cache", async () => {
+    const mutation = useUpdateProjectFfeSpec() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+
+    await expect(mutation.mutationFn({
+      projectId: "project-1",
+      specId: "spec-1",
+      expectedRowVersion: 7,
+      changes: { readiness_status: "ready" },
+    })).rejects.toThrow(/Readiness is derived/);
+    expect(fromSpy).not.toHaveBeenCalled();
+  });
+
   it("uses row_version only as the concurrency predicate", async () => {
     const mutation = useUpdateProjectFfeSpec() as unknown as {
       retry: boolean;

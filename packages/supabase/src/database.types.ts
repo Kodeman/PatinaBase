@@ -7423,6 +7423,7 @@ export type Database = {
           decision_id: string | null
           ffe_item_id: string | null
           id: string
+          project_review_item_id: string | null
           proposal_item_id: string | null
           resolved_at: string | null
           resolved_by: string | null
@@ -7437,6 +7438,7 @@ export type Database = {
           decision_id?: string | null
           ffe_item_id?: string | null
           id?: string
+          project_review_item_id?: string | null
           proposal_item_id?: string | null
           resolved_at?: string | null
           resolved_by?: string | null
@@ -7451,6 +7453,7 @@ export type Database = {
           decision_id?: string | null
           ffe_item_id?: string | null
           id?: string
+          project_review_item_id?: string | null
           proposal_item_id?: string | null
           resolved_at?: string | null
           resolved_by?: string | null
@@ -7484,6 +7487,13 @@ export type Database = {
             columns: ["ffe_item_id"]
             isOneToOne: false
             referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "item_feedback_project_review_item_id_fkey"
+            columns: ["project_review_item_id"]
+            isOneToOne: false
+            referencedRelation: "project_review_items"
             referencedColumns: ["id"]
           },
           {
@@ -13306,9 +13316,265 @@ export type Database = {
           },
         ]
       }
+      project_ffe_board_reconciliation: {
+        Row: {
+          mapped_board_id: string | null
+          mapped_selection_id: string | null
+          project_id: string
+          reconciled_at: string | null
+          resolution: string
+          source_board_id: string | null
+          source_fingerprint: string
+          source_id: string
+          source_item_id: string | null
+          source_kind: string
+        }
+        Insert: {
+          mapped_board_id?: string | null
+          mapped_selection_id?: string | null
+          project_id: string
+          reconciled_at?: string | null
+          resolution?: string
+          source_board_id?: string | null
+          source_fingerprint: string
+          source_id: string
+          source_item_id?: string | null
+          source_kind: string
+        }
+        Update: {
+          mapped_board_id?: string | null
+          mapped_selection_id?: string | null
+          project_id?: string
+          reconciled_at?: string | null
+          resolution?: string
+          source_board_id?: string | null
+          source_fingerprint?: string
+          source_id?: string
+          source_item_id?: string | null
+          source_kind?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_ffe_board_reconciliation_mapped_board_id_fkey"
+            columns: ["mapped_board_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_boards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_board_reconciliation_mapped_selection_id_fkey"
+            columns: ["mapped_selection_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_board_reconciliation_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_ffe_board_reconciliation_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_ffe_command_idempotency: {
+        Row: {
+          actor_id: string
+          created_at: string
+          idempotency_key: string
+          request_hash: string
+          response: Json | null
+        }
+        Insert: {
+          actor_id: string
+          created_at?: string
+          idempotency_key: string
+          request_hash: string
+          response?: Json | null
+        }
+        Update: {
+          actor_id?: string
+          created_at?: string
+          idempotency_key?: string
+          request_hash?: string
+          response?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_ffe_command_idempotency_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_command_idempotency_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_ffe_import_batches: {
+        Row: {
+          commit_response: Json | null
+          committed_at: string | null
+          created_at: string
+          file_hash: string
+          id: string
+          project_id: string
+          row_count: number
+          source_asset_id: string | null
+          source_kind: string
+          staged_by: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          commit_response?: Json | null
+          committed_at?: string | null
+          created_at?: string
+          file_hash: string
+          id?: string
+          project_id: string
+          row_count?: number
+          source_asset_id?: string | null
+          source_kind: string
+          staged_by?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          commit_response?: Json | null
+          committed_at?: string | null
+          created_at?: string
+          file_hash?: string
+          id?: string
+          project_id?: string
+          row_count?: number
+          source_asset_id?: string | null
+          source_kind?: string
+          staged_by?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_ffe_import_batches_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_ffe_import_batches_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_import_batches_source_asset_id_fkey"
+            columns: ["source_asset_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_media_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_import_batches_staged_by_fkey"
+            columns: ["staged_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_import_batches_staged_by_fkey"
+            columns: ["staged_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_ffe_import_rows: {
+        Row: {
+          assignment_scope: string | null
+          batch_id: string
+          committed_ffe_item_id: string | null
+          created_at: string
+          duplicate_mode: string | null
+          id: string
+          imported_approval_text: string | null
+          normalized_row: Json
+          project_room_id: string | null
+          raw_row: Json
+          row_ordinal: number
+          validation_errors: Json
+        }
+        Insert: {
+          assignment_scope?: string | null
+          batch_id: string
+          committed_ffe_item_id?: string | null
+          created_at?: string
+          duplicate_mode?: string | null
+          id?: string
+          imported_approval_text?: string | null
+          normalized_row?: Json
+          project_room_id?: string | null
+          raw_row: Json
+          row_ordinal: number
+          validation_errors?: Json
+        }
+        Update: {
+          assignment_scope?: string | null
+          batch_id?: string
+          committed_ffe_item_id?: string | null
+          created_at?: string
+          duplicate_mode?: string | null
+          id?: string
+          imported_approval_text?: string | null
+          normalized_row?: Json
+          project_room_id?: string | null
+          raw_row?: Json
+          row_ordinal?: number
+          validation_errors?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_ffe_import_rows_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_import_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_import_rows_committed_ffe_item_id_fkey"
+            columns: ["committed_ffe_item_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_import_rows_project_room_id_fkey"
+            columns: ["project_room_id"]
+            isOneToOne: false
+            referencedRelation: "project_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_ffe_items: {
         Row: {
           added_via: string | null
+          assignment_scope: string
           blocked: boolean | null
           blocked_by_decision_id: string | null
           blocked_reason: string | null
@@ -13316,6 +13582,7 @@ export type Database = {
           budget_min_cents: number | null
           created_at: string
           custom_fields: Json
+          design_disposition: string
           doc_code: string | null
           eta: string | null
           ffe_category: string | null
@@ -13333,12 +13600,18 @@ export type Database = {
           purchase_order_id: string | null
           quantity: number
           received_quantity: number | null
+          removal_reason: string | null
+          removed_at: string | null
+          removed_by: string | null
+          role_identity: string
+          selection_thread_id: string
           sort_order: number
           source_authorization_item_id: string | null
           source_commercial_document_id: string | null
           source_decision_id: string | null
           source_proposal_item_id: string | null
           status: string
+          supersedes_ffe_item_id: string | null
           trade_price_cents: number | null
           trade_scope_document_id: string | null
           unit_price_cents: number | null
@@ -13348,6 +13621,7 @@ export type Database = {
         }
         Insert: {
           added_via?: string | null
+          assignment_scope?: string
           blocked?: boolean | null
           blocked_by_decision_id?: string | null
           blocked_reason?: string | null
@@ -13355,6 +13629,7 @@ export type Database = {
           budget_min_cents?: number | null
           created_at?: string
           custom_fields?: Json
+          design_disposition?: string
           doc_code?: string | null
           eta?: string | null
           ffe_category?: string | null
@@ -13372,12 +13647,18 @@ export type Database = {
           purchase_order_id?: string | null
           quantity?: number
           received_quantity?: number | null
+          removal_reason?: string | null
+          removed_at?: string | null
+          removed_by?: string | null
+          role_identity?: string
+          selection_thread_id: string
           sort_order?: number
           source_authorization_item_id?: string | null
           source_commercial_document_id?: string | null
           source_decision_id?: string | null
           source_proposal_item_id?: string | null
           status?: string
+          supersedes_ffe_item_id?: string | null
           trade_price_cents?: number | null
           trade_scope_document_id?: string | null
           unit_price_cents?: number | null
@@ -13387,6 +13668,7 @@ export type Database = {
         }
         Update: {
           added_via?: string | null
+          assignment_scope?: string
           blocked?: boolean | null
           blocked_by_decision_id?: string | null
           blocked_reason?: string | null
@@ -13394,6 +13676,7 @@ export type Database = {
           budget_min_cents?: number | null
           created_at?: string
           custom_fields?: Json
+          design_disposition?: string
           doc_code?: string | null
           eta?: string | null
           ffe_category?: string | null
@@ -13411,12 +13694,18 @@ export type Database = {
           purchase_order_id?: string | null
           quantity?: number
           received_quantity?: number | null
+          removal_reason?: string | null
+          removed_at?: string | null
+          removed_by?: string | null
+          role_identity?: string
+          selection_thread_id?: string
           sort_order?: number
           source_authorization_item_id?: string | null
           source_commercial_document_id?: string | null
           source_decision_id?: string | null
           source_proposal_item_id?: string | null
           status?: string
+          supersedes_ffe_item_id?: string | null
           trade_price_cents?: number | null
           trade_scope_document_id?: string | null
           unit_price_cents?: number | null
@@ -13503,6 +13792,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "project_ffe_items_removed_by_fkey"
+            columns: ["removed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_items_removed_by_fkey"
+            columns: ["removed_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_items_selection_thread_id_fkey"
+            columns: ["selection_thread_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_selection_threads"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "project_ffe_items_source_authorization_item_id_fkey"
             columns: ["source_authorization_item_id"]
             isOneToOne: false
@@ -13538,10 +13848,267 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "project_ffe_items_supersedes_ffe_item_id_fkey"
+            columns: ["supersedes_ffe_item_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "project_ffe_items_trade_scope_document_id_fkey"
             columns: ["trade_scope_document_id"]
             isOneToOne: false
             referencedRelation: "project_commercial_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_ffe_media_assets: {
+        Row: {
+          checksum_sha256: string | null
+          content_type: string | null
+          created_at: string
+          created_by: string | null
+          ffe_item_id: string | null
+          id: string
+          media_kind: string
+          project_id: string
+          size_bytes: number | null
+          storage_bucket: string
+          storage_path: string
+        }
+        Insert: {
+          checksum_sha256?: string | null
+          content_type?: string | null
+          created_at?: string
+          created_by?: string | null
+          ffe_item_id?: string | null
+          id?: string
+          media_kind?: string
+          project_id: string
+          size_bytes?: number | null
+          storage_bucket?: string
+          storage_path: string
+        }
+        Update: {
+          checksum_sha256?: string | null
+          content_type?: string | null
+          created_at?: string
+          created_by?: string | null
+          ffe_item_id?: string | null
+          id?: string
+          media_kind?: string
+          project_id?: string
+          size_bytes?: number | null
+          storage_bucket?: string
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_ffe_media_assets_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_media_assets_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_media_assets_ffe_item_id_fkey"
+            columns: ["ffe_item_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_media_assets_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_ffe_media_assets_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_ffe_media_reconciliation: {
+        Row: {
+          classification: string
+          created_at: string
+          disposition: string
+          id: string
+          project_id: string | null
+          proposal_id: string | null
+          reconciled_at: string | null
+          source_bucket: string
+          source_checksum: string | null
+          source_path: string
+          target_bucket: string | null
+          target_checksum: string | null
+          target_path: string | null
+        }
+        Insert: {
+          classification: string
+          created_at?: string
+          disposition?: string
+          id?: string
+          project_id?: string | null
+          proposal_id?: string | null
+          reconciled_at?: string | null
+          source_bucket: string
+          source_checksum?: string | null
+          source_path: string
+          target_bucket?: string | null
+          target_checksum?: string | null
+          target_path?: string | null
+        }
+        Update: {
+          classification?: string
+          created_at?: string
+          disposition?: string
+          id?: string
+          project_id?: string | null
+          proposal_id?: string | null
+          reconciled_at?: string | null
+          source_bucket?: string
+          source_checksum?: string | null
+          source_path?: string
+          target_bucket?: string | null
+          target_checksum?: string | null
+          target_path?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_ffe_media_reconciliation_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_ffe_media_reconciliation_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_media_reconciliation_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_ffe_receipt_commands: {
+        Row: {
+          created_at: string
+          inspection_id: string | null
+          purchase_order_id: string
+          request_hash: string
+          response: Json | null
+        }
+        Insert: {
+          created_at?: string
+          inspection_id?: string | null
+          purchase_order_id: string
+          request_hash: string
+          response?: Json | null
+        }
+        Update: {
+          created_at?: string
+          inspection_id?: string | null
+          purchase_order_id?: string
+          request_hash?: string
+          response?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_ffe_receipt_commands_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "receiving_inspections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_receipt_commands_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_ffe_selection_threads: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          primary_ffe_item_id: string | null
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          primary_ffe_item_id?: string | null
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          primary_ffe_item_id?: string | null
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_ffe_selection_threads_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_selection_threads_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_selection_threads_primary_ffe_item_id_fkey"
+            columns: ["primary_ffe_item_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_selection_threads_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_ffe_selection_threads_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
@@ -14274,6 +14841,512 @@ export type Database = {
             columns: ["section_id"]
             isOneToOne: false
             referencedRelation: "project_sections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_review_access: {
+        Row: {
+          actor_id: string
+          created_at: string
+          edition_id: string
+          expires_at: string | null
+          revoke_reason: string | null
+          revoked_at: string | null
+          revoked_by: string | null
+          status: string
+        }
+        Insert: {
+          actor_id: string
+          created_at?: string
+          edition_id: string
+          expires_at?: string | null
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          status?: string
+        }
+        Update: {
+          actor_id?: string
+          created_at?: string
+          edition_id?: string
+          expires_at?: string | null
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_review_access_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_review_access_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_review_access_edition_id_fkey"
+            columns: ["edition_id"]
+            isOneToOne: false
+            referencedRelation: "project_review_editions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_review_access_revoked_by_fkey"
+            columns: ["revoked_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_review_access_revoked_by_fkey"
+            columns: ["revoked_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_review_board_media_assets: {
+        Row: {
+          asset_id: string
+          board_id: string
+          checksum_sha256: string
+          content_type: string
+          created_at: string
+          derivative_kind: string
+          edition_id: string
+          id: string
+          media_role: string
+          placement_id: string | null
+          size_bytes: number
+          storage_bucket: string
+          storage_path: string
+        }
+        Insert: {
+          asset_id: string
+          board_id: string
+          checksum_sha256: string
+          content_type: string
+          created_at?: string
+          derivative_kind: string
+          edition_id: string
+          id?: string
+          media_role: string
+          placement_id?: string | null
+          size_bytes: number
+          storage_bucket: string
+          storage_path: string
+        }
+        Update: {
+          asset_id?: string
+          board_id?: string
+          checksum_sha256?: string
+          content_type?: string
+          created_at?: string
+          derivative_kind?: string
+          edition_id?: string
+          id?: string
+          media_role?: string
+          placement_id?: string | null
+          size_bytes?: number
+          storage_bucket?: string
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_review_board_media_assets_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "project_review_media_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_review_board_media_assets_board_id_fkey"
+            columns: ["board_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_boards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_review_board_media_assets_edition_id_fkey"
+            columns: ["edition_id"]
+            isOneToOne: false
+            referencedRelation: "project_review_editions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_review_board_media_assets_placement_id_fkey"
+            columns: ["placement_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_board_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_review_delivery_attempts: {
+        Row: {
+          attempted_at: string
+          completed_at: string | null
+          edition_id: string
+          error_code: string | null
+          id: string
+          idempotency_key: string
+          provider_message_id: string | null
+          requested_by: string | null
+          status: string
+        }
+        Insert: {
+          attempted_at?: string
+          completed_at?: string | null
+          edition_id: string
+          error_code?: string | null
+          id?: string
+          idempotency_key: string
+          provider_message_id?: string | null
+          requested_by?: string | null
+          status?: string
+        }
+        Update: {
+          attempted_at?: string
+          completed_at?: string | null
+          edition_id?: string
+          error_code?: string | null
+          id?: string
+          idempotency_key?: string
+          provider_message_id?: string | null
+          requested_by?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_review_delivery_attempts_edition_id_fkey"
+            columns: ["edition_id"]
+            isOneToOne: false
+            referencedRelation: "project_review_editions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_review_delivery_attempts_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_review_delivery_attempts_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_review_editions: {
+        Row: {
+          board_snapshot: Json
+          client_price_mode: string
+          created_at: string
+          created_by: string | null
+          edition_number: number
+          finalized_at: string | null
+          id: string
+          project_id: string
+          published_at: string | null
+          published_by: string | null
+          room_snapshot: Json
+          snapshot_hash: string | null
+          status: string
+          superseded_at: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          board_snapshot?: Json
+          client_price_mode?: string
+          created_at?: string
+          created_by?: string | null
+          edition_number: number
+          finalized_at?: string | null
+          id?: string
+          project_id: string
+          published_at?: string | null
+          published_by?: string | null
+          room_snapshot?: Json
+          snapshot_hash?: string | null
+          status?: string
+          superseded_at?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          board_snapshot?: Json
+          client_price_mode?: string
+          created_at?: string
+          created_by?: string | null
+          edition_number?: number
+          finalized_at?: string | null
+          id?: string
+          project_id?: string
+          published_at?: string | null
+          published_by?: string | null
+          room_snapshot?: Json
+          snapshot_hash?: string | null
+          status?: string
+          superseded_at?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_review_editions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_review_editions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_review_editions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_review_editions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_review_editions_published_by_fkey"
+            columns: ["published_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_review_editions_published_by_fkey"
+            columns: ["published_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_review_items: {
+        Row: {
+          client_fields: Json
+          client_line_total_cents: number | null
+          client_unit_price_cents: number | null
+          content_hash: string
+          created_at: string
+          edition_id: string
+          id: string
+          item_snapshot: Json
+          media_manifest: Json
+          product_id: string | null
+          project_room_id: string | null
+          room_snapshot: Json
+          selection_thread_id: string
+          sort_order: number
+          source_ffe_item_id: string
+        }
+        Insert: {
+          client_fields?: Json
+          client_line_total_cents?: number | null
+          client_unit_price_cents?: number | null
+          content_hash: string
+          created_at?: string
+          edition_id: string
+          id?: string
+          item_snapshot: Json
+          media_manifest?: Json
+          product_id?: string | null
+          project_room_id?: string | null
+          room_snapshot?: Json
+          selection_thread_id: string
+          sort_order?: number
+          source_ffe_item_id: string
+        }
+        Update: {
+          client_fields?: Json
+          client_line_total_cents?: number | null
+          client_unit_price_cents?: number | null
+          content_hash?: string
+          created_at?: string
+          edition_id?: string
+          id?: string
+          item_snapshot?: Json
+          media_manifest?: Json
+          product_id?: string | null
+          project_room_id?: string | null
+          room_snapshot?: Json
+          selection_thread_id?: string
+          sort_order?: number
+          source_ffe_item_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_review_items_edition_id_fkey"
+            columns: ["edition_id"]
+            isOneToOne: false
+            referencedRelation: "project_review_editions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_review_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_review_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "project_review_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "project_review_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "project_review_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_promotion_candidates"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "project_review_items_project_room_id_fkey"
+            columns: ["project_room_id"]
+            isOneToOne: false
+            referencedRelation: "project_rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_review_items_selection_thread_id_fkey"
+            columns: ["selection_thread_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_selection_threads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_review_items_source_ffe_item_id_fkey"
+            columns: ["source_ffe_item_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_review_media_assets: {
+        Row: {
+          checksum_sha256: string
+          content_type: string
+          derivative_kind: string
+          height: number | null
+          id: string
+          prepared_at: string
+          prepared_by: string | null
+          project_id: string
+          size_bytes: number
+          source_asset_id: string | null
+          storage_bucket: string
+          storage_path: string
+          width: number | null
+        }
+        Insert: {
+          checksum_sha256: string
+          content_type: string
+          derivative_kind: string
+          height?: number | null
+          id?: string
+          prepared_at?: string
+          prepared_by?: string | null
+          project_id: string
+          size_bytes: number
+          source_asset_id?: string | null
+          storage_bucket?: string
+          storage_path: string
+          width?: number | null
+        }
+        Update: {
+          checksum_sha256?: string
+          content_type?: string
+          derivative_kind?: string
+          height?: number | null
+          id?: string
+          prepared_at?: string
+          prepared_by?: string | null
+          project_id?: string
+          size_bytes?: number
+          source_asset_id?: string | null
+          storage_bucket?: string
+          storage_path?: string
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_review_media_assets_prepared_by_fkey"
+            columns: ["prepared_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_review_media_assets_prepared_by_fkey"
+            columns: ["prepared_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_review_media_assets_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "project_review_media_assets_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_review_media_assets_source_asset_id_fkey"
+            columns: ["source_asset_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_media_assets"
             referencedColumns: ["id"]
           },
         ]
@@ -15080,6 +16153,8 @@ export type Database = {
           locked: boolean
           palette_id: string | null
           product_id: string | null
+          project_ffe_item_id: string | null
+          review_media_asset_id: string | null
           rotation: number
           type: string
           updated_at: string
@@ -15100,6 +16175,8 @@ export type Database = {
           locked?: boolean
           palette_id?: string | null
           product_id?: string | null
+          project_ffe_item_id?: string | null
+          review_media_asset_id?: string | null
           rotation?: number
           type: string
           updated_at?: string
@@ -15120,6 +16197,8 @@ export type Database = {
           locked?: boolean
           palette_id?: string | null
           product_id?: string | null
+          project_ffe_item_id?: string | null
+          review_media_asset_id?: string | null
           rotation?: number
           type?: string
           updated_at?: string
@@ -15185,6 +16264,20 @@ export type Database = {
             referencedRelation: "v_promotion_candidates"
             referencedColumns: ["product_id"]
           },
+          {
+            foreignKeyName: "proposal_board_items_project_ffe_item_id_fkey"
+            columns: ["project_ffe_item_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_board_items_review_media_asset_id_fkey"
+            columns: ["review_media_asset_id"]
+            isOneToOne: false
+            referencedRelation: "project_review_media_assets"
+            referencedColumns: ["id"]
+          },
         ]
       }
       proposal_boards: {
@@ -15193,10 +16286,12 @@ export type Database = {
           canvas_height: number
           canvas_width: number
           cover_image_url: string | null
+          cover_review_media_asset_id: string | null
           created_at: string
           id: string
           name: string
           project_id: string | null
+          project_room_id: string | null
           proposal_id: string | null
           scope_room_id: string | null
           sections: Json
@@ -15210,10 +16305,12 @@ export type Database = {
           canvas_height?: number
           canvas_width?: number
           cover_image_url?: string | null
+          cover_review_media_asset_id?: string | null
           created_at?: string
           id?: string
           name: string
           project_id?: string | null
+          project_room_id?: string | null
           proposal_id?: string | null
           scope_room_id?: string | null
           sections?: Json
@@ -15227,10 +16324,12 @@ export type Database = {
           canvas_height?: number
           canvas_width?: number
           cover_image_url?: string | null
+          cover_review_media_asset_id?: string | null
           created_at?: string
           id?: string
           name?: string
           project_id?: string | null
+          project_room_id?: string | null
           proposal_id?: string | null
           scope_room_id?: string | null
           sections?: Json
@@ -15240,6 +16339,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "proposal_boards_cover_review_media_asset_id_fkey"
+            columns: ["cover_review_media_asset_id"]
+            isOneToOne: false
+            referencedRelation: "project_review_media_assets"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "proposal_boards_project_id_fkey"
             columns: ["project_id"]
@@ -15252,6 +16358,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_boards_project_room_id_fkey"
+            columns: ["project_room_id"]
+            isOneToOne: false
+            referencedRelation: "project_rooms"
             referencedColumns: ["id"]
           },
           {
@@ -16787,15 +17900,122 @@ export type Database = {
           },
         ]
       }
+      purchase_order_changes: {
+        Row: {
+          change_kind: string
+          created_at: string
+          created_by: string
+          id: string
+          prior_snapshot: Json
+          project_ffe_item_id: string | null
+          project_id: string
+          purchase_order_id: string
+          reason: string
+          replacement_purchase_order_id: string | null
+          requested_vendor_id: string | null
+          resolved_at: string | null
+          status: string
+        }
+        Insert: {
+          change_kind: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          prior_snapshot: Json
+          project_ffe_item_id?: string | null
+          project_id: string
+          purchase_order_id: string
+          reason: string
+          replacement_purchase_order_id?: string | null
+          requested_vendor_id?: string | null
+          resolved_at?: string | null
+          status?: string
+        }
+        Update: {
+          change_kind?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          prior_snapshot?: Json
+          project_ffe_item_id?: string | null
+          project_id?: string
+          purchase_order_id?: string
+          reason?: string
+          replacement_purchase_order_id?: string | null
+          requested_vendor_id?: string | null
+          resolved_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_order_changes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_changes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_changes_project_ffe_item_id_fkey"
+            columns: ["project_ffe_item_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_changes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "purchase_order_changes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_changes_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_changes_replacement_purchase_order_id_fkey"
+            columns: ["replacement_purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_changes_requested_vendor_id_fkey"
+            columns: ["requested_vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       purchase_orders: {
         Row: {
           acknowledged_at: string | null
           confirmed_eta: string | null
           created_at: string
+          created_by: string | null
           delivered_date: string | null
           designer_id: string
           id: string
           is_patina_catalog: boolean
+          needs_repricing: boolean
           notes: string | null
           payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
           po_document_path: string | null
@@ -16814,10 +18034,12 @@ export type Database = {
           acknowledged_at?: string | null
           confirmed_eta?: string | null
           created_at?: string
+          created_by?: string | null
           delivered_date?: string | null
           designer_id: string
           id?: string
           is_patina_catalog?: boolean
+          needs_repricing?: boolean
           notes?: string | null
           payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
           po_document_path?: string | null
@@ -16836,10 +18058,12 @@ export type Database = {
           acknowledged_at?: string | null
           confirmed_eta?: string | null
           created_at?: string
+          created_by?: string | null
           delivered_date?: string | null
           designer_id?: string
           id?: string
           is_patina_catalog?: boolean
+          needs_repricing?: boolean
           notes?: string | null
           payment_pattern?: Database["public"]["Enums"]["purchase_order_payment_pattern"]
           po_document_path?: string | null
@@ -16855,6 +18079,20 @@ export type Database = {
           vendor_po_number?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "purchase_orders_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "purchase_orders_project_id_fkey"
             columns: ["project_id"]
@@ -19893,6 +21131,8 @@ export type Database = {
           conversation_id: string
           created_at: string
           direction: string
+          error_code: string | null
+          error_message: string | null
           id: string
           matched_coordination_item_id: string | null
           matched_task_id: string | null
@@ -19915,6 +21155,8 @@ export type Database = {
           conversation_id: string
           created_at?: string
           direction: string
+          error_code?: string | null
+          error_message?: string | null
           id?: string
           matched_coordination_item_id?: string | null
           matched_task_id?: string | null
@@ -19937,6 +21179,8 @@ export type Database = {
           conversation_id?: string
           created_at?: string
           direction?: string
+          error_code?: string | null
+          error_message?: string | null
           id?: string
           matched_coordination_item_id?: string | null
           matched_task_id?: string | null
@@ -23324,6 +24568,9 @@ export type Database = {
           referrer: string | null
           role: string | null
           signup_page: string | null
+          sms_consent: boolean
+          sms_consent_at: string | null
+          sms_consent_text: string | null
           source: string
           updated_at: string
           user_agent: string | null
@@ -23359,6 +24606,9 @@ export type Database = {
           referrer?: string | null
           role?: string | null
           signup_page?: string | null
+          sms_consent?: boolean
+          sms_consent_at?: string | null
+          sms_consent_text?: string | null
           source: string
           updated_at?: string
           user_agent?: string | null
@@ -23394,6 +24644,9 @@ export type Database = {
           referrer?: string | null
           role?: string | null
           signup_page?: string | null
+          sms_consent?: boolean
+          sms_consent_at?: string | null
+          sms_consent_text?: string | null
           source?: string
           updated_at?: string
           user_agent?: string | null
@@ -25047,6 +26300,51 @@ export type Database = {
         Returns: number[]
       }
       _aesthete_utilization: { Args: { p_ratio: number }; Returns: number }
+      _apply_board_room_state_00444_impl: {
+        Args: {
+          p_board_id: string
+          p_owner_id: string
+          p_owner_kind: string
+          p_state: Json
+        }
+        Returns: undefined
+      }
+      _apply_board_room_state_00448_impl: {
+        Args: {
+          p_board_id: string
+          p_owner_id: string
+          p_owner_kind: string
+          p_state: Json
+        }
+        Returns: undefined
+      }
+      _apply_board_room_state_00453_impl: {
+        Args: {
+          p_board_id: string
+          p_owner_id: string
+          p_owner_kind: string
+          p_state: Json
+        }
+        Returns: undefined
+      }
+      _apply_board_room_state_00456_impl: {
+        Args: {
+          p_board_id: string
+          p_owner_id: string
+          p_owner_kind: string
+          p_state: Json
+        }
+        Returns: undefined
+      }
+      _apply_board_room_state_v1_impl: {
+        Args: {
+          p_board_id: string
+          p_owner_id: string
+          p_owner_kind: string
+          p_state: Json
+        }
+        Returns: undefined
+      }
       _apply_client_decision_authorized: {
         Args: {
           p_actor: string
@@ -25180,6 +26478,10 @@ export type Database = {
         Args: { p_proposal_id: string }
         Returns: string
       }
+      _commit_project_ffe_import_00446_impl: {
+        Args: { p_batch_id: string; p_decisions?: Json }
+        Returns: Json
+      }
       _commit_proposal_send: {
         Args: {
           p_cc_email?: string
@@ -25259,8 +26561,21 @@ export type Database = {
         Args: { p_snapshot: Json }
         Returns: string
       }
+      _continue_board_in_project_v1_impl: {
+        Args: { p_project_board_id: string }
+        Returns: string
+      }
       _countersign_design_services_agreement_impl: {
         Args: { p_proposal_id: string; p_signer_name: string }
+        Returns: Json
+      }
+      _create_furnishings_authorization_from_schedule_00444_impl: {
+        Args: {
+          p_deposit_percent?: number
+          p_ffe_item_ids: string[]
+          p_name: string
+          p_project_id: string
+        }
         Returns: Json
       }
       _create_furnishings_authorization_from_schedule_impl: {
@@ -25280,6 +26595,144 @@ export type Database = {
           p_project_id: string
         }
         Returns: Json
+      }
+      _create_purchase_order_00448_impl: {
+        Args: {
+          p_confirmed_eta?: string
+          p_custom_milestones?: Json
+          p_deposit_amount_cents?: number
+          p_deposit_due_date?: string
+          p_ffe_item_ids: string[]
+          p_is_patina_catalog?: boolean
+          p_notes?: string
+          p_payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
+          p_project_id: string
+          p_sidemark?: string
+          p_vendor_id: string
+          p_vendor_po_number?: string
+        }
+        Returns: {
+          acknowledged_at: string | null
+          confirmed_eta: string | null
+          created_at: string
+          created_by: string | null
+          delivered_date: string | null
+          designer_id: string
+          id: string
+          is_patina_catalog: boolean
+          needs_repricing: boolean
+          notes: string | null
+          payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
+          po_document_path: string | null
+          po_number: string | null
+          project_id: string
+          sent_at: string | null
+          ship_to: string | null
+          sidemark: string | null
+          status: string
+          total_cents: number
+          updated_at: string
+          vendor_id: string
+          vendor_po_number: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "purchase_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      _create_purchase_order_00449_impl: {
+        Args: {
+          p_confirmed_eta?: string
+          p_custom_milestones?: Json
+          p_deposit_amount_cents?: number
+          p_deposit_due_date?: string
+          p_ffe_item_ids: string[]
+          p_is_patina_catalog?: boolean
+          p_notes?: string
+          p_payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
+          p_project_id: string
+          p_sidemark?: string
+          p_vendor_id: string
+          p_vendor_po_number?: string
+        }
+        Returns: {
+          acknowledged_at: string | null
+          confirmed_eta: string | null
+          created_at: string
+          created_by: string | null
+          delivered_date: string | null
+          designer_id: string
+          id: string
+          is_patina_catalog: boolean
+          needs_repricing: boolean
+          notes: string | null
+          payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
+          po_document_path: string | null
+          po_number: string | null
+          project_id: string
+          sent_at: string | null
+          ship_to: string | null
+          sidemark: string | null
+          status: string
+          total_cents: number
+          updated_at: string
+          vendor_id: string
+          vendor_po_number: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "purchase_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      _create_purchase_order_v1_impl: {
+        Args: {
+          p_confirmed_eta?: string
+          p_custom_milestones?: Json
+          p_deposit_amount_cents?: number
+          p_deposit_due_date?: string
+          p_ffe_item_ids: string[]
+          p_is_patina_catalog?: boolean
+          p_notes?: string
+          p_payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
+          p_project_id: string
+          p_sidemark?: string
+          p_vendor_id: string
+          p_vendor_po_number?: string
+        }
+        Returns: {
+          acknowledged_at: string | null
+          confirmed_eta: string | null
+          created_at: string
+          created_by: string | null
+          delivered_date: string | null
+          designer_id: string
+          id: string
+          is_patina_catalog: boolean
+          needs_repricing: boolean
+          notes: string | null
+          payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
+          po_document_path: string | null
+          po_number: string | null
+          project_id: string
+          sent_at: string | null
+          ship_to: string | null
+          sidemark: string | null
+          status: string
+          total_cents: number
+          updated_at: string
+          vendor_id: string
+          vendor_po_number: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "purchase_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       _custom_commission_milestone_json: {
         Args: { p_milestone_id: string }
@@ -25396,6 +26849,59 @@ export type Database = {
         }
         Returns: Json
       }
+      _ffe_is_studio_actor: {
+        Args: { p_actor_id: string; p_owner_id: string }
+        Returns: boolean
+      }
+      _ffe_require_studio_project: {
+        Args: { p_project_id: string }
+        Returns: {
+          actual_cents: number | null
+          brief_document_url: string | null
+          budget_cents: number | null
+          budget_max: number | null
+          budget_min: number | null
+          change_order_terms: Json | null
+          client_id: string | null
+          client_profile_id: string | null
+          client_visibility_tier: string
+          closure_checklist: Json | null
+          committed_cents: number | null
+          completed_at: string | null
+          created_at: string | null
+          created_by: string
+          current_phase: string | null
+          design_fee_cents: number | null
+          designer_id: string | null
+          expected_completion_date: string | null
+          id: string
+          kickoff_date: string | null
+          kickoff_message: string | null
+          lead_designer_id: string | null
+          name: string
+          notes: string | null
+          portfolio_snapshot: Json | null
+          proposal_id: string | null
+          scope_boundaries: Json | null
+          share_token: string | null
+          site_address: string | null
+          start_date: string | null
+          status: Database["public"]["Enums"]["project_status"] | null
+          studio_id: string | null
+          target_end_date: string | null
+          timeline_end: string | null
+          timeline_start: string | null
+          total_amount_cents: number | null
+          updated_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "projects"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      _ffe_strict_client_fields: { Args: { p_fields: Json }; Returns: Json }
       _finalize_spec_book_issue_00403: {
         Args: { p_revision_id: string }
         Returns: {
@@ -25530,6 +27036,15 @@ export type Database = {
           status: string
         }[]
       }
+      _mark_project_review_delivery_sent_00442_impl: {
+        Args: {
+          p_actor_id: string
+          p_attempt_id: string
+          p_error_code?: string
+          p_provider_message_id?: string
+        }
+        Returns: Json
+      }
       _mark_proposal_viewed_impl: {
         Args: { p_proposal_id: string }
         Returns: {
@@ -25609,6 +27124,22 @@ export type Database = {
         }
         Returns: Json
       }
+      _place_product_in_project_v2_00438_impl: {
+        Args: { p_request: Json }
+        Returns: Json
+      }
+      _place_product_in_project_v2_00441_wrapper: {
+        Args: { p_request: Json }
+        Returns: Json
+      }
+      _place_product_in_project_v2_00444_impl: {
+        Args: { p_request: Json }
+        Returns: Json
+      }
+      _place_product_in_project_v2_00446_impl: {
+        Args: { p_request: Json }
+        Returns: Json
+      }
       _plan_room_canonical_json: { Args: { p_value: Json }; Returns: string }
       _plan_room_rev_letter: { Args: { p_n: number }; Returns: string }
       _plan_room_set_doc_visibility: {
@@ -25621,6 +27152,14 @@ export type Database = {
           follows_phase_id: string
           sort_order: number
         }[]
+      }
+      _prepare_project_review_delivery_00442_impl: {
+        Args: {
+          p_actor_id: string
+          p_edition_id: string
+          p_idempotency_key: string
+        }
+        Returns: Json
       }
       _prepare_spec_book_issue_00403: {
         Args: {
@@ -25691,9 +27230,21 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      _publish_project_review_00446_impl: {
+        Args: { p_request: Json }
+        Returns: Json
+      }
+      _publish_project_review_00448_impl: {
+        Args: { p_request: Json }
+        Returns: Json
+      }
       _recompute_proposal_total_locked: {
         Args: { p_proposal_id: string }
         Returns: number
+      }
+      _reconcile_activated_ffe_placements: {
+        Args: { p_project_id: string }
+        Returns: undefined
       }
       _record_invoice_payment_authorized_legacy_00397: {
         Args: {
@@ -25736,6 +27287,16 @@ export type Database = {
           p_proposal_id: string
           p_scan_document_id?: string
           p_signed_name: string
+        }
+        Returns: Json
+      }
+      _record_project_ffe_receipt_batch_00446_impl: {
+        Args: {
+          p_lines: Json
+          p_notes?: string
+          p_outcome: Database["public"]["Enums"]["receiving_inspection_outcome"]
+          p_photo_asset_ids?: string[]
+          p_purchase_order_id: string
         }
         Returns: Json
       }
@@ -26007,6 +27568,22 @@ export type Database = {
           p_studio: Json
           p_verified_at: string
         }
+        Returns: Json
+      }
+      _stage_project_ffe_import_00447_impl: {
+        Args: { p_request: Json }
+        Returns: Json
+      }
+      _start_purchase_order_change_00446_impl: {
+        Args: { p_request: Json }
+        Returns: Json
+      }
+      _start_purchase_order_change_00451_impl: {
+        Args: { p_request: Json }
+        Returns: Json
+      }
+      _start_purchase_order_change_00452_impl: {
+        Args: { p_request: Json }
         Returns: Json
       }
       _sync_proposal_send_email_log: {
@@ -26379,6 +27956,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      archive_project_selection: {
+        Args: { p_ffe_item_id: string; p_reason: string }
+        Returns: Json
+      }
       assert_client_decision_reference_integrity: {
         Args: {
           p_blocks_milestone_id: string
@@ -26401,10 +27982,12 @@ export type Database = {
           acknowledged_at: string | null
           confirmed_eta: string | null
           created_at: string
+          created_by: string | null
           delivered_date: string | null
           designer_id: string
           id: string
           is_patina_catalog: boolean
+          needs_repricing: boolean
           notes: string | null
           payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
           po_document_path: string | null
@@ -26425,6 +28008,23 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      authorize_project_review_media: {
+        Args: { p_actor_id: string; p_edition_id: string }
+        Returns: Json
+      }
+      authorize_project_review_media_source: {
+        Args: {
+          p_actor_id: string
+          p_project_id: string
+          p_source_bucket: string
+          p_source_path: string
+        }
+        Returns: Json
+      }
+      batch_place_library_products_in_project: {
+        Args: { p_request: Json }
+        Returns: Json
       }
       begin_direction_from_discovery: {
         Args: { p_designer_client_id: string }
@@ -26805,6 +28405,10 @@ export type Database = {
         }
         Returns: Json
       }
+      commit_project_ffe_import: {
+        Args: { p_batch_id: string; p_decisions?: Json }
+        Returns: Json
+      }
       commit_schedule_edit: {
         Args: { p_edits: Json; p_project_id: string; p_reason?: string }
         Returns: number
@@ -27016,6 +28620,7 @@ export type Database = {
         }
         Returns: Json
       }
+      create_named_project_need: { Args: { p_request: Json }; Returns: Json }
       create_plan_issue: {
         Args: {
           p_idempotency_key: string
@@ -27044,6 +28649,7 @@ export type Database = {
         }
         Returns: Json
       }
+      create_project_board: { Args: { p_request: Json }; Returns: Json }
       create_project_phase: {
         Args: {
           p_anchor_date?: string
@@ -27158,10 +28764,12 @@ export type Database = {
           acknowledged_at: string | null
           confirmed_eta: string | null
           created_at: string
+          created_by: string | null
           delivered_date: string | null
           designer_id: string
           id: string
           is_patina_catalog: boolean
+          needs_repricing: boolean
           notes: string | null
           payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
           po_document_path: string | null
@@ -27284,10 +28892,12 @@ export type Database = {
           canvas_height: number
           canvas_width: number
           cover_image_url: string | null
+          cover_review_media_asset_id: string | null
           created_at: string
           id: string
           name: string
           project_id: string | null
+          project_room_id: string | null
           proposal_id: string | null
           scope_room_id: string | null
           sections: Json
@@ -27460,6 +29070,7 @@ export type Database = {
           decision_id: string | null
           ffe_item_id: string | null
           id: string
+          project_review_item_id: string | null
           proposal_item_id: string | null
           resolved_at: string | null
           resolved_by: string | null
@@ -27973,6 +29584,10 @@ export type Database = {
         Args: { p_proposal_id: string }
         Returns: Json
       }
+      get_client_project_review_bundle: {
+        Args: { p_edition_id: string }
+        Returns: Json
+      }
       get_client_project_selections: {
         Args: { p_project_id: string }
         Returns: Json
@@ -28150,6 +29765,18 @@ export type Database = {
       }
       get_project_decision_reviews: {
         Args: { p_project_id: string }
+        Returns: Json
+      }
+      get_project_ffe_extract_upload: {
+        Args: { p_actor_id: string; p_asset_id: string; p_project_id: string }
+        Returns: Json
+      }
+      get_project_ffe_readiness: {
+        Args: { p_ffe_item_id: string }
+        Returns: Json
+      }
+      get_project_review_media_manifest: {
+        Args: { p_client_id: string; p_edition_id: string }
         Returns: Json
       }
       get_project_workflow: {
@@ -28528,10 +30155,12 @@ export type Database = {
           acknowledged_at: string | null
           confirmed_eta: string | null
           created_at: string
+          created_by: string | null
           delivered_date: string | null
           designer_id: string
           id: string
           is_patina_catalog: boolean
+          needs_repricing: boolean
           notes: string | null
           payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
           po_document_path: string | null
@@ -28606,6 +30235,24 @@ export type Database = {
         }
       }
       mark_feedback_seen: { Args: { p_id: string }; Returns: undefined }
+      mark_project_review_delivery_sent:
+        | {
+            Args: {
+              p_actor_id: string
+              p_attempt_id: string
+              p_error_code: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_actor_id: string
+              p_attempt_id: string
+              p_error_code?: string
+              p_provider_message_id?: string
+            }
+            Returns: Json
+          }
       mark_proposal_viewed: { Args: { p_proposal_id: string }; Returns: Json }
       mark_room_scan_geometry_error: {
         Args: { p_error: string; p_scan_id: string }
@@ -28748,6 +30395,7 @@ export type Database = {
         }
         Returns: Json
       }
+      place_product_in_project_v2: { Args: { p_request: Json }; Returns: Json }
       po_status_to_ffe_stage: { Args: { p_po_status: string }; Returns: string }
       prepare_configuration_quote_request: {
         Args: {
@@ -28756,6 +30404,33 @@ export type Database = {
           p_scope?: string
           p_timeline?: string
           p_vendor_id: string
+        }
+        Returns: Json
+      }
+      prepare_project_review_delivery: {
+        Args: {
+          p_actor_id: string
+          p_edition_id: string
+          p_idempotency_key: string
+        }
+        Returns: Json
+      }
+      prepare_project_review_media_asset: {
+        Args: {
+          p_actor_id: string
+          p_content_type: string
+          p_derivative_bucket: string
+          p_derivative_checksum: string
+          p_derivative_kind: string
+          p_derivative_path: string
+          p_derivative_size: number
+          p_height: number
+          p_project_id: string
+          p_source_bucket: string
+          p_source_checksum: string
+          p_source_path: string
+          p_source_size: number
+          p_width: number
         }
         Returns: Json
       }
@@ -28790,6 +30465,10 @@ export type Database = {
         Returns: Json
       }
       promote_batch_to_studio: { Args: { p_items: Json }; Returns: string[] }
+      promote_board_reference_to_selection: {
+        Args: { p_board_item_id: string; p_request: Json }
+        Returns: Json
+      }
       promote_configuration_to_library: {
         Args: { p_configuration_id: string; p_name?: string }
         Returns: Json
@@ -28859,6 +30538,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      publish_project_review: { Args: { p_request: Json }; Returns: Json }
       react_to_feedback: {
         Args: { p_emoji: string; p_id: string }
         Returns: {
@@ -29018,6 +30698,30 @@ export type Database = {
         }
         Returns: Json
       }
+      record_project_ffe_receipt: {
+        Args: {
+          p_ffe_item_id: string
+          p_notes?: string
+          p_outcome: Database["public"]["Enums"]["receiving_inspection_outcome"]
+          p_photo_asset_ids?: string[]
+          p_received_quantity: number
+        }
+        Returns: Json
+      }
+      record_project_ffe_receipt_batch: {
+        Args: {
+          p_lines: Json
+          p_notes?: string
+          p_outcome: Database["public"]["Enums"]["receiving_inspection_outcome"]
+          p_photo_asset_ids?: string[]
+          p_purchase_order_id: string
+        }
+        Returns: Json
+      }
+      record_project_review_feedback: {
+        Args: { p_body?: string; p_review_item_id: string; p_verdict: string }
+        Returns: Json
+      }
       record_trade_scope_substantial_completion: {
         Args: { p_proposal_id: string }
         Returns: Json
@@ -29039,6 +30743,20 @@ export type Database = {
       }
       refresh_product_behavior_stats: { Args: never; Returns: undefined }
       refresh_style_centroids: { Args: never; Returns: number }
+      register_project_ffe_working_media_source: {
+        Args: {
+          p_actor_id: string
+          p_bucket: string
+          p_checksum_sha256: string
+          p_content_type: string
+          p_ffe_item_id?: string
+          p_media_kind: string
+          p_path: string
+          p_project_id: string
+          p_size_bytes: number
+        }
+        Returns: Json
+      }
       reissue_plan_transmittal_link: {
         Args: { p_transmittal_id: string }
         Returns: Json
@@ -29140,6 +30858,7 @@ export type Database = {
           decision_id: string | null
           ffe_item_id: string | null
           id: string
+          project_review_item_id: string | null
           proposal_item_id: string | null
           resolved_at: string | null
           resolved_by: string | null
@@ -29206,6 +30925,14 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      reprice_replacement_purchase_order: {
+        Args: {
+          p_custom_payments?: Json
+          p_lines: Json
+          p_purchase_order_id: string
+        }
+        Returns: Json
       }
       request_proposal_change: {
         Args: { p_feedback: string; p_proposal_id: string }
@@ -29325,6 +31052,7 @@ export type Database = {
           decision_id: string | null
           ffe_item_id: string | null
           id: string
+          project_review_item_id: string | null
           proposal_item_id: string | null
           resolved_at: string | null
           resolved_by: string | null
@@ -29429,6 +31157,10 @@ export type Database = {
       revoke_field_link: { Args: { p_token_id: string }; Returns: boolean }
       revoke_plan_transmittal_link: {
         Args: { p_transmittal_id: string }
+        Returns: Json
+      }
+      revoke_project_review_access: {
+        Args: { p_edition_id: string; p_reason: string }
         Returns: Json
       }
       revoke_role_from_user: {
@@ -30093,6 +31825,17 @@ export type Database = {
           object_path: string
         }[]
       }
+      stage_project_ffe_document_extraction: {
+        Args: {
+          p_actor_id: string
+          p_asset_id: string
+          p_file_hash: string
+          p_project_id: string
+          p_rows: Json
+        }
+        Returns: Json
+      }
+      stage_project_ffe_import: { Args: { p_request: Json }; Returns: Json }
       stamp_client_decision_reminder: {
         Args: { p_decision_id: string }
         Returns: {
@@ -30189,6 +31932,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      start_purchase_order_change: { Args: { p_request: Json }; Returns: Json }
       stripe_balance_tx_ingest: {
         Args: { p_cursor: string; p_txns: Json }
         Returns: Json
@@ -30280,6 +32024,7 @@ export type Database = {
         }
         Returns: Json
       }
+      supersede_project_selection: { Args: { p_request: Json }; Returns: Json }
       supersede_unsigned_legacy_proposals: {
         Args: {
           p_proposal_ids: string[]
@@ -30369,6 +32114,7 @@ export type Database = {
         }
         Returns: Json
       }
+      triage_project_ffe_items: { Args: { p_request: Json }; Returns: Json }
       update_client_decision: {
         Args: {
           p_decision_id: string
@@ -31016,3 +32762,4 @@ export const Constants = {
     },
   },
 } as const
+

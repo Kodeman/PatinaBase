@@ -1,4 +1,4 @@
-export type CaptureExtensionInstallMode = "unpacked" | "webstore";
+export type CaptureExtensionInstallMode = "under_review" | "webstore";
 
 export interface CaptureExtensionConfig {
   mode: CaptureExtensionInstallMode | null;
@@ -9,7 +9,7 @@ export interface CaptureExtensionConfig {
 function isInstallMode(
   value: string | undefined,
 ): value is CaptureExtensionInstallMode {
-  return value === "unpacked" || value === "webstore";
+  return value === "under_review" || value === "webstore";
 }
 
 function safeInstallUrl(value: string | undefined): string | null {
@@ -17,14 +17,18 @@ function safeInstallUrl(value: string | undefined): string | null {
 
   try {
     const url = new URL(value);
-    return url.protocol === "https:" ? url.toString() : null;
+    return url.protocol === "https:" && url.hostname === "chromewebstore.google.com" &&
+        url.port === "" && url.username === "" && url.password === "" &&
+        url.search === "" && url.hash === "" && /^\/detail\/[^/]+\/[a-p]{32}\/?$/.test(url.pathname)
+      ? url.toString()
+      : null;
   } catch {
     return null;
   }
 }
 
 /**
- * Public build-time configuration for the selected-designer extension beta.
+ * Public build-time configuration for the reviewed Chrome distribution.
  * Invalid or incomplete values fail closed so the portal never emits a broken
  * or unsafe install link.
  */
@@ -38,6 +42,6 @@ export function getCaptureExtensionConfig(): CaptureExtensionConfig {
   return {
     mode,
     installUrl,
-    isConfigured: mode !== null && installUrl !== null,
+    isConfigured: mode === "under_review" || (mode === "webstore" && installUrl !== null),
   };
 }

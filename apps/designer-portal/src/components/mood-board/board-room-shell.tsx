@@ -23,6 +23,8 @@ import {
   useAddProposalItem,
   useBoard,
   useBoardFeedback,
+  useApplyBoardRoomState,
+  usePlaceProductInProjectV2,
   useProject,
   useProposal,
   useProposalScheduleItems,
@@ -56,8 +58,15 @@ import {
   buildResolvedMoodBoardUrlItem,
   moodBoardUrlFallbackNotice,
 } from '@/lib/mood-board/url-unfurl';
-import { generateAndUploadMoodBoardCover } from '@/lib/mood-board-assets/board-cover';
-import { prepareAndUploadBoardImages } from '@/lib/mood-board-assets/upload-board-assets';
+import {
+  generateAndUploadMoodBoardCover,
+  createMoodBoardCoverStorage,
+} from '@/lib/mood-board-assets/board-cover';
+import {
+  createBoardAssetStorage,
+  prepareAndUploadBoardImages,
+} from '@/lib/mood-board-assets/upload-board-assets';
+import { prepareProjectReviewMedia } from '@/lib/mood-board-assets/project-review-media';
 import { buildSendToScheduleArgs, findScheduleTwin } from '@/lib/scope/board-schedule';
 import {
   createMoodBoardCoverLifecycle,
@@ -295,12 +304,25 @@ function BoardRoomSurface({
   const [snapToGrid, setSnapToGrid] = useState(false);
   const [tidySession, setTidySession] = useState<TidySpacingSession | null>(null);
   const upsertBoard = useUpsertBoard();
+  const applyBoardState = useApplyBoardRoomState();
   const boardQuery = useBoard(api.state?.boardId);
   const proposalQuery = useProposal(owner.kind === 'proposal' ? owner.id : '');
   const projectQuery = useProject(owner.kind === 'project' ? owner.id : '');
   const sourceProposalId = owner.kind === 'proposal'
     ? owner.id
     : projectQuery.data?.proposal_id ?? null;
+  const unpreparedReviewMediaCount = useMemo(() => {
+    if (owner.kind !== 'project') return 0;
+    const itemCount = (api.state?.items ?? []).filter((item) =>
+      !item.projectFfeItemId &&
+      (item.type === 'image' || item.type === 'room_scan') &&
+      Boolean(item.imageUrl) &&
+      typeof item.data?.review_media_asset_id !== 'string').length;
+    const coverCount = boardQuery.data?.cover_image_url &&
+      !boardQuery.data.cover_review_media_asset_id ? 1 : 0;
+    return itemCount + coverCount;
+  }, [api.state?.items, boardQuery.data?.cover_image_url,
+    boardQuery.data?.cover_review_media_asset_id, owner.kind]);
   const scheduleQuery = useProposalScheduleItems(owner.kind === 'proposal' ? owner.id : undefined);
   const addScheduleItem = useAddProposalItem();
   const feedbackQuery = useBoardFeedback(owner.kind === 'proposal' ? owner.id : undefined);
@@ -311,6 +333,7 @@ function BoardRoomSurface({
   const presentStartedRef = useRef<number | null>(null);
   const previousModeRef = useRef(api.mode);
   const upsertCoverRef = useRef(upsertBoard.mutateAsync);
+  const applyBoardStateRef = useRef(applyBoardState.mutateAsync);
   const preferenceScope = user?.id;
   const railPreferenceKey = preferenceScope ? `${RAIL_COLLAPSED_KEY}:${preferenceScope}` : null;
   const gridPreferenceKey = preferenceScope ? `${GRID_VISIBLE_KEY}:${preferenceScope}` : null;
@@ -327,17 +350,55 @@ function BoardRoomSurface({
     onConsumeExternalNotice();
   }, [externalNotice, onConsumeExternalNotice]);
   upsertCoverRef.current = upsertBoard.mutateAsync;
+  applyBoardStateRef.current = applyBoardState.mutateAsync;
   coverWriteRef.current = async (snapshot) => {
+    const coverStorage = createMoodBoardCoverStorage(owner.kind === 'project'
+      ? { bucket: 'project-ffe-working' }
+      : {});
     const generated = await generateAndUploadMoodBoardCover({
       ownerId: owner.id,
       boardId: snapshot.boardId,
       input: snapshot.input,
+      storage: coverStorage,
     });
-    await upsertCoverRef.current({
-      boardId: snapshot.boardId,
-      owner: { kind: owner.kind, id: owner.id },
-      coverImageUrl: generated.url,
-    });
+    let reviewMediaPrepared = false;
+    try {
+      if (owner.kind === 'project') {
+        if (!api.state || api.state.boardId !== snapshot.boardId) {
+          throw new Error('The active project board is unavailable.');
+        }
+        const reviewMedia = await prepareProjectReviewMedia({
+          projectId: owner.id,
+          sourcePath: generated.path,
+        });
+        reviewMediaPrepared = true;
+        await applyBoardStateRef.current({
+          boardId: snapshot.boardId,
+          owner,
+          state: {
+            name: api.state.name,
+            canvasWidth: api.state.canvasWidth,
+            canvasHeight: api.state.canvasHeight,
+            backgroundColor: api.state.backgroundColor,
+            coverImageUrl: generated.path,
+            coverReviewMediaAssetId: reviewMedia.assetId,
+            sections: api.state.sections,
+            items: api.state.items,
+          },
+        });
+      } else {
+        await upsertCoverRef.current({
+          boardId: snapshot.boardId,
+          owner,
+          coverImageUrl: generated.url,
+        });
+      }
+    } catch (error) {
+      if (owner.kind === 'project' && !reviewMediaPrepared) {
+        await coverStorage.remove(generated.path).catch(() => undefined);
+      }
+      throw error;
+    }
   };
   if (coverLifecycleRef.current === null) {
     coverLifecycleRef.current = createMoodBoardCoverLifecycle({
@@ -495,18 +556,43 @@ function BoardRoomSurface({
     setSurfaceError(null);
     try {
       validateBoardImageFiles([file]);
+      const projectStorage = owner.kind === 'project'
+        ? createBoardAssetStorage({ bucket: 'project-ffe-working' })
+        : null;
       const [asset] = await prepareAndUploadBoardImages({
         ownerId: owner.id,
         boardId: api.state.boardId,
         files: [file],
+        ...(projectStorage ? { storage: projectStorage } : {}),
       });
       if (!asset) throw new Error('The replacement image was not created.');
+      let reviewMediaAssetId: string | null = null;
+      if (owner.kind === 'project') {
+        try {
+          reviewMediaAssetId = (await prepareProjectReviewMedia({
+            projectId: owner.id,
+            sourcePath: asset.assets.display.path,
+          })).assetId;
+        } catch (error) {
+          await projectStorage?.remove([
+            asset.assets.display.path,
+            asset.assets.thumbnail.path,
+          ]).catch(() => undefined);
+          throw error;
+        }
+      }
       const current = api.state.items.find((item) => item.id === itemId);
       if (!current) throw new Error('That pin is no longer on the board.');
       const data = {
         ...(current.data ?? {}),
         image_url: asset.image_url,
         thumbnail_url: asset.data.thumbnail_url,
+        ...(owner.kind === 'project' ? {
+          working_image_path: asset.assets.display.path,
+          working_thumbnail_path: asset.assets.thumbnail.path,
+          review_media_asset_id: reviewMediaAssetId,
+          review_media_status: 'prepared' as const,
+        } : {}),
       };
       delete data.original_image_url;
       api.updateItem(itemId, { imageUrl: asset.image_url, data });
@@ -514,7 +600,7 @@ function BoardRoomSurface({
     } catch (cause) {
       setSurfaceError(cause instanceof Error ? cause.message : 'The image could not be replaced.');
     }
-  }, [api, owner.id]);
+  }, [api, owner]);
 
   useEffect(() => {
     const handlers: BoardRoomItemActions = {
@@ -823,7 +909,9 @@ function BoardRoomSurface({
         )}
 
         <div className="flex shrink-0 items-center gap-1">
-          <Button variant="ghost" size="sm" className="min-h-11 min-w-11" onClick={() => setShareOpen(true)}>Share</Button>
+          {owner.kind === 'proposal' && (
+            <Button variant="ghost" size="sm" className="min-h-11 min-w-11" onClick={() => setShareOpen(true)}>Share</Button>
+          )}
           {api.mode === 'edit' && <Button variant="ghost" size="sm" className="hidden min-h-11 min-w-11 sm:inline-flex" onClick={() => setExportOpen(true)}>Export</Button>}
           <Button variant={api.mode === 'present' ? 'secondary' : 'ghost'} size="sm" className="min-h-11 min-w-11" onClick={api.togglePresent}>
             {api.mode === 'present' ? 'Edit' : 'Present'}
@@ -876,6 +964,12 @@ function BoardRoomSurface({
         </div>
       )}
 
+      {unpreparedReviewMediaCount > 0 && !surfaceError && !api.persistenceError && (
+        <div role="status" className="relative z-40 shrink-0 border-b border-[var(--color-clay)] bg-[var(--bg-surface)] px-4 py-2 text-[11px] text-[var(--color-clay)]">
+          {unpreparedReviewMediaCount} visual {unpreparedReviewMediaCount === 1 ? 'reference needs' : 'references need'} review-media preparation before this board can be published.
+        </div>
+      )}
+
       {dropUploadProgress && (
         <div role="status" className="relative z-40 shrink-0 border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-4 py-2 text-[11px] text-[var(--text-muted)]">
           Uploading {dropUploadProgress}
@@ -901,6 +995,7 @@ function BoardRoomSurface({
             <BoardAddRail
               owner={owner}
               boardId={state.boardId}
+              projectRoomId={owner.kind === 'project' ? boardQuery.data?.project_room_id ?? null : null}
               items={state.items}
               preferenceScope={preferenceScope}
               nextPoint={nextPoint}
@@ -973,7 +1068,7 @@ function BoardRoomSurface({
           <BoardRoomInspector
             api={api}
             owner={owner}
-            scopeRoomId={boardQuery.data?.scope_room_id ?? null}
+            scopeRoomId={boardQuery.data?.project_room_id ?? boardQuery.data?.scope_room_id ?? null}
             onOpenProduct={openProduct}
             onReplaceImage={replaceImage}
           />
@@ -988,15 +1083,17 @@ function BoardRoomSurface({
             : '')}
       </div>
 
-      <BoardShareDialog
-        boardId={state.boardId}
-        boardName={state.name}
-        owner={owner}
-        sourceProposalId={sourceProposalId}
-        open={shareOpen}
-        onOpenChange={setShareOpen}
-        flush={api.flushPending}
-      />
+      {owner.kind === 'proposal' && (
+        <BoardShareDialog
+          boardId={state.boardId}
+          boardName={state.name}
+          owner={owner}
+          sourceProposalId={sourceProposalId}
+          open={shareOpen}
+          onOpenChange={setShareOpen}
+          flush={api.flushPending}
+        />
+      )}
       <BoardExportDialog
         boardId={state.boardId}
         boardName={state.name}
@@ -1031,6 +1128,8 @@ export function MoodBoardRoom({
   const exitHandlerRef = useRef<(() => Promise<void>) | null>(null);
   const deleteGuardRef = useRef<((items: readonly EditableMoodBoardItem[]) => boolean) | null>(null);
   const unfurl = useMoodBoardUrlUnfurl();
+  const boardQuery = useBoard(boardId);
+  const placeProjectProduct = usePlaceProductInProjectV2();
   const [dropUploadProgress, setDropUploadProgress] = useState<string | null>(null);
   const [externalNotice, setExternalNotice] = useState<string | null>(null);
   const metricsRef = useRef<SessionMetrics>({
@@ -1125,6 +1224,7 @@ export function MoodBoardRoom({
       try {
         return await uploadFilesAsBoardItems({
           ownerId: owner.id,
+          ownerKind: owner.kind,
           boardId,
           files: commit.files,
           point: { x: commit.point.x - 140, y: commit.point.y - 100 },
@@ -1143,6 +1243,38 @@ export function MoodBoardRoom({
       const lead = parsed?.items[0]?.item;
       if (!parsed || !lead) return;
       const height = lead.height ?? lead.width * (lead.type === 'image' || lead.type === 'room_scan' ? 0.72 : 1.15);
+      if (owner.kind === 'project' && lead.type === 'capture' && lead.captureId) {
+        const x = commit.point.x - lead.width / 2;
+        const y = commit.point.y - height / 2;
+        const projectRoomId = boardQuery.data?.project_room_id ?? null;
+        const response = await placeProjectProduct.mutateAsync({
+          projectId: owner.id,
+          productId: lead.productId ?? null,
+          captureId: lead.captureId,
+          itemType: 'fixed',
+          roleConfigurationIdentity: 'default',
+          assignmentScope: projectRoomId ? 'room' : 'unassigned',
+          roomId: projectRoomId,
+          boardId,
+          disposition: 'candidate',
+          duplicateMode: 'reuse',
+          placement: { x, y, width: lead.width },
+          idempotencyKey: `capture-drag:${boardId}:${lead.id}`,
+        });
+        if (!response.selectionId || !response.placementId) {
+          throw new Error('The captured product was held and was not added to the board.');
+        }
+        const placedItem: EditableMoodBoardItem = {
+          ...lead,
+          id: response.placementId,
+          type: 'product',
+          x,
+          y,
+          height,
+          projectFfeItemId: response.selectionId,
+        };
+        return [placedItem];
+      }
       await api.pasteAt(
         { x: commit.point.x - lead.width / 2, y: commit.point.y - height / 2 },
         railEnvelope,
@@ -1163,7 +1295,7 @@ export function MoodBoardRoom({
     } catch {
       return;
     }
-  }, [boardId, owner.id, resolveUrl]);
+  }, [boardId, boardQuery.data?.project_room_id, owner, placeProjectProduct, resolveUrl]);
 
   const pasteImages = useCallback(async (files: readonly File[], point: BoardPoint) => {
     const api = apiRef.current;
@@ -1171,13 +1303,14 @@ export function MoodBoardRoom({
     const startZ = Math.max(-1, ...api.state.items.map((item) => item.zIndex ?? 0)) + 1;
     const items = await uploadFilesAsBoardItems({
       ownerId: owner.id,
+      ownerKind: owner.kind,
       boardId,
       files,
       point: { x: point.x - 140, y: point.y - 100 },
       startZ,
     });
     return items;
-  }, [boardId, owner.id]);
+  }, [boardId, owner.id, owner.kind]);
 
   return (
     <BoardRoomController

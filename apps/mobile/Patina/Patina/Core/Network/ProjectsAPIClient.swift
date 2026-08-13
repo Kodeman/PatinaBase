@@ -2,10 +2,9 @@
 //  ProjectsAPIClient.swift
 //  Patina
 //
-//  Reads projects/proposals/phases/milestones/FF&E rows from Supabase.
-//  All access is governed by RLS — clients see only the rows they're tied
-//  to via `projects.client_id`; designers see rows where they're the
-//  `designer_id` or a team member. We never write from iOS.
+//  Reads projects/proposals/phases/milestones and client-safe FF&E projections
+//  from Supabase. FF&E never reads project_ffe_items directly: published
+//  selections and review editions are server-curated RPC snapshots.
 //
 
 import Foundation
@@ -54,12 +53,19 @@ public struct RemotePaymentMilestone: Codable, Sendable, Identifiable {
 
 public struct RemoteFFEItem: Codable, Sendable, Identifiable {
     public let id: String
-    public let project_id: String
     public let name: String?
-    public let status: String?
-    public let line_total_cents: Int?
-    public let category: String?
-    public let qty: Int?
+    public let logisticsStatus: String?
+    public let client_line_total_cents: Int?
+    public let room_name: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, logisticsStatus
+        case client_line_total_cents = "clientLineTotalCents"
+        case room_name = "roomName"
+    }
+}
+public struct RemoteClientSelectionsBundle: Codable, Sendable {
+    public let selections: [RemoteFFEItem]
 }
 
 // MARK: - Client
@@ -134,11 +140,19 @@ public actor ProjectsAPIClient {
         ])
     }
 
-    public func listFFEItems(projectId: String) async throws -> [RemoteFFEItem] {
-        try await get(path: "project_ffe_items", queryItems: [
-            URLQueryItem(name: "select", value: "*"),
-            URLQueryItem(name: "project_id", value: "eq.\(projectId)"),
-            URLQueryItem(name: "order", value: "category.asc"),
-        ])
+    private struct ClientProjectParams: Encodable {
+        let p_project_id: String
     }
+
+    /// Curated selection projection. This intentionally replaces the raw
+    /// project_ffe_items REST query so older builds fail closed after RLS
+    /// lockdown rather than retaining access to studio working rows.
+    public func listFFEItems(projectId: String) async throws -> [RemoteFFEItem] {
+        let bundle: RemoteClientSelectionsBundle = try await SupabaseClientManager.shared.client
+            .rpc("get_client_project_selections", params: ClientProjectParams(p_project_id: projectId))
+            .execute()
+            .value
+        return bundle.selections
+    }
+
 }

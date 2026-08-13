@@ -192,7 +192,7 @@ function selection(over: Partial<Record<string, unknown>> = {}) {
     clientUnitPriceCents: 840000,
     clientLineTotalCents: 840000,
     itemType: 'furniture',
-    status: 'production' as FFEStageKey,
+    logisticsStatus: 'production' as FFEStageKey,
     tradeJourney: null,
     allowance: null,
     instrument: null,
@@ -208,7 +208,7 @@ const TRADE_READY = selection({
   kind: 'trade',
   name: 'Paintwork — library & stair hall',
   clientLineTotalCents: 720000,
-  status: 'approved' as FFEStageKey,
+  logisticsStatus: 'approved' as FFEStageKey,
   tradeJourney: 'substantially_complete',
   instrument: { documentId: 'doc-2', proposalId: 'prop-9', name: 'Trade scope', executedAt: null },
 });
@@ -708,8 +708,8 @@ describe('TheMaking — the open chapter', () => {
       data: {
         origin: 'commercial',
         selections: [
-          selection({ id: 'a', status: 'installed' as FFEStageKey }),
-          selection({ id: 'b', status: 'installed' as FFEStageKey }),
+          selection({ id: 'a', logisticsStatus: 'installed' as FFEStageKey }),
+          selection({ id: 'b', logisticsStatus: 'installed' as FFEStageKey }),
         ],
       },
       isPending: false,
@@ -729,9 +729,9 @@ describe('TheMaking — the open chapter', () => {
       data: {
         origin: 'commercial',
         selections: [
-          selection({ id: 'a', name: 'Agreed chair', status: 'approved' as FFEStageKey }),
-          selection({ id: 'b', name: 'Shipped rug', status: 'shipped' as FFEStageKey }),
-          selection({ id: 'c', name: 'Credenza', status: 'production' as FFEStageKey }),
+          selection({ id: 'a', name: 'Agreed chair', logisticsStatus: 'approved' as FFEStageKey }),
+          selection({ id: 'b', name: 'Shipped rug', logisticsStatus: 'shipped' as FFEStageKey }),
+          selection({ id: 'c', name: 'Credenza', logisticsStatus: 'production' as FFEStageKey }),
         ],
       },
       isPending: false,

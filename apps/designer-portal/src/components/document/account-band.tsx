@@ -12,7 +12,7 @@
  * STUDIO EYES ONLY — excluded from the client mirror, enforced by CI test.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   exportAccountsQbo,
   useAccountPage,
@@ -163,14 +163,24 @@ function MilestoneRow({ m, projectId }: { m: AccountMilestone; projectId: string
 export function AccountBand({
   projectId,
   clientName,
+  activeSection,
 }: {
   projectId: string;
   clientName?: string | null;
+  activeSection?: SectionKey | null;
 }) {
   const { data, isLoading, isError, refetch } = useAccountPage(projectId);
   const [open, setOpen] = useState(false);
   const [exportNote, setExportNote] = useState<string | null>(null);
   const [amendmentOpen, setAmendmentOpen] = useState(false);
+  const changeOnly = activeSection === 'install' || activeSection === 'care';
+
+  useEffect(() => {
+    if (!changeOnly) return;
+    const openChange = () => setAmendmentOpen(true);
+    window.addEventListener('document:open-project-change', openChange);
+    return () => window.removeEventListener('document:open-project-change', openChange);
+  }, [changeOnly]);
 
   if (isLoading) {
     return (
@@ -378,7 +388,7 @@ export function AccountBand({
               variant="secondary"
               onClick={() => setAmendmentOpen(true)}
             >
-              Amendment
+              {changeOnly ? 'Add a change' : 'Amendment'}
             </DocumentAction>
             {exportNote && (
               <span className="font-mono text-[8.5px] text-[var(--text-muted)]">{exportNote}</span>

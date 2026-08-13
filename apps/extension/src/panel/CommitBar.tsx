@@ -45,7 +45,7 @@ export function CommitBar() {
   const valid = selectValidation(state).isValid;
   const placementRoute = routing.specBookPlacement;
   const hasProjectPlacement =
-    routing.specBookPlacementPilot && placementRoute !== null && placementRoute.kind !== 'library';
+    placementRoute !== null && placementRoute.kind !== 'library';
   const disabled =
     !valid || !routing.specBookPlacementValid || io.isSaving || !user || busy !== null;
 
@@ -55,20 +55,25 @@ export function CommitBar() {
     setBusy(kind);
     dispatch({ type: 'SAVE_START', target });
     try {
-      const productId =
-        io.pendingPlacementProductId && hasProjectPlacement
-          ? await retrySpecBookPlacement(io.pendingPlacementProductId, draft, routing)
-          : kind === 'reuse'
-            ? await reuseProductForSpecBookPlacement(dedup.match!.id, draft, routing)
-            : kind === 'library'
-              ? await saveToLibrary(draft, routing, user)
-              : kind === 'inbox'
-                ? await saveToInbox(draft, routing, user)
-                : await updateExisting(dedup.match!.id, draft, routing, user);
+      const duplicateMode = kind === 'library' && dedup.match ? 'create' as const : 'reuse' as const;
+      let productId: string;
+      let placementOutcome = null;
+      if (io.pendingPlacementProductId && hasProjectPlacement) {
+        ({ productId, placementOutcome } = await retrySpecBookPlacement(io.pendingPlacementProductId, draft, routing, duplicateMode));
+      } else if (kind === 'reuse') {
+        ({ productId, placementOutcome } = await reuseProductForSpecBookPlacement(dedup.match!.id, draft, routing));
+      } else if (kind === 'library') {
+        ({ productId, placementOutcome } = await saveToLibrary(draft, routing, user, duplicateMode));
+      } else if (kind === 'update') {
+        ({ productId, placementOutcome } = await updateExisting(dedup.match!.id, draft, routing, user));
+      } else {
+        productId = await saveToInbox(draft, routing, user);
+      }
       dispatch({
         type: 'SAVE_SUCCESS',
         productId,
         landed: kind === 'inbox' ? 'inbox' : 'library',
+        placementOutcome,
       });
     } catch (e) {
       dispatch({
@@ -164,7 +169,7 @@ export function CommitBar() {
       )}
       <button
         type="button"
-        disabled={!valid || io.isSaving || !user}
+        disabled={!valid || !routing.specBookPlacementValid || io.isSaving || !user}
         onClick={() => dispatch({ type: 'OPEN_OVERLAY', overlay: 'DEC' })}
         className="w-full py-1 text-center font-mono text-[0.62rem] uppercase tracking-[0.08em] text-ink-soft transition-colors hover:text-brass disabled:opacity-40"
       >

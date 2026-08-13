@@ -13,7 +13,7 @@ import {
 } from '../../lib/spec-book-placement';
 
 export function RouteCommitRegion() {
-  const { routing, draft } = useCapture();
+  const { draft } = useCapture();
   const dispatch = useCaptureDispatch();
   const { projects, styles } = useReferenceData();
   const [stickyContext, setStickyContext] = useState<SpecBookPlacementContext | null>(null);
@@ -29,9 +29,6 @@ export function RouteCommitRegion() {
   }, []);
 
   if (!draft) return null;
-
-  const destValue =
-    routing.destination.type === 'personal' ? 'personal' : routing.destination.projectId;
 
   return (
     <section className="space-y-2 border-t border-line pt-3">
@@ -55,33 +52,12 @@ export function RouteCommitRegion() {
             dispatch({
               type: 'SPEC_BOOK_PLACEMENT_SET',
               route,
-              pilot: true,
               valid,
             })
           }
         />
       ) : (
-        <select
-          value={destValue}
-          onChange={(e) => {
-            const v = e.target.value;
-            dispatch({
-              type: 'DESTINATION_SET',
-              value:
-                v === 'personal'
-                  ? { type: 'personal' }
-                  : { type: 'project-room', projectId: v, roomId: null },
-            });
-          }}
-          className="w-full rounded-md border border-line bg-paper-3 px-2.5 py-2 text-[0.85rem] text-ink outline-none focus:border-verdigris"
-        >
-          <option value="personal">Personal Library</option>
-          {projects.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
+        <div role="status" aria-label="Loading project placement" className="h-11 animate-pulse rounded-md border border-line bg-paper-3" />
       )}
 
       {styles.length > 0 && (

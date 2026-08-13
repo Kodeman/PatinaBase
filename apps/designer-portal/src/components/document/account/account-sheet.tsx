@@ -103,8 +103,6 @@ export function AccountSheet() {
   // today — matches the fail-closed convention in open-requests-strip.tsx.
   const { value: studioEnabled, isLoading: studioFlagLoading } =
     useFeatureFlag('studio-workspaces');
-  const { value: extensionEnabled, isLoading: extensionFlagLoading } =
-    useFeatureFlag('chrome-extension-beta');
 
   const { user, signOut } = useAuth();
   const { data: profile } = useProfile();
@@ -144,13 +142,6 @@ export function AccountSheet() {
     setPage('profile');
   }, [page, studioEnabled, studioFlagLoading]);
 
-  useEffect(() => {
-    if (page !== 'extension') return;
-    if (extensionFlagLoading) return;
-    if (extensionEnabled) return;
-    setPage('profile');
-  }, [extensionEnabled, extensionFlagLoading, page]);
-
   const handleSignOut = useCallback(async () => {
     setIsSigningOut(true);
     authEvents.logout();
@@ -171,9 +162,7 @@ export function AccountSheet() {
     : 'offline';
   const pages = [
     ...PAGES,
-    ...(extensionEnabled
-      ? [{ key: 'extension' as const, label: 'Extension' }]
-      : []),
+    { key: 'extension' as const, label: 'Extension' },
     ...(studioEnabled ? [{ key: 'studio' as const, label: 'Studio' }] : []),
   ];
 
@@ -279,7 +268,7 @@ export function AccountSheet() {
         {page === 'notifications' && <AccountNotificationsPage />}
         {page === 'security' && <AccountSecurityPage />}
         {page === 'devices' && <AccountDevicesPage />}
-        {page === 'extension' && extensionEnabled && <AccountExtensionPage />}
+        {page === 'extension' && <AccountExtensionPage />}
         {page === 'studio' && studioEnabled && <AccountStudioPage />}
 
         {/* Sign out */}

@@ -311,7 +311,6 @@ describe('captureReducer — save + dedup', () => {
     s = captureReducer(s, {
       type: 'SPEC_BOOK_PLACEMENT_SET',
       route,
-      pilot: true,
       valid: true,
     });
     s = captureReducer(s, { type: 'SAVE_START', target: 'library' });
@@ -332,5 +331,14 @@ describe('captureReducer — save + dedup', () => {
     const before = s0.nav.screen;
     captureReducer(s0, { type: 'NAV', screen: 'R5' });
     expect(s0.nav.screen).toBe(before);
+  });
+
+  it('requires the placement picker to republish readiness for the next capture', () => {
+    let s = captured();
+    s.routing.specBookPlacement = { kind: 'project_inbox', projectId: 'project-1', roomId: null };
+    s.routing.specBookPlacementValid = true;
+    s = captureReducer(s, { type: 'CAPTURE_NEXT' });
+    expect(s.routing.specBookPlacement).toBeNull();
+    expect(s.routing.specBookPlacementValid).toBe(false);
   });
 });

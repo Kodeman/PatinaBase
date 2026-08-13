@@ -7,7 +7,7 @@
  * raw capture that lands on My Library needing teaching.
  */
 
-import { parseCsv, guessField, buildImportRows, type ProductField } from '../import-parse';
+import { parseCsv, guessField, buildImportRows, sanitizeSpreadsheetCell, type ProductField } from '../import-parse';
 
 describe('parseCsv', () => {
   it('parses a simple header + rows grid', () => {
@@ -106,5 +106,16 @@ describe('buildImportRows — the import-to-capture mapping', () => {
     expect(validCount).toBe(2);
     expect(invalidCount).toBe(1);
     expect(total).toBe(3);
+  });
+
+  it('neutralizes spreadsheet formula cells before they enter import staging', () => {
+    expect(sanitizeSpreadsheetCell('=HYPERLINK("https://bad.example")')).toBe("'=HYPERLINK(\"https://bad.example\")");
+    expect(buildImportRows([['@SUM(1,2)', 'Maker', 'SKU', 'table', '']], mapping).rows[0].name).toBe("'@SUM(1,2)");
+  });
+
+  it('holds formula-like prices instead of digit-stripping them into a price', () => {
+    const result = buildImportRows([['Chair', 'Maker', 'SKU', 'table', '=1+1']], mapping);
+    expect(result.rows).toHaveLength(0);
+    expect(result.invalidCount).toBe(1);
   });
 });

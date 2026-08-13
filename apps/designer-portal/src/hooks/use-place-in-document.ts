@@ -8,8 +8,9 @@
  * (00208) is the quiet, honest footprint the placed line wears.
  */
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { createBrowserClient } from '@patina/supabase';
+import { useMutation } from '@tanstack/react-query';
+import { usePlaceProductInProjectV2 } from '@patina/supabase';
+import type { FfeAssignmentScope, FfeDuplicateMode } from '@patina/types';
 
 export interface PlaceablePiece {
   /** product id */
@@ -23,44 +24,43 @@ export interface PlaceablePiece {
 }
 
 export function usePlaceInDocument() {
-  const qc = useQueryClient();
+  const place = usePlaceProductInProjectV2();
   return useMutation({
-    mutationFn: async ({ projectId, piece }: { projectId: string; piece: PlaceablePiece }) => {
-      const supabase = createBrowserClient() as unknown as {
-        from: (table: string) => {
-          insert: (row: Record<string, unknown>) => {
-            select: (cols: string) => { single: () => Promise<{ data: { id: string } | null; error: { message: string } | null }> };
-          };
-        };
-      };
-      // 00185 dual pricing: unit_price_cents is the CLIENT price (the budget
-      // source of truth — useProjectFinancials/Desk read it); trade cost lives
-      // in trade_price_cents. Match every other FF&E insert path.
-      const unitPrice = piece.price_retail ?? 0;
-      const { data, error } = await supabase
-        .from('project_ffe_items')
-        .insert({
-          project_id: projectId,
-          product_id: piece.id,
-          name: piece.name,
-          item_type: 'tbd',
-          status: 'specified',
-          quantity: 1,
-          unit_price_cents: unitPrice,
-          trade_price_cents: piece.price_trade ?? null,
-          line_total_cents: unitPrice,
-          added_via: 'engine',
-        })
-        .select('id')
-        .single();
-      if (error) throw error;
-      return data as { id: string };
-    },
-    onSuccess: (_d, { projectId }) => {
-      // Unified FF&E key (procurement Wave 1) + the project rollups.
-      void qc.invalidateQueries({ queryKey: ['project-ffe-items', projectId] });
-      void qc.invalidateQueries({ queryKey: ['project', projectId] });
-      void qc.invalidateQueries({ queryKey: ['projects'] });
+    mutationFn: async ({
+      projectId,
+      piece,
+      configurationId = null,
+      assignmentScope = 'unassigned',
+      roomId = null,
+      boardId = null,
+      duplicateMode = 'reuse',
+      idempotencyKey,
+    }: {
+      projectId: string;
+      piece: PlaceablePiece;
+      configurationId?: string | null;
+      assignmentScope?: FfeAssignmentScope;
+      roomId?: string | null;
+      boardId?: string | null;
+      duplicateMode?: FfeDuplicateMode;
+      idempotencyKey?: string;
+    }) => {
+      const result = await place.mutateAsync({
+        projectId,
+        productId: piece.id,
+        name: piece.name,
+        itemType: 'fixed',
+        assignmentScope,
+        roomId,
+        boardId,
+        disposition: 'candidate',
+        duplicateMode,
+        configurationId,
+        roleConfigurationIdentity: 'default',
+        source: 'engine',
+        idempotencyKey: idempotencyKey ?? globalThis.crypto?.randomUUID?.() ?? `engine-${projectId}-${piece.id}-${Date.now()}`,
+      });
+      return result;
     },
   });
 }

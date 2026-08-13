@@ -1001,8 +1001,15 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           <>
             {/* Supporting project records follow the active work so a newly
                 opened document reaches the schedule before its reference material. */}
-            <AccountBand projectId={row.project_id} clientName={row.client_name} />
-            <ProjectMoodBoards projectId={row.project_id} />
+            <AccountBand
+              projectId={row.project_id}
+              clientName={row.client_name}
+              activeSection={row.active_section}
+            />
+            <ProjectMoodBoards
+              projectId={row.project_id}
+              canCreate={row.active_section === 'project'}
+            />
             <KickoffBand projectId={row.project_id} rows={rosterRows ?? []} />
             <PlanRoomBand routeId={id} projectId={row.project_id} />
           </>

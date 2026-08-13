@@ -8,6 +8,9 @@ let mockAuthority: { data: unknown } = { data: null };
 let mockItemsLoading = false;
 let mockItemsError = false;
 const mockItemsRefetch = jest.fn();
+let mockReadinessLoading = false;
+let mockReadinessError = false;
+const mockReadinessRefetch = jest.fn();
 
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
@@ -27,7 +30,22 @@ jest.mock('@patina/supabase', () => ({
     isError: mockItemsError,
     refetch: mockItemsRefetch,
   }),
+  useProjectFfeReadiness: () => ({
+    data: mockReadinessError
+      ? undefined
+      : mockItems.map((item) => ({ selectionId: item.id, ready: true, missingFields: [] })),
+    isLoading: mockReadinessLoading,
+    isError: mockReadinessError,
+    refetch: mockReadinessRefetch,
+  }),
+  useProjectOwnedBoards: () => ({ data: [], isLoading: false }),
+  useCreateNamedProjectNeed: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useFfeInvoiceCoverage: () => ({ data: {} }),
+}));
+
+jest.mock('../add-to-project-sheet', () => ({
+  AddToProjectSheet: () => null,
+  openAddToProject: jest.fn(),
 }));
 
 jest.mock('@/hooks/use-document-rooms', () => ({
@@ -48,10 +66,6 @@ jest.mock('@/hooks/use-commercial-documents', () => ({
   }),
   usePublishBudgetCheckpoint: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useOverrideBudgetCheckpoint: () => ({ mutateAsync: jest.fn(), isPending: false }),
-}));
-
-jest.mock('@/hooks/use-projects', () => ({
-  useAddProjectFFEItem: () => ({ mutateAsync: jest.fn(), isPending: false }),
 }));
 
 jest.mock('@/components/portal/ffe/stages', () => ({
@@ -108,6 +122,9 @@ describe('the schedule ceremony', () => {
     mockItemsLoading = false;
     mockItemsError = false;
     mockItemsRefetch.mockReset();
+    mockReadinessLoading = false;
+    mockReadinessError = false;
+    mockReadinessRefetch.mockReset();
     mockRooms = [
       { id: 'room-1', name: 'Primary bedroom', budget_cents: 0 },
       { id: 'room-2', name: 'Living', budget_cents: 0 },
@@ -160,6 +177,25 @@ describe('the schedule ceremony', () => {
     mockItemsError = false;
     renderSection();
     expect(screen.getByText('Build the FF&E schedule')).toBeVisible();
+  });
+
+  it('says so when readiness cannot be read, instead of silently holding every line', () => {
+    mockReadinessError = true;
+    renderSection();
+    expect(
+      screen.getByText(/Release readiness could not be read/),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(mockReadinessRefetch).toHaveBeenCalledTimes(1);
+    fireEvent.click(
+      screen.getByRole('button', { name: /release for authorization/i }),
+    );
+    expect(
+      screen.getByRole('checkbox', {
+        name: 'Include Walnut bed, king in this release',
+      }),
+    ).toBeDisabled();
+    expect(screen.getAllByText('specification not ready').length).toBeGreaterThan(0);
   });
 
   it('wears the second stamp beside the logistics one', () => {

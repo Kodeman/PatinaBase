@@ -360,6 +360,7 @@ export function useProjectFFEItems(projectId: string | null) {
           product:products!product_id(id, name, images, brand)
         `)
         .eq('project_id', projectId)
+        .is('removed_at', null)
         .order('sort_order', { ascending: true });
       if (error) throw error;
       return data ?? [];
@@ -390,7 +391,8 @@ export function useProjectFinancials(projectId: string | null) {
         supabase
           .from('project_ffe_items')
           .select('ffe_category, line_total_cents, status, trade_price_cents, quantity')
-          .eq('project_id', projectId),
+          .eq('project_id', projectId)
+          .is('removed_at', null),
       ]);
 
       const project = projectRes.data;
@@ -500,7 +502,11 @@ export function useProjectKeyMetrics(projectId: string | null) {
           .select('budget_cents, committed_cents, actual_cents, design_fee_cents, start_date, target_end_date')
           .eq('id', projectId)
           .single(),
-        supabase.from('project_ffe_items').select('id, status').eq('project_id', projectId),
+        supabase
+          .from('project_ffe_items')
+          .select('id, status')
+          .eq('project_id', projectId)
+          .is('removed_at', null),
         supabase.from('project_phases').select('id, status, progress, duration_weeks').eq('project_id', projectId),
         supabase.from('client_decisions').select('id, status, due_date').eq('project_id', projectId),
         supabase
@@ -784,32 +790,6 @@ export function useAddProjectRoom() {
 // invalidations didn't prefix-match). These mutations live here (next to the
 // read hooks + queryKeys + isUuid) so that invalidation stays explicit.
 
-type ProjectFFEItemType = 'fixed' | 'allowance' | 'tbd';
-
-// projects.budget_cents is the stored FF&E spend cap = Σ project_ffe_items.line_total_cents
-// (activation seeds it this way). Direct add/remove/edit must recompute it or the
-// project-detail budget tile + variance math drift. Mirrors updateProposalTotal.
-async function recomputeProjectBudget(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any,
-  projectId: string
-): Promise<void> {
-  const { data, error } = await supabase
-    .from('project_ffe_items')
-    .select('line_total_cents')
-    .eq('project_id', projectId);
-  if (error) throw error;
-  const sum = (data ?? []).reduce(
-    (acc: number, r: { line_total_cents: number | null }) => acc + (r.line_total_cents || 0),
-    0
-  );
-  const { error: upErr } = await supabase
-    .from('projects')
-    .update({ budget_cents: sum })
-    .eq('id', projectId);
-  if (upErr) throw upErr;
-}
-
 function invalidateProjectFFE(queryClient: QueryClient, projectId: string) {
   // FF&E items — the shared portal+package namespace (['project-ffe-items',
   // id]); as a prefix it also covers the package useProjectFFEItems(filters)
@@ -833,24 +813,7 @@ export function useAddProjectFFEItem() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({
-      projectId,
-      productId,
-      name,
-      quantity = 1,
-      unitPriceCents = 0,
-      tradePriceCents,
-      markupPercent,
-      vendorName,
-      vendorId,
-      itemType = 'fixed',
-      projectRoomId,
-      ffeCategory,
-      budgetMinCents,
-      budgetMaxCents,
-      notes,
-      eta,
-    }: {
+    mutationFn: async (_input: {
       projectId: string;
       productId?: string | null;
       name: string;
@@ -862,7 +825,7 @@ export function useAddProjectFFEItem() {
       markupPercent?: number | null;
       vendorName?: string | null;
       vendorId?: string | null;
-      itemType?: ProjectFFEItemType;
+      itemType?: 'fixed' | 'allowance' | 'tbd';
       projectRoomId?: string | null;
       ffeCategory?: string | null;
       budgetMinCents?: number | null;
@@ -870,68 +833,22 @@ export function useAddProjectFFEItem() {
       notes?: string | null;
       eta?: string | null;
     }) => {
-      const supabase = getSupabase();
-
-      // Append: max existing sort_order + 1 (not count — count collides after a delete).
-      const { data: existing } = await supabase
-        .from('project_ffe_items')
-        .select('sort_order')
-        .eq('project_id', projectId)
-        .order('sort_order', { ascending: false })
-        .limit(1);
-      const nextSort = (existing?.[0]?.sort_order ?? -1) + 1;
-
-      const lineTotal =
-        itemType === 'allowance' &&
-        typeof budgetMinCents === 'number' &&
-        typeof budgetMaxCents === 'number'
-          ? Math.round((budgetMinCents + budgetMaxCents) / 2)
-          : quantity * unitPriceCents;
-
-      const { data, error } = await supabase
-        .from('project_ffe_items')
-        .insert({
-          project_id: projectId,
-          project_room_id: projectRoomId ?? null,
-          product_id: productId ?? null,
-          name,
-          ffe_category: ffeCategory ?? null,
-          item_type: itemType,
-          status: 'specified',
-          quantity,
-          unit_price_cents: unitPriceCents,
-          trade_price_cents: tradePriceCents ?? null,
-          markup_percent: markupPercent ?? null,
-          line_total_cents: lineTotal,
-          budget_min_cents: budgetMinCents ?? null,
-          budget_max_cents: budgetMaxCents ?? null,
-          vendor_name: vendorName ?? null,
-          vendor_id: vendorId ?? null,
-          eta: eta ?? null,
-          notes: notes ?? null,
-          sort_order: nextSort,
-        })
-        .select()
-        .single();
-      if (error) throw error;
-
-      await recomputeProjectBudget(supabase, projectId);
-      return data;
+      throw new Error('FF&E creation requires place_product_in_project_v2.');
     },
     onSuccess: (_, { projectId }) => invalidateProjectFFE(queryClient, projectId),
   });
 }
 
-// Remove an FF&E item, then recompute the project budget (inverse of add).
+// Legacy API retained for source compatibility. Selections are soft-removed
+// through archive_project_selection; physical deletion deliberately fails closed.
 export function useRemoveProjectFFEItem() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ itemId, projectId }: { itemId: string; projectId: string }) => {
-      const supabase = getSupabase();
-      const { error } = await supabase.from('project_ffe_items').delete().eq('id', itemId);
-      if (error) throw error;
-      await recomputeProjectBudget(supabase, projectId);
+    mutationFn: async (_input: { itemId: string; projectId: string }) => {
+      throw new Error(
+        'Physical FF&E deletion is disabled; archive the project selection instead.',
+      );
     },
     onSuccess: (_, { projectId }) => invalidateProjectFFE(queryClient, projectId),
   });
@@ -945,51 +862,12 @@ export function useUpdateProjectFFEItem() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({
-      itemId,
-      projectId,
-      updates,
-    }: {
+    mutationFn: async (_input: {
       itemId: string;
       projectId: string;
       updates: Record<string, unknown>;
     }) => {
-      const supabase = getSupabase();
-
-      const { data: current, error: curErr } = await supabase
-        .from('project_ffe_items')
-        .select('item_type, quantity, unit_price_cents, budget_min_cents, budget_max_cents')
-        .eq('id', itemId)
-        .single();
-      if (curErr) throw curErr;
-
-      const merged = { ...current, ...updates } as {
-        item_type?: string;
-        quantity?: number;
-        unit_price_cents?: number;
-        budget_min_cents?: number | null;
-        budget_max_cents?: number | null;
-      };
-      const mergedType = merged.item_type ?? 'fixed';
-      const mergedQty = merged.quantity ?? 1;
-      const mergedUnit = merged.unit_price_cents ?? 0;
-      const lineTotal =
-        mergedType === 'allowance' &&
-        typeof merged.budget_min_cents === 'number' &&
-        typeof merged.budget_max_cents === 'number'
-          ? Math.round((merged.budget_min_cents + merged.budget_max_cents) / 2)
-          : mergedQty * mergedUnit;
-
-      const { data, error } = await supabase
-        .from('project_ffe_items')
-        .update({ ...updates, line_total_cents: lineTotal })
-        .eq('id', itemId)
-        .select()
-        .single();
-      if (error) throw error;
-
-      await recomputeProjectBudget(supabase, projectId);
-      return data;
+      throw new Error('FF&E changes are RPC-only; use the selection lifecycle workflow.');
     },
     onSuccess: (_, { projectId }) => invalidateProjectFFE(queryClient, projectId),
   });

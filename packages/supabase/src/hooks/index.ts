@@ -980,6 +980,19 @@ export {
   useUpdatePaymentMilestoneStatus,
   useProjectFinancials,
 } from './use-project-v2';
+export {
+  useArchiveProjectSelection,
+  useCreateNamedProjectNeed,
+  useCreateProjectBoard,
+  usePlaceProductInProjectV2,
+  useProjectFfeReadiness,
+  useProjectReviewAttention,
+  usePromoteBoardReferenceToSelection,
+  usePublishProjectReview,
+  useSupersedeProjectSelection,
+  useTriageProjectFfeItems,
+} from './use-project-ffe-ga';
+export type { ProjectFfeReadiness, ProjectReviewAttention } from './use-project-ffe-ga';
 export type {
   FFEItemFilters,
   ProjectNarrativeSection,

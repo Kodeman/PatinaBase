@@ -54,6 +54,7 @@ import { buildPoSentEmail } from '../_shared/po-emails.ts';
 import { resolveStudioIdentity, studioDisplayName } from '../_shared/studio-identity.ts';
 import {
   buildFallbackSidemark,
+  checkPoRepricingGate,
   checkPoTotalsCoherence,
   PO_OUT_OF_SYNC_DETAIL,
   parsePoSendBody,
@@ -98,6 +99,7 @@ interface PoRow {
   po_document_path: string | null;
   sent_at: string | null;
   notes: string | null;
+  needs_repricing: boolean;
   created_at: string;
   vendor: {
     id: string;
@@ -215,7 +217,7 @@ Deno.serve(async (req: Request) => {
       `
       id, designer_id, project_id, vendor_id, status, payment_pattern,
       total_cents, po_number, sidemark, ship_to, po_document_path, sent_at,
-      notes, created_at,
+      notes, created_at, needs_repricing,
       vendor:vendors!purchase_orders_vendor_id_fkey(id, name, orders_email, contact_info, website),
       project:projects!purchase_orders_project_id_fkey(id, name, site_address, client_id)
     `,
@@ -235,6 +237,13 @@ Deno.serve(async (req: Request) => {
   }
   if (po.status === 'cancelled') {
     return json({ error: 'po_cancelled', detail: 'A cancelled purchase order cannot be sent.' }, 409);
+  }
+  const repricingGate = checkPoRepricingGate(poData, mode);
+  if (!repricingGate.ok) {
+    return json(
+      { error: repricingGate.error, detail: repricingGate.detail },
+      repricingGate.error === 'po_needs_repricing' ? 409 : 500,
+    );
   }
 
   // ── Linked items (the document's line table) ────────────────────────────
@@ -525,6 +534,8 @@ Deno.serve(async (req: Request) => {
 
     let sendResult;
     try {
+      const attachmentBytes = new ArrayBuffer(pdfBytes.byteLength);
+      new Uint8Array(attachmentBytes).set(pdfBytes);
       sendResult = await sendCompliantEmail(admin, {
         to: recipient,
         subject: rendered.subject,
@@ -538,7 +549,7 @@ Deno.serve(async (req: Request) => {
         notificationType: 'po_sent',
         templateId: 'po-sent',
         attachments: [
-          { filename: `${poNumber}.pdf`, content: encodeBase64(pdfBytes) },
+          { filename: `${poNumber}.pdf`, content: encodeBase64(attachmentBytes) },
         ],
         metadata: {
           purchase_order_id: po.id,

@@ -60,8 +60,10 @@ function safeSegment(value: string, label: string): string {
   return value;
 }
 
-export function createBoardAssetStorage(): BoardAssetStorage {
-  const bucket = createBrowserClient().storage.from(BOARD_ASSET_BUCKET);
+export function createBoardAssetStorage(options: {
+  bucket?: string;
+} = {}): BoardAssetStorage {
+  const bucket = createBrowserClient().storage.from(options.bucket ?? BOARD_ASSET_BUCKET);
   return {
     async upload(path, file, options) {
       const { data, error } = await bucket.upload(path, file, options);

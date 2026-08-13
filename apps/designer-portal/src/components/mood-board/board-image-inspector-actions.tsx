@@ -55,21 +55,25 @@ function readableError(cause: unknown): string {
 export function BoardImageInspectorActions({
   boardId,
   item,
+  enabled = true,
   onUpdate,
   onRemoved,
   onBlocked,
 }: {
   boardId: string;
   item: EditableMoodBoardItem;
+  enabled?: boolean;
   onUpdate: (itemId: string, patch: BoardImagePatch) => void;
   onRemoved?: (durationMs: number) => void;
   onBlocked?: (reason: 'not_configured' | 'budget_exceeded') => void;
 }) {
   const eligibleType = item.type === 'image' || item.type === 'capture' || item.type === 'product';
-  const capability = useBackgroundRemovalCapability(eligibleType && item.imageUrl ? boardId : null);
+  const capability = useBackgroundRemovalCapability(enabled && eligibleType && item.imageUrl ? boardId : null);
   const removeBackground = useRemoveBoardItemBackground();
   const originalUrl = originalImageUrl(item);
   const canRemove = eligibleType && Boolean(item.imageUrl) && capability.data?.available === true;
+
+  if (!enabled) return null;
 
   if (originalUrl) {
     return (

@@ -5,6 +5,7 @@ jest.mock('@patina/supabase', () => ({
   useCoordinationItems: () => ({ data: [] }),
   useProjectParties: () => ({ data: [] }),
   useProjectFFEItems: () => ({ data: [] }),
+  useProjectFfeReadiness: () => ({ data: [] }),
   useCoordinationRealtime: jest.fn(),
   useDesignerClientForClientUser: () => ({ data: null }),
   useResolvedSchedule: () => ({

@@ -34,6 +34,8 @@ import Link from 'next/link';
 import {
   useFfeInvoiceCoverage,
   useProjectFFEItems,
+  useProjectFfeReadiness,
+  useProjectOwnedBoards,
   type FfeItemCoverage,
 } from '@patina/supabase';
 import { openInvoiceComposer } from './accounts/invoice-overlays';
@@ -81,6 +83,7 @@ import {
 import { AuthorizationStamp } from './schedule/authorization-stamp';
 import { GuidedEmptyState } from './guided-empty-state';
 import { AddLineSheet } from './schedule/add-line-sheet';
+import { AddToProjectSheet, openAddToProject } from './schedule/add-to-project-sheet';
 import { CompositionBar } from './schedule/composition-bar';
 import { ReviewReleaseSheet } from './schedule/review-release-sheet';
 import {
@@ -303,6 +306,7 @@ function FFELine({
   selected,
   onSelectToggle,
   onIncludeInRelease,
+  canEditSelection,
 }: LineRow & {
   projectId: string;
   projectName: string;
@@ -318,6 +322,7 @@ function FFELine({
   selected: boolean;
   onSelectToggle: () => void;
   onIncludeInRelease: () => void;
+  canEditSelection: boolean;
 }) {
   const sp = stampProps(stamp);
   const line = vendorLine(item, stamp, showRoom);
@@ -389,7 +394,7 @@ function FFELine({
   }`;
 
   return (
-    <li className="border-b border-[var(--color-pearl)]">
+    <li id={`ffe-selection-${item.id}`} className="scroll-mt-24 border-b border-[var(--color-pearl)]">
       {selecting ? (
         // The whole row is the tick while the schedule is a selection surface.
         <label
@@ -434,6 +439,7 @@ function FFELine({
           auth={auth}
           isCommercialOrigin={isCommercialOrigin}
           onIncludeInRelease={onIncludeInRelease}
+          canEditSelection={canEditSelection}
         />
       )}
     </li>
@@ -684,7 +690,19 @@ function FFESectionBody({
     isError: boolean;
     refetch: () => Promise<unknown>;
   };
+  const selectionIds = useMemo(
+    () => (items ?? []).map((item) => String(item.id)),
+    [items],
+  );
+  const readinessQuery = useProjectFfeReadiness(selectionIds);
+  const readinessBySelection = useMemo(
+    () => new Map((readinessQuery.data ?? []).map((row) => [row.selectionId, row])),
+    [readinessQuery.data],
+  );
   const { data: rooms } = useDocumentRooms(
+    mode === 'project' ? projectId : null,
+  );
+  const { data: projectBoards = [] } = useProjectOwnedBoards(
     mode === 'project' ? projectId : null,
   );
   // R76 — per-line billing truth (00187 bridge). Invalidated by every invoice
@@ -727,7 +745,11 @@ function FFESectionBody({
     RELEASING_AUTHORITY.has(String(authority.data?.state ?? ''));
   const selecting = ceremony?.phase === 'selecting';
 
-  const rows: LineRow[] = (items ?? []).map((item) => {
+  const rows: LineRow[] = (items ?? []).map((wireItem) => {
+    const item = {
+      ...wireItem,
+      authoritative_readiness: readinessBySelection.get(String(wireItem.id)) ?? null,
+    };
     const auth = deriveLineAuthorization(item, instrumentIndex);
     const tradeHold = deriveTradeLineHold(item, tradeIndex);
     return {
@@ -820,6 +842,7 @@ function FFESectionBody({
       setOpenLineId(null);
       ceremony?.begin([row.item.id]);
     },
+    canEditSelection: mode === 'project',
   });
 
   const roomHeadingProps = (group: LineRow[]) => {
@@ -835,25 +858,29 @@ function FFESectionBody({
   };
 
   // R25 grouping (project mode): rooms in sort order, then Throughout.
-  const groupByRoom = mode === 'project' && (rooms ?? []).length > 0;
+  const groupByRoom = mode === 'project';
   const roomGroups = groupByRoom
     ? (rooms ?? []).map((room) => ({
         room,
         rows: rows.filter((r) => r.item.project_room_id === room.id),
       }))
     : [];
-  const unassigned = groupByRoom
+  const throughout = groupByRoom
     ? rows.filter(
         (r) =>
-          !r.item.project_room_id ||
-          !(rooms ?? []).some((rm) => rm.id === r.item.project_room_id),
+          r.item.assignment_scope !== 'unassigned' &&
+          (!r.item.project_room_id ||
+            !(rooms ?? []).some((rm) => rm.id === r.item.project_room_id)),
       )
     : rows;
+  const unassigned = groupByRoom
+    ? rows.filter((r) => r.item.assignment_scope === 'unassigned')
+    : [];
 
   const composition = releaseSummary(releaseLines);
 
   return (
-    <section>
+    <section id="project-ffe">
       <div className="mb-1.5 mt-5 flex items-baseline justify-between gap-3">
         <h2 className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]">
           {selecting
@@ -887,6 +914,17 @@ function FFESectionBody({
                 >
                   Spec book →
                 </Link>
+              )}
+              {mode === 'project' && (
+                <DocumentAction
+                  actionKey="open-add-to-project"
+                  surfaceKey="project"
+                  regionKey="ffe-head"
+                  variant="primary"
+                  onClick={() => openAddToProject('section')}
+                >
+                  Add to project
+                </DocumentAction>
               )}
               {/* R76 — bill the schedule: the composer opens FF&E-prefilled
                   with every uninvoiced priced line ticked (untick there to
@@ -926,6 +964,32 @@ function FFESectionBody({
           )}
         </span>
       </div>
+
+      {/* The release gate reads authoritative readiness and stays closed
+          without it — so a pending or failed read has to say so, or the act
+          would simply be missing with no reason given. */}
+      {mode === 'project' && readinessQuery.isError && (
+        <div className="mb-2">
+          <p role="alert" className="text-[11.5px] text-[var(--color-terracotta)]">
+            Release readiness could not be read, so no line can be released yet.
+          </p>
+          <DocumentAction
+            actionKey="retry-ffe-readiness"
+            surfaceKey="project"
+            regionKey="ffe-readiness-error"
+            variant="secondary"
+            onClick={() => void readinessQuery.refetch()}
+          >
+            Try again
+          </DocumentAction>
+        </div>
+      )}
+
+      {mode === 'project' && !readinessQuery.isError && readinessQuery.isLoading && (
+        <p className="mb-2 text-[11.5px] italic text-[var(--text-muted)]">
+          Checking readiness…
+        </p>
+      )}
 
       {selecting && (
         <p className="mb-2 text-[11.5px] text-[var(--text-muted)]">
@@ -1015,15 +1079,31 @@ function FFESectionBody({
               </ul>
             </div>
           ))}
-          {unassigned.length > 0 && (
+          {throughout.length > 0 && (
             <div>
               <RoomHeading
-                name="Throughout · unassigned"
+                name="Throughout"
                 budgetCents={0}
-                rows={unassigned}
+                rows={throughout}
                 onAddLine={() =>
                   setAddLineRoom({ id: null, name: 'Throughout' })
                 }
+                {...roomHeadingProps(throughout)}
+              />
+              <ul>
+                {throughout.map((row) => (
+                  <FFELine key={row.item.id} {...lineProps(row)} />
+                ))}
+              </ul>
+            </div>
+          )}
+          {unassigned.length > 0 && (
+            <div>
+              <RoomHeading
+                name="Unsorted"
+                budgetCents={0}
+                rows={unassigned}
+                onAddLine={() => setAddLineRoom({ id: null, name: 'Unsorted' })}
                 {...roomHeadingProps(unassigned)}
               />
               <ul>
@@ -1033,9 +1113,7 @@ function FFESectionBody({
               </ul>
             </div>
           )}
-          {mode === 'project' && !selecting && (
-            <AddRoomInline projectId={projectId} />
-          )}
+          {!selecting && <AddRoomInline projectId={projectId} />}
         </>
       ) : (
         <>
@@ -1044,9 +1122,6 @@ function FFESectionBody({
               <FFELine key={row.item.id} {...lineProps(row)} />
             ))}
           </ul>
-          {mode === 'project' && !selecting && (
-            <AddRoomInline projectId={projectId} />
-          )}
         </>
       )}
 
@@ -1081,6 +1156,17 @@ function FFESectionBody({
           roomId={addLineRoom.id}
           roomName={addLineRoom.name}
           onClose={() => setAddLineRoom(null)}
+        />
+      )}
+      {mode === 'project' && (
+        <AddToProjectSheet
+          projectId={projectId}
+          projectName={projectName}
+          rooms={(rooms ?? []).map((room) => ({ id: room.id, name: room.name }))}
+          boards={projectBoards}
+          placeholders={(items ?? [])
+            .filter((item) => !item.product_id && item.removed_at == null)
+            .map((item) => ({ id: item.id, name: item.name }))}
         />
       )}
     </section>

@@ -108,6 +108,7 @@ vi.mock('@tanstack/react-query', () => ({
 import {
   useAddBoardItem,
   useApplyBoardRoomState,
+  useBoard,
   useBoards,
   useSaveBoardLayout,
   useBoardsWithItems,
@@ -201,6 +202,8 @@ describe('useApplyBoardRoomState', () => {
       canvasWidth: 1200,
       canvasHeight: 800,
       backgroundColor: '#FAF8F5',
+      coverImageUrl: 'project-1/boards/board-1/cover.png',
+      coverReviewMediaAssetId: '22222222-2222-4222-8222-222222222222',
       sections: [{ id: 'section-1', name: 'Seating' }],
       items: [{
         id: '11111111-1111-4111-8111-111111111111',
@@ -250,6 +253,41 @@ describe('useApplyBoardRoomState', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['project-owned-boards-with-items', 'project-1'] });
   });
 
+  it('replaces expiring item URLs with stable working paths and derivative identity', async () => {
+    rpc.mockResolvedValue({ data: null, error: null });
+    const config = useApplyBoardRoomState() as unknown as {
+      mutationFn: (value: any) => Promise<void>;
+    };
+    await config.mutationFn({
+      ...input,
+      state: {
+        ...input.state,
+        items: [{
+          ...input.state.items[0],
+          type: 'image',
+          imageUrl: 'https://signed.example/working.png?token=short-lived',
+          data: {
+            image_url: 'https://signed.example/working.png?token=short-lived',
+            thumbnail_url: 'https://signed.example/thumb.png?token=short-lived',
+            working_image_path: 'project-1/boards/board-1/asset.webp',
+            working_thumbnail_path: 'project-1/boards/board-1/asset-thumb.webp',
+            review_media_asset_id: '33333333-3333-4333-8333-333333333333',
+          },
+        }],
+      },
+    });
+    const state = rpc.mock.calls[0][1].p_state;
+    expect(state.items[0]).toMatchObject({
+      imageUrl: 'project-1/boards/board-1/asset.webp',
+      reviewMediaAssetId: '33333333-3333-4333-8333-333333333333',
+      data: {
+        image_url: 'project-1/boards/board-1/asset.webp',
+        thumbnail_url: 'project-1/boards/board-1/asset-thumb.webp',
+      },
+    });
+    expect(JSON.stringify(state)).not.toContain('token=short-lived');
+  });
+
   it('invalidates pin feedback after a proposal room snapshot can cascade rows', async () => {
     const config = useApplyBoardRoomState() as unknown as {
       onSettled: (
@@ -273,6 +311,50 @@ describe('useApplyBoardRoomState', () => {
   });
 });
 
+describe('useBoard private working media', () => {
+  it('signs stable project paths only for display and preserves their persistence identity', async () => {
+    pushTableResult('proposal_boards', {
+      data: {
+        id: 'board-1',
+        proposal_id: null,
+        project_id: 'project-1',
+        name: 'Direction',
+        cover_image_url: 'project-1/boards/board-1/cover.png',
+        sections: [],
+        status: 'active',
+        proposal_board_items: [{
+          id: 'item-1',
+          image_url: 'project-1/boards/board-1/image.webp',
+          data: { thumbnail_url: 'project-1/boards/board-1/thumb.webp' },
+        }],
+      },
+      error: null,
+    });
+    const query = useBoard('board-1') as unknown as { queryFn: () => Promise<any> };
+    const board = await query.queryFn();
+    expect(createSignedUrls).toHaveBeenCalledWith(
+      [
+        'project-1/boards/board-1/cover.png',
+        'project-1/boards/board-1/image.webp',
+        'project-1/boards/board-1/thumb.webp',
+      ],
+      3_600,
+    );
+    expect(board.cover_image_url).toBe(
+      'https://storage.example/signed/project-1/boards/board-1/cover.png',
+    );
+    expect(board.items[0]).toMatchObject({
+      image_url: 'https://storage.example/signed/project-1/boards/board-1/image.webp',
+      data: {
+        image_url: 'https://storage.example/signed/project-1/boards/board-1/image.webp',
+        thumbnail_url: 'https://storage.example/signed/project-1/boards/board-1/thumb.webp',
+        working_image_path: 'project-1/boards/board-1/image.webp',
+        working_thumbnail_path: 'project-1/boards/board-1/thumb.webp',
+      },
+    });
+  });
+});
+
 describe('owner-aware board hooks', () => {
   it('keeps legacy proposal query keys while scoping project owners to project_id', async () => {
     const builder = pushTableResult('proposal_boards', { data: [], error: null });
@@ -289,19 +371,11 @@ describe('owner-aware board hooks', () => {
     expect(legacy.queryKey).toEqual(['boards', 'proposal-1']);
   });
 
-  it('inserts a caller-supplied id and complete snapshot for delete resurrection', async () => {
-    const inserted = {
-      id: 'item-original',
-      board_id: 'board-1',
-      type: 'product',
-      x: 12,
-      y: 34,
-    };
-    const builder = pushTableResult('proposal_board_items', { data: inserted, error: null });
+  it('fails closed before a project item can bypass the atomic state command', async () => {
     const config = useAddBoardItem() as unknown as {
       mutationFn: (input: Record<string, unknown>) => Promise<unknown>;
     };
-    await config.mutationFn({
+    await expect(config.mutationFn({
       itemId: 'item-original',
       boardId: 'board-1',
       owner: { kind: 'project', id: 'project-1' },
@@ -311,18 +385,11 @@ describe('owner-aware board hooks', () => {
       width: 210,
       height: null,
       productId: 'product-1',
+      projectFfeItemId: 'selection-1',
       imageUrl: 'https://cdn.example/chair.jpg',
       data: { source_url: 'https://maker.example/chair' },
-    });
-
-    const insert = builder.__chain.find((call) => call.method === 'insert');
-    expect(insert?.args[0]).toEqual(expect.objectContaining({
-      id: 'item-original',
-      board_id: 'board-1',
-      product_id: 'product-1',
-      image_url: 'https://cdn.example/chair.jpg',
-      data: { source_url: 'https://maker.example/chair' },
-    }));
+    })).rejects.toThrow('apply_board_room_state');
+    expect(fromSpy).not.toHaveBeenCalled();
   });
 });
 
@@ -550,15 +617,10 @@ describe('useUpsertBoard — owner switch (B8)', () => {
       mutationFn: (input: any) => Promise<any>;
     }).mutationFn;
 
-  it('inserts a PROJECT-owned board with project_id and NO proposal_id', async () => {
-    const builder = pushTableResult('proposal_boards', {
-      data: { id: 'b1', project_id: 'proj-1', proposal_id: null },
-      error: null,
-    });
-    await mutationFnOf()({ projectId: 'proj-1', name: 'Working board' });
-    const row = builder.__chain.find((c) => c.method === 'insert')?.args[0] as Record<string, unknown>;
-    expect(row.project_id).toBe('proj-1');
-    expect(row).not.toHaveProperty('proposal_id');
+  it('fails closed for project creation before direct DML', async () => {
+    await expect(mutationFnOf()({ projectId: 'proj-1', name: 'Working board' }))
+      .rejects.toThrow('apply_board_room_state');
+    expect(fromSpy).not.toHaveBeenCalled();
   });
 
   it('inserts a PROPOSAL-owned board with proposal_id and NO project_id', async () => {
@@ -584,6 +646,15 @@ describe('useUpsertBoard — owner switch (B8)', () => {
     expect(row).not.toHaveProperty('proposal_id');
     expect(row).not.toHaveProperty('project_id');
     expect(builder.__chain.find((c) => c.method === 'eq')?.args).toEqual(['id', 'b1']);
+  });
+
+  it('fails closed for a project-owned update before direct DML', async () => {
+    await expect(mutationFnOf()({
+      boardId: 'b1',
+      owner: { kind: 'project', id: 'proj-1' },
+      name: 'Renamed',
+    })).rejects.toThrow('apply_board_room_state');
+    expect(fromSpy).not.toHaveBeenCalled();
   });
 });
 

@@ -1,8 +1,9 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { AccountBand } from '../account-band';
 
 const mockGenerate = jest.fn();
 const mockRefetch = jest.fn();
+const amendmentSheet = jest.fn();
 let mockInvoiceId: string | null = null;
 let mockQueryState: 'ready' | 'loading' | 'error' = 'ready';
 
@@ -50,7 +51,10 @@ jest.mock('@/hooks/use-account-page', () => ({
 }));
 
 jest.mock('../overlays/amendment-sheet', () => ({
-  AmendmentSheet: () => null,
+  AmendmentSheet: (props: { open: boolean }) => {
+    amendmentSheet(props);
+    return props.open ? <div>Change sheet open</div> : null;
+  },
 }));
 
 jest.mock('../command-bar', () => ({
@@ -62,6 +66,7 @@ describe('AccountBand invoice handoff', () => {
     mockInvoiceId = null;
     mockQueryState = 'ready';
     mockRefetch.mockClear();
+    amendmentSheet.mockClear();
   });
 
   it('keeps the account surface visible while its authoritative read loads', () => {
@@ -110,5 +115,14 @@ describe('AccountBand invoice handoff', () => {
       invoiceId: 'invoice-1',
     });
     window.removeEventListener('document:open-invoice-folio', opened);
+  });
+
+  it('uses the change workflow as the only post-project add doorway', () => {
+    render(<AccountBand projectId="project-1" activeSection="install" />);
+    fireEvent.click(screen.getByRole('button', { name: /The accounts/ }));
+
+    expect(screen.getByRole('button', { name: 'Add a change' })).toBeInTheDocument();
+    act(() => window.dispatchEvent(new CustomEvent('document:open-project-change')));
+    expect(screen.getByText('Change sheet open')).toBeInTheDocument();
   });
 });

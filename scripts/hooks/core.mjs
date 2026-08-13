@@ -629,6 +629,7 @@ export function scanSecrets(content) {
 function sensitivePathFinding(item) {
   const base = path.posix.basename(item);
   if (base === ".env.example" || base.endsWith(".env.example")) return null;
+  if (base.endsWith(".example")) return null;
   if (
     /(?:^|\/)\.env(?:\.|$)/.test(item) ||
     /\.env\.(?:bak|backup)|\.bak(?:[-.]|$)/i.test(item)

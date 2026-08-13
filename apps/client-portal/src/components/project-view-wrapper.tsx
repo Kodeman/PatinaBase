@@ -106,7 +106,6 @@ export function ProjectViewWrapper({
       {showOverview && isCommercial && <AwaitingSignatureCards projectId={projectId} />}
       {showOverview && isCommercial && <ClientPlanGrid projectId={projectId} />}
       {showOverview && isCommercial && <ClientSelections projectId={projectId} />}
-
       {showOverview && showLegacyOriginTree && <BudgetOverview projectId={projectId} />}
 
       {showOverview && <ProjectInvoicesSummary projectId={projectId} />}

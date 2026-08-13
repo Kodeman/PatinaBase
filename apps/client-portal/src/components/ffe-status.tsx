@@ -1,7 +1,7 @@
 'use client';
 
 import { StatusDot, type StatusDotStatus } from '@patina/design-system';
-import { useProjectFFEItems } from '@patina/supabase';
+import { useClientSelections } from '@/hooks/use-commercial-client';
 import { Package } from 'lucide-react';
 
 interface FFEStatusProps {
@@ -34,7 +34,7 @@ function ffeStatusToDotStatus(status: string): StatusDotStatus {
 }
 
 export function FFEStatus({ projectId }: FFEStatusProps) {
-  const { data: allItems, isLoading } = useProjectFFEItems(projectId);
+  const { data, isLoading } = useClientSelections(projectId);
 
   if (isLoading) {
     return (
@@ -45,8 +45,8 @@ export function FFEStatus({ projectId }: FFEStatusProps) {
   }
 
   // Filter to only client-visible items (past the internal specified/quoted stages)
-  const items = (allItems ?? []).filter((item: any) =>
-    CLIENT_VISIBLE_STATUSES.includes(item.status)
+  const items = (data?.selections ?? []).filter((item) =>
+    CLIENT_VISIBLE_STATUSES.includes(item.logisticsStatus)
   );
 
   if (items.length === 0) {
@@ -54,9 +54,9 @@ export function FFEStatus({ projectId }: FFEStatusProps) {
   }
 
   // Group by room
-  const byRoom = new Map<string, any[]>();
+  const byRoom = new Map<string, typeof items>();
   for (const item of items) {
-    const roomName = item.room?.name || 'General';
+    const roomName = item.roomName || 'General';
     const existing = byRoom.get(roomName) || [];
     existing.push(item);
     byRoom.set(roomName, existing);
@@ -72,8 +72,8 @@ export function FFEStatus({ projectId }: FFEStatusProps) {
           <h4 className="type-meta mb-3">{roomName}</h4>
           <div className="space-y-0">
             {roomItems.map((item: any) => {
-              const itemName = item.product?.name || item.name || item.description || 'Item';
-              const dotStatus = ffeStatusToDotStatus(item.status);
+              const itemName = item.name || 'Item';
+              const dotStatus = ffeStatusToDotStatus(item.logisticsStatus);
 
               return (
                 <div
@@ -85,18 +85,10 @@ export function FFEStatus({ projectId }: FFEStatusProps) {
                     <div className="min-w-0">
                       <p className="text-sm text-[var(--text-primary)] truncate">{itemName}</p>
                       <p className="type-meta-small mt-0.5">
-                        {statusLabels[item.status] || item.status}
+                        {statusLabels[item.logisticsStatus] || item.logisticsStatus}
                       </p>
                     </div>
                   </div>
-                  {item.eta && (
-                    <span className="type-meta shrink-0 ml-4">
-                      ETA {new Date(item.eta).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                      })}
-                    </span>
-                  )}
                 </div>
               );
             })}
