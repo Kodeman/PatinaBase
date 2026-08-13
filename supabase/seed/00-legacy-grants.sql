@@ -11144,12 +11144,6 @@ END $g$;
 
 -- 00476_install_windows.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public._commit_schedule_edit_authorized(uuid, jsonb, text, jsonb, text) FROM PUBLIC, anon, authenticated, service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00476_install_windows.sql
-DO $g$ BEGIN
   REVOKE EXECUTE ON FUNCTION public.hold_install_window(uuid, date, date) FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;

@@ -13,10 +13,14 @@
 --   7. Confirming with a NULL impact proposes: zero anchors, one proposal,
 --      window still confirmed (the R110 downgrade).
 --   8. Releasing with a NULL impact proposes the UNPIN — a proposal with no
---      date (00476's contract extension).
+--      date (the posture 00475 established for a dateless proposal).
 --   9. Releasing a merely HELD window is a state flip and nothing else.
---  10. An omitted anchor_date key is a malformed edit, never a silent unpin.
+--  10. 00475's marker contract, directly: a dateless phase-anchor edit raises
+--      unless it says `"clear": true`, on the commit path and the proposal
+--      path alike, and the marker is what release_install_window sends.
 --  11. ACLs, pinned search_path, RLS and the two policies are as authored.
+--  12. A dateless unpin proposal is an ordinary proposal row: it upserts under
+--      the live-phase unique rather than stacking, and the ratchet holds it.
 --
 -- How to run:
 --   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
@@ -424,11 +428,19 @@ BEGIN
   RAISE NOTICE 'PASS 8: an undisclosed release proposes the unpin — a proposal with no date';
 END $$;
 
--- ─── 10. The phase-anchor contract extension, directly ────────────────────
+-- ─── 10. 00475's marker contract, directly ────────────────────────────────
+--
+-- An unpin is an act, not an omission. 00475 refuses a dateless anchor edit
+-- unless it carries `"clear": true` — the marker release_install_window sends
+-- — and refuses it on the proposal path too, so a ceremony cannot launder a
+-- malformed edit into a dateless proposal.
 
 DO $$
-DECLARE v_message text;
+DECLARE
+  v_message text;
+  v_anchor  date;
 BEGIN
+  -- 10a — commit path: no date, no marker, no unpin.
   BEGIN
     PERFORM public._commit_schedule_edit_authorized(
       'b1a5e000-0000-4000-8000-0000000000a1',
@@ -440,15 +452,59 @@ BEGIN
       jsonb_build_object('sentence', 'stated'),
       'manual'
     );
-    RAISE EXCEPTION 'FAIL 10a: a phase-anchor edit with no anchor_date key was accepted';
+    RAISE EXCEPTION 'FAIL 10a: a dateless phase-anchor edit with no marker was accepted';
   EXCEPTION WHEN raise_exception THEN
     GET STACKED DIAGNOSTICS v_message = MESSAGE_TEXT;
     IF v_message LIKE 'FAIL 10a%' THEN RAISE; END IF;
-    IF v_message NOT LIKE '%requires an anchor_date key%' THEN
-      RAISE EXCEPTION 'FAIL 10b: unexpected refusal (%)', v_message;
+    IF v_message NOT LIKE '%requires an anchor_date, or "clear": true%' THEN
+      RAISE EXCEPTION 'FAIL 10b: unexpected refusal on the commit path (%)', v_message;
     END IF;
   END;
-  RAISE NOTICE 'PASS 10: an omitted anchor_date is a malformed edit, never a silent unpin';
+
+  -- 10c — proposal path: the same refusal, so an undisclosed ceremony cannot
+  -- write a dateless proposal it never asked for.
+  BEGIN
+    PERFORM public._commit_schedule_edit_authorized(
+      'b1a5e000-0000-4000-8000-0000000000a1',
+      jsonb_build_array(jsonb_build_object(
+        'kind', 'phase-anchor',
+        'phase_id', 'b1a5e000-0000-4000-8000-0000000000b2'
+      )),
+      'A malformed ceremony edit',
+      NULL,
+      'ceremony:install-window-released'
+    );
+    RAISE EXCEPTION 'FAIL 10c: a dateless ceremony proposal with no marker was accepted';
+  EXCEPTION WHEN raise_exception THEN
+    GET STACKED DIAGNOSTICS v_message = MESSAGE_TEXT;
+    IF v_message LIKE 'FAIL 10c%' THEN RAISE; END IF;
+    IF v_message NOT LIKE '%requires an anchor_date, or "clear": true%' THEN
+      RAISE EXCEPTION 'FAIL 10d: unexpected refusal on the proposal path (%)', v_message;
+    END IF;
+  END;
+
+  -- 10e — the marker itself unpins, on the commit path, with no date present.
+  UPDATE public.project_phases
+     SET anchor_date = DATE '2026-10-05'
+   WHERE id = 'b1a5e000-0000-4000-8000-0000000000b2';
+
+  PERFORM public._commit_schedule_edit_authorized(
+    'b1a5e000-0000-4000-8000-0000000000a1',
+    jsonb_build_array(jsonb_build_object(
+      'kind', 'phase-anchor',
+      'phase_id', 'b1a5e000-0000-4000-8000-0000000000b2',
+      'clear', true
+    )),
+    'A stated unpin',
+    jsonb_build_object('sentence', 'stated'),
+    'manual'
+  );
+  v_anchor := pg_temp.anchor_of('b1a5e000-0000-4000-8000-0000000000b2');
+  IF v_anchor IS NOT NULL THEN
+    RAISE EXCEPTION 'FAIL 10e: "clear": true did not unpin the anchor (got %)', v_anchor;
+  END IF;
+
+  RAISE NOTICE 'PASS 10: a dateless anchor edit needs the marker on both paths, and the marker unpins';
 END $$;
 
 -- ─── 11. ACL + RLS structure ───────────────────────────────────────────────
@@ -482,7 +538,7 @@ BEGIN
     RAISE EXCEPTION 'FAIL 11c: _install_window_phase carries a grant it should not';
   END IF;
 
-  -- Wave 2's zero-grant posture survives the re-cut.
+  -- 00476 redefines this door nowhere; 00475's zero-grant posture is intact.
   IF has_function_privilege('service_role', 'public._commit_schedule_edit_authorized(uuid, jsonb, text, jsonb, text)', 'EXECUTE')
      OR has_function_privilege('authenticated', 'public._commit_schedule_edit_authorized(uuid, jsonb, text, jsonb, text)', 'EXECUTE') THEN
     RAISE EXCEPTION 'FAIL 11d: _commit_schedule_edit_authorized lost its zero-grant posture';
@@ -494,7 +550,8 @@ BEGIN
    WHERE n.nspname = 'public'
      AND p.proname IN ('hold_install_window', 'confirm_install_window',
                        'release_install_window', '_install_window_phase')
-     AND (NOT p.prosecdef OR NOT ('search_path=public' = ANY (p.proconfig)));
+     AND (NOT p.prosecdef
+          OR NOT ('search_path=public, pg_temp' = ANY (p.proconfig)));
   IF v_bad IS NOT NULL THEN
     RAISE EXCEPTION 'FAIL 11e: % is not a search_path-pinned SECURITY DEFINER', v_bad;
   END IF;
@@ -518,6 +575,77 @@ BEGIN
   END IF;
 
   RAISE NOTICE 'PASS 11: ACLs, search_path, RLS and the two policies are as authored';
+END $$;
+
+-- ─── 12. A dateless unpin proposal is an ordinary proposal row ─────────────
+--
+-- The unpin proposal is the one row shape 00475's uniques and ratchet had no
+-- caller for. It must nag-stack like any other (one live row per project /
+-- target / event, refreshed in place) and resolve one way only.
+
+DO $$
+DECLARE
+  v_wid      uuid;
+  v_before   integer;
+  v_row      public.schedule_proposals%ROWTYPE;
+  v_message  text;
+BEGIN
+  SELECT count(*) INTO v_before FROM public.schedule_proposals
+   WHERE project_id = 'b1a5e000-0000-4000-8000-0000000000a1'
+     AND source_event = 'install-window-released'
+     AND state = 'proposed';
+  IF v_before <> 1 THEN
+    RAISE EXCEPTION 'FAIL 12a: case 8 should have left exactly one live unpin proposal, found %', v_before;
+  END IF;
+
+  -- A second undisclosed confirm → release on the same phase. The release
+  -- proposal must REFRESH the standing row, not stack a second nag.
+  v_wid := public.hold_install_window(
+    'b1a5e000-0000-4000-8000-0000000000a1', DATE '2026-11-02', DATE '2026-11-06');
+  PERFORM public.confirm_install_window(v_wid, NULL);
+  PERFORM public.release_install_window(v_wid, 'Install window released', NULL);
+
+  SELECT count(*) INTO v_before FROM public.schedule_proposals
+   WHERE project_id = 'b1a5e000-0000-4000-8000-0000000000a1'
+     AND source_event = 'install-window-released'
+     AND state = 'proposed';
+  IF v_before <> 1 THEN
+    RAISE EXCEPTION 'FAIL 12b: a repeated unpin proposal stacked instead of upserting (% live)', v_before;
+  END IF;
+
+  SELECT * INTO v_row FROM public.schedule_proposals
+   WHERE project_id = 'b1a5e000-0000-4000-8000-0000000000a1'
+     AND source_event = 'install-window-released'
+     AND state = 'proposed';
+  IF v_row.proposed_anchor_date IS NOT NULL THEN
+    RAISE EXCEPTION 'FAIL 12c: the refreshed unpin proposal grew a date (%)', v_row.proposed_anchor_date;
+  END IF;
+  IF v_row.source_ref <> v_wid THEN
+    RAISE EXCEPTION 'FAIL 12d: the upsert did not carry the newer act (%)', v_row.source_ref;
+  END IF;
+  -- A removal never contradicts the anchor it removes.
+  IF v_row.conflicts_with_committed THEN
+    RAISE EXCEPTION 'FAIL 12e: a proposed unpin was recorded as contradicting';
+  END IF;
+
+  -- The ratchet: resolving stamps the resolution, and history is final.
+  UPDATE public.schedule_proposals SET state = 'dismissed' WHERE id = v_row.id;
+  SELECT * INTO v_row FROM public.schedule_proposals WHERE id = v_row.id;
+  IF v_row.resolved_at IS NULL THEN
+    RAISE EXCEPTION 'FAIL 12f: dismissing the unpin proposal left no resolution stamp';
+  END IF;
+
+  BEGIN
+    UPDATE public.schedule_proposals SET state = 'proposed' WHERE id = v_row.id;
+    RAISE EXCEPTION 'FAIL 12g: a dismissed unpin proposal was revived';
+  EXCEPTION WHEN check_violation THEN
+    GET STACKED DIAGNOSTICS v_message = MESSAGE_TEXT;
+    IF v_message NOT LIKE '%is history and cannot be rewritten%' THEN
+      RAISE EXCEPTION 'FAIL 12h: unexpected ratchet refusal (%)', v_message;
+    END IF;
+  END;
+
+  RAISE NOTICE 'PASS 12: a dateless unpin proposal upserts under the live unique and ratchets shut';
 END $$;
 
 ROLLBACK;

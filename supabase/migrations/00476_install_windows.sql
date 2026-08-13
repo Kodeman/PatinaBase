@@ -8,32 +8,36 @@
 -- Parts
 --   1. install_windows — the evidence of commitment, with RLS in this file.
 --   2. _install_window_phase — the phase an install window anchors.
---   3. _commit_schedule_edit_authorized re-cut — phase-anchor learns an
---      explicit null-as-clear, and a proposal learns to propose an unpin.
---   4. hold / confirm / release — the three faces of the ceremony.
+--   3. hold / confirm / release — the three faces of the ceremony.
+--   4. guard_schedule_proposal_ratchet — a one-line correction to 00475.
 --
--- Lineage of every redefined body (grep|sort|tail verified at authoring):
---   _commit_schedule_edit_authorized ... 00326:681 (as commit_schedule_edit)
---                                        → 00475:208 → 00476
+-- Redefines the commit door NOWHERE. 00476 adds a table, a selector and three
+-- RPCs; every anchor it moves travels 00475's
+-- _commit_schedule_edit_authorized untouched.
+-- That door already carries both extensions I126 needs, so re-cutting it here
+-- would only reintroduce the pre-fix body:
+--   · `"clear": true` is the explicit unpin marker on BOTH phase-anchor and
+--     milestone-anchor (00475 PART 3). A bare or null date without the marker
+--     raises — an unpin is an act, not an omission — so release_install_window
+--     sends the marker and never a null date.
+--   · schedule_proposals.proposed_anchor_date is already nullable (00475
+--     PART 1) precisely so an undisclosed release can propose the REMOVAL of
+--     an anchor. Such a row is dismissible but not committable, the posture
+--     00475 established for a proposal with no identifiable target.
+--   · source_event's CHECK already enumerates install-window-confirmed and
+--     install-window-released, so the downgrade lands instead of raising 23514.
 --
--- Contract extension (I126, "releasing a confirmed window unpins WITH
--- disclosed impact"):
---   · phase-anchor already cleared an anchor when `anchor_date` resolved to
---     NULL, but it could not tell an explicit clear from a malformed edit that
---     simply omitted the key. It now REQUIRES the key to be present and reads
---     an explicit JSON null as the clear — the same rigor milestone-anchor
---     carries, which raises on a null date because a milestone pin has no
---     unpin ceremony behind it.
---   · schedule_proposals.proposed_anchor_date drops NOT NULL. A release that
---     could not state its impact has to propose the REMOVAL of an anchor, and
---     a removal has no date. NULL there means exactly that; such a row is
---     dismissible but not committable, the posture 00475 already established
---     for a proposal with no identifiable target.
+-- The one thing 00476 does correct in 00475 is PART 4, and it is not about
+-- install windows: 00475's live-proposal upsert refreshes source_ref while
+-- 00475's ratchet froze it, so ANY second act re-proposing on the same
+-- (project, target, event) raised instead of refreshing the standing nag —
+-- two po-sends on one phase, as readily as two install windows.
 --
 -- Security shape: the three RPCs are SECURITY DEFINER over a comember guard,
--- exactly like the ceremonies 00475 re-cut. The anchor itself is never written
--- here — it travels _commit_schedule_edit_authorized, so R110's downgrade and
--- the revision cut are the same code for an install window as for a signature.
+-- exactly like the ceremonies 00475 re-cut, and carry the same
+-- `search_path = public, pg_temp`. The anchor itself is never written here —
+-- it travels _commit_schedule_edit_authorized, so R110's downgrade and the
+-- revision cut are the same code for an install window as for a signature.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -141,7 +145,7 @@ RETURNS uuid
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path TO 'public'
+SET search_path = public, pg_temp
 AS $$
   SELECT COALESCE(
     (SELECT ph.id
@@ -166,228 +170,7 @@ COMMENT ON FUNCTION public._install_window_phase(uuid) IS
   'confirmation to a proposal with no target rather than failing it.';
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- PART 3 — the commit door learns to unpin
---
--- Body VERBATIM from 00475:208, with two grafts, both named in the banner:
---   · phase-anchor requires its `anchor_date` key and reads an explicit null
---     as a clear;
---   · the proposal branch carries a null proposed date (the proposed unpin).
--- ═══════════════════════════════════════════════════════════════════════════
-
-ALTER TABLE public.schedule_proposals
-  ALTER COLUMN proposed_anchor_date DROP NOT NULL;
-
-COMMENT ON COLUMN public.schedule_proposals.proposed_anchor_date IS
-  'The date proposed for the target. NULL proposes the REMOVAL of the '
-  'target''s anchor (00476, I126 release semantics) — a proposal with no date '
-  'is dismissible but not committable, the same posture as a proposal with no '
-  'identifiable target.';
-
-CREATE OR REPLACE FUNCTION public._commit_schedule_edit_authorized(
-  p_project_id       uuid,
-  p_edits            jsonb,
-  p_reason           text,
-  p_disclosed_impact jsonb,
-  p_source           text DEFAULT 'manual'
-)
-RETURNS INTEGER
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO 'public'
-AS $$
-DECLARE
-  v_edit           JSONB;
-  v_kind           TEXT;
-  v_phase_id       UUID;
-  v_milestone_id   UUID;
-  v_duration_days  INTEGER;
-  v_anchor_date    DATE;
-  v_offset_days    INTEGER;
-  v_rows_affected  INTEGER;
-  v_new_v          INTEGER;
-  v_ceremony       BOOLEAN := COALESCE(p_source, 'manual') LIKE 'ceremony:%';
-  v_source_event   TEXT;
-BEGIN
-  IF p_edits IS NULL OR jsonb_typeof(p_edits) <> 'array' THEN
-    RAISE EXCEPTION 'p_edits must be a JSON array of edit objects';
-  END IF;
-
-  -- R110, enforced server-side so a UI bug cannot become a quiet hardening:
-  -- a ceremony that could not state its schedule impact PROPOSES. It does not
-  -- write an anchor and it does not cut a revision.
-  IF v_ceremony AND p_disclosed_impact IS NULL THEN
-    v_source_event := substr(p_source, 10);
-    FOR v_edit IN SELECT * FROM jsonb_array_elements(p_edits)
-    LOOP
-      v_kind := v_edit->>'kind';
-      IF v_kind = 'phase-anchor' THEN
-        -- An absent key is a malformed edit, never a proposed unpin (00476).
-        IF NOT (v_edit ? 'anchor_date') THEN
-          RAISE EXCEPTION 'phase-anchor edit requires an anchor_date key (null clears the anchor)';
-        END IF;
-        INSERT INTO public.schedule_proposals (
-          project_id, source_event, source_ref, target_phase_id,
-          proposed_anchor_date, disclosed_context
-        ) VALUES (
-          p_project_id, v_source_event,
-          NULLIF(v_edit->>'source_ref', '')::uuid,
-          NULLIF(v_edit->>'phase_id', '')::uuid,
-          (v_edit->>'anchor_date')::date,
-          v_edit->'context'
-        ) ON CONFLICT DO NOTHING;
-
-      ELSIF v_kind = 'milestone-anchor' THEN
-        INSERT INTO public.schedule_proposals (
-          project_id, source_event, source_ref, target_milestone_id,
-          proposed_anchor_date, disclosed_context
-        ) VALUES (
-          p_project_id, v_source_event,
-          NULLIF(v_edit->>'source_ref', '')::uuid,
-          NULLIF(v_edit->>'milestone_id', '')::uuid,
-          (v_edit->>'anchor_date')::date,
-          v_edit->'context'
-        ) ON CONFLICT DO NOTHING;
-
-      ELSE
-        RAISE EXCEPTION '_commit_schedule_edit_authorized: a ceremony may only propose an anchor, not %', v_kind;
-      END IF;
-    END LOOP;
-    RETURN NULL;
-  END IF;
-
-  FOR v_edit IN SELECT * FROM jsonb_array_elements(p_edits)
-  LOOP
-    v_kind := v_edit->>'kind';
-
-    IF v_kind = 'phase-duration' THEN
-      v_phase_id      := NULLIF(v_edit->>'phase_id', '')::uuid;
-      v_duration_days := (v_edit->>'duration_days')::integer;
-
-      -- Project-scoped WHERE: a phase_id belonging to a different project
-      -- (or no project at all) matches zero rows here, never mutates
-      -- anything, and falls straight into the not-found raise below.
-      UPDATE public.project_phases
-         SET duration_days = v_duration_days
-       WHERE id = v_phase_id
-         AND project_id = p_project_id;
-
-      GET DIAGNOSTICS v_rows_affected = ROW_COUNT;
-      IF v_rows_affected = 0 THEN
-        RAISE EXCEPTION 'phase % not found in project % (phase-duration edit)', v_phase_id, p_project_id;
-      END IF;
-
-    ELSIF v_kind = 'phase-anchor' THEN
-      v_phase_id   := NULLIF(v_edit->>'phase_id', '')::uuid;
-
-      -- 00476: the key must be PRESENT. An explicit null clears the anchor —
-      -- the unpin half of I126's release semantics — while an omitted key is
-      -- a malformed edit that must never silently unpin a committed date.
-      IF NOT (v_edit ? 'anchor_date') THEN
-        RAISE EXCEPTION 'phase-anchor edit requires an anchor_date key (null clears the anchor)';
-      END IF;
-      v_anchor_date := (v_edit->>'anchor_date')::date;
-
-      UPDATE public.project_phases
-         SET anchor_date = v_anchor_date
-       WHERE id = v_phase_id
-         AND project_id = p_project_id;
-
-      GET DIAGNOSTICS v_rows_affected = ROW_COUNT;
-      IF v_rows_affected = 0 THEN
-        RAISE EXCEPTION 'phase % not found in project % (phase-anchor edit)', v_phase_id, p_project_id;
-      END IF;
-
-    ELSIF v_kind = 'milestone-offset' THEN
-      v_milestone_id := NULLIF(v_edit->>'milestone_id', '')::uuid;
-      v_phase_id      := NULLIF(v_edit->>'phase_id', '')::uuid;
-      v_offset_days   := (v_edit->>'offset_days')::integer;
-
-      -- Two project-scoped guards up front: the milestone's CURRENT host
-      -- phase must belong to p_project_id (else it — or its whole project —
-      -- is foreign and unreachable), and so must the edit's TARGET host
-      -- phase (else this door could re-home a milestone onto another
-      -- project's chain). Checked before the UPDATE so the single UPDATE by
-      -- id below is provably safe.
-      IF NOT EXISTS (
-        SELECT 1 FROM public.schedule_milestones sm
-        JOIN public.project_phases ph ON ph.id = sm.phase_id
-        WHERE sm.id = v_milestone_id AND ph.project_id = p_project_id
-      ) THEN
-        RAISE EXCEPTION 'milestone % not found in project % (milestone-offset edit)', v_milestone_id, p_project_id;
-      END IF;
-
-      IF NOT EXISTS (
-        SELECT 1 FROM public.project_phases
-        WHERE id = v_phase_id AND project_id = p_project_id
-      ) THEN
-        RAISE EXCEPTION 'host phase % not found in project % (milestone-offset edit)', v_phase_id, p_project_id;
-      END IF;
-
-      -- anchor_date := NULL unconditionally — see the banner's milestone-
-      -- offset note (mirrors useUpdateScheduleMilestone's chip-unpin).
-      UPDATE public.schedule_milestones
-         SET phase_id    = v_phase_id,
-             offset_days = v_offset_days,
-             anchor_date = NULL
-       WHERE id = v_milestone_id;
-
-    ELSIF v_kind = 'milestone-anchor' THEN
-      v_milestone_id := NULLIF(v_edit->>'milestone_id', '')::uuid;
-      v_anchor_date  := (v_edit->>'anchor_date')::date;
-
-      IF v_anchor_date IS NULL THEN
-        RAISE EXCEPTION 'milestone-anchor edit requires an anchor_date (milestone %)', v_milestone_id;
-      END IF;
-
-      IF NOT EXISTS (
-        SELECT 1 FROM public.schedule_milestones sm
-        JOIN public.project_phases ph ON ph.id = sm.phase_id
-        WHERE sm.id = v_milestone_id AND ph.project_id = p_project_id
-      ) THEN
-        RAISE EXCEPTION 'milestone % not found in project % (milestone-anchor edit)', v_milestone_id, p_project_id;
-      END IF;
-
-      -- offset_days := NULL unconditionally — the exact mirror of
-      -- milestone-offset clearing anchor_date (I130).
-      UPDATE public.schedule_milestones
-         SET anchor_date = v_anchor_date,
-             offset_days = NULL
-       WHERE id = v_milestone_id;
-
-    ELSE
-      RAISE EXCEPTION 'commit_schedule_edit: unknown edit kind %', v_kind;
-    END IF;
-  END LOOP;
-
-  IF p_disclosed_impact IS NULL THEN
-    v_new_v := cut_schedule_revision(p_project_id, p_reason);
-  ELSE
-    -- The revision carries what the ceremony said before it was confirmed.
-    v_new_v := cut_schedule_revision(
-      p_project_id,
-      COALESCE(p_reason, 'Schedule revised') || ' · impact stated: ' ||
-      COALESCE(NULLIF(p_disclosed_impact->>'sentence', ''), p_disclosed_impact::text)
-    );
-  END IF;
-  RETURN v_new_v;
-END;
-$$;
-
-REVOKE ALL ON FUNCTION public._commit_schedule_edit_authorized(uuid, jsonb, text, jsonb, text)
-  FROM PUBLIC, anon, authenticated, service_role;
-
-COMMENT ON FUNCTION public._commit_schedule_edit_authorized(uuid, jsonb, text, jsonb, text) IS
-  'The private commit door (R109/R110). commit_schedule_edit''s 00326 body '
-  'minus the ownership guard — the caller has already authorized — plus the '
-  'milestone-anchor edit kind and the R110 downgrade: p_source ''ceremony:*'' '
-  'with a NULL p_disclosed_impact writes schedule_proposals rows and returns '
-  'NULL without touching an anchor. 00476: phase-anchor requires its '
-  'anchor_date key and reads an explicit null as a CLEAR, so a release can '
-  'unpin through this same door (I126). Zero grants by design: service_role '
-  'included, so an operational fact can only ever propose.';
-
--- ═══════════════════════════════════════════════════════════════════════════
--- PART 4 — the ceremony: hold, confirm, release
+-- PART 3 — the ceremony: hold, confirm, release
 -- ═══════════════════════════════════════════════════════════════════════════
 
 CREATE OR REPLACE FUNCTION public.hold_install_window(
@@ -398,7 +181,7 @@ CREATE OR REPLACE FUNCTION public.hold_install_window(
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path TO 'public'
+SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_actor  uuid := auth.uid();
@@ -458,7 +241,7 @@ CREATE OR REPLACE FUNCTION public.confirm_install_window(
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path TO 'public'
+SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_actor    uuid := auth.uid();
@@ -502,7 +285,10 @@ BEGIN
       'phase_id',    v_phase_id,
       'anchor_date', v_window.starts_on,
       'source_ref',  v_window.id,
-      'context',     p_disclosed_impact
+      -- Never a bare NULL: the proposal branch merges `context` into the
+      -- disclosed_context object, and a JSON null there concatenates into an
+      -- array instead of an object.
+      'context',     COALESCE(p_disclosed_impact, '{}'::jsonb)
     )),
     'Install window confirmed',
     v_impact,
@@ -540,7 +326,7 @@ CREATE OR REPLACE FUNCTION public.release_install_window(
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path TO 'public'
+SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_actor  uuid := auth.uid();
@@ -573,11 +359,14 @@ BEGIN
     PERFORM public._commit_schedule_edit_authorized(
       v_window.project_id,
       jsonb_build_array(jsonb_build_object(
-        'kind',        'phase-anchor',
-        'phase_id',    v_window.phase_id,
-        'anchor_date', NULL,
-        'source_ref',  v_window.id,
-        'context',     p_disclosed_impact
+        'kind',       'phase-anchor',
+        'phase_id',   v_window.phase_id,
+        -- The unpin is stated, never implied: 00475's door raises on a bare or
+        -- null date and takes `"clear": true` as the whole act. It is also why
+        -- a release is never read as contradicting the anchor it removes.
+        'clear',      true,
+        'source_ref', v_window.id,
+        'context',    COALESCE(p_disclosed_impact, '{}'::jsonb)
       )),
       COALESCE(NULLIF(btrim(p_reason), ''), 'Install window released'),
       p_disclosed_impact,
@@ -601,6 +390,74 @@ GRANT  EXECUTE ON FUNCTION public.release_install_window(uuid, text, jsonb) TO a
 COMMENT ON FUNCTION public.release_install_window(uuid, text, jsonb) IS
   'R112/I126: release a window. A confirmed window''s release unpins the '
   'anchor WITH a disclosed impact — release is itself a small ceremony that '
-  'states the effect of removing the date and cuts a revision. A NULL '
-  'p_disclosed_impact downgrades that unpin to a proposal (a proposal with no '
-  'date proposes the removal). Releasing a held window is a state flip only.';
+  'states the effect of removing the date and cuts a revision. The unpin '
+  'travels 00475''s door as an explicit `"clear": true` edit, never a null '
+  'date, so it is neither mistaken for a malformed edit nor read as '
+  'contradicting the anchor it removes. A NULL p_disclosed_impact downgrades '
+  'that unpin to a proposal (a dateless proposal proposes the removal). '
+  'Releasing a held window is a state flip only.';
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- PART 4 — guard_schedule_proposal_ratchet, corrected
+--
+-- Lineage: 00475 (first cut) → 00476. Body VERBATIM from 00475 but for one
+-- name dropped from the immutable set.
+--
+-- 00475 gave the live-proposal upsert `source_ref = EXCLUDED.source_ref` and
+-- gave the ratchet `NEW.source_ref IS DISTINCT FROM OLD.source_ref` as a
+-- forgery guard. The two disagree, and the ratchet wins: the moment a SECOND
+-- act re-proposes on the same (project, target, source_event) the upsert
+-- fires, the trigger raises, and the ceremony that should have refreshed a
+-- standing nag fails outright. Two purchase orders released against one phase
+-- reach it; so does a second install window's undisclosed release (I126).
+--
+-- What a proposal NAMES is its project, its target and its act — the exact
+-- triple the live-unique indexes key on, and the triple that must never be
+-- rewritten. source_ref points at WHICH occurrence of that act is currently
+-- speaking, and a later occurrence carrying a better date is precisely what
+-- the ratchet's own "only the fact itself may be refreshed" contemplates. It
+-- belongs with proposed_anchor_date, not with the identity.
+--
+-- Still frozen: project_id, source_event, both targets, created_at — and the
+-- resolution stamps are still derived here, never taken from the caller.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+CREATE OR REPLACE FUNCTION public.guard_schedule_proposal_ratchet()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF OLD.state <> 'proposed' THEN
+    RAISE EXCEPTION 'a % schedule proposal is history and cannot be rewritten', OLD.state
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW.project_id IS DISTINCT FROM OLD.project_id
+     OR NEW.source_event IS DISTINCT FROM OLD.source_event
+     OR NEW.target_phase_id IS DISTINCT FROM OLD.target_phase_id
+     OR NEW.target_milestone_id IS DISTINCT FROM OLD.target_milestone_id
+     OR NEW.created_at IS DISTINCT FROM OLD.created_at THEN
+    RAISE EXCEPTION 'what a schedule proposal names is fixed at the act'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW.state = 'proposed' THEN
+    -- Still live: only the fact itself may be refreshed (a later send or
+    -- delivery carries a better date, and names itself in source_ref).
+    -- Resolution stamps stay empty.
+    NEW.resolved_at := NULL;
+    NEW.resolved_by := NULL;
+    RETURN NEW;
+  END IF;
+  NEW.resolved_at := now();
+  NEW.resolved_by := auth.uid();
+  RETURN NEW;
+END;
+$$;
+
+COMMENT ON FUNCTION public.guard_schedule_proposal_ratchet() IS
+  'I130''s ratchet. A resolved proposal is history; a live one may be '
+  'refreshed by a later occurrence of the same act, source_ref included — '
+  '00475 froze source_ref, which deadlocked its own live-proposal upsert. '
+  'What stays fixed is what the proposal NAMES: project, target, act. '
+  'resolved_at/resolved_by are derived here, never taken from the caller.';
