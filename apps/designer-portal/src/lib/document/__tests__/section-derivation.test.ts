@@ -49,8 +49,7 @@ const lineage = {
 describe('deriveSections (§4)', () => {
   it('signed active project: Brief→Proposal settled, Project active, Install/Care future', () => {
     const s = deriveSections(
-      { row: baseRow, lineage, lineageResolved: true, projectStartDate: '2026-03-30', installStartDate: '2026-09-02', schedule: null },
-      NOW,
+      { row: baseRow, lineage, lineageResolved: true, schedule: null },
     );
     expect(s.map((x) => x.state)).toEqual([
       'settled',
@@ -72,8 +71,7 @@ describe('deriveSections (§4)', () => {
 
   it('manual project (no lineage): Brief→Proposal are unrecorded, not future or complete', () => {
     const s = deriveSections(
-      { row: baseRow, lineage: null, lineageResolved: true, projectStartDate: '2026-03-30', installStartDate: null, schedule: null },
-      NOW,
+      { row: baseRow, lineage: null, lineageResolved: true, schedule: null },
     );
     expect(s.slice(0, 4).map((x) => x.state)).toEqual([
       'unrecorded',
@@ -92,8 +90,7 @@ describe('deriveSections (§4)', () => {
 
   it.each(['loading', 'error'])('keeps pre-project lineage neutral while the proposal read is %s', () => {
     const s = deriveSections(
-      { row: baseRow, lineage: null, lineageResolved: false, projectStartDate: null, installStartDate: null, schedule: null },
-      NOW,
+      { row: baseRow, lineage: null, lineageResolved: false, schedule: null },
     );
     expect(s.slice(0, 4).map((x) => x.state)).toEqual(['future', 'future', 'future', 'future']);
     expect(s.slice(0, 4).some((x) => x.sub === 'Not recorded')).toBe(false);
@@ -105,11 +102,8 @@ describe('deriveSections (§4)', () => {
         row: { ...baseRow, active_section: 'install', current_phase: 'final_walkthrough' },
         lineage,
         lineageResolved: true,
-        projectStartDate: '2026-03-30',
-        installStartDate: '2026-09-02',
         schedule: null,
       },
-      NOW,
     );
     expect(s[5].state).toBe('active');
     expect(s[5].sub).toBe('Final Walkthrough');
@@ -122,11 +116,8 @@ describe('deriveSections (§4)', () => {
         row: { ...baseRow, active_section: 'care', project_status: 'completed' },
         lineage,
         lineageResolved: true,
-        projectStartDate: '2026-03-30',
-        installStartDate: null,
         schedule: null,
       },
-      NOW,
     );
     expect(s[6]).toMatchObject({ state: 'active', sub: 'Ongoing' });
   });
@@ -145,11 +136,8 @@ describe('deriveSections (§4)', () => {
         },
         lineage: { ...lineage, signedAt: null, status: 'sent' },
         lineageResolved: true,
-        projectStartDate: null,
-        installStartDate: null,
         schedule: null,
       },
-      NOW,
     );
     expect(s[3]).toMatchObject({ state: 'active', sub: 'Awaiting signature' });
     expect(s[2].sub).toBe('Settled · Mar 21');
@@ -167,11 +155,8 @@ describe('deriveSections (§4)', () => {
         },
         lineage: { ...lineage, signedAt: null, status: 'declined' },
         lineageResolved: true,
-        projectStartDate: null,
-        installStartDate: null,
         schedule: null,
       },
-      NOW,
     );
     expect(s[3]).toMatchObject({ state: 'active', sub: 'Declined' });
   });
@@ -187,11 +172,8 @@ describe('deriveSections (§4)', () => {
         },
         lineage,
         lineageResolved: true,
-        projectStartDate: null,
-        installStartDate: null,
         schedule: null,
       },
-      NOW,
     );
     expect(s[3].sub).toBe('Signed · Apr 1');
     expect(s[3].state).toBe('active');
@@ -208,11 +190,8 @@ describe('deriveSections (§4)', () => {
         },
         lineage: { ...lineage, sentAt: null, signedAt: null, status: 'draft' },
         lineageResolved: true,
-        projectStartDate: null,
-        installStartDate: null,
         schedule: null,
       },
-      NOW,
     );
     expect(s[2]).toMatchObject({ state: 'active', sub: 'Drafting' });
     expect(s[1].sub).toBe('Settled · Mar 9');
@@ -229,11 +208,8 @@ describe('deriveSections (§4)', () => {
         },
         lineage: null,
         lineageResolved: true,
-        projectStartDate: null,
-        installStartDate: null,
         schedule: null,
       },
-      NOW,
     );
     expect(s[0]).toMatchObject({ state: 'active', sub: 'Respond by Jun 12' });
     expect(s.slice(1).every((x) => x.state === 'future')).toBe(true);
@@ -245,11 +221,8 @@ describe('deriveSections (§4)', () => {
         row: { ...baseRow, engagement_kind: 'relationship', active_section: 'discovery' },
         lineage: null,
         lineageResolved: true,
-        projectStartDate: null,
-        installStartDate: null,
         schedule: null,
       },
-      NOW,
     );
     expect(s[0].state).toBe('settled');
     expect(s[1]).toMatchObject({ state: 'active', sub: 'In discovery' });
@@ -279,11 +252,8 @@ describe('deriveSections — schedule registers (R108)', () => {
         row: baseRow,
         lineage,
         lineageResolved: true,
-        projectStartDate: '2026-03-30',
-        installStartDate: '2026-09-02',
         schedule,
       },
-      NOW,
     )[4].sub;
 
   it('committed: Active · Week N, straight from the resolver', () => {
@@ -322,11 +292,8 @@ describe('deriveSections — schedule registers (R108)', () => {
         row: baseRow,
         lineage,
         lineageResolved: true,
-        projectStartDate: '2026-03-30',
-        installStartDate: '2026-09-02',
         schedule,
       },
-      NOW,
     )[5].sub;
 
   it('install: a committed anchor prints its day', () => {
@@ -341,10 +308,11 @@ describe('deriveSections — schedule registers (R108)', () => {
     ).toBe('~Sep 2');
   });
 
-  it('install: a band says so beside its date', () => {
-    expect(
-      installSub(scheduleFacts({ install: { date: '2026-09-02', fidelity: 'band' } })),
-    ).toBe('Band · Sep 2');
+  it('install: a band states a month, never a day', () => {
+    const sub = installSub(scheduleFacts({ install: { date: '2026-09-02', fidelity: 'band' } }));
+    expect(sub).toBe('Band · ~Sep');
+    // The desk refuses to put a day on an unanchored schedule; so does this.
+    expect(sub).not.toMatch(/\d/);
   });
 
   it('install: a resolved schedule with no install phase never falls back to the stored date', () => {

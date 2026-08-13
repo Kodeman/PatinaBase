@@ -53,6 +53,7 @@ jest.mock('@tanstack/react-query', () => {
 
 import { replaceEqualDeep } from '@tanstack/react-query';
 import {
+  DESK_PHASE_LIMIT,
   selectOperationalNeedForDocument,
   useDeskEngagements,
 } from '../use-desk-engagements';
@@ -62,7 +63,7 @@ import { partitionDesk, type DocumentStateRow } from '@/lib/document/desk-deriva
  *  itself, and `.then` resolves it as the Promise.all in the hook expects. */
 function chainResult(result: { data: unknown; error: unknown }) {
   const builder: Record<string, unknown> = {};
-  for (const m of ['select', 'order', 'gte', 'lte', 'in', 'eq', 'is']) {
+  for (const m of ['select', 'order', 'gte', 'lte', 'in', 'eq', 'is', 'limit']) {
     builder[m] = jest.fn(() => builder);
   }
   builder.then = (
@@ -184,6 +185,132 @@ describe('useDeskEngagements', () => {
       previous_chip_count: 0,
       session_valid: true,
     });
+  });
+
+  // ── R108: the desk-wide schedule feed is bounded, and a full page is no
+  //    answer at all ──────────────────────────────────────────────────────
+  //
+  // A truncated phase read silently drops whole projects, and a project
+  // missing from a PRESENT map reads as "no phases" — the desk would invent a
+  // setup need for a fully-composed schedule. Truncation must therefore
+  // degrade the map to undefined, exactly like a query error.
+
+  /** A project-shape row that derives no need of its own, so any need it
+   *  ends up with came from the schedule feed. */
+  const PROJECT_ROW = {
+    ...NEW_LEAD_ROW,
+    engagement_kind: 'project',
+    engagement_id: 'project-1',
+    project_id: 'project-1',
+    lead_id: null,
+    lead_status: null,
+    active_section: 'project',
+    is_paused: false,
+    overdue_decision_count: 0,
+    due_task_count: 0,
+    draft_unsent_po_count: 0,
+    unacked_po_count: 0,
+    unsent_pulse_count: 0,
+    awaiting_inspection_count: 0,
+    in_flight_count: 0,
+    item_count: 0,
+    client_name: 'Sarah Whitfield',
+    title: 'Whitfield Residence',
+  };
+
+  /** Routes each table to its own canned result. */
+  function routeTables(byTable: Record<string, { data: unknown; error: unknown }>) {
+    mockFrom.mockImplementation((table: string) =>
+      chainResult(byTable[table] ?? { data: [], error: null }),
+    );
+    mockGetSession.mockResolvedValue({
+      data: { session: { access_token: 'tok' } },
+      error: null,
+    });
+  }
+
+  it('caps the schedule reads and treats a FULL phase read as no answer, not as "no phases"', async () => {
+    // A full page: every row belongs to some other project, so `project-1` is
+    // absent from the map — the exact shape that would fabricate a need.
+    const truncated = Array.from({ length: DESK_PHASE_LIMIT }, (_, i) => ({
+      id: `ph-${i}`,
+      project_id: `other-${i}`,
+      name: 'Phase',
+      phase_key: null,
+      status: 'pending',
+      sort_order: 0,
+      lane: 'main',
+      duration_days: 7,
+      duration_weeks: null,
+      follows_phase_id: null,
+      anchor_date: '2026-01-01',
+      start_date: null,
+      target_end_date: null,
+    }));
+    routeTables({
+      document_state: { data: [PROJECT_ROW], error: null },
+      project_phases: { data: truncated, error: null },
+    });
+
+    const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data!.folders).toHaveLength(0);
+    expect(
+      result.current.data!.folders.some((f) => f.need.kind === 'schedule_unconfigured'),
+    ).toBe(false);
+  });
+
+  it('a SHORT phase read is a real answer — an absent project genuinely has no phases', async () => {
+    routeTables({
+      document_state: { data: [PROJECT_ROW], error: null },
+      project_phases: { data: [], error: null },
+    });
+
+    const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data!.folders.map((f) => f.need.kind)).toEqual([
+      'schedule_unconfigured',
+    ]);
+  });
+
+  it('a phases-query error also degrades to no answer', async () => {
+    routeTables({
+      document_state: { data: [PROJECT_ROW], error: null },
+      project_phases: { data: null, error: { message: 'boom' } },
+    });
+
+    const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data!.folders).toHaveLength(0);
+  });
+
+  it('bounds both schedule reads explicitly', async () => {
+    const limits: number[] = [];
+    mockGetSession.mockResolvedValue({
+      data: { session: { access_token: 'tok' } },
+      error: null,
+    });
+    mockFrom.mockImplementation((table: string) => {
+      const builder = chainResult({
+        data: table === 'document_state' ? [PROJECT_ROW] : [],
+        error: null,
+      }) as Record<string, jest.Mock>;
+      const originalLimit = builder.limit;
+      builder.limit = jest.fn((n: number) => {
+        if (table === 'project_phases' || table === 'schedule_milestones') limits.push(n);
+        return originalLimit(n);
+      });
+      return builder;
+    });
+
+    const { result } = renderHook(() => useDeskEngagements(), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(limits).toHaveLength(2);
+    for (const n of limits) expect(n).toBeGreaterThan(0);
   });
 });
 

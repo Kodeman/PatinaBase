@@ -903,6 +903,29 @@ describe('DocumentPage guide activation', () => {
     expect(screen.getByTestId('doc-vitals').textContent ?? '').not.toMatch(/Target/);
   });
 
+  it('R107: a phase-less project states its project-level target in the band register', () => {
+    asProjectDocument();
+    mockProjectQuery = {
+      data: { target_end_date: '2026-11-15', total_amount_cents: null },
+      isLoading: false,
+      isError: false,
+    };
+    mockResolvedSchedule = {
+      phases: [],
+      milestones: [],
+      resolved: { phases: [], milestones: [], conflicts: [], slackDays: null },
+      isLoading: false,
+      isError: false,
+    };
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    // Band-honest: month precision, approximate marker, never a firm claim.
+    const vitals = screen.getByTestId('doc-vitals').textContent ?? '';
+    expect(vitals).toContain('Target ~November 2026');
+    expect(vitals).not.toMatch(/Target November/);
+  });
+
   it('states no target while the schedule is still being read', () => {
     asProjectDocument();
     mockProjectQuery = {

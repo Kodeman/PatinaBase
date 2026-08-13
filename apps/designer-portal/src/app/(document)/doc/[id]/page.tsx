@@ -123,15 +123,16 @@ const prettyPhase = (phase: string | null) =>
 type AnyRecord = any;
 
 /**
- * The project fields this page actually reads off `useProjectV2`. The wider
- * `AnyRecord` is why `project?.target_completion` — a column that does not
- * exist — sat here silently for months rendering nothing.
+ * The project fields the letterhead actually reads. Standalone — NOT an
+ * intersection with `AnyRecord`, which would collapse straight back to `any`
+ * and re-open the hole that let `project?.target_completion` (not a column)
+ * sit here for months rendering nothing.
  */
-type ProjectVitalsRecord = AnyRecord & {
+interface ProjectVitalsRecord {
   target_end_date?: string | null;
   total_amount_cents?: number | null;
   start_date?: string | null;
-};
+}
 
 /**
  * R108 — the header speaks the resolver's selection and its target in the
@@ -142,8 +143,18 @@ interface ScheduleVitals {
   target: { date: string | null; fidelity: Fidelity };
 }
 
-function targetVitalFor(target: ScheduleVitals['target']): string | null {
-  if (!target.date) return null;
+/**
+ * R107/R108. The register a target may be stated in. When the resolver placed
+ * no phase at all, the project's own `target_end_date` IS the Band tier — a
+ * project-level target the header may state, band-honest, at month precision.
+ */
+function targetVitalFor(
+  target: ScheduleVitals['target'],
+  projectTargetEndDate: string | null | undefined,
+): string | null {
+  if (!target.date) {
+    return projectTargetEndDate ? `Target ~${fmtMonthYear(projectTargetEndDate)}` : null;
+  }
   const month = fmtMonthYear(target.date);
   switch (target.fidelity) {
     case 'committed':
@@ -186,7 +197,7 @@ function vitalsFor(
       (schedule ? schedule.activePhaseName : null) ?? prettyPhase(row.current_phase),
       // While the schedule loads the header states no target at all — a firmer
       // claim that later softens would be the same lie, briefly.
-      schedule ? targetVitalFor(schedule.target) : null,
+      schedule ? targetVitalFor(schedule.target, project?.target_end_date) : null,
       project?.total_amount_cents != null ? fmtUsd(project.total_amount_cents) : null,
     ]
       .filter(Boolean)
@@ -473,8 +484,11 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     const statuses = new Map<string, PhaseStatus>(
       scheduleQuery.phases.map((p) => [p.id, (p.status ?? 'pending') as PhaseStatus]),
     );
+    const sortOrders = new Map<string, number>(
+      scheduleQuery.phases.map((p) => [p.id, p.sort_order ?? 0]),
+    );
     const today = new Date().toISOString().slice(0, 10);
-    const selection = selectActivePhase(resolved, statuses, today);
+    const selection = selectActivePhase(resolved, statuses, today, sortOrders);
     const active = resolved.phases.find((p) => p.id === selection.activePhaseId) ?? null;
     const installResolved = installPhase
       ? (resolved.phases.find((p) => p.id === installPhase.id) ?? null)
@@ -509,13 +523,10 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
         {
           row,
           lineage,
-          projectStartDate: project?.start_date ?? null,
-          installStartDate: installPhase?.start_date ?? null,
           schedule: scheduleFacts,
           lineageResolved:
             row.engagement_kind !== 'project' || (!projectIsLoading && !projectIsError),
         },
-        new Date(),
       )
     : [];
   const proposalGuideFacts: ProposalGuideFacts | null = liveProposal
@@ -726,7 +737,10 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
             change / edit through the household sheet. */}
         <DocLetterhead
           title={row.title}
-          vitals={vitalsFor(row, project, liveProposal, scheduleVitals)}
+          // The cast is the narrowing: `project` is still the page-wide
+          // AnyRecord, but the letterhead may only reach the three columns it
+          // actually reads.
+          vitals={vitalsFor(row, project as ProjectVitalsRecord, liveProposal, scheduleVitals)}
           // R80: project vitals self-save at the letterhead (blur-save law).
           projectId={row.engagement_kind === 'project' ? row.project_id : null}
           fill={deriveFillState(sections)}

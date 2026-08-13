@@ -151,6 +151,33 @@ describe('buildDeskSchedule', () => {
     ).toMatchObject({ fidelity: 'band', activePhaseName: null });
   });
 
+  it('threads each project’s own start_date as the forward-compute origin (the Frame register)', () => {
+    const phases = [
+      phaseRow({ id: 'a1', project_id: 'proj-a', name: 'Discovery', duration_days: 90 }),
+      phaseRow({ id: 'b1', project_id: 'proj-b', name: 'Discovery', duration_days: 90 }),
+    ];
+    const withStarts = buildDeskSchedule(
+      phases,
+      [],
+      TODAY,
+      new Map([['proj-a', '2026-05-01']]),
+    );
+
+    // proj-a has an origin, so its unanchored chain is a Frame…
+    expect(withStarts.get('proj-a')).toMatchObject({
+      fidelity: 'frame',
+      positionText: 'Frame',
+    });
+    // …and proj-b, with no start date, has nothing to place at all.
+    expect(withStarts.get('proj-b')?.fidelity).toBe('band');
+
+    // Omitting the map entirely is the pre-fix behavior: Frame unreachable.
+    const withoutStarts = buildDeskSchedule(phases, [], TODAY);
+    for (const entry of withoutStarts.values()) {
+      expect(entry.fidelity).not.toBe('frame');
+    }
+  });
+
   it('the 50-project shape: one entry per project, each resolved once', () => {
     const phases: DeskPhaseRow[] = [];
     const milestones: DeskMilestoneRow[] = [];

@@ -975,7 +975,7 @@ export function deriveMotion(
 
   // R108: where the project actually stands, in the register its dates support.
   // Never a bare date on a band — an unanchored project says so.
-  if (schedule) {
+  if (schedule && row.engagement_kind === 'project') {
     const position = schedule.positionText;
     if (schedule.fidelity === 'band') {
       if (position) return { kind: 'schedule_position', text: 'Band — no anchor yet' };

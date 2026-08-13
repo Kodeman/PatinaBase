@@ -78,11 +78,17 @@ function groupBy<T>(rows: readonly T[], key: (row: T) => string | null): Map<str
   return out;
 }
 
-/** Per-project Desk schedule inputs from one batched phase + milestone read. */
+/**
+ * Per-project Desk schedule inputs from one batched phase + milestone read.
+ * `startDates` maps project_id → `projects.start_date`, the resolver's
+ * forward-compute origin: without it an unanchored chain can never resolve as
+ * a Frame, only as legacy stored dates.
+ */
 export function buildDeskSchedule(
   phaseRows: readonly DeskPhaseRow[],
   milestoneRows: readonly DeskMilestoneRow[],
   today: string,
+  startDates?: ReadonlyMap<string, string | null>,
 ): Map<string, DeskScheduleInput> {
   const phasesByProject = groupBy(phaseRows ?? [], (r) => r.project_id ?? null);
   const projectOfPhase = new Map<string, string>();
@@ -101,12 +107,13 @@ export function buildDeskSchedule(
       (milestonesByProject.get(projectId) ?? []).map((m) =>
         mapMilestoneRowToScheduleInput(m as Parameters<typeof mapMilestoneRowToScheduleInput>[0]),
       ),
-      { projectStartDate: null, today },
+      { projectStartDate: startDates?.get(projectId) ?? null, today },
     );
     const statuses = new Map<string, PhaseStatus>(
       phases.map((p) => [p.id, (p.status ?? 'pending') as PhaseStatus]),
     );
-    const selection = selectActivePhase(resolved, statuses, today);
+    const sortOrders = new Map<string, number>(phases.map((p) => [p.id, p.sort_order ?? 0]));
+    const selection = selectActivePhase(resolved, statuses, today, sortOrders);
     const active = resolved.phases.find((p) => p.id === selection.activePhaseId) ?? null;
     const installPhase = phases.find((p) => p.phase_key === 'installation') ?? null;
     const installResolved = installPhase

@@ -11,16 +11,9 @@
 
 import { useId, type CSSProperties } from "react";
 import type { ResidentialWorkflowTrackKey } from "@patina/types";
-import type { Fidelity } from "@patina/utils";
+import { FIDELITY_WORD, type Fidelity } from "@patina/utils";
 
 import type { SectionStageLineModel } from "@/lib/document/section-stage-line";
-
-const FIDELITY_LABEL: Record<Fidelity, string> = {
-  band: "Band",
-  frame: "Frame",
-  committed: "Committed",
-  record: "Record",
-};
 
 const TRACK_HUE: Record<ResidentialWorkflowTrackKey, string> = {
   core: "var(--color-mocha)",
@@ -98,7 +91,9 @@ export function SectionStageLine({ model, fidelity }: SectionStageLineProps) {
           )}
         </>
       ) : fidelity ? (
-        <p className={`min-w-0 break-words ${META}`}>{FIDELITY_LABEL[fidelity]}</p>
+        <p role="status" className={`min-w-0 break-words ${META}`}>
+          {FIDELITY_WORD[fidelity]}
+        </p>
       ) : null}
     </section>
   );

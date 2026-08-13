@@ -48,8 +48,11 @@ export function SectionStageLineMount({
     const statuses = new Map<string, PhaseStatus>(
       schedule.phases.map((p) => [p.id, (p.status ?? "pending") as PhaseStatus]),
     );
+    const sortOrders = new Map<string, number>(
+      schedule.phases.map((p) => [p.id, p.sort_order ?? 0]),
+    );
     const today = new Date().toISOString().slice(0, 10);
-    const selection = selectActivePhase(resolved, statuses, today);
+    const selection = selectActivePhase(resolved, statuses, today, sortOrders);
     const active = resolved.phases.find((p) => p.id === selection.activePhaseId) ?? null;
     return {
       selection,

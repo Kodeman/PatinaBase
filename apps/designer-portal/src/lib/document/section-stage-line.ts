@@ -12,7 +12,7 @@ import {
   RESIDENTIAL_WORKFLOW_TRACKS,
   type ResidentialWorkflowTrackKey,
 } from "@patina/types";
-import type { Fidelity, ScheduleSelection } from "@patina/utils";
+import { FIDELITY_WORD, type Fidelity, type ScheduleSelection } from "@patina/utils";
 
 import type {
   WorkflowActiveGroup,
@@ -29,13 +29,6 @@ export interface SectionStageTrackBand {
   label: string;
   stageNumber: string;
 }
-
-const FIDELITY_LABEL: Record<Fidelity, string> = {
-  band: "Band",
-  frame: "Frame",
-  committed: "Committed",
-  record: "Record",
-};
 
 export interface SectionStageLineModel {
   mode: "project" | "section";
@@ -77,7 +70,7 @@ function subLabelFor(
     trackLabel,
     stagePosition,
     position,
-    fidelity ? FIDELITY_LABEL[fidelity] : null,
+    fidelity ? FIDELITY_WORD[fidelity] : null,
   ]
     .filter(Boolean)
     .join(" · ");

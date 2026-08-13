@@ -10,7 +10,7 @@
 import type { Fidelity, ScheduleSelection } from '@patina/utils';
 
 import type { DocumentStateRow, SectionKey } from './desk-derivation';
-import { fmtDay } from './format';
+import { fmtDay, fmtMonth } from './format';
 
 export type SectionState = 'settled' | 'active' | 'future' | 'unrecorded';
 
@@ -53,8 +53,6 @@ export interface SectionFacts {
   row: DocumentStateRow;
   lineage: SectionLineage | null;
   lineageResolved: boolean;
-  projectStartDate: string | null;
-  installStartDate: string | null;
   schedule: SectionScheduleFacts | null;
 }
 
@@ -148,12 +146,14 @@ function futureSub(key: SectionKey, f: SectionFacts): string {
     case 'frame':
       return `~${fmtDay(install.date)}`;
     case 'band':
-      return `Band · ${fmtDay(install.date)}`;
+      // Month precision only: a band never states a day, matching the desk's
+      // refusal to put a date on an unanchored schedule.
+      return `Band · ~${fmtMonth(install.date)}`;
   }
 }
 
 /** The seven spine sections for one engagement. */
-export function deriveSections(f: SectionFacts, now: Date): SpineSection[] {
+export function deriveSections(f: SectionFacts): SpineSection[] {
   const activeIdx = ORDER.indexOf(f.row.active_section);
   // Manual projects (signed shape, no proposal lineage) ghost Brief→Proposal (R1).
   const ghostPast =

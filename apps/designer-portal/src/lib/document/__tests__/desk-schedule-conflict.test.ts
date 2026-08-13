@@ -287,6 +287,17 @@ describe('schedule_position motion (R108)', () => {
     expect(motion).toEqual({ kind: 'schedule_position', text: 'Band — no anchor yet' });
   });
 
+  it('only a project speaks of its schedule — matching deriveNeed’s own asymmetry', () => {
+    for (const kind of ['proposal', 'lead', 'relationship'] as const) {
+      expect(
+        deriveMotion(projectRow({ engagement_kind: kind }), NOW, null, null, positioned)?.kind,
+      ).not.toBe('schedule_position');
+    }
+    expect(deriveMotion(projectRow(), NOW, null, null, positioned)?.kind).toBe(
+      'schedule_position',
+    );
+  });
+
   it('drift outranks it — an existing R22 chip beats a statement of position', () => {
     expect(deriveMotion(projectRow(), NOW, drift, null, positioned)?.kind).toBe('drift');
   });
