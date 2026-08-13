@@ -19906,6 +19906,94 @@ export type Database = {
           },
         ]
       }
+      schedule_proposals: {
+        Row: {
+          created_at: string
+          disclosed_context: Json | null
+          id: string
+          project_id: string
+          proposed_anchor_date: string
+          resolved_at: string | null
+          resolved_by: string | null
+          source_event: string
+          source_ref: string | null
+          state: string
+          target_milestone_id: string | null
+          target_phase_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          disclosed_context?: Json | null
+          id?: string
+          project_id: string
+          proposed_anchor_date: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          source_event: string
+          source_ref?: string | null
+          state?: string
+          target_milestone_id?: string | null
+          target_phase_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          disclosed_context?: Json | null
+          id?: string
+          project_id?: string
+          proposed_anchor_date?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          source_event?: string
+          source_ref?: string | null
+          state?: string
+          target_milestone_id?: string | null
+          target_phase_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_proposals_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "schedule_proposals_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedule_proposals_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedule_proposals_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedule_proposals_target_milestone_id_fkey"
+            columns: ["target_milestone_id"]
+            isOneToOne: false
+            referencedRelation: "schedule_milestones"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedule_proposals_target_phase_id_fkey"
+            columns: ["target_phase_id"]
+            isOneToOne: false
+            referencedRelation: "project_phases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       schedule_revisions: {
         Row: {
           actor: string | null
@@ -26548,6 +26636,16 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      _commit_schedule_edit_authorized: {
+        Args: {
+          p_disclosed_impact: Json
+          p_edits: Json
+          p_project_id: string
+          p_reason: string
+          p_source?: string
+        }
+        Returns: number
+      }
       _compute_quiz_profile: { Args: { p_answers: Json }; Returns: Json }
       _configuration_com_color_fabric: {
         Args: { p_com_details: Json }
@@ -26566,7 +26664,11 @@ export type Database = {
         Returns: string
       }
       _countersign_design_services_agreement_impl: {
-        Args: { p_proposal_id: string; p_signer_name: string }
+        Args: {
+          p_disclosed_impact?: Json
+          p_proposal_id: string
+          p_signer_name: string
+        }
         Returns: Json
       }
       _create_furnishings_authorization_from_schedule_00444_impl: {
@@ -26822,6 +26924,7 @@ export type Database = {
       }
       _execute_furnishings_authorization_on_paper_authorized: {
         Args: {
+          p_disclosed_impact?: Json
           p_paper_signed_on: string
           p_proposal_id: string
           p_recorded_by: string
@@ -27387,6 +27490,18 @@ export type Database = {
       _save_product_configuration_impl: {
         Args: { p_input: Json }
         Returns: Json
+      }
+      _schedule_engagement_start_phase: {
+        Args: { p_project_id: string }
+        Returns: string
+      }
+      _schedule_thread_completion_milestone: {
+        Args: { p_project_id: string }
+        Returns: string
+      }
+      _schedule_thread_phase: {
+        Args: { p_project_id: string }
+        Returns: string
       }
       _scope_change_requester_can_author: {
         Args: { p_actor: string; p_owner: string }
@@ -28478,7 +28593,11 @@ export type Database = {
         Returns: string[]
       }
       countersign_design_services_agreement: {
-        Args: { p_proposal_id: string; p_signer_name: string }
+        Args: {
+          p_disclosed_impact?: Json
+          p_proposal_id: string
+          p_signer_name: string
+        }
         Returns: Json
       }
       create_board_share: {
@@ -28913,7 +29032,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      engage_trade_scope: { Args: { p_proposal_id: string }; Returns: Json }
+      engage_trade_scope: {
+        Args: { p_disclosed_impact?: Json; p_proposal_id: string }
+        Returns: Json
+      }
       enqueue_agent_successor_if_owned: {
         Args: {
           p_actor?: string
@@ -29103,6 +29225,7 @@ export type Database = {
       }
       execute_furnishings_authorization_on_paper: {
         Args: {
+          p_disclosed_impact?: Json
           p_paper_signed_on: string
           p_proposal_id: string
           p_scan_document_id?: string
