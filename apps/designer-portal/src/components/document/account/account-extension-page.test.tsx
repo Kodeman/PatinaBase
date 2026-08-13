@@ -14,24 +14,20 @@ describe("AccountExtensionPage", () => {
     delete process.env.NEXT_PUBLIC_CAPTURE_EXTENSION_INSTALL_URL;
   });
 
-  it("shows the supported unpacked installation flow", () => {
-    process.env.NEXT_PUBLIC_CAPTURE_EXTENSION_INSTALL_MODE = "unpacked";
-    process.env.NEXT_PUBLIC_CAPTURE_EXTENSION_INSTALL_URL =
-      "https://example.com/patina-capture.zip";
+  it("shows the honest under-review state without a download or unpacked instructions", () => {
+    process.env.NEXT_PUBLIC_CAPTURE_EXTENSION_INSTALL_MODE = "under_review";
 
     render(<AccountExtensionPage />);
 
-    expect(
-      screen.getByRole("link", { name: /Download beta/i }),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/Load unpacked/i)).toBeInTheDocument();
-    expect(screen.getByText(/containing manifest.json/i)).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(/update is under review/i);
+    expect(screen.queryByRole("link", { name: /Download|Chrome/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Load unpacked|Developer mode|ZIP/i)).not.toBeInTheDocument();
   });
 
   it("switches to Web Store installation without code changes", () => {
     process.env.NEXT_PUBLIC_CAPTURE_EXTENSION_INSTALL_MODE = "webstore";
     process.env.NEXT_PUBLIC_CAPTURE_EXTENSION_INSTALL_URL =
-      "https://chromewebstore.google.com/detail/patina/example";
+      "https://chromewebstore.google.com/detail/patina/abcdefghijklmnopabcdefghijklmnop";
 
     render(<AccountExtensionPage />);
 
@@ -39,15 +35,15 @@ describe("AccountExtensionPage", () => {
       screen.getByRole("link", { name: /Add to Chrome/i }),
     ).toHaveAttribute(
       "href",
-      "https://chromewebstore.google.com/detail/patina/example",
+      "https://chromewebstore.google.com/detail/patina/abcdefghijklmnopabcdefghijklmnop",
     );
-    expect(screen.getByText(/updates automatically/i)).toBeInTheDocument();
+    expect(screen.getByText(/install and update it through the Web Store/i)).toBeInTheDocument();
   });
 
   it("renders an unavailable state for missing configuration", () => {
     render(<AccountExtensionPage />);
     expect(screen.getByRole("status")).toHaveTextContent(
-      /temporarily unavailable/i,
+      /under review/i,
     );
     expect(
       screen.queryByRole("link", { name: /Chrome|beta/i }),
