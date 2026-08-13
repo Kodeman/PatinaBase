@@ -282,7 +282,10 @@ export function projectGhosts(diff: RippleDiff, scale: TimeScale): RuleGhosts {
   let arrow: GhostArrowSpec | null = null;
 
   const edit = diff.edit;
-  const editedPhaseId = edit.kind === 'milestone-offset' ? null : edit.phaseId;
+  const editedPhaseId =
+    edit.kind === 'milestone-offset' || edit.kind === 'milestone-anchor'
+      ? null
+      : edit.phaseId;
 
   for (const pc of diff.phaseChanges) {
     if (!pc.moved) continue;
@@ -310,7 +313,7 @@ export function projectGhosts(diff: RippleDiff, scale: TimeScale): RuleGhosts {
     const pc = diff.phaseChanges.find((p) => p.phaseId === edit.phaseId);
     fromIso = pc?.fromStart ?? null;
     toIso = pc?.toStart ?? null;
-  } else if (edit.kind === 'milestone-offset') {
+  } else if (edit.kind === 'milestone-offset' || edit.kind === 'milestone-anchor') {
     const mm = diff.milestoneMoves.find((m) => m.milestoneId === edit.milestoneId);
     fromIso = mm?.fromDate ?? null;
     toIso = mm?.toDate ?? null;

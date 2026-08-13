@@ -107,7 +107,11 @@ export const scheduleEvents = {
   scheduleEditCommitted: (p: {
     project_id: string;
     surface: 'rule' | 'spine';
-    edit_kind: 'phase-duration' | 'phase-anchor' | 'milestone-offset';
+    edit_kind:
+      | 'phase-duration'
+      | 'phase-anchor'
+      | 'milestone-offset'
+      | 'milestone-anchor';
     ripple_size: number;
     conflict_count: number;
   }) => track('schedule_edit_committed', p),

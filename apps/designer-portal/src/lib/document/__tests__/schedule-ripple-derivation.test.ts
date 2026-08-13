@@ -510,3 +510,53 @@ describe('durationDelta baseline for legacy-dated phases (M3)', () => {
     expect(diff.durationDelta).toBe(6); // 20 − 14, baseline never falls through to the span
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// milestone-anchor (I130) — the exact mirror of milestone-offset: pin the date,
+// clear the offset. Trade-scope acceptance proposes a thread-completion date.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('milestone-anchor edit kind (I130)', () => {
+  it('pins the milestone to the anchored date and moves no phase', () => {
+    const ms = [milestone({ id: 'm', phaseId: 'b', offsetDays: 0 })];
+    const diff = rippleDiff(
+      chain4(),
+      ms,
+      { kind: 'milestone-anchor', milestoneId: 'm', anchorDate: '2026-03-01' },
+      noNames,
+      TODAY,
+    );
+    const move = diff.milestoneMoves.find((m) => m.milestoneId === 'm')!;
+    expect(move.fromDate).toBe('2026-01-21'); // b's end — it rode the phase
+    expect(move.toDate).toBe('2026-03-01');
+    expect(move.moved).toBe(true);
+    expect(move.anchored).toBe(true);
+    expect(diff.phaseChanges.every((p) => !p.moved)).toBe(true);
+    expect(diff.followerCount).toBe(0);
+  });
+
+  it('names the milestone, not a phase, and leads with the pinned day', () => {
+    const ms = [milestone({ id: 'm', phaseId: 'a', offsetDays: 0 })];
+    const diff = rippleDiff(
+      chain4(),
+      ms,
+      { kind: 'milestone-anchor', milestoneId: 'm', anchorDate: '2026-02-14' },
+      names({ m: 'Thread complete' }),
+      TODAY,
+    );
+    expect(diff.editedName).toBe('Thread complete');
+    expect(rippleSentence(diff).lead).toBe('Thread complete anchored Feb 14');
+  });
+
+  it('degrades on an unknown milestone id rather than throwing', () => {
+    const diff = rippleDiff(
+      chain4(),
+      [],
+      { kind: 'milestone-anchor', milestoneId: 'nope', anchorDate: '2026-02-14' },
+      noNames,
+      TODAY,
+    );
+    expect(diff.milestoneMoves).toEqual([]);
+    expect(diff.rippleSize).toBe(0);
+  });
+});

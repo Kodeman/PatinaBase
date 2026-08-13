@@ -37,7 +37,7 @@ import {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * The three time edits the ripple previews. Each carries exactly the fields the
+ * The four time edits the ripple previews. Each carries exactly the fields the
  * commit path (Slice 04 §T5 `commit_schedule_edit`) needs — nothing more:
  *   - `phase-duration` — a boundary drag / an inline duration field: set the
  *     phase's effective duration to `durationDays` (days become authoritative).
@@ -46,11 +46,14 @@ import {
  *   - `milestone-offset` — a diamond dragged along the line: set the milestone's
  *     offset from its host phase's END to `offsetDays` (and unpin it — a slid
  *     milestone rides the phase again). `phaseId` is the host phase.
+ *   - `milestone-anchor` — pin a milestone to a hard date and clear its offset
+ *     (the exact mirror of milestone-offset clearing the anchor).
  */
 export type RipplePendingEdit =
   | { kind: 'phase-duration'; phaseId: string; durationDays: number }
   | { kind: 'phase-anchor'; phaseId: string; anchorDate: string }
-  | { kind: 'milestone-offset'; milestoneId: string; phaseId: string; offsetDays: number };
+  | { kind: 'milestone-offset'; milestoneId: string; phaseId: string; offsetDays: number }
+  | { kind: 'milestone-anchor'; milestoneId: string; anchorDate: string };
 
 /** One phase's before→after in the ripple. `holds` = anchored && !moved (an
  *  anchor that kept its ground while the edit rippled around it). */
@@ -212,7 +215,7 @@ export function rippleDiff(
   };
 
   // ── Apply the one pending edit to a clone (unknown id ⇒ no-op clone) ───────
-  const editedPhaseId = edit && typeof edit === 'object' ? edit.phaseId : '';
+  const editedPhaseId = edit && typeof edit === 'object' && 'phaseId' in edit ? edit.phaseId : '';
   let pendingPhases = phases;
   let pendingMilestones = milestones;
 
@@ -224,6 +227,10 @@ export function rippleDiff(
     } else if (edit.kind === 'milestone-offset') {
       pendingMilestones = milestones.map((m) =>
         m.id === edit.milestoneId ? { ...m, phaseId: edit.phaseId, offsetDays: edit.offsetDays, anchorDate: null } : m,
+      );
+    } else if (edit.kind === 'milestone-anchor') {
+      pendingMilestones = milestones.map((m) =>
+        m.id === edit.milestoneId ? { ...m, anchorDate: edit.anchorDate, offsetDays: null } : m,
       );
     }
   }
@@ -326,7 +333,9 @@ export function rippleDiff(
   const anchorViolation = conflicts.some((c) => c.kind === 'chain_does_not_fit' || c.kind === 'past_anchor');
 
   const editedName =
-    edit && edit.kind === 'milestone-offset' ? nameOf(edit.milestoneId) : nameOf(editedPhaseId);
+    edit && (edit.kind === 'milestone-offset' || edit.kind === 'milestone-anchor')
+      ? nameOf(edit.milestoneId)
+      : nameOf(editedPhaseId);
 
   return {
     edit,
@@ -395,6 +404,8 @@ function buildLead(diff: RippleDiff): string {
       const move = diff.milestoneMoves.find((m) => m.milestoneId === edit.milestoneId);
       return `${editedName} → ${fmtDay(move?.toDate ?? null)}`;
     }
+    case 'milestone-anchor':
+      return `${editedName} anchored ${fmtDay(edit.anchorDate)}`;
     default:
       return editedName;
   }
