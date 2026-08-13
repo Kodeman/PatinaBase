@@ -19,8 +19,18 @@ import {
   useProjectRoster,
   useDiscovery,
   useProjectContextualHandoffs,
+  useResolvedSchedule,
 } from '@patina/supabase';
-import { rollupVerdicts, formatVerdictRollup } from '@patina/utils';
+import {
+  rollupVerdicts,
+  formatVerdictRollup,
+  phaseFidelity,
+  positionText,
+  selectActivePhase,
+  targetEnd,
+  type Fidelity,
+  type PhaseStatus,
+} from '@patina/utils';
 import { useDocumentEngagement } from '@/hooks/use-document-state';
 import { useHoldDocument } from '@/hooks/document-time-provider';
 import { useMobileActiveDoc } from '@/components/document/mobile/mobile-shell';
@@ -28,7 +38,11 @@ import { MobileMarginChips } from '@/components/document/mobile/mobile-margin-ch
 import { documentEvents, rememberDocumentInHand } from '@/lib/analytics/document-events';
 import { useDocumentPresence } from '@/hooks/use-document-presence';
 import { useProposal } from '@/hooks/use-proposals';
-import { deriveSections, type SectionLineage } from '@/lib/document/section-derivation';
+import {
+  deriveSections,
+  type SectionLineage,
+  type SectionScheduleFacts,
+} from '@/lib/document/section-derivation';
 import type { DocumentStateRow, SectionKey } from '@/lib/document/desk-derivation';
 import { sectionAnchorId } from '@/lib/document/section-anchor';
 import { fmtDay, fmtMonthYear, fmtUsd } from '@/lib/document/format';
@@ -109,6 +123,41 @@ const prettyPhase = (phase: string | null) =>
 type AnyRecord = any;
 
 /**
+ * The project fields this page actually reads off `useProjectV2`. The wider
+ * `AnyRecord` is why `project?.target_completion` — a column that does not
+ * exist — sat here silently for months rendering nothing.
+ */
+type ProjectVitalsRecord = AnyRecord & {
+  target_end_date?: string | null;
+  total_amount_cents?: number | null;
+  start_date?: string | null;
+};
+
+/**
+ * R108 — the header speaks the resolver's selection and its target in the
+ * register the data supports. Null while the schedule is loading, or whenever
+ * the `schedule-fidelity` flag is off (the pre-collapse header renders instead).
+ */
+interface ScheduleVitals {
+  activePhaseName: string | null;
+  target: { date: string | null; fidelity: Fidelity };
+}
+
+function targetVitalFor(target: ScheduleVitals['target']): string | null {
+  if (!target.date) return null;
+  const month = fmtMonthYear(target.date);
+  switch (target.fidelity) {
+    case 'committed':
+    case 'record':
+      return `Target ${month}`;
+    case 'frame':
+      return `Target ~${month}`;
+    case 'band':
+      return `Target band · ${month}`;
+  }
+}
+
+/**
  * Whether the Desk composition can tell this document anything its own row
  * cannot. The Desk's side feeds are keyed narrowly: conflicts and receivables
  * on project_id, flagged lines on a proposal engagement, a parked ceremony on a
@@ -124,14 +173,21 @@ function deskEnrichmentApplies(row: DocumentStateRow | null): boolean {
   );
 }
 
-function vitalsFor(row: DocumentStateRow, project: AnyRecord, proposal: AnyRecord): string {
+function vitalsFor(
+  row: DocumentStateRow,
+  project: ProjectVitalsRecord,
+  proposal: AnyRecord,
+  schedule: ScheduleVitals | null,
+): string {
   // Project + proposal carry the client as a first-class subtitle (the
   // HouseholdChip in the title block), so the vitals drop the client name to
   // avoid showing it twice — they state the phase/target/money only.
   if (row.engagement_kind === 'project') {
     return [
-      prettyPhase(row.current_phase),
-      project?.target_completion ? `Target ${fmtMonthYear(project.target_completion)}` : null,
+      (schedule ? schedule.activePhaseName : null) ?? prettyPhase(row.current_phase),
+      // While the schedule loads the header states no target at all — a firmer
+      // claim that later softens would be the same lie, briefly.
+      schedule ? targetVitalFor(schedule.target) : null,
       project?.total_amount_cents != null ? fmtUsd(project.total_amount_cents) : null,
     ]
       .filter(Boolean)
@@ -171,6 +227,9 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     isError: boolean;
   };
   const { data: phases } = useProjectPhases(projectId) as { data: AnyRecord[] | undefined };
+  // R108/R111 — one derivation, several mouths: the letterhead vitals, the
+  // Project sub-label, and the Install sub-label all read this.
+  const scheduleQuery = useResolvedSchedule(projectId || undefined);
   const { data: liveProposal, isError: proposalIsError } = useProposal(proposalId) as {
     data: any;
     isError: boolean;
@@ -409,6 +468,43 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   // (D13) can publish them unconditionally (rules of hooks). Guarded for the
   // pre-resolution null row.
   const installPhase = (phases ?? []).find((p) => p.phase_key === 'installation');
+  const scheduleFacts = useMemo<SectionScheduleFacts | null>(() => {
+    const resolved = scheduleQuery.resolved;
+    if (!resolved) return null;
+    const statuses = new Map<string, PhaseStatus>(
+      scheduleQuery.phases.map((p) => [p.id, (p.status ?? 'pending') as PhaseStatus]),
+    );
+    const today = new Date().toISOString().slice(0, 10);
+    const selection = selectActivePhase(resolved, statuses, today);
+    const active = resolved.phases.find((p) => p.id === selection.activePhaseId) ?? null;
+    const installResolved = installPhase
+      ? (resolved.phases.find((p) => p.id === installPhase.id) ?? null)
+      : null;
+    return {
+      selection,
+      fidelity: active ? phaseFidelity(active, statuses.get(active.id) ?? 'pending') : 'band',
+      positionText: positionText(resolved, selection, today),
+      install: installResolved
+        ? {
+            date: installResolved.start,
+            fidelity: phaseFidelity(installResolved, statuses.get(installResolved.id) ?? 'pending'),
+          }
+        : null,
+    };
+  }, [scheduleQuery.resolved, scheduleQuery.phases, installPhase]);
+
+  const scheduleVitals = useMemo<ScheduleVitals | null>(() => {
+    const resolved = scheduleQuery.resolved;
+    if (!resolved) return null;
+    const activeId = scheduleFacts?.selection.activePhaseId ?? null;
+    return {
+      activePhaseName: activeId
+        ? (scheduleQuery.phases.find((p) => p.id === activeId)?.name ?? null)
+        : null,
+      target: targetEnd(resolved),
+    };
+  }, [scheduleQuery.resolved, scheduleQuery.phases, scheduleFacts]);
+
   const sections = row
     ? deriveSections(
         {
@@ -416,6 +512,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           lineage,
           projectStartDate: project?.start_date ?? null,
           installStartDate: installPhase?.start_date ?? null,
+          schedule: scheduleFacts,
           lineageResolved:
             row.engagement_kind !== 'project' || (!projectIsLoading && !projectIsError),
         },
@@ -630,7 +727,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
             change / edit through the household sheet. */}
         <DocLetterhead
           title={row.title}
-          vitals={vitalsFor(row, project, liveProposal)}
+          vitals={vitalsFor(row, project, liveProposal, scheduleVitals)}
           // R80: project vitals self-save at the letterhead (blur-save law).
           projectId={row.engagement_kind === 'project' ? row.project_id : null}
           fill={deriveFillState(sections)}
@@ -974,7 +1071,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
               <>
                 <CareSection
                   completedLabel={
-                    project?.target_completion ? fmtMonthYear(project.target_completion) : null
+                    project?.target_end_date ? fmtMonthYear(project.target_end_date) : null
                   }
                   projectId={row.project_id}
                 />

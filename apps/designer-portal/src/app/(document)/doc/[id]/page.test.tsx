@@ -16,6 +16,15 @@ let mockDraftingState: Record<string, unknown> = { gaps: [], isLoading: false, e
 let mockProposalData: Record<string, unknown> | undefined;
 let mockProposalError = false;
 let mockProjectQuery: Record<string, unknown> = { data: undefined, isLoading: false, isError: false };
+// R108: the letterhead vitals read the resolver, never a stored column.
+const NO_RESOLVED_SCHEDULE = {
+  phases: [],
+  milestones: [],
+  resolved: null,
+  isLoading: false,
+  isError: false,
+};
+let mockResolvedSchedule: Record<string, unknown> = NO_RESOLVED_SCHEDULE;
 // Ruling V: the nearest open gate feeds the guide. Empty by default so the
 // existing guide branches keep asserting the derivations they were written for.
 let mockContextualHandoffsQuery: Record<string, unknown> = { data: [], isError: false };
@@ -72,6 +81,7 @@ jest.mock('@patina/supabase', () => ({
     isLoading: false,
     isError: false,
   }),
+  useResolvedSchedule: () => mockResolvedSchedule,
 }));
 
 // The project document's own sections are not what these tests exercise; the
@@ -118,7 +128,12 @@ jest.mock('@/components/document/doc-spine', () => ({
   ),
 }));
 jest.mock('@/components/document/doc-letterhead', () => ({
-  DocLetterhead: ({ title }: { title: string }) => <header>{title}</header>,
+  DocLetterhead: ({ title, vitals }: { title: string; vitals?: string }) => (
+    <header>
+      {title}
+      <span data-testid="doc-vitals">{vitals}</span>
+    </header>
+  ),
 }));
 jest.mock('@/components/document/brief-section', () => ({
   BriefSection: () => <div>Brief work</div>,
@@ -343,6 +358,7 @@ describe('DocumentPage guide activation', () => {
     mockProposalData = undefined;
     mockProposalError = false;
     mockProjectQuery = { data: undefined, isLoading: false, isError: false };
+    mockResolvedSchedule = NO_RESOLVED_SCHEDULE;
     mockContextualHandoffsQuery = { data: [], isError: false };
     mockDeskData = { folders: [], chips: [], composed: {} };
     mockDeskLoading = false;
@@ -773,6 +789,132 @@ describe('DocumentPage guide activation', () => {
 
     expect(screen.getByText('Guidance is unavailable')).toBeInTheDocument();
     expect(screen.queryByText(/Input needed/)).not.toBeInTheDocument();
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // R108 + the ratified quick fix — the letterhead's target. `target_completion`
+  // is not a column on `projects`; the `AnyRecord` type is why it stayed silent.
+  // ───────────────────────────────────────────────────────────────────────────
+
+  const asProjectDocument = () => {
+    const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+    mockDocumentQuery = {
+      ...mockDocumentQuery,
+      data: {
+        kind: 'engagement',
+        row: {
+          ...current,
+          engagement_kind: 'project',
+          active_section: 'project',
+          engagement_id: 'project-1',
+          project_id: 'project-1',
+          lead_id: null,
+          client_profile_id: 'client-1',
+          current_phase: 'design_development',
+          project_status: 'active',
+        },
+      },
+    };
+  };
+
+  const resolvedWith = (
+    phase: Record<string, unknown>,
+    row: Record<string, unknown> = { id: 'ph1', name: 'Design Development', status: 'in_progress' },
+  ) => ({
+    phases: [row],
+    milestones: [],
+    resolved: {
+      phases: [phase],
+      milestones: [],
+      conflicts: [],
+      slackDays: null,
+    },
+    isLoading: false,
+    isError: false,
+  });
+
+  it('states a target from the resolver, in the register its source supports', () => {
+    asProjectDocument();
+    mockProjectQuery = {
+      data: { total_amount_cents: null, target_end_date: null, start_date: null },
+      isLoading: false,
+      isError: false,
+    };
+    mockResolvedSchedule = resolvedWith({
+      id: 'ph1',
+      start: '2026-08-01',
+      end: '2026-11-15',
+      lane: 'main',
+      anchored: true,
+      source: 'anchor',
+      slackDays: null,
+      governingAnchorId: 'ph1',
+      origin: 'anchor',
+    });
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(screen.getByTestId('doc-vitals').textContent).toContain('Target November 2026');
+  });
+
+  it('a band project renders no firm target — only the band', () => {
+    asProjectDocument();
+    mockProjectQuery = {
+      data: { total_amount_cents: null, target_end_date: null, start_date: null },
+      isLoading: false,
+      isError: false,
+    };
+    mockResolvedSchedule = resolvedWith({
+      id: 'ph1',
+      start: '2026-01-05',
+      end: '2026-11-15',
+      lane: 'main',
+      anchored: false,
+      source: 'legacy-dates',
+      slackDays: null,
+      governingAnchorId: null,
+      origin: 'legacy',
+    });
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    const vitals = screen.getByTestId('doc-vitals').textContent ?? '';
+    expect(vitals).toContain('Target band · November 2026');
+    expect(vitals).not.toMatch(/Target November/);
+  });
+
+  it('a phantom target_completion produces no target at all (dead-field regression)', () => {
+    asProjectDocument();
+    mockProjectQuery = {
+      data: { target_completion: '2026-11-15', total_amount_cents: null },
+      isLoading: false,
+      isError: false,
+    };
+    mockResolvedSchedule = {
+      phases: [],
+      milestones: [],
+      resolved: { phases: [], milestones: [], conflicts: [], slackDays: null },
+      isLoading: false,
+      isError: false,
+    };
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(screen.getByTestId('doc-vitals').textContent ?? '').not.toMatch(/Target/);
+  });
+
+  it('states no target while the schedule is still being read', () => {
+    asProjectDocument();
+    mockProjectQuery = {
+      data: { target_end_date: '2026-11-15', total_amount_cents: null },
+      isLoading: false,
+      isError: false,
+    };
+    mockResolvedSchedule = { ...NO_RESOLVED_SCHEDULE, isLoading: true };
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(screen.getByTestId('doc-vitals').textContent ?? '').not.toMatch(/Target/);
   });
 });
 
