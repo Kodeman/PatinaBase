@@ -8162,3 +8162,15 @@ narrowed, not eroded — a future gate-keyed need must still route through
 the R6 discipline. Pinned by the seven-section test.
 
 *Entries add: I128 · last id = I128*
+
+### I129 · Waves 2–3 start flagless — 2026-08-13
+
+Per I127's confirm-at-wave-start requirement: Kody ordered Waves 2 and 3
+delivered with no mention of restoring flags and the platform still has no
+production users, so the presumption stands — `schedule-hardening` and
+`install-window` flags are dropped. Consequence for Wave 2's off-state
+design (PLAN §2.2): ceremony UIs always compute and pass disclosed impact;
+the NULL-impact branch remains solely as the R110 downgrade for
+uncomputable impact, never as a flag posture.
+
+*Entries add: I129 · last id = I129*
