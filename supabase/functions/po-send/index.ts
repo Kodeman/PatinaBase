@@ -54,6 +54,7 @@ import { buildPoSentEmail } from '../_shared/po-emails.ts';
 import { resolveStudioIdentity, studioDisplayName } from '../_shared/studio-identity.ts';
 import {
   buildFallbackSidemark,
+  buildSchedulePoProposal,
   checkPoRepricingGate,
   checkPoTotalsCoherence,
   PO_OUT_OF_SYNC_DETAIL,
@@ -572,13 +573,43 @@ Deno.serve(async (req: Request) => {
 
   // ── Stamp sent_at (first send) / audit-trail the resend ─────────────────
   if (!po.sent_at) {
+    const sentAt = new Date().toISOString();
     const { error: stampError } = await admin
       .from('purchase_orders')
-      .update({ sent_at: new Date().toISOString() })
+      .update({ sent_at: sentAt })
       .eq('id', po.id)
       .is('sent_at', null);
     if (stampError) {
       console.error('po-send: failed to stamp sent_at', stampError);
+    } else {
+      // R109 — a fact proposes. This function runs as service_role, which has
+      // zero EXECUTE on _commit_schedule_edit_authorized, so the proposal row
+      // is structurally the only schedule write it can make.
+      const { data: threadPhase } = await admin
+        .from('project_phases')
+        .select('id')
+        .eq('project_id', po.project_id)
+        .eq('lane', 'thread')
+        .order('sort_order', { ascending: true })
+        .order('id', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      const proposal = buildSchedulePoProposal({
+        projectId: po.project_id,
+        purchaseOrderId: po.id,
+        targetPhaseId: (threadPhase as { id: string } | null)?.id ?? null,
+        sentAt,
+      });
+      if (proposal) {
+        const { error: proposalError } = await admin
+          .from('schedule_proposals')
+          .insert(proposal);
+        // A live proposal for this project/phase/event already exists (the
+        // partial unique index refusing to stack a second nag) — not a failure.
+        if (proposalError) {
+          console.warn('po-send: schedule proposal not recorded', proposalError);
+        }
+      }
     }
   } else if (mode === 'send') {
     // Resend: keep the original sent_at, append an audit line to notes

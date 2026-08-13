@@ -269,6 +269,54 @@ export function paymentRowLabel(payment: {
   return kind.charAt(0).toUpperCase() + kind.slice(1);
 }
 
+// ─── Schedule proposal (R109 — a fact proposes, it never writes) ─────────────
+
+export interface SchedulePoProposalInput {
+  projectId: string | null | undefined;
+  purchaseOrderId: string;
+  /** First thread-lane phase of the project, or null when there is none. */
+  targetPhaseId: string | null | undefined;
+  /** ISO timestamp of the first-send stamp. */
+  sentAt: string;
+}
+
+export interface SchedulePoProposalRow {
+  project_id: string;
+  source_event: 'po-sent';
+  source_ref: string;
+  target_phase_id: string | null;
+  proposed_anchor_date: string;
+  disclosed_context: Record<string, unknown> | null;
+}
+
+export const PO_SENT_NO_THREAD_PHASE_NOTE =
+  'No thread-lane phase on this project — the proposal is filed against the project.';
+
+/**
+ * Build the schedule_proposals row a first send records. Returns null when the
+ * purchase order carries no project, so there is nothing to propose against.
+ * The edge function runs as service_role, which the migration deliberately
+ * leaves with zero EXECUTE on _commit_schedule_edit_authorized — a fact can
+ * only ever land here.
+ */
+export function buildSchedulePoProposal(
+  input: SchedulePoProposalInput,
+): SchedulePoProposalRow | null {
+  const projectId = input.projectId?.trim();
+  if (!projectId) return null;
+  const anchorDate = input.sentAt.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(anchorDate)) return null;
+  const targetPhaseId = input.targetPhaseId?.trim() || null;
+  return {
+    project_id: projectId,
+    source_event: 'po-sent',
+    source_ref: input.purchaseOrderId,
+    target_phase_id: targetPhaseId,
+    proposed_anchor_date: anchorDate,
+    disclosed_context: targetPhaseId ? null : { note: PO_SENT_NO_THREAD_PHASE_NOTE },
+  };
+}
+
 // ─── Vendor-safe spec notes ──────────────────────────────────────────────────
 
 /**
