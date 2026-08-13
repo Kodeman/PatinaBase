@@ -587,17 +587,19 @@ Deno.serve(async (req: Request) => {
       // is structurally the only schedule write it can make.
       const { data: threadPhase } = await admin
         .from('project_phases')
-        .select('id')
+        .select('id, anchor_date')
         .eq('project_id', po.project_id)
         .eq('lane', 'thread')
         .order('sort_order', { ascending: true })
         .order('id', { ascending: true })
         .limit(1)
         .maybeSingle();
+      const phase = threadPhase as { id: string; anchor_date: string | null } | null;
       const proposal = buildSchedulePoProposal({
         projectId: po.project_id,
         purchaseOrderId: po.id,
-        targetPhaseId: (threadPhase as { id: string } | null)?.id ?? null,
+        targetPhaseId: phase?.id ?? null,
+        targetAnchorDate: phase?.anchor_date ?? null,
         sentAt,
       });
       if (proposal) {

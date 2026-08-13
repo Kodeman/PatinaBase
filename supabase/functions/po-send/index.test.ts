@@ -605,9 +605,36 @@ Deno.test("buildSchedulePoProposal targets the thread phase on a first send", ()
       source_ref: "22222222-2222-4222-8222-222222222222",
       target_phase_id: "33333333-3333-4333-8333-333333333333",
       proposed_anchor_date: "2026-08-13",
+      conflicts_with_committed: false,
       disclosed_context: null,
     },
   );
+});
+
+Deno.test("buildSchedulePoProposal reports a contradiction against a committed anchor", () => {
+  const row = buildSchedulePoProposal({
+    projectId: "11111111-1111-4111-8111-111111111111",
+    purchaseOrderId: "22222222-2222-4222-8222-222222222222",
+    targetPhaseId: "33333333-3333-4333-8333-333333333333",
+    targetAnchorDate: "2026-07-01",
+    sentAt: "2026-08-13T00:00:00.000Z",
+  });
+  assert(row !== null);
+  assertEquals(row.conflicts_with_committed, true);
+  assertEquals(row.disclosed_context, { committedAnchorDate: "2026-07-01" });
+});
+
+Deno.test("buildSchedulePoProposal agrees with a committed anchor on the same day", () => {
+  const row = buildSchedulePoProposal({
+    projectId: "11111111-1111-4111-8111-111111111111",
+    purchaseOrderId: "22222222-2222-4222-8222-222222222222",
+    targetPhaseId: "33333333-3333-4333-8333-333333333333",
+    targetAnchorDate: "2026-08-13",
+    sentAt: "2026-08-13T09:00:00.000Z",
+  });
+  assert(row !== null);
+  assertEquals(row.conflicts_with_committed, false);
+  assertEquals(row.disclosed_context, null);
 });
 
 Deno.test("buildSchedulePoProposal files against the project when no thread phase exists", () => {

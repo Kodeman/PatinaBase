@@ -276,6 +276,8 @@ export interface SchedulePoProposalInput {
   purchaseOrderId: string;
   /** First thread-lane phase of the project, or null when there is none. */
   targetPhaseId: string | null | undefined;
+  /** That phase's committed anchor_date, if it carries one. */
+  targetAnchorDate?: string | null;
   /** ISO timestamp of the first-send stamp. */
   sentAt: string;
 }
@@ -286,6 +288,7 @@ export interface SchedulePoProposalRow {
   source_ref: string;
   target_phase_id: string | null;
   proposed_anchor_date: string;
+  conflicts_with_committed: boolean;
   disclosed_context: Record<string, unknown> | null;
 }
 
@@ -307,13 +310,21 @@ export function buildSchedulePoProposal(
   const anchorDate = input.sentAt.slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(anchorDate)) return null;
   const targetPhaseId = input.targetPhaseId?.trim() || null;
+  const committed = input.targetAnchorDate?.trim() || null;
+  // R109's third class: an event whose date differs from an anchor already
+  // committed on the target reports a contradiction — it never offers a slide.
+  const conflicts = Boolean(targetPhaseId && committed && committed !== anchorDate);
+  const context: Record<string, unknown> = {};
+  if (!targetPhaseId) context.note = PO_SENT_NO_THREAD_PHASE_NOTE;
+  if (conflicts) context.committedAnchorDate = committed;
   return {
     project_id: projectId,
     source_event: 'po-sent',
     source_ref: input.purchaseOrderId,
     target_phase_id: targetPhaseId,
     proposed_anchor_date: anchorDate,
-    disclosed_context: targetPhaseId ? null : { note: PO_SENT_NO_THREAD_PHASE_NOTE },
+    conflicts_with_committed: conflicts,
+    disclosed_context: Object.keys(context).length > 0 ? context : null,
   };
 }
 
