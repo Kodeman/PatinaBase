@@ -123,7 +123,20 @@ export interface ResolvedPhase {
   anchored: boolean;
   source: 'chain' | 'anchor' | 'legacy-dates' | 'unresolved';
   slackDays: number | null; // anchored: own absorbed float; unanchored: min float to a downstream anchor; null if none
+  /**
+   * The anchored phase this phase's date ultimately traces to — own id when
+   * `source==='anchor'`, the chain's anchored origin when reached through the
+   * forward pass, the downstream anchor when pulled through the backward pass,
+   * and null when the date grew from `projectStartDate`, from legacy stored
+   * dates, or from nothing. Downstream code may only speak in weeks when this
+   * is non-null (R108).
+   */
+  governingAnchorId: string | null;
+  /** Names the root of this phase's date so no consumer needs a second traversal. */
+  origin: PhaseOrigin;
 }
+
+export type PhaseOrigin = 'anchor' | 'project-start' | 'legacy' | 'none';
 
 export interface ResolvedMilestone {
   id: string;
@@ -261,6 +274,8 @@ interface Resolved {
   end: number | null;
   source: ResolvedPhase['source'] | null;
   via: ResolveVia | null;
+  governingAnchorId: string | null;
+  origin: PhaseOrigin;
 }
 
 function ascNullsLast(a: number | null, b: number | null): number {
@@ -273,6 +288,15 @@ function ascNullsLast(a: number | null, b: number | null): number {
 function cmpId(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
+
+const UNPLACED: Resolved = Object.freeze({
+  start: null,
+  end: null,
+  source: null,
+  via: null,
+  governingAnchorId: null,
+  origin: 'none',
+});
 
 const CONFLICT_RANK: Record<ScheduleConflictKind, number> = {
   orphan_link: 0,
@@ -400,34 +424,51 @@ export function resolveSchedule(
   const forward = (id: string): Resolved => {
     const cached = res.get(id);
     if (cached) return cached;
-    if (resolving.has(id)) return { start: null, end: null, source: null, via: null }; // reentrancy guard
+    if (resolving.has(id)) return UNPLACED; // reentrancy guard
     resolving.add(id);
 
     const n = nodes.get(id)!;
     let out: Resolved;
 
     if (n.onCycle) {
-      out = { start: null, end: null, source: null, via: null };
+      out = UNPLACED;
     } else if (n.anchorEpoch != null) {
       const start = n.anchorEpoch;
       const end = n.dur != null ? start + n.dur : n.targetEndEpoch;
-      out = { start, end, source: 'anchor', via: 'forward' };
+      out = { start, end, source: 'anchor', via: 'forward', governingAnchorId: id, origin: 'anchor' };
     } else if (n.predId != null) {
       const pr = forward(n.predId);
       if (pr.start != null && pr.end != null) {
         const start = pr.end; // contiguous same-day handoff
         const end = n.dur != null ? start + n.dur : start;
-        out = { start, end, source: 'chain', via: 'forward' };
+        // The chain carries its root's provenance forward: a phase is only as
+        // firm as the thing its dates ultimately grew from.
+        out = {
+          start,
+          end,
+          source: 'chain',
+          via: 'forward',
+          governingAnchorId: pr.governingAnchorId,
+          origin: pr.origin,
+        };
       } else {
-        out = { start: null, end: null, source: null, via: null };
+        out = UNPLACED;
       }
     } else {
       // Root (or orphan-root): a forward origin is only useful with a duration.
-      const origin = projectStartEpoch != null ? projectStartEpoch : n.startDateEpoch;
-      if (origin != null && n.dur != null) {
-        out = { start: origin, end: origin + n.dur, source: 'chain', via: 'forward' };
+      const usesProjectStart = projectStartEpoch != null;
+      const originEpoch = usesProjectStart ? projectStartEpoch : n.startDateEpoch;
+      if (originEpoch != null && n.dur != null) {
+        out = {
+          start: originEpoch,
+          end: originEpoch + n.dur,
+          source: 'chain',
+          via: 'forward',
+          governingAnchorId: null,
+          origin: usesProjectStart ? 'project-start' : 'legacy',
+        };
       } else {
-        out = { start: null, end: null, source: null, via: null };
+        out = UNPLACED;
       }
     }
 
@@ -453,7 +494,15 @@ export function resolveSchedule(
       if (pr.start != null) break; // a forward origin exists upstream — forward wins
       const predEnd = curStart;
       const predStart = pn.dur != null ? predEnd - pn.dur : predEnd;
-      res.set(p, { start: predStart, end: predEnd, source: 'chain', via: 'backward' });
+      res.set(p, {
+        start: predStart,
+        end: predEnd,
+        source: 'chain',
+        via: 'backward',
+        // Pulled backward off `id`'s pin: the anchor governs the whole segment.
+        governingAnchorId: id,
+        origin: 'anchor',
+      });
       cur = p;
       curStart = predStart;
     }
@@ -465,9 +514,16 @@ export function resolveSchedule(
     if (r.start != null || r.source != null) continue;
     const n = nodes.get(id)!;
     if (n.startDateEpoch != null || n.targetEndEpoch != null) {
-      res.set(id, { start: n.startDateEpoch, end: n.targetEndEpoch, source: 'legacy-dates', via: 'legacy' });
+      res.set(id, {
+        start: n.startDateEpoch,
+        end: n.targetEndEpoch,
+        source: 'legacy-dates',
+        via: 'legacy',
+        governingAnchorId: null,
+        origin: 'legacy',
+      });
     } else {
-      res.set(id, { start: null, end: null, source: 'unresolved', via: 'unresolved' });
+      res.set(id, { start: null, end: null, source: 'unresolved', via: 'unresolved', governingAnchorId: null, origin: 'none' });
       conflicts.push({
         kind: 'unresolvable',
         phaseId: id,
@@ -669,6 +725,8 @@ export function resolveSchedule(
       anchored: n.anchorEpoch != null,
       source: r.source ?? 'unresolved',
       slackDays,
+      governingAnchorId: r.governingAnchorId,
+      origin: r.origin,
     };
   });
 

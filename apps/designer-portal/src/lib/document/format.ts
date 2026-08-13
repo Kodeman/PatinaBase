@@ -7,6 +7,10 @@ const asLocalDate = (iso: string) => new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? 
 export const fmtDay = (iso: string) =>
   new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(asLocalDate(iso));
 
+/** Month alone (R107) — the precision a band-register date may be stated at. */
+export const fmtMonth = (iso: string) =>
+  new Intl.DateTimeFormat('en-US', { month: 'short' }).format(asLocalDate(iso));
+
 export const fmtMonthYear = (iso: string) =>
   new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(asLocalDate(iso));
 

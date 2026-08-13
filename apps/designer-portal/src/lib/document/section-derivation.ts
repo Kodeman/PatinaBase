@@ -7,8 +7,10 @@
  * claim dates the data actually carries; otherwise they say 'Settled' or '—'.
  */
 
+import type { Fidelity, ScheduleSelection } from '@patina/utils';
+
 import type { DocumentStateRow, SectionKey } from './desk-derivation';
-import { fmtDay } from './format';
+import { fmtDay, fmtMonth } from './format';
 
 export type SectionState = 'settled' | 'active' | 'future' | 'unrecorded';
 
@@ -32,12 +34,26 @@ export interface SectionLineage {
   version: number | null;
 }
 
+/**
+ * R108 — the resolver's answer, projected down to what a section bar can carry.
+ * Deliberately narrow rather than the whole `ResolvedSchedule`: this module
+ * stays dependency-light, and nothing here may recompute a position.
+ * null = the schedule is still being read.
+ */
+export interface SectionScheduleFacts {
+  selection: ScheduleSelection;
+  fidelity: Fidelity;
+  /** 'Week 3' | 'Frame' | 'Band' | 'Committed' — never recomputed downstream. */
+  positionText: string | null;
+  /** The installation phase's resolved start and the register it may be spoken in. */
+  install: { date: string | null; fidelity: Fidelity } | null;
+}
+
 export interface SectionFacts {
   row: DocumentStateRow;
   lineage: SectionLineage | null;
   lineageResolved: boolean;
-  projectStartDate: string | null;
-  installStartDate: string | null;
+  schedule: SectionScheduleFacts | null;
 }
 
 const ORDER: SectionKey[] = [
@@ -59,8 +75,6 @@ const LABEL: Record<SectionKey, string> = {
   install: 'Install',
   care: 'Care',
 };
-
-const WEEK_MS = 7 * 86_400_000;
 
 function prettyPhase(phase: string | null): string {
   if (!phase) return '';
@@ -84,8 +98,8 @@ function settledSub(key: SectionKey, f: SectionFacts): string {
   }
 }
 
-function activeSub(key: SectionKey, f: SectionFacts, now: Date): string {
-  const { row, lineage, projectStartDate } = f;
+function activeSub(key: SectionKey, f: SectionFacts): string {
+  const { row, lineage } = f;
   switch (key) {
     case 'brief':
       return row.lead_response_deadline
@@ -104,12 +118,11 @@ function activeSub(key: SectionKey, f: SectionFacts, now: Date): string {
       return 'Awaiting signature';
     }
     case 'project': {
-      if (!projectStartDate) return 'Active';
-      const week = Math.max(
-        1,
-        Math.floor((now.getTime() - new Date(projectStartDate).getTime()) / WEEK_MS) + 1,
-      );
-      return `Active · Week ${week}`;
+      // R108: the position comes from the resolver or it does not exist. A week
+      // computed off the project's start date was the T1 lie — it claimed a
+      // hard-anchored position for schedules that had never been anchored.
+      const position = f.schedule?.positionText;
+      return position ? `Active · ${position}` : 'Active';
     }
     case 'install':
       return prettyPhase(row.current_phase) || 'Install';
@@ -119,12 +132,28 @@ function activeSub(key: SectionKey, f: SectionFacts, now: Date): string {
 }
 
 function futureSub(key: SectionKey, f: SectionFacts): string {
-  if (key === 'install' && f.installStartDate) return fmtDay(f.installStartDate);
-  return '—';
+  if (key !== 'install') return '—';
+  // R108 reaches here too: the former `installStartDate` read was a legacy
+  // STORED date, so a bare day printed from it claimed a firmness the row may
+  // not have. The resolver's own placement, in its own register, replaces it —
+  // and while the schedule is unread there is simply no date to state.
+  const install = f.schedule?.install;
+  if (!install || !install.date) return '—';
+  switch (install.fidelity) {
+    case 'committed':
+    case 'record':
+      return fmtDay(install.date);
+    case 'frame':
+      return `~${fmtDay(install.date)}`;
+    case 'band':
+      // Month precision only: a band never states a day, matching the desk's
+      // refusal to put a date on an unanchored schedule.
+      return `Band · ~${fmtMonth(install.date)}`;
+  }
 }
 
 /** The seven spine sections for one engagement. */
-export function deriveSections(f: SectionFacts, now: Date): SpineSection[] {
+export function deriveSections(f: SectionFacts): SpineSection[] {
   const activeIdx = ORDER.indexOf(f.row.active_section);
   // Manual projects (signed shape, no proposal lineage) ghost Brief→Proposal (R1).
   const ghostPast =
@@ -141,7 +170,7 @@ export function deriveSections(f: SectionFacts, now: Date): SpineSection[] {
       state === 'settled'
         ? settledSub(key, f)
         : state === 'active'
-          ? activeSub(key, f, now)
+          ? activeSub(key, f)
           : state === 'unrecorded'
             ? 'Not recorded'
             : futureSub(key, f);

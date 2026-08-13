@@ -6,6 +6,7 @@ import { ProjectApprovalReview } from "../project-approval-review";
 const confirmMutate = jest.fn();
 const respondMutate = jest.fn();
 const refresh = jest.fn();
+const useProjectWorkingBudget = jest.fn();
 
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ refresh }),
@@ -20,6 +21,11 @@ jest.mock("@patina/supabase", () => ({
     mutateAsync: respondMutate,
     isPending: false,
   }),
+}));
+
+jest.mock("@/hooks/use-commercial-client", () => ({
+  useProjectWorkingBudget: (...args: unknown[]) =>
+    useProjectWorkingBudget(...args),
 }));
 
 const APPROVAL: ProjectApprovalReviewData = {
@@ -56,12 +62,47 @@ const APPROVAL: ProjectApprovalReviewData = {
   updatedAt: "2026-07-20T12:05:00.000Z",
 };
 
+const MATCHING_BUDGET = {
+  id: "artifact-1",
+  projectId: "project-1",
+  version: 3,
+  state: "published",
+  currency: "USD",
+  lowTotalCents: 8000000,
+  targetTotalCents: 10000000,
+  highTotalCents: 12000000,
+  lines: [
+    {
+      roomName: "Living room",
+      category: "Seating",
+      lowCents: 2000000,
+      targetCents: 2500000,
+      highCents: 3000000,
+      notes: null,
+    },
+  ],
+  checkpoint: {
+    id: "checkpoint-1",
+    state: "open",
+    publishedAt: "2026-07-20T12:00:00.000Z",
+    acknowledgedAt: null,
+    overrideReason: null,
+    evidenceFingerprint: "a".repeat(64),
+  },
+};
+
 beforeEach(() => {
   confirmMutate.mockReset();
   confirmMutate.mockResolvedValue({});
   respondMutate.mockReset();
   respondMutate.mockResolvedValue({});
   refresh.mockReset();
+  useProjectWorkingBudget.mockReset();
+  useProjectWorkingBudget.mockReturnValue({
+    data: MATCHING_BUDGET,
+    isLoading: false,
+    isError: false,
+  });
   Object.defineProperty(globalThis, "crypto", {
     configurable: true,
     value: { randomUUID: () => "request-key-1" },
@@ -69,16 +110,17 @@ beforeEach(() => {
 });
 
 describe("ProjectApprovalReview", () => {
-  it("shows the immutable citation, explicit zero impacts, and three distinct outcomes", () => {
+  it("shows the immutable citation without exposing its checksum, explicit zero impacts, and three distinct outcomes", () => {
     render(<ProjectApprovalReview approval={APPROVAL} />);
 
     expect(
       screen.getByRole("heading", { name: APPROVAL.question }),
     ).toBeInTheDocument();
     expect(screen.getByText("Budget checkpoint 03")).toBeInTheDocument();
-    expect(screen.getByTestId("artifact-checksum")).toHaveTextContent(
-      "a".repeat(64),
-    );
+    expect(
+      screen.queryByText(/SHA-256 artifact checksum/i),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("a".repeat(64))).not.toBeInTheDocument();
     expect(screen.getByTestId("cost-delta")).toHaveTextContent(
       "$0 — no cost change",
     );
@@ -98,6 +140,99 @@ describe("ProjectApprovalReview", () => {
     expect(
       screen.getByRole("link", { name: /previous edition/i }),
     ).toHaveAttribute("href", "/decisions/decision-0");
+  });
+
+  it("shows the exact approved budget totals and room/category ranges", () => {
+    render(<ProjectApprovalReview approval={APPROVAL} />);
+
+    expect(useProjectWorkingBudget).toHaveBeenCalledWith("project-1");
+    const details = screen.getByTestId("approved-budget-details");
+    expect(details).toHaveTextContent("Target$100,000.00");
+    expect(details).toHaveTextContent("Low$80,000.00");
+    expect(details).toHaveTextContent("High$120,000.00");
+    expect(details).toHaveTextContent("Living room · Seating");
+    expect(details).toHaveTextContent("Low$20,000.00");
+    expect(details).toHaveTextContent("Target$25,000.00");
+    expect(details).toHaveTextContent("High$30,000.00");
+  });
+
+  it.each([
+    ["id", { id: "different-budget" }],
+    ["version", { version: 4 }],
+    [
+      "checksum",
+      {
+        checkpoint: {
+          ...MATCHING_BUDGET.checkpoint,
+          evidenceFingerprint: "different-fingerprint",
+        },
+      },
+    ],
+  ])("fails closed without figures on a %s mismatch", (_field, override) => {
+    useProjectWorkingBudget.mockReturnValue({
+      data: { ...MATCHING_BUDGET, ...override },
+      isLoading: false,
+      isError: false,
+    });
+
+    render(<ProjectApprovalReview approval={APPROVAL} />);
+
+    expect(screen.getByTestId("budget-details-unavailable")).toHaveTextContent(
+      "Budget details are unavailable for this exact approved edition.",
+    );
+    expect(
+      screen.queryByTestId("approved-budget-details"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("$100,000.00")).not.toBeInTheDocument();
+  });
+
+  it("announces loading separately from unavailable budget details", () => {
+    useProjectWorkingBudget.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+    });
+
+    render(<ProjectApprovalReview approval={APPROVAL} />);
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Budget details are loading…",
+    );
+    expect(
+      screen.queryByTestId("budget-details-unavailable"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("approved-budget-details"),
+    ).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["error", undefined, true],
+    ["missing budget", null, false],
+  ])("shows no figures when budget details are unavailable: %s", (_state, data, isError) => {
+    useProjectWorkingBudget.mockReturnValue({
+      data,
+      isLoading: false,
+      isError,
+    });
+
+    render(<ProjectApprovalReview approval={APPROVAL} />);
+
+    expect(screen.getByTestId("budget-details-unavailable")).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("approved-budget-details"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("disables the budget query and hides budget details for non-budget approvals", () => {
+    render(
+      <ProjectApprovalReview
+        approval={{ ...APPROVAL, artifactKind: "plan_issue" }}
+      />,
+    );
+
+    expect(useProjectWorkingBudget).toHaveBeenCalledWith("");
+    expect(screen.queryByTestId("budget-details")).not.toBeInTheDocument();
   });
 
   it("keeps the three outcomes and their copy verbatim", () => {

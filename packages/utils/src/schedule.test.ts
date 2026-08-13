@@ -487,6 +487,128 @@ describe('resolveSchedule — R100 pure engine', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// governingAnchorId + origin (I126) — the resolver discloses what it computed.
+// R108 forbids a week number that is not downstream of a hard anchor, so every
+// chain shape above must name its root here. Additive output only: no date,
+// lane, slack, or conflict in the suite above changes.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('resolveSchedule — governingAnchorId / origin', () => {
+  it('forward chain from projectStartDate: whole chain is project-start rooted, no governing anchor', () => {
+    const phases = [
+      phase({ id: 'a', durationDays: 10, sortOrder: 1 }),
+      phase({ id: 'b', durationDays: 14, followsPhaseId: 'a', sortOrder: 2 }),
+      phase({ id: 'c', durationDays: 7, followsPhaseId: 'b', sortOrder: 3 }),
+    ];
+    const r = resolveSchedule(phases, [], opts({ projectStartDate: '2026-01-01', today: '2026-01-01' }));
+
+    for (const id of ['a', 'b', 'c']) {
+      expect(P(r, id)).toMatchObject({ governingAnchorId: null, origin: 'project-start' });
+    }
+  });
+
+  it('backward pass: the anchor governs itself and every predecessor it pulled', () => {
+    const phases = [
+      phase({ id: 'a', durationDays: 10, sortOrder: 1 }),
+      phase({ id: 'b', durationDays: 5, followsPhaseId: 'a', sortOrder: 2 }),
+      phase({ id: 'c', durationDays: 7, followsPhaseId: 'b', anchorDate: '2026-03-01', sortOrder: 3 }),
+    ];
+    const r = resolveSchedule(phases, [], opts({ today: '2026-01-01' }));
+
+    expect(P(r, 'c')).toMatchObject({ governingAnchorId: 'c', origin: 'anchor' });
+    expect(P(r, 'b')).toMatchObject({ governingAnchorId: 'c', origin: 'anchor' });
+    expect(P(r, 'a')).toMatchObject({ governingAnchorId: 'c', origin: 'anchor' });
+  });
+
+  it('multi-hop backward pass: all four hops trace to the terminal anchor', () => {
+    const phases = [
+      phase({ id: 'a', durationDays: 3, sortOrder: 1 }),
+      phase({ id: 'b', durationDays: 4, followsPhaseId: 'a', sortOrder: 2 }),
+      phase({ id: 'c', durationDays: 5, followsPhaseId: 'b', sortOrder: 3 }),
+      phase({ id: 'd', durationDays: 6, followsPhaseId: 'c', anchorDate: '2026-04-01', sortOrder: 4 }),
+    ];
+    const r = resolveSchedule(phases, [], opts({ today: '2026-01-01' }));
+
+    for (const id of ['a', 'b', 'c', 'd']) {
+      expect(P(r, id)).toMatchObject({ governingAnchorId: 'd', origin: 'anchor' });
+    }
+  });
+
+  it('forward pass downstream of a mid-chain anchor: followers inherit the anchor, upstream keeps its own root', () => {
+    const phases = [
+      phase({ id: 'a', durationDays: 10, sortOrder: 1 }),
+      phase({ id: 'b', durationDays: 5, followsPhaseId: 'a', anchorDate: '2026-02-01', sortOrder: 2 }),
+      phase({ id: 'c', durationDays: 7, followsPhaseId: 'b', sortOrder: 3 }),
+    ];
+    const r = resolveSchedule(phases, [], opts({ projectStartDate: '2026-01-01', today: '2026-01-01' }));
+
+    // A resolved forward off the project start — it is NOT downstream of the pin.
+    expect(P(r, 'a')).toMatchObject({ governingAnchorId: null, origin: 'project-start' });
+    expect(P(r, 'b')).toMatchObject({ governingAnchorId: 'b', origin: 'anchor' });
+    expect(P(r, 'c')).toMatchObject({ governingAnchorId: 'b', origin: 'anchor' });
+  });
+
+  it('overlap → thread: promotion to the thread lane does not change the chain root', () => {
+    const phases = [
+      phase({ id: 'a', durationDays: 10, sortOrder: 1 }),
+      phase({ id: 'b', durationDays: 5, followsPhaseId: 'a', sortOrder: 2 }),
+      phase({ id: 'c', durationDays: 7, followsPhaseId: 'a', sortOrder: 3 }),
+    ];
+    const r = resolveSchedule(phases, [], opts({ projectStartDate: '2026-01-01', today: '2026-01-01' }));
+
+    expect(P(r, 'c').lane).toBe('thread');
+    expect(P(r, 'c')).toMatchObject({ governingAnchorId: null, origin: 'project-start' });
+  });
+
+  it('cycle: the legacy-passthrough member reads legacy, the unresolved member reads none', () => {
+    const phases = [
+      phase({ id: 'a', durationDays: 10, followsPhaseId: 'b', startDate: '2026-05-01', targetEndDate: '2026-05-11', sortOrder: 1 }),
+      phase({ id: 'b', durationDays: 5, followsPhaseId: 'a', sortOrder: 2 }),
+    ];
+    const r = resolveSchedule(phases, [], opts({ today: '2026-01-01' }));
+
+    expect(P(r, 'a')).toMatchObject({ source: 'legacy-dates', governingAnchorId: null, origin: 'legacy' });
+    expect(P(r, 'b')).toMatchObject({ source: 'unresolved', governingAnchorId: null, origin: 'none' });
+  });
+
+  it('orphan link: an orphan-root resolved off projectStartDate is project-start rooted', () => {
+    const phases = [phase({ id: 'a', durationDays: 10, followsPhaseId: 'ghost', sortOrder: 1 })];
+    const r = resolveSchedule(phases, [], opts({ projectStartDate: '2026-01-01', today: '2026-01-01' }));
+
+    expect(P(r, 'a')).toMatchObject({ source: 'chain', governingAnchorId: null, origin: 'project-start' });
+  });
+
+  it('legacy fallback: stored-dates phases carry origin legacy and no governing anchor', () => {
+    const phases = [
+      phase({ id: 'p1', startDate: '2026-03-01', targetEndDate: '2026-03-10', sortOrder: 3 }),
+      phase({ id: 'p2', startDate: '2026-01-05', targetEndDate: '2026-01-15', sortOrder: 1 }),
+      phase({ id: 'p3', startDate: '2026-02-01', targetEndDate: '2026-02-10', sortOrder: 2 }),
+    ];
+    const r = resolveSchedule(phases, [], opts({ today: '2026-01-01' }));
+
+    for (const id of ['p1', 'p2', 'p3']) {
+      expect(P(r, id)).toMatchObject({ governingAnchorId: null, origin: 'legacy' });
+    }
+  });
+
+  it('a root with no projectStartDate forward-computes off its own stored startDate and stays legacy-rooted', () => {
+    const phases = [phase({ id: 'a', durationDays: 10, startDate: '2026-01-05', sortOrder: 1 })];
+    const r = resolveSchedule(phases, [], opts({ today: '2026-01-01' }));
+
+    // source is 'chain' (a duration was applied), but the date grew from a
+    // stored legacy value, so it may never be spoken in weeks.
+    expect(P(r, 'a')).toMatchObject({ source: 'chain', governingAnchorId: null, origin: 'legacy' });
+  });
+
+  it('a root anchor governs itself even with no arriving chain', () => {
+    const phases = [phase({ id: 'a', durationDays: 10, anchorDate: '2026-02-01', sortOrder: 1 })];
+    const r = resolveSchedule(phases, [], opts({ today: '2026-01-01' }));
+
+    expect(P(r, 'a')).toMatchObject({ source: 'anchor', governingAnchorId: 'a', origin: 'anchor' });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // epochDayFromISO (Slice 02, packages/utils §4) — additive export reusing the
 // resolver's own day math (`parseDate` internally). Pinned cases: round-trip
 // vs the resolver's own formatDate (exercised indirectly via resolveSchedule,

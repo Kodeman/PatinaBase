@@ -11,6 +11,7 @@
 
 import { useId, type CSSProperties } from "react";
 import type { ResidentialWorkflowTrackKey } from "@patina/types";
+import { FIDELITY_WORD, type Fidelity } from "@patina/utils";
 
 import type { SectionStageLineModel } from "@/lib/document/section-stage-line";
 
@@ -25,9 +26,15 @@ const META =
 
 export interface SectionStageLineProps {
   model: SectionStageLineModel | null;
+  /**
+   * R113 — an unanchored engagement is a legitimate Band, not an error. With no
+   * model to name a stage, the line states the register it does know, or stays
+   * silent when it knows nothing at all.
+   */
+  fidelity?: Fidelity | null;
 }
 
-export function SectionStageLine({ model }: SectionStageLineProps) {
+export function SectionStageLine({ model, fidelity }: SectionStageLineProps) {
   const headingId = useId();
   const tracksId = useId();
 
@@ -77,31 +84,17 @@ export function SectionStageLine({ model }: SectionStageLineProps) {
             </ul>
           )}
 
-          {model.unclassifiedCount > 0 && (
-            <p
-              role={model.subLabel ? undefined : "status"}
-              data-unclassified-disclosure
-              className={
-                model.subLabel
-                  ? `mt-3 min-w-0 break-words ${META}`
-                  : `min-w-0 break-words ${META}`
-              }
-            >
-              {model.unclassifiedCount} active phase
-              {model.unclassifiedCount === 1 ? "" : "s"} not classified to a
-              canonical stage
+          {model.provenance && (
+            <p className={`mt-3 min-w-0 break-words ${META}`}>
+              {model.provenance}
             </p>
           )}
-
-          <p className={`mt-3 min-w-0 break-words ${META}`}>
-            {model.provenance}
-          </p>
         </>
-      ) : (
+      ) : fidelity ? (
         <p role="status" className={`min-w-0 break-words ${META}`}>
-          No active or delayed phase is configured
+          {FIDELITY_WORD[fidelity]}
         </p>
-      )}
+      ) : null}
     </section>
   );
 }

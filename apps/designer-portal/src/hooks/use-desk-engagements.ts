@@ -35,6 +35,11 @@ import {
   type NeedLine,
 } from '@/lib/document/desk-derivation';
 import { buildDeskConflicts } from '@/lib/document/desk-conflicts';
+import {
+  buildDeskSchedule,
+  type DeskMilestoneRow,
+  type DeskPhaseRow,
+} from '@/lib/document/desk-schedule';
 import { buildDeskReceivables } from '@/lib/document/desk-receivables';
 import {
   buildDeskFlaggedLines,
@@ -83,6 +88,15 @@ export function selectOperationalNeedForDocument(
 
 /** Conflict window: today → +120d covers any configured install horizon. */
 const CONFLICT_WINDOW_DAYS = 120;
+
+/**
+ * Caps on the desk-wide schedule reads (risk R1). Sized with headroom over any
+ * plausible studio: the single composing designer on prod carries 59 chained
+ * phases across 14 projects. A read that comes back FULL is treated as no
+ * answer at all rather than a partial one — see the truncation branch below.
+ */
+export const DESK_PHASE_LIMIT = 2000;
+const DESK_MILESTONE_LIMIT = 500;
 
 /** Flatten the item_feedback→proposal_items→proposals embed into the flagged-row
  *  shape buildDeskFlaggedLines reads. Tolerant of PostgREST returning a to-one
@@ -154,6 +168,9 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         { data: flaggedFeedback, error: flaggedError },
         { data: boardFlagged, error: boardFlaggedError },
         { data: ceremonies, error: ceremoniesError },
+        { data: deskPhases, error: deskPhasesError },
+        { data: deskMilestones, error: deskMilestonesError },
+        { data: deskProjectStarts, error: deskProjectStartsError },
       ] = await Promise.all([
         supabase.from('document_state').select('*').order('updated_at', { ascending: false }),
         supabase
@@ -198,6 +215,27 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
           .select(
             'id, lead_id, designer_client_id, state, intro_text, offered_slots, offered_at, picked_slot_starts_at, timezone, thread_id, created_at',
           ),
+        // R108: the schedule feed. Chain columns only, never `*` — this read is
+        // desk-wide (R1 perf). It cannot filter on the project ids the
+        // document_state read returns, because that read is in this same batch;
+        // RLS already scopes project_phases to the designer's own projects.
+        supabase
+          .from('project_phases')
+          .select(
+            'id, project_id, name, phase_key, status, sort_order, lane, duration_days, duration_weeks, follows_phase_id, anchor_date, start_date, target_end_date',
+          )
+          .order('project_id')
+          .limit(DESK_PHASE_LIMIT),
+        // schedule_milestones has no project_id of its own — every milestone
+        // hangs off a phase, so the phase id carries the grouping key.
+        supabase
+          .from('schedule_milestones')
+          .select('id, phase_id, name, kind, offset_days, anchor_date, status, sort_order')
+          .order('phase_id')
+          .limit(DESK_MILESTONE_LIMIT),
+        // R100's forward-compute origin, per project. Without it an unanchored
+        // chain can only ever resolve as legacy dates, never as a Frame.
+        supabase.from('projects').select('id, start_date').limit(DESK_PHASE_LIMIT),
       ]);
       if (error) throw error;
       const rows = (data ?? []) as DocumentStateRow[];
@@ -259,6 +297,35 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
       const ceremoniesByDesignerClientId = ceremoniesError
         ? undefined
         : buildDeskCeremoniesByDesignerClient(ceremonyRows);
+      // R108: the schedule reads degrade independently and together — a phases
+      // error leaves the map undefined, which partitionDesk reads as
+      // "unanswered", never as "this project has no schedule". Milestones or
+      // start dates alone failing still resolves every chain, only less
+      // precisely.
+      //
+      // Truncation is the dangerous case, not the error case: a capped phase
+      // read silently drops whole projects, and a project missing from a
+      // PRESENT map reads as "no phases" — i.e. the desk would invent a
+      // "Name the phases for this project" need for a fully-composed schedule.
+      // A full page is therefore treated as no answer at all.
+      const phaseRows = (deskPhases ?? []) as DeskPhaseRow[];
+      const phasesTruncated = phaseRows.length >= DESK_PHASE_LIMIT;
+      const schedules =
+        deskPhasesError || phasesTruncated
+          ? undefined
+          : buildDeskSchedule(
+              phaseRows,
+              deskMilestonesError ? [] : ((deskMilestones ?? []) as DeskMilestoneRow[]),
+              today,
+              deskProjectStartsError
+                ? undefined
+                : new Map(
+                    ((deskProjectStarts ?? []) as Array<{ id: string; start_date: string | null }>).map(
+                      (p) => [p.id, p.start_date ?? null],
+                    ),
+                  ),
+            );
+
       const result = partitionDesk(
         rows,
         now,
@@ -267,6 +334,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         flaggedLines,
         ceremoniesByLeadId,
         ceremoniesByDesignerClientId,
+        schedules,
       );
       previousResultRef.current = result;
       return result;

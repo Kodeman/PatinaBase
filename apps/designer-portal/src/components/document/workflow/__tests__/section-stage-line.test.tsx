@@ -1,5 +1,7 @@
 import { render, screen } from "@testing-library/react";
 
+import type { Fidelity, ScheduleSelection } from "@patina/utils";
+
 import { SectionStageLine } from "../section-stage-line";
 import { deriveSectionStageLine } from "@/lib/document/section-stage-line";
 import {
@@ -28,8 +30,23 @@ const phase = (
   ...overrides,
 });
 
-const modelFor = (phases: WorkflowPhaseLike[]) =>
-  deriveSectionStageLine(deriveWorkflowStageDocument(phases));
+const SELECTED: ScheduleSelection = {
+  activePhaseId: "phase-1",
+  reason: "today-in-window",
+};
+
+const modelFor = (
+  phases: WorkflowPhaseLike[],
+  selection: ScheduleSelection = SELECTED,
+  fidelity: Fidelity | null = "committed",
+  position: string | null = "Week 3",
+) =>
+  deriveSectionStageLine(
+    deriveWorkflowStageDocument(phases),
+    selection,
+    fidelity,
+    position,
+  );
 
 describe("SectionStageLine", () => {
   it("renders the stage as one sub-label instead of an eleven-row rail", () => {
@@ -38,7 +55,9 @@ describe("SectionStageLine", () => {
     );
 
     expect(
-      screen.getByText("Design Development · Core · stage 06 of 04–09"),
+      screen.getByText(
+        "Design Development · Core · stage 06 of 04–09 · Week 3 · Committed",
+      ),
     ).toBeVisible();
     expect(screen.queryByText("Inquiry & Qualification")).toBeNull();
     expect(screen.queryByText("Expected deliverables")).toBeNull();
@@ -56,7 +75,7 @@ describe("SectionStageLine", () => {
             workflow_track: "construction",
             canonical_stage_key: "concept_schematic",
           }),
-        ])}
+        ], { activePhaseId: "p-core", reason: "today-in-window" })}
       />,
     );
 
@@ -88,8 +107,8 @@ describe("SectionStageLine", () => {
     ).toBeVisible();
   });
 
-  it("discloses active phases no canonical stage classifies", () => {
-    render(
+  it("R113: never discloses the unclassified count, however many there are", () => {
+    const { container } = render(
       <SectionStageLine
         model={modelFor([
           phase(),
@@ -98,13 +117,12 @@ describe("SectionStageLine", () => {
       />,
     );
 
-    expect(
-      screen.getByText("1 active phase not classified to a canonical stage"),
-    ).toBeVisible();
+    expect(container.innerHTML).not.toMatch(/not classified/);
+    expect(container.querySelector("[data-unclassified-disclosure]")).toBeNull();
   });
 
-  it("never says nothing is active when every active phase is unclassified", () => {
-    render(
+  it("R113: an all-unclassified project renders its register, not an error", () => {
+    const { container } = render(
       <SectionStageLine
         model={modelFor([
           phase({ phase_id: "p-1", canonical_stage_key: null }),
@@ -116,17 +134,36 @@ describe("SectionStageLine", () => {
     expect(
       screen.queryByText("No active or delayed phase is configured"),
     ).toBeNull();
-    expect(
-      screen.getByText("2 active phases not classified to a canonical stage"),
-    ).toHaveAttribute("role", "status");
+    expect(container.innerHTML).not.toMatch(/not classified/);
   });
 
-  it("states that nothing is active rather than drawing an empty rail", () => {
-    render(<SectionStageLine model={null} />);
+  it("R113: with no model at all, an unanchored engagement reads as a Band", () => {
+    render(<SectionStageLine model={null} fidelity="band" />);
 
+    expect(screen.getByText("Band")).toBeVisible();
     expect(
-      screen.getByText("No active or delayed phase is configured"),
-    ).toHaveAttribute("role", "status");
+      screen.queryByText("No active or delayed phase is configured"),
+    ).toBeNull();
+  });
+
+  it("renders nothing at all when it knows nothing at all", () => {
+    const { container } = render(<SectionStageLine model={null} />);
+
+    expect(container.textContent).toBe("Workflow stage");
+    expect(
+      screen.queryByText("No active or delayed phase is configured"),
+    ).toBeNull();
+  });
+
+  it("omits the provenance line entirely when no template recorded one", () => {
+    const { container } = render(
+      <SectionStageLine
+        model={modelFor([phase({ template_provenance: null })])}
+      />,
+    );
+
+    expect(container.innerHTML).not.toMatch(/provenance/i);
+    expect(container.innerHTML).not.toMatch(/phase topology/);
   });
 
   it("keeps every metadata string at or above the 12px floor", () => {

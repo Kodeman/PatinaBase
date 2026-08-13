@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import type { PhaseRow, MilestoneRow } from '../use-schedule';
 import { mapPhaseRowToScheduleInput, mapMilestoneRowToScheduleInput } from '../use-schedule';
+import {
+  phaseFidelity,
+  positionText,
+  resolveSchedule,
+  selectActivePhase,
+} from '@patina/utils';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Fixtures — full DB row shapes (Tables<'project_phases'> / Tables<'schedule_milestones'>),
@@ -184,5 +190,81 @@ describe('mapMilestoneRowToScheduleInput', () => {
     const mapped = mapMilestoneRowToScheduleInput(makeMilestoneRow({ phase_id: 'ph9', sort_order: 4 }));
     expect(mapped.phaseId).toBe('ph9');
     expect(mapped.sortOrder).toBe(4);
+  });
+});
+
+// -----------------------------------------------------------------------------
+// The Frame register is only reachable when the project's own start_date is
+// threaded into the resolver as its forward-compute origin. This exercises the
+// REAL hook path -- the same mappers `useResolvedSchedule` calls, over full DB
+// row shapes -- rather than a hand-built ResolvedSchedule, because the bug this
+// pins was exactly that the production caller passed `undefined`.
+// -----------------------------------------------------------------------------
+
+describe('projectStartDate reaches the resolver (the Frame register)', () => {
+  const chain: PhaseRow[] = [
+    makePhaseRow({ id: 'ph1', name: 'Discovery', duration_days: 30, sort_order: 0 }),
+    makePhaseRow({
+      id: 'ph2',
+      name: 'Design Development',
+      duration_days: 60,
+      follows_phase_id: 'ph1',
+      sort_order: 1,
+    }),
+  ];
+
+  const resolveAs = (projectStartDate: string | null) =>
+    resolveSchedule(chain.map(mapPhaseRowToScheduleInput), [], {
+      projectStartDate,
+      today: '2026-02-15',
+    });
+
+  it('with a start date, an unanchored chain resolves as a Frame and says Frame', () => {
+    const resolved = resolveAs('2026-01-01');
+    const statuses = new Map(chain.map((p) => [p.id, 'pending' as const]));
+    const selection = selectActivePhase(resolved, statuses, '2026-02-15');
+    const active = resolved.phases.find((p) => p.id === selection.activePhaseId)!;
+
+    expect(active.origin).toBe('project-start');
+    expect(active.governingAnchorId).toBeNull();
+    expect(phaseFidelity(active, 'pending')).toBe('frame');
+    expect(positionText(resolved, selection, '2026-02-15')).toBe('Frame');
+  });
+
+  it('without one -- the pre-fix production call -- the same chain never places at all', () => {
+    const resolved = resolveAs(null);
+
+    // No origin, no dates: every phase falls through to unresolved, so the
+    // Frame register was unreachable in production.
+    for (const phase of resolved.phases) {
+      expect(phase.origin).toBe('none');
+      expect(phase.source).toBe('unresolved');
+    }
+    expect(resolved.phases.some((p) => p.origin === 'project-start')).toBe(false);
+  });
+
+  it('an anchor still outranks the project start -- Committed beats Frame', () => {
+    const anchored = [
+      chain[0],
+      makePhaseRow({
+        id: 'ph2',
+        name: 'Design Development',
+        duration_days: 60,
+        follows_phase_id: 'ph1',
+        anchor_date: '2026-02-01',
+        sort_order: 1,
+      }),
+    ];
+    const resolved = resolveSchedule(anchored.map(mapPhaseRowToScheduleInput), [], {
+      projectStartDate: '2026-01-01',
+      today: '2026-02-15',
+    });
+    const statuses = new Map(anchored.map((p) => [p.id, 'pending' as const]));
+    const selection = selectActivePhase(resolved, statuses, '2026-02-15');
+    const active = resolved.phases.find((p) => p.id === selection.activePhaseId)!;
+
+    expect(active.origin).toBe('anchor');
+    expect(phaseFidelity(active, 'pending')).toBe('committed');
+    expect(positionText(resolved, selection, '2026-02-15')).toBe('Week 3');
   });
 });
