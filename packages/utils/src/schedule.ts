@@ -289,14 +289,14 @@ function cmpId(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
-const UNPLACED: Resolved = {
+const UNPLACED: Resolved = Object.freeze({
   start: null,
   end: null,
   source: null,
   via: null,
   governingAnchorId: null,
   origin: 'none',
-};
+});
 
 const CONFLICT_RANK: Record<ScheduleConflictKind, number> = {
   orphan_link: 0,

@@ -26,12 +26,13 @@ export interface ScheduleSelection {
   reason: 'today-in-window' | 'status-in-progress' | 'next-upcoming' | 'none';
 }
 
-const FIDELITY_WORD: Record<Fidelity, string> = {
+/** The one place the fidelity vocabulary is spelled. Every mouth reads this. */
+export const FIDELITY_WORD: Readonly<Record<Fidelity, string>> = Object.freeze({
   band: 'Band',
   frame: 'Frame',
   committed: 'Committed',
   record: 'Record',
-};
+});
 
 /** The register a phase's dates may be spoken in, ignoring its status (R107). */
 function sourceFidelity(phase: ResolvedPhase): Fidelity {
@@ -60,6 +61,12 @@ export function selectActivePhase(
   resolved: ResolvedSchedule,
   statuses: Map<string, PhaseStatus>,
   today: string,
+  /**
+   * phase id → `sort_order`. I126 breaks a window tie on the main lane and
+   * then on sort order, which the resolver's output array cannot express (it
+   * orders by start first). Omitted, ties fall back to that output order.
+   */
+  sortOrders?: ReadonlyMap<string, number>,
 ): ScheduleSelection {
   const phases = resolved?.phases ?? [];
   const candidates = phases.filter((p) => statuses.get(p.id) !== 'completed');
@@ -68,8 +75,14 @@ export function selectActivePhase(
     (p) => p.start != null && p.end != null && p.start <= today && today <= p.end,
   );
   if (inWindow.length > 0) {
-    const main = inWindow.find((p) => p.lane === 'main');
-    return { activePhaseId: (main ?? inWindow[0]).id, reason: 'today-in-window' };
+    const rank = (p: ResolvedPhase, index: number): [number, number] => [
+      p.lane === 'main' ? 0 : 1,
+      sortOrders?.get(p.id) ?? index,
+    ];
+    const ordered = inWindow
+      .map((p, index) => ({ p, key: rank(p, index) }))
+      .sort((a, b) => a.key[0] - b.key[0] || a.key[1] - b.key[1]);
+    return { activePhaseId: ordered[0].p.id, reason: 'today-in-window' };
   }
 
   const running = candidates.filter((p) => {

@@ -148,12 +148,44 @@ describe('selectActivePhase — R111', () => {
     expect(selectActivePhase(s, statuses(), '2026-01-20').activePhaseId).toBe('main');
   });
 
-  it('breaks a same-lane tie on the resolver’s own output order', () => {
+  it('breaks a same-lane tie on the resolver’s own output order when no sort orders are given', () => {
     const s = schedule([
       resolved({ id: 'first', start: '2026-01-01', end: '2026-02-01' }),
       resolved({ id: 'second', start: '2026-01-02', end: '2026-02-01' }),
     ]);
     expect(selectActivePhase(s, statuses(), '2026-01-20').activePhaseId).toBe('first');
+  });
+
+  it('I126: two main-lane phases both containing today break on sort_order, not on start', () => {
+    // Output order is start-ascending, so 'earlier' comes first — but its
+    // sort_order is higher, and I126 ranks main-lane-then-sort_order.
+    const s = schedule([
+      resolved({ id: 'earlier', start: '2026-01-01', end: '2026-02-01' }),
+      resolved({ id: 'later', start: '2026-01-10', end: '2026-02-01' }),
+    ]);
+    const sortOrders = new Map([
+      ['earlier', 7],
+      ['later', 2],
+    ]);
+
+    expect(selectActivePhase(s, statuses(), '2026-01-20', sortOrders)).toEqual({
+      activePhaseId: 'later',
+      reason: 'today-in-window',
+    });
+    // Without the sort orders the output order wins — the pre-I126 behavior.
+    expect(selectActivePhase(s, statuses(), '2026-01-20').activePhaseId).toBe('earlier');
+  });
+
+  it('the main lane still outranks a thread with a lower sort_order', () => {
+    const s = schedule([
+      resolved({ id: 'thread', start: '2026-01-01', end: '2026-02-01', lane: 'thread' }),
+      resolved({ id: 'main', start: '2026-01-02', end: '2026-02-01', lane: 'main' }),
+    ]);
+    const sortOrders = new Map([
+      ['thread', 0],
+      ['main', 9],
+    ]);
+    expect(selectActivePhase(s, statuses(), '2026-01-20', sortOrders).activePhaseId).toBe('main');
   });
 
   it('falls back to the single in_progress phase when no window contains today', () => {

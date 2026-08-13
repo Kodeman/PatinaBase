@@ -1619,6 +1619,7 @@ export type { CaptureFromUrlResult } from './use-capture-from-url';
 export {
   useScheduleMilestones,
   useScheduleRevisions,
+  useProjectStartDate,
   useResolvedSchedule,
   mapPhaseRowToScheduleInput,
   mapMilestoneRowToScheduleInput,

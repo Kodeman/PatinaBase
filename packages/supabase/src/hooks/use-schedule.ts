@@ -109,6 +109,32 @@ export function useScheduleMilestones(projectId: string | undefined) {
 }
 
 /**
+ * The project's own start date — the forward-compute origin R100 gives the
+ * resolver when no anchor roots a chain. Without it every unanchored chain
+ * falls back to legacy stored dates, so `origin:'project-start'` (the Frame
+ * register) is unreachable. One column, its own cache key, shared by every
+ * consumer of `useResolvedSchedule`.
+ * Key `['project-start-date', projectId]`.
+ */
+export function useProjectStartDate(projectId: string | undefined) {
+  return useQuery({
+    queryKey: ['project-start-date', projectId],
+    enabled: !!projectId,
+    queryFn: async (): Promise<string | null> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('projects')
+        .select('start_date')
+        .eq('id', projectId)
+        .maybeSingle();
+      if (error) throw error;
+      return (data?.start_date ?? null) as string | null;
+    },
+  });
+}
+
+/**
  * schedule_revisions for a project, latest first. Read-only surface — writes
  * are RPC-only (Slice 05); this will return `[]` until a baseline is cut.
  * Key `['schedule-revisions', projectId]`.
@@ -190,6 +216,7 @@ export interface UseResolvedScheduleResult {
 export function useResolvedSchedule(projectId: string | undefined): UseResolvedScheduleResult {
   const phasesQuery = useProjectPhases(projectId ?? '');
   const milestonesQuery = useScheduleMilestones(projectId);
+  const startDateQuery = useProjectStartDate(projectId);
 
   // Memoize the fallback arrays — a fresh `[]` per render would defeat the
   // useMemo deps below (and the stability comment on `today`).
@@ -202,8 +229,17 @@ export function useResolvedSchedule(projectId: string | undefined): UseResolvedS
   // forever while its data is still undefined. isPending is the honest
   // "no data yet" signal either way. The returned field keeps the
   // `isLoading` name (contract) but derives from isPending.
-  const hasData = phasesQuery.data !== undefined && milestonesQuery.data !== undefined;
-  const isLoading = phasesQuery.isPending || milestonesQuery.isPending;
+  // The start date is best-effort: it refines the register a phase may be
+  // spoken in, so a failed read degrades to "no forward origin" rather than
+  // taking the whole schedule down. It still gates readiness, so no chain
+  // resolves as legacy and then silently re-resolves as a Frame.
+  const startReady = startDateQuery.data !== undefined || startDateQuery.isError;
+  const hasData =
+    phasesQuery.data !== undefined && milestonesQuery.data !== undefined && startReady;
+  const isLoading =
+    phasesQuery.isPending ||
+    milestonesQuery.isPending ||
+    (startDateQuery.isPending && !startDateQuery.isError);
   const isError = phasesQuery.isError || milestonesQuery.isError;
 
   // R100: the single impure door — nothing else in the app computes time.
@@ -211,18 +247,20 @@ export function useResolvedSchedule(projectId: string | undefined): UseResolvedS
   // across unrelated re-renders and only moves when the underlying data does.
   const today = useMemo(() => new Date().toISOString().slice(0, 10), [phases, milestones]);
 
+  const projectStartDate = startDateQuery.data ?? null;
+
   const resolved = useMemo<ResolvedSchedule | null>(() => {
     // null until BOTH sources have real data — a disabled or still-pending
     // query must read as "not ready," never as a confirmed-empty schedule.
     if (!hasData) return null;
     return resolveSchedule(phases.map(mapPhaseRowToScheduleInput), milestones.map(mapMilestoneRowToScheduleInput), {
-      // Slice 01's specimen chains anchor at the root phase itself; a future
-      // slice may thread the project's own start_date here instead of
-      // leaving the forward-compute origin undefined.
-      projectStartDate: undefined,
+      // R100's forward-compute origin. An unanchored chain rooted here resolves
+      // origin:'project-start' — the Frame register. Left undefined, every such
+      // chain fell through to legacy stored dates and Frame was unreachable.
+      projectStartDate,
       today,
     });
-  }, [phases, milestones, hasData, today]);
+  }, [phases, milestones, hasData, today, projectStartDate]);
 
   return { phases, milestones, resolved, isLoading, isError };
 }
