@@ -1,0 +1,1376 @@
+<title>The Anchor Holds</title>
+
+<!--
+================================================================================
+TOKEN PLAN — "The Anchor Holds"  (Direction A · schedule spine as status organ)
+================================================================================
+IDENTITY
+  Sibling of the review deck "The Book Won't Close": paper grounds, brass rule,
+  a serif with an opinion, machine-register mono for anything the product says
+  on screen. Where that deck encoded SEVERITY as form, this one encodes
+  FIDELITY as form — the whole argument is that a date should look as hard as
+  it actually is, so the deck itself never draws a soft date like a firm one.
+
+COLOR (warm neutrals, hue bias ~38deg; ONE editorial accent = brass)
+  --paper        page ground            #F7F3EC  / dark #14120F
+  --paper-2      raised panel           #FDFBF7  / dark #1C1916
+  --paper-3      sunken well            #EFE9DE  / dark #232019
+  --ink          primary text           #211C15  / dark #EDE7DC
+  --ink-2        secondary text         #564E42  / dark #B3A996
+  --ink-3        tertiary / captions    #8B8172  / dark #857B6B
+  --rule         hairline               #DCD3C4  / dark #332E26
+  --rule-strong  section rule           #B9AE99  / dark #4A4438
+  --accent       brass (editorial only) #8C6A2B  / dark #C9A45E
+  --accent-soft  brass wash             #EDE3CE  / dark #2E2618
+
+FIDELITY AS FORM  (the deck's semantic axis — deliberately NOT the accent alone)
+  BAND      --band      graphite   #7B7263 / dark #9A9080   drawn as a DOTTED
+            span with no ends. A band has no edges you can hold.
+  FRAME     --frame     verdigris  #2F5D63 / dark #7FBAC0   drawn as a DASHED
+            outline over a wash — an outline is a shape, not a surface.
+  COMMITTED --commit    brass      #8C6A2B / dark #C9A45E   drawn SOLID with
+            two vertical end ticks — a bar you could hang weight from.
+  CONFLICT  --conflict  oxide red  #9E2B1E / dark #E4715F   used ONLY where an
+            anchor refuses to move. Never decorative.
+  Fidelity swatches (.fw) reuse the exact bar treatment at inline size, so the
+  prose and the mocks speak one visual language.
+
+TYPE
+  display : Georgia / Iowan Old Style / Palatino — headings, mock titles, figures
+  body    : system sans — running prose, tables
+  mono    : SF Mono / Menlo — eyebrows, chips, and EVERY quoted product string
+  scale   : 0.66 / 0.72 / 0.78 / 0.92 / 1.0625 / 1.45 / clamp(1.9-2.75) / clamp(2.6-4.6)
+  quoted product strings: .s (mono, paper-3 well, brass left tick)
+
+LAYOUT
+  one column, --measure 68ch for prose, --wide 1180px for figures/mocks
+  section rule = 1px rule-strong + mono section number in the left gutter
+  every mock is min-width 880px inside .scroll { overflow-x:auto }; the body
+  itself never scrolls sideways
+  MOCK SUB-PALETTE, theme-aware: --m-bg --m-panel --m-ink --m-ink-2 --m-rule
+  plus the four fidelity tokens, which the mocks share with the prose.
+================================================================================
+-->
+
+<style>
+:root{
+  --paper:#F7F3EC; --paper-2:#FDFBF7; --paper-3:#EFE9DE;
+  --ink:#211C15; --ink-2:#564E42; --ink-3:#8B8172;
+  --rule:#DCD3C4; --rule-strong:#B9AE99;
+  --accent:#8C6A2B; --accent-soft:#EDE3CE;
+
+  --band:#7B7263; --band-soft:#E9E3D8;
+  --frame:#2F5D63; --frame-soft:#DDE9E9;
+  --commit:#8C6A2B; --commit-soft:#EDE3CE;
+  --conflict:#9E2B1E; --conflict-soft:#F5E1DC; --conflict-ink:#FFFFFF;
+
+  --shadow:0 1px 2px rgba(33,28,21,.06), 0 8px 24px rgba(33,28,21,.05);
+
+  --m-bg:#FAF7F1; --m-panel:#FFFFFF; --m-ink:#241E17; --m-ink-2:#7A7161;
+  --m-rule:#E2DACB; --m-well:#F2ECE1;
+
+  --display:Georgia,"Iowan Old Style","Palatino Linotype","Book Antiqua",Palatino,serif;
+  --body:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --measure:68ch; --wide:1180px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#14120F; --paper-2:#1C1916; --paper-3:#232019;
+    --ink:#EDE7DC; --ink-2:#B3A996; --ink-3:#857B6B;
+    --rule:#332E26; --rule-strong:#4A4438;
+    --accent:#C9A45E; --accent-soft:#2E2618;
+    --band:#9A9080; --band-soft:#2A251E;
+    --frame:#7FBAC0; --frame-soft:#16292B;
+    --commit:#C9A45E; --commit-soft:#2E2618;
+    --conflict:#E4715F; --conflict-soft:#35201C; --conflict-ink:#1B0F0C;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+    --m-bg:#191612; --m-panel:#211D18; --m-ink:#EDE7DC; --m-ink-2:#9A9080;
+    --m-rule:#3A342B; --m-well:#221E18;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#14120F; --paper-2:#1C1916; --paper-3:#232019;
+  --ink:#EDE7DC; --ink-2:#B3A996; --ink-3:#857B6B;
+  --rule:#332E26; --rule-strong:#4A4438;
+  --accent:#C9A45E; --accent-soft:#2E2618;
+  --band:#9A9080; --band-soft:#2A251E;
+  --frame:#7FBAC0; --frame-soft:#16292B;
+  --commit:#C9A45E; --commit-soft:#2E2618;
+  --conflict:#E4715F; --conflict-soft:#35201C; --conflict-ink:#1B0F0C;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+  --m-bg:#191612; --m-panel:#211D18; --m-ink:#EDE7DC; --m-ink-2:#9A9080;
+  --m-rule:#3A342B; --m-well:#221E18;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:var(--body); font-size:1.0625rem; line-height:1.62;
+  -webkit-font-smoothing:antialiased; overflow-x:hidden;
+}
+.wrap{max-width:var(--wide); margin:0 auto; padding:0 clamp(18px,4vw,44px)}
+p{max-width:var(--measure)}
+a{color:var(--accent)}
+
+/* ---------- primitives ---------- */
+.eyebrow{
+  font-family:var(--mono); font-size:.72rem; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--ink-3); margin:0 0 .6rem;
+}
+.eyebrow.brass{color:var(--accent)}
+h1,h2,h3,h4{font-family:var(--display); font-weight:400; line-height:1.12; letter-spacing:-.01em}
+h2{font-size:clamp(1.9rem,3.6vw,2.75rem); margin:0 0 .5rem}
+h3{font-size:1.45rem; margin:0 0 .35rem}
+h4{font-size:1.12rem; margin:0 0 .3rem}
+.lede{font-size:1.2rem; line-height:1.55; color:var(--ink-2); max-width:62ch}
+.dim{color:var(--ink-3)}
+.scroll{overflow-x:auto; -webkit-overflow-scrolling:touch; max-width:100%}
+.brassrule{height:3px; background:var(--accent); width:64px; margin:0 0 2rem}
+
+/* quoted product string */
+.s{
+  font-family:var(--mono); font-size:.86em; background:var(--paper-3);
+  border-left:2px solid var(--accent); padding:.08em .45em .12em .4em;
+  color:var(--ink); white-space:normal;
+}
+.sblock{
+  font-family:var(--mono); font-size:.85rem; line-height:1.75;
+  background:var(--paper-3); border-left:3px solid var(--accent);
+  padding:.85rem 1rem; margin:1rem 0; max-width:var(--measure); color:var(--ink-2);
+}
+.sblock b{color:var(--ink); font-weight:600}
+
+/* chips */
+.chip{
+  display:inline-block; font-family:var(--mono); font-size:.66rem;
+  letter-spacing:.16em; text-transform:uppercase; padding:.28em .6em .3em;
+  border:1px solid var(--rule-strong); color:var(--ink-3); white-space:nowrap;
+  vertical-align:middle; background:transparent;
+}
+.chip.band{color:var(--band); border-color:var(--band); border-style:dotted}
+.chip.frame{color:var(--frame); border-color:var(--frame); border-style:dashed}
+.chip.commit{color:var(--commit); border-color:var(--commit); background:var(--commit-soft)}
+.chip.conflict{background:var(--conflict); color:var(--conflict-ink); border-color:var(--conflict)}
+.chip.new{color:var(--conflict); border-color:var(--conflict)}
+
+/* inline fidelity swatch — same treatment as the mock bars */
+.fw{display:inline-block; width:52px; height:9px; vertical-align:middle; margin-right:.5em; position:relative}
+.fw.band{background:repeating-linear-gradient(90deg,var(--band) 0 2px,transparent 2px 6px)}
+.fw.frame{background:var(--frame-soft); border:1px dashed var(--frame)}
+.fw.commit{background:var(--commit)}
+.fw.commit::before,.fw.commit::after{content:""; position:absolute; top:-3px; width:2px; height:15px; background:var(--commit)}
+.fw.commit::before{left:0} .fw.commit::after{right:0}
+
+/* section skeleton */
+section{padding:clamp(56px,8vw,110px) 0; border-top:1px solid var(--rule-strong)}
+section:first-of-type{border-top:0}
+.sec-head{display:flex; gap:1.4rem; align-items:baseline; margin-bottom:2.2rem; flex-wrap:wrap}
+.sec-no{font-family:var(--mono); font-size:.8rem; color:var(--accent); letter-spacing:.12em; padding-top:.55rem}
+
+/* figures */
+figure{margin:1.6rem 0 2.4rem; max-width:100%}
+figcaption{
+  font-family:var(--mono); font-size:.74rem; line-height:1.6; letter-spacing:.03em;
+  color:var(--ink-3); margin-top:.7rem; max-width:78ch;
+}
+figcaption b{color:var(--accent); font-weight:600; letter-spacing:.1em}
+figcaption i{color:var(--ink-2); font-style:italic}
+
+/* tables */
+table{border-collapse:collapse; width:100%; min-width:760px; font-size:.92rem}
+th{
+  font-family:var(--mono); font-size:.68rem; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--ink-3); text-align:left; font-weight:400;
+  border-bottom:1px solid var(--rule-strong); padding:.6rem .8rem;
+}
+td{border-bottom:1px solid var(--rule); padding:.75rem .8rem; vertical-align:top}
+td.k{font-family:var(--mono); font-size:.8rem; color:var(--ink-2); white-space:nowrap}
+tbody tr:hover{background:var(--paper-2)}
+
+/* blocks */
+.tier{border-left:3px solid var(--rule-strong); padding-left:clamp(16px,2.5vw,28px); margin:0 0 3rem}
+.tier.is-band{border-left-color:var(--band); border-left-style:dotted}
+.tier.is-frame{border-left-color:var(--frame); border-left-style:dashed}
+.tier.is-commit{border-left-color:var(--commit)}
+.tier-head{display:flex; gap:.9rem; align-items:center; flex-wrap:wrap; margin-bottom:.7rem}
+.tier-head h3{margin:0}
+.rule-note{
+  font-family:var(--mono); font-size:.75rem; letter-spacing:.06em; color:var(--ink-3);
+  border-top:1px solid var(--rule); padding-top:.7rem; margin-top:1.2rem; max-width:var(--measure);
+}
+.rule-note b{color:var(--ink-2); font-weight:600}
+.rec{
+  background:var(--accent-soft); border:1px solid var(--rule);
+  padding:.9rem 1.1rem; margin-top:1.2rem; max-width:var(--measure); font-size:.97rem;
+}
+.rec .eyebrow{margin-bottom:.3rem}
+.alt{
+  background:var(--paper-2); border:1px solid var(--rule); border-top:2px solid var(--frame);
+  padding:.9rem 1.1rem; margin-top:1rem; max-width:var(--measure); font-size:.95rem;
+}
+.warnbox{
+  border:1px solid var(--conflict); border-left-width:3px; background:var(--conflict-soft);
+  padding:1rem 1.15rem; margin:1.4rem 0; max-width:74ch; font-size:.97rem;
+}
+.two{display:grid; grid-template-columns:1fr 1fr; gap:1.8rem}
+@media(max-width:860px){.two{grid-template-columns:1fr}}
+
+/* numbered lists */
+.num{list-style:none; padding:0; margin:1.3rem 0 0; counter-reset:n}
+.num li{counter-increment:n; padding:.85rem 0 .85rem 2.7rem; border-bottom:1px solid var(--rule); position:relative; max-width:76ch}
+.num li::before{content:counter(n,decimal-leading-zero); position:absolute; left:0; top:.95rem; font-family:var(--mono); font-size:.72rem; color:var(--accent); letter-spacing:.1em}
+.plain{list-style:none; padding:0; margin:1rem 0 0}
+.plain li{padding:.55rem 0; border-bottom:1px solid var(--rule); max-width:74ch}
+.plain li:last-child{border-bottom:0}
+
+/* ruling requests */
+.rulings{list-style:none; padding:0; margin:1.6rem 0 0}
+.rulings li{
+  display:grid; grid-template-columns:5.4rem 1fr; gap:1.2rem; padding:1rem 0;
+  border-bottom:1px solid var(--rule); align-items:start;
+}
+.rulings .rid{font-family:var(--mono); font-size:.78rem; letter-spacing:.1em; color:var(--accent); padding-top:.2rem}
+.rulings .rid.open{color:var(--frame)}
+.rulings .rt{font-weight:600; display:block; margin-bottom:.25rem}
+.rulings .rd{color:var(--ink-2); font-size:.95rem; max-width:66ch}
+@media(max-width:640px){.rulings li{grid-template-columns:1fr; gap:.3rem}}
+
+/* ===================== MOCKS ===================== */
+.mockwrap{margin:1.6rem 0 .8rem}
+.mock{
+  background:var(--m-bg); color:var(--m-ink); border:1px solid var(--m-rule);
+  font-family:var(--body); font-size:12px; line-height:1.5; box-shadow:var(--shadow);
+  min-width:880px;
+}
+.mk-lab{font-family:var(--mono); font-size:8.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--m-ink-2)}
+.mk-lab.br{color:var(--commit)}
+.mk-ttl{font-family:var(--display); font-size:19px; line-height:1.15; margin:0}
+.mk-sub{font-family:var(--display); font-style:italic; color:var(--m-ink-2); font-size:12.5px; margin:1px 0 0}
+
+.mk-top{display:flex; justify-content:space-between; align-items:center; gap:16px; padding:10px 18px; border-bottom:1px solid var(--m-rule); background:var(--m-panel)}
+.mk-pane{padding:16px 18px 18px}
+.mk-band{border-top:1px solid var(--m-rule)}
+.mk-hd{display:flex; justify-content:space-between; align-items:baseline; border-bottom:1px solid var(--m-rule); padding-bottom:5px; margin-bottom:11px}
+.mk-hd .t{font-family:var(--display); font-size:14px}
+
+.statuschip{
+  display:inline-block; font-family:var(--mono); font-size:8.5px; letter-spacing:.14em;
+  text-transform:uppercase; padding:5px 9px; border:1px solid var(--m-rule); color:var(--m-ink-2);
+}
+.statuschip.band{color:var(--band); border-color:var(--band); border-style:dotted}
+.statuschip.frame{color:var(--frame); border-color:var(--frame); border-style:dashed}
+.statuschip.commit{color:var(--commit); border-color:var(--commit); background:var(--commit-soft)}
+.statuschip.conflict{color:var(--conflict-ink); background:var(--conflict); border-color:var(--conflict)}
+
+/* --- fidelity spine grid --- */
+.fs{--cols:24}
+.fs-scale{display:grid; grid-template-columns:118px 1fr; gap:12px; align-items:end; margin-bottom:7px}
+.fs-months{display:grid; grid-template-columns:repeat(6,1fr); border-bottom:1px solid var(--m-rule)}
+.fs-months span{font-family:var(--mono); font-size:8px; letter-spacing:.12em; text-transform:uppercase; color:var(--m-ink-2); padding:0 0 4px 5px; border-left:1px solid var(--m-rule)}
+.fs-row{display:grid; grid-template-columns:118px 1fr; gap:12px; align-items:center; padding:5px 0}
+.fs-name{font-size:11px; color:var(--m-ink-2); text-align:right}
+.fs-row.on .fs-name{color:var(--m-ink); font-weight:700}
+.fs-track{
+  display:grid; grid-template-columns:repeat(24,1fr); align-items:center; height:20px;
+  background:repeating-linear-gradient(90deg,var(--m-rule) 0 1px,transparent 1px calc(100% / 6));
+}
+.fs-track > .bar{grid-row:1}
+.bar{height:9px; position:relative; display:flex; align-items:center}
+.bar.band{background:repeating-linear-gradient(90deg,var(--band) 0 2px,transparent 2px 6px)}
+.bar.frame{background:var(--frame-soft); border:1px dashed var(--frame)}
+.bar.commit{background:var(--commit)}
+.bar.commit::before,.bar.commit::after{content:""; position:absolute; top:-4px; width:2px; height:17px; background:var(--commit)}
+.bar.commit::before{left:0} .bar.commit::after{right:0}
+.bar.ghost{background:transparent; border:1px dotted var(--m-ink-2); opacity:.8}
+.bar.clash{background:var(--conflict-soft); border:1px solid var(--conflict)}
+.bar .cap{
+  position:absolute; left:calc(100% + 7px); top:50%; transform:translateY(-50%);
+  font-family:var(--mono); font-size:8px; letter-spacing:.09em; white-space:nowrap; color:var(--m-ink-2);
+}
+.bar .cap.hard{color:var(--commit)}
+.bar .cap.bad{color:var(--conflict)}
+.bar .cap.left{left:auto; right:calc(100% + 7px)}
+.bar .cap.over{left:0; top:-12px; transform:none}
+.anchorpin{
+  position:absolute; left:-1px; top:-13px; font-family:var(--mono); font-size:8px;
+  letter-spacing:.1em; color:var(--commit); white-space:nowrap;
+}
+.fs-legend{display:flex; gap:20px; flex-wrap:wrap; margin-top:12px; padding-top:9px; border-top:1px solid var(--m-rule)}
+.fs-legend div{display:flex; align-items:center; gap:7px; font-family:var(--mono); font-size:8px; letter-spacing:.12em; text-transform:uppercase; color:var(--m-ink-2)}
+.lg{width:34px; height:8px; display:inline-block}
+.lg.band{background:repeating-linear-gradient(90deg,var(--band) 0 2px,transparent 2px 6px)}
+.lg.frame{background:var(--frame-soft); border:1px dashed var(--frame)}
+.lg.commit{background:var(--commit)}
+.lg.clash{background:var(--conflict-soft); border:1px solid var(--conflict)}
+
+/* --- desk card --- */
+.deskcard{border:1px solid var(--m-rule); background:var(--m-panel); padding:12px 14px; max-width:430px}
+.deskcard .dn{font-family:var(--display); font-size:15px; margin-bottom:3px}
+.deskcard .dm{font-family:var(--mono); font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--m-ink-2)}
+.deskcard .dm.band{color:var(--band)}
+.deskcard .dm.frame{color:var(--frame)}
+.deskcard .dm.commit{color:var(--commit)}
+.deskcard .dneed{font-size:11px; color:var(--m-ink); margin-top:7px; border-top:1px solid var(--m-rule); padding-top:7px}
+.deskcard .dneed.none{color:var(--m-ink-2); font-style:italic}
+.deskgrid{display:grid; grid-template-columns:repeat(3,1fr); gap:12px}
+.deskgrid .deskcard{max-width:none}
+
+/* --- ceremony face --- */
+.cer{border:1px solid var(--m-rule); background:var(--m-panel)}
+.cer .cer-h{padding:11px 15px; border-bottom:1px solid var(--m-rule); display:flex; justify-content:space-between; align-items:center}
+.cer .part{display:grid; grid-template-columns:88px 1fr; gap:14px; padding:10px 15px; border-bottom:1px solid var(--m-rule)}
+.cer .part:last-child{border-bottom:0}
+.cer .pk{font-family:var(--mono); font-size:8px; letter-spacing:.16em; text-transform:uppercase; color:var(--m-ink-2); padding-top:2px}
+.cer .pv{font-size:11.5px}
+.cer .part.impact{background:var(--m-well)}
+.cer .part.impact .pk{color:var(--commit)}
+.cer .impact-lines{list-style:none; margin:0; padding:0}
+.cer .impact-lines li{padding:3px 0 3px 14px; position:relative; font-size:11.5px}
+.cer .impact-lines li::before{content:""; position:absolute; left:0; top:8px; width:7px; height:2px; background:var(--commit)}
+.cer .impact-lines li.soft::before{background:var(--frame)}
+.cer .confirm{display:flex; gap:10px; align-items:center}
+.btn{font-family:var(--mono); font-size:9px; letter-spacing:.14em; text-transform:uppercase; padding:7px 13px; border:1px solid var(--commit); color:var(--commit); background:transparent}
+.btn.solid{background:var(--commit); color:var(--m-bg)}
+.btn.quiet{border-color:var(--m-rule); color:var(--m-ink-2)}
+
+/* --- revision ledger --- */
+.ledger{border:1px solid var(--m-rule); background:var(--m-panel)}
+.ledger .lr{display:grid; grid-template-columns:52px 1fr 132px; gap:12px; padding:9px 14px; border-bottom:1px solid var(--m-rule); align-items:baseline}
+.ledger .lr:last-child{border-bottom:0}
+.ledger .lv{font-family:var(--mono); font-size:9px; letter-spacing:.1em; color:var(--m-ink-2)}
+.ledger .lr.now{background:var(--m-well)}
+.ledger .lr.now .lv{color:var(--commit)}
+.ledger .lw{font-size:11px}
+.ledger .lt{font-family:var(--mono); font-size:8.5px; letter-spacing:.08em; color:var(--m-ink-2); text-align:right}
+
+/* --- flow diagram wrapper --- */
+.diagram{background:var(--paper-2); border:1px solid var(--rule); padding:clamp(16px,3vw,30px); box-shadow:var(--shadow); min-width:880px}
+.diagram svg{display:block; width:100%; height:auto}
+
+/* cover */
+.cover{padding:clamp(70px,13vw,150px) 0 clamp(50px,8vw,90px)}
+.cover h1{font-size:clamp(2.6rem,6.4vw,4.6rem); margin:0 0 1.6rem; max-width:15ch}
+.cover .verdict{font-size:clamp(1.15rem,2vw,1.45rem); line-height:1.5; max-width:60ch; color:var(--ink-2)}
+.scope{display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:0; border-top:1px solid var(--rule-strong); margin-top:3.4rem}
+.scope div{padding:1.1rem 1.2rem 1.1rem 0; border-right:1px solid var(--rule)}
+.scope div:last-child{border-right:0}
+.scope dt{font-family:var(--mono); font-size:.66rem; letter-spacing:.18em; text-transform:uppercase; color:var(--ink-3); margin-bottom:.35rem}
+.scope dd{margin:0; font-size:.92rem; color:var(--ink-2)}
+
+.colophon{font-family:var(--mono); font-size:.72rem; letter-spacing:.08em; line-height:1.9; color:var(--ink-3); padding:3rem 0 4rem; border-top:1px solid var(--rule)}
+.colophon b{color:var(--ink-2); letter-spacing:.14em}
+</style>
+
+<div class="wrap">
+
+<!-- ============ 1. COVER ============ -->
+<section class="cover">
+  <div class="brassrule"></div>
+  <p class="eyebrow brass">Designer portal &middot; The document &middot; Direction A &middot; 13 August 2026</p>
+  <h1>The anchor holds.</h1>
+  <p class="verdict">
+    The schedule spine can be the document&rsquo;s single status organ &mdash; but only if it knows
+    how hard its own dates are. An engagement begins as a season and ends as a Tuesday. Today the
+    doc renders both in the same typeface and asks the designer to guess which is which, so it
+    renders <span class="s">Active &middot; Week 2</span> above
+    <span class="s">NO ACTIVE OR DELAYED PHASE IS CONFIGURED</span> and neither line can be believed.
+    This deck proposes one model &mdash; three fidelities, hardened by commitment events, never by
+    asking anyone to set a date.
+  </p>
+
+  <dl class="scope">
+    <div><dt>What this is</dt><dd>A unification and wiring design over machinery that is already built and ratified (R99&ndash;R105, behind <span class="s">schedule-spine</span>). Not a rebuild.</dd></div>
+    <div><dt>What it asks for</dt><dd>Eight rulings, one genuinely new act (install booking), one narrow schema addition argued as unavoidable, and one dead field deleted.</dd></div>
+    <div><dt>What it does not ask for</dt><dd>A second time surface, a chain backfill, a client-facing ledger, or a prompt that says &ldquo;please enter a date.&rdquo;</dd></div>
+    <div><dt>Grounded in</dt><dd>Verified code, schema and decision lineage &mdash; <span class="s">grounding.md</span>. Every mechanism named below exists unless explicitly flagged NEW.</dd></div>
+  </dl>
+</section>
+
+<!-- ============ 2. THE DILEMMA ============ -->
+<section>
+  <div class="sec-head"><span class="sec-no">02</span><div>
+    <p class="eyebrow">The dilemma</p>
+    <h2>Four truths, no arbiter</h2>
+  </div></div>
+
+  <p>
+    On <b>Winkys winktastic loft</b> &mdash; the best-populated live project in the studio &mdash; four
+    independent pieces of code answer the question &ldquo;where is this job?&rdquo; None of them consult
+    each other, and only one of them is right.
+  </p>
+
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Voice</th><th>Where it lives</th><th>What it computes from</th><th>What it says on Winkys</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="k">Header vital</td>
+          <td class="k">doc/[id]/page.tsx:127&ndash;136</td>
+          <td>stored <span class="s">current_phase</span> TEXT, plus a field that does not exist</td>
+          <td><span class="s">Active</span> &mdash; and a Target chip that renders nothing at all</td>
+        </tr>
+        <tr>
+          <td class="k">Section derivation</td>
+          <td class="k">section-derivation.ts:106&ndash;113</td>
+          <td>raw calendar math off <span class="s">projects.start_date</span>; zero phase awareness</td>
+          <td><span class="s">Active &middot; Week 2</span></td>
+        </tr>
+        <tr>
+          <td class="k">Stage classifier</td>
+          <td class="k">section-stage-line.tsx:101&ndash;103</td>
+          <td>workflow taxonomy over phase rows (R1 / WP3 lineage)</td>
+          <td><span class="s">NO ACTIVE OR DELAYED PHASE IS CONFIGURED</span></td>
+        </tr>
+        <tr>
+          <td class="k">The resolver</td>
+          <td class="k">packages/utils/src/schedule.ts</td>
+          <td>durations, links, anchors &mdash; the one pure computation of time</td>
+          <td>a fully resolved six-phase chain, Consultation &rarr; Care &mdash; <i>read by nobody outside the flag</i></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 style="margin-top:2.4rem">Why it happened</h3>
+  <p>
+    Not because four teams disagreed. Because the system has exactly one way to say &ldquo;when&rdquo; &mdash;
+    a date column &mdash; and a date column cannot say <i>how firmly</i>. When an engagement is born, a
+    designer&rsquo;s honest answer is &ldquo;late summer into winter.&rdquo; The only place to put that answer is
+    <span class="s">projects.start_date</span> / <span class="s">target_end_date</span>, which look exactly
+    like the install date the client has taken a day off work for. From that moment on, every consumer
+    downstream is free to do arithmetic on a guess. <span class="s">Week 2</span> is that arithmetic.
+  </p>
+  <p>
+    So the four voices are not four bugs. They are four attempts to answer a question the data model
+    refused to hold: <b>how hard is this date?</b> Direction A adds that one missing dimension and then
+    makes every voice read it.
+  </p>
+
+  <div class="warnbox">
+    <p style="margin:0"><b>The corollary Kody has already ruled on.</b> The cure is <i>not</i> a
+    better prompt. Nobody wants a modal asking them to firm up procurement. Firmness must be a
+    <b>by-product of acts the studio already performs</b> &mdash; a signature, an executed
+    authorization, a released purchase order, a booked install week. The schedule hardens because
+    the business hardened, not because someone was nagged.</p>
+  </div>
+</section>
+
+<!-- ============ 3. THE FIDELITY LADDER ============ -->
+<section>
+  <div class="sec-head"><span class="sec-no">03</span><div>
+    <p class="eyebrow">The model</p>
+    <h2>The fidelity ladder</h2>
+  </div></div>
+
+  <p class="lede">
+    Three tiers. Every one of them already has machinery behind it. The ladder is a reading of the
+    resolver&rsquo;s existing <span class="s">source</span> field &mdash; not a new column, not a new state
+    machine.
+  </p>
+
+  <div class="tier is-band">
+    <div class="tier-head">
+      <span class="fw band"></span>
+      <h3>Band</h3>
+      <span class="chip band">Lead &rarr; proposal</span>
+    </div>
+    <p>
+      Only <span class="s">projects.start_date</span> and <span class="s">target_end_date</span> exist.
+      The spine renders <b>one soft span with no interior edges</b> &mdash; not six phases with fake
+      boundaries. The header states a season, never a week:
+      <span class="s">TARGETING SEP &ndash; FEB</span>. No phase inside a band may display a date, because
+      no phase inside a band <i>has</i> one; the resolver reports
+      <span class="s">source: 'unresolved'</span> or <span class="s">'legacy-dates'</span> and the band
+      is the honest rendering of both.
+    </p>
+    <p class="rule-note"><b>Kills:</b> <span class="s">Active &middot; Week 2</span> on an engagement with no
+      chain. Week counting is arithmetic on an anchor; a band has no anchor, so there is no Week N to count.</p>
+  </div>
+
+  <div class="tier is-frame">
+    <div class="tier-head">
+      <span class="fw frame"></span>
+      <h3>Frame</h3>
+      <span class="chip frame">Agreement executed &rarr;</span>
+    </div>
+    <p>
+      Signature is already the moment the system cuts baseline revision v1 inside
+      <span class="s">activate_proposal_as_project</span>. That same moment gives the chain its first
+      real anchor: the engagement start. Phases now lay out as
+      <span class="s">duration_days</span> off that anchor through
+      <span class="s">follows_phase_id</span> &mdash; the resolver&rsquo;s forward pass, already written.
+    </p>
+    <p>
+      Frames render as <b>dashed ranges, never dates</b>:
+      <span class="s">Procurement &middot; ~6 wks &middot; mid-July frame</span>. The vocabulary is
+      deliberately imprecise because the computation is: a frame is a consequence of durations, and
+      durations are estimates until something commits them.
+    </p>
+    <p class="rule-note"><b>Uses:</b> the resolver&rsquo;s <span class="s">source: 'chain'</span>.
+      <b>Adds:</b> nothing. The chain is built; only the rendering vocabulary is new.</p>
+  </div>
+
+  <div class="tier is-commit">
+    <div class="tier-head">
+      <span class="fw commit"></span>
+      <h3>Committed</h3>
+      <span class="chip commit">Per phase &middot; event-driven</span>
+    </div>
+    <p>
+      A phase hardens <b>one at a time</b>, when its own commitment event fires. Executed furnishings
+      authorization hardens the procurement thread. A released purchase order informs lead time.
+      A booked install week hardens install. <span class="s">close_project</span> is the final hardening
+      and already refuses to fire on an unfinished schedule.
+    </p>
+    <p>
+      Hardening is an <span class="s">anchor_date</span> write, made through the existing
+      ripple &rarr; <span class="s">commit_schedule_edit</span> &rarr;
+      <span class="s">cut_schedule_revision</span> path &mdash; R100&rsquo;s requirement, satisfied without a
+      new write path. Committed bars are drawn solid with end ticks: they are the only bars in the
+      system you can hang weight from, and the only ones a client is ever shown (R101).
+    </p>
+    <p class="rule-note"><b>Crucially per-phase.</b> A project is almost never &ldquo;committed.&rdquo; It is a
+      band that grew a frame that grew, phase by phase, a spine of hard weeks. All three fidelities
+      coexist on one spine at once &mdash; and that mixed picture is the normal, correct state.</p>
+  </div>
+
+  <div class="rec">
+    <p class="eyebrow brass">The honesty rule</p>
+    <p style="margin:0"><b>No surface may render a date firmer than the resolver&rsquo;s source supports.</b>
+    Week N requires an anchor upstream of it. A range requires a chain. Everything else is a band.
+    A band is a legitimate state of an engagement, not an error the designer caused &mdash; so it is
+    never rendered in the machine register that produced
+    <span class="s">NO ACTIVE OR DELAYED PHASE IS CONFIGURED</span>.</p>
+  </div>
+
+  <figure>
+    <div class="mockwrap scroll">
+      <div class="mock">
+        <div class="mk-top">
+          <div>
+            <p class="mk-ttl">Winkys winktastic loft</p>
+            <p class="mk-sub">Kody Winky &middot; Middle Studio</p>
+          </div>
+          <span class="mk-lab">One project, three moments &mdash; the same spine telling the truth about itself</span>
+        </div>
+
+        <!-- ---- BAND ---- -->
+        <div class="mk-pane">
+          <div class="mk-hd">
+            <span class="t">April &mdash; the lead is warm, nothing is signed</span>
+            <span class="statuschip band">Targeting Sep &ndash; Feb</span>
+          </div>
+          <div class="fs">
+            <div class="fs-scale">
+              <span></span>
+              <div class="fs-months"><span>Sep</span><span>Oct</span><span>Nov</span><span>Dec</span><span>Jan</span><span>Feb</span></div>
+            </div>
+            <div class="fs-row">
+              <div class="fs-name">The engagement</div>
+              <div class="fs-track"><div class="bar band" style="grid-column:1 / 25"><span class="cap over">SPAN ONLY &middot; NO PHASES COMPOSED &middot; NO EDGES TO HOLD</span></div></div>
+            </div>
+          </div>
+          <p class="mk-lab" style="margin:14px 0 0; text-transform:none; letter-spacing:.04em; line-height:1.7">
+            Spine sub-label: <b style="color:var(--band)">&ldquo;A season, not a schedule. Phases arrive with the agreement.&rdquo;</b>
+          </p>
+          <div style="margin-top:14px">
+            <div class="deskcard">
+              <div class="dn">Winkys winktastic loft</div>
+              <div class="dm band">Band &middot; targeting Sep &ndash; Feb &middot; nothing composed</div>
+              <div class="dneed">The direction is drafted. Sending it starts the schedule.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ---- FRAME ---- -->
+        <div class="mk-pane mk-band">
+          <div class="mk-hd">
+            <span class="t">8 September &mdash; the agreement is executed</span>
+            <span class="statuschip frame">Frame &middot; from 8 Sep &middot; ~22 wks</span>
+          </div>
+          <div class="fs">
+            <div class="fs-scale">
+              <span></span>
+              <div class="fs-months"><span>Sep</span><span>Oct</span><span>Nov</span><span>Dec</span><span>Jan</span><span>Feb</span></div>
+            </div>
+            <div class="fs-row on">
+              <div class="fs-name">Consultation</div>
+              <div class="fs-track"><div class="bar commit" style="grid-column:1 / 3"><span class="anchorpin">&#9679; ANCHORED &middot; SIGNATURE 8 SEP</span></div></div>
+            </div>
+            <div class="fs-row">
+              <div class="fs-name">Direction</div>
+              <div class="fs-track"><div class="bar frame" style="grid-column:3 / 7"><span class="cap">~4 WKS &middot; LATE SEP FRAME</span></div></div>
+            </div>
+            <div class="fs-row">
+              <div class="fs-name">Documentation</div>
+              <div class="fs-track"><div class="bar frame" style="grid-column:7 / 12"><span class="cap">~5 WKS &middot; LATE OCT FRAME</span></div></div>
+            </div>
+            <div class="fs-row">
+              <div class="fs-name">Procurement</div>
+              <div class="fs-track"><div class="bar frame" style="grid-column:12 / 20"><span class="cap">~8 WKS &middot; DEC FRAME &middot; THREAD</span></div></div>
+            </div>
+            <div class="fs-row">
+              <div class="fs-name">Install</div>
+              <div class="fs-track"><div class="bar frame" style="grid-column:20 / 23"><span class="cap left">~2 WKS &middot; LATE JAN FRAME</span></div></div>
+            </div>
+            <div class="fs-row">
+              <div class="fs-name">Care</div>
+              <div class="fs-track"><div class="bar frame" style="grid-column:23 / 25"><span class="cap left">OPEN-ENDED</span></div></div>
+            </div>
+          </div>
+          <p class="mk-lab" style="margin:14px 0 0; text-transform:none; letter-spacing:.04em; line-height:1.7">
+            Spine sub-label: <b style="color:var(--frame)">&ldquo;Consultation is running. Everything after it is a frame off the signature.&rdquo;</b>
+          </p>
+          <div style="margin-top:14px">
+            <div class="deskcard">
+              <div class="dn">Winkys winktastic loft</div>
+              <div class="dm frame">Frame &middot; consultation week 1 &middot; procurement mid-Dec</div>
+              <div class="dneed">Two client decisions are open in Direction &mdash; oldest since 14 Sep.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ---- COMMITTED ---- -->
+        <div class="mk-pane mk-band">
+          <div class="mk-hd">
+            <span class="t">2 December &mdash; authorization executed, install booked</span>
+            <span class="statuschip commit">Committed &middot; install 26 &ndash; 30 Jan</span>
+          </div>
+          <div class="fs">
+            <div class="fs-scale">
+              <span></span>
+              <div class="fs-months"><span>Sep</span><span>Oct</span><span>Nov</span><span>Dec</span><span>Jan</span><span>Feb</span></div>
+            </div>
+            <div class="fs-row">
+              <div class="fs-name">Consultation</div>
+              <div class="fs-track"><div class="bar commit" style="grid-column:1 / 3; opacity:.45"><span class="cap">SETTLED</span></div></div>
+            </div>
+            <div class="fs-row">
+              <div class="fs-name">Direction</div>
+              <div class="fs-track"><div class="bar commit" style="grid-column:3 / 8; opacity:.45"><span class="cap">SETTLED &middot; RAN 1 WK LONG</span></div></div>
+            </div>
+            <div class="fs-row on">
+              <div class="fs-name">Documentation</div>
+              <div class="fs-track"><div class="bar frame" style="grid-column:8 / 13"><span class="cap">~5 WKS &middot; RUNNING</span></div></div>
+            </div>
+            <div class="fs-row">
+              <div class="fs-name">Procurement</div>
+              <div class="fs-track"><div class="bar commit" style="grid-column:13 / 21"><span class="anchorpin">&#9679; ANCHORED &middot; AUTHORIZATION EXECUTED 2 DEC</span></div></div>
+            </div>
+            <div class="fs-row">
+              <div class="fs-name">Install</div>
+              <div class="fs-track"><div class="bar commit" style="grid-column:21 / 23"><span class="cap hard left">26 &ndash; 30 JAN &middot; BOOKED</span></div></div>
+            </div>
+            <div class="fs-row">
+              <div class="fs-name">Care</div>
+              <div class="fs-track"><div class="bar band" style="grid-column:23 / 25"><span class="cap left">OPENS AT CLOSE</span></div></div>
+            </div>
+          </div>
+          <div class="fs-legend">
+            <div><i class="lg band"></i> Band &mdash; a span, no edges</div>
+            <div><i class="lg frame"></i> Frame &mdash; a duration off an anchor</div>
+            <div><i class="lg commit"></i> Committed &mdash; a date something was signed against</div>
+          </div>
+          <p class="mk-lab" style="margin:14px 0 0; text-transform:none; letter-spacing:.04em; line-height:1.7">
+            Spine sub-label: <b style="color:var(--commit)">&ldquo;Documentation is running, week 2 of ~5. Install holds 26 &ndash; 30 Jan.&rdquo;</b>
+            &mdash; the first legitimate &ldquo;week N&rdquo; in this project&rsquo;s life, because there is finally an anchor to count from.
+          </p>
+          <div style="margin-top:14px">
+            <div class="deskcard">
+              <div class="dn">Winkys winktastic loft</div>
+              <div class="dm commit">Committed &middot; documentation wk 2 of ~5 &middot; install 26 Jan</div>
+              <div class="dneed">Documentation has ~5 days of slack before it presses install.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      <b>Mock A</b> &mdash; one engagement aging through the ladder. Winkys&rsquo; name, client and six-phase
+      Consultation&rarr;Care chain are real; <i>all dates and week counts are invented for the mock</i> (prod
+      Winkys carries a $100,000 design authority and a $13,772 released living-room ledger, neither
+      shown here). Note that the third panel is <b>not</b> &ldquo;committed&rdquo; as a project state &mdash; two phases
+      are settled, one is a running frame, two are anchored, one is still a band. That mixture is the
+      normal picture, and the header chip names the firmest thing the client is holding, not an average.
+    </figcaption>
+  </figure>
+</section>
+
+<!-- ============ 4. HARDENING BY COMMITMENT ============ -->
+<section>
+  <div class="sec-head"><span class="sec-no">04</span><div>
+    <p class="eyebrow">Tension 1 &mdash; resolved</p>
+    <h2>Hardening by commitment</h2>
+  </div></div>
+
+  <p class="lede">
+    Every commitment event in the studio already exists as a real, auditable act. Not one of them
+    currently writes a date. That wiring is the substance of Direction A.
+  </p>
+
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Commitment event</th><th>Mechanism (exists today)</th><th>What it hardens</th><th>Class</th></tr></thead>
+      <tbody>
+        <tr><td>Design-services agreement executed</td><td class="k">commercial_state ratchet 00412&ndash;00414 &middot; countersign RPC</td><td>Engagement start &rarr; the whole chain gains its first anchor. <b>Band &rarr; Frame.</b></td><td><span class="chip commit">Ceremony</span></td></tr>
+        <tr><td>Furnishings authorization executed</td><td class="k">create_furnishings_authorization_from_schedule + execution (00422)</td><td>Procurement thread start for that wave. <b>Frame &rarr; Committed.</b></td><td><span class="chip commit">Ceremony</span></td></tr>
+        <tr><td>Trade scope engaged / draw 1</td><td class="k">trade_scope_terms ratchet &middot; trade_scope_draws (00423)</td><td>Trade thread start; acceptance closes it. <span class="s">lane:'thread'</span> material.</td><td><span class="chip commit">Ceremony</span></td></tr>
+        <tr><td><b>Install window booked</b></td><td class="k">&mdash; does not exist &mdash;</td><td>Install week. <b>The one real gap</b> &mdash; &sect;07.</td><td><span class="chip new">Ceremony &middot; NEW</span></td></tr>
+        <tr><td>Project close</td><td class="k">close_project (00394), hard-gated on completed phases</td><td>Final hardening; the book&rsquo;s last date.</td><td><span class="chip commit">Ceremony</span></td></tr>
+        <tr><td>Purchase order released</td><td class="k">po-send edge fn &middot; purchase_orders.sent_at</td><td><i>Proposes</i> a production-start / lead-time refinement on the procurement thread.</td><td><span class="chip frame">Operational</span></td></tr>
+        <tr><td>PO acknowledged / shipped / delivered</td><td class="k">acknowledged_at, last_status_change_at, delivered_date</td><td><i>Proposes</i> goods-arrival refinement upstream of install.</td><td><span class="chip frame">Operational</span></td></tr>
+        <tr><td>Deposits and payments</td><td class="k">po_payments.paid_date &middot; project_payment_milestones.paid_at</td><td>Nothing, for now &mdash; see the open question below.</td><td><span class="chip">Deferred</span></td></tr>
+        <tr><td>Trade RFQ</td><td class="k">00424</td><td>Nothing. A signal, not a commitment.</td><td><span class="chip">Inert</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 style="margin-top:2.6rem">The line: ceremonies harden, facts propose</h3>
+  <p>
+    I56 ratified that chain adoption is &ldquo;assisted, confirmed, never silent.&rdquo; Kody has ruled that
+    hardening must not come from asking anyone for a date. These are only in tension if you assume the
+    confirmation has to be <i>a separate act</i>. It does not &mdash; it has to be <i>a real act by a
+    human who understood what they were doing</i>. That test splits the events cleanly in two.
+  </p>
+
+  <div class="two">
+    <div>
+      <h4><span class="fw commit"></span>Ceremonies harden directly</h4>
+      <p style="font-size:.97rem">
+        A ceremony is R2&rsquo;s six-part boundary &mdash; ARTIFACT, QUESTION, SCOPE, IMPACT, AUTHORITY,
+        CONFIRMATION. The confirmation already happened, deliberately, with the impact stated on the
+        face of it. Nothing is silent: the schedule consequence is written <b>into the IMPACT line the
+        person read before they confirmed</b>. Executing an authorization that says &ldquo;procurement starts
+        the week of 8 Dec and install holds at 26 Jan&rdquo; <i>is</i> confirming that schedule.
+      </p>
+      <p style="font-size:.97rem" class="dim">
+        The corollary is a hard constraint, not a nicety: <b>a ceremony that cannot state its schedule
+        impact before confirmation is not permitted to harden anything.</b> If the IMPACT line can&rsquo;t
+        render it, the ceremony downgrades to a proposal.
+      </p>
+    </div>
+    <div>
+      <h4><span class="fw frame"></span>Operational facts only propose</h4>
+      <p style="font-size:.97rem">
+        <span class="s">sent_at</span> on a purchase order is a fact about a message, not a promise
+        about a week. It arrives from a background job, from a vendor&rsquo;s reply, from a webhook. Nobody
+        stood in front of an IMPACT line. So it never writes: it <b>prepares a ripple</b> &mdash; the
+        existing single in-flight <span class="s">RippleProvider</span> preview &mdash; which the
+        designer commits in one act, or dismisses.
+      </p>
+      <p style="font-size:.97rem" class="dim">
+        This is the same confirm strip that already exists for manual edits. Operational hardening adds
+        no new interaction grammar; it adds a new <i>author</i> of the pending diff.
+      </p>
+    </div>
+  </div>
+
+  <div class="rec">
+    <p class="eyebrow brass">Where I diverge from the brief</p>
+    <p style="margin:0 0 .6rem">The two-way split is right but incomplete. It answers &ldquo;what may write&rdquo;
+      and leaves &ldquo;what may <i>overwrite</i>&rdquo; undefined &mdash; and that is where a system like this
+      does its real damage. I propose a <b>third class</b>:</p>
+    <p style="margin:0"><b>Contradictions never propose &mdash; they report.</b> When an operational fact
+      disagrees with an <i>already-committed</i> anchor (a delivery slips past a booked install week), it
+      does not prepare a ripple that would move the anchor. It raises a conflict, per R4: one fact,
+      exactly three renderings &mdash; the terracotta stamp on the spine, the guide sentence, the desk
+      re-sort. Re-committing is a human act with a name. A prepared ripple that silently offers to move
+      a date the client is holding would be exactly the silence I56 forbade, wearing a confirm button.</p>
+  </div>
+
+  <div class="alt">
+    <p class="eyebrow">Alternative considered &mdash; and rejected</p>
+    <p style="margin:0"><b>Uniform proposal:</b> every event, ceremonies included, prepares a ripple the
+      designer commits. Cleaner as a rule, and tempting. Rejected because it makes the studio confirm
+      the same decision twice &mdash; once inside the ceremony, once in a schedule strip minutes later
+      &mdash; which trains people to commit ripples without reading them. That is worse than silence: it
+      manufactures consent. It also breaks the client-facing case, where the anchor must be true the
+      instant the ceremony completes, not whenever the designer next opens the doc.</p>
+  </div>
+
+  <figure>
+    <div class="mockwrap scroll">
+      <div class="mock">
+        <div class="mk-top">
+          <div><p class="mk-ttl">The hardening moment</p>
+          <p class="mk-sub">Furnishings authorization &middot; Wave 2 &middot; Living room + primary bedroom</p></div>
+          <span class="mk-lab br">R2 boundary ceremony &mdash; six parts, one of which now carries time</span>
+        </div>
+
+        <div class="mk-pane">
+          <div class="cer">
+            <div class="cer-h">
+              <span class="mk-lab">Confirmation face</span>
+              <span class="statuschip">Authorization &middot; ready to execute</span>
+            </div>
+            <div class="part"><div class="pk">Artifact</div><div class="pv">Furnishings authorization <b>AUTH&#8209;0042</b> &mdash; 14 pieces, $61,480 authorized.</div></div>
+            <div class="part"><div class="pk">Question</div><div class="pv">Is this wave released to order?</div></div>
+            <div class="part"><div class="pk">Scope</div><div class="pv">Living room and primary bedroom only. Kitchen stays in specification.</div></div>
+            <div class="part impact">
+              <div class="pk">Impact</div>
+              <div class="pv">
+                <ul class="impact-lines">
+                  <li>$61,480 leaves the working budget and becomes committed.</li>
+                  <li>Money fields on these 14 pieces soft-lock.</li>
+                  <li><b>Procurement starts the week of 8 December and holds there.</b> Its frame becomes a date.</li>
+                  <li class="soft">Install stays a frame &mdash; late January, ~2 weeks &mdash; until a window is booked.</li>
+                  <li class="soft">Documentation keeps ~5 days of slack before it presses procurement.</li>
+                </ul>
+              </div>
+            </div>
+            <div class="part"><div class="pk">Authority</div><div class="pv">Executed under the design authority of $100,000 &middot; $61,480 committed after this act.</div></div>
+            <div class="part">
+              <div class="pk">Confirmation</div>
+              <div class="pv confirm">
+                <span class="btn solid">Execute the authorization</span>
+                <span class="btn quiet">Not yet</span>
+                <span class="mk-lab" style="margin-left:6px">Cuts revision v4</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mk-pane mk-band">
+          <div class="mk-hd"><span class="t">&hellip; and the spine, one second later</span>
+            <span class="statuschip commit">Procurement anchored 8 Dec</span></div>
+          <div class="fs">
+            <div class="fs-scale"><span></span>
+              <div class="fs-months"><span>Sep</span><span>Oct</span><span>Nov</span><span>Dec</span><span>Jan</span><span>Feb</span></div>
+            </div>
+            <div class="fs-row on"><div class="fs-name">Documentation</div>
+              <div class="fs-track"><div class="bar frame" style="grid-column:8 / 13"><span class="cap">~5 WKS &middot; RUNNING &middot; 5D SLACK</span></div></div></div>
+            <div class="fs-row"><div class="fs-name">Procurement</div>
+              <div class="fs-track"><div class="bar commit" style="grid-column:13 / 21"><span class="anchorpin">&#9679; 8 DEC &middot; AUTH&#8209;0042</span></div></div></div>
+            <div class="fs-row"><div class="fs-name">Install</div>
+              <div class="fs-track"><div class="bar frame" style="grid-column:21 / 23"><span class="cap left">~2 WKS &middot; LATE JAN FRAME</span></div></div></div>
+          </div>
+        </div>
+
+        <div class="mk-pane mk-band">
+          <div class="mk-hd"><span class="t">The baseline ledger &mdash; studio eyes only</span>
+            <span class="mk-lab">Append-only &middot; actor server-resolved</span></div>
+          <div class="ledger">
+            <div class="lr now"><span class="lv">v4</span><span class="lw"><b>Procurement anchored to 8 Dec</b> &mdash; furnishings authorization AUTH&#8209;0042 executed. Install frame unchanged; documentation slack 8d &rarr; 5d.</span><span class="lt">2 Dec &middot; Kody</span></div>
+            <div class="lr"><span class="lv">v3</span><span class="lw">Direction extended 4 wks &rarr; 5 wks &mdash; ripple committed.</span><span class="lt">14 Oct &middot; Kody</span></div>
+            <div class="lr"><span class="lv">v2</span><span class="lw">Procurement duration 6 wks &rarr; 8 wks after lead-time review.</span><span class="lt">1 Oct &middot; Kody</span></div>
+            <div class="lr"><span class="lv">v1</span><span class="lw">Baseline cut at signature &mdash; six phases off 8 Sep.</span><span class="lt">8 Sep &middot; system</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      <b>Mock B</b> &mdash; the hardening moment. The only genuinely new element is the third and fourth
+      lines of IMPACT: the ceremony states what happens to time, and executing it <i>is</i> the
+      confirmation. The write goes through the existing ripple &rarr;
+      <span class="s">commit_schedule_edit</span> &rarr; <span class="s">cut_schedule_revision</span> path,
+      so v4 in the ledger is produced by the same machinery as a hand edit &mdash; with the authorization
+      named as its cause. Figures follow Winkys&rsquo; real $100,000 design authority; the wave itself is invented.
+    </figcaption>
+  </figure>
+</section>
+
+<!-- ============ 5. DELAYS MEET ANCHORS ============ -->
+<section>
+  <div class="sec-head"><span class="sec-no">05</span><div>
+    <p class="eyebrow">Ripple semantics</p>
+    <h2>When a delay meets an anchor</h2>
+  </div></div>
+
+  <p class="lede">
+    This is the scheduling dilemma, and the answer is already in the resolver. A delay is not a single
+    behaviour. It behaves one way in soft material and another way against something committed &mdash;
+    and the difference between those two behaviours is the entire value of knowing your own fidelity.
+  </p>
+
+  <div class="two">
+    <div>
+      <h4>Through frames &mdash; it flows</h4>
+      <p style="font-size:.97rem">Unanchored downstream phases shift automatically on the resolver&rsquo;s
+      forward pass. Nothing is asked of anyone. The frame was always an estimate; a later estimate is
+      still an estimate. The spine simply redraws and the ledger records it.</p>
+    </div>
+    <div>
+      <h4>Into an anchor &mdash; it stops</h4>
+      <p style="font-size:.97rem">The anchor does not move. The resolver reports shrinking
+      <span class="s">slackDays</span>, then <span class="s">chain_does_not_fit</span> with
+      <span class="s">overrunDays</span>. R100 already says it: a change that would break an anchor
+      <b>names the conflict instead</b>. The UI draws the collision; a human decides.</p>
+    </div>
+  </div>
+
+  <figure>
+    <div class="mockwrap scroll">
+      <div class="mock">
+        <div class="mk-top">
+          <div><p class="mk-ttl">Documentation runs three weeks long</p>
+            <p class="mk-sub">The same delay, against two different fidelities</p></div>
+          <span class="mk-lab">Winkys winktastic loft &middot; ripple preview, uncommitted</span>
+        </div>
+
+        <div class="mk-pane">
+          <div class="mk-hd"><span class="t">A &mdash; nothing downstream is committed</span>
+            <span class="statuschip frame">Ripples freely</span></div>
+          <div class="fs">
+            <div class="fs-scale"><span></span>
+              <div class="fs-months"><span>Sep</span><span>Oct</span><span>Nov</span><span>Dec</span><span>Jan</span><span>Feb</span></div>
+            </div>
+            <div class="fs-row on"><div class="fs-name">Documentation</div>
+              <div class="fs-track">
+                <div class="bar ghost" style="grid-column:8 / 13"></div>
+                <div class="bar frame" style="grid-column:8 / 15"><span class="cap">+3 WKS</span></div>
+              </div></div>
+            <div class="fs-row"><div class="fs-name">Procurement</div>
+              <div class="fs-track">
+                <div class="bar ghost" style="grid-column:13 / 21"></div>
+                <div class="bar frame" style="grid-column:15 / 23"><span class="cap over">MOVED &middot; NOW LATE DEC FRAME</span></div>
+              </div></div>
+            <div class="fs-row"><div class="fs-name">Install</div>
+              <div class="fs-track">
+                <div class="bar ghost" style="grid-column:21 / 23"></div>
+                <div class="bar frame" style="grid-column:23 / 25"><span class="cap left">MOVED &middot; MID FEB FRAME</span></div>
+              </div></div>
+          </div>
+          <p class="mk-lab" style="margin:14px 0 0; text-transform:none; letter-spacing:.04em; line-height:1.7">
+            Guide sentence: <b>&ldquo;Documentation ran three weeks long. Everything after it moved with it &mdash; nothing downstream was promised to anyone.&rdquo;</b>
+          </p>
+        </div>
+
+        <div class="mk-pane mk-band">
+          <div class="mk-hd"><span class="t">B &mdash; install is booked for 26 &ndash; 30 January</span>
+            <span class="statuschip conflict">The anchor holds</span></div>
+          <div class="fs">
+            <div class="fs-scale"><span></span>
+              <div class="fs-months"><span>Sep</span><span>Oct</span><span>Nov</span><span>Dec</span><span>Jan</span><span>Feb</span></div>
+            </div>
+            <div class="fs-row on"><div class="fs-name">Documentation</div>
+              <div class="fs-track">
+                <div class="bar ghost" style="grid-column:8 / 13"></div>
+                <div class="bar frame" style="grid-column:8 / 15"><span class="cap">+3 WKS</span></div>
+              </div></div>
+            <div class="fs-row"><div class="fs-name">Procurement</div>
+              <div class="fs-track">
+                <div class="bar clash" style="grid-column:15 / 23"><span class="cap bad over">NEEDS 8 WKS &middot; 21 REMAIN &middot; OVERRUNS BY 11 DAYS</span></div>
+              </div></div>
+            <div class="fs-row"><div class="fs-name">Install</div>
+              <div class="fs-track">
+                <div class="bar commit" style="grid-column:21 / 23"><span class="anchorpin">&#9679; 26 &ndash; 30 JAN &middot; BOOKED</span></div>
+              </div></div>
+          </div>
+          <div class="fs-legend">
+            <div><i class="lg frame"></i> Frame &mdash; moves without asking</div>
+            <div><i class="lg commit"></i> Committed &mdash; refuses to move</div>
+            <div><i class="lg clash"></i> The chain does not fit</div>
+          </div>
+          <p class="mk-lab" style="margin:14px 0 0; text-transform:none; letter-spacing:.04em; line-height:1.7">
+            Guide sentence: <b style="color:var(--conflict)">&ldquo;Documentation ran three weeks long. Install is booked for 26 January and did not move; procurement now needs eleven days it does not have.&rdquo;</b>
+          </p>
+          <div style="margin-top:12px; display:flex; gap:10px; align-items:center; flex-wrap:wrap">
+            <span class="btn">Compress procurement</span>
+            <span class="btn">Re-book the install window</span>
+            <span class="btn quiet">Leave it &mdash; carry the overrun</span>
+            <span class="mk-lab">Whichever is chosen cuts a revision and names its cause</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      <b>Mock C</b> &mdash; the resolution of the scheduling dilemma. The system does not choose; it makes
+      the choice unavoidable and small. Note that the conflict obeys R4 exactly: one fact rendered three
+      ways &mdash; the collision on the spine, the guide sentence, and a desk re-sort. No badge, no banner,
+      no count, no modal, no auto-action. And note what is <i>absent</i>: any offer to quietly slide the
+      install date. Moving a booked week is a ceremony, not a ripple.
+    </figcaption>
+  </figure>
+
+  <p class="rule-note" style="margin-top:2rem"><b>Overdue is the same fact.</b> A phase running past its
+    committed end is not a new condition needing new chrome &mdash; it is R4&rsquo;s overdue condition sourced
+    from the resolver instead of from a stored column, and R8 keeps it studio-side.</p>
+</section>
+
+<!-- ============ 6. ONE ORGAN, MANY MOUTHS ============ -->
+<section>
+  <div class="sec-head"><span class="sec-no">06</span><div>
+    <p class="eyebrow">Tension 3 &mdash; resolved</p>
+    <h2>One organ, many mouths</h2>
+  </div></div>
+
+  <p>
+    The spine becomes the status organ not by growing, but by every other surface losing its own
+    opinion. Each row below is a surface that currently computes time and must stop.
+  </p>
+
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Surface</th><th>Today</th><th>Under Direction A</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="k">Doc header vitals<br><span class="dim">doc/[id]/page.tsx:127&ndash;146</span></td>
+          <td>stored <span class="s">current_phase</span> + a dead <span class="s">target_completion</span> field</td>
+          <td>the resolver&rsquo;s active phase and its fidelity, verbatim. Chip reads <span class="s">TARGETING SEP &ndash; FEB</span>, <span class="s">FRAME &middot; PROCUREMENT MID-DEC</span>, or <span class="s">INSTALL 26 &ndash; 30 JAN</span> &mdash; never all three registers at once.</td>
+        </tr>
+        <tr>
+          <td class="k">&ldquo;Active &middot; Week N&rdquo;<br><span class="dim">section-derivation.ts:96&ndash;113</span></td>
+          <td>calendar arithmetic off <span class="s">start_date</span></td>
+          <td>deleted as a computation. Week N is emitted only by the resolver, only downstream of an anchor. Below that, a band phrase.</td>
+        </tr>
+        <tr>
+          <td class="k">Stage sub-label<br><span class="dim">section-stage-line.tsx</span></td>
+          <td>an independent classifier that <i>selects</i> a phase and can find none</td>
+          <td>the classifier keeps naming stages and loses the right to select. See below.</td>
+        </tr>
+        <tr>
+          <td class="k">Desk motion chip<br><span class="dim">desk-derivation.ts:814&ndash;947</span></td>
+          <td>no phase text at all for projects &mdash; only drift and in-flight work</td>
+          <td>the resolver&rsquo;s live phase, fidelity and next commitment. Mock D.</td>
+        </tr>
+        <tr>
+          <td class="k">Desk need lines<br><span class="dim">desk-derivation.ts:483&ndash;</span></td>
+          <td>decision / PO / task facts, gate-keyed per R6</td>
+          <td>unchanged in kind; schedule conflicts route here gate-keyed. A test scaffold already exists: <span class="s">desk-schedule-conflict.test.ts</span>.</td>
+        </tr>
+        <tr>
+          <td class="k">folder-card.tsx</td>
+          <td>renders what derivations hand it</td>
+          <td>downstream and automatic. No change.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 style="margin-top:2.6rem">Reconciling the classifier</h3>
+  <p>
+    R1 already narrowed the workflow classifier to section sub-labels and track fills. But narrowing
+    its <i>output</i> did not remove its ability to <i>disagree</i>, because it still performs its own
+    selection: it scans phase rows for an active-or-delayed one and, finding none, announces
+    <span class="s">NO ACTIVE OR DELAYED PHASE IS CONFIGURED</span> over a perfectly good six-phase chain.
+    Two components each picking &ldquo;the current phase&rdquo; from the same rows by different rules will disagree
+    eventually; that is a structural property, not a bug to patch.
+  </p>
+  <p>
+    <b>The split: the resolver selects, the classifier names.</b> The resolver alone answers <i>which
+    phase is current and how firm it is</i> &mdash; it is the only code that understands anchors, links and
+    time. The classifier receives that phase and answers <i>which canonical stage it belongs to</i>, a
+    taxonomy question with no time in it. The sub-label is then a composition of three parts from two
+    components that cannot contradict each other, because only one of them ever chose:
+  </p>
+
+  <div class="sblock">
+    <b>stage</b> <span class="dim">(classifier)</span> &nbsp;&middot;&nbsp; <b>position</b> <span class="dim">(resolver)</span> &nbsp;&middot;&nbsp; <b>fidelity</b> <span class="dim">(resolver)</span><br><br>
+    &ldquo;Documentation &middot; week 2 of ~5 &middot; frame&rdquo;<br>
+    &ldquo;Procurement &middot; starts 8 Dec &middot; committed&rdquo;<br>
+    &ldquo;Not yet composed &middot; targeting Sep &ndash; Feb &middot; band&rdquo;
+  </div>
+
+  <p>
+    When the resolver hands over nothing, the answer is not an error &mdash; it is the band, and the
+    sub-label says so in the designer&rsquo;s language. Two of the review&rsquo;s leaked-machinery strings die of
+    this change alone: <span class="s">NO ACTIVE OR DELAYED PHASE IS CONFIGURED</span> and
+    <span class="s">2 ACTIVE PHASES NOT CLASSIFIED TO A CANONICAL STAGE</span> &mdash; the latter because
+    an unclassifiable phase now degrades to naming itself rather than to reporting a taxonomy failure.
+  </p>
+
+  <figure>
+    <div class="mockwrap scroll">
+      <div class="mock">
+        <div class="mk-top">
+          <div><p class="mk-ttl">The desk, re-derived</p>
+            <p class="mk-sub">Every card admits its own fidelity before it asks for anything</p></div>
+          <span class="mk-lab">Motion line = resolver, verbatim &middot; need line = gate-keyed, R6</span>
+        </div>
+        <div class="mk-pane">
+          <div class="deskgrid">
+            <div class="deskcard">
+              <div class="dn">SMS House</div>
+              <div class="dm frame">Frame &middot; procurement mid-July &middot; nothing hardened yet</div>
+              <div class="dneed">One decision overdue &mdash; oldest due 12 Aug. No decision lead named.</div>
+            </div>
+            <div class="deskcard">
+              <div class="dn">Winkys winktastic loft</div>
+              <div class="dm commit">Committed &middot; documentation wk 2 of ~5 &middot; install 26 Jan</div>
+              <div class="dneed">Documentation has 5 days of slack before it presses install.</div>
+            </div>
+            <div class="deskcard">
+              <div class="dn">Test Walker</div>
+              <div class="dm band">Band &middot; no span set &middot; nothing composed</div>
+              <div class="dneed">Active work with no schedule &mdash; compose one, or set a target span.</div>
+            </div>
+          </div>
+          <p class="mk-lab" style="margin:16px 0 0; text-transform:none; letter-spacing:.04em; line-height:1.75">
+            The third card is the one the desk cannot say today. <b>Test Walker is a live, active project with
+            no schedule at all</b> &mdash; and the only thing the desk currently surfaces about it is an overdue
+            invoice. The upstream cause becomes visible the moment the motion line is required to state a fidelity,
+            because &ldquo;band&rdquo; is a thing it must admit rather than a blank it can omit.
+          </p>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      <b>Mock D</b> &mdash; the desk card, re-derived. Project names and conditions are real (SMS House&rsquo;s
+      overdue decision and missing decision lead; Test Walker&rsquo;s wholly unconfigured schedule alongside
+      an INV-0019 nudge); <i>dates and week counts are invented</i>. Note the R4 discipline: the conflict
+      state does not add a badge to these cards &mdash; it re-sorts them.
+    </figcaption>
+  </figure>
+</section>
+
+<!-- ============ 7. THE INSTALL BOOKING ACT ============ -->
+<section>
+  <div class="sec-head"><span class="sec-no">07</span><div>
+    <p class="eyebrow">Tension 2 &mdash; the one new mechanism</p>
+    <h2>The install window</h2>
+  </div></div>
+
+  <p class="lede">
+    Everything else in this deck is wiring. This is not. There is no table, no RPC and no act anywhere
+    in the system that books an install &mdash; and install week is the single most committed date in an
+    engagement, the one the household takes a day off work for.
+  </p>
+
+  <p>
+    Today the closest thing available is a designer typing a date into the entry grammar, which
+    auto-anchors. That works mechanically and fails completely as a record: it captures a date and
+    loses everything that makes the date binding &mdash; who agreed to it, when, on what understanding,
+    with what access arrangements. A booked week that only one party remembers agreeing to is not a
+    commitment; it is a note.
+  </p>
+
+  <h3 style="margin-top:2.2rem">The act</h3>
+  <p>
+    <b>The install window is an R2 boundary ceremony</b> &mdash; the same six parts as every other gate,
+    reusing the grammar rather than inventing a third one. Per the &sect;7 guard it is written in
+    actor-neutral language: it names <i>the site</i> and <i>the window</i>, never a commercial actor,
+    until &#8470;7 resolves.
+  </p>
+
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Part</th><th>The install window ceremony</th></tr></thead>
+      <tbody>
+        <tr><td class="k">Artifact</td><td>The window itself &mdash; a start date, a working span in days, and the site it applies to.</td></tr>
+        <tr><td class="k">Question</td><td>Is the site held for these days?</td></tr>
+        <tr><td class="k">Scope</td><td>Which rooms, and which authorized waves must have landed by then.</td></tr>
+        <tr><td class="k">Impact</td><td>Install anchors to the window. Procurement and delivery become backward-computed against it &mdash; the resolver&rsquo;s backward pass, already written. Slack upstream is stated in days, out loud.</td></tr>
+        <tr><td class="k">Authority</td><td>Who holds the site for that week, and what access the window depends on.</td></tr>
+        <tr><td class="k">Confirmation</td><td>Holding the window cuts a revision. Releasing it later is a second, equally named act &mdash; never an edit.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 style="margin-top:2.4rem">The schema question &mdash; flagged for ruling</h3>
+  <p>
+    R7 set the precedent hard: derive over existing columns, zero new schema. I tested three ways to
+    honour it and recommend the third.
+  </p>
+
+  <div class="alt">
+    <p class="eyebrow">Option A &mdash; zero schema</p>
+    <p style="margin:0">The window is just <span class="s">anchor_date</span> on the install phase plus a
+      revision-ledger note. <b>Rejected.</b> The ledger records that a date changed and who committed it,
+      not that a site was held, by whom, under what access. The evidence of the commitment lives nowhere,
+      which is precisely the failure the ceremony exists to fix &mdash; and it gives the &ldquo;re-book the
+      window&rdquo; branch of Mock C nothing to re-book.</p>
+  </div>
+
+  <div class="alt">
+    <p class="eyebrow">Option B &mdash; overload <span class="s">site_requests</span> (00374)</p>
+    <p style="margin:0">It already carries a <span class="s">due_at</span> and points at a site.
+      <b>Rejected.</b> It is a Field media-capture instrument; a request to photograph a room and a
+      commitment to occupy it for a week are different kinds of fact with different lifecycles and
+      different audiences. I56 A0.3 already refused exactly this move for payment milestones versus
+      schedule milestones, on the same grounds. Overloading it buys one table and costs the meaning of two.</p>
+  </div>
+
+  <div class="rec">
+    <p class="eyebrow brass">Option C &mdash; recommended: one narrow table</p>
+    <p style="margin:0 0 .5rem"><span class="s">install_windows</span> &mdash; project, phase,
+      <span class="s">window_start</span>, <span class="s">span_days</span>,
+      <span class="s">state</span> (proposed | held | released | fulfilled),
+      <span class="s">held_at</span>, <span class="s">held_by</span> (server-resolved, like every other
+      ledger actor), <span class="s">access_note</span>. That is the whole surface.</p>
+    <p style="margin:0"><b>Why this survives R7:</b> R7 forbids duplicating a fact that already exists.
+      The install <i>date</i> is not duplicated &mdash; it stays where every other date lives, as
+      <span class="s">anchor_date</span> on the install phase, written through
+      <span class="s">commit_schedule_edit</span> like everything else. What the new table holds is the
+      <i>evidence of the commitment</i>, which exists nowhere today. One table, one RPC to hold a window,
+      one to release it, both cutting revisions. It is also the natural seat for the install-mode
+      composition the review deck asks for in T2 &mdash; a week has a shape, and this is where that shape
+      would hang &mdash; though that is a separate design and not requested here.</p>
+  </div>
+
+  <p class="rule-note"><b>This is the deck&rsquo;s only schema request</b> and the only place it asks for a new
+    mechanism rather than a new wire. Everything else &mdash; every other hardening event in &sect;04 &mdash;
+    runs on acts that already exist and columns that already exist.</p>
+</section>
+
+<!-- ============ 8. WHAT THIS ASKS OF THE SYSTEM ============ -->
+<section>
+  <div class="sec-head"><span class="sec-no">08</span><div>
+    <p class="eyebrow">Tension 4 &mdash; and the docket</p>
+    <h2>What this asks of the system</h2>
+  </div></div>
+
+  <h3>Path to ship</h3>
+  <p>
+    Sequenced by risk, not by dependency. The governing hazard is that two date-computation paths are
+    live in production right now &mdash; the legacy stored cascade that everything outside the flag reads,
+    and the pure resolver behind it &mdash; and the collapse in &sect;06 is what finally retires one of them.
+    Nothing below reaches production before the flag state itself is honest.
+  </p>
+
+  <ol class="num">
+    <li><b>Clear the ground.</b> Reconcile the <span class="s">schedule-spine</span> flag contradiction
+      (I55: live at 100% on PostHog against a design-authority-only intent) and land the comember-widening
+      pass owed by R105. Neither is optional; the collapse makes the flag load-bearing for
+      <i>every</i> project surface, not just the spine slice. Fix the dead
+      <span class="s">target_completion</span> field here too &mdash; it is one line and it is wrong today
+      regardless of anything else in this deck.</li>
+    <li><b>Teach the resolver to speak fidelity.</b> Derive the three tiers from the existing
+      <span class="s">source</span> field and expose a small vocabulary &mdash; tier, position phrase,
+      fidelity phrase &mdash; from the one impure door, <span class="s">useResolvedSchedule</span>. Pure
+      addition, no consumer changes, nothing user-visible.</li>
+    <li><b>Collapse the mouths.</b> Header vitals, week-N derivation, stage sub-label, desk motion chip
+      &mdash; all four re-derive from that vocabulary. This is the change that kills T1, and it can ship
+      before a single hardening event is wired, because <i>a band honestly rendered is already better
+      than a fabricated week</i>.</li>
+    <li><b>Wire the ceremonies.</b> Signature first (its anchor already exists implicitly &mdash; v1 is cut
+      there today), then furnishings authorization, then trade scope, then close. Each is an IMPACT-line
+      addition plus one call into the existing commit path. Ship them one at a time; each is
+      independently valuable and independently reversible.</li>
+    <li><b>Wire the operational proposals.</b> PO release and delivery prepare ripples. Last, because
+      this is where the prepared-diff volume lives and it wants real usage data to tune.</li>
+    <li><b>The install window</b> &mdash; after its ruling. Schema, two RPCs, one ceremony face. It is the
+      only step gated on a decision rather than on the step before it.</li>
+  </ol>
+
+  <div class="warnbox">
+    <p style="margin:0 0 .5rem"><b>The one-way door.</b> Step 3 makes the resolver load-bearing for
+      surfaces that currently render for every project in the studio, flag or no flag. If the flag stays
+      contradictory, step 3 either ships to everyone unintentionally or ships to nobody while looking
+      shipped. Step 1 is not housekeeping; it is the gate.</p>
+    <p style="margin:0">Legacy stored dates do not get deleted by this deck. They stay as the resolver&rsquo;s
+      last-resort <span class="s">source: 'legacy-dates'</span> &mdash; which renders as a <b>band</b>,
+      which is honest, and which is why no backfill is needed and I56&rsquo;s no-backfill rule stays intact.</p>
+  </div>
+
+  <h3 style="margin-top:2.8rem">Quick fixes carried along</h3>
+  <ul class="plain">
+    <li><b>The dead header field.</b> <span class="s">doc/[id]/page.tsx:134,977</span> reads
+      <span class="s">project?.target_completion</span> &mdash; not a column. The real one is
+      <span class="s">target_end_date</span>. Typed as <span class="s">AnyRecord</span>, so it fails
+      silently and the header&rsquo;s Target chip has been dead code the whole time. Under this design it should
+      not be repointed at the stored column at all &mdash; it should read the resolver&rsquo;s computed end and
+      its fidelity, and render a band phrase when that is all there is.</li>
+    <li><b>&ldquo;Name a phase&hellip;&rdquo; after Completion.</b> The ghost-add row is offered on a finished book.
+      Under the ladder, an authoring affordance whose phase has settled retires. (Review deck finding (i).)</li>
+    <li><b>Machine register.</b> <span class="s">NO ACTIVE OR DELAYED PHASE IS CONFIGURED</span> and
+      <span class="s">2 ACTIVE PHASES NOT CLASSIFIED TO A CANONICAL STAGE</span> both die as a
+      consequence of &sect;06, not as separate copy edits.</li>
+  </ul>
+
+  <h3 style="margin-top:2.8rem">Decisions requested</h3>
+  <p>Numbered in the house sequence, continuing from R106.</p>
+
+  <ol class="rulings">
+    <li><span class="rid">R107</span><span>
+      <span class="rt">The fidelity ladder is the schedule&rsquo;s vocabulary.</span>
+      <span class="rd">Band, Frame, Committed &mdash; derived from the resolver&rsquo;s existing
+      <span class="s">source</span>, per phase, not per project. All three may coexist on one spine.
+      No new column.</span></span></li>
+
+    <li><span class="rid">R108</span><span>
+      <span class="rt">The honesty rule: no surface renders a date firmer than its source supports.</span>
+      <span class="rd">Week N requires an anchor upstream of it. Header vitals, week-N derivation, stage
+      sub-label and desk motion chip all re-derive from the resolver and render its output verbatim.
+      This is the T1 fix and the reason to elect the spine as the status organ.</span></span></li>
+
+    <li><span class="rid">R109</span><span>
+      <span class="rt">Ceremonies harden; operational facts propose; contradictions report.</span>
+      <span class="rd">A ceremony writes an anchor directly because its IMPACT line stated the schedule
+      consequence before confirmation &mdash; satisfying I56&rsquo;s never-silent posture inside the act rather
+      than after it. An operational fact prepares a ripple the designer commits in one act. A fact that
+      contradicts a committed anchor never proposes moving it; it raises an R4 conflict. <i>The third
+      clause is this deck&rsquo;s addition to the orchestrator&rsquo;s two-way split.</i></span></span></li>
+
+    <li><span class="rid">R110</span><span>
+      <span class="rt">A ceremony that cannot state its schedule impact may not harden.</span>
+      <span class="rd">Hardening is scoped by the ceremony&rsquo;s own SCOPE part and disclosed in its IMPACT
+      part. If the impact cannot be rendered before confirmation, the ceremony downgrades to a proposal.
+      This keeps R2&rsquo;s six-part anatomy the sole gate grammar.</span></span></li>
+
+    <li><span class="rid">R111</span><span>
+      <span class="rt">The resolver selects the phase; the classifier names its stage.</span>
+      <span class="rd">The workflow classifier loses its independent selection of &ldquo;the active phase&rdquo; and
+      receives the resolver&rsquo;s. Sub-label = stage &middot; position &middot; fidelity. Disagreement becomes
+      structurally impossible rather than merely unlikely. R1-compatible; narrows R1 further rather than
+      reopening it.</span></span></li>
+
+    <li><span class="rid">R112</span><span>
+      <span class="rt">The install window is a boundary ceremony with its own record.</span>
+      <span class="rd">One narrow table <span class="s">install_windows</span> plus hold and release
+      RPCs; the date itself stays as <span class="s">anchor_date</span> written through
+      <span class="s">commit_schedule_edit</span>. Actor-neutral copy per the &sect;7 guard.
+      <b>The only schema this deck requests</b>, argued against zero-schema and against overloading
+      <span class="s">site_requests</span> in &sect;07.</span></span></li>
+
+    <li><span class="rid">R113</span><span>
+      <span class="rt">An unanchored engagement is a legitimate state, not a setup error.</span>
+      <span class="rd">A band renders as a band, in the designer&rsquo;s language, on the spine, the header and
+      the desk. Machine-state strings about classification and provenance leave the reading surface.
+      Answers T6 for the schedule surfaces specifically.</span></span></li>
+
+    <li><span class="rid">R114</span><span>
+      <span class="rt">Flag reconciliation and comember widening gate the collapse.</span>
+      <span class="rd">I55 and R105 are cleared before any surface in &sect;06 re-derives. Legacy stored
+      dates are retained, not backfilled, and render as bands via
+      <span class="s">source: 'legacy-dates'</span> &mdash; preserving I56.</span></span></li>
+
+    <li><span class="rid open">O10</span><span>
+      <span class="rt">Open &mdash; what fidelity does a client see?</span>
+      <span class="rd">R101 keeps the spine studio-only and proposals carry anchored milestones only, so
+      the safe default is that clients see committed anchors and nothing else &mdash; no bands, no frames,
+      no ledger. But the install window ceremony has an actor on the other side of it who must be told a
+      week. Depends on O8. Flagged, not answered here.</span></span></li>
+
+    <li><span class="rid open">O11</span><span>
+      <span class="rt">Open &mdash; do payment milestones ever harden a phase?</span>
+      <span class="rd">Deliberately deferred. <span class="s">project_payment_milestones</span> was kept
+      semantically separate from <span class="s">schedule_milestones</span> by I56 A0.3, and this deck
+      does not reopen that. Named so it is a decision rather than an omission.</span></span></li>
+  </ol>
+</section>
+
+<!-- ============ 9. COLOPHON ============ -->
+<section>
+  <div class="colophon">
+    <p style="max-width:76ch"><b>SOURCES</b><br>
+      <span class="s">docs/design/schedule-fidelity/grounding.md</span> &mdash; verified code, schema and
+      decision grounding: chain model 00323&ndash;00327 / 00331, resolver
+      <span class="s">packages/utils/src/schedule.ts</span>, commitment-event inventory, surface-collapse
+      table. Every mechanism named in this deck is drawn from it.<br>
+      <span class="s">docs/design/schedule-fidelity/input-critique.md</span> and the review deck
+      <i>The Book Won&rsquo;t Close</i> (<span class="s">artifacts/doc-ux-review-2026-08-13/</span>) &mdash;
+      themes T1 (contradictory status organs) and T6 (leaked machinery), which this design answers, and
+      T2 (install is not a mode), which it touches only where the schedule intersects it.<br>
+      <span class="s">artifacts/doc-ux-review-2026-08-13/04-journey-walk.md</span> and
+      <span class="s">02-prod-inventory.md</span> &mdash; the observed friction: Winkys&rsquo;
+      <span class="s">Active &middot; Week 2</span> over
+      <span class="s">NO ACTIVE OR DELAYED PHASE IS CONFIGURED</span>, SMS House&rsquo;s blocked decision,
+      Test Walker&rsquo;s unconfigured schedule.</p>
+    <p style="max-width:76ch; margin-top:1.6rem"><b>DECISION LINEAGE</b><br>
+      R99&ndash;R106 and I55&ndash;I57, <span class="s">docs/design/the-document/DECISIONS.md</span> &mdash;
+      one schedule folded and unfolded, one pure resolver, anchors that refuse silent movement, no chain
+      backfill, revisions on every change.<br>
+      R1&ndash;R9 and the &sect;7 actor-neutral guard, workflow alignment, ratified 2026-08-11 &mdash; one paper
+      one spine, the six-part boundary ceremony, overdue as one fact with three renderings, derive over
+      existing columns.<br>
+      This deck adds nothing to those rulings that it does not name in &sect;08.</p>
+    <p style="max-width:76ch; margin-top:1.6rem"><b>ON THE MOCKS</b><br>
+      Forward-looking compositions, not captures. Project names, phase chains and financial figures are
+      real where the walk recorded them; all dates, week counts and the AUTH&#8209;0042 wave are invented and
+      captioned as such.</p>
+    <p style="margin-top:2rem">Designer portal &middot; The document &middot; Direction A &middot; 13 August 2026</p>
+  </div>
+</section>
+
+</div>

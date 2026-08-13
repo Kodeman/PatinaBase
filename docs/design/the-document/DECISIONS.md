@@ -8029,3 +8029,136 @@ for those.
   follow-up pass if Kody wants the retirement to reach transactional email.
 
 *Entries add: I121–I125 · last id = I125*
+
+## The Document — Direction A: the spine as status organ, progressive fidelity (R107–R114 · O10 O11) — 2026-08-13
+
+Ruled by Kody (interviewed per-ruling, multiple-choice; all eight ratified as
+written in the design deck "The Anchor Holds", docs/design/schedule-fidelity/
+deck.html; grounding in grounding.md beside it; born from the /doc UX review
+"The Book Won't Close", artifacts/doc-ux-review-2026-08-13/). Standing user
+rulings behind the deck: Direction A chosen over B/C; scheduling begins as
+high-level start/end targets and refines into hard dates as design
+progresses; hardening is driven by commitment events, never by asking anyone
+to set a date.
+
+### R107 · The fidelity ladder — 2026-08-13
+Band / Frame / Committed is the schedule's official vocabulary, derived per
+phase from the resolver's existing `source` field. No new column; completed
+phases render as record. (R7 precedent: derive over existing data.)
+
+### R108 · The honesty rule — 2026-08-13
+No surface renders a date firmer than its source supports. The doc header
+chip, the "Week N" sub-label, the section stage line, and the desk chips all
+render the resolver's output verbatim — one derivation, many mouths. "Week 2"
+exists only downstream of a hard anchor. (The T1 kill.)
+
+### R109 · Ceremonies harden; facts propose; contradictions report — 2026-08-13
+Three hardening classes. A ceremony (signature, executed authorization,
+install-window booking) writes anchors directly — the confirmation happened
+inside the ceremony. An operational fact (PO sent_at, delivered_date) only
+prepares a ripple the designer commits in one act. A fact that contradicts an
+already-committed anchor never proposes a slide — it raises an R4-discipline
+conflict. All writes travel the existing ripple→commit→revision path (R100).
+
+### R110 · Hardening is disclosed at consent — 2026-08-13
+A ceremony may harden only if it states its schedule impact in its IMPACT
+line (R2 anatomy) before confirmation. If impact cannot be computed, the
+ceremony still runs but its hardening downgrades to a proposal. Gates the
+ceremony class against quiet widening.
+
+### R111 · The resolver selects; the classifier names — 2026-08-13
+Only the resolver selects the active phase. The workflow-stage classifier
+loses its right to select and names the stage of the resolver's selection;
+the section sub-label becomes stage · position · fidelity. Disagreement
+between the two becomes structurally impossible.
+
+### R112 · The install window — 2026-08-13
+Install week gets its commitment act: an R2-anatomy boundary ceremony backed
+by one narrow `install_windows` table with hold/release RPCs — the package's
+only schema request. The date itself remains `anchor_date`; only the evidence
+of commitment is new. Copy stays actor-neutral pending №7.
+
+### R113 · Band is a state, not an error — 2026-08-13
+An unanchored engagement is a legitimate Band. The leaked machine strings
+("NO ACTIVE OR DELAYED PHASE IS CONFIGURED", "2 ACTIVE PHASES NOT CLASSIFIED
+TO A CANONICAL STAGE", "…NO TEMPLATE PROVENANCE RECORDED") are removed; an
+unanchored spine renders as a band. Setup nudges live in desk need lines,
+gate-keyed per R6 — never as error copy in the doc body.
+
+### R114 · The collapse ships first — 2026-08-13
+Sequencing: the surface collapse (all mouths read the resolver) lands before
+any event wiring, gated on reconciling the I55 flag contradiction and the
+R105 comember-widening pass. Legacy dates are never backfilled (I56); they
+render as bands. A band honestly rendered beats a fabricated week.
+
+**O10 (open)** — what fidelity a client sees; depends on O8, sharpened by the
+install ceremony having a counterparty. **O11 (open)** — whether payment
+milestones ever harden a phase; deliberately deferred (I56 A0.3 collision
+stands).
+
+Also carried by the deck as named quick fixes, ratified implicitly with
+R108/R114: the dead `project?.target_completion` header field (real column is
+`projects.target_end_date`) is fixed regardless of sequencing.
+
+*Entries add: R107–R114, O10–O11 · last id = I125*
+
+### I126 · Direction A plan gates cleared — I55 ratified live; four under-determinations blessed — 2026-08-13
+
+**Ruled by Kody (interviewed, with probe data).** Prod probes (PostHog +
+Strata, read-only): flag `schedule-spine` (764880) at 100% since 2026-07-16
+with 3 distinct true-evaluations in 30 days and exactly 1 composing designer
+(14 projects, 59 chained phases, 3 anchors, 13 revisions across 11 projects).
+
+- **I55 resolved — the live state is ratified.** The 100% rollout becomes
+  intentional; the flag is vestigial. Wave 1's collapse ships on a new
+  `schedule-fidelity` flag, created disabled, design-authority-first (PLAN.md
+  §G1.3 stands).
+- **Resolver output extension blessed** (PLAN.md under-determination #2):
+  `governingAnchorId` + `origin` added to `ResolvedPhase` as derived output
+  computed inside the existing passes — the resolver remains the single
+  computer of time; it now discloses what it computed. Pinned by tests over
+  all eight chain shapes.
+- **R111 selection rules blessed as proposed** (#1): active = date window
+  containing today (completed excluded; ties main-lane-then-sort_order);
+  fallback single in_progress/delayed; else next upcoming; else none.
+- **R110 proposal storage blessed as proposed** (#3): the ceremony's
+  evidence JSON carries `proposed_anchor`; the desk surfaces it as a
+  gate-keyed need line; committing runs the normal ripple→commit path. No
+  new table.
+- **R112 release semantics ruled** (#4): releasing a confirmed install
+  window unpins WITH disclosed impact — release is itself a small ceremony
+  that states the impact of removing the anchor and cuts a revision.
+  ("Anchors refuse silent movement" reaches releases.)
+- **I59 correction**: the `proposal_schedule_milestones` studio-comember leg
+  recorded as deliberately omitted was closed by 00401:837-884 (probe-
+  confirmed: `is_design_studio_comember` select + `lock_proposal_authored_
+  parent` writes + a legacy client select). The R105 comember gate is
+  discharged save the `apply_phase_template` residual — one guard site
+  (probe-confirmed single occurrence), closed by the planned 00474.
+
+*Entries add: I126 · last id = I126*
+
+### I127 · No fidelity flag — Wave 1 ships unconditional — 2026-08-13
+
+**Ruled by Kody.** The `schedule-fidelity` flag (PLAN.md §G1.3 / Wave 1
+gates) is dropped: the platform has no production users, so the collapse
+ships 100% GA with no flag gate and no preserved legacy branches — the
+WEEK_MS math and the three leaked strings are deleted, not parked behind a
+flag. Loading fallbacks stand. Wave 2's `schedule-hardening` and Wave 3's
+`install-window` flags are presumptively dropped on the same reasoning —
+confirm at wave start rather than assuming a flag posture returns.
+
+*Entries add: I127 · last id = I127*
+
+### I128 · Desk schedule nudge keys on active_section — 2026-08-13
+
+**Ruled by Kody.** Wave 1's `schedule_unconfigured` desk need keys on
+`active_section ∈ {project, install}` rather than `canonical_stage_key`.
+Rationale: `active_section` is itself the gate-derived document_state
+projection; the nudge is setup guidance, not a gate act; and the desk feed
+should not re-import the workflow classifier that R111 just stripped of
+selection rights. R6's letter ("need lines key to gates") is noted as
+narrowed, not eroded — a future gate-keyed need must still route through
+the R6 discipline. Pinned by the seven-section test.
+
+*Entries add: I128 · last id = I128*
