@@ -38,7 +38,7 @@ export interface SectionLineage {
  * R108 — the resolver's answer, projected down to what a section bar can carry.
  * Deliberately narrow rather than the whole `ResolvedSchedule`: this module
  * stays dependency-light, and nothing here may recompute a position.
- * null = the schedule is still loading, or the `schedule-fidelity` flag is off.
+ * null = the schedule is still being read.
  */
 export interface SectionScheduleFacts {
   selection: ScheduleSelection;

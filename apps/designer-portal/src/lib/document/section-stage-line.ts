@@ -52,8 +52,8 @@ export interface SectionStageLineModel {
   unclassifiedCount: number;
   /**
    * The register the selected phase's dates may be spoken in — null when the
-   * caller has no resolver answer to state (the `schedule-fidelity` cohort
-   * boundary), in which case the sub-label makes no fidelity claim.
+   * caller has no resolver answer to state (a section-mode Document has no
+   * schedule at all), in which case the sub-label makes no fidelity claim.
    */
   fidelity: Fidelity | null;
 }

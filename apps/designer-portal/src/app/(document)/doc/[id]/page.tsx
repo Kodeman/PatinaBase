@@ -135,8 +135,7 @@ type ProjectVitalsRecord = AnyRecord & {
 
 /**
  * R108 — the header speaks the resolver's selection and its target in the
- * register the data supports. Null while the schedule is loading, or whenever
- * the `schedule-fidelity` flag is off (the pre-collapse header renders instead).
+ * register the data supports. Null while the schedule is still unread.
  */
 interface ScheduleVitals {
   activePhaseName: string | null;
