@@ -11,6 +11,7 @@ import {
   type ClientProjectSelections,
   type CommercialDocumentBundle,
   type ProjectCommercialSummary,
+  type WorkingBudgetVersion,
 } from '@/lib/commercial-documents';
 import { adaptClientProjectReviewBundle, applyClientReviewMediaUrls, type ClientProjectReviewBundle, type ClientReviewVerdict } from '@/lib/project-review';
 
@@ -64,6 +65,20 @@ export function useProjectCommercialSummary(projectId: string) {
           ? furnishingsResult.data
           : [],
       });
+    },
+  });
+}
+
+export function useProjectWorkingBudget(projectId: string) {
+  return useQuery<WorkingBudgetVersion | null>({
+    queryKey: commercialKeys.budget(projectId),
+    enabled: !!projectId,
+    queryFn: async () => {
+      const { data, error } = await getSupabase().rpc('get_project_working_budget', {
+        p_project_id: projectId,
+      });
+      if (error) throw error;
+      return adaptProjectCommercialSummary({ workingBudget: data }).workingBudget;
     },
   });
 }
