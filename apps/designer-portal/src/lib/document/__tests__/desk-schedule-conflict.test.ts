@@ -332,3 +332,154 @@ describe('partitionDesk threads schedules by project_id', () => {
     expect(folders).toHaveLength(0);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// R4 / "Ruling IV" — the resolver's own contradiction rides the SAME need kind
+// as the R28 collision (one fact, exactly three renderings: spine stamp, desk
+// re-sort, guide sentence). R109/R110 — a proposed anchor is its own need,
+// ranked under the contradiction and over the setup nudge.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const configured = (over: Partial<DeskScheduleInput> = {}): DeskScheduleInput => ({
+  selection: { activePhaseId: 'phase-1', reason: 'in-progress' },
+  fidelity: 'frame',
+  positionText: 'Week 2',
+  activePhaseName: 'Procurement',
+  unconfigured: null,
+  conflicts: [],
+  ...over,
+});
+
+const chainConflict = {
+  kind: 'chain_does_not_fit' as const,
+  phaseId: 'phase-9',
+  anchorId: 'phase-9',
+  overrunDays: 6,
+  message: 'The chain projects 6 days past the install anchor',
+};
+
+describe('the resolver contradiction joins schedule_conflict (R4)', () => {
+  it('a chain that no longer fits its anchor raises the conflict need', () => {
+    const need = deriveNeed(
+      projectRow(),
+      NOW,
+      null,
+      null,
+      null,
+      null,
+      configured({ conflicts: [chainConflict] }),
+    );
+    expect(need?.kind).toBe('schedule_conflict');
+    expect(need?.text).toBe(chainConflict.message);
+    expect(need?.urgent).toBe(false);
+  });
+
+  it('the R28 collision still wins when both are present — one need, never two', () => {
+    const collision: DeskConflictInput = {
+      collision: { text: 'two installs in one week', label: 'COLLISION', date: null },
+      drift: null,
+    };
+    const need = deriveNeed(
+      projectRow(),
+      NOW,
+      collision,
+      null,
+      null,
+      null,
+      configured({ conflicts: [chainConflict] }),
+    );
+    expect(need?.kind).toBe('schedule_conflict');
+    expect(need?.text).toBe('two installs in one week');
+  });
+
+  it('a non-blocking resolver conflict raises nothing', () => {
+    expect(
+      deriveNeed(
+        projectRow(),
+        NOW,
+        null,
+        null,
+        null,
+        null,
+        configured({
+          conflicts: [{ kind: 'orphan_link', phaseId: 'p', message: 'orphan' }],
+        }),
+      ),
+    ).toBeNull();
+  });
+});
+
+describe('schedule_proposal need (R109 / R110)', () => {
+  it('a ceremony-sourced proposal names a signed act', () => {
+    const need = deriveNeed(
+      projectRow(),
+      NOW,
+      null,
+      null,
+      null,
+      null,
+      configured({
+        proposals: { count: 1, latestSourceEvent: 'furnishings-authorization-executed' },
+      }),
+    );
+    expect(need?.kind).toBe('schedule_proposal');
+    expect(need?.text).toBe('A signed act proposes a schedule anchor — review');
+    expect(need?.actionLabel).toBe('Review the proposed date');
+    expect(need?.urgent).toBe(false);
+  });
+
+  it('an operational fact names a recorded event, never a signature', () => {
+    const need = deriveNeed(
+      projectRow(),
+      NOW,
+      null,
+      null,
+      null,
+      null,
+      configured({ proposals: { count: 2, latestSourceEvent: 'po-sent' } }),
+    );
+    expect(need?.text).toBe('A recorded event proposes a schedule anchor — review');
+  });
+
+  it('sorts under the contradiction and over the setup nudge', () => {
+    const proposals = { count: 1, latestSourceEvent: 'po-sent' };
+    // Under the contradiction: with both live, the conflict speaks.
+    expect(
+      deriveNeed(
+        projectRow(),
+        NOW,
+        null,
+        null,
+        null,
+        null,
+        configured({ conflicts: [chainConflict], proposals }),
+      )?.kind,
+    ).toBe('schedule_conflict');
+    // Over the setup nudge: with both live, the proposal speaks.
+    expect(
+      deriveNeed(
+        projectRow(),
+        NOW,
+        null,
+        null,
+        null,
+        null,
+        configured({ unconfigured: 'install-unanchored', proposals }),
+      )?.kind,
+    ).toBe('schedule_proposal');
+  });
+
+  it('an empty proposal signal raises nothing', () => {
+    expect(
+      deriveNeed(
+        projectRow(),
+        NOW,
+        null,
+        null,
+        null,
+        null,
+        configured({ proposals: { count: 0, latestSourceEvent: null } }),
+      ),
+    ).toBeNull();
+  });
+});

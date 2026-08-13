@@ -2,6 +2,10 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 jest.mock('@patina/supabase', () => ({
   excludeProjectArtifactApprovals: (items: unknown[]) => items,
+  // R109/R110 — the spine's proposed-anchor block.
+  useScheduleProposals: () => ({ data: [], isError: false }),
+  useCommitScheduleProposal: () => ({ mutateAsync: jest.fn(), isPending: false, isError: false }),
+  useDismissScheduleProposal: () => ({ mutateAsync: jest.fn(), isPending: false, isError: false }),
   useCoordinationItems: () => ({ data: [] }),
   useProjectParties: () => ({ data: [] }),
   useProjectFFEItems: () => ({ data: [] }),

@@ -99,6 +99,7 @@ import { PhaseDeleteConfirm } from './phase-delete-confirm';
 import { MilestoneComposer, type MilestoneDraft } from './milestone-composer';
 import { ScheduleEntryField } from './schedule-entry-field';
 import { RevisionLedger } from './revision-ledger';
+import { ScheduleProposals } from './schedule-proposals';
 import { AddLineSheet } from './add-line-sheet';
 import type { PastProjectOption } from './past-project-picker';
 import { DocumentAction } from '../document-action';
@@ -742,6 +743,15 @@ export function ScheduleSpine({
         )}
       </div>
       <StrataMiniRule className="mt-1.5" />
+
+      {!loading && (
+        <ScheduleProposals
+          projectId={projectId}
+          committedPhases={committedPhaseInputs}
+          committedMilestones={committedMilestoneInputs}
+          today={today}
+        />
+      )}
 
       {loading ? (
         // Nothing heavy while the resolver's sources load — one quiet line.

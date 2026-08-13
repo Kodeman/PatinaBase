@@ -324,6 +324,25 @@ const RETIRED_STRINGS = [
   "no project phase topology",
 ];
 
+// §7 commercial-policy guard (I125's ratified register): Wave 2's new copy
+// names the ACT and the evidence state, never the commercial actor. "Ordered"
+// is "Released to maker", "Shipped" is "In transit", "Delivered" is "Received";
+// "PO issued" and "Authorized" never appear in designer-facing status copy.
+const FORBIDDEN_COMMERCIAL_REGISTER = [
+  "PO issued",
+  "Ordered",
+  "Shipped",
+  "Delivered",
+  "Authorized",
+];
+
+// Every surface Wave 2 (R109/R110, I130) added or gave new strings to.
+const WAVE_2_COPY_SOURCES = [
+  "../schedule-impact.ts",
+  "../../../components/document/commercial/schedule-impact-block.tsx",
+  "../../../components/document/schedule/schedule-proposals.tsx",
+];
+
 describe("R113 string-absence contract", () => {
   const SELECTIONS: ScheduleSelection[] = [
     NO_SELECTION,
@@ -390,6 +409,15 @@ describe("R113 string-absence contract", () => {
     for (const retired of RETIRED_STRINGS) {
       expect(classifier).not.toContain(retired);
       expect(component).not.toContain(retired);
+    }
+  });
+
+  it("§7: Wave 2's ceremony and proposal copy carries no commercial-actor register", () => {
+    for (const relative of WAVE_2_COPY_SOURCES) {
+      const source = fs.readFileSync(path.resolve(__dirname, relative), "utf8");
+      for (const forbidden of FORBIDDEN_COMMERCIAL_REGISTER) {
+        expect(`${relative}:${source}`).not.toContain(forbidden);
+      }
     }
   });
 

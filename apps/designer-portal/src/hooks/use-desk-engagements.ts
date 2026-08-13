@@ -39,6 +39,7 @@ import {
   buildDeskSchedule,
   type DeskMilestoneRow,
   type DeskPhaseRow,
+  type DeskProposalRow,
 } from '@/lib/document/desk-schedule';
 import { buildDeskReceivables } from '@/lib/document/desk-receivables';
 import {
@@ -97,6 +98,7 @@ const CONFLICT_WINDOW_DAYS = 120;
  */
 export const DESK_PHASE_LIMIT = 2000;
 const DESK_MILESTONE_LIMIT = 500;
+const DESK_PROPOSAL_LIMIT = 500;
 
 /** Flatten the item_feedback→proposal_items→proposals embed into the flagged-row
  *  shape buildDeskFlaggedLines reads. Tolerant of PostgREST returning a to-one
@@ -171,6 +173,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         { data: deskPhases, error: deskPhasesError },
         { data: deskMilestones, error: deskMilestonesError },
         { data: deskProjectStarts, error: deskProjectStartsError },
+        { data: deskProposals, error: deskProposalsError },
       ] = await Promise.all([
         supabase.from('document_state').select('*').order('updated_at', { ascending: false }),
         supabase
@@ -236,6 +239,15 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         // R100's forward-compute origin, per project. Without it an unanchored
         // chain can only ever resolve as legacy dates, never as a Frame.
         supabase.from('projects').select('id, start_date').limit(DESK_PHASE_LIMIT),
+        // R109/R110 (00475): live schedule proposals, newest first. Bounded and
+        // ordered like every other desk read; it degrades on its own — a failed
+        // proposals read leaves the need silent, never invents one.
+        supabase
+          .from('schedule_proposals')
+          .select('id, project_id, source_event')
+          .eq('state', 'proposed')
+          .order('created_at', { ascending: false })
+          .limit(DESK_PROPOSAL_LIMIT),
       ]);
       if (error) throw error;
       const rows = (data ?? []) as DocumentStateRow[];
@@ -324,6 +336,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
                       (p) => [p.id, p.start_date ?? null],
                     ),
                   ),
+              deskProposalsError ? [] : ((deskProposals ?? []) as DeskProposalRow[]),
             );
 
       const result = partitionDesk(

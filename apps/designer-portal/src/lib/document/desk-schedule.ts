@@ -20,6 +20,7 @@ import {
   selectActivePhase,
   type Fidelity,
   type PhaseStatus,
+  type ScheduleConflict,
   type ScheduleSelection,
 } from '@patina/utils';
 
@@ -51,6 +52,32 @@ export interface DeskMilestoneRow {
   sort_order: number | null;
 }
 
+/** A live ('proposed') schedule_proposals row, desk-shaped (00475). */
+export interface DeskProposalRow {
+  id: string;
+  project_id: string;
+  source_event: string;
+}
+
+/** What the desk knows about a project's live proposals. */
+export interface DeskProposalSignal {
+  count: number;
+  /** The newest proposal's source event — it decides which line is honest. */
+  latestSourceEvent: string | null;
+}
+
+/** Source events raised by a signed act rather than a recorded operational one. */
+const CEREMONY_SOURCE_EVENTS: ReadonlySet<string> = new Set([
+  'design-services-executed',
+  'furnishings-authorization-executed',
+  'trade-scope-engaged',
+  'trade-scope-accepted',
+]);
+
+export function isCeremonySourceEvent(sourceEvent: string | null | undefined): boolean {
+  return !!sourceEvent && CEREMONY_SOURCE_EVENTS.has(sourceEvent);
+}
+
 /** What a desk folder may say about a project's schedule. */
 export interface DeskScheduleInput {
   selection: ScheduleSelection;
@@ -64,6 +91,15 @@ export interface DeskScheduleInput {
    * no anchor holds its week.
    */
   unconfigured: 'no-phases' | 'install-unanchored' | null;
+  /**
+   * The resolver's own contradictions (R4 / "Ruling IV" — one fact, exactly
+   * three renderings: the spine row's terracotta stamp, the desk re-sort, the
+   * guide sentence). Wave 1 computed these and dropped them; the desk leg needs
+   * them. Optional so existing fixtures stay valid — absent reads as "silent".
+   */
+  conflicts?: ScheduleConflict[];
+  /** Live schedule proposals awaiting the designer's one act (R109/R110). */
+  proposals?: DeskProposalSignal;
 }
 
 function groupBy<T>(rows: readonly T[], key: (row: T) => string | null): Map<string, T[]> {
@@ -89,6 +125,7 @@ export function buildDeskSchedule(
   milestoneRows: readonly DeskMilestoneRow[],
   today: string,
   startDates?: ReadonlyMap<string, string | null>,
+  proposalRows?: readonly DeskProposalRow[],
 ): Map<string, DeskScheduleInput> {
   const phasesByProject = groupBy(phaseRows ?? [], (r) => r.project_id ?? null);
   const projectOfPhase = new Map<string, string>();
@@ -99,6 +136,19 @@ export function buildDeskSchedule(
     milestoneRows ?? [],
     (m) => projectOfPhase.get(m.phase_id) ?? null,
   );
+
+  // Proposals arrive newest-first from the feed; the first per project wins.
+  const proposalsByProject = new Map<string, DeskProposalSignal>();
+  for (const p of proposalRows ?? []) {
+    if (!p?.project_id) continue;
+    const existing = proposalsByProject.get(p.project_id);
+    if (existing) existing.count += 1;
+    else
+      proposalsByProject.set(p.project_id, {
+        count: 1,
+        latestSourceEvent: p.source_event ?? null,
+      });
+  }
 
   const out = new Map<string, DeskScheduleInput>();
   for (const [projectId, phases] of phasesByProject) {
@@ -131,7 +181,16 @@ export function buildDeskSchedule(
         installResolved && installResolved.governingAnchorId === null
           ? 'install-unanchored'
           : null,
+      conflicts: resolved.conflicts,
+      proposals: proposalsByProject.get(projectId),
     });
+  }
+
+  // A project with live proposals but no phase rows never reaches the loop
+  // above; it still has something to say.
+  for (const [projectId, proposals] of proposalsByProject) {
+    if (out.has(projectId)) continue;
+    out.set(projectId, { ...DESK_SCHEDULE_UNCONFIGURED, proposals });
   }
 
   // A project with no phase rows at all never reaches the loop above, so the
@@ -146,4 +205,5 @@ export const DESK_SCHEDULE_UNCONFIGURED: DeskScheduleInput = {
   positionText: null,
   activePhaseName: null,
   unconfigured: 'no-phases',
+  conflicts: [],
 };
