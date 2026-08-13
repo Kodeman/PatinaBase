@@ -23,6 +23,10 @@ import {
   NOT_OVERDUE,
   type OverdueCondition,
 } from './overdue-condition';
+import {
+  DESK_SCHEDULE_UNCONFIGURED,
+  type DeskScheduleInput,
+} from './desk-schedule';
 
 export type EngagementKind = 'project' | 'proposal' | 'lead' | 'relationship';
 
@@ -109,6 +113,9 @@ export type NeedKind =
   | 'awaiting_inspection'
   | 'schedule_conflict'
   | 'task_due'
+  // R113 + R6: the setup nudges the doc body used to leak as error copy. Setup,
+  // not a live obstruction — it sorts under both schedule_conflict and task_due.
+  | 'schedule_unconfigured'
   | 'po_unsent'
   | 'po_unacknowledged'
   | 'pulse_due';
@@ -130,6 +137,7 @@ export const NEED_ACTION_LABELS: Record<NeedKind, string | null> = {
   awaiting_inspection: 'Inspect the delivery',
   schedule_conflict: 'Resolve the schedule',
   task_due: 'Open the task',
+  schedule_unconfigured: 'Open the schedule',
   po_unsent: 'Review the purchase order',
   po_unacknowledged: 'Follow up with the maker',
   pulse_due: 'Review and send',
@@ -317,6 +325,8 @@ export type MotionKind =
   | 'in_flight'
   | 'drift'
   | 'conflict'
+  // R108: the project's own position, spoken in the register its dates support.
+  | 'schedule_position'
   // R106 §4 (the Arrival Arc): the four ceremony-in-motion states, replacing
   // the static "Schedule the discovery call" text for a relationship whose
   // ceremony has sent. Never promotes to a folder — the wait is a chip
@@ -401,6 +411,10 @@ const NEED_RANK: Record<NeedKind, number> = {
   // ordering (TASK DUE below awaiting-inspection, above send-weave) holds.
   schedule_conflict: 9,
   task_due: 10,
+  // R113/R6: an unconfigured schedule is setup work, not a live obstruction —
+  // it sorts under the collision it might one day cause and under a task the
+  // designer already committed to. Fractional to stay surgical (sort is numeric).
+  schedule_unconfigured: 10.5,
   po_unsent: 11,
   po_unacknowledged: 12,
   pulse_due: 13,
@@ -487,6 +501,7 @@ export function deriveNeed(
   receivable?: ReceivableSignal | null,
   flagged?: DeskFlaggedSignal | null,
   ceremony?: DeskCeremonySignal | null,
+  schedule?: DeskScheduleInput | null,
 ): NeedLine | null {
   if (row.is_archived || row.is_paused) return null;
 
@@ -754,6 +769,26 @@ export function deriveNeed(
     };
   }
 
+  // R113 + R6: the setup nudges the doc body used to leak as error copy, now
+  // gated on the sections where composing a schedule IS the act. Ranked below
+  // the collision and below a committed task — this is setup, not obstruction.
+  if (
+    schedule?.unconfigured &&
+    row.engagement_kind === 'project' &&
+    (row.active_section === 'project' || row.active_section === 'install')
+  ) {
+    return {
+      kind: 'schedule_unconfigured',
+      text:
+        schedule.unconfigured === 'no-phases'
+          ? 'Name the phases for this project'
+          : 'Anchor the install week',
+      actionLabel: NEED_ACTION_LABELS.schedule_unconfigured,
+      stamp: { label: 'BAND', ...STAMP.clay },
+      urgent: false,
+    };
+  }
+
   // R18: the send weave. A drafted PO the studio never sent is the
   // designer's own pen (rises first); a sent PO the vendor hasn't
   // acknowledged is a nudge. Both thresholds provisional (constants watch).
@@ -816,6 +851,7 @@ export function deriveMotion(
   now: Date,
   conflict?: DeskConflictInput | null,
   ceremony?: DeskCeremonySignal | null,
+  schedule?: DeskScheduleInput | null,
 ): {
   kind: MotionKind;
   text: string;
@@ -933,8 +969,23 @@ export function deriveMotion(
     return { kind: 'in_discovery', text: 'Schedule the discovery call' };
   }
 
-  // R28/R22 drift tier: state carried, never a nag.
+  // R28/R22 drift tier: state carried, never a nag. Drift is an existing R22
+  // chip and outranks a plain statement of position.
   if (conflict?.drift) return { kind: 'drift', text: conflict.drift };
+
+  // R108: where the project actually stands, in the register its dates support.
+  // Never a bare date on a band — an unanchored project says so.
+  if (schedule) {
+    const position = schedule.positionText;
+    if (schedule.fidelity === 'band') {
+      if (position) return { kind: 'schedule_position', text: 'Band — no anchor yet' };
+    } else if (position && schedule.activePhaseName) {
+      return {
+        kind: 'schedule_position',
+        text: `${schedule.activePhaseName} · ${position}`,
+      };
+    }
+  }
 
   if (row.in_flight_count > 0) {
     const n = row.in_flight_count;
@@ -987,6 +1038,9 @@ export function partitionDesk(
   flaggedLines?: ReadonlyMap<string, DeskFlaggedSignal>,
   ceremoniesByLeadId?: ReadonlyMap<string, DeskCeremonySignal>,
   ceremoniesByDesignerClientId?: ReadonlyMap<string, DeskCeremonySignal>,
+  /** R108/R113 — per-project resolver output. `undefined` = the feed degraded;
+   *  a project absent from a PRESENT map genuinely has no phases at all. */
+  schedules?: ReadonlyMap<string, DeskScheduleInput>,
 ): { folders: DeskFolder[]; chips: MotionChip[]; composed: Record<string, true> } {
   const folders: DeskFolder[] = [];
   const chips: MotionChip[] = [];
@@ -1022,7 +1076,11 @@ export function partitionDesk(
         : row.engagement_kind === 'relationship'
           ? (ceremoniesByDesignerClientId?.get(row.engagement_id) ?? null)
           : null;
-    const need = deriveNeed(row, now, conflict, receivable, flagged, ceremony);
+    const schedule =
+      schedules && row.project_id
+        ? (schedules.get(row.project_id) ?? DESK_SCHEDULE_UNCONFIGURED)
+        : null;
+    const need = deriveNeed(row, now, conflict, receivable, flagged, ceremony, schedule);
     if (need) {
       // Ruling IV: the overdue condition rides the folder so the sort, the
       // folio's need line, and the margin stamp all read one derivation.
@@ -1036,7 +1094,7 @@ export function partitionDesk(
       });
       continue;
     }
-    const motion = deriveMotion(row, now, conflict, ceremony);
+    const motion = deriveMotion(row, now, conflict, ceremony, schedule);
     if (motion)
       chips.push({
         row,

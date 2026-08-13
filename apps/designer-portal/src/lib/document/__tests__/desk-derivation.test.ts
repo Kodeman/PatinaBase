@@ -13,6 +13,7 @@ import {
   type NurtureLike,
   type DeskCeremonySignal,
 } from '../desk-derivation';
+import type { DeskScheduleInput } from '../desk-schedule';
 
 const NOW = new Date('2026-06-11T12:00:00Z');
 
@@ -1182,5 +1183,99 @@ describe('partitionDesk — ceremonies wiring (R106)', () => {
       'ceremony_pending',
       'hesitating_proposal',
     ]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// R108 / R113 — the schedule tiers take their place in the existing stacks
+// without displacing anything above them.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const schedule = (over: Partial<DeskScheduleInput> = {}): DeskScheduleInput => ({
+  selection: { activePhaseId: 'ph1', reason: 'today-in-window' },
+  fidelity: 'committed',
+  positionText: 'Week 3',
+  activePhaseName: 'Design Development',
+  unconfigured: null,
+  ...over,
+});
+
+describe('schedule tiers in the desk stacks (R108 / R113)', () => {
+  it('the whole needs stack sorts the setup nudge under the collision and the task', () => {
+    const rows = [
+      mkRow({ engagement_id: 'e-setup', project_id: 'proj-setup', active_section: 'project' }),
+      mkRow({
+        engagement_id: 'e-task',
+        project_id: 'proj-task',
+        due_task_count: 1,
+        earliest_task_due: daysAgo(1),
+        due_task_title: 'Order the sconces',
+      }),
+      mkRow({
+        engagement_id: 'e-overdue',
+        project_id: 'proj-overdue',
+        overdue_decision_count: 1,
+        earliest_overdue_due: daysAgo(2),
+      }),
+    ];
+    const { folders } = partitionDesk(
+      rows,
+      NOW,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      new Map<string, DeskScheduleInput>(),
+    );
+
+    expect(folders.map((f) => f.need.kind)).toEqual([
+      'overdue_decision',
+      'task_due',
+      'schedule_unconfigured',
+    ]);
+  });
+
+  it('a positioned project renders a schedule_position chip rather than falling silent', () => {
+    const rows = [mkRow({ engagement_id: 'e1', project_id: 'proj-a' })];
+    const { chips, folders } = partitionDesk(
+      rows,
+      NOW,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      new Map([['proj-a', schedule()]]),
+    );
+
+    expect(folders).toHaveLength(0);
+    expect(chips).toEqual([
+      expect.objectContaining({
+        kind: 'schedule_position',
+        text: 'Design Development · Week 3',
+      }),
+    ]);
+  });
+
+  it('the in-flight chip still wins when the schedule has nothing to say', () => {
+    const motion = deriveMotion(
+      mkRow({ in_flight_count: 2 }),
+      NOW,
+      null,
+      null,
+      schedule({ selection: { activePhaseId: null, reason: 'none' }, positionText: null }),
+    );
+    expect(motion?.kind).toBe('in_flight');
+  });
+
+  it('a paused row states nothing about its schedule', () => {
+    expect(deriveMotion(mkRow({ is_paused: true }), NOW, null, null, schedule())).toEqual({
+      kind: 'paused',
+      text: 'Paused',
+    });
+    expect(deriveNeed(mkRow({ is_paused: true }), NOW, null, null, null, null, schedule({
+      unconfigured: 'no-phases',
+    }))).toBeNull();
   });
 });

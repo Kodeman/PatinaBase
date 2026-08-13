@@ -35,6 +35,11 @@ import {
   type NeedLine,
 } from '@/lib/document/desk-derivation';
 import { buildDeskConflicts } from '@/lib/document/desk-conflicts';
+import {
+  buildDeskSchedule,
+  type DeskMilestoneRow,
+  type DeskPhaseRow,
+} from '@/lib/document/desk-schedule';
 import { buildDeskReceivables } from '@/lib/document/desk-receivables';
 import {
   buildDeskFlaggedLines,
@@ -154,6 +159,8 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         { data: flaggedFeedback, error: flaggedError },
         { data: boardFlagged, error: boardFlaggedError },
         { data: ceremonies, error: ceremoniesError },
+        { data: deskPhases, error: deskPhasesError },
+        { data: deskMilestones, error: deskMilestonesError },
       ] = await Promise.all([
         supabase.from('document_state').select('*').order('updated_at', { ascending: false }),
         supabase
@@ -198,6 +205,20 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
           .select(
             'id, lead_id, designer_client_id, state, intro_text, offered_slots, offered_at, picked_slot_starts_at, timezone, thread_id, created_at',
           ),
+        // R108: the schedule feed. Chain columns only, never `*` — this read is
+        // desk-wide (R1 perf). It cannot filter on the project ids the
+        // document_state read returns, because that read is in this same batch;
+        // RLS already scopes project_phases to the designer's own projects.
+        supabase
+          .from('project_phases')
+          .select(
+            'id, project_id, name, phase_key, status, sort_order, lane, duration_days, duration_weeks, follows_phase_id, anchor_date, start_date, target_end_date',
+          ),
+        // schedule_milestones has no project_id of its own — every milestone
+        // hangs off a phase, so the phase id carries the grouping key.
+        supabase
+          .from('schedule_milestones')
+          .select('id, phase_id, name, kind, offset_days, anchor_date, status, sort_order'),
       ]);
       if (error) throw error;
       const rows = (data ?? []) as DocumentStateRow[];
@@ -259,6 +280,19 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
       const ceremoniesByDesignerClientId = ceremoniesError
         ? undefined
         : buildDeskCeremoniesByDesignerClient(ceremonyRows);
+      // R108: the two schedule reads degrade independently and together — a
+      // phases error leaves the map undefined, which partitionDesk reads as
+      // "unanswered", never as "this project has no schedule". Milestones
+      // alone failing still resolves every chain; only anchored milestones are
+      // missing, which no Wave 1 surface reads.
+      const schedules = deskPhasesError
+        ? undefined
+        : buildDeskSchedule(
+            (deskPhases ?? []) as DeskPhaseRow[],
+            deskMilestonesError ? [] : ((deskMilestones ?? []) as DeskMilestoneRow[]),
+            today,
+          );
+
       const result = partitionDesk(
         rows,
         now,
@@ -267,6 +301,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         flaggedLines,
         ceremoniesByLeadId,
         ceremoniesByDesignerClientId,
+        schedules,
       );
       previousResultRef.current = result;
       return result;

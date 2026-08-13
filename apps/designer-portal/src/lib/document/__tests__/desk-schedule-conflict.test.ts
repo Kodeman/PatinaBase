@@ -12,6 +12,7 @@ import {
   type DeskConflictInput,
   type DocumentStateRow,
 } from '../desk-derivation';
+import type { DeskScheduleInput } from '../desk-schedule';
 
 const NOW = new Date('2026-06-12T16:00:00Z');
 
@@ -123,5 +124,200 @@ describe('partitionDesk threads conflicts by project_id (R28)', () => {
     expect(folders[0].row.project_id).toBe('p1');
     expect(folders[0].need.kind).toBe('schedule_conflict');
     expect(chips.some((c) => c.row.project_id === 'p2' && c.text === 'delivery 5d before install')).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// R113 + R6 — the setup nudges relocated out of the doc body. Setup, not a live
+// obstruction: they sort under the collision they might one day cause and under
+// a task the designer already committed to. Drift stays a chip and never
+// becomes a need — the discipline this file already pins.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const unconfigured = (over: Partial<DeskScheduleInput> = {}): DeskScheduleInput => ({
+  selection: { activePhaseId: null, reason: 'none' },
+  fidelity: 'band',
+  positionText: null,
+  activePhaseName: null,
+  unconfigured: 'no-phases',
+  ...over,
+});
+
+describe('schedule_unconfigured need (R113 / R6)', () => {
+  it('a project with no phases asks for them by name', () => {
+    const need = deriveNeed(projectRow(), NOW, null, null, null, null, unconfigured());
+    expect(need?.kind).toBe('schedule_unconfigured');
+    expect(need?.text).toBe('Name the phases for this project');
+    expect(need?.urgent).toBe(false);
+  });
+
+  it('an unanchored install week asks for the anchor', () => {
+    const need = deriveNeed(
+      projectRow(),
+      NOW,
+      null,
+      null,
+      null,
+      null,
+      unconfigured({ unconfigured: 'install-unanchored' }),
+    );
+    expect(need?.text).toBe('Anchor the install week');
+  });
+
+  it('a configured schedule raises no need at all', () => {
+    expect(
+      deriveNeed(projectRow(), NOW, null, null, null, null, unconfigured({ unconfigured: null })),
+    ).toBeNull();
+  });
+
+  it('a degraded feed (no schedule input) never nags', () => {
+    expect(deriveNeed(projectRow(), NOW, null, null, null, null, null)).toBeNull();
+  });
+
+  it('R6 gate: it fires only in the sections where composing a schedule is the act', () => {
+    for (const section of ['project', 'install'] as const) {
+      expect(
+        deriveNeed(
+          projectRow({ active_section: section }),
+          NOW,
+          null,
+          null,
+          null,
+          null,
+          unconfigured(),
+        )?.kind,
+      ).toBe('schedule_unconfigured');
+    }
+    for (const section of ['brief', 'discovery', 'direction', 'proposal', 'care'] as const) {
+      expect(
+        deriveNeed(
+          projectRow({ active_section: section }),
+          NOW,
+          null,
+          null,
+          null,
+          null,
+          unconfigured(),
+        ),
+      ).toBeNull();
+    }
+  });
+
+  it('a collision outranks it — a live obstruction beats setup work', () => {
+    expect(deriveNeed(projectRow(), NOW, collision, null, null, null, unconfigured())?.kind).toBe(
+      'schedule_conflict',
+    );
+  });
+
+  it('a dued task outranks it — a committed act beats setup work', () => {
+    expect(
+      deriveNeed(
+        projectRow({ due_task_count: 1, earliest_task_due: '2026-06-12', due_task_title: 'x' }),
+        NOW,
+        null,
+        null,
+        null,
+        null,
+        unconfigured(),
+      )?.kind,
+    ).toBe('task_due');
+  });
+
+  it('it outranks the send weave beneath it', () => {
+    expect(
+      deriveNeed(
+        projectRow({ draft_unsent_po_count: 1, oldest_draft_po_created_at: '2026-05-01' }),
+        NOW,
+        null,
+        null,
+        null,
+        null,
+        unconfigured(),
+      )?.kind,
+    ).toBe('schedule_unconfigured');
+  });
+
+  it('drift still stays a chip and never becomes this need', () => {
+    expect(
+      deriveNeed(projectRow(), NOW, drift, null, null, null, unconfigured({ unconfigured: null })),
+    ).toBeNull();
+    expect(deriveMotion(projectRow(), NOW, drift, null, unconfigured())).toEqual({
+      kind: 'drift',
+      text: 'delivery 5d before install',
+    });
+  });
+});
+
+describe('schedule_position motion (R108)', () => {
+  const positioned = unconfigured({
+    selection: { activePhaseId: 'ph1', reason: 'today-in-window' },
+    fidelity: 'committed',
+    positionText: 'Week 3',
+    activePhaseName: 'Design Development',
+    unconfigured: null,
+  });
+
+  it('states the phase and its position', () => {
+    expect(deriveMotion(projectRow(), NOW, null, null, positioned)).toEqual({
+      kind: 'schedule_position',
+      text: 'Design Development · Week 3',
+    });
+  });
+
+  it('a frame says Frame, never a week', () => {
+    const motion = deriveMotion(
+      projectRow(),
+      NOW,
+      null,
+      null,
+      unconfigured({ ...positioned, fidelity: 'frame', positionText: 'Frame' }),
+    );
+    expect(motion?.text).toBe('Design Development · Frame');
+    expect(motion?.text).not.toMatch(/Week/);
+  });
+
+  it('a band never states a date — it states that it is a band', () => {
+    const motion = deriveMotion(
+      projectRow(),
+      NOW,
+      null,
+      null,
+      unconfigured({ ...positioned, fidelity: 'band', positionText: 'Band' }),
+    );
+    expect(motion).toEqual({ kind: 'schedule_position', text: 'Band — no anchor yet' });
+  });
+
+  it('drift outranks it — an existing R22 chip beats a statement of position', () => {
+    expect(deriveMotion(projectRow(), NOW, drift, null, positioned)?.kind).toBe('drift');
+  });
+
+  it('it outranks the in-flight chip beneath it', () => {
+    expect(
+      deriveMotion(projectRow({ in_flight_count: 3 }), NOW, null, null, positioned)?.kind,
+    ).toBe('schedule_position');
+    expect(deriveMotion(projectRow({ in_flight_count: 3 }), NOW, null, null, null)?.kind).toBe(
+      'in_flight',
+    );
+  });
+});
+
+describe('partitionDesk threads schedules by project_id', () => {
+  it('reads a project absent from a PRESENT map as having no phases at all', () => {
+    const { folders } = partitionDesk(
+      [projectRow({ project_id: 'p1' })],
+      NOW,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      new Map<string, DeskScheduleInput>(),
+    );
+    expect(folders[0]?.need.kind).toBe('schedule_unconfigured');
+  });
+
+  it('reads an ABSENT map as unanswered, never as an unconfigured schedule', () => {
+    const { folders } = partitionDesk([projectRow({ project_id: 'p1' })], NOW);
+    expect(folders).toHaveLength(0);
   });
 });
