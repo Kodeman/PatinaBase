@@ -18,14 +18,23 @@ const mutation = (fn: jest.Mock) => ({ mutateAsync: fn, isPending: false });
 
 // Engagement states its schedule impact before the act (R110); the resolver's
 // one door reads through React Query, which these tests do not provide.
+// Mutable so one case can hand the sheet a REAL chain and pin the computable
+// R110 path — the branch that actually hardens.
+const scheduleStub: {
+  phases: unknown[];
+  milestones: unknown[];
+  isLoading: boolean;
+  isError: boolean;
+} = { phases: [], milestones: [], isLoading: false, isError: false };
+
 jest.mock('@patina/supabase', () => ({
   ...jest.requireActual('@patina/supabase'),
   useResolvedSchedule: () => ({
-    phases: [],
-    milestones: [],
+    phases: scheduleStub.phases,
+    milestones: scheduleStub.milestones,
     resolved: null,
-    isLoading: false,
-    isError: false,
+    isLoading: scheduleStub.isLoading,
+    isError: scheduleStub.isError,
   }),
 }));
 
@@ -142,6 +151,10 @@ describe('TradeScopeDetail', () => {
     voidScope.mockReset().mockResolvedValue({});
     executeTradeScopeOnPaper.mockReset().mockResolvedValue({});
     recordTradeAcceptanceOnPaper.mockReset().mockResolvedValue({});
+    scheduleStub.phases = [];
+    scheduleStub.milestones = [];
+    scheduleStub.isLoading = false;
+    scheduleStub.isError = false;
     mockWorkspace = { data: workspaceData };
     mockCommercialDocument = { data: undefined, isLoading: false };
   });
@@ -175,6 +188,78 @@ describe('TradeScopeDetail', () => {
       }),
     );
     expect(screen.getByRole('group', { name: 'Impact' })).toBeVisible();
+  });
+
+  it('states a computed impact on a real chain, and passes exactly what it stated', async () => {
+    scheduleStub.phases = [
+      {
+        id: 'phase-main',
+        name: 'Design development',
+        lane: 'main',
+        sort_order: 0,
+        duration_days: 14,
+        duration_weeks: null,
+        follows_phase_id: null,
+        anchor_date: null,
+        start_date: '2026-06-01',
+        target_end_date: null,
+        status: 'in_progress',
+      },
+      {
+        id: 'phase-thread',
+        name: 'Procurement thread',
+        lane: 'thread',
+        sort_order: 1,
+        duration_days: 30,
+        duration_weeks: null,
+        follows_phase_id: 'phase-main',
+        anchor_date: null,
+        start_date: null,
+        target_end_date: null,
+        status: 'pending',
+      },
+    ];
+    renderDetail(scope());
+
+    const block = screen.getByRole('group', { name: 'Impact' });
+    expect(block).toHaveAttribute('data-schedule-impact', 'computed');
+    const stated = block.textContent ?? '';
+    expect(stated).toContain('Procurement thread anchored');
+
+    fireEvent.click(screen.getByRole('button', { name: /Engage Atelier Marchand/ }));
+    await waitFor(() => expect(engage).toHaveBeenCalled());
+    const passed = engage.mock.calls[0][0] as {
+      disclosedImpact: { sentence: string; kind: string; anchorDate: string } | null;
+    };
+    expect(passed.disclosedImpact).not.toBeNull();
+    expect(passed.disclosedImpact?.kind).toBe('phase-anchor');
+    // What the sheet SAID is what the RPC receives — R110's whole point.
+    expect(stated).toContain(passed.disclosedImpact?.sentence ?? '__none__');
+  });
+
+  it('holds the act while the schedule is still being read (R110)', () => {
+    scheduleStub.isLoading = true;
+    renderDetail(scope());
+    expect(
+      screen.getByRole('button', { name: /Engage Atelier Marchand/ }),
+    ).toBeDisabled();
+    expect(screen.getByRole('group', { name: 'Impact' })).toHaveAttribute(
+      'data-schedule-impact',
+      'reading',
+    );
+    expect(screen.getByText('Reading the schedule…')).toBeVisible();
+  });
+
+  it('holds the act when the schedule read failed — that is not "uncomputable"', () => {
+    scheduleStub.isError = true;
+    renderDetail(scope());
+    expect(
+      screen.getByRole('button', { name: /Engage Atelier Marchand/ }),
+    ).toBeDisabled();
+    expect(screen.getByRole('group', { name: 'Impact' })).toHaveAttribute(
+      'data-schedule-impact',
+      'unavailable',
+    );
   });
 
   it('holds engagement with its reason when the deposit has not been paid', () => {

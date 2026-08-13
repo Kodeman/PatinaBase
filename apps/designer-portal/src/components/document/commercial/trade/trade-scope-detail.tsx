@@ -32,6 +32,8 @@ import {
   SIGNED_ON_PAPER_NOTE,
   signedOnPaperNote,
 } from '@/lib/document/commercial-documents';
+import { scheduleEvents } from '@/lib/analytics/schedule-events';
+import { impactIsSettled } from '@/lib/document/schedule-impact';
 import {
   ScheduleImpactBlock,
   useScheduleImpact,
@@ -411,19 +413,36 @@ export function TradeScopeDetail({
           <GatedAct
             actionKey="engage-trade-scope"
             label={`Engage ${partyName}`}
-            gate={engageGate}
+            // R110: the act waits for the schedule to answer. A click while the
+            // read is in flight would state nothing and downgrade a hardening
+            // that was one moment from computable.
+            gate={
+              engageGate.allowed && !impactIsSettled(engageImpact)
+                ? { allowed: false, reason: 'reading the schedule' }
+                : engageGate
+            }
             pending={engage.isPending}
             onRun={() =>
               void run(
                 () =>
-                  engage.mutateAsync({
-                    proposalId: scope.proposalId,
-                    // R110: engagement is a studio act, so the block below
-                    // stated its schedule effect first.
-                    disclosedImpact: engageImpact.computable
-                      ? engageImpact.disclosure
-                      : null,
-                  }),
+                  engage
+                    .mutateAsync({
+                      proposalId: scope.proposalId,
+                      // R110: engagement is a studio act, so the block below
+                      // stated its schedule effect first.
+                      disclosedImpact: engageImpact.computable
+                        ? engageImpact.disclosure
+                        : null,
+                    })
+                    .then((result) => {
+                      scheduleEvents.scheduleCeremonyAnchored({
+                        project_id: projectId,
+                        source_event: 'trade-scope-engaged',
+                        edit_kind: 'phase-anchor',
+                        disclosed: engageImpact.computable,
+                      });
+                      return result;
+                    }),
                 'The trade could not be engaged.',
               )
             }

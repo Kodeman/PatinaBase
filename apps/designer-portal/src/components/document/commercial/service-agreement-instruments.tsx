@@ -16,12 +16,12 @@ import {
   RECORD_ON_PAPER_ACT_LABEL,
   RecordOnPaperSheet,
 } from "./record-on-paper-sheet";
-import type { ScheduleDisclosedImpact } from "@/lib/document/schedule-impact";
 import {
-  ScheduleImpactBlock,
-  useEngagementStartPhaseId,
-  useScheduleImpact,
-} from "./schedule-impact-block";
+  IMPACT_UNCOMPUTABLE_LINE,
+  type ScheduleDisclosedImpact,
+  type ScheduleImpact,
+} from "@/lib/document/schedule-impact";
+import { ScheduleImpactBlock } from "./schedule-impact-block";
 import { ServiceAgreementPreview } from "./service-agreement-preview";
 import { ServiceAgreementSendSheet } from "./service-agreement-send-sheet";
 
@@ -34,38 +34,32 @@ const toneColor = {
 };
 
 /**
- * The studio's countersign, with its IMPACT stated before confirmation (R110).
- * Its own component so the schedule read never runs ahead of the bundle's
- * loading branches above.
+ * The studio's countersign.
  *
- * On an ORIGIN agreement there is no project yet — the countersign is what
- * creates it — so the effect is genuinely uncomputable and the block says so;
- * the server then proposes the engagement-start date instead of setting it.
+ * R110 says a ceremony may state a schedule effect only if that effect is what
+ * the server will perform. Neither countersign path can promise one:
+ *  · an ORIGIN agreement has no project until this act creates it, so the
+ *    engagement-start anchor cannot be computed against a chain that does not
+ *    exist — the act honestly PROPOSES the date and the desk carries it;
+ *  · a service ADDENDUM re-executes billing authority and carries no schedule
+ *    graft at all, so it says nothing about the schedule rather than showing a
+ *    ripple the server will ignore.
+ * Both therefore disclose nothing.
  */
 function CountersignAct({
-  projectId,
+  documentKind,
   signerName,
   onSignerNameChange,
   pending,
   onSubmit,
 }: {
-  projectId: string | null;
+  documentKind: string;
   signerName: string;
   onSignerNameChange: (value: string) => void;
   pending: boolean;
   onSubmit: (disclosedImpact: ScheduleDisclosedImpact | null) => void;
 }) {
-  const startPhaseId = useEngagementStartPhaseId(projectId);
-  const impact = useScheduleImpact(
-    projectId,
-    startPhaseId
-      ? {
-          kind: "phase-anchor",
-          phaseId: startPhaseId,
-          anchorDate: new Date().toISOString().slice(0, 10),
-        }
-      : null,
-  );
+  const movesTheSchedule = documentKind === "design_services";
   return (
     <>
       <div className="mt-3 flex max-w-xl flex-col gap-2 sm:flex-row">
@@ -79,17 +73,23 @@ function CountersignAct({
           className="shrink-0"
           disabled={!signerName.trim()}
           loading={pending}
-          onClick={() =>
-            onSubmit(impact.computable ? impact.disclosure : null)
-          }
+          onClick={() => onSubmit(null)}
         >
           Countersign agreement
         </Button>
       </div>
-      <ScheduleImpactBlock impact={impact} />
+      {movesTheSchedule && (
+        <ScheduleImpactBlock impact={COUNTERSIGN_PROPOSES_IMPACT} />
+      )}
     </>
   );
 }
+
+const COUNTERSIGN_PROPOSES_IMPACT: ScheduleImpact = {
+  status: "uncomputable",
+  computable: false,
+  line: IMPACT_UNCOMPUTABLE_LINE,
+};
 
 export function ServiceAgreementInstruments({
   proposal,
@@ -287,7 +287,7 @@ export function ServiceAgreementInstruments({
                 is safe to retry.
               </p>
               <CountersignAct
-                projectId={projectId}
+                documentKind={document.kind}
                 signerName={signerName}
                 onSignerNameChange={setSignerName}
                 pending={countersign.isPending}

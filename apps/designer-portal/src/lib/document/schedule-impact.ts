@@ -26,6 +26,14 @@ import {
 export const IMPACT_UNCOMPUTABLE_LINE =
   'The schedule effect cannot be computed here — this act proposes a date rather than setting one.';
 
+/** While the schedule is being read, nothing is known yet — least of all that
+ *  the effect is uncomputable. */
+export const IMPACT_READING_LINE = 'Reading the schedule…';
+
+/** A failed read is not evidence about the chain; it is an absent answer. */
+export const IMPACT_UNAVAILABLE_LINE =
+  'The schedule could not be read, so this act cannot state its effect yet.';
+
 /** The payload handed to a ceremony RPC's `p_disclosed_impact`. */
 export interface ScheduleDisclosedImpact {
   sentence: string;
@@ -36,11 +44,38 @@ export interface ScheduleDisclosedImpact {
   conflictCount: number;
 }
 
+/**
+ * Four states, deliberately. "Still reading" and "the read failed" are NOT
+ * "the effect is uncomputable" — conflating them lets a mistimed click
+ * downgrade a hardening that would have succeeded a moment later, and prints a
+ * statement of fact about a chain nobody has looked at.
+ */
 export type ScheduleImpact =
-  | { computable: true; sentence: string; disclosure: ScheduleDisclosedImpact }
-  | { computable: false; line: string };
+  | { status: 'computed'; computable: true; sentence: string; disclosure: ScheduleDisclosedImpact }
+  | { status: 'reading' | 'unavailable' | 'uncomputable'; computable: false; line: string };
 
-const UNCOMPUTABLE: ScheduleImpact = { computable: false, line: IMPACT_UNCOMPUTABLE_LINE };
+/** A ceremony may only be confirmed once the schedule has answered. */
+export function impactIsSettled(impact: ScheduleImpact): boolean {
+  return impact.status !== 'reading' && impact.status !== 'unavailable';
+}
+
+export const IMPACT_READING: ScheduleImpact = {
+  status: 'reading',
+  computable: false,
+  line: IMPACT_READING_LINE,
+};
+
+export const IMPACT_UNAVAILABLE: ScheduleImpact = {
+  status: 'unavailable',
+  computable: false,
+  line: IMPACT_UNAVAILABLE_LINE,
+};
+
+const UNCOMPUTABLE: ScheduleImpact = {
+  status: 'uncomputable',
+  computable: false,
+  line: IMPACT_UNCOMPUTABLE_LINE,
+};
 
 /**
  * Compute the prospective ripple for one anchor edit. Total: any missing or
@@ -83,6 +118,7 @@ export function deriveScheduleImpact(
 
   const sentence = rippleSentence(diff).plain;
   return {
+    status: 'computed',
     computable: true,
     sentence,
     disclosure: {

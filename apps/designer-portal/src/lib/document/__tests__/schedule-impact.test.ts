@@ -7,7 +7,10 @@
 
 import {
   deriveScheduleImpact,
+  IMPACT_READING,
+  IMPACT_UNAVAILABLE,
   IMPACT_UNCOMPUTABLE_LINE,
+  impactIsSettled,
 } from '../schedule-impact';
 import type { SchedulePhaseInput, ScheduleMilestoneInput } from '@patina/utils';
 
@@ -145,6 +148,39 @@ describe('deriveScheduleImpact — the honest downgrade (R110)', () => {
     );
     expect(result.computable).toBe(false);
     expect(line(result)).toBe(IMPACT_UNCOMPUTABLE_LINE);
+  });
+
+  it('reports the computed state distinctly from the three silent ones', () => {
+    const computed = deriveScheduleImpact(
+      chain(),
+      [],
+      { kind: 'phase-anchor', phaseId: 'thread', anchorDate: '2026-02-01' },
+      TODAY,
+    );
+    expect(computed.status).toBe('computed');
+    expect(
+      deriveScheduleImpact([], [], null, TODAY).status,
+    ).toBe('uncomputable');
+  });
+
+  it('a ceremony may only be confirmed once the schedule has answered', () => {
+    // Reading and unavailable are NOT the R110 downgrade — confirming through
+    // them would turn a hardening into a proposal by a race.
+    expect(impactIsSettled(IMPACT_READING)).toBe(false);
+    expect(impactIsSettled(IMPACT_UNAVAILABLE)).toBe(false);
+    expect(
+      impactIsSettled(deriveScheduleImpact([], [], null, TODAY)),
+    ).toBe(true);
+    expect(
+      impactIsSettled(
+        deriveScheduleImpact(
+          chain(),
+          [],
+          { kind: 'phase-anchor', phaseId: 'thread', anchorDate: '2026-02-01' },
+          TODAY,
+        ),
+      ),
+    ).toBe(true);
   });
 
   it('degrades rather than throwing on malformed input', () => {

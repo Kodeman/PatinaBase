@@ -17,35 +17,95 @@ import {
 } from "@patina/supabase";
 import {
   deriveScheduleImpact,
+  IMPACT_READING,
+  IMPACT_UNAVAILABLE,
+  IMPACT_UNCOMPUTABLE_LINE,
   type ScheduleImpact,
 } from "@/lib/document/schedule-impact";
 import type { RipplePendingEdit } from "@/lib/document/schedule-ripple-derivation";
 
 /**
- * Compute a ceremony's prospective schedule effect. `edit` is null when the
- * ceremony has no identifiable target yet — the impact then reads uncomputable,
- * which is the honest answer and the R110 downgrade.
+ * Compute a ceremony's prospective schedule effect.
+ *
+ * Three answers that are NOT the same thing, and are never collapsed:
+ *  · reading — the query is in flight; the sheet says so and holds its act.
+ *  · unavailable — the read failed; still not evidence about the chain.
+ *  · uncomputable — the chain answered and the effect genuinely cannot be
+ *    stated. Only this one is R110's downgrade.
+ *
+ * `edit` is taken apart into primitives so the memo actually holds: every call
+ * site builds the edit object inline, and an object literal has a new identity
+ * on every keystroke.
  */
 export function useScheduleImpact(
   projectId: string | null | undefined,
   edit: RipplePendingEdit | null,
 ): ScheduleImpact {
   const schedule = useResolvedSchedule(projectId ?? undefined);
-  const { phases, milestones } = schedule;
+  const { phases, milestones, isLoading, isError } = schedule;
+
+  const editKind = edit?.kind ?? null;
+  const editTargetId = edit
+    ? edit.kind === "milestone-anchor" || edit.kind === "milestone-offset"
+      ? edit.milestoneId
+      : edit.phaseId
+    : null;
+  const editAnchorDate =
+    edit && (edit.kind === "phase-anchor" || edit.kind === "milestone-anchor")
+      ? edit.anchorDate
+      : null;
+
+  // `today` is keyed on the data, exactly as useResolvedSchedule keys its own —
+  // a memo that survives midnight must not compute against yesterday.
+  const today = useMemo(
+    () => new Date().toISOString().slice(0, 10),
+    [phases, milestones],
+  );
+
   return useMemo(() => {
-    if (!projectId) return { computable: false as const, line: UNCOMPUTABLE_FALLBACK };
-    const today = new Date().toISOString().slice(0, 10);
+    if (!projectId) return UNCOMPUTABLE_NO_PROJECT;
+    if (isError) return IMPACT_UNAVAILABLE;
+    if (isLoading) return IMPACT_READING;
+    if (!editKind || !editTargetId) return UNCOMPUTABLE_NO_TARGET;
+    const rebuilt =
+      editKind === "phase-anchor"
+        ? ({
+            kind: "phase-anchor",
+            phaseId: editTargetId,
+            anchorDate: editAnchorDate ?? "",
+          } as const)
+        : editKind === "milestone-anchor"
+          ? ({
+              kind: "milestone-anchor",
+              milestoneId: editTargetId,
+              anchorDate: editAnchorDate ?? "",
+            } as const)
+          : null;
     return deriveScheduleImpact(
       phases.map(mapPhaseRowToScheduleInput),
       milestones.map(mapMilestoneRowToScheduleInput),
-      edit,
+      rebuilt,
       today,
     );
-  }, [projectId, phases, milestones, edit]);
+  }, [
+    projectId,
+    phases,
+    milestones,
+    isLoading,
+    isError,
+    editKind,
+    editTargetId,
+    editAnchorDate,
+    today,
+  ]);
 }
 
-const UNCOMPUTABLE_FALLBACK =
-  "The schedule effect cannot be computed here — this act proposes a date rather than setting one.";
+const UNCOMPUTABLE_NO_PROJECT: ScheduleImpact = {
+  status: "uncomputable",
+  computable: false,
+  line: IMPACT_UNCOMPUTABLE_LINE,
+};
+const UNCOMPUTABLE_NO_TARGET = UNCOMPUTABLE_NO_PROJECT;
 
 /**
  * The first thread-lane phase of a project — the procurement/trade thread the
@@ -94,7 +154,7 @@ export function ScheduleImpactBlock({ impact }: { impact: ScheduleImpact }) {
     <div
       role="group"
       aria-label="Impact"
-      data-schedule-impact={impact.computable ? "computed" : "uncomputable"}
+      data-schedule-impact={impact.status}
       className="mt-3 border-t border-[var(--doc-ink-border)] pt-3"
     >
       <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--text-muted)]">

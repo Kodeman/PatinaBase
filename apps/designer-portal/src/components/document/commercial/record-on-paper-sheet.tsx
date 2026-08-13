@@ -32,6 +32,8 @@ import {
 import { DateTextInput } from '../date-text-input';
 import { DocSheet } from '../overlays/doc-sheet';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
+import { scheduleEvents } from '@/lib/analytics/schedule-events';
+import { impactIsSettled } from '@/lib/document/schedule-impact';
 import {
   ScheduleImpactBlock,
   useScheduleImpact,
@@ -253,6 +255,14 @@ export function RecordOnPaperSheet({
             // proposal, server-side.
             disclosedImpact: impact.computable ? impact.disclosure : null,
           });
+          if (projectId) {
+            scheduleEvents.scheduleCeremonyAnchored({
+              project_id: projectId,
+              source_event: 'furnishings-authorization-executed',
+              edit_kind: 'phase-anchor',
+              disclosed: impact.computable,
+            });
+          }
           break;
         case 'trade-execution':
           await executeTradeScope.mutateAsync({
@@ -365,7 +375,14 @@ export function RecordOnPaperSheet({
             actionKey="record-on-paper"
             variant="primary"
             type="submit"
-            disabled={signedName.trim().length < 2 || !dateValid}
+            // R110: a ceremony is not confirmable until the schedule has
+            // answered. Confirming mid-read would pass no disclosure and
+            // downgrade a hardening that was about to be computable.
+            disabled={
+              signedName.trim().length < 2 ||
+              !dateValid ||
+              (kind === 'furnishings' && !impactIsSettled(impact))
+            }
             loading={isPending}
             loadingLabel={loadingLabel}
             trailing="→"
