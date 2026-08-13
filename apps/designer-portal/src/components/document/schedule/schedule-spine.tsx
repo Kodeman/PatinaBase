@@ -99,6 +99,11 @@ import { PhaseDeleteConfirm } from './phase-delete-confirm';
 import { MilestoneComposer, type MilestoneDraft } from './milestone-composer';
 import { ScheduleEntryField } from './schedule-entry-field';
 import { RevisionLedger } from './revision-ledger';
+import { ScheduleProposals } from './schedule-proposals';
+import {
+  InstallWindowCeremony,
+  useInstallWindowPhaseId,
+} from './install-window-ceremony';
 import { AddLineSheet } from './add-line-sheet';
 import type { PastProjectOption } from './past-project-picker';
 import { DocumentAction } from '../document-action';
@@ -415,6 +420,13 @@ export function ScheduleSpine({
     () => (mainLane.length > 0 ? mainLane[mainLane.length - 1].id : null),
     [mainLane],
   );
+
+  // The row the install ceremony sits under. It calls the SAME hook the
+  // ceremony does rather than re-deriving from `mainLane`: the resolver
+  // promotes an unanchored overlapping phase into the thread lane and orders
+  // by resolved start date, so a lane-derived guess can mount the ceremony
+  // under a different phase than `_install_window_phase(uuid)` will anchor.
+  const installEntryPhaseId = useInstallWindowPhaseId(projectId);
 
   const pastProjectOptions = useMemo<PastProjectOption[]>(() => {
     const rows = (projectRows ?? []) as Array<{
@@ -743,6 +755,15 @@ export function ScheduleSpine({
       </div>
       <StrataMiniRule className="mt-1.5" />
 
+      {!loading && (
+        <ScheduleProposals
+          projectId={projectId}
+          committedPhases={committedPhaseInputs}
+          committedMilestones={committedMilestoneInputs}
+          today={today}
+        />
+      )}
+
       {loading ? (
         // Nothing heavy while the resolver's sources load — one quiet line.
         <p className="mt-4 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
@@ -939,6 +960,9 @@ export function ScheduleSpine({
                       }
                       onUnpinMilestoneAnchor={handleUnpinMilestone}
                     />
+                    {entry.phase.id === installEntryPhaseId && (
+                      <InstallWindowCeremony projectId={projectId} />
+                    )}
                   </Fragment>
                 );
               })}

@@ -2,6 +2,15 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 jest.mock('@patina/supabase', () => ({
   excludeProjectArtifactApprovals: (items: unknown[]) => items,
+  // R109/R110 — the spine's proposed-anchor block.
+  useScheduleProposals: () => ({ data: [], isError: false }),
+  useCommitScheduleProposal: () => ({ mutateAsync: jest.fn(), isPending: false, isError: false }),
+  useDismissScheduleProposal: () => ({ mutateAsync: jest.fn(), isPending: false, isError: false }),
+  // R112 — the install window ceremony rides the installation phase row.
+  useInstallWindow: () => ({ data: null, isError: false }),
+  useHoldInstallWindow: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useConfirmInstallWindow: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useReleaseInstallWindow: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useCoordinationItems: () => ({ data: [] }),
   useProjectParties: () => ({ data: [] }),
   useProjectFFEItems: () => ({ data: [] }),

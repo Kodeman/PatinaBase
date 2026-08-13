@@ -107,10 +107,37 @@ export const scheduleEvents = {
   scheduleEditCommitted: (p: {
     project_id: string;
     surface: 'rule' | 'spine';
-    edit_kind: 'phase-duration' | 'phase-anchor' | 'milestone-offset';
+    edit_kind:
+      | 'phase-duration'
+      | 'phase-anchor'
+      | 'milestone-offset'
+      | 'milestone-anchor';
     ripple_size: number;
     conflict_count: number;
   }) => track('schedule_edit_committed', p),
+
+  // ── Wave 2 (R109/R110) — anchors that moved without the ripple UI ──
+
+  /** A ceremony wrote an anchor directly, having stated its impact first
+   *  (R110). Fires from the studio sheet that made the statement, so a
+   *  downgraded ceremony (no statement) never counts as a hardening.
+   *  `source_event` matches schedule_proposals.source_event's vocabulary. */
+  scheduleCeremonyAnchored: (p: {
+    project_id: string;
+    source_event: string;
+    edit_kind: 'phase-anchor' | 'milestone-anchor';
+    disclosed: boolean;
+  }) => track('schedule_ceremony_anchored', p),
+
+  /** A proposed anchor was resolved by the designer's one act (I56).
+   *  `edit_kind` is null for a target-less or dateless proposal, which can
+   *  only ever be dismissed. */
+  scheduleProposalResolved: (p: {
+    project_id: string;
+    source_event: string;
+    resolution: 'committed' | 'dismissed';
+    edit_kind: 'phase-anchor' | 'milestone-anchor' | null;
+  }) => track('schedule_proposal_resolved', p),
 
   // ── Slice 05 (Memory, R100) — a numbered revision was cut ──
 

@@ -10,6 +10,19 @@ jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: jest.fn() }),
 }));
 
+// The countersign's IMPACT block (R110) reads the resolver's one door; these
+// tests render without a QueryClientProvider.
+jest.mock("@patina/supabase", () => ({
+  ...jest.requireActual("@patina/supabase"),
+  useResolvedSchedule: () => ({
+    phases: [],
+    milestones: [],
+    resolved: null,
+    isLoading: false,
+    isError: false,
+  }),
+}));
+
 jest.mock("@/hooks/use-commercial-documents", () => ({
   useCommercialDocument: () => ({
     isLoading: false,

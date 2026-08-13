@@ -32,6 +32,13 @@ import {
 import { DateTextInput } from '../date-text-input';
 import { DocSheet } from '../overlays/doc-sheet';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
+import { scheduleEvents } from '@/lib/analytics/schedule-events';
+import { impactIsSettled } from '@/lib/document/schedule-impact';
+import {
+  ScheduleImpactBlock,
+  useScheduleImpact,
+  useThreadPhaseId,
+} from './schedule-impact-block';
 
 export type RecordOnPaperKind =
   | 'design-services'
@@ -170,6 +177,19 @@ export function RecordOnPaperSheet({
   const [stage, setStage] = useState<'idle' | 'uploading' | 'recording'>(
     'idle',
   );
+
+  // R110 — the furnishings paper rail hardens the procurement thread anchor to
+  // the day the client signed, so this sheet states that effect before the act
+  // is confirmed. The other three kinds carry no schedule graft.
+  const threadPhaseId = useThreadPhaseId(
+    kind === 'furnishings' ? projectId : null,
+  );
+  const impact = useScheduleImpact(
+    kind === 'furnishings' ? projectId : null,
+    threadPhaseId && dateValid && paperSignedOn
+      ? { kind: 'phase-anchor', phaseId: threadPhaseId, anchorDate: paperSignedOn }
+      : null,
+  );
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -230,7 +250,19 @@ export function RecordOnPaperSheet({
             signedName: trimmedName,
             paperSignedOn,
             scanDocumentId,
+            // R110: this rail is studio-executed, so the sheet stated its
+            // schedule effect above; a NULL disclosure downgrades to a
+            // proposal, server-side.
+            disclosedImpact: impact.computable ? impact.disclosure : null,
           });
+          if (projectId) {
+            scheduleEvents.scheduleCeremonyAnchored({
+              project_id: projectId,
+              source_event: 'furnishings-authorization-executed',
+              edit_kind: 'phase-anchor',
+              disclosed: impact.computable,
+            });
+          }
           break;
         case 'trade-execution':
           await executeTradeScope.mutateAsync({
@@ -322,6 +354,8 @@ export function RecordOnPaperSheet({
           )}
         </div>
 
+        {kind === 'furnishings' && <ScheduleImpactBlock impact={impact} />}
+
         {error && (
           <p
             className="mt-5 text-[12px] text-[var(--color-terracotta)]"
@@ -341,7 +375,14 @@ export function RecordOnPaperSheet({
             actionKey="record-on-paper"
             variant="primary"
             type="submit"
-            disabled={signedName.trim().length < 2 || !dateValid}
+            // R110: a ceremony is not confirmable until the schedule has
+            // answered. Confirming mid-read would pass no disclosure and
+            // downgrade a hardening that was about to be computable.
+            disabled={
+              signedName.trim().length < 2 ||
+              !dateValid ||
+              (kind === 'furnishings' && !impactIsSettled(impact))
+            }
             loading={isPending}
             loadingLabel={loadingLabel}
             trailing="→"

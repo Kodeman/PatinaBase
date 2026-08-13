@@ -192,7 +192,8 @@ DO $$ BEGIN
   ) ~ 'FROM public\.projects project\s+WHERE project.id = NEW.project_id\s+FOR UPDATE',
     'time ceiling classifier must serialize on the stable project row';
   ASSERT pg_get_functiondef(
-    'public._countersign_design_services_agreement_impl(uuid,text)'::regprocedure
+    -- 00475 threaded the optional p_disclosed_impact through this body.
+    'public._countersign_design_services_agreement_impl(uuid,text,jsonb)'::regprocedure
   ) ~ 'PERFORM 1 FROM public\.projects\s+WHERE id = v_project_id\s+FOR UPDATE',
     'addendum countersign must serialize on the shared project row';
   ASSERT EXISTS (

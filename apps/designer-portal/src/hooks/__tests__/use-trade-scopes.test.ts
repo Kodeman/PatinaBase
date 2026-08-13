@@ -13,6 +13,7 @@ jest.mock('@patina/supabase', () => ({
     instruments: (id: string) => ['furnishings-authorizations', id],
   },
   createBrowserClient: () => ({ rpc, functions: { invoke }, from: fromMock }),
+  invalidateProjectWorkflow: jest.fn(),
 }));
 
 jest.mock('@tanstack/react-query', () => ({
@@ -336,19 +337,46 @@ describe('designer trade scope hooks', () => {
 
   it('engages through the RPC and moves the schedule', async () => {
     rpc.mockResolvedValue({ data: { ok: true }, error: null });
-    const mutation = useEngageTradeScope('project-1') as unknown as Mutation<string>;
+    const mutation = useEngageTradeScope('project-1') as unknown as Mutation<{
+      proposalId: string;
+      disclosedImpact?: unknown;
+    }>;
 
-    await mutation.mutationFn('proposal-1');
+    await mutation.mutationFn({ proposalId: 'proposal-1' });
     expect(rpc).toHaveBeenCalledWith('engage_trade_scope', {
       p_proposal_id: 'proposal-1',
+      p_disclosed_impact: null,
     });
 
-    await mutation.onSuccess?.(undefined, 'proposal-1');
+    await mutation.onSuccess?.(undefined, { proposalId: 'proposal-1' });
     const keys = invalidatedKeys();
     expect(keys).toContain(JSON.stringify(['project-ffe-items', 'project-1']));
     expect(keys).toContain(JSON.stringify(['trade-scopes', 'project-1']));
     expect(keys).toContain(JSON.stringify(['trade-scope', 'proposal-1']));
     expect(keys).toContain(JSON.stringify(['working-budget', 'project-1']));
+    // R109/R110: every anchor-writing act invalidates the schedule set.
+    expect(keys).toContain(JSON.stringify(['project-phases', 'project-1']));
+    expect(keys).toContain(JSON.stringify(['schedule-milestones', 'project-1']));
+    expect(keys).toContain(JSON.stringify(['schedule-revisions', 'project-1']));
+    expect(keys).toContain(JSON.stringify(['schedule-proposals', 'project-1']));
+  });
+
+  it('passes a stated schedule impact through to the engage RPC', async () => {
+    rpc.mockResolvedValue({ data: { ok: true }, error: null });
+    const mutation = useEngageTradeScope('project-1') as unknown as Mutation<{
+      proposalId: string;
+      disclosedImpact?: unknown;
+    }>;
+
+    const disclosure = { sentence: 'Procurement anchored Aug 13.', kind: 'phase-anchor' };
+    await mutation.mutationFn({
+      proposalId: 'proposal-1',
+      disclosedImpact: disclosure,
+    });
+    expect(rpc).toHaveBeenCalledWith('engage_trade_scope', {
+      p_proposal_id: 'proposal-1',
+      p_disclosed_impact: disclosure,
+    });
   });
 
   it('records the two studio progress acts', async () => {

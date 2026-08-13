@@ -36,9 +36,11 @@ import {
 } from '@/lib/document/desk-derivation';
 import { buildDeskConflicts } from '@/lib/document/desk-conflicts';
 import {
+  buildDeskProposalSignals,
   buildDeskSchedule,
   type DeskMilestoneRow,
   type DeskPhaseRow,
+  type DeskProposalRow,
 } from '@/lib/document/desk-schedule';
 import { buildDeskReceivables } from '@/lib/document/desk-receivables';
 import {
@@ -97,6 +99,7 @@ const CONFLICT_WINDOW_DAYS = 120;
  */
 export const DESK_PHASE_LIMIT = 2000;
 const DESK_MILESTONE_LIMIT = 500;
+const DESK_PROPOSAL_LIMIT = 500;
 
 /** Flatten the item_feedback→proposal_items→proposals embed into the flagged-row
  *  shape buildDeskFlaggedLines reads. Tolerant of PostgREST returning a to-one
@@ -171,6 +174,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         { data: deskPhases, error: deskPhasesError },
         { data: deskMilestones, error: deskMilestonesError },
         { data: deskProjectStarts, error: deskProjectStartsError },
+        { data: deskProposals, error: deskProposalsError },
       ] = await Promise.all([
         supabase.from('document_state').select('*').order('updated_at', { ascending: false }),
         supabase
@@ -236,6 +240,15 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         // R100's forward-compute origin, per project. Without it an unanchored
         // chain can only ever resolve as legacy dates, never as a Frame.
         supabase.from('projects').select('id, start_date').limit(DESK_PHASE_LIMIT),
+        // R109/R110 (00475): live schedule proposals, newest first. Bounded and
+        // ordered like every other desk read; it degrades on its own — a failed
+        // proposals read leaves the need silent, never invents one.
+        supabase
+          .from('schedule_proposals')
+          .select('id, project_id, source_event, conflicts_with_committed, created_at')
+          .eq('state', 'proposed')
+          .order('created_at', { ascending: false })
+          .limit(DESK_PROPOSAL_LIMIT),
       ]);
       if (error) throw error;
       const rows = (data ?? []) as DocumentStateRow[];
@@ -310,9 +323,20 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
       // A full page is therefore treated as no answer at all.
       const phaseRows = (deskPhases ?? []) as DeskPhaseRow[];
       const phasesTruncated = phaseRows.length >= DESK_PHASE_LIMIT;
+      // Same sentinel as the phases read, same reason: a capped page silently
+      // drops whole projects, and a project missing from a PRESENT feed reads
+      // as "nothing proposed" rather than "unanswered".
+      const proposalRows = (deskProposals ?? []) as DeskProposalRow[];
+      const proposalsTruncated = proposalRows.length >= DESK_PROPOSAL_LIMIT;
+      const answeredProposals =
+        deskProposalsError || proposalsTruncated ? [] : proposalRows;
+      // Degradation runs both ways: a failed phases read must not silence the
+      // proposals, which need no chain to be true.
       const schedules =
         deskPhasesError || phasesTruncated
-          ? undefined
+          ? answeredProposals.length > 0
+            ? buildDeskProposalSignals(answeredProposals)
+            : undefined
           : buildDeskSchedule(
               phaseRows,
               deskMilestonesError ? [] : ((deskMilestones ?? []) as DeskMilestoneRow[]),
@@ -324,6 +348,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
                       (p) => [p.id, p.start_date ?? null],
                     ),
                   ),
+              answeredProposals,
             );
 
       const result = partitionDesk(

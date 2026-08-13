@@ -25,6 +25,7 @@ import {
 } from './overdue-condition';
 import {
   DESK_SCHEDULE_UNCONFIGURED,
+  isCeremonySourceEvent,
   type DeskScheduleInput,
 } from './desk-schedule';
 
@@ -112,6 +113,10 @@ export type NeedKind =
   | 'hesitating_proposal'
   | 'awaiting_inspection'
   | 'schedule_conflict'
+  // R109/R110 (00475): an act proposed a schedule anchor and is waiting for the
+  // designer's one commit-or-dismiss. Sorts under the contradiction it might
+  // one day cause, over the setup nudge.
+  | 'schedule_proposal'
   | 'task_due'
   // R113 + R6: the setup nudges the doc body used to leak as error copy. Setup,
   // not a live obstruction — it sorts under both schedule_conflict and task_due.
@@ -136,6 +141,7 @@ export const NEED_ACTION_LABELS: Record<NeedKind, string | null> = {
   hesitating_proposal: 'Follow up',
   awaiting_inspection: 'Inspect the delivery',
   schedule_conflict: 'Resolve the schedule',
+  schedule_proposal: 'Review the proposed date',
   task_due: 'Open the task',
   schedule_unconfigured: 'Open the schedule',
   po_unsent: 'Review the purchase order',
@@ -410,6 +416,10 @@ const NEED_RANK: Record<NeedKind, number> = {
   // R28: a schedule collision slots under awaiting-inspection; R33's blessed
   // ordering (TASK DUE below awaiting-inspection, above send-weave) holds.
   schedule_conflict: 9,
+  // R109/R110: a proposed anchor is a real pending act — it sorts directly
+  // under the contradiction and above a committed task. Fractional to stay
+  // surgical (sort is numeric).
+  schedule_proposal: 9.5,
   task_due: 10,
   // R113/R6: an unconfigured schedule is setup work, not a live obstruction —
   // it sorts under the collision it might one day cause and under a task the
@@ -749,6 +759,49 @@ export function deriveNeed(
       text: conflict.collision.text,
       actionLabel: NEED_ACTION_LABELS.schedule_conflict,
       stamp: { label: conflict.collision.label, ...STAMP.terracotta },
+      urgent: false,
+    };
+  }
+
+  // R4 / "Ruling IV" (overdue-condition.ts): one fact, exactly three
+  // renderings. The resolver's own contradiction — a chain that no longer fits
+  // the anchor holding it — already stamps the spine row (Slice 03) and, by
+  // riding the SAME need kind, re-sorts this folder and speaks the guide's
+  // sentence. No fourth rendering. The text is built upstream from phase
+  // NAMES; the resolver's own message carries raw ids and never surfaces.
+  if (schedule?.contradictionText) {
+    return {
+      kind: 'schedule_conflict',
+      text: schedule.contradictionText,
+      actionLabel: NEED_ACTION_LABELS.schedule_conflict,
+      stamp: { label: 'SCHEDULE', ...STAMP.terracotta },
+      urgent: false,
+    };
+  }
+
+  // R109's third class rides the same register: an act whose date contradicts
+  // an anchor already committed reports — it never offers a slide to commit.
+  if (schedule?.proposals && schedule.proposals.conflicting > 0) {
+    return {
+      kind: 'schedule_conflict',
+      text: 'A recorded date contradicts an anchor already committed',
+      actionLabel: NEED_ACTION_LABELS.schedule_conflict,
+      stamp: { label: 'SCHEDULE', ...STAMP.terracotta },
+      urgent: false,
+    };
+  }
+
+  // R109/R110 (00475): an act proposed an anchor and is waiting for one
+  // designer act — commit it or dismiss it. The line names the source honestly:
+  // a signed act and a recorded event are not the same evidence.
+  if (schedule?.proposals && schedule.proposals.count > 0) {
+    return {
+      kind: 'schedule_proposal',
+      text: isCeremonySourceEvent(schedule.proposals.latestSourceEvent)
+        ? 'A signed act proposes a schedule anchor — review'
+        : 'A recorded event proposes a schedule anchor — review',
+      actionLabel: NEED_ACTION_LABELS.schedule_proposal,
+      stamp: { label: 'PROPOSED', ...STAMP.clay },
       urgent: false,
     };
   }

@@ -11,10 +11,12 @@ import {
 } from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import {
   buildFallbackSidemark,
+  buildSchedulePoProposal,
   checkPoRepricingGate,
   checkPoTotalsCoherence,
   PO_NEEDS_REPRICING_DETAIL,
   PO_OUT_OF_SYNC_DETAIL,
+  PO_SENT_NO_THREAD_PHASE_NOTE,
   parsePoSendBody,
   paymentPatternLabel,
   paymentRowLabel,
@@ -584,5 +586,86 @@ Deno.test("vendorConfigurationLines returns [] when there is nothing vendor-safe
       selected_dimensions: null,
     }),
     [],
+  );
+});
+
+// ─── buildSchedulePoProposal — R109, a fact proposes ─────────────────────────
+
+Deno.test("buildSchedulePoProposal targets the thread phase on a first send", () => {
+  assertEquals(
+    buildSchedulePoProposal({
+      projectId: "11111111-1111-4111-8111-111111111111",
+      purchaseOrderId: "22222222-2222-4222-8222-222222222222",
+      targetPhaseId: "33333333-3333-4333-8333-333333333333",
+      sentAt: "2026-08-13T17:04:11.123Z",
+    }),
+    {
+      project_id: "11111111-1111-4111-8111-111111111111",
+      source_event: "po-sent",
+      source_ref: "22222222-2222-4222-8222-222222222222",
+      target_phase_id: "33333333-3333-4333-8333-333333333333",
+      proposed_anchor_date: "2026-08-13",
+      conflicts_with_committed: false,
+      disclosed_context: null,
+    },
+  );
+});
+
+Deno.test("buildSchedulePoProposal reports a contradiction against a committed anchor", () => {
+  const row = buildSchedulePoProposal({
+    projectId: "11111111-1111-4111-8111-111111111111",
+    purchaseOrderId: "22222222-2222-4222-8222-222222222222",
+    targetPhaseId: "33333333-3333-4333-8333-333333333333",
+    targetAnchorDate: "2026-07-01",
+    sentAt: "2026-08-13T00:00:00.000Z",
+  });
+  assert(row !== null);
+  assertEquals(row.conflicts_with_committed, true);
+  assertEquals(row.disclosed_context, { committedAnchorDate: "2026-07-01" });
+});
+
+Deno.test("buildSchedulePoProposal agrees with a committed anchor on the same day", () => {
+  const row = buildSchedulePoProposal({
+    projectId: "11111111-1111-4111-8111-111111111111",
+    purchaseOrderId: "22222222-2222-4222-8222-222222222222",
+    targetPhaseId: "33333333-3333-4333-8333-333333333333",
+    targetAnchorDate: "2026-08-13",
+    sentAt: "2026-08-13T09:00:00.000Z",
+  });
+  assert(row !== null);
+  assertEquals(row.conflicts_with_committed, false);
+  assertEquals(row.disclosed_context, null);
+});
+
+Deno.test("buildSchedulePoProposal files against the project when no thread phase exists", () => {
+  const row = buildSchedulePoProposal({
+    projectId: "11111111-1111-4111-8111-111111111111",
+    purchaseOrderId: "22222222-2222-4222-8222-222222222222",
+    targetPhaseId: null,
+    sentAt: "2026-08-13T00:00:00.000Z",
+  });
+  assert(row !== null);
+  assertEquals(row.target_phase_id, null);
+  assertEquals(row.disclosed_context, { note: PO_SENT_NO_THREAD_PHASE_NOTE });
+});
+
+Deno.test("buildSchedulePoProposal returns null without a project or a usable stamp", () => {
+  assertEquals(
+    buildSchedulePoProposal({
+      projectId: null,
+      purchaseOrderId: "22222222-2222-4222-8222-222222222222",
+      targetPhaseId: "33333333-3333-4333-8333-333333333333",
+      sentAt: "2026-08-13T00:00:00.000Z",
+    }),
+    null,
+  );
+  assertEquals(
+    buildSchedulePoProposal({
+      projectId: "11111111-1111-4111-8111-111111111111",
+      purchaseOrderId: "22222222-2222-4222-8222-222222222222",
+      targetPhaseId: "33333333-3333-4333-8333-333333333333",
+      sentAt: "not-a-timestamp",
+    }),
+    null,
   );
 });

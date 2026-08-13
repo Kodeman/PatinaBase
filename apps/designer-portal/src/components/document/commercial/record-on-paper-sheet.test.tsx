@@ -8,6 +8,20 @@ const uploadPaperScanDocument = jest.fn();
 
 const mutation = (fn: jest.Mock) => ({ mutateAsync: fn, isPending: false });
 
+// The furnishings rail states its schedule impact before it is confirmed
+// (R110), which reads the resolver through React Query. These tests render
+// without a QueryClientProvider, so the one door is stubbed.
+jest.mock('@patina/supabase', () => ({
+  ...jest.requireActual('@patina/supabase'),
+  useResolvedSchedule: () => ({
+    phases: [],
+    milestones: [],
+    resolved: null,
+    isLoading: false,
+    isError: false,
+  }),
+}));
+
 jest.mock('@/hooks/use-commercial-documents', () => ({
   useRecordPaperClientSignature: () => mutation(recordClientSignature),
   useExecuteFurnishingsAuthorizationOnPaper: () => mutation(executeFurnishings),

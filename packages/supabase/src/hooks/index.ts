@@ -1655,6 +1655,30 @@ export type {
   SerializedRippleEdit,
 } from './use-schedule-compose';
 
+// The Document · Schedule — Wave 2 (R109/R110, I130): schedule_proposals, the
+// one home for every proposed anchor, and its two designer acts.
+export {
+  useScheduleProposals,
+  useCommitScheduleProposal,
+  useDismissScheduleProposal,
+  SCHEDULE_PROPOSAL_READ_LIMIT,
+} from './use-schedule-proposals';
+export type { ScheduleProposalRow } from './use-schedule-proposals';
+
+// The Document · Schedule — Wave 3 (R112, I126): the install window's three
+// faces. Hold is studio-only and moves nothing; confirm writes the anchor;
+// release unpins it, both through the same disclosed-impact door.
+export {
+  useInstallWindow,
+  useHoldInstallWindow,
+  useConfirmInstallWindow,
+  useReleaseInstallWindow,
+} from './use-install-window';
+export type {
+  InstallWindowRow,
+  ScheduleDisclosedImpactInput,
+} from './use-install-window';
+
 // The Room View (W2-T2) — The Rooms roster's data hook: room_scan_documents
 // rows + their geometry elements, one query per scan set.
 export { useRoomRoster } from './use-room-roster';

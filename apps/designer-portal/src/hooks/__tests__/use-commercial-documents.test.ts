@@ -14,6 +14,7 @@ jest.mock('@patina/supabase', () => ({
     instruments: (id: string) => ['furnishings-authorizations', id],
   },
   createBrowserClient: () => ({ rpc, functions: { invoke }, from: fromMock }),
+  invalidateProjectWorkflow: jest.fn(),
 }));
 
 jest.mock('@tanstack/react-query', () => ({
@@ -88,10 +89,10 @@ describe('designer commercial document hooks', () => {
     });
     invoke.mockResolvedValue({ data: { ok: true }, error: null });
     const mutation = useCountersignDesignServicesAgreement('agreement-1') as unknown as {
-      mutationFn: (name: string) => Promise<Record<string, unknown>>;
+      mutationFn: (input: { signerName: string; disclosedImpact?: unknown }) => Promise<Record<string, unknown>>;
     };
 
-    const result = await mutation.mutationFn('Morgan Designer');
+    const result = await mutation.mutationFn({ signerName: 'Morgan Designer' });
 
     expect(result).toEqual(
       expect.objectContaining({
@@ -123,10 +124,10 @@ describe('designer commercial document hooks', () => {
       error: { message: 'edge unavailable' },
     });
     const mutation = useCountersignDesignServicesAgreement('agreement-1') as unknown as {
-      mutationFn: (name: string) => Promise<Record<string, unknown>>;
+      mutationFn: (input: { signerName: string; disclosedImpact?: unknown }) => Promise<Record<string, unknown>>;
     };
 
-    const result = await mutation.mutationFn('Morgan Designer');
+    const result = await mutation.mutationFn({ signerName: 'Morgan Designer' });
 
     expect(result).toEqual(
       expect.objectContaining({
@@ -151,10 +152,10 @@ describe('designer commercial document hooks', () => {
     });
     invoke.mockResolvedValue({ data: { ok: true }, error: null });
     const mutation = useCountersignDesignServicesAgreement('agreement-1') as unknown as {
-      mutationFn: (name: string) => Promise<Record<string, unknown>>;
+      mutationFn: (input: { signerName: string; disclosedImpact?: unknown }) => Promise<Record<string, unknown>>;
     };
 
-    const result = await mutation.mutationFn('Morgan Designer');
+    const result = await mutation.mutationFn({ signerName: 'Morgan Designer' });
 
     expect(result).toEqual(
       expect.objectContaining({
@@ -181,10 +182,10 @@ describe('designer commercial document hooks', () => {
     });
     stubSignatureLookup({ metadata: { executedOnPaper: true } });
     const mutation = useCountersignDesignServicesAgreement('agreement-1') as unknown as {
-      mutationFn: (name: string) => Promise<Record<string, unknown>>;
+      mutationFn: (input: { signerName: string; disclosedImpact?: unknown }) => Promise<Record<string, unknown>>;
     };
 
-    const result = await mutation.mutationFn('Morgan Designer');
+    const result = await mutation.mutationFn({ signerName: 'Morgan Designer' });
 
     expect(fromMock).toHaveBeenCalledWith('commercial_document_signatures');
     expect(fetchMock).toHaveBeenCalledWith(
@@ -214,10 +215,10 @@ describe('designer commercial document hooks', () => {
     });
     stubSignatureLookup(null, { message: 'permission denied for table commercial_document_signatures' });
     const mutation = useCountersignDesignServicesAgreement('agreement-1') as unknown as {
-      mutationFn: (name: string) => Promise<Record<string, unknown>>;
+      mutationFn: (input: { signerName: string; disclosedImpact?: unknown }) => Promise<Record<string, unknown>>;
     };
 
-    const result = await mutation.mutationFn('Morgan Designer');
+    const result = await mutation.mutationFn({ signerName: 'Morgan Designer' });
 
     // A failed read must never be read as "not paper" — that would silently
     // send the wrong-channel (online) copy for what might actually be a
@@ -617,6 +618,7 @@ describe('designer commercial document hooks', () => {
         p_signed_name: 'Harper Vale',
         p_paper_signed_on: '2026-08-04',
         p_scan_document_id: null,
+        p_disclosed_impact: null,
       });
       expect(fetchMock).toHaveBeenCalledTimes(2);
       expect(fetchMock).toHaveBeenNthCalledWith(

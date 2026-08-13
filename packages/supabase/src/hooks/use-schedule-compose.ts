@@ -346,14 +346,16 @@ export function useDeletePhaseWithRelink() {
 export type RipplePendingEditInput =
   | { kind: 'phase-duration'; phaseId: string; durationDays: number }
   | { kind: 'phase-anchor'; phaseId: string; anchorDate: string }
-  | { kind: 'milestone-offset'; milestoneId: string; phaseId: string; offsetDays: number };
+  | { kind: 'milestone-offset'; milestoneId: string; phaseId: string; offsetDays: number }
+  | { kind: 'milestone-anchor'; milestoneId: string; anchorDate: string };
 
 /** The RPC boundary's shape for one edit — snake_case, `kind` preserved
  *  verbatim as the discriminant `commit_schedule_edit` (00325) switches on. */
 export type SerializedRippleEdit =
   | { kind: 'phase-duration'; phase_id: string; duration_days: number }
   | { kind: 'phase-anchor'; phase_id: string; anchor_date: string }
-  | { kind: 'milestone-offset'; milestone_id: string; phase_id: string; offset_days: number };
+  | { kind: 'milestone-offset'; milestone_id: string; phase_id: string; offset_days: number }
+  | { kind: 'milestone-anchor'; milestone_id: string; anchor_date: string };
 
 /**
  * Pure camelCase → snake_case mapper for the ripple's one write path. Total
@@ -375,6 +377,12 @@ export function serializeRippleEditForRpc(edit: RipplePendingEditInput): Seriali
         milestone_id: edit.milestoneId,
         phase_id: edit.phaseId,
         offset_days: edit.offsetDays,
+      };
+    case 'milestone-anchor':
+      return {
+        kind: 'milestone-anchor',
+        milestone_id: edit.milestoneId,
+        anchor_date: edit.anchorDate,
       };
     default: {
       const _exhaustive: never = edit;

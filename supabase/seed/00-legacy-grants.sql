@@ -10979,3 +10979,207 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.site_request_close(uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00473_board_cover_ffe_review_derivative_source.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.board_media_reference_has_live_source(text, uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00475_schedule_ceremony_anchors.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_schedule_proposal_ratchet() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00475_schedule_ceremony_anchors.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.schedule_proposals FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00475_schedule_ceremony_anchors.sql
+DO $g$ BEGIN
+  GRANT SELECT, UPDATE ON TABLE public.schedule_proposals TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00475_schedule_ceremony_anchors.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT ON TABLE public.schedule_proposals TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00475_schedule_ceremony_anchors.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._schedule_engagement_start_phase(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00475_schedule_ceremony_anchors.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._schedule_thread_phase(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00475_schedule_ceremony_anchors.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._schedule_thread_completion_milestone(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00475_schedule_ceremony_anchors.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._commit_schedule_edit_authorized(uuid, jsonb, text, jsonb, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00475_schedule_ceremony_anchors.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.commit_schedule_edit(UUID, JSONB, TEXT) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00475_schedule_ceremony_anchors.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.commit_schedule_edit(UUID, JSONB, TEXT) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00475_schedule_ceremony_anchors.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._countersign_design_services_agreement_impl(uuid, text, jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00475_schedule_ceremony_anchors.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.countersign_design_services_agreement(uuid, text, jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00475_schedule_ceremony_anchors.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.countersign_design_services_agreement(uuid, text, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00475_schedule_ceremony_anchors.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._execute_furnishings_authorization_authorized(uuid, text, uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00475_schedule_ceremony_anchors.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._execute_furnishings_authorization_on_paper_authorized(uuid, text, date, uuid, uuid, jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00475_schedule_ceremony_anchors.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.execute_furnishings_authorization_on_paper(uuid, text, date, uuid, jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00475_schedule_ceremony_anchors.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.execute_furnishings_authorization_on_paper(uuid, text, date, uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00475_schedule_ceremony_anchors.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.engage_trade_scope(uuid, jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00475_schedule_ceremony_anchors.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.engage_trade_scope(uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00475_schedule_ceremony_anchors.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._accept_trade_scope_authorized(uuid, text, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00475_schedule_ceremony_anchors.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_paper_trade_acceptance(uuid, text, date, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00475_schedule_ceremony_anchors.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_paper_trade_acceptance(uuid, text, date, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00476_install_windows.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.install_windows FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00476_install_windows.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.install_windows TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00476_install_windows.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.install_windows_client_v FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00476_install_windows.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.install_windows_client_v TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00476_install_windows.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._install_window_phase(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00476_install_windows.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.hold_install_window(uuid, date, date) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00476_install_windows.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.hold_install_window(uuid, date, date) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00476_install_windows.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.confirm_install_window(uuid, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00476_install_windows.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.confirm_install_window(uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00476_install_windows.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.release_install_window(uuid, text, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00476_install_windows.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.release_install_window(uuid, text, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
