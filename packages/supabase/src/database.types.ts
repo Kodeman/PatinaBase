@@ -6934,6 +6934,121 @@ export type Database = {
         }
         Relationships: []
       }
+      install_windows: {
+        Row: {
+          confirmed_at: string | null
+          confirmed_by: string | null
+          created_at: string
+          disclosed_impact: Json | null
+          ends_on: string
+          held_by: string | null
+          held_until: string | null
+          id: string
+          phase_id: string | null
+          project_id: string
+          released_at: string | null
+          released_by: string | null
+          starts_on: string
+          state: string
+        }
+        Insert: {
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          disclosed_impact?: Json | null
+          ends_on: string
+          held_by?: string | null
+          held_until?: string | null
+          id?: string
+          phase_id?: string | null
+          project_id: string
+          released_at?: string | null
+          released_by?: string | null
+          starts_on: string
+          state?: string
+        }
+        Update: {
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          disclosed_impact?: Json | null
+          ends_on?: string
+          held_by?: string | null
+          held_until?: string | null
+          id?: string
+          phase_id?: string | null
+          project_id?: string
+          released_at?: string | null
+          released_by?: string | null
+          starts_on?: string
+          state?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "install_windows_confirmed_by_fkey"
+            columns: ["confirmed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "install_windows_confirmed_by_fkey"
+            columns: ["confirmed_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "install_windows_held_by_fkey"
+            columns: ["held_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "install_windows_held_by_fkey"
+            columns: ["held_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "install_windows_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "project_phases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "install_windows_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "install_windows_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "install_windows_released_by_fkey"
+            columns: ["released_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "install_windows_released_by_fkey"
+            columns: ["released_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       interactions: {
         Row: {
           created_at: string
@@ -27036,6 +27151,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      _install_window_phase: { Args: { p_project_id: string }; Returns: string }
       _instantiate_product_configuration_template_impl: {
         Args: {
           p_name?: string
@@ -28561,6 +28677,10 @@ export type Database = {
       compute_house_taste_draft: { Args: never; Returns: string }
       concierge_checklist_template: { Args: { p_stage: string }; Returns: Json }
       concierge_damage_photo_checklist: { Args: never; Returns: Json }
+      confirm_install_window: {
+        Args: { p_disclosed_impact?: Json; p_window_id: string }
+        Returns: string
+      }
       confirm_project_decision_review: {
         Args: {
           p_decision_id: string
@@ -30024,6 +30144,10 @@ export type Database = {
         }
         Returns: Json
       }
+      hold_install_window: {
+        Args: { p_ends_on: string; p_project_id: string; p_starts_on: string }
+        Returns: string
+      }
       immutable_array_to_string: {
         Args: { arr: string[]; sep: string }
         Returns: string
@@ -30886,6 +31010,14 @@ export type Database = {
       reissue_plan_transmittal_link: {
         Args: { p_transmittal_id: string }
         Returns: Json
+      }
+      release_install_window: {
+        Args: {
+          p_disclosed_impact?: Json
+          p_reason: string
+          p_window_id: string
+        }
+        Returns: string
       }
       release_proposal_send_dispatch: {
         Args: { p_claim_token: string; p_dispatch_id: string; p_error: string }
