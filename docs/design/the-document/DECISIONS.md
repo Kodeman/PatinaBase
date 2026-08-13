@@ -8174,3 +8174,47 @@ the NULL-impact branch remains solely as the R110 downgrade for
 uncomputable impact, never as a flag posture.
 
 *Entries add: I129 · last id = I129*
+
+### I130 · Proposals get a table; milestone-anchor kind; actor-side disclosure — 2026-08-13
+
+**Ruled by Kody (storage + edit kind) and design-architecture (disclosure
+doctrine), after Wave 2-3 pre-flight verification voided I126's storage
+premise** (no evidence JSONB exists on the operational-fact path or on
+trade_scope_terms; only the signature rows carry metadata).
+
+- **`schedule_proposals` table** (supersedes I126's evidence-JSON answer):
+  narrow table — source event, project, target (phase anchor | milestone
+  anchor), proposed date, disclosed context jsonb, state ratchet
+  proposed → committed | dismissed. The uniform home for every proposal
+  class: operational facts (PO sent, delivered), client-executed-ceremony
+  downgrades, and uncomputable-impact downgrades. Desk reads one table.
+  Studio-only under RLS (working scaffolding per R101). Wave 2's one
+  schema request beside R112's install_windows.
+- **`milestone-anchor` edit kind** added to the ripple lib +
+  commit_schedule_edit: pins a milestone's anchor_date and clears its
+  offset — the exact mirror of milestone-offset-clears-anchor. Needed for
+  trade-scope acceptance → thread-completion milestone.
+- **Actor-side disclosure doctrine** (resolves pre-flight blockers on
+  gate-anatomy non-use and the client-portal execute act): R110's IMPACT
+  disclosure renders as a labeled IMPACT block inside the existing bespoke
+  DocSheet ceremony sheets (the R2 anatomy's vocabulary, not necessarily
+  its component). Ceremony RPCs gain an optional `p_disclosed_impact`
+  param: studio-side acts (countersign, record-on-paper, trade engage)
+  compute the ripple diff pre-confirmation and pass it → direct hardening;
+  client-executed digital acts (furnishings execute, trade accept) pass
+  nothing → the NULL branch writes a schedule_proposals row, never an
+  anchor — the R110 downgrade by construction, no client-portal changes,
+  O10 untouched. When O10 resolves, client-side disclosure can upgrade
+  those paths to direct hardening.
+- **Graft-target corrections** (pre-flight, binding on 00475):
+  countersign logic lives at `_countersign_design_services_agreement_impl`
+  (renamed by 00462; body authored 00414:704) — the 00462 capability
+  wrapper is untouched; `_execute_trade_scope_authorized` head is
+  00424:930 (not 00423); furnishings needs BOTH bodies re-cut (00422:1120
+  and the independent on-paper body 00425:559); `_commit_schedule_edit_
+  authorized` takes no actor param (cut_schedule_revision derives
+  auth.uid() internally by ratified anti-forgery design) and carries the
+  sibling zero-grant posture (service_role included — po-send can only
+  ever write proposals, structurally enforcing R109's fact class).
+
+*Entries add: I130 · last id = I130*
