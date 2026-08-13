@@ -11120,19 +11120,25 @@ END $g$;
 
 -- 00476_install_windows.sql
 DO $g$ BEGIN
-  REVOKE ALL ON TABLE public.install_windows FROM PUBLIC, anon;
+  REVOKE ALL ON TABLE public.install_windows FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00476_install_windows.sql
 DO $g$ BEGIN
-  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.install_windows TO authenticated;
+  GRANT SELECT ON TABLE public.install_windows TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00476_install_windows.sql
 DO $g$ BEGIN
-  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.install_windows TO service_role;
+  REVOKE ALL ON public.install_windows_client_v FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00476_install_windows.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.install_windows_client_v TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

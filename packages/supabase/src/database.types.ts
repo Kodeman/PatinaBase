@@ -6936,6 +6936,7 @@ export type Database = {
       }
       install_windows: {
         Row: {
+          anchored: boolean
           confirmed_at: string | null
           confirmed_by: string | null
           created_at: string
@@ -6946,12 +6947,14 @@ export type Database = {
           id: string
           phase_id: string | null
           project_id: string
+          release_disclosed_impact: Json | null
           released_at: string | null
           released_by: string | null
           starts_on: string
           state: string
         }
         Insert: {
+          anchored?: boolean
           confirmed_at?: string | null
           confirmed_by?: string | null
           created_at?: string
@@ -6962,12 +6965,14 @@ export type Database = {
           id?: string
           phase_id?: string | null
           project_id: string
+          release_disclosed_impact?: Json | null
           released_at?: string | null
           released_by?: string | null
           starts_on: string
           state?: string
         }
         Update: {
+          anchored?: boolean
           confirmed_at?: string | null
           confirmed_by?: string | null
           created_at?: string
@@ -6978,6 +6983,7 @@ export type Database = {
           id?: string
           phase_id?: string | null
           project_id?: string
+          release_disclosed_impact?: Json | null
           released_at?: string | null
           released_by?: string | null
           starts_on?: string
@@ -25277,6 +25283,31 @@ export type Database = {
           vendor_count: number | null
         }
         Relationships: []
+      }
+      install_windows_client_v: {
+        Row: {
+          confirmed_at: string | null
+          ends_on: string | null
+          id: string | null
+          project_id: string | null
+          starts_on: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "install_windows_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "install_windows_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ledger_stripe_recon_v: {
         Row: {
