@@ -588,13 +588,15 @@ RESET ROLE;
 INSERT INTO workflow_privacy_results
 SELECT
   'C17_COUNTERSIGN_RPC_ARGUMENT_NAMES_STABLE',
-  proargnames = ARRAY['p_proposal_id', 'p_signer_name']::text[],
+  -- 00475 appends the optional p_disclosed_impact (R110). The two names the
+  -- portal passes stay first and stay spelled the same.
+  proargnames = ARRAY['p_proposal_id', 'p_signer_name', 'p_disclosed_impact']::text[],
   format(
-    'countersign argument names=%s; required={p_proposal_id,p_signer_name}',
+    'countersign argument names=%s; required={p_proposal_id,p_signer_name,p_disclosed_impact}',
     proargnames
   )
 FROM pg_proc
-WHERE oid = 'public.countersign_design_services_agreement(uuid,text)'::regprocedure;
+WHERE oid = 'public.countersign_design_services_agreement(uuid,text,jsonb)'::regprocedure;
 
 TABLE workflow_privacy_results ORDER BY case_id;
 
