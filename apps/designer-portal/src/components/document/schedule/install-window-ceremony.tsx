@@ -37,6 +37,9 @@ import { fmtDay, todayYmd } from "@/lib/document/format";
 import {
   deriveScheduleImpact,
   deriveUnpinImpact,
+  impactIsSettled,
+  IMPACT_READING,
+  IMPACT_UNAVAILABLE,
   type ScheduleImpact,
 } from "@/lib/document/schedule-impact";
 import { DateTextInput } from "../date-text-input";
@@ -200,10 +203,21 @@ function InstallWindowSheet({
   // The window the confirmation would pin, and the phase it lands on — the
   // same pair the server resolves, so the stated impact is the written one.
   const confirmTargetPhaseId = window?.phase_id ?? phaseId;
+  // A read in flight is not an uncomputable effect. Until the chain answers,
+  // the ceremony says so and refuses consent — otherwise a mistimed click
+  // discloses nothing, and the server downgrades to a proposal a hardening
+  // that would have succeeded a moment later.
+  const scheduleUnsettled = schedule.isError
+    ? IMPACT_UNAVAILABLE
+    : schedule.isLoading
+      ? IMPACT_READING
+      : null;
+
   const confirmImpact: ScheduleImpact = useMemo(() => {
     if (face !== "confirm" || !window || !confirmTargetPhaseId) {
-      return { computable: false, line: HOLD_IMPACT_LINE };
+      return { status: "uncomputable", computable: false, line: HOLD_IMPACT_LINE };
     }
+    if (scheduleUnsettled) return scheduleUnsettled;
     return deriveScheduleImpact(
       inputs.phases,
       inputs.milestones,
@@ -214,19 +228,20 @@ function InstallWindowSheet({
       },
       today,
     );
-  }, [face, window, confirmTargetPhaseId, inputs, today]);
+  }, [face, window, confirmTargetPhaseId, inputs, today, scheduleUnsettled]);
 
   const releaseImpact: ScheduleImpact = useMemo(() => {
     if (face !== "release" || !window) {
-      return { computable: false, line: RELEASE_HELD_LINE };
+      return { status: "uncomputable", computable: false, line: RELEASE_HELD_LINE };
     }
+    if (scheduleUnsettled) return scheduleUnsettled;
     return deriveUnpinImpact(
       inputs.phases,
       inputs.milestones,
       window.phase_id ?? confirmTargetPhaseId,
       today,
     );
-  }, [face, window, confirmTargetPhaseId, inputs, today]);
+  }, [face, window, confirmTargetPhaseId, inputs, today, scheduleUnsettled]);
 
   const busy = hold.isPending || confirm.isPending || release.isPending;
   const datesReady =
@@ -378,7 +393,13 @@ function InstallWindowSheet({
                 actionKey={copy.actionKey}
                 variant="primary"
                 type="submit"
-                disabled={face === "hold" && !datesReady}
+                disabled={
+                  face === "hold"
+                    ? !datesReady
+                    : // Consent waits for the chain to answer (R110): an act
+                      // confirmed mid-read would disclose nothing and propose.
+                      !impactIsSettled(face === "confirm" ? confirmImpact : releaseImpact)
+                }
                 loading={busy}
                 loadingLabel={copy.submittingLabel}
                 trailing="→"
