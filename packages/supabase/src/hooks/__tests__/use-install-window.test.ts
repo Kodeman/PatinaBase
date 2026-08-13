@@ -38,6 +38,9 @@ const EXPECTED_KEYS = [
   ['project-v2', PROJECT_ID],
   ['schedule-revisions', PROJECT_ID],
   ['schedule-proposals', PROJECT_ID],
+  // The desk renders the need these acts resolve, and reads schedule_proposals
+  // directly — an open desk must not keep asking about a window already acted on.
+  ['document-state', 'desk'],
 ];
 
 async function expectFullInvalidationSet(config: MutationConfig) {

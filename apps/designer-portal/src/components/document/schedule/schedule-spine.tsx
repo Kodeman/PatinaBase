@@ -100,7 +100,10 @@ import { MilestoneComposer, type MilestoneDraft } from './milestone-composer';
 import { ScheduleEntryField } from './schedule-entry-field';
 import { RevisionLedger } from './revision-ledger';
 import { ScheduleProposals } from './schedule-proposals';
-import { InstallWindowCeremony } from './install-window-ceremony';
+import {
+  InstallWindowCeremony,
+  useInstallWindowPhaseId,
+} from './install-window-ceremony';
 import { AddLineSheet } from './add-line-sheet';
 import type { PastProjectOption } from './past-project-picker';
 import { DocumentAction } from '../document-action';
@@ -418,16 +421,12 @@ export function ScheduleSpine({
     [mainLane],
   );
 
-  // The row the install ceremony sits under — the installation phase, or the
-  // last main-lane phase when the chain does not name one. Mirrors
-  // `_install_window_phase(uuid)` (00476), so the ceremony appears where the
-  // anchor will land.
-  const installEntryPhaseId = useMemo(() => {
-    const named = mainLane.find(
-      (phase) => rowById.get(phase.id)?.phase_key === 'installation',
-    );
-    return named?.id ?? lastMainPhaseId;
-  }, [mainLane, rowById, lastMainPhaseId]);
+  // The row the install ceremony sits under. It calls the SAME hook the
+  // ceremony does rather than re-deriving from `mainLane`: the resolver
+  // promotes an unanchored overlapping phase into the thread lane and orders
+  // by resolved start date, so a lane-derived guess can mount the ceremony
+  // under a different phase than `_install_window_phase(uuid)` will anchor.
+  const installEntryPhaseId = useInstallWindowPhaseId(projectId);
 
   const pastProjectOptions = useMemo<PastProjectOption[]>(() => {
     const rows = (projectRows ?? []) as Array<{

@@ -11,6 +11,7 @@ import {
   IMPACT_READING,
   IMPACT_UNAVAILABLE,
   IMPACT_UNCOMPUTABLE_LINE,
+  IMPACT_UNPIN_UNCOMPUTABLE_LINE,
   impactIsSettled,
 } from '../schedule-impact';
 import type { SchedulePhaseInput, ScheduleMilestoneInput } from '@patina/utils';
@@ -248,7 +249,11 @@ describe('deriveUnpinImpact — the release face (I126)', () => {
       TODAY,
     );
     expect(impact.computable).toBe(false);
-    expect(impact.computable ? null : impact.line).toBe(IMPACT_UNCOMPUTABLE_LINE);
+    // A removal's own line: the generic downgrade sentence ("this act proposes
+    // a date rather than setting one") is false twice over for an unpin.
+    expect(impact.computable ? null : impact.line).toBe(
+      IMPACT_UNPIN_UNCOMPUTABLE_LINE,
+    );
   });
 
   it('degrades rather than throwing on a missing phase or malformed input', () => {

@@ -154,11 +154,15 @@ export function ScheduleProposals({
                     ? `This contradicts the anchor committed for ${formatCalendarDate(committedDate)}. Nothing moved.`
                     : 'This contradicts an anchor already committed. Nothing moved.'}
                 </p>
-              ) : (
+              ) : row.proposed_anchor_date ? (
                 <p className="mt-1 text-[11.5px] leading-relaxed text-[var(--text-muted)]">
                   {impact.computable ? impact.sentence : impact.line}
                 </p>
-              )}
+              ) : null}
+              {/* A dateless row proposes a REMOVAL. deriveScheduleImpact has
+                  no question to answer there, and its generic downgrade line
+                  ("this act proposes a date rather than setting one") is false
+                  twice over — the line below the actions carries the meaning. */}
               <div className="mt-2 flex flex-wrap gap-2">
                 {!contradicts && (
                   <DocumentAction

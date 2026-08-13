@@ -36,7 +36,11 @@ export interface ScheduleDisclosedImpactInput {
   kind: string;
   anchorDate: string;
   followerCount: number;
-  heldAnchorCount: number;
+  /** A move's measure: anchors that ABSORBED it. Absent on an unpin. */
+  heldAnchorCount?: number;
+  /** An unpin's measure: anchors the removal leaves standing. Absent on a
+   *  move. The two are not comparable, so they never share a name. */
+  otherAnchorCount?: number;
   conflictCount: number;
 }
 
@@ -76,6 +80,12 @@ async function invalidateAfterInstallWindowAct(
   queryClient.invalidateQueries({ queryKey: ['project-v2', projectId] });
   queryClient.invalidateQueries({ queryKey: ['schedule-revisions', projectId] });
   queryClient.invalidateQueries({ queryKey: ['schedule-proposals', projectId] });
+  // The desk is where the need this act resolves is rendered, and it reads
+  // schedule_proposals directly — both confirm and release can write one
+  // (R110's downgrade, a contradiction, an undisclosed release) and both can
+  // move project_phases.anchor_date, which the desk's schedule motion derives
+  // from. Without this an open desk keeps asking about a window already acted on.
+  queryClient.invalidateQueries({ queryKey: ['document-state', 'desk'] });
   await invalidateProjectWorkflow(queryClient, projectId);
 }
 

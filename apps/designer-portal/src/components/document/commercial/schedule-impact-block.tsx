@@ -149,11 +149,19 @@ export function useEngagementStartPhaseId(
   }, [phases]);
 }
 
-export function ScheduleImpactBlock({ impact }: { impact: ScheduleImpact }) {
+export function ScheduleImpactBlock({
+  impact,
+  /** Set when the block already sits inside a `GatePartBlock part="impact"` —
+   *  that wrapper names the group, so naming it again stutters for AT. */
+  inGatePart = false,
+}: {
+  impact: ScheduleImpact;
+  inGatePart?: boolean;
+}) {
   return (
     <div
-      role="group"
-      aria-label="Impact"
+      role={inGatePart ? undefined : "group"}
+      aria-label={inGatePart ? undefined : "Impact"}
       data-schedule-impact={impact.status}
       className="mt-3 border-t border-[var(--doc-ink-border)] pt-3"
     >

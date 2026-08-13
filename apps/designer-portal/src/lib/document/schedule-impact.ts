@@ -20,6 +20,7 @@ import {
   type ScheduleMilestoneInput,
   type SchedulePhaseInput,
 } from '@patina/utils';
+import { formatCalendarDate } from './format';
 import {
   rippleDiff,
   rippleSentence,
@@ -38,29 +39,66 @@ export const IMPACT_READING_LINE = 'Reading the schedule…';
 export const IMPACT_UNAVAILABLE_LINE =
   'The schedule could not be read, so this act cannot state its effect yet.';
 
+/**
+ * An unpin's effect is not "uncomputable" in the generic sense — the ripple's
+ * edit vocabulary simply has no unpin shape to ask about. Saying "this act
+ * proposes a date rather than setting one" of a removal is false twice over.
+ */
+export const IMPACT_UNPIN_UNCOMPUTABLE_LINE =
+  'The effect of removing this anchor cannot be computed here — the release is proposed rather than applied.';
+
 /** The payload handed to a ceremony RPC's `p_disclosed_impact`. */
 export interface ScheduleDisclosedImpact {
   sentence: string;
   kind: RipplePendingEdit['kind'];
   anchorDate: string;
   followerCount: number;
-  heldAnchorCount: number;
+  /**
+   * Anchors that HELD AGAINST the proposed move — they absorbed it. Only a
+   * move can measure this, so the unpin path leaves it undefined rather than
+   * filing a different measurement under the same name.
+   */
+  heldAnchorCount?: number;
+  /** Unpin path only: anchors elsewhere in the chain that the removal leaves
+   *  where they are. Not comparable to heldAnchorCount. */
+  otherAnchorCount?: number;
   conflictCount: number;
 }
 
 /**
- * Four states, deliberately. "Still reading" and "the read failed" are NOT
+ * Five states, deliberately. "Still reading" and "the read failed" are NOT
  * "the effect is uncomputable" — conflating them lets a mistimed click
  * downgrade a hardening that would have succeeded a moment later, and prints a
- * statement of fact about a chain nobody has looked at.
+ * statement of fact about a chain nobody has looked at. And a date that
+ * CONTRADICTS one already committed is not an effect at all: 00475 proposes it
+ * however well it was disclosed (R109's third class), so a surface that states
+ * a ripple there would be describing a move the server will refuse to make.
  */
 export type ScheduleImpact =
   | { status: 'computed'; computable: true; sentence: string; disclosure: ScheduleDisclosedImpact }
-  | { status: 'reading' | 'unavailable' | 'uncomputable'; computable: false; line: string };
+  | {
+      status: 'reading' | 'unavailable' | 'uncomputable' | 'contradicts';
+      computable: false;
+      line: string;
+    };
 
-/** A ceremony may only be confirmed once the schedule has answered. */
+/** A ceremony may only be confirmed once the schedule has answered. A
+ *  contradiction IS an answer — it reports rather than moves. */
 export function impactIsSettled(impact: ScheduleImpact): boolean {
   return impact.status !== 'reading' && impact.status !== 'unavailable';
+}
+
+/**
+ * R109's third class, stated before consent. The act still stands — it records
+ * the contradiction — but it will not move the date, so the sheet must not
+ * promise that it will.
+ */
+export function impactContradicts(committedDate: string): ScheduleImpact {
+  return {
+    status: 'contradicts',
+    computable: false,
+    line: `This contradicts the anchor committed for ${formatCalendarDate(committedDate)} — confirming reports the contradiction, it does not move the date.`,
+  };
 }
 
 export const IMPACT_READING: ScheduleImpact = {
@@ -79,6 +117,12 @@ const UNCOMPUTABLE: ScheduleImpact = {
   status: 'uncomputable',
   computable: false,
   line: IMPACT_UNCOMPUTABLE_LINE,
+};
+
+const UNPIN_UNCOMPUTABLE: ScheduleImpact = {
+  status: 'uncomputable',
+  computable: false,
+  line: IMPACT_UNPIN_UNCOMPUTABLE_LINE,
 };
 
 /**
@@ -150,11 +194,11 @@ export function deriveUnpinImpact(
   phaseId: string | null | undefined,
   today: string,
 ): ScheduleImpact {
-  if (!phaseId) return UNCOMPUTABLE;
+  if (!phaseId) return UNPIN_UNCOMPUTABLE;
   const phaseList = Array.isArray(phases) ? phases : [];
   const milestoneList = Array.isArray(milestones) ? milestones : [];
   const target = phaseList.find((p) => p?.id === phaseId);
-  if (!target || !target.anchorDate) return UNCOMPUTABLE;
+  if (!target || !target.anchorDate) return UNPIN_UNCOMPUTABLE;
 
   let before;
   let after;
@@ -166,9 +210,9 @@ export function deriveUnpinImpact(
       { today },
     );
   } catch {
-    return UNCOMPUTABLE;
+    return UNPIN_UNCOMPUTABLE;
   }
-  if (after.conflicts.some((c) => c.kind === 'chain_cycle')) return UNCOMPUTABLE;
+  if (after.conflicts.some((c) => c.kind === 'chain_cycle')) return UNPIN_UNCOMPUTABLE;
 
   const beforeById = new Map(before.phases.map((p) => [p.id, p]));
   const moved = after.phases.filter((p) => {
@@ -176,7 +220,10 @@ export function deriveUnpinImpact(
     return pre != null && (pre.start !== p.start || pre.end !== p.end);
   });
   const others = moved.filter((p) => p.id !== phaseId).length;
-  const held = after.phases.filter(
+  // Every OTHER anchored phase the removal leaves standing. Not the same
+  // measure as a move's heldAnchors (anchors that absorbed the move), so it
+  // travels under its own name.
+  const otherAnchors = after.phases.filter(
     (p) => p.anchored && !moved.some((m) => m.id === p.id),
   ).length;
 
@@ -195,7 +242,7 @@ export function deriveUnpinImpact(
       kind: 'phase-anchor',
       anchorDate: target.anchorDate,
       followerCount: others,
-      heldAnchorCount: held,
+      otherAnchorCount: otherAnchors,
       conflictCount: after.conflicts.length,
     },
   };
