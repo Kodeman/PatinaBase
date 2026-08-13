@@ -6,6 +6,11 @@ jest.mock('@patina/supabase', () => ({
   useScheduleProposals: () => ({ data: [], isError: false }),
   useCommitScheduleProposal: () => ({ mutateAsync: jest.fn(), isPending: false, isError: false }),
   useDismissScheduleProposal: () => ({ mutateAsync: jest.fn(), isPending: false, isError: false }),
+  // R112 — the install window ceremony rides the installation phase row.
+  useInstallWindow: () => ({ data: null, isError: false }),
+  useHoldInstallWindow: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useConfirmInstallWindow: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useReleaseInstallWindow: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useCoordinationItems: () => ({ data: [] }),
   useProjectParties: () => ({ data: [] }),
   useProjectFFEItems: () => ({ data: [] }),

@@ -15,7 +15,11 @@
  * reason, so the ledger records what was said.
  */
 
-import type { ScheduleMilestoneInput, SchedulePhaseInput } from '@patina/utils';
+import {
+  resolveSchedule,
+  type ScheduleMilestoneInput,
+  type SchedulePhaseInput,
+} from '@patina/utils';
 import {
   rippleDiff,
   rippleSentence,
@@ -128,6 +132,71 @@ export function deriveScheduleImpact(
       followerCount: diff.followerCount,
       heldAnchorCount: diff.heldAnchors.length,
       conflictCount: diff.conflicts.length,
+    },
+  };
+}
+
+/**
+ * I126 — releasing a confirmed install window unpins the anchor, and that
+ * unpinning states its impact like any other movement. The ripple's edit
+ * vocabulary has no unpin shape, so this resolves the chain twice directly:
+ * once as committed, once with the target's anchor cleared, and reports what
+ * moved. Same totality rule as above — anything unresolvable degrades to the
+ * uncomputable answer, which downgrades the release to a proposal.
+ */
+export function deriveUnpinImpact(
+  phases: readonly SchedulePhaseInput[] | null | undefined,
+  milestones: readonly ScheduleMilestoneInput[] | null | undefined,
+  phaseId: string | null | undefined,
+  today: string,
+): ScheduleImpact {
+  if (!phaseId) return UNCOMPUTABLE;
+  const phaseList = Array.isArray(phases) ? phases : [];
+  const milestoneList = Array.isArray(milestones) ? milestones : [];
+  const target = phaseList.find((p) => p?.id === phaseId);
+  if (!target || !target.anchorDate) return UNCOMPUTABLE;
+
+  let before;
+  let after;
+  try {
+    before = resolveSchedule(phaseList, milestoneList, { today });
+    after = resolveSchedule(
+      phaseList.map((p) => (p.id === phaseId ? { ...p, anchorDate: null } : p)),
+      milestoneList,
+      { today },
+    );
+  } catch {
+    return UNCOMPUTABLE;
+  }
+  if (after.conflicts.some((c) => c.kind === 'chain_cycle')) return UNCOMPUTABLE;
+
+  const beforeById = new Map(before.phases.map((p) => [p.id, p]));
+  const moved = after.phases.filter((p) => {
+    const pre = beforeById.get(p.id);
+    return pre != null && (pre.start !== p.start || pre.end !== p.end);
+  });
+  const others = moved.filter((p) => p.id !== phaseId).length;
+  const held = after.phases.filter(
+    (p) => p.anchored && !moved.some((m) => m.id === p.id),
+  ).length;
+
+  const name = target.name || 'the phase';
+  const sentence =
+    others === 0
+      ? `Removing the anchor returns ${name} to the chain; nothing else moves.`
+      : `Removing the anchor returns ${name} to the chain; ${others} line${others === 1 ? '' : 's'} move with it.`;
+
+  return {
+    status: 'computed',
+    computable: true,
+    sentence,
+    disclosure: {
+      sentence,
+      kind: 'phase-anchor',
+      anchorDate: target.anchorDate,
+      followerCount: others,
+      heldAnchorCount: held,
+      conflictCount: after.conflicts.length,
     },
   };
 }

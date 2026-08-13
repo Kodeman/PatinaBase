@@ -337,13 +337,29 @@ const FORBIDDEN_COMMERCIAL_REGISTER = [
 ];
 
 // Every surface Wave 2 (R109/R110, I130) added or gave new strings to —
-// including the two desk modules, which carry the copy Leah actually reads.
+// including the two desk modules, which carry the copy Leah actually reads —
+// plus Wave 3's install-window ceremony (R112, I126), which has a
+// counterparty, so §7 bites hardest there.
 const WAVE_2_COPY_SOURCES = [
   "../schedule-impact.ts",
   "../desk-derivation.ts",
   "../desk-schedule.ts",
   "../../../components/document/commercial/schedule-impact-block.tsx",
   "../../../components/document/schedule/schedule-proposals.tsx",
+  "../../../components/document/schedule/install-window-ceremony.tsx",
+];
+
+// №7 stays open, so the install ceremony names the ACT and the window, never
+// the party that shows up to do the work.
+const FORBIDDEN_INSTALL_ACTORS = [
+  "installer",
+  "Installer",
+  "the client",
+  "The client",
+  "vendor",
+  "Vendor",
+  "crew",
+  "Crew",
 ];
 
 describe("R113 string-absence contract", () => {
@@ -421,6 +437,19 @@ describe("R113 string-absence contract", () => {
       for (const forbidden of FORBIDDEN_COMMERCIAL_REGISTER) {
         expect(`${relative}:${source}`).not.toContain(forbidden);
       }
+    }
+  });
+
+  it("§7: the install window ceremony names the act, never a counterparty", () => {
+    const source = fs.readFileSync(
+      path.resolve(
+        __dirname,
+        "../../../components/document/schedule/install-window-ceremony.tsx",
+      ),
+      "utf8",
+    );
+    for (const forbidden of FORBIDDEN_INSTALL_ACTORS) {
+      expect(source).not.toContain(forbidden);
     }
   });
 

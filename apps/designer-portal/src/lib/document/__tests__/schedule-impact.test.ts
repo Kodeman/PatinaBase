@@ -7,6 +7,7 @@
 
 import {
   deriveScheduleImpact,
+  deriveUnpinImpact,
   IMPACT_READING,
   IMPACT_UNAVAILABLE,
   IMPACT_UNCOMPUTABLE_LINE,
@@ -192,5 +193,71 @@ describe('deriveScheduleImpact — the honest downgrade (R110)', () => {
         TODAY,
       ).computable,
     ).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// I126 — releasing a confirmed install window unpins the anchor, and the
+// unpinning states its own impact.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('deriveUnpinImpact — the release face (I126)', () => {
+  const anchored = () => [
+    phase({ id: 'a', startDate: '2026-01-01', durationDays: 10 }),
+    phase({
+      id: 'install',
+      name: 'Installation',
+      followsPhaseId: 'a',
+      durationDays: 7,
+      anchorDate: '2026-03-01',
+    }),
+  ];
+
+  it('names the phase whose anchor is being removed', () => {
+    const impact = deriveUnpinImpact(anchored(), [], 'install', TODAY);
+    expect(impact.computable).toBe(true);
+    if (!impact.computable) return;
+    expect(impact.sentence).toContain('Removing the anchor returns Installation');
+    expect(impact.disclosure.kind).toBe('phase-anchor');
+    expect(impact.disclosure.anchorDate).toBe('2026-03-01');
+  });
+
+  it('says nothing else moves when the unpin is local', () => {
+    const impact = deriveUnpinImpact(anchored(), [], 'install', TODAY);
+    if (!impact.computable) throw new Error('expected a computable unpin');
+    expect(impact.sentence).toContain('nothing else moves');
+    expect(impact.disclosure.followerCount).toBe(0);
+  });
+
+  it('counts the lines that move with the unpin', () => {
+    const withFollower = [
+      ...anchored(),
+      phase({ id: 'after', followsPhaseId: 'install', durationDays: 5 }),
+    ];
+    const impact = deriveUnpinImpact(withFollower, [], 'install', TODAY);
+    if (!impact.computable) throw new Error('expected a computable unpin');
+    expect(impact.disclosure.followerCount).toBe(1);
+    expect(impact.sentence).toContain('1 line move');
+  });
+
+  it('has nothing to state when the phase carries no anchor', () => {
+    const impact = deriveUnpinImpact(
+      [phase({ id: 'install', startDate: '2026-01-01', durationDays: 7 })],
+      [],
+      'install',
+      TODAY,
+    );
+    expect(impact.computable).toBe(false);
+    expect(impact.computable ? null : impact.line).toBe(IMPACT_UNCOMPUTABLE_LINE);
+  });
+
+  it('degrades rather than throwing on a missing phase or malformed input', () => {
+    expect(deriveUnpinImpact(anchored(), [], 'nowhere', TODAY).computable).toBe(
+      false,
+    );
+    expect(deriveUnpinImpact(anchored(), [], null, TODAY).computable).toBe(false);
+    expect(deriveUnpinImpact(null, undefined, 'install', TODAY).computable).toBe(
+      false,
+    );
   });
 });

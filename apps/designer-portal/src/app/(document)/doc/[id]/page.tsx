@@ -56,6 +56,7 @@ import { ProposalBlocksReadOnly } from '@/components/document/proposal-blocks-re
 import { FFESection } from '@/components/document/ffe-section';
 import { CoordinationBand } from '@/components/document/coordination/coordination-band';
 import { ScheduleSpine } from '@/components/document/schedule/schedule-spine';
+import { InstallWindowCeremony } from '@/components/document/schedule/install-window-ceremony';
 import { BriefSection } from '@/components/document/brief-section';
 import { BriefRecap } from '@/components/document/brief-recap';
 import { CareBand } from '@/components/document/care-band';
@@ -1075,6 +1076,9 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
                   onFolioDropConsumed={() => setFolioDrop(null)}
                   sectionDragOver={sectionDrag}
                 />
+                {/* R112: the install week's commitment act, on the section
+                    whose whole subject is that week. */}
+                <InstallWindowCeremony projectId={row.project_id} />
                 {/* R80: at install the band opens unfolded — closing out IS the
                     work of this stage. */}
                 <CareBand projectId={row.project_id} />

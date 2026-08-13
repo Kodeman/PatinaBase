@@ -47,8 +47,9 @@ type ProposalAnchorEdit = Extract<
 >;
 
 export function proposalEdit(row: ScheduleProposalRow): ProposalAnchorEdit | null {
-  // A dateless row is a proposed UNPIN (R112's release): dismissible, but not
-  // an anchor the designer can commit from here.
+  // A dateless row is a proposed UNPIN (R112's release, 00476/I126): the
+  // ripple's edit vocabulary has no unpin shape, so such a row is dismissible
+  // but never committable — the same posture as a targetless one.
   if (!row.proposed_anchor_date) return null;
   if (row.target_phase_id) {
     return {
@@ -210,8 +211,9 @@ export function ScheduleProposals({
               </div>
               {!edit && !contradicts && (
                 <p className="mt-2 text-[11.5px] text-[var(--text-muted)]">
-                  No phase on this project carries the date, so there is nothing to
-                  commit it onto.
+                  {row.proposed_anchor_date
+                    ? "No phase on this project carries the date, so there is nothing to commit it onto."
+                    : "Removing an anchor is not a date this block can commit — unpin it on the phase itself."}
                 </p>
               )}
               {failedId === row.id && (

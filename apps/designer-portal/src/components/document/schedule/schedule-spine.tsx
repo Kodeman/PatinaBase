@@ -100,6 +100,7 @@ import { MilestoneComposer, type MilestoneDraft } from './milestone-composer';
 import { ScheduleEntryField } from './schedule-entry-field';
 import { RevisionLedger } from './revision-ledger';
 import { ScheduleProposals } from './schedule-proposals';
+import { InstallWindowCeremony } from './install-window-ceremony';
 import { AddLineSheet } from './add-line-sheet';
 import type { PastProjectOption } from './past-project-picker';
 import { DocumentAction } from '../document-action';
@@ -416,6 +417,17 @@ export function ScheduleSpine({
     () => (mainLane.length > 0 ? mainLane[mainLane.length - 1].id : null),
     [mainLane],
   );
+
+  // The row the install ceremony sits under — the installation phase, or the
+  // last main-lane phase when the chain does not name one. Mirrors
+  // `_install_window_phase(uuid)` (00476), so the ceremony appears where the
+  // anchor will land.
+  const installEntryPhaseId = useMemo(() => {
+    const named = mainLane.find(
+      (phase) => rowById.get(phase.id)?.phase_key === 'installation',
+    );
+    return named?.id ?? lastMainPhaseId;
+  }, [mainLane, rowById, lastMainPhaseId]);
 
   const pastProjectOptions = useMemo<PastProjectOption[]>(() => {
     const rows = (projectRows ?? []) as Array<{
@@ -949,6 +961,9 @@ export function ScheduleSpine({
                       }
                       onUnpinMilestoneAnchor={handleUnpinMilestone}
                     />
+                    {entry.phase.id === installEntryPhaseId && (
+                      <InstallWindowCeremony projectId={projectId} />
+                    )}
                   </Fragment>
                 );
               })}
