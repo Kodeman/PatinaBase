@@ -24,12 +24,17 @@
 --   execute_furnishings_authorization_on_paper ... 00425:811 → 00462:1831 → 00475
 --   engage_trade_scope ........................... 00423:2113 (sole) → 00475
 --   _accept_trade_scope_authorized ............... 00423:2349 (sole) → 00475
+--   record_paper_trade_acceptance ................ 00425:1094 (sole) → 00475
 --
 -- Reconciles / deliberately NOT re-cut:
 --   _execute_trade_scope_authorized (head 00424:930, which added
 --   _close_trade_rfqs_for_scope) carries NO schedule graft — execution is not
 --   engagement or acceptance in the R109 map. Re-cutting it from 00423 would
 --   have reverted 00424's RFQ closeout; it is left alone entirely.
+--
+--   delivered_date carries no graft either. A delivery is an arrival, not a
+--   thread START, and proposing the same phase-start po-send already proposes
+--   put two competing dates on one anchor. Deferred pending a target ruling.
 --
 -- Security shape:
 --   _commit_schedule_edit_authorized carries the sibling zero-grant posture
@@ -56,11 +61,29 @@
 CREATE TABLE IF NOT EXISTS public.schedule_proposals (
   id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id           uuid NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
-  source_event         text NOT NULL,
+  source_event         text NOT NULL
+                         CHECK (source_event IN (
+                           'design-services-executed',
+                           'furnishings-authorization-executed',
+                           'trade-scope-engaged',
+                           'trade-scope-accepted',
+                           'po-sent',
+                           -- R112's install window (Wave 3) routes through the
+                           -- same internal; enumerated here so its undisclosed
+                           -- confirm/release can propose rather than 23514.
+                           'install-window-confirmed',
+                           'install-window-released'
+                         )),
   source_ref           uuid,
   target_phase_id      uuid REFERENCES public.project_phases(id) ON DELETE CASCADE,
   target_milestone_id  uuid REFERENCES public.schedule_milestones(id) ON DELETE CASCADE,
-  proposed_anchor_date date NOT NULL,
+  -- Nullable: a proposed UNPIN has no date. It is dismissible and, like a
+  -- target-less row, never committable as an anchor.
+  proposed_anchor_date date,
+  -- R109's third class, recorded at write time: this date contradicts an
+  -- anchor already committed on the target. A contradiction reports; it never
+  -- proposes a slide the designer can commit blind.
+  conflicts_with_committed boolean NOT NULL DEFAULT false,
   disclosed_context    jsonb,
   state                text NOT NULL DEFAULT 'proposed'
                          CHECK (state IN ('proposed', 'committed', 'dismissed')),
@@ -89,8 +112,61 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_schedule_proposals_live_milestone
   ON public.schedule_proposals (project_id, target_milestone_id, source_event)
   WHERE state = 'proposed' AND target_milestone_id IS NOT NULL;
 
+-- The target-less fallback escapes both indexes above (NULL is never equal to
+-- NULL), so it gets its own: one live project-level proposal per event.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_schedule_proposals_live_projectwide
+  ON public.schedule_proposals (project_id, source_event)
+  WHERE state = 'proposed'
+    AND target_phase_id IS NULL AND target_milestone_id IS NULL;
+
 CREATE INDEX IF NOT EXISTS idx_schedule_proposals_project_state
   ON public.schedule_proposals (project_id, state, created_at DESC);
+
+-- ─── The ratchet, enforced (I130) ─────────────────────────────────────────
+-- The CHECK constrains the vocabulary; this constrains the direction. A
+-- resolved proposal is history: it never returns to 'proposed', and what it
+-- proposed can never be rewritten. resolved_by is derived here, never taken
+-- from the caller — the same anti-forgery posture cut_schedule_revision holds
+-- for the revision ledger (00326 banner §1).
+CREATE OR REPLACE FUNCTION public.guard_schedule_proposal_ratchet()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF OLD.state <> 'proposed' THEN
+    RAISE EXCEPTION 'a % schedule proposal is history and cannot be rewritten', OLD.state
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW.project_id IS DISTINCT FROM OLD.project_id
+     OR NEW.source_event IS DISTINCT FROM OLD.source_event
+     OR NEW.source_ref IS DISTINCT FROM OLD.source_ref
+     OR NEW.target_phase_id IS DISTINCT FROM OLD.target_phase_id
+     OR NEW.target_milestone_id IS DISTINCT FROM OLD.target_milestone_id
+     OR NEW.created_at IS DISTINCT FROM OLD.created_at THEN
+    RAISE EXCEPTION 'what a schedule proposal names is fixed at the act'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW.state = 'proposed' THEN
+    -- Still live: only the fact itself may be refreshed (a later send or
+    -- delivery carries a better date). Resolution stamps stay empty.
+    NEW.resolved_at := NULL;
+    NEW.resolved_by := NULL;
+    RETURN NEW;
+  END IF;
+  NEW.resolved_at := now();
+  NEW.resolved_by := auth.uid();
+  RETURN NEW;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.guard_schedule_proposal_ratchet()
+  FROM PUBLIC, anon, authenticated, service_role;
+
+DROP TRIGGER IF EXISTS guard_schedule_proposal_ratchet_trg ON public.schedule_proposals;
+CREATE TRIGGER guard_schedule_proposal_ratchet_trg
+  BEFORE UPDATE ON public.schedule_proposals
+  FOR EACH ROW EXECUTE FUNCTION public.guard_schedule_proposal_ratchet();
 
 ALTER TABLE public.schedule_proposals ENABLE ROW LEVEL SECURITY;
 
@@ -114,9 +190,14 @@ CREATE POLICY schedule_proposals_studio_rw
     )
   );
 
-REVOKE ALL ON TABLE public.schedule_proposals FROM PUBLIC, anon;
+-- All four roles, not two: Supabase's default privileges still grant ALL on a
+-- new table in schema public, so a partial REVOKE narrows nothing. authenticated
+-- must never hold INSERT (a studio member could fabricate an operational fact),
+-- DELETE or TRUNCATE (a dismissal is a ratchet, not an erasure).
+REVOKE ALL ON TABLE public.schedule_proposals
+  FROM PUBLIC, anon, authenticated, service_role;
 GRANT SELECT, UPDATE ON TABLE public.schedule_proposals TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.schedule_proposals TO service_role;
+GRANT SELECT, INSERT ON TABLE public.schedule_proposals TO service_role;
 
 COMMENT ON TABLE public.schedule_proposals IS
   'R109/R110 (I130): the uniform home for every proposed schedule anchor — '
@@ -126,7 +207,11 @@ COMMENT ON TABLE public.schedule_proposals IS
   'under RLS (R101 working scaffolding).';
 COMMENT ON COLUMN public.schedule_proposals.source_event IS
   'The act that proposed the anchor — e.g. furnishings-authorization-executed, '
-  'trade-scope-accepted, po-sent, delivered.';
+  'trade-scope-accepted, po-sent.';
+COMMENT ON COLUMN public.schedule_proposals.conflicts_with_committed IS
+  'R109''s third class, decided at write time: the proposed date contradicts an '
+  'anchor already committed on the target. A contradiction reports through the '
+  'existing schedule_conflict register (R4) — it is never a slide to commit blind.';
 COMMENT ON COLUMN public.schedule_proposals.source_ref IS
   'The originating row (proposal id, purchase order id, …). Soft pointer: the '
   'proposal outlives nothing, so no FK.';
@@ -145,7 +230,7 @@ RETURNS uuid
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path TO 'public'
+SET search_path = public, pg_temp
 AS $$
   SELECT ph.id
   FROM public.project_phases ph
@@ -161,7 +246,7 @@ RETURNS uuid
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path TO 'public'
+SET search_path = public, pg_temp
 AS $$
   SELECT ph.id
   FROM public.project_phases ph
@@ -177,7 +262,7 @@ RETURNS uuid
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path TO 'public'
+SET search_path = public, pg_temp
 AS $$
   SELECT sm.id
   FROM public.schedule_milestones sm
@@ -215,7 +300,7 @@ CREATE OR REPLACE FUNCTION public._commit_schedule_edit_authorized(
 RETURNS INTEGER
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path TO 'public'
+SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_edit           JSONB;
@@ -227,47 +312,144 @@ DECLARE
   v_offset_days    INTEGER;
   v_rows_affected  INTEGER;
   v_new_v          INTEGER;
+  v_clear          BOOLEAN;
+  v_committed      DATE;
+  v_contradicts    BOOLEAN;
+  v_context        JSONB;
   v_ceremony       BOOLEAN := COALESCE(p_source, 'manual') LIKE 'ceremony:%';
+  v_disclosed      BOOLEAN;
+  v_propose        BOOLEAN;
   v_source_event   TEXT;
 BEGIN
   IF p_edits IS NULL OR jsonb_typeof(p_edits) <> 'array' THEN
     RAISE EXCEPTION 'p_edits must be a JSON array of edit objects';
   END IF;
 
-  -- R110, enforced server-side so a UI bug cannot become a quiet hardening:
-  -- a ceremony that could not state its schedule impact PROPOSES. It does not
-  -- write an anchor and it does not cut a revision.
-  IF v_ceremony AND p_disclosed_impact IS NULL THEN
+  -- R110's gate is a DISCLOSURE check, not a null check. An object that says
+  -- nothing has disclosed nothing; only a real sentence is a statement a
+  -- surface made before consent.
+  v_disclosed := p_disclosed_impact IS NOT NULL
+    AND jsonb_typeof(p_disclosed_impact) = 'object'
+    AND COALESCE(btrim(p_disclosed_impact->>'sentence'), '') <> '';
+
+  -- A ceremony proposes when it disclosed nothing (R110's downgrade) — and,
+  -- per R109's third class, when its date contradicts an anchor already
+  -- committed on the target, however well it was disclosed.
+  v_propose := v_ceremony AND NOT v_disclosed;
+
+  IF v_ceremony THEN
     v_source_event := substr(p_source, 10);
+    -- Scan first: one contradicting edit makes the whole ceremony propose,
+    -- so a batch never half-hardens.
     FOR v_edit IN SELECT * FROM jsonb_array_elements(p_edits)
     LOOP
       v_kind := v_edit->>'kind';
       IF v_kind = 'phase-anchor' THEN
-        INSERT INTO public.schedule_proposals (
-          project_id, source_event, source_ref, target_phase_id,
-          proposed_anchor_date, disclosed_context
-        ) VALUES (
-          p_project_id, v_source_event,
-          NULLIF(v_edit->>'source_ref', '')::uuid,
-          NULLIF(v_edit->>'phase_id', '')::uuid,
-          (v_edit->>'anchor_date')::date,
-          v_edit->'context'
-        ) ON CONFLICT DO NOTHING;
-
+        SELECT ph.anchor_date INTO v_committed
+          FROM public.project_phases ph
+         WHERE ph.id = NULLIF(v_edit->>'phase_id', '')::uuid
+           AND ph.project_id = p_project_id;
       ELSIF v_kind = 'milestone-anchor' THEN
-        INSERT INTO public.schedule_proposals (
-          project_id, source_event, source_ref, target_milestone_id,
-          proposed_anchor_date, disclosed_context
+        SELECT sm.anchor_date INTO v_committed
+          FROM public.schedule_milestones sm
+          JOIN public.project_phases ph ON ph.id = sm.phase_id
+         WHERE sm.id = NULLIF(v_edit->>'milestone_id', '')::uuid
+           AND ph.project_id = p_project_id;
+      ELSE
+        RAISE EXCEPTION '_commit_schedule_edit_authorized: a ceremony may only anchor, not %', v_kind;
+      END IF;
+      -- An explicit clear IS the act of replacing the committed anchor (R112's
+      -- release), so it is never read as a contradiction — only a different
+      -- DATE arriving over a committed one is.
+      IF v_committed IS NOT NULL
+         AND NOT COALESCE((v_edit->>'clear')::boolean, false)
+         AND v_committed IS DISTINCT FROM (v_edit->>'anchor_date')::date THEN
+        v_propose := true;
+        v_contradicts := true;
+      END IF;
+    END LOOP;
+  END IF;
+
+  IF v_propose THEN
+    FOR v_edit IN SELECT * FROM jsonb_array_elements(p_edits)
+    LOOP
+      v_kind := v_edit->>'kind';
+      v_anchor_date := (v_edit->>'anchor_date')::date;
+      v_clear       := COALESCE((v_edit->>'clear')::boolean, false);
+      -- A dateless proposal is only honest as a proposed UNPIN.
+      IF v_anchor_date IS NULL AND NOT v_clear THEN
+        RAISE EXCEPTION 'a ceremony proposal requires an anchor_date, or "clear": true (%)', v_kind;
+      END IF;
+      IF v_clear THEN
+        v_anchor_date := NULL;
+      END IF;
+      -- What the act knew, recorded with the proposal: the desk reads this
+      -- rather than re-deriving the ceremony's own facts.
+      v_context := COALESCE(v_edit->'context', '{}'::jsonb)
+        || jsonb_build_object(
+             'sourceEvent', v_source_event,
+             'proposedOn', to_char(current_date, 'YYYY-MM-DD'),
+             'disclosed', v_disclosed)
+        || CASE WHEN v_disclosed
+                THEN jsonb_build_object('statedImpact', p_disclosed_impact->>'sentence')
+                ELSE '{}'::jsonb END;
+
+      IF v_kind = 'phase-anchor' THEN
+        v_phase_id := NULLIF(v_edit->>'phase_id', '')::uuid;
+        IF NOT EXISTS (
+          SELECT 1 FROM public.project_phases
+          WHERE id = v_phase_id AND project_id = p_project_id
+        ) THEN
+          RAISE EXCEPTION 'phase % not found in project % (phase-anchor proposal)', v_phase_id, p_project_id;
+        END IF;
+        SELECT ph.anchor_date INTO v_committed FROM public.project_phases ph WHERE ph.id = v_phase_id;
+        INSERT INTO public.schedule_proposals AS sp (
+          project_id, source_event, source_ref, target_phase_id,
+          proposed_anchor_date, conflicts_with_committed, disclosed_context
         ) VALUES (
           p_project_id, v_source_event,
           NULLIF(v_edit->>'source_ref', '')::uuid,
-          NULLIF(v_edit->>'milestone_id', '')::uuid,
-          (v_edit->>'anchor_date')::date,
-          v_edit->'context'
-        ) ON CONFLICT DO NOTHING;
+          v_phase_id, v_anchor_date,
+          NOT v_clear AND v_committed IS NOT NULL AND v_committed IS DISTINCT FROM v_anchor_date,
+          v_context
+        )
+        ON CONFLICT (project_id, target_phase_id, source_event)
+          WHERE state = 'proposed' AND target_phase_id IS NOT NULL
+        DO UPDATE SET
+          proposed_anchor_date     = EXCLUDED.proposed_anchor_date,
+          source_ref               = EXCLUDED.source_ref,
+          conflicts_with_committed = EXCLUDED.conflicts_with_committed,
+          disclosed_context        = EXCLUDED.disclosed_context
+        WHERE sp.state = 'proposed';
 
       ELSE
-        RAISE EXCEPTION '_commit_schedule_edit_authorized: a ceremony may only propose an anchor, not %', v_kind;
+        v_milestone_id := NULLIF(v_edit->>'milestone_id', '')::uuid;
+        IF NOT EXISTS (
+          SELECT 1 FROM public.schedule_milestones sm
+          JOIN public.project_phases ph ON ph.id = sm.phase_id
+          WHERE sm.id = v_milestone_id AND ph.project_id = p_project_id
+        ) THEN
+          RAISE EXCEPTION 'milestone % not found in project % (milestone-anchor proposal)', v_milestone_id, p_project_id;
+        END IF;
+        SELECT sm.anchor_date INTO v_committed FROM public.schedule_milestones sm WHERE sm.id = v_milestone_id;
+        INSERT INTO public.schedule_proposals AS sp (
+          project_id, source_event, source_ref, target_milestone_id,
+          proposed_anchor_date, conflicts_with_committed, disclosed_context
+        ) VALUES (
+          p_project_id, v_source_event,
+          NULLIF(v_edit->>'source_ref', '')::uuid,
+          v_milestone_id, v_anchor_date,
+          NOT v_clear AND v_committed IS NOT NULL AND v_committed IS DISTINCT FROM v_anchor_date,
+          v_context
+        )
+        ON CONFLICT (project_id, target_milestone_id, source_event)
+          WHERE state = 'proposed' AND target_milestone_id IS NOT NULL
+        DO UPDATE SET
+          proposed_anchor_date     = EXCLUDED.proposed_anchor_date,
+          source_ref               = EXCLUDED.source_ref,
+          conflicts_with_committed = EXCLUDED.conflicts_with_committed,
+          disclosed_context        = EXCLUDED.disclosed_context
+        WHERE sp.state = 'proposed';
       END IF;
     END LOOP;
     RETURN NULL;
@@ -297,6 +479,17 @@ BEGIN
     ELSIF v_kind = 'phase-anchor' THEN
       v_phase_id   := NULLIF(v_edit->>'phase_id', '')::uuid;
       v_anchor_date := (v_edit->>'anchor_date')::date;
+      v_clear       := COALESCE((v_edit->>'clear')::boolean, false);
+
+      -- An unpin is an act, not an omission. A missing date raises unless the
+      -- edit says `"clear": true` — the same rule milestone-anchor carries, so
+      -- neither door can silently drop an anchor.
+      IF v_anchor_date IS NULL AND NOT v_clear THEN
+        RAISE EXCEPTION 'phase-anchor edit requires an anchor_date, or "clear": true to unpin (phase %)', v_phase_id;
+      END IF;
+      IF v_clear THEN
+        v_anchor_date := NULL;
+      END IF;
 
       UPDATE public.project_phases
          SET anchor_date = v_anchor_date
@@ -345,9 +538,13 @@ BEGIN
     ELSIF v_kind = 'milestone-anchor' THEN
       v_milestone_id := NULLIF(v_edit->>'milestone_id', '')::uuid;
       v_anchor_date  := (v_edit->>'anchor_date')::date;
+      v_clear        := COALESCE((v_edit->>'clear')::boolean, false);
 
-      IF v_anchor_date IS NULL THEN
-        RAISE EXCEPTION 'milestone-anchor edit requires an anchor_date (milestone %)', v_milestone_id;
+      IF v_anchor_date IS NULL AND NOT v_clear THEN
+        RAISE EXCEPTION 'milestone-anchor edit requires an anchor_date, or "clear": true to unpin (milestone %)', v_milestone_id;
+      END IF;
+      IF v_clear THEN
+        v_anchor_date := NULL;
       END IF;
 
       IF NOT EXISTS (
@@ -370,14 +567,16 @@ BEGIN
     END IF;
   END LOOP;
 
-  IF p_disclosed_impact IS NULL THEN
-    v_new_v := cut_schedule_revision(p_project_id, p_reason);
+  IF NOT v_disclosed THEN
+    v_new_v := cut_schedule_revision(p_project_id, left(p_reason, 500));
   ELSE
     -- The revision carries what the ceremony said before it was confirmed.
+    -- Bounded: the ledger holds one human sentence, and the text arrives from
+    -- an authenticated caller.
     v_new_v := cut_schedule_revision(
       p_project_id,
-      COALESCE(p_reason, 'Schedule revised') || ' · impact stated: ' ||
-      COALESCE(NULLIF(p_disclosed_impact->>'sentence', ''), p_disclosed_impact::text)
+      left(COALESCE(p_reason, 'Schedule revised'), 500) || ' · impact stated: ' ||
+      left(btrim(p_disclosed_impact->>'sentence'), 500)
     );
   END IF;
   RETURN v_new_v;
@@ -441,7 +640,11 @@ COMMENT ON FUNCTION public.commit_schedule_edit(UUID, JSONB, TEXT) IS
   'return, same guard. The ripple UI disclosed the impact, so the manual path '
   'needs no disclosure argument.';
 
-REVOKE EXECUTE ON FUNCTION public.commit_schedule_edit(UUID, JSONB, TEXT) FROM PUBLIC, anon;
+-- service_role is revoked too: the manual door is the designer's, and po-send
+-- has no business at it. Supabase's default privileges granted it at creation,
+-- so the documented posture only becomes the real one by saying so.
+REVOKE EXECUTE ON FUNCTION public.commit_schedule_edit(UUID, JSONB, TEXT)
+  FROM PUBLIC, anon, service_role;
 GRANT  EXECUTE ON FUNCTION public.commit_schedule_edit(UUID, JSONB, TEXT) TO authenticated;
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -1349,6 +1552,10 @@ REVOKE ALL ON FUNCTION public.execute_furnishings_authorization_on_paper(uuid, t
 GRANT EXECUTE ON FUNCTION public.execute_furnishings_authorization_on_paper(uuid, text, date, uuid, jsonb)
   TO authenticated;
 
+COMMENT ON FUNCTION public.execute_furnishings_authorization_on_paper(uuid, text, date, uuid, jsonb) IS
+  '00425: the studio records that the client signed and executed a PRINTED furnishings authorization, in one act — every effect of the online rail (schedule lines apply, deposit invoice follows), with the paper metadata and no expiry guard. '
+  '00475 adds the optional p_disclosed_impact: the sheet states the procurement-thread anchor''s effect before confirmation and the anchor hardens; a NULL or empty disclosure downgrades to a schedule_proposals row (R110), and a date contradicting a committed anchor always does.';
+
 -- ── (d) Trade scope engaged → trade thread start ──────────────────────────
 -- 00423:2113 body VERBATIM (sole definition) plus the optional
 -- p_disclosed_impact parameter and one graft. engage_trade_scope is itself the
@@ -1596,97 +1803,139 @@ REVOKE ALL ON FUNCTION public._accept_trade_scope_authorized(uuid, text, uuid)
   FROM PUBLIC, anon, authenticated, service_role;
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- PART 6 — Operational fact: delivery proposes
+-- PART 6 — Trade acceptance recorded on paper
 --
--- receiving_inspection_side_effects (head 00184:256, sole definition) body
--- VERBATIM plus one graft. This is the R109 fact class, not the ceremony
--- class: the trigger writes a proposal, never an anchor, and cannot reach
--- _commit_schedule_edit_authorized's anchor path even though it runs as owner
--- — it does not call it at all.
+-- record_paper_trade_acceptance (head 00425:1094, sole definition) body
+-- VERBATIM plus the same graft the digital acceptance body got. It is an
+-- independent copy of _accept_trade_scope_authorized, not a wrapper, so
+-- grafting one and not the other would make the same client act propose or
+-- not depending on where it was signed.
 -- ═══════════════════════════════════════════════════════════════════════════
 
-CREATE OR REPLACE FUNCTION receiving_inspection_side_effects()
-RETURNS TRIGGER
+CREATE OR REPLACE FUNCTION public.record_paper_trade_acceptance(
+  p_proposal_id uuid,
+  p_signed_name text,
+  p_paper_signed_on date,
+  p_scan_document_id uuid DEFAULT NULL
+)
+RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-  v_po                 purchase_orders%ROWTYPE;
-  v_delivered_was_null BOOLEAN;
-  v_delivered_date     DATE;
-  v_thread_phase_id    UUID;   -- 00475
+  -- 00425 DELTA 1 (actor). accepted_by stays the CLIENT — they accepted the
+  -- work, on paper. v_recorder is the studio author writing it down.
+  v_actor uuid;
+  v_recorder uuid := auth.uid();
+  v_proposal public.proposals%ROWTYPE;
+  v_terms public.trade_scope_terms%ROWTYPE;
+  v_name text := btrim(COALESCE(p_signed_name, ''));
+  v_previous_progress text := current_setting('app.trade_scope_progress_id', true);
+  v_project_id uuid;        -- 00475
+  v_milestone_id uuid;      -- 00475
 BEGIN
-  SELECT * INTO v_po
-    FROM purchase_orders
-   WHERE id = NEW.purchase_order_id;
-
-  IF NOT FOUND THEN
-    RETURN NEW;
+  IF v_recorder IS NULL OR char_length(v_name) < 2 THEN
+    RAISE EXCEPTION 'recording a paper trade scope acceptance requires an authenticated studio author and legal name'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  SELECT * INTO v_proposal FROM public.proposals WHERE id = p_proposal_id FOR UPDATE;
+  IF NOT FOUND OR v_proposal.document_kind <> 'trade_scope'
+     OR NOT public._can_author_proposal(v_proposal.designer_id)
+     OR v_proposal.client_id IS NULL
+  THEN
+    RAISE EXCEPTION 'trade scope % not found or access denied', p_proposal_id
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  v_actor := v_proposal.client_id;
+  -- 00425 DELTA 2 (terminal). A retired or declined instrument is not a thing
+  -- a paper acceptance can be recorded against.
+  IF COALESCE(v_proposal.commercial_state, 'draft') IN ('superseded', 'declined') THEN
+    RAISE EXCEPTION 'trade scope % is % and can no longer be recorded on paper',
+      p_proposal_id, v_proposal.commercial_state
+      USING ERRCODE = 'check_violation';
+  END IF;
+  -- The same helper the signature rails use, given the same three facts: the
+  -- date must be there and not invented, and a scan pointer must belong to THIS
+  -- document. One validation, four acts.
+  PERFORM public._assert_paper_provenance(
+    p_proposal_id, p_paper_signed_on, p_scan_document_id
+  );
+  SELECT * INTO v_terms FROM public.trade_scope_terms
+  WHERE proposal_id = p_proposal_id FOR UPDATE;
+  IF v_terms.progress_state = 'accepted' THEN
+    RETURN jsonb_build_object('proposalId', p_proposal_id,
+      'progressState', v_terms.progress_state,
+      'acceptedAt', v_terms.accepted_at,
+      'acceptedSignedName', v_terms.accepted_signed_name,
+      'acceptanceFingerprint', v_terms.acceptance_fingerprint,
+      'acceptedOnPaper', v_terms.accepted_on_paper,
+      'acceptanceScanDocumentId', v_terms.acceptance_scan_document_id,
+      'changed', false);
+  END IF;
+  IF v_terms.progress_state <> 'substantially_complete' THEN
+    RAISE EXCEPTION 'a trade scope must be substantially complete before the client accepts it'
+      USING ERRCODE = 'check_violation';
   END IF;
 
-  v_delivered_was_null := v_po.delivered_date IS NULL;
-  v_delivered_date     := COALESCE(v_po.delivered_date, NEW.inspected_at::date);
+  PERFORM set_config('app.trade_scope_progress_id', p_proposal_id::text, true);
+  UPDATE public.trade_scope_terms SET
+    progress_state = 'accepted',
+    -- 00425 DELTA 3 (paper stamps). accepted_at becomes the date on the paper,
+    -- not the moment of typing; accepted_on_paper and acceptance_recorded_by
+    -- say who wrote it down; acceptance_scan_document_id is the page itself.
+    -- All three new columns move only under the progress GUC.
+    accepted_at = p_paper_signed_on::timestamptz,
+    accepted_by = v_actor,
+    accepted_signed_name = v_name,
+    acceptance_fingerprint = public._commercial_document_fingerprint(p_proposal_id),
+    accepted_on_paper = true,
+    acceptance_recorded_by = v_recorder,
+    acceptance_scan_document_id = p_scan_document_id
+  WHERE proposal_id = p_proposal_id RETURNING * INTO v_terms;
+  PERFORM set_config('app.trade_scope_progress_id', COALESCE(v_previous_progress, ''), true);
 
-  -- Stamp delivered_date on ALL outcomes (the truck arrived), but only a
-  -- CLEAN inspection advances the PO to 'delivered'. Damaged/partial leave
-  -- the PO status alone — deliberate tightening vs the legacy hook, which
-  -- advanced on every outcome. The status change cascades to linked items
-  -- via Trigger B.
-  UPDATE purchase_orders
-     SET delivered_date = v_delivered_date,
-         status = CASE
-                    WHEN NEW.outcome = 'clean'
-                         AND status NOT IN ('delivered', 'cancelled')
-                    THEN 'delivered'
-                    ELSE status
-                  END
-   WHERE id = NEW.purchase_order_id;
-
-  -- net-30: when delivered_date just transitioned from NULL, the balance
-  -- becomes due 30 days after delivery. Only pending rows — never overwrite
-  -- a paid or already-due row (mirrors the legacy hook's predicate).
-  IF v_po.payment_pattern = 'net_30' AND v_delivered_was_null THEN
-    UPDATE po_payments
-       SET due_date = (v_delivered_date + INTERVAL '30 days')::date
-     WHERE purchase_order_id = NEW.purchase_order_id
-       AND kind  = 'balance'
-       AND state = 'pending';
+  -- 00475 (R109 ceremony class): the client's acceptance, recorded. It is the
+  -- client's act either way, so it proposes the thread-completion date and
+  -- never pins it — the same downgrade the digital rail takes.
+  SELECT d.project_id INTO v_project_id
+  FROM public.project_commercial_documents d
+  WHERE d.proposal_id = p_proposal_id;
+  IF v_project_id IS NOT NULL THEN
+    v_milestone_id := public._schedule_thread_completion_milestone(v_project_id);
+    IF v_milestone_id IS NOT NULL THEN
+      PERFORM public._commit_schedule_edit_authorized(
+        v_project_id,
+        jsonb_build_array(jsonb_build_object(
+          'kind', 'milestone-anchor',
+          'milestone_id', v_milestone_id,
+          'anchor_date', to_char(p_paper_signed_on, 'YYYY-MM-DD'),
+          'source_ref', p_proposal_id
+        )),
+        'Trade scope accepted',
+        NULL,
+        'ceremony:trade-scope-accepted'
+      );
+    END IF;
   END IF;
 
-  -- Clean inspection ⇒ everything on the PO arrived: mark items fully
-  -- received (never decreases an existing count).
-  IF NEW.outcome = 'clean' THEN
-    UPDATE project_ffe_items
-       SET received_quantity = quantity,
-           updated_at        = NOW()
-     WHERE purchase_order_id = NEW.purchase_order_id
-       AND (received_quantity IS NULL OR received_quantity < quantity);
-  END IF;
-
-  -- 00475 (R109 operational-fact class): a fact PROPOSES. First delivery only.
-  IF v_delivered_was_null AND v_po.project_id IS NOT NULL THEN
-    v_thread_phase_id := public._schedule_thread_phase(v_po.project_id);
-    INSERT INTO public.schedule_proposals (
-      project_id, source_event, source_ref, target_phase_id,
-      proposed_anchor_date, disclosed_context
-    ) VALUES (
-      v_po.project_id, 'delivered', v_po.id, v_thread_phase_id, v_delivered_date,
-      CASE WHEN v_thread_phase_id IS NULL THEN jsonb_build_object(
-        'note', 'No thread-lane phase on this project — the proposal is filed against the project.'
-      ) ELSE NULL END
-    ) ON CONFLICT DO NOTHING;
-  END IF;
-
-  RETURN NEW;
+  RETURN jsonb_build_object('proposalId', p_proposal_id,
+    'progressState', v_terms.progress_state,
+    'acceptedAt', v_terms.accepted_at,
+    'acceptedBy', v_terms.accepted_by,
+    'acceptedSignedName', v_terms.accepted_signed_name,
+    'acceptanceFingerprint', v_terms.acceptance_fingerprint,
+    'acceptedOnPaper', v_terms.accepted_on_paper,
+    'acceptanceRecordedBy', v_terms.acceptance_recorded_by,
+    'acceptanceScanDocumentId', v_terms.acceptance_scan_document_id,
+    'changed', true);
+EXCEPTION WHEN OTHERS THEN
+  PERFORM set_config('app.trade_scope_progress_id', COALESCE(v_previous_progress, ''), true);
+  RAISE;
 END;
 $$;
 
-COMMENT ON FUNCTION receiving_inspection_side_effects() IS
-  'Trigger function: on receiving_inspections INSERT, stamps the parent PO''s '
-  'delivered_date (all outcomes), advances the PO to ''delivered'' on a clean '
-  'outcome only, shifts the net-30 pending balance due_date to delivered+30d, '
-  'and sets received_quantity = quantity on linked items for clean outcomes. '
-  'SECURITY DEFINER so the writes bypass RLS. '
-  '00475: a first delivery also records a schedule_proposals row (R109 fact '
-  'class) — it proposes an anchor, it never writes one.';
+REVOKE ALL ON FUNCTION public.record_paper_trade_acceptance(uuid, text, date, uuid)
+  FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.record_paper_trade_acceptance(uuid, text, date, uuid)
+  TO authenticated;

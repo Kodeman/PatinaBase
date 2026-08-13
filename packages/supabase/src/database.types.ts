@@ -19908,11 +19908,12 @@ export type Database = {
       }
       schedule_proposals: {
         Row: {
+          conflicts_with_committed: boolean
           created_at: string
           disclosed_context: Json | null
           id: string
           project_id: string
-          proposed_anchor_date: string
+          proposed_anchor_date: string | null
           resolved_at: string | null
           resolved_by: string | null
           source_event: string
@@ -19922,11 +19923,12 @@ export type Database = {
           target_phase_id: string | null
         }
         Insert: {
+          conflicts_with_committed?: boolean
           created_at?: string
           disclosed_context?: Json | null
           id?: string
           project_id: string
-          proposed_anchor_date: string
+          proposed_anchor_date?: string | null
           resolved_at?: string | null
           resolved_by?: string | null
           source_event: string
@@ -19936,11 +19938,12 @@ export type Database = {
           target_phase_id?: string | null
         }
         Update: {
+          conflicts_with_committed?: boolean
           created_at?: string
           disclosed_context?: Json | null
           id?: string
           project_id?: string
-          proposed_anchor_date?: string
+          proposed_anchor_date?: string | null
           resolved_at?: string | null
           resolved_by?: string | null
           source_event?: string

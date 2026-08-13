@@ -10988,7 +10988,13 @@ END $g$;
 
 -- 00475_schedule_ceremony_anchors.sql
 DO $g$ BEGIN
-  REVOKE ALL ON TABLE public.schedule_proposals FROM PUBLIC, anon;
+  REVOKE ALL ON FUNCTION public.guard_schedule_proposal_ratchet() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00475_schedule_ceremony_anchors.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.schedule_proposals FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -11000,7 +11006,7 @@ END $g$;
 
 -- 00475_schedule_ceremony_anchors.sql
 DO $g$ BEGIN
-  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.schedule_proposals TO service_role;
+  GRANT SELECT, INSERT ON TABLE public.schedule_proposals TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -11030,7 +11036,7 @@ END $g$;
 
 -- 00475_schedule_ceremony_anchors.sql
 DO $g$ BEGIN
-  REVOKE EXECUTE ON FUNCTION public.commit_schedule_edit(UUID, JSONB, TEXT) FROM PUBLIC, anon;
+  REVOKE EXECUTE ON FUNCTION public.commit_schedule_edit(UUID, JSONB, TEXT) FROM PUBLIC, anon, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -11097,5 +11103,17 @@ END $g$;
 -- 00475_schedule_ceremony_anchors.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._accept_trade_scope_authorized(uuid, text, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00475_schedule_ceremony_anchors.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_paper_trade_acceptance(uuid, text, date, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00475_schedule_ceremony_anchors.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_paper_trade_acceptance(uuid, text, date, uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
