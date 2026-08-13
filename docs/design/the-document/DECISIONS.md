@@ -8218,3 +8218,40 @@ trade_scope_terms; only the signature rows carry metadata).
   ever write proposals, structurally enforcing R109's fact class).
 
 *Entries add: I130 · last id = I130*
+
+### I131 · Waves 2–3 delivered — event wiring + install windows live — 2026-08-13
+
+Delivered per Kody's order, ultracode orchestration: pre-flight verification
+(6 lanes, 19 blockers caught incl. two stale-lineage revert hazards and the
+voided evidence-JSON premise) → Wave 2 implementation → three-lens panel
+(51 findings) → fix pass → Wave 3 implementation → integration (caught the
+00476 self-revert hazard + a latent Wave 2 ratchet/upsert deadlock) →
+two-lens panel (30 findings, several verified by live exploit probes:
+table-grant ceremony bypass, blind release unpin, TOCTOU double-confirm) →
+final fix pass → ship.
+
+**Live on Strata + prod**: merge `f6b978bd`, migrations 00475 + 00476,
+po-send redeployed, designer portal version `df435d58` (22:37Z).
+Mechanism: `_commit_schedule_edit_authorized` (zero-grant DEFINER; R110
+downgrade + contradiction scan server-side), `schedule_proposals` (ratchet
+trigger, conflicts_with_committed, three dedup uniques), five ceremony
+bodies grafted at verified heads (00462 capability layer intact),
+`install_windows` + hold/confirm/release doors (FOR UPDATE, anchored
+discriminant, client-minimal view), clear-marker unpin, desk proposal +
+contradiction needs, IMPACT blocks in the three studio ceremony sheets.
+
+**Accepted architect calls**: ratchet COERCES source_ref (net-identical to
+the reviewer's upsert-side fix, avoids re-cutting the door; 00475's inert
+SET documented in 00476's banner); rank 9.5 proposal-above-task stands.
+
+**Follow-up ledger (open, non-blocking)**: delivered-event target needs a
+ruling (graft dropped — thread-completion milestone was the candidate);
+trade-scope EXECUTION deliberately anchors nothing (make explicit if ever
+revisited); held_until unwritten pending a hold-expiry policy; proposed
+unpins are dismissible but not one-click committable (needs a ripple edit
+union widening); po-send cannot refresh a standing proposal (INSERT-only
+grant — deliberate divergence from the DB-side upsert); react/react-dom
+lockfile skew in the working tree errors two unrelated test suites —
+resolve deliberately in its own session. Owed: Kody's signed-in walk.
+
+*Entries add: I131 · last id = I131*
