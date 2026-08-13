@@ -11117,3 +11117,69 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.record_paper_trade_acceptance(uuid, text, date, uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00476_install_windows.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.install_windows FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00476_install_windows.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.install_windows TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00476_install_windows.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.install_windows TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00476_install_windows.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._install_window_phase(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00476_install_windows.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._commit_schedule_edit_authorized(uuid, jsonb, text, jsonb, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00476_install_windows.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.hold_install_window(uuid, date, date) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00476_install_windows.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.hold_install_window(uuid, date, date) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00476_install_windows.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.confirm_install_window(uuid, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00476_install_windows.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.confirm_install_window(uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00476_install_windows.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.release_install_window(uuid, text, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00476_install_windows.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.release_install_window(uuid, text, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
