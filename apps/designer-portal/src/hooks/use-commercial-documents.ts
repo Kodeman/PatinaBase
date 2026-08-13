@@ -49,6 +49,8 @@ async function invalidateScheduleAfterAnchorWrite(
     queryClient.invalidateQueries({ queryKey: ["project-v2", projectId] }),
     queryClient.invalidateQueries({ queryKey: ["schedule-revisions", projectId] }),
     queryClient.invalidateQueries({ queryKey: ["schedule-proposals", projectId] }),
+    // The desk carries the proposal/contradiction need these acts can raise.
+    queryClient.invalidateQueries({ queryKey: ["document-state", "desk"] }),
     invalidateProjectWorkflow(queryClient, projectId),
   ]);
 }

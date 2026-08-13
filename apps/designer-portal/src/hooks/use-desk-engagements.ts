@@ -36,6 +36,7 @@ import {
 } from '@/lib/document/desk-derivation';
 import { buildDeskConflicts } from '@/lib/document/desk-conflicts';
 import {
+  buildDeskProposalSignals,
   buildDeskSchedule,
   type DeskMilestoneRow,
   type DeskPhaseRow,
@@ -244,7 +245,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         // proposals read leaves the need silent, never invents one.
         supabase
           .from('schedule_proposals')
-          .select('id, project_id, source_event')
+          .select('id, project_id, source_event, conflicts_with_committed, created_at')
           .eq('state', 'proposed')
           .order('created_at', { ascending: false })
           .limit(DESK_PROPOSAL_LIMIT),
@@ -322,9 +323,20 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
       // A full page is therefore treated as no answer at all.
       const phaseRows = (deskPhases ?? []) as DeskPhaseRow[];
       const phasesTruncated = phaseRows.length >= DESK_PHASE_LIMIT;
+      // Same sentinel as the phases read, same reason: a capped page silently
+      // drops whole projects, and a project missing from a PRESENT feed reads
+      // as "nothing proposed" rather than "unanswered".
+      const proposalRows = (deskProposals ?? []) as DeskProposalRow[];
+      const proposalsTruncated = proposalRows.length >= DESK_PROPOSAL_LIMIT;
+      const answeredProposals =
+        deskProposalsError || proposalsTruncated ? [] : proposalRows;
+      // Degradation runs both ways: a failed phases read must not silence the
+      // proposals, which need no chain to be true.
       const schedules =
         deskPhasesError || phasesTruncated
-          ? undefined
+          ? answeredProposals.length > 0
+            ? buildDeskProposalSignals(answeredProposals)
+            : undefined
           : buildDeskSchedule(
               phaseRows,
               deskMilestonesError ? [] : ((deskMilestones ?? []) as DeskMilestoneRow[]),
@@ -336,7 +348,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
                       (p) => [p.id, p.start_date ?? null],
                     ),
                   ),
-              deskProposalsError ? [] : ((deskProposals ?? []) as DeskProposalRow[]),
+              answeredProposals,
             );
 
       const result = partitionDesk(

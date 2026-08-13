@@ -767,14 +767,24 @@ export function deriveNeed(
   // renderings. The resolver's own contradiction — a chain that no longer fits
   // the anchor holding it — already stamps the spine row (Slice 03) and, by
   // riding the SAME need kind, re-sorts this folder and speaks the guide's
-  // sentence. No fourth rendering.
-  const chainContradiction = schedule?.conflicts?.find(
-    (c) => c.kind === 'chain_does_not_fit',
-  );
-  if (chainContradiction) {
+  // sentence. No fourth rendering. The text is built upstream from phase
+  // NAMES; the resolver's own message carries raw ids and never surfaces.
+  if (schedule?.contradictionText) {
     return {
       kind: 'schedule_conflict',
-      text: chainContradiction.message,
+      text: schedule.contradictionText,
+      actionLabel: NEED_ACTION_LABELS.schedule_conflict,
+      stamp: { label: 'SCHEDULE', ...STAMP.terracotta },
+      urgent: false,
+    };
+  }
+
+  // R109's third class rides the same register: an act whose date contradicts
+  // an anchor already committed reports — it never offers a slide to commit.
+  if (schedule?.proposals && schedule.proposals.conflicting > 0) {
+    return {
+      kind: 'schedule_conflict',
+      text: 'A recorded date contradicts an anchor already committed',
       actionLabel: NEED_ACTION_LABELS.schedule_conflict,
       stamp: { label: 'SCHEDULE', ...STAMP.terracotta },
       urgent: false,

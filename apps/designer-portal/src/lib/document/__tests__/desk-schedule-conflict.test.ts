@@ -341,22 +341,18 @@ describe('partitionDesk threads schedules by project_id', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const configured = (over: Partial<DeskScheduleInput> = {}): DeskScheduleInput => ({
-  selection: { activePhaseId: 'phase-1', reason: 'in-progress' },
+  selection: { activePhaseId: 'phase-1', reason: 'status-in-progress' },
   fidelity: 'frame',
   positionText: 'Week 2',
   activePhaseName: 'Procurement',
   unconfigured: null,
   conflicts: [],
+  contradictionText: null,
   ...over,
 });
 
-const chainConflict = {
-  kind: 'chain_does_not_fit' as const,
-  phaseId: 'phase-9',
-  anchorId: 'phase-9',
-  overrunDays: 6,
-  message: 'The chain projects 6 days past the install anchor',
-};
+const CONTRADICTION = 'The chain no longer fits Installation — 6 days past its anchor';
+const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 describe('the resolver contradiction joins schedule_conflict (R4)', () => {
   it('a chain that no longer fits its anchor raises the conflict need', () => {
@@ -367,11 +363,13 @@ describe('the resolver contradiction joins schedule_conflict (R4)', () => {
       null,
       null,
       null,
-      configured({ conflicts: [chainConflict] }),
+      configured({ contradictionText: CONTRADICTION }),
     );
     expect(need?.kind).toBe('schedule_conflict');
-    expect(need?.text).toBe(chainConflict.message);
+    expect(need?.text).toBe(CONTRADICTION);
     expect(need?.urgent).toBe(false);
+    // R113: a desk line never carries an engine identifier.
+    expect(need?.text).not.toMatch(UUID_RE);
   });
 
   it('the R28 collision still wins when both are present — one need, never two', () => {
@@ -386,7 +384,7 @@ describe('the resolver contradiction joins schedule_conflict (R4)', () => {
       null,
       null,
       null,
-      configured({ conflicts: [chainConflict] }),
+      configured({ contradictionText: CONTRADICTION }),
     );
     expect(need?.kind).toBe('schedule_conflict');
     expect(need?.text).toBe('two installs in one week');
@@ -407,6 +405,23 @@ describe('the resolver contradiction joins schedule_conflict (R4)', () => {
       ),
     ).toBeNull();
   });
+
+  it("R109's third class borrows the same register — a contradicting proposal reports", () => {
+    const need = deriveNeed(
+      projectRow(),
+      NOW,
+      null,
+      null,
+      null,
+      null,
+      configured({
+        proposals: { count: 1, latestSourceEvent: 'po-sent', conflicting: 1 },
+      }),
+    );
+    expect(need?.kind).toBe('schedule_conflict');
+    expect(need?.text).toBe('A recorded date contradicts an anchor already committed');
+    expect(need?.text).not.toMatch(UUID_RE);
+  });
 });
 
 describe('schedule_proposal need (R109 / R110)', () => {
@@ -419,7 +434,11 @@ describe('schedule_proposal need (R109 / R110)', () => {
       null,
       null,
       configured({
-        proposals: { count: 1, latestSourceEvent: 'furnishings-authorization-executed' },
+        proposals: {
+          count: 1,
+          latestSourceEvent: 'furnishings-authorization-executed',
+          conflicting: 0,
+        },
       }),
     );
     expect(need?.kind).toBe('schedule_proposal');
@@ -436,13 +455,13 @@ describe('schedule_proposal need (R109 / R110)', () => {
       null,
       null,
       null,
-      configured({ proposals: { count: 2, latestSourceEvent: 'po-sent' } }),
+      configured({ proposals: { count: 2, latestSourceEvent: 'po-sent', conflicting: 0 } }),
     );
     expect(need?.text).toBe('A recorded event proposes a schedule anchor — review');
   });
 
   it('sorts under the contradiction and over the setup nudge', () => {
-    const proposals = { count: 1, latestSourceEvent: 'po-sent' };
+    const proposals = { count: 1, latestSourceEvent: 'po-sent', conflicting: 0 };
     // Under the contradiction: with both live, the conflict speaks.
     expect(
       deriveNeed(
@@ -452,7 +471,7 @@ describe('schedule_proposal need (R109 / R110)', () => {
         null,
         null,
         null,
-        configured({ conflicts: [chainConflict], proposals }),
+        configured({ contradictionText: CONTRADICTION, proposals }),
       )?.kind,
     ).toBe('schedule_conflict');
     // Over the setup nudge: with both live, the proposal speaks.
@@ -469,6 +488,51 @@ describe('schedule_proposal need (R109 / R110)', () => {
     ).toBe('schedule_proposal');
   });
 
+  it('outranks a dued task — a proposed anchor is an act waiting on her', () => {
+    const need = deriveNeed(
+      projectRow({ due_task_count: 1, earliest_task_due: '2026-06-12', due_task_title: 'x' }),
+      NOW,
+      null,
+      null,
+      null,
+      null,
+      configured({ proposals: { count: 1, latestSourceEvent: 'po-sent', conflicting: 0 } }),
+    );
+    expect(need?.kind).toBe('schedule_proposal');
+  });
+
+  it('NEED_RANK places it between the conflict and the task across FOLDERS', () => {
+    const rows = [
+      projectRow({ engagement_id: 'p-task', project_id: 'p-task', due_task_count: 1, earliest_task_due: '2026-06-12', due_task_title: 'x' }),
+      projectRow({ engagement_id: 'p-proposal', project_id: 'p-proposal' }),
+      projectRow({ engagement_id: 'p-conflict', project_id: 'p-conflict' }),
+    ];
+    const { folders } = partitionDesk(
+      rows,
+      NOW,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      new Map<string, DeskScheduleInput>([
+        ['p-task', configured()],
+        [
+          'p-proposal',
+          configured({
+            proposals: { count: 1, latestSourceEvent: 'po-sent', conflicting: 0 },
+          }),
+        ],
+        ['p-conflict', configured({ contradictionText: CONTRADICTION })],
+      ]),
+    );
+    expect(folders.map((f) => f.row.project_id)).toEqual([
+      'p-conflict',
+      'p-proposal',
+      'p-task',
+    ]);
+  });
+
   it('an empty proposal signal raises nothing', () => {
     expect(
       deriveNeed(
@@ -478,7 +542,7 @@ describe('schedule_proposal need (R109 / R110)', () => {
         null,
         null,
         null,
-        configured({ proposals: { count: 0, latestSourceEvent: null } }),
+        configured({ proposals: { count: 0, latestSourceEvent: null, conflicting: 0 } }),
       ),
     ).toBeNull();
   });

@@ -336,9 +336,12 @@ const FORBIDDEN_COMMERCIAL_REGISTER = [
   "Authorized",
 ];
 
-// Every surface Wave 2 (R109/R110, I130) added or gave new strings to.
+// Every surface Wave 2 (R109/R110, I130) added or gave new strings to —
+// including the two desk modules, which carry the copy Leah actually reads.
 const WAVE_2_COPY_SOURCES = [
   "../schedule-impact.ts",
+  "../desk-derivation.ts",
+  "../desk-schedule.ts",
   "../../../components/document/commercial/schedule-impact-block.tsx",
   "../../../components/document/schedule/schedule-proposals.tsx",
 ];

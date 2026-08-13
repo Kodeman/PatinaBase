@@ -58,6 +58,9 @@ async function invalidateAfterProposalResolution(
   queryClient.invalidateQueries({ queryKey: ['project-v2', projectId] });
   queryClient.invalidateQueries({ queryKey: ['schedule-revisions', projectId] });
   queryClient.invalidateQueries({ queryKey: ['schedule-proposals', projectId] });
+  // The desk is where the need this act resolves is rendered; without this an
+  // open desk keeps asking for a proposal already committed.
+  queryClient.invalidateQueries({ queryKey: ['document-state', 'desk'] });
   await invalidateProjectWorkflow(queryClient, projectId);
 }
 

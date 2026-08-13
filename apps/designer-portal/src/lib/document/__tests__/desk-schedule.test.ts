@@ -5,10 +5,13 @@
  */
 
 import {
+  buildDeskProposalSignals,
   buildDeskSchedule,
+  chainConflictText,
   DESK_SCHEDULE_UNCONFIGURED,
   type DeskMilestoneRow,
   type DeskPhaseRow,
+  type DeskProposalRow,
 } from '../desk-schedule';
 
 const TODAY = '2026-06-12';
@@ -203,5 +206,147 @@ describe('buildDeskSchedule', () => {
       expect(entry.fidelity).toBe('committed');
       expect(entry.positionText).toBe('Week 2');
     }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Wave 2 (R109/R110) — the proposal signal and the contradiction's WORDS.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function proposalRow(
+  over: Partial<DeskProposalRow> & { id: string; project_id: string },
+): DeskProposalRow {
+  return {
+    source_event: over.source_event ?? 'po-sent',
+    conflicts_with_committed: over.conflicts_with_committed ?? false,
+    created_at: over.created_at ?? '2026-06-01T00:00:00Z',
+    ...over,
+  };
+}
+
+describe('the proposal signal', () => {
+  it('collapses many proposals per project into one signal, newest event first', () => {
+    const map = buildDeskSchedule(
+      [phaseRow({ id: 'a', project_id: 'proj-1', duration_days: 7 })],
+      [],
+      TODAY,
+      undefined,
+      [
+        proposalRow({ id: 'r1', project_id: 'proj-1', source_event: 'po-sent', created_at: '2026-06-01T00:00:00Z' }),
+        proposalRow({
+          id: 'r2',
+          project_id: 'proj-1',
+          source_event: 'trade-scope-accepted',
+          created_at: '2026-06-05T00:00:00Z',
+        }),
+      ],
+    );
+    expect(map.get('proj-1')?.proposals).toEqual({
+      count: 2,
+      latestSourceEvent: 'trade-scope-accepted',
+      conflicting: 0,
+    });
+  });
+
+  it('does not depend on the caller ordering the rows', () => {
+    const rows = [
+      proposalRow({ id: 'r1', project_id: 'proj-1', source_event: 'po-sent', created_at: '2026-06-01T00:00:00Z' }),
+      proposalRow({
+        id: 'r2',
+        project_id: 'proj-1',
+        source_event: 'trade-scope-engaged',
+        created_at: '2026-06-09T00:00:00Z',
+      }),
+    ];
+    const map = buildDeskSchedule(
+      [phaseRow({ id: 'a', project_id: 'proj-1', duration_days: 7 })],
+      [],
+      TODAY,
+      undefined,
+      rows,
+    );
+    expect(map.get('proj-1')?.proposals?.latestSourceEvent).toBe('trade-scope-engaged');
+  });
+
+  it('counts the contradictions separately (R109 class 3)', () => {
+    const map = buildDeskSchedule(
+      [phaseRow({ id: 'a', project_id: 'proj-1', duration_days: 7 })],
+      [],
+      TODAY,
+      undefined,
+      [
+        proposalRow({ id: 'r1', project_id: 'proj-1', conflicts_with_committed: true }),
+        proposalRow({
+          id: 'r2',
+          project_id: 'proj-1',
+          source_event: 'trade-scope-engaged',
+          created_at: '2026-06-02T00:00:00Z',
+        }),
+      ],
+    );
+    expect(map.get('proj-1')?.proposals?.conflicting).toBe(1);
+  });
+
+  it('a project with proposals and no phase rows still reaches the desk', () => {
+    const map = buildDeskSchedule([], [], TODAY, undefined, [
+      proposalRow({ id: 'r1', project_id: 'proj-9' }),
+    ]);
+    expect(map.get('proj-9')?.unconfigured).toBe('no-phases');
+    expect(map.get('proj-9')?.proposals?.count).toBe(1);
+  });
+
+  it('the proposals-only map says nothing about configuration', () => {
+    const map = buildDeskProposalSignals([
+      proposalRow({ id: 'r1', project_id: 'proj-9' }),
+      proposalRow({ id: 'r2', project_id: 'proj-9', conflicts_with_committed: true, created_at: '2026-06-02T00:00:00Z' }),
+    ]);
+    // An unanswered chain is not an unconfigured one — this map must never
+    // fabricate the "name the phases" nudge.
+    expect(map.get('proj-9')?.unconfigured).toBeNull();
+    expect(map.get('proj-9')?.proposals).toEqual({
+      count: 2,
+      latestSourceEvent: 'po-sent',
+      conflicting: 1,
+    });
+  });
+});
+
+describe('the contradiction is said in words, never ids (R113)', () => {
+  const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+  it('names the phase and the overrun', () => {
+    expect(chainConflictText('Installation', 6)).toBe(
+      'The chain no longer fits Installation \u2014 6 days past its anchor',
+    );
+    expect(chainConflictText('Installation', 1)).toContain('1 day past');
+  });
+
+  it('degrades without a name rather than printing an id', () => {
+    expect(chainConflictText(null, 3)).toBe(
+      'The chain no longer fits an anchored phase \u2014 3 days past its anchor',
+    );
+    expect(chainConflictText(null, null)).not.toMatch(UUID_RE);
+  });
+
+  it('buildDeskSchedule resolves the contradiction into desk copy', () => {
+    // Two 30d phases feeding an install anchored earlier than they can finish.
+    const map = buildDeskSchedule(
+      [
+        phaseRow({ id: 'a', project_id: 'proj-1', duration_days: 30, start_date: '2026-06-01' }),
+        phaseRow({
+          id: 'install',
+          project_id: 'proj-1',
+          name: 'Installation',
+          follows_phase_id: 'a',
+          duration_days: 7,
+          anchor_date: '2026-06-10',
+        }),
+      ],
+      [],
+      TODAY,
+    );
+    const entry = map.get('proj-1');
+    expect(entry?.contradictionText).toContain('Installation');
+    expect(entry?.contradictionText).not.toMatch(UUID_RE);
   });
 });
