@@ -111,3 +111,6 @@ packages/patina-design-system/.dssync-tailwind.css
 
 # stray fuse artifacts (NFS/SSHFS remnants)
 .fuse_hidden*
+
+# Parcel build cache (extension bundler)
+.parcel-cache/

@@ -114,17 +114,7 @@ async function agent(eventName) {
     findings = paths.length ? await inspectPaths(paths, { root }) : [];
   } else if (eventName === "Stop") {
     const paths = changedPaths({ root, includeUntracked: true });
-    const policy = await inspectPaths(paths, { root });
-    const classified = await classifyPaths(paths, { root });
-    findings = [...policy];
-    if (classified.checks.length) {
-      findings.push({
-        id: "suggested-verification",
-        severity: "info",
-        blocking: false,
-        message: `Suggested affected checks: ${classified.checks.map((check) => check.command).join("; ")}`,
-      });
-    }
+    findings = await inspectPaths(paths, { root });
   }
   printJson(agentHookOutput(eventName, findings));
 }
