@@ -14,6 +14,7 @@
 import { useState } from 'react';
 import { useCreateReviewRequest } from '@patina/supabase';
 import { RoomSheet } from '../../rooms/room-sheet';
+import { DateTextInput } from '../../date-text-input';
 import { DocumentAction, DocumentActionGroup } from '../../document-action';
 
 export function ReviewRequestSheet({
@@ -102,17 +103,13 @@ export function ReviewRequestSheet({
         </div>
 
         <div>
-          <label
-            htmlFor="review-date"
-            className="mb-1.5 block font-mono text-[0.5rem] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
-          >
+          <span className="mb-1.5 block font-mono text-[0.5rem] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
             Send when (leave blank to send now)
-          </label>
-          <input
-            id="review-date"
-            type="date"
-            value={scheduledFor}
-            onChange={(e) => setScheduledFor(e.target.value)}
+          </span>
+          <DateTextInput
+            value={scheduledFor || null}
+            onChange={(value) => setScheduledFor(value ?? '')}
+            ariaLabel="Send when (leave blank to send now)"
             className="rounded-[6px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[0.78rem] text-[var(--color-charcoal)] outline-none focus:border-[var(--color-clay)]"
           />
         </div>

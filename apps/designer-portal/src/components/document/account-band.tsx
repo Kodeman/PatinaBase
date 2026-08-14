@@ -22,6 +22,7 @@ import {
 } from '@/hooks/use-account-page';
 import type { SectionKey } from '@/lib/document/desk-derivation';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
+import { DateTextInput } from './date-text-input';
 import { openLedger } from './command-bar';
 import { openInvoiceComposer, openInvoiceFolio } from './accounts/invoice-overlays';
 import { AmendmentSheet } from './overlays/amendment-sheet';
@@ -99,17 +100,16 @@ function MilestoneRow({ m, projectId }: { m: AccountMilestone; projectId: string
           </select>
         )}
         {m.trigger_kind === 'on_date' && (
-          <input
-            type="date"
-            value={m.due_date ?? ''}
-            onChange={(e) =>
+          <DateTextInput
+            value={m.due_date ?? null}
+            onChange={(value) =>
               updateTrigger.mutate({
                 milestoneId: m.id,
                 triggerKind: 'on_date',
-                dueDate: e.target.value || null,
+                dueDate: value,
               })
             }
-            aria-label={`${m.label} date`}
+            ariaLabel={`${m.label} date`}
             className="bg-transparent font-mono text-[9px] text-[var(--color-clay)] outline-none"
           />
         )}

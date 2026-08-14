@@ -16,6 +16,7 @@ import { useState } from 'react';
 import { useCreateTouchpoint, type TouchpointType } from '@patina/supabase';
 import { RoomSheet } from '../../rooms/room-sheet';
 import { todayYmd } from '@/lib/document/format';
+import { DateTextInput } from '../../date-text-input';
 import { DocumentAction, DocumentActionGroup } from '../../document-action';
 
 const KINDS: Array<[TouchpointType, string]> = [
@@ -123,17 +124,13 @@ export function TouchpointSheet({
         </div>
 
         <div>
-          <label
-            htmlFor="touchpoint-date"
-            className="mb-1.5 block font-mono text-[0.5rem] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
-          >
+          <span className="mb-1.5 block font-mono text-[0.5rem] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
             When
-          </label>
-          <input
-            id="touchpoint-date"
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
+          </span>
+          <DateTextInput
+            value={date || null}
+            onChange={(value) => setDate(value ?? '')}
+            ariaLabel="When"
             className="rounded-[6px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[0.78rem] text-[var(--color-charcoal)] outline-none focus:border-[var(--color-clay)]"
           />
         </div>

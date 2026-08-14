@@ -43,6 +43,8 @@ export function DateTextInput({
   ariaLabel,
   onValidityChange,
   instruction = 'Choose a date from the calendar.',
+  disabled = false,
+  minDate,
 }: {
   value: string | null;
   onChange: (value: string | null) => void;
@@ -50,6 +52,10 @@ export function DateTextInput({
   ariaLabel?: string;
   onValidityChange?: (valid: boolean) => void;
   instruction?: string;
+  disabled?: boolean;
+  /** Passed through to the Folio's own `minDate` — a site that gated the old
+   *  native input's `min` attribute keeps the same floor on the grid. */
+  minDate?: string | null;
 }) {
   const descriptionId = useId();
   const errorId = useId();
@@ -68,12 +74,13 @@ export function DateTextInput({
         <button
           ref={triggerRef}
           type="button"
+          disabled={disabled}
           aria-label={ariaLabel}
           aria-describedby={`${descriptionId}${invalid ? ` ${errorId}` : ''}`}
           aria-invalid={invalid || undefined}
           aria-expanded={open}
           onClick={() => setOpen((current) => !current)}
-          className={`flex items-center justify-between gap-2 text-left ${className ?? ''}`}
+          className={`flex items-center justify-between gap-2 text-left disabled:cursor-not-allowed disabled:opacity-50 ${className ?? ''}`}
         >
           <span>
             {canonicalValue ? (
@@ -82,7 +89,7 @@ export function DateTextInput({
               <span className="font-mono italic text-[var(--text-faint)]">MM/DD/YYYY</span>
             )}
           </span>
-          {canonicalValue ? (
+          {canonicalValue && !disabled ? (
             <span
               role="button"
               tabIndex={0}
@@ -105,7 +112,7 @@ export function DateTextInput({
             </span>
           ) : null}
         </button>
-        {open ? (
+        {open && !disabled ? (
           <FolioPopover
             onClose={() => setOpen(false)}
             returnFocusRef={triggerRef}
@@ -115,6 +122,7 @@ export function DateTextInput({
               modes={['day']}
               value={canonicalValue ? { kind: 'day', date: canonicalValue } : null}
               today={todayYmd()}
+              minDate={minDate}
               onCommit={(selection) => {
                 if (selection.kind !== 'day') return;
                 onValidityChange?.(true);

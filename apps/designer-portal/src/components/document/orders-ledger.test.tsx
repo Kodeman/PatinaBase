@@ -46,6 +46,28 @@ jest.mock('./ledger-front-matter', () => ({
   LedgerFrontMatter: () => <div data-testid="front-matter" />,
 }));
 
+// The Folio-backed trigger is proven in its own suite (date-text-input.test.tsx);
+// here we only need a controlled stand-in so the ledger's own plumbing (value
+// in, onChange out) can be exercised directly.
+jest.mock('./date-text-input', () => ({
+  DateTextInput: ({
+    value,
+    onChange,
+    ariaLabel,
+  }: {
+    value: string | null;
+    onChange: (value: string | null) => void;
+    ariaLabel?: string;
+  }) => (
+    <input
+      type="text"
+      aria-label={ariaLabel}
+      value={value ?? ''}
+      onChange={(event) => onChange(event.target.value || null)}
+    />
+  ),
+}));
+
 jest.mock('@/lib/document/ledger-summary', () => ({
   ordersThroughput: () => [],
 }));

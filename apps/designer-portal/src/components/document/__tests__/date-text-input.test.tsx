@@ -22,12 +22,18 @@ jest.mock('../date', () => ({
   ),
   FolioCalendar: ({
     value,
+    minDate,
     onCommit,
   }: {
     value: { kind: 'day'; date: string } | null;
+    minDate?: string | null;
     onCommit: (selection: { kind: 'day'; date: string }) => void;
   }) => (
-    <div data-testid="folio-calendar" data-seeded={value?.date ?? ''}>
+    <div
+      data-testid="folio-calendar"
+      data-seeded={value?.date ?? ''}
+      data-min-date={minDate ?? ''}
+    >
       <button
         type="button"
         onClick={() => onCommit({ kind: 'day', date: '2026-08-19' })}
@@ -169,5 +175,45 @@ describe('DateTextInput', () => {
     );
     expect(screen.getByRole('alert')).toHaveTextContent('Choose a valid calendar date.');
     expect(onValidityChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it('disables the trigger, hides the clear affordance, and never opens the Folio', () => {
+    const onChange = jest.fn();
+
+    render(
+      <DateTextInput
+        value="2026-08-07"
+        onChange={onChange}
+        ariaLabel="Start date"
+        disabled
+      />,
+    );
+
+    const trigger = screen.getByRole('button', { name: 'Start date' });
+    expect(trigger).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Clear date' })).not.toBeInTheDocument();
+
+    fireEvent.click(trigger);
+
+    expect(screen.queryByTestId('folio-popover')).not.toBeInTheDocument();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('passes minDate through to the Folio', () => {
+    render(
+      <DateTextInput
+        value={null}
+        onChange={jest.fn()}
+        ariaLabel="Extend due date to"
+        minDate="2026-08-15"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Extend due date to' }));
+
+    expect(screen.getByTestId('folio-calendar')).toHaveAttribute(
+      'data-min-date',
+      '2026-08-15',
+    );
   });
 });
