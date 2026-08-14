@@ -214,7 +214,7 @@ describe("ServiceAgreementInstruments paper issuance from draft", () => {
     mockRates = READY_RATES;
   });
 
-  it("offers the paper act on a ready draft, and says nothing will be emailed", () => {
+  it("offers the paper act on a ready draft as an offer, not as a claim about what the client already holds", () => {
     mockDocumentState = "draft";
     render(
       <ServiceAgreementInstruments
@@ -226,14 +226,40 @@ describe("ServiceAgreementInstruments paper issuance from draft", () => {
     expect(
       screen.getByRole("button", { name: "Record the signature" }),
     ).toBeVisible();
+    expect(
+      screen.getByText(/if the client has signed a printed copy/i),
+    ).toBeVisible();
+    // The portal cannot know whether anyone ever printed this, so it must not
+    // say so on every ready draft.
+    expect(screen.queryByText(/already has a signed copy/i)).toBeNull();
     expect(screen.getByText(/nothing will be emailed/i)).toBeVisible();
   });
 
-  it("withholds the paper act from a draft the server would refuse", () => {
+  // The send sheet is the wall the review met: two buttons, both assuming an
+  // email. The third path has to be findable from there.
+  it("names the offline path inside the send sheet itself, and opens the ceremony from it", async () => {
     mockDocumentState = "draft";
-    // The server bar is terms AND at least one role rate; a draft missing
-    // either is one send_commercial_document would refuse too.
-    mockTerms = READY_TERMS;
+    render(
+      <ServiceAgreementInstruments
+        proposal={{ id: "agreement-1", client: {} }}
+        clientName="Avery Client"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Review & send" }));
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Record a signature received outside Patina",
+      }),
+    );
+
+    expect(await screen.findByLabelText("Signed by")).toHaveValue(
+      "Avery Client",
+    );
+  });
+
+  it("withholds the offline path from the send sheet when the server would refuse the paper act", () => {
+    mockDocumentState = "draft";
     mockRates = [];
     render(
       <ServiceAgreementInstruments
@@ -242,10 +268,38 @@ describe("ServiceAgreementInstruments paper issuance from draft", () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "Review & send" }));
     expect(
-      screen.queryByRole("button", { name: "Record the signature" }),
+      screen.queryByRole("button", {
+        name: "Record a signature received outside Patina",
+      }),
     ).toBeNull();
   });
+
+  // The server bar is terms AND at least one role rate; a draft missing either
+  // is one send_commercial_document would refuse too. Both halves, because the
+  // gate is a conjunction and either side alone must close it.
+  it.each([
+    ["no role rates", READY_TERMS as unknown, [] as unknown[]],
+    ["no terms", null as unknown, READY_RATES as unknown[]],
+  ])(
+    "withholds the paper act from a draft with %s, which the server would refuse",
+    (_label, terms, rates) => {
+      mockDocumentState = "draft";
+      mockTerms = terms;
+      mockRates = rates;
+      render(
+        <ServiceAgreementInstruments
+          proposal={{ id: "agreement-1", client: {} }}
+          clientName="Avery Client"
+        />,
+      );
+
+      expect(
+        screen.queryByRole("button", { name: "Record the signature" }),
+      ).toBeNull();
+    },
+  );
 
   it.each(["client_signed", "executed", "declined", "expired", "superseded"])(
     "withholds the paper act once the agreement is %s",

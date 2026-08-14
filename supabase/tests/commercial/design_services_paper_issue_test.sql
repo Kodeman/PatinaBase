@@ -13,22 +13,32 @@
 --
 --   · UNDER-recording — the paper-issued rail quietly producing a lesser
 --     engagement than the emailed one. Section (1) builds BOTH from identical
---     fixtures and diffs the resulting rows field by field.
+--     fixtures and diffs the resulting rows field by field; section (10) walks
+--     the two lifecycles stage by stage and proves they traverse the identical
+--     (status, commercial_state) pairs, all the way to an active project.
 --
 --   · OVER-recording — the rail claiming more than happened, or concealing
 --     what did. Sections (2), (3) and (7): the stamps say issuance was on
 --     paper, nothing says an email left, and neither stamp is paintable by
 --     hand.
 --
--- And two that belong to this migration alone:
+-- And three that belong to this migration alone:
 --   · STRICTLY ADDITIVE — section (5). Without p_issue_on_paper the act is the
 --     shipped act, refusing from draft in 00425's exact words.
 --   · ORDERING IS LOAD-BEARING — section (9). The signature trigger re-reads
 --     the proposal at fire time, so it observes the mid-transaction flip to
 --     'sent'. Proven by removing the impl's own state guard and watching the
 --     TRIGGER refuse a draft-state insert on its own.
+--   · ONE STATE SHAPE, TWO DOORS — sections (10)-(12). An issuance moves
+--     proposals.status as well as commercial_state, which is what engages the
+--     three status-keyed server guards around a document the client has
+--     signed: the content freeze, the send rail, and the drafting-room save.
+--     Section (11) shows each of them refusing, paired with the same act
+--     landing on a still-draft control. Section (12) shows the two doors are
+--     disjoint by construction, so `issued_on_paper = true` alone is the whole
+--     reader's predicate.
 --
--- FALSIFIABILITY. Three refusals are proven to BITE, in the pattern
+-- FALSIFIABILITY. Four refusals are proven to BITE, in the pattern
 -- executed_on_paper_test.sql established: the live function definition is
 -- rewritten with the predicate removed inside a SAVEPOINT, the refused call is
 -- shown to SUCCEED, and the SAVEPOINT is rolled back. Those blocks are marked
@@ -259,16 +269,20 @@ BEGIN
      AND (v_recorded->>'signedOnPaper')::boolean,
     format('issuing and recording in one act must leave the document client-signed: %s', v_recorded);
 
-  -- Mid-lifecycle, before the countersign: the issue step moved commercial_
-  -- state and the two stamps, and nothing else. proposals.status is still
-  -- where the drafting room left it — countersign reads commercial_state only
-  -- (00475:661), so nothing downstream notices.
+  -- Mid-lifecycle, before the countersign: the issue step moved BOTH keys, the
+  -- way send does. status = 'sent' is what engages every status-keyed server
+  -- guard — content freeze, send, the drafting-room save — around a document a
+  -- client has now signed. sent_at stays NULL, because that is the tell that
+  -- nothing was actually sent.
   ASSERT (SELECT status FROM public.proposals
-          WHERE id = '1a300000-0000-4000-8000-000000000002') = 'draft',
-    'the issue step must not touch proposals.status';
+          WHERE id = '1a300000-0000-4000-8000-000000000002') = 'sent',
+    'an issuance is an issuance: the paper door moves proposals.status too';
   ASSERT (SELECT sent_at FROM public.proposals
           WHERE id = '1a300000-0000-4000-8000-000000000002') IS NULL,
     'nothing was sent, so there is no sent_at';
+  ASSERT (SELECT proposal_send_dispatch_id FROM public.proposals
+          WHERE id = '1a300000-0000-4000-8000-000000000002') IS NULL,
+    'nothing was dispatched, so there is no dispatch link';
 
   v_executed := public.countersign_design_services_agreement(
     '1a300000-0000-4000-8000-000000000002', 'Issue Designer'
@@ -352,9 +366,12 @@ BEGIN
     format('the two rails must converge on the same lifecycle — %s/%s vs %s/%s',
            p.status, p.commercial_state, c.status, c.commercial_state);
 
-  -- THE READER'S PREDICATE, exactly as the banner states it.
-  ASSERT (p.issued_on_paper AND p.proposal_send_dispatch_id IS NULL),
-    'issued on paper AND never emailed — the predicate any reader should use';
+  -- THE READER'S PREDICATE, exactly as the banner states it: ONE column. The
+  -- two doors are disjoint by construction (each requires draft on the key the
+  -- other one moves), so issued_on_paper = true already implies both send
+  -- columns are empty. No downstream reader needs a conjunction.
+  ASSERT p.issued_on_paper,
+    'issued on paper — the single-column predicate any reader should use';
 
   ASSERT NOT c.issued_on_paper, 'an emailed document must not claim paper issuance';
   ASSERT c.paper_issued_by IS NULL, 'and must name nobody as its paper issuer';
@@ -363,6 +380,27 @@ BEGIN
 
   RAISE NOTICE 'PASS 2: the stamps distinguish a paper issuance from a real send';
 END $$;
+
+-- THE DISJOINTNESS ITSELF, asserted over the whole table rather than over one
+-- fixture: no row anywhere may carry the paper stamp AND evidence of a real
+-- send. This is the invariant the single-column predicate rests on, and it is
+-- re-checked at the end of the suite, after every interleaving below has run.
+CREATE OR REPLACE FUNCTION pg_temp.assert_stamps_disjoint(p_where text)
+RETURNS void LANGUAGE plpgsql AS $$
+DECLARE v_bad integer;
+BEGIN
+  SELECT count(*) INTO v_bad FROM public.proposals
+  WHERE issued_on_paper
+    AND (sent_at IS NOT NULL OR proposal_send_dispatch_id IS NOT NULL);
+  ASSERT v_bad = 0,
+    format('%s: %s row(s) claim a paper issuance AND a real send', p_where, v_bad);
+  SELECT count(*) INTO v_bad FROM public.proposals
+  WHERE NOT issued_on_paper AND paper_issued_by IS NOT NULL;
+  ASSERT v_bad = 0,
+    format('%s: %s row(s) name a paper issuer without being issued on paper', p_where, v_bad);
+END $$;
+
+SELECT pg_temp.assert_stamps_disjoint('after section 2');
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- (3) NO EMAIL LEFT — and the client the emailed rail cannot serve at all.
@@ -741,9 +779,12 @@ END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- (8) READINESS PARITY. Issuing on paper must not be HARDER than sending by
---     email. The server bar is send_commercial_document's actual design-
---     services bar (00423:1610-1616) and nothing beyond it: terms exist, and
---     at least one role rate exists.
+--     email — nor EASIER. The server bar is send_commercial_document's actual
+--     design-services bar and nothing beside it: an exact client relationship
+--     (00423:1598-1608), terms, and at least one role rate (00423:1610-1616).
+--     Both halves are proven the same way: the same document is offered to
+--     both rails and both refuse it, so these are one bar rather than two that
+--     happen to fire together.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 DO $$
@@ -782,9 +823,83 @@ BEGIN
   END;
   ASSERT v_send_err = 'design-services send requires terms and role rates',
     format('bare-send refusal: %L', v_send_err);
-
-  RAISE NOTICE 'PASS 8: the paper bar is the emailed bar — terms and one rate, no more';
 END $$;
+
+-- THE CLIENT RELATIONSHIP. send refuses a document whose designer_client_id
+-- names a different household than its client_id — an identity drift no
+-- engagement may be built on. A document the emailed rail will not send is not
+-- a document the paper door may issue, sign and countersign into a live project
+-- and a billing authority.
+-- designer_client_id names the emailless household (relationship 02); client_id
+-- names the other one. (Insertable here because this suite runs as postgres —
+-- 00387:634 skips its identity check for trusted server paths, which is exactly
+-- how such a row comes to exist in the wild: a relationship edited after the
+-- document was drafted.)
+SELECT pg_temp.mint_agreement(
+  '1a300000-0000-4000-8000-00000000000d', 'Mismatched relationship probe',
+  '1a000000-0000-4000-8000-000000000002', '1a200000-0000-4000-8000-000000000002');
+
+DO $$
+DECLARE
+  v_err text;
+  v_send_err text;
+BEGIN
+  BEGIN
+    PERFORM pg_temp.send_agreement('1a300000-0000-4000-8000-00000000000d');
+    ASSERT false, 'the emailed rail must refuse a mismatched client relationship';
+  EXCEPTION WHEN check_violation THEN v_send_err := SQLERRM;
+  END;
+  ASSERT v_send_err = 'commercial document requires an exact client relationship before sending',
+    format('mismatched-send refusal: %L', v_send_err);
+
+  BEGIN
+    PERFORM public.record_paper_client_signature(
+      '1a300000-0000-4000-8000-00000000000d', 'Issue Client', pg_temp.paper_date(),
+      NULL::uuid, true);
+    ASSERT false, 'the paper rail must refuse the same mismatched relationship';
+  EXCEPTION WHEN check_violation THEN v_err := SQLERRM;
+  END;
+  ASSERT v_err = v_send_err,
+    format('mismatched-issue refusal: %L (wanted the send rail''s own words, %L)',
+           v_err, v_send_err);
+
+  -- The refusal is total, on both rails.
+  ASSERT (SELECT commercial_state FROM public.proposals
+          WHERE id = '1a300000-0000-4000-8000-00000000000d') = 'draft'
+     AND (SELECT status FROM public.proposals
+          WHERE id = '1a300000-0000-4000-8000-00000000000d') = 'draft'
+     AND NOT (SELECT issued_on_paper FROM public.proposals
+              WHERE id = '1a300000-0000-4000-8000-00000000000d'),
+    'a refused issuance must leave the document exactly where it was';
+
+  RAISE NOTICE 'PASS 8: the paper bar is the emailed bar — relationship, terms and one rate, no more';
+END $$;
+
+-- FALSIFY (extra) — the relationship predicate itself. With it stripped from
+-- the live body the mismatched issuance lands, which is what makes the refusal
+-- above a test of THAT predicate rather than of some earlier gate.
+SAVEPOINT falsify_issue_relationship;
+DO $$
+DECLARE v_def text;
+BEGIN
+  SELECT pg_get_functiondef(p.oid) INTO v_def
+  FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+  WHERE n.nspname = 'public'
+    AND p.proname = '_issue_design_services_agreement_on_paper';
+  ASSERT position('AND dc.client_id = v_proposal.client_id' IN v_def) > 0,
+    'FALSIFY setup: the relationship predicate must be findable in the live definition';
+  EXECUTE replace(v_def,
+    'AND dc.client_id = v_proposal.client_id', 'AND true');
+END $$;
+DO $$
+BEGIN
+  PERFORM public._issue_design_services_agreement_on_paper(
+    '1a300000-0000-4000-8000-00000000000d');
+  ASSERT (SELECT commercial_state FROM public.proposals
+          WHERE id = '1a300000-0000-4000-8000-00000000000d') = 'sent',
+    'FALSIFY: with the relationship predicate stripped the mismatched issuance must land';
+END $$;
+ROLLBACK TO SAVEPOINT falsify_issue_relationship;
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- (9) ORDERING IS LOAD-BEARING. guard_commercial_signature_insert re-derives
@@ -859,7 +974,267 @@ DO $$ BEGIN
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- (10) SHAPE — ACLs, arity and the pinned search_path, as authored.
+-- (10) THE STATE WALK. The emailed rail's lifecycle is (draft,draft) →
+--      (sent,sent) → (sent,client_signed) → (accepted,executed), and the last
+--      step activates a project. The paper rail must traverse the IDENTICAL
+--      pairs — that is what makes every status-keyed guard, every phase rail
+--      and every desk row read a paper-issued agreement the same way it reads
+--      an emailed one. Recorded stage by stage into a table this suite prints.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+CREATE TEMP TABLE walk (
+  seq serial PRIMARY KEY,
+  rail text NOT NULL,
+  stage text NOT NULL,
+  status text,
+  commercial_state text,
+  sent_at_written boolean,
+  dispatch_written boolean,
+  issued_on_paper boolean,
+  active_section text
+) ON COMMIT DROP;
+
+CREATE OR REPLACE FUNCTION pg_temp.mark(p_rail text, p_stage text, p_id uuid)
+RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  INSERT INTO walk (rail, stage, status, commercial_state, sent_at_written,
+                    dispatch_written, issued_on_paper, active_section)
+  SELECT p_rail, p_stage, p.status, p.commercial_state, p.sent_at IS NOT NULL,
+         p.proposal_send_dispatch_id IS NOT NULL, p.issued_on_paper,
+         (SELECT s.active_section FROM public.document_state s WHERE s.proposal_id = p.id)
+  FROM public.proposals p WHERE p.id = p_id;
+END $$;
+
+SELECT pg_temp.mint_agreement('1a300000-0000-4000-8000-00000000000b', 'Walk · emailed');
+SELECT pg_temp.mint_agreement('1a300000-0000-4000-8000-00000000000c', 'Walk · paper');
+SELECT pg_temp.mark('emailed', '1 drafted', '1a300000-0000-4000-8000-00000000000b');
+SELECT pg_temp.mark('paper', '1 drafted', '1a300000-0000-4000-8000-00000000000c');
+
+SELECT pg_temp.send_agreement('1a300000-0000-4000-8000-00000000000b');
+-- The private door, called directly, so the issuance can be OBSERVED on its
+-- own. Through record_paper_client_signature the two acts share a transaction
+-- and this state is never externally visible.
+SELECT public._issue_design_services_agreement_on_paper('1a300000-0000-4000-8000-00000000000c');
+SELECT pg_temp.mark('emailed', '2 issued', '1a300000-0000-4000-8000-00000000000b');
+SELECT pg_temp.mark('paper', '2 issued', '1a300000-0000-4000-8000-00000000000c');
+
+SELECT pg_temp.assume_user('1a000000-0000-4000-8000-000000000002');
+SELECT public.sign_design_services_agreement(
+  '1a300000-0000-4000-8000-00000000000b', 'Issue Client');
+SELECT pg_temp.assume_user('1a000000-0000-4000-8000-000000000001');
+DO $$
+BEGIN
+  PERFORM pg_temp.assume_role('1a000000-0000-4000-8000-000000000001');
+  PERFORM public.record_paper_client_signature(
+    '1a300000-0000-4000-8000-00000000000c', 'Issue Client', pg_temp.paper_date());
+  PERFORM pg_temp.reset_role();
+END $$;
+SELECT pg_temp.mark('emailed', '3 client signed', '1a300000-0000-4000-8000-00000000000b');
+SELECT pg_temp.mark('paper', '3 client signed', '1a300000-0000-4000-8000-00000000000c');
+
+DO $$
+DECLARE v_e jsonb; v_p jsonb;
+BEGIN
+  v_e := public.countersign_design_services_agreement(
+    '1a300000-0000-4000-8000-00000000000b', 'Issue Designer');
+  v_p := public.countersign_design_services_agreement(
+    '1a300000-0000-4000-8000-00000000000c', 'Issue Designer');
+  INSERT INTO issue_ids VALUES ('walk_emailed_project', (v_e->>'projectId')::uuid);
+  INSERT INTO issue_ids VALUES ('walk_paper_project', (v_p->>'projectId')::uuid);
+END $$;
+SELECT pg_temp.mark('emailed', '4 executed', '1a300000-0000-4000-8000-00000000000b');
+SELECT pg_temp.mark('paper', '4 executed', '1a300000-0000-4000-8000-00000000000c');
+
+DO $$
+DECLARE
+  v_stage record;
+  v_e record;
+  v_p record;
+BEGIN
+  FOR v_stage IN SELECT DISTINCT stage FROM walk ORDER BY stage LOOP
+    SELECT * INTO v_e FROM walk WHERE rail = 'emailed' AND stage = v_stage.stage;
+    SELECT * INTO v_p FROM walk WHERE rail = 'paper' AND stage = v_stage.stage;
+    ASSERT v_e.status = v_p.status AND v_e.commercial_state = v_p.commercial_state,
+      format('stage %s diverges: emailed %s/%s vs paper %s/%s', v_stage.stage,
+             v_e.status, v_e.commercial_state, v_p.status, v_p.commercial_state);
+    -- The one place they must NOT agree: the emailed rail wrote a sent_at and a
+    -- dispatch row from stage 2 on; the paper rail never writes either.
+    ASSERT NOT v_p.sent_at_written AND NOT v_p.dispatch_written,
+      format('stage %s: the paper rail wrote send evidence', v_stage.stage);
+    -- Desk, document spine and ⌘K all read document_state (00191). A paper
+    -- issuance that left status behind showed 'direction' — still drafting —
+    -- for the whole client-signed window. It reads what the emailed rail reads.
+    ASSERT v_e.active_section IS NOT DISTINCT FROM v_p.active_section,
+      format('stage %s: the shared document_state view disagrees — emailed %s vs paper %s',
+             v_stage.stage, v_e.active_section, v_p.active_section);
+  END LOOP;
+
+  ASSERT (SELECT status FROM public.projects
+          WHERE id = (SELECT value FROM issue_ids WHERE key = 'walk_paper_project')) = 'active',
+    'the walk must end at a real active project';
+  ASSERT EXISTS (SELECT 1 FROM public.project_billing_authorities
+                 WHERE project_id = (SELECT value FROM issue_ids WHERE key = 'walk_paper_project')),
+    'and a real billing authority';
+
+  RAISE NOTICE 'PASS 10: the paper rail traverses the emailed rail''s exact states, end to end';
+END $$;
+
+SELECT rail, stage, status, commercial_state, sent_at_written AS sent_at,
+       dispatch_written AS dispatch, issued_on_paper, active_section
+FROM walk ORDER BY stage, rail;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (11) WHAT THE REGIME NOW REFUSES. Three server guards key on proposals.
+--      status, and every one of them is the reason status has to move:
+--        · guard_commercial_authored_child — the words the client signed stop
+--          moving (00423:440).
+--        · send_commercial_document — a document handed over on paper can
+--          never afterwards be emailed (00423:1585).
+--        · upsert_design_services_draft — the drafting room cannot rewrite a
+--          signed instrument or roll it back to draft (00422:1731).
+--      Each refusal is paired with the same act landing on a still-draft
+--      control, so what is proven is the ISSUANCE, not a broken act.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+SELECT pg_temp.mint_agreement('1a300000-0000-4000-8000-00000000000e', 'Regime probe');
+SELECT pg_temp.mint_agreement('1a300000-0000-4000-8000-00000000000f', 'Regime control');
+
+DO $$
+DECLARE v_recorded jsonb;
+BEGIN
+  PERFORM pg_temp.assume_role('1a000000-0000-4000-8000-000000000001');
+  v_recorded := public.record_paper_client_signature(
+    '1a300000-0000-4000-8000-00000000000e', 'Issue Client', pg_temp.paper_date(),
+    NULL::uuid, true);
+  PERFORM pg_temp.reset_role();
+  ASSERT v_recorded->>'commercialState' = 'client_signed',
+    'the regime probe must be sitting at a recorded paper signature';
+END $$;
+
+DO $$
+DECLARE v_err text;
+BEGIN
+  -- (a) CONTENT FREEZE. A rate the client signed is not editable.
+  BEGIN
+    UPDATE public.proposal_service_rates SET hourly_rate_cents = 99900
+    WHERE proposal_id = '1a300000-0000-4000-8000-00000000000e';
+    ASSERT false, 'the rates behind a recorded paper signature must be frozen';
+  EXCEPTION WHEN check_violation THEN v_err := SQLERRM;
+  END;
+  ASSERT v_err = 'proposal_service_rates is immutable after its proposal leaves draft',
+    format('frozen-rate refusal: %L', v_err);
+
+  v_err := NULL;
+  BEGIN
+    UPDATE public.proposal_service_terms SET billing_ceiling_cents = 5000000
+    WHERE proposal_id = '1a300000-0000-4000-8000-00000000000e';
+    ASSERT false, 'the terms behind a recorded paper signature must be frozen';
+  EXCEPTION WHEN check_violation THEN v_err := SQLERRM;
+  END;
+  ASSERT v_err = 'proposal_service_terms is immutable after its proposal leaves draft',
+    format('frozen-terms refusal: %L', v_err);
+
+  -- The control: the same two edits land on a document still in draft, so the
+  -- refusals above are about the issuance and not about the columns.
+  UPDATE public.proposal_service_rates SET hourly_rate_cents = 99900
+  WHERE proposal_id = '1a300000-0000-4000-8000-00000000000f';
+  UPDATE public.proposal_service_terms SET billing_ceiling_cents = 5000000
+  WHERE proposal_id = '1a300000-0000-4000-8000-00000000000f';
+  ASSERT (SELECT hourly_rate_cents FROM public.proposal_service_rates
+          WHERE proposal_id = '1a300000-0000-4000-8000-00000000000f') = 99900,
+    'the still-draft control must remain editable, or the freeze proves nothing';
+
+  -- (b) NO EMAIL, EVER. The ceremony promised nothing would be emailed; the
+  -- server is what keeps that promise. The status gate fires before the
+  -- fingerprint check, so a bogus fingerprint cannot be what refused this.
+  v_err := NULL;
+  BEGIN
+    PERFORM public.send_commercial_document(
+      '1a300000-0000-4000-8000-00000000000e', 'not-the-fingerprint', NULL, NULL);
+    ASSERT false, 'a paper-issued document must never be emailable';
+  EXCEPTION WHEN insufficient_privilege THEN v_err := SQLERRM;
+  END;
+  ASSERT v_err = 'commercial draft 1a300000-0000-4000-8000-00000000000e not found or access denied',
+    format('paper-issued send refusal: %L', v_err);
+  ASSERT (SELECT count(*) FROM public.proposal_send_dispatches
+          WHERE proposal_id = '1a300000-0000-4000-8000-00000000000e') = 0,
+    'and must write no dispatch row on the way out';
+  ASSERT (SELECT commercial_state FROM public.proposals
+          WHERE id = '1a300000-0000-4000-8000-00000000000e') = 'client_signed',
+    'and must not regress the lifecycle it refused to act on';
+
+  -- (c) THE DRAFTING ROOM. The signed instrument cannot be rewritten, and the
+  -- lifecycle cannot be rolled back underneath the client's signature.
+  v_err := NULL;
+  BEGIN
+    PERFORM public.upsert_design_services_draft(
+      '1a300000-0000-4000-8000-00000000000e',
+      jsonb_build_object('scope', 'Rewritten after signature.',
+        'billingCeilingCents', 5000000, 'currentRateVersion', 1),
+      jsonb_build_array(jsonb_build_object('version', 1, 'roleName', 'Lead Designer',
+        'hourlyRateCents', 99900, 'sortOrder', 0, 'effectiveAt', DATE '2026-01-01')));
+    ASSERT false, 'the drafting room must not rewrite a signed instrument';
+  EXCEPTION WHEN insufficient_privilege THEN v_err := SQLERRM;
+  END;
+  ASSERT v_err = 'draft proposal 1a300000-0000-4000-8000-00000000000e not found or access denied',
+    format('post-signature draft-save refusal: %L', v_err);
+  ASSERT (SELECT commercial_state FROM public.proposals
+          WHERE id = '1a300000-0000-4000-8000-00000000000e') = 'client_signed'
+     AND (SELECT billing_ceiling_cents FROM public.proposal_service_terms
+          WHERE proposal_id = '1a300000-0000-4000-8000-00000000000e') = 900000,
+    'the signed terms and the signed lifecycle must both be exactly where the client left them';
+
+  -- The control again: the same save lands on the still-draft document.
+  PERFORM public.upsert_design_services_draft(
+    '1a300000-0000-4000-8000-00000000000f',
+    jsonb_build_object('scope', 'Freely redrafted.',
+      'billingCeilingCents', 4000000, 'currentRateVersion', 1),
+    jsonb_build_array(jsonb_build_object('version', 1, 'roleName', 'Lead Designer',
+      'hourlyRateCents', 12500, 'sortOrder', 0, 'effectiveAt', DATE '2026-01-01')));
+  ASSERT (SELECT billing_ceiling_cents FROM public.proposal_service_terms
+          WHERE proposal_id = '1a300000-0000-4000-8000-00000000000f') = 4000000,
+    'the still-draft control must remain saveable, or the refusal proves nothing';
+
+  RAISE NOTICE 'PASS 11: content freeze, no send, no re-draft — the status-keyed guards engage';
+END $$;
+
+-- THE TWO INTERLEAVINGS, stated as one claim: the doors are disjoint BY
+-- CONSTRUCTION, because each requires draft on the key the other one moves.
+DO $$
+DECLARE v_err text;
+BEGIN
+  -- Real send first ⇒ the paper door refuses (commercial_state is 'sent').
+  -- Fixture 03 was sent for real in section (4).
+  BEGIN
+    PERFORM public.record_paper_client_signature(
+      '1a300000-0000-4000-8000-000000000003', 'Issue Client', pg_temp.paper_date(),
+      NULL::uuid, true);
+    ASSERT false, 'a really-sent document must not be issuable on paper';
+  EXCEPTION WHEN check_violation THEN v_err := SQLERRM;
+  END;
+  ASSERT v_err = 'design services agreement 1a300000-0000-4000-8000-000000000003 is not issuable on paper (sent)',
+    format('send-then-paper refusal: %L', v_err);
+  ASSERT NOT (SELECT issued_on_paper FROM public.proposals
+              WHERE id = '1a300000-0000-4000-8000-000000000003'),
+    'a really-sent document must never acquire the paper stamp';
+
+  -- Paper first ⇒ the send door refuses (status is 'sent'). Proven in (11b)
+  -- above on fixture 0e; asserted here as the second half of the same claim.
+  ASSERT (SELECT status FROM public.proposals
+          WHERE id = '1a300000-0000-4000-8000-00000000000e') = 'sent'
+     AND (SELECT sent_at FROM public.proposals
+          WHERE id = '1a300000-0000-4000-8000-00000000000e') IS NULL,
+    'the paper-issued document holds the status that closes the send door, and no sent_at';
+END $$;
+
+SELECT pg_temp.assert_stamps_disjoint('after every interleaving');
+
+DO $$ BEGIN
+  RAISE NOTICE 'PASS 12: the two doors are disjoint — no interleaving produces a document that was both';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (13) SHAPE — ACLs, arity and the pinned search_path, as authored.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 DO $$
@@ -867,13 +1242,13 @@ BEGIN
   -- The one public door: authenticated only.
   IF NOT has_function_privilege('authenticated',
        'public.record_paper_client_signature(uuid, text, date, uuid, boolean)', 'EXECUTE') THEN
-    RAISE EXCEPTION 'FAIL 10a: authenticated cannot execute record_paper_client_signature';
+    RAISE EXCEPTION 'FAIL 13a: authenticated cannot execute record_paper_client_signature';
   END IF;
   IF has_function_privilege('anon',
        'public.record_paper_client_signature(uuid, text, date, uuid, boolean)', 'EXECUTE')
      OR has_function_privilege('service_role',
        'public.record_paper_client_signature(uuid, text, date, uuid, boolean)', 'EXECUTE') THEN
-    RAISE EXCEPTION 'FAIL 10b: record_paper_client_signature carries a grant it should not';
+    RAISE EXCEPTION 'FAIL 13b: record_paper_client_signature carries a grant it should not';
   END IF;
 
   -- The private issuance door: zero grants, service_role included.
@@ -883,7 +1258,7 @@ BEGIN
        'public._issue_design_services_agreement_on_paper(uuid)', 'EXECUTE')
      OR has_function_privilege('service_role',
        'public._issue_design_services_agreement_on_paper(uuid)', 'EXECUTE') THEN
-    RAISE EXCEPTION 'FAIL 10c: _issue_design_services_agreement_on_paper carries a grant it should not';
+    RAISE EXCEPTION 'FAIL 13c: _issue_design_services_agreement_on_paper carries a grant it should not';
   END IF;
 
   -- The four-arg entry point is GONE — one door, not two.
@@ -893,11 +1268,11 @@ BEGIN
       AND pg_get_function_identity_arguments(p.oid)
           = 'p_proposal_id uuid, p_signed_name text, p_paper_signed_on date, p_scan_document_id uuid'
   ) THEN
-    RAISE EXCEPTION 'FAIL 10d: the superseded four-arg record_paper_client_signature still exists';
+    RAISE EXCEPTION 'FAIL 13d: the superseded four-arg record_paper_client_signature still exists';
   END IF;
   IF (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
       WHERE n.nspname = 'public' AND p.proname = 'record_paper_client_signature') <> 1 THEN
-    RAISE EXCEPTION 'FAIL 10e: record_paper_client_signature is overloaded';
+    RAISE EXCEPTION 'FAIL 13e: record_paper_client_signature is overloaded';
   END IF;
 
   -- Both new/re-cut DEFINER doors pin search_path.
@@ -908,7 +1283,7 @@ BEGIN
                         '_issue_design_services_agreement_on_paper')
       AND (NOT p.prosecdef OR NOT ('search_path=public, pg_temp' = ANY (p.proconfig)))
   ) THEN
-    RAISE EXCEPTION 'FAIL 10f: a door is not a search_path-pinned SECURITY DEFINER';
+    RAISE EXCEPTION 'FAIL 13f: a door is not a search_path-pinned SECURITY DEFINER';
   END IF;
 
   -- The lifecycle guard stays SECURITY INVOKER — it must see the caller.
@@ -917,10 +1292,10 @@ BEGIN
     WHERE n.nspname = 'public' AND p.proname = 'guard_commercial_proposal_authority'
       AND (p.prosecdef OR NOT ('search_path=public, pg_temp' = ANY (p.proconfig)))
   ) THEN
-    RAISE EXCEPTION 'FAIL 10g: guard_commercial_proposal_authority changed security posture';
+    RAISE EXCEPTION 'FAIL 13g: guard_commercial_proposal_authority changed security posture';
   END IF;
 
-  RAISE NOTICE 'PASS 10: grants, arity and search_path are as authored';
+  RAISE NOTICE 'PASS 13: grants, arity and search_path are as authored';
 END $$;
 
 DO $$

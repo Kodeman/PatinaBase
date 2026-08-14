@@ -18,6 +18,31 @@
 -- flips sent → client_signed exactly as it does today, and the studio
 -- countersigns through the unchanged countersign_design_services_agreement.
 --
+-- ONE STATE SHAPE, TWO DOORS. An issuance is an issuance: the paper door moves
+-- proposals.status to 'sent' in the SAME act that moves commercial_state, the
+-- way send_commercial_document (00423:1748) does. Anything less would leave the
+-- document half-issued — 'sent' to the commercial rail, still 'draft' to every
+-- server guard that keys on status — and those guards are the ones that matter:
+--   · guard_commercial_authored_child (00423:440) freezes terms and rates the
+--     moment the proposal leaves draft. A client who has signed a printed copy
+--     signed WORDS; those words must stop moving.
+--   · send_commercial_document (00423:1585) refuses a non-draft document, so a
+--     document handed over on paper can never afterwards be emailed — the
+--     ceremony's promise is kept by the server, not by the UI hiding a button.
+--   · upsert_design_services_draft (00422:1731) refuses a non-draft document,
+--     so the drafting room cannot rewrite a signed instrument or roll the
+--     lifecycle back to draft underneath a recorded signature.
+-- The two doors are therefore DISJOINT BY CONSTRUCTION: each requires draft on
+-- the key the other one moves. Real send first ⇒ paper issue refuses
+-- (commercial_state is 'sent'). Paper issue first ⇒ send refuses (status is
+-- 'sent'). No interleaving produces a document that was both.
+--
+-- WHAT IS NOT SET: sent_at, which stays NULL because nothing was sent, and no
+-- dispatch row is written. The status move needs app.proposal_send_id (00387's
+-- guard_proposal_authority admits status → 'sent' only under it), so the issue
+-- step holds that GUC and app.commercial_document_id together for exactly one
+-- UPDATE and restores both.
+--
 -- HONEST PROVENANCE, EVERYWHERE (00425's banner, lines 14-35). An issuance on
 -- paper is the same architectural situation as a trade acceptance on paper: an
 -- act with no signature row of its own to carry its tell. 00425 answered that
@@ -25,14 +50,16 @@
 -- answers it the same way. proposals.issued_on_paper says the document reached
 -- 'sent' without an email, and proposals.paper_issued_by says who said so.
 -- Reading them is how anyone downstream tells a paper issuance from a real
--- send — an audit, a Nurture line, a notification rail:
+-- send — an audit, a Nurture line, a notification rail. Because the two doors
+-- are disjoint, ONE COLUMN is the whole predicate:
 --
---     issued_on_paper = true AND proposal_send_dispatch_id IS NULL
---       ⇒ this document was issued on paper and was NEVER emailed.
+--     issued_on_paper = true  ⇔  this document was issued on paper,
+--                                and therefore sent_at IS NULL
+--                                and proposal_send_dispatch_id IS NULL.
 --
--- The dispatch column alone would have been an implicit double negative; the
--- stamp is the explicit tell, and the two agree by construction because the
--- issue path writes neither a dispatch row nor sent_at.
+-- No conjunction is required and none should be written: a downstream reader
+-- branches on issued_on_paper FIRST, and only then asks the send columns about
+-- documents that were actually sent.
 --
 -- THE STAMPS ARE LIFECYCLE, NOT CONTENT. public.proposals carries a broad
 -- authenticated UPDATE grant gated by row-ownership RLS ("Designers can manage
@@ -86,7 +113,7 @@ ALTER TABLE public.proposals
     REFERENCES public.profiles(id) ON DELETE SET NULL;
 
 COMMENT ON COLUMN public.proposals.issued_on_paper IS
-  '00477: TRUE when this commercial document reached ''sent'' through _issue_design_services_agreement_on_paper — the studio put a printed copy in the client''s hands — rather than through send_commercial_document. FALSE on every emailed send. Read with proposal_send_dispatch_id IS NULL for "issued on paper and never emailed". Moves only under app.commercial_document_id (guard_commercial_proposal_authority).';
+  '00477: TRUE when this commercial document reached ''sent'' through _issue_design_services_agreement_on_paper — the studio put a printed copy in the client''s hands — rather than through send_commercial_document. FALSE on every emailed send. This column alone is the whole predicate: the two doors each require draft on the key the other one moves, so TRUE already implies sent_at IS NULL and proposal_send_dispatch_id IS NULL. Branch on it FIRST, then ask the send columns about documents that were actually sent. Moves only under app.commercial_document_id (guard_commercial_proposal_authority).';
 COMMENT ON COLUMN public.proposals.paper_issued_by IS
   '00477: the studio member who issued the printed copy. NULL on an emailed send. Distinct from the signature row''s recordedBy, which names whoever later wrote the client''s signature down — often but not always the same person. Moves only under app.commercial_document_id.';
 
@@ -215,9 +242,12 @@ REVOKE ALL ON FUNCTION public.guard_commercial_proposal_authority()
 -- identity has already been established by auth.uid().
 --
 -- The readiness bar is send_commercial_document's ACTUAL design-services bar
--- (00423:1610-1616) and nothing more: terms exist, at least one role rate
--- exists. Not the richer client-side assessment — issuing on paper must not be
--- harder than sending by email.
+-- and nothing more: an exact client relationship (00423:1598-1608), terms, and
+-- at least one role rate (00423:1610-1616). Not the richer client-side
+-- assessment — issuing on paper must not be harder than sending by email. Nor
+-- easier: a document the emailed rail refuses because designer_client_id names
+-- a different household than client_id is not a document that may be signed
+-- and countersigned into a live project through the other door.
 
 CREATE OR REPLACE FUNCTION public._issue_design_services_agreement_on_paper(
   p_proposal_id uuid
@@ -231,6 +261,7 @@ DECLARE
   v_issuer uuid := auth.uid();
   v_proposal public.proposals%ROWTYPE;
   v_previous_commercial text := current_setting('app.commercial_document_id', true);
+  v_previous_send text := current_setting('app.proposal_send_id', true);
 BEGIN
   IF v_issuer IS NULL THEN
     RAISE EXCEPTION 'issuing a design services agreement on paper requires an authenticated studio author'
@@ -256,6 +287,22 @@ BEGIN
       USING ERRCODE = 'check_violation';
   END IF;
 
+  -- send's exact-client-relationship bar (00423:1598-1608), in send's words.
+  -- The emailed rail refuses a document whose designer_client_id names a
+  -- different household than client_id; the paper door is the same issuance by
+  -- another route, so it refuses it too.
+  IF v_proposal.designer_client_id IS NULL
+     OR NOT EXISTS (
+       SELECT 1 FROM public.designer_clients dc
+       WHERE dc.id = v_proposal.designer_client_id
+         AND dc.designer_id = v_proposal.designer_id
+         AND dc.client_id = v_proposal.client_id
+     )
+  THEN
+    RAISE EXCEPTION 'commercial document requires an exact client relationship before sending'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
   IF NOT EXISTS (SELECT 1 FROM public.proposal_service_terms t WHERE t.proposal_id = p_proposal_id)
      OR NOT EXISTS (SELECT 1 FROM public.proposal_service_rates r WHERE r.proposal_id = p_proposal_id)
   THEN
@@ -263,15 +310,24 @@ BEGIN
       USING ERRCODE = 'check_violation';
   END IF;
 
+  -- Both GUCs, one UPDATE: app.proposal_send_id is what 00387's
+  -- guard_proposal_authority requires before status may enter 'sent', and
+  -- app.commercial_document_id is what 00412's guard requires before
+  -- commercial_state or either stamp may move. sent_at is deliberately absent —
+  -- nothing was sent.
   PERFORM set_config('app.commercial_document_id', p_proposal_id::text, true);
+  PERFORM set_config('app.proposal_send_id', p_proposal_id::text, true);
   UPDATE public.proposals SET
+    status = 'sent',
     commercial_state = 'sent',
     issued_on_paper = true,
     paper_issued_by = v_issuer,
     updated_at = now()
   WHERE id = p_proposal_id;
+  PERFORM set_config('app.proposal_send_id', COALESCE(v_previous_send, ''), true);
   PERFORM set_config('app.commercial_document_id', COALESCE(v_previous_commercial, ''), true);
 EXCEPTION WHEN OTHERS THEN
+  PERFORM set_config('app.proposal_send_id', COALESCE(v_previous_send, ''), true);
   PERFORM set_config('app.commercial_document_id', COALESCE(v_previous_commercial, ''), true);
   RAISE;
 END;
@@ -282,10 +338,14 @@ REVOKE ALL ON FUNCTION public._issue_design_services_agreement_on_paper(uuid)
 
 COMMENT ON FUNCTION public._issue_design_services_agreement_on_paper(uuid) IS
   '00477: draft → sent for a design services agreement or addendum the studio '
-  'is handing over on paper. No email, no dispatch row, no client email address '
+  'is handing over on paper. Moves proposals.status AND commercial_state in one '
+  'act, exactly as send_commercial_document does, so every status-keyed guard — '
+  'content freeze, send, drafting-room save — engages the moment the client '
+  'holds a signed copy. No email, no dispatch row, no client email address '
   'required — and no sent_at, because nothing was sent. Stamps issued_on_paper '
   'and paper_issued_by so the difference from an emailed send is stated rather '
-  'than inferred. Refuses anything not in draft, by name. Zero grants by '
+  'than inferred. Refuses anything not in draft, by name, and refuses the same '
+  'client-relationship mismatch the emailed rail refuses. Zero grants by '
   'design: reachable only from record_paper_client_signature.';
 
 -- ── record_paper_client_signature — one new flag, same act ────────────────

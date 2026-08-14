@@ -271,7 +271,7 @@ export function ServiceAgreementInstruments({
               </p>
               <p className="mt-1 text-[11.5px] text-[var(--text-muted)]">
                 {neverSent
-                  ? "The client already has a signed copy of this agreement — record it here. Nothing will be emailed."
+                  ? "If the client has signed a printed copy, record it here — nothing will be emailed."
                   : "For a client who signed a printed copy instead of signing here — countersign as usual once it’s recorded."}
               </p>
               <div className="mt-3">
@@ -348,6 +348,18 @@ export function ServiceAgreementInstruments({
             rates={rates}
             recipientEmail={clientEmail}
             recipientName={clientName}
+            // The send sheet is where a studio meets the wall — two buttons,
+            // both of which assume an email. The third path belongs there, not
+            // only in the sibling block below it, so a signature taken at a
+            // kitchen table is findable from the exact place it is needed.
+            onRecordOffline={
+              neverSent && paperReady
+                ? () => {
+                    setSendOpen(false);
+                    setRecordOnPaperOpen(true);
+                  }
+                : undefined
+            }
           />
         </>
       )}

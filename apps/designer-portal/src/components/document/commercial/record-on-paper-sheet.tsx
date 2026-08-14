@@ -133,6 +133,24 @@ export const RECORD_ON_PAPER_ACT_LABEL: Record<RecordOnPaperKind, string> = {
 const DESIGN_SERVICES_ISSUE_ON_PAPER_BODY =
   'Issues this agreement on paper and records the client’s printed signature in one act — nothing is emailed. Countersign it below once it’s recorded, the same as any other signature.';
 
+/**
+ * The state-race refusals, in the document's voice.
+ *
+ * 00477 and 00425 both refuse a stale act by naming the state they found, with
+ * the document's id in the sentence — the right thing for a log and the wrong
+ * thing for a ceremony. The server raise is untouched; this is only what the
+ * inline band shows, and only for that one family of refusals. Everything else
+ * still surfaces verbatim, because an unrecognized failure must not be
+ * paraphrased into something softer than it is.
+ */
+const STATE_RACE_REFUSAL = /is not (?:issuable|recordable) on paper/i;
+
+function refusalLine(message: string): string {
+  return STATE_RACE_REFUSAL.test(message)
+    ? 'This agreement is no longer in the studio’s hands — reopen it to see where it stands.'
+    : message;
+}
+
 /** All four paper acts can now carry a scan (00425 added trade-acceptance's
  *  own acceptance_scan_document_id alongside the three execution/signature
  *  RPCs' existing scan pointer) — kept as a lookup rather than folded away
@@ -308,7 +326,7 @@ export function RecordOnPaperSheet({
       setStage('idle');
       setError(
         err instanceof Error
-          ? err.message
+          ? refusalLine(err.message)
           : 'Could not record this. Try again.',
       );
     }

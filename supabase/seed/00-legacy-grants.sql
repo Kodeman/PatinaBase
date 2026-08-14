@@ -52,7 +52,9 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
   GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;
 
 -- ── Replay of every top-level GRANT/REVOKE across supabase/migrations/ ──────
--- Each statement is guarded: objects dropped by later migrations are skipped.
+-- Statements naming a function signature a later migration DROPs are omitted
+-- entirely — the object they address no longer exists by the time this runs.
+-- The rest are guarded, so an object dropped some other way is skipped too.
 
 -- 00008_similarity_functions.sql
 DO $g$ BEGIN
@@ -2550,18 +2552,6 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00325_schedule_commit_edit.sql
-DO $g$ BEGIN
-  REVOKE EXECUTE ON FUNCTION public.commit_schedule_edit(UUID, JSONB, TEXT) FROM PUBLIC, anon;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00325_schedule_commit_edit.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.commit_schedule_edit(UUID, JSONB, TEXT) TO authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
 -- 00326_schedule_memory.sql
 DO $g$ BEGIN
   REVOKE EXECUTE ON FUNCTION public.cut_schedule_revision(UUID, TEXT) FROM PUBLIC, anon;
@@ -2900,30 +2890,6 @@ END $g$;
 
 -- 00353_fulfillment_rpcs_views.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.fulfillment_resolve_exception(uuid,text,text,boolean,text) FROM public, anon, authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00353_fulfillment_rpcs_views.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.fulfillment_resolve_exception(uuid,text,text,boolean,text) TO service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00353_fulfillment_rpcs_views.sql
-DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.fulfillment_settle_po(uuid,text) FROM public, anon, authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00353_fulfillment_rpcs_views.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.fulfillment_settle_po(uuid,text) TO service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00353_fulfillment_rpcs_views.sql
-DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.fulfillment_record_client_note(uuid,uuid,text,text,text,text,text,jsonb,text,text,text) FROM public, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -2955,18 +2921,6 @@ END $g$;
 -- 00353_fulfillment_rpcs_views.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.fulfillment_update_vendor_profile(uuid,jsonb,text) TO service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00353_fulfillment_rpcs_views.sql
-DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.rule_leah_review(uuid,text,text) FROM public, anon, authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00353_fulfillment_rpcs_views.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.rule_leah_review(uuid,text,text) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -4454,18 +4408,6 @@ END $g$;
 
 -- 00387_project_proposal_authority_boundaries.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.sign_proposal(uuid, text, text, boolean, date) FROM PUBLIC, anon, service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00387_project_proposal_authority_boundaries.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.sign_proposal(uuid, text, text, boolean, date) TO authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00387_project_proposal_authority_boundaries.sql
-DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.record_offline_signature(uuid, text, boolean, date) FROM PUBLIC, anon, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -4809,18 +4751,6 @@ END $g$;
 -- 00390_proposal_copy_immutability.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.activate_proposal_as_project(uuid, date) TO authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00390_proposal_copy_immutability.sql
-DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.sign_proposal(uuid, text, text, boolean, date) FROM PUBLIC, anon, service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00390_proposal_copy_immutability.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.sign_proposal(uuid, text, text, boolean, date) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -5204,18 +5134,6 @@ END $g$;
 
 -- 00397_billing_checkout_integrity.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.claim_invoice_checkout_attempt(uuid, uuid, text, boolean) FROM PUBLIC, anon, authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00397_billing_checkout_integrity.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.claim_invoice_checkout_attempt(uuid, uuid, text, boolean) TO service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00397_billing_checkout_integrity.sql
-DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.finalize_invoice_checkout_attempt(uuid, uuid, text, text) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -5271,18 +5189,6 @@ END $g$;
 -- 00397_billing_checkout_integrity.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.sync_invoice_checkout_attempt() TO service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00397_billing_checkout_integrity.sql
-DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.settle_invoice_checkout_payment(uuid, text, text, integer) FROM PUBLIC, anon, authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00397_billing_checkout_integrity.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.settle_invoice_checkout_payment(uuid, text, text, integer) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -6195,18 +6101,6 @@ END $g$;
 -- 00399_journey_authority_integrity.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public._can_record_proposal_engagement( uuid, uuid, text ) TO authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00399_journey_authority_integrity.sql
-DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.sign_proposal(uuid, text, text, boolean, date) FROM PUBLIC, anon, service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00399_journey_authority_integrity.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.sign_proposal(uuid, text, text, boolean, date) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -7346,18 +7240,6 @@ END $g$;
 
 -- 00412_design_services_commercial_authority.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.countersign_design_services_agreement(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00412_design_services_commercial_authority.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.countersign_design_services_agreement(uuid, text) TO authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00412_design_services_commercial_authority.sql
-DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.activate_proposal_as_project(uuid, date) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -7785,18 +7667,6 @@ END $g$;
 -- 00414_design_services_rail_completion.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._execute_furnishings_authorization_authorized(uuid, text, uuid, text) FROM PUBLIC, anon, authenticated, service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00414_design_services_rail_completion.sql
-DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.countersign_design_services_agreement(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00414_design_services_rail_completion.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.countersign_design_services_agreement(uuid, text) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -8378,18 +8248,6 @@ END $g$;
 
 -- 00423_trade_scope_instrument.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.engage_trade_scope(uuid) FROM PUBLIC, anon, authenticated, service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00423_trade_scope_instrument.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.engage_trade_scope(uuid) TO authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00423_trade_scope_instrument.sql
-DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.mark_trade_scope_in_progress(uuid) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -8661,36 +8519,6 @@ END $g$;
 -- 00425_executed_on_paper.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._paper_signature_metadata(uuid, text, date, uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00425_executed_on_paper.sql
-DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.record_paper_client_signature(uuid, text, date, uuid) FROM PUBLIC, anon, authenticated, service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00425_executed_on_paper.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.record_paper_client_signature(uuid, text, date, uuid) TO authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00425_executed_on_paper.sql
-DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public._execute_furnishings_authorization_on_paper_authorized(uuid, text, date, uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00425_executed_on_paper.sql
-DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.execute_furnishings_authorization_on_paper(uuid, text, date, uuid) FROM PUBLIC, anon, authenticated, service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00425_executed_on_paper.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.execute_furnishings_authorization_on_paper(uuid, text, date, uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -10214,12 +10042,6 @@ END $g$;
 
 -- 00462_workflow_privacy_authority.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public._countersign_design_services_agreement_impl(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00462_workflow_privacy_authority.sql
-DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._record_paper_client_signature_impl(uuid, text, date, uuid) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -10245,18 +10067,6 @@ END $g$;
 -- 00462_workflow_privacy_authority.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.sign_design_services_agreement_with_trusted_ip(uuid, text, uuid, text) TO service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00462_workflow_privacy_authority.sql
-DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.countersign_design_services_agreement(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00462_workflow_privacy_authority.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.countersign_design_services_agreement(uuid, text) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -10305,30 +10115,6 @@ END $g$;
 -- 00462_workflow_privacy_authority.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.execute_trade_scope_with_trusted_ip(uuid, text, uuid, text) TO service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00462_workflow_privacy_authority.sql
-DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.record_paper_client_signature(uuid, text, date, uuid) FROM PUBLIC, anon, authenticated, service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00462_workflow_privacy_authority.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.record_paper_client_signature(uuid, text, date, uuid) TO authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00462_workflow_privacy_authority.sql
-DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.execute_furnishings_authorization_on_paper(uuid, text, date, uuid) FROM PUBLIC, anon, authenticated, service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00462_workflow_privacy_authority.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.execute_furnishings_authorization_on_paper(uuid, text, date, uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
