@@ -108,19 +108,11 @@ export function Field({
   );
 }
 
-/** Exported so a caller swapping ResolveInput's date arm for DateTextInput
- *  (the Calendar Folio trigger) can match the same paper-field footprint. */
+/** Exported so a caller swapping a date arm for DateTextInput (the Calendar
+ *  Folio trigger — see resolve-waiting.tsx) can match the same paper-field
+ *  footprint as ResolveTextarea below. */
 export const FIELD_CLS =
   'w-full rounded-[6px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-3 py-2 font-body text-[0.82rem] text-[var(--color-charcoal)] outline-none transition-colors focus:border-[var(--color-clay)] placeholder:italic placeholder:text-[var(--text-muted)]';
-
-/** A paper text input matching the prototype `.field input`. */
-export function ResolveInput(
-  props: React.InputHTMLAttributes<HTMLInputElement>,
-) {
-  return (
-    <input {...props} className={`${FIELD_CLS} ${props.className ?? ''}`} />
-  );
-}
 
 /** A paper textarea matching the prototype `.field textarea`. */
 export function ResolveTextarea(

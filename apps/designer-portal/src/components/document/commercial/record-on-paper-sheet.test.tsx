@@ -33,23 +33,35 @@ jest.mock('@/hooks/use-commercial-documents', () => ({
 
 // The Folio-backed trigger is proven in its own suite (date-text-input.test.tsx);
 // here we only need a controlled stand-in so the sheet's own plumbing (default,
-// change, clear) can be exercised directly.
+// change, clear, AND the validity gate it wires to submit) can be exercised
+// directly — the real trigger can never itself go invalid, but the prop still
+// has to reach the sheet's submit gate correctly.
 jest.mock('../date-text-input', () => ({
   DateTextInput: ({
     value,
     onChange,
     ariaLabel,
+    onValidityChange,
   }: {
     value: string | null;
     onChange: (value: string | null) => void;
     ariaLabel?: string;
+    onValidityChange?: (valid: boolean) => void;
   }) => (
-    <input
-      type="text"
-      aria-label={ariaLabel}
-      value={value ?? ''}
-      onChange={(event) => onChange(event.target.value || null)}
-    />
+    <span>
+      <input
+        type="text"
+        aria-label={ariaLabel}
+        value={value ?? ''}
+        onChange={(event) => onChange(event.target.value || null)}
+      />
+      <button type="button" aria-label={`${ariaLabel} invalid`} onClick={() => onValidityChange?.(false)}>
+        Mark invalid
+      </button>
+      <button type="button" aria-label={`${ariaLabel} valid`} onClick={() => onValidityChange?.(true)}>
+        Mark valid
+      </button>
+    </span>
   ),
 }));
 
@@ -377,6 +389,30 @@ describe('RecordOnPaperSheet', () => {
     fireEvent.click(submit);
     await waitFor(() => expect(executeTradeScope).toHaveBeenCalledTimes(1));
     expect(executeTradeScope.mock.calls[0][0].signedDate).toBeUndefined();
+  });
+
+  it('disables the act while the date reports invalid, and re-enables once it reports valid', () => {
+    render(
+      <RecordOnPaperSheet
+        kind="trade-execution"
+        proposalId="proposal-1"
+        projectId="project-1"
+        open
+        onClose={jest.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText('Signed by'), {
+      target: { value: 'Harper Vale' },
+    });
+    const submit = screen.getByRole('button', { name: 'Record & execute' });
+    expect(submit).not.toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Date signed invalid' }));
+    expect(submit).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Date signed valid' }));
+    expect(submit).not.toBeDisabled();
   });
 
   it('cancels without recording anything', () => {
