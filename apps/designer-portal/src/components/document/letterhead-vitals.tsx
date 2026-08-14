@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 /**
  * LetterheadVitals (Track 7 · R80) — the project letterhead's vitals: start
@@ -21,35 +21,29 @@
  * project documents (the page passes projectId).
  */
 
-import { useEffect, useRef, useState } from "react";
-import { useProjectV2, useProjectPhases } from "@patina/supabase";
-import { useUpdatePhaseEstimates } from "@/hooks/use-time-tracking";
+import { useEffect, useRef, useState } from 'react';
+import { useProjectV2, useProjectPhases } from '@patina/supabase';
+import { useUpdatePhaseEstimates } from '@/hooks/use-time-tracking';
 import {
   usePhaseActualMinutes,
   useSaveProjectVitals,
   type ProjectVitalsPatch,
-} from "@/hooks/use-project-lifecycle";
-import {
-  centsToDollarString,
-  dollarsToCents,
-} from "@/lib/document/closure-derivation";
-import {
-  FolioCalendar,
-  FolioPopover,
-  type FolioSelection,
-} from "@/components/document/date";
-import { fmtDay, todayYmd } from "@/lib/document/format";
+} from '@/hooks/use-project-lifecycle';
+import { centsToDollarString, dollarsToCents } from '@/lib/document/closure-derivation';
+import { FolioCalendar, FolioPopover, type FolioSelection } from '@/components/document/date';
+import { fmtDay, todayYmd } from '@/lib/document/format';
+
 
 type AnyRecord = any;
 
-type SaveState = "idle" | "saving" | "saved" | "error";
+type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
 const prettyPhase = (phase: string | null) =>
   phase
     ? phase
-        .split("_")
+        .split('_')
         .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-        .join(" ")
+        .join(' ')
     : null;
 
 const fmtHours = (minutes: number) => {
@@ -61,7 +55,7 @@ const fmtHours = (minutes: number) => {
  *  Piece's useFacetSave, retargeted at the project vitals write). */
 function useVitalSave(projectId: string) {
   const mutation = useSaveProjectVitals(projectId);
-  const [state, setState] = useState<SaveState>("idle");
+  const [state, setState] = useState<SaveState>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const timer = useRef<number | null>(null);
 
@@ -73,43 +67,35 @@ function useVitalSave(projectId: string) {
   );
 
   const save = async (patch: ProjectVitalsPatch) => {
-    setState("saving");
+    setState('saving');
     setErrorMsg(null);
     try {
       await mutation.mutateAsync(patch);
-      setState("saved");
+      setState('saved');
       if (timer.current !== null) window.clearTimeout(timer.current);
-      timer.current = window.setTimeout(() => setState("idle"), 1800);
+      timer.current = window.setTimeout(() => setState('idle'), 1800);
     } catch (e) {
-      setState("error");
-      setErrorMsg(e instanceof Error ? e.message : "Could not save just now.");
+      setState('error');
+      setErrorMsg(e instanceof Error ? e.message : 'Could not save just now.');
     }
   };
 
   return { save, state, errorMsg };
 }
 
-function SaveDot({
-  state,
-  errorMsg,
-}: {
-  state: SaveState;
-  errorMsg: string | null;
-}) {
-  if (state === "idle") return null;
+function SaveDot({ state, errorMsg }: { state: SaveState; errorMsg: string | null }) {
+  if (state === 'idle') return null;
   return (
     <span
       role="status"
       aria-live="polite"
       className={`ml-1 font-mono text-[8px] uppercase tracking-[0.05em] ${
-        state === "error"
-          ? "text-[var(--color-terracotta)]"
-          : "text-[var(--color-sage)]"
+        state === 'error' ? 'text-[var(--color-terracotta)]' : 'text-[var(--color-sage)]'
       }`}
     >
-      {state === "saving" && "· saving…"}
-      {state === "saved" && "✓"}
-      {state === "error" && `· ${errorMsg ?? "couldn't save"}`}
+      {state === 'saving' && '· saving…'}
+      {state === 'saved' && '✓'}
+      {state === 'error' && `· ${errorMsg ?? "couldn't save"}`}
     </span>
   );
 }
@@ -126,18 +112,18 @@ function VitalDate({
   label,
 }: {
   projectId: string;
-  column: "start_date" | "target_end_date";
+  column: 'start_date' | 'target_end_date';
   serverValue: string | null;
   label: string;
 }) {
-  const [value, setValue] = useState(serverValue ?? "");
+  const [value, setValue] = useState(serverValue ?? '');
   const [open, setOpen] = useState(false);
-  const lastServer = useRef(serverValue ?? "");
+  const lastServer = useRef(serverValue ?? '');
   const triggerRef = useRef<HTMLButtonElement>(null);
   const { save, state, errorMsg } = useVitalSave(projectId);
 
   useEffect(() => {
-    const incoming = serverValue ?? "";
+    const incoming = serverValue ?? '';
     if (incoming !== lastServer.current) {
       lastServer.current = incoming;
       if (!open) setValue(incoming);
@@ -145,16 +131,15 @@ function VitalDate({
   }, [serverValue, open]);
 
   const commit = (selection: FolioSelection) => {
-    if (selection.kind !== "day") return;
+    if (selection.kind !== 'day') return;
     setOpen(false);
     setValue(selection.date);
-    if (selection.date !== (serverValue ?? ""))
-      void save({ [column]: selection.date });
+    if (selection.date !== (serverValue ?? '')) void save({ [column]: selection.date });
   };
 
   const clear = () => {
-    setValue("");
-    if ((serverValue ?? "") !== "") void save({ [column]: null });
+    setValue('');
+    if ((serverValue ?? '') !== '') void save({ [column]: null });
   };
 
   return (
@@ -167,17 +152,17 @@ function VitalDate({
         type="button"
         aria-label={label}
         onClick={() => setOpen(true)}
-        disabled={state === "saving"}
+        disabled={state === 'saving'}
         className="border-b border-transparent bg-transparent font-mono text-[10px] text-[var(--text-muted)] hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:text-[var(--color-charcoal)] focus:outline-none disabled:opacity-50"
       >
-        {value ? fmtDay(value) : "—"}
+        {value ? fmtDay(value) : '—'}
       </button>
       {value && (
         <button
           type="button"
           aria-label={`Clear ${label.toLowerCase()}`}
           onClick={clear}
-          disabled={state === "saving"}
+          disabled={state === 'saving'}
           className="font-mono text-[9px] text-[var(--color-aged-oak)] hover:text-[var(--color-clay)] disabled:opacity-50"
         >
           ×
@@ -185,19 +170,12 @@ function VitalDate({
       )}
       <SaveDot state={state} errorMsg={errorMsg} />
       {open && (
-        <FolioPopover
-          onClose={() => setOpen(false)}
-          aria-label={`${label} date`}
-          returnFocusRef={triggerRef}
-        >
+        <FolioPopover onClose={() => setOpen(false)} aria-label={`${label} date`} returnFocusRef={triggerRef}>
           <FolioCalendar
-            value={value ? { kind: "day", date: value } : null}
+            value={value ? { kind: 'day', date: value } : null}
             today={todayYmd()}
-            modes={["day"]}
-            readoutLabels={{
-              day: label.toUpperCase(),
-              span: label.toUpperCase(),
-            }}
+            modes={['day']}
+            readoutLabels={{ day: label.toUpperCase(), span: label.toUpperCase() }}
             onCommit={commit}
           />
         </FolioPopover>
@@ -216,7 +194,7 @@ function VitalMoney({
   autoFocus = false,
 }: {
   projectId: string;
-  column: "budget_min" | "budget_max";
+  column: 'budget_min' | 'budget_max';
   serverCents: number | null;
   ariaLabel: string;
   placeholder: string;
@@ -257,15 +235,15 @@ function VitalMoney({
         onChange={(e) => setValue(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => {
-          if (e.key === "Enter") {
+          if (e.key === 'Enter') {
             e.preventDefault();
             e.currentTarget.blur();
-          } else if (e.key === "Escape") {
+          } else if (e.key === 'Escape') {
             e.stopPropagation();
             e.currentTarget.blur();
           }
         }}
-        disabled={state === "saving"}
+        disabled={state === 'saving'}
         size={Math.max(4, value.length + 1)}
         className="border-b border-transparent bg-transparent text-right font-mono text-[10px] text-[var(--text-muted)] placeholder:text-[var(--color-aged-oak)] hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:text-[var(--color-charcoal)] focus:outline-none disabled:opacity-50"
       />
@@ -276,9 +254,7 @@ function VitalMoney({
 
 /** The phases fold — estimate fields (blur-save, 00177) beside logged actuals. */
 function PhasesFold({ projectId }: { projectId: string }) {
-  const { data: phases } = useProjectPhases(projectId) as {
-    data: AnyRecord[] | undefined;
-  };
+  const { data: phases } = useProjectPhases(projectId) as { data: AnyRecord[] | undefined };
   const { data: actualMinutes } = usePhaseActualMinutes(projectId);
   const updateEstimates = useUpdatePhaseEstimates();
   const [values, setValues] = useState<Record<string, string>>({});
@@ -287,27 +263,20 @@ function PhasesFold({ projectId }: { projectId: string }) {
   if (!phases || phases.length === 0) return null;
 
   const valueFor = (p: AnyRecord) =>
-    values[p.id] ??
-    (p.estimated_hours != null ? String(p.estimated_hours) : "");
+    values[p.id] ?? (p.estimated_hours != null ? String(p.estimated_hours) : '');
 
   const commit = (p: AnyRecord) => {
     const raw = valueFor(p).trim();
-    const parsed = raw === "" ? null : Math.round(parseFloat(raw) * 10) / 10;
+    const parsed = raw === '' ? null : Math.round(parseFloat(raw) * 10) / 10;
     if (parsed !== null && (!Number.isFinite(parsed) || parsed < 0)) return;
-    const current =
-      p.estimated_hours != null ? Number(p.estimated_hours) : null;
+    const current = p.estimated_hours != null ? Number(p.estimated_hours) : null;
     if (parsed === current) return;
     setRowError(null);
     updateEstimates.mutate(
-      {
-        projectId,
-        changes: [{ phaseId: p.id as string, estimatedHours: parsed }],
-      },
+      { projectId, changes: [{ phaseId: p.id as string, estimatedHours: parsed }] },
       {
         onError: (err) =>
-          setRowError(
-            err instanceof Error ? err.message : "Could not save the estimate.",
-          ),
+          setRowError(err instanceof Error ? err.message : 'Could not save the estimate.'),
       },
     );
   };
@@ -315,19 +284,17 @@ function PhasesFold({ projectId }: { projectId: string }) {
   return (
     <div className="mt-1.5">
       <table className="text-left">
-        <caption className="sr-only">
-          Phase hour estimates beside logged actuals
-        </caption>
+        <caption className="sr-only">Phase hour estimates beside logged actuals</caption>
         <tbody>
           {phases.map((p) => {
-            const logged = actualMinutes?.[p.phase_key ?? ""] ?? 0;
+            const logged = actualMinutes?.[p.phase_key ?? ''] ?? 0;
             return (
               <tr key={p.id}>
                 <td className="pr-4 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
                   {p.name ?? prettyPhase(p.phase_key)}
                 </td>
                 <td className="pr-2 text-right font-mono text-[9px] text-[var(--text-muted)]">
-                  {logged > 0 ? fmtHours(logged) : "—"}
+                  {logged > 0 ? fmtHours(logged) : '—'}
                 </td>
                 <td className="pr-1 font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
                   of
@@ -341,24 +308,22 @@ function PhasesFold({ projectId }: { projectId: string }) {
                     onChange={(e) =>
                       setValues((prev) => ({
                         ...prev,
-                        [p.id]: e.target.value.replace(/[^0-9.]/g, ""),
+                        [p.id]: e.target.value.replace(/[^0-9.]/g, ''),
                       }))
                     }
                     onBlur={() => commit(p)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") {
+                      if (e.key === 'Enter') {
                         e.preventDefault();
                         e.currentTarget.blur();
-                      } else if (e.key === "Escape") {
+                      } else if (e.key === 'Escape') {
                         e.stopPropagation();
                         e.currentTarget.blur();
                       }
                     }}
                     className="w-10 border-b border-transparent bg-transparent text-right font-mono text-[9px] text-[var(--text-muted)] placeholder:text-[var(--color-aged-oak)] hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:text-[var(--color-charcoal)] focus:outline-none"
                   />
-                  <span className="font-mono text-[9px] text-[var(--text-muted)]">
-                    h est.
-                  </span>
+                  <span className="font-mono text-[9px] text-[var(--text-muted)]">h est.</span>
                 </td>
               </tr>
             );
@@ -366,10 +331,7 @@ function PhasesFold({ projectId }: { projectId: string }) {
         </tbody>
       </table>
       {rowError && (
-        <p
-          role="alert"
-          className="mt-0.5 text-[10px] text-[var(--color-terracotta)]"
-        >
+        <p role="alert" className="mt-0.5 text-[10px] text-[var(--color-terracotta)]">
           {rowError}
         </p>
       )}
@@ -383,11 +345,11 @@ function PhasesFold({ projectId }: { projectId: string }) {
 function contractTotal(cents: number): string {
   const abs = Math.abs(cents);
   const whole = abs % 100 === 0;
-  const body = (abs / 100).toLocaleString("en-US", {
+  const body = (abs / 100).toLocaleString('en-US', {
     minimumFractionDigits: whole ? 0 : 2,
     maximumFractionDigits: whole ? 0 : 2,
   });
-  return `${cents < 0 ? "−" : ""}$${body}`;
+  return `${cents < 0 ? '−' : ''}$${body}`;
 }
 
 export function LetterheadVitals({ projectId }: { projectId: string }) {
@@ -438,9 +400,7 @@ export function LetterheadVitals({ projectId }: { projectId: string }) {
             <span className="font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
               Band
             </span>
-            <span className="font-mono text-[10px] text-[var(--text-muted)]">
-              $
-            </span>
+            <span className="font-mono text-[10px] text-[var(--text-muted)]">$</span>
             <VitalMoney
               projectId={projectId}
               column="budget_min"
@@ -449,9 +409,7 @@ export function LetterheadVitals({ projectId }: { projectId: string }) {
               placeholder="from"
               autoFocus={bandOpen}
             />
-            <span className="font-mono text-[10px] text-[var(--text-muted)]">
-              –
-            </span>
+            <span className="font-mono text-[10px] text-[var(--text-muted)]">–</span>
             <VitalMoney
               projectId={projectId}
               column="budget_max"
@@ -470,7 +428,7 @@ export function LetterheadVitals({ projectId }: { projectId: string }) {
           onClick={() => setPhasesOpen((v) => !v)}
           className="font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay)]"
         >
-          Phases {phasesOpen ? "▾" : "▸"}
+          Phases {phasesOpen ? '▾' : '▸'}
         </button>
       </div>
       {phasesOpen && <PhasesFold projectId={projectId} />}
@@ -502,7 +460,7 @@ export function LetterheadTitle({
   const commit = () => {
     focused.current = false;
     const next = value.trim();
-    if (next === "") {
+    if (next === '') {
       setValue(serverTitle); // a document keeps its name — blank never saves
       return;
     }
@@ -519,15 +477,15 @@ export function LetterheadTitle({
         onChange={(e) => setValue(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => {
-          if (e.key === "Enter") {
+          if (e.key === 'Enter') {
             e.preventDefault();
             e.currentTarget.blur();
-          } else if (e.key === "Escape") {
+          } else if (e.key === 'Escape') {
             e.stopPropagation();
             e.currentTarget.blur();
           }
         }}
-        disabled={state === "saving"}
+        disabled={state === 'saving'}
         className="min-w-0 flex-1 border-b border-transparent bg-transparent font-heading text-[1.55rem] font-medium leading-tight tracking-[-0.01em] text-[var(--color-charcoal)] hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:outline-none disabled:opacity-60"
       />
       <SaveDot state={state} errorMsg={errorMsg} />
