@@ -49,6 +49,7 @@ SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_phase         jsonb;
+  v_index         integer;
   v_phase_id      uuid;
   v_start_date    date;
   v_target_end    date;
@@ -59,19 +60,41 @@ BEGIN
     RAISE EXCEPTION '_materialize_schedule_dates_impl: p_phases must be a JSON array of phase snapshots';
   END IF;
 
-  FOR v_phase IN SELECT * FROM jsonb_array_elements(p_phases)
+  -- WITH ORDINALITY: a malformed element names ITS OWN position rather than
+  -- surfacing a raw cast error with no way to tell which of N snapshots was
+  -- bad. 0-based (ordinality - 1) to match the array's own JS-side indexing.
+  FOR v_phase, v_index IN
+    SELECT value, (ordinality - 1)::integer
+    FROM jsonb_array_elements(p_phases) WITH ORDINALITY AS t(value, ordinality)
   LOOP
     IF jsonb_typeof(v_phase) <> 'object' THEN
-      RAISE EXCEPTION '_materialize_schedule_dates_impl: each phase snapshot must be a JSON object';
+      RAISE EXCEPTION '_materialize_schedule_dates_impl: p_phases[%] must be a JSON object', v_index;
     END IF;
 
-    v_phase_id   := NULLIF(v_phase->>'phase_id', '')::uuid;
-    v_start_date := NULLIF(v_phase->>'start_date', '')::date;
-    v_target_end := NULLIF(v_phase->>'target_end_date', '')::date;
+    BEGIN
+      v_phase_id := NULLIF(v_phase->>'phase_id', '')::uuid;
+    EXCEPTION WHEN invalid_text_representation THEN
+      RAISE EXCEPTION '_materialize_schedule_dates_impl: p_phases[%].phase_id is not a valid uuid (%)',
+        v_index, v_phase->>'phase_id';
+    END;
 
     IF v_phase_id IS NULL THEN
-      RAISE EXCEPTION '_materialize_schedule_dates_impl: phase snapshot missing phase_id';
+      RAISE EXCEPTION '_materialize_schedule_dates_impl: p_phases[%] is missing phase_id', v_index;
     END IF;
+
+    BEGIN
+      v_start_date := NULLIF(v_phase->>'start_date', '')::date;
+    EXCEPTION WHEN invalid_datetime_format OR datetime_field_overflow THEN
+      RAISE EXCEPTION '_materialize_schedule_dates_impl: p_phases[%].start_date is not a valid date (%)',
+        v_index, v_phase->>'start_date';
+    END;
+
+    BEGIN
+      v_target_end := NULLIF(v_phase->>'target_end_date', '')::date;
+    EXCEPTION WHEN invalid_datetime_format OR datetime_field_overflow THEN
+      RAISE EXCEPTION '_materialize_schedule_dates_impl: p_phases[%].target_end_date is not a valid date (%)',
+        v_index, v_phase->>'target_end_date';
+    END;
 
     -- IS DISTINCT FROM guard: see the banner. A snapshot that reproduces what
     -- the row already holds must not churn updated_at or fire realtime.
