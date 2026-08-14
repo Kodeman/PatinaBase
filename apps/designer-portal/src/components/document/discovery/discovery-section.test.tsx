@@ -1,20 +1,21 @@
 /**
- * J1 — Begin-the-Direction must not hard-navigate to the standalone
- * `/drafting/[id]` route. The doc's own Direction section (doc/[id]/page.tsx)
- * is real, and useBeginDirection's own onSuccess already invalidates the
- * document-state query the page reads its active_section from — so the page
- * re-renders the Direction section in place once that refetch resolves. See
- * apps/designer-portal/src/components/document/discovery/discovery-section.tsx.
+ * J1 — Begin the Direction moves the document's IDENTITY from the relationship
+ * (designer_clients.id, document_state shape D) to the proposal chain (shape B,
+ * 00327). The instant the draft proposal exists, /doc/<designerClientId> stops
+ * resolving, so the act must land on the successor id the RPC returns — and
+ * must keep reading as in-flight until it does.
+ * See apps/designer-portal/src/components/document/discovery/discovery-section.tsx.
  */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { DiscoverySection } from './discovery-section';
 
 const mockPush = jest.fn();
+const mockReplace = jest.fn();
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => ({ push: mockPush, replace: mockReplace }),
 }));
 
-const mockBeginDirectionMutate = jest.fn();
+const mockBeginDirectionMutateAsync = jest.fn();
 const mockUpsertMutateAsync = jest.fn().mockResolvedValue({});
 
 // A fully-ready discovery row — all five essentials captured, so the
@@ -51,7 +52,7 @@ jest.mock('@patina/supabase', () => ({
   useDiscovery: () => ({ data: { row: READY_ROW, prefill: null } }),
   useUpsertDiscovery: () => ({ mutateAsync: mockUpsertMutateAsync }),
   useBeginDirection: () => ({
-    mutate: mockBeginDirectionMutate,
+    mutateAsync: mockBeginDirectionMutateAsync,
     isPending: false,
   }),
   useStyles: () => ({ data: [] }),
@@ -79,11 +80,14 @@ const PROPS = {
 describe('DiscoverySection — Begin the Direction (J1)', () => {
   beforeEach(() => {
     mockPush.mockClear();
-    mockBeginDirectionMutate.mockClear();
+    mockReplace.mockClear();
+    mockBeginDirectionMutateAsync.mockReset();
     mockUpsertMutateAsync.mockClear();
   });
 
-  it('calls the mutation and does not navigate to the standalone drafting route', async () => {
+  it('lands on the successor document id the RPC returns, not the standalone drafting route', async () => {
+    mockBeginDirectionMutateAsync.mockResolvedValue('proposal-9');
+
     render(<DiscoverySection {...PROPS} />);
 
     const beginButton = screen.getByRole('button', { name: 'Begin the Direction' });
@@ -91,34 +95,44 @@ describe('DiscoverySection — Begin the Direction (J1)', () => {
 
     fireEvent.click(beginButton);
 
-    await waitFor(() => expect(mockBeginDirectionMutate).toHaveBeenCalledWith(
-      { designerClientId: 'engagement-1' },
-      expect.any(Object),
-    ));
-
-    expect(mockPush).not.toHaveBeenCalledWith(
+    await waitFor(() =>
+      expect(mockBeginDirectionMutateAsync).toHaveBeenCalledWith({
+        designerClientId: 'engagement-1',
+      }),
+    );
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/doc/proposal-9'));
+    // The old relationship id is a dead end from this instant — never pushed,
+    // and never routed to the standalone drafting room.
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(mockReplace).not.toHaveBeenCalledWith(
       expect.stringMatching(/^\/drafting\//),
     );
+    expect(mockReplace).not.toHaveBeenCalledWith('/doc/engagement-1');
   });
 
-  it('never calls router.push at all on a successful begin', async () => {
-    // Simulate useBeginDirection's mutate calling the passed onSuccess, the
-    // way React Query actually does — proving that even when the act
-    // succeeds, nothing here navigates away from the doc page.
-    mockBeginDirectionMutate.mockImplementation((_input, callbacks) => {
-      callbacks?.onSuccess?.('new-proposal-id');
-    });
+  it('holds the act in-flight until the navigation is issued', async () => {
+    let resolveBegin: (id: string) => void = () => undefined;
+    mockBeginDirectionMutateAsync.mockImplementation(
+      () => new Promise<string>((resolve) => { resolveBegin = resolve; }),
+    );
 
     render(<DiscoverySection {...PROPS} />);
     fireEvent.click(screen.getByRole('button', { name: 'Begin the Direction' }));
 
-    await waitFor(() => expect(mockBeginDirectionMutate).toHaveBeenCalled());
-    expect(mockPush).not.toHaveBeenCalled();
+    // The RPC is still open: the act reads as in-flight rather than idle.
+    const opening = await screen.findByRole('button', { name: 'Opening…' });
+    expect(opening).toBeDisabled();
+
+    resolveBegin('proposal-9');
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/doc/proposal-9'));
+    // Still held after the RPC resolved — the surface is gone only when the
+    // successor document mounts and this component unmounts.
+    expect(screen.getByRole('button', { name: 'Opening…' })).toBeDisabled();
   });
 
   it('renders a quiet inline error, not a navigation, when the act fails', async () => {
-    mockBeginDirectionMutate.mockImplementation((_input, callbacks) => {
-      callbacks?.onError?.({ message: 'discovery not ready: the five essentials must be captured' });
+    mockBeginDirectionMutateAsync.mockRejectedValue({
+      message: 'discovery not ready: the five essentials must be captured',
     });
 
     render(<DiscoverySection {...PROPS} />);
@@ -127,6 +141,9 @@ describe('DiscoverySection — Begin the Direction (J1)', () => {
     expect(
       await screen.findByText('discovery not ready: the five essentials must be captured'),
     ).toBeInTheDocument();
+    expect(mockReplace).not.toHaveBeenCalled();
     expect(mockPush).not.toHaveBeenCalled();
+    // The act releases so the inline retry is reachable.
+    expect(screen.getByRole('button', { name: 'Begin the Direction' })).toBeEnabled();
   });
 });
