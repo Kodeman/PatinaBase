@@ -101,6 +101,7 @@ jest.mock('@/lib/document/schedule-spine-derivation', () => ({
 jest.mock('@/lib/document/coordination-derivation', () => ({
   blocksText: () => null,
   sortItemsBlockingFirst: (items: unknown[]) => items,
+  isOpen: (item: { status?: string }) => item.status === 'pending',
 }));
 
 jest.mock('@/lib/document/phase-anchor', () => ({

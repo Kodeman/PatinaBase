@@ -620,7 +620,7 @@ function AddRoomInline({ projectId }: { projectId: string }) {
         actionKey="add-project-room"
         surfaceKey="project"
         regionKey="room-capture"
-        variant="inked"
+        variant="secondary"
         onClick={save}
         disabled={!name.trim()}
       >
@@ -913,15 +913,23 @@ function FFESectionBody({
     wasFfeFolded.current = ffeFold.folded;
   }, [ffeFold.folded, ffeHeadingId]);
 
-  const ffeRoomCount = roomGroups.length;
+  // The head counts what the body actually prints: the room groups PLUS the
+  // Throughout and unassigned groups. Counting rooms alone told a project whose
+  // every line is Throughout that it had "0 rooms · 12 lines" — a head arguing
+  // with the section beneath it.
+  const ffeGroupCount =
+    roomGroups.length +
+    (throughout.length > 0 ? 1 : 0) +
+    (unassigned.length > 0 ? 1 : 0);
+  const ffeGroupWord = ffeGroupCount === 1 ? 'group' : 'groups';
   const ffeAwaitingCount = rows.filter(
     (row) => row.auth.track === 'awaiting',
   ).length;
-  const ffeStatus = `${ffeRoomCount} rooms · ${total} lines${
+  const ffeStatus = `${ffeGroupCount} ${ffeGroupWord} · ${total} lines${
     ffeAwaitingCount > 0 ? ` · ${ffeAwaitingCount} awaiting authorization` : ''
   }`;
   const ffeSeamSummary =
-    total === 0 ? `${ffeRoomCount} rooms · no lines yet` : ffeStatus;
+    total === 0 ? `${ffeGroupCount} ${ffeGroupWord} · no lines yet` : ffeStatus;
 
   const ffeAddToProjectEntry: RegionLedgerEntry = {
     key: 'open-add-to-project',

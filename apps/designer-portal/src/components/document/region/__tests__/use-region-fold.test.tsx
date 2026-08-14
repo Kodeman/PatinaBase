@@ -101,6 +101,42 @@ describe('useRegionFold', () => {
     expect(state()).toBe('open');
   });
 
+  it('records nothing for a fold gesture no one can see under forceOpen', () => {
+    const { rerender } = render(
+      <Probe docId="doc-1" region="schedule" defaultFolded={false} forceOpen />,
+    );
+    act(() => {
+      screen.getByRole('button', { name: 'toggle' }).click();
+    });
+    act(() => {
+      screen.getByRole('button', { name: 'fold' }).click();
+    });
+
+    expect(state()).toBe('open');
+    expect(window.localStorage.getItem(KEY)).toBeNull();
+    expect(events.regionFolded).not.toHaveBeenCalled();
+
+    // And once the force lapses the region reads its own default again, not a
+    // fold the designer never watched happen.
+    rerender(<Probe docId="doc-1" region="schedule" defaultFolded={false} />);
+    expect(state()).toBe('open');
+  });
+
+  it('releases the latched default when the document changes', () => {
+    const { rerender } = render(
+      <Probe docId="doc-1" region="schedule" defaultFolded={true} />,
+    );
+    expect(state()).toBe('folded');
+
+    // The next document's own default has not settled yet — the previous
+    // document's answer must not stand in for it.
+    rerender(<Probe docId="doc-2" region="schedule" defaultFolded={null} />);
+    expect(state()).toBe('open');
+
+    rerender(<Probe docId="doc-2" region="schedule" defaultFolded={true} />);
+    expect(state()).toBe('folded');
+  });
+
   it('degrades gracefully when storage throws', () => {
     const getItem = jest
       .spyOn(Storage.prototype, 'getItem')

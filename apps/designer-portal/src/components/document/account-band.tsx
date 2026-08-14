@@ -42,7 +42,17 @@ const TRIGGER_LABELS: Record<string, string> = {
 
 const GATE_SECTIONS: SectionKey[] = ['project', 'install', 'care'];
 
-function MilestoneRow({ m, projectId }: { m: AccountMilestone; projectId: string }) {
+function MilestoneRow({
+  m,
+  projectId,
+  headless,
+}: {
+  m: AccountMilestone;
+  projectId: string;
+  /** Inside the Money region the head already carries the inked leader, so a
+   *  per-milestone primary would stand a second leader beside it. */
+  headless: boolean;
+}) {
   const updateTrigger = useUpdateMilestoneTrigger(projectId);
   const generate = useGenerateMilestoneInvoice(projectId);
   const [invoiceNote, setInvoiceNote] = useState<string | null>(null);
@@ -129,7 +139,7 @@ function MilestoneRow({ m, projectId }: { m: AccountMilestone; projectId: string
           actionKey="generate-milestone-invoice"
           surfaceKey="accounts"
           regionKey="payment-milestone"
-          variant="primary"
+          variant={headless ? 'secondary' : 'primary'}
           disabled={generate.isPending}
           loading={generate.isPending}
           loadingLabel="Generating…"
@@ -346,7 +356,7 @@ export function AccountBand({
                 Payment milestones
               </p>
               {data.milestones.map((m) => (
-                <MilestoneRow key={m.id} m={m} projectId={projectId} />
+                <MilestoneRow key={m.id} m={m} projectId={projectId} headless={headless} />
               ))}
             </div>
           )}

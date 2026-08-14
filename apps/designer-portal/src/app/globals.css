@@ -561,6 +561,20 @@
   background-color: var(--color-clay);
 }
 
+/* ── the inked leader focuses on its OWN ink ───────────────────────────────
+   The leader is already flooded charcoal, so the caret (quiet-ink) and the
+   melted charcoal score both sit charcoal-on-charcoal — the focus mark was
+   invisible on exactly the word a keyboard reaches first. Both invert to
+   off-white on the pool (≈13.6:1); the clay score already rides the ink at
+   ≈6.2:1 and keeps its colour, so the mark stays the proofreader's, not a
+   ring. Value only — no shadow (D4). ────────────────────────────────────── */
+.da-inked:focus-visible::before {
+  color: var(--color-off-white);
+}
+.da-inked:focus-visible .da-label::before {
+  background-color: var(--color-off-white);
+}
+
 /* ── stilled · the same room by the other door. No bead, no draw, no snap;
    a held act inks at once, so held still reads as held. ─────────────────── */
 @media (prefers-reduced-motion: reduce) {

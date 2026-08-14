@@ -120,6 +120,9 @@ export function MoneyRegion({
     executedInstruments.reduce((sum, instrument) => sum + instrument.totalAmountCents, 0) +
     executedScopes.reduce((sum, scope) => sum + scope.clientPriceCents, 0);
 
+  // The same word the accounts band uses for this act, derived the same way.
+  const changeOnly = activeSection === 'install' || activeSection === 'care';
+
   const account = accountQuery.data ?? null;
   const accountFailed = Boolean(accountQuery.isError);
   const accountSettled = !accountQuery.isLoading && !accountFailed;
@@ -160,12 +163,29 @@ export function MoneyRegion({
         ? `${money(account.committedCents)} in motion — ordered through installed`
         : 'nothing in motion yet';
 
+  // The account's own quiet test. A region that folds on authority/plan/
+  // committed alone would hide an overdue invoice on a project that never
+  // executed an instrument — the money that is actually chasing the designer.
+  // The milestone rows the accounts band renders are the only invoice/
+  // receivable signal this region already holds: a milestone carrying an
+  // invoice_id has had money drawn against it, and an unpaid 'outstanding'
+  // milestone is a receivable whether or not its invoice row was read here.
+  const accountMilestones = account?.milestones ?? [];
+  const invoicesDrawn = accountMilestones.filter((m) => m.invoice_id != null).length;
+  const receivableCount = accountMilestones.filter(
+    (m) => !m.paid_at && m.status !== 'paid' && (m.invoice_id != null || m.status === 'outstanding'),
+  ).length;
+  const accountQuiet = invoicesDrawn === 0 && receivableCount === 0;
+
   // The fold default is withheld until every source the sparse test reads from
   // has settled — a default computed from a partial read could latch shut a
   // region that is actually busy, or open one that is actually quiet.
   const allSettled = authoritySettled && budgetSettled && committedSettled && accountSettled;
   const defaultFolded = allSettled
-    ? committedCents === 0 && executedCount === 0 && (!version || planLines.length === 0)
+    ? committedCents === 0 &&
+      executedCount === 0 &&
+      (!version || planLines.length === 0) &&
+      accountQuiet
     : null;
 
   const { folded, setFolded } = useRegionFold({
@@ -206,7 +226,9 @@ export function MoneyRegion({
     // event and opens its own AmendmentSheet.
     {
       key: 'compose-project-amendment',
-      label: 'Amendment',
+      // The band names this act by the section it is standing in; the region's
+      // doorway to the SAME sheet must not name it differently.
+      label: changeOnly ? 'Add a change' : 'Amendment',
       variant: 'secondary',
       onClick: () => window.dispatchEvent(new CustomEvent('document:compose-amendment')),
     },

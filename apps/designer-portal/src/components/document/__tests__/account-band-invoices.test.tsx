@@ -144,6 +144,29 @@ describe('AccountBand invoice handoff', () => {
     expect(screen.getByRole('button', { name: 'Amendment' })).toBeInTheDocument();
   });
 
+  it('stands every per-milestone act down from primary when headless', () => {
+    // The Money region's head already carries the one inked leader; a milestone
+    // row printing a primary beside it would be a second leader on the page.
+    render(<AccountBand projectId="project-1" headless />);
+    fireEvent.click(screen.getByRole('button', { name: /The accounts/ }));
+
+    expect(document.querySelectorAll('[data-action-variant="primary"]')).toHaveLength(0);
+    expect(screen.getByRole('button', { name: 'Generate invoice' })).toHaveAttribute(
+      'data-action-variant',
+      'secondary',
+    );
+  });
+
+  it('keeps the milestone act primary on the standalone mount', () => {
+    render(<AccountBand projectId="project-1" />);
+    fireEvent.click(screen.getByRole('button', { name: /The accounts/ }));
+
+    expect(screen.getByRole('button', { name: 'Generate invoice' })).toHaveAttribute(
+      'data-action-variant',
+      'primary',
+    );
+  });
+
   it('opens the amendment sheet from the document:compose-amendment event', () => {
     render(<AccountBand projectId="project-1" headless />);
 

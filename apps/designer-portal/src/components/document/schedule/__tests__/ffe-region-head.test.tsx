@@ -154,8 +154,20 @@ describe('FF&E project-mode region head', () => {
     mockItems = [];
     renderProject();
     expect(
-      screen.getByText('1 rooms · no lines yet', { exact: false }),
+      screen.getByText('1 group · no lines yet', { exact: false }),
     ).toBeInTheDocument();
+  });
+
+  it('counts the Throughout group so lines in no room are never "0"', () => {
+    // Every line unassigned to a room: the body prints ONE group (Throughout),
+    // and the head has to say so rather than counting rooms it does not have.
+    mockRooms = [];
+    mockItems = [
+      line({ id: 'ffe-1', project_room_id: null, room: null }),
+      line({ id: 'ffe-2', project_room_id: null, room: null }),
+    ];
+    renderProject();
+    expect(screen.getByText('1 group · 2 lines')).toBeInTheDocument();
   });
 
   it('opens from the seam back to the full head, round-trip', () => {

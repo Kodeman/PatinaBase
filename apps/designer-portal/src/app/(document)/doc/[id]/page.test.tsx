@@ -1148,6 +1148,47 @@ describe('DocumentPage guide activation', () => {
       expect(screen.getByRole('button', { name: 'Open the task' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Inspect the delivery' })).toBeInTheDocument();
     });
+
+    it('keeps the guide on a project the Desk composition never covered', () => {
+      asProjectDocument();
+      // Warm cache, other engagements only: the zone has no answer for THIS
+      // document, and the page cannot derive one (it holds no invoice or
+      // schedule facts), so the guide speaks instead of a short list posing as
+      // the whole list.
+      mockDeskData = {
+        folders: [{ row: { engagement_id: 'someone-else' }, need: null, needs: [] }],
+        chips: [],
+        composed: { 'someone-else': true },
+      };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(mockSelectOperationalNeeds).toHaveReturnedWith(undefined);
+      expect(screen.queryByRole('region', { name: 'Needs attention' })).not.toBeInTheDocument();
+      expect(document.getElementById('document-next-up')).not.toBeNull();
+    });
+
+    it('keeps the guide — and its retry — on a project whose Desk read failed', () => {
+      asProjectDocument();
+      mockDeskError = true;
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(screen.queryByRole('region', { name: 'Needs attention' })).not.toBeInTheDocument();
+      expect(screen.getByText('Guidance is unavailable')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    });
+
+    it('prints neither zone when the composition covered the project and found nothing', () => {
+      asProjectDocument();
+      mockDeskData = { folders: [], chips: [], composed: { 'project-1': true } };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(mockSelectOperationalNeeds).toHaveReturnedWith([]);
+      expect(screen.queryByRole('region', { name: 'Needs attention' })).not.toBeInTheDocument();
+      expect(document.getElementById('document-next-up')).toBeNull();
+    });
   });
 
   // ── W4: the recap line ──

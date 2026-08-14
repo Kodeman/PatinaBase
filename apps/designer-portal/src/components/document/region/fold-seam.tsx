@@ -32,7 +32,6 @@ export function focusRegionHeading(headingId: string): void {
 
 export function FoldSeam({
   headingId,
-  bodyId,
   name,
   summary,
   onUnfold,
@@ -43,7 +42,10 @@ export function FoldSeam({
     <button
       type="button"
       aria-expanded={false}
-      aria-controls={bodyId}
+      // No aria-controls: a folded region's body is UNMOUNTED, so the id would
+      // point at nothing and assistive tech would offer a jump into a void.
+      // `bodyId` stays in the props so the seam and the head it stands in for
+      // still name the same body once it is back on the page.
       data-fold-seam={headingId}
       data-action-region={regionKey}
       data-surface-key={surfaceKey}

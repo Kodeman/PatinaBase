@@ -73,4 +73,33 @@ describe('RedLetterZone', () => {
     render(<RedLetterZone rows={rows} />);
     expect(screen.getAllByRole('button')).toHaveLength(2);
   });
+
+  it('gathers every act into ONE named group, not one group per row', () => {
+    render(<RedLetterZone rows={rows} />);
+    const groups = screen.getAllByRole('group');
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toHaveAccessibleName('Needs attention actions');
+  });
+
+  it('keys each act to its own row, so two needs of a kind stay distinct', () => {
+    const twoOfAKind: RedLetterRow[] = [
+      { ...rows[0], key: 'a' },
+      { ...rows[0], key: 'b', onAct: jest.fn() },
+    ];
+    render(<RedLetterZone rows={twoOfAKind} />);
+    const keys = screen
+      .getAllByRole('button')
+      .map((button) => button.getAttribute('data-action-key'));
+    expect(keys).toEqual([
+      'red-letter-overdue_decision-0',
+      'red-letter-overdue_decision-1',
+    ]);
+  });
+
+  it('weights an urgent need heavier, and only by weight', () => {
+    render(<RedLetterZone rows={rows} />);
+    const [urgent, ordinary] = screen.getAllByRole('listitem');
+    expect(urgent.querySelector('p')).toHaveClass('font-medium');
+    expect(ordinary.querySelector('p')).toHaveClass('font-normal');
+  });
 });

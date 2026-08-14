@@ -244,6 +244,68 @@ describe('MoneyRegion', () => {
     expect(screen.getByRole('button', { name: /unfold/i })).toBeInTheDocument();
   });
 
+  it('stays open for an overdue invoice even with nothing executed', () => {
+    // Nothing authorized, nothing executed, no plan — but an invoice has been
+    // drawn against a milestone and is still unpaid. The region that folded
+    // over this would hide the only money actually chasing the designer.
+    mockAccount = {
+      data: {
+        committedCents: 0,
+        milestones: [
+          {
+            id: 'milestone-1',
+            invoice_id: 'invoice-1',
+            status: 'outstanding',
+            paid_at: null,
+          },
+        ],
+      },
+      isLoading: false,
+      isError: false,
+    };
+
+    render(<MoneyRegion projectId="project-1" />);
+
+    expect(screen.getByRole('heading', { name: 'Design authority' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: /unfold/i })).not.toBeInTheDocument();
+  });
+
+  it('still folds when every milestone is planned but none is receivable', () => {
+    mockAccount = {
+      data: {
+        committedCents: 0,
+        milestones: [
+          { id: 'milestone-1', invoice_id: null, status: 'pending', paid_at: null },
+          {
+            id: 'milestone-2',
+            invoice_id: null,
+            status: 'paid',
+            paid_at: '2026-08-01',
+          },
+        ],
+      },
+      isLoading: false,
+      isError: false,
+    };
+
+    render(<MoneyRegion projectId="project-1" />);
+
+    expect(screen.getByRole('button', { name: /unfold/i })).toBeInTheDocument();
+  });
+
+  it('names the amendment by the section it is composed from', () => {
+    mockInstruments = {
+      data: [{ state: 'executed', totalAmountCents: 1_000_000 }],
+      isLoading: false,
+      error: null,
+    };
+
+    render(<MoneyRegion projectId="project-1" activeSection="install" />);
+
+    expect(screen.getByRole('button', { name: 'Add a change' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Amendment' })).not.toBeInTheDocument();
+  });
+
   it('opens on the seam and round-trips back through it', () => {
     render(<MoneyRegion projectId="project-1" />);
 

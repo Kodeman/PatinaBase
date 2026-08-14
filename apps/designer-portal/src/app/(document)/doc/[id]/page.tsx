@@ -48,7 +48,7 @@ import {
   type SectionLineage,
   type SectionScheduleFacts,
 } from '@/lib/document/section-derivation';
-import { deriveNeeds, type DocumentStateRow, type SectionKey } from '@/lib/document/desk-derivation';
+import { type DocumentStateRow, type SectionKey } from '@/lib/document/desk-derivation';
 import { sectionAnchorId } from '@/lib/document/section-anchor';
 import { fmtDay, fmtMonthYear, fmtUsd } from '@/lib/document/format';
 import { documentResolutionState } from '@/lib/document/document-resolution-state';
@@ -637,16 +637,18 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
 
   // The letterhead's red-letter zone (project documents only, D-something): every
   // need this document is carrying, printed once, instead of the guide's single
-  // sentence. Sourced from the Desk composition when it has answered for this
-  // document (mirrors enrichedOperationalNeed above); falls back to a local
-  // derivation — the same call the guide's own default branch would make —
-  // while the Desk composition hasn't covered this engagement yet.
+  // sentence. Sourced from the Desk composition ONLY — `undefined` means the
+  // composition has not answered for this document, and the zone stands down in
+  // favour of DocumentGuide rather than printing a local derivation: this page
+  // cannot pass deriveNeeds the invoice/schedule facts the Desk holds, so that
+  // fallback silently printed a SHORT list as if it were the whole list.
   const enrichedOperationalNeeds = deskEnrichment
     ? selectOperationalNeedsForDocument(enrichedOperationalQuery.data, row?.engagement_id)
     : undefined;
   const redLetterRows: RedLetterRow[] = useMemo(() => {
     if (!row || row.engagement_kind !== 'project') return [];
-    const needs = enrichedOperationalNeeds ?? deriveNeeds(row, new Date());
+    const needs = enrichedOperationalNeeds;
+    if (!needs) return [];
     return needs.map((need, index) => {
       const action = needGuideAction(need, row.active_section, row.project_id ?? null);
       return {
@@ -845,8 +847,15 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           needsSetup={needsSetup}
         />
 
+        {/* The red letter replaces the guide only where it can actually speak
+            for the document: a composed Desk answer for THIS engagement. With
+            no composition (or a failed Desk read, whose retry lives on the
+            guide) the project document keeps the same guide every other kind
+            gets — silence is not a state this page is allowed to render. */}
         {guideModel &&
-          (row.engagement_kind === 'project' ? (
+          (row.engagement_kind === 'project' &&
+          enrichedOperationalNeeds &&
+          !deskGuidanceFailed ? (
             <RedLetterZone rows={redLetterRows} />
           ) : (
             <DocumentGuide model={guideModel} onActivate={activateGuide} />

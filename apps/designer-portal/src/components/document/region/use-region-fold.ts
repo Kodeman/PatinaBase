@@ -92,12 +92,16 @@ export function useRegionFold({
   forceOpen = false,
 }: UseRegionFoldArgs): RegionFold {
   const [explicit, setExplicit] = useState<boolean | null>(null);
-  const [latchedDefault, setLatchedDefault] = useState<boolean>(
-    defaultFolded ?? false,
+  const [latchedDefault, setLatchedDefault] = useState<boolean | null>(
+    defaultFolded,
   );
 
+  // A new document (or region) is a new fold question: the latched default has
+  // to be released alongside the explicit choice, or the next document opens
+  // wearing the last one's derived answer until its own default settles.
   useEffect(() => {
     setExplicit(readExplicit(docId, region));
+    setLatchedDefault(null);
   }, [docId, region]);
 
   useEffect(() => {
@@ -105,15 +109,20 @@ export function useRegionFold({
     setLatchedDefault((current) => (explicit === null ? defaultFolded : current));
   }, [defaultFolded, explicit]);
 
-  const folded = forceOpen ? false : (explicit ?? latchedDefault);
+  const folded = forceOpen ? false : (explicit ?? latchedDefault ?? false);
 
   const setFolded = useCallback(
     (value: boolean) => {
+      // While a caller is forcing the body open, folding is a gesture with no
+      // visible effect — so it must leave no record either. Remembering it
+      // would fold the region shut the moment forceOpen lapses, on a document
+      // the designer never saw fold.
+      if (forceOpen && value) return;
       setExplicit(value);
       writeExplicit(docId, region, value);
       documentEvents.regionFolded({ region, folded: value });
     },
-    [docId, region],
+    [docId, region, forceOpen],
   );
 
   const toggle = useCallback(() => {
