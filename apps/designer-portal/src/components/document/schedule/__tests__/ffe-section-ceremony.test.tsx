@@ -13,7 +13,11 @@ let mockReadinessError = false;
 const mockReadinessRefetch = jest.fn();
 
 jest.mock('@/lib/analytics/document-events', () => ({
-  documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
+  documentEvents: {
+    actionShown: jest.fn(),
+    actionSelected: jest.fn(),
+    regionFolded: jest.fn(),
+  },
 }));
 
 jest.mock('@/lib/help-system/open-help', () => ({ openHelp: jest.fn() }));
@@ -176,6 +180,10 @@ describe('the schedule ceremony', () => {
 
     mockItemsError = false;
     renderSection();
+    // A settled, genuinely empty schedule defaults its region to folded (the
+    // seam reads "N rooms · no lines yet"); the guided empty state lives in
+    // the body, so unfold first to reach it.
+    fireEvent.click(screen.getByRole('button', { name: /unfold/i }));
     expect(screen.getByText('Build the FF&E schedule')).toBeVisible();
   });
 

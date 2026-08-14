@@ -8,7 +8,11 @@ let mockAuthority: { data: unknown } = { data: null };
 let mockTradeScopesPending = false;
 
 jest.mock('@/lib/analytics/document-events', () => ({
-  documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
+  documentEvents: {
+    actionShown: jest.fn(),
+    actionSelected: jest.fn(),
+    regionFolded: jest.fn(),
+  },
 }));
 
 jest.mock('@/lib/help-system/open-help', () => ({ openHelp: jest.fn() }));
