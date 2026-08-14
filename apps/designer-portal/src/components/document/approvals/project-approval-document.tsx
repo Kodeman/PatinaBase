@@ -8,6 +8,10 @@ import {
   useState,
   type FormEvent,
 } from 'react';
+import { RegionHead, type RegionLedgerEntry } from '../region/region-head';
+import { useRegionFold } from '../region/use-region-fold';
+import { FoldSeam, focusRegionHeading } from '../region/fold-seam';
+import { RegionRule } from '../region/region-rule';
 import {
   useCreateProjectApproval,
   useProjectApprovalArtifactCandidates,
@@ -46,6 +50,8 @@ import {
   type FocusProjectApprovalDetail,
 } from './project-approval-navigation';
 import { SectionLoadingLine } from '../section-loading-line';
+
+const APPROVALS_BODY_ID = 'project-approvals-body';
 
 export interface ProjectApprovalPhase {
   id: string;
@@ -476,38 +482,114 @@ export function ProjectApprovalDocument({
 
   const composerArtifact = findArtifact(candidates, form.artifactValue);
 
+  const decisionLeadId = authority?.decisionLeadId ?? null;
+  const decidedCount = approvals.filter(isSealed).length;
+  const openCount = approvals.length - decidedCount;
+  const leadName = authorityMatches
+    ? clientName?.trim() || 'the designated client'
+    : null;
+  const headStatus =
+    openCount > 0
+      ? `${openCount} awaiting decision · ${leadName ?? 'no decision lead'}`
+      : `${decidedCount} decided · ${leadName ?? 'no decision lead'}`;
+
+  const composeAvailable = authorityMatches && availablePhases.length > 0;
+  const assignAvailable =
+    Boolean(clientProfileId) && authority === null && !authorityQuery.isLoading;
+  const reassignAvailable =
+    Boolean(authority) && !authorityMatches && Boolean(clientProfileId);
+
+  const headLedger: RegionLedgerEntry[] = [];
+  if (composeAvailable) {
+    headLedger.push({
+      key: 'compose-project-approval',
+      label: composing ? 'Close draft' : 'New approval',
+      onClick: () => setComposing((open) => !open),
+      'aria-expanded': composing,
+    });
+  } else if (assignAvailable) {
+    headLedger.push({
+      key: 'assign-project-decision-lead',
+      label: 'Assign project client',
+      loading: setAuthority.isPending,
+      loadingLabel: 'Assigning…',
+      onClick: () => void assignAuthority(),
+    });
+  } else if (reassignAvailable) {
+    headLedger.push({
+      key: 'reassign-project-decision-lead',
+      label: 'Assign current project client',
+      loading: setAuthority.isPending,
+      loadingLabel: 'Assigning…',
+      onClick: () => void assignAuthority(),
+    });
+  }
+
+  const queriesSettled = !approvalsQuery.isLoading && !authorityQuery.isLoading;
+  const defaultFolded = queriesSettled
+    ? (approvals.length === 0 && !decisionLeadId) ||
+      (approvals.length > 0 && approvals.every(isSealed))
+    : null;
+  const fold = useRegionFold({
+    docId: projectId,
+    region: 'approvals',
+    defaultFolded,
+  });
+  const unfoldFocusRef = useRef(false);
+
+  useEffect(() => {
+    if (!fold.folded && unfoldFocusRef.current) {
+      unfoldFocusRef.current = false;
+      focusRegionHeading('project-approvals-title');
+    }
+  }, [fold.folded]);
+
+  if (fold.folded) {
+    const leadPhrase = authorityMatches
+      ? `Decision lead — ${clientName?.trim() || 'the designated client'}`
+      : 'No decision lead';
+    const authoredPhrase =
+      approvals.length === 0
+        ? 'no approvals authored'
+        : `${approvals.length} approval${approvals.length === 1 ? '' : 's'} authored`;
+    return (
+      <>
+        <RegionRule />
+        <FoldSeam
+          headingId="project-approvals-title"
+          bodyId={APPROVALS_BODY_ID}
+          name="Client approvals"
+          summary={`${leadPhrase} · ${authoredPhrase}`}
+          onUnfold={() => {
+            unfoldFocusRef.current = true;
+            fold.setFolded(false);
+          }}
+          surfaceKey="open-document"
+          regionKey="approvals-head"
+        />
+      </>
+    );
+  }
+
   return (
     <section
       aria-labelledby="project-approvals-title"
       data-project-approval-document
       className="mt-6 min-w-0 border-y border-[var(--border-subtle)] py-6"
     >
-      <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-2">
-        <div className="min-w-0">
-          <p className="font-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
-            Exact artifact · named authority
-          </p>
-          <h2
-            id="project-approvals-title"
-            tabIndex={-1}
-            className="font-heading text-[22px] font-medium text-[var(--color-charcoal)] outline-none"
-          >
-            Client approvals
-          </h2>
-        </div>
-        {authorityMatches && availablePhases.length > 0 && (
-          <DocumentAction
-            actionKey="compose-project-approval"
-            surfaceKey="open-document"
-            regionKey="project-approvals"
-            variant="primary"
-            onClick={() => setComposing((open) => !open)}
-            aria-expanded={composing}
-          >
-            {composing ? 'Close draft' : 'New approval'}
-          </DocumentAction>
-        )}
-      </div>
+      <RegionRule />
+      <RegionHead
+        headingId="project-approvals-title"
+        name="Client approvals"
+        status={headStatus}
+        eyebrow="Exact artifact · named authority"
+        surfaceKey="open-document"
+        regionKey="approvals-head"
+        actions={headLedger}
+        bodyId={APPROVALS_BODY_ID}
+        onFold={() => fold.setFolded(true)}
+      />
+      <div id={APPROVALS_BODY_ID}>
       <p className="mt-2 max-w-[66ch] text-[14px] leading-relaxed text-[var(--text-muted)]">
         Bind each request to one issued plan, client-ready specification, or
         published budget checkpoint. Discussion stays in the project thread;
@@ -524,17 +606,6 @@ export function ProjectApprovalDocument({
           <p className="text-[13px] text-[var(--color-charcoal)]">
             This project does not have a designated decision lead yet.
           </p>
-          <DocumentAction
-            actionKey="assign-project-decision-lead"
-            surfaceKey="open-document"
-            regionKey="project-approvals"
-            variant="primary"
-            loading={setAuthority.isPending}
-            loadingLabel="Assigning…"
-            onClick={assignAuthority}
-          >
-            Assign project client
-          </DocumentAction>
         </div>
       )}
       {authority && !authorityMatches && clientProfileId && (
@@ -545,17 +616,6 @@ export function ProjectApprovalDocument({
           >
             Decision authority does not match this project’s current client.
           </p>
-          <DocumentAction
-            actionKey="reassign-project-decision-lead"
-            surfaceKey="open-document"
-            regionKey="project-approvals"
-            variant="primary"
-            loading={setAuthority.isPending}
-            loadingLabel="Assigning…"
-            onClick={assignAuthority}
-          >
-            Assign current project client
-          </DocumentAction>
         </div>
       )}
 
@@ -742,7 +802,7 @@ export function ProjectApprovalDocument({
               >
                 <DocumentAction
                   actionKey="create-project-approval-draft"
-                  variant="primary"
+                  variant="secondary"
                   type="submit"
                   loading={createApproval.isPending}
                   loadingLabel="Creating…"
@@ -942,7 +1002,7 @@ export function ProjectApprovalDocument({
                         {review.lifecycleStatus === 'draft' && (
                           <DocumentAction
                             actionKey="publish-project-approval"
-                            variant="primary"
+                            variant="secondary"
                             disabled={!actions.publish}
                             loading={publishApproval.isPending}
                             loadingLabel="Publishing…"
@@ -1267,7 +1327,7 @@ export function ProjectApprovalDocument({
                         >
                           <DocumentAction
                             actionKey="confirm-supersede-project-approval"
-                            variant="primary"
+                            variant="secondary"
                             type="submit"
                             loading={supersedeApproval.isPending}
                             loadingLabel="Superseding…"
@@ -1290,6 +1350,7 @@ export function ProjectApprovalDocument({
             );
           })}
         </ol>
+      </div>
       </div>
     </section>
   );
