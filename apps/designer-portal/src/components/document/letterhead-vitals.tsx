@@ -150,12 +150,16 @@ function VitalMoney({
   serverCents,
   ariaLabel,
   placeholder,
+  autoFocus = false,
 }: {
   projectId: string;
   column: 'budget_min' | 'budget_max';
   serverCents: number | null;
   ariaLabel: string;
   placeholder: string;
+  /** Set on the first field the ghost affordance reveals, so opening the band
+   *  by keyboard does not drop focus onto the body. */
+  autoFocus?: boolean;
 }) {
   const serverDollars = centsToDollarString(serverCents);
   const [value, setValue] = useState(serverDollars);
@@ -184,6 +188,8 @@ function VitalMoney({
         aria-label={ariaLabel}
         value={value}
         placeholder={placeholder}
+        // eslint-disable-next-line jsx-a11y/no-autofocus
+        autoFocus={autoFocus}
         onFocus={() => (focused.current = true)}
         onChange={(e) => setValue(e.target.value)}
         onBlur={commit}
@@ -295,11 +301,17 @@ function PhasesFold({ projectId }: { projectId: string }) {
 export function LetterheadVitals({ projectId }: { projectId: string }) {
   const { data: project } = useProjectV2(projectId) as { data: AnyRecord };
   const [phasesOpen, setPhasesOpen] = useState(false);
+  const [bandOpen, setBandOpen] = useState(false);
 
   if (!project) return null;
 
   const phaseWord = prettyPhase(project.current_phase);
   const total = project.total_amount_cents ?? null;
+  // Band-honest empty rendering: with neither bound recorded, the two dollar
+  // marks and the dash have nothing to punctuate, and a contract total of zero
+  // is the absence of a recorded amount rather than a project worth nothing.
+  // Both read as stated figures, so neither renders until it is one.
+  const bandUnset = project.budget_min == null && project.budget_max == null;
 
   return (
     <div className="mt-1">
@@ -317,28 +329,39 @@ export function LetterheadVitals({ projectId }: { projectId: string }) {
           serverValue={project.target_end_date ?? null}
           label="Target"
         />
-        <span className="inline-flex items-baseline gap-0.5">
-          <span className="font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
-            Band
+        {bandUnset && !bandOpen ? (
+          <button
+            type="button"
+            onClick={() => setBandOpen(true)}
+            className="font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay)]"
+          >
+            Set a budget band
+          </button>
+        ) : (
+          <span className="inline-flex items-baseline gap-0.5">
+            <span className="font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+              Band
+            </span>
+            <span className="font-mono text-[10px] text-[var(--text-muted)]">$</span>
+            <VitalMoney
+              projectId={projectId}
+              column="budget_min"
+              serverCents={project.budget_min ?? null}
+              ariaLabel="Budget band minimum (dollars)"
+              placeholder="from"
+              autoFocus={bandOpen}
+            />
+            <span className="font-mono text-[10px] text-[var(--text-muted)]">–</span>
+            <VitalMoney
+              projectId={projectId}
+              column="budget_max"
+              serverCents={project.budget_max ?? null}
+              ariaLabel="Budget band maximum (dollars)"
+              placeholder="to"
+            />
           </span>
-          <span className="font-mono text-[10px] text-[var(--text-muted)]">$</span>
-          <VitalMoney
-            projectId={projectId}
-            column="budget_min"
-            serverCents={project.budget_min ?? null}
-            ariaLabel="Budget band minimum (dollars)"
-            placeholder="from"
-          />
-          <span className="font-mono text-[10px] text-[var(--text-muted)]">–</span>
-          <VitalMoney
-            projectId={projectId}
-            column="budget_max"
-            serverCents={project.budget_max ?? null}
-            ariaLabel="Budget band maximum (dollars)"
-            placeholder="to"
-          />
-        </span>
-        {total != null && (
+        )}
+        {total != null && total > 0 && (
           <span className="font-mono text-[10px]">
             ${Math.round(total / 100).toLocaleString('en-US')}
           </span>
