@@ -6,6 +6,7 @@ import {
   commercialKeys,
   createBrowserClient,
   invalidateProjectWorkflow,
+  settleScheduleWrite,
 } from "@patina/supabase";
 import type { ScheduleDisclosedImpact } from "@/lib/document/schedule-impact";
 import {
@@ -36,23 +37,22 @@ const getSupabase = () => createBrowserClient() as any;
  * Every cache an anchor write can move (00475 ceremonies write through
  * `_commit_schedule_edit_authorized`, exactly as `useCommitScheduleEdit` does):
  * the phase chain, the milestones, the project-v2 rollup the header and desk
- * read, the revisions ledger, and the workflow spine.
+ * read, the revisions ledger, and the workflow spine — plus the resolved-date
+ * materialization onto the legacy project_phases columns (00480). The shared
+ * portion travels `settleScheduleWrite` (packages/supabase), same as every
+ * other schedule-shaping mutation hook; the two extra keys these ceremonies
+ * also touch (a proposal downgrade, R109/R110; the desk's own render of that
+ * need) invalidate alongside it.
  */
 async function invalidateScheduleAfterAnchorWrite(
   queryClient: QueryClient,
   projectId: string | null | undefined,
 ) {
   if (!projectId) return;
-  await Promise.all([
-    queryClient.invalidateQueries({ queryKey: ["project-phases", projectId] }),
-    queryClient.invalidateQueries({ queryKey: ["schedule-milestones", projectId] }),
-    queryClient.invalidateQueries({ queryKey: ["project-v2", projectId] }),
-    queryClient.invalidateQueries({ queryKey: ["schedule-revisions", projectId] }),
-    queryClient.invalidateQueries({ queryKey: ["schedule-proposals", projectId] }),
-    // The desk carries the proposal/contradiction need these acts can raise.
-    queryClient.invalidateQueries({ queryKey: ["document-state", "desk"] }),
-    invalidateProjectWorkflow(queryClient, projectId),
-  ]);
+  queryClient.invalidateQueries({ queryKey: ["schedule-proposals", projectId] });
+  // The desk carries the proposal/contradiction need these acts can raise.
+  queryClient.invalidateQueries({ queryKey: ["document-state", "desk"] });
+  await settleScheduleWrite(queryClient, projectId);
 }
 
 export const commercialDocumentKeys = {
@@ -2438,6 +2438,12 @@ export function useRecordPaperTradeAcceptance(projectId: string) {
       await Promise.all([
         invalidateProjectCommerce(queryClient, projectId),
         invalidateTradeScope(queryClient, projectId, variables.proposalId),
+        // record_paper_trade_acceptance is the trade-scope-accepted ceremony
+        // (00475) — it can move the trade-thread anchor server-side through
+        // the same _commit_schedule_edit_authorized door every other
+        // ceremony uses, so it needs the same schedule invalidation +
+        // materialization every other ceremony hook in this file carries.
+        invalidateScheduleAfterAnchorWrite(queryClient, projectId),
         ...(variables.scanDocumentId
           ? [
               queryClient.invalidateQueries({
