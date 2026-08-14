@@ -47,6 +47,20 @@ describe('LetterheadVitals band-honest empty rendering', () => {
     expect(container).not.toHaveTextContent('$0');
   });
 
+  it('states a sub-dollar total to the cent rather than rounding it into $0', () => {
+    mockProject = { ...baseProject, total_amount_cents: 49 };
+    render(<LetterheadVitals projectId="project-1" />);
+
+    expect(screen.getByText('$0.49')).toBeVisible();
+  });
+
+  it('keeps the sign on a credit rather than hiding the figure', () => {
+    mockProject = { ...baseProject, total_amount_cents: -7_500_00 };
+    render(<LetterheadVitals projectId="project-1" />);
+
+    expect(screen.getByText('−$7,500')).toBeVisible();
+  });
+
   it('keeps the blur-save inputs one click away from the ghost affordance', () => {
     mockProject = { ...baseProject };
     render(<LetterheadVitals projectId="project-1" />);

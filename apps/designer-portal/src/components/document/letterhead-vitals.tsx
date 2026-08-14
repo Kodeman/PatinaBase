@@ -298,6 +298,19 @@ function PhasesFold({ projectId }: { projectId: string }) {
   );
 }
 
+/** The contract total as a stated figure: a sub-dollar amount keeps its cents
+ *  rather than rounding down into a bare "$0", and a credit keeps its sign.
+ *  Only an exact zero is the absence of a recorded amount. */
+function contractTotal(cents: number): string {
+  const abs = Math.abs(cents);
+  const whole = abs % 100 === 0;
+  const body = (abs / 100).toLocaleString('en-US', {
+    minimumFractionDigits: whole ? 0 : 2,
+    maximumFractionDigits: whole ? 0 : 2,
+  });
+  return `${cents < 0 ? '−' : ''}$${body}`;
+}
+
 export function LetterheadVitals({ projectId }: { projectId: string }) {
   const { data: project } = useProjectV2(projectId) as { data: AnyRecord };
   const [phasesOpen, setPhasesOpen] = useState(false);
@@ -333,7 +346,7 @@ export function LetterheadVitals({ projectId }: { projectId: string }) {
           <button
             type="button"
             onClick={() => setBandOpen(true)}
-            className="font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay)]"
+            className="font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
           >
             Set a budget band
           </button>
@@ -361,10 +374,8 @@ export function LetterheadVitals({ projectId }: { projectId: string }) {
             />
           </span>
         )}
-        {total != null && total > 0 && (
-          <span className="font-mono text-[10px]">
-            ${Math.round(total / 100).toLocaleString('en-US')}
-          </span>
+        {total != null && total !== 0 && (
+          <span className="font-mono text-[10px]">{contractTotal(total)}</span>
         )}
         <button
           type="button"

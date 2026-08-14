@@ -488,7 +488,8 @@ export function ProjectApprovalDocument({
           </p>
           <h2
             id="project-approvals-title"
-            className="font-heading text-[22px] font-medium text-[var(--color-charcoal)]"
+            tabIndex={-1}
+            className="font-heading text-[22px] font-medium text-[var(--color-charcoal)] outline-none"
           >
             Client approvals
           </h2>

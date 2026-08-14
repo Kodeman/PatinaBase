@@ -441,6 +441,19 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     if (authorizationDoorway) router.replace(authorizationDoorway);
   }, [authorizationDoorway, router]);
 
+  // W4 — the recap line's approvals clause is a door to the approvals record,
+  // which keeps its own place on the page; the disclosure below it only ever
+  // holds settled bars.
+  const openApprovals = useCallback(() => {
+    const section = document.querySelector<HTMLElement>('[data-project-approval-document]');
+    if (!section) return;
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    section.scrollIntoView({ block: 'start', behavior: reduceMotion ? 'auto' : 'smooth' });
+    const target =
+      section.querySelector<HTMLElement>('#project-approvals-title') ?? section;
+    target.focus({ preventScroll: true });
+  }, []);
+
   // Esc puts down (D1) — unless an overlay owns it (ledger sheet first, §3).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -709,10 +722,14 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           },
         ]
       : [];
-  // W4 — drafted approvals that have not been published to the client.
-  const approvalsAwaitingPublish = (approvalsQuery.data ?? []).filter(
-    (approval) => approval.lifecycleStatus === 'draft' && approval.disposition === 'active',
-  ).length;
+  // W4 — drafted approvals that have not been published to the client. Null
+  // while the read is unanswered: a recap line that grows a clause after first
+  // paint is the same lie as a figure that softens.
+  const approvalsAwaitingPublish = approvalsQuery.isLoading
+    ? null
+    : (approvalsQuery.data ?? []).filter(
+        (approval) => approval.lifecycleStatus === 'draft' && approval.disposition === 'active',
+      ).length;
   const unfoldProposalId =
     row.engagement_kind === 'project' ? (project?.proposal?.id ?? null) : (row.proposal_id ?? null);
   const seal = lineage?.signedAt
@@ -842,6 +859,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           open={historyOpen}
           onOpenChange={setHistoryOpen}
           approvalsAwaitingPublish={approvalsAwaitingPublish}
+          onOpenApprovals={openApprovals}
         >
           {settled.map((s) => {
           const isOpen = openSection === s.key;
@@ -1076,13 +1094,16 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
                   {/* W2 — one money region: authority → plan → committed →
                     moved, over the four surfaces that used to stand apart
                     (design authority, working budget, authorizations & trade
-                    scopes, the accounts). */}
-                  <MoneyRegion
-                    projectId={row.project_id}
-                    projectName={row.title}
-                    clientName={row.client_name}
-                    activeSection={row.active_section}
-                  />
+                    scopes, the accounts). Gated on engagement_kind exactly as
+                    the four tail mounts it replaced were. */}
+                  {row.engagement_kind === 'project' && (
+                    <MoneyRegion
+                      projectId={row.project_id}
+                      projectName={row.title}
+                      clientName={row.client_name}
+                      activeSection={row.active_section}
+                    />
+                  )}
                   {/* R80: the Care band — closure stays reachable from an active
                     project (a quiet folded line until install nears). */}
                   <CareBand projectId={row.project_id} />

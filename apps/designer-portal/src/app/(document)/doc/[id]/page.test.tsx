@@ -1047,8 +1047,26 @@ describe('DocumentPage guide activation', () => {
     render(<DocumentPage params={fulfilledParams} />);
 
     expect(
-      screen.getByRole('button', { name: /\+ Client approvals · 1 awaiting publish$/ }),
+      screen.getByRole('button', { name: 'Client approvals · 1 awaiting publish →' }),
     ).toBeVisible();
+    // The recap disclosure promises only what its own body holds.
+    expect(
+      screen.getByRole('button', { name: /^Previous work · \d+ complete$/ }),
+    ).toBeVisible();
+  });
+
+  it('says nothing about approvals while that read is unanswered', () => {
+    asProjectDocument();
+    mockProjectQuery = {
+      data: { proposal: { id: 'proposal-1', version: 1, status: 'signed', signed_at: null } },
+      isLoading: false,
+      isError: false,
+    };
+    mockProjectApprovalsQuery = { data: undefined, isLoading: true };
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(screen.queryByText(/Client approvals/)).not.toBeInTheDocument();
   });
 });
 

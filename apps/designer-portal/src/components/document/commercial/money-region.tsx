@@ -13,9 +13,11 @@
  *
  * Tier 3 and tier 4 are different money and must never be swapped: tier 3 is
  * what executed instruments contractually owe; tier 4 is the accounts'
- * status-derived figure — schedule lines at ordered or beyond, money already
- * in motion to vendors. The product calls both of them "committed" in
- * different places, so the flow caption states the derivation on the page.
+ * committed figure — the CLIENT value of schedule lines at ordered and later.
+ * Tier 4 is not a disbursement: nothing in the data models money leaving, so
+ * the tier never claims funds were released. The product calls both figures
+ * "committed" in different places, so the flow caption states the derivation
+ * on the page.
  */
 
 import { useAccountPage } from '@/hooks/use-account-page';
@@ -73,56 +75,74 @@ export function MoneyRegion({
   const accountQuery = useAccountPage(projectId);
 
   const authority = authorityQuery.data ?? null;
-  const authoritySettled = !authorityQuery.isLoading && !authorityQuery.error;
+  const authorityFailed = Boolean(authorityQuery.error);
+  const authoritySettled = !authorityQuery.isLoading && !authorityFailed;
 
   const version = budgetQuery.data?.version ?? null;
-  const budgetSettled = !budgetQuery.isLoading && !budgetQuery.error;
+  const budgetFailed = Boolean(budgetQuery.error);
+  const budgetSettled = !budgetQuery.isLoading && !budgetFailed;
   // project_budget_versions.target_total_cents is stamped only when a version
   // publishes (00414's publish RPC), so a draft's stored total is stale. The
   // rows the grid below renders are the honest source for the region's figure.
-  const planCents = (version?.lines ?? []).reduce((sum, line) => sum + line.targetCents, 0);
+  const planLines = version?.lines ?? [];
+  const planCents = planLines.reduce((sum, line) => sum + line.targetCents, 0);
 
+  const committedFailed = Boolean(instrumentsQuery.error || tradeScopesQuery.error);
   const committedSettled =
-    !instrumentsQuery.isLoading &&
-    !tradeScopesQuery.isLoading &&
-    !instrumentsQuery.error &&
-    !tradeScopesQuery.error;
+    !instrumentsQuery.isLoading && !tradeScopesQuery.isLoading && !committedFailed;
   const executedInstruments = (instrumentsQuery.data ?? []).filter(
     (instrument) => instrument.state === 'executed',
   );
   const executedScopes = (tradeScopesQuery.data ?? []).filter(
     (scope) => scope.state === 'executed',
   );
+  const draftScopeCount = (tradeScopesQuery.data ?? []).filter(
+    (scope) => scope.state === 'draft',
+  ).length;
   const executedCount = executedInstruments.length + executedScopes.length;
   const committedCents =
     executedInstruments.reduce((sum, instrument) => sum + instrument.totalAmountCents, 0) +
     executedScopes.reduce((sum, scope) => sum + scope.clientPriceCents, 0);
 
   const account = accountQuery.data ?? null;
-  const accountSettled = !accountQuery.isLoading && !accountQuery.isError;
+  const accountFailed = Boolean(accountQuery.isError);
+  const accountSettled = !accountQuery.isLoading && !accountFailed;
 
-  const authorityFigure = authority
-    ? `${money(authority.authorizedCents)} authorized`
-    : authoritySettled
-      ? 'no design authority recorded yet'
-      : null;
-  const planFigure = version
-    ? `${money(planCents)} working budget v${version.version}`
-    : budgetSettled
-      ? 'no working budget yet'
-      : null;
-  const committedFigure = !committedSettled
-    ? null
-    : executedCount === 0
-      ? 'nothing executed yet'
-      : `${money(committedCents)} · ${executedCount} ${
-          executedCount === 1 ? 'authorization' : 'authorizations'
-        } executed`;
-  const movedFigure = !accountSettled
-    ? null
-    : account && account.committedCents > 0
-      ? `${money(account.committedCents)} released to vendors`
-      : 'nothing released yet';
+  const authorityFigure = authorityFailed
+    ? 'could not be read'
+    : authority
+      ? `${money(authority.authorizedCents)} authorized`
+      : authoritySettled
+        ? 'no design authority recorded yet'
+        : null;
+  // A version row is created before its lines are derived (00422's
+  // derive_working_budget_draft), so a line-less version is a real state — and
+  // summing nothing into "$0" would state a plan that does not exist.
+  const planFigure = budgetFailed
+    ? 'could not be read'
+    : version && planLines.length > 0
+      ? `${money(planCents)} working budget v${version.version}`
+      : version
+        ? `working budget v${version.version} · no rooms yet`
+        : budgetSettled
+          ? 'no working budget yet'
+          : null;
+  const committedFigure = committedFailed
+    ? 'could not be read'
+    : !committedSettled
+      ? null
+      : executedCount === 0
+        ? 'nothing executed yet'
+        : `${money(committedCents)} · ${executedCount} ${
+            executedCount === 1 ? 'instrument' : 'instruments'
+          } executed — authorizations and trade scopes`;
+  const movedFigure = accountFailed
+    ? 'could not be read'
+    : !accountSettled
+      ? null
+      : account && account.committedCents > 0
+        ? `${money(account.committedCents)} in motion — ordered through installed`
+        : 'nothing in motion yet';
 
   return (
     <section aria-label="Money" className="mb-5">
@@ -147,13 +167,22 @@ export function MoneyRegion({
           figure={committedFigure}
           meaning="What is contractually owed"
         />
-        <Rung name="Moved" figure={movedFigure} meaning="What has actually left" />
+        <Rung
+          name="Moved"
+          figure={movedFigure}
+          meaning="The accounts’ committed figure — client value of lines at ordered and later; not funds disbursed"
+        />
       </ol>
 
       <p className="mt-3 max-w-2xl text-[10.5px] leading-relaxed text-[var(--text-muted)]">
-        Authority → plan → committed → moved. Moved is the accounts&rsquo; own figure —
-        schedule lines at ordered, in production, shipped, delivered or installed — so it
-        counts money in motion to vendors, not the contractually owed total above it.
+        Authority → plan → committed → moved. Moved is the accounts&rsquo; committed figure
+        — the client value of schedule lines at ordered, in production, shipped, delivered
+        or installed — not funds disbursed, and not the contractually owed total above it.
+        {committedSettled && draftScopeCount > 0
+          ? ` ${draftScopeCount} trade ${draftScopeCount === 1 ? 'scope' : 'scopes'} still in draft, counted in neither.`
+          : ''}{' '}
+        Absorbs today&rsquo;s four separate bands: design authority, working budget,
+        authorizations &amp; trade scopes, the accounts.
       </p>
 
       <div className="mt-4">
