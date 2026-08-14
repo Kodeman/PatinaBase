@@ -198,6 +198,7 @@ section{padding:clamp(56px,8vw,110px) 0; border-top:1px solid var(--rule-strong)
 section:first-of-type{border-top:0}
 .sec-head{display:flex; gap:1.4rem; align-items:baseline; margin-bottom:2.2rem; flex-wrap:wrap}
 .sec-no{font-family:var(--mono); font-size:.8rem; color:var(--accent); letter-spacing:.12em; padding-top:.55rem}
+.delivered-note{font-family:var(--mono); font-size:.74rem; letter-spacing:.05em; color:var(--ink-3); margin:0 0 2rem}
 
 /* figures */
 figure{margin:1.6rem 0 2.4rem; max-width:100%}
@@ -260,6 +261,8 @@ tr.hi td.k{color:var(--high)}
   color:var(--ink-3); margin-top:2.6rem; padding-top:1rem; border-top:1px solid var(--rule);
 }
 .provenance b{color:var(--ink-2); letter-spacing:.14em}
+.provenance.delivered{border-top:2px solid var(--accent); margin-top:1.6rem; padding-top:1rem}
+.provenance.delivered b{color:var(--accent)}
 
 /* debt spread */
 .spread h4{margin-bottom:1rem}
@@ -498,10 +501,10 @@ tr.hi td.k{color:var(--high)}
   </p>
 
   <dl class="scope">
-    <div><dt>Findings scored</dt><dd class="num-fig">42<small>Six themes, twelve top-line items, eight journey steps, nine addendum items, seven install demands. One journey step scored OK &middot; no action, and is counted in the total only.</small></dd></div>
-    <div><dt>Shipped</dt><dd class="num-fig">3<small>Every one names its mechanism &mdash; a ruling plus the artifact that carries it.</small></dd></div>
-    <div><dt>Partial</dt><dd class="num-fig">5<small>A real act exists; the composition around it does not.</small></dd></div>
-    <div><dt>Open + deferred</dt><dd class="num-fig">33<small>24 open &mdash; Wave 4 or the bug lane. 9 deferred to Layout B, Layout C, or their own argument.</small></dd></div>
+    <div><dt>Shipped</dt><dd class="num-fig">27<small>Every one names its mechanism &mdash; a ruling plus the artifact that carries it.</small></dd></div>
+    <div><dt>Verified &middot; no defect</dt><dd class="num-fig">2<small>J4&rsquo;s draft save and A7&rsquo;s &#8984;K circuit &mdash; both audited under new coverage, no defect found.</small></dd></div>
+    <div><dt>Partial</dt><dd class="num-fig">3<small>A real act exists; the composition around it does not.</small></dd></div>
+    <div><dt>Deferred</dt><dd class="num-fig">9<small>To Layout B, Layout C, or their own argument&hellip;and 1 diagnosed, awaiting a ruling (A5).</small></dd></div>
   </dl>
 
   <div class="legend">
@@ -517,6 +520,12 @@ tr.hi td.k{color:var(--high)}
     /doc UX review, 13 August 2026 &rarr; rulings R107&ndash;R114 ratified &rarr;
     Waves 1&ndash;3 live: migrations 00474, 00475, 00476 &middot; edge function po-send &middot;
     designer portal df435d58.
+  </p>
+
+  <p class="provenance delivered">
+    <b>DELIVERED</b> &middot; 14 August 2026 &mdash; merge b5684d07 &middot; six lanes, 77 review
+    findings triaged to zero &middot; migrations 00477 + 00478 authored, awaiting Strata &middot;
+    Kody&rsquo;s signed-in walks owed.
   </p>
 </section>
 
@@ -541,7 +550,7 @@ tr.hi td.k{color:var(--high)}
         <td class="k">T1</td>
         <td>Contradictory status organs</td>
         <td><span class="chip shipped">Shipped</span></td>
-        <td class="m">R107 / R108 / R111 &mdash; one resolver (<span class="s">packages/utils schedule-fidelity.ts</span>) now feeds header vitals, section sub-label, stage line, install future-sub, desk motion and desk need. <span class="s">Week N</span> renders only downstream of a hard anchor. Folded sub-findings A2 breadcrumb and A5 no-op remain open &mdash; scored under A2 / A5.</td>
+        <td class="m">R107 / R108 / R111 &mdash; one resolver (<span class="s">packages/utils schedule-fidelity.ts</span>) now feeds header vitals, section sub-label, stage line, install future-sub, desk motion and desk need. <span class="s">Week N</span> renders only downstream of a hard anchor. Folded sub-findings: A2 shipped; A5 diagnosed, awaiting a ruling.</td>
       </tr>
       <tr>
         <td class="k">T2</td>
@@ -552,8 +561,8 @@ tr.hi td.k{color:var(--high)}
       <tr>
         <td class="k">T3</td>
         <td>Flat money hierarchy</td>
-        <td><span class="chip open">Open</span></td>
-        <td class="m">Wave 4 &middot; W2 &mdash; the money region.</td>
+        <td><span class="chip shipped">Shipped</span></td>
+        <td class="m">W2 &middot; <span class="s">money-region.tsx</span> &mdash; one dominant figure, four tiers in dependency order; AccountBand left the tail.</td>
       </tr>
       <tr>
         <td class="k">T4</td>
@@ -564,14 +573,14 @@ tr.hi td.k{color:var(--high)}
       <tr>
         <td class="k">T5</td>
         <td>Empty-module erosion</td>
-        <td><span class="chip open">Open</span></td>
-        <td class="m">Wave 4 &middot; W3 &mdash; the empty-band collapse.</td>
+        <td><span class="chip shipped">Shipped</span></td>
+        <td class="m">W3 &middot; <span class="s">not-started-band.tsx</span> one-line collapse; <span class="s">Name a phase&hellip;</span> retires after completion.</td>
       </tr>
       <tr>
         <td class="k">T6</td>
         <td>Leaked machinery</td>
-        <td><span class="chip partial">Partial</span></td>
-        <td class="m">The three strings and the provenance line are dead (R113) and survive only as string-absence contract tests. The motion leak &mdash; A4, the loading cascade &mdash; is open &rarr; Wave 4 &middot; W5.</td>
+        <td><span class="chip shipped">Shipped</span></td>
+        <td class="m">R113 strings dead + W5 &middot; <span class="s">section-loading-line.tsx</span> &mdash; one quiet register replaced nine bespoke loading strings.</td>
       </tr>
     </tbody>
   </table></div>
@@ -584,14 +593,14 @@ tr.hi td.k{color:var(--high)}
       <tr><td class="k">2 (a)</td><td><span class="s">Week 2</span> against &ldquo;no phase configured&rdquo;</td><td><span class="chip shipped">Shipped</span></td><td class="m">R108 Week-N gate. The string <span class="s">NO ACTIVE OR DELAYED PHASE IS CONFIGURED</span> is dead (R113).</td></tr>
       <tr><td class="k">3 (e)</td><td>Book closed with work unbilled</td><td><span class="chip deferred">Deferred</span></td><td class="m">The close gate is Layout B&rsquo;s centerpiece.</td></tr>
       <tr><td class="k">4</td><td>Install reads as FF&amp;E plus unfolded Care</td><td><span class="chip partial">Partial</span></td><td class="m">Window ceremony shipped; composition deferred to Layout B.</td></tr>
-      <tr><td class="k">5 (b)</td><td>Empty actives while the desk nags</td><td><span class="chip partial">Partial</span></td><td class="m"><span class="s">schedule_unconfigured</span> desk need (<span class="s">Name the phases for this project</span>, rank 10.5) plus Band-as-state. The doc-side collapse arrives with Wave 4 &middot; W1.</td></tr>
-      <tr><td class="k">6 (g)</td><td>Mood boards and plan room empty everywhere</td><td><span class="chip open">Open</span></td><td class="m">Wave 4 &middot; W3.</td></tr>
-      <tr><td class="k">7 (h)</td><td>Four financial concepts, equal weight</td><td><span class="chip open">Open</span></td><td class="m">Wave 4 &middot; W2.</td></tr>
-      <tr><td class="k">8 (c)</td><td>People: three renderings of one relationship</td><td><span class="chip open">Open</span></td><td class="m">Bug lane &mdash; rides the Nurture derivation fix.</td></tr>
+      <tr><td class="k">5 (b)</td><td>Empty actives while the desk nags</td><td><span class="chip shipped">Shipped</span></td><td class="m">Desk need (rank 10.5) + W1 needs-setup chip on the letterhead.</td></tr>
+      <tr><td class="k">6 (g)</td><td>Mood boards and plan room empty everywhere</td><td><span class="chip shipped">Shipped</span></td><td class="m">W3.</td></tr>
+      <tr><td class="k">7 (h)</td><td>Four financial concepts, equal weight</td><td><span class="chip shipped">Shipped</span></td><td class="m">W2.</td></tr>
+      <tr><td class="k">8 (c)</td><td>People: three renderings of one relationship</td><td><span class="chip shipped">Shipped</span></td><td class="m">J7 &mdash; the directory derivation keys on send evidence.</td></tr>
       <tr><td class="k">9 (d)</td><td><span class="s">CANONICAL STAGE</span> / <span class="s">TEMPLATE PROVENANCE</span></td><td><span class="chip shipped">Shipped</span></td><td class="m">R113; <span class="s">provenanceFor</span> returns null.</td></tr>
-      <tr><td class="k">10 (j)</td><td><span class="s">REVEAL 3 MORE FOLIOS</span> inert</td><td><span class="chip open">Open</span></td><td class="m">Bug lane.</td></tr>
-      <tr><td class="k">(f)</td><td><span class="s">$ BAND from &ndash; to $0</span></td><td><span class="chip open">Open</span></td><td class="m">Wave 4 &middot; W2 &mdash; band-honest empty rendering. <i>Below the cut.</i></td></tr>
-      <tr><td class="k">(i)</td><td><span class="s">Name a phase&hellip;</span> offered after Completion</td><td><span class="chip open">Open</span></td><td class="m">Wave 4 &middot; W3 &mdash; authoring affordances retire with their phase. <i>Below the cut.</i></td></tr>
+      <tr><td class="k">10 (j)</td><td><span class="s">REVEAL 3 MORE FOLIOS</span> inert</td><td><span class="chip shipped">Shipped</span></td><td class="m">Re-derived working in code; capture path hardened + pinned; the prod-observed inertness never reproduced &mdash; live walk owed.</td></tr>
+      <tr><td class="k">(f)</td><td><span class="s">$ BAND from &ndash; to $0</span></td><td><span class="chip shipped">Shipped</span></td><td class="m">Letterhead band-honest ghost + designer preview + the client portal&rsquo;s shell.</td></tr>
+      <tr><td class="k">(i)</td><td><span class="s">Name a phase&hellip;</span> offered after Completion</td><td><span class="chip shipped">Shipped</span></td><td class="m">W3.</td></tr>
     </tbody>
   </table></div>
 
@@ -599,14 +608,14 @@ tr.hi td.k{color:var(--high)}
   <div class="scroll"><table>
     <thead><tr><th style="width:3.4rem">ID</th><th style="width:28%">Finding</th><th style="width:9rem">Status</th><th>Mechanism or destination</th></tr></thead>
     <tbody>
-      <tr><td class="k">J1</td><td>Direction entry skips the doc&rsquo;s own Direction section</td><td><span class="chip open">Open</span></td><td class="m">Bug lane &middot; M.</td></tr>
-      <tr class="hi"><td class="k">J2</td><td>Picklist auto-invite, no confirm</td><td><span class="chip high">High</span> <span class="chip open">Open</span></td><td class="m">Bug lane &mdash; an outbound send fires with no consent step.</td></tr>
-      <tr><td class="k">J3</td><td>Facet claims and $0 defaults</td><td><span class="chip open">Open</span></td><td class="m">Bug lane &middot; S &mdash; rides J2.</td></tr>
+      <tr><td class="k">J1</td><td>Direction entry skips the doc&rsquo;s own Direction section</td><td><span class="chip shipped">Shipped</span></td><td class="m">Begin the Direction lands the doc and navigates to the successor.</td></tr>
+      <tr><td class="k">J2</td><td>Picklist auto-invite, no confirm</td><td><span class="chip shipped">Shipped</span></td><td class="m">Arm-then-confirm; selection never sends.</td></tr>
+      <tr><td class="k">J3</td><td>Facet claims and $0 defaults</td><td><span class="chip shipped">Shipped</span></td><td class="m">Both halves (ceiling + retainer), designer preview + client shell.</td></tr>
       <tr><td class="k">J4</td><td><span class="s">Save agreement</span> is a true draft save</td><td><span class="chip ok">OK</span></td><td class="m">No action. Behaves as labelled.</td></tr>
-      <tr class="hi"><td class="k">J5</td><td>Hard wall: no designer-side signed path</td><td><span class="chip high">High</span> <span class="chip open">Open</span></td><td class="m">Bug lane &mdash; remedy <span class="s">Record a signature received outside Patina</span>. Precedent already shipped: <span class="s">record_paper_trade_acceptance</span> and the on-paper furnishings rail.</td></tr>
-      <tr class="hi"><td class="k">J6</td><td>Doc URL permanently breaks at Direction</td><td><span class="chip high">High</span> <span class="chip open">Open</span></td><td class="m">Bug lane &mdash; a shared link dies on supersession.</td></tr>
-      <tr class="hi"><td class="k">J7</td><td>Nurture calls a never-sent draft <span class="s">Proposal sent</span></td><td><span class="chip high">High</span> <span class="chip open">Open</span></td><td class="m">Bug lane &mdash; the CRM reports an outbound that never left.</td></tr>
-      <tr><td class="k">J8</td><td>Proposal never advances in the rail</td><td><span class="chip open">Open</span></td><td class="m">Rides J5.</td></tr>
+      <tr><td class="k">J5</td><td>Hard wall: no designer-side signed path</td><td><span class="chip shipped">Shipped</span></td><td class="m">Preflight re-scope: the ceremony existed; the wall was upstream &mdash; 00477 issue-on-paper converges onto the sent regime, and the send modal carries the third path.</td></tr>
+      <tr><td class="k">J6</td><td>Doc URL permanently breaks at Direction</td><td><span class="chip shipped">Shipped</span></td><td class="m">Forward resolution in the doc-state hook.</td></tr>
+      <tr><td class="k">J7</td><td>Nurture calls a never-sent draft <span class="s">Proposal sent</span></td><td><span class="chip shipped">Shipped</span></td><td class="m">Evidence-keyed: issued-on-paper &rarr; send evidence &rarr; draft.</td></tr>
+      <tr><td class="k">J8</td><td>Proposal never advances in the rail</td><td><span class="chip shipped">Shipped</span></td><td class="m">Rides J5 &mdash; the rail advances without an email.</td></tr>
     </tbody>
   </table></div>
 
@@ -614,15 +623,15 @@ tr.hi td.k{color:var(--high)}
   <div class="scroll"><table>
     <thead><tr><th style="width:3.4rem">ID</th><th style="width:38%">Finding</th><th style="width:9rem">Status</th><th>Destination</th></tr></thead>
     <tbody>
-      <tr><td class="k">A1</td><td>Desk-card send-trap</td><td><span class="chip open">Open</span></td><td class="m">Bug lane.</td></tr>
-      <tr><td class="k">A2</td><td>Wrong-doc breadcrumb</td><td><span class="chip open">Open</span></td><td class="m">Bug lane. Folded out of T1.</td></tr>
-      <tr><td class="k">A3</td><td><span class="s">IN-HAND</span> timer misattribution</td><td><span class="chip open">Open</span></td><td class="m">Bug lane.</td></tr>
-      <tr><td class="k">A4</td><td>Loading cascade</td><td><span class="chip open">Open</span></td><td class="m">Wave 4 &middot; W5 &mdash; the one addendum item that moved lanes.</td></tr>
-      <tr><td class="k">A5</td><td><span class="s">RESOLVE THE SCHEDULE</span> no-op</td><td><span class="chip open">Open</span></td><td class="m">Bug lane. Folded out of T1.</td></tr>
-      <tr><td class="k">A6</td><td>Release with no feedback</td><td><span class="chip open">Open</span></td><td class="m">Bug lane.</td></tr>
-      <tr><td class="k">A7</td><td>&#8984;K inert to the mouse</td><td><span class="chip open">Open</span></td><td class="m">Bug lane.</td></tr>
-      <tr><td class="k">A8</td><td>Cold loads land mid-scroll</td><td><span class="chip open">Open</span></td><td class="m">Bug lane.</td></tr>
-      <tr><td class="k">A9</td><td>Triplicate <span class="s">Capture a lead</span></td><td><span class="chip open">Open</span></td><td class="m">Bug lane.</td></tr>
+      <tr><td class="k">A1</td><td>Desk-card send-trap</td><td><span class="chip shipped">Shipped</span></td><td class="m">Bug lane.</td></tr>
+      <tr><td class="k">A2</td><td>Wrong-doc breadcrumb</td><td><span class="chip shipped">Shipped</span></td><td class="m">Bug lane. Folded out of T1.</td></tr>
+      <tr><td class="k">A3</td><td><span class="s">IN-HAND</span> timer misattribution</td><td><span class="chip shipped">Shipped</span></td><td class="m">Real gap confirmed (unawaited invalidation on doc switch); hardened + pinned; live repro owed.</td></tr>
+      <tr><td class="k">A4</td><td>Loading cascade</td><td><span class="chip shipped">Shipped</span></td><td class="m">W5.</td></tr>
+      <tr><td class="k">A5</td><td><span class="s">RESOLVE THE SCHEDULE</span> no-op</td><td><span class="chip open">Open</span></td><td class="m">Diagnosed &mdash; awaiting a design ruling (I132 ledger).</td></tr>
+      <tr><td class="k">A6</td><td>Release with no feedback</td><td><span class="chip shipped">Shipped</span></td><td class="m">Bug lane.</td></tr>
+      <tr><td class="k">A7</td><td>&#8984;K inert to the mouse</td><td><span class="chip ok">OK</span></td><td class="m">Verified working &middot; click circuit fully wired; new pinning coverage; no defect found.</td></tr>
+      <tr><td class="k">A8</td><td>Cold loads land mid-scroll</td><td><span class="chip shipped">Shipped</span></td><td class="m">Bug lane.</td></tr>
+      <tr><td class="k">A9</td><td>Triplicate <span class="s">Capture a lead</span></td><td><span class="chip shipped">Shipped</span></td><td class="m">Bug lane.</td></tr>
     </tbody>
   </table></div>
 
@@ -832,6 +841,8 @@ tr.hi td.k{color:var(--high)}
     <p class="eyebrow">Wave 4</p>
     <h2>The tight document</h2>
   </div></div>
+
+  <p class="delivered-note">Delivered at b5684d07 &middot; designer-portal 350 suites / 3,715 tests green at integration.</p>
 
   <p>
     Five workstreams, all composition-only. Each names the components it touches and the finding
@@ -1066,6 +1077,8 @@ tr.hi td.k{color:var(--high)}
     <h2>Fourteen defects, four of them expensive</h2>
   </div></div>
 
+  <p class="delivered-note">Delivered at b5684d07 &middot; designer-portal 350 suites / 3,715 tests green at integration.</p>
+
   <p>
     This lane is independent of composition and can start immediately. The four oxide rows cost
     money or trust today: an unconsented outbound send, a dead shared link, a false CRM
@@ -1145,6 +1158,7 @@ tr.hi td.k{color:var(--high)}
     <li>Wave 4 lands in order: W1 &rarr; W2 &rarr; W3 &rarr; W4 &rarr; W5. W2 is the largest; W4 and W5 are small.</li>
     <li>Each workstream gates on the designer-portal suite (238 tests) and @patina/utils (557) green &mdash; after the react / react-dom lockfile skew is resolved in its own session.</li>
     <li>Every workstream is composition-only: no schema, no new data &mdash; the same constraint the review set for its own mocks, <span class="s">nothing below asks for new data</span>.</li>
+    <li>Outcome &mdash; six lanes merged clean, full gate sweep green (only pre-existing reds, each reproduced on unmodified main); 00477/00478 must land on Strata BEFORE the designer portal deploys (the portal reads the new send-evidence signals fail-closed).</li>
   </ul>
 
   <p class="close-line">
