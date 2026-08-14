@@ -8,11 +8,15 @@ export function PreviousWork({
   children,
   open: controlledOpen,
   onOpenChange,
+  approvalsAwaitingPublish = 0,
 }: {
   count: number;
   children: React.ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** W4: client approvals drafted but not yet published. Announced on this
+   *  same line only when there are any — a zero is not news. */
+  approvalsAwaitingPublish?: number;
 }) {
   const [localOpen, setLocalOpen] = useState(false);
   const open = controlledOpen ?? localOpen;
@@ -33,7 +37,11 @@ export function PreviousWork({
         onClick={() => setOpen(!open)}
         className="flex min-h-11 w-full items-center justify-between border-y border-[var(--color-pearl)] py-2 text-left font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
       >
-        <span>Previous work · {count} complete</span>
+        <span>
+          Previous work · {count} complete
+          {approvalsAwaitingPublish > 0 &&
+            ` + Client approvals · ${approvalsAwaitingPublish} awaiting publish`}
+        </span>
         <span aria-hidden>{open ? '−' : '+'}</span>
       </button>
       <div id={contentId} hidden={!open} className="pt-2">{open ? children : null}</div>

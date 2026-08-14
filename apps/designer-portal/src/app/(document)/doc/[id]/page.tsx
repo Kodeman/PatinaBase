@@ -15,6 +15,7 @@ import { useRouter } from 'next/navigation';
 import {
   useProjectV2,
   useProjectPhases,
+  useProjectApprovals,
   useProposalFeedback,
   useProjectRoster,
   useDiscovery,
@@ -72,6 +73,8 @@ import {
 import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 import { AccountBand } from '@/components/document/account-band';
+import { MoneyRegion } from '@/components/document/commercial/money-region';
+import { NotStartedBand } from '@/components/document/not-started-band';
 import { ScheduleNavProvider } from '@/components/document/schedule/schedule-nav-context';
 import { RippleProvider } from '@/components/document/schedule/schedule-ripple-context';
 import { ProjectScheduleHandoffMount } from '@/components/document/project-schedule-handoff-mount';
@@ -80,8 +83,6 @@ import { ProjectApprovalDocumentMount } from '@/components/document/project-appr
 import { LetterheadInstruments } from '@/components/document/letterhead-instruments';
 import { CallSheetMount } from '@/components/document/roster/call-sheet-mount';
 import type { CallSheetOpenMode } from '@/components/document/roster/call-sheet';
-import { KickoffBand } from '@/components/document/roster/kickoff-band';
-import { PlanRoomBand } from '@/components/document/plans/plan-room-band';
 import { HouseholdChip } from '@/components/document/household-chip';
 import { ProposalInstruments } from '@/components/document/proposal-instruments';
 import { FolioLetterhead, ProposalFolioStrip } from '@/components/document/folio-strip';
@@ -91,9 +92,6 @@ import { gateState, useSectionGates } from '@/hooks/use-section-work';
 import { deriveFillState } from '@/lib/document/fill-state';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { useHydrated } from '@/hooks/use-hydrated';
-import { ProjectAuthorityBandForProject } from '@/components/document/commercial/project-authority-band';
-import { ProjectMoodBoards } from '@/components/document/project-mood-boards';
-import { ProjectCommerceSection } from '@/components/document/commercial/project-commerce-section';
 import { authorizationDoorwayFor } from '@/lib/document/authorization-doorway';
 import {
   asLegacyProposalLifecycle,
@@ -238,6 +236,9 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     isError: boolean;
   };
   const { data: phases } = useProjectPhases(projectId) as { data: AnyRecord[] | undefined };
+  // W4: the same key ProjectApprovalDocument already holds hot — read here only
+  // to count what is drafted and unsent, for the recap line.
+  const approvalsQuery = useProjectApprovals(projectId || undefined);
   // R108/R111 — one derivation, several mouths: the letterhead vitals, the
   // Project sub-label, and the Install sub-label all read this.
   const scheduleQuery = useResolvedSchedule(projectId || undefined);
@@ -693,6 +694,25 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
 
   const settled = sections.filter((s) => s.state === 'settled');
   settledCountRef.current = settled.length;
+  // W1 — the letterhead's setup chip. deriveNeed returns at most one need per
+  // document, so this list holds one entry or none; `undefined` (the Desk has
+  // not answered) and `null` (it answered "nothing") both render nothing. The
+  // remedy anchors to the active section directly rather than borrowing the
+  // guide's action, which an open workflow gate can point somewhere else.
+  const needsSetup =
+    enrichedOperationalNeed?.kind === 'schedule_unconfigured'
+      ? [
+          {
+            text: enrichedOperationalNeed.text,
+            remedyLabel: enrichedOperationalNeed.actionLabel ?? 'Review',
+            onActivate: () => jumpToSection(row.active_section),
+          },
+        ]
+      : [];
+  // W4 — drafted approvals that have not been published to the client.
+  const approvalsAwaitingPublish = (approvalsQuery.data ?? []).filter(
+    (approval) => approval.lifecycleStatus === 'draft' && approval.disposition === 'active',
+  ).length;
   const unfoldProposalId =
     row.engagement_kind === 'project' ? (project?.proposal?.id ?? null) : (row.proposal_id ?? null);
   const seal = lineage?.signedAt
@@ -758,6 +778,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
               />
             ) : undefined
           }
+          needsSetup={needsSetup}
         />
 
         {guideModel && <DocumentGuide model={guideModel} onActivate={activateGuide} />}
@@ -820,6 +841,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           count={settled.length}
           open={historyOpen}
           onOpenChange={setHistoryOpen}
+          approvalsAwaitingPublish={approvalsAwaitingPublish}
         >
           {settled.map((s) => {
           const isOpen = openSection === s.key;
@@ -1029,6 +1051,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
                       projectId={row.project_id}
                       clientUserId={row.client_profile_id}
                       clientName={row.client_name}
+                      projectStatus={project?.status}
                     />
                   ) : (
                     <CoordinationBand
@@ -1050,11 +1073,15 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
                     onFolioDropConsumed={() => setFolioDrop(null)}
                     sectionDragOver={sectionDrag}
                   />
-                  <ProjectAuthorityBandForProject projectId={row.project_id} allowAddendum />
-                  <ProjectCommerceSection
+                  {/* W2 — one money region: authority → plan → committed →
+                    moved, over the four surfaces that used to stand apart
+                    (design authority, working budget, authorizations & trade
+                    scopes, the accounts). */}
+                  <MoneyRegion
                     projectId={row.project_id}
                     projectName={row.title}
                     clientName={row.client_name}
+                    activeSection={row.active_section}
                   />
                   {/* R80: the Care band — closure stays reachable from an active
                     project (a quiet folded line until install nears). */}
@@ -1114,18 +1141,27 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
         {row.engagement_kind === 'project' && row.project_id && (
           <>
             {/* Supporting project records follow the active work so a newly
-                opened document reaches the schedule before its reference material. */}
-            <AccountBand
+                opened document reaches the schedule before its reference material.
+                W2 — the accounts moved into the money region, which mounts only
+                while the Project section is open; every other section keeps the
+                band here, where it has always been. */}
+            {row.active_section !== 'project' && (
+              <AccountBand
+                projectId={row.project_id}
+                clientName={row.client_name}
+                activeSection={row.active_section}
+              />
+            )}
+            {/* W3 — mood boards, plan room, spec book and call sheet collapse
+                to one line while all of them are still empty, and mount
+                individually the moment any one of them holds something. */}
+            <NotStartedBand
               projectId={row.project_id}
-              clientName={row.client_name}
-              activeSection={row.active_section}
+              routeId={id}
+              callSheetEnabled={callSheetGate.value}
+              rosterRows={rosterRows ?? []}
+              canCreateBoards={row.active_section === 'project'}
             />
-            <ProjectMoodBoards
-              projectId={row.project_id}
-              canCreate={row.active_section === 'project'}
-            />
-            <KickoffBand projectId={row.project_id} rows={rosterRows ?? []} />
-            <PlanRoomBand routeId={id} projectId={row.project_id} />
           </>
         )}
 

@@ -13,4 +13,26 @@ describe('PreviousWork', () => {
     expect(screen.getByText('Brief recap')).toBeInTheDocument();
     expect(document.getElementById(button.getAttribute('aria-controls')!)).toBeVisible();
   });
+
+  it('leaves the line alone when no approval is awaiting publish', () => {
+    render(
+      <PreviousWork count={3} approvalsAwaitingPublish={0}>
+        <div>Brief recap</div>
+      </PreviousWork>,
+    );
+    expect(screen.getByRole('button', { name: 'Previous work · 3 complete' })).toBeVisible();
+  });
+
+  it('carries the drafted approvals on the same line when there are any', () => {
+    render(
+      <PreviousWork count={4} approvalsAwaitingPublish={1}>
+        <div>Brief recap</div>
+      </PreviousWork>,
+    );
+    expect(
+      screen.getByRole('button', {
+        name: 'Previous work · 4 complete + Client approvals · 1 awaiting publish',
+      }),
+    ).toBeVisible();
+  });
 });
