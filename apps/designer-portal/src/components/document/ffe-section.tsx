@@ -92,6 +92,7 @@ import {
 } from './schedule/release-ceremony-context';
 import type { SectionKey } from '@/lib/document/desk-derivation';
 import { DocumentAction } from './document-action';
+import { SectionLoadingLine } from './section-loading-line';
 
 /** Warm borders need darker text ink on paper (prototype stamp treatment). */
 const STAGE_INK: Partial<Record<FFEStageKey, string>> = {
@@ -957,13 +958,15 @@ function FFESectionBody({
                   because there is no new document to make. Visible whenever
                   canRelease holds (an executed agreement stands behind the
                   project) so authorization-adjacent controls don't vanish —
-                  disabled, not hidden, once readiness has SETTLED and still
-                  says no individual line can join a release. While readiness
-                  is loading or has failed to read, the button stays enabled
-                  on purpose: entering the ceremony is how a designer sees
-                  each line's own disabled-checkbox reason (or retries) —
-                  disabling here too would just swap one silent dead end for
-                  another. */}
+                  disabled, not hidden, once BOTH the schedule and readiness
+                  have SETTLED and still say no individual line can join a
+                  release. While the schedule or readiness is loading or has
+                  failed to read, the button stays enabled on purpose:
+                  entering the ceremony is how a designer sees each line's
+                  own disabled-checkbox reason (or retries) — disabling here
+                  too would just swap one silent dead end for another. Empty
+                  schedule (total === 0) is excluded too: GuidedEmptyState
+                  already owns that message below. */}
               {canRelease && (
                 <DocumentAction
                   actionKey="release-for-authorization"
@@ -971,7 +974,12 @@ function FFESectionBody({
                   regionKey="ffe-head"
                   variant="primary"
                   disabled={
-                    !anyEligible && !readinessQuery.isLoading && !readinessQuery.isError
+                    !isLoading &&
+                    !isError &&
+                    total > 0 &&
+                    !anyEligible &&
+                    !readinessQuery.isLoading &&
+                    !readinessQuery.isError
                   }
                   onClick={() => ceremony?.begin()}
                 >
@@ -1004,9 +1012,7 @@ function FFESectionBody({
       )}
 
       {mode === 'project' && !readinessQuery.isError && readinessQuery.isLoading && (
-        <p className="mb-2 text-[11.5px] italic text-[var(--text-muted)]">
-          Checking readiness…
-        </p>
+        <SectionLoadingLine label="Checking readiness" className="mb-2" />
       )}
 
       {/* The head button stays visible (never vanishes on the designer) but
@@ -1015,6 +1021,9 @@ function FFESectionBody({
           Per-row reasons remain reachable via each row's own unfold. */}
       {mode === 'project' &&
         canRelease &&
+        !isLoading &&
+        !isError &&
+        total > 0 &&
         !anyEligible &&
         !readinessQuery.isLoading &&
         !readinessQuery.isError && (
@@ -1052,11 +1061,7 @@ function FFESectionBody({
         />
       )}
 
-      {isLoading && (
-        <p className="py-3 text-[11.5px] italic text-[var(--text-muted)]">
-          Reading the schedule…
-        </p>
-      )}
+      {isLoading && <SectionLoadingLine label="Reading the schedule" className="py-3" />}
 
       {!isLoading && isError && (
         <div className="border-t border-[var(--color-pearl)] py-3">

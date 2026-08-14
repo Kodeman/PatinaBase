@@ -22,6 +22,7 @@ import { useDiscovery, useDesignerClientForClientUser, useStyles } from '@patina
 import { useDesignerClientIdForProposal } from '@/hooks/use-discovery-relationship-id';
 import { formatBudgetRange } from '@/lib/document/discovery-seed';
 import { fmtDay } from '@/lib/document/format';
+import { SectionLoadingLine } from '../section-loading-line';
 
 const pretty = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
@@ -76,7 +77,7 @@ export function DiscoveryRecap({
     (tryProposalLeg && proposalLegLoading) ||
     (Boolean(designerClientId) && discoveryLoading);
   if (resolving) {
-    return <p className="py-2 text-[11.5px] italic text-[var(--text-muted)]">Opening discovery…</p>;
+    return <SectionLoadingLine label="Opening discovery" className="py-2" />;
   }
   if (!row) {
     return (

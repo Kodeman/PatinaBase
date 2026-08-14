@@ -19,10 +19,14 @@ export function SectionLoadingLine({
   className?: string;
 }) {
   return (
-    <p role="status" aria-live="polite" aria-busy="true" className={`my-1 ${className}`}>
+    // text-[11.5px]: the bespoke sentences this bar replaced sat between
+    // 9px and 13px, clustered around 11.5-12px — this keeps the bar's
+    // 0.85em height in that register instead of inheriting the ~16px body
+    // size (no call site passes a font-size override today).
+    <p role="status" aria-live="polite" className={`my-1 text-[11.5px] ${className}`}>
       <span
         aria-hidden
-        className="inline-block h-[0.85em] w-24 max-w-[45%] animate-pulse rounded-[2px] bg-[var(--bg-muted)] align-middle motion-reduce:animate-none"
+        className="inline-block h-[0.85em] w-24 max-w-[45%] animate-pulse rounded-[2px] bg-[var(--color-pearl)] align-middle motion-reduce:animate-none"
       />
       <span className="sr-only">{label}</span>
     </p>

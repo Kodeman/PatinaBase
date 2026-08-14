@@ -162,7 +162,7 @@ describe('the schedule ceremony', () => {
     mockItems = [];
     mockItemsLoading = true;
     const loading = renderSection();
-    expect(screen.getByText('Reading the schedule…')).toBeVisible();
+    expect(screen.getByText('Reading the schedule')).toBeVisible();
     expect(screen.queryByText('Build the FF&E schedule')).not.toBeInTheDocument();
     loading.unmount();
 

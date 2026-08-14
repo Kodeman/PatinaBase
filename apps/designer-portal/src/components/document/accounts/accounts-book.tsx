@@ -36,6 +36,7 @@ import { DocSheetHead } from '../overlays/doc-sheet';
 import { STUDIO_LEDGERS } from '@/lib/document/registry';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 import { AccountsQueryFailure } from './accounts-query-failure';
+import { SectionLoadingLine } from '../section-loading-line';
 
 // R96 — the registry is the single source of the surface icon (no drift).
 const ACCOUNTS_ICON = STUDIO_LEDGERS.find((l) => l.key === 'accounts')!.icon;
@@ -153,7 +154,7 @@ export function AccountsBook({
           onRetry={refetch}
         />
       ) : isLoading ? (
-        <p className="py-3 text-[12px] italic text-[var(--color-aged-oak)]">Opening the book…</p>
+        <SectionLoadingLine label="Opening the book" className="py-3" />
       ) : (
         <>
           <LedgerFrontMatter caption="the studio" stats={stats} />
