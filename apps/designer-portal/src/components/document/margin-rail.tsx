@@ -50,6 +50,7 @@ import { lockBodyScroll } from './overlays/body-scroll-lock';
 import {
   registerManagedModalDialog,
   topActiveModalDialog,
+  topDismissiblePopover,
 } from './overlays/active-dialog';
 import {
   ItemComposer,
@@ -145,6 +146,11 @@ export function ResponsiveMarginRail({ children }: { children: ReactNode }) {
       if (topDialog && topDialog !== panel) return;
 
       if (event.key === 'Escape') {
+        // An open anchored popover (a Calendar Folio in a margin field) owns
+        // this Esc. It cannot be seen through topActiveModalDialog() — it wears
+        // no role="dialog" on purpose — and it cannot stop this listener, which
+        // was registered first and so runs first in the same capture phase.
+        if (topDismissiblePopover()) return;
         event.preventDefault();
         event.stopPropagation();
         setOpen(false);
