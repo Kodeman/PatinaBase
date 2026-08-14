@@ -132,7 +132,7 @@ describe("SectionStageLineMount", () => {
       <SectionStageLineMount projectId="project-1" activeSection="project" />,
     );
 
-    expect(screen.getByText("Reading project workflow…")).toBeVisible();
+    expect(screen.getByText("Reading project workflow")).toBeVisible();
   });
 
   it("says the stage position is unavailable without implying the schedule changed", () => {
@@ -160,6 +160,6 @@ describe("SectionStageLineMount", () => {
       <SectionStageLineMount projectId="project-1" activeSection="project" />,
     );
 
-    expect(screen.getByText("Reading project workflow…")).toBeVisible();
+    expect(screen.getByText("Reading project workflow")).toBeVisible();
   });
 });

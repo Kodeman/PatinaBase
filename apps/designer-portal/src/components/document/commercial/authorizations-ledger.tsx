@@ -39,6 +39,7 @@ import { DocumentAction } from "../document-action";
 import { TradeScopeDetail } from "./trade/trade-scope-detail";
 import { TradeScopeDraftSheet } from "./trade/trade-scope-draft-sheet";
 import { GuidedEmptyState } from "../guided-empty-state";
+import { SectionLoadingLine } from "../section-loading-line";
 
 const toneColor = {
   quiet: "var(--text-muted)",
@@ -183,11 +184,7 @@ export function AuthorizationsLedger({
         signed by the client, then engaged.
       </p>
 
-      {isLoading && (
-        <p className="mt-3 text-[11px] text-[var(--text-muted)]">
-          Loading authorizations…
-        </p>
-      )}
+      {isLoading && <SectionLoadingLine label="Loading authorizations" className="mt-3" />}
       {Boolean(instrumentsQuery.error) && (
         <p role="alert" className="mt-3 text-[11px] text-[var(--color-terracotta)]">
           Authorizations are unavailable.

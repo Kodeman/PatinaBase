@@ -27,6 +27,7 @@ import { openInvoiceComposer, openInvoiceFolio } from './accounts/invoice-overla
 import { AmendmentSheet } from './overlays/amendment-sheet';
 import { DocumentAction, DocumentActionGroup } from './document-action';
 import { AccountsQueryFailure } from './accounts/accounts-query-failure';
+import { SectionLoadingLine } from './section-loading-line';
 
 const SAGE_INK = '#85947C';
 const TERRACOTTA_INK = '#C4836F';
@@ -183,20 +184,7 @@ export function AccountBand({
   }, [changeOnly]);
 
   if (isLoading) {
-    return (
-      <div
-        className="mt-4 rounded-[5px] bg-[rgba(229,226,221,0.32)] px-3 py-2"
-        role="status"
-        aria-live="polite"
-      >
-        <span className="font-heading text-[12.5px] font-medium italic text-[var(--color-charcoal)]">
-          The accounts · this project
-        </span>
-        <span className="ml-3 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-          opening the ledger…
-        </span>
-      </div>
-    );
+    return <SectionLoadingLine label="opening the ledger" className="mt-4" />;
   }
 
   if (isError) {

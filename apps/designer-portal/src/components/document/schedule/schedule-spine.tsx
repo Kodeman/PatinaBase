@@ -107,6 +107,7 @@ import {
 import { AddLineSheet } from './add-line-sheet';
 import type { PastProjectOption } from './past-project-picker';
 import { DocumentAction } from '../document-action';
+import { SectionLoadingLine } from '../section-loading-line';
 
 /** Best-effort phase_key from a free-typed name (phase_key is nullable + not
  *  unique on project_phases, so a plain slug is safe — no dedupe needed). */
@@ -771,9 +772,7 @@ export function ScheduleSpine({
 
       {loading ? (
         // Nothing heavy while the resolver's sources load — one quiet line.
-        <p className="mt-4 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-          resolving the schedule…
-        </p>
+        <SectionLoadingLine label="resolving the schedule" className="mt-4" />
       ) : (
         <>
           {resolvedPhases.length === 0 ? (

@@ -35,6 +35,7 @@ import {
   when,
   type WorkingBudgetLineView,
 } from "@/lib/document/project-commerce";
+import { SectionLoadingLine } from "../section-loading-line";
 
 function TargetCell({
   versionId,
@@ -124,11 +125,7 @@ export function DerivedBudgetGrid({ projectId }: { projectId: string }) {
   const editable = version?.state === "draft";
 
   if (budgetQuery.isLoading) {
-    return (
-      <p className="text-[12px] text-[var(--text-muted)]">
-        Loading working budget…
-      </p>
-    );
+    return <SectionLoadingLine label="Loading working budget" />;
   }
 
   if (budgetQuery.error) {
