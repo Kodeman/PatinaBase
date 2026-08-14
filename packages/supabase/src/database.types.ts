@@ -15621,6 +15621,7 @@ export type Database = {
           section_key: string | null
           seq_after_task_id: string | null
           sort_order: number
+          starts_on: string | null
           status: string
           title: string
           updated_at: string
@@ -15641,6 +15642,7 @@ export type Database = {
           section_key?: string | null
           seq_after_task_id?: string | null
           sort_order?: number
+          starts_on?: string | null
           status?: string
           title: string
           updated_at?: string
@@ -15661,6 +15663,7 @@ export type Database = {
           section_key?: string | null
           seq_after_task_id?: string | null
           sort_order?: number
+          starts_on?: string | null
           status?: string
           title?: string
           updated_at?: string
@@ -27386,6 +27389,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      _materialize_schedule_dates_impl: {
+        Args: { p_phases: Json; p_project_id: string }
+        Returns: number
+      }
       _paper_signature_metadata: {
         Args: {
           p_paper_signed_on: string
@@ -30606,6 +30613,10 @@ export type Database = {
           p_template_id: string
         }
         Returns: string
+      }
+      materialize_schedule_dates: {
+        Args: { p_phases: Json; p_project_id: string }
+        Returns: number
       }
       may_resolve_coordination_item: {
         Args: {

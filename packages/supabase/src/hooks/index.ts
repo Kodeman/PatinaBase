@@ -1655,6 +1655,10 @@ export type {
   SerializedRippleEdit,
 } from './use-schedule-compose';
 
+// The shared invalidate-then-materialize tail every schedule-shaping
+// mutation hook above calls in its onSuccess (00480).
+export { settleScheduleWrite } from './schedule-write-settle';
+
 // The Document · Schedule — Wave 2 (R109/R110, I130): schedule_proposals, the
 // one home for every proposed anchor, and its two designer acts.
 export {
