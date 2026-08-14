@@ -1,12 +1,17 @@
 'use client';
 
 /**
- * LetterheadVitals (Track 7 · R80) — the project letterhead's vitals become
- * blur-save fields per the R40/R70 self-save law: start date · target date ·
- * budget band write ONE column on blur with a quiet per-field status (the
- * Piece's facet-field grammar, compacted to the letterhead's one-line scale).
- * The phase word and the contract total stay static — they are derived facts,
- * not editables.
+ * LetterheadVitals (Track 7 · R80) — the project letterhead's vitals: start
+ * date · target date · budget band write ONE column with a quiet per-field
+ * status (the Piece's facet-field grammar, compacted to the letterhead's
+ * one-line scale). The phase word and the contract total stay static — they
+ * are derived facts, not editables.
+ *
+ * Date Instruments lane D5 — the two dates moved off the R40/R70 blur-save
+ * law onto the Calendar Folio: a Folio trigger opens FolioPopover/
+ * FolioCalendar in day mode, and SET is the commit (never blur), matching the
+ * one date grammar the rest of the Document now speaks (DECISIONS.md I133).
+ * Money and everything below the line keep blur-save untouched.
  *
  * Below the line, a quiet "Phases" fold: each project phase's hour estimate
  * (project_phases.estimated_hours, 00177) as an editable mono field beside its
@@ -25,6 +30,8 @@ import {
   type ProjectVitalsPatch,
 } from '@/hooks/use-project-lifecycle';
 import { centsToDollarString, dollarsToCents } from '@/lib/document/closure-derivation';
+import { FolioCalendar, FolioPopover, type FolioSelection } from '@/components/document/date';
+import { fmtDay, todayYmd } from '@/lib/document/format';
 
 
 type AnyRecord = any;
@@ -93,7 +100,15 @@ function SaveDot({ state, errorMsg }: { state: SaveState; errorMsg: string | nul
   );
 }
 
-/** Blur-save date vital, styled as quiet mono text until focused. */
+/** SET-save date vital through the Calendar Folio, styled as the same quiet
+ *  mono text treatment the blur-save fields wear. An `open` guard (not a
+ *  `focused` ref) keeps a server echo from clobbering the trigger's label
+ *  while the popover is up — the popover, not focus, is what must not be
+ *  interrupted. An echo that lands while open is remembered (`pendingEcho`,
+ *  not applied to `value`) rather than dropped: a close that ISN'T a fresh
+ *  commit (Esc, outside click) flushes it so the display never gets stuck
+ *  showing what the popover opened with. `commit`/`clear` both discard any
+ *  pending echo — the locally authored value wins over a now-stale one. */
 function VitalDate({
   projectId,
   column,
@@ -106,39 +121,85 @@ function VitalDate({
   label: string;
 }) {
   const [value, setValue] = useState(serverValue ?? '');
-  const focused = useRef(false);
+  const [open, setOpen] = useState(false);
   const lastServer = useRef(serverValue ?? '');
+  const pendingEcho = useRef<string | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const { save, state, errorMsg } = useVitalSave(projectId);
 
   useEffect(() => {
     const incoming = serverValue ?? '';
-    if (incoming !== lastServer.current) {
-      lastServer.current = incoming;
-      if (!focused.current) setValue(incoming);
+    if (incoming === lastServer.current) return;
+    lastServer.current = incoming;
+    if (open) {
+      pendingEcho.current = incoming;
+    } else {
+      setValue(incoming);
+      pendingEcho.current = null;
     }
-  }, [serverValue]);
+  }, [serverValue, open]);
 
-  const commit = () => {
-    focused.current = false;
-    if (value !== (serverValue ?? '')) void save({ [column]: value || null });
+  // Flush a pending echo the instant the popover closes without a commit —
+  // `commit`/`clear` already clear `pendingEcho` before this can fire, so a
+  // fresh local write is never clobbered by a stale one.
+  useEffect(() => {
+    if (open || pendingEcho.current == null) return;
+    setValue(pendingEcho.current);
+    pendingEcho.current = null;
+  }, [open]);
+
+  const commit = (selection: FolioSelection) => {
+    if (selection.kind !== 'day') return;
+    setOpen(false);
+    pendingEcho.current = null;
+    setValue(selection.date);
+    if (selection.date !== (serverValue ?? '')) void save({ [column]: selection.date });
+  };
+
+  const clear = () => {
+    pendingEcho.current = null;
+    setValue('');
+    if ((serverValue ?? '') !== '') void save({ [column]: null });
   };
 
   return (
-    <span className="inline-flex items-baseline gap-1">
+    <span className="relative inline-flex items-baseline gap-1">
       <span className="font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
         {label}
       </span>
-      <input
-        type="date"
+      <button
+        ref={triggerRef}
+        type="button"
         aria-label={label}
-        value={value}
-        onFocus={() => (focused.current = true)}
-        onChange={(e) => setValue(e.target.value)}
-        onBlur={commit}
+        onClick={() => setOpen(true)}
         disabled={state === 'saving'}
         className="border-b border-transparent bg-transparent font-mono text-[10px] text-[var(--text-muted)] hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:text-[var(--color-charcoal)] focus:outline-none disabled:opacity-50"
-      />
+      >
+        {value ? fmtDay(value) : '—'}
+      </button>
+      {value && (
+        <button
+          type="button"
+          aria-label={`Clear ${label.toLowerCase()}`}
+          onClick={clear}
+          disabled={state === 'saving'}
+          className="font-mono text-[9px] text-[var(--color-aged-oak)] hover:text-[var(--color-clay)] disabled:opacity-50"
+        >
+          ×
+        </button>
+      )}
       <SaveDot state={state} errorMsg={errorMsg} />
+      {open && (
+        <FolioPopover onClose={() => setOpen(false)} aria-label={`${label} date`} returnFocusRef={triggerRef}>
+          <FolioCalendar
+            value={value ? { kind: 'day', date: value } : null}
+            today={todayYmd()}
+            modes={['day']}
+            readoutLabels={{ day: label.toUpperCase(), span: label.toUpperCase() }}
+            onCommit={commit}
+          />
+        </FolioPopover>
+      )}
     </span>
   );
 }
@@ -328,7 +389,11 @@ export function LetterheadVitals({ projectId }: { projectId: string }) {
 
   return (
     <div className="mt-1">
-      <p className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[11px] text-[var(--text-muted)]">
+      {/* A plain <div>, not <p>: a VitalDate's FolioPopover mounts a <div>
+          while open (no portal, by the Folio's own house rule — see
+          folio-popover.tsx), and a <div> can never legally nest inside a
+          <p> (the browser silently closes it, a hydration hazard). */}
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[11px] text-[var(--text-muted)]">
         {phaseWord && <span>{phaseWord}</span>}
         <VitalDate
           projectId={projectId}
@@ -385,7 +450,7 @@ export function LetterheadVitals({ projectId }: { projectId: string }) {
         >
           Phases {phasesOpen ? '▾' : '▸'}
         </button>
-      </p>
+      </div>
       {phasesOpen && <PhasesFold projectId={projectId} />}
     </div>
   );

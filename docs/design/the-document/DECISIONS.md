@@ -8356,3 +8356,20 @@ server-side settle path callable from client-portal's routes — and is
 explicitly deferred from the date-instruments program.
 
 *Entries add: I133 · last id = I133*
+
+### I134 · Letterhead date vitals move to SET via the Calendar Folio — 2026-08-14
+
+Date Instruments lane D5. `LetterheadVitals`' start/target dates drop the
+R40/R70 blur-save law in favor of the Calendar Folio (`FolioPopover` +
+`FolioCalendar`, day mode): a quiet mono trigger opens the Folio, and SET —
+not blur — is the commit. Rationale: the Document should speak one date
+grammar everywhere a day is picked, and SET is this field's blur — the same
+act, moved onto the instrument the rest of the program (milestone WHEN,
+D3; the drafting line, D-B) now uses. The `focused` ref guard becomes an
+`open` guard, so a server echo landing while the popover is up can no
+longer clobber the field mid-pick. A small clear affordance (both columns
+stay nullable) saves `null` directly, no Folio round-trip. Money
+(`VitalMoney`) and the Phases fold keep blur-save untouched — only the two
+DATE columns speak the new grammar.
+
+*Entries add: I134 · last id = I134*
