@@ -69,20 +69,32 @@ function ordered(a: string, b: string): { start: string; end: string } | null {
 
 /**
  * Open a draft off the committed value. A null value opens empty in
- * `fallbackMode`; a value always opens in ITS own mode, whatever the fallback
+ * `fallbackMode`; a value normally opens in ITS own mode, whatever the fallback
  * says (a committed span may not be reinterpreted as a day behind the user).
+ *
+ * `modes` is the surface's allowed shapes. A value whose kind the surface does
+ * NOT offer is coerced rather than dropped — a span-only surface holding a day
+ * opens that day as an unclosed anchor, a day-only surface holding a span opens
+ * on its start. Coercion never commits: the user still has to press SET, so the
+ * stored value is untouched until they agree to the reshaping.
  */
 export function folioDraftFromValue(
   value: FolioSelection | null,
   fallbackMode: 'day' | 'span',
+  modes?: Array<'day' | 'span'>,
 ): FolioDraft {
   if (value == null) {
     return fallbackMode === 'span'
       ? { mode: 'span', anchor: null, end: null }
       : { mode: 'day', date: null };
   }
-  if (value.kind === 'day') return { mode: 'day', date: value.date };
-  return { mode: 'span', anchor: value.start, end: value.end };
+  const offered = modes == null || modes.includes(value.kind === 'day' ? 'day' : 'span');
+  if (value.kind === 'day') {
+    return offered ? { mode: 'day', date: value.date } : { mode: 'span', anchor: value.date, end: null };
+  }
+  return offered
+    ? { mode: 'span', anchor: value.start, end: value.end }
+    : { mode: 'day', date: value.start };
 }
 
 /**
@@ -130,25 +142,39 @@ export function folioCommittable(draft: FolioDraft): FolioSelection | null {
 }
 
 /**
+ * The micro-label a draft reads under. The ONE place the mode→label choice is
+ * made: `folioReadout` prefixes with it and the footer typesets it, so the
+ * announced sentence and the printed one can never name different things.
+ */
+export function folioReadoutLabel(draft: FolioDraft, labels: FolioReadoutLabels): string {
+  return draft.mode === 'day' ? labels.day : labels.span;
+}
+
+/**
  * The footer sentence, label included: "DUE Thu, Aug 20",
  * "WORKING WINDOW Aug 25 — Aug 28 · 4 days". An incomplete draft reads as the
  * label plus an em dash. The label lives in the string (not just beside it) so
  * the aria-live announcement and the typeset footer are the same sentence.
+ *
+ * `hoverIso` is the CURSOR day in the broad sense — the pointer's day while
+ * hovering, otherwise the keyboard's roving day (R102: the span preview is not
+ * a hover-only affordance).
  */
 export function folioReadout(
   draft: FolioDraft,
   hoverIso: string | null,
   labels: FolioReadoutLabels,
 ): string {
+  const label = folioReadoutLabel(draft, labels);
   if (draft.mode === 'day') {
     const day = draft.date == null ? null : weekdayMonthDay(draft.date);
-    return `${labels.day} ${day ?? EM_DASH}`;
+    return `${label} ${day ?? EM_DASH}`;
   }
   const range = folioShadeRange(draft, hoverIso);
-  if (range == null) return `${labels.span} ${EM_DASH}`;
+  if (range == null) return `${label} ${EM_DASH}`;
   const start = monthDay(range.start);
   const end = monthDay(range.end);
-  if (start == null || end == null) return `${labels.span} ${EM_DASH}`;
+  if (start == null || end == null) return `${label} ${EM_DASH}`;
   const days = (epochDayFromISO(range.end) as number) - (epochDayFromISO(range.start) as number) + 1;
-  return `${labels.span} ${start} ${EM_DASH} ${end} · ${days} ${days === 1 ? 'day' : 'days'}`;
+  return `${label} ${start} ${EM_DASH} ${end} · ${days} ${days === 1 ? 'day' : 'days'}`;
 }

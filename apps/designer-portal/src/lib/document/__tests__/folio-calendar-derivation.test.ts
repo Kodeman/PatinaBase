@@ -3,6 +3,7 @@ import {
   folioCommittable,
   folioDraftFromValue,
   folioReadout,
+  folioReadoutLabel,
   folioShadeRange,
   type FolioDraft,
 } from '../folio-calendar-derivation';
@@ -27,6 +28,44 @@ describe('folioDraftFromValue', () => {
       end: '2026-08-28',
     });
     expect(folioCommittable(folioDraftFromValue(span, 'day'))).toEqual(span);
+  });
+
+  it('coerces a day value onto a span-only surface as an open anchor', () => {
+    expect(folioDraftFromValue({ kind: 'day', date: '2026-08-20' }, 'span', ['span'])).toEqual({
+      mode: 'span',
+      anchor: '2026-08-20',
+      end: null,
+    });
+    // …and coercion alone is never committable: the user still presses SET.
+    expect(
+      folioCommittable(folioDraftFromValue({ kind: 'day', date: '2026-08-20' }, 'span', ['span'])),
+    ).toBeNull();
+  });
+
+  it('coerces a span value onto a day-only surface as its start', () => {
+    expect(
+      folioDraftFromValue({ kind: 'span', start: '2026-08-25', end: '2026-08-28' }, 'day', ['day']),
+    ).toEqual({ mode: 'day', date: '2026-08-25' });
+  });
+
+  it('leaves a value alone when the surface offers its shape', () => {
+    expect(
+      folioDraftFromValue({ kind: 'day', date: '2026-08-20' }, 'span', ['span', 'day']),
+    ).toEqual({ mode: 'day', date: '2026-08-20' });
+  });
+});
+
+describe('folioReadoutLabel', () => {
+  it('is the one place the mode picks its label', () => {
+    expect(folioReadoutLabel({ mode: 'day', date: null }, LABELS)).toBe('DUE');
+    expect(folioReadoutLabel({ mode: 'span', anchor: null, end: null }, LABELS)).toBe(
+      'WORKING WINDOW',
+    );
+    // folioReadout prefixes with exactly that label — they cannot drift.
+    const draft: FolioDraft = { mode: 'day', date: '2026-08-20' };
+    expect(folioReadout(draft, null, LABELS).startsWith(folioReadoutLabel(draft, LABELS))).toBe(
+      true,
+    );
   });
 });
 

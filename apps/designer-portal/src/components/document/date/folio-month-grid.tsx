@@ -168,9 +168,12 @@ export function FolioMonthGrid({
       {grid.weeks.map((week) => (
         <div key={week[0].iso} role="row" className="grid grid-cols-7">
           {week.map((cell) => {
-            const selected = selectedIsos.includes(cell.iso);
+            const endpoint = selectedIsos.includes(cell.iso);
             const inSpan =
               shade != null && cell.iso >= shade.start && cell.iso <= shade.end;
+            // A span's interior belongs to the selection as much as its ends —
+            // a screen reader must not hear a four-day window as two days.
+            const selected = endpoint || inSpan;
             const isToday = cell.iso === today;
             const unavailable = blocked(cell.iso);
 
@@ -195,14 +198,14 @@ export function FolioMonthGrid({
                 }}
                 className={[
                   'relative flex h-[33px] items-center justify-center rounded-[2px] text-[12px] outline-none focus-visible:border focus-visible:border-[var(--color-clay)]',
-                  selected
+                  endpoint
                     ? 'bg-[var(--color-charcoal)] text-[var(--doc-paper)]'
                     : inSpan
                       ? 'bg-[rgba(196,165,123,0.28)] text-[var(--color-charcoal)]'
                       : cell.inMonth
                         ? 'text-[var(--color-charcoal)]'
                         : 'text-[var(--text-muted)] opacity-60',
-                  isToday && !selected
+                  isToday && !endpoint
                     ? 'underline decoration-[var(--color-clay)] decoration-2 underline-offset-[3px]'
                     : '',
                   unavailable ? 'cursor-not-allowed opacity-40' : '',

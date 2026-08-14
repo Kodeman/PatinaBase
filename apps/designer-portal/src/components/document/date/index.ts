@@ -9,6 +9,7 @@ export {
   folioCommittable,
   folioDraftFromValue,
   folioReadout,
+  folioReadoutLabel,
   folioShadeRange,
   type FolioDraft,
   type FolioReadoutLabels,

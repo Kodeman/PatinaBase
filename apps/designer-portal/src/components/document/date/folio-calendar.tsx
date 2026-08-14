@@ -20,6 +20,7 @@ import {
   folioCommittable,
   folioDraftFromValue,
   folioReadout,
+  folioReadoutLabel,
   folioShadeRange,
   type FolioDraft,
   type FolioReadoutLabels,
@@ -43,8 +44,15 @@ export interface FolioCalendarProps {
   footerExtra?: ReactNode;
   /** Fires ONLY on SET. */
   onCommit: (selection: FolioSelection) => void;
-  /** Esc inside the instrument. */
+  /**
+   * Esc inside the instrument — INLINE usage only. Inside a FolioPopover the
+   * popover consumes Esc in the capture phase (it has to, to keep DocSheet and
+   * the confirm strip from acting on the same key), so a popover caller wires
+   * its dismissal to `FolioPopover.onClose`, not here.
+   */
   onCancel?: () => void;
+  /** Defaults to true — the popover case is the common one. Inline callers
+   *  that must not steal the caret pass false. */
   autoFocus?: boolean;
   className?: string;
 }
@@ -61,11 +69,11 @@ function draftFocus(draft: FolioDraft): string | null {
   return draft.mode === 'day' ? draft.date : draft.anchor;
 }
 
-/** A stable identity for the committed value, so the draft re-seeds only when
- *  the caller actually commits something new. */
-function valueKey(value: FolioSelection | null): string {
-  if (value == null) return '';
-  return value.kind === 'day' ? `day:${value.date}` : `span:${value.start}:${value.end}`;
+/** A stable identity for what the draft was seeded FROM — the committed value
+ *  and the shapes the surface offers, since a modes change re-derives it. */
+function seedKey(value: FolioSelection | null, modesKey: string): string {
+  const shape = value == null ? '' : value.kind === 'day' ? `day:${value.date}` : `span:${value.start}:${value.end}`;
+  return `${modesKey}#${shape}`;
 }
 
 export function FolioCalendar({
@@ -77,23 +85,26 @@ export function FolioCalendar({
   footerExtra,
   onCommit,
   onCancel,
-  autoFocus = false,
+  autoFocus = true,
   className,
 }: FolioCalendarProps) {
   const fallbackMode = modes[0] ?? 'day';
-  const [draft, setDraft] = useState<FolioDraft>(() => folioDraftFromValue(value, fallbackMode));
+  const modesKey = modes.join('|');
+  const [draft, setDraft] = useState<FolioDraft>(() =>
+    folioDraftFromValue(value, fallbackMode, modes),
+  );
   const [hoverIso, setHoverIso] = useState<string | null>(null);
   const [focusIso, setFocusIso] = useState<string>(
-    () => draftFocus(folioDraftFromValue(value, fallbackMode)) ?? today,
+    () => draftFocus(folioDraftFromValue(value, fallbackMode, modes)) ?? today,
   );
   const [view, setView] = useState(() => monthOf(focusIso) ?? monthOf(today) ?? { year: 1970, month: 1 });
 
-  const seededKey = useRef(valueKey(value));
+  const seededFrom = useRef(seedKey(value, modesKey));
   useEffect(() => {
-    const key = valueKey(value);
-    if (key === seededKey.current) return;
-    seededKey.current = key;
-    const next = folioDraftFromValue(value, fallbackMode);
+    const key = seedKey(value, modesKey);
+    if (key === seededFrom.current) return;
+    seededFrom.current = key;
+    const next = folioDraftFromValue(value, fallbackMode, modesKey.split('|') as Array<'day' | 'span'>);
     setDraft(next);
     setHoverIso(null);
     const focus = draftFocus(next);
@@ -102,9 +113,13 @@ export function FolioCalendar({
       const month = monthOf(focus);
       if (month != null) setView(month);
     }
-  }, [value, fallbackMode]);
+  }, [value, fallbackMode, modesKey]);
 
-  const shade = folioShadeRange(draft, hoverIso);
+  // R102 — the span preview is not a hover-only affordance: the pointer leads
+  // while it is over the grid, and the roving caret leads when it isn't, so an
+  // arrow-key user draws (and hears) the same live window a mouse draws.
+  const previewIso = hoverIso ?? focusIso;
+  const shade = folioShadeRange(draft, previewIso);
   const selectedIsos =
     draft.mode === 'day'
       ? draft.date == null
@@ -113,8 +128,8 @@ export function FolioCalendar({
       : [draft.anchor, draft.end].filter((iso): iso is string => iso != null);
 
   const committable = folioCommittable(draft);
-  const label = draft.mode === 'day' ? readoutLabels.day : readoutLabels.span;
-  const readout = folioReadout(draft, hoverIso, readoutLabels);
+  const label = folioReadoutLabel(draft, readoutLabels);
+  const readout = folioReadout(draft, previewIso, readoutLabels);
   // The footer typesets the label in mono and the date in Playfair, but the
   // announced sentence must be the one string the derivation produced — so the
   // parts are sliced off that string rather than re-derived here.
@@ -251,8 +266,11 @@ export function FolioCalendar({
       <div className="mt-[14px] flex items-end justify-between gap-[14px] border-t border-[var(--color-pearl)] pt-[13px]">
         <div>
           <p aria-live="polite" className="leading-tight">
+            {/* The trailing space is load-bearing, not stray: it keeps the
+                aria-live region's text content one readable sentence rather
+                than "WORKING WINDOWAug 14". */}
             <span className="block font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-aged-oak)]">
-              {label}
+              {`${label} `}
             </span>
             <span className="block font-[family-name:var(--font-display)] text-[17px] text-[var(--color-charcoal)]">
               {readoutValue}

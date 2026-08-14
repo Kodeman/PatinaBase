@@ -97,6 +97,52 @@ describe('FolioCalendar', () => {
     expect(screen.getByText('Aug 25 — Aug 27 · 3 days')).toBeInTheDocument();
   });
 
+  it('draws the span preview from the keyboard alone (R102 — no hover required)', () => {
+    const onCommit = jest.fn();
+    render(<FolioCalendar value={null} today={TODAY} onCommit={onCommit} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Over a span' }));
+    // Anchor with the keyboard; the caret is on today and no pointer ever
+    // enters the grid in this test.
+    fireEvent.keyDown(cell(TODAY), { key: 'Enter' });
+    expect(screen.getByText('Aug 14 — Aug 14 · 1 day')).toBeInTheDocument();
+
+    fireEvent.keyDown(cell(TODAY), { key: 'ArrowRight' });
+    fireEvent.keyDown(cell('2026-08-15'), { key: 'ArrowRight' });
+
+    expect(cell('2026-08-15')).toHaveAttribute('data-in-span', 'true');
+    expect(cell('2026-08-16')).toHaveAttribute('data-in-span', 'true');
+    expect(document.querySelector('[aria-live="polite"]')).toHaveTextContent(
+      'WORKING WINDOW Aug 14 — Aug 16 · 3 days',
+    );
+
+    fireEvent.keyDown(cell('2026-08-16'), { key: 'Enter' });
+    fireEvent.click(setButton());
+
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    expect(onCommit).toHaveBeenCalledWith({
+      kind: 'span',
+      start: '2026-08-14',
+      end: '2026-08-16',
+    });
+  });
+
+  it('counts a whole window as selected, interior days included', () => {
+    render(
+      <FolioCalendar
+        value={{ kind: 'span', start: '2026-08-25', end: '2026-08-28' }}
+        today={TODAY}
+        onCommit={jest.fn()}
+      />,
+    );
+
+    for (const iso of ['2026-08-25', '2026-08-26', '2026-08-27', '2026-08-28']) {
+      expect(cell(iso)).toHaveAttribute('aria-selected', 'true');
+    }
+    expect(cell('2026-08-24')).toHaveAttribute('aria-selected', 'false');
+    expect(cell('2026-08-26')).toHaveAttribute('data-in-span', 'true');
+  });
+
   it('cancels on Esc and commits nothing', () => {
     const onCommit = jest.fn();
     const onCancel = jest.fn();
