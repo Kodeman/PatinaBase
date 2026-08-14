@@ -168,6 +168,20 @@ export function FolderCard({
 
   const selectFolioAction = () => {
     if (!need.actionLabel) return;
+    if (need.ledger) {
+      // R36: for the one NeedKind whose act is a Drawer ledger, the card
+      // body is a plain doc-open — NOT the act (that's the inner "Send
+      // reminder" control's own onClick, below). A distinct, non-act-named
+      // key so this can never be mistaken for the dunning act itself.
+      documentEvents.actionSelected({
+        surface_key: 'desk',
+        region_key: 'needs-your-hand',
+        action_key: 'open_document',
+        variant: 'primary',
+        presentation: 'inline',
+      });
+      return;
+    }
     documentEvents.actionSelected({
       surface_key: 'desk',
       region_key: 'needs-your-hand',
@@ -177,28 +191,31 @@ export function FolderCard({
     });
   };
 
-  const cardClassName =
-    'group relative mt-[26px] block w-full cursor-grab rounded-[0_8px_8px_8px] text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] active:cursor-grabbing';
-  const inner = (
-    <FolderFace folder={folder} stageLine={stageLine} tabLabel={tabLabel} />
-  );
-
   // R36: the overdue-invoice need still opens the Accounts book onto
   // Receivables (where the dunning act lives) rather than the document — but
   // the card itself always routes to the doc now (A1); the ledger act is the
   // explicit inner "Send reminder" control in FolderFace.
+  //
+  // The pick-up Link is a full-bleed sibling BEHIND the face, not a wrapper
+  // AROUND it — a <button>/TriageBar descendant of an <a> is invalid
+  // interactive-in-interactive nesting (HTML5 content model; browsers don't
+  // auto-correct it and React doesn't warn). It renders first, so it's first
+  // in DOM/tab order; FolderFace's content is pointer-events-none above it,
+  // except its own interactive controls, which opt back in with
+  // pointer-events-auto so clicks land on them instead of falling through.
   return (
-    <Link
-      href={need.deepLink ?? `/doc/${row.engagement_id}`}
-      onClick={selectFolioAction}
-      className={cardClassName}
-      aria-label={`${row.title} — ${need.text}`}
-      data-action-key={need.actionLabel ? need.kind : undefined}
-      data-action-variant={need.actionLabel ? 'primary' : undefined}
-      data-action-region={need.actionLabel ? 'needs-your-hand' : undefined}
-    >
-      {inner}
-    </Link>
+    <div className="group relative mt-[26px] w-full">
+      <Link
+        href={need.deepLink ?? `/doc/${row.engagement_id}`}
+        onClick={selectFolioAction}
+        aria-label={`${row.title} — ${need.text}`}
+        data-action-key={need.actionLabel ? need.kind : undefined}
+        data-action-variant={need.actionLabel ? 'primary' : undefined}
+        data-action-region={need.actionLabel ? 'needs-your-hand' : undefined}
+        className="absolute inset-0 block cursor-grab rounded-[0_8px_8px_8px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] active:cursor-grabbing"
+      />
+      <FolderFace folder={folder} stageLine={stageLine} tabLabel={tabLabel} />
+    </div>
   );
 }
 
@@ -215,18 +232,25 @@ function FolderFace({
   return (
     <>
       {/* Two tinted sheets behind the face — the other pages in the folder.
-          Nudged down/right so the folio reads as a stack (depth, not shadow). */}
+          Nudged down/right so the folio reads as a stack (depth, not shadow).
+          pointer-events-none: purely decorative, and — since the pick-up
+          Link is now a sibling behind this face, not an ancestor — a click
+          here must fall through to it, not be silently swallowed. */}
       <div
         aria-hidden
-        className="absolute inset-0 translate-x-[10px] translate-y-[10px] rounded-[0_8px_8px_8px] border border-[var(--border-default)] bg-[var(--doc-sheet-back)]"
+        className="pointer-events-none absolute inset-0 translate-x-[10px] translate-y-[10px] rounded-[0_8px_8px_8px] border border-[var(--border-default)] bg-[var(--doc-sheet-back)]"
       />
       <div
         aria-hidden
-        className="absolute inset-0 translate-x-[5px] translate-y-[5px] rounded-[0_8px_8px_8px] border border-[var(--border-default)] bg-[var(--doc-sheet-front)]"
+        className="pointer-events-none absolute inset-0 translate-x-[5px] translate-y-[5px] rounded-[0_8px_8px_8px] border border-[var(--border-default)] bg-[var(--doc-sheet-front)]"
       />
 
-      {/* The document face — offset paper sheets provide quiet, physical depth. */}
-      <div className="relative">
+      {/* The document face — offset paper sheets provide quiet, physical
+          depth. pointer-events-none for the same reason as the sheets above:
+          every click here should fall through to the pick-up Link EXCEPT
+          the face's own interactive controls, which opt back in below with
+          pointer-events-auto. */}
+      <div className="relative pointer-events-none">
         {/* Folder tab — status color carries the state; type does the rest. */}
         <div
           className="absolute -top-[26px] left-0 flex h-[26px] items-center rounded-t-[7px] px-3.5 font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-white"
@@ -261,32 +285,51 @@ function FolderFace({
           </div>
           {/* R61/R65: a lead is the one need whose act is a triage, not a pick-up
               — for a new lead AND for a nurtured lead whose reconnect is now due.
-              The bar's buttons stopPropagation so they never trip the card's
-              link (D1). Shape C always carries lead_id. */}
+              pointer-events-auto opts this control back in over the
+              pointer-events-none face (the pick-up Link sits behind, as a
+              sibling — not an ancestor — of this whole card, so there's no
+              enclosing <a> left for the bar's own guard() to have to stop).
+              Shape C always carries lead_id. */}
           {(need.kind === 'new_lead' || need.kind === 'reconnect_due') &&
             row.lead_id && (
-              <TriageBar
-                leadId={row.lead_id}
-                variant="desk"
-                arrivalEligible={Boolean(row.client_profile_id)}
-              />
+              <div className="pointer-events-auto relative">
+                <TriageBar
+                  leadId={row.lead_id}
+                  variant="desk"
+                  arrivalEligible={Boolean(row.client_profile_id)}
+                />
+              </div>
             )}
           {need.actionLabel &&
             (need.ledger ? (
               // R36: the one NeedKind (overdue_invoice) whose act isn't the
               // card's own pick-up — an explicit inner control, not the whole
-              // card, so the card surface can route to the doc (A1). Guards
-              // preventDefault+stopPropagation so the enclosing <Link> never
-              // fires (D1 precedent — TriageBar's guard()).
+              // card, so the card surface can route to the doc (A1). A
+              // SIBLING of the pick-up Link (never a descendant — nesting a
+              // <button> inside an <a> is invalid HTML5 content model), so
+              // preventDefault+stopPropagation below is defensive (no click
+              // could reach the Link's own handler regardless) rather than
+              // load-bearing. pointer-events-auto opts back in over the
+              // pointer-events-none face. Fires its own actionSelected with
+              // the real act's key — the card body's own click fires a
+              // separate, non-act-named 'open_document' key instead
+              // (selectFolioAction above).
               <button
                 type="button"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
+                  documentEvents.actionSelected({
+                    surface_key: 'desk',
+                    region_key: 'needs-your-hand',
+                    action_key: need.kind,
+                    variant: 'primary',
+                    presentation: 'inline',
+                  });
                   openLedger(need.ledger!.name, need.ledger!.context);
                 }}
                 aria-label={`${need.actionLabel} — ${row.title}`}
-                className="mt-4 flex min-h-11 w-full items-center justify-between gap-3 border-t border-[var(--color-pearl)] pt-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+                className="pointer-events-auto relative mt-4 flex min-h-11 w-full items-center justify-between gap-3 border-t border-[var(--color-pearl)] pt-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
               >
                 <span className="font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)]">
                   {need.actionLabel}

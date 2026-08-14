@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { DeskFolder } from '@/lib/document/desk-derivation';
 import {
   DESK_FOLIO_PREVIEW_LIMIT,
@@ -198,9 +199,25 @@ describe('NeedsYourHandFolios', () => {
 
 // A1: the card surface always routes to the doc; the R36 ledger act (the one
 // NeedKind whose act isn't "open the document") is now an explicit inner
-// control, not the whole card.
+// control, not the whole card. The two are SIBLINGS in the DOM (never a
+// <button> nested inside the card's <a>), so both are independently
+// reachable by mouse and keyboard.
 describe('FolderCard — overdue_invoice (R36 ledger act)', () => {
-  it('routes the card to the doc and exposes Send reminder as a separate, non-navigating control', () => {
+  it('has no interactive-in-interactive nesting: the card is not an <a> wrapping the button', () => {
+    const folder = invoiceFolio(1);
+    const { container } = render(<FolderCard folder={folder} />);
+
+    const card = screen.getByRole('link', {
+      name: 'Invoice Folio 1 — Invoice 1 overdue — send a reminder',
+    });
+    const sendReminder = screen.getByRole('button', {
+      name: 'Send reminder — Invoice Folio 1',
+    });
+    expect(card.contains(sendReminder)).toBe(false);
+    expect(container.querySelectorAll('a button')).toHaveLength(0);
+  });
+
+  it('routes the card to the doc and fires a navigate-named event, not the ledger act key', () => {
     const folder = invoiceFolio(1);
     render(<FolderCard folder={folder} />);
 
@@ -208,6 +225,20 @@ describe('FolderCard — overdue_invoice (R36 ledger act)', () => {
       name: 'Invoice Folio 1 — Invoice 1 overdue — send a reminder',
     });
     expect(card).toHaveAttribute('href', '/doc/invoice-folio-1');
+
+    fireEvent.click(card);
+
+    // The card body IS "open the document", not the dunning act — so it
+    // fires a distinct 'open_document' key, never 'overdue_invoice'.
+    expect(documentEvents.actionSelected).toHaveBeenCalledTimes(1);
+    expect(documentEvents.actionSelected).toHaveBeenCalledWith(
+      expect.objectContaining({ action_key: 'open_document' }),
+    );
+  });
+
+  it('exposes Send reminder as a separate, non-navigating control that fires the real act key', () => {
+    const folder = invoiceFolio(1);
+    render(<FolderCard folder={folder} />);
 
     const sendReminder = screen.getByRole('button', {
       name: 'Send reminder — Invoice Folio 1',
@@ -220,8 +251,39 @@ describe('FolderCard — overdue_invoice (R36 ledger act)', () => {
       page: 'receivables',
       invoiceId: 'inv-1',
     });
-    // The click never bubbled into the enclosing <Link>'s own onClick
-    // (D1's guard() precedent) — the card's pick-up analytics never fires.
-    expect(documentEvents.actionSelected).not.toHaveBeenCalled();
+    // The act is tracked under the need's own key, on the control that
+    // actually performs it — the event name matches the act performed.
+    expect(documentEvents.actionSelected).toHaveBeenCalledTimes(1);
+    expect(documentEvents.actionSelected).toHaveBeenCalledWith(
+      expect.objectContaining({ action_key: 'overdue_invoice' }),
+    );
+  });
+
+  it('reaches the card then the inner control by Tab, and activates each with keyboard alone', async () => {
+    const user = userEvent.setup();
+    const folder = invoiceFolio(1);
+    render(<FolderCard folder={folder} />);
+
+    const card = screen.getByRole('link', {
+      name: 'Invoice Folio 1 — Invoice 1 overdue — send a reminder',
+    });
+    const sendReminder = screen.getByRole('button', {
+      name: 'Send reminder — Invoice Folio 1',
+    });
+
+    // The pick-up Link renders first (first in DOM/tab order).
+    await user.tab();
+    expect(card).toHaveFocus();
+
+    await user.tab();
+    expect(sendReminder).toHaveFocus();
+
+    // Enter on the focused button activates it — and does not navigate.
+    await user.keyboard('{Enter}');
+    expect(openLedger).toHaveBeenCalledTimes(1);
+
+    // Space also activates the button (native button semantics).
+    await user.keyboard(' ');
+    expect(openLedger).toHaveBeenCalledTimes(2);
   });
 });
