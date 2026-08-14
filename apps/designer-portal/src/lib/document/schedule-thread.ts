@@ -191,20 +191,24 @@ function weekdayMonthDay(iso: string): string | null {
  *  - Otherwise the sentence always opens with
  *    `Starts <weekday, month day> · finishes <weekday, month day>` for
  *    `placement.startsOn` / `placement.dueDate`.
- *  - Exactly ONE clause is appended:
- *      · `installStart` is `null`, fails to parse, or falls ON OR BEFORE
- *        `placement.dueDate` (the install window already opened by the time
- *        this work finishes, or opens the same day) →
- *        `' · after install begins'` — a quiet warning, not an error: the
- *        work isn't landing ahead of install, it's landing on or after it,
- *        and there is nothing further to measure.
- *      · otherwise → `' · leaves N working day(s) before install'`, where N
- *        is the count of FULL WORKDAYS STRICTLY BETWEEN `dueDate` and
- *        `installStart` — both endpoints excluded, so a `dueDate` that falls
- *        on the workday immediately before `installStart` (nothing but a
- *        weekend between them, say) reads `N=0`, never `N=1`. `N=1` means
- *        one clear working day of runway exists between finishing and
- *        install starting.
+ *  - `installStart` is `null` or fails to parse (no install window exists to
+ *    speak of — nothing has been held or confirmed yet) → NO clause is
+ *    appended at all. There is no install date to be honest or dishonest
+ *    about; the sentence stays exactly the start/finish pair. (Ruled 2026 —
+ *    the earlier draft appended "· after install begins" here too, which
+ *    read as a warning about an install window that doesn't exist.)
+ *  - `installStart` parses and falls ON OR BEFORE `placement.dueDate` (the
+ *    install window already opened by the time this work finishes, or opens
+ *    the same day) → `' · after install begins'` — a quiet warning, not an
+ *    error: the work isn't landing ahead of install, it's landing on or
+ *    after it, and there is nothing further to measure.
+ *  - `installStart` parses and falls AFTER `placement.dueDate` →
+ *    `' · leaves N working day(s) before install'`, where N is the count of
+ *    FULL WORKDAYS STRICTLY BETWEEN `dueDate` and `installStart` — both
+ *    endpoints excluded, so a `dueDate` that falls on the workday
+ *    immediately before `installStart` (nothing but a weekend between them,
+ *    say) reads `N=0`, never `N=1`. `N=1` means one clear working day of
+ *    runway exists between finishing and install starting.
  *  - `today` is accepted for signature symmetry with this file's other
  *    clock-injected functions but is not read: the sentence states the
  *    placement's relationship to install, never to "now."
@@ -222,9 +226,12 @@ export function threadConsequence(
   if (start == null || finish == null) return '';
   const main = `Starts ${start} · finishes ${finish}`;
 
-  const dueEpoch = epochDayFromISO(placement.dueDate);
+  // No install window at all — nothing to disclose, so no clause.
   const installEpoch = installStart == null ? null : epochDayFromISO(installStart);
-  if (dueEpoch == null || installEpoch == null || installEpoch <= dueEpoch) {
+  if (installEpoch == null) return main;
+
+  const dueEpoch = epochDayFromISO(placement.dueDate);
+  if (dueEpoch == null || installEpoch <= dueEpoch) {
     return `${main} · after install begins`;
   }
 

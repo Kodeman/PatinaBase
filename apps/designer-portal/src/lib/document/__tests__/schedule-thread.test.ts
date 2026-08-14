@@ -186,9 +186,18 @@ describe('threadConsequence', () => {
     expect(threadConsequence(null, '2026-10-26', '2026-08-14')).toBe('');
   });
 
-  it('states the plain start/finish sentence', () => {
-    const text = threadConsequence(placement, null, '2026-08-14');
-    expect(text.startsWith('Starts Tue, Oct 13 · finishes Fri, Oct 16')).toBe(true);
+  it('states the plain start/finish sentence, with no clause when there is no install window', () => {
+    // No install window held or confirmed at all — nothing to disclose, so
+    // the sentence stops after finish. (Ruled 2026: the earlier contract
+    // appended "· after install begins" here too, which read as a warning
+    // about an install date that doesn't exist.)
+    expect(threadConsequence(placement, null, '2026-08-14')).toBe('Starts Tue, Oct 13 · finishes Fri, Oct 16');
+  });
+
+  it('appends no clause when installStart fails to parse either', () => {
+    expect(threadConsequence(placement, 'not-a-date', '2026-08-14')).toBe(
+      'Starts Tue, Oct 13 · finishes Fri, Oct 16',
+    );
   });
 
   it('counts full workdays strictly between dueDate and installStart, excluding both endpoints', () => {
@@ -210,12 +219,6 @@ describe('threadConsequence', () => {
     // Strictly between Oct 16 (Fri) and Oct 19 (Mon) is only the weekend.
     expect(threadConsequence(placement, '2026-10-19', '2026-08-14')).toBe(
       'Starts Tue, Oct 13 · finishes Fri, Oct 16 · leaves 0 working days before install',
-    );
-  });
-
-  it('warns "after install begins" when installStart is null', () => {
-    expect(threadConsequence(placement, null, '2026-08-14')).toBe(
-      'Starts Tue, Oct 13 · finishes Fri, Oct 16 · after install begins',
     );
   });
 
