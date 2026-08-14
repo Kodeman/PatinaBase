@@ -11183,3 +11183,27 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.release_install_window(uuid, text, jsonb) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00477_design_services_paper_issue.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_commercial_proposal_authority() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00477_design_services_paper_issue.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._issue_design_services_agreement_on_paper(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00477_design_services_paper_issue.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_paper_client_signature(uuid, text, date, uuid, boolean) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00477_design_services_paper_issue.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_paper_client_signature(uuid, text, date, uuid, boolean) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
