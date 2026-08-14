@@ -15,6 +15,28 @@ jest.mock('@/components/portal/client-picker', () => ({
   ClientPicker: () => <button type="button">Choose household</button>,
 }));
 
+// The Folio-backed trigger is proven in its own suite (date-text-input.test.tsx);
+// here we only need a controlled stand-in so the sheet's own plumbing (default,
+// change, clear) can be exercised directly.
+jest.mock('../date-text-input', () => ({
+  DateTextInput: ({
+    value,
+    onChange,
+    ariaLabel,
+  }: {
+    value: string | null;
+    onChange: (value: string | null) => void;
+    ariaLabel?: string;
+  }) => (
+    <input
+      type="text"
+      aria-label={ariaLabel}
+      value={value ?? ''}
+      onChange={(event) => onChange(event.target.value || null)}
+    />
+  ),
+}));
+
 describe('OpenProjectSheet date validity', () => {
   beforeEach(() => {
     mutate.mockReset();
@@ -24,17 +46,19 @@ describe('OpenProjectSheet date validity', () => {
     });
   });
 
-  it('never opens a project on an impossible calendar date', () => {
+  it('opens a project with no start date when the date is cleared', () => {
     render(<OpenProjectSheet open onClose={jest.fn()} />);
 
     fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
       target: { value: 'Lake house refresh' },
     });
 
-    // Feb 30 does not exist; the native date control refuses it rather than
-    // letting it through as a start date the project would be opened on.
+    // The Folio can only ever commit a whole calendar date or clear to
+    // nothing — an impossible date like Feb 30 has no pathway into state at
+    // all, so the case worth proving is that clearing opens the project with
+    // no start date rather than blocking it.
     const start = screen.getByLabelText('Start date');
-    fireEvent.change(start, { target: { value: '2027-02-30' } });
+    fireEvent.change(start, { target: { value: '' } });
     expect(start).toHaveValue('');
 
     fireEvent.click(screen.getByRole('button', { name: /open the project/i }));

@@ -31,6 +31,28 @@ jest.mock('@/hooks/use-commercial-documents', () => ({
     uploadPaperScanDocument(...args),
 }));
 
+// The Folio-backed trigger is proven in its own suite (date-text-input.test.tsx);
+// here we only need a controlled stand-in so the sheet's own plumbing (default,
+// change, clear) can be exercised directly.
+jest.mock('../date-text-input', () => ({
+  DateTextInput: ({
+    value,
+    onChange,
+    ariaLabel,
+  }: {
+    value: string | null;
+    onChange: (value: string | null) => void;
+    ariaLabel?: string;
+  }) => (
+    <input
+      type="text"
+      aria-label={ariaLabel}
+      value={value ?? ''}
+      onChange={(event) => onChange(event.target.value || null)}
+    />
+  ),
+}));
+
 import {
   RECORD_ON_PAPER_ACT_LABEL,
   RecordOnPaperSheet,
@@ -320,9 +342,9 @@ describe('RecordOnPaperSheet', () => {
   });
 
   // The two halves are not symmetric: a too-short name disables the act, while
-  // an invalid date cannot be entered at all — so the record proceeds date-less
+  // a cleared date cannot be entered at all — so the record proceeds date-less
   // rather than being blocked. The title says both.
-  it('disables submission for a too-short name, and records date-less rather than on an invalid date', async () => {
+  it('disables submission for a too-short name, and records date-less when the date is cleared', async () => {
     render(
       <RecordOnPaperSheet
         kind="trade-execution"
@@ -345,10 +367,11 @@ describe('RecordOnPaperSheet', () => {
     });
     expect(submit).not.toBeDisabled();
 
-    // Month 13 / day 40 is not a date; the native control refuses it, so the
-    // execution can never be recorded against a nonsense day.
+    // The Folio can only ever commit a whole calendar date or clear to
+    // nothing, so there is no pathway left for a nonsense day like month 13 /
+    // day 40 to reach state — clearing is the case worth proving instead.
     const date = screen.getByLabelText('Date signed');
-    fireEvent.change(date, { target: { value: '13/40/2026' } });
+    fireEvent.change(date, { target: { value: '' } });
     expect(date).toHaveValue('');
 
     fireEvent.click(submit);

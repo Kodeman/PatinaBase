@@ -1,6 +1,31 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { DateInput, Field, RowListEditor } from './field-kit';
 
+// The Folio-backed trigger is proven in its own suite (date-text-input.test.tsx);
+// here we only need a controlled stand-in so the field kit's own plumbing
+// (value in, onChange out) can be exercised directly.
+jest.mock('../date-text-input', () => ({
+  DateTextInput: ({
+    value,
+    onChange,
+    ariaLabel,
+    className,
+  }: {
+    value: string | null;
+    onChange: (value: string | null) => void;
+    ariaLabel?: string;
+    className?: string;
+  }) => (
+    <input
+      type="text"
+      aria-label={ariaLabel}
+      className={className}
+      value={value ?? ''}
+      onChange={(event) => onChange(event.target.value || null)}
+    />
+  ),
+}));
+
 describe('Discovery field semantics', () => {
   it('labels every row control with its column and row', () => {
     render(
@@ -41,7 +66,7 @@ describe('Discovery field semantics', () => {
     expect(screen.getByRole('button', { name: 'Remove row 1' })).toBeVisible();
   });
 
-  it('offers picker or keyboard date entry and commits an ISO date-only value', () => {
+  it('labels the date field and commits an ISO date-only value', () => {
     const onChange = jest.fn();
 
     render(
@@ -51,9 +76,6 @@ describe('Discovery field semantics', () => {
     );
 
     const input = screen.getByLabelText('Hard date');
-    expect(input).toHaveAttribute('type', 'date');
-    expect(input).toHaveAccessibleDescription(/picker or keyboard/i);
-
     fireEvent.change(input, { target: { value: '2026-11-15' } });
 
     expect(onChange).toHaveBeenLastCalledWith('2026-11-15');

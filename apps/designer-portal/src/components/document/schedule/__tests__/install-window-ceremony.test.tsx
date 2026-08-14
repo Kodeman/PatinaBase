@@ -67,6 +67,46 @@ jest.mock('@patina/supabase', () => ({
   useReleaseInstallWindow: () => mutation(release),
 }));
 
+// The Folio-backed trigger is proven in its own suite (date-text-input.test.tsx);
+// here we only need a controlled stand-in so the ceremony's own plumbing
+// (value in, onChange out, and the validity the real trigger always reports)
+// can be exercised directly.
+jest.mock('../../date-text-input', () => {
+  const { useEffect } = jest.requireActual('react');
+  return {
+    DateTextInput: ({
+      value,
+      onChange,
+      ariaLabel,
+      onValidityChange,
+    }: {
+      value: string | null;
+      onChange: (value: string | null) => void;
+      ariaLabel?: string;
+      onValidityChange?: (valid: boolean) => void;
+    }) => {
+      useEffect(() => {
+        onValidityChange?.(true);
+      }, [onValidityChange]);
+      return (
+        <input
+          type="text"
+          aria-label={ariaLabel}
+          value={value ?? ''}
+          onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
+            // The real trigger reports validity synchronously from the commit
+            // itself (a Folio SET can never be invalid), not only from its
+            // mount effect — mirror that here so a value change occurring
+            // after a parent's own reset-on-open effect still lands as valid.
+            onValidityChange?.(true);
+            onChange(event.target.value || null);
+          }}
+        />
+      );
+    },
+  };
+});
+
 import {
   InstallWindowCeremony,
   installWindowFace,
