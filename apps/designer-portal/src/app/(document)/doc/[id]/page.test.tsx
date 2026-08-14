@@ -95,7 +95,6 @@ jest.mock('@patina/supabase', () => ({
 // The project document's own sections are not what these tests exercise; the
 // guide strip and the margin are.
 jest.mock('@/components/document/ffe-section', () => ({ FFESection: () => null }));
-jest.mock('@/components/document/coordination/coordination-band', () => ({ CoordinationBand: () => null }));
 jest.mock('@/components/document/schedule/schedule-spine', () => ({ ScheduleSpine: () => null }));
 jest.mock('@/components/document/approvals/project-approval-document', () => ({
   ProjectApprovalDocument: () => null,
@@ -203,12 +202,6 @@ jest.mock('@/hooks/use-project-file-change-notifications', () => ({
   useMarkProjectFileChangeRead: () => jest.fn(),
 }));
 jest.mock('@/components/document/doc-colophon', () => ({ DocColophon: () => null }));
-
-jest.mock('@/components/document/phase-timeline', () => ({
-  PhaseTimeline: ({ projectId }: { projectId: string }) => (
-    <div data-testid="legacy-schedule">Legacy schedule · {projectId}</div>
-  ),
-}));
 
 jest.mock('@/components/document/schedule/schedule-rule', () => ({
   ScheduleRule: ({

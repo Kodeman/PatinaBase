@@ -278,20 +278,21 @@ test.describe('Product Editor', () => {
 ## 🚩 Feature-flag overrides
 
 Parts of the app are gated by PostHog feature flags (e.g. the Orders book's
-open-requests strip still mirrors `procurement-workspace-pilot`, and the Schedule
-Spine rides `schedule-spine`). The flag hook is fail-closed and PostHog never
-resolves in e2e/CI, so gated UI would be invisible to tests.
+open-requests strip still mirrors `procurement-workspace-pilot`). The flag hook
+is fail-closed and PostHog never resolves in e2e/CI, so gated UI would be
+invisible to tests.
 
 `src/hooks/use-feature-flag.ts` supports an env-based override that is checked
 before the PostHog path:
 
 ```bash
-NEXT_PUBLIC_FLAG_OVERRIDES='procurement-workspace-pilot:true,schedule-spine:false'
+NEXT_PUBLIC_FLAG_OVERRIDES='procurement-workspace-pilot:true'
 ```
 
 > `the-document-pilot` is gone. The R21 dissolve made the Document the only
 > surface, so there is nothing left to flag on — do not add it back to an
-> override string.
+> override string. `schedule-spine` is likewise retired (B3): the Rule and the
+> Spine are the schedule, unconditionally.
 
 - Format: comma-separated `flag-name:true|false` entries (whitespace trimmed).
 - Overridden flags resolve immediately (`isLoading: false`); PostHog is never

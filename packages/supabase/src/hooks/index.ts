@@ -975,7 +975,6 @@ export {
   useProjectPhases,
   useCreateProjectPhase,
   useUpdateProjectPhaseStatus,
-  useUpdateProjectPhaseDates,
   useProjectPaymentMilestones,
   useUpdatePaymentMilestoneStatus,
   useProjectFinancials,

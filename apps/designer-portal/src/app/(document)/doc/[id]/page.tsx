@@ -59,7 +59,6 @@ import { PreviousWork } from '@/components/document/previous-work';
 import { DocumentGuide } from '@/components/document/document-guide';
 import { ProposalBlocksReadOnly } from '@/components/document/proposal-blocks-readonly';
 import { FFESection } from '@/components/document/ffe-section';
-import { CoordinationBand } from '@/components/document/coordination/coordination-band';
 import { ScheduleSpine } from '@/components/document/schedule/schedule-spine';
 import { InstallWindowCeremony } from '@/components/document/schedule/install-window-ceremony';
 import { BriefSection } from '@/components/document/brief-section';
@@ -648,10 +647,8 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     rememberDocumentInHand(heldEngagementId, { title: heldTitle, subtitle: heldSubtitle });
   }, [heldEngagementId, heldTitle, heldSubtitle]);
 
-  // C7 — the Schedule Spine flip gate. Rules of hooks: called unconditionally
-  // above the early returns below, alongside the page's other hooks.
-  const spineGate = useFeatureFlag('schedule-spine');
-  // Call Sheet (Wave 3) — same rules-of-hooks posture. The roster fetch is
+  // Call Sheet (Wave 3) — rules of hooks: called unconditionally above the
+  // early returns below, alongside the page's other hooks. The roster fetch is
   // gated on the flag so a cohort without it doesn't pay for a query neither
   // the kickoff band nor the instrument will render from.
   const callSheetGate = useFeatureFlag('call-sheet');
@@ -964,20 +961,18 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
               ripple). */}
           <RippleProvider projectId={row.project_id ?? ''}>
             {/* Field Coordination (light-PM slice): the phase schedule as a
-                horizontal band — status-tinted segments, a today line, popover date
-                editing. Project-wide (shows across project/install/care stages),
-                mounted with the AccountBand at the top of the project document so it
-                reads as a project overview above the section work.
-                S2-4 — the Rule flip gate (same spineGate as the C7 gate below):
-                while it's loading (or resolves off) the old PhaseTimeline
-                renders — fail-closed, zero flash for the non-pilot cohort. */}
+                horizontal instrument — status-weighted segments, a today cut,
+                draggable phase bars. Project-wide (shows across
+                project/install/care stages), mounted with the AccountBand at the
+                top of the project document so it reads as a project overview
+                above the section work. B3 retired the flip gate: the Rule is the
+                schedule, unconditionally. */}
             <ProjectScheduleHandoffMount
               engagementKind={row.engagement_kind}
               projectId={row.project_id}
               projectTitle={row.title}
               projectStatus={project?.status}
               phases={phases}
-              showScheduleRule={!spineGate.isLoading && spineGate.value}
             />
 
           {/* The active section — exactly one (§4). */}
@@ -1074,25 +1069,15 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
                     (work-block.tsx pattern); the page passes clientUserId, never a
                     raw uid. Mounts ABOVE the FF&E section in the project home (D1:
                     its sheets are band-local overlays, never a route).
-                    C7 — the schedule-spine flip gate: while the flag is loading
-                    (or resolves off), the old band renders — fail-closed default
-                    IS the accepted current page, so this is zero flash/layout
-                    shift for the non-pilot cohort (PostHog persists flags, so
-                    pilots see at most one first-visit swap). */}
-                  {!spineGate.isLoading && spineGate.value ? (
-                    <ScheduleSpine
-                      projectId={row.project_id}
-                      clientUserId={row.client_profile_id}
-                      clientName={row.client_name}
-                      projectStatus={project?.status}
-                    />
-                  ) : (
-                    <CoordinationBand
-                      projectId={row.project_id}
-                      clientUserId={row.client_profile_id}
-                      clientName={row.client_name}
-                    />
-                  )}
+                    B3 retired the schedule-spine flip gate — the Spine is the
+                    ledger, unconditionally; CoordinationBand was its fallback
+                    and no longer mounts anywhere. */}
+                  <ScheduleSpine
+                    projectId={row.project_id}
+                    clientUserId={row.client_profile_id}
+                    clientName={row.client_name}
+                    projectStatus={project?.status}
+                  />
                   <FFESection
                     projectId={row.project_id}
                     projectName={row.title}
