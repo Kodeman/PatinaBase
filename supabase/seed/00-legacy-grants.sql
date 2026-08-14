@@ -10993,3 +10993,33 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.record_paper_client_signature(uuid, text, date, uuid, boolean) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00478_people_directory_has_sent_proposal.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.designer_client_send_evidence(uuid, uuid, uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00478_people_directory_has_sent_proposal.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.designer_client_send_evidence(uuid, uuid, uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00480_materialize_schedule_dates.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._materialize_schedule_dates_impl(uuid, jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00480_materialize_schedule_dates.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.materialize_schedule_dates(uuid, jsonb) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00480_materialize_schedule_dates.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.materialize_schedule_dates(uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
