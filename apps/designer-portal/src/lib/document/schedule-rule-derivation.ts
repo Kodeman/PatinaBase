@@ -223,6 +223,103 @@ export function milestoneOffsetDays(phaseEndEpoch: number, draggedEpochDay: numb
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// ruleBars — the drafting line: one direct-manipulation bar per main-lane phase
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * One draggable BAR per placed main-lane phase — the Rule's direct-manipulation
+ * phase-date editor. The span is exactly `ruleSegments`' span (same phases, same
+ * scale, same exclusions: thread lanes draw hairlines, an unplaced phase surfaces
+ * via `unplacedPhases`); what the bar adds is the drag/keyboard MATH inputs the
+ * segment never needed — the start as an epoch day (the move gesture's base and
+ * the resize's duration base) and whether the bar's own END is already owned by
+ * a `RuleBoundaryHandle`.
+ */
+export interface RuleBar {
+  /** The phase id — the `phase-anchor` / `phase-duration` edit's `phaseId`. */
+  id: string;
+  name: string;
+  leftPct: number;
+  widthPct: number;
+  /** Resolved START as an epoch day — `barMoveStartEpoch`'s grab base AND
+   *  `boundaryDurationDays`' first argument for a right-edge resize. */
+  startEpoch: number;
+  /** Resolved span in whole days (end − start, clamped ≥ 1 by the SAME rule a
+   *  boundary drag applies — `boundaryDurationDays`, reused). */
+  durationDays: number;
+  /** The resolver's own flag — an unanchored bar's move CREATES an anchor at the
+   *  new start, an anchored bar's move MOVES it. One edit kind covers both. */
+  anchored: boolean;
+  /** A `RuleBoundaryHandle` already owns this phase's end tick (a following
+   *  phase chains off it) ⇒ the bar draws NO right-edge resize grip; the
+   *  boundary handle stays the one way to edit that end. */
+  hasInternalEndBoundary: boolean;
+}
+
+/**
+ * Derive the bars from the SAME inputs the rest of the Rule consumes — the
+ * resolver's `resolvedPhases`, the raw rows' chain (`id` → `followsPhaseId` +
+ * `name`), and the committed `TimeScale`.
+ *
+ * `hasInternalEndBoundary` is read off `ruleBoundaries`' OWN output rather than
+ * re-derived from the chain: the two must agree by construction, since the
+ * question the bar asks ("is a handle already standing on my end?") is exactly
+ * the question that function answers.
+ */
+export function ruleBars(
+  phases: ReadonlyArray<ResolvedPhase>,
+  chain: ReadonlyArray<{ id: string; followsPhaseId: string | null; name: string }>,
+  scale: TimeScale,
+): RuleBar[] {
+  const nameById = new Map(chain.map((c) => [c.id, c.name]));
+  const boundedEnds = new Set(ruleBoundaries(phases, chain, scale).map((b) => b.upstreamPhaseId));
+
+  const out: RuleBar[] = [];
+  for (const p of phases) {
+    if (p.lane !== 'main') continue;
+    const left = scale.toX(p.start);
+    const right = scale.toX(p.end);
+    const startEpoch = epochDayFromISO(p.start);
+    const endEpoch = epochDayFromISO(p.end);
+    if (left == null || right == null || startEpoch == null || endEpoch == null) continue;
+    out.push({
+      id: p.id,
+      name: nameById.get(p.id) ?? '',
+      leftPct: left,
+      widthPct: right - left,
+      startEpoch,
+      durationDays: boundaryDurationDays(startEpoch, endEpoch),
+      anchored: p.anchored,
+      hasInternalEndBoundary: boundedEnds.has(p.id),
+    });
+  }
+  return out;
+}
+
+/**
+ * A bar-body drag → the phase's new START epoch day: the day under the pointer
+ * minus the offset the pointer held into the bar when the grab began (so the bar
+ * slides under the cursor instead of snapping its start to it).
+ *
+ * The SAME subtraction produces that grab offset at drag begin —
+ * `barMoveStartEpoch(startEpoch, draggedEpochDayAtBegin)` — so a drag needs no
+ * second date-math expression anywhere.
+ */
+export function barMoveStartEpoch(grabOffsetDays: number, draggedEpochDay: number): number {
+  return Math.round(draggedEpochDay) - Math.round(grabOffsetDays);
+}
+
+/**
+ * Shift an epoch day by whole days — the keyboard model's one date-math step
+ * (a ±1 / ±7 nudge, and the bar's own end = start shifted by its duration).
+ * Exists so the bar component composes lib helpers instead of doing epoch
+ * arithmetic inline (R100's ONE date-math impl rule, applied to this file).
+ */
+export function barNudgeEpochDay(epochDay: number, deltaDays: number): number {
+  return Math.round(epochDay) + Math.round(deltaDays);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // projectGhosts — the ripple diff → the Rule's dashed-terracotta ghost layer
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -233,6 +330,11 @@ export interface GhostTickSpec {
   id: string;
   xPct: number;
   date: string | null;
+  /** How far this FOLLOWER's start slid, in whole days (`toStart − fromStart`)
+   *  — the ghost layer's `+3d` / `−2d` chip. `null` on the edited phase's own
+   *  tick (its movement is the cause, not a consequence, and the confirm strip
+   *  already states it) and whenever either endpoint is unplaceable. */
+  deltaDays: number | null;
 }
 /** A dashed ghost diamond at a moved milestone's NEW date (name for the label). */
 export interface GhostDiamondSpec {
@@ -293,7 +395,13 @@ export function projectGhosts(diff: RippleDiff, scale: TimeScale): RuleGhosts {
       pc.phaseId === editedPhaseId && edit.kind === 'phase-anchor' ? pc.toStart : pc.phaseId === editedPhaseId ? pc.toEnd : pc.toStart;
     const x = scale.toX(dateIso);
     if (x == null) continue;
-    ticks.push({ id: pc.phaseId, xPct: x, date: dateIso });
+    const fromStartEpoch = epochDayFromISO(pc.fromStart);
+    const toStartEpoch = epochDayFromISO(pc.toStart);
+    const deltaDays =
+      pc.phaseId === editedPhaseId || fromStartEpoch == null || toStartEpoch == null
+        ? null
+        : toStartEpoch - fromStartEpoch;
+    ticks.push({ id: pc.phaseId, xPct: x, date: dateIso, deltaDays });
   }
 
   for (const mm of diff.milestoneMoves) {

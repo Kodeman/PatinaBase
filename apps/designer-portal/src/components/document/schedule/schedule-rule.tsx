@@ -69,13 +69,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useResolvedSchedule, useScheduleRevisions } from '@patina/supabase';
 import type { ResolvedPhase } from '@patina/utils';
-import { epochDayFromISO, resolveSchedule } from '@patina/utils';
+import { epochDayFromISO, isoFromEpochDay, resolveSchedule } from '@patina/utils';
 import {
   buildTimeScale,
   ruleSegments,
   ruleDiamonds,
   ruleThreads,
   ruleBoundaries,
+  ruleBars,
   boundaryDurationDays,
   milestoneOffsetDays,
   xToEpochDay,
@@ -95,6 +96,7 @@ import { RuleToday } from './rule-today';
 import { RuleThread, THREAD_LANE_PITCH } from './rule-thread';
 import { RuleLabelRow, type RuleLabelItem } from './rule-label-row';
 import { RuleBoundaryHandle } from './rule-boundary-handle';
+import { RulePhaseBar } from './rule-phase-bar';
 import { RuleGhostLayer } from './rule-ghost-layer';
 import { RuleBaselineLayer } from './rule-baseline-layer';
 
@@ -227,6 +229,19 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
     return ruleBoundaries(resolvedPhases, chain, scale);
   }, [resolvedPhases, schedule.phases, scale]);
 
+  // The Drafting Line's bars — one per placed main-lane phase, from the SAME
+  // resolved phases + chain the boundaries read (ruleBars asks ruleBoundaries
+  // which ends already carry a handle, so the two can't disagree).
+  const bars = useMemo(() => {
+    if (!scale) return [];
+    const chain = schedule.phases.map((r) => ({
+      id: r.id,
+      followsPhaseId: r.follows_phase_id ?? null,
+      name: r.name,
+    }));
+    return ruleBars(resolvedPhases, chain, scale);
+  }, [resolvedPhases, schedule.phases, scale]);
+
   // Host phase END epoch by phase id — a diamond drag's `milestone-offset` base
   // (offset from the phase END). null when the host phase has no resolved end.
   const phaseEndEpochById = useMemo(
@@ -342,6 +357,34 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
   const frameDiamond = (milestoneId: string, phaseId: string, phaseEndEpoch: number, xPct: number) =>
     ripple.update({ kind: 'milestone-offset', milestoneId, phaseId, offsetDays: milestoneOffsetDays(phaseEndEpoch, xToEpochDay(scale, xPct)) });
 
+  // Bar drags → the SAME two ripple kinds the boundary handles already stage.
+  // A body drag stages `phase-anchor` at the bar's new start: one kind covers
+  // both semantics (an unanchored phase gains an anchor there, an anchored
+  // phase's anchor moves there). A null ISO is unreachable for a finite epoch
+  // day, so an unplaceable start simply stages nothing.
+  const beginBarMove = (phaseId: string, startEpoch: number) => {
+    const anchorDate = isoFromEpochDay(startEpoch);
+    if (anchorDate == null) return;
+    ripple.begin({ kind: 'phase-anchor', phaseId, anchorDate }, 'rule');
+  };
+  const frameBarMove = (phaseId: string, startEpoch: number) => {
+    const anchorDate = isoFromEpochDay(startEpoch);
+    if (anchorDate == null) return;
+    ripple.update({ kind: 'phase-anchor', phaseId, anchorDate });
+  };
+  const beginBarResize = (phaseId: string, durationDays: number) =>
+    ripple.begin({ kind: 'phase-duration', phaseId, durationDays }, 'rule');
+  const frameBarResize = (phaseId: string, durationDays: number) =>
+    ripple.update({ kind: 'phase-duration', phaseId, durationDays });
+
+  // Which phase (if any) the pending edit belongs to — a bar nudges its OWN
+  // session forward and begins a fresh one otherwise.
+  const sessionPhaseId =
+    ripple.session != null &&
+    (ripple.session.edit.kind === 'phase-anchor' || ripple.session.edit.kind === 'phase-duration')
+      ? ripple.session.edit.phaseId
+      : null;
+
   const handlesOn = ripple.providerPresent;
 
   return (
@@ -368,6 +411,21 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
             </span>
             <div ref={trackRef} className="relative h-[22px] flex-1">
               <RuleTrack segments={segments} pinned todayXPct={todayX} />
+              {handlesOn &&
+                bars.map((b) => (
+                  <RulePhaseBar
+                    key={b.id}
+                    bar={b}
+                    pinned
+                    trackRef={trackRef}
+                    xToDay={(x) => xToEpochDay(scale, x)}
+                    sessionOwned={sessionPhaseId === b.id}
+                    onMoveBegin={(s) => beginBarMove(b.id, s)}
+                    onMoveFrame={(s) => frameBarMove(b.id, s)}
+                    onResizeBegin={(d) => beginBarResize(b.id, d)}
+                    onResizeFrame={(d) => frameBarResize(b.id, d)}
+                  />
+                ))}
               {diamonds.map((d) => {
                 const pe = phaseEndEpochById.get(d.phaseId) ?? null;
                 return (
@@ -417,6 +475,25 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
             )}
 
             <RuleTrack segments={segments} pinned={false} todayXPct={todayX} />
+
+            {/* the Drafting Line — draggable phase bars, above the decorative
+                track and below the diamonds in paint order. Render only when a
+                ripple provider is present (same gate as the handles). */}
+            {handlesOn &&
+              bars.map((b) => (
+                <RulePhaseBar
+                  key={b.id}
+                  bar={b}
+                  pinned={false}
+                  trackRef={trackRef}
+                  xToDay={(x) => xToEpochDay(scale, x)}
+                  sessionOwned={sessionPhaseId === b.id}
+                  onMoveBegin={(s) => beginBarMove(b.id, s)}
+                  onMoveFrame={(s) => frameBarMove(b.id, s)}
+                  onResizeBegin={(d) => beginBarResize(b.id, d)}
+                  onResizeFrame={(d) => frameBarResize(b.id, d)}
+                />
+              ))}
 
             {diamonds.map((d) => {
               const pe = phaseEndEpochById.get(d.phaseId) ?? null;

@@ -36,7 +36,7 @@
 import { useMemo, type ReactNode } from 'react';
 import { fmtDay } from '@/lib/document/format';
 import { projectGhosts, type TimeScale } from '@/lib/document/schedule-rule-derivation';
-import type { RippleDiff } from '@/lib/document/schedule-ripple-derivation';
+import { fmtDelta, type RippleDiff } from '@/lib/document/schedule-ripple-derivation';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Ghost paint primitives — the dashed marks the ripple's TERRACOTTA preview
@@ -158,6 +158,14 @@ export function RuleGhostLayer({ diff, scale, pinned }: RuleGhostLayerProps) {
           {!pinned && t.date && (
             <GhostLabel leftPct={clampLeft(t.xPct)} top={g.tickLabelTop} marginLeft={4} tone="terracotta">
               {fmtDay(t.date)}
+              {/* delta chip — how far this FOLLOWER slid. Only followers carry a
+                  `deltaDays` (the edited phase's own tick is the cause), and a
+                  zero slide is not a consequence worth a chip. */}
+              {t.deltaDays != null && t.deltaDays !== 0 && (
+                <span className="ml-1 border border-[var(--color-terracotta)] px-[2px]">
+                  {fmtDelta(t.deltaDays)}
+                </span>
+              )}
             </GhostLabel>
           )}
         </div>

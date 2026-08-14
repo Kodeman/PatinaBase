@@ -12,6 +12,9 @@ import {
   ruleDiamonds,
   ruleThreads,
   ruleBoundaries,
+  ruleBars,
+  barMoveStartEpoch,
+  barNudgeEpochDay,
   boundaryDurationDays,
   milestoneOffsetDays,
   projectGhosts,
@@ -896,5 +899,222 @@ describe('projectBaselineGhosts', () => {
     const g = projectBaselineGhosts(diff, scale);
     expect(g.ticks).toHaveLength(0);
     expect(g.diamonds).toHaveLength(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ruleBars — the Drafting Line's draggable phase bars (B1)
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('ruleBars', () => {
+  const scale = buildTimeScale([{ start: '2026-01-01', end: '2026-04-11' }], '2026-02-20')!;
+
+  it('spans exactly the phase start→end, carrying the start epoch and the day duration', () => {
+    const phases = [rphase({ id: 'a', start: '2026-01-01', end: '2026-01-31' })];
+    const [bar] = ruleBars(phases, [link('a', null, 'Design')], scale);
+    expect(bar.id).toBe('a');
+    expect(bar.name).toBe('Design');
+    expect(bar.leftPct).toBeCloseTo(scale.toX('2026-01-01')!, 10);
+    expect(bar.widthPct).toBeCloseTo(scale.toX('2026-01-31')! - scale.toX('2026-01-01')!, 10);
+    expect(bar.startEpoch).toBe(epochDayFromISO('2026-01-01')!);
+    expect(bar.durationDays).toBe(30);
+  });
+
+  it('a same-day phase reports a 1-day duration (the same ≥1 clamp a boundary drag applies)', () => {
+    const phases = [rphase({ id: 'a', start: '2026-02-02', end: '2026-02-02' })];
+    expect(ruleBars(phases, [link('a', null)], scale)[0].durationDays).toBe(1);
+  });
+
+  it('carries the resolver anchored flag — unanchored and anchored bars both get one', () => {
+    const phases = [
+      rphase({ id: 'free', start: '2026-01-01', end: '2026-01-31' }),
+      rphase({ id: 'pinned', start: '2026-02-01', end: '2026-03-01', anchored: true, source: 'anchor' }),
+    ];
+    const bars = ruleBars(phases, [link('free', null), link('pinned', null)], scale);
+    expect(bars.map((b) => [b.id, b.anchored])).toEqual([
+      ['free', false],
+      ['pinned', true],
+    ]);
+  });
+
+  it('thread-lane phases are excluded (they draw hairlines, not bars)', () => {
+    const phases = [
+      rphase({ id: 'main', start: '2026-01-01', end: '2026-01-31' }),
+      rphase({ id: 'thr', start: '2026-01-05', end: '2026-02-05', lane: 'thread' }),
+    ];
+    expect(ruleBars(phases, [link('main', null), link('thr', null)], scale).map((b) => b.id)).toEqual([
+      'main',
+    ]);
+  });
+
+  it('an unplaced phase (missing either date) gets no bar — never a bar at x:0/NaN', () => {
+    const phases = [
+      rphase({ id: 'nodates', start: null, end: null, source: 'unresolved' }),
+      rphase({ id: 'halfdated', start: '2026-01-01', end: null, source: 'legacy-dates' }),
+    ];
+    expect(ruleBars(phases, [link('nodates', null), link('halfdated', null)], scale)).toEqual([]);
+  });
+
+  it('hasInternalEndBoundary: true where a boundary handle owns the end, false on the TERMINAL phase', () => {
+    const phases = [
+      rphase({ id: 'a', start: '2026-01-01', end: '2026-01-31' }),
+      rphase({ id: 'b', start: '2026-01-31', end: '2026-02-28' }),
+      rphase({ id: 'c', start: '2026-02-28', end: '2026-03-31' }),
+    ];
+    const chain = [link('a', null), link('b', 'a'), link('c', 'b')];
+    const bars = ruleBars(phases, chain, scale);
+    expect(bars.map((b) => [b.id, b.hasInternalEndBoundary])).toEqual([
+      ['a', true], // a→b boundary handle stands on a's end
+      ['b', true], // b→c boundary handle stands on b's end
+      ['c', false], // terminal — nothing follows, so the bar owns its own end
+    ]);
+  });
+
+  it('hasInternalEndBoundary agrees with ruleBoundaries exactly, including a LOCKED boundary', () => {
+    const phases = [
+      rphase({ id: 'a', start: '2026-01-01', end: '2026-01-31' }),
+      rphase({ id: 'install', start: '2026-02-15', end: '2026-03-15', anchored: true }),
+    ];
+    const chain = [link('a', null), link('install', 'a', 'Installation')];
+    const bounded = new Set(ruleBoundaries(phases, chain, scale).map((x) => x.upstreamPhaseId));
+    const bars = ruleBars(phases, chain, scale);
+    for (const bar of bars) expect(bar.hasInternalEndBoundary).toBe(bounded.has(bar.id));
+    // 'a' is locked-but-bounded; the anchored terminal 'install' still resizes.
+    expect(bars.find((b) => b.id === 'a')!.hasInternalEndBoundary).toBe(true);
+    expect(bars.find((b) => b.id === 'install')!.hasInternalEndBoundary).toBe(false);
+  });
+
+  it('a standalone phase (no chain at all) owns its end', () => {
+    const phases = [rphase({ id: 'solo', start: '2026-01-10', end: '2026-02-10' })];
+    expect(ruleBars(phases, [link('solo', null)], scale)[0].hasInternalEndBoundary).toBe(false);
+  });
+
+  it('a phase absent from the chain lookup gets an empty name, never undefined', () => {
+    const phases = [rphase({ id: 'ghost', start: '2026-01-01', end: '2026-01-31' })];
+    expect(ruleBars(phases, [], scale)[0].name).toBe('');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// barMoveStartEpoch / barNudgeEpochDay — the bar's pure drag + keyboard math
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('barMoveStartEpoch', () => {
+  it('new start = dragged day − the offset the pointer held into the bar', () => {
+    const start = epochDayFromISO('2026-01-01')!;
+    const grabOffset = 4; // grabbed 4 days into the bar
+    expect(barMoveStartEpoch(grabOffset, start + 10)).toBe(start + 6);
+  });
+
+  it('the SAME subtraction yields the grab offset at drag begin', () => {
+    const start = epochDayFromISO('2026-01-01')!;
+    const grabbedOn = epochDayFromISO('2026-01-05')!;
+    const grabOffset = barMoveStartEpoch(start, grabbedOn);
+    expect(grabOffset).toBe(4);
+    // dragging back onto the same day reproduces the untouched start.
+    expect(barMoveStartEpoch(grabOffset, grabbedOn)).toBe(start);
+  });
+
+  it('a grab at the bar’s left edge snaps the start straight to the dragged day', () => {
+    const start = epochDayFromISO('2026-03-01')!;
+    expect(barMoveStartEpoch(0, start - 3)).toBe(start - 3);
+  });
+
+  it('rounds both inputs to whole days (day math is integer-only)', () => {
+    expect(barMoveStartEpoch(2.4, 100.6)).toBe(99);
+  });
+});
+
+describe('barNudgeEpochDay', () => {
+  it('shifts an epoch day forward and backward by whole days', () => {
+    const day = epochDayFromISO('2026-05-10')!;
+    expect(isoFromEpochDay(barNudgeEpochDay(day, 1))).toBe('2026-05-11');
+    expect(isoFromEpochDay(barNudgeEpochDay(day, -1))).toBe('2026-05-09');
+    expect(isoFromEpochDay(barNudgeEpochDay(day, 7))).toBe('2026-05-17');
+    expect(isoFromEpochDay(barNudgeEpochDay(day, -7))).toBe('2026-05-03');
+  });
+
+  it('a zero nudge is the identity; it crosses a month boundary correctly', () => {
+    const day = epochDayFromISO('2026-01-30')!;
+    expect(barNudgeEpochDay(day, 0)).toBe(day);
+    expect(isoFromEpochDay(barNudgeEpochDay(day, 7))).toBe('2026-02-06');
+  });
+
+  it('composes with boundaryDurationDays for the RESIZE nudge (clamped ≥ 1)', () => {
+    const start = epochDayFromISO('2026-01-01')!;
+    // a 3-day phase nudged −1 → 2 days; nudged −7 → clamped to 1.
+    expect(boundaryDurationDays(start, barNudgeEpochDay(start, 3 - 1))).toBe(2);
+    expect(boundaryDurationDays(start, barNudgeEpochDay(start, 3 - 7))).toBe(1);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// projectGhosts — follower delta chips (B1)
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('projectGhosts — deltaDays chips', () => {
+  const scale = buildTimeScale([{ start: '2026-01-01', end: '2026-04-11' }], '2026-02-20')!;
+
+  it('a follower carries its own start slide in days; the EDITED phase carries null', () => {
+    const diff = rdiff({
+      edit: { kind: 'phase-duration', phaseId: 'a', durationDays: 40 },
+      phaseChanges: [
+        pchange({ phaseId: 'a', fromStart: '2026-01-01', toStart: '2026-01-01', fromEnd: '2026-01-31', toEnd: '2026-02-10', moved: true }),
+        pchange({ phaseId: 'b', fromStart: '2026-01-31', toStart: '2026-02-10', toEnd: '2026-03-01', moved: true }),
+      ],
+    });
+    const g = projectGhosts(diff, scale);
+    expect(g.ticks.find((t) => t.id === 'a')!.deltaDays).toBeNull();
+    expect(g.ticks.find((t) => t.id === 'b')!.deltaDays).toBe(10);
+  });
+
+  it('a follower pulled EARLIER carries a negative delta (the chip’s U+2212 case)', () => {
+    const diff = rdiff({
+      edit: { kind: 'phase-duration', phaseId: 'a', durationDays: 20 },
+      phaseChanges: [
+        pchange({ phaseId: 'a', fromEnd: '2026-01-31', toEnd: '2026-01-21', moved: true }),
+        pchange({ phaseId: 'b', fromStart: '2026-01-31', toStart: '2026-01-29', moved: true }),
+      ],
+    });
+    expect(projectGhosts(diff, scale).ticks.find((t) => t.id === 'b')!.deltaDays).toBe(-2);
+  });
+
+  it('a bar MOVE (phase-anchor) still reports the follower delta, and null on the dragged bar', () => {
+    const diff = rdiff({
+      edit: { kind: 'phase-anchor', phaseId: 'a', anchorDate: '2026-01-04' },
+      phaseChanges: [
+        pchange({ phaseId: 'a', fromStart: '2026-01-01', toStart: '2026-01-04', moved: true, anchored: true }),
+        pchange({ phaseId: 'b', fromStart: '2026-01-31', toStart: '2026-02-03', moved: true }),
+      ],
+    });
+    const g = projectGhosts(diff, scale);
+    expect(g.ticks.find((t) => t.id === 'a')!.deltaDays).toBeNull();
+    expect(g.ticks.find((t) => t.id === 'b')!.deltaDays).toBe(3);
+  });
+
+  it('an unplaceable from/to start leaves the delta null — the tick still draws', () => {
+    const diff = rdiff({
+      edit: { kind: 'phase-duration', phaseId: 'a', durationDays: 40 },
+      phaseChanges: [
+        pchange({ phaseId: 'a', fromEnd: '2026-01-31', toEnd: '2026-02-10', moved: true }),
+        // a follower that had no committed start (newly placeable) — nothing to subtract.
+        pchange({ phaseId: 'b', fromStart: null, toStart: '2026-02-10', moved: true }),
+      ],
+    });
+    const g = projectGhosts(diff, scale);
+    const tickB = g.ticks.find((t) => t.id === 'b')!;
+    expect(tickB.date).toBe('2026-02-10');
+    expect(tickB.deltaDays).toBeNull();
+  });
+
+  it('a follower that slid zero days reports 0 (the layer suppresses the chip, not the tick)', () => {
+    const diff = rdiff({
+      edit: { kind: 'phase-duration', phaseId: 'a', durationDays: 40 },
+      phaseChanges: [
+        pchange({ phaseId: 'a', fromEnd: '2026-01-31', toEnd: '2026-02-10', moved: true }),
+        pchange({ phaseId: 'b', fromStart: '2026-02-10', toStart: '2026-02-10', fromEnd: '2026-03-01', toEnd: '2026-03-05', moved: true }),
+      ],
+    });
+    expect(projectGhosts(diff, scale).ticks.find((t) => t.id === 'b')!.deltaDays).toBe(0);
   });
 });

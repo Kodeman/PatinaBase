@@ -160,8 +160,9 @@ function fmtDay(iso: string | null): string {
 }
 
 /** A signed day-delta as `+5d` / `−3d` (U+2212 minus, the brand's typographic
- *  minus — matches R100's `+5d` entry grammar). */
-function fmtDelta(n: number): string {
+ *  minus — matches R100's `+5d` entry grammar). Exported so the Rule's ghost
+ *  delta chips speak the confirm strip's grammar rather than a second one. */
+export function fmtDelta(n: number): string {
   return `${n < 0 ? MINUS : '+'}${Math.abs(n)}d`;
 }
 
