@@ -1,4 +1,8 @@
 const fromMock = jest.fn();
+/** Every `.eq()`/`.order()` call the J6 chain leg makes, in call order —
+ *  lets NAV-1's tie-break test assert the exact ORDER BY shape without
+ *  re-deriving it from the mock's resolved data. */
+let orderCalls: Array<{ leg: string; args: unknown[] }> = [];
 
 jest.mock('@patina/supabase', () => ({
   createBrowserClient: () => ({ from: fromMock }),
@@ -30,6 +34,7 @@ function stubTables(opts: {
     parent_proposal_id: string | null;
     project_id: string | null;
     status: string;
+    created_at?: string;
   }>;
   decision?: { project_id: string | null; designer_client_id: string | null } | null;
 }) {
@@ -60,9 +65,27 @@ function stubTables(opts: {
               }),
             };
           }
-          // J6 leg: .select('id, parent_proposal_id, project_id, status').eq('designer_client_id', id)
+          // J6 leg: .select(...).eq('designer_client_id', id)
+          //   .order('created_at', {...}).order('id', {...})
+          // — chained, resolving only after both .order() calls (NAV-1's
+          // deterministic tie-break). The mock returns whatever order the
+          // test configured `chainProposals` in — same as a real ORDER BY
+          // already having sorted them server-side.
           return {
-            eq: () => Promise.resolve({ data: opts.chainProposals ?? [], error: null }),
+            eq: (...eqArgs: unknown[]) => {
+              orderCalls.push({ leg: 'eq', args: eqArgs });
+              return {
+                order: (...firstArgs: unknown[]) => {
+                  orderCalls.push({ leg: 'order-1', args: firstArgs });
+                  return {
+                    order: (...secondArgs: unknown[]) => {
+                      orderCalls.push({ leg: 'order-2', args: secondArgs });
+                      return Promise.resolve({ data: opts.chainProposals ?? [], error: null });
+                    },
+                  };
+                },
+              };
+            },
           };
         },
       };
@@ -109,6 +132,7 @@ function stubTables(opts: {
 describe('useDocumentEngagement — J6 designer_client_id chain leg', () => {
   beforeEach(() => {
     fromMock.mockReset();
+    orderCalls = [];
   });
 
   it('redirects a pre-Direction relationship id to the live draft chain root', async () => {
@@ -186,6 +210,50 @@ describe('useDocumentEngagement — J6 designer_client_id chain leg', () => {
     const resolution = await query.queryFn();
 
     expect(resolution).toEqual({ kind: 'missing' });
+  });
+
+  it('NAV-1: orders the chain leg by created_at then id, ascending, so two independent duplicate-mode chains sharing one designer_client_id resolve deterministically', async () => {
+    // Two unrelated roots (both parent_proposal_id: null, as clone_proposal's
+    // 'duplicate' mode always produces) sharing one designer_client_id — the
+    // exact ambiguity NAV-1 flagged. The mock returns them pre-sorted (as a
+    // real ORDER BY would); the fix's job is issuing that ORDER BY at all.
+    stubTables({
+      documentStateRows: [],
+      r6ProjectId: null,
+      leadStatus: null,
+      chainProposals: [
+        {
+          id: 'older-duplicate-root',
+          parent_proposal_id: null,
+          project_id: null,
+          status: 'draft',
+          created_at: '2026-01-01T00:00:00Z',
+        },
+        {
+          id: 'newer-duplicate-root',
+          parent_proposal_id: null,
+          project_id: null,
+          status: 'draft',
+          created_at: '2026-02-01T00:00:00Z',
+        },
+      ],
+    });
+
+    const query = useDocumentEngagement(ID) as unknown as {
+      queryFn: () => Promise<{ kind: string; projectId?: string }>;
+    };
+    const resolution = await query.queryFn();
+
+    // The mock already returned them oldest-first (matching a real ORDER BY
+    // created_at ASC); the resolver's `.find()` picks the first live row as
+    // before — this test's real job is pinning that the query issues the
+    // ORDER BY at all, asserted below.
+    expect(resolution).toEqual({ kind: 'redirect', projectId: 'older-duplicate-root' });
+    expect(orderCalls).toEqual([
+      { leg: 'eq', args: ['designer_client_id', ID] },
+      { leg: 'order-1', args: ['created_at', { ascending: true }] },
+      { leg: 'order-2', args: ['id', { ascending: true }] },
+    ]);
   });
 
   it('still resolves the direct document_state hit without touching the chain leg at all', async () => {

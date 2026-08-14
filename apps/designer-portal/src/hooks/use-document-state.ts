@@ -102,16 +102,31 @@ export function useDocumentEngagement(id: string) {
       // draft/sent/viewed/accepted/declined/expired row; among the live
       // rows, resolve to the chain root exactly as Shape B does
       // (coalesce(parent_proposal_id, id)).
+      //
+      // Tie-break (NAV-1): revision siblings all carry the SAME true root
+      // via clone_proposal's COALESCE normalization (00327:653), so which
+      // one this query returns first never matters for them. But
+      // clone_proposal(p_mode='duplicate') carries designer_client_id
+      // forward while always setting parent_proposal_id=NULL (00327:658-673)
+      // — a fresh, unrelated root — so TWO independent duplicate-mode chains
+      // can share one designer_client_id. Order by created_at (then id, for
+      // proposals created in the same instant) so the pick is at least
+      // deterministic and prefers the OLDEST chain — the one most likely to
+      // descend from the original begin_direction_from_discovery seed rather
+      // than a later, unrelated duplicate.
       const { data: chainProps, error: chainError } = await supabase
         .from('proposals')
-        .select('id, parent_proposal_id, project_id, status')
-        .eq('designer_client_id', id);
+        .select('id, parent_proposal_id, project_id, status, created_at')
+        .eq('designer_client_id', id)
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true });
       if (chainError) throw chainError;
       const chainRows = (chainProps ?? []) as Array<{
         id: string;
         parent_proposal_id: string | null;
         project_id: string | null;
         status: string;
+        created_at: string;
       }>;
       const activated = chainRows.find((r) => r.project_id);
       if (activated?.project_id) {
