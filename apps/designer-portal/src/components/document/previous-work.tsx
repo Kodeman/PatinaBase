@@ -8,11 +8,20 @@ export function PreviousWork({
   children,
   open: controlledOpen,
   onOpenChange,
+  approvalsAwaitingPublish = null,
+  onOpenApprovals,
 }: {
   count: number;
   children: React.ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** W4: client approvals drafted but not yet published — `null` while the
+   *  read has not answered, so the line never grows a clause after first
+   *  paint. A zero is not news either. */
+  approvalsAwaitingPublish?: number | null;
+  /** The approvals record is a door, not content of this disclosure: the
+   *  clause only appears when there is somewhere for it to go. */
+  onOpenApprovals?: () => void;
 }) {
   const [localOpen, setLocalOpen] = useState(false);
   const open = controlledOpen ?? localOpen;
@@ -36,6 +45,17 @@ export function PreviousWork({
         <span>Previous work · {count} complete</span>
         <span aria-hidden>{open ? '−' : '+'}</span>
       </button>
+      {approvalsAwaitingPublish !== null &&
+        approvalsAwaitingPublish > 0 &&
+        onOpenApprovals && (
+          <button
+            type="button"
+            onClick={onOpenApprovals}
+            className="mt-1 flex min-h-11 items-center font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-clay)] underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+          >
+            Client approvals · {approvalsAwaitingPublish} awaiting publish →
+          </button>
+        )}
       <div id={contentId} hidden={!open} className="pt-2">{open ? children : null}</div>
     </section>
   );

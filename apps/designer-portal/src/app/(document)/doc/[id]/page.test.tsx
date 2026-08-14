@@ -16,6 +16,8 @@ let mockDraftingState: Record<string, unknown> = { gaps: [], isLoading: false, e
 let mockProposalData: Record<string, unknown> | undefined;
 let mockProposalError = false;
 let mockProjectQuery: Record<string, unknown> = { data: undefined, isLoading: false, isError: false };
+// W4: the recap line counts drafted-and-unsent client approvals off this read.
+let mockProjectApprovalsQuery: Record<string, unknown> = { data: [] };
 // R108: the letterhead vitals read the resolver, never a stored column.
 const NO_RESOLVED_SCHEDULE = {
   phases: [],
@@ -67,6 +69,7 @@ jest.mock('next/navigation', () => ({
 jest.mock('@patina/supabase', () => ({
   useProjectV2: () => mockProjectQuery,
   useProjectPhases: () => ({ data: [] }),
+  useProjectApprovals: () => mockProjectApprovalsQuery,
   useProposalFeedback: () => ({ data: [] }),
   useProjectRoster: () => ({ data: [] }),
   useDiscovery: () => mockDiscoveryQuery,
@@ -100,9 +103,8 @@ jest.mock('@/components/document/commercial/project-commerce-section', () => ({
 }));
 jest.mock('@/components/document/care-band', () => ({ CareBand: () => null }));
 jest.mock('@/components/document/account-band', () => ({ AccountBand: () => null }));
-jest.mock('@/components/document/project-mood-boards', () => ({ ProjectMoodBoards: () => null }));
-jest.mock('@/components/document/roster/kickoff-band', () => ({ KickoffBand: () => null }));
-jest.mock('@/components/document/plans/plan-room-band', () => ({ PlanRoomBand: () => null }));
+jest.mock('@/components/document/commercial/money-region', () => ({ MoneyRegion: () => null }));
+jest.mock('@/components/document/not-started-band', () => ({ NotStartedBand: () => null }));
 jest.mock('@/components/document/roster/call-sheet-mount', () => ({ CallSheetMount: () => null }));
 
 jest.mock('@/hooks/use-hydrated', () => ({
@@ -128,10 +130,24 @@ jest.mock('@/components/document/doc-spine', () => ({
   ),
 }));
 jest.mock('@/components/document/doc-letterhead', () => ({
-  DocLetterhead: ({ title, vitals }: { title: string; vitals?: string }) => (
+  DocLetterhead: ({
+    title,
+    vitals,
+    needsSetup,
+  }: {
+    title: string;
+    vitals?: string;
+    needsSetup?: Array<{ text: string; remedyLabel: string; onActivate: () => void }> | null;
+  }) => (
     <header>
       {title}
       <span data-testid="doc-vitals">{vitals}</span>
+      <span data-testid="doc-needs-setup-count">{needsSetup?.length ?? 0}</span>
+      {(needsSetup ?? []).map((entry) => (
+        <button key={entry.text} type="button" onClick={entry.onActivate}>
+          {`${entry.text} · ${entry.remedyLabel}`}
+        </button>
+      ))}
     </header>
   ),
 }));
@@ -358,6 +374,7 @@ describe('DocumentPage guide activation', () => {
     mockProposalData = undefined;
     mockProposalError = false;
     mockProjectQuery = { data: undefined, isLoading: false, isError: false };
+    mockProjectApprovalsQuery = { data: [] };
     mockResolvedSchedule = NO_RESOLVED_SCHEDULE;
     mockContextualHandoffsQuery = { data: [], isError: false };
     mockDeskData = { folders: [], chips: [], composed: {} };
@@ -938,6 +955,118 @@ describe('DocumentPage guide activation', () => {
     render(<DocumentPage params={fulfilledParams} />);
 
     expect(screen.getByTestId('doc-vitals').textContent ?? '').not.toMatch(/Target/);
+  });
+
+  // ── W1: the letterhead's needs-setup chip ──
+  it('states no setup need when the Desk reports none', () => {
+    asProjectDocument();
+    mockDeskData = {
+      folders: [{ row: { engagement_id: 'project-1' }, need: null }],
+      chips: [],
+      composed: { 'project-1': true },
+    };
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(screen.getByTestId('doc-needs-setup-count')).toHaveTextContent('0');
+  });
+
+  it('carries the one unconfigured-schedule need to the letterhead with its remedy', () => {
+    asProjectDocument();
+    mockDeskData = {
+      folders: [{
+        row: { engagement_id: 'project-1' },
+        need: {
+          kind: 'schedule_unconfigured',
+          text: 'Name the phases for this project',
+          actionLabel: 'Open the schedule',
+          urgent: false,
+          stamp: { label: 'BAND' },
+        },
+      }],
+      chips: [],
+      composed: { 'project-1': true },
+    };
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(screen.getByTestId('doc-needs-setup-count')).toHaveTextContent('1');
+    const activeSection = document.querySelector<HTMLElement>('[data-active-section]');
+    activeSection!.scrollIntoView = jest.fn();
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Name the phases for this project · Open the schedule',
+      }),
+    );
+
+    expect(activeSection!.scrollIntoView).toHaveBeenCalled();
+    expect(activeSection).toHaveFocus();
+  });
+
+  it('leaves every other kind of need to the guide', () => {
+    asProjectDocument();
+    mockDeskData = {
+      folders: [{
+        row: { engagement_id: 'project-1' },
+        need: {
+          kind: 'task_due',
+          text: 'Confirm the site measure',
+          actionLabel: 'Open the task',
+          urgent: false,
+          stamp: { label: 'TASK DUE' },
+        },
+      }],
+      chips: [],
+      composed: { 'project-1': true },
+    };
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(screen.getByTestId('doc-needs-setup-count')).toHaveTextContent('0');
+  });
+
+  // ── W4: the recap line ──
+  it('counts only drafted, active approvals as awaiting publish', () => {
+    asProjectDocument();
+    // Proposal lineage resolves the earlier sections as settled, which is what
+    // gives this project document a recap line to carry the approvals count.
+    mockProjectQuery = {
+      data: { proposal: { id: 'proposal-1', version: 1, status: 'signed', signed_at: null } },
+      isLoading: false,
+      isError: false,
+    };
+    mockProjectApprovalsQuery = {
+      data: [
+        { lifecycleStatus: 'draft', disposition: 'active' },
+        { lifecycleStatus: 'pending', disposition: 'active' },
+        { lifecycleStatus: 'draft', disposition: 'superseded' },
+      ],
+    };
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(
+      screen.getByRole('button', { name: 'Client approvals · 1 awaiting publish →' }),
+    ).toBeVisible();
+    // The recap disclosure promises only what its own body holds.
+    expect(
+      screen.getByRole('button', { name: /^Previous work · \d+ complete$/ }),
+    ).toBeVisible();
+  });
+
+  it('says nothing about approvals while that read is unanswered', () => {
+    asProjectDocument();
+    mockProjectQuery = {
+      data: { proposal: { id: 'proposal-1', version: 1, status: 'signed', signed_at: null } },
+      isLoading: false,
+      isError: false,
+    };
+    mockProjectApprovalsQuery = { data: undefined, isLoading: true };
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(screen.queryByText(/Client approvals/)).not.toBeInTheDocument();
   });
 });
 

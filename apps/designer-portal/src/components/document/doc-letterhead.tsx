@@ -14,6 +14,7 @@
 import type { ReactNode } from 'react';
 import { StrataMark } from './strata-mark';
 import { LetterheadTitle, LetterheadVitals } from './letterhead-vitals';
+import { NeedsSetupChip, type NeedsSetupEntry } from './needs-setup-chip';
 import type { FillState } from '@/lib/document/fill-state';
 
 export function DocLetterhead({
@@ -22,6 +23,7 @@ export function DocLetterhead({
   fill,
   client,
   projectId = null,
+  needsSetup = null,
 }: {
   title: string;
   vitals: string;
@@ -33,6 +35,9 @@ export function DocLetterhead({
   /** R80: set on project documents — the title + vitals become self-save
    *  fields writing the projects row (blur-save, quiet per-field status). */
   projectId?: string | null;
+  /** W1: the open setup needs, each with its own remedy. Empty, null and
+   *  undefined all render nothing — the chip never announces a zero. */
+  needsSetup?: NeedsSetupEntry[] | null;
 }) {
   return (
     <header id="document-project-status" tabIndex={-1} className="mb-4 border-b border-[var(--color-pearl)] pb-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]">
@@ -52,6 +57,7 @@ export function DocLetterhead({
       ) : (
         vitals && <p className="mt-1 text-[11px] text-[var(--text-muted)]">{vitals}</p>
       )}
+      <NeedsSetupChip count={needsSetup?.length ?? 0} entries={needsSetup ?? []} />
     </header>
   );
 }
