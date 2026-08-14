@@ -14,8 +14,8 @@
  * `epochDayFromISO`, reused, never duplicated).
  */
 
-import type { ResolvedPhase, ResolvedMilestone, MilestoneStatus } from '@patina/utils';
-import { epochDayFromISO } from '@patina/utils';
+import type { ResolvedPhase, ResolvedMilestone, MilestoneStatus, PhaseLane } from '@patina/utils';
+import { epochDayFromISO, isoFromEpochDay } from '@patina/utils';
 import { phaseState } from './schedule-spine-derivation';
 // Type-only — the ghost projector reads a `RippleDiff` (schedule-ripple-
 // derivation imports NOTHING from this file, so this stays acyclic).
@@ -377,6 +377,8 @@ export interface GhostTickSpec {
 /** A dashed ghost diamond at a moved milestone's NEW date (name for the label). */
 export interface GhostDiamondSpec {
   id: string;
+  /** The host phase — the lane the ghost diamond belongs in (drafting strip). */
+  phaseId: string;
   xPct: number;
   name: string;
   date: string | null;
@@ -446,7 +448,7 @@ export function projectGhosts(diff: RippleDiff, scale: TimeScale): RuleGhosts {
     if (!mm.moved) continue;
     const x = scale.toX(mm.toDate);
     if (x == null) continue;
-    diamonds.push({ id: mm.milestoneId, xPct: x, name: mm.name, date: mm.toDate });
+    diamonds.push({ id: mm.milestoneId, phaseId: mm.phaseId, xPct: x, name: mm.name, date: mm.toDate });
   }
 
   let fromIso: string | null = null;
@@ -851,4 +853,214 @@ export function foldedLayers(pinned: boolean): FoldedLayers {
     today: true,
     line: true,
   };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// The DRAFTING STRIP — one lane per phase, over a month/week grid
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * The strip's vertical layout: every phase the rule can draw gets its OWN
+ * horizontal lane instead of sharing one compressed track. This is the whole
+ * point of the strip — the compact single-track rule was unreadable at the size
+ * a document header allows, and unusable as a date editor. Lanes cost height
+ * and buy legibility; nothing here tries to win the height back.
+ *
+ * `topPx` is the lane band's y; a bar sits inside it (see `laneBarTopPx`), and
+ * the lane's gutter label sits above the bar in the same band, so the two never
+ * collide however long the phase name is.
+ */
+export interface RuleLane {
+  id: string;
+  /** 0-based row: main lanes in ledger order first, thread lanes after. */
+  index: number;
+  lane: PhaseLane;
+  topPx: number;
+  heightPx: number;
+}
+
+export interface RuleLaneLayout {
+  lanes: RuleLane[];
+  /** The grid's full height — the sum of every lane band. */
+  totalHeightPx: number;
+}
+
+/** Lane band heights. Main lanes carry a chunky bar + a gutter label; thread
+ *  lanes carry a hairline and read as secondary, so they sit shorter. */
+export const MAIN_LANE_H = 38;
+export const THREAD_LANE_H = 26;
+/** Where a bar sits inside its lane band, and how tall it is drawn. */
+export const LANE_BAR_TOP = 19;
+export const LANE_BAR_H = 14;
+export const LANE_THREAD_TOP = 15;
+
+/**
+ * Assign a lane to every phase the strip can draw.
+ *
+ * ORDER — main-lane phases first, in the order `order` lists them (the ledger's
+ * own `sort_order`, passed as ids by the caller so this file never re-sorts
+ * against a column it can't see), then thread-lane phases in the same order.
+ * A phase absent from `order` sorts last within its group, by id, so the layout
+ * is deterministic for any input rather than dependent on resolver output order.
+ *
+ * EXCLUSIONS — a phase missing a start or an end gets no lane, exactly as it
+ * gets no segment and no bar: it cannot be drawn against a date scale at all,
+ * and surfaces through `unplacedPhases` instead.
+ */
+export function ruleLanes(
+  phases: ReadonlyArray<ResolvedPhase>,
+  order: ReadonlyArray<string>,
+  opts?: { mainHeightPx?: number; threadHeightPx?: number },
+): RuleLaneLayout {
+  const mainH = opts?.mainHeightPx ?? MAIN_LANE_H;
+  const threadH = opts?.threadHeightPx ?? THREAD_LANE_H;
+
+  const rank = new Map(order.map((id, i) => [id, i]));
+  const rankOf = (id: string) => rank.get(id) ?? Number.MAX_SAFE_INTEGER;
+
+  const placeable = phases.filter((p) => p.start != null && p.end != null);
+  const sortGroup = (group: ResolvedPhase[]) =>
+    group.slice().sort((a, b) => rankOf(a.id) - rankOf(b.id) || a.id.localeCompare(b.id));
+
+  const ordered = [
+    ...sortGroup(placeable.filter((p) => p.lane === 'main')),
+    ...sortGroup(placeable.filter((p) => p.lane !== 'main')),
+  ];
+
+  const lanes: RuleLane[] = [];
+  let top = 0;
+  ordered.forEach((p, index) => {
+    const heightPx = p.lane === 'main' ? mainH : threadH;
+    lanes.push({ id: p.id, index, lane: p.lane, topPx: top, heightPx });
+    top += heightPx;
+  });
+
+  return { lanes, totalHeightPx: top };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// The strip's graph paper — month columns + week gridlines
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** A month boundary on the strip: its x, and the DM Mono label above it. */
+export interface RuleMonthColumn {
+  /** 'YYYY-MM' — stable React key. */
+  key: string;
+  /** 'AUG' — already upper-cased for the mono label row. */
+  label: string;
+  xPct: number;
+}
+
+const MONTH_LABELS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+
+/**
+ * Every first-of-month inside the scale's domain. Walks calendar months through
+ * `isoFromEpochDay`/`epochDayFromISO` — R100's ONE date-math impl — rather than
+ * a second days-in-month table: read the domain's first day, take its year and
+ * month, then step month by month building 'YYYY-MM-01' and asking the resolver
+ * where that lands. Total: an unplaceable domain yields no columns.
+ */
+export function monthColumns(scale: TimeScale): RuleMonthColumn[] {
+  const firstIso = isoFromEpochDay(Math.ceil(scale.minEpoch));
+  const lastEpoch = Math.floor(scale.maxEpoch);
+  if (firstIso == null) return [];
+
+  let year = Number(firstIso.slice(0, 4));
+  let month = Number(firstIso.slice(5, 7));
+  const out: RuleMonthColumn[] = [];
+
+  // A padded domain spans at most a few years of schedule; the guard is a
+  // belt-and-braces stop, never reached by real data.
+  for (let guard = 0; guard < 600; guard++) {
+    const key = `${year}-${String(month).padStart(2, '0')}`;
+    const epoch = epochDayFromISO(`${key}-01`);
+    if (epoch == null) break;
+    if (epoch > lastEpoch) break;
+    if (epoch >= scale.minEpoch) {
+      const x = scale.toX(`${key}-01`);
+      if (x != null) out.push({ key, label: MONTH_LABELS[month - 1], xPct: x });
+    }
+    month += 1;
+    if (month > 12) {
+      month = 1;
+      year += 1;
+    }
+  }
+  return out;
+}
+
+/**
+ * Faint weekly gridlines — every Monday inside the domain, as x%. Epoch day 0 is
+ * 1970-01-01, a THURSDAY, so `(epoch + 3) mod 7 === 0` names a Monday; the
+ * arithmetic stays on the integer epoch rather than reaching for a `Date`.
+ */
+export function weekGridlines(scale: TimeScale): number[] {
+  const lo = Math.ceil(scale.minEpoch);
+  const hi = Math.floor(scale.maxEpoch);
+  const span = scale.maxEpoch - scale.minEpoch || 1;
+  const out: number[] = [];
+  // Step forward to the first Monday at or after the domain's start.
+  let day = lo;
+  while (((day + 3) % 7 + 7) % 7 !== 0) day += 1;
+  for (; day <= hi; day += 7) {
+    out.push(((day - scale.minEpoch) / span) * 100);
+  }
+  return out;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// projectGhostBars — the ripple diff → one ghost BAR per moved lane
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * A moved phase's previewed span, for the lane it lives in. The compact rule
+ * ghosts a single TICK per move because it has only one track to draw on; with
+ * a lane per phase the honest ghost is the whole bar in its new place, beside
+ * the committed one.
+ */
+export interface GhostBarSpec {
+  id: string;
+  leftPct: number;
+  widthPct: number;
+  /** How far this FOLLOWER's start slid, in whole days — the lane's `+3d` chip.
+   *  `null` on the edited phase itself (its movement is the cause, not a
+   *  consequence) and whenever either endpoint is unplaceable. */
+  deltaDays: number | null;
+  /** True on the phase the edit names — the lane the designer has hold of. */
+  edited: boolean;
+}
+
+/**
+ * Project a `RippleDiff` onto per-lane ghost bars. Same committed `scale` and
+ * same honest-overflow rule as `projectGhosts` (positions may run past the
+ * edge; the component clamps paint, never the dates). A move whose new span
+ * can't be placed at both ends drops that one ghost rather than drawing a
+ * zero-width or NaN bar.
+ */
+export function projectGhostBars(diff: RippleDiff, scale: TimeScale): GhostBarSpec[] {
+  const edit = diff.edit;
+  const editedPhaseId =
+    edit.kind === 'milestone-offset' || edit.kind === 'milestone-anchor' ? null : edit.phaseId;
+
+  const out: GhostBarSpec[] = [];
+  for (const pc of diff.phaseChanges) {
+    if (!pc.moved) continue;
+    const left = scale.toX(pc.toStart);
+    const right = scale.toX(pc.toEnd);
+    if (left == null || right == null) continue;
+    const fromStartEpoch = epochDayFromISO(pc.fromStart);
+    const toStartEpoch = epochDayFromISO(pc.toStart);
+    const edited = pc.phaseId === editedPhaseId;
+    out.push({
+      id: pc.phaseId,
+      leftPct: left,
+      widthPct: right - left,
+      deltaDays:
+        edited || fromStartEpoch == null || toStartEpoch == null
+          ? null
+          : toStartEpoch - fromStartEpoch,
+      edited,
+    });
+  }
+  return out;
 }

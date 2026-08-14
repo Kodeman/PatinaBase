@@ -13,6 +13,12 @@ import {
   ruleThreads,
   ruleBoundaries,
   ruleBars,
+  ruleLanes,
+  monthColumns,
+  weekGridlines,
+  projectGhostBars,
+  MAIN_LANE_H,
+  THREAD_LANE_H,
   barCanResize,
   barMoveStartEpoch,
   barNudgeEpochDay,
@@ -1224,5 +1230,246 @@ describe('clampBarEpochDay', () => {
     // grabbed 10 days into the bar, dragged onto the domain's first day.
     const staged = clampBarEpochDay(barMoveStartEpoch(10, lo), lo, hi);
     expect(staged).toBe(lo);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ruleLanes — the drafting strip's one-lane-per-phase vertical layout
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('ruleLanes', () => {
+  const dated = (id: string, over: Partial<ResolvedPhase> = {}) =>
+    rphase({ id, start: '2026-01-01', end: '2026-02-01', ...over });
+
+  it('one lane per placed phase, stacked top to bottom with no gaps', () => {
+    const { lanes, totalHeightPx } = ruleLanes([dated('a'), dated('b'), dated('c')], ['a', 'b', 'c']);
+    expect(lanes.map((l) => [l.id, l.index, l.topPx])).toEqual([
+      ['a', 0, 0],
+      ['b', 1, MAIN_LANE_H],
+      ['c', 2, MAIN_LANE_H * 2],
+    ]);
+    expect(lanes.every((l) => l.heightPx === MAIN_LANE_H)).toBe(true);
+    expect(totalHeightPx).toBe(MAIN_LANE_H * 3);
+  });
+
+  it('follows the ledger order it is given, not the resolver’s array order', () => {
+    // resolver hands them back c, a, b; the ledger sorts a, b, c.
+    const { lanes } = ruleLanes([dated('c'), dated('a'), dated('b')], ['a', 'b', 'c']);
+    expect(lanes.map((l) => l.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('threads come AFTER every main lane and sit shorter', () => {
+    const phases = [
+      dated('thread-1', { lane: 'thread' }),
+      dated('main-1'),
+      dated('thread-2', { lane: 'thread' }),
+      dated('main-2'),
+    ];
+    const { lanes, totalHeightPx } = ruleLanes(phases, ['thread-1', 'main-1', 'thread-2', 'main-2']);
+    expect(lanes.map((l) => [l.id, l.lane])).toEqual([
+      ['main-1', 'main'],
+      ['main-2', 'main'],
+      ['thread-1', 'thread'],
+      ['thread-2', 'thread'],
+    ]);
+    expect(lanes[2].topPx).toBe(MAIN_LANE_H * 2);
+    expect(lanes[3].topPx).toBe(MAIN_LANE_H * 2 + THREAD_LANE_H);
+    expect(totalHeightPx).toBe(MAIN_LANE_H * 2 + THREAD_LANE_H * 2);
+  });
+
+  it('an unplaced phase gets NO lane (it cannot be drawn against a date scale)', () => {
+    const phases = [
+      dated('placed'),
+      rphase({ id: 'nodates', start: null, end: null, source: 'unresolved' }),
+      rphase({ id: 'halfdated', start: '2026-01-01', end: null, source: 'legacy-dates' }),
+    ];
+    const { lanes } = ruleLanes(phases, ['placed', 'nodates', 'halfdated']);
+    expect(lanes.map((l) => l.id)).toEqual(['placed']);
+  });
+
+  it('a phase absent from the order sorts last within its group, deterministically', () => {
+    const { lanes } = ruleLanes([dated('zz'), dated('aa'), dated('known')], ['known']);
+    expect(lanes.map((l) => l.id)).toEqual(['known', 'aa', 'zz']);
+  });
+
+  it('is stable: the same inputs always produce the same layout', () => {
+    const phases = [dated('b'), dated('a'), dated('t', { lane: 'thread' })];
+    const first = ruleLanes(phases, ['a', 'b', 't']);
+    const second = ruleLanes(phases, ['a', 'b', 't']);
+    expect(second).toEqual(first);
+  });
+
+  it('honours height overrides (the strip owns its own rhythm)', () => {
+    const { lanes, totalHeightPx } = ruleLanes(
+      [dated('m'), dated('t', { lane: 'thread' })],
+      ['m', 't'],
+      { mainHeightPx: 50, threadHeightPx: 20 },
+    );
+    expect(lanes.map((l) => l.heightPx)).toEqual([50, 20]);
+    expect(totalHeightPx).toBe(70);
+  });
+
+  it('empty input is an empty, zero-height layout — never throws', () => {
+    expect(ruleLanes([], [])).toEqual({ lanes: [], totalHeightPx: 0 });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// monthColumns / weekGridlines — the strip's graph paper
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('monthColumns', () => {
+  it('names every first-of-month inside the PADDED domain, in order, upper-cased', () => {
+    // Aug 5 → Nov 20 is 107 days; the scale's symmetric 4% pad reaches back past
+    // Aug 1, so August's own column is legitimately inside the domain.
+    const scale = buildTimeScale([{ start: '2026-08-05', end: '2026-11-20' }], '2026-09-01')!;
+    expect(epochDayFromISO('2026-08-01')!).toBeGreaterThanOrEqual(scale.minEpoch);
+    const cols = monthColumns(scale);
+    expect(cols.map((c) => c.label)).toEqual(['AUG', 'SEP', 'OCT', 'NOV']);
+    expect(cols.map((c) => c.key)).toEqual(['2026-08', '2026-09', '2026-10', '2026-11']);
+  });
+
+  it('places each column where the scale places that date', () => {
+    const scale = buildTimeScale([{ start: '2026-08-05', end: '2026-11-20' }], '2026-09-01')!;
+    for (const col of monthColumns(scale)) {
+      expect(col.xPct).toBeCloseTo(scale.toX(`${col.key}-01`)!, 10);
+    }
+  });
+
+  it('crosses a year boundary correctly', () => {
+    const scale = buildTimeScale([{ start: '2026-11-10', end: '2027-02-10' }], '2026-12-01')!;
+    expect(monthColumns(scale).map((c) => c.key)).toEqual([
+      '2026-12',
+      '2027-01',
+      '2027-02',
+    ]);
+  });
+
+  it('a domain narrower than one month boundary yields no columns', () => {
+    const scale = buildTimeScale([{ start: '2026-03-05', end: '2026-03-20' }], '2026-03-10')!;
+    expect(monthColumns(scale)).toEqual([]);
+  });
+});
+
+describe('weekGridlines', () => {
+  it('every line lands on a Monday', () => {
+    const scale = buildTimeScale([{ start: '2026-01-01', end: '2026-03-01' }], '2026-02-01')!;
+    const span = scale.maxEpoch - scale.minEpoch;
+    for (const x of weekGridlines(scale)) {
+      const epoch = Math.round(scale.minEpoch + (x / 100) * span);
+      const iso = isoFromEpochDay(epoch)!;
+      // Jan 5 2026 is a Monday; every line must be a whole number of weeks off it.
+      expect((epoch - epochDayFromISO('2026-01-05')!) % 7).toBe(0);
+      expect(iso).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    }
+  });
+
+  it('lines are 7 days apart and stay inside the domain', () => {
+    const scale = buildTimeScale([{ start: '2026-01-01', end: '2026-03-01' }], '2026-02-01')!;
+    const xs = weekGridlines(scale);
+    expect(xs.length).toBeGreaterThan(5);
+    expect(Math.min(...xs)).toBeGreaterThanOrEqual(0);
+    expect(Math.max(...xs)).toBeLessThanOrEqual(100);
+    const span = scale.maxEpoch - scale.minEpoch;
+    const days = xs.map((x) => Math.round(scale.minEpoch + (x / 100) * span));
+    for (let i = 1; i < days.length; i++) expect(days[i] - days[i - 1]).toBe(7);
+  });
+
+  it('a single-day domain never loops or divides by zero', () => {
+    const scale = buildTimeScale([{ start: '2026-01-01', end: '2026-01-01' }], '2026-01-01')!;
+    expect(Array.isArray(weekGridlines(scale))).toBe(true);
+    expect(weekGridlines(scale).every((x) => Number.isFinite(x))).toBe(true);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// projectGhostBars — the ripple diff → one ghost bar per moved lane
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('projectGhostBars', () => {
+  const scale = buildTimeScale([{ start: '2026-01-01', end: '2026-04-11' }], '2026-02-20')!;
+
+  it('a moved phase ghosts its WHOLE new span, not just a boundary tick', () => {
+    const diff = rdiff({
+      edit: { kind: 'phase-anchor', phaseId: 'a', anchorDate: '2026-01-11' },
+      phaseChanges: [
+        pchange({
+          phaseId: 'a',
+          fromStart: '2026-01-01',
+          toStart: '2026-01-11',
+          fromEnd: '2026-01-31',
+          toEnd: '2026-02-10',
+          moved: true,
+        }),
+      ],
+    });
+    const [bar] = projectGhostBars(diff, scale);
+    expect(bar.leftPct).toBeCloseTo(scale.toX('2026-01-11')!, 10);
+    expect(bar.widthPct).toBeCloseTo(scale.toX('2026-02-10')! - scale.toX('2026-01-11')!, 10);
+    expect(bar.edited).toBe(true);
+    expect(bar.deltaDays).toBeNull(); // the cause carries no consequence chip
+  });
+
+  it('followers carry their slide as a signed delta; the edited phase does not', () => {
+    const diff = rdiff({
+      edit: { kind: 'phase-duration', phaseId: 'a', durationDays: 40 },
+      phaseChanges: [
+        pchange({ phaseId: 'a', fromStart: '2026-01-01', toStart: '2026-01-01', fromEnd: '2026-01-31', toEnd: '2026-02-10', moved: true }),
+        pchange({ phaseId: 'b', fromStart: '2026-01-31', toStart: '2026-02-10', toEnd: '2026-03-01', moved: true }),
+      ],
+    });
+    const bars = projectGhostBars(diff, scale);
+    expect(bars.find((b) => b.id === 'a')).toMatchObject({ edited: true, deltaDays: null });
+    expect(bars.find((b) => b.id === 'b')).toMatchObject({ edited: false, deltaDays: 10 });
+  });
+
+  it('a follower pulled earlier reports a negative delta', () => {
+    const diff = rdiff({
+      edit: { kind: 'phase-duration', phaseId: 'a', durationDays: 20 },
+      phaseChanges: [
+        pchange({ phaseId: 'b', fromStart: '2026-01-31', toStart: '2026-01-29', toEnd: '2026-02-20', moved: true }),
+      ],
+    });
+    expect(projectGhostBars(diff, scale)[0].deltaDays).toBe(-2);
+  });
+
+  it('an unmoved phase ghosts nothing', () => {
+    const diff = rdiff({
+      edit: { kind: 'phase-duration', phaseId: 'a', durationDays: 30 },
+      phaseChanges: [
+        pchange({ phaseId: 'held', toStart: '2026-03-01', toEnd: '2026-03-20', moved: false, anchored: true, holds: true }),
+      ],
+    });
+    expect(projectGhostBars(diff, scale)).toEqual([]);
+  });
+
+  it('an unplaceable endpoint drops that ghost — never a NaN-width bar', () => {
+    const diff = rdiff({
+      edit: { kind: 'phase-duration', phaseId: 'a', durationDays: 30 },
+      phaseChanges: [pchange({ phaseId: 'a', toStart: '2026-02-01', toEnd: null, moved: true })],
+    });
+    expect(projectGhostBars(diff, scale)).toEqual([]);
+  });
+
+  it('a milestone-only edit moves no phase, so no lane ghosts a bar', () => {
+    const diff = rdiff({
+      edit: { kind: 'milestone-offset', milestoneId: 'm', phaseId: 'a', offsetDays: 3 },
+      milestoneMoves: [mmove({ milestoneId: 'm', phaseId: 'a', toDate: '2026-02-14', moved: true })],
+    });
+    expect(projectGhostBars(diff, scale)).toEqual([]);
+  });
+});
+
+describe('projectGhosts — diamonds carry their host phase (lane placement)', () => {
+  const scale = buildTimeScale([{ start: '2026-01-01', end: '2026-04-11' }], '2026-02-20')!;
+
+  it('a ghost diamond names the phase whose lane hosts it', () => {
+    const diff = rdiff({
+      edit: { kind: 'milestone-offset', milestoneId: 'm', phaseId: 'host', offsetDays: 3 },
+      milestoneMoves: [
+        mmove({ milestoneId: 'm', phaseId: 'host', name: 'Sofa', fromDate: '2026-02-01', toDate: '2026-02-14', moved: true }),
+      ],
+    });
+    expect(projectGhosts(diff, scale).diamonds[0]).toMatchObject({ id: 'm', phaseId: 'host' });
   });
 });

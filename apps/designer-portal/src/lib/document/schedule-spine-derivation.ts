@@ -142,8 +142,10 @@ export function milestoneStamp(
 // phaseMeta — the DM Mono meta line under a phase heading
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** Exact multiples of 7 render as weeks; everything else as days. */
-function weeksOrDays(n: number): string {
+/** Exact multiples of 7 render as weeks; everything else as days. Exported so
+ *  the drafting strip's header readout speaks the meta line's own grammar
+ *  ("Follows Consultation · 3w") rather than inventing a second one. */
+export function weeksOrDays(n: number): string {
   return n % 7 === 0 ? `${n / 7}w` : `${n}d`;
 }
 
