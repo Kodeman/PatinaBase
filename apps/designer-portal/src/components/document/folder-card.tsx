@@ -177,33 +177,16 @@ export function FolderCard({
     });
   };
 
-  // R36: the overdue-invoice need opens the Accounts book onto Receivables
-  // (where the dunning act lives), not the document. Same paper face either way.
   const cardClassName =
     'group relative mt-[26px] block w-full cursor-grab rounded-[0_8px_8px_8px] text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] active:cursor-grabbing';
   const inner = (
     <FolderFace folder={folder} stageLine={stageLine} tabLabel={tabLabel} />
   );
 
-  if (need.ledger) {
-    return (
-      <button
-        type="button"
-        onClick={() => {
-          selectFolioAction();
-          openLedger(need.ledger!.name, need.ledger!.context);
-        }}
-        className={cardClassName}
-        aria-label={`${row.title} — ${need.text}`}
-        data-action-key={need.actionLabel ? need.kind : undefined}
-        data-action-variant={need.actionLabel ? 'primary' : undefined}
-        data-action-region={need.actionLabel ? 'needs-your-hand' : undefined}
-      >
-        {inner}
-      </button>
-    );
-  }
-
+  // R36: the overdue-invoice need still opens the Accounts book onto
+  // Receivables (where the dunning act lives) rather than the document — but
+  // the card itself always routes to the doc now (A1); the ledger act is the
+  // explicit inner "Send reminder" control in FolderFace.
   return (
     <Link
       href={need.deepLink ?? `/doc/${row.engagement_id}`}
@@ -288,19 +271,46 @@ function FolderFace({
                 arrivalEligible={Boolean(row.client_profile_id)}
               />
             )}
-          {need.actionLabel && (
-            <div className="mt-4 flex min-h-11 items-center justify-between gap-3 border-t border-[var(--color-pearl)] pt-3">
-              <span className="font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)]">
-                {need.actionLabel}
-              </span>
-              <span
-                aria-hidden
-                className="text-[14px] text-[var(--color-clay)]"
+          {need.actionLabel &&
+            (need.ledger ? (
+              // R36: the one NeedKind (overdue_invoice) whose act isn't the
+              // card's own pick-up — an explicit inner control, not the whole
+              // card, so the card surface can route to the doc (A1). Guards
+              // preventDefault+stopPropagation so the enclosing <Link> never
+              // fires (D1 precedent — TriageBar's guard()).
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  openLedger(need.ledger!.name, need.ledger!.context);
+                }}
+                aria-label={`${need.actionLabel} — ${row.title}`}
+                className="mt-4 flex min-h-11 w-full items-center justify-between gap-3 border-t border-[var(--color-pearl)] pt-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
               >
-                →
-              </span>
-            </div>
-          )}
+                <span className="font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)]">
+                  {need.actionLabel}
+                </span>
+                <span
+                  aria-hidden
+                  className="text-[14px] text-[var(--color-clay)]"
+                >
+                  →
+                </span>
+              </button>
+            ) : (
+              <div className="mt-4 flex min-h-11 items-center justify-between gap-3 border-t border-[var(--color-pearl)] pt-3">
+                <span className="font-mono text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)]">
+                  {need.actionLabel}
+                </span>
+                <span
+                  aria-hidden
+                  className="text-[14px] text-[var(--color-clay)]"
+                >
+                  →
+                </span>
+              </div>
+            ))}
         </div>
       </div>
     </>
