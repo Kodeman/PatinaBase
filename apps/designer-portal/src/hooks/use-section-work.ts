@@ -38,6 +38,11 @@ export interface SectionTask {
   title: string;
   status: 'todo' | 'done' | 'blocked';
   due_date: string | null;
+  // Date Instruments (lane D2): a task's working window start. NULL for
+  // every legacy single-day task and for a fresh day-pick through the Folio
+  // — only a span commit sets it. due_date stays the ONE "when it's needed"
+  // source either way (overdue logic, Desk derivation never read this).
+  starts_on: string | null;
   completed_at: string | null;
   estimate_minutes: number | null;
   sort_order: number;
@@ -82,7 +87,7 @@ export function useSectionTasks(projectId: string | null) {
     queryFn: async () => {
       const { data, error } = await getSupabase()
         .from('project_tasks')
-        .select('id, project_id, section_key, title, status, due_date, completed_at, estimate_minutes, sort_order, owner, owner_party_id, blocked_by_item_id, seq_after_task_id')
+        .select('id, project_id, section_key, title, status, due_date, starts_on, completed_at, estimate_minutes, sort_order, owner, owner_party_id, blocked_by_item_id, seq_after_task_id')
         .eq('project_id', projectId)
         .not('section_key', 'is', null)
         .order('sort_order', { ascending: true })
@@ -100,6 +105,7 @@ export function useCreateSectionTask(projectId: string | null) {
       title: string;
       sectionKey: SectionKey;
       dueDate?: string | null;
+      startsOn?: string | null;
       estimateMinutes?: number | null;
     }) => {
       const supabase = getSupabase();
@@ -111,6 +117,7 @@ export function useCreateSectionTask(projectId: string | null) {
           title: input.title,
           section_key: input.sectionKey,
           due_date: input.dueDate ?? null,
+          starts_on: input.startsOn ?? null,
           estimate_minutes: input.estimateMinutes ?? null,
           created_by: auth?.user?.id ?? null,
         })
