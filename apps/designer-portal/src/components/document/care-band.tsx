@@ -20,7 +20,7 @@
  * toast (D2), zero shadows (D4).
  */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   useCoordinationItems,
   useFfeInvoiceCoverage,
@@ -45,6 +45,13 @@ import {
 } from '@/lib/document/closure-derivation';
 import { StrataMark } from './strata-mark';
 import { DocumentAction } from './document-action';
+import { RegionHead, type RegionLedgerEntry } from './region/region-head';
+import { useRegionFold } from './region/use-region-fold';
+import { FoldSeam, focusRegionHeading } from './region/fold-seam';
+import { RegionRule } from './region/region-rule';
+
+const HEADING_ID = 'care-band-heading';
+const BODY_ID = 'care-band-body';
 
 type AnyRecord = any;
 
@@ -82,7 +89,6 @@ export function CareBand({ projectId }: { projectId: string }) {
     project?.current_phase === 'installation' ||
     project?.current_phase === 'final_walkthrough';
 
-  const [unfolded, setUnfolded] = useState(false);
   const [items, setItems] = useState<ClosureItem[]>(defaultClosureItems);
   const [headline, setHeadline] = useState('');
   const [description, setDescription] = useState('');
@@ -92,36 +98,6 @@ export function CareBand({ projectId }: { projectId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [closed, setClosed] = useState(false);
 
-  if (!project || project.status === 'completed') return null;
-  if (authLoading) return null;
-
-  const isProjectOwner =
-    typeof project.designer_id === 'string' && project.designer_id === user?.id;
-  if (!isProjectOwner) {
-    const ownerName =
-      typeof project.designer?.full_name === 'string' &&
-      project.designer.full_name.trim()
-        ? project.designer.full_name.trim()
-        : 'the project owner';
-
-    return (
-      <section
-        aria-label="Project closeout ownership"
-        className="mt-8 border-l-2 border-[var(--color-sage)] px-3.5 py-2.5"
-      >
-        <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
-          Project closeout · owner action
-        </p>
-        <p className="mt-1 text-[11.5px] leading-relaxed text-[var(--color-charcoal)]">
-          Only {ownerName} can close the book. The project stays available for
-          your coordination work until its owner completes closeout.
-        </p>
-      </section>
-    );
-  }
-
-  const seed = seedSnapshot(project);
-  const open = unfolded || nearClose;
   const operationalDataReady =
     phaseQuery.data !== undefined &&
     coordinationQuery.data !== undefined &&
@@ -192,6 +168,51 @@ export function CareBand({ projectId }: { projectId: string }) {
   const ready = closureReady(effectiveItems, operational);
   const done = effectiveItems.filter((i) => i.completed).length;
 
+  const fold = useRegionFold({
+    docId: projectId,
+    region: 'care',
+    defaultFolded: ready === undefined ? null : !nearClose,
+    forceOpen: nearClose,
+  });
+  const unfoldFocusRef = useRef(false);
+
+  useEffect(() => {
+    if (!fold.folded && unfoldFocusRef.current) {
+      unfoldFocusRef.current = false;
+      focusRegionHeading(HEADING_ID);
+    }
+  }, [fold.folded]);
+
+  if (!project || project.status === 'completed') return null;
+  if (authLoading) return null;
+
+  const isProjectOwner =
+    typeof project.designer_id === 'string' && project.designer_id === user?.id;
+  if (!isProjectOwner) {
+    const ownerName =
+      typeof project.designer?.full_name === 'string' &&
+      project.designer.full_name.trim()
+        ? project.designer.full_name.trim()
+        : 'the project owner';
+
+    return (
+      <section
+        aria-label="Project closeout ownership"
+        className="mt-8 border-l-2 border-[var(--color-sage)] px-3.5 py-2.5"
+      >
+        <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
+          Project closeout · owner action
+        </p>
+        <p className="mt-1 text-[11.5px] leading-relaxed text-[var(--color-charcoal)]">
+          Only {ownerName} can close the book. The project stays available for
+          your coordination work until its owner completes closeout.
+        </p>
+      </section>
+    );
+  }
+
+  const seed = seedSnapshot(project);
+
   // R51 — the quiet inline confirmation while the read models re-derive.
   if (closed) {
     return (
@@ -207,18 +228,22 @@ export function CareBand({ projectId }: { projectId: string }) {
   }
 
   // The folded quiet line — closure stays reachable without wearing a band.
-  if (!open) {
+  if (fold.folded) {
     return (
       <div className="mt-8">
-        <DocumentAction
-          actionKey="open-project-closure"
+        <RegionRule />
+        <FoldSeam
+          headingId={HEADING_ID}
+          bodyId={BODY_ID}
+          name="Closing the book"
+          summary={`${done} of ${items.length} closed out`}
+          onUnfold={() => {
+            unfoldFocusRef.current = true;
+            fold.setFolded(false);
+          }}
           surfaceKey="care"
           regionKey="closure-fold"
-          variant="secondary"
-          onClick={() => setUnfolded(true)}
-        >
-          Close the book…
-        </DocumentAction>
+        />
       </div>
     );
   }
@@ -247,46 +272,51 @@ export function CareBand({ projectId }: { projectId: string }) {
     );
   };
 
+  const headLedger: RegionLedgerEntry[] = [
+    {
+      key: 'close-project',
+      label: 'Close the book',
+      onClick: submit,
+      disabled: !ready || closeProject.isPending,
+      loading: closeProject.isPending,
+      loadingLabel: 'Closing…',
+    },
+  ];
+
   return (
     <div className="mt-8 rounded-[3px] bg-[rgba(229,221,208,0.5)] px-4 py-3.5">
+      <RegionRule />
       {/* The band head — R68.1: mark · mono label · reading · the solid act. */}
       <div className="flex items-center gap-4">
         <StrataMark size="lg" label="Closing the book" />
         <div className="min-w-0 flex-1">
-          <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-            Care · closing the book
-          </p>
-          <p className="mt-0.5 text-[14px] leading-snug text-[var(--color-charcoal)]">
-            {ready ? (
-              <>
-                <b>Everything is settled</b> — close the book when you&rsquo;re
-                ready
-              </>
-            ) : (
-              <>
-                <b>
-                  {done} of {items.length} closed out
-                </b>{' '}
-                · the checklist settles this project
-              </>
-            )}
-          </p>
+          <RegionHead
+            headingId={HEADING_ID}
+            name="Closing the book"
+            eyebrow="Care · closing the book"
+            status={
+              ready ? (
+                <>
+                  <b>Everything is settled</b> — close the book when
+                  you&rsquo;re ready
+                </>
+              ) : (
+                <>
+                  <b>
+                    {done} of {items.length} closed out
+                  </b>{' '}
+                  · the checklist settles this project
+                </>
+              )
+            }
+            surfaceKey="care"
+            regionKey="closure"
+            actions={headLedger}
+          />
         </div>
-        <DocumentAction
-          actionKey="close-project"
-          surfaceKey="care"
-          regionKey="closure"
-          variant="primary"
-          disabled={!ready || closeProject.isPending}
-          loading={closeProject.isPending}
-          loadingLabel="Closing…"
-          onClick={submit}
-          className="shrink-0"
-        >
-          Close the book
-        </DocumentAction>
       </div>
 
+      <div id={BODY_ID}>
       {/* The closure checklist — square ticks that fill sage (the Work
           block's stamp grammar, not a SaaS checkbox). */}
       {operational.blockers.length > 0 && (
@@ -433,12 +463,13 @@ export function CareBand({ projectId }: { projectId: string }) {
             surfaceKey="care"
             regionKey="closure"
             variant="tertiary"
-            onClick={() => setUnfolded(false)}
+            onClick={() => fold.setFolded(true)}
           >
             Not yet — fold it away
           </DocumentAction>
         </div>
       )}
+      </div>
     </div>
   );
 }

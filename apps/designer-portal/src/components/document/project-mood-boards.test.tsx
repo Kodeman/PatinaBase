@@ -135,6 +135,8 @@ describe('ProjectMoodBoards', () => {
     useProjectBoards.mockReturnValue({ data: [], isLoading: false, isError: false });
     render(<ProjectMoodBoards projectId="project-1" />);
 
+    // Boards are empty, so the region defaults folded shut — unfold the seam first.
+    fireEvent.click(screen.getByRole('button', { name: /mood boards/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Start a mood board' }));
     expect(screen.getByTestId('boards-builder')).toHaveTextContent('Boards for project-1');
   });

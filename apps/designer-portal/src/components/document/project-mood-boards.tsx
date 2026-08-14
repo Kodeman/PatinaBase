@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { BoardComposition } from '@patina/design-system';
@@ -20,7 +20,13 @@ import { moodBoardEvents } from '@/lib/analytics/mood-board-events';
 import { BoardCoverArt } from '@/components/mood-board/board-cover-art';
 import { GuidedEmptyState } from './guided-empty-state';
 import { BoardsBuilder } from '@/components/portal/scope-builder/boards-builder';
-import { DocumentAction } from './document-action';
+import { RegionHead, type RegionLedgerEntry } from './region/region-head';
+import { useRegionFold } from './region/use-region-fold';
+import { FoldSeam, focusRegionHeading } from './region/fold-seam';
+import { RegionRule } from './region/region-rule';
+
+const HEADING_ID = 'project-mood-boards';
+const BODY_ID = 'project-mood-boards-body';
 
 type LiveBoardWithLineage = ProposalBoardSummary & {
   source_project_board_id?: string | null;
@@ -164,11 +170,30 @@ export function ProjectMoodBoards({
     return result.slice(0, 3);
   }, [activeSelectionRows, attentionQuery.data, canCreate, liveBoards, pathname, readinessQuery.data]);
 
+  const boardsEmpty = liveBoards.length === 0 && frozenBoards.length === 0;
+  const { folded: boardsFolded, setFolded: setBoardsFolded } = useRegionFold({
+    docId: projectId,
+    region: 'boards',
+    defaultFolded: isLoading ? null : boardsEmpty,
+  });
+  const unfoldFocusRef = useRef(false);
+
   useEffect(() => {
-    const openCreator = () => { if (canCreate) setStartingBoard(true); };
+    if (!boardsFolded && unfoldFocusRef.current) {
+      unfoldFocusRef.current = false;
+      focusRegionHeading(HEADING_ID);
+    }
+  }, [boardsFolded]);
+
+  useEffect(() => {
+    const openCreator = () => {
+      if (!canCreate) return;
+      setBoardsFolded(false);
+      setStartingBoard(true);
+    };
     window.addEventListener('document:new-project-board', openCreator);
     return () => window.removeEventListener('document:new-project-board', openCreator);
-  }, [canCreate]);
+  }, [canCreate, setBoardsFolded]);
   if (isLoading) {
     return (
       <section aria-label="Mood boards" className="mt-9 border-t border-[var(--color-pearl)] pt-6">
@@ -191,22 +216,37 @@ export function ProjectMoodBoards({
     );
   }
 
-  if (liveBoards.length === 0 && frozenBoards.length === 0) {
+  const status = boardsEmpty
+    ? 'no boards yet'
+    : `${liveBoards.length} boards · ${frozenBoards.length} frozen`;
+
+  const ledger: RegionLedgerEntry[] = canCreate
+    ? [
+        {
+          key: 'new-project-board',
+          label: 'New board',
+          onClick: () => setStartingBoard(true),
+        },
+      ]
+    : [];
+
+  if (boardsFolded) {
     return (
-      <section aria-labelledby="project-mood-boards" className="mt-9 border-t border-[var(--color-pearl)] pt-6">
-        <h2 id="project-mood-boards" className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]">Mood boards</h2>
-        {startingBoard ? (
-          <div className="mt-3"><BoardsBuilder projectId={projectId} /></div>
-        ) : (
-          <GuidedEmptyState
-            className="mt-3"
-            title="Start the project’s visual direction"
-            description="Use a working mood board to collect references, compose the room, and keep the visual decisions close to the project."
-            inputs={['Room or purpose', 'References', 'A point of view']}
-            action={{ key: 'start-project-board', label: 'Start a mood board', onClick: () => setStartingBoard(true) }}
-          />
-        )}
-      </section>
+      <>
+        <RegionRule />
+        <FoldSeam
+          headingId={HEADING_ID}
+          bodyId={BODY_ID}
+          name="Mood boards"
+          summary={status}
+          onUnfold={() => {
+            unfoldFocusRef.current = true;
+            setBoardsFolded(false);
+          }}
+          surfaceKey="project"
+          regionKey="working-boards"
+        />
+      </>
     );
   }
 
@@ -242,27 +282,38 @@ export function ProjectMoodBoards({
   };
 
   return (
-    <section aria-labelledby="project-mood-boards" className="mt-9 border-t border-[var(--color-pearl)] pt-6">
-      <div className="flex items-baseline justify-between gap-4">
-        <div>
-          <h2 id="project-mood-boards" className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]">
-            Working boards
-          </h2>
-          <p className="mt-1 text-[11px] text-[var(--text-muted)]">
-            Compose references and project selections before publishing a review.
-          </p>
-        </div>
-        <span className="flex items-center gap-3">
-          <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
-            {liveBoards.length} live · {frozenBoards.length} frozen
-          </span>
-          {canCreate && (
-            <DocumentAction actionKey="new-project-board" surfaceKey="project" regionKey="working-boards" variant="primary" onClick={() => setStartingBoard(true)}>
-              New board
-            </DocumentAction>
-          )}
-        </span>
-      </div>
+    <section aria-labelledby={HEADING_ID} className="mt-9 border-t border-[var(--color-pearl)] pt-6">
+      <RegionRule />
+      <RegionHead
+        headingId={HEADING_ID}
+        name="Mood boards"
+        status={status}
+        surfaceKey="project"
+        regionKey="working-boards"
+        actions={ledger}
+        bodyId={BODY_ID}
+        onFold={() => setBoardsFolded(true)}
+      />
+      <div id={BODY_ID}>
+      {boardsEmpty ? (
+        startingBoard ? (
+          <div className="mt-3">
+            <BoardsBuilder projectId={projectId} />
+          </div>
+        ) : (
+          <GuidedEmptyState
+            className="mt-3"
+            title="Start the project’s visual direction"
+            description="Use a working mood board to collect references, compose the room, and keep the visual decisions close to the project."
+            inputs={['Room or purpose', 'References', 'A point of view']}
+            action={{ key: 'start-project-board', label: 'Start a mood board', onClick: () => setStartingBoard(true) }}
+          />
+        )
+      ) : (
+        <>
+      <p className="mt-1 text-[11px] text-[var(--text-muted)]">
+        Compose references and project selections before publishing a review.
+      </p>
 
       {continueItems.length > 0 && (
         <div aria-label="Continue project FF&E work" className="mt-4 border-y border-[var(--color-pearl)]">
@@ -416,6 +467,9 @@ export function ProjectMoodBoards({
           {error}
         </p>
       )}
+        </>
+      )}
+      </div>
     </section>
   );
 }
