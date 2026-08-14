@@ -66,12 +66,118 @@ describe('RecordOnPaperSheet', () => {
         signedName: 'Harper Vale',
         paperSignedOn: expect.any(String),
         scanDocumentId: null,
+        // The default entry: the agreement is already with the client, so the
+        // act records only — it does not issue anything (00477).
+        issueOnPaper: false,
       }),
     );
     expect(onRecorded).toHaveBeenCalled();
     expect(executeFurnishings).not.toHaveBeenCalled();
     expect(executeTradeScope).not.toHaveBeenCalled();
     expect(recordTradeAcceptance).not.toHaveBeenCalled();
+  });
+
+  // 00477 — the same sheet, entered from a draft that was never emailed. The
+  // act issues the agreement on paper and records the signature in one call.
+  it('issues on paper when the agreement was never sent, and says nothing is emailed', async () => {
+    render(
+      <RecordOnPaperSheet
+        kind="design-services"
+        proposalId="proposal-1"
+        clientName="Harper Vale"
+        neverSent
+        open
+        onClose={jest.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByText(/issues this agreement on paper.*nothing is emailed/i),
+    ).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Record signed' }));
+
+    await waitFor(() =>
+      expect(recordClientSignature).toHaveBeenCalledWith(
+        expect.objectContaining({
+          signedName: 'Harper Vale',
+          issueOnPaper: true,
+        }),
+      ),
+    );
+  });
+
+  // 00477's issue step refuses a stale act by naming the state it found, with
+  // the document's id in the sentence. A double submit from a stale render is
+  // exactly how a studio meets it, and a raw Postgres sentence with a UUID in
+  // it is not an answer.
+  it('states a state-race refusal in the document’s voice rather than as a raw server sentence', async () => {
+    recordClientSignature
+      .mockReset()
+      .mockRejectedValueOnce(
+        new Error(
+          'design services agreement 3f8c1d22-0000-4000-8000-000000000001 is not issuable on paper (client_signed)',
+        ),
+      );
+    render(
+      <RecordOnPaperSheet
+        kind="design-services"
+        proposalId="proposal-1"
+        clientName="Harper Vale"
+        neverSent
+        open
+        onClose={jest.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Record signed' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(
+      'This agreement is no longer in the studio’s hands — reopen it to see where it stands.',
+    );
+    expect(alert).not.toHaveTextContent('3f8c1d22');
+  });
+
+  it('leaves an unrecognized failure exactly as it arrived', async () => {
+    recordClientSignature
+      .mockReset()
+      .mockRejectedValueOnce(new Error('could not reach the database'));
+    render(
+      <RecordOnPaperSheet
+        kind="design-services"
+        proposalId="proposal-1"
+        clientName="Harper Vale"
+        open
+        onClose={jest.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Record signed' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'could not reach the database',
+    );
+  });
+
+  it('leaves the other three kinds untouched by neverSent', async () => {
+    render(
+      <RecordOnPaperSheet
+        kind="furnishings"
+        proposalId="proposal-1"
+        projectId="project-1"
+        neverSent
+        open
+        onClose={jest.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Signed by'), {
+      target: { value: 'Harper Vale' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Record & execute' }));
+
+    await waitFor(() => expect(executeFurnishings).toHaveBeenCalled());
+    expect(executeFurnishings.mock.calls[0][0].issueOnPaper).toBeUndefined();
   });
 
   it('uploads a selected scan before executing, and passes its id through as scanDocumentId', async () => {

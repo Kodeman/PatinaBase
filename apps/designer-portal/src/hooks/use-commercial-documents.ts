@@ -2191,6 +2191,11 @@ export interface RecordPaperClientSignatureInput {
   signedName: string;
   paperSignedOn: string;
   scanDocumentId?: string | null;
+  /** 00477: issue the agreement on paper first — draft → sent with no email
+   *  and no dispatch row — so an engagement that only ever existed on paper
+   *  can reach a recorded signature. Only valid while the document is still in
+   *  draft; the RPC refuses by name otherwise. */
+  issueOnPaper?: boolean;
 }
 
 export interface PaperRecordResult {
@@ -2200,8 +2205,10 @@ export interface PaperRecordResult {
 
 /**
  * "Record the signature" for a design services agreement / addendum —
- * `record_paper_client_signature` (sent → client_signed only; execution
- * remains the studio's separate, unchanged countersign act below).
+ * `record_paper_client_signature` (→ client_signed only; execution remains the
+ * studio's separate, unchanged countersign act below). With `issueOnPaper` the
+ * same call first issues a still-draft agreement on paper (00477): no email,
+ * no dispatch row, no client email address required.
  */
 export function useRecordPaperClientSignature(proposalId: string) {
   const queryClient = useQueryClient();
@@ -2218,6 +2225,7 @@ export function useRecordPaperClientSignature(proposalId: string) {
           p_signed_name: input.signedName.trim(),
           p_paper_signed_on: input.paperSignedOn,
           p_scan_document_id: input.scanDocumentId ?? null,
+          p_issue_on_paper: input.issueOnPaper ?? false,
         },
       );
       if (error) throw error;

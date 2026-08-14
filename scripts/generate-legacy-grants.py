@@ -33,22 +33,62 @@ DOLLAR_BODY = re.compile(r"\$([A-Za-z_]*)\$.*?\$\1\$", re.DOTALL)
 LINE_COMMENT = re.compile(r"--[^\n]*")
 BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
 STMT = re.compile(r"(?:GRANT|REVOKE)\s[^;]*;", re.DOTALL)
+DROP_FN = re.compile(
+    r"DROP\s+FUNCTION\s+(?:IF\s+EXISTS\s+)?([A-Za-z_.\"]+\s*\([^)]*\))", re.IGNORECASE
+)
+ON_FN = re.compile(r"ON\s+FUNCTION\s+([A-Za-z_.\"]+\s*\([^)]*\))", re.IGNORECASE)
+
+
+def signature(text: str) -> str:
+    """Normalize `public.f( uuid , TEXT )` to `public.f(uuid,text)`.
+
+    Deliberately literal: only a signature written the same way in both the
+    DROP and the GRANT/REVOKE compares equal. A near-miss keeps the statement,
+    which is the safe direction — a replayed statement for a live object is
+    correct, while dropping a live one would silently change an ACL.
+    """
+    name, _, args = text.partition("(")
+    args = args.rsplit(")", 1)[0]
+    parts = [" ".join(a.split()).lower() for a in args.split(",")] if args.strip() else []
+    return f"{' '.join(name.split()).lower()}({','.join(parts)})"
+
+
+def clean(raw: str) -> str:
+    # Strip function bodies first (GRANT text inside plpgsql must not replay),
+    # then comments (prose that merely mentions REVOKE).
+    return LINE_COMMENT.sub("", BLOCK_COMMENT.sub("", DOLLAR_BODY.sub("", raw)))
 
 
 def extract_statements() -> list[tuple[str, str]]:
+    paths = sorted(glob.glob(str(ROOT / "supabase" / "migrations" / "*.sql")))
+    cleaned = {path: clean(Path(path).read_text()) for path in paths}
+
+    # A GRANT/REVOKE for a function signature a LATER migration DROPs is dead:
+    # by the time this seed replays, the object it names no longer exists.
+    # Recording the last position each signature is dropped at lets those
+    # statements be omitted rather than emitted as guarded no-ops.
+    last_drop: dict[str, tuple[int, int]] = {}
+    for index, path in enumerate(paths):
+        for m in DROP_FN.finditer(cleaned[path]):
+            sig = signature(m.group(1))
+            here = (index, m.start())
+            if last_drop.get(sig, (-1, -1)) < here:
+                last_drop[sig] = here
+
     out: list[tuple[str, str]] = []
-    for path in sorted(glob.glob(str(ROOT / "supabase" / "migrations" / "*.sql"))):
-        raw = Path(path).read_text()
-        # Strip function bodies first (GRANT text inside plpgsql must not
-        # replay), then comments (prose that merely mentions REVOKE).
-        cleaned = DOLLAR_BODY.sub("", raw)
-        cleaned = BLOCK_COMMENT.sub("", cleaned)
-        cleaned = LINE_COMMENT.sub("", cleaned)
-        for m in STMT.finditer(cleaned):
+    for index, path in enumerate(paths):
+        for m in STMT.finditer(cleaned[path]):
             stmt = " ".join(m.group(0).split())
             # Only statements that start with the keyword survive (defensive).
-            if stmt.startswith(("GRANT ", "REVOKE ")):
-                out.append((Path(path).name, stmt))
+            if not stmt.startswith(("GRANT ", "REVOKE ")):
+                continue
+            target = ON_FN.search(stmt)
+            if target and last_drop.get(signature(target.group(1)), (-1, -1)) > (
+                index,
+                m.start(),
+            ):
+                continue
+            out.append((Path(path).name, stmt))
     return out
 
 
@@ -110,7 +150,9 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
   GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;
 
 -- ── Replay of every top-level GRANT/REVOKE across supabase/migrations/ ──────
--- Each statement is guarded: objects dropped by later migrations are skipped.
+-- Statements naming a function signature a later migration DROPs are omitted
+-- entirely — the object they address no longer exists by the time this runs.
+-- The rest are guarded, so an object dropped some other way is skipped too.
 """
     )
     for fname, stmt in stmts:

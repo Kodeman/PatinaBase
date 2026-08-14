@@ -121,6 +121,36 @@ export const RECORD_ON_PAPER_ACT_LABEL: Record<RecordOnPaperKind, string> = {
   'trade-acceptance': 'Record the acceptance',
 };
 
+/**
+ * The design-services body when the agreement never left the studio (00477).
+ *
+ * The default body describes recording a signature against a document already
+ * with the client. From draft the act does one more thing — it issues the
+ * agreement on paper — and one thing it must promise it will NOT do: send an
+ * email. A ceremony states what the act will actually perform, so both are
+ * said here rather than discovered afterwards.
+ */
+const DESIGN_SERVICES_ISSUE_ON_PAPER_BODY =
+  'Issues this agreement on paper and records the client’s printed signature in one act — nothing is emailed. Countersign it below once it’s recorded, the same as any other signature.';
+
+/**
+ * The state-race refusals, in the document's voice.
+ *
+ * 00477 and 00425 both refuse a stale act by naming the state they found, with
+ * the document's id in the sentence — the right thing for a log and the wrong
+ * thing for a ceremony. The server raise is untouched; this is only what the
+ * inline band shows, and only for that one family of refusals. Everything else
+ * still surfaces verbatim, because an unrecognized failure must not be
+ * paraphrased into something softer than it is.
+ */
+const STATE_RACE_REFUSAL = /is not (?:issuable|recordable) on paper/i;
+
+function refusalLine(message: string): string {
+  return STATE_RACE_REFUSAL.test(message)
+    ? 'This agreement is no longer in the studio’s hands — reopen it to see where it stands.'
+    : message;
+}
+
 /** All four paper acts can now carry a scan (00425 added trade-acceptance's
  *  own acceptance_scan_document_id alongside the three execution/signature
  *  RPCs' existing scan pointer) — kept as a lookup rather than folded away
@@ -137,6 +167,7 @@ export function RecordOnPaperSheet({
   proposalId,
   projectId = null,
   clientName = '',
+  neverSent = false,
   open,
   onClose,
   onRecorded,
@@ -147,6 +178,11 @@ export function RecordOnPaperSheet({
    *  invalidation is project-scoped. Unused (and unneeded) for design-services. */
   projectId?: string | null;
   clientName?: string;
+  /** design-services only (00477): the agreement is still in the studio's
+   *  hands and no email has been sent, so this act issues it on paper before
+   *  recording the signature. The server refuses by name if the document has
+   *  left draft in the meantime. */
+  neverSent?: boolean;
   open: boolean;
   onClose: () => void;
   onRecorded?: () => void;
@@ -207,6 +243,8 @@ export function RecordOnPaperSheet({
   }, [open, clientName]);
 
   const copy = KIND_COPY[kind];
+  const issuesOnPaper = kind === 'design-services' && neverSent;
+  const body = issuesOnPaper ? DESIGN_SERVICES_ISSUE_ON_PAPER_BODY : copy.body;
   const allowsScan = ALLOWS_SCAN[kind];
   const isPending =
     recordClientSignature.isPending ||
@@ -242,6 +280,7 @@ export function RecordOnPaperSheet({
             signedName: trimmedName,
             paperSignedOn,
             scanDocumentId,
+            issueOnPaper: issuesOnPaper,
           });
           break;
         case 'furnishings':
@@ -287,7 +326,7 @@ export function RecordOnPaperSheet({
       setStage('idle');
       setError(
         err instanceof Error
-          ? err.message
+          ? refusalLine(err.message)
           : 'Could not record this. Try again.',
       );
     }
@@ -306,7 +345,7 @@ export function RecordOnPaperSheet({
           {copy.heading}
         </h2>
         <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--color-mocha)]">
-          {copy.body}
+          {body}
         </p>
 
         <div className="mt-7 space-y-5">

@@ -518,12 +518,15 @@ INSERT INTO fingerprint_column_contract VALUES
    -- payload: document_kind and commercial_state are set by the authoring and
    -- signature RPCs, and superseded_*/replacement_proposal_id record the
    -- cut-over of an edition. A copy re-derives all five, so the review
-   -- fingerprint must not carry them.
+   -- fingerprint must not carry them. 00477's two issuance stamps are the same
+   -- kind of thing — they say HOW this edition reached 'sent', which a copy
+   -- has not done yet — and keeping them out is also what lets already-signed
+   -- documents keep their evidence hash across the migration.
    ARRAY['project_id','status','sent_at','viewed_at','accepted_at','declined_at',
          'decline_reason','updated_at','client_feedback','signed_at','signed_by_name',
          'signed_ip','last_nudged_at','nudge_count','proposal_send_dispatch_id',
          'document_kind','commercial_state','superseded_at','superseded_reason',
-         'replacement_proposal_id']),
+         'replacement_proposal_id','issued_on_paper','paper_issued_by']),
   ('proposal_sections', 'section',
    ARRAY['id','proposal_id','type','title','body','metadata','sort_order'],
    ARRAY['created_at','updated_at']),
