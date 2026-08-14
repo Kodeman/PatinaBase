@@ -80,6 +80,21 @@ export function ClientPicker({
   const [inviteError, setInviteError] = React.useState<{ id: string; message: string } | null>(
     null,
   );
+  // J2 — selecting an invitable row only ARMS it; sending the invite (a real
+  // outbound email to the household) requires a separate explicit act via
+  // the confirm block below. Already-linked rows are unaffected — see the
+  // `linkable` branch in onSelect, which still selects immediately.
+  const [armedInviteId, setArmedInviteId] = React.useState<string | null>(null);
+
+  // Arming is a transient UI state, not a commitment — drop it whenever the
+  // popover closes or the search narrows the list, so a stale confirm block
+  // never lingers on a row the user has moved away from.
+  React.useEffect(() => {
+    if (!open) setArmedInviteId(null);
+  }, [open]);
+  React.useEffect(() => {
+    setArmedInviteId(null);
+  }, [search]);
 
   const { data: queriedClients, isLoading } = useClients();
   const clients = clientOptions ?? queriedClients;
@@ -290,7 +305,9 @@ export function ClientPicker({
                             setSearch('');
                             setOpen(false);
                           } else if (invitable) {
-                            void handleInviteAndLink(dc);
+                            // J2: selecting arms the row — it does not send.
+                            // Sending is the confirm block's explicit act.
+                            setArmedInviteId(dc.id);
                           }
                         }}
                         className={cn(
@@ -331,12 +348,15 @@ export function ClientPicker({
                               'Inviting…'
                             ) : invitable ? (
                               // The tag reads "No Patina account" at rest and
-                              // becomes the act — "Invite & link" — when the row
-                              // is hovered/highlighted (cmdk sets aria-selected).
+                              // becomes "Select to invite" when the row is
+                              // hovered/highlighted (cmdk sets aria-selected)
+                              // — selecting only arms the row (see onSelect
+                              // above); it never sends by itself, so the copy
+                              // must not read as an immediate action.
                               <>
                                 <span className="group-aria-selected:hidden">No Patina account</span>
                                 <span className="hidden text-[var(--accent-primary)] group-aria-selected:inline">
-                                  Invite &amp; link
+                                  Select to invite
                                 </span>
                               </>
                             ) : (
@@ -345,6 +365,47 @@ export function ClientPicker({
                           </span>
                         )}
                       </CommandPrimitive.Item>
+                      {/* J2 — arm-then-confirm: selecting an invitable row
+                          only got us here. Sending the invite is a separate,
+                          explicit consent affordance — the row's own act
+                          never fires the outbound email. */}
+                      {armedInviteId === dc.id && (
+                        <div
+                          data-testid={`client-picker-invite-confirm-${dc.id}`}
+                          className="px-2 pb-1.5 pt-0.5 text-[0.7rem] leading-snug text-[var(--text-muted)]"
+                        >
+                          <p className="mb-1.5">
+                            {dc.client_email} has no Patina account yet. Sending
+                            an invite emails them a signup link and links this
+                            record once they accept.
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              data-testid={`client-picker-invite-send-${dc.id}`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setArmedInviteId(null);
+                                void handleInviteAndLink(dc);
+                              }}
+                              className="rounded-sm bg-[var(--accent-primary)] px-2 py-1 text-[0.7rem] font-medium text-white"
+                            >
+                              Send invite
+                            </button>
+                            <button
+                              type="button"
+                              data-testid={`client-picker-invite-cancel-${dc.id}`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setArmedInviteId(null);
+                              }}
+                              className="rounded-sm px-2 py-1 text-[0.7rem] text-[var(--text-muted)] hover:bg-[var(--bg-hover)]"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
                       {/* Login-required flow: explain why a no-email row is
                           stuck rather than leaving it a mystery greyed-out
                           row. */}
