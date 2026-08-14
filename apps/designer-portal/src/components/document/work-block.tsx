@@ -8,7 +8,7 @@
  * kanban, assignees, priority flags.
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   gateState,
   useCreateSectionTask,
@@ -17,7 +17,7 @@ import {
   useSectionTasks,
 } from '@/hooks/use-section-work';
 import type { SectionKey } from '@/lib/document/desk-derivation';
-import { fmtDay } from '@/lib/document/format';
+import { fmtDay, todayYmd } from '@/lib/document/format';
 import { useToggleSectionTask } from '@/hooks/use-section-work';
 import { Stamp } from './stamp';
 import {
@@ -26,6 +26,8 @@ import {
 } from './document-action';
 import { GuidedEmptyState } from './guided-empty-state';
 import { SectionLoadingLine } from './section-loading-line';
+import { FolioPopover, FolioCalendar, type FolioSelection } from './date';
+import { ScheduleThreadPanel } from './schedule-thread-panel';
 
 // The gate's Golden-Hour stamp (HTML §1 .stamp.st-gh) — a gate IS a decision,
 // and the section's closing line wears the stamp the client will grant.
@@ -38,12 +40,36 @@ const GATE_STAMP = {
 const GATE_ROW =
   'flex items-center gap-2.5 border-t border-[rgba(207,174,52,0.35)] bg-[rgba(232,197,71,0.06)] px-3 py-2';
 
-const todayYmd = () => new Date().toISOString().slice(0, 10);
-
 const fmtHours = (minutes: number) => {
   const h = minutes / 60;
   return Number.isInteger(h) ? `${h}h` : `${h.toFixed(1)}h`;
 };
+
+/** The capture chip's compact span label: "Aug 25 – 28" when both ends share
+ *  a month, "Jul 30 – Aug 3" (both months spelled out) when they don't. */
+function chipSpanLabel(start: string, end: string) {
+  const startLabel = fmtDay(start);
+  const endLabel = fmtDay(end);
+  const startMonth = startLabel.split(' ')[0];
+  const endMonth = endLabel.split(' ')[0];
+  return startMonth === endMonth ? `${startLabel} – ${endLabel.split(' ')[1]}` : `${startLabel} – ${endLabel}`;
+}
+
+/**
+ * The single choke point every `setWhen` call routes a fresh commit through
+ * (the calendar's own onCommit, the Thread's onSet): a span whose start and
+ * end land on the same day is really a day pick, not a one-day-wide window —
+ * clicking the same grid cell twice in span mode, or a Thread placement with
+ * lasts=1, both produce {kind:'span', start===end} otherwise. Collapsing it
+ * HERE, before it ever reaches `when` state, means every consumer of `when`
+ * (the chip label, save()'s dueDate/startsOn split) sees the day shape and
+ * never has to re-check the same-day case itself.
+ */
+function normalizeWhen(selection: FolioSelection): FolioSelection {
+  return selection.kind === 'span' && selection.start === selection.end
+    ? { kind: 'day', date: selection.start }
+    : selection;
+}
 
 export function WorkBlock({
   projectId,
@@ -70,8 +96,11 @@ export function WorkBlock({
 
   const [capturing, setCapturing] = useState(false);
   const [title, setTitle] = useState('');
-  const [due, setDue] = useState('');
+  const [when, setWhen] = useState<FolioSelection | null>(null);
   const [estimateH, setEstimateH] = useState('');
+  const [folioOpen, setFolioOpen] = useState(false);
+  const [folioMode, setFolioMode] = useState<'calendar' | 'thread'>('calendar');
+  const dateChipRef = useRef<HTMLButtonElement>(null);
 
   const sectionTasks = useMemo(
     () => (tasks ?? []).filter((t) => t.section_key === sectionKey),
@@ -93,17 +122,34 @@ export function WorkBlock({
     const trimmed = title.trim();
     if (!trimmed) return;
     const estMin = estimateH ? Math.round(parseFloat(estimateH) * 60) : null;
+    // due_date stays the ONE "when it's needed" source (overdue logic, Desk
+    // derivation) whichever shape the Folio commits: a day sets it alone, a
+    // span sets it to the window's END and starts_on to the window's START.
+    const dates =
+      when == null
+        ? { dueDate: null, startsOn: null }
+        : when.kind === 'day'
+          ? { dueDate: when.date, startsOn: null }
+          : { dueDate: when.end, startsOn: when.start };
     createTask.mutate({
       title: trimmed,
       sectionKey,
-      dueDate: due || null,
+      dueDate: dates.dueDate,
+      startsOn: dates.startsOn,
       estimateMinutes: estMin && estMin > 0 ? estMin : null,
     });
     setTitle('');
-    setDue('');
+    setWhen(null);
     setEstimateH('');
     setCapturing(false);
+    setFolioOpen(false);
+    setFolioMode('calendar');
   };
+
+  // "Aug 20" for a day, "Aug 25 – 28" for a span — the chip's own footprint,
+  // never the Folio's fuller weekday readout (that lives inside the panel).
+  const whenLabel =
+    when == null ? null : when.kind === 'day' ? fmtDay(when.date) : chipSpanLabel(when.start, when.end);
 
   if (tasksQuery.isLoading || gatesQuery.isLoading) {
     return <SectionLoadingLine label="Reading the work" className="mb-1 mt-4" />;
@@ -199,9 +245,11 @@ export function WorkBlock({
                     ? t.completed_at
                       ? `done · ${fmtDay(t.completed_at)}`
                       : 'done'
-                    : t.due_date
-                      ? `due ${fmtDay(t.due_date)}`
-                      : ''}
+                    : t.starts_on && t.due_date
+                      ? `due ${fmtDay(t.starts_on)} – ${fmtDay(t.due_date)}`
+                      : t.due_date
+                        ? `due ${fmtDay(t.due_date)}`
+                        : ''}
                   {!done && t.estimate_minutes
                     ? ` · ${fmtHours(t.estimate_minutes)}`
                     : ''}
@@ -235,13 +283,73 @@ export function WorkBlock({
             placeholder="What needs doing"
             className="min-w-0 flex-1 bg-transparent text-[12px] text-[var(--color-charcoal)] outline-none placeholder:italic placeholder:text-[var(--text-muted)]"
           />
-          <input
-            type="date"
-            value={due}
-            onChange={(e) => setDue(e.target.value)}
-            aria-label="Due date"
-            className="bg-transparent font-mono text-[9.5px] text-[var(--text-muted)] outline-none"
-          />
+          <span className="relative inline-block shrink-0">
+            <button
+              type="button"
+              ref={dateChipRef}
+              onClick={() => {
+                setFolioMode('calendar');
+                setFolioOpen((open) => !open);
+              }}
+              aria-haspopup="dialog"
+              aria-expanded={folioOpen}
+              aria-label="Due date"
+              className={`whitespace-nowrap bg-transparent font-mono text-[9.5px] outline-none ${
+                whenLabel ? 'text-[var(--text-muted)]' : 'italic text-[var(--text-muted)]'
+              }`}
+            >
+              {whenLabel ?? 'date'}
+            </button>
+
+            {folioOpen && (
+              // Contains its own Enter presses (day picks, the SET button)
+              // so they never bubble to the row's onKeyDown and submit the
+              // task mid-pick — Escape is unaffected, FolioPopover already
+              // eats that at the document capture phase before it gets here.
+              <span onKeyDown={(e) => e.key === 'Enter' && e.stopPropagation()}>
+                <FolioPopover
+                  aria-label="Set date"
+                  align="end"
+                  onClose={() => setFolioOpen(false)}
+                  returnFocusRef={dateChipRef}
+                >
+                  {folioMode === 'calendar' ? (
+                    <FolioCalendar
+                      value={when}
+                      today={todayYmd()}
+                      modes={['day', 'span']}
+                      onCommit={(selection) => {
+                        setWhen(normalizeWhen(selection));
+                        setFolioOpen(false);
+                      }}
+                      footerExtra={
+                        <button
+                          type="button"
+                          onClick={() => setFolioMode('thread')}
+                          className="mt-1 block font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--color-clay)] underline decoration-dotted underline-offset-2 hover:text-[var(--color-aged-oak)]"
+                        >
+                          Place it in the schedule
+                        </button>
+                      }
+                    />
+                  ) : (
+                    <ScheduleThreadPanel
+                      projectId={projectId}
+                      today={todayYmd()}
+                      onSet={(placement) => {
+                        setWhen(
+                          normalizeWhen({ kind: 'span', start: placement.startsOn, end: placement.dueDate }),
+                        );
+                        setFolioOpen(false);
+                        setFolioMode('calendar');
+                      }}
+                      onBack={() => setFolioMode('calendar')}
+                    />
+                  )}
+                </FolioPopover>
+              </span>
+            )}
+          </span>
           <input
             value={estimateH}
             onChange={(e) =>
