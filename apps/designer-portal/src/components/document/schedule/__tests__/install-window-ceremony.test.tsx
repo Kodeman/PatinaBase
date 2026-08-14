@@ -67,45 +67,36 @@ jest.mock('@patina/supabase', () => ({
   useReleaseInstallWindow: () => mutation(release),
 }));
 
-// The Folio-backed trigger is proven in its own suite (date-text-input.test.tsx);
-// here we only need a controlled stand-in so the ceremony's own plumbing
-// (value in, onChange out, and the validity the real trigger always reports)
-// can be exercised directly.
-jest.mock('../../date-text-input', () => {
-  const { useEffect } = jest.requireActual('react');
-  return {
-    DateTextInput: ({
-      value,
-      onChange,
-      ariaLabel,
-      onValidityChange,
-    }: {
-      value: string | null;
-      onChange: (value: string | null) => void;
-      ariaLabel?: string;
-      onValidityChange?: (valid: boolean) => void;
-    }) => {
-      useEffect(() => {
-        onValidityChange?.(true);
-      }, [onValidityChange]);
-      return (
-        <input
-          type="text"
-          aria-label={ariaLabel}
-          value={value ?? ''}
-          onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
-            // The real trigger reports validity synchronously from the commit
-            // itself (a Folio SET can never be invalid), not only from its
-            // mount effect — mirror that here so a value change occurring
-            // after a parent's own reset-on-open effect still lands as valid.
-            onValidityChange?.(true);
-            onChange(event.target.value || null);
-          }}
-        />
-      );
-    },
-  };
-});
+// The Folio is a frozen, independently-tested instrument (lane A2) — this
+// suite is not the place to re-verify its own click choreography. What
+// matters HERE is that the ceremony trusts the shape SET hands back rather
+// than re-validating it: the mock's "Mock folio set" button hands back
+// exactly `mockFolioSpan`, whatever it is, so a span the type system already
+// guarantees ordered (`FolioSelection` — start<=end) reaches `hold` verbatim.
+type MockSpan = { start: string; end: string };
+let mockFolioSpan: MockSpan = { start: '2026-06-01', end: '2026-06-05' };
+
+jest.mock('@/components/document/date', () => ({
+  __esModule: true,
+  FolioPopover: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  FolioCalendar: ({
+    onCommit,
+  }: {
+    onCommit: (selection: { kind: 'span'; start: string; end: string }) => void;
+  }) => (
+    <button
+      type="button"
+      onClick={() =>
+        onCommit({ kind: 'span', start: mockFolioSpan.start, end: mockFolioSpan.end })
+      }
+    >
+      Mock folio set
+    </button>
+  ),
+  folioReadout: (
+    draft: { mode: 'span'; anchor: string | null; end: string | null },
+  ) => ` ${draft.anchor} — ${draft.end}`,
+}));
 
 import {
   InstallWindowCeremony,
@@ -173,11 +164,12 @@ describe('InstallWindowCeremony', () => {
     windowError = false;
     scheduleLoading = false;
     scheduleError = false;
+    mockFolioSpan = { start: '2026-06-01', end: '2026-06-05' };
   });
 
   // ── HOLD ─────────────────────────────────────────────────────────────────
 
-  it('holds a window from a date range, and states that a hold moves nothing', async () => {
+  it('holds a window built from the Folio span, and states that a hold moves nothing', async () => {
     render(<InstallWindowCeremony projectId="project-1" />);
     expect(screen.getByText('No window is held.')).toBeInTheDocument();
 
@@ -188,13 +180,18 @@ describe('InstallWindowCeremony', () => {
     ).toBeInTheDocument();
     expect(face.getByText(/Holding moves nothing/)).toBeInTheDocument();
 
-    fireEvent.change(face.getByLabelText('The window opens'), {
-      target: { value: '2026-06-01' },
-    });
-    fireEvent.change(face.getByLabelText('The window closes'), {
-      target: { value: '2026-06-05' },
-    });
-    fireEvent.click(face.getByRole('button', { name: 'Hold the window' }));
+    // Nothing to hold yet: the trigger reads the unset invitation and SET is
+    // disabled until the Folio hands back a span.
+    expect(
+      face.getByRole('button', { name: 'Choose the window' }),
+    ).toBeInTheDocument();
+    expect(submitButton('Hold the window')).toBeDisabled();
+
+    fireEvent.click(face.getByRole('button', { name: 'Choose the window' }));
+    fireEvent.click(face.getByRole('button', { name: 'Mock folio set' }));
+
+    expect(submitButton('Hold the window')).toBeEnabled();
+    fireEvent.click(submitButton('Hold the window'));
 
     await waitFor(() =>
       expect(hold).toHaveBeenCalledWith({
@@ -205,6 +202,49 @@ describe('InstallWindowCeremony', () => {
     );
     expect(confirm).not.toHaveBeenCalled();
     expect(release).not.toHaveBeenCalled();
+  });
+
+  it('passes the Folio span through verbatim — no reordering logic left to trust', async () => {
+    // Structurally valid (start<=end, the one thing FolioSelection {kind:
+    // 'span'} guarantees) but NOT the "tidy" range other tests use — a
+    // single-day span the component must not clamp, reorder, or reject.
+    mockFolioSpan = { start: '2026-09-07', end: '2026-09-07' };
+    render(<InstallWindowCeremony projectId="project-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hold a window' }));
+    const face = sheet();
+    fireEvent.click(face.getByRole('button', { name: 'Choose the window' }));
+    fireEvent.click(face.getByRole('button', { name: 'Mock folio set' }));
+    fireEvent.click(submitButton('Hold the window'));
+
+    await waitFor(() =>
+      expect(hold).toHaveBeenCalledWith({
+        projectId: 'project-1',
+        startsOn: '2026-09-07',
+        endsOn: '2026-09-07',
+      }),
+    );
+  });
+
+  it('reset-on-open clears a stale span the next time the sheet is opened', async () => {
+    render(<InstallWindowCeremony projectId="project-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hold a window' }));
+    let face = sheet();
+    fireEvent.click(face.getByRole('button', { name: 'Choose the window' }));
+    fireEvent.click(face.getByRole('button', { name: 'Mock folio set' }));
+    expect(submitButton('Hold the window')).toBeEnabled();
+
+    fireEvent.click(face.getByRole('button', { name: 'Cancel' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hold a window' }));
+    face = sheet();
+    expect(
+      face.getByRole('button', { name: 'Choose the window' }),
+    ).toBeInTheDocument();
+    expect(submitButton('Hold the window')).toBeDisabled();
+
+    expect(hold).not.toHaveBeenCalled();
   });
 
   // ── CONFIRM ──────────────────────────────────────────────────────────────

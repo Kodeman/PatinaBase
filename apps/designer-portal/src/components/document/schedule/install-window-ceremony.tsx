@@ -22,7 +22,7 @@
  * confirmed, released. No counterparty is ever named.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   mapMilestoneRowToScheduleInput,
   mapPhaseRowToScheduleInput,
@@ -44,7 +44,12 @@ import {
   IMPACT_UNCOMPUTABLE_LINE,
   type ScheduleImpact,
 } from "@/lib/document/schedule-impact";
-import { DateTextInput } from "../date-text-input";
+import {
+  FolioCalendar,
+  FolioPopover,
+  folioReadout,
+  type FolioSelection,
+} from "@/components/document/date";
 import { DocSheet } from "../overlays/doc-sheet";
 import { DocumentAction, DocumentActionGroup } from "../document-action";
 import { ScheduleImpactBlock } from "../commercial/schedule-impact-block";
@@ -223,19 +228,24 @@ function InstallWindowSheet({
   const confirm = useConfirmInstallWindow();
   const release = useReleaseInstallWindow();
 
-  const [startsOn, setStartsOn] = useState("");
-  const [endsOn, setEndsOn] = useState("");
-  const [startValid, setStartValid] = useState(false);
-  const [endValid, setEndValid] = useState(false);
+  // The window the HOLD face is building. The Folio's span selection makes
+  // end>=start structural (FolioSelection {kind:'span'} guarantees it), so
+  // there is nothing left for this state to validate — only to hold.
+  const [span, setSpan] = useState<{ start: string; end: string } | null>(null);
+  const [folioOpen, setFolioOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const folioTriggerRef = useRef<HTMLButtonElement>(null);
+  // A caption `<span>`, not a `<label>`: wrapping the trigger in a `<label>`
+  // would make the accessible-name algorithm prefer the label's OWN text and
+  // discard the button's — the one place the current span actually gets
+  // read back. `aria-describedby` adds the caption without that trade.
+  const folioCaptionId = useId();
 
   useEffect(() => {
     if (!open) return;
-    setStartsOn("");
-    setEndsOn("");
-    setStartValid(false);
-    setEndValid(false);
+    setSpan(null);
+    setFolioOpen(false);
     setReason("");
     setError(null);
   }, [open]);
@@ -322,19 +332,30 @@ function InstallWindowSheet({
   }, [face, installWindow, inputs, today, scheduleUnsettled]);
 
   const busy = hold.isPending || confirm.isPending || release.isPending;
-  const datesReady =
-    startValid && endValid && startsOn !== "" && endsOn !== "" && endsOn >= startsOn;
+  const datesReady = span !== null;
+
+  // The trigger line's set-state reading — the same sentence the Folio's own
+  // footer would print, minus the label (this line carries no "THE WINDOW"
+  // prefix of its own). No date math lives here: the derivation is the one
+  // place that owns it.
+  const spanReadout = span
+    ? folioReadout(
+        { mode: "span", anchor: span.start, end: span.end },
+        null,
+        { day: "", span: "" },
+      ).trim()
+    : null;
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
     try {
       if (face === "hold") {
-        if (!datesReady) {
-          setError("Enter a start and an end, with the end on or after the start.");
+        if (!span) {
+          setError("Choose the window before holding it.");
           return;
         }
-        await hold.mutateAsync({ projectId, startsOn, endsOn });
+        await hold.mutateAsync({ projectId, startsOn: span.start, endsOn: span.end });
       } else if (face === "confirm" && installWindow) {
         await confirm.mutateAsync({
           windowId: installWindow.id,
@@ -398,25 +419,50 @@ function InstallWindowSheet({
               }
             />
             {face === "hold" && (
-              <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="The window opens">
-                  <DateTextInput
-                    value={startsOn}
-                    onChange={(value) => setStartsOn(value ?? "")}
-                    ariaLabel="The window opens"
-                    onValidityChange={setStartValid}
-                    className="w-full border-b border-[var(--color-pearl)] bg-transparent pb-1.5 font-mono text-[12px] text-[var(--color-charcoal)] placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)] focus:outline-none"
-                  />
-                </Field>
-                <Field label="The window closes">
-                  <DateTextInput
-                    value={endsOn}
-                    onChange={(value) => setEndsOn(value ?? "")}
-                    ariaLabel="The window closes"
-                    onValidityChange={setEndValid}
-                    className="w-full border-b border-[var(--color-pearl)] bg-transparent pb-1.5 font-mono text-[12px] text-[var(--color-charcoal)] placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)] focus:outline-none"
-                  />
-                </Field>
+              <div className="relative mt-3">
+                <span
+                  id={folioCaptionId}
+                  className="mb-1.5 block font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--text-muted)]"
+                >
+                  The window
+                </span>
+                <button
+                  type="button"
+                  ref={folioTriggerRef}
+                  onClick={() => setFolioOpen((was) => !was)}
+                  aria-haspopup="true"
+                  aria-expanded={folioOpen}
+                  aria-describedby={folioCaptionId}
+                  className="block min-h-11 w-full border-b border-[var(--color-pearl)] bg-transparent pb-1.5 text-left font-mono text-[12px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
+                >
+                  {span ? (
+                    spanReadout
+                  ) : (
+                    <span className="italic text-[var(--text-faint)]">
+                      Choose the window
+                    </span>
+                  )}
+                </button>
+                {folioOpen && (
+                  <FolioPopover
+                    onClose={() => setFolioOpen(false)}
+                    aria-label="Install window"
+                    returnFocusRef={folioTriggerRef}
+                  >
+                    <FolioCalendar
+                      value={span ? { kind: "span", start: span.start, end: span.end } : null}
+                      today={today}
+                      modes={["span"]}
+                      readoutLabels={{ day: "DUE", span: "THE WINDOW" }}
+                      onCommit={(selection: FolioSelection) => {
+                        if (selection.kind === "span") {
+                          setSpan({ start: selection.start, end: selection.end });
+                        }
+                        setFolioOpen(false);
+                      }}
+                    />
+                  </FolioPopover>
+                )}
               </div>
             )}
           </GatePartBlock>
