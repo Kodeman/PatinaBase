@@ -131,6 +131,41 @@ describe('MilestoneComposer — timing presets (D3)', () => {
     expect(onSubmit).not.toHaveBeenCalled();
     expect(screen.getByText('pick a date')).toBeInTheDocument();
   });
+
+  it('switching from "Before end" back to "At phase end" submits with no offsetDays key', () => {
+    const { onSubmit } = renderComposer();
+    nameTheMilestone();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Before end' }));
+    fireEvent.click(screen.getByRole('button', { name: 'More days before end' }));
+    fireEvent.click(screen.getByRole('button', { name: 'More days before end' }));
+    expect(screen.getByText('5 days before end')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'At phase end' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add milestone' }));
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    const draft = onSubmit.mock.calls[0][0];
+    expect(draft).toEqual({ name: 'Fabric order', kind: 'event' });
+    expect('offsetDays' in draft).toBe(false);
+  });
+
+  it('switching from "Pick a date" back to "At phase end" submits with no anchorDate key', () => {
+    const { onSubmit } = renderComposer();
+    nameTheMilestone();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pick a date' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Milestone date' }));
+    fireEvent.click(screen.getByText('commit-picked-date'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'At phase end' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add milestone' }));
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    const draft = onSubmit.mock.calls[0][0];
+    expect(draft).toEqual({ name: 'Fabric order', kind: 'event' });
+    expect('anchorDate' in draft).toBe(false);
+  });
 });
 
 describe('MilestoneComposer — write-error and name-required guards', () => {

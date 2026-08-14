@@ -104,7 +104,11 @@ function SaveDot({ state, errorMsg }: { state: SaveState; errorMsg: string | nul
  *  mono text treatment the blur-save fields wear. An `open` guard (not a
  *  `focused` ref) keeps a server echo from clobbering the trigger's label
  *  while the popover is up — the popover, not focus, is what must not be
- *  interrupted. */
+ *  interrupted. An echo that lands while open is remembered (`pendingEcho`,
+ *  not applied to `value`) rather than dropped: a close that ISN'T a fresh
+ *  commit (Esc, outside click) flushes it so the display never gets stuck
+ *  showing what the popover opened with. `commit`/`clear` both discard any
+ *  pending echo — the locally authored value wins over a now-stale one. */
 function VitalDate({
   projectId,
   column,
@@ -119,25 +123,41 @@ function VitalDate({
   const [value, setValue] = useState(serverValue ?? '');
   const [open, setOpen] = useState(false);
   const lastServer = useRef(serverValue ?? '');
+  const pendingEcho = useRef<string | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const { save, state, errorMsg } = useVitalSave(projectId);
 
   useEffect(() => {
     const incoming = serverValue ?? '';
-    if (incoming !== lastServer.current) {
-      lastServer.current = incoming;
-      if (!open) setValue(incoming);
+    if (incoming === lastServer.current) return;
+    lastServer.current = incoming;
+    if (open) {
+      pendingEcho.current = incoming;
+    } else {
+      setValue(incoming);
+      pendingEcho.current = null;
     }
   }, [serverValue, open]);
+
+  // Flush a pending echo the instant the popover closes without a commit —
+  // `commit`/`clear` already clear `pendingEcho` before this can fire, so a
+  // fresh local write is never clobbered by a stale one.
+  useEffect(() => {
+    if (open || pendingEcho.current == null) return;
+    setValue(pendingEcho.current);
+    pendingEcho.current = null;
+  }, [open]);
 
   const commit = (selection: FolioSelection) => {
     if (selection.kind !== 'day') return;
     setOpen(false);
+    pendingEcho.current = null;
     setValue(selection.date);
     if (selection.date !== (serverValue ?? '')) void save({ [column]: selection.date });
   };
 
   const clear = () => {
+    pendingEcho.current = null;
     setValue('');
     if ((serverValue ?? '') !== '') void save({ [column]: null });
   };

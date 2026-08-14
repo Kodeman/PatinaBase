@@ -25,8 +25,20 @@ jest.mock('@/hooks/use-project-lifecycle', () => ({
 // correctly, not the Folio's own grid/preset behavior (covered by the
 // date/__tests__ suites).
 jest.mock('@/components/document/date', () => ({
-  FolioPopover: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="folio-popover">{children}</div>
+  FolioPopover: ({
+    children,
+    onClose,
+  }: {
+    children: React.ReactNode;
+    onClose: () => void;
+  }) => (
+    <div data-testid="folio-popover">
+      {children}
+      {/* Stands in for Esc/outside-click — a dismissal, not a commit. */}
+      <button type="button" onClick={onClose}>
+        close-popover
+      </button>
+    </div>
   ),
   FolioCalendar: ({
     onCommit,
@@ -157,5 +169,24 @@ describe('LetterheadVitals date vitals — the Calendar Folio (D5)', () => {
     rerender(<LetterheadVitals projectId="project-1" />);
 
     expect(screen.getByLabelText('Start')).toHaveTextContent('—');
+  });
+
+  it('flushes a pending echo once the popover closes without a pick', () => {
+    mockProject = { ...baseProject, start_date: null };
+    const { rerender } = render(<LetterheadVitals projectId="project-1" />);
+
+    fireEvent.click(screen.getByLabelText('Start'));
+
+    // An echo lands while the popover is up — must not clobber it live.
+    mockProject = { ...baseProject, start_date: '2026-05-01' };
+    rerender(<LetterheadVitals projectId="project-1" />);
+    expect(screen.getByLabelText('Start')).toHaveTextContent('—');
+
+    // Dismiss (Esc/outside-click stand-in) WITHOUT picking a date.
+    fireEvent.click(screen.getByText('close-popover'));
+
+    // The display must now show what the server actually has — not stay
+    // stuck at the value the popover opened with.
+    expect(screen.getByLabelText('Start')).toHaveTextContent('May 1');
   });
 });
