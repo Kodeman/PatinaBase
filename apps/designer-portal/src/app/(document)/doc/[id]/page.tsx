@@ -48,7 +48,7 @@ import {
   type SectionLineage,
   type SectionScheduleFacts,
 } from '@/lib/document/section-derivation';
-import type { DocumentStateRow, SectionKey } from '@/lib/document/desk-derivation';
+import { deriveNeeds, type DocumentStateRow, type SectionKey } from '@/lib/document/desk-derivation';
 import { sectionAnchorId } from '@/lib/document/section-anchor';
 import { fmtDay, fmtMonthYear, fmtUsd } from '@/lib/document/format';
 import { documentResolutionState } from '@/lib/document/document-resolution-state';
@@ -99,6 +99,8 @@ import { authorizationDoorwayFor } from '@/lib/document/authorization-doorway';
 import {
   asLegacyProposalLifecycle,
   deriveDocumentGuide,
+  needGuideAction,
+  type DocumentGuideAction,
   type ProposalGuideFacts,
 } from '@/lib/document/document-guide';
 import { composeDocumentGuideInputs } from '@/lib/document/document-guide-inputs';
@@ -110,9 +112,11 @@ import {
 import { useDraftingState } from '@/hooks/use-drafting-state';
 import {
   selectOperationalNeedForDocument,
+  selectOperationalNeedsForDocument,
   useDeskEngagements,
 } from '@/hooks/use-desk-engagements';
 import { openLedger } from '@/components/document/command-bar';
+import { RedLetterZone, type RedLetterRow } from '@/components/document/red-letter-zone';
 
 const prettyPhase = (phase: string | null) =>
   phase
@@ -610,18 +614,51 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
         gate: nearestGate,
       })
     : null;
+  // Split from activateGuide so the red-letter zone's per-need actions (below)
+  // can reach the same switch without going through the guide's own model.
+  const activateDestination = useCallback(
+    (destination: DocumentGuideAction['destination']) => {
+      if (destination.kind === 'retry') {
+        void enrichedOperationalQuery.refetch();
+        return;
+      }
+      if (destination.kind === 'anchor') {
+        jumpToSection(destination.section, destination.focusId, destination.activate);
+      }
+      if (destination.kind === 'ledger') openLedger(destination.name, destination.context);
+    },
+    [enrichedOperationalQuery, jumpToSection],
+  );
   const activateGuide = useCallback(() => {
     const destination = guideModel?.action?.destination;
     if (!destination) return;
-    if (destination.kind === 'retry') {
-      void enrichedOperationalQuery.refetch();
-      return;
-    }
-    if (destination.kind === 'anchor') {
-      jumpToSection(destination.section, destination.focusId, destination.activate);
-    }
-    if (destination.kind === 'ledger') openLedger(destination.name, destination.context);
-  }, [enrichedOperationalQuery, guideModel, jumpToSection]);
+    activateDestination(destination);
+  }, [activateDestination, guideModel]);
+
+  // The letterhead's red-letter zone (project documents only, D-something): every
+  // need this document is carrying, printed once, instead of the guide's single
+  // sentence. Sourced from the Desk composition when it has answered for this
+  // document (mirrors enrichedOperationalNeed above); falls back to a local
+  // derivation — the same call the guide's own default branch would make —
+  // while the Desk composition hasn't covered this engagement yet.
+  const enrichedOperationalNeeds = deskEnrichment
+    ? selectOperationalNeedsForDocument(enrichedOperationalQuery.data, row?.engagement_id)
+    : undefined;
+  const redLetterRows: RedLetterRow[] = useMemo(() => {
+    if (!row || row.engagement_kind !== 'project') return [];
+    const needs = enrichedOperationalNeeds ?? deriveNeeds(row, new Date());
+    return needs.map((need, index) => {
+      const action = needGuideAction(need, row.active_section, row.project_id ?? null);
+      return {
+        key: `${need.kind}-${index}`,
+        kind: need.kind,
+        text: need.text,
+        actionLabel: action.label,
+        onAct: () => activateDestination(action.destination),
+        urgent: need.urgent,
+      };
+    });
+  }, [row, enrichedOperationalNeeds, activateDestination]);
 
   // D13: publish the held document to the mobile shell (bar + spine sheet).
   useMobileActiveDoc(
@@ -808,7 +845,12 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           needsSetup={needsSetup}
         />
 
-        {guideModel && <DocumentGuide model={guideModel} onActivate={activateGuide} />}
+        {guideModel &&
+          (row.engagement_kind === 'project' ? (
+            <RedLetterZone rows={redLetterRows} />
+          ) : (
+            <DocumentGuide model={guideModel} onActivate={activateGuide} />
+          ))}
 
         {/* R27 / R63: the letterhead instruments — one quiet DM-mono row under
             the subtitle, now STAGE-CONSISTENT. Send-a-note (and, where there's
