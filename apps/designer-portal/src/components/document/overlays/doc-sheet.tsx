@@ -38,6 +38,7 @@ import {
   isElementRendered,
   registerManagedModalDialog,
   topActiveModalDialog,
+  topDismissiblePopover,
 } from './active-dialog';
 
 const FOCUSABLE_SELECTOR = [
@@ -284,10 +285,17 @@ export function DocSheet({
       }
 
       if (e.key !== 'Tab' || e.defaultPrevented) return;
-      const focusable = getFocusableElements(panel);
+      // A dismissible popover (the Calendar Folio) is PORTALED out of this
+      // sheet's subtree, so trapping to the panel would strand it: Tab would
+      // walk out of the open panel and back into the sheet behind it. While one
+      // is open it IS the top layer, so it owns the cycle; Esc closes it and
+      // returns focus to its trigger inside the sheet, and the trap below
+      // resumes on the next key.
+      const scope = topDismissiblePopover() ?? panel;
+      const focusable = getFocusableElements(scope);
       if (focusable.length === 0) {
         e.preventDefault();
-        panel.focus({ preventScroll: true });
+        scope.focus({ preventScroll: true });
         return;
       }
 
@@ -295,7 +303,7 @@ export function DocSheet({
       const last = focusable[focusable.length - 1];
       const active = document.activeElement;
 
-      if (active === panel || !panel.contains(active)) {
+      if (active === scope || !scope.contains(active)) {
         e.preventDefault();
         (e.shiftKey ? last : first).focus();
       } else if (!e.shiftKey && active === last) {

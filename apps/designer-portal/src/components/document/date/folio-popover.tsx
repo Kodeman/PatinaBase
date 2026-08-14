@@ -3,12 +3,21 @@
 /**
  * FolioPopover — the anchored paper panel the Calendar Folio opens in.
  *
- * The house anchored-popover pattern (title-picker): the CALLER renders this
- * inside a `relative` wrapper and owns whether it is mounted at all. No portal
- * — a DocSheet traps focus, and a portalled panel would land outside the trap.
+ * The CALLER renders this inside a `relative` wrapper and owns whether it is
+ * mounted at all. The panel itself is PORTALED to <body> and positioned
+ * `fixed` from that wrapper's rect: an inline `absolute` panel was clipped to
+ * ribbons by the first `overflow` ancestor it met on a plain fold section
+ * (Kody's live walk — the discovery Timeline fields showed bare grid rows with
+ * the header, presets and SET cut away). A date panel must render above
+ * everything, so it leaves the flow entirely; the caller's markup is unchanged
+ * because the anchor is found from a hidden marker left at the old position.
+ *
  * No `role="dialog"` — the schedule confirm strip defers its Esc to
  * `document.querySelector('[role="dialog"]')`, so a date panel wearing that
  * role would silently disable the strip's revert for as long as it is open.
+ * Portaling costs the DocSheet focus trap, which can no longer reach the panel
+ * by subtree — doc-sheet.tsx therefore trades its scope for the popover's
+ * while one is open (`topDismissiblePopover`).
  *
  * Both dismiss handlers listen in the CAPTURE phase on `document`: DocSheet and
  * the confirm strip listen on `document` too, and between two listeners on the
@@ -29,11 +38,22 @@
  * "HOLD THE WINDOW" hazard, where a dismissing click commits a ceremony.
  */
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import type { ReactNode, RefObject } from 'react';
 
 /** Mounted panels, oldest first. Only the last one answers Esc. */
 const openPanels: symbol[] = [];
+
+/** Clear of DocSheet (z-50), RoomSheet (z-55) and PaperFolioSheet (z-[60]):
+ *  a date panel opened from a field inside any of them sits above it. */
+const PANEL_Z = 70;
+
+/** The gap between the anchor's edge and the panel. */
+const GAP = 6;
+
+/** Viewport margin the panel is never pushed past. */
+const EDGE = 8;
 
 /** How long the click shield waits for the click that may never come (a
  *  pointerdown with no matching click — a drag, a lifted finger elsewhere). */
@@ -60,14 +80,62 @@ export function FolioPopover({
   className,
 }: FolioPopoverProps) {
   const panelRef = useRef<HTMLDivElement>(null);
-  const [placement, setPlacement] = useState<'below' | 'above'>('below');
+  const markerRef = useRef<HTMLSpanElement>(null);
 
+  // The anchor is the caller's `relative` wrapper — the element the panel used
+  // to be positioned inside. The marker stays behind at that spot purely to
+  // name it, so no caller has to pass a ref it didn't need before.
+  const anchorOf = () => markerRef.current?.parentElement ?? null;
+
+  // Positioning is imperative on purpose: writing top/left into React state
+  // would re-render on every scroll frame, and the panel's size is an input to
+  // its own placement.
   useLayoutEffect(() => {
-    const panel = panelRef.current;
-    if (!panel || typeof window === 'undefined') return;
-    const rect = panel.getBoundingClientRect();
-    if (rect.height > 0 && rect.bottom > window.innerHeight) setPlacement('above');
-  }, []);
+    if (typeof window === 'undefined') return;
+
+    const place = () => {
+      const panel = panelRef.current;
+      const anchor = anchorOf();
+      if (!panel || !anchor) return;
+
+      const rect = anchor.getBoundingClientRect();
+      const width = panel.offsetWidth;
+      const height = panel.offsetHeight;
+
+      const roomBelow = window.innerHeight - rect.bottom - GAP;
+      const roomAbove = rect.top - GAP;
+      const above = height > roomBelow && roomAbove > roomBelow;
+
+      const top = above ? Math.max(EDGE, rect.top - GAP - height) : rect.bottom + GAP;
+      const wanted = align === 'end' ? rect.right - width : rect.left;
+      const left = Math.max(EDGE, Math.min(wanted, window.innerWidth - width - EDGE));
+
+      panel.style.top = `${top}px`;
+      panel.style.left = `${left}px`;
+      panel.dataset.folioPlacement = above ? 'above' : 'below';
+    };
+
+    place();
+
+    // Capture, so a scroll in ANY ancestor container moves the panel with its
+    // field — a fixed panel left behind by a scrolled anchor is worse than one
+    // that never opened.
+    let frame: number | null = null;
+    const onViewportChange = () => {
+      if (frame != null) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = null;
+        place();
+      });
+    };
+    window.addEventListener('scroll', onViewportChange, true);
+    window.addEventListener('resize', onViewportChange);
+    return () => {
+      if (frame != null) window.cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', onViewportChange, true);
+      window.removeEventListener('resize', onViewportChange);
+    };
+  }, [align]);
 
   useEffect(() => {
     const panel = panelRef.current;
@@ -119,9 +187,12 @@ export function FolioPopover({
 
     const onPointerDown = (e: PointerEvent) => {
       const panel = panelRef.current;
-      // A press inside disarms any stale shield from a previous dismissal —
-      // nothing inside the panel should ever be swallowed.
-      if (!panel || panel.contains(e.target as Node)) {
+      const target = e.target as Node;
+      // "Inside" is now two places: the portaled panel, and the anchor the
+      // panel belongs to — a press on the trigger is the caller's own toggle to
+      // answer, never a dismissal that also swallows its click.
+      // A press inside also disarms any stale shield from a previous dismissal.
+      if (!panel || panel.contains(target) || anchorOf()?.contains(target)) {
         disarmShield();
         return;
       }
@@ -157,25 +228,33 @@ export function FolioPopover({
     [],
   );
 
+  if (typeof document === 'undefined') return null;
+
   return (
-    <div
-      ref={panelRef}
-      tabIndex={-1}
-      aria-label={ariaLabel}
+    <>
+      {/* Stays at the caller's position so the anchor can be found. */}
+      <span ref={markerRef} aria-hidden className="hidden" />
+      {createPortal(
+        <div
+          ref={panelRef}
+          tabIndex={-1}
+          aria-label={ariaLabel}
       // The marker `topDismissiblePopover()` reads. It is how a surface with
       // its own document-CAPTURE Esc (margin-rail's compact sheet) defers to an
       // open panel: that listener is registered before this one and therefore
       // runs first, so the stack below cannot stop it — only the guard can.
-      data-dismissible-popover=""
-      data-folio-placement={placement}
-      className={[
-        'absolute z-20 rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] outline-none',
-        align === 'end' ? 'right-0' : 'left-0',
-        placement === 'above' ? 'bottom-[calc(100%+6px)]' : 'top-[calc(100%+6px)]',
-        className ?? '',
-      ].join(' ')}
-    >
-      {children}
-    </div>
+          data-dismissible-popover=""
+          data-folio-placement="below"
+          style={{ zIndex: PANEL_Z }}
+          className={[
+            'fixed rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] outline-none',
+            className ?? '',
+          ].join(' ')}
+        >
+          {children}
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }

@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { FolioPopover } from '../date/folio-popover';
 import { DocSheet } from '../overlays/doc-sheet';
@@ -34,6 +35,27 @@ describe('FolioPopover', () => {
 
     fireEvent.pointerDown(screen.getByText('outside'));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders on the body, clear of any overflow ancestor that would clip it', () => {
+    render(
+      // The discovery fold section that cut the panel to bare grid rows.
+      <section className="overflow-hidden">
+        <div className="relative">
+          <FolioPopover onClose={jest.fn()} aria-label="Date">
+            <span>panel</span>
+          </FolioPopover>
+        </div>
+      </section>,
+    );
+
+    const panel = document.querySelector<HTMLElement>('[data-dismissible-popover]')!;
+    expect(panel.parentElement).toBe(document.body);
+    expect(panel.closest('.overflow-hidden')).toBeNull();
+    // (`fixed` is a Tailwind class — jsdom loads no stylesheet, so the class
+    // itself is the assertable fact here.)
+    expect(panel).toHaveClass('fixed');
+    expect(panel.style.top).not.toBe('');
   });
 
   it('swallows the click that dismissed it — one press, one act', () => {
@@ -177,11 +199,57 @@ describe('FolioPopover', () => {
     expect(layer).toHaveAttribute('data-doc-sheet-stack-state', 'top');
     expect(layer).not.toHaveAttribute('inert');
 
-    // …and the sheet's Tab trap still holds, Folio included.
-    const panel = document.querySelector<HTMLElement>('[role="dialog"][aria-modal="true"]')!;
-    screen.getByText('a day').focus();
+  });
+
+  it('holds the DocSheet Tab cycle while open, and hands it back on Esc', () => {
+    function SheetWithFolio() {
+      const triggerRef = useRef<HTMLButtonElement>(null);
+      const [open, setOpen] = useState(true);
+      return (
+        <DocSheet open onClose={jest.fn()} title="Received">
+          <button type="button">sheet field</button>
+          <div className="relative">
+            <button type="button" ref={triggerRef}>
+              trigger
+            </button>
+            {open ? (
+              <FolioPopover
+                onClose={() => setOpen(false)}
+                returnFocusRef={triggerRef}
+                aria-label="Date"
+              >
+                <button type="button">a day</button>
+                <button type="button">another day</button>
+              </FolioPopover>
+            ) : null}
+          </div>
+        </DocSheet>
+      );
+    }
+    render(<SheetWithFolio />);
+
+    const panel = document.querySelector<HTMLElement>('[data-dismissible-popover]')!;
+    // The panel is portaled OUT of the sheet — the trap must follow it there.
+    expect(document.querySelector('[data-doc-sheet-layer]')!.contains(panel)).toBe(false);
+
+    screen.getByText('another day').focus();
     fireEvent.keyDown(document.body, { key: 'Tab' });
     expect(panel.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).toBe(screen.getByText('a day'));
+
+    // Focus is on a sheet control? The trap still pulls it into the popover.
+    screen.getByText('sheet field').focus();
+    fireEvent.keyDown(document.body, { key: 'Tab' });
+    expect(panel.contains(document.activeElement)).toBe(true);
+
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(document.querySelector('[data-dismissible-popover]')).toBeNull();
+    expect(document.activeElement).toBe(screen.getByText('trigger'));
+
+    // …and the sheet's own trap resumes.
+    const sheetPanel = document.querySelector<HTMLElement>('[role="dialog"][aria-modal="true"]')!;
+    fireEvent.keyDown(document.body, { key: 'Tab' });
+    expect(sheetPanel.contains(document.activeElement)).toBe(true);
   });
 
   it('closes alone inside a PaperFolioSheet', () => {
