@@ -574,6 +574,7 @@ describe('designer commercial document hooks', () => {
           signedName: string;
           paperSignedOn: string;
           scanDocumentId?: string | null;
+          issueOnPaper?: boolean;
         }) => Promise<Record<string, unknown>>;
       };
 
@@ -588,9 +589,40 @@ describe('designer commercial document hooks', () => {
         p_signed_name: 'Harper Vale',
         p_paper_signed_on: '2026-08-04',
         p_scan_document_id: 'scan-1',
+        // 00477: omitting issueOnPaper is the shipped act — record only.
+        p_issue_on_paper: false,
       });
       expect(fetchMock).not.toHaveBeenCalled();
       expect(result.notificationDelivery).toBe('not_requested');
+    });
+
+    it('issues the agreement on paper in the same call when the draft was never sent', async () => {
+      rpc.mockResolvedValue({ data: { proposalId: 'agreement-1' }, error: null });
+      const mutation = useRecordPaperClientSignature('agreement-1') as unknown as {
+        mutationFn: (input: {
+          signedName: string;
+          paperSignedOn: string;
+          scanDocumentId?: string | null;
+          issueOnPaper?: boolean;
+        }) => Promise<Record<string, unknown>>;
+      };
+
+      await mutation.mutationFn({
+        signedName: 'Harper Vale',
+        paperSignedOn: '2026-08-04',
+        issueOnPaper: true,
+      });
+
+      expect(rpc).toHaveBeenCalledWith('record_paper_client_signature', {
+        p_proposal_id: 'agreement-1',
+        p_signed_name: 'Harper Vale',
+        p_paper_signed_on: '2026-08-04',
+        p_scan_document_id: null,
+        p_issue_on_paper: true,
+      });
+      // Still no paper-notify: the act reaches client_signed, and the route
+      // 400s that transition on purpose.
+      expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it('executes a furnishings authorization on paper, then chains deposit_ready when the RPC raised a deposit invoice', async () => {

@@ -66,12 +66,65 @@ describe('RecordOnPaperSheet', () => {
         signedName: 'Harper Vale',
         paperSignedOn: expect.any(String),
         scanDocumentId: null,
+        // The default entry: the agreement is already with the client, so the
+        // act records only — it does not issue anything (00477).
+        issueOnPaper: false,
       }),
     );
     expect(onRecorded).toHaveBeenCalled();
     expect(executeFurnishings).not.toHaveBeenCalled();
     expect(executeTradeScope).not.toHaveBeenCalled();
     expect(recordTradeAcceptance).not.toHaveBeenCalled();
+  });
+
+  // 00477 — the same sheet, entered from a draft that was never emailed. The
+  // act issues the agreement on paper and records the signature in one call.
+  it('issues on paper when the agreement was never sent, and says nothing is emailed', async () => {
+    render(
+      <RecordOnPaperSheet
+        kind="design-services"
+        proposalId="proposal-1"
+        clientName="Harper Vale"
+        neverSent
+        open
+        onClose={jest.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByText(/issues this agreement on paper.*nothing is emailed/i),
+    ).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Record signed' }));
+
+    await waitFor(() =>
+      expect(recordClientSignature).toHaveBeenCalledWith(
+        expect.objectContaining({
+          signedName: 'Harper Vale',
+          issueOnPaper: true,
+        }),
+      ),
+    );
+  });
+
+  it('leaves the other three kinds untouched by neverSent', async () => {
+    render(
+      <RecordOnPaperSheet
+        kind="furnishings"
+        proposalId="proposal-1"
+        projectId="project-1"
+        neverSent
+        open
+        onClose={jest.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Signed by'), {
+      target: { value: 'Harper Vale' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Record & execute' }));
+
+    await waitFor(() => expect(executeFurnishings).toHaveBeenCalled());
+    expect(executeFurnishings.mock.calls[0][0].issueOnPaper).toBeUndefined();
   });
 
   it('uploads a selected scan before executing, and passes its id through as scanDocumentId', async () => {
