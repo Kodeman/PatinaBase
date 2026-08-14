@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * ScheduleSpine — the Ledger Spine, the project page's bones (C6, Slice 01
@@ -34,7 +34,7 @@ import {
   useMemo,
   useRef,
   useState,
-} from 'react';
+} from "react";
 import {
   useCoordinationItems,
   useProjectParties,
@@ -54,14 +54,14 @@ import {
   useCopyScheduleAsBuilt,
   mapPhaseRowToScheduleInput,
   mapMilestoneRowToScheduleInput,
-} from '@patina/supabase';
+} from "@patina/supabase";
 import type {
   ResolvedPhase,
   SchedulePhaseInput,
   ScheduleMilestoneInput,
-} from '@patina/utils';
-import { useSectionTasks } from '@/hooks/use-section-work';
-import { scheduleEvents } from '@/lib/analytics/schedule-events';
+} from "@patina/utils";
+import { useSectionTasks } from "@/hooks/use-section-work";
+import { scheduleEvents } from "@/lib/analytics/schedule-events";
 import {
   phaseState,
   itemsForPhase,
@@ -70,43 +70,45 @@ import {
   phaseGhostLine,
   threadsFor,
   type SpinePhaseState,
-} from '@/lib/document/schedule-spine-derivation';
+} from "@/lib/document/schedule-spine-derivation";
 import {
   blocksText,
   sortItemsBlockingFirst,
-} from '@/lib/document/coordination-derivation';
-import { phaseAnchorId } from '@/lib/document/phase-anchor';
+} from "@/lib/document/coordination-derivation";
+import { phaseAnchorId } from "@/lib/document/phase-anchor";
 import {
   useScheduleNav,
   type ScheduleRevealTarget,
-} from './schedule-nav-context';
-import { useRippleSession } from './schedule-ripple-context';
-import { StrataMiniRule } from '../strata-mini-rule';
-import { DocSheet } from '../overlays/doc-sheet';
-import { OpenItemSheet } from '../coordination/open-item-sheet';
+} from "./schedule-nav-context";
+import { useRippleSession } from "./schedule-ripple-context";
+import { RegionHead, type RegionLedgerEntry } from "../region/region-head";
+import { useRegionFold } from "../region/use-region-fold";
+import { FoldSeam, focusRegionHeading } from "../region/fold-seam";
+import { RegionRule } from "../region/region-rule";
+import { DocSheet } from "../overlays/doc-sheet";
+import { OpenItemSheet } from "../coordination/open-item-sheet";
 import {
   ItemComposer,
   toComposerFfeItems,
   toComposerPhases,
-} from '../coordination/item-composer';
-import { CoordinationWork } from '../coordination/coordination-work';
-import { PhaseSection } from './phase-section';
-import { TodayRule } from './today-rule';
-import { GhostAddLine, type GhostAddInput } from './ghost-add-line';
-import { ScheduleBirth } from './schedule-birth';
-import { PhaseComposeActions } from './phase-compose-actions';
-import { PhaseDeleteConfirm } from './phase-delete-confirm';
-import { MilestoneComposer, type MilestoneDraft } from './milestone-composer';
-import { RevisionLedger } from './revision-ledger';
-import { ScheduleProposals } from './schedule-proposals';
+} from "../coordination/item-composer";
+import { CoordinationWork } from "../coordination/coordination-work";
+import { PhaseSection } from "./phase-section";
+import { TodayRule } from "./today-rule";
+import { GhostAddLine, type GhostAddInput } from "./ghost-add-line";
+import { ScheduleBirth } from "./schedule-birth";
+import { PhaseComposeActions } from "./phase-compose-actions";
+import { PhaseDeleteConfirm } from "./phase-delete-confirm";
+import { MilestoneComposer, type MilestoneDraft } from "./milestone-composer";
+import { RevisionLedger } from "./revision-ledger";
+import { ScheduleProposals } from "./schedule-proposals";
 import {
   InstallWindowCeremony,
   useInstallWindowPhaseId,
-} from './install-window-ceremony';
-import { AddLineSheet } from './add-line-sheet';
-import type { PastProjectOption } from './past-project-picker';
-import { DocumentAction } from '../document-action';
-import { SectionLoadingLine } from '../section-loading-line';
+} from "./install-window-ceremony";
+import { AddLineSheet } from "./add-line-sheet";
+import type { PastProjectOption } from "./past-project-picker";
+import { SectionLoadingLine } from "../section-loading-line";
 
 /** Best-effort phase_key from a free-typed name (phase_key is nullable + not
  *  unique on project_phases, so a plain slug is safe — no dedupe needed). */
@@ -115,16 +117,16 @@ function slugifyPhaseKey(name: string): string {
     name
       .toLowerCase()
       .trim()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 40) || 'phase'
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 40) || "phase"
   );
 }
 
 /** Which inline compose panel is open, and on which phase (one across the spine). */
 type ComposeState = {
   phaseId: string;
-  kind: 'milestone' | 'delete';
+  kind: "milestone" | "delete";
 } | null;
 
 // ── schedule-spine.tsx (orchestrator; owns ALL sheet-open LOCAL state) ──
@@ -144,9 +146,9 @@ export interface ScheduleSpineProps {
 
 /** The spine's sheet state: one overlay at a time, or none. */
 type SheetState =
-  | { kind: 'item'; id: string }
-  | { kind: 'composer' }
-  | { kind: 'add-line' }
+  | { kind: "item"; id: string }
+  | { kind: "composer" }
+  | { kind: "add-line" }
   | null;
 
 export function ScheduleSpine({
@@ -157,7 +159,7 @@ export function ScheduleSpine({
 }: ScheduleSpineProps) {
   // ── designer_clients.id resolution (work-block.tsx pattern) ──
   const { data: designerClient } = useDesignerClientForClientUser(
-    clientUserId ?? '',
+    clientUserId ?? "",
   );
   const designerClientId = designerClient?.id ?? null;
 
@@ -244,13 +246,13 @@ export function ScheduleSpine({
 
   /** The rendered entries — main-lane phases only; threads stitch into hosts. */
   const mainLane = useMemo(
-    () => resolvedPhases.filter((p) => p.lane === 'main'),
+    () => resolvedPhases.filter((p) => p.lane === "main"),
     [resolvedPhases],
   );
 
   const activePhaseId = useMemo(
     () =>
-      mainLane.find((p) => phaseState(rowById.get(p.id)?.status) === 'active')
+      mainLane.find((p) => phaseState(rowById.get(p.id)?.status) === "active")
         ?.id ?? null,
     [mainLane, rowById],
   );
@@ -285,7 +287,7 @@ export function ScheduleSpine({
 
         const milestones = resolvedMilestones
           .filter((m) => m.phaseId === phase.id)
-          .map((m) => ({ ...m, name: milestoneNameById.get(m.id) ?? '' }));
+          .map((m) => ({ ...m, name: milestoneNameById.get(m.id) ?? "" }));
 
         // Open items for this phase (null/dangling phase_id → active phase),
         // the thing holding the line first (R101.2).
@@ -303,7 +305,7 @@ export function ScheduleSpine({
         ).length;
         let lastSigned: { name: string; date: string | null } | null = null;
         for (const m of milestones) {
-          if (m.derivedStatus !== 'signed' || m.date == null) continue;
+          if (m.derivedStatus !== "signed" || m.date == null) continue;
           if (
             lastSigned == null ||
             (lastSigned.date != null && m.date > lastSigned.date)
@@ -325,7 +327,7 @@ export function ScheduleSpine({
         // itself), so this phase's overrun (if any) is always found by its
         // own id — never a downstream/upstream lookup.
         const chainConflict = resolvedConflicts.find(
-          (c) => c.kind === 'chain_does_not_fit' && c.phaseId === phase.id,
+          (c) => c.kind === "chain_does_not_fit" && c.phaseId === phase.id,
         );
 
         const { text: metaLine, overrunText } = phaseMeta({
@@ -354,7 +356,7 @@ export function ScheduleSpine({
           .map((tid) => {
             const thread = resolvedPhases.find((p) => p.id === tid);
             return thread
-              ? { phase: thread, name: rowById.get(tid)?.name ?? '' }
+              ? { phase: thread, name: rowById.get(tid)?.name ?? "" }
               : null;
           })
           .filter(
@@ -363,7 +365,7 @@ export function ScheduleSpine({
 
         return {
           phase,
-          name: row?.name ?? '',
+          name: row?.name ?? "",
           state,
           metaLine,
           overrunText,
@@ -442,7 +444,7 @@ export function ScheduleSpine({
       .filter((p) => p.id !== projectId && (phaseCounts?.[p.id] ?? 0) > 0)
       .map((p) => ({
         id: p.id,
-        name: p.name ?? 'Untitled project',
+        name: p.name ?? "Untitled project",
         phaseCount: phaseCounts?.[p.id] ?? 0,
       }));
   }, [projectRows, phaseCounts, projectId]);
@@ -478,21 +480,21 @@ export function ScheduleSpine({
         onSuccess: () => {
           if (wasEmpty) {
             scheduleEvents.scheduleBorn({
-              surface: 'project',
+              surface: "project",
               project_id: projectId,
-              kind: 'blank',
+              kind: "blank",
             });
           }
           scheduleEvents.schedulePhaseAdded({
-            surface: 'project',
+            surface: "project",
             project_id: projectId,
-            via: 'ghost_line',
+            via: "ghost_line",
           });
           if (input.anchorDate) {
             scheduleEvents.scheduleAnchorSet({
-              surface: 'project',
+              surface: "project",
               project_id: projectId,
-              target: 'phase',
+              target: "phase",
               set: true,
             });
           }
@@ -502,7 +504,7 @@ export function ScheduleSpine({
     );
   };
   const ghostError = createPhase.isError
-    ? 'Add failed — nothing was saved; your entry is kept'
+    ? "Add failed — nothing was saved; your entry is kept"
     : null;
 
   // ── The ruled boundary (Slice 04 R100 · B3) ───────────────────────────────
@@ -527,9 +529,9 @@ export function ScheduleSpine({
       {
         onSuccess: () =>
           scheduleEvents.scheduleAnchorSet({
-            surface: 'project',
+            surface: "project",
             project_id: projectId,
-            target: 'phase',
+            target: "phase",
             set: false,
           }),
       },
@@ -550,9 +552,9 @@ export function ScheduleSpine({
         onSuccess: () => {
           if (draft.anchorDate) {
             scheduleEvents.scheduleAnchorSet({
-              surface: 'project',
+              surface: "project",
               project_id: projectId,
-              target: 'milestone',
+              target: "milestone",
               set: true,
             });
           }
@@ -567,9 +569,9 @@ export function ScheduleSpine({
       {
         onSuccess: () =>
           scheduleEvents.scheduleAnchorSet({
-            surface: 'project',
+            surface: "project",
             project_id: projectId,
-            target: 'milestone',
+            target: "milestone",
             set: false,
           }),
       },
@@ -587,13 +589,13 @@ export function ScheduleSpine({
 
   const handleSeedPatinaSix = () => {
     seedTemplate.mutate(
-      { projectId, templateSlug: 'patina_six' },
+      { projectId, templateSlug: "patina_six" },
       {
         onSuccess: () =>
           scheduleEvents.scheduleBorn({
-            surface: 'project',
+            surface: "project",
             project_id: projectId,
-            kind: 'patina_six',
+            kind: "patina_six",
           }),
       },
     );
@@ -604,9 +606,9 @@ export function ScheduleSpine({
       {
         onSuccess: () =>
           scheduleEvents.scheduleBorn({
-            surface: 'project',
+            surface: "project",
             project_id: projectId,
-            kind: 'past_project',
+            kind: "past_project",
             source_project_id: sourceProjectId,
           }),
       },
@@ -615,9 +617,9 @@ export function ScheduleSpine({
 
   const birthBusy = seedTemplate.isPending || copyAsBuilt.isPending;
   const birthError = seedTemplate.isError
-    ? 'Couldn’t seed the Patina Six — nothing was saved'
+    ? "Couldn’t seed the Patina Six — nothing was saved"
     : copyAsBuilt.isError
-      ? 'Couldn’t copy that schedule — nothing was saved'
+      ? "Couldn’t copy that schedule — nothing was saved"
       : null;
 
   // ── spine-LOCAL sheet state — never a route/tab (D1) ──
@@ -625,18 +627,18 @@ export function ScheduleSpine({
 
   const openItem = (id: string) => {
     if (displayItems.some((item) => item.id === id)) {
-      setSheet({ kind: 'item', id });
+      setSheet({ kind: "item", id });
     }
   };
-  const openComposer = () => setSheet({ kind: 'composer' });
-  const openAddLine = () => setSheet({ kind: 'add-line' });
+  const openComposer = () => setSheet({ kind: "composer" });
+  const openAddLine = () => setSheet({ kind: "add-line" });
   const closeSheet = () => setSheet(null);
 
   // The item currently in the OpenItemSheet (resolved fresh from the live query
   // so the sheet always reads the latest row after an optimistic update).
   const activeItem = useMemo(
     () =>
-      sheet?.kind === 'item'
+      sheet?.kind === "item"
         ? (displayItems.find((i) => i.id === sheet.id) ?? null)
         : null,
     [sheet, displayItems],
@@ -646,6 +648,10 @@ export function ScheduleSpine({
   // unconditionally (its onToggle is null), which realizes the "seeded with
   // the active phase" rule structurally — ids load async, sets don't wait. ──
   const [unfolded, setUnfolded] = useState<Set<string>>(() => new Set());
+
+  // Row-verb collapse (Project, Composed L3) — one phase's ··· cluster open
+  // across the whole spine at a time, lifted here per RowOverflow's contract.
+  const [openRowVerbs, setOpenRowVerbs] = useState<string | null>(null);
 
   const handlePhaseToggle = (
     phaseId: string,
@@ -661,7 +667,7 @@ export function ScheduleSpine({
     // the state guard stays as a defensive no-op boundary, not a load-bearing
     // check.
     const isUnfolding = !unfolded.has(phaseId);
-    if (isUnfolding && state !== 'active') {
+    if (isUnfolding && state !== "active") {
       scheduleEvents.spinePhaseUnfolded({
         project_id: projectId,
         phase_id: phaseId,
@@ -695,7 +701,7 @@ export function ScheduleSpine({
       return next;
     });
 
-    if (target.kind === 'milestone') {
+    if (target.kind === "milestone") {
       setHighlightMilestoneId(target.milestoneId);
       if (highlightTimer.current) clearTimeout(highlightTimer.current);
       highlightTimer.current = setTimeout(
@@ -709,7 +715,7 @@ export function ScheduleSpine({
     requestAnimationFrame(() => {
       document
         .getElementById(phaseAnchorId(target.phaseId))
-        ?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        ?.scrollIntoView({ block: "start", behavior: "smooth" });
     });
   }, []);
 
@@ -725,29 +731,68 @@ export function ScheduleSpine({
 
   const loading = schedule.isLoading || schedule.resolved == null;
 
-  return (
-    <section id="document-decision-controls" tabIndex={-1} aria-label="Project schedule" className="mt-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]">
-      {/* The section head — the band's grammar: a quiet Playfair label over the
-          StrataMiniRule, ONE quiet mono action at right (hidden, not disabled,
-          until the designer-client id resolves). Depth = value contrast. */}
-      <div className="flex items-baseline justify-between">
-        <h2 className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]">
-          Schedule
-        </h2>
-        {designerClientId && (
-          <DocumentAction
-            actionKey="new-open-item"
-            surfaceKey="open-document"
-            regionKey="schedule-head"
-            variant="secondary"
-            onClick={openComposer}
-          >
-            + New open item
-          </DocumentAction>
-        )}
-      </div>
-      <StrataMiniRule className="mt-1.5" />
+  // ── region head / fold seam (Project, Composed L3) ──────────────────────
+  const scheduleHeadingId = "project-schedule-title";
+  const scheduleBodyId = "project-schedule-body";
 
+  // The soonest unresolved milestone (date >= today), across every resolved
+  // milestone — not just the active phase's — so the head's glance holds
+  // even while that phase is folded shut.
+  const nextMilestoneLabel = useMemo(() => {
+    const upcoming = resolvedMilestones
+      .filter((m) => m.date != null && m.date >= today)
+      .sort((a, b) => (a.date as string).localeCompare(b.date as string))[0];
+    return upcoming ? (milestoneNameById.get(upcoming.id) ?? null) : null;
+  }, [resolvedMilestones, milestoneNameById, today]);
+
+  const scheduleStatus = useMemo(() => {
+    const activeName = activePhaseId
+      ? (rowById.get(activePhaseId)?.name ?? null)
+      : null;
+    return `${entries.length} phases · ${activeName ?? "nothing active"} · next milestone ${nextMilestoneLabel ?? "—"}`;
+  }, [entries.length, activePhaseId, rowById, nextMilestoneLabel]);
+
+  const scheduleLedger: readonly RegionLedgerEntry[] = designerClientId
+    ? [
+        {
+          key: "new-open-item",
+          label: "+ New open item",
+          onClick: openComposer,
+        },
+      ]
+    : [];
+
+  // Null until phases resolve (loading), then folded only when there is at
+  // least one main-lane phase and every one of them is closed. A zero-phase
+  // schedule MUST default open — ScheduleBirth is the only way in.
+  const scheduleDefaultFolded = loading
+    ? null
+    : entries.length > 0 && entries.every((entry) => entry.state === "closed");
+
+  const scheduleFold = useRegionFold({
+    docId: projectId,
+    region: "schedule",
+    defaultFolded: scheduleDefaultFolded,
+  });
+
+  // FoldSeam only calls onUnfold and then unmounts on the caller's re-render,
+  // so focus is landed from an effect once the head (and its heading) is back
+  // on the page — the contract fold-seam.tsx documents.
+  const scheduleJustUnfolded = useRef(false);
+  useEffect(() => {
+    if (!scheduleFold.folded && scheduleJustUnfolded.current) {
+      focusRegionHeading(scheduleHeadingId);
+      scheduleJustUnfolded.current = false;
+    }
+  }, [scheduleFold.folded]);
+
+  const handleScheduleUnfold = () => {
+    scheduleJustUnfolded.current = true;
+    scheduleFold.setFolded(false);
+  };
+
+  const scheduleBody = (
+    <>
       {!loading && (
         <ScheduleProposals
           projectId={projectId}
@@ -796,7 +841,7 @@ export function ScheduleSpine({
 
                 // The revealed compose surface for this phase, per open kind.
                 const composePanel =
-                  composeKind === 'milestone' ? (
+                  composeKind === "milestone" ? (
                     <MilestoneComposer
                       today={today}
                       onSubmit={(draft) =>
@@ -806,11 +851,11 @@ export function ScheduleSpine({
                       busy={addMilestone.isPending}
                       errorText={
                         addMilestone.isError
-                          ? 'Add failed — nothing was saved'
+                          ? "Add failed — nothing was saved"
                           : null
                       }
                     />
-                  ) : composeKind === 'delete' ? (
+                  ) : composeKind === "delete" ? (
                     <PhaseDeleteConfirm
                       name={entry.name}
                       milestoneCount={entry.milestones.length}
@@ -821,7 +866,7 @@ export function ScheduleSpine({
                       busy={deletePhaseWithRelink.isPending}
                       errorText={
                         deletePhaseWithRelink.isError
-                          ? 'Delete failed — nothing was changed'
+                          ? "Delete failed — nothing was changed"
                           : null
                       }
                     />
@@ -837,12 +882,12 @@ export function ScheduleSpine({
                       anchorId={phaseAnchorId(entry.phase.id)}
                       highlightMilestoneId={highlightMilestoneId}
                       expanded={
-                        entry.state === 'active'
+                        entry.state === "active"
                           ? true
                           : unfolded.has(entry.phase.id)
                       }
                       onToggle={
-                        entry.state === 'active'
+                        entry.state === "active"
                           ? null
                           : () =>
                               handlePhaseToggle(
@@ -863,10 +908,12 @@ export function ScheduleSpine({
                       threads={entry.threads}
                       onOpenItem={openItem}
                       today={today}
+                      openRowVerbs={openRowVerbs}
+                      onOpenRowVerbsChange={setOpenRowVerbs}
                       headingActions={
                         <PhaseComposeActions
                           onAddItem={openAddLine}
-                          canDelete={row?.status === 'pending'}
+                          canDelete={row?.status === "pending"}
                           // Each open resets its mutation's stale error state
                           // (updateChain is shared with the chip unpin) so a
                           // fresh panel never opens wearing an old failure.
@@ -874,7 +921,7 @@ export function ScheduleSpine({
                             addMilestone.reset();
                             setCompose({
                               phaseId: entry.phase.id,
-                              kind: 'milestone',
+                              kind: "milestone",
                             });
                           }}
                           // B3 — no typed panel: arm the Rule. It scrolls into
@@ -887,7 +934,7 @@ export function ScheduleSpine({
                             deletePhaseWithRelink.reset();
                             setCompose({
                               phaseId: entry.phase.id,
-                              kind: 'delete',
+                              kind: "delete",
                             });
                           }}
                         />
@@ -911,7 +958,7 @@ export function ScheduleSpine({
               {/* The ongoing +add — the same ghost line, joining the main lane.
                   A completed project has no next phase to name, so the line
                   stands down on the same gate CareBand reads. */}
-              {projectStatus !== 'completed' && (
+              {projectStatus !== "completed" && (
                 <GhostAddLine
                   committedPhases={committedPhaseInputs}
                   committedMilestones={committedMilestoneInputs}
@@ -938,10 +985,49 @@ export function ScheduleSpine({
           <RevisionLedger projectId={projectId} />
         </>
       )}
+    </>
+  );
+
+  return (
+    <section
+      id="document-decision-controls"
+      tabIndex={-1}
+      aria-label="Project schedule"
+      className="mt-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+    >
+      {/* The region's rule opens it whether folded or open — a printed device,
+          not a divider with meaning (region-rule.tsx). */}
+      <RegionRule />
+
+      {scheduleFold.folded ? (
+        <FoldSeam
+          headingId={scheduleHeadingId}
+          bodyId={scheduleBodyId}
+          name="Schedule"
+          summary={scheduleStatus}
+          onUnfold={handleScheduleUnfold}
+          surfaceKey="open-document"
+          regionKey="schedule"
+        />
+      ) : (
+        <>
+          <RegionHead
+            headingId={scheduleHeadingId}
+            name="Schedule"
+            status={scheduleStatus}
+            surfaceKey="open-document"
+            regionKey="schedule"
+            actions={scheduleLedger}
+            bodyId={scheduleBodyId}
+            onFold={() => scheduleFold.setFolded(true)}
+          />
+          <div id={scheduleBodyId}>{scheduleBody}</div>
+        </>
+      )}
 
       {/* ── Overlays — DocSheet children at the spine root so the document stays
           mounted beneath (D1). `open` is spine-local state, never a route. ── */}
-      {sheet?.kind === 'add-line' && (
+      {sheet?.kind === "add-line" && (
         <AddLineSheet
           open
           projectId={projectId}
@@ -952,9 +1038,9 @@ export function ScheduleSpine({
       )}
 
       <DocSheet
-        open={sheet?.kind === 'item' && Boolean(activeItem)}
+        open={sheet?.kind === "item" && Boolean(activeItem)}
         onClose={closeSheet}
-        title={activeItem ? `Open item — ${activeItem.title}` : 'Open item'}
+        title={activeItem ? `Open item — ${activeItem.title}` : "Open item"}
       >
         {activeItem && (
           <OpenItemSheet
@@ -962,7 +1048,7 @@ export function ScheduleSpine({
             tasks={allTasks}
             parties={allParties}
             projectId={projectId}
-            designerClientId={designerClientId ?? ''}
+            designerClientId={designerClientId ?? ""}
             clientName={clientName}
             onClose={closeSheet}
           />
@@ -970,11 +1056,11 @@ export function ScheduleSpine({
       </DocSheet>
 
       <DocSheet
-        open={sheet?.kind === 'composer' && Boolean(designerClientId)}
+        open={sheet?.kind === "composer" && Boolean(designerClientId)}
         onClose={closeSheet}
         title="New open item"
       >
-        {sheet?.kind === 'composer' && designerClientId && (
+        {sheet?.kind === "composer" && designerClientId && (
           <ItemComposer
             projectId={projectId}
             designerClientId={designerClientId}

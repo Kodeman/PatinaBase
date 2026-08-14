@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Phase section — one ledger-spine entry (C6, Slice 01 read).
@@ -22,14 +22,15 @@
  * the meta line arrives composed (phaseMeta). Zero shadows (D4).
  */
 
-import type { ReactNode } from 'react';
-import type { ResolvedMilestone, ResolvedPhase } from '@patina/utils';
-import type { CoordinationItem, ProjectParty } from '@patina/supabase';
-import type { SectionTask } from '@/hooks/use-section-work';
-import type { SpinePhaseState } from '@/lib/document/schedule-spine-derivation';
-import { OpenItemRow } from '../coordination/open-item-row';
-import { MilestoneRow, AnchorChip } from './milestone-row';
-import { ThreadStitch } from './thread-stitch';
+import type { ReactNode } from "react";
+import type { ResolvedMilestone, ResolvedPhase } from "@patina/utils";
+import type { CoordinationItem, ProjectParty } from "@patina/supabase";
+import type { SectionTask } from "@/hooks/use-section-work";
+import type { SpinePhaseState } from "@/lib/document/schedule-spine-derivation";
+import { OpenItemRow } from "../coordination/open-item-row";
+import { MilestoneRow, AnchorChip } from "./milestone-row";
+import { ThreadStitch } from "./thread-stitch";
+import { RowOverflow } from "../region/row-overflow";
 
 export interface PhaseSectionProps {
   phase: ResolvedPhase;
@@ -71,8 +72,16 @@ export interface PhaseSectionProps {
   today: string;
   // ── Compose (Slice 03) — all optional; omit every one and the entry
   //    renders byte-identically to the read-only Slice 01 markup. ──
-  /** The persistent quiet mono action cluster on the heading (PhaseComposeActions). */
+  /** The persistent quiet mono action cluster on the heading (PhaseComposeActions).
+   *  Wrapped in RowOverflow (region/row-overflow.tsx) behind this phase's own
+   *  always-visible ··· glyph — undefined → the heading renders exactly as
+   *  Slice 01 did, with no wrapper and no glyph. */
   headingActions?: ReactNode;
+  /** Row-verb collapse (Project, Composed L3) — the single key open across the
+   *  whole spine, lifted to the caller per RowOverflow's contract. Required
+   *  whenever headingActions is supplied. */
+  openRowVerbs?: string | null;
+  onOpenRowVerbsChange?: (key: string | null) => void;
   /** A revealed compose surface under the meta line — the grammar fields, the
    *  milestone composer, or the delete confirm. Renders regardless of fold. */
   composePanel?: ReactNode;
@@ -84,16 +93,16 @@ export interface PhaseSectionProps {
 
 /** Heading weight/size/ink per state (`.mb-entry h3` + state variants). */
 const HEADING_CLS: Record<SpinePhaseState, string> = {
-  active: 'text-[1.28rem] font-semibold text-[var(--color-charcoal)]',
-  closed: 'text-[1.02rem] font-normal text-[var(--color-aged-oak)]',
-  future: 'text-[1.1rem] font-normal text-[var(--color-aged-oak)]',
+  active: "text-[1.28rem] font-semibold text-[var(--color-charcoal)]",
+  closed: "text-[1.02rem] font-normal text-[var(--color-aged-oak)]",
+  future: "text-[1.1rem] font-normal text-[var(--color-aged-oak)]",
 };
 
 /** Per-entry bottom breathing room (`.mb-body` padding in the slide). */
 const BODY_PAD: Record<SpinePhaseState, string> = {
-  active: 'pb-[0.9rem]',
-  closed: 'pb-[1.2rem]',
-  future: 'pb-[1.1rem]',
+  active: "pb-[0.9rem]",
+  closed: "pb-[1.2rem]",
+  future: "pb-[1.1rem]",
 };
 
 export function PhaseSection({
@@ -116,6 +125,8 @@ export function PhaseSection({
   onOpenItem,
   today,
   headingActions,
+  openRowVerbs = null,
+  onOpenRowVerbsChange,
   composePanel,
   onUnpinPhaseAnchor,
   onUnpinMilestoneAnchor,
@@ -124,35 +135,41 @@ export function PhaseSection({
   // a live project_parties row named by the item wins, else the embedded
   // court_party the item carried, else the generic court token (partyFor).
   const partyForItem = (item: CoordinationItem) =>
-    parties.find((p) => p.id === item.court_party_id) ?? item.court_party ?? null;
+    parties.find((p) => p.id === item.court_party_id) ??
+    item.court_party ??
+    null;
 
   const anchorChip = phase.anchored ? (
-    <AnchorChip date={phase.start} className="ml-[0.7rem] align-[3px]" onUnpin={onUnpinPhaseAnchor} />
+    <AnchorChip
+      date={phase.start}
+      className="ml-[0.7rem] align-[3px]"
+      onUnpin={onUnpinPhaseAnchor}
+    />
   ) : null;
 
   return (
     <div
       id={anchorId}
       className={`grid grid-cols-[30px_minmax(0,1fr)] gap-x-[1.1rem]${
-        anchorId ? ' scroll-mt-24' : ''
+        anchorId ? " scroll-mt-24" : ""
       }`}
     >
       {/* ── spine cell — per-entry segment + node so the line reads continuous ── */}
       <div className="relative" aria-hidden>
-        {state === 'future' ? (
+        {state === "future" ? (
           <span
             className="absolute bottom-0 left-[6px] top-0 w-[1.5px]"
             style={{
               background:
-                'repeating-linear-gradient(to bottom, var(--color-pearl) 0 5px, transparent 5px 10px)',
+                "repeating-linear-gradient(to bottom, var(--color-pearl) 0 5px, transparent 5px 10px)",
             }}
           />
         ) : (
           <span className="absolute bottom-0 left-[6px] top-0 w-[2px] bg-[var(--color-mocha)]" />
         )}
-        {state === 'closed' ? (
+        {state === "closed" ? (
           <span className="absolute left-[2px] top-[10px] h-[10px] w-[10px] rounded-full bg-[var(--color-mocha)]" />
-        ) : state === 'active' ? (
+        ) : state === "active" ? (
           <span className="absolute left-0 top-[8px] h-[14px] w-[14px] rounded-full border-[2.5px] border-[var(--color-clay)] bg-[var(--color-off-white)]" />
         ) : (
           <span className="absolute left-0 top-[8px] h-[14px] w-[14px] rounded-full border-[1.5px] border-[var(--color-pearl)] bg-[var(--color-off-white)]" />
@@ -164,9 +181,9 @@ export function PhaseSection({
         {(() => {
           // The unfold mark stays visible — never hover-revealed (touch exists;
           // a hidden affordance on a closed chapter is a lie).
-          const foldLabel = expanded ? 'Fold' : 'Unfold';
+          const foldLabel = expanded ? "Fold" : "Unfold";
           const foldCls =
-            'ml-4 font-mono text-[0.58rem] font-normal uppercase tracking-[0.08em] text-[var(--color-clay)]';
+            "ml-4 font-mono text-[0.58rem] font-normal uppercase tracking-[0.08em] text-[var(--color-clay)]";
           // An unpinnable anchor chip renders a real <button>; it must never
           // nest inside the fold toggle <button> (invalid HTML — the walk's
           // hydration warning). When the chip is inert (a <span>, the read-only
@@ -225,7 +242,16 @@ export function PhaseSection({
           return headingActions ? (
             <div className="flex items-baseline justify-between gap-4">
               {headingEl}
-              {headingActions}
+              <RowOverflow
+                rowKey={phase.id}
+                openKey={openRowVerbs}
+                onOpenChange={onOpenRowVerbsChange ?? (() => {})}
+                surfaceKey="open-document"
+                regionKey="schedule"
+                label={`More actions for ${name || "this phase"}`}
+              >
+                {headingActions}
+              </RowOverflow>
             </div>
           ) : (
             headingEl
@@ -274,7 +300,9 @@ export function PhaseSection({
                 today={today}
                 highlighted={highlightMilestoneId === m.id}
                 onUnpinAnchor={
-                  onUnpinMilestoneAnchor ? () => onUnpinMilestoneAnchor(m.id) : undefined
+                  onUnpinMilestoneAnchor
+                    ? () => onUnpinMilestoneAnchor(m.id)
+                    : undefined
                 }
               />
             ))}
@@ -284,7 +312,9 @@ export function PhaseSection({
                 {items.map((item, i) => (
                   <li
                     key={item.id}
-                    className={i === 0 ? 'border-t border-[var(--color-pearl)]' : ''}
+                    className={
+                      i === 0 ? "border-t border-[var(--color-pearl)]" : ""
+                    }
                   >
                     <OpenItemRow
                       item={item}
