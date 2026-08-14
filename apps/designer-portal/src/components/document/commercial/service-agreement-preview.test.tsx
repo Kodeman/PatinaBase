@@ -122,6 +122,34 @@ describe("ServiceAgreementPreview", () => {
     expect(screen.queryByText(/on paper/)).not.toBeInTheDocument();
   });
 
+  it("says the ceiling is not yet set rather than printing $0 (J3)", () => {
+    render(
+      <ServiceAgreementPreview
+        document={document}
+        terms={{ ...terms, billingCeilingCents: 0 }}
+        rates={[]}
+        signatures={[]}
+      />,
+    );
+
+    expect(screen.getByText("Not yet set")).toBeVisible();
+    expect(screen.queryByText("$0")).not.toBeInTheDocument();
+  });
+
+  it("still renders a real, positive ceiling as currency", () => {
+    render(
+      <ServiceAgreementPreview
+        document={document}
+        terms={{ ...terms, billingCeilingCents: 1_800_000 }}
+        rates={[]}
+        signatures={[]}
+      />,
+    );
+
+    expect(screen.getByText("$18,000")).toBeVisible();
+    expect(screen.queryByText("Not yet set")).not.toBeInTheDocument();
+  });
+
   it("says the deposit is unset rather than printing a null percent", () => {
     render(
       <ServiceAgreementPreview

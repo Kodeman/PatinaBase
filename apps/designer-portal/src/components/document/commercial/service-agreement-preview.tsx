@@ -53,6 +53,12 @@ export function ServiceAgreementPreview({
     signatures,
   });
   const status = commercialStatusView(preview.state);
+  // J3: mirrors assessServiceAgreementReadiness's own "Set the design
+  // authorization ceiling" threshold (commercial-documents.ts) exactly —
+  // an untouched/zero ceiling counts as not-yet-written there, so the
+  // client copy must not advertise it as a real $0 figure here either.
+  const ceilingIsSet =
+    Number.isFinite(preview.billingCeilingCents) && preview.billingCeilingCents > 0;
 
   return (
     <article
@@ -131,8 +137,16 @@ export function ServiceAgreementPreview({
           <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
             Design authorization ceiling
           </span>
-          <strong className="font-heading text-[1.05rem] text-[var(--color-charcoal)]">
-            {money(preview.billingCeilingCents, preview.currency)}
+          <strong
+            className={
+              ceilingIsSet
+                ? "font-heading text-[1.05rem] text-[var(--color-charcoal)]"
+                : "font-heading text-[1.05rem] italic text-[var(--text-muted)]"
+            }
+          >
+            {ceilingIsSet
+              ? money(preview.billingCeilingCents, preview.currency)
+              : "Not yet set"}
           </strong>
         </div>
       </section>
