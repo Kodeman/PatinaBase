@@ -21,10 +21,10 @@
  * keyDown, assertions on the emitted callbacks and the ARIA the slider states.
  */
 
-import { createRef } from 'react';
+import { createRef, useCallback, useState } from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { epochDayFromISO, isoFromEpochDay } from '@patina/utils';
-import { RulePhaseBar } from '../rule-phase-bar';
+import { RulePhaseBar, type BarEditState } from '../rule-phase-bar';
 import type { RippleSession } from '../schedule-ripple-context';
 import type { RuleBar } from '@/lib/document/schedule-rule-derivation';
 
@@ -46,15 +46,47 @@ function makeBar(over: Partial<RuleBar> = {}): RuleBar {
   };
 }
 
-function renderBar(bar: RuleBar, session: RippleSession | null = null) {
-  const handlers = {
-    onMoveBegin: jest.fn(),
-    onMoveFrame: jest.fn(),
-    onResizeBegin: jest.fn(),
-    onResizeFrame: jest.fn(),
-  };
-  const view = render(
+type Handlers = {
+  onMoveBegin: jest.Mock;
+  onMoveFrame: jest.Mock;
+  onResizeBegin: jest.Mock;
+  onResizeFrame: jest.Mock;
+};
+
+/**
+ * Stands in for ScheduleRule: it holds the LIFTED ownership + staged store and
+ * renders one bar under it. `instance` is the bar's React key — bumping it
+ * unmounts and remounts the bar while the store above survives, which is exactly
+ * what the pin flip does to a bar mid-edit.
+ */
+function Harness({
+  bar,
+  session,
+  handlers,
+  instance,
+}: {
+  bar: RuleBar;
+  session: RippleSession | null;
+  handlers: Handlers;
+  instance: number;
+}) {
+  const [edits, setEdits] = useState<Map<string, BarEditState>>(() => new Map());
+  const getBarEdit = useCallback(
+    (phaseId: string) => edits.get(phaseId) ?? null,
+    [edits],
+  );
+  const setBarEdit = useCallback((phaseId: string, next: BarEditState | null) => {
+    setEdits((prev) => {
+      const map = new Map(prev);
+      if (next == null) map.delete(phaseId);
+      else map.set(phaseId, next);
+      return map;
+    });
+  }, []);
+
+  return (
     <RulePhaseBar
+      key={instance}
       bar={bar}
       pinned={false}
       trackRef={createRef<HTMLElement>()}
@@ -62,24 +94,48 @@ function renderBar(bar: RuleBar, session: RippleSession | null = null) {
       domainMinEpoch={DOMAIN_MIN}
       domainMaxEpoch={DOMAIN_MAX}
       session={session}
+      getBarEdit={getBarEdit}
+      setBarEdit={setBarEdit}
       {...handlers}
-    />,
+    />
   );
-  const rerenderWith = (nextSession: RippleSession | null, nextBar: RuleBar = bar) =>
+}
+
+function renderBar(bar: RuleBar, session: RippleSession | null = null) {
+  const handlers: Handlers = {
+    onMoveBegin: jest.fn(),
+    onMoveFrame: jest.fn(),
+    onResizeBegin: jest.fn(),
+    onResizeFrame: jest.fn(),
+  };
+  const view = render(
+    <Harness bar={bar} session={session} handlers={handlers} instance={0} />,
+  );
+  /** Re-render with a new session (and optionally a fresh bar INSTANCE, i.e. a
+   *  pin remount) while the harness's store persists. */
+  const rerenderWith = (
+    nextSession: RippleSession | null,
+    opts: { remount?: boolean; bar?: RuleBar } = {},
+  ) => {
+    instanceCounter += opts.remount ? 1 : 0;
     view.rerender(
-      <RulePhaseBar
-        bar={nextBar}
-        pinned={false}
-        trackRef={createRef<HTMLElement>()}
-        xToDay={(x) => Math.round(DOMAIN_MIN + (x / 100) * (DOMAIN_MAX - DOMAIN_MIN))}
-        domainMinEpoch={DOMAIN_MIN}
-        domainMaxEpoch={DOMAIN_MAX}
+      <Harness
+        bar={opts.bar ?? bar}
         session={nextSession}
-        {...handlers}
+        handlers={handlers}
+        instance={instanceCounter}
       />,
     );
+    // A remount swaps the DOM node — always hand back the live one.
+    return screen.getByRole('slider');
+  };
   return { ...handlers, rerenderWith, slider: screen.getByRole('slider') };
 }
+
+let instanceCounter = 0;
+beforeEach(() => {
+  instanceCounter = 0;
+});
 
 /** The rule-origin session the provider would hold after this bar's own move. */
 const ruleAnchorSession = (phaseId: string, startEpoch: number): RippleSession => ({
@@ -135,6 +191,40 @@ describe('RulePhaseBar — session ownership', () => {
     expect(onMoveFrame).not.toHaveBeenCalled();
     expect(onMoveBegin).toHaveBeenCalledTimes(2);
     expect(onMoveBegin).toHaveBeenLastCalledWith(START + 1); // back to committed
+  });
+
+  it('SURVIVES the pin remount: a fresh instance keeps framing from the staged value', () => {
+    const bar = makeBar();
+    const { slider, rerenderWith, onMoveBegin, onMoveFrame } = renderBar(bar);
+
+    fireEvent.keyDown(slider, { key: 'ArrowRight' });
+    expect(onMoveBegin).toHaveBeenCalledWith(START + 1);
+
+    // scroll past the pin threshold: ScheduleRule swaps its ternary and every
+    // bar unmounts/remounts, while the session it authored lives on.
+    const remounted = rerenderWith(ruleAnchorSession('p1', START + 1), { remount: true });
+    expect(remounted).not.toBe(slider); // genuinely a new element
+
+    fireEvent.keyDown(remounted, { key: 'ArrowRight' });
+    expect(onMoveFrame).toHaveBeenCalledTimes(1);
+    expect(onMoveFrame).toHaveBeenCalledWith(START + 2); // continued, not restarted
+    expect(onMoveBegin).toHaveBeenCalledTimes(1); // never began a second time
+  });
+
+  it('a fresh instance after a COMMIT (session null) claims nothing', () => {
+    const bar = makeBar();
+    const { slider, rerenderWith, onMoveBegin, onMoveFrame } = renderBar(bar);
+
+    fireEvent.keyDown(slider, { key: 'ArrowRight' });
+    // the strip commits: the session clears and the committed bar now carries
+    // the new start — a remounted bar must own nothing.
+    const committedBar = makeBar({ startEpoch: START + 1 });
+    const remounted = rerenderWith(null, { remount: true, bar: committedBar });
+
+    fireEvent.keyDown(remounted, { key: 'ArrowRight' });
+    expect(onMoveFrame).not.toHaveBeenCalled();
+    expect(onMoveBegin).toHaveBeenCalledTimes(2);
+    expect(onMoveBegin).toHaveBeenLastCalledWith(START + 2); // off the NEW committed start
   });
 
   it('a cleared session (Esc revert) drops ownership — the next nudge begins off committed', () => {

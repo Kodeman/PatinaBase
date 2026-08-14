@@ -66,7 +66,7 @@
  * Zero shadows (D4).
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useResolvedSchedule, useScheduleRevisions } from '@patina/supabase';
 import type { ResolvedPhase } from '@patina/utils';
 import { epochDayFromISO, isoFromEpochDay, resolveSchedule } from '@patina/utils';
@@ -96,7 +96,7 @@ import { RuleToday } from './rule-today';
 import { RuleThread, THREAD_LANE_PITCH } from './rule-thread';
 import { RuleLabelRow, type RuleLabelItem } from './rule-label-row';
 import { RuleBoundaryHandle } from './rule-boundary-handle';
-import { RulePhaseBar } from './rule-phase-bar';
+import { RulePhaseBar, barOwnsSession, type BarEditState } from './rule-phase-bar';
 import { RuleGhostLayer } from './rule-ghost-layer';
 import { RuleBaselineLayer } from './rule-baseline-layer';
 
@@ -294,6 +294,46 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
     return () => observer.disconnect();
   }, [sentinelEl]);
 
+  // ── The bars' ownership + staged store, keyed by phase id (B1/B2). It lives
+  //    HERE, not in RulePhaseBar: the pinned/unpinned surfaces are a ternary on
+  //    `pinned`, so scrolling past the pin threshold unmounts and remounts every
+  //    bar. Instance-local memory would be wiped by that scroll while the
+  //    session the bar authored lives on in the provider, and the next gesture
+  //    would silently begin again off stale committed values, discarding the
+  //    accumulated edit. ScheduleRule does not remount across the flip, so the
+  //    store outlives it. (Deliberately NOT in RippleProvider — the provider
+  //    owns the one pending EDIT; this is the Rule's own surface bookkeeping.) ──
+  const [barEdits, setBarEdits] = useState<Map<string, BarEditState>>(() => new Map());
+  const getBarEdit = useCallback(
+    (phaseId: string): BarEditState | null => barEdits.get(phaseId) ?? null,
+    [barEdits],
+  );
+  const setBarEdit = useCallback((phaseId: string, next: BarEditState | null) => {
+    setBarEdits((prev) => {
+      const map = new Map(prev);
+      if (next == null) map.delete(phaseId);
+      else map.set(phaseId, next);
+      return map;
+    });
+  }, []);
+  // Prune every proof the live session no longer bears out — cleared, committed,
+  // origin-flipped, or taken over. `barOwnsSession` is the SAME predicate the
+  // bars read, so the store can never hold a proof a bar would still honour.
+  useEffect(() => {
+    setBarEdits((prev) => {
+      if (prev.size === 0) return prev;
+      const next = new Map(prev);
+      let changed = false;
+      for (const [phaseId, entry] of prev) {
+        if (!barOwnsSession(ripple.session, phaseId, entry.emitted)) {
+          next.delete(phaseId);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [ripple.session]);
+
   const layers = foldedLayers(pinned);
 
   // Baseline affordance gates (R100): a v1 must exist; the toggle + ghosts hide
@@ -420,6 +460,8 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
                     domainMinEpoch={domainMinEpoch}
                     domainMaxEpoch={domainMaxEpoch}
                     session={ripple.session}
+                    getBarEdit={getBarEdit}
+                    setBarEdit={setBarEdit}
                     onMoveBegin={(s) => beginBarMove(b.id, s)}
                     onMoveFrame={(s) => frameBarMove(b.id, s)}
                     onResizeBegin={(d) => beginBarResize(b.id, d)}
@@ -490,6 +532,8 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
                   domainMinEpoch={domainMinEpoch}
                   domainMaxEpoch={domainMaxEpoch}
                   session={ripple.session}
+                  getBarEdit={getBarEdit}
+                  setBarEdit={setBarEdit}
                   onMoveBegin={(s) => beginBarMove(b.id, s)}
                   onMoveFrame={(s) => frameBarMove(b.id, s)}
                   onResizeBegin={(d) => beginBarResize(b.id, d)}
