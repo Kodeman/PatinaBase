@@ -685,6 +685,45 @@ describe('DocumentPage guide activation', () => {
     expect(screen.getByText(/Input needed · phases & fees/)).toBeInTheDocument();
   });
 
+  it('J1 — swaps Discovery for the doc\'s own Direction section once document-state refetches (no navigation needed)', () => {
+    const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+    mockDocumentQuery = {
+      ...mockDocumentQuery,
+      data: { kind: 'engagement', row: {
+        ...current, engagement_kind: 'relationship', active_section: 'discovery',
+        engagement_id: 'relationship-1', proposal_id: null, lead_id: null,
+        designer_id: 'designer-1', client_profile_id: 'client-1',
+      } },
+    };
+
+    const { rerender } = render(<DocumentPage params={fulfilledParams} />);
+
+    expect(screen.getByRole('button', { name: 'Budget comfort' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Direction', level: 2 })).not.toBeInTheDocument();
+
+    // Simulate the exact thing discovery-section.tsx's begin() now relies on
+    // instead of an explicit router.push to /drafting/[id]: useBeginDirection's
+    // own onSuccess (use-discovery.ts) invalidates the document-state query,
+    // it refetches, and now reads 'direction' with a real proposal_id.
+    mockDocumentQuery = {
+      ...mockDocumentQuery,
+      data: { kind: 'engagement', row: {
+        ...current, engagement_kind: 'proposal', active_section: 'direction',
+        engagement_id: 'relationship-1', proposal_id: 'proposal-9', lead_id: null,
+        designer_id: 'designer-1', client_profile_id: 'client-1', proposal_status: 'draft',
+      } },
+    };
+    mockProposalData = {
+      id: 'proposal-9', status: 'draft', document_kind: 'design_services',
+      commercial_state: 'draft', project_id: null,
+    };
+
+    rerender(<DocumentPage params={fulfilledParams} />);
+
+    expect(screen.getByRole('heading', { name: 'Direction', level: 2 })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Budget comfort' })).not.toBeInTheDocument();
+  });
+
   it('focuses an already-open missing Discovery facet without toggling it closed', () => {
     const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
     mockDocumentQuery = {

@@ -15,7 +15,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import {
   useDiscovery,
   useUpsertDiscovery,
@@ -33,7 +33,6 @@ import {
   type DiscoveryFacts,
 } from '@/lib/document/discovery-readiness';
 import { formatBudgetRange } from '@/lib/document/discovery-seed';
-import { rememberRoomOrigin } from '@/lib/document/room-origin';
 import type { Option } from './field-kit';
 import {
   ScopeEditor,
@@ -138,7 +137,6 @@ export function DiscoverySection({
   clientName: string;
 }) {
   const router = useRouter();
-  const pathname = usePathname();
   const { data: read } = useDiscovery(engagementId);
   const upsert = useUpsertDiscovery();
   const beginDirection = useBeginDirection();
@@ -271,14 +269,14 @@ export function DiscoverySection({
     beginDirection.mutate(
       { designerClientId: engagementId },
       {
-        onSuccess: (proposalId) => {
-          if (proposalId) {
-            // Stash where we came from so "← back" out of the Room returns
-            // here (mirrors draft-proposal-opener.tsx's cold-start opener).
-            rememberRoomOrigin(pathname);
-            router.push(`/drafting/${proposalId}`);
-          }
-        },
+        // J1: no navigation here. useBeginDirection's own onSuccess
+        // (use-discovery.ts) already invalidates the document-state query —
+        // the same row this page's useDocumentEngagement reads — so once
+        // that refetch resolves, row.active_section flips to 'direction' and
+        // doc/[id]/page.tsx mounts its own real Direction section in place.
+        // Routing to the standalone /drafting route skipped past that
+        // section entirely, even though the user was already on the page
+        // that renders it.
         onError: (err) => {
           // R83: the failure is explained in place, with a retry act. The RPC
           // rejects with a PostgrestError (message-shaped, not always an
