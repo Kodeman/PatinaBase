@@ -55,6 +55,22 @@ function chipSpanLabel(start: string, end: string) {
   return startMonth === endMonth ? `${startLabel} – ${endLabel.split(' ')[1]}` : `${startLabel} – ${endLabel}`;
 }
 
+/**
+ * The single choke point every `setWhen` call routes a fresh commit through
+ * (the calendar's own onCommit, the Thread's onSet): a span whose start and
+ * end land on the same day is really a day pick, not a one-day-wide window —
+ * clicking the same grid cell twice in span mode, or a Thread placement with
+ * lasts=1, both produce {kind:'span', start===end} otherwise. Collapsing it
+ * HERE, before it ever reaches `when` state, means every consumer of `when`
+ * (the chip label, save()'s dueDate/startsOn split) sees the day shape and
+ * never has to re-check the same-day case itself.
+ */
+function normalizeWhen(selection: FolioSelection): FolioSelection {
+  return selection.kind === 'span' && selection.start === selection.end
+    ? { kind: 'day', date: selection.start }
+    : selection;
+}
+
 export function WorkBlock({
   projectId,
   sectionKey,
@@ -303,7 +319,7 @@ export function WorkBlock({
                       today={todayYmd()}
                       modes={['day', 'span']}
                       onCommit={(selection) => {
-                        setWhen(selection);
+                        setWhen(normalizeWhen(selection));
                         setFolioOpen(false);
                       }}
                       footerExtra={
@@ -322,9 +338,7 @@ export function WorkBlock({
                       today={todayYmd()}
                       onSet={(placement) => {
                         setWhen(
-                          placement.startsOn === placement.dueDate
-                            ? { kind: 'day', date: placement.dueDate }
-                            : { kind: 'span', start: placement.startsOn, end: placement.dueDate },
+                          normalizeWhen({ kind: 'span', start: placement.startsOn, end: placement.dueDate }),
                         );
                         setFolioOpen(false);
                         setFolioMode('calendar');

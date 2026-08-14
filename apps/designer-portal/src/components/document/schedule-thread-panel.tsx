@@ -204,6 +204,8 @@ export function ScheduleThreadPanel({ projectId, today, onSet, onBack }: Schedul
     anchors[0] ??
     null;
 
+  // by 0 from a weekend anchor rolls to the next workday; the consequence
+  // line is the disclosure.
   const placement = useMemo(
     () => (selectedAnchor ? computeThreadPlacement(selectedAnchor.date, byWorkdays, lastsWorkdays) : null),
     [selectedAnchor, byWorkdays, lastsWorkdays],

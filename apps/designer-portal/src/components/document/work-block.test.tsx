@@ -41,6 +41,12 @@ jest.mock('./date', () => ({
       >
         commit-span
       </button>
+      <button
+        type="button"
+        onClick={() => onCommit({ kind: 'span', start: '2026-08-20', end: '2026-08-20' })}
+      >
+        commit-same-day-span
+      </button>
       {footerExtra}
     </div>
   ),
@@ -161,6 +167,22 @@ describe('WorkBlock date capture (Date Instruments D2)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
     expect(createTaskMutate).toHaveBeenCalledWith(
       expect.objectContaining({ dueDate: '2026-08-28', startsOn: '2026-08-25' }),
+    );
+  });
+
+  it('a same-day span collapses to a day pick: mutates {dueDate, startsOn: null}, chip shows one date', () => {
+    openCaptureRow();
+    fireEvent.click(screen.getByRole('button', { name: 'Due date' }));
+    fireEvent.click(screen.getByText('commit-same-day-span'));
+
+    // The chip reads a single date, never "Aug 20 – 20".
+    const chip = screen.getByRole('button', { name: 'Due date' });
+    expect(chip).toHaveTextContent('Aug 20');
+    expect(chip.textContent).not.toContain('–');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect(createTaskMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ dueDate: '2026-08-20', startsOn: null }),
     );
   });
 
