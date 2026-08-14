@@ -49,6 +49,17 @@ describe('weekdayFromEpochDay', () => {
     expect(weekdayFromEpochDay(epoch('2026-08-16'))).toBe(0); // Sun
     expect(weekdayFromEpochDay(epoch('2026-08-17'))).toBe(1); // Mon
   });
+
+  it('handles a negative epoch day (before 1970-01-01) via the normalized modulo', () => {
+    // epoch -1 = 1969-12-31, a Wednesday.
+    expect(weekdayFromEpochDay(-1)).toBe(3);
+  });
+
+  it('throws RangeError on non-finite input', () => {
+    expect(() => weekdayFromEpochDay(-Infinity)).toThrow(RangeError);
+    expect(() => weekdayFromEpochDay(Infinity)).toThrow(RangeError);
+    expect(() => weekdayFromEpochDay(NaN)).toThrow(RangeError);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -87,6 +98,10 @@ describe('nextWorkday', () => {
   it('from Monday → Tuesday, strictly after even though Monday is itself a workday', () => {
     expect(nextWorkday(epoch('2026-08-17'))).toBe(epoch('2026-08-18'));
   });
+
+  it('throws RangeError on non-finite input instead of looping forever', () => {
+    expect(() => nextWorkday(NaN)).toThrow(RangeError);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -118,6 +133,11 @@ describe('workdaysBetween', () => {
     // Mon 2026-08-17 .. Fri 2026-08-28: two full weeks (Mon–Fri each) inclusive.
     expect(workdaysBetween(epoch('2026-08-17'), epoch('2026-08-28'))).toBe(10);
   });
+
+  it('throws RangeError on non-finite input', () => {
+    expect(() => workdaysBetween(NaN, epoch('2026-08-21'))).toThrow(RangeError);
+    expect(() => workdaysBetween(epoch('2026-08-17'), NaN)).toThrow(RangeError);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -140,6 +160,20 @@ describe('addWorkdaysISO', () => {
   it('crosses two weekends over a longer run', () => {
     // Fri 08-14 is step 0; +1..+5 walks Mon 17 .. Fri 21.
     expect(addWorkdaysISO('2026-08-14', 5)).toBe('2026-08-21');
+  });
+
+  it('non-workday start with n>0: Saturday anchors to Monday (step 0), then steps further', () => {
+    // Sat 08-15 → step0 Mon 17 → step1 Tue 18 → step2 Wed 19.
+    expect(addWorkdaysISO('2026-08-15', 2)).toBe('2026-08-19');
+  });
+
+  it('non-workday start (Sunday) with n>0 crossing another weekend', () => {
+    // Sun 08-16 → step0 Mon 17 → 1..4 Tue..Fri → 5 crosses the weekend to Mon 24.
+    expect(addWorkdaysISO('2026-08-16', 5)).toBe('2026-08-24');
+  });
+
+  it('negative n does not step backward — floored to 0 additional steps', () => {
+    expect(addWorkdaysISO('2026-08-17', -3)).toBe('2026-08-17'); // Mon, already a workday
   });
 
   it('malformed iso → null', () => {

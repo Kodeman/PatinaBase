@@ -5,9 +5,18 @@
  * Every date computation here goes through `epochDayFromISO` /
  * `isoFromEpochDay` (see `./schedule.ts`) — the ONE date-math implementation
  * in this package (R100). This file adds no second one: it never touches
- * `Date`, never reimplements days-in-month, and reads no clock. Every
- * exported function is pure and total — malformed 'YYYY-MM-DD' input
- * degrades to `null` (never a throw), exactly like `epochDayFromISO` itself.
+ * `Date`, never reimplements days-in-month, and reads no clock.
+ *
+ * Two contracts, by layer:
+ *  - The raw-epoch API (`weekdayFromEpochDay`, `isWorkday`, `nextWorkday`,
+ *    `workdaysBetween`) is total over finite integers — a non-integer finite
+ *    epoch is truncated — but THROWS `RangeError` on non-finite input
+ *    (`NaN`, `Infinity`, `-Infinity`). These take a number a caller computed;
+ *    a loud throw beats silently hanging (a `while` loop keyed on a NaN
+ *    comparison never terminates) or returning nonsense.
+ *  - The ISO-string API (`addWorkdaysISO`, `workdaysBetweenISO`, `monthOf`)
+ *    stays fully total: malformed 'YYYY-MM-DD' input degrades to `null`,
+ *    never a throw, exactly like `epochDayFromISO` itself.
  *
  * Epoch-day 0 is 1970-01-01, a Thursday — `weekdayFromEpochDay(0) === 4`.
  * Weekdays are numbered the JS `Date#getDay()` way: 0 = Sunday … 6 = Saturday.
@@ -22,26 +31,44 @@ import { epochDayFromISO, isoFromEpochDay } from './schedule';
 /** Epoch-day 0 (1970-01-01) is a Thursday. */
 const EPOCH0_WEEKDAY = 4;
 
-/** The weekday of an epoch day: 0 = Sunday … 6 = Saturday. Pure, total. */
+/**
+ * Guards the raw-epoch API's entry points: throws `RangeError` on non-finite
+ * input (NaN/±Infinity would otherwise silently poison every downstream
+ * comparison — e.g. a `while (!isWorkday(e)) e++` loop keyed on a NaN
+ * comparison never terminates), and truncates a non-integer finite input
+ * (day math is integer-only).
+ */
+function assertFiniteEpoch(epoch: number, fnName: string): number {
+  if (!Number.isFinite(epoch)) {
+    throw new RangeError(`${fnName}: epoch must be a finite number, got ${epoch}`);
+  }
+  return Math.trunc(epoch);
+}
+
+/** The weekday of an epoch day: 0 = Sunday … 6 = Saturday. Total over finite integers; throws on non-finite input (see `assertFiniteEpoch`). */
 export function weekdayFromEpochDay(epoch: number): number {
-  const mod7 = ((epoch % 7) + 7) % 7; // JS `%` can be negative; normalize first
+  const e = assertFiniteEpoch(epoch, 'weekdayFromEpochDay');
+  const mod7 = ((e % 7) + 7) % 7; // JS `%` can be negative; normalize first
   return (mod7 + EPOCH0_WEEKDAY) % 7;
 }
 
-/** True for Monday–Friday. */
+/** True for Monday–Friday. Total over finite integers; throws on non-finite input. */
 export function isWorkday(epoch: number): boolean {
-  const wd = weekdayFromEpochDay(epoch);
+  const e = assertFiniteEpoch(epoch, 'isWorkday');
+  const wd = weekdayFromEpochDay(e);
   return wd >= 1 && wd <= 5;
 }
 
 /**
  * The first workday STRICTLY AFTER `epoch` — never `epoch` itself, even when
- * `epoch` is already a workday. Fri → Mon, Sat → Mon, Sun → Mon.
+ * `epoch` is already a workday. Fri → Mon, Sat → Mon, Sun → Mon. Total over
+ * finite integers; throws on non-finite input.
  */
 export function nextWorkday(epoch: number): number {
-  let e = epoch + 1;
-  while (!isWorkday(e)) e++;
-  return e;
+  const e = assertFiniteEpoch(epoch, 'nextWorkday');
+  let cur = e + 1;
+  while (!isWorkday(cur)) cur++;
+  return cur;
 }
 
 /**
@@ -49,15 +76,18 @@ export function nextWorkday(epoch: number): number {
  * is reversed (`startEpoch > endEpoch`) or empty. Closed-form, not a day-by-day
  * loop: any run of 7 consecutive calendar days contains exactly 5 workdays
  * regardless of phase, so the range decomposes into full 7-day blocks (×5
- * each) plus a short remainder walked by weekday.
+ * each) plus a short remainder walked by weekday. Total over finite integers;
+ * throws on non-finite input.
  */
 export function workdaysBetween(startEpoch: number, endEpoch: number): number {
-  if (startEpoch > endEpoch) return 0;
-  const totalDays = endEpoch - startEpoch + 1;
+  const start = assertFiniteEpoch(startEpoch, 'workdaysBetween');
+  const end = assertFiniteEpoch(endEpoch, 'workdaysBetween');
+  if (start > end) return 0;
+  const totalDays = end - start + 1;
   const fullWeeks = Math.floor(totalDays / 7);
   const remainder = totalDays % 7;
   let count = fullWeeks * 5;
-  let wd = weekdayFromEpochDay(startEpoch + fullWeeks * 7);
+  let wd = weekdayFromEpochDay(start + fullWeeks * 7);
   for (let i = 0; i < remainder; i++) {
     if (wd >= 1 && wd <= 5) count++;
     wd = (wd + 1) % 7;
