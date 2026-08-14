@@ -5,7 +5,7 @@
  * The id accepts ANY of the engagement's keys (engagement_id / project_id /
  * proposal_id / lead_id) and canonicalizes to the view row — the resolver
  * blessed by spec §3, logged as DECISIONS.md I8. The URL is not rewritten,
- * with TWO exceptions where the document's identity moves across a threshold:
+ * with FOUR exceptions where the document's identity moves across a threshold:
  *   · R6 — an activated proposal's id resolves to a redirect to
  *     `/doc/[projectId]` so pre-signing links survive the signing moment.
  *   · F1 (walk 2026-07) — an ACCEPTED lead's id resolves to a redirect to
@@ -13,6 +13,12 @@
  *     designer_clients relationship row (shape D keys engagement_id on it,
  *     and shape C excludes status 'accepted'), so pre-accept links survive
  *     the intake moment the same way.
+ *   · J6 (Direction A) — a pre-Direction relationship id whose
+ *     designer_clients row has since started a Direction chain (00327's
+ *     begin_direction_from_discovery, which stamps the new draft proposal's
+ *     designer_client_id to the relationship id) resolves to a redirect to
+ *     `/doc/[chainRootId]` (an activated chain's project, or the chain's own
+ *     root proposal id) so the pre-Direction URL survives the transition.
  *   · R21 (the dissolve) — a client_decision's id resolves to a redirect to
  *     `/doc/[projectId]`, or to `/doc/[designerClientId]` when the decision has
  *     no project yet: the decision never had a document of its own, it is a
@@ -31,9 +37,10 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 export type DocumentResolution =
   | { kind: 'engagement'; row: DocumentStateRow }
-  // The target document id: an activated proposal's project (R6) or an
-  // accepted lead's designer_clients relationship (F1). The consumer just
-  // replaces the URL with `/doc/${projectId}` either way.
+  // The target document id: an activated proposal's project (R6), an
+  // accepted lead's designer_clients relationship (F1), or a started
+  // Direction chain's root/project (J6). The consumer just replaces the
+  // URL with `/doc/${projectId}` either way.
   | { kind: 'redirect'; projectId: string }
   | { kind: 'missing' };
 
@@ -84,11 +91,43 @@ export function useDocumentEngagement(id: string) {
         if (rel?.id) return { kind: 'redirect', projectId: rel.id };
       }
 
+      // J6: the document grew across the DIRECTION-START moment —
+      // begin_direction_from_discovery (00327) stamps a fresh draft
+      // proposal's designer_client_id to this relationship's own id, so the
+      // pre-Direction canonical URL (/doc/[designerClientId]) has nothing
+      // answering it once Shape D's discovery view excludes the relationship
+      // row. Query by designer_client_id directly (NOT .maybeSingle() —
+      // clone_proposal carries the link onto every revision, so multiple
+      // rows can match). An activated-project row wins over any live
+      // draft/sent/viewed/accepted/declined/expired row; among the live
+      // rows, resolve to the chain root exactly as Shape B does
+      // (coalesce(parent_proposal_id, id)).
+      const { data: chainProps, error: chainError } = await supabase
+        .from('proposals')
+        .select('id, parent_proposal_id, project_id, status')
+        .eq('designer_client_id', id);
+      if (chainError) throw chainError;
+      const chainRows = (chainProps ?? []) as Array<{
+        id: string;
+        parent_proposal_id: string | null;
+        project_id: string | null;
+        status: string;
+      }>;
+      const activated = chainRows.find((r) => r.project_id);
+      if (activated?.project_id) {
+        return { kind: 'redirect', projectId: activated.project_id };
+      }
+      const LIVE_STATUSES = ['draft', 'sent', 'viewed', 'accepted', 'declined', 'expired'];
+      const live = chainRows.find((r) => LIVE_STATUSES.includes(r.status));
+      if (live) {
+        return { kind: 'redirect', projectId: live.parent_proposal_id ?? live.id };
+      }
+
       // R21 dissolve: /portal/decisions/[id] was a real page; the act it held is
       // a margin item inside the document the decision belongs to. Its permanent
       // redirect sends the decision id to /doc/[id], so the resolver has to know
-      // that shape too — third miss-path leg, same style as R6/F1: one lookup,
-      // only when nothing else answered.
+      // that shape too — fourth miss-path leg, same style as R6/F1/J6: one
+      // lookup, only when nothing else answered.
       //
       // NOTE: `client_decisions.project_id` is NULLABLE — a decision recorded
       // against the client relationship before a project exists carries none.
