@@ -81,18 +81,32 @@ describe('RoomViewPage — A2 scoped-back referrer resolution', () => {
     setSearch('');
   });
 
-  it('Case A: targets the docId referrer document, not the scan canonical document, when they differ', () => {
-    setSearch('?from=document&docId=referring-doc');
+  it('Case A: targets the docId referrer document (its own phase, not the canonical row\'s) when its resolved id matches this room\'s own canonical document', () => {
+    setSearch('?from=document&docId=stale-alias-of-canonical');
     mockDocEngagementResult = {
-      data: { kind: 'engagement', row: { engagement_id: 'referring-doc', active_section: 'direction' } },
+      data: { kind: 'engagement', row: { engagement_id: 'canonical-doc', active_section: 'direction' } },
       isLoading: false,
       isFetching: false,
     };
 
     render(<RoomViewPage params={fulfilledParams} />);
 
-    expect(screen.getByTestId('back-to').textContent).toBe('/doc/referring-doc');
+    expect(screen.getByTestId('back-to').textContent).toBe('/doc/canonical-doc');
     expect(screen.getByTestId('back-label').textContent).toBe('the Document · Direction');
+  });
+
+  it('NAV-3: a docId referrer resolving to a DIFFERENT document (not this room\'s own) is not trusted — falls back to the canonical document', () => {
+    setSearch('?from=document&docId=unrelated-but-accessible-doc');
+    mockDocEngagementResult = {
+      data: { kind: 'engagement', row: { engagement_id: 'other-designers-doc', active_section: 'proposal' } },
+      isLoading: false,
+      isFetching: false,
+    };
+
+    render(<RoomViewPage params={fulfilledParams} />);
+
+    expect(screen.getByTestId('back-to').textContent).toBe('/doc/canonical-doc');
+    expect(screen.getByTestId('back-label').textContent).toBe('the Document · Brief');
   });
 
   it('Case B: falls back to the scan canonical document when no docId arrived', () => {
@@ -104,7 +118,11 @@ describe('RoomViewPage — A2 scoped-back referrer resolution', () => {
     expect(screen.getByTestId('back-label').textContent).toBe('the Document · Brief');
   });
 
-  it('Case C: follows a redirect resolution (J6-style stale docId) to the redirect target', () => {
+  it('Case C: follows a redirect resolution (J6-style stale docId) to the redirect target, phase-qualified from this room\'s own canonical document', () => {
+    // The room's own canonical document has already migrated (via
+    // room_scan_documents' own document_state join) to the same identity
+    // the stale docId's redirect leg resolves to — the realistic J6 shape.
+    mockRoomGeometryData!.document = { engagementId: 'chain-root-proposal', activeSection: 'direction' };
     setSearch('?from=document&docId=stale-relationship-id');
     mockDocEngagementResult = {
       data: { kind: 'redirect', projectId: 'chain-root-proposal' },
@@ -115,7 +133,21 @@ describe('RoomViewPage — A2 scoped-back referrer resolution', () => {
     render(<RoomViewPage params={fulfilledParams} />);
 
     expect(screen.getByTestId('back-to').textContent).toBe('/doc/chain-root-proposal');
-    expect(screen.getByTestId('back-label').textContent).toBe('the Document');
+    expect(screen.getByTestId('back-label').textContent).toBe('the Document · Direction');
+  });
+
+  it('NAV-3: a redirect resolution to a DIFFERENT document (not this room\'s own) is not trusted — falls back to the canonical document', () => {
+    setSearch('?from=document&docId=stale-relationship-id');
+    mockDocEngagementResult = {
+      data: { kind: 'redirect', projectId: 'some-other-project' },
+      isLoading: false,
+      isFetching: false,
+    };
+
+    render(<RoomViewPage params={fulfilledParams} />);
+
+    expect(screen.getByTestId('back-to').textContent).toBe('/doc/canonical-doc');
+    expect(screen.getByTestId('back-label').textContent).toBe('the Document · Brief');
   });
 
   it('holds the leave affordance back (no flash of the canonical fallback) while the docId referrer is still loading', () => {
