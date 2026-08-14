@@ -193,13 +193,15 @@ export function RuleBoundaryHandle({
         // The refusal now names the way THROUGH, not just the wall (B3 review):
         // a locked boundary still refuses the drag, but the phase's bar carries
         // the duration on the keyboard. The sentence is long enough to overrun
-        // the rule's right edge, so a boundary in the right third grows the
-        // label LEFTWARD — the same anchor rule RuleLabelRow uses (centerX>66).
-        // It can't collide with the ghost labels below: the nudge is suppressed
-        // whenever a session is live, and the ghosts only exist while one is.
+        // the rule's right edge, so a boundary past the MIDPOINT grows the label
+        // LEFTWARD. RuleLabelRow flips at 66 for its own short phase names; this
+        // sentence is roughly twice their length, so it has to turn earlier —
+        // between 50 and 66 a right-growing label still overruns. It can't
+        // collide with the ghost labels below: the nudge is suppressed whenever
+        // a session is live, and the ghosts only exist while one is.
         <span
           className="absolute whitespace-nowrap font-mono text-[0.54rem] uppercase tracking-[0.06em] text-[var(--color-terracotta)]"
-          style={xPct > 66 ? { right: 8, top: g.labelTop } : { left: 8, top: g.labelTop }}
+          style={xPct > 50 ? { right: 8, top: g.labelTop } : { left: 8, top: g.labelTop }}
         >
           {refuseName} is anchored — unpin to move it, or select the bar and press Enter to
           resize it

@@ -98,6 +98,7 @@ import { RuleThread, THREAD_LANE_PITCH } from './rule-thread';
 import { RuleLabelRow, type RuleLabelItem } from './rule-label-row';
 import { RuleBoundaryHandle } from './rule-boundary-handle';
 import { RulePhaseBar, barOwnsSession, type BarEditState } from './rule-phase-bar';
+import { useArmedBarFocus } from './use-armed-bar-focus';
 import { RuleGhostLayer } from './rule-ghost-layer';
 import { RuleBaselineLayer } from './rule-baseline-layer';
 
@@ -340,23 +341,24 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
   //    and the Rule answers: scroll itself into view, then hand that phase's bar
   //    the focus so the edit happens by drag or by the bar's keyboard model.
   //    The sentinel is the scroll target — it sits immediately above the sticky
-  //    wrapper, so bringing it to the top brings the Rule with it. A phase with
-  //    NO bar (unplaced, or a thread lane) simply isn't in the map and the call
-  //    no-ops; the "Unplaced · N" affordance below remains its way in. ──
-  const barEls = useRef<Map<string, HTMLElement>>(new Map());
-  const registerBarEl = useCallback((phaseId: string, el: HTMLElement | null) => {
-    if (el == null) barEls.current.delete(phaseId);
-    else barEls.current.set(phaseId, el);
-  }, []);
+  //    wrapper, so bringing it to the top brings the Rule with it.
+  //
+  //    The focus is ARMED, not spent: that smooth scroll typically un-pins the
+  //    Rule partway through, which remounts every bar through the ternary below,
+  //    so a focus applied on the next frame would land on an element that is
+  //    about to be thrown away. `useArmedBarFocus` holds the intent until a bar
+  //    for the phase actually appears — through as many pin flips as the scroll
+  //    causes — and drops it after ~1.5s. A phase with NO bar (unplaced, or a
+  //    thread lane) never registers one, so its intent expires unspent; the
+  //    "Unplaced · N" affordance below remains its way in. ──
+  const { registerBarEl, arm: armBarFocus } = useArmedBarFocus();
 
   const handleArmEdit = useCallback(
     (phaseId: string) => {
+      armBarFocus(phaseId);
       sentinelEl?.scrollIntoView({ block: 'start', behavior: 'smooth' });
-      // Focus after the scroll paints — the same rAF beat the spine's reveal
-      // uses, so the bar is on screen before it takes focus.
-      requestAnimationFrame(() => barEls.current.get(phaseId)?.focus());
     },
-    [sentinelEl],
+    [armBarFocus, sentinelEl],
   );
 
   useEffect(() => {

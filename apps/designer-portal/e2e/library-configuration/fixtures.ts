@@ -163,11 +163,15 @@ export function teardownScope(scope: SeedScope): void {
 }
 
 /**
- * A project the Coordination band will actually render for:
+ * A project the schedule band will actually render for:
  *   · `status` not 'completed' and `current_phase` not install/walkthrough, or
  *     `document_state.active_section` is not 'project' and the band is absent.
- *   · `client_id` set to the seeded client — CoordinationBand resolves
+ *   · `client_id` set to the seeded client — the band resolves
  *     `designer_clients` from it, and without a match "+ New open item" no-ops.
+ *
+ * (Written for CoordinationBand, which stopped mounting when B3 retired the
+ * schedule-spine gate; the ScheduleSpine that replaced it takes the same props
+ * and needs the same seed, so these conditions still hold.)
  */
 export async function seedProject(name: string, designerId: string, clientId: string) {
   const { data, error } = await adminDb
