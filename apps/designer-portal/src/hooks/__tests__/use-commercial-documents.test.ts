@@ -15,6 +15,17 @@ jest.mock('@patina/supabase', () => ({
   },
   createBrowserClient: () => ({ rpc, functions: { invoke }, from: fromMock }),
   invalidateProjectWorkflow: jest.fn(),
+  // Stands in for the real settleScheduleWrite (packages/supabase): invalidates
+  // just the shared key set it owns (project-phases/schedule-milestones/
+  // project-v2/schedule-revisions), without touching real Supabase (a full
+  // fetch+resolve+rpc round trip is out of scope for this mock).
+  settleScheduleWrite: jest.fn((queryClient: { invalidateQueries: (arg: unknown) => unknown }, projectId: string) => {
+    queryClient.invalidateQueries({ queryKey: ['project-phases', projectId] });
+    queryClient.invalidateQueries({ queryKey: ['schedule-milestones', projectId] });
+    queryClient.invalidateQueries({ queryKey: ['project-v2', projectId] });
+    queryClient.invalidateQueries({ queryKey: ['schedule-revisions', projectId] });
+    return Promise.resolve();
+  }),
 }));
 
 jest.mock('@tanstack/react-query', () => ({
@@ -23,6 +34,7 @@ jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries, setQueryData: jest.fn() }),
 }));
 
+import { settleScheduleWrite } from '@patina/supabase';
 import {
   fetchCommercialDocumentBundle,
   useCountersignDesignServicesAgreement,
@@ -40,6 +52,11 @@ import {
   useSetBudgetTargets,
   useVoidAuthorization,
 } from '../use-commercial-documents';
+
+/** Mirrors use-trade-scopes.test.ts's own helper — the shared shape every
+ *  invalidateQueries assertion in this file's schedule tests reads from. */
+const invalidatedKeys = () =>
+  invalidateQueries.mock.calls.map((call) => JSON.stringify((call[0] as { queryKey?: unknown })?.queryKey));
 
 /** Chainable stub for `.from('commercial_document_signatures').select(...)
  *  .eq(...).eq(...).maybeSingle()` — useCountersignDesignServicesAgreement's
@@ -66,6 +83,7 @@ describe('designer commercial document hooks', () => {
     rpc.mockReset();
     invoke.mockReset();
     invalidateQueries.mockReset();
+    (settleScheduleWrite as jest.Mock).mockClear();
     fromMock.mockReset();
     stubSignatureLookup(null);
     fetchMock.mockReset().mockResolvedValue({
@@ -228,6 +246,36 @@ describe('designer commercial document hooks', () => {
     expect(result.notificationDelivery).toBe('pending_retry');
     // The countersign RPC itself already committed — this never blocks it.
     expect(result.newlyExecuted).toBe(true);
+  });
+
+  it('moves the schedule on success — countersign is the design-services-executed ceremony (00475)', async () => {
+    rpc.mockResolvedValue({
+      data: {
+        proposalId: 'agreement-1',
+        commercialState: 'executed',
+        projectId: 'project-1',
+        agreementId: 'agreement-1',
+        billingAuthorityId: 'authority-1',
+        newlyExecuted: true,
+      },
+      error: null,
+    });
+    invoke.mockResolvedValue({ data: { ok: true }, error: null });
+    const mutation = useCountersignDesignServicesAgreement('agreement-1') as unknown as {
+      mutationFn: (input: { signerName: string; disclosedImpact?: unknown }) => Promise<Record<string, unknown>>;
+      onSuccess?: (result: Record<string, unknown>) => unknown;
+    };
+
+    const result = await mutation.mutationFn({ signerName: 'Morgan Designer' });
+    await mutation.onSuccess?.(result);
+
+    const keys = invalidatedKeys();
+    // R109/R110: every anchor-writing ceremony invalidates the schedule set.
+    expect(keys).toContain(JSON.stringify(['project-phases', 'project-1']));
+    expect(keys).toContain(JSON.stringify(['schedule-milestones', 'project-1']));
+    expect(keys).toContain(JSON.stringify(['schedule-revisions', 'project-1']));
+    expect(keys).toContain(JSON.stringify(['schedule-proposals', 'project-1']));
+    expect(settleScheduleWrite).toHaveBeenCalledWith(expect.anything(), 'project-1');
   });
 
   it('publishes checkpoints and requires an audited override reason', async () => {
@@ -781,6 +829,36 @@ describe('designer commercial document hooks', () => {
         p_paper_signed_on: '2026-08-04',
         p_scan_document_id: null,
       });
+    });
+
+    it('moves the schedule on success — record_paper_trade_acceptance is the trade-scope-accepted ceremony (00475)', async () => {
+      rpc.mockResolvedValue({ data: { progressState: 'accepted' }, error: null });
+      const mutation = useRecordPaperTradeAcceptance('project-1') as unknown as {
+        mutationFn: (input: {
+          proposalId: string;
+          signedName: string;
+          paperSignedOn: string;
+        }) => Promise<Record<string, unknown>>;
+        onSuccess?: (
+          result: unknown,
+          variables: { proposalId: string; scanDocumentId?: string | null },
+        ) => unknown;
+      };
+
+      await mutation.mutationFn({
+        proposalId: 'trade-scope-1',
+        signedName: 'Harper Vale',
+        paperSignedOn: '2026-08-04',
+      });
+      await mutation.onSuccess?.(undefined, { proposalId: 'trade-scope-1' });
+
+      const keys = invalidatedKeys();
+      // R109/R110: every anchor-writing ceremony invalidates the schedule set.
+      expect(keys).toContain(JSON.stringify(['project-phases', 'project-1']));
+      expect(keys).toContain(JSON.stringify(['schedule-milestones', 'project-1']));
+      expect(keys).toContain(JSON.stringify(['schedule-revisions', 'project-1']));
+      expect(keys).toContain(JSON.stringify(['schedule-proposals', 'project-1']));
+      expect(settleScheduleWrite).toHaveBeenCalledWith(expect.anything(), 'project-1');
     });
 
     it('invalidates the proposal folio query when a paper execution carried a scan, so it appears in the Folio strip', async () => {

@@ -3,6 +3,7 @@ import { createBrowserClient } from '../client';
 import type { Database } from '../database.types';
 import { invalidateFfeCaches } from './use-procurement';
 import { invalidateProjectWorkflow } from './use-project-workflow';
+import { settleScheduleWrite } from './schedule-write-settle';
 
 const getSupabase = () => createBrowserClient();
 
@@ -439,9 +440,7 @@ export function useCreateProjectPhase() {
       return row;
     },
     onSuccess: (_, { projectId }) => {
-      queryClient.invalidateQueries({ queryKey: ['project-phases', projectId] });
-      queryClient.invalidateQueries({ queryKey: ['project-v2', projectId] });
-      void invalidateProjectWorkflow(queryClient, projectId);
+      void settleScheduleWrite(queryClient, projectId);
     },
   });
 }

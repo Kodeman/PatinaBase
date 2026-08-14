@@ -14,6 +14,18 @@ jest.mock('@patina/supabase', () => ({
   },
   createBrowserClient: () => ({ rpc, functions: { invoke }, from: fromMock }),
   invalidateProjectWorkflow: jest.fn(),
+  // Stands in for the real settleScheduleWrite (packages/supabase): invalidates
+  // just the shared key set it owns (project-phases/schedule-milestones/
+  // project-v2/schedule-revisions) so this file's existing "moves the
+  // schedule" assertions still see those keys, without touching real Supabase
+  // (a full fetch+resolve+rpc round trip is out of scope for this mock).
+  settleScheduleWrite: jest.fn((queryClient: { invalidateQueries: (arg: unknown) => unknown }, projectId: string) => {
+    queryClient.invalidateQueries({ queryKey: ['project-phases', projectId] });
+    queryClient.invalidateQueries({ queryKey: ['schedule-milestones', projectId] });
+    queryClient.invalidateQueries({ queryKey: ['project-v2', projectId] });
+    queryClient.invalidateQueries({ queryKey: ['schedule-revisions', projectId] });
+    return Promise.resolve();
+  }),
 }));
 
 jest.mock('@tanstack/react-query', () => ({

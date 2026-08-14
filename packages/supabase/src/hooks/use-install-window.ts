@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 import type { Tables } from '../database.types';
-import { invalidateProjectWorkflow } from './use-project-workflow';
+import { settleScheduleWrite } from './schedule-write-settle';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // The install window (R112, I126 · migration 00476)
@@ -75,10 +75,6 @@ async function invalidateAfterInstallWindowAct(
   projectId: string,
 ) {
   queryClient.invalidateQueries({ queryKey: ['install-window', projectId] });
-  queryClient.invalidateQueries({ queryKey: ['project-phases', projectId] });
-  queryClient.invalidateQueries({ queryKey: ['schedule-milestones', projectId] });
-  queryClient.invalidateQueries({ queryKey: ['project-v2', projectId] });
-  queryClient.invalidateQueries({ queryKey: ['schedule-revisions', projectId] });
   queryClient.invalidateQueries({ queryKey: ['schedule-proposals', projectId] });
   // The desk is where the need this act resolves is rendered, and it reads
   // schedule_proposals directly — both confirm and release can write one
@@ -86,7 +82,10 @@ async function invalidateAfterInstallWindowAct(
   // move project_phases.anchor_date, which the desk's schedule motion derives
   // from. Without this an open desk keeps asking about a window already acted on.
   queryClient.invalidateQueries({ queryKey: ['document-state', 'desk'] });
-  await invalidateProjectWorkflow(queryClient, projectId);
+  // The shared key set (project-phases/schedule-milestones/project-v2/
+  // schedule-revisions) plus the workflow invalidator, plus the
+  // resolved-dates materialization (00480) — see schedule-write-settle.ts.
+  await settleScheduleWrite(queryClient, projectId);
 }
 
 /** Hold a window. Writes no anchor and cuts no revision — a hold is not a

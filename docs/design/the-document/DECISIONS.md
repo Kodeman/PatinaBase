@@ -8332,3 +8332,27 @@ forward-resolution redirect. **No prod deploy was performed: this is local
 delivery only.**
 
 *Entries add: I132 · last id = I132*
+
+### I133 · Client-signed digital ceremonies have no materialization path — deferred — 2026-08-14
+
+**Found during the date-instruments program's Lane C review.**
+`accept_trade_scope`/`accept_trade_scope_with_trusted_ip` (digital
+trade-scope acceptance) and the digital, non-paper
+`execute_furnishings_authorization` move a schedule anchor server-side
+through `_commit_schedule_edit_authorized`, exactly like every ceremony
+00475/00476 cut — but nothing settles the legacy `project_phases.start_date`/
+`target_end_date` mirror (00480) after them. They run in
+`apps/client-portal`'s server-side API routes (`api/trade-scopes/[id]/accept`,
+`api/proposals/[id]/sign`), which hold no `queryClient` to call
+`settleScheduleWrite` from; and a server-side settle attempt would still need
+`materialize_schedule_dates` itself, whose wrapper guard
+(`is_studio_comember`) the signing CLIENT cannot pass — `service_role` is
+deliberately revoked from it, the same posture `commit_schedule_edit`
+carries. The gap is self-healing (the next designer-side schedule write
+re-materializes every phase) but visible to the client immediately after
+their own signing act, which is exactly the moment they'd look. Resolving it
+needs its own design ruling — a client-scoped wrapper guard, or a
+server-side settle path callable from client-portal's routes — and is
+explicitly deferred from the date-instruments program.
+
+*Entries add: I133 · last id = I133*
