@@ -13,6 +13,7 @@ import { useLead } from '@patina/supabase';
 import { fmtDay } from '@/lib/document/format';
 import { TriageBar } from './triage-bar';
 import { BriefScanStrip } from './brief-scan-strip';
+import { SectionLoadingLine } from './section-loading-line';
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
@@ -34,7 +35,7 @@ export function BriefSection({ leadId }: { leadId: string }) {
   };
 
   if (isLoading) {
-    return <p className="py-3 text-[11.5px] italic text-[var(--text-muted)]">Opening the brief…</p>;
+    return <SectionLoadingLine label="Opening the brief" className="py-3" />;
   }
   if (!lead) {
     return <p className="py-3 text-[11.5px] text-[var(--text-muted)]">Brief unavailable.</p>;

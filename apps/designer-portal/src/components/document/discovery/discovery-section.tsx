@@ -6,8 +6,8 @@
  * the Strata Mark is the only progress device; the five essentials → "ready
  * for Direction" (a soft gate). On readiness the designer begins the Direction
  * — a seeded draft design agreement (begin_direction_from_discovery, 00224) —
- * and the document re-derives Discovery→Direction, opening the Drafting Room
- * pre-seeded.
+ * and the act lands on the successor document, whose Direction section is now
+ * the engagement's identity (J1).
  *
  * The margin holds only the unstructured call Note (R66's load-bearing split);
  * structured facts live in the blocks and seed the proposal field→field.
@@ -15,7 +15,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import {
   useDiscovery,
   useUpsertDiscovery,
@@ -33,7 +33,6 @@ import {
   type DiscoveryFacts,
 } from '@/lib/document/discovery-readiness';
 import { formatBudgetRange } from '@/lib/document/discovery-seed';
-import { rememberRoomOrigin } from '@/lib/document/room-origin';
 import type { Option } from './field-kit';
 import {
   ScopeEditor,
@@ -138,7 +137,6 @@ export function DiscoverySection({
   clientName: string;
 }) {
   const router = useRouter();
-  const pathname = usePathname();
   const { data: read } = useDiscovery(engagementId);
   const upsert = useUpsertDiscovery();
   const beginDirection = useBeginDirection();
@@ -157,6 +155,10 @@ export function DiscoverySection({
   // R83 (F2, walk 2026-07): a failed Begin-the-Direction explains itself in a
   // quiet inline band AT the act — never a toast.
   const [beginError, setBeginError] = useState<string | null>(null);
+  // The act is not over when the RPC resolves — it is over when the successor
+  // document has been navigated to. Held until this component unmounts under
+  // the new URL, so the primary act never looks idle mid-flight.
+  const [landing, setLanding] = useState(false);
   const hydrated = useRef(false);
 
   // Debounced, SERIALIZED self-persist (no Save button) — F3/F4 (walk 2026-07).
@@ -268,28 +270,27 @@ export function DiscoverySection({
     // AWAIT the serialized save chain — the server gate must read the FINAL
     // facts, not race a still-in-flight edit (F2).
     await flush();
-    beginDirection.mutate(
-      { designerClientId: engagementId },
-      {
-        onSuccess: (proposalId) => {
-          if (proposalId) {
-            // Stash where we came from so "← back" out of the Room returns
-            // here (mirrors draft-proposal-opener.tsx's cold-start opener).
-            rememberRoomOrigin(pathname);
-            router.push(`/drafting/${proposalId}`);
-          }
-        },
-        onError: (err) => {
-          // R83: the failure is explained in place, with a retry act. The RPC
-          // rejects with a PostgrestError (message-shaped, not always an
-          // instanceof Error) — read .message off whatever arrived.
-          const message = (err as { message?: string } | null)?.message;
-          setBeginError(
-            message || 'Something went wrong beginning the Direction.',
-          );
-        },
-      },
-    );
+    setLanding(true);
+    try {
+      const proposalId = await beginDirection.mutateAsync({
+        designerClientId: engagementId,
+      });
+      // J1: the document's IDENTITY moves here. document_state keys the
+      // pre-Direction row on designer_clients.id (shape D) and suppresses it
+      // the moment a draft proposal exists (00327), while the successor row
+      // (shape B) is keyed on the proposal. So /doc/<designerClientId> stops
+      // resolving to anything at this instant — staying put renders "No
+      // document answers to this name". Navigate to the successor id the RPC
+      // just returned; replace, because the old name is now a dead end.
+      router.replace(`/doc/${proposalId}`);
+    } catch (err) {
+      setLanding(false);
+      // R83: the failure is explained in place, with a retry act. The RPC
+      // rejects with a PostgrestError (message-shaped, not always an
+      // instanceof Error) — read .message off whatever arrived.
+      const message = (err as { message?: string } | null)?.message;
+      setBeginError(message || 'Something went wrong beginning the Direction.');
+    }
   };
 
   const essentials: { key: BlockKey; name: string; node: React.ReactNode }[] = [
@@ -405,8 +406,8 @@ export function DiscoverySection({
           regionKey="readiness"
           variant="primary"
           onClick={() => void begin()}
-          disabled={!ready || beginDirection.isPending}
-          loading={beginDirection.isPending}
+          disabled={!ready || landing}
+          loading={landing}
           loadingLabel="Opening…"
           className="shrink-0"
         >
@@ -464,7 +465,7 @@ export function DiscoverySection({
             actionKey="view-room-scan"
             variant="tertiary"
             onClick={() =>
-              router.push(`/room/${draft.room_scan_id}?from=document`)
+              router.push(`/room/${draft.room_scan_id}?from=document&docId=${engagementId}`)
             }
           >
             View the scan

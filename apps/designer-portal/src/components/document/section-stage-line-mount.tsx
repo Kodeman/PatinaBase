@@ -18,6 +18,7 @@ import {
   deriveWorkflowStageDocument,
 } from "@/lib/document/workflow-stage-derivation";
 import { deriveSectionStageLine } from "@/lib/document/section-stage-line";
+import { SectionLoadingLine } from "./section-loading-line";
 
 const NO_SELECTION: ScheduleSelection = { activePhaseId: null, reason: "none" };
 
@@ -86,9 +87,7 @@ export function SectionStageLineMount({
         data-section-stage-line
         className="mb-1 min-w-0"
       >
-        <p className="font-mono text-[12px] uppercase tracking-[0.09em] text-[var(--text-muted)]">
-          Reading project workflow…
-        </p>
+        <SectionLoadingLine label="Reading project workflow" />
       </section>
     );
   }

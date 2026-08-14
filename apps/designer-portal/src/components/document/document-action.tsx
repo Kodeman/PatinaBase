@@ -209,7 +209,14 @@ export const DocumentAction = forwardRef<
         event.preventDefault();
         return;
       }
-      documentEvents.actionSelected(analytics);
+      // A capture failure must never block the act itself — the same
+      // isolate-and-log pattern as posthog.ts's init-subscriber drain (a
+      // throw here is caught, not propagated, so linkOnClick still runs).
+      try {
+        documentEvents.actionSelected(analytics);
+      } catch (error) {
+        console.error('[analytics] actionSelected threw', error);
+      }
       try {
         await linkOnClick?.(event);
       } finally {
@@ -235,7 +242,13 @@ export const DocumentAction = forwardRef<
   const buttonOnClick = onClick as DocumentActionButtonProps['onClick'];
   const handleClick = async (event: MouseEvent<HTMLButtonElement>) => {
     if (unavailable) return;
-    documentEvents.actionSelected(analytics);
+    // Same isolate-and-log guard as the Link branch above — a capture
+    // failure can never swallow the click's own state update.
+    try {
+      documentEvents.actionSelected(analytics);
+    } catch (error) {
+      console.error('[analytics] actionSelected threw', error);
+    }
     try {
       await buttonOnClick?.(event);
     } finally {

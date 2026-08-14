@@ -45,6 +45,7 @@ import {
   FOCUS_PROJECT_APPROVAL_EVENT,
   type FocusProjectApprovalDetail,
 } from './project-approval-navigation';
+import { SectionLoadingLine } from '../section-loading-line';
 
 export interface ProjectApprovalPhase {
   id: string;
@@ -488,7 +489,8 @@ export function ProjectApprovalDocument({
           </p>
           <h2
             id="project-approvals-title"
-            className="font-heading text-[22px] font-medium text-[var(--color-charcoal)]"
+            tabIndex={-1}
+            className="font-heading text-[22px] font-medium text-[var(--color-charcoal)] outline-none"
           >
             Client approvals
           </h2>
@@ -765,12 +767,7 @@ export function ProjectApprovalDocument({
           Approval record
         </h3>
         {(approvalsQuery.isLoading || authorityQuery.isLoading) && (
-          <p
-            aria-busy="true"
-            className="mt-3 text-[13px] text-[var(--text-muted)]"
-          >
-            Reading approvals…
-          </p>
+          <SectionLoadingLine label="Reading approvals" className="mt-3" />
         )}
         {approvalsQuery.isError && (
           <p

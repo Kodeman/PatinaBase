@@ -45,7 +45,6 @@ import {
 } from '@/components/document/document-action';
 import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
-import { useMobilePrimaryAction } from '@/components/document/mobile/mobile-shell';
 import { RecentBoardsStrip } from '@/components/document/recent-boards-strip';
 
 export default function DeskPage() {
@@ -84,13 +83,10 @@ export default function DeskPage() {
     seedSkipped: callSheetOn ? !!studio?.rolodex_seed_skipped_at : false,
   });
 
-  useMobilePrimaryAction({
-    actionKey: 'capture-lead',
-    surfaceKey: 'desk',
-    regionKey: 'desk-head',
-    label: 'Capture a lead',
-    target: { kind: 'press', onPress: () => setCaptureOpen(true) },
-  });
+  // A9: no mobile primary action is registered here — the header's
+  // "Capture a lead" (below) is the one on-screen CTA at every viewport, and
+  // the mobile dock falls back to its documented default (the "In hand /
+  // Today" glance, mobile-bar.tsx) instead of duplicating it.
 
   // R21 week-one watch: the Desk's composition on each load (folder/chip
   // counts + need-line kinds) so noise — esp. sent-unacknowledged frequency

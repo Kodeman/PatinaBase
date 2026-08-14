@@ -54,6 +54,7 @@ import {
   fetchProjectBillingAuthority,
 } from '@/hooks/use-commercial-documents';
 import { automaticTimeBillingIntent } from '@/lib/document/authority-hours';
+import { queryKeys } from '@/lib/react-query';
 
 // R64 — grace added past the last activity ping when bounding an abandoned
 // timer's end, so a normal trailing pause near the threshold isn't shaved.
@@ -133,9 +134,18 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
   const api = useRef({ startTimer, stopTimer, discardTimer, createEntry, updateEntry, deleteEntry });
   api.current = { startTimer, stopTimer, discardTimer, createEntry, updateEntry, deleteEntry };
 
-  // One serialized lane for every timer-row operation.
+  // One serialized lane for every timer-row operation. A rejection here is
+  // swallowed ON PURPOSE so one failed close-out/start can't wedge the chain
+  // for every hold/release after it — but a silently swallowed failure also
+  // violates the chain's own ordering guarantee (a stop that never actually
+  // ran still lets the next hold proceed as if it had). Surface it instead
+  // of hiding it, so a broken sequence is at least observable.
   const enqueue = useCallback((op: () => Promise<void>) => {
-    queueRef.current = queueRef.current.then(op).catch(() => {});
+    queueRef.current = queueRef.current.then(op).catch((error) => {
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('[document-time] a queued timer operation failed', error);
+      }
+    });
   }, []);
 
   /** The single running row, read from the server (the cache can lag a
@@ -211,6 +221,11 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
 
       if (ruling.action === 'discard_silently') {
         await api.current.discardTimer.mutateAsync({ entryId: timer.id });
+        // useDiscardTimer's own onSuccess fires invalidateQueries without
+        // awaiting/returning it too — same gap as useStopTimer/useStartTimer
+        // below. Await it here so a queued op right behind this one reads
+        // the settled cache, not the stale still-running row.
+        await qc.invalidateQueries({ queryKey: queryKeys.time.runningTimer() });
         invalidateTimeSurfaces();
         return;
       }
@@ -238,6 +253,15 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
         idleSeconds,
         ...(autoPhase !== undefined ? { phaseKey: autoPhase } : {}),
       });
+      // useStopTimer's own onSuccess fires invalidateQueries without
+      // awaiting/returning it, so mutateAsync above resolves before the
+      // runningTimer cache has actually refetched. hold()'s own queue
+      // ordering is safe regardless (fetchRunning reads Supabase directly,
+      // not this cache) — but the cached runningTimer backs the display
+      // read (heldTimer/elapsedSeconds below, and the spine clock any other
+      // mounted consumer reads). Wait for the refetch here so that display
+      // doesn't lag behind the row this call just stopped.
+      await qc.invalidateQueries({ queryKey: queryKeys.time.runningTimer() });
       invalidateTimeSurfaces();
 
       if (opts.offerStrip) {
@@ -253,7 +277,7 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
         });
       }
     },
-    [invalidateTimeSurfaces],
+    [invalidateTimeSurfaces, qc],
   );
 
   /** Pick up a document: chain out whatever runs, then start (D11,
@@ -281,9 +305,14 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
             quiet: true,
           })
           .catch(() => {});
+        // Same gap as closeOut's stopTimer above: useStartTimer's onSuccess
+        // doesn't await its own invalidateQueries either, so without this
+        // the cache can still read the PREVIOUS document's (or no) timer
+        // for a window after this row exists.
+        await qc.invalidateQueries({ queryKey: queryKeys.time.runningTimer() });
       });
     },
-    [enqueue, fetchRunning, closeOut, automaticBillableIntent],
+    [enqueue, fetchRunning, closeOut, automaticBillableIntent, qc],
   );
 
   /** Put down: close out the held document's timer through the strip. */
@@ -339,8 +368,9 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
           quiet: true,
         })
         .catch(() => {});
+      await qc.invalidateQueries({ queryKey: queryKeys.time.runningTimer() });
     });
-  }, [enqueue, fetchRunning, automaticBillableIntent]);
+  }, [enqueue, fetchRunning, automaticBillableIntent, qc]);
 
   /** "+ Log" — a typed entry against the held document (source manual_entry). */
   const manualLog = useCallback(

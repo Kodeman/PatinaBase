@@ -162,7 +162,7 @@ describe('the schedule ceremony', () => {
     mockItems = [];
     mockItemsLoading = true;
     const loading = renderSection();
-    expect(screen.getByText('Reading the schedule…')).toBeVisible();
+    expect(screen.getByText('Reading the schedule')).toBeVisible();
     expect(screen.queryByText('Build the FF&E schedule')).not.toBeInTheDocument();
     loading.unmount();
 
@@ -226,6 +226,50 @@ describe('the schedule ceremony', () => {
     renderSection();
     expect(
       screen.queryByRole('button', { name: /release for authorization/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('disables the head act and explains itself when canRelease holds but no line is eligible', () => {
+    // Every line blocked — eligibility() returns false for all of them —
+    // while billing authority (canRelease) is still active.
+    mockItems = [
+      item({ blocked: true }),
+      item({
+        id: 'line-2',
+        name: 'Roman shades, six windows',
+        blocked: true,
+      }),
+      item({
+        id: 'line-3',
+        name: 'Console table',
+        project_room_id: 'room-2',
+        room: { id: 'room-2', name: 'Living' },
+        blocked: true,
+      }),
+    ];
+    mockInstruments = [];
+    renderSection();
+
+    const button = screen.getByRole('button', {
+      name: /release for authorization/i,
+    });
+    expect(button).toBeDisabled();
+    expect(
+      screen.getByText('No lines are currently eligible for release.'),
+    ).toBeInTheDocument();
+
+    fireEvent.click(button);
+    expect(screen.queryByText('Choose what to release')).not.toBeInTheDocument();
+  });
+
+  it('leaves the head act enabled with no explanatory text when at least one line is eligible', () => {
+    renderSection();
+    const button = screen.getByRole('button', {
+      name: /release for authorization/i,
+    });
+    expect(button).toBeEnabled();
+    expect(
+      screen.queryByText('No lines are currently eligible for release.'),
     ).not.toBeInTheDocument();
   });
 

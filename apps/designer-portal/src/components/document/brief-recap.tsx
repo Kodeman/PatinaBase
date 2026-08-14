@@ -11,6 +11,7 @@
 
 import { useDesignerClientForClientUser } from '@patina/supabase';
 import { BriefSection } from './brief-section';
+import { SectionLoadingLine } from './section-loading-line';
 
 export function BriefRecap({
   clientProfileId,
@@ -28,7 +29,7 @@ export function BriefRecap({
 
   if (!resolvedLeadId) {
     if (clientProfileId && isLoading) {
-      return <p className="py-2 text-[11.5px] italic text-[var(--text-muted)]">Opening the brief…</p>;
+      return <SectionLoadingLine label="Opening the brief" className="py-2" />;
     }
     return (
       <p className="py-2 text-[11.5px] text-[var(--text-muted)]">

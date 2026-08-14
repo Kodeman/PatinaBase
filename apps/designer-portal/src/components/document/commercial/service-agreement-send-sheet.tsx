@@ -15,6 +15,7 @@ export function ServiceAgreementSendSheet({
   open,
   onClose,
   onSent,
+  onRecordOffline,
   document,
   terms,
   rates,
@@ -24,6 +25,11 @@ export function ServiceAgreementSendSheet({
   open: boolean;
   onClose: () => void;
   onSent?: () => void;
+  /** 00477 — the third path out of this sheet, offered only while the
+   *  agreement is still in the studio's hands and the server would accept a
+   *  paper issuance. Omitted otherwise, because an act that would be refused
+   *  should not be named here. */
+  onRecordOffline?: () => void;
   document: CommercialDocument;
   terms: ServiceAgreementTerms | null;
   rates: ServiceRate[];
@@ -146,17 +152,30 @@ export function ServiceAgreementSendSheet({
           </p>
         )}
 
-        <div className="mt-6 flex justify-end gap-3">
-          <Button variant="ghost" onClick={onClose}>
-            Send later
-          </Button>
-          <Button
-            onClick={() => void submit()}
-            disabled={!readiness.ready}
-            loading={send.isPending}
-          >
-            Send agreement →
-          </Button>
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+          {onRecordOffline ? (
+            <button
+              type="button"
+              onClick={onRecordOffline}
+              className="text-[12px] text-[var(--color-mocha)] underline underline-offset-4"
+            >
+              Record a signature received outside Patina
+            </button>
+          ) : (
+            <span />
+          )}
+          <div className="flex gap-3">
+            <Button variant="ghost" onClick={onClose}>
+              Send later
+            </Button>
+            <Button
+              onClick={() => void submit()}
+              disabled={!readiness.ready}
+              loading={send.isPending}
+            >
+              Send agreement →
+            </Button>
+          </div>
         </div>
       </div>
     </DocSheet>

@@ -140,6 +140,13 @@ export function ServiceAgreementInstruments({
   const projectId = resultProjectId ?? document.projectId;
   const clientEmail =
     typeof proposal.client?.email === "string" ? proposal.client.email : null;
+  // 00477 — a draft can be issued on paper instead of emailed. The gate is the
+  // SERVER's bar, not the fuller client-side readiness assessment: the RPC
+  // requires terms and at least one role rate, exactly as Send agreement does,
+  // so offering the act on anything narrower would refuse work the server
+  // would have accepted.
+  const neverSent = document.state === "draft";
+  const paperReady = Boolean(terms) && rates.length > 0;
 
   const enterDrafting = () => {
     rememberRoomOrigin(pathname);
@@ -256,14 +263,16 @@ export function ServiceAgreementInstruments({
             </div>
           </div>
 
-          {document.state === "sent" && (
+          {(document.state === "sent" ||
+            (document.state === "draft" && paperReady)) && (
             <div className="mt-4 border-t border-[var(--doc-ink-border)] pt-3">
               <p className="font-heading text-[1rem] italic text-[var(--color-charcoal)]">
                 Signed offline
               </p>
               <p className="mt-1 text-[11.5px] text-[var(--text-muted)]">
-                For a client who signed a printed copy instead of signing
-                here — countersign as usual once it&rsquo;s recorded.
+                {neverSent
+                  ? "If the client has signed a printed copy, record it here — nothing will be emailed."
+                  : "For a client who signed a printed copy instead of signing here — countersign as usual once it’s recorded."}
               </p>
               <div className="mt-3">
                 <DocumentAction
@@ -339,6 +348,18 @@ export function ServiceAgreementInstruments({
             rates={rates}
             recipientEmail={clientEmail}
             recipientName={clientName}
+            // The send sheet is where a studio meets the wall — two buttons,
+            // both of which assume an email. The third path belongs there, not
+            // only in the sibling block below it, so a signature taken at a
+            // kitchen table is findable from the exact place it is needed.
+            onRecordOffline={
+              neverSent && paperReady
+                ? () => {
+                    setSendOpen(false);
+                    setRecordOnPaperOpen(true);
+                  }
+                : undefined
+            }
           />
         </>
       )}
@@ -347,6 +368,7 @@ export function ServiceAgreementInstruments({
         kind="design-services"
         proposalId={proposalId}
         clientName={clientName}
+        neverSent={neverSent}
         open={recordOnPaperOpen}
         onClose={() => setRecordOnPaperOpen(false)}
         onRecorded={() => {

@@ -17814,8 +17814,10 @@ export type Database = {
           document_kind: string
           feedback_enabled: boolean
           id: string
+          issued_on_paper: boolean
           last_nudged_at: string | null
           nudge_count: number
+          paper_issued_by: string | null
           parent_proposal_id: string | null
           payment_notes: string | null
           payment_terms: string | null
@@ -17863,8 +17865,10 @@ export type Database = {
           document_kind?: string
           feedback_enabled?: boolean
           id?: string
+          issued_on_paper?: boolean
           last_nudged_at?: string | null
           nudge_count?: number
+          paper_issued_by?: string | null
           parent_proposal_id?: string | null
           payment_notes?: string | null
           payment_terms?: string | null
@@ -17912,8 +17916,10 @@ export type Database = {
           document_kind?: string
           feedback_enabled?: boolean
           id?: string
+          issued_on_paper?: boolean
           last_nudged_at?: string | null
           nudge_count?: number
+          paper_issued_by?: string | null
           parent_proposal_id?: string | null
           payment_notes?: string | null
           payment_terms?: string | null
@@ -17973,6 +17979,20 @@ export type Database = {
           {
             foreignKeyName: "proposals_designer_id_fkey"
             columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposals_paper_issued_by_fkey"
+            columns: ["paper_issued_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposals_paper_issued_by_fkey"
+            columns: ["paper_issued_by"]
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
             referencedColumns: ["id"]
@@ -26749,8 +26769,10 @@ export type Database = {
           document_kind: string
           feedback_enabled: boolean
           id: string
+          issued_on_paper: boolean
           last_nudged_at: string | null
           nudge_count: number
+          paper_issued_by: string | null
           parent_proposal_id: string | null
           payment_notes: string | null
           payment_terms: string | null
@@ -27019,8 +27041,10 @@ export type Database = {
           document_kind: string
           feedback_enabled: boolean
           id: string
+          issued_on_paper: boolean
           last_nudged_at: string | null
           nudge_count: number
+          paper_issued_by: string | null
           parent_proposal_id: string | null
           payment_notes: string | null
           payment_terms: string | null
@@ -27195,6 +27219,10 @@ export type Database = {
         Args: { p_project_id: string }
         Returns: boolean
       }
+      _issue_design_services_agreement_on_paper: {
+        Args: { p_proposal_id: string }
+        Returns: undefined
+      }
       _issue_invoice_authorized_legacy_00397: {
         Args: { p_due_date?: string; p_invoice_id: string }
         Returns: {
@@ -27320,8 +27348,10 @@ export type Database = {
           document_kind: string
           feedback_enabled: boolean
           id: string
+          issued_on_paper: boolean
           last_nudged_at: string | null
           nudge_count: number
+          paper_issued_by: string | null
           parent_proposal_id: string | null
           payment_notes: string | null
           payment_terms: string | null
@@ -27687,8 +27717,10 @@ export type Database = {
           document_kind: string
           feedback_enabled: boolean
           id: string
+          issued_on_paper: boolean
           last_nudged_at: string | null
           nudge_count: number
+          paper_issued_by: string | null
           parent_proposal_id: string | null
           payment_notes: string | null
           payment_terms: string | null
@@ -28318,8 +28350,10 @@ export type Database = {
           document_kind: string
           feedback_enabled: boolean
           id: string
+          issued_on_paper: boolean
           last_nudged_at: string | null
           nudge_count: number
+          paper_issued_by: string | null
           parent_proposal_id: string | null
           payment_notes: string | null
           payment_terms: string | null
@@ -29147,6 +29181,14 @@ export type Database = {
       }
       derive_working_budget_draft: {
         Args: { p_project_id: string }
+        Returns: Json
+      }
+      designer_client_send_evidence: {
+        Args: {
+          p_client_id: string
+          p_designer_client_id: string
+          p_designer_id: string
+        }
         Returns: Json
       }
       dismiss_field_capture: { Args: { p_capture_id: string }; Returns: Json }
@@ -30963,6 +31005,7 @@ export type Database = {
       }
       record_paper_client_signature: {
         Args: {
+          p_issue_on_paper?: boolean
           p_paper_signed_on: string
           p_proposal_id: string
           p_scan_document_id?: string
@@ -31628,8 +31671,10 @@ export type Database = {
               document_kind: string
               feedback_enabled: boolean
               id: string
+              issued_on_paper: boolean
               last_nudged_at: string | null
               nudge_count: number
+              paper_issued_by: string | null
               parent_proposal_id: string | null
               payment_notes: string | null
               payment_terms: string | null
@@ -31691,8 +31736,10 @@ export type Database = {
               document_kind: string
               feedback_enabled: boolean
               id: string
+              issued_on_paper: boolean
               last_nudged_at: string | null
               nudge_count: number
+              paper_issued_by: string | null
               parent_proposal_id: string | null
               payment_notes: string | null
               payment_terms: string | null

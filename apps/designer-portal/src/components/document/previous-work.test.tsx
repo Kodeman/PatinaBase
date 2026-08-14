@@ -13,4 +13,43 @@ describe('PreviousWork', () => {
     expect(screen.getByText('Brief recap')).toBeInTheDocument();
     expect(document.getElementById(button.getAttribute('aria-controls')!)).toBeVisible();
   });
+
+  it('leaves the line alone when no approval is awaiting publish', () => {
+    render(
+      <PreviousWork count={3} approvalsAwaitingPublish={0} onOpenApprovals={jest.fn()}>
+        <div>Brief recap</div>
+      </PreviousWork>,
+    );
+    expect(screen.getByRole('button', { name: 'Previous work · 3 complete' })).toBeVisible();
+    expect(screen.queryByText(/Client approvals/)).not.toBeInTheDocument();
+  });
+
+  it('says nothing about approvals until the read has answered', () => {
+    render(
+      <PreviousWork count={3} approvalsAwaitingPublish={null} onOpenApprovals={jest.fn()}>
+        <div>Brief recap</div>
+      </PreviousWork>,
+    );
+    expect(screen.queryByText(/Client approvals/)).not.toBeInTheDocument();
+  });
+
+  it('carries the drafted approvals as a door, not as content of the disclosure', () => {
+    const openApprovals = jest.fn();
+    render(
+      <PreviousWork count={4} approvalsAwaitingPublish={1} onOpenApprovals={openApprovals}>
+        <div>Brief recap</div>
+      </PreviousWork>,
+    );
+
+    // The disclosure's accessible name promises only what its body holds.
+    const disclosure = screen.getByRole('button', { name: 'Previous work · 4 complete' });
+    expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+
+    const door = screen.getByRole('button', {
+      name: 'Client approvals · 1 awaiting publish →',
+    });
+    fireEvent.click(door);
+    expect(openApprovals).toHaveBeenCalledTimes(1);
+    expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+  });
 });

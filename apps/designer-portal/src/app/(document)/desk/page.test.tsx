@@ -83,17 +83,21 @@ jest.mock('@/components/document/overlays/open-project-sheet', () => ({
 jest.mock('@/lib/help-system/use-document-surface', () => ({
   useDocumentSurface: jest.fn(),
 }));
-jest.mock('@/components/document/mobile/mobile-shell', () => ({
-  useMobilePrimaryAction: jest.fn(),
-}));
 jest.mock('@/components/document/recent-boards-strip', () => ({
   RecentBoardsStrip: () => null,
 }));
 jest.mock('@/components/document/account/account-sheet', () => ({
   openAccountPage: jest.fn(),
 }));
+// A9: the Desk no longer registers a mobile-dock primary action for
+// capture-lead (mobile-bar falls back to its documented "In hand / Today"
+// glance instead) — kept mocked here purely as a regression witness below.
+jest.mock('@/components/document/mobile/mobile-shell', () => ({
+  useMobilePrimaryAction: jest.fn(),
+}));
 
 import DeskPage from './page';
+import { useMobilePrimaryAction } from '@/components/document/mobile/mobile-shell';
 
 const WHISPER = 'The studio isn’t fully set up.';
 
@@ -153,5 +157,13 @@ describe('Desk — the studio setup whisper counts the rolodex', () => {
     mockOrgs.mockReturnValue([studio({ membership: { role: 'member' } })]);
     render(<DeskPage />);
     expect(screen.queryByText(WHISPER)).not.toBeInTheDocument();
+  });
+});
+
+describe('Desk — capture-lead affordance (A9)', () => {
+  it('registers no mobile-dock primary action; the header CTA is the only on-screen "Capture a lead"', () => {
+    render(<DeskPage />);
+    expect(useMobilePrimaryAction).not.toHaveBeenCalled();
+    expect(screen.getAllByText('Capture a lead')).toHaveLength(1);
   });
 });

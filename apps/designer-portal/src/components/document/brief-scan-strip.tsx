@@ -59,7 +59,7 @@ export function BriefScanStrip({ leadId }: { leadId: string }) {
             <button
               key={row.id}
               type="button"
-              onClick={() => router.push(`/room/${row.scan_id}?from=document`)}
+              onClick={() => router.push(`/room/${row.scan_id}?from=document&docId=${leadId}`)}
               title={row.scan?.name ?? 'Room scan'}
               className="group relative h-16 w-16 shrink-0 overflow-hidden rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
             >

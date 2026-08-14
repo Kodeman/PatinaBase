@@ -219,16 +219,21 @@ export function DeskContents({ prominent = false }: { prominent?: boolean }) {
         <div>
           <ColumnHead>Begin</ColumnHead>
           <ul>
-            {STUDIO_VERBS.map((verb) => (
-              <ContentsRow
-                key={verb.key}
-                icon={verb.icon}
-                label={verb.label}
-                variant="verb"
-                prominent={prominent}
-                onOpen={openVerb(verb.key)}
-              />
-            ))}
+            {/* A9: capture-lead is the Desk header's primary CTA — showing it
+                again in the Studio Contents index is the A9 triplicate; ⌘K
+                still finds it via the untouched STUDIO_VERBS registry. */}
+            {STUDIO_VERBS.filter((verb) => verb.key !== 'capture-lead').map(
+              (verb) => (
+                <ContentsRow
+                  key={verb.key}
+                  icon={verb.icon}
+                  label={verb.label}
+                  variant="verb"
+                  prominent={prominent}
+                  onOpen={openVerb(verb.key)}
+                />
+              ),
+            )}
           </ul>
         </div>
       </div>

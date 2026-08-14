@@ -19,22 +19,38 @@
  *     the card's click site / readRoomOrigin here) — same as Library/People.
  *     No wiring needed here; the mechanic is already generic.
  *   · A Document scan door (W2-T5, I74a) → `?from=document` is the minimal
- *     signal. Unlike the roster's origin-stash, the doors don't carry a
- *     document/engagement id of their own to pass along — so rather than
- *     round-trip one through the URL, the scoped-back reads it off the SAME
- *     `useRoomGeometry` fetch this page already makes for the Plan
- *     (`data.document.engagementId` / `.activeSection`, room_scan_documents
- *     — 00339). That produces the phase-qualified leave affordance
- *     ("← the Document · Brief") the doc-link at the top of RoomView already
- *     renders forward ("→ the Document · Brief", room-view.tsx) — one
- *     resolved Document, read twice, same label vocabulary both directions.
- *     `?from=document` doubles as the room_opened source=document
- *     telemetry-attribution marker (wired below) — do not repurpose or drop
- *     it.
- *     When the fetch resolves without a Document (an orphan scan, or the
- *     scan simply hasn't parsed yet), the scoped-back label/target is
- *     skipped and RoomShell falls back to its normal origin-stash — a
- *     roster-style leave rather than a broken/blank document link.
+ *     signal, and (A2) `?docId=` carries the CURRENT document's own
+ *     engagement id — the document the visitor actually opened the scan
+ *     from, which can drift from the scan's own canonical document across
+ *     an identity-migration moment (J6: a stale pre-Direction docId that
+ *     has since redirected). When `docId` resolves (via the same
+ *     `useDocumentEngagement` resolver the doc surface itself uses — J6's
+ *     fix applies here for free), the scoped-back targets THAT document —
+ *     but ONLY once its resolved identity is checked against the room's OWN
+ *     engagement (NAV-3: a hand-crafted `docId` pointing at a real but
+ *     unrelated document the visitor also happens to have access to must
+ *     not spoof the leave affordance). The check is cheap and needs no new
+ *     query — `useRoomGeometry` already loads the room's own canonical
+ *     `data.document.engagementId` for the Plan, so `docId`'s resolved
+ *     target is trusted only when it equals that id, which is exactly what
+ *     a genuinely stale, since-migrated docId for THIS room resolves to.
+ *     Only when `docId` is absent (an older bookmarked/pre-A2 link), its
+ *     resolver comes back empty, or its resolved identity doesn't match the
+ *     room's own document does the scoped-back fall back to the scan's own
+ *     canonical document, read off the SAME `useRoomGeometry` fetch this
+ *     page already makes for the Plan (`data.document.engagementId` /
+ *     `.activeSection`, room_scan_documents — 00339). Either way it
+ *     produces the phase-qualified leave affordance ("← the Document ·
+ *     Brief") the doc-link at the top of RoomView already renders forward
+ *     ("→ the Document · Brief", room-view.tsx) — one resolved Document,
+ *     read twice, same label vocabulary both directions. `?from=document`
+ *     doubles as the room_opened source=document telemetry-attribution
+ *     marker (wired below) — do not repurpose or drop it.
+ *     When neither the docId resolver nor the fetch resolves a Document (an
+ *     orphan scan, or the scan simply hasn't parsed yet), the scoped-back
+ *     label/target is skipped and RoomShell falls back to its normal
+ *     origin-stash — a roster-style leave rather than a broken/blank
+ *     document link.
  *
  * (I74b, historical): a hard-refreshed /room/[id] used to be able to bounce
  * to /portal while the now-removed DocumentGate's flag check resolved.
@@ -48,6 +64,7 @@ import { RoomShell } from '@/components/document/rooms/room-shell';
 import { RoomView } from '@/components/document/rooms/room-view/room-view';
 import { roomGeometryFromRows } from '@/lib/room-view/from-rows';
 import { roomEvents } from '@/lib/analytics';
+import { useDocumentEngagement } from '@/hooks/use-document-state';
 
 /** Mirrors room-view.tsx's own SECTION_LABEL (itself mirroring folder-card.tsx,
  *  module-private in both) — the leave affordance needs the same human phase
@@ -69,8 +86,9 @@ export default function RoomViewPage({ params }: { params: Promise<{ id: string 
   // matching drafting-room.tsx's `arrivingFlagged` pattern. `from=document`
   // is also the room_opened source attribution marker (see file header) —
   // read once at mount, same as the marker itself never changes after
-  // arrival.
+  // arrival. `docId` (A2) is read the same way, same reasoning.
   const [fromDocument, setFromDocument] = useState(false);
+  const [docId, setDocId] = useState<string | null>(null);
 
   // room_opened — fires exactly once per mount (ref-guard, not just the
   // effect's `[id]` deps: React Strict Mode double-invokes effects in dev,
@@ -81,6 +99,7 @@ export default function RoomViewPage({ params }: { params: Promise<{ id: string 
     const qs = new URLSearchParams(window.location.search);
     const isFromDocument = qs.get('from') === 'document';
     setFromDocument(isFromDocument);
+    setDocId(qs.get('docId'));
     if (!openedRef.current) {
       openedRef.current = true;
       roomEvents.roomOpened({ room_id: id, source: isFromDocument ? 'document' : 'index' });
@@ -88,6 +107,12 @@ export default function RoomViewPage({ params }: { params: Promise<{ id: string 
   }, [id]);
 
   const { data, isLoading } = useRoomGeometry(id);
+
+  // A2: resolve the referring document by the id the door carried, THROUGH
+  // the same resolver the doc surface itself uses (J6's redirect leg applies
+  // here too, for free). Disabled (and permanently non-loading) when no
+  // docId arrived — see use-document-state.ts's UUID `enabled` gate.
+  const referrer = useDocumentEngagement(docId ?? '');
 
   // The scan's photo set, alongside the geometry fetch. `id` IS the scan id
   // (useRoomGeometry queries room_scan_documents by scan_id) — the same key
@@ -102,17 +127,60 @@ export default function RoomViewPage({ params }: { params: Promise<{ id: string 
     return roomGeometryFromRows(data.header, data.elements);
   }, [data]);
 
-  // Scoped-back (I74a, package accept 2.4): only when the door arrived
-  // `?from=document` AND the scan's Document actually resolves — an orphan
-  // scan or a not-yet-parsed row degrades to RoomShell's generic origin-stash
-  // leave instead of a dead/blank "the Document" link.
+  // Scoped-back (I74a, package accept 2.4; A2 adds the docId-referrer path):
+  // only when the door arrived `?from=document` at all. Priority when a
+  // `docId` also arrived: still loading holds the leave affordance back
+  // rather than flashing the canonical fallback first; an engagement or
+  // redirect resolution is trusted ONLY when its resolved identity equals
+  // this room's own canonical `doc.engagementId` (NAV-3 — the cheap
+  // same-room check, no extra query: `doc` is the SAME `useRoomGeometry`
+  // read the canonical fallback below uses) — a J6-style stale docId for
+  // THIS room resolves right back to that id, so the phase-qualified label
+  // still applies; a docId that resolves to a different document the
+  // visitor also happens to have access to is not trusted and falls
+  // through instead. 'missing', a query error, or a same-room-mismatch all
+  // fall through to the scan's own canonical document, same as when no
+  // docId arrived at all. An orphan scan or a not-yet-parsed
+  // canonical-document row (both paths) degrades to RoomShell's generic
+  // origin-stash leave instead of a dead/blank "the Document" link.
   const back = useMemo(() => {
     if (!fromDocument) return null;
     const doc = data?.document;
+    if (docId) {
+      if (referrer.isLoading || referrer.isFetching) return null;
+      if (
+        referrer.data?.kind === 'engagement' &&
+        doc?.engagementId &&
+        referrer.data.row.engagement_id === doc.engagementId
+      ) {
+        const { row } = referrer.data;
+        const label = SECTION_LABEL[row.active_section] ?? row.active_section;
+        return { to: `/doc/${row.engagement_id}`, label: `the Document · ${label}` };
+      }
+      if (
+        referrer.data?.kind === 'redirect' &&
+        doc?.engagementId &&
+        doc.activeSection &&
+        referrer.data.projectId === doc.engagementId
+      ) {
+        const label = SECTION_LABEL[doc.activeSection] ?? doc.activeSection;
+        return { to: `/doc/${referrer.data.projectId}`, label: `the Document · ${label}` };
+      }
+      // 'missing', a query error, or a resolved identity that isn't this
+      // room's own document: fall through to the canonical-document read
+      // below, same as an older link with no docId at all.
+    }
     if (!doc?.engagementId || !doc.activeSection) return null;
     const label = SECTION_LABEL[doc.activeSection] ?? doc.activeSection;
     return { to: `/doc/${doc.engagementId}`, label: `the Document · ${label}` };
-  }, [fromDocument, data?.document]);
+  }, [
+    fromDocument,
+    docId,
+    referrer.isLoading,
+    referrer.isFetching,
+    referrer.data,
+    data?.document,
+  ]);
 
   return (
     <RoomShell title="A room" backTo={back?.to} backLabel={back?.label}>

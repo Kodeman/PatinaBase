@@ -107,6 +107,7 @@ import {
 import { AddLineSheet } from './add-line-sheet';
 import type { PastProjectOption } from './past-project-picker';
 import { DocumentAction } from '../document-action';
+import { SectionLoadingLine } from '../section-loading-line';
 
 /** Best-effort phase_key from a free-typed name (phase_key is nullable + not
  *  unique on project_phases, so a plain slug is safe — no dedupe needed). */
@@ -136,6 +137,10 @@ export interface ScheduleSpineProps {
    *  feeds this to useDesignerClientForClientUser to produce designerClientId. */
   clientUserId: string | null;
   clientName: string;
+  /** projects.status as the page already read it. Optional, so the mount stays
+   *  drop-in compatible with the band it replaces; when it says 'completed' the
+   *  ongoing +add line stands down (the same gate CareBand keeps). */
+  projectStatus?: string | null;
 }
 
 /** The spine's sheet state: one overlay at a time, or none. */
@@ -149,6 +154,7 @@ export function ScheduleSpine({
   projectId,
   clientUserId,
   clientName,
+  projectStatus = null,
 }: ScheduleSpineProps) {
   // ── designer_clients.id resolution (work-block.tsx pattern) ──
   const { data: designerClient } = useDesignerClientForClientUser(
@@ -766,9 +772,7 @@ export function ScheduleSpine({
 
       {loading ? (
         // Nothing heavy while the resolver's sources load — one quiet line.
-        <p className="mt-4 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-          resolving the schedule…
-        </p>
+        <SectionLoadingLine label="resolving the schedule" className="mt-4" />
       ) : (
         <>
           {resolvedPhases.length === 0 ? (
@@ -970,16 +974,20 @@ export function ScheduleSpine({
                 <TodayRule today={today} />
               )}
 
-              {/* The ongoing +add — the same ghost line, joining the main lane. */}
-              <GhostAddLine
-                committedPhases={committedPhaseInputs}
-                committedMilestones={committedMilestoneInputs}
-                followsPhaseId={lastMainPhaseId}
-                today={today}
-                onAdd={handleAddPhase}
-                errorText={ghostError}
-                resetSignal={ghostResetSignal}
-              />
+              {/* The ongoing +add — the same ghost line, joining the main lane.
+                  A completed project has no next phase to name, so the line
+                  stands down on the same gate CareBand reads. */}
+              {projectStatus !== 'completed' && (
+                <GhostAddLine
+                  committedPhases={committedPhaseInputs}
+                  committedMilestones={committedMilestoneInputs}
+                  followsPhaseId={lastMainPhaseId}
+                  today={today}
+                  onAdd={handleAddPhase}
+                  errorText={ghostError}
+                  resetSignal={ghostResetSignal}
+                />
+              )}
             </div>
           )}
 

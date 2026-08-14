@@ -128,9 +128,10 @@ export function OpenProjectSheet({
           </Field>
 
           <Field label="Household">
-            {/* The R73 picker: linked clients select directly; captured
-                households with an email invite-and-link in place. Optional —
-                the household sheet can set it later. */}
+            {/* The R73 picker: linked clients select directly; a captured
+                household with an email arms an invite that only sends on an
+                explicit confirm (J2). Optional — the household sheet can set
+                it later. */}
             <ClientPicker
               value={clientId}
               onChange={setClientId}

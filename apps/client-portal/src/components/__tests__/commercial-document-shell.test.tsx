@@ -122,6 +122,39 @@ describe('CommercialDocumentShell', () => {
     expect(screen.getByText(/require a separate named furnishings authorization/i)).toBeInTheDocument();
   });
 
+  /**
+   * The surface the client actually reads. Nothing blocks a send with the
+   * ceiling or retainer untouched, and both default to 0 — so an unwritten
+   * figure would arrive here formatted as a real authorized amount ("$0"), on
+   * the one audience that has no way to know it was never set.
+   */
+  it('names an unset ceiling and retainer instead of printing $0 at the client', () => {
+    render(<CommercialDocumentShell bundle={bundle({
+      serviceTerms: {
+        ...bundle().serviceTerms!,
+        billingCeilingCents: 0,
+        retainerAmountCents: 0,
+        retainerActivationPolicy: 'immediate',
+      },
+    })} />);
+    expect(screen.getAllByText('Not yet set')).toHaveLength(2);
+    expect(screen.queryByText('$0')).not.toBeInTheDocument();
+    // The activation clause describes a retainer that does not exist yet.
+    expect(
+      screen.queryByText(/Due under the terms of the fully executed agreement/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it('still prints a real, positive ceiling and retainer as currency', () => {
+    render(<CommercialDocumentShell bundle={bundle()} />);
+    expect(screen.getByText('$18,000')).toBeInTheDocument();
+    expect(screen.getByText('$3,000')).toBeInTheDocument();
+    expect(screen.queryByText('Not yet set')).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/Design work begins after the fully executed agreement and retainer payment/i),
+    ).toBeInTheDocument();
+  });
+
   it('states that a client-signed agreement is still awaiting studio countersignature', () => {
     render(<CommercialDocumentShell bundle={bundle({
       document: { ...bundle().document, state: 'client_signed' },

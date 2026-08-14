@@ -5,6 +5,11 @@ import { authorizationDoorwayFor } from '@/lib/document/authorization-doorway';
 
 let mockHydrated = false;
 const mockRetryDocumentResolution = jest.fn();
+// A8: the recent-documents-in-hand MRU landedRef reads to decide whether to
+// jump to the active section. Empty by default — most existing tests in
+// this file exercise a "first open" shape and must not gain a surprise
+// scroll-jump because of this addition.
+let mockRecentDocumentsInHand: Array<{ id: string; title: string; subtitle?: string }> = [];
 const mockHistoryToggled = jest.fn();
 const mockDiscoveryFacetOpen = jest.fn();
 let mockDiscoveryFacetExpanded = false;
@@ -16,6 +21,8 @@ let mockDraftingState: Record<string, unknown> = { gaps: [], isLoading: false, e
 let mockProposalData: Record<string, unknown> | undefined;
 let mockProposalError = false;
 let mockProjectQuery: Record<string, unknown> = { data: undefined, isLoading: false, isError: false };
+// W4: the recap line counts drafted-and-unsent client approvals off this read.
+let mockProjectApprovalsQuery: Record<string, unknown> = { data: [] };
 // R108: the letterhead vitals read the resolver, never a stored column.
 const NO_RESOLVED_SCHEDULE = {
   phases: [],
@@ -67,6 +74,7 @@ jest.mock('next/navigation', () => ({
 jest.mock('@patina/supabase', () => ({
   useProjectV2: () => mockProjectQuery,
   useProjectPhases: () => ({ data: [] }),
+  useProjectApprovals: () => mockProjectApprovalsQuery,
   useProposalFeedback: () => ({ data: [] }),
   useProjectRoster: () => ({ data: [] }),
   useDiscovery: () => mockDiscoveryQuery,
@@ -100,9 +108,8 @@ jest.mock('@/components/document/commercial/project-commerce-section', () => ({
 }));
 jest.mock('@/components/document/care-band', () => ({ CareBand: () => null }));
 jest.mock('@/components/document/account-band', () => ({ AccountBand: () => null }));
-jest.mock('@/components/document/project-mood-boards', () => ({ ProjectMoodBoards: () => null }));
-jest.mock('@/components/document/roster/kickoff-band', () => ({ KickoffBand: () => null }));
-jest.mock('@/components/document/plans/plan-room-band', () => ({ PlanRoomBand: () => null }));
+jest.mock('@/components/document/commercial/money-region', () => ({ MoneyRegion: () => null }));
+jest.mock('@/components/document/not-started-band', () => ({ NotStartedBand: () => null }));
 jest.mock('@/components/document/roster/call-sheet-mount', () => ({ CallSheetMount: () => null }));
 
 jest.mock('@/hooks/use-hydrated', () => ({
@@ -128,10 +135,24 @@ jest.mock('@/components/document/doc-spine', () => ({
   ),
 }));
 jest.mock('@/components/document/doc-letterhead', () => ({
-  DocLetterhead: ({ title, vitals }: { title: string; vitals?: string }) => (
+  DocLetterhead: ({
+    title,
+    vitals,
+    needsSetup,
+  }: {
+    title: string;
+    vitals?: string;
+    needsSetup?: Array<{ text: string; remedyLabel: string; onActivate: () => void }> | null;
+  }) => (
     <header>
       {title}
       <span data-testid="doc-vitals">{vitals}</span>
+      <span data-testid="doc-needs-setup-count">{needsSetup?.length ?? 0}</span>
+      {(needsSetup ?? []).map((entry) => (
+        <button key={entry.text} type="button" onClick={entry.onActivate}>
+          {`${entry.text} · ${entry.remedyLabel}`}
+        </button>
+      ))}
     </header>
   ),
 }));
@@ -264,6 +285,7 @@ jest.mock('@/lib/help-system/use-document-surface', () => ({
 
 jest.mock('@/lib/analytics/document-events', () => ({
   rememberDocumentInHand: jest.fn(),
+  readRecentDocumentsInHand: () => mockRecentDocumentsInHand,
   documentEvents: {
     historyToggled: (...args: unknown[]) => mockHistoryToggled(...args),
     guideShown: jest.fn(),
@@ -358,6 +380,7 @@ describe('DocumentPage guide activation', () => {
     mockProposalData = undefined;
     mockProposalError = false;
     mockProjectQuery = { data: undefined, isLoading: false, isError: false };
+    mockProjectApprovalsQuery = { data: [] };
     mockResolvedSchedule = NO_RESOLVED_SCHEDULE;
     mockContextualHandoffsQuery = { data: [], isError: false };
     mockDeskData = { folders: [], chips: [], composed: {} };
@@ -366,6 +389,7 @@ describe('DocumentPage guide activation', () => {
     mockRetryDesk.mockReset();
     mockUseDeskEngagements.mockClear();
     mockSelectOperationalNeed.mockClear();
+    mockRecentDocumentsInHand = [];
     mockDocumentQuery = {
       data: {
         kind: 'engagement',
@@ -685,6 +709,36 @@ describe('DocumentPage guide activation', () => {
     expect(screen.getByText(/Input needed · phases & fees/)).toBeInTheDocument();
   });
 
+  it('J1 — the successor id begin() lands on renders the doc\'s own Direction section', () => {
+    const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+    // The REAL post-begin row, not an invented one: document_state shape B
+    // (00327) emits engagement_id = pr.chain_root_id — the new proposal's own
+    // id for a freshly seeded chain — with project_id and lead_id NULL. This
+    // is exactly what /doc/<proposalId> resolves to after
+    // discovery-section.tsx's begin() replaces the URL with the id the RPC
+    // returned. (A row keyed on the designer_clients id cannot exist here:
+    // shape D is suppressed the moment a draft proposal references it.)
+    mockDocumentQuery = {
+      ...mockDocumentQuery,
+      data: { kind: 'engagement', row: {
+        ...current, engagement_kind: 'proposal', active_section: 'direction',
+        engagement_id: 'proposal-9', project_id: null, proposal_id: 'proposal-9',
+        lead_id: null, designer_id: 'designer-1', client_profile_id: 'client-1',
+        proposal_status: 'draft',
+      } },
+    };
+    mockProposalData = {
+      id: 'proposal-9', status: 'draft', document_kind: 'design_services',
+      commercial_state: 'draft', project_id: null,
+    };
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(screen.getByRole('heading', { name: 'Direction', level: 2 })).toBeInTheDocument();
+    expect(screen.queryByText('No document answers to this name.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Budget comfort' })).not.toBeInTheDocument();
+  });
+
   it('focuses an already-open missing Discovery facet without toggling it closed', () => {
     const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
     mockDocumentQuery = {
@@ -938,6 +992,203 @@ describe('DocumentPage guide activation', () => {
     render(<DocumentPage params={fulfilledParams} />);
 
     expect(screen.getByTestId('doc-vitals').textContent ?? '').not.toMatch(/Target/);
+  });
+
+  // ── W1: the letterhead's needs-setup chip ──
+  it('states no setup need when the Desk reports none', () => {
+    asProjectDocument();
+    mockDeskData = {
+      folders: [{ row: { engagement_id: 'project-1' }, need: null }],
+      chips: [],
+      composed: { 'project-1': true },
+    };
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(screen.getByTestId('doc-needs-setup-count')).toHaveTextContent('0');
+  });
+
+  it('carries the one unconfigured-schedule need to the letterhead with its remedy', () => {
+    asProjectDocument();
+    mockDeskData = {
+      folders: [{
+        row: { engagement_id: 'project-1' },
+        need: {
+          kind: 'schedule_unconfigured',
+          text: 'Name the phases for this project',
+          actionLabel: 'Open the schedule',
+          urgent: false,
+          stamp: { label: 'BAND' },
+        },
+      }],
+      chips: [],
+      composed: { 'project-1': true },
+    };
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(screen.getByTestId('doc-needs-setup-count')).toHaveTextContent('1');
+    const activeSection = document.querySelector<HTMLElement>('[data-active-section]');
+    activeSection!.scrollIntoView = jest.fn();
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Name the phases for this project · Open the schedule',
+      }),
+    );
+
+    expect(activeSection!.scrollIntoView).toHaveBeenCalled();
+    expect(activeSection).toHaveFocus();
+  });
+
+  it('leaves every other kind of need to the guide', () => {
+    asProjectDocument();
+    mockDeskData = {
+      folders: [{
+        row: { engagement_id: 'project-1' },
+        need: {
+          kind: 'task_due',
+          text: 'Confirm the site measure',
+          actionLabel: 'Open the task',
+          urgent: false,
+          stamp: { label: 'TASK DUE' },
+        },
+      }],
+      chips: [],
+      composed: { 'project-1': true },
+    };
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(screen.getByTestId('doc-needs-setup-count')).toHaveTextContent('0');
+  });
+
+  // ── W4: the recap line ──
+  it('counts only drafted, active approvals as awaiting publish', () => {
+    asProjectDocument();
+    // Proposal lineage resolves the earlier sections as settled, which is what
+    // gives this project document a recap line to carry the approvals count.
+    mockProjectQuery = {
+      data: { proposal: { id: 'proposal-1', version: 1, status: 'signed', signed_at: null } },
+      isLoading: false,
+      isError: false,
+    };
+    mockProjectApprovalsQuery = {
+      data: [
+        { lifecycleStatus: 'draft', disposition: 'active' },
+        { lifecycleStatus: 'pending', disposition: 'active' },
+        { lifecycleStatus: 'draft', disposition: 'superseded' },
+      ],
+    };
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(
+      screen.getByRole('button', { name: 'Client approvals · 1 awaiting publish →' }),
+    ).toBeVisible();
+    // The recap disclosure promises only what its own body holds.
+    expect(
+      screen.getByRole('button', { name: /^Previous work · \d+ complete$/ }),
+    ).toBeVisible();
+  });
+
+  it('says nothing about approvals while that read is unanswered', () => {
+    asProjectDocument();
+    mockProjectQuery = {
+      data: { proposal: { id: 'proposal-1', version: 1, status: 'signed', signed_at: null } },
+      isLoading: false,
+      isError: false,
+    };
+    mockProjectApprovalsQuery = { data: undefined, isLoading: true };
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(screen.queryByText(/Client approvals/)).not.toBeInTheDocument();
+  });
+});
+
+describe('DocumentPage landedRef — A8 first-open gate', () => {
+  const rowFor = (engagementId: string, activeSection: string) => ({
+    engagement_kind: 'lead', engagement_id: engagementId, project_id: null, proposal_id: null,
+    lead_id: engagementId, designer_id: 'designer-1', client_profile_id: null,
+    client_name: 'Avery Stone', title: 'Stone Residence', active_section: activeSection,
+    project_status: null, current_phase: null, is_paused: false, is_archived: false,
+    proposal_status: null, proposal_sent_at: null, proposal_viewed_at: null,
+    lead_response_deadline: null, lead_status: null, overdue_decision_count: 0,
+    earliest_overdue_due: null, awaiting_inspection_count: 0, blocked_item_count: 0,
+    in_flight_count: 0, installed_count: 0, item_count: 0,
+    updated_at: '2026-08-10T12:00:00Z', open_claim_count: 0, open_claim_po: null,
+    unsent_pulse_count: 0, pulse_week_of: null, draft_unsent_po_count: 0,
+    oldest_draft_po_created_at: null, draft_po_label: null, unacked_po_count: 0,
+    oldest_unacked_sent_at: null, unacked_po_label: null, due_task_count: 0,
+    earliest_task_due: null, due_task_title: null,
+  });
+
+  beforeEach(() => {
+    mockHydrated = true;
+    mockDiscoveryQuery = { data: undefined, isLoading: false, isError: false };
+    mockDraftingState = { gaps: [], isLoading: false, error: null };
+    mockProposalData = undefined;
+    mockProposalError = false;
+    mockProjectQuery = { data: undefined, isLoading: false, isError: false };
+    mockResolvedSchedule = NO_RESOLVED_SCHEDULE;
+    mockContextualHandoffsQuery = { data: [], isError: false };
+    mockDeskData = { folders: [], chips: [], composed: {} };
+    mockDeskLoading = false;
+    mockDeskError = false;
+    mockRetryDesk.mockReset();
+    mockUseDeskEngagements.mockClear();
+    mockSelectOperationalNeed.mockClear();
+    mockRecentDocumentsInHand = [];
+    mockDocumentQuery = {
+      data: { kind: 'engagement', row: rowFor('lead-1', 'brief') },
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      refetch: mockRetryDocumentResolution,
+    };
+    setViewport({ width: 1440, reducedMotion: true });
+    window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    }) as typeof window.requestAnimationFrame;
+    HTMLElement.prototype.scrollIntoView = jest.fn();
+    // The active-section element's real geometry is irrelevant here — this
+    // gate is exercised BEFORE React ever mounts it, so force every element
+    // past the 60% threshold that would otherwise trigger the jump, and
+    // isolate what's under test to the MRU membership check alone.
+    HTMLElement.prototype.getBoundingClientRect = jest.fn(() => ({
+      top: 1000, bottom: 1100, left: 0, right: 100, width: 100, height: 100,
+      x: 0, y: 1000, toJSON: () => ({}),
+    })) as unknown as typeof HTMLElement.prototype.getBoundingClientRect;
+  });
+
+  it('does not jump to the active section for a first-time visitor (no MRU record for this document)', () => {
+    mockRecentDocumentsInHand = [];
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(document.querySelector('[data-active-section]')).not.toBeNull();
+    expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it('jumps to the active section as before for a visitor whose MRU already holds this document', () => {
+    mockRecentDocumentsInHand = [{ id: 'lead-1', title: 'Stone Residence' }];
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+  });
+
+  it('does not jump when the MRU holds other documents but not this one', () => {
+    mockRecentDocumentsInHand = [
+      { id: 'other-doc-1', title: 'Whitfield Residence' },
+      { id: 'other-doc-2', title: 'Harper Loft' },
+    ];
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
   });
 });
 

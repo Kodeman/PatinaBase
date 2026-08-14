@@ -8255,3 +8255,80 @@ lockfile skew in the working tree errors two unrelated test suites —
 resolve deliberately in its own session. Owed: Kody's signed-in walk.
 
 *Entries add: I131 · last id = I131*
+
+### I132 · The Book Closes delivered — Wave 4 composition + the bug lane — 2026-08-13
+
+The work `docs/design/doc-polish/deck.html` identified, delivered by multi-agent
+orchestration: six preflight specs → five parallel worktree lanes plus a
+sequenced W5 lane → a ten-reviewer two-lens panel (77 findings) → a triaged fix
+pass → independent per-lane fix verification → integration. Lane branches and
+their tips: `doc-polish/wave4-composition` `09509b13`, `doc-polish/paper-signature`
+`9b70dfa5`, `doc-polish/send-consent` `20e654a2`, `doc-polish/navigation`
+`d86cbf49`, `doc-polish/desk` `29e6a1eb`, `doc-polish/w5-small` `c7a68b25`. All
+six folded onto `doc-polish/integration` (last code commit `3eb94f12`, this
+entry on top; merges `365b112c`
+wave 4, `c325b9f1` paper, `19a7145a` consent, `dea4b972` navigation, `1e838344`
+desk, `0c2ef7b3` W5) and merged to `main` `--no-ff` as `merge(doc-polish): the
+book closes — wave 4 + the bug lane` — 84 files, +7223/−580, two migrations.
+
+**Wave 4 shipped.** W1 — the letterhead states its setup needs as one dashed
+chip, reading the desk's own need-derivation, at most one live entry. W2 — one
+Money region: a single dominant figure over four tiers (authority → plan →
+committed → moved), composing `ProjectAuthorityBandForProject`,
+`DerivedBudgetGrid`, `AuthorizationsLedger` and `AccountBand`, which left the
+tail. W3 — four empty rooms collapse to one line, `GhostAddLine` retires once
+the project completes. W4 — the recap line, delivered NARROW: `PreviousWork`
+only. The deck's section-04 broad reading is a recorded follow-up, not an
+omission. W5 — one quiet loading register across the document, plus A3/A6/A7.
+
+**The bug lane shipped.** J2 — invite-on-select becomes arm-then-confirm, and
+the consent step is reachable without a mouse. J3 — both halves (ceiling and
+retainer) AND the client-portal commercial shell, which is the surface the
+client actually reads. J7 — people/nurture derivation keys on evidence, in the
+order `issued_on_paper` → real-send evidence (`sent_at` OR dispatch row) →
+draft, with a neutral dot for the paper case. J1 — Begin the Direction
+navigates explicitly to the successor document, because the pre-Direction name
+stops resolving the instant the RPC returns. J5 — re-scoped by preflight: the
+execute-on-paper ceremony has existed since 2026-08-05; the real wall was that
+no email-free path reached a recordable state. **00477** opens that path. J6 —
+forward URL resolution for pre-Direction relationship URLs. A1 — the desk folio
+card splits into a valid DOM (card routes to the doc; the ledger act is an
+inner control). A2 — the held-document breadcrumb, with `docId` validated
+against the room's own document, which also closes a spoofing affordance. A8 —
+first open lands at the top; the active-section jump is a resume convenience,
+gated on the recent-documents MRU. A9 — one Capture a lead. #10 — verdict:
+the control is verified working in code (static read + regression + throw
+hardening); the prod-observed inertness was not reproduced.
+
+**Rulings minted this session.** W4 is NARROW — the recap line carries
+`PreviousWork` only. Tier 4 "Moved" is the accounts' committed figure — client
+value ordered-through-installed — never "released to vendors". Paper issuance
+CONVERGES on the sent regime: `00477` sets `proposals.status = 'sent'` with
+`sent_at` NULL, no dispatch row, and `issued_on_paper = true` as provenance, so
+every status-keyed guard engages and the paper flow traverses the emailed
+flow's exact states; the send wall itself gained the third quiet path. P1 — a
+state race is a hard error, not a silent repair. P2 — the provenance columns
+are in. J3 never advertises $0 unless the facet was affirmatively written. The
+nurture queue keeps unsent clients, relabelled and downranked — that is
+correct, not a bug. A5 is DEFERRED pending a design ruling (ScheduleSpine
+mounting for the install section versus cross-project collision awareness in
+the ceremony; the static diagnosis is on file in the navigation lane spec).
+
+**Migrations.** `00477_design_services_paper_issue` (the issue-on-paper path
+and its provenance) and `00478_people_directory_has_sent_proposal` (the
+`designer_client_send_evidence` function; `people_directory.meta` gains
+`has_sent_proposal` + `issued_on_paper`). Both LOCAL ONLY — replayed clean
+through `supabase db reset` on this branch, never pushed to Strata.
+`database.types.ts` regenerated through 00478 at `3eb94f12` (additive: the one
+new function).
+
+**Follow-up ledger (open, non-blocking).** The canonical-query-key pin is
+untested (W4C-07). Money aggregates ignore per-record currency (W4C-11). Stale
+duplicate test mocks remain in `page.test.tsx` (W4C-15). The deck §04 broad-W4
+reading is unbuilt. A5 needs a ruling. Kody's signed-in walks are owed for
+every new surface — needs-setup chip, money region, not-started collapse, the
+issue-on-paper ceremony and the wall's third path, the consent step, the
+forward-resolution redirect. **No prod deploy was performed: this is local
+delivery only.**
+
+*Entries add: I132 · last id = I132*
