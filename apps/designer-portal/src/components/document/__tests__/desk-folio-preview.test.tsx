@@ -195,6 +195,34 @@ describe('NeedsYourHandFolios', () => {
       }),
     ).toBeInTheDocument();
   });
+
+  // 913db1dc: DocumentAction's handleClick wraps the documentEvents
+  // .actionSelected(analytics) capture call in try/catch so a synchronous
+  // throw there can never abort the click before the wrapped onClick (and
+  // its state update) runs. Pin that: make the capture call throw, click
+  // Reveal, and assert the fold→expand state transition still happens.
+  it('still reveals the folded folios when the analytics capture call throws synchronously', () => {
+    (documentEvents.actionSelected as jest.Mock).mockImplementationOnce(
+      () => {
+        throw new Error('capture boom');
+      },
+    );
+
+    const folders = Array.from({ length: 6 }, (_, index) => folio(index + 1));
+    render(<NeedsYourHandFolios folders={folders} />);
+
+    const reveal = screen.getByRole('button', {
+      name: 'Reveal 2 more folios',
+    });
+
+    fireEvent.click(reveal);
+
+    expect(screen.getAllByRole('link')).toHaveLength(6);
+    expect(screen.getByText('All 6 folios in reach')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Fold to four' }),
+    ).toHaveAttribute('aria-expanded', 'true');
+  });
 });
 
 // A1: the card surface always routes to the doc; the R36 ledger act (the one
