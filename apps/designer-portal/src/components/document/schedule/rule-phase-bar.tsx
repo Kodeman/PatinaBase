@@ -12,13 +12,25 @@
  *              semantics: an unanchored phase GAINS an anchor at the day it was
  *              dropped on; an anchored phase's anchor MOVES there.
  *   · edge   → `phase-duration`, via the same `boundaryDurationDays` a boundary
- *              handle uses. Rendered ONLY where no `RuleBoundaryHandle` already
- *              owns that end (`hasInternalEndBoundary`), so the two affordances
- *              never stack on one tick.
- * The parent owns `ripple.begin`/`ripple.update` exactly as it does for the
- * boundary handles; this component owns the gesture and hands over already-
- * computed edit VALUES (the date math is `schedule-rule-derivation`'s — this
- * file performs no epoch arithmetic of its own).
+ *              handle uses. Offered wherever `barCanResize` says the bar owns
+ *              its end — i.e. no boundary handle stands there, or one does but
+ *              is LOCKED and therefore refuses every drag (without that second
+ *              case the phase's duration would be editable by nothing at all).
+ * Nothing here follows the cursor: the committed bar holds its ground while the
+ * terracotta ghost layer carries the preview, exactly as a boundary-handle drag
+ * does. The parent owns `ripple.begin`/`ripple.update`; this component owns the
+ * gesture and hands over already-computed edit VALUES (the date math is
+ * `schedule-rule-derivation`'s — this file performs no epoch arithmetic).
+ *
+ * SESSION OWNERSHIP. At most one edit is ever pending, and any surface may
+ * begin one — including the Spine, on this very phase. A bar therefore may
+ * only `update()` a session it can PROVE is its own: `ownsSession()` requires
+ * the live session to be rule-originated AND to still carry this bar's last
+ * emitted values. Anything else (a spine-origin session, another rule surface's
+ * edit, a session cleared and re-begun elsewhere) reads as not-ours and the
+ * next gesture BEGINS a fresh one off the committed values. Begin replacing a
+ * pending foreign session is the Rule's existing behavior (the boundary handles
+ * do the same); silently updating into one is what this prevents.
  *
  * Session PERSISTS on pointerup and after a keyboard nudge — the confirm strip
  * commits or reverts. Esc is deliberately NOT handled here: the strip's global
@@ -26,17 +38,17 @@
  *
  * R102 — no hover-revealed affordances. Both marks are PERMANENT: a faint clay
  * underlay band the width of the phase (the bar is visible before you reach for
- * it) and, where the end is resizable, a 2px charcoal grip tick standing on it.
+ * it) and, where the bar owns its end, a 2px charcoal grip tick standing on it.
  * Nothing appears on hover; only the cursor changes (grab → grabbing).
  *
  * KEYBOARD (B2) — the accessibility path to the same two edits, since the bar is
  * a spatial gesture and typed phase-date entry is going away. The bar root is a
  * `role="slider"`: ←/→ nudge ±1 day, Shift+←/→ ±7, Enter toggles MOVE ⇄ RESIZE
- * (RESIZE offered only where the end is resizable), and a small always-visible
- * mode label shows which set of arrows you are holding. Nudges accumulate off
- * the STAGED value while this bar owns the session and fall back to the
- * committed value the moment it doesn't (a commit or an Esc revert), so the
- * announced value can never drift from the truth.
+ * (RESIZE offered only where the bar owns its end), and a small always-visible
+ * mode label shows which set of arrows you are holding. `aria-valuemin`/`max`
+ * follow the mode — the scale's epoch domain when moving, 1…domain-span days
+ * when resizing — and every staged value is clamped into that same domain, so
+ * the announced range is the range the gesture can actually reach.
  *
  * Zero shadows (D4) — the focus ring is a real outline. No animation, so there
  * is nothing here for `prefersReducedMotion` to guard.
@@ -45,14 +57,17 @@
 import { useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent, RefObject } from 'react';
 import {
+  barCanResize,
   barMoveStartEpoch,
   barNudgeEpochDay,
   boundaryDurationDays,
+  clampBarEpochDay,
   clientXToPct,
   type RuleBar,
 } from '@/lib/document/schedule-rule-derivation';
 import { isoFromEpochDay } from '@patina/utils';
 import { fmtDay } from '@/lib/document/format';
+import type { RippleSession } from './schedule-ripple-context';
 
 /** px of pointer travel before a press becomes a drag — matches the boundary
  *  handle / diamond so every drag surface on the Rule has one feel. */
@@ -71,6 +86,11 @@ interface BarValue {
   durationDays: number;
 }
 
+/** What this bar last handed the parent — the proof of session ownership. */
+type Emission =
+  | { kind: 'phase-anchor'; anchorDate: string }
+  | { kind: 'phase-duration'; durationDays: number };
+
 export interface RulePhaseBarProps {
   bar: RuleBar;
   pinned: boolean;
@@ -79,9 +99,13 @@ export interface RulePhaseBarProps {
   /** x% → the epoch day it names, in the Rule's committed scale (the parent
    *  holds the scale; the bar never sees it). */
   xToDay: (xPct: number) => number;
-  /** The pending ripple edit targets THIS phase ⇒ a nudge updates the session
-   *  and accumulates off the staged value; otherwise it begins a new one. */
-  sessionOwned: boolean;
+  /** The scale's padded epoch domain — the slider's announced range AND the
+   *  clamp every staged value passes through. */
+  domainMinEpoch: number;
+  domainMaxEpoch: number;
+  /** The ONE pending ripple session, verbatim. The bar decides for itself
+   *  whether it is the session's author — see `ownsSession`. */
+  session: RippleSession | null;
   /** MOVE → the phase's new START epoch day (the parent anchors it there). */
   onMoveBegin: (startEpoch: number) => void;
   onMoveFrame: (startEpoch: number) => void;
@@ -95,28 +119,72 @@ export function RulePhaseBar({
   pinned,
   trackRef,
   xToDay,
-  sessionOwned,
+  domainMinEpoch,
+  domainMaxEpoch,
+  session,
   onMoveBegin,
   onMoveFrame,
   onResizeBegin,
   onResizeFrame,
 }: RulePhaseBarProps) {
   const drag = useRef({ down: false, begun: false, mode: 'move' as BarMode, startX: 0, grabOffsetDays: 0 });
-  const [dragPreview, setDragPreview] = useState<BarValue | null>(null);
+  const emitted = useRef<Emission | null>(null);
+  const [dragging, setDragging] = useState(false);
   const [staged, setStaged] = useState<BarValue | null>(null);
   const [mode, setMode] = useState<BarMode>('move');
   const [focused, setFocused] = useState(false);
 
-  const canResize = !bar.hasInternalEndBoundary;
+  const canResize = barCanResize(bar);
   const effectiveMode: BarMode = mode === 'resize' && !canResize ? 'move' : mode;
 
-  // The value the keyboard nudges from and the label announces: staged while
-  // this bar owns the pending edit, committed the moment it doesn't (commit,
-  // revert, or another surface taking the session over).
-  const value: BarValue =
-    sessionOwned && staged != null
-      ? staged
-      : { startEpoch: bar.startEpoch, durationDays: bar.durationDays };
+  /**
+   * Is the live session the one THIS bar staged? Origin must be 'rule' (a
+   * spine-originated edit is never ours, whatever phase it names) and the
+   * session's edit must still carry this bar's phase id and its last emitted
+   * value. A cleared, committed, or taken-over session fails all three.
+   */
+  const ownsSession = (): boolean => {
+    const mine = emitted.current;
+    if (session == null || mine == null || session.origin !== 'rule') return false;
+    const live = session.edit;
+    if (mine.kind === 'phase-anchor') {
+      return (
+        live.kind === 'phase-anchor' && live.phaseId === bar.id && live.anchorDate === mine.anchorDate
+      );
+    }
+    return (
+      live.kind === 'phase-duration' && live.phaseId === bar.id && live.durationDays === mine.durationDays
+    );
+  };
+
+  const owned = ownsSession();
+
+  // The value a nudge counts from and the label announces: the staged one only
+  // while this bar owns the live session, the committed one the instant it
+  // doesn't (a commit, an Esc revert, or any other surface taking over).
+  const committed: BarValue = { startEpoch: bar.startEpoch, durationDays: bar.durationDays };
+  const value: BarValue = owned && staged != null ? staged : committed;
+
+  // The inline readout: live through a pointer drag, and equally through the
+  // keyboard's staged edit, so a sighted keyboard user reads the same dates a
+  // dragging one does.
+  const previewing = dragging || (owned && staged != null);
+
+  const emitMove = (startEpoch: number) => {
+    const anchorDate = isoFromEpochDay(startEpoch);
+    if (anchorDate == null) return; // unreachable for a finite epoch day
+    if (ownsSession()) onMoveFrame(startEpoch);
+    else onMoveBegin(startEpoch);
+    emitted.current = { kind: 'phase-anchor', anchorDate };
+    setStaged({ startEpoch, durationDays: committed.durationDays });
+  };
+
+  const emitResize = (durationDays: number) => {
+    if (ownsSession()) onResizeFrame(durationDays);
+    else onResizeBegin(durationDays);
+    emitted.current = { kind: 'phase-duration', durationDays };
+    setStaged({ startEpoch: committed.startEpoch, durationDays });
+  };
 
   const pctFromClientX = (clientX: number): number | null => {
     const rect = trackRef.current?.getBoundingClientRect();
@@ -139,44 +207,30 @@ export function RulePhaseBar({
     if (pct == null) return;
     const day = xToDay(pct);
 
-    const isResize = drag.current.mode === 'resize';
-
     if (!drag.current.begun) {
       if (Math.abs(e.clientX - drag.current.startX) < DRAG_THRESHOLD_PX) return;
       drag.current.begun = true;
+      setDragging(true);
       // The offset the pointer holds INTO the bar — the same subtraction that
-      // later yields the new start, so the bar slides under the cursor rather
-      // than snapping its start to it.
+      // later yields the new start, so a grab in the bar's middle moves by the
+      // distance dragged rather than snapping the start onto the cursor.
       drag.current.grabOffsetDays = barMoveStartEpoch(bar.startEpoch, day);
-      if (isResize) {
-        const durationDays = boundaryDurationDays(bar.startEpoch, day);
-        setDragPreview({ startEpoch: bar.startEpoch, durationDays });
-        onResizeBegin(durationDays);
-      } else {
-        const startEpoch = barMoveStartEpoch(drag.current.grabOffsetDays, day);
-        setDragPreview({ startEpoch, durationDays: bar.durationDays });
-        onMoveBegin(startEpoch);
-      }
-      return;
     }
 
-    if (isResize) {
-      const durationDays = boundaryDurationDays(bar.startEpoch, day);
-      setDragPreview({ startEpoch: bar.startEpoch, durationDays });
-      onResizeFrame(durationDays);
+    if (drag.current.mode === 'resize') {
+      emitResize(boundaryDurationDays(bar.startEpoch, day));
       return;
     }
-
-    const startEpoch = barMoveStartEpoch(drag.current.grabOffsetDays, day);
-    setDragPreview({ startEpoch, durationDays: bar.durationDays });
-    onMoveFrame(startEpoch);
+    // `day` is already domain-clamped by xToEpochDay; the grab-offset
+    // subtraction can carry the START back outside it, so clamp again.
+    emitMove(clampBarEpochDay(barMoveStartEpoch(drag.current.grabOffsetDays, day), domainMinEpoch, domainMaxEpoch));
   };
 
   const endDrag = (e: ReactPointerEvent<HTMLElement>) => {
     if (!drag.current.down) return;
     drag.current.down = false;
     drag.current.begun = false;
-    setDragPreview(null);
+    setDragging(false);
     try {
       e.currentTarget.releasePointerCapture(e.pointerId);
     } catch {
@@ -185,25 +239,19 @@ export function RulePhaseBar({
     // Session PERSISTS — the confirm strip commits or reverts it.
   };
 
-  // Only ONE edit is ever pending (R100), so staging one dimension drops any
-  // pending edit of the other — the untouched dimension therefore always
-  // re-reads the COMMITTED bar, never a stale staged value from the old kind.
   const nudge = (deltaDays: number) => {
     if (effectiveMode === 'resize') {
-      // The nudged END, run through the SAME clamp a boundary drag applies.
-      const durationDays = boundaryDurationDays(
-        bar.startEpoch,
+      // The nudged END — clamped to the domain, then run through the SAME ≥1
+      // clamp a boundary drag applies.
+      const end = clampBarEpochDay(
         barNudgeEpochDay(bar.startEpoch, value.durationDays + deltaDays),
+        domainMinEpoch,
+        domainMaxEpoch,
       );
-      setStaged({ startEpoch: bar.startEpoch, durationDays });
-      if (sessionOwned) onResizeFrame(durationDays);
-      else onResizeBegin(durationDays);
+      emitResize(boundaryDurationDays(bar.startEpoch, end));
       return;
     }
-    const startEpoch = barNudgeEpochDay(value.startEpoch, deltaDays);
-    setStaged({ startEpoch, durationDays: bar.durationDays });
-    if (sessionOwned) onMoveFrame(startEpoch);
-    else onMoveBegin(startEpoch);
+    emitMove(clampBarEpochDay(barNudgeEpochDay(value.startEpoch, deltaDays), domainMinEpoch, domainMaxEpoch));
   };
 
   const onKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -227,13 +275,13 @@ export function RulePhaseBar({
     ? { top: 4, height: 12, tipTop: 0, modeTop: 0 }
     : { top: 62, height: 16, tipTop: 44, modeTop: 80 };
 
-  const shown = dragPreview ?? value;
-  const startIso = isoFromEpochDay(shown.startEpoch);
-  const endIso = isoFromEpochDay(barNudgeEpochDay(shown.startEpoch, shown.durationDays));
+  const startIso = isoFromEpochDay(value.startEpoch);
+  const endIso = isoFromEpochDay(barNudgeEpochDay(value.startEpoch, value.durationDays));
 
+  const resizing = effectiveMode === 'resize';
   const valueText = `${bar.name}: starts ${startIso ? fmtDay(startIso) : '—'}, ${
-    shown.durationDays
-  } days — ${effectiveMode === 'resize' ? 'RESIZE' : 'MOVE'} mode`;
+    value.durationDays
+  } days — ${resizing ? 'RESIZE' : 'MOVE'} mode`;
 
   return (
     <>
@@ -244,7 +292,9 @@ export function RulePhaseBar({
         role="slider"
         tabIndex={0}
         aria-orientation="horizontal"
-        aria-valuenow={effectiveMode === 'resize' ? shown.durationDays : shown.startEpoch}
+        aria-valuemin={resizing ? 1 : domainMinEpoch}
+        aria-valuemax={resizing ? barMoveStartEpoch(domainMinEpoch, domainMaxEpoch) : domainMaxEpoch}
+        aria-valuenow={resizing ? value.durationDays : value.startEpoch}
         aria-valuetext={valueText}
         onPointerDown={(e) => beginPointer(e, 'move')}
         onPointerMove={onPointerMove}
@@ -259,7 +309,7 @@ export function RulePhaseBar({
           width: `${Math.max(0, bar.widthPct)}%`,
           top: g.top,
           height: g.height,
-          cursor: dragPreview != null ? 'grabbing' : 'grab',
+          cursor: dragging ? 'grabbing' : 'grab',
           touchAction: 'none',
         }}
       >
@@ -275,22 +325,25 @@ export function RulePhaseBar({
             className="absolute whitespace-nowrap font-mono text-[0.54rem] uppercase tracking-[0.07em] text-[var(--color-aged-oak)]"
             style={{ left: 0, top: g.modeTop - g.top }}
           >
-            {effectiveMode === 'resize' ? 'Resize' : 'Move'}
+            {resizing ? 'Resize' : 'Move'}
           </span>
         )}
 
-        {!pinned && dragPreview != null && startIso && endIso && (
+        {!pinned && previewing && startIso && endIso && (
           <span
             className="absolute whitespace-nowrap font-mono text-[0.54rem] uppercase tracking-[0.06em] text-[var(--color-terracotta)]"
             style={{ left: 0, top: g.tipTop - g.top }}
           >
-            {fmtDay(startIso)} — {fmtDay(endIso)} · {shown.durationDays}d
+            {fmtDay(startIso)} — {fmtDay(endIso)} · {value.durationDays}d
           </span>
         )}
       </div>
 
-      {/* PERMANENT 2px charcoal grip on a resizable end — a sibling, not a
-          child, so its press never doubles as a body (move) press. */}
+      {/* PERMANENT 2px charcoal grip on an end this bar owns — a sibling, not a
+          child, so its press never doubles as a body (move) press. Where the end
+          carries a LOCKED boundary handle the grip is pixel-coincident with, and
+          hit-tested under, that handle (z-[2]) — so a pointer drag there still
+          meets the handle's refusal and the keyboard stays the way through. */}
       {canResize && (
         <div
           aria-hidden

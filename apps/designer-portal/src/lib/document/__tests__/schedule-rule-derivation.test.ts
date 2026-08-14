@@ -13,8 +13,10 @@ import {
   ruleThreads,
   ruleBoundaries,
   ruleBars,
+  barCanResize,
   barMoveStartEpoch,
   barNudgeEpochDay,
+  clampBarEpochDay,
   boundaryDurationDays,
   milestoneOffsetDays,
   projectGhosts,
@@ -1116,5 +1118,111 @@ describe('projectGhosts — deltaDays chips', () => {
       ],
     });
     expect(projectGhosts(diff, scale).ticks.find((t) => t.id === 'b')!.deltaDays).toBe(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// endBoundaryLocked + barCanResize — a locked boundary must not strand a
+// phase's duration (review fix 2)
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('ruleBars — endBoundaryLocked', () => {
+  const scale = buildTimeScale([{ start: '2026-01-01', end: '2026-04-11' }], '2026-02-20')!;
+
+  it('mirrors the boundary handle’s own locked flag onto the upstream bar', () => {
+    const phases = [
+      rphase({ id: 'a', start: '2026-01-01', end: '2026-01-31' }),
+      rphase({ id: 'install', start: '2026-02-15', end: '2026-03-15', anchored: true }),
+    ];
+    const chain = [link('a', null), link('install', 'a', 'Installation')];
+    const bars = ruleBars(phases, chain, scale);
+    const boundary = ruleBoundaries(phases, chain, scale)[0];
+    expect(boundary.locked).toBe(true);
+    expect(bars.find((b) => b.id === 'a')!.endBoundaryLocked).toBe(true);
+  });
+
+  it('an UNLOCKED boundary leaves the flag false', () => {
+    const phases = [
+      rphase({ id: 'a', start: '2026-01-01', end: '2026-01-31' }),
+      rphase({ id: 'b', start: '2026-01-31', end: '2026-02-28' }),
+    ];
+    const bars = ruleBars(phases, [link('a', null), link('b', 'a')], scale);
+    expect(bars.find((b) => b.id === 'a')!).toMatchObject({
+      hasInternalEndBoundary: true,
+      endBoundaryLocked: false,
+    });
+  });
+
+  it('a phase with NO boundary on its end is never “locked”', () => {
+    const phases = [rphase({ id: 'solo', start: '2026-01-10', end: '2026-02-10' })];
+    expect(ruleBars(phases, [link('solo', null)], scale)[0]).toMatchObject({
+      hasInternalEndBoundary: false,
+      endBoundaryLocked: false,
+    });
+  });
+});
+
+describe('barCanResize — the truth table', () => {
+  it('covers all four (hasInternalEndBoundary × endBoundaryLocked) combinations', () => {
+    // no boundary → the bar owns its end, locked flag irrelevant.
+    expect(barCanResize({ hasInternalEndBoundary: false, endBoundaryLocked: false })).toBe(true);
+    expect(barCanResize({ hasInternalEndBoundary: false, endBoundaryLocked: true })).toBe(true);
+    // a live boundary handle owns the end — the bar stays out of it.
+    expect(barCanResize({ hasInternalEndBoundary: true, endBoundaryLocked: false })).toBe(false);
+    // the handle is there but refuses every drag — the bar is the only way left.
+    expect(barCanResize({ hasInternalEndBoundary: true, endBoundaryLocked: true })).toBe(true);
+  });
+
+  it('holds against real derived bars: chained · locked-downstream · terminal', () => {
+    const scale = buildTimeScale([{ start: '2026-01-01', end: '2026-04-11' }], '2026-02-20')!;
+    const phases = [
+      rphase({ id: 'a', start: '2026-01-01', end: '2026-01-31' }),
+      rphase({ id: 'b', start: '2026-01-31', end: '2026-02-14' }),
+      rphase({ id: 'install', start: '2026-02-20', end: '2026-03-20', anchored: true }),
+    ];
+    // a→b is an ordinary edge; b→install locks (install is anchored); install is terminal.
+    const chain = [link('a', null), link('b', 'a', 'B'), link('install', 'b', 'Installation')];
+    const bars = ruleBars(phases, chain, scale);
+    expect(bars.map((b) => [b.id, barCanResize(b)])).toEqual([
+      ['a', false], // ordinary boundary handle owns a's end
+      ['b', true], // locked handle refuses — the bar must carry the duration
+      ['install', true], // terminal — nothing follows
+    ]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// clampBarEpochDay — the domain clamp a bar applies after its own math
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('clampBarEpochDay', () => {
+  const lo = epochDayFromISO('2026-01-01')!;
+  const hi = epochDayFromISO('2026-06-01')!;
+
+  it('passes an in-domain day through untouched', () => {
+    const mid = epochDayFromISO('2026-03-01')!;
+    expect(clampBarEpochDay(mid, lo, hi)).toBe(mid);
+  });
+
+  it('clamps below the minimum and above the maximum to the edges', () => {
+    expect(clampBarEpochDay(lo - 40, lo, hi)).toBe(lo);
+    expect(clampBarEpochDay(hi + 40, lo, hi)).toBe(hi);
+    expect(clampBarEpochDay(lo, lo, hi)).toBe(lo); // the edges themselves are in-domain
+    expect(clampBarEpochDay(hi, lo, hi)).toBe(hi);
+  });
+
+  it('rounds to a whole day (day math is integer-only)', () => {
+    expect(clampBarEpochDay(lo + 5.6, lo, hi)).toBe(lo + 6);
+  });
+
+  it('tolerates reversed bounds rather than inverting the clamp', () => {
+    expect(clampBarEpochDay(lo - 40, hi, lo)).toBe(lo);
+    expect(clampBarEpochDay(hi + 40, hi, lo)).toBe(hi);
+  });
+
+  it('composes with barMoveStartEpoch: a grab-offset subtraction can never leave the domain', () => {
+    // grabbed 10 days into the bar, dragged onto the domain's first day.
+    const staged = clampBarEpochDay(barMoveStartEpoch(10, lo), lo, hi);
+    expect(staged).toBe(lo);
   });
 });

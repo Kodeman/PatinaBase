@@ -377,13 +377,11 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
   const frameBarResize = (phaseId: string, durationDays: number) =>
     ripple.update({ kind: 'phase-duration', phaseId, durationDays });
 
-  // Which phase (if any) the pending edit belongs to — a bar nudges its OWN
-  // session forward and begins a fresh one otherwise.
-  const sessionPhaseId =
-    ripple.session != null &&
-    (ripple.session.edit.kind === 'phase-anchor' || ripple.session.edit.kind === 'phase-duration')
-      ? ripple.session.edit.phaseId
-      : null;
+  // The scale's padded epoch domain, read through its own inverse so the bounds
+  // are exactly the days a drag at either edge resolves to — the bars' announced
+  // slider range and the clamp their staged values pass through.
+  const domainMinEpoch = xToEpochDay(scale, 0);
+  const domainMaxEpoch = xToEpochDay(scale, 100);
 
   const handlesOn = ripple.providerPresent;
 
@@ -419,7 +417,9 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
                     pinned
                     trackRef={trackRef}
                     xToDay={(x) => xToEpochDay(scale, x)}
-                    sessionOwned={sessionPhaseId === b.id}
+                    domainMinEpoch={domainMinEpoch}
+                    domainMaxEpoch={domainMaxEpoch}
+                    session={ripple.session}
                     onMoveBegin={(s) => beginBarMove(b.id, s)}
                     onMoveFrame={(s) => frameBarMove(b.id, s)}
                     onResizeBegin={(d) => beginBarResize(b.id, d)}
@@ -487,7 +487,9 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
                   pinned={false}
                   trackRef={trackRef}
                   xToDay={(x) => xToEpochDay(scale, x)}
-                  sessionOwned={sessionPhaseId === b.id}
+                  domainMinEpoch={domainMinEpoch}
+                  domainMaxEpoch={domainMaxEpoch}
+                  session={ripple.session}
                   onMoveBegin={(s) => beginBarMove(b.id, s)}
                   onMoveFrame={(s) => frameBarMove(b.id, s)}
                   onResizeBegin={(d) => beginBarResize(b.id, d)}
