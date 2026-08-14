@@ -36,6 +36,9 @@ export interface RuleDiamondProps {
   /** The milestone's display name — the button's accessible label. */
   label: string;
   pinned: boolean;
+  /** The drafting strip places diamonds inside their phase's lane; omitted ⇒
+   *  the compact rule's own single-track y. */
+  topPx?: number;
   onClick: () => void;
   /** A ripple provider is present ⇒ enable the pointer drag (batch 4). When
    *  false the diamond is a pure reveal button (Slice-02 behavior, unchanged). */
@@ -73,6 +76,7 @@ export function RuleDiamond({
   status,
   label,
   pinned,
+  topPx,
   onClick,
   draggable = false,
   anchored = false,
@@ -83,7 +87,7 @@ export function RuleDiamond({
   onDragFrame,
 }: RuleDiamondProps) {
   const size = pinned ? 6 : 8;
-  const top = pinned ? 8.5 : 65;
+  const top = topPx ?? (pinned ? 8.5 : 65);
 
   const drag = useRef({ down: false, begun: false, dragged: false, startX: 0 });
   const [nudging, setNudging] = useState(false);

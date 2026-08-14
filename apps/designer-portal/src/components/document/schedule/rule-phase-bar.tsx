@@ -158,6 +158,20 @@ export interface RulePhaseBarProps {
   /** Hands the slider element up so the Rule can focus this bar when the Spine
    *  arms an edit ("Edit dates" → the instrument). */
   registerRoot?: (el: HTMLDivElement | null) => void;
+  /** The drafting strip places each bar inside its own LANE, so it supplies the
+   *  geometry rather than letting the bar pick between the two single-track
+   *  bands. Omitted ⇒ the compact rule's own pinned/resting geometry. */
+  laneGeometry?: { top: number; height: number; tipTop: number; modeTop: number };
+  /** The ENGAGED bar — the one the strip's header line speaks for. It wears the
+   *  deck's live-bar treatment (a solid clay fill inside an aged-oak edge)
+   *  instead of the faint standing underlay every other bar carries. */
+  emphasis?: boolean;
+  /** Override `barCanResize`. The strip passes `true`: a lane per phase means
+   *  every bar owns its own right edge, so no boundary handle shares it and the
+   *  internal-boundary constraint that gated resizing on the single track does
+   *  not apply. (The locked-downstream rule is untouched — a resize still emits
+   *  `phase-duration` and `anchorViolation` still governs the commit.) */
+  resizable?: boolean;
   /** MOVE → the phase's new START epoch day (the parent anchors it there). */
   onMoveBegin: (startEpoch: number) => void;
   onMoveFrame: (startEpoch: number) => void;
@@ -177,6 +191,9 @@ export function RulePhaseBar({
   getBarEdit,
   setBarEdit,
   registerRoot,
+  laneGeometry,
+  emphasis = false,
+  resizable,
   onMoveBegin,
   onMoveFrame,
   onResizeBegin,
@@ -187,7 +204,7 @@ export function RulePhaseBar({
   const [mode, setMode] = useState<BarMode>('move');
   const [focused, setFocused] = useState(false);
 
-  const canResize = barCanResize(bar);
+  const canResize = resizable ?? barCanResize(bar);
   const effectiveMode: BarMode = mode === 'resize' && !canResize ? 'move' : mode;
 
   // Ownership and the staged value both come from the lifted store — a fresh
@@ -314,9 +331,15 @@ export function RulePhaseBar({
 
   // Geometry — the resting canvas centers the line at y≈70 (the boundary
   // handle's band is 62..78); the pin collapses it to ~22px (band 4..16).
-  const g = pinned
-    ? { top: 4, height: 12, tipTop: 0, modeTop: 0 }
-    : { top: 62, height: 16, tipTop: 44, modeTop: 80 };
+  const g =
+    laneGeometry ??
+    (pinned
+      ? { top: 4, height: 12, tipTop: 0, modeTop: 0 }
+      : { top: 62, height: 16, tipTop: 44, modeTop: 80 });
+  // In a lane the two labels share one narrow band, so the drag readout takes
+  // precedence over the mode label; on the single track their tops differ and
+  // both can show as before.
+  const modeLabelVisible = focused && (laneGeometry == null || !previewing);
 
   const startIso = isoFromEpochDay(value.startEpoch);
   const endIso = isoFromEpochDay(barNudgeEpochDay(value.startEpoch, value.durationDays));
@@ -357,14 +380,19 @@ export function RulePhaseBar({
           touchAction: 'none',
         }}
       >
-        {/* PERMANENT faint clay underlay — the bar is a standing mark, never a
-            hover reveal (R102). */}
+        {/* PERMANENT clay fill — the bar is a standing mark, never a hover
+            reveal (R102). The engaged bar reads solid inside an aged-oak edge
+            (the deck's live bar); the rest stay a faint underlay. */}
         <span
           className="absolute inset-0"
-          style={{ background: 'var(--color-clay)', opacity: 0.1 }}
+          style={
+            emphasis
+              ? { background: 'var(--color-clay)', border: '1px solid var(--color-aged-oak)' }
+              : { background: 'var(--color-clay)', opacity: 0.18 }
+          }
         />
 
-        {!pinned && focused && (
+        {!pinned && modeLabelVisible && (
           <span
             className="absolute whitespace-nowrap font-mono text-[0.54rem] uppercase tracking-[0.07em] text-[var(--color-aged-oak)]"
             style={{ left: 0, top: g.modeTop - g.top }}
