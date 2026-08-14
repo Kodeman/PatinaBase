@@ -1,7 +1,8 @@
 /**
- * J7 — the person profile's Nurture card must read the same honest
- * has_sent_proposal signal deriveRelationshipLine/isNurtureDue read, rather
- * than reimplementing "proposal sent" off bare status_raw a third time. See
+ * J7 — the person profile's Nurture card must read the same issuance evidence
+ * (deriveIssuanceState: paper → sent → draft) deriveRelationshipLine and
+ * isNurtureDue read, rather than reimplementing "proposal sent" off bare
+ * status_raw a third time. See
  * apps/designer-portal/src/lib/document/people-derivation.ts.
  */
 import { render, screen } from '@testing-library/react';
@@ -118,5 +119,30 @@ describe('PersonProfile — Nurture card (J7)', () => {
     expect(
       screen.getByText('Still drafting — nothing has gone to them yet.'),
     ).toBeInTheDocument();
+  });
+
+  it('names a paper issuance for what it is — neither a send nor a draft', () => {
+    mockPersonData = basePerson({ meta: { issued_on_paper: true } });
+    render(
+      <PersonProfile
+        personId="client-1"
+        role="client"
+        onBack={jest.fn()}
+        openThread={jest.fn()}
+        openPerson={jest.fn()}
+        goView={jest.fn()}
+        notify={jest.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByText('Handed over on paper — waiting on the signed copy to record.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('Proposal out — a nudge or a call may be overdue.'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Still drafting — nothing has gone to them yet.'),
+    ).not.toBeInTheDocument();
   });
 });

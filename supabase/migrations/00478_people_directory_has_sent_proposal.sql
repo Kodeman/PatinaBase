@@ -1,10 +1,16 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00478 — People Room: an honest "proposal sent" signal (J7 / doc-polish)
+-- 00478 — People Room: honest issuance evidence, not "a proposal exists"
+--         (J7 / doc-polish)
 --
 -- Lineage (people_directory): 00221 (birth) → 00281 (field kinds) →
 -- 00420 (studio scope + contacts) → 00478 (this). The 00420 body is copied
 -- VERBATIM as the base and one delta is grafted on top; no earlier branch is
 -- touched or reverted.
+--
+-- DEPENDS ON 00477. This migration reads proposals.issued_on_paper, the
+-- provenance stamp 00477 adds. It must be applied after it — the file numbers
+-- already order them, and nothing here is safe to replay against a database
+-- that lacks that column.
 --
 -- THE BUG THIS FIXES: set_document_client (00225) sets designer_clients.status
 -- to 'proposal' the instant a client is linked to ANY proposal — draft or
@@ -14,33 +20,128 @@
 -- client with a merely-drafted, never-emailed proposal reads as sent
 -- everywhere: the directory line ("Proposal sent · awaiting signature"), the
 -- Nurture queue (unconditionally "due"), and the person profile's Nurture
--- card. proposals.sent_at (nullable, set only by the real send path — see
--- 00388's dispatch guard) is the honest signal and was simply never wired
--- into this view.
+-- card.
 --
--- THE FIX: the CLIENT branch's `meta` gains ONE new key —
--- `has_sent_proposal` — an EXISTS check against `proposals` joined on
--- `designer_client_id` (works for a profileless/captured household exactly
--- as well as a linked one) requiring `sent_at IS NOT NULL`. `proposals` is
--- already fully studio-widened (`proposals_studio_rw`, 00316), matching this
--- branch's own `is_studio_comember` predicate, so the subquery resolves
--- identically for 'mine' and 'studio' rows under security_invoker — no new
--- scoping gap, unlike the under-widened tables 00420 already documents.
+-- THE FIX: the CLIENT branch's `meta` gains TWO keys, computed together by
+-- public.designer_client_send_evidence():
+--
+--   has_sent_proposal — a real, outbound send happened. The union of the two
+--     independent tells the send rail leaves behind: proposals.sent_at (set by
+--     send_commercial_document, 00423:1752) OR a proposal_send_dispatches row
+--     (00388). Either alone is enough; neither is written by the paper rail.
+--   issued_on_paper — the document reached the client's hands WITHOUT an
+--     email (00477). Disjoint from the above by construction: the paper issue
+--     path writes no sent_at and no dispatch row, and 00477's guard keeps the
+--     stamp unpaintable outside that ceremony.
+--
+-- Consumers must read them in that order — paper first, then send evidence,
+-- then draft. A paper issuance is NOT a send and must never render as one;
+-- it is also not a draft, and must never draw a "nothing has gone out" nudge.
+--
+-- LEGACY JOIN. proposals.designer_client_id (00327) was backfilled by 00328
+-- ONLY where the (designer_id, client_id) pair resolved to exactly one
+-- designer_clients row (00328:71-79); repeat-client households were left for
+-- manual review and two prod orphans deliberately unrepaired. document_state's
+-- own shape D carries a fallback for exactly this gap (00327:453-457), so this
+-- function carries the same one: an orphan proposal (designer_client_id NULL)
+-- matches on the designer/client pair. Without it a genuinely sent 2026-05
+-- agreement would read "not yet sent" — the very inversion this migration
+-- exists to prevent.
+--
+-- WHY SECURITY DEFINER. The view is security_invoker, and `proposals` is NOT
+-- widened to the same audience as `designer_clients`: 00401:424 dropped
+-- proposals_studio_rw and replaced it with proposals_design_studio_select,
+-- gated on is_design_studio_comember, which 00399:1160-1163 documents as
+-- deliberately narrower than the is_studio_comember this branch uses. A
+-- co-member who reaches the household through a non-design_studio org can see
+-- the row but not its proposals, so an invoker-side EXISTS would silently
+-- answer false and re-render the exact dishonesty this fixes. The evidence is
+-- therefore computed by a definer-rights function, keyed on a household the
+-- caller has already been admitted to. What it discloses is two booleans about
+-- that household's agreements — strictly less than the revenue totals, project
+-- counts and satisfaction scores the same `meta` blob already carries.
+--
+-- RELEASE ORDER IS LOAD-BEARING. The designer portal reads these keys
+-- fail-closed: absent ⇒ "not yet sent". Apply this migration BEFORE deploying
+-- the portal, or every proposal-stage client — including ones holding a real,
+-- sent, unsigned agreement — reads as merely drafted, is not nurture-due, and
+-- drops out of the Desk's reconnect band (desk-reconnect.tsx →
+-- deriveReconnectNeeds) as well as the People directory and Nurture queue.
+-- Regenerate packages/supabase/src/database.types.ts after applying.
 --
 -- CoR discipline unchanged from 00420: `meta` is a JSONB blob, not a flat
--- view column, so adding a key inside `jsonb_build_object` is additive and
--- does not touch the append-only top-level column order 00420 pins.
+-- view column, so adding keys inside it is additive and does not touch the
+-- append-only top-level column order 00420 pins.
 --
--- Additive only (D7): CREATE OR REPLACE VIEW, one new JSONB key in one
--- branch. No grants/revokes, no column drops, nothing narrows.
+-- Additive only (D7): one new function, CREATE OR REPLACE VIEW, two new JSONB
+-- keys in one branch. No column drops, nothing narrows.
 -- ═══════════════════════════════════════════════════════════════════════════
+
+CREATE OR REPLACE FUNCTION public.designer_client_send_evidence(
+  p_designer_client_id uuid,
+  p_designer_id        uuid,
+  p_client_id          uuid
+)
+RETURNS jsonb
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $fn$
+  WITH matched AS (
+    SELECT p.id, p.sent_at, p.issued_on_paper
+    FROM public.proposals p
+    WHERE p.designer_client_id = p_designer_client_id
+    UNION
+    -- 00328's un-backfilled orphans, mirroring document_state shape D.
+    SELECT p.id, p.sent_at, p.issued_on_paper
+    FROM public.proposals p
+    WHERE p.designer_client_id IS NULL
+      AND p_client_id IS NOT NULL
+      AND p.designer_id = p_designer_id
+      AND p.client_id   = p_client_id
+  )
+  SELECT jsonb_build_object(
+    'has_sent_proposal', COALESCE((
+      SELECT bool_or(
+               m.sent_at IS NOT NULL
+               OR EXISTS (
+                    SELECT 1 FROM public.proposal_send_dispatches d
+                    WHERE d.proposal_id = m.id
+                  )
+             )
+      FROM matched m
+    ), false),
+    'issued_on_paper', COALESCE((
+      SELECT bool_or(COALESCE(m.issued_on_paper, false)) FROM matched m
+    ), false)
+  );
+$fn$;
+
+REVOKE ALL ON FUNCTION public.designer_client_send_evidence(uuid, uuid, uuid)
+  FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.designer_client_send_evidence(uuid, uuid, uuid)
+  TO authenticated, service_role;
+
+COMMENT ON FUNCTION public.designer_client_send_evidence(uuid, uuid, uuid) IS
+  '00478: issuance evidence for one designer_clients household, as '
+  '{has_sent_proposal, issued_on_paper}. has_sent_proposal is the union of the '
+  'two tells a real outbound send leaves (proposals.sent_at, a '
+  'proposal_send_dispatches row); issued_on_paper is 00477''s stamp for a '
+  'document handed over without an email. Disjoint by construction. Matches '
+  'proposals on designer_client_id, plus the designer/client pair for rows '
+  '00328 could not backfill. SECURITY DEFINER on purpose: proposals is gated '
+  'by the narrower is_design_studio_comember (00401/00399) while '
+  'people_directory''s client branch is gated by is_studio_comember, so an '
+  'invoker-side read would answer false for co-members who can legitimately '
+  'see the household.';
 
 CREATE OR REPLACE VIEW public.people_directory
 WITH (security_invoker = true) AS
 
 -- ── CLIENTS ───────────────────────────────────────────────────────────────
--- v4: meta gains has_sent_proposal (this migration). Everything else in this
--- branch is unchanged from 00420.
+-- v4: meta gains has_sent_proposal + issued_on_paper (this migration).
+-- Everything else in this branch is unchanged from 00420.
 SELECT
   dc.id                                                          AS person_id,
   'client'::text                                                 AS role,
@@ -63,13 +164,9 @@ SELECT
     'satisfaction_score', dc.satisfaction_score,
     'nickname',           dc.nickname,
     'location',           dc.location,
-    'lead_id',            dc.lead_id,
-    'has_sent_proposal',  EXISTS (
-      SELECT 1 FROM public.proposals p
-      WHERE p.designer_client_id = dc.id
-        AND p.sent_at IS NOT NULL
-    )
-  )                                                              AS meta,
+    'lead_id',            dc.lead_id
+  ) || public.designer_client_send_evidence(dc.id, dc.designer_id, dc.client_id)
+                                                                 AS meta,
   (CASE WHEN dc.designer_id = (select auth.uid()) THEN 'mine' ELSE 'studio' END)::text AS scope
 FROM public.designer_clients dc
 LEFT JOIN public.profiles pr ON pr.id = dc.client_id
@@ -276,11 +373,12 @@ WHERE public.is_active_studio_member(sc.organization_id);
 COMMENT ON VIEW public.people_directory IS
   'R57 / People Room roster (client|lead|maker|gc|sub|installer|receiver|'
   'architect|photographer|stager|team|contact) for the querying user. v4 '
-  '(00478): the client branch''s meta gains has_sent_proposal (an EXISTS '
-  'against proposals.designer_client_id + sent_at IS NOT NULL) so the '
-  'directory/Nurture derivations can distinguish a drafted-and-linked '
-  'proposal from an actually-sent one, instead of both reading as '
-  'status_raw = ''proposal''. v3 (00420): every branch is STUDIO-scoped via '
+  '(00478): the client branch''s meta gains has_sent_proposal and '
+  'issued_on_paper from designer_client_send_evidence(), so the '
+  'directory/Nurture derivations can tell a merely-drafted agreement from one '
+  'that was really emailed and from one handed over on paper (00477), instead '
+  'of all three reading as status_raw = ''proposal''. Read them paper-first, '
+  'then send evidence, then draft. v3 (00420): every branch is STUDIO-scoped via '
   'is_studio_comember (00315), a contacts branch surfaces the shared rolodex '
   '(studio_contacts, 00417), and the appended `scope` column reads ''mine'' | '
   '''studio'' for the scope lens. The party branch admits the 00419 roster '

@@ -163,6 +163,33 @@ function humanizeTeamRole(raw: string | null | undefined): string {
 // ─── directory line + status dot (Track A) ─────────────────────────────────
 
 /**
+ * Where a proposal-stage relationship's document actually IS.
+ *
+ * designer_clients.status flips to 'proposal' the instant a client is linked to
+ * ANY proposal, draft or not (set_document_client, 00225) — it says nothing
+ * about whether anything left the studio. people_directory's meta carries the
+ * evidence that does (00478), and it is read in ONE order everywhere:
+ *
+ *   1. issued_on_paper — the agreement was handed over without an email
+ *      (00477). Not a send; also not a draft. It must never render as
+ *      "Proposal sent", and it must never draw a "nothing has gone out" nudge.
+ *   2. has_sent_proposal — a real outbound send happened (proposals.sent_at or
+ *      a proposal_send_dispatches row; 00478 takes the union so an orphan
+ *      legacy row with a null designer_client_id still counts).
+ *   3. otherwise the document is still in the studio's hands.
+ *
+ * Fail-closed by construction: absent keys (a pre-00478 view, or a fixture that
+ * predates it) read as 'draft' — the state that claims the least.
+ */
+export type IssuanceState = 'paper' | 'sent' | 'draft';
+
+export function deriveIssuanceState(p: Pick<DirectoryPerson, 'meta'>): IssuanceState {
+  if (p.meta?.['issued_on_paper'] === true) return 'paper';
+  if (p.meta?.['has_sent_proposal'] === true) return 'sent';
+  return 'draft';
+}
+
+/**
  * The status dot. Drives the prototype's gold/sage/terracotta/pearl dot and
  * feeds the nurture banding.
  */
@@ -176,7 +203,12 @@ export function deriveStatusDot(p: DirectoryPerson, now: Date): PartyStatus {
 
     case 'client': {
       if (p.status_raw === 'active') return 'active';
-      if (p.status_raw === 'proposal') return 'warm';
+      // The dot and the line must say the same thing. A document still in the
+      // studio's hands is not motion — it draws the neutral dot, so a glance
+      // down the dot column cannot read progress that has not happened. Paper
+      // and email issuance are both motion.
+      if (p.status_raw === 'proposal')
+        return deriveIssuanceState(p) === 'draft' ? 'cool' : 'warm';
       if (p.status_raw === 'completed' || p.status_raw === 'nurture') {
         if (dormant != null && dormant >= NURTURE_DUE_DAYS) return 'due';
         if (dormant != null && dormant >= NURTURE_DORMANT_DAYS) return 'warm';
@@ -231,14 +263,11 @@ export function isNurtureDue(p: DirectoryPerson, now: Date): boolean {
     case 'lead':
       return p.status_raw === 'new' || p.status_raw === 'viewed';
     case 'client':
-      // J7: status_raw='proposal' means "linked to at least one proposal,
-      // draft or sent" (set_document_client, 00225) — it does NOT mean a
-      // real send happened. meta.has_sent_proposal (00478's people_directory
-      // patch: EXISTS proposals.sent_at IS NOT NULL) is the honest dispatch
-      // signal. Fail-closed: an absent/undefined key (a pre-00478 fixture,
-      // or the migration not yet applied in this worktree) reads as
-      // not-due — never silently keeps the old always-due default.
-      if (p.status_raw === 'proposal') return p.meta?.['has_sent_proposal'] === true;
+      // J7: only a real send starts the clock on "they haven't answered yet".
+      // A draft has not been asked for an answer; a paper issuance was handed
+      // over in person, so a nudge about silence would be a lie about what
+      // happened. See deriveIssuanceState for the ordering.
+      if (p.status_raw === 'proposal') return deriveIssuanceState(p) === 'sent';
       if (p.status_raw === 'lead') return true;
       if (p.status_raw === 'completed' || p.status_raw === 'nurture')
         return dormant != null && dormant >= NURTURE_DUE_DAYS;
@@ -285,12 +314,14 @@ export function deriveRelationshipLine(
       case 'client': {
         if (p.status_raw === 'active') return `Active project · last touched ${since}`;
         if (p.status_raw === 'proposal') {
-          // J7: same has_sent_proposal signal isNurtureDue reads above (`due`
-          // already reflects it) — a merely-drafted, never-emailed proposal
-          // must not read as sent here either.
-          return p.meta?.['has_sent_proposal'] === true
-            ? `Proposal sent · ${due ? 'hesitating' : 'awaiting signature'}`
-            : 'Direction drafted · not yet sent';
+          switch (deriveIssuanceState(p)) {
+            case 'paper':
+              return 'Issued on paper · awaiting recorded signature';
+            case 'sent':
+              return `Proposal sent · ${due ? 'hesitating' : 'awaiting signature'}`;
+            case 'draft':
+              return 'Direction drafted · not yet sent';
+          }
         }
         if (p.status_raw === 'completed' || p.status_raw === 'nurture')
           return due ? `Past client · ${since} · time to reconnect` : `Past client · ${since}`;
@@ -379,7 +410,13 @@ export function deriveNurtureQueue(people: DirectoryPerson[], now: Date): Nurtur
   for (const p of people) {
     const dot = deriveStatusDot(p, now);
     const due = isNurtureDue(p, now);
-    if (!due && dot === 'cool') continue; // out of touch but not worth surfacing yet
+    // Out of touch but not worth surfacing yet — EXCEPT a proposal-stage
+    // client. An unsent Direction now wears the neutral dot (it is not in
+    // motion), but it is still a live thread the studio is holding: it stays
+    // in the queue, relabeled and ranked below everything due, rather than
+    // disappearing from the one surface that would remind anyone to send it.
+    const holdingADocument = p.role === 'client' && p.status_raw === 'proposal';
+    if (!due && dot === 'cool' && !holdingADocument) continue;
 
     const dormant = daysSince(p.last_touch_at, now) ?? 0;
     const trust =

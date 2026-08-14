@@ -1,4 +1,5 @@
 import {
+  deriveIssuanceState,
   deriveNurtureQueue,
   deriveRelationshipJourney,
   deriveRelationshipLine,
@@ -46,8 +47,20 @@ describe('deriveStatusDot (R57)', () => {
     expect(deriveStatusDot(mkPerson({ status_raw: 'active' }), NOW)).toBe('active');
   });
 
-  it('proposal client → warm', () => {
-    expect(deriveStatusDot(mkPerson({ status_raw: 'proposal' }), NOW)).toBe('warm');
+  // SC-14: the dot and the line must agree. A document still in the studio's
+  // hands is not motion; an emailed or hand-delivered one is.
+  it('proposal client reads warm only once the document actually left', () => {
+    expect(
+      deriveStatusDot(mkPerson({ status_raw: 'proposal', meta: { has_sent_proposal: true } }), NOW),
+    ).toBe('warm');
+    expect(
+      deriveStatusDot(mkPerson({ status_raw: 'proposal', meta: { issued_on_paper: true } }), NOW),
+    ).toBe('warm');
+    expect(
+      deriveStatusDot(mkPerson({ status_raw: 'proposal', meta: { has_sent_proposal: false } }), NOW),
+    ).toBe('cool');
+    // Missing signal (a pre-00478 view) fails closed to the neutral dot.
+    expect(deriveStatusDot(mkPerson({ status_raw: 'proposal', meta: {} }), NOW)).toBe('cool');
   });
 
   it('past client quiet 8 months → due (Joan Marsh)', () => {
@@ -88,10 +101,24 @@ describe('deriveStatusDot (R57)', () => {
   });
 });
 
+describe('deriveIssuanceState (J7)', () => {
+  it('reads paper first, then send evidence, then draft', () => {
+    expect(deriveIssuanceState({ meta: { issued_on_paper: true } })).toBe('paper');
+    // Paper wins even against a stale/contradictory send flag — a document
+    // handed over in person must never be narrated as emailed.
+    expect(
+      deriveIssuanceState({ meta: { issued_on_paper: true, has_sent_proposal: true } }),
+    ).toBe('paper');
+    expect(deriveIssuanceState({ meta: { has_sent_proposal: true } })).toBe('sent');
+    expect(deriveIssuanceState({ meta: { has_sent_proposal: false } })).toBe('draft');
+    expect(deriveIssuanceState({ meta: {} })).toBe('draft');
+  });
+});
+
 describe('deriveRelationshipLine (R57)', () => {
   // J7: status_raw='proposal' means "linked to at least one proposal, draft
-  // or sent" (set_document_client, 00225) — meta.has_sent_proposal (00478)
-  // is the only honest signal that a real send happened.
+  // or sent" (set_document_client, 00225) — meta.has_sent_proposal /
+  // meta.issued_on_paper (00478) are the only honest signals of what left.
   it('a drafted-but-never-sent proposal reads honestly, not due', () => {
     const line = deriveRelationshipLine(
       mkPerson({ status_raw: 'proposal', meta: { has_sent_proposal: false } }),
@@ -114,6 +141,21 @@ describe('deriveRelationshipLine (R57)', () => {
     );
     expect(line.due).toBe(true);
     expect(line.text).toMatch(/hesitating/);
+  });
+
+  it('an agreement issued on paper reads as issued — never sent, never a draft nudge', () => {
+    const line = deriveRelationshipLine(
+      mkPerson({ status_raw: 'proposal', meta: { issued_on_paper: true } }),
+      NOW,
+    );
+    expect(line.text).toBe('Issued on paper · awaiting recorded signature');
+    expect(line.text).not.toMatch(/Proposal sent/);
+    expect(line.text).not.toMatch(/not yet sent/);
+    // No nurture nudge: nothing is waiting on an email that was never sent.
+    expect(line.due).toBe(false);
+    expect(
+      isNurtureDue(mkPerson({ status_raw: 'proposal', meta: { issued_on_paper: true } }), NOW),
+    ).toBe(false);
   });
 
   it('isNurtureDue only flags a proposal-stage client once it was actually sent', () => {
@@ -181,6 +223,21 @@ describe('deriveNurtureQueue (R58)', () => {
     expect(drafted.reason).toBe('Direction drafted · not yet sent');
     expect(sent.due).toBe(true);
     expect(sent.reason).not.toMatch(/^Direction drafted/);
+    // Ruled: an unsent Direction is relabeled and downranked, NOT dropped —
+    // the queue is the one surface that would remind anyone to send it, even
+    // though the row now wears the neutral dot (SC-14).
+    expect(deriveStatusDot(drafted.person, NOW)).toBe('cool');
+    expect(queue.indexOf(sent)).toBeLessThan(queue.indexOf(drafted));
+  });
+
+  it('an agreement issued on paper stays in the queue without a reconnect nudge', () => {
+    const people = [
+      mkPerson({ person_id: 'paper', status_raw: 'proposal', meta: { issued_on_paper: true } }),
+    ];
+    const queue = deriveNurtureQueue(people, NOW);
+    const paper = queue.find((e) => e.person.person_id === 'paper')!;
+    expect(paper.due).toBe(false);
+    expect(paper.reason).toBe('Issued on paper · awaiting recorded signature');
   });
 });
 
