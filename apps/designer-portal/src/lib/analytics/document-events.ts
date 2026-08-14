@@ -176,11 +176,16 @@ export const documentEvents = {
   historyToggled: (props: { expanded: boolean; completed_count: number }) =>
     track('document_previous_work_toggled', props),
 
+  /** A Project region was folded shut or unfolded (the region head's Fold word
+   *  or the fold seam). `region` is the RegionFoldKey the choice persists under. */
+  regionFolded: (props: { region: string; folded: boolean }) =>
+    track('document_region_folded', props),
+
   actionShown: (props: {
     surface_key: string;
     region_key: string;
     action_key: string;
-    variant: 'primary' | 'secondary' | 'tertiary' | 'danger';
+    variant: 'primary' | 'inked' | 'secondary' | 'tertiary' | 'danger';
     presentation: 'inline' | 'mobile_dock';
   }) => track('document_action_shown', props),
 
@@ -188,7 +193,7 @@ export const documentEvents = {
     surface_key: string;
     region_key: string;
     action_key: string;
-    variant: 'primary' | 'secondary' | 'tertiary' | 'danger';
+    variant: 'primary' | 'inked' | 'secondary' | 'tertiary' | 'danger';
     presentation: 'inline' | 'mobile_dock';
   }) => track('document_action_selected', props),
 

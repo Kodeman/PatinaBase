@@ -201,7 +201,15 @@ function gateGuide(
   };
 }
 
-function actionForNeed(need: NeedLine, row: DocumentStateRow): DocumentGuideAction {
+/** The act a need points at — extracted so a region that prints needs itself
+ *  can reach the same destination the guide strip would have offered. `stage`
+ *  is the section an anchor destination lands in; `projectId` only ever reaches
+ *  an orders-ledger context. */
+export function needGuideAction(
+  need: NeedLine,
+  stage: SectionKey,
+  projectId?: string | null,
+): DocumentGuideAction {
   const orderPage =
     need.kind === 'damage_claim' || need.kind === 'awaiting_inspection'
       ? 'receiving'
@@ -211,14 +219,14 @@ function actionForNeed(need: NeedLine, row: DocumentStateRow): DocumentGuideActi
   const destination: DocumentGuideDestination = need.kind === 'reconnect_due'
     ? { kind: 'href', href: '/people?view=nurture' }
     : orderPage
-      ? { kind: 'ledger', name: 'orders', context: { page: orderPage, projectId: row.project_id ?? undefined } }
+      ? { kind: 'ledger', name: 'orders', context: { page: orderPage, projectId: projectId ?? undefined } }
     : need.ledger
     ? { kind: 'ledger', name: need.ledger.name, context: need.ledger.context }
     : need.deepLink
       ? { kind: 'href', href: need.deepLink }
       : {
           kind: 'anchor',
-          section: row.active_section,
+          section: stage,
           focusId:
             need.kind === 'overdue_decision'
               ? 'document-decision-controls'
@@ -368,7 +376,7 @@ export function deriveDocumentGuide({
       state: 'actionable', stage, eyebrow: `${stageCopy[stage].eyebrow} · needs attention`,
       headline: need.text,
       reason: 'This action comes from the operational signals available on the current document.',
-      action: actionForNeed(need, row),
+      action: needGuideAction(need, row.active_section, row.project_id),
     }, inputFacts);
   }
 

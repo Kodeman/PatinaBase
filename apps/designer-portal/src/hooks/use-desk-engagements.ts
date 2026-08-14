@@ -88,6 +88,24 @@ export function selectOperationalNeedForDocument(
   return data.folders.find((folder) => folder.row.engagement_id === engagementId)?.need ?? null;
 }
 
+/**
+ * The same answer, read whole: every need this composition derived for the
+ * document, in priority order. Identical sentinel discipline to the single-need
+ * reader above — `undefined` = this composition never covered the engagement,
+ * so the caller has no answer; `[]` = it did, and there are no needs.
+ */
+export function selectOperationalNeedsForDocument(
+  data: DeskData | undefined,
+  engagementId: string | null | undefined,
+): NeedLine[] | undefined {
+  if (!data || !engagementId) return undefined;
+  if (data.composed[engagementId] !== true) return undefined;
+  return (
+    data.folders.find((folder) => folder.row.engagement_id === engagementId)
+      ?.needs ?? []
+  );
+}
+
 /** Conflict window: today → +120d covers any configured install horizon. */
 const CONFLICT_WINDOW_DAYS = 120;
 

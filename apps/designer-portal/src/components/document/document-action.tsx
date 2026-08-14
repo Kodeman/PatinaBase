@@ -24,6 +24,7 @@ import { documentEvents } from '@/lib/analytics/document-events';
 
 export type DocumentActionVariant =
   | 'primary'
+  | 'inked'
   | 'secondary'
   | 'tertiary'
   | 'danger';
@@ -53,6 +54,7 @@ const BASE_CLASS =
 
 const VARIANT_CLASS: Record<DocumentActionVariant, string> = {
   primary: 'da-primary font-medium tracking-[0.12em]',
+  inked: 'da-inked font-medium tracking-[0.12em]',
   secondary: 'da-secondary font-normal tracking-[0.1em]',
   tertiary: 'da-tertiary font-light tracking-[0.1em]',
   danger: 'da-danger font-medium tracking-[0.12em]',
@@ -280,6 +282,14 @@ interface DocumentActionGroupProps {
   'aria-label'?: string;
 }
 
+/* Leadership is a role, not a look: `primary` and `inked` are two renderings of
+   the same "one leader per region" claim, so the ≤1 guard counts them together
+   (an inked ledger head beside a primary is still two leaders). */
+const LEADER_VARIANTS: readonly DocumentActionVariant[] = ['primary', 'inked'];
+const LEADER_SELECTOR = LEADER_VARIANTS.map(
+  (variant) => `[data-action-variant="${variant}"]`,
+).join(', ');
+
 function countPrimaryActions(children: ReactNode): number {
   let count = 0;
   Children.forEach(children, (child) => {
@@ -291,7 +301,8 @@ function countPrimaryActions(children: ReactNode): number {
     )
       return;
     if (child.type === DocumentAction) {
-      if ((child.props.variant ?? 'secondary') === 'primary') count += 1;
+      if (LEADER_VARIANTS.includes(child.props.variant ?? 'secondary'))
+        count += 1;
       return;
     }
     if (
@@ -323,9 +334,7 @@ function ActionRegionFrame({
     if (process.env.NODE_ENV === 'production' || reported.current) return;
     const renderedPrimaryCount = frameRef.current
       ? Array.from(
-          frameRef.current.querySelectorAll<HTMLElement>(
-            '[data-action-variant="primary"]',
-          ),
+          frameRef.current.querySelectorAll<HTMLElement>(LEADER_SELECTOR),
         ).filter(
           (action) =>
             action.closest('[role="group"][data-action-region]') ===

@@ -245,6 +245,9 @@ export interface DeskFolder {
   /** Ruling IV — the one overdue derivation, read by this folio's order and by
    *  its stamp. Undefined only where a folder was built outside partitionDesk. */
   overdue?: OverdueCondition;
+  /** The whole chain this row produced, priority-ordered — `need` is its head.
+   *  Undefined only where a folder was built outside partitionDesk. */
+  needs?: NeedLine[];
 }
 
 // ─── R53: People on the Desk (the nurture-due / reconnect surface) ──────────
@@ -503,18 +506,32 @@ export function folderTab(
   return firstOfTitle || last || '—';
 }
 
-/** The ONE thing this engagement needs from the designer today, or null. */
-export function deriveNeed(
-  row: DocumentStateRow,
-  now: Date,
-  conflict?: DeskConflictInput | null,
-  receivable?: ReceivableSignal | null,
-  flagged?: DeskFlaggedSignal | null,
-  ceremony?: DeskCeremonySignal | null,
-  schedule?: DeskScheduleInput | null,
-): NeedLine | null {
-  if (row.is_archived || row.is_paused) return null;
+/** Everything deriveNeed used to read off its parameter list, bundled so the
+ *  chain below can be a list of rules instead of one long function. */
+interface NeedContext {
+  row: DocumentStateRow;
+  now: Date;
+  conflict?: DeskConflictInput | null;
+  receivable?: ReceivableSignal | null;
+  flagged?: DeskFlaggedSignal | null;
+  ceremony?: DeskCeremonySignal | null;
+  schedule?: DeskScheduleInput | null;
+}
 
+/** A rule that owns its engagement kind outright. The original deriveNeed
+ *  returned from INSIDE the proposal and lead blocks — with a need or with
+ *  null — so no rule below them could ever see those rows. Sealing is how that
+ *  early exit survives being cut into a list. */
+interface SealedNeed {
+  sealed: true;
+  need: NeedLine | null;
+}
+
+const seal = (need: NeedLine | null): SealedNeed => ({ sealed: true, need });
+
+type NeedRule = (ctx: NeedContext) => NeedLine | SealedNeed | null;
+
+const needOverdueDecision: NeedRule = ({ row }) => {
   if (row.overdue_decision_count > 0) {
     const oldest = row.earliest_overdue_due
       ? ` — oldest due ${fmtDay(row.earliest_overdue_due)}`
@@ -531,13 +548,16 @@ export function deriveNeed(
       urgent: true,
     };
   }
+  return null;
+};
 
-  // R36: an overdue + unchased receivable rises here (just under a blocking
-  // decision). The act isn't "pick up the document" — it's "send the reminder",
-  // which lives on the Accounts book's Receivables page, so the folder opens
-  // that ledger (need.ledger) rather than the document. Chasing the invoice
-  // stamps ar_last_chased_at; on the next read this signal is gone and the
-  // folder clears — the same R22 awareness tier as the send weave.
+// R36: an overdue + unchased receivable rises here (just under a blocking
+// decision). The act isn't "pick up the document" — it's "send the reminder",
+// which lives on the Accounts book's Receivables page, so the folder opens
+// that ledger (need.ledger) rather than the document. Chasing the invoice
+// stamps ar_last_chased_at; on the next read this signal is gone and the
+// folder clears — the same R22 awareness tier as the send weave.
+const needOverdueInvoice: NeedRule = ({ receivable }) => {
   if (receivable) {
     const oldest = receivable.oldestDue
       ? ` — oldest due ${fmtDay(receivable.oldestDue)}`
@@ -558,36 +578,39 @@ export function deriveNeed(
       },
     };
   }
+  return null;
+};
 
+const needProposal: NeedRule = ({ row, now, flagged }) => {
   if (row.engagement_kind === 'proposal') {
     // Signed but no project row yet (DECISIONS.md I7): the signing moment
     // is waiting on the designer's hand — activation opens the project.
     if (row.proposal_status === 'accepted') {
-      return {
+      return seal({
         kind: 'proposal_signed',
         text: 'Signed — open the project',
         actionLabel: NEED_ACTION_LABELS.proposal_signed,
         stamp: { label: 'SIGNED', ...STAMP.sage },
         urgent: false,
-      };
+      });
     }
     if (row.proposal_status === 'declined') {
-      return {
+      return seal({
         kind: 'proposal_declined',
         text: 'Proposal declined — follow up',
         actionLabel: NEED_ACTION_LABELS.proposal_declined,
         stamp: { label: 'DECLINED', ...STAMP.terracotta },
         urgent: false,
-      };
+      });
     }
     if (row.proposal_status === 'expired') {
-      return {
+      return seal({
         kind: 'proposal_expired',
         text: 'Proposal expired — revise or follow up',
         actionLabel: NEED_ACTION_LABELS.proposal_expired,
         stamp: { label: 'EXPIRED', ...STAMP.terracotta },
         urgent: false,
-      };
+      });
     }
     // C4: the client has flagged lines on a still-live proposal — a concrete
     // concern raised on the copy, waiting on the designer to respond (resolve /
@@ -596,7 +619,7 @@ export function deriveNeed(
     // clay FLAGGED stamp matches the line's own verdict chip.
     if (flagged && flagged.count > 0) {
       const n = flagged.count;
-      return {
+      return seal({
         kind: 'lines_flagged',
         text:
           n === 1
@@ -606,7 +629,7 @@ export function deriveNeed(
         stamp: { label: 'FLAGGED', color: 'var(--color-clay)' },
         urgent: false,
         deepLink: `/drafting/${flagged.proposalId}?flagged=1`,
-      };
+      });
     }
     if (
       row.proposal_status === 'sent' &&
@@ -617,13 +640,13 @@ export function deriveNeed(
       // R22: a folder only once waiting is no longer the only act (≥2 days
       // unopened = follow up). Day 1 lives as an In-motion chip (deriveMotion).
       if (days >= SENT_UNOPENED_PROMOTE_DAYS) {
-        return {
+        return seal({
           kind: 'hesitating_proposal',
           text: `Sent ${fmtDay(row.proposal_sent_at)} — not yet opened`,
           actionLabel: NEED_ACTION_LABELS.hesitating_proposal,
           stamp: { label: 'SENT', ...STAMP.dustyBlue },
           urgent: false,
-        };
+        });
       }
     }
     if (row.proposal_status === 'viewed' && row.proposal_viewed_at) {
@@ -638,18 +661,21 @@ export function deriveNeed(
           opens > 1
             ? `Opened ${opens}× — last ${fmtDay(lastOpen)}, no signature yet`
             : `Opened ${fmtDay(lastOpen)} — no signature yet`;
-        return {
+        return seal({
           kind: 'hesitating_proposal',
           text,
           actionLabel: NEED_ACTION_LABELS.hesitating_proposal,
           stamp: { label: 'VIEWED', ...STAMP.dustyBlue },
           urgent: false,
-        };
+        });
       }
     }
-    return null;
+    return seal(null);
   }
+  return null;
+};
 
+const needLead: NeedRule = ({ row, now, ceremony }) => {
   if (row.engagement_kind === 'lead') {
     // R106 §3: a claimed lead whose ceremony was put down mid-draft is
     // "Introduce yourself to {first name}" — the act available is WRITING
@@ -659,7 +685,7 @@ export function deriveNeed(
     // ceremony rows at all) falls straight through unchanged.
     if (ceremony && ceremony.state === 'draft') {
       const draftText = (ceremony.introText ?? '').trim();
-      return {
+      return seal({
         kind: 'ceremony_pending',
         text: `Introduce yourself to ${firstName(row.client_name)}`,
         actionLabel: NEED_ACTION_LABELS.ceremony_pending,
@@ -669,7 +695,7 @@ export function deriveNeed(
         sub: draftText
           ? `Your draft is held — "${truncateWords(draftText, 60)}"`
           : undefined,
-      };
+      });
     }
 
     // R65 — a nurtured lead (status='contacted') carries a RECONNECT DATE in
@@ -681,22 +707,23 @@ export function deriveNeed(
     if (row.lead_status === 'contacted') {
       const reconnectAt = row.lead_response_deadline;
       if (reconnectAt && new Date(reconnectAt).getTime() <= now.getTime()) {
-        return {
+        return seal({
           kind: 'reconnect_due',
           text: `Reconnect — touchpoint due ${fmtDay(reconnectAt)}`,
           actionLabel: NEED_ACTION_LABELS.reconnect_due,
           stamp: { label: 'RECONNECT', ...STAMP.dustyBlue },
           urgent: false,
-        };
+        });
       }
-      return null;
+      return seal(null);
     }
 
     // R61 — the new-lead triage gate. Shape C (`document_state`) still includes
     // `leads.status='contacted'` (handled above); accepted/declined leave Shape
     // C entirely. Only a lead the designer hasn't yet acted on (new/viewed) is
     // "the one thing today".
-    if (row.lead_status !== 'new' && row.lead_status !== 'viewed') return null;
+    if (row.lead_status !== 'new' && row.lead_status !== 'viewed')
+      return seal(null);
 
     const deadline = row.lead_response_deadline;
     const msLeft = deadline
@@ -711,17 +738,20 @@ export function deriveNeed(
           : closing
             ? `Respond by ${fmtDay(deadline)} — closing soon`
             : `New lead — respond by ${fmtDay(deadline)}`;
-    return {
+    return seal({
       kind: 'new_lead',
       text,
       actionLabel: NEED_ACTION_LABELS.new_lead,
       stamp: { label: 'NEW LEAD', ...STAMP.clay },
       urgent: closing,
-    };
+    });
   }
+  return null;
+};
 
-  // R7: claims surface at the grain where they are true — the PO. The line
-  // stamp stays suppressed until per-item attribution exists (Slice 4).
+// R7: claims surface at the grain where they are true — the PO. The line
+// stamp stays suppressed until per-item attribution exists (Slice 4).
+const needDamageClaim: NeedRule = ({ row }) => {
   if (row.open_claim_count > 0) {
     const n = row.open_claim_count;
     return {
@@ -735,7 +765,10 @@ export function deriveNeed(
       urgent: false,
     };
   }
+  return null;
+};
 
+const needAwaitingInspection: NeedRule = ({ row }) => {
   if (row.awaiting_inspection_count > 0) {
     const n = row.awaiting_inspection_count;
     return {
@@ -749,10 +782,13 @@ export function deriveNeed(
       urgent: false,
     };
   }
+  return null;
+};
 
-  // R28: the calendar's intelligence, promoted — a collision needs her hand
-  // (two installs one week, or a delivery landing after its install). Drift
-  // with no act stays an in-motion chip (deriveMotion).
+// R28: the calendar's intelligence, promoted — a collision needs her hand
+// (two installs one week, or a delivery landing after its install). Drift
+// with no act stays an in-motion chip (deriveMotion).
+const needScheduleCollision: NeedRule = ({ conflict }) => {
   if (conflict?.collision) {
     return {
       kind: 'schedule_conflict',
@@ -762,13 +798,16 @@ export function deriveNeed(
       urgent: false,
     };
   }
+  return null;
+};
 
-  // R4 / "Ruling IV" (overdue-condition.ts): one fact, exactly three
-  // renderings. The resolver's own contradiction — a chain that no longer fits
-  // the anchor holding it — already stamps the spine row (Slice 03) and, by
-  // riding the SAME need kind, re-sorts this folder and speaks the guide's
-  // sentence. No fourth rendering. The text is built upstream from phase
-  // NAMES; the resolver's own message carries raw ids and never surfaces.
+// R4 / "Ruling IV" (overdue-condition.ts): one fact, exactly three
+// renderings. The resolver's own contradiction — a chain that no longer fits
+// the anchor holding it — already stamps the spine row (Slice 03) and, by
+// riding the SAME need kind, re-sorts this folder and speaks the guide's
+// sentence. No fourth rendering. The text is built upstream from phase
+// NAMES; the resolver's own message carries raw ids and never surfaces.
+const needScheduleContradiction: NeedRule = ({ schedule }) => {
   if (schedule?.contradictionText) {
     return {
       kind: 'schedule_conflict',
@@ -778,9 +817,12 @@ export function deriveNeed(
       urgent: false,
     };
   }
+  return null;
+};
 
-  // R109's third class rides the same register: an act whose date contradicts
-  // an anchor already committed reports — it never offers a slide to commit.
+// R109's third class rides the same register: an act whose date contradicts
+// an anchor already committed reports — it never offers a slide to commit.
+const needScheduleProposalConflict: NeedRule = ({ schedule }) => {
   if (schedule?.proposals && schedule.proposals.conflicting > 0) {
     return {
       kind: 'schedule_conflict',
@@ -790,10 +832,13 @@ export function deriveNeed(
       urgent: false,
     };
   }
+  return null;
+};
 
-  // R109/R110 (00475): an act proposed an anchor and is waiting for one
-  // designer act — commit it or dismiss it. The line names the source honestly:
-  // a signed act and a recorded event are not the same evidence.
+// R109/R110 (00475): an act proposed an anchor and is waiting for one
+// designer act — commit it or dismiss it. The line names the source honestly:
+// a signed act and a recorded event are not the same evidence.
+const needScheduleProposal: NeedRule = ({ schedule }) => {
   if (schedule?.proposals && schedule.proposals.count > 0) {
     return {
       kind: 'schedule_proposal',
@@ -805,9 +850,12 @@ export function deriveNeed(
       urgent: false,
     };
   }
+  return null;
+};
 
-  // R23: a dued task is the designer's own committed act — it rises (the
-  // R22 test passes: the act is doing it). Undated tasks never nag.
+// R23: a dued task is the designer's own committed act — it rises (the
+// R22 test passes: the act is doing it). Undated tasks never nag.
+const needTaskDue: NeedRule = ({ row }) => {
   if (row.due_task_count > 0 && row.earliest_task_due) {
     const n = row.due_task_count;
     return {
@@ -821,10 +869,13 @@ export function deriveNeed(
       urgent: false,
     };
   }
+  return null;
+};
 
-  // R113 + R6: the setup nudges the doc body used to leak as error copy, now
-  // gated on the sections where composing a schedule IS the act. Ranked below
-  // the collision and below a committed task — this is setup, not obstruction.
+// R113 + R6: the setup nudges the doc body used to leak as error copy, now
+// gated on the sections where composing a schedule IS the act. Ranked below
+// the collision and below a committed task — this is setup, not obstruction.
+const needScheduleUnconfigured: NeedRule = ({ row, schedule }) => {
   if (
     schedule?.unconfigured &&
     row.engagement_kind === 'project' &&
@@ -841,10 +892,13 @@ export function deriveNeed(
       urgent: false,
     };
   }
+  return null;
+};
 
-  // R18: the send weave. A drafted PO the studio never sent is the
-  // designer's own pen (rises first); a sent PO the vendor hasn't
-  // acknowledged is a nudge. Both thresholds provisional (constants watch).
+// R18: the send weave. A drafted PO the studio never sent is the
+// designer's own pen (rises first); a sent PO the vendor hasn't
+// acknowledged is a nudge. Both thresholds provisional (constants watch).
+const needPoUnsent: NeedRule = ({ row, now }) => {
   if (row.draft_unsent_po_count > 0 && row.oldest_draft_po_created_at) {
     const days = daysBetween(row.oldest_draft_po_created_at, now);
     if (days >= PO_DRAFT_UNSENT_DAYS) {
@@ -861,7 +915,10 @@ export function deriveNeed(
       };
     }
   }
+  return null;
+};
 
+const needPoUnacknowledged: NeedRule = ({ row, now }) => {
   if (row.unacked_po_count > 0 && row.oldest_unacked_sent_at) {
     const days = daysBetween(row.oldest_unacked_sent_at, now);
     if (days >= PO_SENT_UNACKED_DAYS) {
@@ -878,8 +935,11 @@ export function deriveNeed(
       };
     }
   }
+  return null;
+};
 
-  // D5: Friday unsent Pulses rise on the Desk — never earlier in the week.
+// D5: Friday unsent Pulses rise on the Desk — never earlier in the week.
+const needPulseDue: NeedRule = ({ row, now }) => {
   if (row.unsent_pulse_count > 0 && row.pulse_week_of) {
     const monday = new Date(`${row.pulse_week_of}T00:00:00`);
     const friday = monday.getTime() + 4 * DAY_MS;
@@ -893,8 +953,78 @@ export function deriveNeed(
       };
     }
   }
-
   return null;
+};
+
+/** The chain, in the order it has always been read. Priority is position:
+ *  deriveNeed still takes the first line this list produces. */
+const NEED_RULES: readonly NeedRule[] = [
+  needOverdueDecision,
+  needOverdueInvoice,
+  needProposal,
+  needLead,
+  needDamageClaim,
+  needAwaitingInspection,
+  needScheduleCollision,
+  needScheduleContradiction,
+  needScheduleProposalConflict,
+  needScheduleProposal,
+  needTaskDue,
+  needScheduleUnconfigured,
+  needPoUnsent,
+  needPoUnacknowledged,
+  needPulseDue,
+];
+
+/** EVERY thing this engagement needs from the designer today, in priority
+ *  order — the whole chain read out instead of stopped at its first line.
+ *  An archived or paused engagement needs nothing. */
+export function deriveNeeds(
+  row: DocumentStateRow,
+  now: Date,
+  conflict?: DeskConflictInput | null,
+  receivable?: ReceivableSignal | null,
+  flagged?: DeskFlaggedSignal | null,
+  ceremony?: DeskCeremonySignal | null,
+  schedule?: DeskScheduleInput | null,
+): NeedLine[] {
+  if (row.is_archived || row.is_paused) return [];
+  const ctx: NeedContext = {
+    row,
+    now,
+    conflict,
+    receivable,
+    flagged,
+    ceremony,
+    schedule,
+  };
+  const needs: NeedLine[] = [];
+  for (const rule of NEED_RULES) {
+    const result = rule(ctx);
+    if (result === null) continue;
+    if ('sealed' in result) {
+      if (result.need) needs.push(result.need);
+      break;
+    }
+    needs.push(result);
+  }
+  return needs;
+}
+
+/** The ONE thing this engagement needs from the designer today, or null. */
+export function deriveNeed(
+  row: DocumentStateRow,
+  now: Date,
+  conflict?: DeskConflictInput | null,
+  receivable?: ReceivableSignal | null,
+  flagged?: DeskFlaggedSignal | null,
+  ceremony?: DeskCeremonySignal | null,
+  schedule?: DeskScheduleInput | null,
+): NeedLine | null {
+  return (
+    deriveNeeds(row, now, conflict, receivable, flagged, ceremony, schedule)[0] ??
+    null
+  );
 }
 
 /** One quiet line for an engagement progressing without the designer, paired
@@ -1133,13 +1263,15 @@ export function partitionDesk(
       schedules && row.project_id
         ? (schedules.get(row.project_id) ?? DESK_SCHEDULE_UNCONFIGURED)
         : null;
-    const need = deriveNeed(row, now, conflict, receivable, flagged, ceremony, schedule);
+    const needs = deriveNeeds(row, now, conflict, receivable, flagged, ceremony, schedule);
+    const need = needs[0] ?? null;
     if (need) {
       // Ruling IV: the overdue condition rides the folder so the sort, the
       // folio's need line, and the margin stamp all read one derivation.
       folders.push({
         row,
         need,
+        needs,
         overdue:
           need.kind === 'overdue_decision'
             ? deriveOverdue(row.earliest_overdue_due, now)
