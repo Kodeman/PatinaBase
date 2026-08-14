@@ -68,7 +68,7 @@ export function CeremonyArrival({
         <div className="mt-7">
           <button
             type="button"
-            onClick={() => router.push(`/room/${primary.scan_id}?from=document`)}
+            onClick={() => router.push(`/room/${primary.scan_id}?from=document&docId=${lead.id}`)}
             className="block w-full rounded-[2px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] p-2.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
           >
             {primary.scan.thumbnail_url ? (
@@ -103,7 +103,7 @@ export function CeremonyArrival({
                 <button
                   key={row.id}
                   type="button"
-                  onClick={() => router.push(`/room/${row.scan_id}?from=document`)}
+                  onClick={() => router.push(`/room/${row.scan_id}?from=document&docId=${lead.id}`)}
                   title={row.scan?.name ?? 'Room scan'}
                   className="h-16 w-16 shrink-0 overflow-hidden rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
                 >

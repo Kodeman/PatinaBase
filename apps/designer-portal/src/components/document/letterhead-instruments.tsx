@@ -205,6 +205,7 @@ export function LetterheadInstruments({
   proposalId = null,
   clientProfileId,
   clientName,
+  engagementId = null,
 }: {
   /** Set on a project document; null pre-project (proposal / relationship). */
   projectId?: string | null;
@@ -212,6 +213,12 @@ export function LetterheadInstruments({
   proposalId?: string | null;
   clientProfileId: string | null;
   clientName: string;
+  /** The CURRENT document's own engagement id (A2) — passed through as the
+   *  Room View door's `docId`, so a scan whose own canonical document
+   *  differs from the one it was opened from still scopes-back to the right
+   *  document. Optional: callers that don't yet carry it degrade to the
+   *  door's un-scoped canonical-doc fallback. */
+  engagementId?: string | null;
 }) {
   const router = useRouter();
   const [mirrorOpen, setMirrorOpen] = useState(false);
@@ -281,7 +288,11 @@ export function LetterheadInstruments({
           <DocumentAction
             actionKey="open-client-scan"
             variant="tertiary"
-            onClick={() => router.push(`/room/${scan.id}?from=document`)}
+            onClick={() =>
+              router.push(
+                `/room/${scan.id}?from=document${engagementId ? `&docId=${engagementId}` : ''}`,
+              )
+            }
           >
             The scan
           </DocumentAction>

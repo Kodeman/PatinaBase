@@ -155,7 +155,7 @@ export function FolioStrip({
   // room_scan id in storage_path. Real files keep the DocFileViewer door.
   const openFolioFile = (f: FolioFile) => {
     if (f.doc_type === 'scan' && f.storage_path) {
-      router.push(`/room/${f.storage_path}?from=document`);
+      router.push(`/room/${f.storage_path}?from=document&docId=${projectId}`);
     } else {
       setViewing(f);
     }
@@ -346,7 +346,7 @@ export function FolioLetterhead({ projectId }: { projectId: string }) {
   // exists; real files keep the DocFileViewer door).
   const openFolioFile = (f: FolioFile) => {
     if (f.doc_type === 'scan' && f.storage_path) {
-      router.push(`/room/${f.storage_path}?from=document`);
+      router.push(`/room/${f.storage_path}?from=document&docId=${projectId}`);
     } else {
       setViewing(f);
     }

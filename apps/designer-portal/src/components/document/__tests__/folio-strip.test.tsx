@@ -60,12 +60,12 @@ describe('FolioStrip — a scan chip navigates to the Room View', () => {
     mockUseSetFolioVisibility.mockReturnValue({ mutate: jest.fn() });
   });
 
-  it('a doc_type "scan" chip pushes /room/<storage_path>?from=document, not the file viewer', () => {
+  it('a doc_type "scan" chip pushes /room/<storage_path>?from=document&docId=<projectId> (A2), not the file viewer', () => {
     mockUseFolioFiles.mockReturnValue({ data: [scanFile()] });
     render(<FolioStrip projectId="project-1" anchor={{ kind: 'letterhead' }} />);
 
     fireEvent.click(screen.getByText('Living room'));
-    expect(mockPush).toHaveBeenCalledWith('/room/scan-xyz?from=document');
+    expect(mockPush).toHaveBeenCalledWith('/room/scan-xyz?from=document&docId=project-1');
     // The paper DocFileViewer must not also be mounted for a scan chip.
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
