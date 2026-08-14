@@ -770,6 +770,12 @@ function FFESectionBody({
   const total = rows.length;
   const underway = rows.filter((r) => UNDERWAY.has(r.stamp.kind)).length;
   const installed = rows.filter((r) => r.stamp.kind === 'installed').length;
+  // The head act's own gate: canRelease is section-level (an executed
+  // agreement stands behind the project), but that says nothing about
+  // whether any INDIVIDUAL line can currently join a release. Aggregating
+  // the same per-row eligibility() call every row already carries — no new
+  // derivation.
+  const anyEligible = rows.some((row) => row.eligible.eligible);
 
   // R76 — what the section-level Bill act would carry: priced lines not yet
   // on a live invoice (the composer re-partitions; this is the offer).
@@ -948,13 +954,25 @@ function FFESectionBody({
                 </DocumentAction>
               )}
               {/* The head act is a verb: there is no "new proposal" here,
-                  because there is no new document to make. */}
+                  because there is no new document to make. Visible whenever
+                  canRelease holds (an executed agreement stands behind the
+                  project) so authorization-adjacent controls don't vanish —
+                  disabled, not hidden, once readiness has SETTLED and still
+                  says no individual line can join a release. While readiness
+                  is loading or has failed to read, the button stays enabled
+                  on purpose: entering the ceremony is how a designer sees
+                  each line's own disabled-checkbox reason (or retries) —
+                  disabling here too would just swap one silent dead end for
+                  another. */}
               {canRelease && (
                 <DocumentAction
                   actionKey="release-for-authorization"
                   surfaceKey="project"
                   regionKey="ffe-head"
                   variant="primary"
+                  disabled={
+                    !anyEligible && !readinessQuery.isLoading && !readinessQuery.isError
+                  }
                   onClick={() => ceremony?.begin()}
                 >
                   Release for authorization
@@ -990,6 +1008,20 @@ function FFESectionBody({
           Checking readiness…
         </p>
       )}
+
+      {/* The head button stays visible (never vanishes on the designer) but
+          disables itself when canRelease holds and yet no individual line
+          is currently eligible — say so here instead of a silent no-op.
+          Per-row reasons remain reachable via each row's own unfold. */}
+      {mode === 'project' &&
+        canRelease &&
+        !anyEligible &&
+        !readinessQuery.isLoading &&
+        !readinessQuery.isError && (
+          <p className="mb-2 text-[11.5px] text-[var(--text-muted)]">
+            No lines are currently eligible for release.
+          </p>
+        )}
 
       {selecting && (
         <p className="mb-2 text-[11.5px] text-[var(--text-muted)]">
