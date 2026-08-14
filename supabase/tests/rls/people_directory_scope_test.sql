@@ -31,6 +31,11 @@
 --       project team now SELECTs that project's parties + team rows and both
 --       v_project_roster branches; a guest co-member and an unrelated designer
 --       still see none; and the co-member's WRITES still fail.
+--   (k) ISSUANCE EVIDENCE (00478): the client branch's meta.has_sent_proposal
+--       and meta.issued_on_paper tell a drafted-and-linked agreement from an
+--       emailed one, from one handed over on paper, and from a genuinely sent
+--       legacy row 00328 could not backfill — and the answer does not change
+--       with the caller's own RLS on `proposals`.
 --
 -- How to run:
 --   docker exec -i supabase_db_supabase psql -U postgres -d postgres \
@@ -109,6 +114,86 @@ VALUES
   ('bd000000-0000-4000-8000-0000000000d5', 'bd000000-0000-4000-8000-000000000005', 'bath',      'S Lead', 'new'),
   ('bd000000-0000-4000-8000-0000000000d6', 'bd000000-0000-4000-8000-000000000006', 'kitchen',   'D Lead (studio-1 side)', 'new'),
   ('bd000000-0000-4000-8000-0000000000d7', 'bd000000-0000-4000-8000-000000000006', 'bath',      'D Lead (studio-2 side)', 'new');
+
+-- ── 00478 issuance-evidence fixtures ───────────────────────────────────────
+-- Five more of A's households, one per shape the meta keys have to tell apart.
+-- Only the legacy one carries a client_id: the fallback join matches on the
+-- (designer, client) pair, so giving two of them the same pair would let the
+-- orphan proposal bleed across households and hide the very distinction under
+-- test.
+INSERT INTO designer_clients (id, designer_id, client_id, client_name, status)
+VALUES
+  ('bd000000-0000-4000-8000-0000000000c8', 'bd000000-0000-4000-8000-000000000001', NULL,
+   'A Drafted Household',  'proposal'),
+  ('bd000000-0000-4000-8000-0000000000c9', 'bd000000-0000-4000-8000-000000000001', NULL,
+   'A Sent Household',     'proposal'),
+  ('bd000000-0000-4000-8000-0000000000ca', 'bd000000-0000-4000-8000-000000000001', NULL,
+   'A Dispatch Household', 'proposal'),
+  ('bd000000-0000-4000-8000-0000000000cb', 'bd000000-0000-4000-8000-000000000001', NULL,
+   'A Paper Household',    'proposal'),
+  ('bd000000-0000-4000-8000-0000000000cc', 'bd000000-0000-4000-8000-000000000001',
+   'bd000000-0000-4000-8000-000000000004', 'A Legacy Household', 'proposal');
+
+-- The proposals. Inserted as postgres, which is the only role
+-- guard_commercial_proposal_authority lets past a non-draft commercial_state
+-- on INSERT.
+INSERT INTO proposals (id, designer_id, client_id, designer_client_id, title,
+                       status, document_kind, commercial_state, sent_at, issued_on_paper)
+VALUES
+  -- drafted and linked, never issued: the false-signal case J7 exists for
+  ('bd000000-0000-4000-8000-0000000000f1', 'bd000000-0000-4000-8000-000000000001', NULL,
+   'bd000000-0000-4000-8000-0000000000c8', 'A Drafted Agreement',
+   'draft', 'design_services', 'draft', NULL, false),
+  -- really emailed: sent_at written by send_commercial_document
+  ('bd000000-0000-4000-8000-0000000000f2', 'bd000000-0000-4000-8000-000000000001', NULL,
+   'bd000000-0000-4000-8000-0000000000c9', 'A Sent Agreement',
+   'sent', 'design_services', 'sent', NOW(), false),
+  -- a dispatch row exists but sent_at is missing: the second, independent tell
+  ('bd000000-0000-4000-8000-0000000000f3', 'bd000000-0000-4000-8000-000000000001', NULL,
+   'bd000000-0000-4000-8000-0000000000ca', 'A Dispatched Agreement',
+   'sent', 'design_services', 'sent', NULL, false),
+  -- issued on paper (00477): no sent_at, no dispatch row, stamp true
+  ('bd000000-0000-4000-8000-0000000000f4', 'bd000000-0000-4000-8000-000000000001', NULL,
+   'bd000000-0000-4000-8000-0000000000cb', 'A Paper Agreement',
+   'sent', 'design_services', 'sent', NULL, true),
+  -- 00328 orphan: genuinely sent, but designer_client_id was never backfilled
+  ('bd000000-0000-4000-8000-0000000000f5', 'bd000000-0000-4000-8000-000000000001',
+   'bd000000-0000-4000-8000-000000000004', NULL, 'A Legacy Agreement',
+   'sent', 'design_services', 'sent', NOW(), false);
+
+INSERT INTO proposal_send_dispatches (
+  id, proposal_id, sent_at, designer_id, client_id, proposal_title,
+  recipient_email, designer_name, sender_name, client_portal_path,
+  provider_idempotency_key, email_log_id, in_app_log_id)
+VALUES
+  ('bd000000-0000-4000-8000-0000000000f9', 'bd000000-0000-4000-8000-0000000000f3', NOW(),
+   'bd000000-0000-4000-8000-000000000001', 'bd000000-0000-4000-8000-000000000004',
+   'A Dispatched Agreement', 'pd-client@test.invalid', 'PD Owner', 'PD Owner',
+   '/proposals/bd000000-0000-4000-8000-0000000000f3',
+   'pd-test-idem-f3', 'bd000000-0000-4000-8000-0000000000fa',
+   'bd000000-0000-4000-8000-0000000000fb');
+
+-- T: a co-member of A through a CONTRACTOR org only. is_studio_comember admits
+-- them (so they see A's households); is_design_studio_comember — which gates
+-- proposals since 00401 — does not. This is the viewer an invoker-side EXISTS
+-- would have lied to.
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES ('bd000000-0000-4000-8000-000000000009', 'pd-trade@test.invalid', '', NOW(), NOW(), NOW(),
+        '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+
+INSERT INTO profiles (id, email, full_name, display_name, created_at, updated_at)
+VALUES ('bd000000-0000-4000-8000-000000000009', 'pd-trade@test.invalid', 'PD Trade', NULL, NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO organizations (id, type, name, slug)
+VALUES ('bd000000-0000-4000-8000-0000000000a3', 'contractor', 'PD Trade Co', 'pd-trade-co-test');
+
+INSERT INTO organization_members (id, user_id, organization_id, role, status, joined_at)
+VALUES
+  ('bd000000-0000-4000-8000-00000000ab08', 'bd000000-0000-4000-8000-000000000001',
+   'bd000000-0000-4000-8000-0000000000a3', 'member', 'active', NOW()),
+  ('bd000000-0000-4000-8000-00000000ab09', 'bd000000-0000-4000-8000-000000000009',
+   'bd000000-0000-4000-8000-0000000000a3', 'member', 'active', NOW());
 
 -- ── a saved vendor (00421 §3: the studio's shared maker book) ──────────────
 INSERT INTO vendors (id, name)
@@ -777,6 +862,103 @@ BEGIN
   PERFORM pg_temp.reset_role();
 
   RAISE NOTICE 'people_directory_scope: case (j) passed.';
+END
+$$;
+
+-- ─── (k) 00478 issuance evidence in the client branch's meta ───────────────
+-- The distinction the People Room, the Nurture queue and the Desk's reconnect
+-- band all rest on: a linked proposal is not an issued one, an emailed one is
+-- not a paper one, and neither reads as the other.
+DO $$
+DECLARE
+  v_sent  BOOLEAN;
+  v_paper BOOLEAN;
+BEGIN
+  PERFORM pg_temp.assume_user('bd000000-0000-4000-8000-000000000001');   -- A
+
+  -- k0: both keys are always present, so a consumer can tell "false" from
+  -- "this view predates the fix".
+  PERFORM 1 FROM people_directory
+   WHERE person_id = 'bd000000-0000-4000-8000-0000000000c1'
+     AND meta ? 'has_sent_proposal' AND meta ? 'issued_on_paper';
+  ASSERT FOUND, 'FAIL k0: the client branch must always carry both evidence keys';
+
+  -- k1: no proposal at all → both false
+  SELECT (meta->>'has_sent_proposal')::boolean, (meta->>'issued_on_paper')::boolean
+    INTO v_sent, v_paper
+  FROM people_directory WHERE person_id = 'bd000000-0000-4000-8000-0000000000c1';
+  ASSERT v_sent = false AND v_paper = false,
+    'FAIL k1: a household with no proposal must read false/false, got '
+    || v_sent || '/' || v_paper;
+
+  -- k2: a DRAFT proposal is not evidence of anything leaving the studio
+  SELECT (meta->>'has_sent_proposal')::boolean, (meta->>'issued_on_paper')::boolean
+    INTO v_sent, v_paper
+  FROM people_directory WHERE person_id = 'bd000000-0000-4000-8000-0000000000c8';
+  ASSERT v_sent = false AND v_paper = false,
+    'FAIL k2: a merely-drafted proposal must NOT read as sent, got '
+    || v_sent || '/' || v_paper;
+
+  -- k3: sent_at set → sent
+  SELECT (meta->>'has_sent_proposal')::boolean, (meta->>'issued_on_paper')::boolean
+    INTO v_sent, v_paper
+  FROM people_directory WHERE person_id = 'bd000000-0000-4000-8000-0000000000c9';
+  ASSERT v_sent = true AND v_paper = false,
+    'FAIL k3: a proposal with sent_at must read as sent, got '
+    || v_sent || '/' || v_paper;
+
+  -- k4: a dispatch row with no sent_at still means it went out
+  SELECT (meta->>'has_sent_proposal')::boolean INTO v_sent
+  FROM people_directory WHERE person_id = 'bd000000-0000-4000-8000-0000000000ca';
+  ASSERT v_sent = true,
+    'FAIL k4: a dispatch row alone must count as a real send, got ' || v_sent;
+
+  -- k5: issued on paper is its own state — never sent, never a draft
+  SELECT (meta->>'has_sent_proposal')::boolean, (meta->>'issued_on_paper')::boolean
+    INTO v_sent, v_paper
+  FROM people_directory WHERE person_id = 'bd000000-0000-4000-8000-0000000000cb';
+  ASSERT v_paper = true, 'FAIL k5a: a paper issuance must stamp issued_on_paper';
+  ASSERT v_sent = false,
+    'FAIL k5b: a paper issuance must NOT read as a send (no email left), got ' || v_sent;
+
+  -- k6: 00328's orphan — designer_client_id NULL, matched on the pair
+  SELECT (meta->>'has_sent_proposal')::boolean INTO v_sent
+  FROM people_directory WHERE person_id = 'bd000000-0000-4000-8000-0000000000cc';
+  ASSERT v_sent = true,
+    'FAIL k6: a genuinely sent proposal 00328 could not backfill must still '
+    'read as sent, got ' || v_sent;
+
+  PERFORM pg_temp.reset_role();
+
+  -- k7: the RLS-independence claim. T shares only a CONTRACTOR org with A, so
+  -- proposals are invisible to them while the households are not. The evidence
+  -- must still be the truth — an invoker-side EXISTS would answer false here
+  -- and re-print "not yet sent" over a sent agreement.
+  PERFORM pg_temp.assume_user('bd000000-0000-4000-8000-000000000009');   -- T
+
+  PERFORM 1 FROM people_directory
+   WHERE person_id = 'bd000000-0000-4000-8000-0000000000c9' AND scope = 'studio';
+  ASSERT FOUND, 'FAIL k7a: a contractor-org co-member should still see A''s household';
+
+  PERFORM 1 FROM proposals WHERE id = 'bd000000-0000-4000-8000-0000000000f2';
+  ASSERT NOT FOUND,
+    'FAIL k7b: fixture assumption broken — this viewer must NOT be able to '
+    'select the proposal, or the case proves nothing';
+
+  SELECT (meta->>'has_sent_proposal')::boolean INTO v_sent
+  FROM people_directory WHERE person_id = 'bd000000-0000-4000-8000-0000000000c9';
+  ASSERT v_sent = true,
+    'FAIL k7c: issuance evidence must not depend on the caller''s RLS on '
+    'proposals, got ' || v_sent;
+
+  SELECT (meta->>'issued_on_paper')::boolean INTO v_paper
+  FROM people_directory WHERE person_id = 'bd000000-0000-4000-8000-0000000000cb';
+  ASSERT v_paper = true,
+    'FAIL k7d: the paper stamp must not depend on the caller''s RLS on '
+    'proposals, got ' || v_paper;
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE 'people_directory_scope: case (k) passed.';
   RAISE NOTICE 'All people_directory scope assertions passed.';
 END
 $$;

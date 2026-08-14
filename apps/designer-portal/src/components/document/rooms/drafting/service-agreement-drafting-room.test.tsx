@@ -79,6 +79,13 @@ jest.mock("@/hooks/use-clients", () => ({
         client_name: "Teammate Client",
         client_email: "teammate@example.com",
       },
+      {
+        id: "linked-relationship",
+        designer_id: "designer-1",
+        client_id: "profile-3",
+        client_name: "Linked Client",
+        client_email: "linked@example.com",
+      },
     ],
   }),
   useAddClient: () => ({ mutateAsync: jest.fn() }),
@@ -210,7 +217,14 @@ describe("ServiceAgreementDraftingRoom new agreement defaults", () => {
     expect(await screen.findByText("Jordan Manual Lead")).toBeInTheDocument();
     expect(screen.queryByText("Teammate Client")).not.toBeInTheDocument();
 
+    // Selecting the row only arms it — it must not send on its own (J2).
     fireEvent.click(screen.getByText("Jordan Manual Lead"));
+    expect(mockInviteAndLinkClient).not.toHaveBeenCalled();
+
+    const sendButton = await screen.findByTestId(
+      "client-picker-invite-send-manual-lead-relationship",
+    );
+    fireEvent.click(sendButton);
 
     await waitFor(() =>
       expect(mockInviteAndLinkClient).toHaveBeenCalledWith({
@@ -230,5 +244,185 @@ describe("ServiceAgreementDraftingRoom new agreement defaults", () => {
     expect(
       screen.getByText("Client account attached to this agreement."),
     ).toHaveAttribute("role", "status");
+  });
+
+  it("cancels an armed invite without sending", async () => {
+    render(
+      <ServiceAgreementDraftingRoom
+        proposal={{
+          id: "agreement-1",
+          designer_id: "designer-1",
+          client_id: null,
+          designer_client_id: "manual-lead-relationship",
+          description: "Seeded from Discovery · budget 15,000–50,000",
+          client: null,
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("combobox", { name: "Client account" }));
+    fireEvent.click(await screen.findByText("Jordan Manual Lead"));
+
+    const confirmBlock = await screen.findByTestId(
+      "client-picker-invite-confirm-manual-lead-relationship",
+    );
+    expect(confirmBlock).toBeInTheDocument();
+    expect(mockInviteAndLinkClient).not.toHaveBeenCalled();
+
+    fireEvent.click(
+      screen.getByTestId("client-picker-invite-cancel-manual-lead-relationship"),
+    );
+
+    expect(
+      screen.queryByTestId(
+        "client-picker-invite-confirm-manual-lead-relationship",
+      ),
+    ).not.toBeInTheDocument();
+    expect(mockInviteAndLinkClient).not.toHaveBeenCalled();
+  });
+
+  it("arms with a perceivable state: focus, a live announcement, and aria on the row", async () => {
+    render(
+      <ServiceAgreementDraftingRoom
+        proposal={{
+          id: "agreement-1",
+          designer_id: "designer-1",
+          client_id: null,
+          designer_client_id: "manual-lead-relationship",
+          description: "Seeded from Discovery · budget 15,000–50,000",
+          client: null,
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("combobox", { name: "Client account" }));
+    const row = await screen.findByTestId(
+      "client-picker-option-manual-lead-relationship",
+    );
+    expect(row).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(screen.getByText("Jordan Manual Lead"));
+
+    const sendButton = await screen.findByTestId(
+      "client-picker-invite-send-manual-lead-relationship",
+    );
+    // Focus follows the act, so the next keystroke is the decision.
+    expect(sendButton).toHaveFocus();
+    // The row itself states the change, for anyone reading it via aria.
+    expect(row).toHaveAttribute("aria-expanded", "true");
+    expect(row).toHaveAttribute(
+      "aria-controls",
+      screen.getByTestId("client-picker-invite-confirm-manual-lead-relationship").id,
+    );
+    expect(screen.getByText("Confirm below")).toBeInTheDocument();
+    // And it is announced rather than only shown.
+    const status = screen.getByTestId("client-picker-invite-status");
+    expect(status).toHaveAttribute("aria-live", "polite");
+    expect(status).toHaveTextContent(/Invite armed for jordan@example\.com/);
+  });
+
+  it("sends the armed invite from the keyboard, despite cmdk swallowing Enter", async () => {
+    render(
+      <ServiceAgreementDraftingRoom
+        proposal={{
+          id: "agreement-1",
+          designer_id: "designer-1",
+          client_id: null,
+          designer_client_id: "manual-lead-relationship",
+          description: "Seeded from Discovery · budget 15,000–50,000",
+          client: null,
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("combobox", { name: "Client account" }));
+    fireEvent.click(await screen.findByText("Jordan Manual Lead"));
+
+    const sendButton = await screen.findByTestId(
+      "client-picker-invite-send-manual-lead-relationship",
+    );
+    // cmdk's Command root preventDefault()s Enter and re-dispatches SELECT on
+    // the highlighted row, so the browser never generates this button's
+    // activation click. The confirm block's own keydown handler is what makes
+    // the act reachable without a mouse.
+    fireEvent.keyDown(sendButton, { key: "Enter" });
+
+    await waitFor(() =>
+      expect(mockInviteAndLinkClient).toHaveBeenCalledWith({
+        designerClientId: "manual-lead-relationship",
+        clientEmail: "jordan@example.com",
+        clientName: "Jordan Manual Lead",
+      }),
+    );
+  });
+
+  it("cancels the armed invite from the keyboard too", async () => {
+    render(
+      <ServiceAgreementDraftingRoom
+        proposal={{
+          id: "agreement-1",
+          designer_id: "designer-1",
+          client_id: null,
+          designer_client_id: "manual-lead-relationship",
+          description: "Seeded from Discovery · budget 15,000–50,000",
+          client: null,
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("combobox", { name: "Client account" }));
+    fireEvent.click(await screen.findByText("Jordan Manual Lead"));
+
+    fireEvent.keyDown(
+      await screen.findByTestId(
+        "client-picker-invite-cancel-manual-lead-relationship",
+      ),
+      { key: " " },
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.queryByTestId(
+          "client-picker-invite-confirm-manual-lead-relationship",
+        ),
+      ).not.toBeInTheDocument(),
+    );
+    expect(mockInviteAndLinkClient).not.toHaveBeenCalled();
+  });
+
+  it("selects an already-linked client immediately, with no arm/confirm step", async () => {
+    render(
+      <ServiceAgreementDraftingRoom
+        proposal={{
+          id: "agreement-1",
+          designer_id: "designer-1",
+          client_id: null,
+          designer_client_id: "linked-relationship",
+          description: "Seeded from Discovery · budget 15,000–50,000",
+          client: null,
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("combobox", { name: "Client account" }));
+    fireEvent.click(await screen.findByText("Linked Client"));
+
+    // A linkable row attaches on the single click — no invite path, no
+    // confirm block, and the popover closes (the trigger now shows the
+    // selected client's name instead of the placeholder combobox role).
+    await waitFor(() =>
+      expect(mockAttachClient).toHaveBeenCalledWith(
+        {
+          engagementKind: "proposal",
+          targetId: "agreement-1",
+          clientId: "profile-3",
+        },
+        expect.any(Object),
+      ),
+    );
+    expect(mockInviteAndLinkClient).not.toHaveBeenCalled();
+    expect(
+      screen.queryByTestId("client-picker-invite-confirm-linked-relationship"),
+    ).not.toBeInTheDocument();
   });
 });

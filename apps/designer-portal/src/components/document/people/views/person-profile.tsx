@@ -40,6 +40,7 @@ import {
 } from '@patina/supabase';
 import { usePersonDocuments } from '@/hooks/use-person-documents';
 import {
+  deriveIssuanceState,
   deriveRelationshipJourney,
   deriveStatusDot,
   humanizeSince,
@@ -275,7 +276,8 @@ function ClientProfile({
       last_touch_at: lastTouchAt,
       meta,
       // Unused by isNurtureDue (switches on role/status_raw/last_touch_at
-      // only) — 'mine' satisfies the frozen PeopleDirectoryRow shape.
+      // and, for a proposal-stage client, meta's issuance evidence) — 'mine'
+      // satisfies the frozen PeopleDirectoryRow shape.
       scope: 'mine',
     },
     now,
@@ -299,7 +301,7 @@ function ClientProfile({
     },
     now,
   );
-  const nurtureText = nurtureLine(statusRaw, lastTouchAt, now, due, dot);
+  const nurtureText = nurtureLine(statusRaw, lastTouchAt, now, due, dot, meta);
 
   const onMessage = () => {
     if (!profileId) {
@@ -425,9 +427,20 @@ function nurtureLine(
   now: Date,
   due: boolean,
   dot: string,
+  meta: Record<string, unknown>,
 ): string {
-  if (statusRaw === 'proposal')
-    return 'Proposal out — a nudge or a call may be overdue.';
+  if (statusRaw === 'proposal') {
+    // J7: share deriveIssuanceState's one ordering (paper → sent → draft)
+    // rather than reimplementing the check a third time.
+    switch (deriveIssuanceState({ meta })) {
+      case 'paper':
+        return 'Handed over on paper — waiting on the signed copy to record.';
+      case 'sent':
+        return 'Proposal out — a nudge or a call may be overdue.';
+      case 'draft':
+        return 'Still drafting — nothing has gone to them yet.';
+    }
+  }
   if (statusRaw === 'lead')
     return 'New relationship — open the conversation within a day.';
   if (statusRaw === 'completed' || statusRaw === 'nurture') {

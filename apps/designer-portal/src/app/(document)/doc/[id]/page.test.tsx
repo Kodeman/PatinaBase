@@ -702,6 +702,36 @@ describe('DocumentPage guide activation', () => {
     expect(screen.getByText(/Input needed · phases & fees/)).toBeInTheDocument();
   });
 
+  it('J1 — the successor id begin() lands on renders the doc\'s own Direction section', () => {
+    const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+    // The REAL post-begin row, not an invented one: document_state shape B
+    // (00327) emits engagement_id = pr.chain_root_id — the new proposal's own
+    // id for a freshly seeded chain — with project_id and lead_id NULL. This
+    // is exactly what /doc/<proposalId> resolves to after
+    // discovery-section.tsx's begin() replaces the URL with the id the RPC
+    // returned. (A row keyed on the designer_clients id cannot exist here:
+    // shape D is suppressed the moment a draft proposal references it.)
+    mockDocumentQuery = {
+      ...mockDocumentQuery,
+      data: { kind: 'engagement', row: {
+        ...current, engagement_kind: 'proposal', active_section: 'direction',
+        engagement_id: 'proposal-9', project_id: null, proposal_id: 'proposal-9',
+        lead_id: null, designer_id: 'designer-1', client_profile_id: 'client-1',
+        proposal_status: 'draft',
+      } },
+    };
+    mockProposalData = {
+      id: 'proposal-9', status: 'draft', document_kind: 'design_services',
+      commercial_state: 'draft', project_id: null,
+    };
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(screen.getByRole('heading', { name: 'Direction', level: 2 })).toBeInTheDocument();
+    expect(screen.queryByText('No document answers to this name.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Budget comfort' })).not.toBeInTheDocument();
+  });
+
   it('focuses an already-open missing Discovery facet without toggling it closed', () => {
     const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
     mockDocumentQuery = {

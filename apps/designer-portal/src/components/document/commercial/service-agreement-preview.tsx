@@ -53,6 +53,18 @@ export function ServiceAgreementPreview({
     signatures,
   });
   const status = commercialStatusView(preview.state);
+  // J3: mirrors assessServiceAgreementReadiness's own "Set the design
+  // authorization ceiling" threshold (commercial-documents.ts) exactly —
+  // an untouched/zero ceiling counts as not-yet-written there, so the
+  // client copy must not advertise it as a real $0 figure here either.
+  const ceilingIsSet =
+    Number.isFinite(preview.billingCeilingCents) && preview.billingCeilingCents > 0;
+  // Same gate for the retainer: an untouched agreement defaults it to 0
+  // (emptyTerms, service-agreement-drafting-room.tsx), so printing "$0 ·
+  // agreement activates immediately" would state a term nobody wrote — and
+  // read identically to a deliberate no-retainer choice.
+  const retainerIsSet =
+    Number.isFinite(preview.retainerAmountCents) && preview.retainerAmountCents > 0;
 
   return (
     <article
@@ -131,8 +143,16 @@ export function ServiceAgreementPreview({
           <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
             Design authorization ceiling
           </span>
-          <strong className="font-heading text-[1.05rem] text-[var(--color-charcoal)]">
-            {money(preview.billingCeilingCents, preview.currency)}
+          <strong
+            className={
+              ceilingIsSet
+                ? "font-heading text-[1.05rem] text-[var(--color-charcoal)]"
+                : "font-heading text-[1.05rem] italic text-[var(--text-muted)]"
+            }
+          >
+            {ceilingIsSet
+              ? money(preview.billingCeilingCents, preview.currency)
+              : "Not yet set"}
           </strong>
         </div>
       </section>
@@ -142,11 +162,23 @@ export function ServiceAgreementPreview({
           <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
             Retainer
           </p>
-          <p className="mt-1 text-[12.5px] text-[var(--color-charcoal)]">
-            {money(preview.retainerAmountCents, preview.currency)}
-            {preview.retainerActivationPolicy === "retainer_paid"
-              ? " · work begins when paid"
-              : " · agreement activates immediately"}
+          <p
+            className={
+              retainerIsSet
+                ? "mt-1 text-[12.5px] text-[var(--color-charcoal)]"
+                : "mt-1 text-[12.5px] italic text-[var(--text-muted)]"
+            }
+          >
+            {retainerIsSet ? (
+              <>
+                {money(preview.retainerAmountCents, preview.currency)}
+                {preview.retainerActivationPolicy === "retainer_paid"
+                  ? " · work begins when paid"
+                  : " · agreement activates immediately"}
+              </>
+            ) : (
+              "Not yet set"
+            )}
           </p>
         </div>
         <div>
