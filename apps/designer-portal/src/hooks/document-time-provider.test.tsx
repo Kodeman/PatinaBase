@@ -29,7 +29,12 @@ const events: string[] = [];
 // `fetchRunning` would see it — the actual source hold()/release() reason
 // over, distinct from (and not kept in sync with) the mocked useRunningTimer
 // react-query hook below, exactly as in the real split (see A3 hazards).
-let runningTimerRow: { id: string; project_id: string; started_at: string } | null = null;
+let runningTimerRow: {
+  id: string;
+  project_id: string;
+  started_at: string;
+  source?: string;
+} | null = null;
 
 const authGetUser = jest.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } });
 
@@ -73,11 +78,17 @@ const startTimerMutateAsync = jest.fn(async (input: { projectId: string }) => {
   return runningTimerRow;
 });
 
+const discardTimerMutateAsync = jest.fn(async (input: { entryId: string }) => {
+  events.push(`discardTimer:${runningTimerRow?.project_id}`);
+  runningTimerRow = null;
+  return { id: input.entryId };
+});
+
 jest.mock('@/hooks/use-time-tracking', () => ({
   useRunningTimer: () => ({ data: null }),
   useStartTimer: () => ({ mutateAsync: startTimerMutateAsync }),
   useStopTimer: () => ({ mutateAsync: stopTimerMutateAsync }),
-  useDiscardTimer: () => ({ mutateAsync: jest.fn() }),
+  useDiscardTimer: () => ({ mutateAsync: discardTimerMutateAsync }),
   useCreateTimeEntry: () => ({ mutateAsync: jest.fn() }),
   useUpdateTimeEntry: () => ({ mutateAsync: jest.fn() }),
   useDeleteTimeEntry: () => ({ mutateAsync: jest.fn() }),
@@ -104,6 +115,7 @@ describe('DocumentTimeProvider — A3 queue hardening', () => {
     runningTimerRow = null;
     stopTimerMutateAsync.mockClear();
     startTimerMutateAsync.mockClear();
+    discardTimerMutateAsync.mockClear();
     qc = new QueryClient();
     const originalInvalidate = qc.invalidateQueries.bind(qc);
     jest.spyOn(qc, 'invalidateQueries').mockImplementation((filters, options) => {
@@ -183,5 +195,39 @@ describe('DocumentTimeProvider — A3 queue hardening', () => {
     expect(startTimerMutateAsync).toHaveBeenCalledTimes(1);
 
     consoleErrorSpy.mockRestore();
+  });
+
+  it('awaits the runningTimer invalidation on the discard_silently path too, not just stop/start', async () => {
+    const { result } = renderHook(() => useDocumentTime(), { wrapper });
+
+    act(() => {
+      result.current.hold({ projectId: 'project-a', projectName: 'A', phaseKey: null });
+    });
+    await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(1));
+
+    // A designer who glances at a document for under a minute: mark the row
+    // auto-started and elapsed stays near-zero, so closeOutTimer rules
+    // 'discard_silently' (source === 'timer_auto' && elapsed < 60) instead of
+    // 'offer' — this is the branch stopTimer's hardening did NOT reach.
+    if (runningTimerRow) runningTimerRow.source = 'timer_auto';
+
+    act(() => {
+      result.current.hold({ projectId: 'project-b', projectName: 'B', phaseKey: null });
+    });
+    await waitFor(() => expect(discardTimerMutateAsync).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(startTimerMutateAsync).toHaveBeenCalledTimes(2));
+
+    // discardTimer never touches stopTimer, and the runningTimer cache
+    // invalidation for the discard is awaited BEFORE project-b's start
+    // fires — the same ordering guarantee the stop/start path already had.
+    expect(stopTimerMutateAsync).not.toHaveBeenCalled();
+    expect(events).toEqual([
+      'startTimer:project-a',
+      'invalidateRunningTimer',
+      'discardTimer:project-a',
+      'invalidateRunningTimer',
+      'startTimer:project-b',
+      'invalidateRunningTimer',
+    ]);
   });
 });

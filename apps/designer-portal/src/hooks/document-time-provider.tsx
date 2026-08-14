@@ -143,7 +143,6 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
   const enqueue = useCallback((op: () => Promise<void>) => {
     queueRef.current = queueRef.current.then(op).catch((error) => {
       if (process.env.NODE_ENV !== 'production') {
-        // eslint-disable-next-line no-console
         console.error('[document-time] a queued timer operation failed', error);
       }
     });
@@ -222,6 +221,11 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
 
       if (ruling.action === 'discard_silently') {
         await api.current.discardTimer.mutateAsync({ entryId: timer.id });
+        // useDiscardTimer's own onSuccess fires invalidateQueries without
+        // awaiting/returning it too — same gap as useStopTimer/useStartTimer
+        // below. Await it here so a queued op right behind this one reads
+        // the settled cache, not the stale still-running row.
+        await qc.invalidateQueries({ queryKey: queryKeys.time.runningTimer() });
         invalidateTimeSurfaces();
         return;
       }
@@ -251,10 +255,12 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
       });
       // useStopTimer's own onSuccess fires invalidateQueries without
       // awaiting/returning it, so mutateAsync above resolves before the
-      // runningTimer cache has actually refetched. A queued hold() for the
-      // NEXT document reads that stale cache the instant it settles — wait
-      // for the refetch here so nothing downstream of this queue op can
-      // observe the row this call just stopped as still running.
+      // runningTimer cache has actually refetched. hold()'s own queue
+      // ordering is safe regardless (fetchRunning reads Supabase directly,
+      // not this cache) — but the cached runningTimer backs the display
+      // read (heldTimer/elapsedSeconds below, and the spine clock any other
+      // mounted consumer reads). Wait for the refetch here so that display
+      // doesn't lag behind the row this call just stopped.
       await qc.invalidateQueries({ queryKey: queryKeys.time.runningTimer() });
       invalidateTimeSurfaces();
 
@@ -271,7 +277,7 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
         });
       }
     },
-    [invalidateTimeSurfaces],
+    [invalidateTimeSurfaces, qc],
   );
 
   /** Pick up a document: chain out whatever runs, then start (D11,
