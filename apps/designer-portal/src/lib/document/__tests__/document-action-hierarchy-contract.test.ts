@@ -114,7 +114,6 @@ describe('I91 shared action grammar', () => {
 
   it('registers Room-head leadership with the mobile shell', () => {
     for (const source of [
-      desk,
       letterhead,
       proposalDraft,
       proposalWatch,
@@ -125,5 +124,13 @@ describe('I91 shared action grammar', () => {
       expect(source).toContain('useMobilePrimaryAction');
     }
     expect(drafting).toContain('useMobilePrimaryAction(null);');
+  });
+
+  // A9: the Desk deliberately opts out of this contract now — its one
+  // on-screen "Capture a lead" is the header primary at every viewport, and
+  // the mobile dock falls back to its documented default (the "In hand /
+  // Today" glance) instead of a second, duplicate registration.
+  it('keeps the Desk out of the mobile-shell primary-action contract (A9)', () => {
+    expect(desk).not.toContain('useMobilePrimaryAction');
   });
 });
