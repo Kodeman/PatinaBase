@@ -162,6 +162,11 @@ export function FolioPopover({
       ref={panelRef}
       tabIndex={-1}
       aria-label={ariaLabel}
+      // The marker `topDismissiblePopover()` reads. It is how a surface with
+      // its own document-CAPTURE Esc (margin-rail's compact sheet) defers to an
+      // open panel: that listener is registered before this one and therefore
+      // runs first, so the stack below cannot stop it — only the guard can.
+      data-dismissible-popover=""
       data-folio-placement={placement}
       className={[
         'absolute z-20 rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] outline-none',

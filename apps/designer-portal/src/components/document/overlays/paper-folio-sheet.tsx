@@ -7,9 +7,15 @@
  * D1). Three deliberate differences from DocPaperSheet:
  *
  *  1. z-[60] — above DocSheet (z-50) and RoomSheet (z-55).
- *  2. Esc is consumed in the CAPTURE phase on window (the CommandBar pattern)
- *     so the ledger sheet underneath doesn't also close on the same keypress
- *     (DocSheet listens bubble-phase on document).
+ *  2. Esc follows the house pattern (DocSheet/RoomSheet): a document
+ *     BUBBLE-phase listener guarded by `topActiveModalDialog()`. It used to be
+ *     a WINDOW-CAPTURE listener, which fires before every document listener —
+ *     including the ones belonging to anything mounted INSIDE the sheet, so an
+ *     anchored popover in one of its fields (the received-date Folio) never saw
+ *     its own Esc and the first press tore down the whole sheet. The guard is
+ *     what keeps the ledger sheet underneath from closing on the same keypress:
+ *     while this panel is the topmost modal dialog, DocSheet's identical guard
+ *     fails and it stands still.
  *  3. Rendered through a portal onto <body>, so the folio's print stylesheet
  *     can hide every sibling with one selector (R74 Print = the folio itself).
  *
@@ -19,6 +25,7 @@
 
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { topActiveModalDialog } from './active-dialog';
 
 export function PaperFolioSheet({
   open,
@@ -48,19 +55,19 @@ export function PaperFolioSheet({
     };
   }, [open]);
 
-  // Esc closes THIS sheet only — capture phase, stopPropagation, so the
-  // bubble-phase Esc handlers of any DocSheet beneath never see the event.
+  // Esc closes THIS sheet only, and only when nothing is stacked above it.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        e.stopPropagation();
-        onClose();
-      }
+      const panel = panelRef.current;
+      if (!panel || topActiveModalDialog() !== panel) return;
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      e.preventDefault();
+      e.stopPropagation();
+      onClose();
     };
-    window.addEventListener('keydown', onKey, { capture: true });
-    return () => window.removeEventListener('keydown', onKey, { capture: true });
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
   if (!open || typeof document === 'undefined') return null;

@@ -26,6 +26,25 @@ export function topActiveModalDialog() {
     .at(-1);
 }
 
+/**
+ * The topmost open DISMISSIBLE POPOVER — an anchored panel that dismisses on
+ * Esc but is not a modal dialog (the Calendar Folio is the first). Such a panel
+ * deliberately wears no `role="dialog"`: the schedule confirm strip defers its
+ * Esc to any `[role="dialog"]` in the DOM, so a date panel wearing that role
+ * would silently disable the strip's revert. That also keeps it out of
+ * `topActiveModalDialog()`, so surfaces that consult that function for their own
+ * Esc must consult this one too, or their Esc and the popover's will both fire.
+ *
+ * Popovers opt in by rendering `data-dismissible-popover` on their panel.
+ */
+export function topDismissiblePopover() {
+  return Array.from(
+    document.querySelectorAll<HTMLElement>('[data-dismissible-popover]'),
+  )
+    .filter(isElementRendered)
+    .at(-1);
+}
+
 type ManagedDialog = {
   dialog: HTMLElement;
   onTopChange: (isTop: boolean) => void;
