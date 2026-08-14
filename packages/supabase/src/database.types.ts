@@ -29183,6 +29183,14 @@ export type Database = {
         Args: { p_project_id: string }
         Returns: Json
       }
+      designer_client_send_evidence: {
+        Args: {
+          p_client_id: string
+          p_designer_client_id: string
+          p_designer_id: string
+        }
+        Returns: Json
+      }
       dismiss_field_capture: { Args: { p_capture_id: string }; Returns: Json }
       dispatch_board_asset_gc: {
         Args: { p_dry_run?: boolean }
