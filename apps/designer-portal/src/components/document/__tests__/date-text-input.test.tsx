@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 
 import { DateTextInput, displayDateText, parseDateText } from '../date-text-input';
@@ -117,6 +118,25 @@ describe('DateTextInput', () => {
 
     expect(onChange).toHaveBeenCalledWith('2026-08-19');
     expect(onValidityChange).toHaveBeenLastCalledWith(true);
+    expect(screen.queryByTestId('folio-popover')).not.toBeInTheDocument();
+  });
+
+  it('writes the set date onto its trigger (the discovery Timeline plumbing)', () => {
+    // Exactly how field-kit's DateInput is wired on the Timeline fields:
+    // `value={draft.target_date} onChange={(v) => commit({ target_date: v })}`.
+    function ControlledField() {
+      const [value, setValue] = useState<string | null>(null);
+      return <DateTextInput value={value} onChange={setValue} ariaLabel="Target (move-in)" />;
+    }
+    render(<ControlledField />);
+
+    const trigger = screen.getByRole('button', { name: 'Target (move-in)' });
+    expect(trigger).toHaveTextContent('MM/DD/YYYY');
+
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByText('Stub set'));
+
+    expect(trigger).toHaveTextContent('08/19/2026');
     expect(screen.queryByTestId('folio-popover')).not.toBeInTheDocument();
   });
 
