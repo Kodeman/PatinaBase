@@ -3,6 +3,7 @@ import { createBrowserClient } from '../client';
 import type { Tables } from '../database.types';
 import { invalidateProjectWorkflow } from './use-project-workflow';
 import { serializeRippleEditForRpc, type RipplePendingEditInput } from './use-schedule-compose';
+import { settleScheduleWrite } from './schedule-write-settle';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Schedule proposals (R109/R110, I130 · migration 00475)
@@ -48,6 +49,9 @@ export function useScheduleProposals(projectId: string | undefined) {
   });
 }
 
+/** Dismiss only — nothing moves, so no materialization; the shared key set is
+ *  still hand-invalidated here (no anchor write means settleScheduleWrite's
+ *  re-resolve + RPC round trip would be pure waste). */
 async function invalidateAfterProposalResolution(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   queryClient: any,
@@ -62,6 +66,20 @@ async function invalidateAfterProposalResolution(
   // open desk keeps asking for a proposal already committed.
   queryClient.invalidateQueries({ queryKey: ['document-state', 'desk'] });
   await invalidateProjectWorkflow(queryClient, projectId);
+}
+
+/** Commit only — the anchor moved through commit_schedule_edit, so the
+ *  shared key set + materialization travels settleScheduleWrite; the extra
+ *  keys beyond that shared set (schedule-proposals, the desk) invalidate
+ *  alongside it, same as the install-window hooks' shared invalidator. */
+async function invalidateAfterProposalCommit(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  queryClient: any,
+  projectId: string,
+) {
+  queryClient.invalidateQueries({ queryKey: ['schedule-proposals', projectId] });
+  queryClient.invalidateQueries({ queryKey: ['document-state', 'desk'] });
+  await settleScheduleWrite(queryClient, projectId);
 }
 
 /**
@@ -104,7 +122,7 @@ export function useCommitScheduleProposal() {
       return data as number;
     },
     onSuccess: (_data, { projectId }) => {
-      void invalidateAfterProposalResolution(queryClient, projectId);
+      void invalidateAfterProposalCommit(queryClient, projectId);
     },
   });
 }
