@@ -139,7 +139,9 @@ jest.mock('../phase-section', () => ({
   PhaseSection: ({ headingActions }: any) => <div>{headingActions}</div>,
 }));
 jest.mock('../today-rule', () => ({ TodayRule: () => null }));
-jest.mock('../ghost-add-line', () => ({ GhostAddLine: () => null }));
+jest.mock('../ghost-add-line', () => ({
+  GhostAddLine: () => <div data-testid="ghost-add-line" />,
+}));
 jest.mock('../schedule-birth', () => ({ ScheduleBirth: () => null }));
 jest.mock('../phase-delete-confirm', () => ({
   PhaseDeleteConfirm: () => null,
@@ -183,5 +185,28 @@ describe('ScheduleSpine add item action', () => {
     expect(screen.getByRole('dialog', { name: 'Add a line' })).toHaveTextContent(
       'project-1 · Throughout',
     );
+  });
+});
+
+describe('ScheduleSpine ongoing add-a-phase line', () => {
+  it('offers the ghost line while the project is still running', () => {
+    render(
+      <ScheduleSpine projectId="project-1" clientUserId={null} clientName="Winky Loft" />,
+    );
+
+    expect(screen.getByTestId('ghost-add-line')).toBeInTheDocument();
+  });
+
+  it('stands the ghost line down once the project is completed', () => {
+    render(
+      <ScheduleSpine
+        projectId="project-1"
+        clientUserId={null}
+        clientName="Winky Loft"
+        projectStatus="completed"
+      />,
+    );
+
+    expect(screen.queryByTestId('ghost-add-line')).not.toBeInTheDocument();
   });
 });
