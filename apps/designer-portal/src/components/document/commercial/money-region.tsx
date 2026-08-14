@@ -18,8 +18,15 @@
  * the tier never claims funds were released. The product calls both figures
  * "committed" in different places, so the flow caption states the derivation
  * on the page.
+ *
+ * The region head's ledger reuses the exact mechanisms the accounts band
+ * already invokes — the same module-level openers, the same event names —
+ * rather than opening a second doorway to the same act. The band itself mounts
+ * `headless`, dropping its own duplicate "Draw an invoice" primary since the
+ * region head now carries it.
  */
 
+import { useEffect, useRef } from 'react';
 import { useAccountPage } from '@/hooks/use-account-page';
 import {
   useProjectBillingAuthority,
@@ -30,8 +37,17 @@ import {
 import type { SectionKey } from '@/lib/document/desk-derivation';
 import { money } from '@/lib/document/project-commerce';
 import { AccountBand } from '../account-band';
+import { openInvoiceComposer } from '../accounts/invoice-overlays';
+import { openLedger } from '../command-bar';
+import { FoldSeam, focusRegionHeading } from '../region/fold-seam';
+import { RegionHead, type RegionLedgerEntry } from '../region/region-head';
+import { RegionRule } from '../region/region-rule';
+import { useRegionFold } from '../region/use-region-fold';
 import { ProjectAuthorityBandForProject } from './project-authority-band';
 import { ProjectCommerceSection } from './project-commerce-section';
+
+const HEADING_ID = 'money-region-heading';
+const BODY_ID = 'money-region-body';
 
 /** One rung. `figure` is null while its source has not answered — a tier that
  *  stated a number and later softened it would be the same lie, briefly. */
@@ -104,6 +120,9 @@ export function MoneyRegion({
     executedInstruments.reduce((sum, instrument) => sum + instrument.totalAmountCents, 0) +
     executedScopes.reduce((sum, scope) => sum + scope.clientPriceCents, 0);
 
+  // The same word the accounts band uses for this act, derived the same way.
+  const changeOnly = activeSection === 'install' || activeSection === 'care';
+
   const account = accountQuery.data ?? null;
   const accountFailed = Boolean(accountQuery.isError);
   const accountSettled = !accountQuery.isLoading && !accountFailed;
@@ -144,59 +163,162 @@ export function MoneyRegion({
         ? `${money(account.committedCents)} in motion — ordered through installed`
         : 'nothing in motion yet';
 
+  // The account's own quiet test. A region that folds on authority/plan/
+  // committed alone would hide an overdue invoice on a project that never
+  // executed an instrument — the money that is actually chasing the designer.
+  // The milestone rows the accounts band renders are the only invoice/
+  // receivable signal this region already holds: a milestone carrying an
+  // invoice_id has had money drawn against it, and an unpaid 'outstanding'
+  // milestone is a receivable whether or not its invoice row was read here.
+  const accountMilestones = account?.milestones ?? [];
+  const invoicesDrawn = accountMilestones.filter((m) => m.invoice_id != null).length;
+  const receivableCount = accountMilestones.filter(
+    (m) => !m.paid_at && m.status !== 'paid' && (m.invoice_id != null || m.status === 'outstanding'),
+  ).length;
+  const accountQuiet = invoicesDrawn === 0 && receivableCount === 0;
+
+  // The fold default is withheld until every source the sparse test reads from
+  // has settled — a default computed from a partial read could latch shut a
+  // region that is actually busy, or open one that is actually quiet.
+  const allSettled = authoritySettled && budgetSettled && committedSettled && accountSettled;
+  const defaultFolded = allSettled
+    ? committedCents === 0 &&
+      executedCount === 0 &&
+      (!version || planLines.length === 0) &&
+      accountQuiet
+    : null;
+
+  const { folded, setFolded } = useRegionFold({
+    docId: projectId,
+    region: 'money',
+    defaultFolded,
+  });
+
+  // FoldSeam only calls onUnfold; it unmounts on the caller's re-render and so
+  // cannot move focus itself. Land focus on the heading once the body (and its
+  // heading) is actually on the page.
+  const wasFolded = useRef(folded);
+  useEffect(() => {
+    if (wasFolded.current && !folded) {
+      focusRegionHeading(HEADING_ID);
+    }
+    wasFolded.current = folded;
+  }, [folded]);
+
+  const headStatus = authority
+    ? `${money(authority.remainingCents)} remaining · ${money(committedCents)} committed`
+    : 'no authority yet';
+  const seamSummary = authority
+    ? `${money(authority.authorizedCents)} authorized · ${money(committedCents)} committed`
+    : `no authority yet · ${money(committedCents)} committed`;
+
+  const ledger: RegionLedgerEntry[] = [
+    // R74b — draw an invoice for THIS engagement: the anti-wizard composer,
+    // milestones/time/FF&E pulled through pre-scoped. Same opener the accounts
+    // band's own primary calls — the region head is now the single doorway.
+    {
+      key: 'draw-project-invoice',
+      label: 'Draw an invoice',
+      onClick: () => openInvoiceComposer({ projectId }),
+    },
+    // R81 — the Amendment: scope changes composed from the money region (the
+    // margin escalation is the other doorway). The band listens for this
+    // event and opens its own AmendmentSheet.
+    {
+      key: 'compose-project-amendment',
+      // The band names this act by the section it is standing in; the region's
+      // doorway to the SAME sheet must not name it differently.
+      label: changeOnly ? 'Add a change' : 'Amendment',
+      variant: 'secondary',
+      onClick: () => window.dispatchEvent(new CustomEvent('document:compose-amendment')),
+    },
+    // R77 — the per-document Hours lens, same opener the band's own tertiary
+    // calls.
+    {
+      key: 'open-project-hours',
+      label: 'Hours · this project ↗',
+      variant: 'tertiary',
+      onClick: () => openLedger('hours', { projectId }),
+    },
+  ];
+
+  if (folded) {
+    return (
+      <section aria-label="Money" className="mb-5">
+        <RegionRule />
+        <FoldSeam
+          headingId={HEADING_ID}
+          bodyId={BODY_ID}
+          name="Design authority"
+          summary={seamSummary}
+          onUnfold={() => setFolded(false)}
+          surfaceKey="accounts"
+          regionKey="money-head"
+        />
+      </section>
+    );
+  }
+
   return (
     <section aria-label="Money" className="mb-5">
-      <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
-        Money · one region
-      </p>
-      {authority && (
-        <p className="mt-1.5 font-heading text-[1.35rem] font-medium leading-tight tracking-[-0.01em] text-[var(--color-charcoal)]">
-          Design authority · remaining {money(authority.remainingCents)}
+      <RegionRule />
+      <RegionHead
+        headingId={HEADING_ID}
+        name="Design authority"
+        status={headStatus}
+        eyebrow="Money · one region"
+        surfaceKey="accounts"
+        regionKey="money-head"
+        actions={ledger}
+        bodyId={BODY_ID}
+        onFold={() => setFolded(true)}
+      />
+
+      <div id={BODY_ID}>
+        <ol className="mt-3 space-y-2">
+          <Rung
+            name="Authority"
+            figure={authorityFigure}
+            meaning="What the client has agreed to fund"
+          />
+          <Rung name="Plan" figure={planFigure} meaning="What the plan intends to spend" />
+          <Rung
+            name="Committed"
+            figure={committedFigure}
+            meaning="What is contractually owed"
+          />
+          <Rung
+            name="Moved"
+            figure={movedFigure}
+            meaning="The accounts’ committed figure — client value of lines at ordered and later; not funds disbursed"
+          />
+        </ol>
+
+        <p className="mt-3 max-w-2xl text-[10.5px] leading-relaxed text-[var(--text-muted)]">
+          Authority → plan → committed → moved. Moved is the accounts&rsquo; committed figure
+          — the client value of schedule lines at ordered, in production, shipped, delivered
+          or installed — not funds disbursed, and not the contractually owed total above it.
+          {committedSettled && draftScopeCount > 0
+            ? ` ${draftScopeCount} trade ${draftScopeCount === 1 ? 'scope' : 'scopes'} still in draft, counted in neither.`
+            : ''}{' '}
+          Absorbs today&rsquo;s four separate bands: design authority, working budget,
+          authorizations &amp; trade scopes, the accounts.
         </p>
-      )}
 
-      <ol className="mt-3 space-y-2">
-        <Rung
-          name="Authority"
-          figure={authorityFigure}
-          meaning="What the client has agreed to fund"
-        />
-        <Rung name="Plan" figure={planFigure} meaning="What the plan intends to spend" />
-        <Rung
-          name="Committed"
-          figure={committedFigure}
-          meaning="What is contractually owed"
-        />
-        <Rung
-          name="Moved"
-          figure={movedFigure}
-          meaning="The accounts’ committed figure — client value of lines at ordered and later; not funds disbursed"
-        />
-      </ol>
-
-      <p className="mt-3 max-w-2xl text-[10.5px] leading-relaxed text-[var(--text-muted)]">
-        Authority → plan → committed → moved. Moved is the accounts&rsquo; committed figure
-        — the client value of schedule lines at ordered, in production, shipped, delivered
-        or installed — not funds disbursed, and not the contractually owed total above it.
-        {committedSettled && draftScopeCount > 0
-          ? ` ${draftScopeCount} trade ${draftScopeCount === 1 ? 'scope' : 'scopes'} still in draft, counted in neither.`
-          : ''}{' '}
-        Absorbs today&rsquo;s four separate bands: design authority, working budget,
-        authorizations &amp; trade scopes, the accounts.
-      </p>
-
-      <div className="mt-4">
-        <ProjectAuthorityBandForProject projectId={projectId} allowAddendum />
-        <ProjectCommerceSection
-          projectId={projectId}
-          projectName={projectName}
-          clientName={clientName ?? undefined}
-        />
-        <AccountBand
-          projectId={projectId}
-          clientName={clientName}
-          activeSection={activeSection}
-        />
+        <div className="mt-4">
+          <ProjectAuthorityBandForProject projectId={projectId} allowAddendum />
+          <ProjectCommerceSection
+            projectId={projectId}
+            projectName={projectName}
+            clientName={clientName ?? undefined}
+          />
+          <AccountBand
+            projectId={projectId}
+            clientName={clientName}
+            activeSection={activeSection}
+            headless
+          />
+        </div>
       </div>
     </section>
   );

@@ -93,6 +93,10 @@ import {
 import type { SectionKey } from '@/lib/document/desk-derivation';
 import { DocumentAction } from './document-action';
 import { SectionLoadingLine } from './section-loading-line';
+import { RegionHead, type RegionLedgerEntry } from './region/region-head';
+import { RegionRule } from './region/region-rule';
+import { FoldSeam, focusRegionHeading } from './region/fold-seam';
+import { useRegionFold } from './region/use-region-fold';
 
 /** Warm borders need darker text ink on paper (prototype stamp treatment). */
 const STAGE_INK: Partial<Record<FFEStageKey, string>> = {
@@ -616,7 +620,7 @@ function AddRoomInline({ projectId }: { projectId: string }) {
         actionKey="add-project-room"
         surfaceKey="project"
         regionKey="room-capture"
-        variant="primary"
+        variant="secondary"
         onClick={save}
         disabled={!name.trim()}
       >
@@ -886,111 +890,199 @@ function FFESectionBody({
 
   const composition = releaseSummary(releaseLines);
 
+  // The region head's fold (project mode only — install and the release
+  // ceremony never fold). The default only settles once the schedule itself
+  // has settled (not loading, not error); until then the latch holds
+  // whatever is current rather than guessing.
+  const ffeItemsSettled = !isLoading && !isError;
+  const ffeDefaultFolded =
+    mode === 'project' && ffeItemsSettled ? total === 0 : null;
+  const ffeFold = useRegionFold({
+    docId: projectId,
+    region: 'ffe',
+    defaultFolded: ffeDefaultFolded,
+  });
+  const ffeHeadingId = `ffe-region-heading-${projectId}`;
+  const ffeBodyId = `ffe-region-body-${projectId}`;
+  const ffeFolded = mode === 'project' && !selecting && ffeFold.folded;
+  const wasFfeFolded = useRef(ffeFold.folded);
+  useEffect(() => {
+    if (wasFfeFolded.current && !ffeFold.folded) {
+      focusRegionHeading(ffeHeadingId);
+    }
+    wasFfeFolded.current = ffeFold.folded;
+  }, [ffeFold.folded, ffeHeadingId]);
+
+  // The head counts what the body actually prints: the room groups PLUS the
+  // Throughout and unassigned groups. Counting rooms alone told a project whose
+  // every line is Throughout that it had "0 rooms · 12 lines" — a head arguing
+  // with the section beneath it.
+  const ffeGroupCount =
+    roomGroups.length +
+    (throughout.length > 0 ? 1 : 0) +
+    (unassigned.length > 0 ? 1 : 0);
+  const ffeGroupWord = ffeGroupCount === 1 ? 'group' : 'groups';
+  const ffeAwaitingCount = rows.filter(
+    (row) => row.auth.track === 'awaiting',
+  ).length;
+  const ffeStatus = `${ffeGroupCount} ${ffeGroupWord} · ${total} lines${
+    ffeAwaitingCount > 0 ? ` · ${ffeAwaitingCount} awaiting authorization` : ''
+  }`;
+  const ffeSeamSummary =
+    total === 0 ? `${ffeGroupCount} ${ffeGroupWord} · no lines yet` : ffeStatus;
+
+  const ffeAddToProjectEntry: RegionLedgerEntry = {
+    key: 'open-add-to-project',
+    label: 'Add to project',
+    onClick: () => openAddToProject('section'),
+  };
+  const ffeReleaseEntry: RegionLedgerEntry = {
+    key: 'release-for-authorization',
+    label: 'Release for authorization',
+    onClick: () => ceremony?.begin(),
+    disabled:
+      !isLoading &&
+      !isError &&
+      total > 0 &&
+      !anyEligible &&
+      !readinessQuery.isLoading &&
+      !readinessQuery.isError,
+  };
+  const ffeBillEntry: RegionLedgerEntry | null =
+    billableUninvoiced.length > 0
+      ? {
+          key: 'bill-project-ffe',
+          label: `Bill ${billableUninvoiced.length} uninvoiced`,
+          variant: 'secondary',
+          onClick: () =>
+            openInvoiceComposer({
+              projectId,
+              initialFfeItemIds: billableUninvoiced.map(
+                (it) => it.id as string,
+              ),
+            }),
+        }
+      : null;
+  const ffeSpecBookEntry: RegionLedgerEntry = {
+    key: 'open-spec-book',
+    label: 'Spec book',
+    href: `/doc/${projectId}/spec-book`,
+    variant: 'tertiary',
+    trailing: '→',
+  };
+  const ffeLedger: RegionLedgerEntry[] = [
+    canRelease ? ffeReleaseEntry : ffeAddToProjectEntry,
+    ...(canRelease
+      ? [{ ...ffeAddToProjectEntry, variant: 'secondary' as const }]
+      : []),
+    ...(ffeBillEntry ? [ffeBillEntry] : []),
+    ffeSpecBookEntry,
+  ];
+
   return (
     <section id="project-ffe">
-      <div className="mb-1.5 mt-5 flex items-baseline justify-between gap-3">
-        <h2 className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]">
-          {selecting
-            ? 'Choose what to release'
-            : mode === 'install'
-              ? 'Install'
-              : 'Project · FF&E'}
-        </h2>
-        <span className="flex items-baseline gap-3">
-          {!selecting && meta && (
-            <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-              {meta}
-            </span>
-          )}
-          {selecting ? (
-            <DocumentAction
-              actionKey="put-back-release-ceremony"
+      {mode === 'install' || selecting ? (
+        <div className="mb-1.5 mt-5 flex items-baseline justify-between gap-3">
+          <h2 className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]">
+            {selecting
+              ? 'Choose what to release'
+              : mode === 'install'
+                ? 'Install'
+                : 'Project · FF&E'}
+          </h2>
+          <span className="flex items-baseline gap-3">
+            {!selecting && meta && (
+              <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                {meta}
+              </span>
+            )}
+            {selecting ? (
+              <DocumentAction
+                actionKey="put-back-release-ceremony"
+                surfaceKey="project"
+                regionKey="ffe-head"
+                variant="tertiary"
+                onClick={() => ceremony?.putBack()}
+              >
+                Put back · Esc
+              </DocumentAction>
+            ) : (
+              <>
+                {mode === 'project' && (
+                  <Link
+                    href={`/doc/${projectId}/spec-book`}
+                    className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:text-[var(--color-charcoal)]"
+                  >
+                    Spec book →
+                  </Link>
+                )}
+                {/* Add to project and Release for authorization are project-
+                    mode acts, and project mode (not selecting) now renders
+                    RegionHead below instead of this block — so both are
+                    unreachable here and, per the I91 hierarchy contract
+                    (adopting region-head forbids a hand-spelled `primary` in
+                    this file), no longer hand-spelled here at all. */}
+                {/* R76 — bill the schedule: the composer opens FF&E-prefilled
+                    with every uninvoiced priced line ticked (untick there to
+                    narrow). */}
+                {billableUninvoiced.length > 0 && (
+                  <DocumentAction
+                    actionKey="bill-project-ffe"
+                    surfaceKey="project"
+                    regionKey="ffe-head"
+                    variant={canRelease ? 'secondary' : 'primary'}
+                    onClick={() =>
+                      openInvoiceComposer({
+                        projectId,
+                        initialFfeItemIds: billableUninvoiced.map(
+                          (it) => it.id as string,
+                        ),
+                      })
+                    }
+                  >
+                    Bill {billableUninvoiced.length} uninvoiced
+                  </DocumentAction>
+                )}
+                {/* Release for authorization is a project-mode act (canRelease
+                    itself requires mode === 'project'); this branch only ever
+                    reaches install mode, where it is unreachable — RegionHead
+                    below carries it for project mode instead. */}
+              </>
+            )}
+          </span>
+        </div>
+      ) : (
+        <>
+          <RegionRule className="mt-5" />
+          {ffeFold.folded ? (
+            <FoldSeam
+              headingId={ffeHeadingId}
+              bodyId={ffeBodyId}
+              name="Project · FF&E"
+              summary={ffeSeamSummary}
+              onUnfold={() => ffeFold.setFolded(false)}
               surfaceKey="project"
-              regionKey="ffe-head"
-              variant="tertiary"
-              onClick={() => ceremony?.putBack()}
-            >
-              Put back · Esc
-            </DocumentAction>
+              regionKey="ffe"
+            />
           ) : (
-            <>
-              {mode === 'project' && (
-                <Link
-                  href={`/doc/${projectId}/spec-book`}
-                  className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:text-[var(--color-charcoal)]"
-                >
-                  Spec book →
-                </Link>
-              )}
-              {mode === 'project' && (
-                <DocumentAction
-                  actionKey="open-add-to-project"
-                  surfaceKey="project"
-                  regionKey="ffe-head"
-                  variant="primary"
-                  onClick={() => openAddToProject('section')}
-                >
-                  Add to project
-                </DocumentAction>
-              )}
-              {/* R76 — bill the schedule: the composer opens FF&E-prefilled
-                  with every uninvoiced priced line ticked (untick there to
-                  narrow). */}
-              {billableUninvoiced.length > 0 && (
-                <DocumentAction
-                  actionKey="bill-project-ffe"
-                  surfaceKey="project"
-                  regionKey="ffe-head"
-                  variant={canRelease ? 'secondary' : 'primary'}
-                  onClick={() =>
-                    openInvoiceComposer({
-                      projectId,
-                      initialFfeItemIds: billableUninvoiced.map(
-                        (it) => it.id as string,
-                      ),
-                    })
-                  }
-                >
-                  Bill {billableUninvoiced.length} uninvoiced
-                </DocumentAction>
-              )}
-              {/* The head act is a verb: there is no "new proposal" here,
-                  because there is no new document to make. Visible whenever
-                  canRelease holds (an executed agreement stands behind the
-                  project) so authorization-adjacent controls don't vanish —
-                  disabled, not hidden, once BOTH the schedule and readiness
-                  have SETTLED and still say no individual line can join a
-                  release. While the schedule or readiness is loading or has
-                  failed to read, the button stays enabled on purpose:
-                  entering the ceremony is how a designer sees each line's
-                  own disabled-checkbox reason (or retries) — disabling here
-                  too would just swap one silent dead end for another. Empty
-                  schedule (total === 0) is excluded too: GuidedEmptyState
-                  already owns that message below. */}
-              {canRelease && (
-                <DocumentAction
-                  actionKey="release-for-authorization"
-                  surfaceKey="project"
-                  regionKey="ffe-head"
-                  variant="primary"
-                  disabled={
-                    !isLoading &&
-                    !isError &&
-                    total > 0 &&
-                    !anyEligible &&
-                    !readinessQuery.isLoading &&
-                    !readinessQuery.isError
-                  }
-                  onClick={() => ceremony?.begin()}
-                >
-                  Release for authorization
-                </DocumentAction>
-              )}
-            </>
+            <div className="mb-1.5">
+              <RegionHead
+                headingId={ffeHeadingId}
+                name="Project · FF&E"
+                status={ffeStatus}
+                surfaceKey="project"
+                regionKey="ffe"
+                actions={ffeLedger}
+                bodyId={ffeBodyId}
+                onFold={() => ffeFold.setFolded(true)}
+              />
+            </div>
           )}
-        </span>
-      </div>
+        </>
+      )}
 
+      {!ffeFolded && (
+      <div id={ffeBodyId}>
       {/* The release gate reads authoritative readiness and stays closed
           without it — so a pending or failed read has to say so, or the act
           would simply be missing with no reason given. */}
@@ -1160,6 +1252,8 @@ function FFESectionBody({
             ))}
           </ul>
         </>
+      )}
+      </div>
       )}
 
       {/* The bar counts what is held, under the schedule, while choosing. */}

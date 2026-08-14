@@ -43,6 +43,13 @@ const VARIANTS = [
     hasPool: true,
   },
   {
+    variant: 'inked',
+    retiredChrome: 'bg-[var(--color-charcoal)]',
+    tracking: 'tracking-[0.12em]',
+    weight: 'font-medium',
+    hasPool: true,
+  },
+  {
     variant: 'secondary',
     retiredChrome: 'border-[var(--color-aged-oak)]',
     tracking: 'tracking-[0.1em]',
@@ -384,6 +391,44 @@ describe('DocumentActionGroup', () => {
 
     await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
     expect(spy.mock.calls[0]?.[0]).toContain('received 2 primary actions');
+    spy.mockRestore();
+  });
+
+  // `inked` is the region-ledger rendering of the SAME leadership claim, so it
+  // counts against the one-leader budget rather than beside it.
+  it('counts an inked leader against the one-primary budget', async () => {
+    const spy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+    render(
+      <DocumentActionGroup surfaceKey="test" regionKey="two-leaders">
+        <DocumentAction actionKey="inked" variant="inked">
+          Inked
+        </DocumentAction>
+        <DocumentAction actionKey="primary" variant="primary">
+          Primary
+        </DocumentAction>
+      </DocumentActionGroup>,
+    );
+
+    await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+    expect(spy.mock.calls[0]?.[0]).toContain('received 2 primary actions');
+    spy.mockRestore();
+  });
+
+  it('accepts a single inked leader', () => {
+    const spy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+    render(
+      <DocumentActionGroup surfaceKey="test" regionKey="one-leader">
+        <DocumentAction actionKey="inked" variant="inked">
+          Inked
+        </DocumentAction>
+        <DocumentAction actionKey="secondary">Secondary</DocumentAction>
+      </DocumentActionGroup>,
+    );
+    expect(spy).not.toHaveBeenCalled();
     spy.mockRestore();
   });
 });

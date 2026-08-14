@@ -54,6 +54,7 @@ import {
   useCopyScheduleAsBuilt,
   mapPhaseRowToScheduleInput,
   mapMilestoneRowToScheduleInput,
+  useScheduleProposals,
 } from '@patina/supabase';
 import type {
   ResolvedPhase,
@@ -73,6 +74,7 @@ import {
 } from '@/lib/document/schedule-spine-derivation';
 import {
   blocksText,
+  isOpen,
   sortItemsBlockingFirst,
 } from '@/lib/document/coordination-derivation';
 import { phaseAnchorId } from '@/lib/document/phase-anchor';
@@ -81,7 +83,10 @@ import {
   type ScheduleRevealTarget,
 } from './schedule-nav-context';
 import { useRippleSession } from './schedule-ripple-context';
-import { StrataMiniRule } from '../strata-mini-rule';
+import { RegionHead, type RegionLedgerEntry } from '../region/region-head';
+import { useRegionFold, type RegionFold } from '../region/use-region-fold';
+import { FoldSeam, focusRegionHeading } from '../region/fold-seam';
+import { RegionRule } from '../region/region-rule';
 import { DocSheet } from '../overlays/doc-sheet';
 import { OpenItemSheet } from '../coordination/open-item-sheet';
 import {
@@ -105,7 +110,6 @@ import {
 } from './install-window-ceremony';
 import { AddLineSheet } from './add-line-sheet';
 import type { PastProjectOption } from './past-project-picker';
-import { DocumentAction } from '../document-action';
 import { SectionLoadingLine } from '../section-loading-line';
 
 /** Best-effort phase_key from a free-typed name (phase_key is nullable + not
@@ -647,6 +651,10 @@ export function ScheduleSpine({
   // the active phase" rule structurally — ids load async, sets don't wait. ──
   const [unfolded, setUnfolded] = useState<Set<string>>(() => new Set());
 
+  // Row-verb collapse (Project, Composed L3) — one phase's ··· cluster open
+  // across the whole spine at a time, lifted here per RowOverflow's contract.
+  const [openRowVerbs, setOpenRowVerbs] = useState<string | null>(null);
+
   const handlePhaseToggle = (
     phaseId: string,
     state: SpinePhaseState,
@@ -685,33 +693,60 @@ export function ScheduleSpine({
   >(null);
   const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleReveal = useCallback((target: ScheduleRevealTarget) => {
-    // Unfold the target phase through the SAME Set the header toggle uses
-    // (a no-op for the always-open active phase); never fold it back.
-    setUnfolded((prev) => {
-      if (prev.has(target.phaseId)) return prev;
-      const next = new Set(prev);
-      next.add(target.phaseId);
-      return next;
-    });
+  // A reveal asked for while the whole region is folded has no anchor to scroll
+  // to — the body is unmounted. The target is parked here, the region unfolds,
+  // and the effect below finishes the reveal once the body has mounted (the
+  // same ref-flag-then-effect pattern the unfold focus uses).
+  const pendingRevealPhaseId = useRef<string | null>(null);
+  // The region fold is declared further down (it needs the resolved phases);
+  // handleReveal is registered with the Rule and must keep a stable identity,
+  // so it reads the fold through a ref kept current after every render.
+  const scheduleFoldRef = useRef<RegionFold>({
+    folded: false,
+    toggle: () => {},
+    setFolded: () => {},
+  });
 
-    if (target.kind === 'milestone') {
-      setHighlightMilestoneId(target.milestoneId);
-      if (highlightTimer.current) clearTimeout(highlightTimer.current);
-      highlightTimer.current = setTimeout(
-        () => setHighlightMilestoneId(null),
-        1600,
-      );
-    }
-
+  const scrollToPhase = useCallback((phaseId: string) => {
     // Scroll after the unfold paints — the page's rAF + smooth + scroll-mt
     // pattern; each PhaseSection wears phaseAnchorId(phaseId) as its DOM id.
     requestAnimationFrame(() => {
       document
-        .getElementById(phaseAnchorId(target.phaseId))
+        .getElementById(phaseAnchorId(phaseId))
         ?.scrollIntoView({ block: 'start', behavior: 'smooth' });
     });
   }, []);
+
+  const handleReveal = useCallback(
+    (target: ScheduleRevealTarget) => {
+      // Unfold the target phase through the SAME Set the header toggle uses
+      // (a no-op for the always-open active phase); never fold it back.
+      setUnfolded((prev) => {
+        if (prev.has(target.phaseId)) return prev;
+        const next = new Set(prev);
+        next.add(target.phaseId);
+        return next;
+      });
+
+      if (target.kind === 'milestone') {
+        setHighlightMilestoneId(target.milestoneId);
+        if (highlightTimer.current) clearTimeout(highlightTimer.current);
+        highlightTimer.current = setTimeout(
+          () => setHighlightMilestoneId(null),
+          1600,
+        );
+      }
+
+      if (scheduleFoldRef.current.folded) {
+        pendingRevealPhaseId.current = target.phaseId;
+        scheduleFoldRef.current.setFolded(false);
+        return;
+      }
+
+      scrollToPhase(target.phaseId);
+    },
+    [scrollToPhase],
+  );
 
   // Register for as long as the spine is mounted; unregister on unmount so a
   // reveal from a still-mounted Rule no-ops once the spine is gone.
@@ -725,29 +760,95 @@ export function ScheduleSpine({
 
   const loading = schedule.isLoading || schedule.resolved == null;
 
-  return (
-    <section id="document-decision-controls" tabIndex={-1} aria-label="Project schedule" className="mt-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]">
-      {/* The section head — the band's grammar: a quiet Playfair label over the
-          StrataMiniRule, ONE quiet mono action at right (hidden, not disabled,
-          until the designer-client id resolves). Depth = value contrast. */}
-      <div className="flex items-baseline justify-between">
-        <h2 className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]">
-          Schedule
-        </h2>
-        {designerClientId && (
-          <DocumentAction
-            actionKey="new-open-item"
-            surfaceKey="open-document"
-            regionKey="schedule-head"
-            variant="secondary"
-            onClick={openComposer}
-          >
-            + New open item
-          </DocumentAction>
-        )}
-      </div>
-      <StrataMiniRule className="mt-1.5" />
+  // ── region head / fold seam (Project, Composed L3) ──────────────────────
+  const scheduleHeadingId = 'project-schedule-title';
+  const scheduleBodyId = 'project-schedule-body';
 
+  // The soonest unresolved milestone (date >= today), across every resolved
+  // milestone — not just the active phase's — so the head's glance holds
+  // even while that phase is folded shut.
+  const nextMilestoneLabel = useMemo(() => {
+    const upcoming = resolvedMilestones
+      .filter((m) => m.date != null && m.date >= today)
+      .sort((a, b) => (a.date as string).localeCompare(b.date as string))[0];
+    return upcoming ? (milestoneNameById.get(upcoming.id) ?? null) : null;
+  }, [resolvedMilestones, milestoneNameById, today]);
+
+  const scheduleStatus = useMemo(() => {
+    const activeName = activePhaseId
+      ? (rowById.get(activePhaseId)?.name ?? null)
+      : null;
+    return `${entries.length} phases · ${activeName ?? 'nothing active'} · next milestone ${nextMilestoneLabel ?? '—'}`;
+  }, [entries.length, activePhaseId, rowById, nextMilestoneLabel]);
+
+  const scheduleLedger: readonly RegionLedgerEntry[] = designerClientId
+    ? [
+        {
+          key: 'new-open-item',
+          label: '+ New open item',
+          onClick: openComposer,
+        },
+      ]
+    : [];
+
+  // Null until phases resolve (loading), then folded only when there is at
+  // least one main-lane phase and every one of them is closed. A zero-phase
+  // schedule MUST default open — ScheduleBirth is the only way in.
+  //
+  // Closed phases are not the whole region: the body also prints ScheduleProposals
+  // and CoordinationWork, and a schedule whose phases have all closed can still be
+  // holding a proposed anchor waiting to be committed or an open coordination item
+  // waiting on someone. Folding over either would hide work behind a summary line
+  // that never mentions it. `useScheduleProposals` is the SAME query key
+  // ScheduleProposals already mounts (['schedule-proposals', projectId]) — one
+  // cache entry, no second read; the open items are the array already passed to
+  // CoordinationWork.
+  const scheduleProposals = useScheduleProposals(projectId);
+  const pendingProposalCount = scheduleProposals.data?.length ?? 0;
+  const openItemCount = allItems.filter(isOpen).length;
+  const scheduleDefaultFolded = loading
+    ? null
+    : entries.length > 0 &&
+      entries.every((entry) => entry.state === 'closed') &&
+      pendingProposalCount === 0 &&
+      openItemCount === 0;
+
+  const scheduleFold = useRegionFold({
+    docId: projectId,
+    region: 'schedule',
+    defaultFolded: scheduleDefaultFolded,
+  });
+  useEffect(() => {
+    scheduleFoldRef.current = scheduleFold;
+  });
+
+  // A reveal that arrived while the region was folded parked its phase here;
+  // the body is on the page now, so the anchor exists and the scroll can run.
+  useEffect(() => {
+    if (scheduleFold.folded || !pendingRevealPhaseId.current) return;
+    const phaseId = pendingRevealPhaseId.current;
+    pendingRevealPhaseId.current = null;
+    scrollToPhase(phaseId);
+  }, [scheduleFold.folded, scrollToPhase]);
+
+  // FoldSeam only calls onUnfold and then unmounts on the caller's re-render,
+  // so focus is landed from an effect once the head (and its heading) is back
+  // on the page — the contract fold-seam.tsx documents.
+  const scheduleJustUnfolded = useRef(false);
+  useEffect(() => {
+    if (!scheduleFold.folded && scheduleJustUnfolded.current) {
+      focusRegionHeading(scheduleHeadingId);
+      scheduleJustUnfolded.current = false;
+    }
+  }, [scheduleFold.folded]);
+
+  const handleScheduleUnfold = () => {
+    scheduleJustUnfolded.current = true;
+    scheduleFold.setFolded(false);
+  };
+
+  const scheduleBody = (
+    <>
       {!loading && (
         <ScheduleProposals
           projectId={projectId}
@@ -863,6 +964,8 @@ export function ScheduleSpine({
                       threads={entry.threads}
                       onOpenItem={openItem}
                       today={today}
+                      openRowVerbs={openRowVerbs}
+                      onOpenRowVerbsChange={setOpenRowVerbs}
                       headingActions={
                         <PhaseComposeActions
                           onAddItem={openAddLine}
@@ -936,6 +1039,45 @@ export function ScheduleSpine({
               Studio-only by construction (inside the gated spine); renders
               nothing until a baseline is cut. */}
           <RevisionLedger projectId={projectId} />
+        </>
+      )}
+    </>
+  );
+
+  return (
+    <section
+      id="document-decision-controls"
+      tabIndex={-1}
+      aria-label="Project schedule"
+      className="mt-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+    >
+      {/* The region's rule opens it whether folded or open — a printed device,
+          not a divider with meaning (region-rule.tsx). */}
+      <RegionRule />
+
+      {scheduleFold.folded ? (
+        <FoldSeam
+          headingId={scheduleHeadingId}
+          bodyId={scheduleBodyId}
+          name="Schedule"
+          summary={scheduleStatus}
+          onUnfold={handleScheduleUnfold}
+          surfaceKey="open-document"
+          regionKey="schedule"
+        />
+      ) : (
+        <>
+          <RegionHead
+            headingId={scheduleHeadingId}
+            name="Schedule"
+            status={scheduleStatus}
+            surfaceKey="open-document"
+            regionKey="schedule"
+            actions={scheduleLedger}
+            bodyId={scheduleBodyId}
+            onFold={() => scheduleFold.setFolded(true)}
+          />
+          <div id={scheduleBodyId}>{scheduleBody}</div>
         </>
       )}
 

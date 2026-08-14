@@ -42,7 +42,17 @@ const TRIGGER_LABELS: Record<string, string> = {
 
 const GATE_SECTIONS: SectionKey[] = ['project', 'install', 'care'];
 
-function MilestoneRow({ m, projectId }: { m: AccountMilestone; projectId: string }) {
+function MilestoneRow({
+  m,
+  projectId,
+  headless,
+}: {
+  m: AccountMilestone;
+  projectId: string;
+  /** Inside the Money region the head already carries the inked leader, so a
+   *  per-milestone primary would stand a second leader beside it. */
+  headless: boolean;
+}) {
   const updateTrigger = useUpdateMilestoneTrigger(projectId);
   const generate = useGenerateMilestoneInvoice(projectId);
   const [invoiceNote, setInvoiceNote] = useState<string | null>(null);
@@ -129,7 +139,7 @@ function MilestoneRow({ m, projectId }: { m: AccountMilestone; projectId: string
           actionKey="generate-milestone-invoice"
           surfaceKey="accounts"
           regionKey="payment-milestone"
-          variant="primary"
+          variant={headless ? 'secondary' : 'primary'}
           disabled={generate.isPending}
           loading={generate.isPending}
           loadingLabel="Generating…"
@@ -165,10 +175,18 @@ export function AccountBand({
   projectId,
   clientName,
   activeSection,
+  headless = false,
 }: {
   projectId: string;
   clientName?: string | null;
   activeSection?: SectionKey | null;
+  /** The Money region now carries the "Draw an invoice" leader on its own
+   *  head — a headless band drops its own duplicate of that primary so the
+   *  act has exactly one doorway. Everything else (the fold, the variance
+   *  table, export, the amendment doorway) stays put: this band is still the
+   *  accounts sub-seam inside the region, not merely absorbed. Defaults to
+   *  false so the standalone page.tsx mount is byte-identical to before. */
+  headless?: boolean;
 }) {
   const { data, isLoading, isError, refetch } = useAccountPage(projectId);
   const [open, setOpen] = useState(false);
@@ -182,6 +200,15 @@ export function AccountBand({
     window.addEventListener('document:open-project-change', openChange);
     return () => window.removeEventListener('document:open-project-change', openChange);
   }, [changeOnly]);
+
+  // The Money region's head ledger dispatches this instead of calling
+  // setAmendmentOpen directly — the region has no access to this band's local
+  // state, so the band remains the sole owner of its AmendmentSheet.
+  useEffect(() => {
+    const openAmendment = () => setAmendmentOpen(true);
+    window.addEventListener('document:compose-amendment', openAmendment);
+    return () => window.removeEventListener('document:compose-amendment', openAmendment);
+  }, []);
 
   if (isLoading) {
     return <SectionLoadingLine label="opening the ledger" className="mt-4" />;
@@ -329,7 +356,7 @@ export function AccountBand({
                 Payment milestones
               </p>
               {data.milestones.map((m) => (
-                <MilestoneRow key={m.id} m={m} projectId={projectId} />
+                <MilestoneRow key={m.id} m={m} projectId={projectId} headless={headless} />
               ))}
             </div>
           )}
@@ -340,14 +367,18 @@ export function AccountBand({
             className="mt-2.5 items-center"
           >
             {/* R74b — draw an invoice for THIS engagement: the anti-wizard
-                composer, milestones/time/FF&E pulled through pre-scoped. */}
-            <DocumentAction
-              actionKey="draw-project-invoice"
-              variant="primary"
-              onClick={() => openInvoiceComposer({ projectId })}
-            >
-              Draw an invoice
-            </DocumentAction>
+                composer, milestones/time/FF&E pulled through pre-scoped.
+                Headless drops this: the Money region's head now carries the
+                single inked "Draw an invoice" leader for this project. */}
+            {!headless && (
+              <DocumentAction
+                actionKey="draw-project-invoice"
+                variant="primary"
+                onClick={() => openInvoiceComposer({ projectId })}
+              >
+                Draw an invoice
+              </DocumentAction>
+            )}
             {/* R77 — the per-document Hours lens (the drawer pre-addresses
                 the ledger with this project once wired through). */}
             <DocumentAction

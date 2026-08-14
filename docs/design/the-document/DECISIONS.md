@@ -8373,3 +8373,55 @@ stay nullable) saves `null` directly, no Folio round-trip. Money
 DATE columns speak the new grammar.
 
 *Entries add: I134 · last id = I134*
+
+### I135 · "The Project, Composed" ratified — region heads, red-letter needs, always-visible overflow, fold seams — 2026-08-14
+
+The Project section of The Document adopts Direction II (Action Ledger) for
+region governance and Direction III (fold seams) for length, per the deck
+(artifact `8f3bf39d`) and its ratified rulings. Five lanes landed together
+on `redesign/project-composed`: the page shell (region ordering + fold
+wiring), approvals/boards/care-band, the schedule spine + phase rows,
+FF&E, and the commercial/money region + account band.
+
+**Region heads.** Every Project region (Approvals, Boards, Schedule, FF&E,
+Commercial) now renders through the shared `RegionHead` primitive: a serif
+name + one-line status on the left, a `DocumentActionGroup` ledger on the
+right where entry 0 is *always* the region's inked leader and every entry
+after it is a secondary or quieter word — order is hierarchy, not
+labelling. `RegionHead` enforces this at the type and runtime level
+(`variant` is ignored at index 0; a dev-mode console error fires if a
+later entry declares `inked`), so a region can have exactly one leader and
+callers cannot promote a second one by relabelling.
+
+**Red-letter needs zone.** Project documents surface an unmet-need line in
+the same red-letter register the deck specified — `deriveNeeds` (P0) feeds
+a zone that reads as urgent without a badge or box, consistent with the
+rest of the Document's no-badges doctrine.
+
+**Always-visible row overflow — deviation from the deck.** The deck's
+Direction II sketched row-level secondary actions behind hover reveal. The
+codebase's own no-hidden-affordances doctrine (nothing actionable exists
+only on hover — touch has no hover, and hover-reveal audits poorly) wins
+here: the `···` row-verb overflow on schedule/FF&E rows renders always
+visible, not hover-gated. This is a deliberate departure from the deck,
+not an oversight.
+
+**Double region rules + fold seams.** Regions are set off by the
+double-rule motif carried from P0, and each region's body can fold behind
+a per-surface, per-region `localStorage` key (`use-region-fold`, P0) with
+sparse defaults — a region is expanded unless its key says otherwise, so
+existing users see nothing collapse under them on first load.
+
+**Contract-test side effect — flagged for design review.** Because
+`RegionHead` refuses a hand-spelled primary at ledger index > 0, several
+former in-body primary actions were demoted to secondary on migration:
+the approvals region's draft/publish/supersede actions, and FF&E's
+`AddRoomInline` add-room action, no longer render as the region's inked
+leader — they now sit as secondary ledger entries behind whatever action
+the region head elects as primary (e.g. the region's overview/open action).
+This is a mechanical consequence of the primitive's one-leader contract,
+not a deliberate design call on any given region's correct leader, and is
+flagged here for a design ruling on whether each demoted action should
+become that region's declared leader instead.
+
+*Entries add: I135 · last id = I135*

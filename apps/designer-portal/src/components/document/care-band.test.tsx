@@ -43,6 +43,8 @@ jest.mock('./document-action', () => ({
       {children}
     </button>
   ),
+  DocumentActionGroup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DocumentActionRow: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
 import { CareBand } from './care-band';
@@ -146,5 +148,64 @@ describe('CareBand closeout authority', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(
       'project cannot close: 1 coordination/decision item(s) are unresolved',
     );
+  });
+});
+
+describe('CareBand fold', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('forces the band open on install phases even with a remembered fold', () => {
+    window.localStorage.setItem('patina:doc-fold:project-1:care', '1');
+
+    render(<CareBand projectId="project-1" />);
+
+    expect(screen.getByRole('button', { name: 'Close the book' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /closing the book/i })).not.toBeInTheDocument();
+  });
+
+  it('keeps a non-install-phase band open when the remembered choice says so', () => {
+    useProjectV2.mockReturnValue(
+      settled({
+        id: 'project-1',
+        name: 'Prairie House',
+        status: 'active',
+        current_phase: 'design_development',
+        designer_id: 'owner-1',
+        designer: { full_name: 'Olivia Owner' },
+        total_amount_cents: 0,
+        start_date: null,
+      }),
+    );
+    window.localStorage.setItem('patina:doc-fold:project-1:care', '0');
+
+    render(<CareBand projectId="project-1" />);
+
+    expect(screen.getByRole('button', { name: 'Close the book' })).toBeInTheDocument();
+  });
+
+  it('defaults folded to a quiet seam on a non-install phase with no remembered choice', () => {
+    useProjectV2.mockReturnValue(
+      settled({
+        id: 'project-1',
+        name: 'Prairie House',
+        status: 'active',
+        current_phase: 'design_development',
+        designer_id: 'owner-1',
+        designer: { full_name: 'Olivia Owner' },
+        total_amount_cents: 0,
+        start_date: null,
+      }),
+    );
+
+    render(<CareBand projectId="project-1" />);
+
+    expect(screen.queryByRole('button', { name: 'Close the book' })).not.toBeInTheDocument();
+    const seam = screen.getByRole('button', { name: /closing the book/i });
+    expect(seam).toBeInTheDocument();
+
+    fireEvent.click(seam);
+    expect(screen.getByRole('button', { name: 'Close the book' })).toBeInTheDocument();
   });
 });

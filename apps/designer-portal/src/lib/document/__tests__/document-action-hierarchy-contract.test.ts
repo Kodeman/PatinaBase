@@ -134,3 +134,75 @@ describe('I91 shared action grammar', () => {
     expect(desk).not.toContain('useMobilePrimaryAction');
   });
 });
+
+/**
+ * The Project, Composed — a region's leadership lives in its ledger's ORDER,
+ * not in a variant a caller spells. RegionHead inks index 0 and nothing else,
+ * so a region that has adopted it must not carry a hand-written `primary` in
+ * its head, nor spell `'inked'` in the ledger it passes.
+ *
+ * The per-region assertions are conditional on the file having adopted
+ * RegionHead — they pass vacuously until a region lane lands, and bite the
+ * moment it does.
+ */
+const PROJECT_REGION_FILES = [
+  'approvals/project-approval-document.tsx',
+  'schedule/schedule-spine.tsx',
+  'ffe-section.tsx',
+  'commercial/money-region.tsx',
+  'project-mood-boards.tsx',
+  'care-band.tsx',
+] as const;
+
+/** The `actions={[...]}` / `actions: [...]` ledger literals in a source file. */
+function ledgerLiterals(source: string): string[] {
+  const found: string[] = [];
+  const opener = /actions(?:=\{|:\s*)\[/g;
+  let match: RegExpExecArray | null;
+  while ((match = opener.exec(source)) !== null) {
+    const start = match.index + match[0].length - 1;
+    let depth = 0;
+    for (let i = start; i < source.length; i += 1) {
+      if (source[i] === '[') depth += 1;
+      else if (source[i] === ']') {
+        depth -= 1;
+        if (depth === 0) {
+          found.push(source.slice(start, i + 1));
+          break;
+        }
+      }
+    }
+  }
+  return found;
+}
+
+describe('Project region ledgers', () => {
+  it.each(PROJECT_REGION_FILES)(
+    '%s keeps its head free of a hand-spelled leader',
+    (file) => {
+      const path = join(COMPONENTS, file);
+      expect(existsSync(path)).toBe(true);
+      const source = readFileSync(path, 'utf8');
+      if (!source.includes('region/region-head')) return;
+      expect(source).not.toContain('variant="primary"');
+      for (const ledger of ledgerLiterals(source)) {
+        expect(ledger).not.toContain("'inked'");
+        expect(ledger).not.toContain('"inked"');
+      }
+    },
+  );
+
+  it('inks the leading ledger entry and only the leading one', () => {
+    const head = readFileSync(
+      join(COMPONENTS, 'region', 'region-head.tsx'),
+      'utf8',
+    );
+    expect(head.match(/'inked'/g) ?? []).toHaveLength(2);
+    expect(head).toContain("index === 0 ? 'inked'");
+    // the second occurrence is the dev guard that catches a caller trying to
+    // spell leadership on a later entry — not a second place it is granted.
+    expect(head).toContain(
+      "(entry.variant as DocumentActionVariant | undefined) === 'inked'",
+    );
+  });
+});

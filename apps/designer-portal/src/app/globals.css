@@ -406,6 +406,31 @@
   background-color: var(--color-terracotta);
 }
 
+/* ── INKED · the primary already flooded. A region ledger's leader is not a
+   word waiting to be inked — it is the word the ink has already taken, so the
+   pool opens to 150% at rest and never moves again. The stacking argument from
+   the top of this block still holds: the charcoal score melts into the charcoal
+   pool and the clay score rides on top of the ink, which is why the leader is
+   still legibly SCORED and not a plate. Hover/press shift value only. ─────── */
+.da-inked {
+  color: var(--color-off-white);
+}
+.da-inked .da-pool {
+  background-color: var(--color-charcoal);
+  clip-path: circle(150% at 50% 50%);
+  transition: background-color 150ms var(--ease-editorial);
+}
+.da-inked .da-label::before {
+  background-color: var(--color-charcoal);
+}
+.da-inked .da-label::after {
+  background-color: var(--color-clay);
+}
+.da-inked .da-leading,
+.da-inked .da-trailing {
+  color: var(--color-off-white);
+}
+
 /* ── hover · the scoring answers, and a 3.5px bead gathers under the finger ─ */
 .da-act:hover .da-pool {
   clip-path: circle(3.5px at var(--ink-x, 50%) var(--ink-y, 50%));
@@ -432,6 +457,22 @@
 }
 .da-danger:hover {
   color: var(--color-error);
+}
+/* the inked leader is already flooded: the shared bead/flood clip-paths below
+   would re-open a pool that never closed, so hold the geometry and answer with
+   value alone — the ink lightens toward mocha, the clay score thickens. */
+.da-inked:hover .da-pool,
+.da-inked:active .da-pool {
+  clip-path: circle(150% at 50% 50%);
+}
+.da-inked:hover .da-pool {
+  background-color: var(--color-mocha);
+}
+.da-inked:hover .da-label::after {
+  height: 2px;
+}
+.da-inked:hover .da-trailing {
+  transform: translateX(2px);
 }
 
 /* ── press · the word drops a pixel, the ink opens from the contact point,
@@ -463,6 +504,10 @@
 .da-danger:active .da-leading,
 .da-danger:active .da-trailing {
   color: var(--color-off-white);
+}
+/* held: the ink deepens back to charcoal from its hover mocha — value only. */
+.da-inked:active .da-pool {
+  background-color: var(--color-charcoal);
 }
 .da-secondary:active {
   color: var(--color-charcoal);
@@ -516,6 +561,20 @@
   background-color: var(--color-clay);
 }
 
+/* ── the inked leader focuses on its OWN ink ───────────────────────────────
+   The leader is already flooded charcoal, so the caret (quiet-ink) and the
+   melted charcoal score both sit charcoal-on-charcoal — the focus mark was
+   invisible on exactly the word a keyboard reaches first. Both invert to
+   off-white on the pool (≈13.6:1); the clay score already rides the ink at
+   ≈6.2:1 and keeps its colour, so the mark stays the proofreader's, not a
+   ring. Value only — no shadow (D4). ────────────────────────────────────── */
+.da-inked:focus-visible::before {
+  color: var(--color-off-white);
+}
+.da-inked:focus-visible .da-label::before {
+  background-color: var(--color-off-white);
+}
+
 /* ── stilled · the same room by the other door. No bead, no draw, no snap;
    a held act inks at once, so held still reads as held. ─────────────────── */
 @media (prefers-reduced-motion: reduce) {
@@ -537,6 +596,17 @@
   .da-act:active .da-pool {
     clip-path: circle(140% at var(--ink-x, 50%) var(--ink-y, 50%));
     transition: none;
+  }
+  /* the inked leader never had motion to still — it only has to keep its
+     flood, which the two stilled rules above would otherwise close. */
+  .da-inked .da-pool,
+  .da-inked:hover .da-pool,
+  .da-inked:active .da-pool {
+    clip-path: circle(150% at 50% 50%);
+    transition: none;
+  }
+  .da-inked:hover .da-trailing {
+    transform: none;
   }
   /* :active re-declares the transition longhands at (0,2,0), which outranks the
      blanket `.da-act { transition: none }` above — so the press clock has to be
@@ -636,6 +706,16 @@
   .da-glyph-btn {
     transition: none;
   }
+}
+
+/* The Project, Composed — region furniture. A region is announced by a ruled
+   band, not by a card: a 2px charcoal band, a 3px gap of paper, then a hairline
+   — the printer's double rule that opens a chapter. Depth is value and stacked
+   edges only, never a shadow (D4). ────────────────────────────────────────── */
+.doc-region-rule {
+  height: 6px;
+  border-top: 2px solid var(--color-charcoal);
+  border-bottom: 1px solid rgba(44, 41, 38, 0.18);
 }
 
 /* Typography: now provided by @patina/design-system/styles/typography.css.

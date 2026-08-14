@@ -30,6 +30,7 @@ import type { SpinePhaseState } from '@/lib/document/schedule-spine-derivation';
 import { OpenItemRow } from '../coordination/open-item-row';
 import { MilestoneRow, AnchorChip } from './milestone-row';
 import { ThreadStitch } from './thread-stitch';
+import { RowOverflow } from '../region/row-overflow';
 
 export interface PhaseSectionProps {
   phase: ResolvedPhase;
@@ -71,8 +72,16 @@ export interface PhaseSectionProps {
   today: string;
   // ── Compose (Slice 03) — all optional; omit every one and the entry
   //    renders byte-identically to the read-only Slice 01 markup. ──
-  /** The persistent quiet mono action cluster on the heading (PhaseComposeActions). */
+  /** The persistent quiet mono action cluster on the heading (PhaseComposeActions).
+   *  Wrapped in RowOverflow (region/row-overflow.tsx) behind this phase's own
+   *  always-visible ··· glyph — undefined → the heading renders exactly as
+   *  Slice 01 did, with no wrapper and no glyph. */
   headingActions?: ReactNode;
+  /** Row-verb collapse (Project, Composed L3) — the single key open across the
+   *  whole spine, lifted to the caller per RowOverflow's contract. Required
+   *  whenever headingActions is supplied. */
+  openRowVerbs?: string | null;
+  onOpenRowVerbsChange?: (key: string | null) => void;
   /** A revealed compose surface under the meta line — the grammar fields, the
    *  milestone composer, or the delete confirm. Renders regardless of fold. */
   composePanel?: ReactNode;
@@ -116,6 +125,8 @@ export function PhaseSection({
   onOpenItem,
   today,
   headingActions,
+  openRowVerbs = null,
+  onOpenRowVerbsChange,
   composePanel,
   onUnpinPhaseAnchor,
   onUnpinMilestoneAnchor,
@@ -124,10 +135,16 @@ export function PhaseSection({
   // a live project_parties row named by the item wins, else the embedded
   // court_party the item carried, else the generic court token (partyFor).
   const partyForItem = (item: CoordinationItem) =>
-    parties.find((p) => p.id === item.court_party_id) ?? item.court_party ?? null;
+    parties.find((p) => p.id === item.court_party_id) ??
+    item.court_party ??
+    null;
 
   const anchorChip = phase.anchored ? (
-    <AnchorChip date={phase.start} className="ml-[0.7rem] align-[3px]" onUnpin={onUnpinPhaseAnchor} />
+    <AnchorChip
+      date={phase.start}
+      className="ml-[0.7rem] align-[3px]"
+      onUnpin={onUnpinPhaseAnchor}
+    />
   ) : null;
 
   return (
@@ -225,7 +242,16 @@ export function PhaseSection({
           return headingActions ? (
             <div className="flex items-baseline justify-between gap-4">
               {headingEl}
-              {headingActions}
+              <RowOverflow
+                rowKey={phase.id}
+                openKey={openRowVerbs}
+                onOpenChange={onOpenRowVerbsChange ?? (() => {})}
+                surfaceKey="open-document"
+                regionKey="schedule"
+                label={`More actions for ${name || 'this phase'}`}
+              >
+                {headingActions}
+              </RowOverflow>
             </div>
           ) : (
             headingEl
@@ -274,7 +300,9 @@ export function PhaseSection({
                 today={today}
                 highlighted={highlightMilestoneId === m.id}
                 onUnpinAnchor={
-                  onUnpinMilestoneAnchor ? () => onUnpinMilestoneAnchor(m.id) : undefined
+                  onUnpinMilestoneAnchor
+                    ? () => onUnpinMilestoneAnchor(m.id)
+                    : undefined
                 }
               />
             ))}
@@ -284,7 +312,9 @@ export function PhaseSection({
                 {items.map((item, i) => (
                   <li
                     key={item.id}
-                    className={i === 0 ? 'border-t border-[var(--color-pearl)]' : ''}
+                    className={
+                      i === 0 ? 'border-t border-[var(--color-pearl)]' : ''
+                    }
                   >
                     <OpenItemRow
                       item={item}

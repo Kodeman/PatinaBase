@@ -36,7 +36,11 @@ let mockResolvedSchedule: Record<string, unknown> = NO_RESOLVED_SCHEDULE;
 // existing guide branches keep asserting the derivations they were written for.
 let mockContextualHandoffsQuery: Record<string, unknown> = { data: [], isError: false };
 type MockDeskData = {
-  folders: Array<{ row: { engagement_id: string }; need: Record<string, unknown> | null }>;
+  folders: Array<{
+    row: { engagement_id: string };
+    need: Record<string, unknown> | null;
+    needs?: Array<Record<string, unknown>>;
+  }>;
   chips: unknown[];
   composed: Record<string, true>;
 };
@@ -59,6 +63,17 @@ const mockSelectOperationalNeed = jest.fn(
     if (!data || !engagementId) return undefined;
     if (data.composed[engagementId] !== true) return undefined;
     return data.folders.find((folder) => folder.row.engagement_id === engagementId)?.need ?? null;
+  },
+);
+// L1 — the red-letter zone's whole-chain reader (mirrors the singular reader
+// above, sentinel-for-sentinel).
+const mockSelectOperationalNeeds = jest.fn(
+  (data: MockDeskData | undefined, engagementId: string | null | undefined) => {
+    if (!data || !engagementId) return undefined;
+    if (data.composed[engagementId] !== true) return undefined;
+    return (
+      data.folders.find((folder) => folder.row.engagement_id === engagementId)?.needs ?? []
+    );
   },
 );
 
@@ -256,6 +271,11 @@ jest.mock('@/hooks/use-desk-engagements', () => ({
     engagementId: string | null | undefined,
   ) =>
     mockSelectOperationalNeed(data, engagementId),
+  selectOperationalNeedsForDocument: (
+    data: typeof mockDeskData | undefined,
+    engagementId: string | null | undefined,
+  ) =>
+    mockSelectOperationalNeeds(data, engagementId),
 }));
 
 jest.mock('@/hooks/use-document-rooms', () => ({
@@ -382,6 +402,7 @@ describe('DocumentPage guide activation', () => {
     mockRetryDesk.mockReset();
     mockUseDeskEngagements.mockClear();
     mockSelectOperationalNeed.mockClear();
+    mockSelectOperationalNeeds.mockClear();
     mockRecentDocumentsInHand = [];
     mockDocumentQuery = {
       data: {
@@ -1056,6 +1077,120 @@ describe('DocumentPage guide activation', () => {
     expect(screen.getByTestId('doc-needs-setup-count')).toHaveTextContent('0');
   });
 
+  // ── L1: the letterhead's red-letter zone (project documents only) ──
+  describe('the red-letter zone', () => {
+    it('renders the red-letter zone, not the guide strip, on a project document', () => {
+      asProjectDocument();
+      mockDeskData = {
+        folders: [{
+          row: { engagement_id: 'project-1' },
+          need: {
+            kind: 'task_due', text: 'Confirm the site measure',
+            actionLabel: 'Open the task', urgent: false, stamp: { label: 'TASK DUE' },
+          },
+          needs: [{
+            kind: 'task_due', text: 'Confirm the site measure',
+            actionLabel: 'Open the task', urgent: false, stamp: { label: 'TASK DUE' },
+          }],
+        }],
+        chips: [],
+        composed: { 'project-1': true },
+      };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(screen.getByRole('region', { name: 'Needs attention' })).toBeInTheDocument();
+      expect(screen.getByText('Confirm the site measure')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Open the task' })).toBeInTheDocument();
+      // The guide strip's own heading id never mounts alongside it.
+      expect(document.getElementById('document-next-up')).toBeNull();
+    });
+
+    it('keeps the guide strip, not the red-letter zone, on a non-project document', () => {
+      // The default mockDocumentQuery row from the outer beforeEach is a lead
+      // (Brief) document — unaffected by the project-only swap.
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(screen.getByRole('button', { name: 'Review the brief' })).toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: 'Needs attention' })).not.toBeInTheDocument();
+    });
+
+    it('maps every need in the chain to its own red-letter row', () => {
+      asProjectDocument();
+      mockDeskData = {
+        folders: [{
+          row: { engagement_id: 'project-1' },
+          need: {
+            kind: 'task_due', text: 'Confirm the site measure',
+            actionLabel: 'Open the task', urgent: false, stamp: { label: 'TASK DUE' },
+          },
+          needs: [
+            {
+              kind: 'task_due', text: 'Confirm the site measure',
+              actionLabel: 'Open the task', urgent: false, stamp: { label: 'TASK DUE' },
+            },
+            {
+              kind: 'awaiting_inspection', text: '1 piece delivered — awaiting inspection',
+              actionLabel: 'Inspect the delivery', urgent: false, stamp: { label: 'DELIVERED' },
+            },
+          ],
+        }],
+        chips: [],
+        composed: { 'project-1': true },
+      };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      const region = screen.getByRole('region', { name: 'Needs attention' });
+      expect(region.querySelectorAll('li')).toHaveLength(2);
+      expect(screen.getByText('Confirm the site measure')).toBeInTheDocument();
+      expect(screen.getByText('1 piece delivered — awaiting inspection')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Open the task' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Inspect the delivery' })).toBeInTheDocument();
+    });
+
+    it('keeps the guide on a project the Desk composition never covered', () => {
+      asProjectDocument();
+      // Warm cache, other engagements only: the zone has no answer for THIS
+      // document, and the page cannot derive one (it holds no invoice or
+      // schedule facts), so the guide speaks instead of a short list posing as
+      // the whole list.
+      mockDeskData = {
+        folders: [{ row: { engagement_id: 'someone-else' }, need: null, needs: [] }],
+        chips: [],
+        composed: { 'someone-else': true },
+      };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(mockSelectOperationalNeeds).toHaveReturnedWith(undefined);
+      expect(screen.queryByRole('region', { name: 'Needs attention' })).not.toBeInTheDocument();
+      expect(document.getElementById('document-next-up')).not.toBeNull();
+    });
+
+    it('keeps the guide — and its retry — on a project whose Desk read failed', () => {
+      asProjectDocument();
+      mockDeskError = true;
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(screen.queryByRole('region', { name: 'Needs attention' })).not.toBeInTheDocument();
+      expect(screen.getByText('Guidance is unavailable')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    });
+
+    it('prints neither zone when the composition covered the project and found nothing', () => {
+      asProjectDocument();
+      mockDeskData = { folders: [], chips: [], composed: { 'project-1': true } };
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(mockSelectOperationalNeeds).toHaveReturnedWith([]);
+      expect(screen.queryByRole('region', { name: 'Needs attention' })).not.toBeInTheDocument();
+      expect(document.getElementById('document-next-up')).toBeNull();
+    });
+  });
+
   // ── W4: the recap line ──
   it('counts only drafted, active approvals as awaiting publish', () => {
     asProjectDocument();
@@ -1132,6 +1267,7 @@ describe('DocumentPage landedRef — A8 first-open gate', () => {
     mockRetryDesk.mockReset();
     mockUseDeskEngagements.mockClear();
     mockSelectOperationalNeed.mockClear();
+    mockSelectOperationalNeeds.mockClear();
     mockRecentDocumentsInHand = [];
     mockDocumentQuery = {
       data: { kind: 'engagement', row: rowFor('lead-1', 'brief') },
