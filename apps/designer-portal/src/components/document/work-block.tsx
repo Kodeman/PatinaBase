@@ -25,6 +25,7 @@ import {
   DocumentActionRow,
 } from './document-action';
 import { GuidedEmptyState } from './guided-empty-state';
+import { SectionLoadingLine } from './section-loading-line';
 
 // The gate's Golden-Hour stamp (HTML §1 .stamp.st-gh) — a gate IS a decision,
 // and the section's closing line wears the stamp the client will grant.
@@ -105,11 +106,7 @@ export function WorkBlock({
   };
 
   if (tasksQuery.isLoading || gatesQuery.isLoading) {
-    return (
-      <p className="mb-1 mt-4 py-3 text-[11.5px] italic text-[var(--text-muted)]">
-        Reading the work…
-      </p>
-    );
+    return <SectionLoadingLine label="Reading the work" className="mb-1 mt-4" />;
   }
 
   if (tasksQuery.isError || gatesQuery.isError) {

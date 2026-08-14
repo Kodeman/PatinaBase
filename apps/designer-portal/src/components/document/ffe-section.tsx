@@ -92,6 +92,7 @@ import {
 } from './schedule/release-ceremony-context';
 import type { SectionKey } from '@/lib/document/desk-derivation';
 import { DocumentAction } from './document-action';
+import { SectionLoadingLine } from './section-loading-line';
 
 /** Warm borders need darker text ink on paper (prototype stamp treatment). */
 const STAGE_INK: Partial<Record<FFEStageKey, string>> = {
@@ -770,6 +771,12 @@ function FFESectionBody({
   const total = rows.length;
   const underway = rows.filter((r) => UNDERWAY.has(r.stamp.kind)).length;
   const installed = rows.filter((r) => r.stamp.kind === 'installed').length;
+  // The head act's own gate: canRelease is section-level (an executed
+  // agreement stands behind the project), but that says nothing about
+  // whether any INDIVIDUAL line can currently join a release. Aggregating
+  // the same per-row eligibility() call every row already carries — no new
+  // derivation.
+  const anyEligible = rows.some((row) => row.eligible.eligible);
 
   // R76 — what the section-level Bill act would carry: priced lines not yet
   // on a live invoice (the composer re-partitions; this is the offer).
@@ -948,13 +955,32 @@ function FFESectionBody({
                 </DocumentAction>
               )}
               {/* The head act is a verb: there is no "new proposal" here,
-                  because there is no new document to make. */}
+                  because there is no new document to make. Visible whenever
+                  canRelease holds (an executed agreement stands behind the
+                  project) so authorization-adjacent controls don't vanish —
+                  disabled, not hidden, once BOTH the schedule and readiness
+                  have SETTLED and still say no individual line can join a
+                  release. While the schedule or readiness is loading or has
+                  failed to read, the button stays enabled on purpose:
+                  entering the ceremony is how a designer sees each line's
+                  own disabled-checkbox reason (or retries) — disabling here
+                  too would just swap one silent dead end for another. Empty
+                  schedule (total === 0) is excluded too: GuidedEmptyState
+                  already owns that message below. */}
               {canRelease && (
                 <DocumentAction
                   actionKey="release-for-authorization"
                   surfaceKey="project"
                   regionKey="ffe-head"
                   variant="primary"
+                  disabled={
+                    !isLoading &&
+                    !isError &&
+                    total > 0 &&
+                    !anyEligible &&
+                    !readinessQuery.isLoading &&
+                    !readinessQuery.isError
+                  }
                   onClick={() => ceremony?.begin()}
                 >
                   Release for authorization
@@ -986,10 +1012,25 @@ function FFESectionBody({
       )}
 
       {mode === 'project' && !readinessQuery.isError && readinessQuery.isLoading && (
-        <p className="mb-2 text-[11.5px] italic text-[var(--text-muted)]">
-          Checking readiness…
-        </p>
+        <SectionLoadingLine label="Checking readiness" className="mb-2" />
       )}
+
+      {/* The head button stays visible (never vanishes on the designer) but
+          disables itself when canRelease holds and yet no individual line
+          is currently eligible — say so here instead of a silent no-op.
+          Per-row reasons remain reachable via each row's own unfold. */}
+      {mode === 'project' &&
+        canRelease &&
+        !isLoading &&
+        !isError &&
+        total > 0 &&
+        !anyEligible &&
+        !readinessQuery.isLoading &&
+        !readinessQuery.isError && (
+          <p className="mb-2 text-[11.5px] text-[var(--text-muted)]">
+            No lines are currently eligible for release.
+          </p>
+        )}
 
       {selecting && (
         <p className="mb-2 text-[11.5px] text-[var(--text-muted)]">
@@ -1020,11 +1061,7 @@ function FFESectionBody({
         />
       )}
 
-      {isLoading && (
-        <p className="py-3 text-[11.5px] italic text-[var(--text-muted)]">
-          Reading the schedule…
-        </p>
-      )}
+      {isLoading && <SectionLoadingLine label="Reading the schedule" className="py-3" />}
 
       {!isLoading && isError && (
         <div className="border-t border-[var(--color-pearl)] py-3">

@@ -37,7 +37,7 @@ describe('WorkBlock query states', () => {
   it('does not show a false empty prompt while work is loading', () => {
     tasksQuery.isLoading = true;
     renderWork();
-    expect(screen.getByText('Reading the work…')).toBeVisible();
+    expect(screen.getByText('Reading the work')).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Add the first task' })).not.toBeInTheDocument();
   });
 
