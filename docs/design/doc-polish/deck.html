@@ -1,0 +1,1164 @@
+<title>The Book Closes</title>
+
+<!--
+================================================================================
+TOKEN PLAN — "The Book Closes"  (/doc UX review, scored · Wave 4 polish plan)
+================================================================================
+IDENTITY
+  Third deck in the program, sibling of "The Book Won't Close" (the review) and
+  "The Anchor Holds" (Direction A). Same paper grounds, same brass rule, same
+  serif-with-an-opinion, same machine-register mono for anything the product
+  says on screen. Where the review encoded SEVERITY as form and Direction A
+  encoded FIDELITY as form, this deck encodes REMEDIATION STATUS as form —
+  drawn with the SAME bar vocabulary, so the three decks speak one language.
+
+COLOR (warm neutrals, hue bias ~38deg; ONE editorial accent = brass)
+  --paper        page ground            #F7F3EC  / dark #14120F
+  --paper-2      raised panel           #FDFBF7  / dark #1C1916
+  --paper-3      sunken well            #EFE9DE  / dark #232019
+  --ink          primary text           #211C15  / dark #EDE7DC
+  --ink-2        secondary text         #564E42  / dark #B3A996
+  --ink-3        tertiary / captions    #8B8172  / dark #857B6B
+  --rule         hairline               #DCD3C4  / dark #332E26
+  --rule-strong  section rule           #B9AE99  / dark #4A4438
+  --accent       brass (editorial only) #8C6A2B  / dark #C9A45E
+  --accent-soft  brass wash             #EDE3CE  / dark #2E2618
+
+STATUS AS FORM  (this deck's semantic axis, inheriting the prior bar treatments)
+  SHIPPED   --shipped   brass      #8C6A2B / dark #C9A45E   SOLID bar with two
+            vertical end ticks. The "committed" treatment: weight can hang on it.
+  PARTIAL   --partial   verdigris  #2F5D63 / dark #7FBAC0   DASHED outline over
+            a wash. The "frame" treatment: a shape exists, the surface does not.
+  OPEN      --open      graphite   #7B7263 / dark #9A9080   DOTTED span, no ends.
+            The "band" treatment: named, unbounded, not yet begun.
+  DEFERRED  --deferred  graphite at low emphasis, dotted, with a "→ later" affix.
+  HIGH      --high      oxide red  #9E2B1E / dark #E4715F   ONLY where something
+            costs money or trust today: the four HIGH bugs. Never decorative.
+  Status swatches (.sw) reuse the exact bar treatment at inline size; the chip
+  (.chip) carries the same border style, so scorecard, debt spread and mocks agree.
+
+TYPE
+  display : Georgia / Iowan Old Style / Palatino — headings, mock titles, figures
+  body    : system sans — running prose, tables
+  mono    : SF Mono / Menlo — eyebrows, chips, and EVERY quoted product string
+  scale   : 0.66 / 0.72 / 0.78 / 0.92 / 1.0625 / 1.45 / clamp(1.9-2.75) / clamp(2.6-4.6)
+  quoted product strings: .s (mono, paper-3 well, brass left tick); figures
+  carry tabular-nums; headings carry text-wrap:balance
+
+LAYOUT
+  one column, --measure 68ch for prose, --wide 1180px for figures/mocks
+  section rule = 1px rule-strong + mono section number in the left gutter
+  every mock and every table sits inside .scroll { overflow-x:auto } at a stated
+  min-width; the body itself never scrolls sideways
+  MOCK SUB-PALETTE, theme-aware: --m-bg --m-panel --m-ink --m-ink-2 --m-rule
+  --m-well, plus the status tokens, which the mocks share with the prose.
+================================================================================
+-->
+
+<style>
+:root{
+  --paper:#F7F3EC; --paper-2:#FDFBF7; --paper-3:#EFE9DE;
+  --ink:#211C15; --ink-2:#564E42; --ink-3:#8B8172;
+  --rule:#DCD3C4; --rule-strong:#B9AE99;
+  --accent:#8C6A2B; --accent-soft:#EDE3CE;
+
+  --shipped:#8C6A2B; --shipped-soft:#EDE3CE;
+  --partial:#2F5D63; --partial-soft:#DDE9E9;
+  --open:#7B7263; --open-soft:#E9E3D8;
+  --deferred:#8B8172; --deferred-soft:#EFE9DE;
+  --high:#9E2B1E; --high-soft:#F5E1DC; --high-ink:#FFFFFF;
+
+  --shadow:0 1px 2px rgba(33,28,21,.06), 0 8px 24px rgba(33,28,21,.05);
+
+  --m-bg:#FAF7F1; --m-panel:#FFFFFF; --m-ink:#241E17; --m-ink-2:#7A7161;
+  --m-rule:#E2DACB; --m-well:#F2ECE1;
+
+  --display:Georgia,"Iowan Old Style","Palatino Linotype","Book Antiqua",Palatino,serif;
+  --body:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --measure:68ch; --wide:1180px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#14120F; --paper-2:#1C1916; --paper-3:#232019;
+    --ink:#EDE7DC; --ink-2:#B3A996; --ink-3:#857B6B;
+    --rule:#332E26; --rule-strong:#4A4438;
+    --accent:#C9A45E; --accent-soft:#2E2618;
+
+    --shipped:#C9A45E; --shipped-soft:#2E2618;
+    --partial:#7FBAC0; --partial-soft:#16292B;
+    --open:#9A9080; --open-soft:#2A251E;
+    --deferred:#857B6B; --deferred-soft:#232019;
+    --high:#E4715F; --high-soft:#35201C; --high-ink:#1B0F0C;
+
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+
+    --m-bg:#191612; --m-panel:#211D18; --m-ink:#EDE7DC; --m-ink-2:#9A9080;
+    --m-rule:#3A342B; --m-well:#221E18;
+
+    --display:Georgia,"Iowan Old Style","Palatino Linotype","Book Antiqua",Palatino,serif;
+    --body:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    --measure:68ch; --wide:1180px;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#14120F; --paper-2:#1C1916; --paper-3:#232019;
+  --ink:#EDE7DC; --ink-2:#B3A996; --ink-3:#857B6B;
+  --rule:#332E26; --rule-strong:#4A4438;
+  --accent:#C9A45E; --accent-soft:#2E2618;
+
+  --shipped:#C9A45E; --shipped-soft:#2E2618;
+  --partial:#7FBAC0; --partial-soft:#16292B;
+  --open:#9A9080; --open-soft:#2A251E;
+  --deferred:#857B6B; --deferred-soft:#232019;
+  --high:#E4715F; --high-soft:#35201C; --high-ink:#1B0F0C;
+
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+
+  --m-bg:#191612; --m-panel:#211D18; --m-ink:#EDE7DC; --m-ink-2:#9A9080;
+  --m-rule:#3A342B; --m-well:#221E18;
+
+  --display:Georgia,"Iowan Old Style","Palatino Linotype","Book Antiqua",Palatino,serif;
+  --body:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --measure:68ch; --wide:1180px;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:var(--body); font-size:1.0625rem; line-height:1.62;
+  -webkit-font-smoothing:antialiased; overflow-x:hidden;
+}
+.wrap{max-width:var(--wide); margin:0 auto; padding:0 clamp(18px,4vw,44px)}
+p{max-width:var(--measure)}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+
+/* ---------- primitives ---------- */
+.eyebrow{
+  font-family:var(--mono); font-size:.72rem; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--ink-3); margin:0 0 .6rem;
+}
+.eyebrow.brass{color:var(--accent)}
+h1,h2,h3,h4{font-family:var(--display); font-weight:400; line-height:1.12; letter-spacing:-.01em; text-wrap:balance}
+h2{font-size:clamp(1.9rem,3.6vw,2.75rem); margin:0 0 .5rem}
+h3{font-size:1.45rem; margin:0 0 .35rem}
+h4{font-size:1.12rem; margin:0 0 .3rem}
+.lede{font-size:1.2rem; line-height:1.55; color:var(--ink-2); max-width:62ch}
+.dim{color:var(--ink-3)}
+.scroll{overflow-x:auto; -webkit-overflow-scrolling:touch; max-width:100%}
+.brassrule{height:3px; background:var(--accent); width:64px; margin:0 0 2rem}
+.num-fig{font-variant-numeric:tabular-nums}
+
+/* quoted product string */
+.s{
+  font-family:var(--mono); font-size:.86em; background:var(--paper-3);
+  border-left:2px solid var(--accent); padding:.08em .45em .12em .4em;
+  color:var(--ink); white-space:normal; font-variant-numeric:tabular-nums;
+}
+.sblock{
+  font-family:var(--mono); font-size:.85rem; line-height:1.75;
+  background:var(--paper-3); border-left:3px solid var(--accent);
+  padding:.85rem 1rem; margin:1rem 0; max-width:var(--measure); color:var(--ink-2);
+}
+.sblock b{color:var(--ink); font-weight:600}
+
+/* chips — the status axis */
+.chip{
+  display:inline-block; font-family:var(--mono); font-size:.66rem;
+  letter-spacing:.16em; text-transform:uppercase; padding:.28em .6em .3em;
+  border:1px solid var(--rule-strong); color:var(--ink-3); white-space:nowrap;
+  vertical-align:middle; background:transparent;
+}
+.chip.shipped{color:var(--shipped); border-color:var(--shipped); background:var(--shipped-soft)}
+.chip.partial{color:var(--partial); border-color:var(--partial); border-style:dashed; background:var(--partial-soft)}
+.chip.open{color:var(--open); border-color:var(--open); border-style:dotted}
+.chip.deferred{color:var(--deferred); border-color:var(--deferred); border-style:dotted; opacity:.85}
+.chip.deferred::after{content:"\00a0\2192 later"}
+.chip.high{background:var(--high); color:var(--high-ink); border-color:var(--high)}
+.chip.ok{color:var(--ink-3); border-color:var(--rule-strong)}
+
+/* inline status swatch — the same bar treatment as the mocks */
+.sw{display:inline-block; width:52px; height:9px; vertical-align:middle; margin-right:.55em; position:relative}
+.sw.shipped{background:var(--shipped)}
+.sw.shipped::before,.sw.shipped::after{content:""; position:absolute; top:-3px; width:2px; height:15px; background:var(--shipped)}
+.sw.shipped::before{left:0} .sw.shipped::after{right:0}
+.sw.partial{background:var(--partial-soft); border:1px dashed var(--partial)}
+.sw.open{background:repeating-linear-gradient(90deg,var(--open) 0 2px,transparent 2px 6px)}
+.sw.deferred{background:repeating-linear-gradient(90deg,var(--deferred) 0 2px,transparent 2px 6px); opacity:.55}
+.sw.high{background:var(--high-soft); border:1px solid var(--high)}
+
+.legend{display:flex; gap:1.6rem; flex-wrap:wrap; margin:1.8rem 0 0; padding-top:1rem; border-top:1px solid var(--rule)}
+.legend div{display:flex; align-items:center; gap:.1rem; font-family:var(--mono); font-size:.66rem; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-3)}
+
+/* section skeleton */
+section{padding:clamp(56px,8vw,110px) 0; border-top:1px solid var(--rule-strong)}
+section:first-of-type{border-top:0}
+.sec-head{display:flex; gap:1.4rem; align-items:baseline; margin-bottom:2.2rem; flex-wrap:wrap}
+.sec-no{font-family:var(--mono); font-size:.8rem; color:var(--accent); letter-spacing:.12em; padding-top:.55rem}
+
+/* figures */
+figure{margin:1.6rem 0 2.4rem; max-width:100%}
+figcaption{
+  font-family:var(--mono); font-size:.74rem; line-height:1.6; letter-spacing:.03em;
+  color:var(--ink-3); margin-top:.7rem; max-width:78ch;
+}
+figcaption b{color:var(--accent); font-weight:600; letter-spacing:.1em}
+figcaption i{color:var(--ink-2); font-style:italic}
+
+/* tables */
+table{border-collapse:collapse; width:100%; min-width:820px; font-size:.92rem; font-variant-numeric:tabular-nums}
+th{
+  font-family:var(--mono); font-size:.68rem; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--ink-3); text-align:left; font-weight:400;
+  border-bottom:1px solid var(--rule-strong); padding:.6rem .8rem;
+}
+td{border-bottom:1px solid var(--rule); padding:.75rem .8rem; vertical-align:top}
+td.k{font-family:var(--mono); font-size:.8rem; color:var(--ink-2); white-space:nowrap}
+td.m{font-size:.88rem; color:var(--ink-2)}
+tbody tr:hover{background:var(--paper-2)}
+tr.hi td{background:var(--high-soft)}
+tr.hi:hover td{background:var(--high-soft)}
+tr.hi td.k{color:var(--high)}
+.tblname{font-family:var(--mono); font-size:.7rem; letter-spacing:.18em; text-transform:uppercase; color:var(--accent); margin:2.4rem 0 .7rem}
+
+/* blocks */
+.tier{border-left:3px solid var(--rule-strong); padding-left:clamp(16px,2.5vw,28px); margin:0 0 3rem}
+.tier.is-open{border-left-color:var(--open); border-left-style:dotted}
+.tier.is-partial{border-left-color:var(--partial); border-left-style:dashed}
+.tier.is-shipped{border-left-color:var(--shipped)}
+.tier-head{display:flex; gap:.9rem; align-items:center; flex-wrap:wrap; margin-bottom:.7rem}
+.tier-head h3{margin:0}
+.rule-note{
+  font-family:var(--mono); font-size:.75rem; letter-spacing:.06em; color:var(--ink-3);
+  border-top:1px solid var(--rule); padding-top:.7rem; margin-top:1.2rem; max-width:var(--measure);
+}
+.rule-note b{color:var(--ink-2); font-weight:600}
+.rec{
+  background:var(--accent-soft); border:1px solid var(--rule);
+  padding:.9rem 1.1rem; margin-top:1.2rem; max-width:var(--measure); font-size:.97rem;
+}
+.rec .eyebrow{margin-bottom:.3rem}
+.two{display:grid; grid-template-columns:1fr 1fr; gap:2.2rem}
+@media(max-width:860px){.two{grid-template-columns:1fr}}
+
+/* cover */
+.cover{padding:clamp(70px,13vw,150px) 0 clamp(50px,8vw,90px)}
+.cover h1{font-size:clamp(2.6rem,6.4vw,4.6rem); margin:0 0 1.6rem; max-width:15ch}
+.cover .verdict{font-size:clamp(1.15rem,2vw,1.45rem); line-height:1.5; max-width:62ch; color:var(--ink-2)}
+.scope{display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:0; border-top:1px solid var(--rule-strong); margin-top:3.4rem}
+.scope div{padding:1.1rem 1.2rem 1.1rem 0; border-right:1px solid var(--rule)}
+.scope div:last-child{border-right:0}
+.scope dt{font-family:var(--mono); font-size:.66rem; letter-spacing:.18em; text-transform:uppercase; color:var(--ink-3); margin-bottom:.35rem}
+.scope dd{margin:0; font-family:var(--display); font-size:2.1rem; line-height:1; color:var(--ink); font-variant-numeric:tabular-nums}
+.scope dd small{display:block; font-family:var(--body); font-size:.8rem; color:var(--ink-2); margin-top:.5rem; line-height:1.45}
+
+.provenance{
+  font-family:var(--mono); font-size:.7rem; letter-spacing:.09em; line-height:1.9;
+  color:var(--ink-3); margin-top:2.6rem; padding-top:1rem; border-top:1px solid var(--rule);
+}
+.provenance b{color:var(--ink-2); letter-spacing:.14em}
+
+/* debt spread */
+.spread h4{margin-bottom:1rem}
+.bands{list-style:none; padding:0; margin:0; font-size:.93rem}
+.bands li{padding:.42rem 0 .42rem 4.2rem; border-bottom:1px solid var(--rule); position:relative; color:var(--ink-2)}
+.bands li .mk{position:absolute; left:0; top:.95rem; width:44px; height:8px}
+.bands li.loose{color:var(--ink)}
+.bands li.loose .mk{background:repeating-linear-gradient(90deg,var(--open) 0 2px,transparent 2px 6px)}
+.bands li.keep .mk{background:var(--rule-strong); height:2px; top:1.15rem}
+.bands li.end{border-bottom:0; color:var(--ink-3); font-family:var(--mono); font-size:.72rem; letter-spacing:.12em; text-transform:uppercase}
+.bands li.end .mk{background:none}
+.bands.target li .mk{background:var(--shipped); height:2px; top:1.15rem}
+.bands.target li{color:var(--ink)}
+.bands.target li.mono{font-family:var(--mono); font-size:.78rem; letter-spacing:.02em; line-height:1.6}
+.kicker{
+  border-top:2px solid var(--accent); margin-top:2.4rem; padding-top:1rem;
+  font-size:1.02rem; color:var(--ink-2); max-width:var(--measure);
+}
+
+/* workstreams */
+.ws{list-style:none; padding:0; margin:1.8rem 0 0}
+.ws > li{
+  display:grid; grid-template-columns:4.6rem 1fr; gap:1.4rem; padding:1.3rem 0;
+  border-bottom:1px solid var(--rule); align-items:start;
+}
+.ws .wn{font-family:var(--mono); font-size:.86rem; letter-spacing:.1em; color:var(--accent); padding-top:.24rem}
+.ws .wt{font-family:var(--display); font-size:1.24rem; display:block; margin-bottom:.3rem}
+.ws .wd{color:var(--ink-2); font-size:.97rem; max-width:70ch}
+.ws .wm{font-family:var(--mono); font-size:.72rem; letter-spacing:.05em; color:var(--ink-3); margin-top:.55rem; max-width:74ch}
+.ws .wm b{color:var(--accent); font-weight:600; letter-spacing:.12em}
+@media(max-width:640px){.ws > li{grid-template-columns:1fr; gap:.35rem}}
+
+/* deferred entries */
+.defs{list-style:none; padding:0; margin:1.6rem 0 0}
+.defs li{padding:1rem 0 1rem 4.2rem; border-bottom:1px solid var(--rule); position:relative; max-width:78ch}
+.defs li::before{content:""; position:absolute; left:0; top:1.5rem; width:44px; height:8px; background:repeating-linear-gradient(90deg,var(--deferred) 0 2px,transparent 2px 6px); opacity:.55}
+.defs .dt{font-weight:600; display:block; margin-bottom:.2rem}
+.defs .dd{color:var(--ink-2); font-size:.95rem}
+.residue{list-style:none; padding:0; margin:1.4rem 0 0; max-width:var(--measure)}
+.residue li{font-family:var(--mono); font-size:.78rem; letter-spacing:.03em; line-height:1.65; padding:.5rem 0 .5rem 1.4rem; border-bottom:1px solid var(--rule); position:relative; color:var(--ink-2)}
+.residue li::before{content:""; position:absolute; left:0; top:1.05rem; width:8px; height:2px; background:var(--high)}
+.residue li:last-child{border-bottom:0}
+
+/* sequencing */
+.seq{list-style:none; padding:0; margin:1.6rem 0 0; counter-reset:n}
+.seq li{counter-increment:n; padding:.9rem 0 .9rem 2.9rem; border-bottom:1px solid var(--rule); position:relative; max-width:78ch}
+.seq li::before{content:counter(n,decimal-leading-zero); position:absolute; left:0; top:1.05rem; font-family:var(--mono); font-size:.72rem; color:var(--accent); letter-spacing:.1em}
+.close-line{
+  font-family:var(--display); font-size:clamp(1.3rem,2.6vw,1.85rem); line-height:1.35;
+  color:var(--ink); max-width:34ch; margin:3rem 0 0; padding-top:1.6rem; border-top:2px solid var(--accent);
+}
+
+.colophon{font-family:var(--mono); font-size:.72rem; letter-spacing:.08em; line-height:1.9; color:var(--ink-3); padding:3rem 0 4rem; border-top:1px solid var(--rule)}
+.colophon b{color:var(--ink-2); letter-spacing:.14em}
+
+/* ===================== MOCKS ===================== */
+.mockwrap{margin:1.6rem 0 .8rem}
+.mock{
+  background:var(--m-bg); color:var(--m-ink); border:1px solid var(--m-rule);
+  font-family:var(--body); font-size:12px; line-height:1.5; box-shadow:var(--shadow);
+  min-width:880px; font-variant-numeric:tabular-nums;
+}
+.mk-lab{font-family:var(--mono); font-size:8.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--m-ink-2)}
+.mk-lab.br{color:var(--shipped)}
+.mk-ttl{font-family:var(--display); font-size:19px; line-height:1.15; margin:0}
+.mk-sub{font-family:var(--display); font-style:italic; color:var(--m-ink-2); font-size:12.5px; margin:1px 0 0}
+.mk-str{font-family:var(--mono); font-size:10.5px; letter-spacing:.02em}
+.mk-top{display:flex; justify-content:space-between; align-items:center; gap:16px; padding:10px 18px; border-bottom:1px solid var(--m-rule); background:var(--m-panel)}
+.mk-pane{padding:14px 18px 16px}
+.mk-band{border-top:1px solid var(--m-rule)}
+.mk-hd{display:flex; justify-content:space-between; align-items:baseline; border-bottom:1px solid var(--m-rule); padding-bottom:5px; margin-bottom:10px}
+.mk-hd .t{font-family:var(--display); font-size:14px}
+.mk-rule{height:1px; background:var(--m-rule); margin:14px 0}
+
+.statuschip{
+  display:inline-block; font-family:var(--mono); font-size:8.5px; letter-spacing:.14em;
+  text-transform:uppercase; padding:4px 8px; border:1px solid var(--m-rule); color:var(--m-ink-2);
+}
+.statuschip.shipped{color:var(--shipped); border-color:var(--shipped); background:var(--shipped-soft)}
+.statuschip.partial{color:var(--partial); border-color:var(--partial); border-style:dashed}
+.statuschip.open{color:var(--open); border-color:var(--open); border-style:dotted}
+.statuschip.high{color:var(--high-ink); background:var(--high); border-color:var(--high)}
+
+/* --- annotated live mock (section 03) --- */
+.arow{display:grid; grid-template-columns:1fr 272px; border-bottom:1px solid var(--m-rule)}
+.arow:last-child{border-bottom:0}
+.acell{padding:13px 18px; background:var(--m-bg)}
+.anote{
+  padding:13px 15px; border-left:2px solid var(--shipped); background:var(--m-panel);
+  font-family:var(--mono); font-size:9px; line-height:1.75; letter-spacing:.03em; color:var(--m-ink-2);
+}
+.anote b{display:block; color:var(--shipped); letter-spacing:.16em; text-transform:uppercase; font-size:8px; margin-bottom:4px; font-weight:600}
+.vitals{font-family:var(--mono); font-size:11px; letter-spacing:.04em; color:var(--m-ink)}
+.registers{display:flex; gap:22px; flex-wrap:wrap; margin-top:9px; padding-top:8px; border-top:1px solid var(--m-rule)}
+.registers div{font-family:var(--mono); font-size:9px; color:var(--m-ink-2)}
+.registers div i{display:block; font-style:normal; font-size:7.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--m-ink-2); margin-top:3px}
+.registers div b{color:var(--m-ink); font-weight:400; font-size:10px}
+.stageline{display:flex; gap:26px; align-items:center; flex-wrap:wrap}
+.stageline .alt{font-family:var(--mono); font-size:10.5px; color:var(--m-ink-2)}
+.proprow{display:flex; justify-content:space-between; align-items:center; gap:16px; background:var(--m-well); border:1px solid var(--m-rule); padding:9px 12px}
+.iwband{display:flex; justify-content:space-between; align-items:center; gap:16px; border:1px dashed var(--partial); background:var(--partial-soft); padding:9px 12px}
+.btn{font-family:var(--mono); font-size:9px; letter-spacing:.14em; text-transform:uppercase; padding:6px 12px; border:1px solid var(--shipped); color:var(--shipped); background:transparent; display:inline-block}
+.btn.solid{background:var(--shipped); color:var(--m-bg)}
+.btn.quiet{border-color:var(--m-rule); color:var(--m-ink-2)}
+
+/* ceremony face */
+.cer{border:1px solid var(--m-rule); background:var(--m-panel)}
+.cer .cer-h{padding:9px 14px; border-bottom:1px solid var(--m-rule); display:flex; justify-content:space-between; align-items:center}
+.cer .part{display:grid; grid-template-columns:80px 1fr; gap:14px; padding:9px 14px; border-bottom:1px solid var(--m-rule)}
+.cer .part:last-child{border-bottom:0}
+.cer .pk{font-family:var(--mono); font-size:8px; letter-spacing:.16em; text-transform:uppercase; color:var(--m-ink-2); padding-top:2px}
+.cer .pv{font-size:11.5px}
+.cer .part.impact{background:var(--m-well)}
+.cer .part.impact .pk{color:var(--shipped)}
+.cer .impact-lines{list-style:none; margin:0; padding:0}
+.cer .impact-lines li{padding:3px 0 3px 14px; position:relative; font-size:11.5px}
+.cer .impact-lines li::before{content:""; position:absolute; left:0; top:8px; width:7px; height:2px; background:var(--shipped)}
+.cer .impact-lines li.soft{color:var(--m-ink-2)}
+.cer .impact-lines li.soft::before{background:var(--partial)}
+
+/* desk needs */
+.needs{list-style:none; margin:0; padding:0; border:1px solid var(--m-rule); background:var(--m-panel)}
+.needs li{display:flex; justify-content:space-between; gap:16px; align-items:center; padding:8px 13px; border-bottom:1px solid var(--m-rule); font-size:11.5px}
+.needs li:last-child{border-bottom:0}
+.needs .nk{font-family:var(--mono); font-size:8.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--m-ink-2)}
+.needs .nk.shipped{color:var(--shipped)}
+
+/* --- Mock 1: the tight doc --- */
+.m1{display:grid; grid-template-columns:196px 1fr 214px}
+.m1 .rail{border-right:1px solid var(--m-rule); background:var(--m-panel); padding:16px 14px}
+.m1 .margin{border-left:1px solid var(--m-rule); background:var(--m-panel); padding:16px 14px}
+.railitem{padding:7px 0 7px 15px; position:relative; border-bottom:1px solid var(--m-rule)}
+.railitem:last-child{border-bottom:0}
+.railitem::before{content:""; position:absolute; left:0; top:13px; width:8px; height:2px; background:var(--m-rule)}
+.railitem.done::before{background:var(--m-ink-2)}
+.railitem.now::before{background:var(--shipped); height:3px; top:12px}
+.railitem .rn{font-size:11.5px; color:var(--m-ink-2)}
+.railitem.now .rn{color:var(--m-ink); font-weight:700}
+.railitem .rs{font-family:var(--mono); font-size:8px; letter-spacing:.13em; text-transform:uppercase; color:var(--m-ink-2); display:block; margin-top:2px}
+.railitem.now .rs{color:var(--shipped)}
+.chiprow{display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:9px}
+.needchip{font-family:var(--mono); font-size:8.5px; letter-spacing:.14em; text-transform:uppercase; padding:4px 8px; border:1px dashed var(--open); color:var(--open)}
+.actions{display:flex; gap:14px; flex-wrap:wrap; margin-top:11px; padding-top:9px; border-top:1px solid var(--m-rule); font-family:var(--mono); font-size:8.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--m-ink-2)}
+.recapline{font-size:11.5px; color:var(--m-ink-2); border-top:1px solid var(--m-rule); border-bottom:1px solid var(--m-rule); padding:8px 0; margin-top:12px}
+.recapline b{color:var(--m-ink); font-weight:400}
+.spine{display:grid; grid-template-columns:repeat(6,1fr); gap:0; margin-top:4px}
+.spine > div{padding:0 8px 0 0}
+.spine .sbar{height:9px; position:relative; margin-bottom:7px}
+.spine .sbar.now{background:var(--shipped)}
+.spine .sbar.now::before,.spine .sbar.now::after{content:""; position:absolute; top:-3px; width:2px; height:15px; background:var(--shipped)}
+.spine .sbar.now::before{left:0} .spine .sbar.now::after{right:0}
+.spine .sbar.next{background:var(--m-rule)}
+.spine .sbar.soft{background:repeating-linear-gradient(90deg,var(--open) 0 2px,transparent 2px 6px)}
+.spine .sn{font-size:10.5px; color:var(--m-ink-2)}
+.spine .sd{font-family:var(--mono); font-size:8.5px; letter-spacing:.1em; color:var(--m-ink-2); display:block; margin-top:2px}
+.spine .on .sn{color:var(--m-ink); font-weight:700}
+.spine .on .sd{color:var(--shipped)}
+.gatefoot{font-family:var(--mono); font-size:9px; letter-spacing:.06em; color:var(--m-ink-2); border-top:1px solid var(--m-rule); margin-top:12px; padding-top:8px}
+.rooms{display:grid; grid-template-columns:1fr 1fr; gap:18px}
+.room .rh{display:flex; justify-content:space-between; align-items:baseline; border-bottom:1px solid var(--m-rule); padding-bottom:4px; margin-bottom:6px}
+.room .rt{font-family:var(--display); font-size:12.5px}
+.room .rc{font-family:var(--mono); font-size:8.5px; letter-spacing:.11em; text-transform:uppercase; color:var(--m-ink-2)}
+.lineitem{display:flex; justify-content:space-between; gap:12px; padding:5px 0; border-bottom:1px solid var(--m-rule); font-size:11px}
+.lineitem:last-child{border-bottom:0}
+.lineitem .lm{font-family:var(--mono); font-size:8.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--m-ink-2); white-space:nowrap}
+.lineitem .lm.due{color:var(--high)}
+.moneymini{display:grid; grid-template-columns:repeat(4,1fr); gap:14px}
+.moneymini div{border-top:2px solid var(--shipped); padding-top:6px}
+.moneymini div:nth-child(2){border-top-color:var(--m-ink-2)}
+.moneymini div:nth-child(3){border-top-color:var(--m-rule)}
+.moneymini div:nth-child(4){border-top-color:var(--m-rule)}
+.moneymini .mv{font-family:var(--display); font-size:15px}
+.moneymini .mk2{font-family:var(--mono); font-size:8px; letter-spacing:.14em; text-transform:uppercase; color:var(--m-ink-2); display:block; margin-top:3px}
+.notstarted{font-family:var(--mono); font-size:10px; letter-spacing:.03em; color:var(--m-ink-2); border-top:1px solid var(--m-rule); padding-top:9px; margin-top:12px}
+.margitem{padding:9px 0; border-bottom:1px solid var(--m-rule)}
+.margitem:last-child{border-bottom:0}
+.margitem .mk3{font-family:var(--mono); font-size:8px; letter-spacing:.16em; text-transform:uppercase; color:var(--m-ink-2); display:block; margin-bottom:3px}
+.margitem.urgent .mk3{color:var(--high)}
+.margitem .mt{font-size:11px}
+
+/* --- Mock 2: money ladder --- */
+.ladder{padding:20px 24px 24px}
+.ladder .lh{font-family:var(--display); font-size:30px; line-height:1.1}
+.ladder .ls{font-family:var(--mono); font-size:9.5px; letter-spacing:.1em; color:var(--m-ink-2); margin-top:6px}
+.rung{border-left:3px solid var(--shipped); padding:10px 0 10px 16px; margin-top:14px}
+.rung .rv{font-family:var(--display); line-height:1.15}
+.rung .rk{font-family:var(--mono); font-size:8.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--m-ink-2); display:block; margin-top:4px}
+.rung.t1{margin-left:0; font-size:1em} .rung.t1 .rv{font-size:23px}
+.rung.t2{margin-left:26px; border-left-color:var(--m-ink-2)} .rung.t2 .rv{font-size:19px; color:var(--m-ink-2)}
+.rung.t3{margin-left:52px; border-left-color:var(--m-rule)} .rung.t3 .rv{font-size:16px; color:var(--m-ink-2)}
+.rung.t4{margin-left:78px; border-left-color:var(--m-rule)} .rung.t4 .rv{font-size:14px; color:var(--m-ink-2)}
+.ladder .lc{font-family:var(--mono); font-size:9px; line-height:1.8; letter-spacing:.04em; color:var(--m-ink-2); border-top:1px solid var(--m-rule); margin-top:20px; padding-top:10px}
+
+/* --- Mock 3: triptych --- */
+.tript{display:grid; grid-template-columns:repeat(3,1fr); gap:0}
+.tript > div{padding:16px 16px 18px; border-right:1px solid var(--m-rule)}
+.tript > div:last-child{border-right:0}
+.pairlab{font-family:var(--mono); font-size:8px; letter-spacing:.18em; text-transform:uppercase; color:var(--m-ink-2); margin-bottom:9px}
+.beforebox{border:1px solid var(--m-rule); background:var(--m-panel); padding:10px 11px; min-height:96px}
+.afterbox{border:1px solid var(--shipped); background:var(--shipped-soft); padding:10px 11px; margin-top:0}
+.shout{font-family:var(--mono); font-size:9px; letter-spacing:.13em; text-transform:uppercase; color:var(--m-ink-2); padding:3px 0; border-bottom:1px solid var(--m-rule)}
+.shout:last-child{border-bottom:0}
+.arrowdown{font-family:var(--mono); font-size:9px; letter-spacing:.16em; text-transform:uppercase; color:var(--m-ink-2); text-align:center; padding:9px 0}
+.emptyband{border:1px dashed var(--m-rule); padding:12px 11px; margin-bottom:8px; text-align:center}
+.emptyband .eb-t{font-family:var(--display); font-size:12.5px}
+.emptyband .eb-s{font-size:10px; color:var(--m-ink-2); margin-top:3px}
+.emptyband .eb-a{font-family:var(--mono); font-size:8px; letter-spacing:.14em; text-transform:uppercase; color:var(--m-ink-2); margin-top:7px}
+.loadline{font-style:italic; font-size:11px; color:var(--m-ink-2); padding:3px 0}
+.skel{height:8px; background:var(--m-well); border:1px solid var(--m-rule); margin-bottom:6px}
+.skel.w2{width:74%} .skel.w3{width:52%}
+.remedy{display:flex; justify-content:space-between; gap:12px; font-size:10.5px; padding:5px 0; border-top:1px solid var(--m-rule)}
+.remedy .ra{font-family:var(--mono); font-size:8.5px; letter-spacing:.11em; text-transform:uppercase; color:var(--shipped); white-space:nowrap}
+
+@media (prefers-reduced-motion: reduce){
+  *{animation:none !important; transition:none !important}
+}
+</style>
+
+<div class="wrap">
+
+<!-- ============ 01 · COVER / VERDICT ============ -->
+<section class="cover">
+  <div class="brassrule"></div>
+  <p class="eyebrow brass">Designer portal &middot; The document &middot; Review scored &middot; 13 August 2026</p>
+  <h1>The book closes.</h1>
+  <p class="verdict">
+    The review found two kinds of trouble: the document told contradictory truths, and the
+    document was loosely composed. The three shipped waves fixed the truth. The composition
+    &mdash; the review&rsquo;s other half &mdash; is still owed. This deck scores every finding
+    and plans the rest.
+  </p>
+  <p class="lede" style="margin-top:1.8rem">
+    The review deck was <i>The Book Won&rsquo;t Close</i>. This is the plan that closes it.
+    Forty-two findings, one status each, drawn in the same bar vocabulary the program&rsquo;s
+    prior decks used for fidelity.
+  </p>
+
+  <dl class="scope">
+    <div><dt>Findings scored</dt><dd class="num-fig">42<small>Six themes, twelve top-line items, eight journey steps, nine addendum items, seven install demands. One journey step scored OK &middot; no action, and is counted in the total only.</small></dd></div>
+    <div><dt>Shipped</dt><dd class="num-fig">3<small>Every one names its mechanism &mdash; a ruling plus the artifact that carries it.</small></dd></div>
+    <div><dt>Partial</dt><dd class="num-fig">5<small>A real act exists; the composition around it does not.</small></dd></div>
+    <div><dt>Open + deferred</dt><dd class="num-fig">33<small>24 open &mdash; Wave 4 or the bug lane. 9 deferred to Layout B, Layout C, or their own argument.</small></dd></div>
+  </dl>
+
+  <div class="legend">
+    <div><span class="sw shipped"></span>Shipped</div>
+    <div><span class="sw partial"></span>Partial</div>
+    <div><span class="sw open"></span>Open</div>
+    <div><span class="sw deferred"></span>Deferred</div>
+    <div><span class="sw high"></span>High &middot; costs money or trust today</div>
+  </div>
+
+  <p class="provenance">
+    <b>Provenance</b><br>
+    /doc UX review, 13 August 2026 &rarr; rulings R107&ndash;R114 ratified &rarr;
+    Waves 1&ndash;3 live: migrations 00474, 00475, 00476 &middot; edge function po-send &middot;
+    designer portal df435d58.
+  </p>
+</section>
+
+<!-- ============ 02 · THE SCORECARD ============ -->
+<section>
+  <div class="sec-head"><span class="sec-no">02</span><div>
+    <p class="eyebrow">The scorecard</p>
+    <h2>Every finding, against what shipped</h2>
+  </div></div>
+
+  <p>
+    Five tables, one row per finding. <b>Mechanism</b> for a shipped item names the ruling and
+    the artifact that carries it &mdash; a claim you can go read. <b>Destination</b> for an open
+    item names the workstream or lane that will close it. Nothing is marked shipped on intent.
+  </p>
+
+  <p class="tblname">Themes</p>
+  <div class="scroll"><table>
+    <thead><tr><th style="width:3.4rem">ID</th><th style="width:24%">Finding</th><th style="width:9rem">Status</th><th>Mechanism or destination</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="k">T1</td>
+        <td>Contradictory status organs</td>
+        <td><span class="chip shipped">Shipped</span></td>
+        <td class="m">R107 / R108 / R111 &mdash; one resolver (<span class="s">packages/utils schedule-fidelity.ts</span>) now feeds header vitals, section sub-label, stage line, install future-sub, desk motion and desk need. <span class="s">Week N</span> renders only downstream of a hard anchor. Folded sub-findings A2 breadcrumb and A5 no-op remain open &mdash; scored under A2 / A5.</td>
+      </tr>
+      <tr>
+        <td class="k">T2</td>
+        <td>Install is not a real mode</td>
+        <td><span class="chip partial">Partial</span></td>
+        <td class="m">The install week gained its first real act &mdash; <span class="s">install_windows</span> hold / confirm / release (00476, R112). No composition: room state, punch, close gate and Care deferral all deferred to Layout B.</td>
+      </tr>
+      <tr>
+        <td class="k">T3</td>
+        <td>Flat money hierarchy</td>
+        <td><span class="chip open">Open</span></td>
+        <td class="m">Wave 4 &middot; W2 &mdash; the money region.</td>
+      </tr>
+      <tr>
+        <td class="k">T4</td>
+        <td>No fleet view</td>
+        <td><span class="chip deferred">Deferred</span></td>
+        <td class="m">Layout C, its own deck. The R21 tension must be argued, not assumed.</td>
+      </tr>
+      <tr>
+        <td class="k">T5</td>
+        <td>Empty-module erosion</td>
+        <td><span class="chip open">Open</span></td>
+        <td class="m">Wave 4 &middot; W3 &mdash; the empty-band collapse.</td>
+      </tr>
+      <tr>
+        <td class="k">T6</td>
+        <td>Leaked machinery</td>
+        <td><span class="chip partial">Partial</span></td>
+        <td class="m">The three strings and the provenance line are dead (R113) and survive only as string-absence contract tests. The motion leak &mdash; A4, the loading cascade &mdash; is open &rarr; Wave 4 &middot; W5.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <p class="tblname">Top ten</p>
+  <div class="scroll"><table>
+    <thead><tr><th style="width:3.4rem">ID</th><th style="width:26%">Finding</th><th style="width:9rem">Status</th><th>Mechanism or destination</th></tr></thead>
+    <tbody>
+      <tr><td class="k">1 (k)</td><td>No fleet list</td><td><span class="chip deferred">Deferred</span></td><td class="m">Layout C.</td></tr>
+      <tr><td class="k">2 (a)</td><td><span class="s">Week 2</span> against &ldquo;no phase configured&rdquo;</td><td><span class="chip shipped">Shipped</span></td><td class="m">R108 Week-N gate. The string <span class="s">NO ACTIVE OR DELAYED PHASE IS CONFIGURED</span> is dead (R113).</td></tr>
+      <tr><td class="k">3 (e)</td><td>Book closed with work unbilled</td><td><span class="chip deferred">Deferred</span></td><td class="m">The close gate is Layout B&rsquo;s centerpiece.</td></tr>
+      <tr><td class="k">4</td><td>Install reads as FF&amp;E plus unfolded Care</td><td><span class="chip partial">Partial</span></td><td class="m">Window ceremony shipped; composition deferred to Layout B.</td></tr>
+      <tr><td class="k">5 (b)</td><td>Empty actives while the desk nags</td><td><span class="chip partial">Partial</span></td><td class="m"><span class="s">schedule_unconfigured</span> desk need (<span class="s">Name the phases for this project</span>, rank 10.5) plus Band-as-state. The doc-side collapse arrives with Wave 4 &middot; W1.</td></tr>
+      <tr><td class="k">6 (g)</td><td>Mood boards and plan room empty everywhere</td><td><span class="chip open">Open</span></td><td class="m">Wave 4 &middot; W3.</td></tr>
+      <tr><td class="k">7 (h)</td><td>Four financial concepts, equal weight</td><td><span class="chip open">Open</span></td><td class="m">Wave 4 &middot; W2.</td></tr>
+      <tr><td class="k">8 (c)</td><td>People: three renderings of one relationship</td><td><span class="chip open">Open</span></td><td class="m">Bug lane &mdash; rides the Nurture derivation fix.</td></tr>
+      <tr><td class="k">9 (d)</td><td><span class="s">CANONICAL STAGE</span> / <span class="s">TEMPLATE PROVENANCE</span></td><td><span class="chip shipped">Shipped</span></td><td class="m">R113; <span class="s">provenanceFor</span> returns null.</td></tr>
+      <tr><td class="k">10 (j)</td><td><span class="s">REVEAL 3 MORE FOLIOS</span> inert</td><td><span class="chip open">Open</span></td><td class="m">Bug lane.</td></tr>
+      <tr><td class="k">(f)</td><td><span class="s">$ BAND from &ndash; to $0</span></td><td><span class="chip open">Open</span></td><td class="m">Wave 4 &middot; W2 &mdash; band-honest empty rendering. <i>Below the cut.</i></td></tr>
+      <tr><td class="k">(i)</td><td><span class="s">Name a phase&hellip;</span> offered after Completion</td><td><span class="chip open">Open</span></td><td class="m">Wave 4 &middot; W3 &mdash; authoring affordances retire with their phase. <i>Below the cut.</i></td></tr>
+    </tbody>
+  </table></div>
+
+  <p class="tblname">Journey walk &middot; chronological</p>
+  <div class="scroll"><table>
+    <thead><tr><th style="width:3.4rem">ID</th><th style="width:28%">Finding</th><th style="width:9rem">Status</th><th>Mechanism or destination</th></tr></thead>
+    <tbody>
+      <tr><td class="k">J1</td><td>Direction entry skips the doc&rsquo;s own Direction section</td><td><span class="chip open">Open</span></td><td class="m">Bug lane &middot; M.</td></tr>
+      <tr class="hi"><td class="k">J2</td><td>Picklist auto-invite, no confirm</td><td><span class="chip high">High</span> <span class="chip open">Open</span></td><td class="m">Bug lane &mdash; an outbound send fires with no consent step.</td></tr>
+      <tr><td class="k">J3</td><td>Facet claims and $0 defaults</td><td><span class="chip open">Open</span></td><td class="m">Bug lane &middot; S &mdash; rides J2.</td></tr>
+      <tr><td class="k">J4</td><td><span class="s">Save agreement</span> is a true draft save</td><td><span class="chip ok">OK</span></td><td class="m">No action. Behaves as labelled.</td></tr>
+      <tr class="hi"><td class="k">J5</td><td>Hard wall: no designer-side signed path</td><td><span class="chip high">High</span> <span class="chip open">Open</span></td><td class="m">Bug lane &mdash; remedy <span class="s">Record a signature received outside Patina</span>. Precedent already shipped: <span class="s">record_paper_trade_acceptance</span> and the on-paper furnishings rail.</td></tr>
+      <tr class="hi"><td class="k">J6</td><td>Doc URL permanently breaks at Direction</td><td><span class="chip high">High</span> <span class="chip open">Open</span></td><td class="m">Bug lane &mdash; a shared link dies on supersession.</td></tr>
+      <tr class="hi"><td class="k">J7</td><td>Nurture calls a never-sent draft <span class="s">Proposal sent</span></td><td><span class="chip high">High</span> <span class="chip open">Open</span></td><td class="m">Bug lane &mdash; the CRM reports an outbound that never left.</td></tr>
+      <tr><td class="k">J8</td><td>Proposal never advances in the rail</td><td><span class="chip open">Open</span></td><td class="m">Rides J5.</td></tr>
+    </tbody>
+  </table></div>
+
+  <p class="tblname">Addendum A1&ndash;A9</p>
+  <div class="scroll"><table>
+    <thead><tr><th style="width:3.4rem">ID</th><th style="width:38%">Finding</th><th style="width:9rem">Status</th><th>Destination</th></tr></thead>
+    <tbody>
+      <tr><td class="k">A1</td><td>Desk-card send-trap</td><td><span class="chip open">Open</span></td><td class="m">Bug lane.</td></tr>
+      <tr><td class="k">A2</td><td>Wrong-doc breadcrumb</td><td><span class="chip open">Open</span></td><td class="m">Bug lane. Folded out of T1.</td></tr>
+      <tr><td class="k">A3</td><td><span class="s">IN-HAND</span> timer misattribution</td><td><span class="chip open">Open</span></td><td class="m">Bug lane.</td></tr>
+      <tr><td class="k">A4</td><td>Loading cascade</td><td><span class="chip open">Open</span></td><td class="m">Wave 4 &middot; W5 &mdash; the one addendum item that moved lanes.</td></tr>
+      <tr><td class="k">A5</td><td><span class="s">RESOLVE THE SCHEDULE</span> no-op</td><td><span class="chip open">Open</span></td><td class="m">Bug lane. Folded out of T1.</td></tr>
+      <tr><td class="k">A6</td><td>Release with no feedback</td><td><span class="chip open">Open</span></td><td class="m">Bug lane.</td></tr>
+      <tr><td class="k">A7</td><td>&#8984;K inert to the mouse</td><td><span class="chip open">Open</span></td><td class="m">Bug lane.</td></tr>
+      <tr><td class="k">A8</td><td>Cold loads land mid-scroll</td><td><span class="chip open">Open</span></td><td class="m">Bug lane.</td></tr>
+      <tr><td class="k">A9</td><td>Triplicate <span class="s">Capture a lead</span></td><td><span class="chip open">Open</span></td><td class="m">Bug lane.</td></tr>
+    </tbody>
+  </table></div>
+
+  <p class="tblname">Install demands 1&ndash;7</p>
+  <div class="scroll"><table>
+    <thead><tr><th style="width:3.4rem">ID</th><th style="width:34%">Demand</th><th style="width:9rem">Status</th><th>Mechanism or destination</th></tr></thead>
+    <tbody>
+      <tr><td class="k">D7</td><td>Arrival and day logistics</td><td><span class="chip partial">Partial</span></td><td class="m"><span class="s">install_windows</span> &mdash; the week can now be held, confirmed and released with disclosed impact.</td></tr>
+      <tr><td class="k">D1</td><td>Room state</td><td><span class="chip deferred">Deferred</span></td><td class="m">Layout B.</td></tr>
+      <tr><td class="k">D2</td><td>Punch band</td><td><span class="chip deferred">Deferred</span></td><td class="m">Layout B.</td></tr>
+      <tr><td class="k">D3</td><td>Close gate</td><td><span class="chip deferred">Deferred</span></td><td class="m">Layout B &mdash; its centerpiece.</td></tr>
+      <tr><td class="k">D4</td><td>Care held back until install closes</td><td><span class="chip deferred">Deferred</span></td><td class="m">Layout B.</td></tr>
+      <tr><td class="k">D5</td><td>A working surface for the week</td><td><span class="chip deferred">Deferred</span></td><td class="m">Layout B.</td></tr>
+      <tr><td class="k">D6</td><td>Boundary reconciliation</td><td><span class="chip deferred">Deferred</span></td><td class="m">Layout B.</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="rec">
+    <p class="eyebrow brass">What the waves also built that the review never asked for</p>
+    <p style="margin:0">
+      Ceremonies harden, facts propose, contradictions report (R109). IMPACT disclosed at consent
+      (R110). <span class="s">schedule_proposals</span> with desk needs at rank 9.5. po-send
+      proposing anchors rather than writing them. This is the mechanism that makes the status
+      truth durable rather than merely repainted: the next contradictory write does not undo it.
+    </p>
+  </div>
+</section>
+
+<!-- ============ 03 · WHAT SHIPPED, ON THE ACTUAL SCREEN ============ -->
+<section>
+  <div class="sec-head"><span class="sec-no">03</span><div>
+    <p class="eyebrow">What shipped</p>
+    <h2>On the actual screen</h2>
+  </div></div>
+
+  <p>
+    Six organs, one resolver behind all of them. Every string in the panel below is the live
+    string, annotated with the ruling and the artifact that put it there.
+  </p>
+
+  <figure class="mockwrap">
+    <div class="scroll">
+      <div class="mock">
+        <div class="mk-top">
+          <div>
+            <p class="mk-lab">Designer portal &middot; The document &middot; Live</p>
+            <p class="mk-ttl" style="margin-top:3px">Winkys winktastic loft</p>
+          </div>
+          <span class="statuschip shipped">Portal df435d58</span>
+        </div>
+
+        <div class="arow">
+          <div class="acell">
+            <p class="mk-lab">Letterhead &middot; vitals register</p>
+            <div class="vitals" style="margin-top:6px">Consultation &middot; Target band &middot; Mar 2027 &middot; $100,000</div>
+            <div class="registers">
+              <div><b>Target Mar 2027</b><i>Committed</i></div>
+              <div><b>Target ~Mar 2027</b><i>Frame</i></div>
+              <div><b>Target band &middot; Mar 2027</b><i>Band</i></div>
+            </div>
+          </div>
+          <div class="anote"><b>R107 &middot; one resolver</b>schedule-fidelity.ts feeds the register. Three target renderings, one per fidelity &mdash; the date looks as hard as it is.</div>
+        </div>
+
+        <div class="arow">
+          <div class="acell">
+            <p class="mk-lab">Stage line</p>
+            <div class="stageline" style="margin-top:6px">
+              <span class="mk-str" style="color:var(--shipped)">Design development &middot; Week 3 &middot; Committed</span>
+              <span class="alt">Band &mdash; no anchor yet</span>
+            </div>
+          </div>
+          <div class="anote"><b>R108 &middot; Week-N gate</b>positionText() renders a week number only downstream of a hard anchor. Without one, the line says band and stops.</div>
+        </div>
+
+        <div class="arow">
+          <div class="acell">
+            <p class="mk-lab">The schedule &middot; proposals row</p>
+            <div class="proprow" style="margin-top:6px">
+              <span class="mk-str">PROPOSED &middot; Released to maker &middot; +4 days to Procurement</span>
+              <span><span class="btn solid">Commit</span> <span class="btn quiet">Dismiss</span></span>
+            </div>
+          </div>
+          <div class="anote"><b>R109 &middot; po-send proposes</b>schedule_proposals, 00475. A fact proposes an anchor; nothing on the spine moves without a commit.</div>
+        </div>
+
+        <div class="arow">
+          <div class="acell">
+            <p class="mk-lab">Install week</p>
+            <div class="iwband" style="margin-top:6px">
+              <span class="mk-str">Install window &middot; Mar 3 &ndash; Mar 14 &middot; Held</span>
+              <span class="btn">Confirm the window</span>
+            </div>
+          </div>
+          <div class="anote"><b>R112 &middot; install_windows</b>00476. Hold, confirm, release &mdash; the install week&rsquo;s first real act, with the impact disclosed before consent.</div>
+        </div>
+
+        <div class="arow">
+          <div class="acell">
+            <p class="mk-lab">Ceremony sheet &middot; IMPACT part</p>
+            <div class="cer" style="margin-top:6px">
+              <div class="cer-h"><span class="mk-lab">Engage the trade</span><span class="statuschip">Consent required</span></div>
+              <div class="part impact">
+                <span class="pk">Impact</span>
+                <div class="pv">
+                  <ul class="impact-lines">
+                    <li>Installation moves Nov 14 &rarr; Nov 21; Care follows.</li>
+                    <li class="soft">The schedule effect cannot be computed here &mdash; this act proposes a date rather than setting one.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="anote"><b>R110 &middot; impact at consent</b>Every ceremony states the schedule consequence before the act. When the effect cannot be computed, the sheet says so rather than implying certainty.</div>
+        </div>
+
+        <div class="arow">
+          <div class="acell">
+            <p class="mk-lab">The desk &middot; needs</p>
+            <ul class="needs" style="margin-top:6px">
+              <li><span>Review the proposed date</span><span class="nk shipped">Proposed</span></li>
+              <li><span>A recorded date contradicts an anchor already committed</span><span class="nk">Schedule</span></li>
+              <li><span>Name the phases for this project</span><span class="nk">Band</span></li>
+            </ul>
+          </div>
+          <div class="anote"><b>R111 &middot; desk reads the resolver</b>Desk motion and desk need consume the same computation as the doc. Proposals rank 9.5; schedule_unconfigured ranks 10.5.</div>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      <b>Live</b> Everything in this panel is live on app.patina.cloud as of portal df435d58.
+      Migrations 00474, 00475, 00476; edge function po-send.
+      <i>The annotations are this deck&rsquo;s; the strings are the product&rsquo;s.</i>
+    </figcaption>
+  </figure>
+</section>
+
+<!-- ============ 04 · THE REMAINING DEBT ============ -->
+<section>
+  <div class="sec-head"><span class="sec-no">04</span><div>
+    <p class="eyebrow">The remaining debt</p>
+    <h2>Seventeen bands against nine</h2>
+  </div></div>
+
+  <p>
+    The truth is fixed. The composition is not. An active project still renders as a long
+    single scroll in which a settled accordion, a never-populated mood board and the working
+    budget all claim the same visual weight.
+  </p>
+
+  <div class="two spread" style="margin-top:2.6rem">
+    <div>
+      <p class="eyebrow">Today</p>
+      <h4>17 bands, one scroll</h4>
+      <ul class="bands">
+        <li class="keep"><span class="mk"></span>Letterhead</li>
+        <li class="keep"><span class="mk"></span>Guide</li>
+        <li class="keep"><span class="mk"></span>Instruments + Folio</li>
+        <li class="loose"><span class="mk"></span>Approvals</li>
+        <li class="loose"><span class="mk"></span>Previous work &mdash; settled accordions &times; 4</li>
+        <li class="loose"><span class="mk"></span>Schedule rule + confirm strip + phase advance</li>
+        <li class="keep"><span class="mk"></span>Stage line</li>
+        <li class="keep"><span class="mk"></span>Schedule spine</li>
+        <li class="keep"><span class="mk"></span>FF&amp;E &mdash; rooms</li>
+        <li class="loose"><span class="mk"></span>Design authority band</li>
+        <li class="loose"><span class="mk"></span>Working budget grid</li>
+        <li class="loose"><span class="mk"></span>Authorizations ledger</li>
+        <li class="keep"><span class="mk"></span>Care &mdash; folded</li>
+        <li class="loose"><span class="mk"></span>Account band</li>
+        <li class="loose"><span class="mk"></span>Mood boards</li>
+        <li class="loose"><span class="mk"></span>Kickoff</li>
+        <li class="loose"><span class="mk"></span>Plan room</li>
+        <li class="end"><span class="mk"></span>Colophon</li>
+      </ul>
+      <p class="rule-note"><b>Dotted</b> the ten loose parts &mdash; each either duplicates a
+      neighbour&rsquo;s concern or occupies a full band to say nothing.</p>
+    </div>
+
+    <div>
+      <p class="eyebrow brass">Wave 4</p>
+      <h4>The tight document</h4>
+      <ul class="bands target">
+        <li class="mono"><span class="mk"></span>Letterhead + one chip + <span class="s">Needs setup &middot; 2 &rarr;</span></li>
+        <li><span class="mk"></span>Guide</li>
+        <li class="mono"><span class="mk"></span><span class="s">Previous work &middot; 4 complete + Client approvals &middot; 1 awaiting publish</span> &mdash; one line</li>
+        <li><span class="mk"></span>Schedule &mdash; status of record</li>
+        <li><span class="mk"></span>The rooms &mdash; FF&amp;E</li>
+        <li><span class="mk"></span>Money &mdash; one region, four tiers</li>
+        <li><span class="mk"></span>Care &mdash; folded</li>
+        <li class="mono"><span class="mk"></span><span class="s">Not started &middot; mood boards, plan room, spec book, call sheet &mdash; Open one &rarr;</span> &mdash; one line</li>
+        <li><span class="mk"></span>Colophon</li>
+      </ul>
+      <p class="rule-note"><b>Nine</b> Nothing is removed from the product. Four bands become
+      two lines; four become one region.</p>
+    </div>
+  </div>
+
+  <p class="kicker">
+    Mock A named four new elements. One shipped &mdash; the single derived chip. The other three
+    &mdash; the needs-setup collapse, the money region, the empty-band collapse &mdash; are this wave.
+  </p>
+</section>
+
+<!-- ============ 05 · WAVE 4 ============ -->
+<section>
+  <div class="sec-head"><span class="sec-no">05</span><div>
+    <p class="eyebrow">Wave 4</p>
+    <h2>The tight document</h2>
+  </div></div>
+
+  <p>
+    Five workstreams, all composition-only. Each names the components it touches and the finding
+    it closes; none of them asks for a schema change or a new query.
+  </p>
+
+  <ul class="ws">
+    <li>
+      <span class="wn">W1</span>
+      <div>
+        <span class="wt">Needs-setup collapse</span>
+        <p class="wd">One dashed <span class="s">Needs setup &middot; 2 &rarr;</span> beside the letterhead status line, in place of the shouted machine strings. Entries carry their remedies, so the count is a door rather than a complaint.</p>
+        <p class="wm"><b>Touches</b> lib/document/desk-derivation.ts &mdash; the collapse reads the existing desk need-derivation model, never a second computation. <b>Closes</b> the doc-side half of #5; finishes T6&rsquo;s promise.</p>
+      </div>
+    </li>
+    <li>
+      <span class="wn">W2</span>
+      <div>
+        <span class="wt">The money region</span>
+        <p class="wd">One section, one dominant figure &mdash; <span class="s">Design authority &middot; remaining $100,000</span> &mdash; and four tiers in dependency order: authority, plan, committed, moved. Band-honest empty rendering kills <span class="s">$ BAND from &ndash; to $0</span>.</p>
+        <p class="wm"><b>Touches</b> ProjectAuthorityBandForProject &middot; DerivedBudgetGrid + AuthorizationsLedger &middot; AccountBand, which leaves the page tail. <b>Closes</b> T3, #7, (f). <b>Largest of the five.</b></p>
+      </div>
+    </li>
+    <li>
+      <span class="wn">W3</span>
+      <div>
+        <span class="wt">Empty-band collapse</span>
+        <p class="wd">Never-populated tail bands collapse to one quiet line that still offers the door. Return-null bands get a consistent one-line posture instead of vanishing. Authoring affordances retire when their phase passes &mdash; <span class="s">Name a phase&hellip;</span> dies after Completion.</p>
+        <p class="wm"><b>Touches</b> ProjectMoodBoards &middot; PlanRoomBand &middot; KickoffBand &middot; the spec-book doorway. <b>Closes</b> T5, #6, (i).</p>
+      </div>
+    </li>
+    <li>
+      <span class="wn">W4</span>
+      <div>
+        <span class="wt">Recap compression</span>
+        <p class="wd">PreviousWork&rsquo;s settled accordion stack becomes one expandable line. Four completed engagements stop competing with the live one.</p>
+        <p class="wm"><b>Touches</b> PreviousWork. <b>Small.</b></p>
+      </div>
+    </li>
+    <li>
+      <span class="wn">W5</span>
+      <div>
+        <span class="wt">Loading discipline</span>
+        <p class="wd">Eight bespoke italic loading strings &mdash; <span class="s">Reading approvals&hellip;</span>, <span class="s">READING PROJECT WORKFLOW&hellip;</span>, <span class="s">RESOLVING THE SCHEDULE&hellip;</span>, <span class="s">Reading the work&hellip;</span>, <span class="s">Loading working budget&hellip;</span>, <span class="s">Loading authorizations&hellip;</span>, <span class="s">OPENING THE LEDGER&hellip;</span>, <span class="s">Opening the brief...</span> &mdash; unify into one quiet skeleton register on cold load.</p>
+        <p class="wm"><b>Closes</b> A4 &middot; T6-in-motion. <b>Small.</b></p>
+      </div>
+    </li>
+  </ul>
+
+  <!-- ---- MOCK 1 ---- -->
+  <figure class="mockwrap" style="margin-top:3.4rem">
+    <p class="eyebrow brass">Mock 1 &middot; the tight project /doc</p>
+    <div class="scroll">
+      <div class="mock m1">
+        <div class="rail">
+          <p class="mk-lab">The engagement</p>
+          <div style="margin-top:8px">
+            <div class="railitem done"><span class="rn">Brief</span><span class="rs">Settled</span></div>
+            <div class="railitem done"><span class="rn">Discovery</span><span class="rs">Settled Aug 5</span></div>
+            <div class="railitem done"><span class="rn">Direction</span><span class="rs">Settled Aug 5</span></div>
+            <div class="railitem done"><span class="rn">Proposal</span><span class="rs">Signed Aug 5</span></div>
+            <div class="railitem now"><span class="rn">Project</span><span class="rs">Active &middot; Consultation &middot; Week 2</span></div>
+            <div class="railitem"><span class="rn">Install</span><span class="rs">Nov 14</span></div>
+            <div class="railitem"><span class="rn">Care</span><span class="rs">&ndash;</span></div>
+          </div>
+        </div>
+
+        <div>
+          <div class="mk-pane">
+            <p class="mk-ttl">Winkys winktastic loft</p>
+            <p class="mk-sub">for Kody Winky</p>
+            <div class="chiprow">
+              <span class="statuschip shipped">Project &middot; Consultation &middot; Week 2 &middot; Committed</span>
+              <span class="needchip">Needs setup &middot; 2 &rarr;</span>
+            </div>
+            <div class="actions">
+              <span>Message Kody Winky</span><span>Preview as client</span><span>The scan</span>
+              <span>Sharing</span><span>Milestones</span><span>Call sheet</span><span>The folio</span>
+            </div>
+            <div class="recapline"><b>Previous work &middot; 4 complete</b> + <b>Client approvals &middot; 1 awaiting publish</b></div>
+          </div>
+
+          <div class="mk-pane mk-band">
+            <div class="mk-hd"><span class="t">The schedule</span><span class="mk-lab">Status of record</span></div>
+            <div class="spine">
+              <div class="on"><div class="sbar now"></div><span class="sn">Consultation</span><span class="sd">Aug 5 &ndash; 19 &middot; now</span></div>
+              <div><div class="sbar next"></div><span class="sn">Schematic</span><span class="sd">Aug 19</span></div>
+              <div><div class="sbar next"></div><span class="sn">Design dev</span><span class="sd">Sep 2</span></div>
+              <div><div class="sbar soft"></div><span class="sn">Procurement</span><span class="sd">Sep 19</span></div>
+              <div><div class="sbar soft"></div><span class="sn">Installation</span><span class="sd">Nov 14</span></div>
+              <div><div class="sbar soft"></div><span class="sn">Care</span><span class="sd">Dec 12</span></div>
+            </div>
+            <div class="gatefoot">Next gate &middot; Budget checkpoint B-002 &middot; due Aug 13 &middot; 1 decision overdue</div>
+          </div>
+
+          <div class="mk-pane mk-band">
+            <div class="mk-hd"><span class="t">The rooms</span><span class="mk-lab">4 lines &middot; 2 rooms</span></div>
+            <div class="rooms">
+              <div class="room">
+                <div class="rh"><span class="rt">Living</span><span class="rc">0 of 2 underway &middot; $13,772 released</span></div>
+                <div class="lineitem"><span>Otto Dining Table &middot; $9,995</span><span class="lm">Authorized A1</span></div>
+                <div class="lineitem"><span>Line Credenza Large &middot; $3,777</span><span class="lm">Authorized A2</span></div>
+              </div>
+              <div class="room">
+                <div class="rh"><span class="rt">Throughout</span><span class="rc">0 of 2 underway</span></div>
+                <div class="lineitem"><span>PH5 Pendant Warm Sand &middot; $990</span><span class="lm">Specified</span></div>
+                <div class="lineitem"><span>Line Credenza Large &middot; $3,777</span><span class="lm due">Decision due Aug 13</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mk-pane mk-band">
+            <div class="mk-hd"><span class="t">Money</span><span class="mk-lab">One region &middot; four tiers</span></div>
+            <div class="moneymini">
+              <div><span class="mv">$100,000</span><span class="mk2">Authority</span></div>
+              <div><span class="mv">$86,540</span><span class="mk2">Plan &middot; v2</span></div>
+              <div><span class="mv">$13,772</span><span class="mk2">Committed &middot; 2 auth</span></div>
+              <div><span class="mv">$13,772</span><span class="mk2">Moved</span></div>
+            </div>
+            <div class="notstarted">Not started &middot; mood boards, plan room, spec book, call sheet &mdash; Open one &rarr;</div>
+            <div class="mk-rule"></div>
+            <p class="mk-lab">Colophon &middot; Patina &middot; the document</p>
+          </div>
+        </div>
+
+        <div class="margin">
+          <p class="mk-lab">In the margin</p>
+          <div style="margin-top:8px">
+            <div class="margitem urgent"><span class="mk3">Decision &middot; overdue</span><span class="mt">&ldquo;Which one dude?&rdquo;</span></div>
+            <div class="margitem"><span class="mk3">Money</span><span class="mt">INV-0018 sent</span></div>
+            <div class="margitem"><span class="mk3">Friday pulse</span><span class="mt">Draft</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      <b>Mock 1</b> Real Winky data throughout. Nine bands where there are seventeen today; the
+      money region is compressed here and drawn in full in Mock 2.
+      <i>Nothing in this mock asks for data the document does not already load.</i>
+    </figcaption>
+  </figure>
+
+  <!-- ---- MOCK 2 ---- -->
+  <figure class="mockwrap">
+    <p class="eyebrow brass">Mock 2 &middot; the money region, full detail</p>
+    <div class="scroll">
+      <div class="mock">
+        <div class="ladder">
+          <p class="mk-lab">Money &middot; one region</p>
+          <p class="lh" style="margin:6px 0 0">Design authority &middot; remaining $100,000</p>
+          <p class="ls">Agreement v1 &middot; assistant $150/hr &middot; principal $200/hr</p>
+
+          <div class="rung t1"><div class="rv">Authority &middot; $100,000 authorized</div><span class="rk">What the client has agreed to fund</span></div>
+          <div class="rung t2"><div class="rv">Plan &middot; $86,540 working budget v2</div><span class="rk">What the plan intends to spend</span></div>
+          <div class="rung t3"><div class="rv">Committed &middot; $13,772 &middot; 2 authorizations executed</div><span class="rk">What is contractually owed</span></div>
+          <div class="rung t4"><div class="rv">Moved &middot; $13,772 released to vendors</div><span class="rk">What has actually left</span></div>
+
+          <p class="lc">Authority &rarr; plan &rarr; committed &rarr; moved &middot; 1 trade scope still in draft &middot;
+          absorbs today&rsquo;s four separate bands: design authority, working budget, authorizations &amp; trade scopes, the accounts.</p>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      <b>Mock 2</b> Descending visual weight is the dependency order &mdash; a figure cannot be
+      read before the figure it depends on. The headline is the only display-size number on the page.
+    </figcaption>
+  </figure>
+
+  <!-- ---- MOCK 3 ---- -->
+  <figure class="mockwrap">
+    <p class="eyebrow brass">Mock 3 &middot; small states, before and after</p>
+    <div class="scroll">
+      <div class="mock">
+        <div class="tript">
+          <div>
+            <p class="pairlab">a &middot; machine strings &rarr; one door</p>
+            <div class="beforebox">
+              <div class="shout">No active or delayed phase is configured</div>
+              <div class="shout">2 active phases not classified to a canonical stage</div>
+              <div class="shout">Derived from the project schedule &middot; no template provenance recorded</div>
+            </div>
+            <div class="arrowdown">&darr;</div>
+            <div class="afterbox">
+              <span class="needchip">Needs setup &middot; 2 &rarr;</span>
+              <div class="remedy" style="margin-top:9px"><span>Classify 2 phases to a stage &rarr;</span><span class="ra">Open the schedule</span></div>
+              <div class="remedy"><span>Record template provenance &rarr;</span><span class="ra">Pick a template</span></div>
+            </div>
+          </div>
+
+          <div>
+            <p class="pairlab">b &middot; guided empties &rarr; one line</p>
+            <div class="beforebox">
+              <div class="emptyband"><div class="eb-t">Mood boards</div><div class="eb-s">Nothing here yet. Build a board to collect direction.</div><div class="eb-a">Create a mood board</div></div>
+              <div class="emptyband" style="margin-bottom:0"><div class="eb-t">Plan room</div><div class="eb-s">No drawings uploaded. Add the plan set to begin.</div><div class="eb-a">Open the plan room</div></div>
+            </div>
+            <div class="arrowdown">&darr;</div>
+            <div class="afterbox">
+              <span class="mk-str">Not started &middot; mood boards, plan room, spec book, call sheet &mdash; Open one &rarr;</span>
+            </div>
+          </div>
+
+          <div>
+            <p class="pairlab">c &middot; loading cascade &rarr; one register</p>
+            <div class="beforebox">
+              <div class="loadline">Reading approvals&hellip;</div>
+              <div class="loadline">READING PROJECT WORKFLOW&hellip;</div>
+              <div class="loadline">RESOLVING THE SCHEDULE&hellip;</div>
+              <div class="loadline">Loading working budget&hellip;</div>
+              <div class="loadline">OPENING THE LEDGER&hellip;</div>
+            </div>
+            <div class="arrowdown">&darr;</div>
+            <div class="afterbox">
+              <div class="skel"></div><div class="skel w2"></div><div class="skel w3"></div>
+              <div class="mk-str" style="margin-top:7px">Opening the document&hellip;</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      <b>Mock 3</b> Three small states, each one of them a finding: (a) closes the doc-side half
+      of #5 and finishes T6 &mdash; its before is the review&rsquo;s screen; the strings are already
+      dead (R113), and W1 gives their remedies a door; (b) closes #6 and (i); (c) closes A4.
+    </figcaption>
+  </figure>
+</section>
+
+<!-- ============ 06 · THE BUG & INTERACTION LANE ============ -->
+<section>
+  <div class="sec-head"><span class="sec-no">06</span><div>
+    <p class="eyebrow">The bug &amp; interaction lane</p>
+    <h2>Fourteen defects, four of them expensive</h2>
+  </div></div>
+
+  <p>
+    This lane is independent of composition and can start immediately. The four oxide rows cost
+    money or trust today: an unconsented outbound send, a dead shared link, a false CRM
+    milestone, and a signed agreement that Patina refuses to record.
+  </p>
+
+  <div class="scroll"><table>
+    <thead><tr><th style="width:5rem">ID</th><th style="width:30%">Defect</th><th>Fix</th><th style="width:4.5rem">Size</th></tr></thead>
+    <tbody>
+      <tr class="hi"><td class="k">04 #2</td><td>Picklist auto-invite &mdash; selection sends</td><td class="m">A confirm step before any outbound send.</td><td class="k">S</td></tr>
+      <tr class="hi"><td class="k">04 #6</td><td>Doc URL permanently breaks at Direction</td><td class="m">The old doc id resolves forward to the successor id instead of <span class="s">No document answers to this name</span>.</td><td class="k">M</td></tr>
+      <tr class="hi"><td class="k">04 #7</td><td>Nurture treats a draft as sent</td><td class="m">Nurture keys on a real send event, never on draft existence &mdash; also unwinds #8&rsquo;s People mislabels.</td><td class="k">S</td></tr>
+      <tr class="hi"><td class="k">04 #5</td><td>No designer-side path for a signed agreement</td><td class="m">A paper-signature ceremony on the shipped paper-rail pattern.</td><td class="k">M</td></tr>
+      <tr><td class="k">04 #1</td><td>Direction entry skips the doc&rsquo;s Direction section</td><td class="m">Direction entry honors the document.</td><td class="k">M</td></tr>
+      <tr><td class="k">A1</td><td>Desk card is a send-trap</td><td class="m">The card routes to the doc; send becomes an inner button.</td><td class="k">S</td></tr>
+      <tr><td class="k">A2</td><td>Breadcrumb names the wrong document</td><td class="m">The breadcrumb follows the held document.</td><td class="k">S</td></tr>
+      <tr><td class="k">A3</td><td>IN-HAND timer misattributes on doc switch</td><td class="m">The timer reattributes on doc switch.</td><td class="k">S</td></tr>
+      <tr><td class="k">A5</td><td><span class="s">RESOLVE THE SCHEDULE</span> is a no-op</td><td class="m">Reproduce with the network log, then fix or dismiss the control.</td><td class="k">S</td></tr>
+      <tr><td class="k">A6</td><td>Release with nothing eligible gives no feedback</td><td class="m">The release explains itself when nothing is eligible.</td><td class="k">S</td></tr>
+      <tr><td class="k">A7</td><td>&#8984;K inert to the mouse</td><td class="m">&#8984;K opens on click.</td><td class="k">S</td></tr>
+      <tr><td class="k">A8</td><td>Shared-link cold loads land mid-scroll</td><td class="m">Cold loads land at the top.</td><td class="k">S</td></tr>
+      <tr><td class="k">A9</td><td>Triplicate <span class="s">Capture a lead</span></td><td class="m">One Capture a lead.</td><td class="k">S</td></tr>
+      <tr><td class="k">#10</td><td><span class="s">REVEAL 3 MORE FOLIOS</span> is inert</td><td class="m">Reveal 3 more folios reveals three more folios.</td><td class="k">S</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============ 07 · DEFERRED, DELIBERATELY ============ -->
+<section>
+  <div class="sec-head"><span class="sec-no">07</span><div>
+    <p class="eyebrow">Deferred, deliberately</p>
+    <h2>What this deck does not plan</h2>
+  </div></div>
+
+  <ul class="defs">
+    <li>
+      <span class="dt">Layout B &middot; install composition</span>
+      <span class="dd">Room state, punch band, close gate, Care deferral, the working surface,
+      boundary reconciliation. It waits for a real install-week walk &mdash; the review&rsquo;s
+      own validation list, item 6 &mdash; before the room axis gets built on assumption.</span>
+    </li>
+    <li>
+      <span class="dt">Layout C &middot; the fleet view</span>
+      <span class="dd">Reintroduces the list-and-detail shape that R21 dissolved. That tension has
+      to be argued in its own deck, not assumed by a polish wave.</span>
+    </li>
+    <li>
+      <span class="dt">O10 and O11</span>
+      <span class="dd">Client-visible fidelity and payment-milestone hardening are open by ruling,
+      not by oversight.</span>
+    </li>
+    <li>
+      <span class="dt">I131 ledger</span>
+      <span class="dd">The delivered-event ruling, trade execution anchoring nothing, the
+      held_until policy, one-click unpin commit, po-send proposal refresh.</span>
+    </li>
+  </ul>
+
+  <p class="eyebrow" style="margin-top:2.6rem">Standing residue</p>
+  <ul class="residue">
+    <li>Kody&rsquo;s owed signed-in walks &mdash; Band / Week-N walk, trade engage impact sentence, install hold / confirm / release, desk proposals need</li>
+    <li>Prod test-client cleanup &mdash; UX Walk Aug 13, Fable UX Walk</li>
+    <li>react / react-dom lockfile skew</li>
+    <li>PATINA_ALLOW_LOCAL_PROD_DEPLOY revert</li>
+  </ul>
+</section>
+
+<!-- ============ 08 · SEQUENCING ============ -->
+<section>
+  <div class="sec-head"><span class="sec-no">08</span><div>
+    <p class="eyebrow">Sequencing</p>
+    <h2>What order, and what gates it</h2>
+  </div></div>
+
+  <ul class="seq">
+    <li>The bug lane&rsquo;s four HIGH rows can start immediately &mdash; they are independent of composition and each is self-contained.</li>
+    <li>Wave 4 lands in order: W1 &rarr; W2 &rarr; W3 &rarr; W4 &rarr; W5. W2 is the largest; W4 and W5 are small.</li>
+    <li>Each workstream gates on the designer-portal suite (238 tests) and @patina/utils (557) green &mdash; after the react / react-dom lockfile skew is resolved in its own session.</li>
+    <li>Every workstream is composition-only: no schema, no new data &mdash; the same constraint the review set for its own mocks, <span class="s">nothing below asks for new data</span>.</li>
+  </ul>
+
+  <p class="close-line">
+    When Wave 4 lands, the book the review described &mdash; one truth, tightly bound &mdash; is
+    the book on screen. Then it can close.
+  </p>
+</section>
+
+<div class="colophon">
+  <b>The Book Closes</b><br>
+  Patina &middot; designer portal &middot; the document &middot; 13 August 2026<br>
+  Scores the /doc UX review of 13 August 2026 against rulings R107&ndash;R114 and Waves 1&ndash;3
+  (00474, 00475, 00476, po-send, portal df435d58).<br>
+  Sibling of <i>The Book Won&rsquo;t Close</i> and <i>The Anchor Holds</i>.
+</div>
+
+</div>
