@@ -1,17 +1,17 @@
 /**
  * Schedule Spine telemetry (C7, §7 name-contract). Separate module from
- * document-events.ts — the Spine is a Slice 01+ surface behind its own
- * `schedule-spine` flag, not part of the Document's existing command-bar /
- * wayfinding / desk taxonomy. Follows document-events.ts's shape exactly:
+ * document-events.ts — the Spine is its own Slice 01+ surface, not part of the
+ * Document's existing command-bar / wayfinding / desk taxonomy. (It rode a
+ * `schedule-spine` flag through the pilot; B3 retired that gate.) Follows
+ * document-events.ts's shape exactly:
  * module-local `track()` guarding `isAnalyticsEnabled()` → `posthog.capture`,
  * flat snake_case props.
  *
  * `spine_phase_unfolded` (Slice 01) and `rule_minimap_jump` (Slice 02) are
  * scaffolded here. Slice 03 (compose) adds `schedule_born` /
  * `schedule_phase_added` / `schedule_anchor_set` — fired from BOTH surfaces
- * (`surface: 'project'` on the Spine, `surface: 'proposal'` on PhaseBuilder;
- * the proposal side is NOT behind the `schedule-spine` flag, so these fire
- * there unconditionally). Every one of these three fires ONLY inside a
+ * (`surface: 'project'` on the Spine, `surface: 'proposal'` on PhaseBuilder).
+ * Every one of these three fires ONLY inside a
  * mutation's `onSuccess` — a failed write is never counted as a compose act.
  *
  * Slice 04 (adjust) adds `schedule_edit_committed` — one previewed time edit

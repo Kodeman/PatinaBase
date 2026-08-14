@@ -13,8 +13,9 @@
  * boundary ticks, milestone diamonds, a today cut, thread hairlines, and
  * natural-width staggered labels that NEVER truncate. Every label and diamond
  * is a focusable control that reveals its phase in the spine (§3.5, via
- * ScheduleNavProvider). This surface is READ-ONLY — no drag, no time editing
- * (Slice 04).
+ * ScheduleNavProvider). Since B3 this surface is also the ONLY place phase
+ * dates are edited: the spine's "Edit dates" arms it (`nav.armEdit`) and the
+ * per-phase bars carry the drag and keyboard models.
  *
  * Two modes, one file:
  *  · at rest — the full canvas (132px base + one 20px lane per extra
@@ -60,22 +61,23 @@
  * containers measure 0 wide, so the stagger never runs) — the line, diamonds
  * and today remain. Full mobile treatment is a review escalation (§7).
  *
- * Mounted (S2-4) at the document page's `<main>` top-level flow behind the
- * `schedule-spine` flag, replacing `PhaseTimeline`; every reveal call fires
- * `rule_minimap_jump` alongside it (`@/lib/analytics/schedule-events`).
- * Zero shadows (D4).
+ * Mounted at the document page's `<main>` top-level flow — unconditionally
+ * since B3 retired the `schedule-spine` gate and its PhaseTimeline fallback;
+ * every reveal call fires `rule_minimap_jump` alongside it
+ * (`@/lib/analytics/schedule-events`). Zero shadows (D4).
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useResolvedSchedule, useScheduleRevisions } from '@patina/supabase';
 import type { ResolvedPhase } from '@patina/utils';
-import { epochDayFromISO, resolveSchedule } from '@patina/utils';
+import { epochDayFromISO, isoFromEpochDay, resolveSchedule } from '@patina/utils';
 import {
   buildTimeScale,
   ruleSegments,
   ruleDiamonds,
   ruleThreads,
   ruleBoundaries,
+  ruleBars,
   boundaryDurationDays,
   milestoneOffsetDays,
   xToEpochDay,
@@ -95,6 +97,8 @@ import { RuleToday } from './rule-today';
 import { RuleThread, THREAD_LANE_PITCH } from './rule-thread';
 import { RuleLabelRow, type RuleLabelItem } from './rule-label-row';
 import { RuleBoundaryHandle } from './rule-boundary-handle';
+import { RulePhaseBar, barOwnsSession, type BarEditState } from './rule-phase-bar';
+import { useArmedBarFocus } from './use-armed-bar-focus';
 import { RuleGhostLayer } from './rule-ghost-layer';
 import { RuleBaselineLayer } from './rule-baseline-layer';
 
@@ -119,7 +123,7 @@ function phaseSubline(rp: ResolvedPhase | null): string {
 
 export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
   const schedule = useResolvedSchedule(projectId);
-  const { reveal } = useScheduleNav();
+  const { reveal, registerArmEditHandler } = useScheduleNav();
   // The one preview session (Slice 04). INERT (no-op, providerPresent=false)
   // until batch 4 mounts RippleProvider around the Rule — until then the drag
   // handles simply don't render and the ghost layer never has a diff to draw.
@@ -227,6 +231,19 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
     return ruleBoundaries(resolvedPhases, chain, scale);
   }, [resolvedPhases, schedule.phases, scale]);
 
+  // The Drafting Line's bars — one per placed main-lane phase, from the SAME
+  // resolved phases + chain the boundaries read (ruleBars asks ruleBoundaries
+  // which ends already carry a handle, so the two can't disagree).
+  const bars = useMemo(() => {
+    if (!scale) return [];
+    const chain = schedule.phases.map((r) => ({
+      id: r.id,
+      followsPhaseId: r.follows_phase_id ?? null,
+      name: r.name,
+    }));
+    return ruleBars(resolvedPhases, chain, scale);
+  }, [resolvedPhases, schedule.phases, scale]);
+
   // Host phase END epoch by phase id — a diamond drag's `milestone-offset` base
   // (offset from the phase END). null when the host phase has no resolved end.
   const phaseEndEpochById = useMemo(
@@ -278,6 +295,76 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
     observer.observe(sentinelEl);
     return () => observer.disconnect();
   }, [sentinelEl]);
+
+  // ── The bars' ownership + staged store, keyed by phase id (B1/B2). It lives
+  //    HERE, not in RulePhaseBar: the pinned/unpinned surfaces are a ternary on
+  //    `pinned`, so scrolling past the pin threshold unmounts and remounts every
+  //    bar. Instance-local memory would be wiped by that scroll while the
+  //    session the bar authored lives on in the provider, and the next gesture
+  //    would silently begin again off stale committed values, discarding the
+  //    accumulated edit. ScheduleRule does not remount across the flip, so the
+  //    store outlives it. (Deliberately NOT in RippleProvider — the provider
+  //    owns the one pending EDIT; this is the Rule's own surface bookkeeping.) ──
+  const [barEdits, setBarEdits] = useState<Map<string, BarEditState>>(() => new Map());
+  const getBarEdit = useCallback(
+    (phaseId: string): BarEditState | null => barEdits.get(phaseId) ?? null,
+    [barEdits],
+  );
+  const setBarEdit = useCallback((phaseId: string, next: BarEditState | null) => {
+    setBarEdits((prev) => {
+      const map = new Map(prev);
+      if (next == null) map.delete(phaseId);
+      else map.set(phaseId, next);
+      return map;
+    });
+  }, []);
+  // Prune every proof the live session no longer bears out — cleared, committed,
+  // origin-flipped, or taken over. `barOwnsSession` is the SAME predicate the
+  // bars read, so the store can never hold a proof a bar would still honour.
+  useEffect(() => {
+    setBarEdits((prev) => {
+      if (prev.size === 0) return prev;
+      const next = new Map(prev);
+      let changed = false;
+      for (const [phaseId, entry] of prev) {
+        if (!barOwnsSession(ripple.session, phaseId, entry.emitted)) {
+          next.delete(phaseId);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [ripple.session]);
+
+  // ── "Edit dates" arms the instrument (B3). The Spine's per-phase action no
+  //    longer opens a typed panel in the ledger; it calls `nav.armEdit(phaseId)`
+  //    and the Rule answers: scroll itself into view, then hand that phase's bar
+  //    the focus so the edit happens by drag or by the bar's keyboard model.
+  //    The sentinel is the scroll target — it sits immediately above the sticky
+  //    wrapper, so bringing it to the top brings the Rule with it.
+  //
+  //    The focus is ARMED, not spent: that smooth scroll typically un-pins the
+  //    Rule partway through, which remounts every bar through the ternary below,
+  //    so a focus applied on the next frame would land on an element that is
+  //    about to be thrown away. `useArmedBarFocus` holds the intent until a bar
+  //    for the phase actually appears — through as many pin flips as the scroll
+  //    causes — and drops it after ~1.5s. A phase with NO bar (unplaced, or a
+  //    thread lane) never registers one, so its intent expires unspent; the
+  //    "Unplaced · N" affordance below remains its way in. ──
+  const { registerBarEl, arm: armBarFocus } = useArmedBarFocus();
+
+  const handleArmEdit = useCallback(
+    (phaseId: string) => {
+      armBarFocus(phaseId);
+      sentinelEl?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    },
+    [armBarFocus, sentinelEl],
+  );
+
+  useEffect(() => {
+    registerArmEditHandler(handleArmEdit);
+    return () => registerArmEditHandler(null);
+  }, [registerArmEditHandler, handleArmEdit]);
 
   const layers = foldedLayers(pinned);
 
@@ -342,6 +429,32 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
   const frameDiamond = (milestoneId: string, phaseId: string, phaseEndEpoch: number, xPct: number) =>
     ripple.update({ kind: 'milestone-offset', milestoneId, phaseId, offsetDays: milestoneOffsetDays(phaseEndEpoch, xToEpochDay(scale, xPct)) });
 
+  // Bar drags → the SAME two ripple kinds the boundary handles already stage.
+  // A body drag stages `phase-anchor` at the bar's new start: one kind covers
+  // both semantics (an unanchored phase gains an anchor there, an anchored
+  // phase's anchor moves there). A null ISO is unreachable for a finite epoch
+  // day, so an unplaceable start simply stages nothing.
+  const beginBarMove = (phaseId: string, startEpoch: number) => {
+    const anchorDate = isoFromEpochDay(startEpoch);
+    if (anchorDate == null) return;
+    ripple.begin({ kind: 'phase-anchor', phaseId, anchorDate }, 'rule');
+  };
+  const frameBarMove = (phaseId: string, startEpoch: number) => {
+    const anchorDate = isoFromEpochDay(startEpoch);
+    if (anchorDate == null) return;
+    ripple.update({ kind: 'phase-anchor', phaseId, anchorDate });
+  };
+  const beginBarResize = (phaseId: string, durationDays: number) =>
+    ripple.begin({ kind: 'phase-duration', phaseId, durationDays }, 'rule');
+  const frameBarResize = (phaseId: string, durationDays: number) =>
+    ripple.update({ kind: 'phase-duration', phaseId, durationDays });
+
+  // The scale's padded epoch domain, read through its own inverse so the bounds
+  // are exactly the days a drag at either edge resolves to — the bars' announced
+  // slider range and the clamp their staged values pass through.
+  const domainMinEpoch = xToEpochDay(scale, 0);
+  const domainMaxEpoch = xToEpochDay(scale, 100);
+
   const handlesOn = ripple.providerPresent;
 
   return (
@@ -368,6 +481,26 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
             </span>
             <div ref={trackRef} className="relative h-[22px] flex-1">
               <RuleTrack segments={segments} pinned todayXPct={todayX} />
+              {handlesOn &&
+                bars.map((b) => (
+                  <RulePhaseBar
+                    key={b.id}
+                    bar={b}
+                    pinned
+                    trackRef={trackRef}
+                    xToDay={(x) => xToEpochDay(scale, x)}
+                    domainMinEpoch={domainMinEpoch}
+                    domainMaxEpoch={domainMaxEpoch}
+                    session={ripple.session}
+                    getBarEdit={getBarEdit}
+                    setBarEdit={setBarEdit}
+                    registerRoot={(el) => registerBarEl(b.id, el)}
+                    onMoveBegin={(s) => beginBarMove(b.id, s)}
+                    onMoveFrame={(s) => frameBarMove(b.id, s)}
+                    onResizeBegin={(d) => beginBarResize(b.id, d)}
+                    onResizeFrame={(d) => frameBarResize(b.id, d)}
+                  />
+                ))}
               {diamonds.map((d) => {
                 const pe = phaseEndEpochById.get(d.phaseId) ?? null;
                 return (
@@ -417,6 +550,30 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
             )}
 
             <RuleTrack segments={segments} pinned={false} todayXPct={todayX} />
+
+            {/* the Drafting Line — draggable phase bars, above the decorative
+                track and below the diamonds in paint order. Render only when a
+                ripple provider is present (same gate as the handles). */}
+            {handlesOn &&
+              bars.map((b) => (
+                <RulePhaseBar
+                  key={b.id}
+                  bar={b}
+                  pinned={false}
+                  trackRef={trackRef}
+                  xToDay={(x) => xToEpochDay(scale, x)}
+                  domainMinEpoch={domainMinEpoch}
+                  domainMaxEpoch={domainMaxEpoch}
+                  session={ripple.session}
+                  getBarEdit={getBarEdit}
+                  setBarEdit={setBarEdit}
+                  registerRoot={(el) => registerBarEl(b.id, el)}
+                  onMoveBegin={(s) => beginBarMove(b.id, s)}
+                  onMoveFrame={(s) => frameBarMove(b.id, s)}
+                  onResizeBegin={(d) => beginBarResize(b.id, d)}
+                  onResizeFrame={(d) => frameBarResize(b.id, d)}
+                />
+              ))}
 
             {diamonds.map((d) => {
               const pe = phaseEndEpochById.get(d.phaseId) ?? null;

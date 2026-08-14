@@ -13,7 +13,7 @@ import { adminDb, getUserIdByEmail } from '../helpers/supabase-admin';
  *   2. Desk triage — a seeded needs_review sms_messages row surfaces as a Field
  *      triage card in "In the field"; Apply flips the target task to done and
  *      clears the card.
- *   3. Phase timeline — setting dates on a phase renders it as a band segment.
+ *   (3. Phase timeline — removed with the band itself in B3; see below.)
  *
  * ENV: uses the LOCAL Supabase demo stack via apps/designer-portal/.env.local
  * (never the prod checkout's env). The stack must have migrations through 00283.
@@ -231,81 +231,10 @@ test.describe('Field Coordination · Desk triage', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 3. Phase timeline — set dates on a phase → the segment renders
+// 3. Phase timeline — REMOVED (B3). The band this exercised (the "Phase
+//    timeline" region, its per-phase start/target-end date inputs, its Save)
+//    went with `phase-timeline.tsx`. Phase dates are edited on the Rule's
+//    draggable bars now and committed through the schedule confirm strip;
+//    re-covering that path needs a drag/keyboard + confirm-strip walk, which
+//    is its own piece of work rather than a rename of this one.
 // ─────────────────────────────────────────────────────────────────────────────
-test.describe('Field Coordination · Phase timeline', () => {
-  let projectId: string;
-  let phaseId: string;
-
-  test.beforeAll(async () => {
-    const designerId = await getUserIdByEmail(DESIGNER_EMAIL);
-    const clientId = await getUserIdByEmail(CLIENT_EMAIL);
-    const { data: proj, error: projErr } = await adminDb
-      .from('projects')
-      .insert({
-        name: 'FC Timeline (e2e)',
-        created_by: designerId,
-        designer_id: designerId,
-        client_id: clientId,
-        status: 'active',
-        current_phase: 'installation',
-      })
-      .select('id')
-      .single();
-    if (projErr) throw new Error(`seed project failed: ${projErr.message}`);
-    projectId = proj.id as string;
-
-    // One phase, initially UNDATED → renders as an unplaced chip.
-    const { data: phase, error: phaseErr } = await adminDb
-      .from('project_phases')
-      .insert({
-        project_id: projectId,
-        phase_key: 'installation',
-        name: 'Installation & Styling',
-        status: 'in_progress',
-        sort_order: 0,
-      })
-      .select('id')
-      .single();
-    if (phaseErr) throw new Error(`seed phase failed: ${phaseErr.message}`);
-    phaseId = phase.id as string;
-  });
-
-  test.afterAll(async () => {
-    if (projectId) await adminDb.from('projects').delete().eq('id', projectId);
-  });
-
-  test('setting dates moves the phase from unplaced into the band', async ({
-    authenticatedPage: page,
-  }) => {
-    await page.goto(`/doc/${projectId}`);
-    await page.waitForLoadState('networkidle');
-
-    // Scope to the phase-timeline band (the DocSpine also carries an
-    // "Installation" marker — the region label disambiguates).
-    const timeline = page.getByRole('region', { name: 'Phase timeline' });
-    await expect(timeline.getByText('The schedule')).toBeVisible({ timeout: 30_000 });
-    await expect(timeline.getByText('No phase dates set yet', { exact: false })).toBeVisible();
-
-    // Open the editor for the unplaced phase chip and set dates.
-    await timeline.getByRole('button', { name: /Installation/ }).first().click();
-    await page.getByLabel('Phase start date').fill('2026-08-01');
-    await page.getByLabel('Phase target end date').fill('2026-08-20');
-    await timeline.getByRole('button', { name: /^Save$/ }).click();
-
-    // The empty-state placeholder is gone — the phase now renders as a segment.
-    await expect(timeline.getByText('No phase dates set yet', { exact: false })).toBeHidden({
-      timeout: 15_000,
-    });
-    await expect(timeline.getByRole('button', { name: /Installation/ }).first()).toBeVisible();
-
-    // The dates persisted.
-    const { data: phase } = await adminDb
-      .from('project_phases')
-      .select('start_date, target_end_date')
-      .eq('id', phaseId)
-      .single();
-    expect(phase?.start_date).toBe('2026-08-01');
-    expect(phase?.target_end_date).toBe('2026-08-20');
-  });
-});

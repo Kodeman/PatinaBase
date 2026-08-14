@@ -5,7 +5,8 @@
  * heading wears in compose (Slice 03 §3, R102 "no hover reveal"). The available
  * actions are always visible (touch exists; a hover-revealed affordance is a
  * lie): + Item (reuses the coordination ItemComposer), + Milestone (reveals
- * MilestoneComposer under the meta), Edit dates (reveals the grammar fields),
+ * MilestoneComposer under the meta), Edit dates (arms the drafting line — the
+ * Rule scrolls in and the phase's bar takes focus; B3 removed the typed panel),
  * and, for pending phases only, Delete (swaps in the inline typographic
  * confirm — never a modal, D4).
  *

@@ -198,8 +198,8 @@ export function useRemoveScheduleMilestone() {
 // ═══════════════════════════════════════════════════════════════════════════
 // PROJECT PHASE CHAIN (00323 columns: duration_days / anchor_date /
 // follows_phase_id / lane) — project_phases identity fields (name, phase_key,
-// status, fee_cents, ...) stay on useUpdateProjectPhaseStatus /
-// useUpdateProjectPhaseDates in use-project-v2.ts; this hook is chain-only.
+// status, fee_cents, ...) stay on useUpdateProjectPhaseStatus in
+// use-project-v2.ts; this hook is chain-only.
 // ═══════════════════════════════════════════════════════════════════════════
 
 export function useUpdateProjectPhaseChain() {

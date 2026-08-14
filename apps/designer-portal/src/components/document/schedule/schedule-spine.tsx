@@ -97,7 +97,6 @@ import { ScheduleBirth } from './schedule-birth';
 import { PhaseComposeActions } from './phase-compose-actions';
 import { PhaseDeleteConfirm } from './phase-delete-confirm';
 import { MilestoneComposer, type MilestoneDraft } from './milestone-composer';
-import { ScheduleEntryField } from './schedule-entry-field';
 import { RevisionLedger } from './revision-ledger';
 import { ScheduleProposals } from './schedule-proposals';
 import {
@@ -125,7 +124,7 @@ function slugifyPhaseKey(name: string): string {
 /** Which inline compose panel is open, and on which phase (one across the spine). */
 type ComposeState = {
   phaseId: string;
-  kind: 'edit' | 'milestone' | 'delete';
+  kind: 'milestone' | 'delete';
 } | null;
 
 // ── schedule-spine.tsx (orchestrator; owns ALL sheet-open LOCAL state) ──
@@ -192,7 +191,7 @@ export function ScheduleSpine({
 
   // The Rule (the minimap) reveals phases/milestones here through the nav
   // context. Inert when no provider is above (the spine works standalone).
-  const { registerRevealHandler } = useScheduleNav();
+  const { registerRevealHandler, armEdit } = useScheduleNav();
 
   // The single ripple session (Slice 04). A time edit (duration/anchor) begins
   // a preview here; every consumer — this spine's downstream ghost meta, the
@@ -506,27 +505,15 @@ export function ScheduleSpine({
     ? 'Add failed — nothing was saved; your entry is kept'
     : null;
 
-  // ── The ruled boundary (Slice 04 R100) ────────────────────────────────────
-  // A TIME edit — a phase's duration or a hard anchor date — never writes
-  // directly from the spine anymore: it BEGINS a ripple preview (origin
-  // 'spine'), and the confirm strip commits or reverts it. Nothing moves until
-  // Commit. So these two close the inline compose panel and hand off to the
-  // strip. Everything ELSE the spine writes stays DIRECT — the unpin chip,
-  // the ghost-add line, and milestone/phase create+delete are not time-shifting
-  // ripples (they add/remove entities or clear a pin), so they persist
-  // immediately as before. (Rule-side drags begin the same ripple with origin
-  // 'rule'; both surfaces share one session.)
-  const handleEditDuration = (phaseId: string, days: number) => {
-    ripple.begin(
-      { kind: 'phase-duration', phaseId, durationDays: days },
-      'spine',
-    );
-    closeCompose(); // the strip takes over the preview + commit
-  };
-  const handleSetAnchor = (phaseId: string, date: string) => {
-    ripple.begin({ kind: 'phase-anchor', phaseId, anchorDate: date }, 'spine');
-    closeCompose(); // the strip takes over the preview + commit
-  };
+  // ── The ruled boundary (Slice 04 R100 · B3) ───────────────────────────────
+  // A TIME edit — a phase's duration or a hard anchor date — is not typed into
+  // the spine at all anymore. "Edit dates" ARMS THE RULE (`armEdit` below): the
+  // instrument scrolls into view and the phase's bar takes focus, and the edit
+  // is made there by drag or by the bar's keyboard model, previewing as a
+  // ripple the confirm strip commits or reverts. Everything ELSE the spine
+  // writes stays DIRECT — the unpin chip, the ghost-add line, and
+  // milestone/phase create+delete are not time-shifting ripples (they
+  // add/remove entities or clear a pin), so they persist immediately as before.
   const handleUnpinPhase = (phaseId: string) => {
     const phase = schedule.phases.find((row) => row.id === phaseId);
     if (!phase?.updated_at) return;
@@ -807,59 +794,9 @@ export function ScheduleSpine({
                   (p) => p.follows_phase_id === entry.phase.id,
                 ).length;
 
-                // The phase's last COMMITTED effective duration — same
-                // formula the meta line above computes (durationDays, line
-                // ~271): an authored day count, or weeks*7 when only a
-                // week count is stored, or null (e.g. legacy-dates-derived
-                // phases with neither). Feeds the Edit-dates duration
-                // field's 'relative' mode below — it's what a signed
-                // '+5d'/'-3d' shift resolves against. Not the resolved
-                // start/end span (that'd need epoch-day math this render
-                // path doesn't otherwise do) — the stored authored value is
-                // what "committed duration" means for R100's grammar.
-                const baselineDurationDays =
-                  row == null
-                    ? null
-                    : (row.duration_days ??
-                      (row.duration_weeks != null
-                        ? row.duration_weeks * 7
-                        : null));
-
                 // The revealed compose surface for this phase, per open kind.
                 const composePanel =
-                  composeKind === 'edit' ? (
-                    <div className="mt-[0.5rem] flex flex-col gap-[0.5rem]">
-                      <ScheduleEntryField
-                        aria-label="Set phase duration"
-                        today={today}
-                        bareNumberUnit="weeks"
-                        accept={['duration']}
-                        durationSign="relative"
-                        baselineDays={baselineDurationDays}
-                        placeholder="Duration — 4w · 28d · +5d"
-                        onCommit={(e) =>
-                          e.kind === 'duration' &&
-                          handleEditDuration(entry.phase.id, e.days)
-                        }
-                        onCancel={closeCompose}
-                      />
-                      <ScheduleEntryField
-                        aria-label="Anchor phase date"
-                        today={today}
-                        accept={['anchor']}
-                        autoFocus={false}
-                        placeholder="Anchor a date — Sep 21"
-                        onCommit={(e) =>
-                          e.kind === 'anchor' &&
-                          handleSetAnchor(entry.phase.id, e.date)
-                        }
-                        onCancel={closeCompose}
-                      />
-                      {/* No inline error surface here: a duration/anchor entry
-                          now begins a ripple preview (it never writes), and the
-                          confirm strip owns commit + its failure line. */}
-                    </div>
-                  ) : composeKind === 'milestone' ? (
+                  composeKind === 'milestone' ? (
                     <MilestoneComposer
                       today={today}
                       onSubmit={(draft) =>
@@ -940,15 +877,12 @@ export function ScheduleSpine({
                               kind: 'milestone',
                             });
                           }}
-                          // Opens the duration/anchor entry panel. No mutation
-                          // reset needed — the panel begins a ripple preview, it
-                          // never carries a stale write error (the strip does).
-                          onEditDates={() =>
-                            setCompose({
-                              phaseId: entry.phase.id,
-                              kind: 'edit',
-                            })
-                          }
+                          // B3 — no typed panel: arm the Rule. It scrolls into
+                          // view and focuses this phase's bar, where the edit is
+                          // made by drag or by the bar's keyboard model. A phase
+                          // the Rule cannot draw (unplaced, thread lane) has no
+                          // bar, so this no-ops.
+                          onEditDates={() => armEdit(entry.phase.id)}
                           onDelete={() => {
                             deletePhaseWithRelink.reset();
                             setCompose({

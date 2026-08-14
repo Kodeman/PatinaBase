@@ -3,12 +3,6 @@ import type { Database } from '@patina/supabase';
 
 import { ProjectScheduleHandoffMount } from '../project-schedule-handoff-mount';
 
-jest.mock('@/components/document/phase-timeline', () => ({
-  PhaseTimeline: ({ projectId }: { projectId: string }) => (
-    <div data-testid="legacy-schedule">Legacy schedule · {projectId}</div>
-  ),
-}));
-
 jest.mock('@/components/document/schedule/schedule-rule', () => ({
   ScheduleRule: ({
     projectId,
@@ -65,29 +59,14 @@ const scheduleMountProps = {
 };
 
 describe('ProjectScheduleHandoffMount', () => {
-  it('mounts phase handoffs under the legacy schedule renderer', () => {
-    render(
-      <ProjectScheduleHandoffMount
-        {...scheduleMountProps}
-        showScheduleRule={false}
-      />,
-    );
-
-    expect(screen.getByTestId('legacy-schedule')).toHaveTextContent('project-1');
-    expect(screen.queryByTestId('schedule-rule')).not.toBeInTheDocument();
-    expect(screen.getByTestId('schedule-confirm')).toBeVisible();
-    expect(screen.getByTestId('phase-handoffs')).toHaveTextContent('project-1 · 1');
-  });
-
-  it('mounts the same phase handoffs under the Rule/Spine schedule renderer', () => {
-    render(<ProjectScheduleHandoffMount {...scheduleMountProps} showScheduleRule />);
+  it('mounts the Rule and the phase handoffs under it — no renderer choice left (B3)', () => {
+    render(<ProjectScheduleHandoffMount {...scheduleMountProps} />);
 
     expect(screen.getByTestId('schedule-rule')).toHaveTextContent(
       'project-1 · Lakeshore House',
     );
-    expect(screen.queryByTestId('legacy-schedule')).not.toBeInTheDocument();
     expect(screen.getByTestId('schedule-confirm')).toBeVisible();
-    expect(screen.getByTestId('phase-handoffs')).toBeVisible();
+    expect(screen.getByTestId('phase-handoffs')).toHaveTextContent('project-1 · 1');
   });
 
   it.each(['on_hold', 'completed', 'archived', 'draft'])(
@@ -97,11 +76,10 @@ describe('ProjectScheduleHandoffMount', () => {
         <ProjectScheduleHandoffMount
           {...scheduleMountProps}
           projectStatus={projectStatus}
-          showScheduleRule={false}
         />,
       );
 
-      expect(screen.getByTestId('legacy-schedule')).toBeVisible();
+      expect(screen.getByTestId('schedule-rule')).toBeVisible();
       expect(screen.getByTestId('schedule-confirm')).toBeVisible();
       expect(screen.queryByTestId('phase-handoffs')).not.toBeInTheDocument();
     },
@@ -109,11 +87,7 @@ describe('ProjectScheduleHandoffMount', () => {
 
   it('mounts no project schedule or mutation control on proposal documents', () => {
     const { container } = render(
-      <ProjectScheduleHandoffMount
-        {...scheduleMountProps}
-        engagementKind="proposal"
-        showScheduleRule
-      />,
+      <ProjectScheduleHandoffMount {...scheduleMountProps} engagementKind="proposal" />,
     );
 
     expect(container).toBeEmptyDOMElement();
