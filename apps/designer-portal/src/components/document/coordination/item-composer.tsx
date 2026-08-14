@@ -59,6 +59,7 @@ import {
   type DecisionOptionValue,
 } from '@/components/portal/decision-option-builder';
 import { ComposerOptionBuilder } from './composer-option-builder';
+import { DateTextInput } from '../date-text-input';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { PartyMiniRow } from '../roster/party-mini-row';
 import { RolodexPicker } from '../roster/rolodex-picker';
@@ -832,10 +833,10 @@ export function ItemComposer({
         )}
         <div>
           <label className={fieldLabelCls}>Due</label>
-          <input
-            type="date"
-            value={due}
-            onChange={(e) => setDue(e.target.value)}
+          <DateTextInput
+            value={due || null}
+            onChange={(value) => setDue(value ?? '')}
+            ariaLabel="Due"
             className={`${inputCls} w-auto`}
           />
         </div>

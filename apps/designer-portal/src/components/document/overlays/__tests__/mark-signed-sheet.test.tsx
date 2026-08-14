@@ -12,6 +12,22 @@ jest.mock('../doc-sheet', () => ({
     open ? <div role="dialog">{children}</div> : null,
 }));
 
+// The trigger renders the display form (MM/DD/YYYY), not the canonical value —
+// proven directly in date-text-input.test.tsx; here we only need the trigger's
+// visible text.
+jest.mock('../../date-text-input', () => {
+  const actual = jest.requireActual('../../date-text-input');
+  return {
+    DateTextInput: ({
+      value,
+      ariaLabel,
+    }: {
+      value: string | null;
+      ariaLabel?: string;
+    }) => <span aria-label={ariaLabel}>{actual.displayDateText(value)}</span>,
+  };
+});
+
 describe('MarkSignedSheet date-only defaults', () => {
   beforeEach(() => {
     jest.useFakeTimers();
@@ -34,7 +50,7 @@ describe('MarkSignedSheet date-only defaults', () => {
       />,
     );
 
-    // A native date control holds the canonical ISO value, not the display form.
-    expect(screen.getByLabelText('Date signed')).toHaveValue('2026-07-31');
+    // The trigger renders the display form, not the canonical ISO value.
+    expect(screen.getByLabelText('Date signed')).toHaveTextContent('07/31/2026');
   });
 });

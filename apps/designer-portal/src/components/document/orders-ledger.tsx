@@ -34,6 +34,7 @@ import {
   procurementExpected,
 } from '@/lib/document/procurement-lifecycle';
 import { Stamp } from './stamp';
+import { DateTextInput } from './date-text-input';
 import { LogAckInline, PoPreview } from './po-preview';
 import { LedgerFrontMatter } from './ledger-front-matter';
 import { ordersThroughput } from '@/lib/document/ledger-summary';
@@ -676,12 +677,11 @@ export function OrdersLedger({
               </p>
               {selectedVendor && (
                 <>
-                  <input
-                    type="date"
-                    aria-label="Shared ETA"
+                  <DateTextInput
+                    ariaLabel="Shared ETA"
                     className="doc-type-control min-h-11 rounded-[4px] border border-[var(--color-pearl)] bg-transparent px-2 text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
-                    value={truckEta}
-                    onChange={(e) => setTruckEta(e.target.value)}
+                    value={truckEta || null}
+                    onChange={(value) => setTruckEta(value ?? '')}
                   />
                   <DocumentAction
                     actionKey="align-purchase-order-eta"

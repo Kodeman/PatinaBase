@@ -38,6 +38,7 @@ import {
   type LineAuthorization,
 } from '@/lib/document/authorization-derivation';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
+import { DateTextInput } from './date-text-input';
 import { DocumentAction, DocumentActionGroup } from './document-action';
 
 type FFERow = any;
@@ -126,16 +127,16 @@ function MovementCell({ item, po }: { item: FFERow; po: FFERow | null }) {
             <span className="font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
               arrives
             </span>
-            <input
-              type="date"
-              value={eta}
-              aria-label="Confirmed ETA"
+            <DateTextInput
+              value={eta || null}
+              ariaLabel="Confirmed ETA"
               disabled={updateEta.isPending}
-              onChange={(e) => {
-                setEta(e.target.value);
-                save(e.target.value);
+              onChange={(value) => {
+                const next = value ?? '';
+                setEta(next);
+                save(next);
               }}
-              className="bg-transparent text-[10.5px] text-[var(--color-charcoal)] outline-none disabled:opacity-50"
+              className="bg-transparent text-[10.5px] text-[var(--color-charcoal)] outline-none"
             />
           </label>
           {!eta && po.status === 'shipped' && !error && (

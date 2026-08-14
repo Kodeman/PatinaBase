@@ -40,6 +40,7 @@ import type { MarginItemRow } from '@/lib/document/margin-derivation';
 import { extendRevivesDecision } from '@/lib/document/decision-edges';
 import { composePulseDraft } from '@/lib/document/compose-pulse-draft';
 import { fmtDay, fmtUsd, tomorrowYmd } from '@/lib/document/format';
+import { DateTextInput } from './date-text-input';
 import { openInvoiceFolio } from './accounts/invoice-overlays';
 import {
   DocumentAction,
@@ -340,13 +341,12 @@ export function DecisionBody({
             >
               {row.payload.reminder_sent_at ? 'Nudge again' : 'Send a nudge'}
             </DocumentAction>
-            <input
-              type="date"
-              aria-label="Extend due date to"
+            <DateTextInput
+              ariaLabel="Extend due date to"
               className={INPUT}
-              value={extendTo}
-              min={tomorrowYmd()}
-              onChange={(e) => setExtendTo(e.target.value)}
+              value={extendTo || null}
+              minDate={tomorrowYmd()}
+              onChange={(value) => setExtendTo(value ?? '')}
             />
             <DocumentAction
               actionKey="extend-decision"

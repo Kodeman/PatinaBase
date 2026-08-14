@@ -18,6 +18,7 @@ import { useLogPOAcknowledgment, useSendPurchaseOrder } from '@patina/supabase';
 import { poSendErrorMessage } from '@/components/portal/procurement/po-send-actions';
 import { procurementEvents } from '@/lib/analytics/procurement-events';
 import { fmtDay } from '@/lib/document/format';
+import { DateTextInput } from './date-text-input';
 import { DocumentAction, DocumentActionGroup } from './document-action';
 
 export interface PoPreviewProps {
@@ -141,11 +142,10 @@ export function LogAckInline({
         </label>
         <label className="flex flex-col gap-0.5">
           <span className={label}>Confirmed ETA</span>
-          <input
-            type="date"
-            value={eta}
-            onChange={(e) => setEta(e.target.value)}
-            aria-label="Confirmed ETA"
+          <DateTextInput
+            value={eta || null}
+            onChange={(value) => setEta(value ?? '')}
+            ariaLabel="Confirmed ETA"
             className={input}
           />
         </label>

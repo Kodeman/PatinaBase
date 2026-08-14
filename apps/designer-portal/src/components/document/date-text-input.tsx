@@ -1,6 +1,8 @@
 'use client';
 
-import { useEffect, useId } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { todayYmd } from '@/lib/document/format';
+import { FolioCalendar, FolioPopover } from './date';
 
 const pad2 = (value: number) => String(value).padStart(2, '0');
 
@@ -40,7 +42,9 @@ export function DateTextInput({
   className,
   ariaLabel,
   onValidityChange,
-  instruction = 'Choose a date with the picker or keyboard.',
+  instruction = 'Choose a date from the calendar.',
+  disabled = false,
+  minDate,
 }: {
   value: string | null;
   onChange: (value: string | null) => void;
@@ -48,11 +52,17 @@ export function DateTextInput({
   ariaLabel?: string;
   onValidityChange?: (valid: boolean) => void;
   instruction?: string;
+  disabled?: boolean;
+  /** Passed through to the Folio's own `minDate` — a site that gated the old
+   *  native input's `min` attribute keeps the same floor on the grid. */
+  minDate?: string | null;
 }) {
   const descriptionId = useId();
   const errorId = useId();
   const canonicalValue = value && parseDateText(value) === value ? value : '';
   const invalid = Boolean(value && !canonicalValue);
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     onValidityChange?.(!invalid);
@@ -60,20 +70,69 @@ export function DateTextInput({
 
   return (
     <span className="block">
-      <input
-        type="date"
-        autoComplete="off"
-        value={canonicalValue}
-        aria-label={ariaLabel}
-        aria-describedby={`${descriptionId}${invalid ? ` ${errorId}` : ''}`}
-        aria-invalid={invalid || undefined}
-        className={className}
-        onChange={(event) => {
-          const next = event.target.value;
-          onValidityChange?.(true);
-          onChange(next || null);
-        }}
-      />
+      <span className="relative inline-block w-full">
+        <button
+          ref={triggerRef}
+          type="button"
+          disabled={disabled}
+          aria-label={ariaLabel}
+          aria-describedby={`${descriptionId}${invalid ? ` ${errorId}` : ''}`}
+          aria-invalid={invalid || undefined}
+          aria-expanded={open}
+          onClick={() => setOpen((current) => !current)}
+          className={`flex items-center justify-between gap-2 text-left disabled:cursor-not-allowed disabled:opacity-50 ${className ?? ''}`}
+        >
+          <span>
+            {canonicalValue ? (
+              displayDateText(canonicalValue)
+            ) : (
+              <span className="font-mono italic text-[var(--text-faint)]">MM/DD/YYYY</span>
+            )}
+          </span>
+          {canonicalValue && !disabled ? (
+            <span
+              role="button"
+              tabIndex={0}
+              aria-label="Clear date"
+              onClick={(event) => {
+                event.stopPropagation();
+                onValidityChange?.(true);
+                onChange(null);
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                event.stopPropagation();
+                onValidityChange?.(true);
+                onChange(null);
+              }}
+              className="font-mono text-[10px] text-[var(--text-muted)] hover:text-[var(--color-terracotta)]"
+            >
+              ×
+            </span>
+          ) : null}
+        </button>
+        {open && !disabled ? (
+          <FolioPopover
+            onClose={() => setOpen(false)}
+            returnFocusRef={triggerRef}
+            aria-label={ariaLabel ?? 'Choose a date'}
+          >
+            <FolioCalendar
+              modes={['day']}
+              value={canonicalValue ? { kind: 'day', date: canonicalValue } : null}
+              today={todayYmd()}
+              minDate={minDate}
+              onCommit={(selection) => {
+                if (selection.kind !== 'day') return;
+                onValidityChange?.(true);
+                onChange(selection.date);
+                setOpen(false);
+              }}
+            />
+          </FolioPopover>
+        ) : null}
+      </span>
       <span
         id={descriptionId}
         className="mt-1 block font-mono text-[8.5px] normal-case tracking-normal text-[var(--text-muted)]"

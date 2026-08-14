@@ -25,12 +25,13 @@ import {
 import { COURT_ORDER } from '@/lib/document/coordination-derivation';
 import { partyFor, courtToken } from '../party';
 import { todayYmd } from '@/lib/document/format';
+import { DateTextInput } from '../../date-text-input';
 import {
   ButtonRow,
   Field,
+  FIELD_CLS,
   QuietConfirm,
   ResolveButton,
-  ResolveInput,
   ResolveQuestion,
   ResolveShell,
   type ResolvePanelProps,
@@ -166,11 +167,12 @@ export function ResolveWaiting({
         <>
           <ResolveQuestion>Push the due date out:</ResolveQuestion>
           <Field label="New due date">
-            <ResolveInput
-              type="date"
-              value={newDue}
-              onChange={(e) => setNewDue(e.target.value)}
+            <DateTextInput
+              value={newDue || null}
+              onChange={(value) => setNewDue(value ?? '')}
+              ariaLabel="New due date"
               disabled={busy}
+              className={FIELD_CLS}
             />
           </Field>
           <ButtonRow>

@@ -15,6 +15,7 @@ import { useState } from 'react';
 import { useReviewSmsMessage, type SmsReviewMessage } from '@patina/supabase';
 import { getFieldTradeLabel } from '@patina/types';
 import { describeFieldEffect, isDelayEffect } from '@/lib/document/field-sms';
+import { DateTextInput } from '../date-text-input';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 
 export function SmsReviewCard({ message }: { message: SmsReviewMessage }) {
@@ -87,11 +88,10 @@ export function SmsReviewCard({ message }: { message: SmsReviewMessage }) {
             {delay && (
               <label className="mt-2.5 flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
                 Move to
-                <input
-                  type="date"
-                  value={editedDate}
-                  onChange={(e) => setEditedDate(e.target.value)}
-                  aria-label="Adjust the new date"
+                <DateTextInput
+                  value={editedDate || null}
+                  onChange={(value) => setEditedDate(value ?? '')}
+                  ariaLabel="Adjust the new date"
                   className="rounded-[4px] border border-[var(--border-default)] bg-[var(--bg-surface)] px-2 py-1 text-[11px] text-[var(--text-primary)] focus:border-[var(--color-clay)] focus:outline-none"
                 />
               </label>

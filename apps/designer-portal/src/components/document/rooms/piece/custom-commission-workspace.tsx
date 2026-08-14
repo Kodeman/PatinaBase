@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Input, Select, Textarea } from "@/components/ui/controls";
+import { DateTextInput } from "../../date-text-input";
 import { DocumentAction, DocumentActionGroup } from "../../document-action";
 import { RoomSheet } from "../room-sheet";
 import { ConfigurationSnapshotCard } from "@/components/document/configuration-snapshot-card";
@@ -775,13 +776,12 @@ export function CustomCommissionWorkspace({
                   />
                 </FieldLabel>
                 <FieldLabel label="Quote valid until">
-                  <Input
-                    type="date"
-                    value={brief.quote.validUntil}
-                    onChange={(event) =>
-                      setQuote("validUntil", event.target.value)
-                    }
+                  <DateTextInput
+                    value={brief.quote.validUntil || null}
+                    onChange={(value) => setQuote("validUntil", value ?? "")}
+                    ariaLabel="Quote valid until"
                     disabled={status !== "submitted"}
+                    className="flex w-full rounded-[3px] border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 text-[0.85rem] text-[var(--text-primary)]"
                   />
                 </FieldLabel>
               </div>

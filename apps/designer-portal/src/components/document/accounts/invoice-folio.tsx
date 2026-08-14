@@ -36,6 +36,7 @@ import {
   timeLineHoursLabel,
 } from '@patina/shared';
 import { useQueryClient } from '@tanstack/react-query';
+import { DateTextInput } from '../date-text-input';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { Stamp } from '../stamp';
 import { todayYmd } from '@/lib/document/format';
@@ -760,10 +761,10 @@ export function InvoiceFolio({
               </label>
               <label className="flex flex-col gap-0.5">
                 <span className={LABEL}>received</span>
-                <input
-                  type="date"
-                  value={receivedDate}
-                  onChange={(e) => setReceivedDate(e.target.value)}
+                <DateTextInput
+                  value={receivedDate || null}
+                  onChange={(value) => setReceivedDate(value ?? '')}
+                  ariaLabel="received"
                   className={INPUT}
                 />
               </label>

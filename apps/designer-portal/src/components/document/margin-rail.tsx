@@ -41,6 +41,7 @@ import {
   type MarginItemRow,
 } from '@/lib/document/margin-derivation';
 import { todayYmd } from '@/lib/document/format';
+import { DateTextInput } from './date-text-input';
 import { MarginItem } from './margin-item';
 import { MarginHandoffs, useHandoffGates } from './margin-handoff-item';
 import { MarginItemBody } from './margin-bodies';
@@ -582,12 +583,11 @@ export function MarginRail({
             className="mt-1.5"
             aria-label="Margin note actions"
           >
-            <input
-              type="date"
-              aria-label="Note due date (optional)"
+            <DateTextInput
+              ariaLabel="Note due date (optional)"
               className="rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2 py-1 text-[16px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
-              value={noteDue}
-              onChange={(e) => setNoteDue(e.target.value)}
+              value={noteDue || null}
+              onChange={(value) => setNoteDue(value ?? '')}
             />
             <DocumentAction
               actionKey="save-margin-note"
