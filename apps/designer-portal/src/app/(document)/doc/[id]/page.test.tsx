@@ -5,6 +5,11 @@ import { authorizationDoorwayFor } from '@/lib/document/authorization-doorway';
 
 let mockHydrated = false;
 const mockRetryDocumentResolution = jest.fn();
+// A8: the recent-documents-in-hand MRU landedRef reads to decide whether to
+// jump to the active section. Empty by default — most existing tests in
+// this file exercise a "first open" shape and must not gain a surprise
+// scroll-jump because of this addition.
+let mockRecentDocumentsInHand: Array<{ id: string; title: string; subtitle?: string }> = [];
 const mockHistoryToggled = jest.fn();
 const mockDiscoveryFacetOpen = jest.fn();
 let mockDiscoveryFacetExpanded = false;
@@ -280,6 +285,7 @@ jest.mock('@/lib/help-system/use-document-surface', () => ({
 
 jest.mock('@/lib/analytics/document-events', () => ({
   rememberDocumentInHand: jest.fn(),
+  readRecentDocumentsInHand: () => mockRecentDocumentsInHand,
   documentEvents: {
     historyToggled: (...args: unknown[]) => mockHistoryToggled(...args),
     guideShown: jest.fn(),
@@ -383,6 +389,7 @@ describe('DocumentPage guide activation', () => {
     mockRetryDesk.mockReset();
     mockUseDeskEngagements.mockClear();
     mockSelectOperationalNeed.mockClear();
+    mockRecentDocumentsInHand = [];
     mockDocumentQuery = {
       data: {
         kind: 'engagement',
@@ -1097,6 +1104,91 @@ describe('DocumentPage guide activation', () => {
     render(<DocumentPage params={fulfilledParams} />);
 
     expect(screen.queryByText(/Client approvals/)).not.toBeInTheDocument();
+  });
+});
+
+describe('DocumentPage landedRef — A8 first-open gate', () => {
+  const rowFor = (engagementId: string, activeSection: string) => ({
+    engagement_kind: 'lead', engagement_id: engagementId, project_id: null, proposal_id: null,
+    lead_id: engagementId, designer_id: 'designer-1', client_profile_id: null,
+    client_name: 'Avery Stone', title: 'Stone Residence', active_section: activeSection,
+    project_status: null, current_phase: null, is_paused: false, is_archived: false,
+    proposal_status: null, proposal_sent_at: null, proposal_viewed_at: null,
+    lead_response_deadline: null, lead_status: null, overdue_decision_count: 0,
+    earliest_overdue_due: null, awaiting_inspection_count: 0, blocked_item_count: 0,
+    in_flight_count: 0, installed_count: 0, item_count: 0,
+    updated_at: '2026-08-10T12:00:00Z', open_claim_count: 0, open_claim_po: null,
+    unsent_pulse_count: 0, pulse_week_of: null, draft_unsent_po_count: 0,
+    oldest_draft_po_created_at: null, draft_po_label: null, unacked_po_count: 0,
+    oldest_unacked_sent_at: null, unacked_po_label: null, due_task_count: 0,
+    earliest_task_due: null, due_task_title: null,
+  });
+
+  beforeEach(() => {
+    mockHydrated = true;
+    mockDiscoveryQuery = { data: undefined, isLoading: false, isError: false };
+    mockDraftingState = { gaps: [], isLoading: false, error: null };
+    mockProposalData = undefined;
+    mockProposalError = false;
+    mockProjectQuery = { data: undefined, isLoading: false, isError: false };
+    mockResolvedSchedule = NO_RESOLVED_SCHEDULE;
+    mockContextualHandoffsQuery = { data: [], isError: false };
+    mockDeskData = { folders: [], chips: [], composed: {} };
+    mockDeskLoading = false;
+    mockDeskError = false;
+    mockRetryDesk.mockReset();
+    mockUseDeskEngagements.mockClear();
+    mockSelectOperationalNeed.mockClear();
+    mockRecentDocumentsInHand = [];
+    mockDocumentQuery = {
+      data: { kind: 'engagement', row: rowFor('lead-1', 'brief') },
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      refetch: mockRetryDocumentResolution,
+    };
+    setViewport({ width: 1440, reducedMotion: true });
+    window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    }) as typeof window.requestAnimationFrame;
+    HTMLElement.prototype.scrollIntoView = jest.fn();
+    // The active-section element's real geometry is irrelevant here — this
+    // gate is exercised BEFORE React ever mounts it, so force every element
+    // past the 60% threshold that would otherwise trigger the jump, and
+    // isolate what's under test to the MRU membership check alone.
+    HTMLElement.prototype.getBoundingClientRect = jest.fn(() => ({
+      top: 1000, bottom: 1100, left: 0, right: 100, width: 100, height: 100,
+      x: 0, y: 1000, toJSON: () => ({}),
+    })) as unknown as typeof HTMLElement.prototype.getBoundingClientRect;
+  });
+
+  it('does not jump to the active section for a first-time visitor (no MRU record for this document)', () => {
+    mockRecentDocumentsInHand = [];
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(document.querySelector('[data-active-section]')).not.toBeNull();
+    expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it('jumps to the active section as before for a visitor whose MRU already holds this document', () => {
+    mockRecentDocumentsInHand = [{ id: 'lead-1', title: 'Stone Residence' }];
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+  });
+
+  it('does not jump when the MRU holds other documents but not this one', () => {
+    mockRecentDocumentsInHand = [
+      { id: 'other-doc-1', title: 'Whitfield Residence' },
+      { id: 'other-doc-2', title: 'Harper Loft' },
+    ];
+
+    render(<DocumentPage params={fulfilledParams} />);
+
+    expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
   });
 });
 

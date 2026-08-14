@@ -36,7 +36,11 @@ import { useDocumentEngagement } from '@/hooks/use-document-state';
 import { useHoldDocument } from '@/hooks/document-time-provider';
 import { useMobileActiveDoc } from '@/components/document/mobile/mobile-shell';
 import { MobileMarginChips } from '@/components/document/mobile/mobile-margin-chips';
-import { documentEvents, rememberDocumentInHand } from '@/lib/analytics/document-events';
+import {
+  documentEvents,
+  rememberDocumentInHand,
+  readRecentDocumentsInHand,
+} from '@/lib/analytics/document-events';
 import { useDocumentPresence } from '@/hooks/use-document-presence';
 import { useProposal } from '@/hooks/use-proposals';
 import {
@@ -465,11 +469,20 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     return () => document.removeEventListener('keydown', onKey);
   }, [router]);
 
-  // Open lands at the active section (§4): settled bars compress above it.
+  // Open lands at the active section (§4): settled bars compress above it —
+  // but only for a visitor who has been in this document before (A8). A
+  // first-time/shared-link visitor should see the header first; the jump is
+  // a resume convenience, not a default. "Seen before" reads off the same
+  // recent-documents-in-hand MRU this page writes to below via
+  // rememberDocumentInHand — that write runs later in this same commit
+  // (React runs effects in declaration order), so this read never races it
+  // for the current visit.
   const landedRef = useRef(false);
   useEffect(() => {
     if (!row || landedRef.current) return;
     landedRef.current = true;
+    const seenBefore = readRecentDocumentsInHand().some((d) => d.id === row.engagement_id);
+    if (!seenBefore) return;
     const el = mainRef.current?.querySelector('[data-active-section]');
     if (el && el.getBoundingClientRect().top > window.innerHeight * 0.6) {
       el.scrollIntoView({ block: 'start' });
@@ -820,6 +833,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
               projectId={row.project_id}
               clientProfileId={row.client_profile_id}
               clientName={row.client_name}
+              engagementId={row.engagement_id}
             />
             <FolioLetterhead projectId={row.project_id} />
           </>
@@ -828,6 +842,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           <LetterheadInstruments
             clientProfileId={row.client_profile_id}
             clientName={row.client_name}
+            engagementId={row.engagement_id}
           />
         )}
 

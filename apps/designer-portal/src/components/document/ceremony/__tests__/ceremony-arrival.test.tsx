@@ -66,15 +66,15 @@ describe('CeremonyArrival — scan doors navigate to the Room View', () => {
     mockPush.mockClear();
   });
 
-  it('the primary scan frame ("Tap to walk it") pushes /room/<scanId>?from=document', () => {
+  it('the primary scan frame ("Tap to walk it") pushes /room/<scanId>?from=document&docId=<lead.id> (A2)', () => {
     const scans = [scanRow({ id: 'row-1', scan_id: 'scan-primary', is_primary: true })];
     render(<CeremonyArrival lead={baseLead} scans={scans} tags={[]} />);
 
     fireEvent.click(screen.getByText('Tap to walk it').closest('button')!);
-    expect(mockPush).toHaveBeenCalledWith('/room/scan-primary?from=document');
+    expect(mockPush).toHaveBeenCalledWith('/room/scan-primary?from=document&docId=lead-1');
   });
 
-  it('a secondary scan thumbnail pushes its own /room/<scanId>?from=document', () => {
+  it('a secondary scan thumbnail pushes its own /room/<scanId>?from=document&docId=<lead.id> (A2)', () => {
     const scans = [
       scanRow({ id: 'row-1', scan_id: 'scan-primary', is_primary: true }),
       scanRow({ id: 'row-2', scan_id: 'scan-secondary' }),
@@ -82,7 +82,7 @@ describe('CeremonyArrival — scan doors navigate to the Room View', () => {
     render(<CeremonyArrival lead={baseLead} scans={scans} tags={[]} />);
 
     fireEvent.click(screen.getByTitle('Living room scan'));
-    expect(mockPush).toHaveBeenCalledWith('/room/scan-secondary?from=document');
+    expect(mockPush).toHaveBeenCalledWith('/room/scan-secondary?from=document&docId=lead-1');
   });
 
   it('does not navigate anywhere when the lead has no scans', () => {

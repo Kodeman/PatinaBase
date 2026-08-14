@@ -465,7 +465,7 @@ export function DiscoverySection({
             actionKey="view-room-scan"
             variant="tertiary"
             onClick={() =>
-              router.push(`/room/${draft.room_scan_id}?from=document`)
+              router.push(`/room/${draft.room_scan_id}?from=document&docId=${engagementId}`)
             }
           >
             View the scan

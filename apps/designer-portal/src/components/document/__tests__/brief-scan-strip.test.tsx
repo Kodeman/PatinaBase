@@ -32,7 +32,7 @@ describe('BriefScanStrip — scan tiles navigate to the Room View', () => {
     mockUseRoomScanCovers.mockReturnValue({ data: undefined });
   });
 
-  it('a scan tile pushes /room/<scanId>?from=document', () => {
+  it('a scan tile pushes /room/<scanId>?from=document&docId=<leadId> (A2 — scopes back to the current document)', () => {
     mockUseLeadScans.mockReturnValue({
       data: [
         {
@@ -46,7 +46,7 @@ describe('BriefScanStrip — scan tiles navigate to the Room View', () => {
     render(<BriefScanStrip leadId="lead-1" />);
 
     fireEvent.click(screen.getByTitle('Kitchen scan'));
-    expect(mockPush).toHaveBeenCalledWith('/room/scan-abc?from=document');
+    expect(mockPush).toHaveBeenCalledWith('/room/scan-abc?from=document&docId=lead-1');
   });
 
   it('renders nothing (and never navigates) when the lead has no scans', () => {
