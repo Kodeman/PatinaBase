@@ -165,6 +165,15 @@ function DesignServicesBody({ bundle }: { bundle: CommercialDocumentBundle }) {
   const terms = bundle.serviceTerms;
   if (!terms) return null;
 
+  // A brand-new agreement defaults both of these to 0 and nothing blocks a
+  // send, so an untouched figure would reach the client as a real authorized
+  // amount. An amount nobody wrote is named as unwritten — the same gate the
+  // studio-side preview applies (service-agreement-preview.tsx).
+  const ceilingIsSet =
+    Number.isFinite(terms.billingCeilingCents) && terms.billingCeilingCents > 0;
+  const retainerIsSet =
+    Number.isFinite(terms.retainerAmountCents) && terms.retainerAmountCents > 0;
+
   return (
     <div className="mt-8 space-y-8">
       {terms.scope && (
@@ -197,7 +206,9 @@ function DesignServicesBody({ bundle }: { bundle: CommercialDocumentBundle }) {
           ))}
           <div className="flex items-baseline justify-between gap-4 py-4">
             <span className="type-body-small font-medium text-[var(--text-primary)]">Design authorization ceiling</span>
-            <span className="type-data-large">{money(terms.billingCeilingCents, terms.currency)}</span>
+            <span className={ceilingIsSet ? 'type-data-large' : 'type-data-large italic text-[var(--text-muted)]'}>
+              {ceilingIsSet ? money(terms.billingCeilingCents, terms.currency) : 'Not yet set'}
+            </span>
           </div>
         </div>
       </section>
@@ -205,12 +216,16 @@ function DesignServicesBody({ bundle }: { bundle: CommercialDocumentBundle }) {
       <section className="grid gap-4 sm:grid-cols-2">
         <div className="border-b border-[var(--border-default)] pb-4">
           <p className="type-meta">Retainer</p>
-          <p className="type-data-large mt-1">{money(terms.retainerAmountCents, terms.currency)}</p>
-          <p className="type-body-small mt-1">
-            {terms.retainerActivationPolicy === 'retainer_paid'
-              ? 'Design work begins after the fully executed agreement and retainer payment.'
-              : 'Due under the terms of the fully executed agreement.'}
+          <p className={retainerIsSet ? 'type-data-large mt-1' : 'type-data-large mt-1 italic text-[var(--text-muted)]'}>
+            {retainerIsSet ? money(terms.retainerAmountCents, terms.currency) : 'Not yet set'}
           </p>
+          {retainerIsSet && (
+            <p className="type-body-small mt-1">
+              {terms.retainerActivationPolicy === 'retainer_paid'
+                ? 'Design work begins after the fully executed agreement and retainer payment.'
+                : 'Due under the terms of the fully executed agreement.'}
+            </p>
+          )}
         </div>
         <div className="border-b border-[var(--border-default)] pb-4">
           <p className="type-meta">Billing cadence</p>

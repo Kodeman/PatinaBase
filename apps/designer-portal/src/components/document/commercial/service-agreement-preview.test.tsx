@@ -150,6 +150,41 @@ describe("ServiceAgreementPreview", () => {
     expect(screen.queryByText("Not yet set")).not.toBeInTheDocument();
   });
 
+  it("says the retainer is not yet set rather than printing $0 (J3)", () => {
+    render(
+      <ServiceAgreementPreview
+        document={document}
+        terms={{
+          ...terms,
+          retainerAmountCents: 0,
+          retainerActivationPolicy: "immediate",
+        }}
+        rates={[]}
+        signatures={[]}
+      />,
+    );
+
+    expect(screen.getByText("Not yet set")).toBeVisible();
+    expect(screen.queryByText("$0")).not.toBeInTheDocument();
+    // The activation clause describes a retainer that does not exist yet.
+    expect(
+      screen.queryByText(/agreement activates immediately/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("still renders a real, positive retainer with its activation term", () => {
+    render(
+      <ServiceAgreementPreview
+        document={document}
+        terms={{ ...terms, retainerAmountCents: 500_000 }}
+        rates={[]}
+        signatures={[]}
+      />,
+    );
+
+    expect(screen.getByText(/\$5,000 · work begins when paid/)).toBeVisible();
+  });
+
   it("says the deposit is unset rather than printing a null percent", () => {
     render(
       <ServiceAgreementPreview

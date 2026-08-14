@@ -59,6 +59,12 @@ export function ServiceAgreementPreview({
   // client copy must not advertise it as a real $0 figure here either.
   const ceilingIsSet =
     Number.isFinite(preview.billingCeilingCents) && preview.billingCeilingCents > 0;
+  // Same gate for the retainer: an untouched agreement defaults it to 0
+  // (emptyTerms, service-agreement-drafting-room.tsx), so printing "$0 ·
+  // agreement activates immediately" would state a term nobody wrote — and
+  // read identically to a deliberate no-retainer choice.
+  const retainerIsSet =
+    Number.isFinite(preview.retainerAmountCents) && preview.retainerAmountCents > 0;
 
   return (
     <article
@@ -156,11 +162,23 @@ export function ServiceAgreementPreview({
           <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
             Retainer
           </p>
-          <p className="mt-1 text-[12.5px] text-[var(--color-charcoal)]">
-            {money(preview.retainerAmountCents, preview.currency)}
-            {preview.retainerActivationPolicy === "retainer_paid"
-              ? " · work begins when paid"
-              : " · agreement activates immediately"}
+          <p
+            className={
+              retainerIsSet
+                ? "mt-1 text-[12.5px] text-[var(--color-charcoal)]"
+                : "mt-1 text-[12.5px] italic text-[var(--text-muted)]"
+            }
+          >
+            {retainerIsSet ? (
+              <>
+                {money(preview.retainerAmountCents, preview.currency)}
+                {preview.retainerActivationPolicy === "retainer_paid"
+                  ? " · work begins when paid"
+                  : " · agreement activates immediately"}
+              </>
+            ) : (
+              "Not yet set"
+            )}
           </p>
         </div>
         <div>
