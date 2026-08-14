@@ -29,8 +29,8 @@ import {
 //
 // Materialization is DERIVED, never authoritative: the chain and the
 // resolver remain the source of truth. A failure here must never fail the
-// user's actual commit, so every step after the first invalidation is one
-// try/catch that only logs.
+// user's actual commit — "never rethrows" is structural: the ENTIRE body,
+// invalidation included, runs inside one try/catch that only logs.
 // ═══════════════════════════════════════════════════════════════════════════
 
 const getSupabase = () => createBrowserClient();
@@ -39,18 +39,18 @@ export async function settleScheduleWrite(
   queryClient: QueryClient,
   projectId: string,
 ): Promise<void> {
-  // (1) The shared key set every schedule-shaping hook already invalidated
-  // individually. Callers that touch additional keys (install windows'
-  // ['install-window', id]/['schedule-proposals', id]/['document-state',
-  // 'desk'], useDismissScheduleProposal's ['schedule-proposals', id], …)
-  // invalidate those themselves, in addition to calling this.
-  queryClient.invalidateQueries({ queryKey: ['project-phases', projectId] });
-  queryClient.invalidateQueries({ queryKey: ['schedule-milestones', projectId] });
-  queryClient.invalidateQueries({ queryKey: ['project-v2', projectId] });
-  queryClient.invalidateQueries({ queryKey: ['schedule-revisions', projectId] });
-  await invalidateProjectWorkflow(queryClient, projectId);
-
   try {
+    // (1) The shared key set every schedule-shaping hook already invalidated
+    // individually. Callers that touch additional keys (install windows'
+    // ['install-window', id]/['schedule-proposals', id]/['document-state',
+    // 'desk'], useDismissScheduleProposal's ['schedule-proposals', id], …)
+    // invalidate those themselves, in addition to calling this.
+    queryClient.invalidateQueries({ queryKey: ['project-phases', projectId] });
+    queryClient.invalidateQueries({ queryKey: ['schedule-milestones', projectId] });
+    queryClient.invalidateQueries({ queryKey: ['project-v2', projectId] });
+    queryClient.invalidateQueries({ queryKey: ['schedule-revisions', projectId] });
+    await invalidateProjectWorkflow(queryClient, projectId);
+
     // (2) Fresh-fetch phases + milestones + project start date — mirrors
     // useProjectPhases (use-project-v2.ts), useScheduleMilestones and
     // useProjectStartDate (use-schedule.ts) exactly, including the
