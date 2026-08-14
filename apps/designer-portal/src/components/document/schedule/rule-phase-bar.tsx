@@ -155,6 +155,9 @@ export interface RulePhaseBarProps {
    *  no memory of its own. */
   getBarEdit: (phaseId: string) => BarEditState | null;
   setBarEdit: (phaseId: string, next: BarEditState | null) => void;
+  /** Hands the slider element up so the Rule can focus this bar when the Spine
+   *  arms an edit ("Edit dates" → the instrument). */
+  registerRoot?: (el: HTMLDivElement | null) => void;
   /** MOVE → the phase's new START epoch day (the parent anchors it there). */
   onMoveBegin: (startEpoch: number) => void;
   onMoveFrame: (startEpoch: number) => void;
@@ -173,6 +176,7 @@ export function RulePhaseBar({
   session,
   getBarEdit,
   setBarEdit,
+  registerRoot,
   onMoveBegin,
   onMoveFrame,
   onResizeBegin,
@@ -328,6 +332,7 @@ export function RulePhaseBar({
           decorative track, BELOW the boundary handles (z-[2]) and diamonds
           (z-[3]) so both stay grabbable where they overlap a bar. */}
       <div
+        ref={registerRoot}
         role="slider"
         tabIndex={0}
         aria-orientation="horizontal"

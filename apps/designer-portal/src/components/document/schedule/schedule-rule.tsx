@@ -13,8 +13,9 @@
  * boundary ticks, milestone diamonds, a today cut, thread hairlines, and
  * natural-width staggered labels that NEVER truncate. Every label and diamond
  * is a focusable control that reveals its phase in the spine (§3.5, via
- * ScheduleNavProvider). This surface is READ-ONLY — no drag, no time editing
- * (Slice 04).
+ * ScheduleNavProvider). Since B3 this surface is also the ONLY place phase
+ * dates are edited: the spine's "Edit dates" arms it (`nav.armEdit`) and the
+ * per-phase bars carry the drag and keyboard models.
  *
  * Two modes, one file:
  *  · at rest — the full canvas (132px base + one 20px lane per extra
@@ -60,10 +61,10 @@
  * containers measure 0 wide, so the stagger never runs) — the line, diamonds
  * and today remain. Full mobile treatment is a review escalation (§7).
  *
- * Mounted (S2-4) at the document page's `<main>` top-level flow behind the
- * `schedule-spine` flag, replacing `PhaseTimeline`; every reveal call fires
- * `rule_minimap_jump` alongside it (`@/lib/analytics/schedule-events`).
- * Zero shadows (D4).
+ * Mounted at the document page's `<main>` top-level flow — unconditionally
+ * since B3 retired the `schedule-spine` gate and its PhaseTimeline fallback;
+ * every reveal call fires `rule_minimap_jump` alongside it
+ * (`@/lib/analytics/schedule-events`). Zero shadows (D4).
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -121,7 +122,7 @@ function phaseSubline(rp: ResolvedPhase | null): string {
 
 export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
   const schedule = useResolvedSchedule(projectId);
-  const { reveal } = useScheduleNav();
+  const { reveal, registerArmEditHandler } = useScheduleNav();
   // The one preview session (Slice 04). INERT (no-op, providerPresent=false)
   // until batch 4 mounts RippleProvider around the Rule — until then the drag
   // handles simply don't render and the ghost layer never has a diff to draw.
@@ -334,6 +335,35 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
     });
   }, [ripple.session]);
 
+  // ── "Edit dates" arms the instrument (B3). The Spine's per-phase action no
+  //    longer opens a typed panel in the ledger; it calls `nav.armEdit(phaseId)`
+  //    and the Rule answers: scroll itself into view, then hand that phase's bar
+  //    the focus so the edit happens by drag or by the bar's keyboard model.
+  //    The sentinel is the scroll target — it sits immediately above the sticky
+  //    wrapper, so bringing it to the top brings the Rule with it. A phase with
+  //    NO bar (unplaced, or a thread lane) simply isn't in the map and the call
+  //    no-ops; the "Unplaced · N" affordance below remains its way in. ──
+  const barEls = useRef<Map<string, HTMLElement>>(new Map());
+  const registerBarEl = useCallback((phaseId: string, el: HTMLElement | null) => {
+    if (el == null) barEls.current.delete(phaseId);
+    else barEls.current.set(phaseId, el);
+  }, []);
+
+  const handleArmEdit = useCallback(
+    (phaseId: string) => {
+      sentinelEl?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      // Focus after the scroll paints — the same rAF beat the spine's reveal
+      // uses, so the bar is on screen before it takes focus.
+      requestAnimationFrame(() => barEls.current.get(phaseId)?.focus());
+    },
+    [sentinelEl],
+  );
+
+  useEffect(() => {
+    registerArmEditHandler(handleArmEdit);
+    return () => registerArmEditHandler(null);
+  }, [registerArmEditHandler, handleArmEdit]);
+
   const layers = foldedLayers(pinned);
 
   // Baseline affordance gates (R100): a v1 must exist; the toggle + ghosts hide
@@ -462,6 +492,7 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
                     session={ripple.session}
                     getBarEdit={getBarEdit}
                     setBarEdit={setBarEdit}
+                    registerRoot={(el) => registerBarEl(b.id, el)}
                     onMoveBegin={(s) => beginBarMove(b.id, s)}
                     onMoveFrame={(s) => frameBarMove(b.id, s)}
                     onResizeBegin={(d) => beginBarResize(b.id, d)}
@@ -534,6 +565,7 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
                   session={ripple.session}
                   getBarEdit={getBarEdit}
                   setBarEdit={setBarEdit}
+                  registerRoot={(el) => registerBarEl(b.id, el)}
                   onMoveBegin={(s) => beginBarMove(b.id, s)}
                   onMoveFrame={(s) => frameBarMove(b.id, s)}
                   onResizeBegin={(d) => beginBarResize(b.id, d)}

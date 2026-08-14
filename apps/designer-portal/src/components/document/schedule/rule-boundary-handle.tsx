@@ -17,10 +17,11 @@
  * math pure + tested in schedule-rule-derivation).
  *
  * Refuse (a `locked` boundary — the downstream phase is anchored): pointerdown
- * shows a transient terracotta nudge ("{name} is anchored — unpin to move it")
- * with a brief firm wobble (Web Animations, reduced-motion-guarded) and begins
- * NOTHING — no capture, no session. `suppressRefuse` (the ripple session is
- * already active) silences the nudge cleanly.
+ * shows a transient terracotta nudge naming both the wall and the way through
+ * ("{name} is anchored — unpin to move it, or select the bar and press Enter to
+ * resize it") with a brief firm wobble (Web Animations, reduced-motion-guarded)
+ * and begins NOTHING — no capture, no session. `suppressRefuse` (the ripple
+ * session is already active) silences the nudge cleanly.
  *
  * Session PERSISTS on pointerup — the preview stays; the confirm strip commits
  * or reverts (batch 4). This component does nothing on release but drop capture.
@@ -189,11 +190,19 @@ export function RuleBoundaryHandle({
         }}
       />
       {nudging && !pinned && (
+        // The refusal now names the way THROUGH, not just the wall (B3 review):
+        // a locked boundary still refuses the drag, but the phase's bar carries
+        // the duration on the keyboard. The sentence is long enough to overrun
+        // the rule's right edge, so a boundary in the right third grows the
+        // label LEFTWARD — the same anchor rule RuleLabelRow uses (centerX>66).
+        // It can't collide with the ghost labels below: the nudge is suppressed
+        // whenever a session is live, and the ghosts only exist while one is.
         <span
           className="absolute whitespace-nowrap font-mono text-[0.54rem] uppercase tracking-[0.06em] text-[var(--color-terracotta)]"
-          style={{ left: 8, top: g.labelTop }}
+          style={xPct > 66 ? { right: 8, top: g.labelTop } : { left: 8, top: g.labelTop }}
         >
-          {refuseName} is anchored — unpin to move it
+          {refuseName} is anchored — unpin to move it, or select the bar and press Enter to
+          resize it
         </span>
       )}
     </div>
