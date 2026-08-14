@@ -101,8 +101,12 @@ export function TriageBar({
     void qc.invalidateQueries({ queryKey: ['leads'] });
   };
 
-  // On the Desk this bar lives inside the card's pick-up <Link>; the buttons
-  // must never navigate (D1). In the open Brief there's nothing to stop.
+  // On the Desk this bar sits inside the card's face, beside — never nested
+  // inside — the card's pick-up Link (folder-card.tsx keeps them siblings so
+  // no <button> is ever a descendant of an <a>); the guard stays as a
+  // defensive preventDefault+stopPropagation so these buttons can never
+  // trigger navigation (D1) even if that structure changes again. In the
+  // open Brief there's nothing to stop.
   const guard = (fn: () => void) => (e: React.MouseEvent) => {
     if (variant === 'desk') {
       e.preventDefault();
