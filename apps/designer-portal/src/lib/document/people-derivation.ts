@@ -231,7 +231,15 @@ export function isNurtureDue(p: DirectoryPerson, now: Date): boolean {
     case 'lead':
       return p.status_raw === 'new' || p.status_raw === 'viewed';
     case 'client':
-      if (p.status_raw === 'proposal' || p.status_raw === 'lead') return true;
+      // J7: status_raw='proposal' means "linked to at least one proposal,
+      // draft or sent" (set_document_client, 00225) — it does NOT mean a
+      // real send happened. meta.has_sent_proposal (00478's people_directory
+      // patch: EXISTS proposals.sent_at IS NOT NULL) is the honest dispatch
+      // signal. Fail-closed: an absent/undefined key (a pre-00478 fixture,
+      // or the migration not yet applied in this worktree) reads as
+      // not-due — never silently keeps the old always-due default.
+      if (p.status_raw === 'proposal') return p.meta?.['has_sent_proposal'] === true;
+      if (p.status_raw === 'lead') return true;
       if (p.status_raw === 'completed' || p.status_raw === 'nurture')
         return dormant != null && dormant >= NURTURE_DUE_DAYS;
       return false;
@@ -276,8 +284,14 @@ export function deriveRelationshipLine(
     switch (p.role) {
       case 'client': {
         if (p.status_raw === 'active') return `Active project · last touched ${since}`;
-        if (p.status_raw === 'proposal')
-          return `Proposal sent · ${due ? 'hesitating' : 'awaiting signature'}`;
+        if (p.status_raw === 'proposal') {
+          // J7: same has_sent_proposal signal isNurtureDue reads above (`due`
+          // already reflects it) — a merely-drafted, never-emailed proposal
+          // must not read as sent here either.
+          return p.meta?.['has_sent_proposal'] === true
+            ? `Proposal sent · ${due ? 'hesitating' : 'awaiting signature'}`
+            : 'Direction drafted · not yet sent';
+        }
         if (p.status_raw === 'completed' || p.status_raw === 'nurture')
           return due ? `Past client · ${since} · time to reconnect` : `Past client · ${since}`;
         return `Client · ${since}`;

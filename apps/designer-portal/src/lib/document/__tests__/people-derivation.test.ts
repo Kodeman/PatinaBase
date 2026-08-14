@@ -3,6 +3,7 @@ import {
   deriveRelationshipJourney,
   deriveRelationshipLine,
   deriveStatusDot,
+  isNurtureDue,
   roleLabel,
   sortJourney,
   type DirectoryPerson,
@@ -88,10 +89,44 @@ describe('deriveStatusDot (R57)', () => {
 });
 
 describe('deriveRelationshipLine (R57)', () => {
-  it('a hesitating proposal reads due', () => {
-    const line = deriveRelationshipLine(mkPerson({ status_raw: 'proposal' }), NOW);
+  // J7: status_raw='proposal' means "linked to at least one proposal, draft
+  // or sent" (set_document_client, 00225) — meta.has_sent_proposal (00478)
+  // is the only honest signal that a real send happened.
+  it('a drafted-but-never-sent proposal reads honestly, not due', () => {
+    const line = deriveRelationshipLine(
+      mkPerson({ status_raw: 'proposal', meta: { has_sent_proposal: false } }),
+      NOW,
+    );
+    expect(line.due).toBe(false);
+    expect(line.text).toBe('Direction drafted · not yet sent');
+  });
+
+  it('an undefined has_sent_proposal (missing signal) fails closed to not-due', () => {
+    const line = deriveRelationshipLine(mkPerson({ status_raw: 'proposal', meta: {} }), NOW);
+    expect(line.due).toBe(false);
+    expect(line.text).toBe('Direction drafted · not yet sent');
+  });
+
+  it('a hesitating proposal reads due once it was actually sent', () => {
+    const line = deriveRelationshipLine(
+      mkPerson({ status_raw: 'proposal', meta: { has_sent_proposal: true } }),
+      NOW,
+    );
     expect(line.due).toBe(true);
     expect(line.text).toMatch(/hesitating/);
+  });
+
+  it('isNurtureDue only flags a proposal-stage client once it was actually sent', () => {
+    expect(
+      isNurtureDue(mkPerson({ status_raw: 'proposal', meta: { has_sent_proposal: true } }), NOW),
+    ).toBe(true);
+    expect(
+      isNurtureDue(mkPerson({ status_raw: 'proposal', meta: { has_sent_proposal: false } }), NOW),
+    ).toBe(false);
+    expect(isNurtureDue(mkPerson({ status_raw: 'proposal', meta: {} }), NOW)).toBe(false);
+    // A designer_clients.status of 'lead' (a client relationship still at the
+    // lead stage, distinct from role='lead') is unaffected — still due.
+    expect(isNurtureDue(mkPerson({ status_raw: 'lead' }), NOW)).toBe(true);
   });
 
   it('a dormant past client says time to reconnect', () => {
@@ -132,6 +167,20 @@ describe('deriveNurtureQueue (R58)', () => {
     ];
     const queue = deriveNurtureQueue(people, NOW);
     expect(queue[0]!.person.person_id).toBe('high');
+  });
+
+  it('J7 — a merely-drafted proposal is not due and carries the honest reason; a sent one is', () => {
+    const people = [
+      mkPerson({ person_id: 'drafted', status_raw: 'proposal', meta: { has_sent_proposal: false } }),
+      mkPerson({ person_id: 'sent', status_raw: 'proposal', meta: { has_sent_proposal: true } }),
+    ];
+    const queue = deriveNurtureQueue(people, NOW);
+    const drafted = queue.find((e) => e.person.person_id === 'drafted')!;
+    const sent = queue.find((e) => e.person.person_id === 'sent')!;
+    expect(drafted.due).toBe(false);
+    expect(drafted.reason).toBe('Direction drafted · not yet sent');
+    expect(sent.due).toBe(true);
+    expect(sent.reason).not.toMatch(/^Direction drafted/);
   });
 });
 

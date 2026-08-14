@@ -299,7 +299,7 @@ function ClientProfile({
     },
     now,
   );
-  const nurtureText = nurtureLine(statusRaw, lastTouchAt, now, due, dot);
+  const nurtureText = nurtureLine(statusRaw, lastTouchAt, now, due, dot, meta);
 
   const onMessage = () => {
     if (!profileId) {
@@ -425,9 +425,17 @@ function nurtureLine(
   now: Date,
   due: boolean,
   dot: string,
+  meta: Record<string, unknown>,
 ): string {
-  if (statusRaw === 'proposal')
-    return 'Proposal out — a nudge or a call may be overdue.';
+  if (statusRaw === 'proposal') {
+    // J7: status_raw='proposal' means "linked to at least one proposal,
+    // draft or sent" (set_document_client, 00225) — share the same
+    // has_sent_proposal signal (00478) deriveRelationshipLine/isNurtureDue
+    // read, rather than reimplementing this check a third time.
+    return meta['has_sent_proposal'] === true
+      ? 'Proposal out — a nudge or a call may be overdue.'
+      : 'Still drafting — nothing has gone to them yet.';
+  }
   if (statusRaw === 'lead')
     return 'New relationship — open the conversation within a day.';
   if (statusRaw === 'completed' || statusRaw === 'nurture') {
