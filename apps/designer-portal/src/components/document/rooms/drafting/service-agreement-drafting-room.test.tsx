@@ -281,6 +281,115 @@ describe("ServiceAgreementDraftingRoom new agreement defaults", () => {
     expect(mockInviteAndLinkClient).not.toHaveBeenCalled();
   });
 
+  it("arms with a perceivable state: focus, a live announcement, and aria on the row", async () => {
+    render(
+      <ServiceAgreementDraftingRoom
+        proposal={{
+          id: "agreement-1",
+          designer_id: "designer-1",
+          client_id: null,
+          designer_client_id: "manual-lead-relationship",
+          description: "Seeded from Discovery · budget 15,000–50,000",
+          client: null,
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("combobox", { name: "Client account" }));
+    const row = await screen.findByTestId(
+      "client-picker-option-manual-lead-relationship",
+    );
+    expect(row).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(screen.getByText("Jordan Manual Lead"));
+
+    const sendButton = await screen.findByTestId(
+      "client-picker-invite-send-manual-lead-relationship",
+    );
+    // Focus follows the act, so the next keystroke is the decision.
+    expect(sendButton).toHaveFocus();
+    // The row itself states the change, for anyone reading it via aria.
+    expect(row).toHaveAttribute("aria-expanded", "true");
+    expect(row).toHaveAttribute(
+      "aria-controls",
+      screen.getByTestId("client-picker-invite-confirm-manual-lead-relationship").id,
+    );
+    expect(screen.getByText("Confirm below")).toBeInTheDocument();
+    // And it is announced rather than only shown.
+    const status = screen.getByTestId("client-picker-invite-status");
+    expect(status).toHaveAttribute("aria-live", "polite");
+    expect(status).toHaveTextContent(/Invite armed for jordan@example\.com/);
+  });
+
+  it("sends the armed invite from the keyboard, despite cmdk swallowing Enter", async () => {
+    render(
+      <ServiceAgreementDraftingRoom
+        proposal={{
+          id: "agreement-1",
+          designer_id: "designer-1",
+          client_id: null,
+          designer_client_id: "manual-lead-relationship",
+          description: "Seeded from Discovery · budget 15,000–50,000",
+          client: null,
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("combobox", { name: "Client account" }));
+    fireEvent.click(await screen.findByText("Jordan Manual Lead"));
+
+    const sendButton = await screen.findByTestId(
+      "client-picker-invite-send-manual-lead-relationship",
+    );
+    // cmdk's Command root preventDefault()s Enter and re-dispatches SELECT on
+    // the highlighted row, so the browser never generates this button's
+    // activation click. The confirm block's own keydown handler is what makes
+    // the act reachable without a mouse.
+    fireEvent.keyDown(sendButton, { key: "Enter" });
+
+    await waitFor(() =>
+      expect(mockInviteAndLinkClient).toHaveBeenCalledWith({
+        designerClientId: "manual-lead-relationship",
+        clientEmail: "jordan@example.com",
+        clientName: "Jordan Manual Lead",
+      }),
+    );
+  });
+
+  it("cancels the armed invite from the keyboard too", async () => {
+    render(
+      <ServiceAgreementDraftingRoom
+        proposal={{
+          id: "agreement-1",
+          designer_id: "designer-1",
+          client_id: null,
+          designer_client_id: "manual-lead-relationship",
+          description: "Seeded from Discovery · budget 15,000–50,000",
+          client: null,
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("combobox", { name: "Client account" }));
+    fireEvent.click(await screen.findByText("Jordan Manual Lead"));
+
+    fireEvent.keyDown(
+      await screen.findByTestId(
+        "client-picker-invite-cancel-manual-lead-relationship",
+      ),
+      { key: " " },
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.queryByTestId(
+          "client-picker-invite-confirm-manual-lead-relationship",
+        ),
+      ).not.toBeInTheDocument(),
+    );
+    expect(mockInviteAndLinkClient).not.toHaveBeenCalled();
+  });
+
   it("selects an already-linked client immediately, with no arm/confirm step", async () => {
     render(
       <ServiceAgreementDraftingRoom

@@ -85,16 +85,12 @@ export function ClientPicker({
   // the confirm block below. Already-linked rows are unaffected — see the
   // `linkable` branch in onSelect, which still selects immediately.
   const [armedInviteId, setArmedInviteId] = React.useState<string | null>(null);
+  const armedRegionId = React.useId();
+  const armedSendRef = React.useRef<HTMLButtonElement | null>(null);
 
-  // Arming is a transient UI state, not a commitment — drop it whenever the
-  // popover closes or the search narrows the list, so a stale confirm block
-  // never lingers on a row the user has moved away from.
   React.useEffect(() => {
     if (!open) setArmedInviteId(null);
   }, [open]);
-  React.useEffect(() => {
-    setArmedInviteId(null);
-  }, [search]);
 
   const { data: queriedClients, isLoading } = useClients();
   const clients = clientOptions ?? queriedClients;
@@ -133,6 +129,27 @@ export function ClientPicker({
     });
   }, [clients, trimmedSearch, labelFor, subtitleFor]);
 
+  // Arming is a transient UI state, not a commitment — it drops whenever the
+  // list RE-DERIVES for any reason (a search change, a background useClients
+  // refetch, a new clientOptions prop), not just when the search narrows. A
+  // row that briefly left the list and came back must be selected again before
+  // it can send: nothing outside a fresh human act may leave a send armed.
+  React.useEffect(() => {
+    setArmedInviteId(null);
+  }, [filtered]);
+
+  const armedClient = React.useMemo(
+    () => filtered.find((dc) => dc.id === armedInviteId) ?? null,
+    [filtered, armedInviteId],
+  );
+
+  // Focus follows the act: arming moves the caret onto the affordance that
+  // sends, so a keyboard-only designer's next keystroke is the decision rather
+  // than a hunt through cmdk's roving-focus model for where the decision went.
+  React.useEffect(() => {
+    if (armedInviteId) armedSendRef.current?.focus();
+  }, [armedInviteId]);
+
   // Treat the search text as a candidate email for "+ Add new client".
   const canAdd = trimmedSearch.length > 0;
   const isEmail = /.+@.+\..+/.test(trimmedSearch);
@@ -161,13 +178,15 @@ export function ClientPicker({
     }
   };
 
-  // R73 — invite-on-send. A captured household (client_id NULL, client_email
-  // set) can't be linked directly; selecting its row invites the email on file
+  // R73 — invite-on-send, J2 — consent first. A captured household (client_id
+  // NULL, client_email set) can't be linked directly; it has to be invited
   // (create-and-link the Patina account via useInviteAndLinkClient → the
-  // /api/clients/invite designerClientId path) and then proceeds exactly like
-  // a normal selection with the new profile id. Failures render inline at the
-  // row (R83) — the mutation carries meta.errorSurface='inline', so the global
-  // toast stays quiet; re-selecting the row is the retry act.
+  // /api/clients/invite designerClientId path), after which the flow proceeds
+  // exactly like a normal selection with the new profile id. Selecting the row
+  // only ARMS that; this function runs from the confirm block's explicit
+  // "Send invite" act and nowhere else. Failures render inline at the row
+  // (R83) — the mutation carries meta.errorSurface='inline', so the global
+  // toast stays quiet.
   const handleInviteAndLink = async (dc: DesignerClient) => {
     if (disabled || invitingId || !dc.client_email) return;
     setInvitingId(dc.id);
@@ -292,12 +311,16 @@ export function ClientPicker({
                   // login-required flow this needs its own explanation, not
                   // just the generic tag.
                   const needsLoginHint = requireClientLogin && !linkable && !invitable;
+                  const isArmed = armedInviteId === dc.id;
+                  const confirmId = `${armedRegionId}-${dc.id}`;
                   return (
                     <React.Fragment key={dc.id}>
                       <CommandPrimitive.Item
                         value={dc.id}
                         data-testid={`client-picker-option-${dc.client_id ?? dc.id}`}
                         disabled={!linkable && !invitable}
+                        aria-expanded={invitable ? isArmed : undefined}
+                        aria-controls={isArmed ? confirmId : undefined}
                         onSelect={() => {
                           if (disabled || invitingId) return;
                           if (linkable) {
@@ -347,18 +370,23 @@ export function ClientPicker({
                             {isInviting ? (
                               'Inviting…'
                             ) : invitable ? (
-                              // The tag reads "No Patina account" at rest and
-                              // becomes "Select to invite" when the row is
-                              // hovered/highlighted (cmdk sets aria-selected)
-                              // — selecting only arms the row (see onSelect
-                              // above); it never sends by itself, so the copy
-                              // must not read as an immediate action.
-                              <>
-                                <span className="group-aria-selected:hidden">No Patina account</span>
-                                <span className="hidden text-[var(--accent-primary)] group-aria-selected:inline">
-                                  Select to invite
-                                </span>
-                              </>
+                              // Three states, all readable without color: at
+                              // rest "No Patina account"; highlighted (cmdk
+                              // sets aria-selected) "Select to invite" —
+                              // selecting only ARMS, so the copy must not read
+                              // as an immediate action; armed "Confirm below",
+                              // which is also what a screen reader gets off
+                              // the row itself once aria-expanded flips.
+                              isArmed ? (
+                                <span className="text-[var(--accent-primary)]">Confirm below</span>
+                              ) : (
+                                <>
+                                  <span className="group-aria-selected:hidden">No Patina account</span>
+                                  <span className="hidden text-[var(--accent-primary)] group-aria-selected:inline">
+                                    Select to invite
+                                  </span>
+                                </>
+                              )
                             ) : (
                               'No email on file'
                             )}
@@ -369,9 +397,27 @@ export function ClientPicker({
                           only got us here. Sending the invite is a separate,
                           explicit consent affordance — the row's own act
                           never fires the outbound email. */}
-                      {armedInviteId === dc.id && (
+                      {isArmed && (
                         <div
+                          role="group"
+                          id={confirmId}
+                          aria-label={`Invite ${dc.client_email}`}
                           data-testid={`client-picker-invite-confirm-${dc.id}`}
+                          onKeyDown={(event) => {
+                            // cmdk's Command root preventDefault()s EVERY Enter
+                            // that reaches it and re-dispatches SELECT on the
+                            // highlighted row, so a button inside its subtree
+                            // never receives the browser's activation click and
+                            // the invite silently never fires. Intercept before
+                            // the key climbs, and activate the focused control
+                            // by hand. Space too, for parity.
+                            if (event.key !== 'Enter' && event.key !== ' ') return;
+                            const target = event.target as HTMLElement | null;
+                            if (!(target instanceof HTMLButtonElement)) return;
+                            event.preventDefault();
+                            event.stopPropagation();
+                            target.click();
+                          }}
                           className="px-2 pb-1.5 pt-0.5 text-[0.7rem] leading-snug text-[var(--text-muted)]"
                         >
                           <p className="mb-1.5">
@@ -382,6 +428,7 @@ export function ClientPicker({
                           <div className="flex items-center gap-2">
                             <button
                               type="button"
+                              ref={armedSendRef}
                               data-testid={`client-picker-invite-send-${dc.id}`}
                               onClick={(event) => {
                                 event.stopPropagation();
@@ -425,7 +472,10 @@ export function ClientPicker({
                           className="px-2 pb-1 pt-0.5 text-[0.7rem] leading-snug text-[var(--color-terracotta)]"
                         >
                           {inviteError.message}
-                          <span className="opacity-80"> Select the row again to retry.</span>
+                          <span className="opacity-80">
+                            {' '}
+                            Select the row again, then Send invite, to retry.
+                          </span>
                         </div>
                       )}
                     </React.Fragment>
@@ -463,6 +513,15 @@ export function ClientPicker({
                 )}
               </CommandPrimitive.List>
             </CommandPrimitive>
+            {/* J2 — the armed state has to be perceivable without sight. It
+                lives OUTSIDE the cmdk listbox (buttons and live regions are
+                not valid listbox children) and narrates the same three-state
+                copy the row's tag shows. */}
+            <p aria-live="polite" data-testid="client-picker-invite-status" className="sr-only">
+              {armedClient
+                ? `Invite armed for ${subtitleFor(armedClient) ?? labelFor(armedClient)}. Choose Send invite to email them, or Cancel.`
+                : ''}
+            </p>
           </PopoverPrimitive.Content>
         </PopoverPrimitive.Portal>
       </PopoverPrimitive.Root>
