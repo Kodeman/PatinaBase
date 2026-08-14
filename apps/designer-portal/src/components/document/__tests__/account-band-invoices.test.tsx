@@ -125,4 +125,44 @@ describe('AccountBand invoice handoff', () => {
     act(() => window.dispatchEvent(new CustomEvent('document:open-project-change')));
     expect(screen.getByText('Change sheet open')).toBeInTheDocument();
   });
+
+  it('renders its own "Draw an invoice" primary by default (byte-identical standalone mount)', () => {
+    render(<AccountBand projectId="project-1" />);
+    fireEvent.click(screen.getByRole('button', { name: /The accounts/ }));
+
+    expect(screen.getByRole('button', { name: 'Draw an invoice' })).toBeInTheDocument();
+  });
+
+  it('drops its own "Draw an invoice" primary when headless, keeping export + amendment', () => {
+    render(<AccountBand projectId="project-1" headless />);
+    fireEvent.click(screen.getByRole('button', { name: /The accounts/ }));
+
+    expect(
+      screen.queryByRole('button', { name: 'Draw an invoice' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Export · QBO' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Amendment' })).toBeInTheDocument();
+  });
+
+  it('opens the amendment sheet from the document:compose-amendment event', () => {
+    render(<AccountBand projectId="project-1" headless />);
+
+    act(() => window.dispatchEvent(new CustomEvent('document:compose-amendment')));
+    expect(screen.getByText('Change sheet open')).toBeInTheDocument();
+  });
+
+  it('removes the compose-amendment listener on unmount rather than leaking a state update', () => {
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { unmount } = render(<AccountBand projectId="project-1" headless />);
+
+    unmount();
+    act(() => window.dispatchEvent(new CustomEvent('document:compose-amendment')));
+
+    expect(
+      errorSpy.mock.calls.some((call) =>
+        String(call[0]).includes('state update on an unmounted component'),
+      ),
+    ).toBe(false);
+    errorSpy.mockRestore();
+  });
 });

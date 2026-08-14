@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 let mockAuthority: Record<string, unknown>;
 let mockBudget: Record<string, unknown>;
@@ -15,6 +15,24 @@ jest.mock('@/hooks/use-commercial-documents', () => ({
 
 jest.mock('@/hooks/use-account-page', () => ({
   useAccountPage: () => mockAccount,
+}));
+
+jest.mock('@/lib/analytics/document-events', () => ({
+  documentEvents: {
+    actionShown: jest.fn(),
+    actionSelected: jest.fn(),
+    regionFolded: jest.fn(),
+  },
+}));
+
+const mockOpenInvoiceComposer = jest.fn();
+jest.mock('../accounts/invoice-overlays', () => ({
+  openInvoiceComposer: (...args: unknown[]) => mockOpenInvoiceComposer(...args),
+}));
+
+const mockOpenLedger = jest.fn();
+jest.mock('../command-bar', () => ({
+  openLedger: (...args: unknown[]) => mockOpenLedger(...args),
 }));
 
 jest.mock('./project-authority-band', () => ({
@@ -35,7 +53,20 @@ const settledEmpty = {
   account: { data: null, isLoading: false, isError: false },
 };
 
+/** The fold's derived default only fires once every source has settled; a
+ *  sparse project (nothing committed, nothing executed, no working plan)
+ *  folds shut by default. Tests exercising rung content unfold first via the
+ *  seam so they read the same body regardless of which side of the default
+ *  they land on. */
+function unfoldIfNeeded() {
+  const seam = screen.queryByRole('button', { name: /unfold/i });
+  if (seam) fireEvent.click(seam);
+}
+
 beforeEach(() => {
+  window.localStorage.clear();
+  mockOpenInvoiceComposer.mockClear();
+  mockOpenLedger.mockClear();
   mockAuthority = settledEmpty.authority;
   mockBudget = settledEmpty.budget;
   mockInstruments = settledEmpty.instruments;
@@ -79,7 +110,8 @@ describe('MoneyRegion', () => {
 
     render(<MoneyRegion projectId="project-1" />);
 
-    expect(screen.getByText('Design authority · remaining $18,000')).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Design authority' })).toBeVisible();
+    expect(screen.getByText('$18,000 remaining · $13,772 committed')).toBeVisible();
     expect(screen.getByText('Authority · $100,000 authorized')).toBeVisible();
     expect(screen.getByText('Plan · $86,540 working budget v2')).toBeVisible();
     expect(
@@ -101,6 +133,7 @@ describe('MoneyRegion', () => {
     };
 
     const { container } = render(<MoneyRegion projectId="project-1" />);
+    unfoldIfNeeded();
 
     expect(screen.getByText('Plan · working budget v1 · no rooms yet')).toBeVisible();
     expect(container).not.toHaveTextContent('$0');
@@ -122,8 +155,10 @@ describe('MoneyRegion', () => {
 
   it('degrades every tier to a band-honest line when nothing is recorded', () => {
     const { container } = render(<MoneyRegion projectId="project-1" />);
+    unfoldIfNeeded();
 
-    expect(screen.queryByText(/Design authority · remaining/)).not.toBeInTheDocument();
+    expect(screen.getByText('no authority yet')).toBeVisible();
+    expect(screen.queryByText(/remaining/)).not.toBeInTheDocument();
     expect(screen.getByText('Authority · no design authority recorded yet')).toBeVisible();
     expect(screen.getByText('Plan · no working budget yet')).toBeVisible();
     expect(screen.getByText('Committed · nothing executed yet')).toBeVisible();
@@ -145,6 +180,7 @@ describe('MoneyRegion', () => {
 
   it('carries the four detail surfaces the tiers summarise, accounts included', () => {
     render(<MoneyRegion projectId="project-1" />);
+    unfoldIfNeeded();
 
     expect(screen.getByText('Authority band')).toBeVisible();
     expect(screen.getByText('Commerce section')).toBeVisible();
@@ -153,6 +189,7 @@ describe('MoneyRegion', () => {
 
   it('names the moved tier’s derivation so it cannot be read as the owed total', () => {
     render(<MoneyRegion projectId="project-1" />);
+    unfoldIfNeeded();
 
     const caption = screen.getByText(/Moved is the accounts’ committed figure/);
     expect(caption).toHaveTextContent('not funds disbursed');
@@ -177,5 +214,92 @@ describe('MoneyRegion', () => {
     expect(screen.getByText(/Moved is the accounts’ committed figure/)).toHaveTextContent(
       '1 trade scope still in draft, counted in neither.',
     );
+  });
+
+  it('inks exactly one ledger leader on the region head', () => {
+    mockInstruments = {
+      data: [{ state: 'executed', totalAmountCents: 1_000_000 }],
+      isLoading: false,
+      error: null,
+    };
+
+    render(<MoneyRegion projectId="project-1" />);
+
+    expect(
+      document.querySelectorAll('[data-action-variant="inked"]'),
+    ).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Draw an invoice' })).toHaveAttribute(
+      'data-action-variant',
+      'inked',
+    );
+  });
+
+  it('folds a sparse project by default, stating the seam summary', () => {
+    render(<MoneyRegion projectId="project-1" />);
+
+    expect(
+      screen.queryByRole('heading', { name: 'Design authority' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('no authority yet · $0 committed')).toBeVisible();
+    expect(screen.getByRole('button', { name: /unfold/i })).toBeInTheDocument();
+  });
+
+  it('opens on the seam and round-trips back through it', () => {
+    render(<MoneyRegion projectId="project-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /unfold/i }));
+
+    expect(screen.getByRole('heading', { name: 'Design authority' })).toBeVisible();
+    expect(screen.getByText('Account band')).toBeVisible();
+    expect(screen.getByRole('button', { name: /fold/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /fold/i }));
+
+    expect(
+      screen.queryByRole('heading', { name: 'Design authority' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /unfold/i })).toBeInTheDocument();
+  });
+
+  it('draws an invoice from the ledger with the same call the accounts band makes', () => {
+    mockInstruments = {
+      data: [{ state: 'executed', totalAmountCents: 1_000_000 }],
+      isLoading: false,
+      error: null,
+    };
+
+    render(<MoneyRegion projectId="project-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Draw an invoice' }));
+
+    expect(mockOpenInvoiceComposer).toHaveBeenCalledWith({ projectId: 'project-1' });
+  });
+
+  it('opens hours through the same opener the band uses, from the ledger', () => {
+    mockInstruments = {
+      data: [{ state: 'executed', totalAmountCents: 1_000_000 }],
+      isLoading: false,
+      error: null,
+    };
+
+    render(<MoneyRegion projectId="project-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Hours · this project ↗' }));
+
+    expect(mockOpenLedger).toHaveBeenCalledWith('hours', { projectId: 'project-1' });
+  });
+
+  it('dispatches the compose-amendment event the band listens for, from the ledger', () => {
+    mockInstruments = {
+      data: [{ state: 'executed', totalAmountCents: 1_000_000 }],
+      isLoading: false,
+      error: null,
+    };
+    const heard = jest.fn();
+    window.addEventListener('document:compose-amendment', heard);
+
+    render(<MoneyRegion projectId="project-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Amendment' }));
+
+    expect(heard).toHaveBeenCalledTimes(1);
+    window.removeEventListener('document:compose-amendment', heard);
   });
 });

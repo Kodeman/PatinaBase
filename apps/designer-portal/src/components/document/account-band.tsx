@@ -165,10 +165,18 @@ export function AccountBand({
   projectId,
   clientName,
   activeSection,
+  headless = false,
 }: {
   projectId: string;
   clientName?: string | null;
   activeSection?: SectionKey | null;
+  /** The Money region now carries the "Draw an invoice" leader on its own
+   *  head — a headless band drops its own duplicate of that primary so the
+   *  act has exactly one doorway. Everything else (the fold, the variance
+   *  table, export, the amendment doorway) stays put: this band is still the
+   *  accounts sub-seam inside the region, not merely absorbed. Defaults to
+   *  false so the standalone page.tsx mount is byte-identical to before. */
+  headless?: boolean;
 }) {
   const { data, isLoading, isError, refetch } = useAccountPage(projectId);
   const [open, setOpen] = useState(false);
@@ -182,6 +190,15 @@ export function AccountBand({
     window.addEventListener('document:open-project-change', openChange);
     return () => window.removeEventListener('document:open-project-change', openChange);
   }, [changeOnly]);
+
+  // The Money region's head ledger dispatches this instead of calling
+  // setAmendmentOpen directly — the region has no access to this band's local
+  // state, so the band remains the sole owner of its AmendmentSheet.
+  useEffect(() => {
+    const openAmendment = () => setAmendmentOpen(true);
+    window.addEventListener('document:compose-amendment', openAmendment);
+    return () => window.removeEventListener('document:compose-amendment', openAmendment);
+  }, []);
 
   if (isLoading) {
     return <SectionLoadingLine label="opening the ledger" className="mt-4" />;
@@ -340,14 +357,18 @@ export function AccountBand({
             className="mt-2.5 items-center"
           >
             {/* R74b — draw an invoice for THIS engagement: the anti-wizard
-                composer, milestones/time/FF&E pulled through pre-scoped. */}
-            <DocumentAction
-              actionKey="draw-project-invoice"
-              variant="primary"
-              onClick={() => openInvoiceComposer({ projectId })}
-            >
-              Draw an invoice
-            </DocumentAction>
+                composer, milestones/time/FF&E pulled through pre-scoped.
+                Headless drops this: the Money region's head now carries the
+                single inked "Draw an invoice" leader for this project. */}
+            {!headless && (
+              <DocumentAction
+                actionKey="draw-project-invoice"
+                variant="primary"
+                onClick={() => openInvoiceComposer({ projectId })}
+              >
+                Draw an invoice
+              </DocumentAction>
+            )}
             {/* R77 — the per-document Hours lens (the drawer pre-addresses
                 the ledger with this project once wired through). */}
             <DocumentAction
