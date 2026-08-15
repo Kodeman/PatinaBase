@@ -8,14 +8,22 @@ import {
 } from './catalog';
 import { isHealthAuthorized } from './auth';
 import { probeBinding } from './database';
-import type { EdgeApiEnv } from './env';
+import { UpstreamAbortError, UpstreamTimeoutError } from './deadline';
+import {
+  ConfigurationError,
+  validateRuntimeConfig,
+  type EdgeApiEnv,
+  type RuntimeConfig,
+} from './env';
 import { isCompatibilityPath, proxySupabaseRequest } from './proxy';
 import {
-  clampPercentage,
-  isEnabled,
+  ALERT_EVENTS,
+  createTraceId,
   isSelectedForRollout,
+  routeClassFor,
   structuredLog,
-  traceIdFor,
+  trustedRolloutKey,
+  type AlertLogEvent,
 } from './security';
 
 export interface WorkerDependencies {
@@ -24,20 +32,26 @@ export interface WorkerDependencies {
     env: EdgeApiEnv,
     ids: string[],
   ): Promise<CatalogProductSummary[]>;
-  queryLegacy(env: EdgeApiEnv, ids: string[]): Promise<CatalogProductSummary[]>;
+  queryLegacy(
+    env: EdgeApiEnv,
+    ids: string[],
+    signal?: AbortSignal,
+  ): Promise<CatalogProductSummary[]>;
   probe(binding: Hyperdrive | undefined): Promise<boolean>;
   authorizeHealth(request: Request, env: EdgeApiEnv): Promise<boolean>;
   randomUUID(): string;
-  log(event: Record<string, unknown>): void;
+  cohortKey(request: Request): string;
+  log(event: AlertLogEvent): void;
 }
 
 const defaultDependencies: WorkerDependencies = {
-  fetcher: fetch,
+  fetcher: (input, init) => fetch(input, init),
   queryHyperdrive: queryCatalogViaHyperdrive,
   queryLegacy: queryCatalogViaLegacy,
   probe: probeBinding,
   authorizeHealth: isHealthAuthorized,
-  randomUUID: crypto.randomUUID,
+  randomUUID: () => crypto.randomUUID(),
+  cohortKey: trustedRolloutKey,
   log: structuredLog,
 };
 
@@ -75,17 +89,48 @@ async function publicCatalogResponse(
   });
 }
 
-function rolloutKey(request: Request): string {
-  return (
-    request.headers.get('x-patina-rollout-key') ??
-    request.headers.get('cf-connecting-ip') ??
-    request.url
-  );
+function logCatalogFailure(
+  dependencies: WorkerDependencies,
+  event: AlertLogEvent['event'],
+  traceId: string,
+  fallback?: AlertLogEvent['fallback'],
+): void {
+  dependencies.log({
+    event,
+    severity: 'error',
+    traceId,
+    routeClass: 'catalog.products',
+    fallback,
+  });
+}
+
+async function legacyCatalog(
+  request: Request,
+  env: EdgeApiEnv,
+  ids: string[],
+  traceId: string,
+  dependencies: WorkerDependencies,
+): Promise<Response> {
+  try {
+    return publicCatalogResponse(
+      await dependencies.queryLegacy(env, ids, request.signal),
+      traceId,
+    );
+  } catch {
+    logCatalogFailure(
+      dependencies,
+      ALERT_EVENTS.catalogLegacyFailure,
+      traceId,
+      'unavailable',
+    );
+    return privateJson({ error: 'catalog_unavailable' }, 503, traceId);
+  }
 }
 
 async function handleCatalog(
   request: Request,
   env: EdgeApiEnv,
+  config: RuntimeConfig,
   ctx: ExecutionContext,
   traceId: string,
   dependencies: WorkerDependencies,
@@ -104,61 +149,68 @@ async function handleCatalog(
     throw error;
   }
 
-  const percentage = clampPercentage(env.CATALOG_HYPERDRIVE_PERCENT);
-  const selected =
-    env.CATALOG_SOURCE === 'hyperdrive' &&
-    isSelectedForRollout(rolloutKey(request), percentage);
-
-  if (!selected) {
-    try {
-      const legacy = await dependencies.queryLegacy(env, ids);
-      if (isEnabled(env.CATALOG_SHADOW_ENABLED)) {
-        ctx.waitUntil(
-          dependencies
-            .queryHyperdrive(env, ids)
-            .then((shadow) => {
-              if (!catalogResultsMatch(legacy, shadow)) {
-                dependencies.log({
-                  event: 'catalog_shadow_mismatch',
-                  traceId,
-                  route: '/v1/catalog/products',
-                  legacyCount: legacy.length,
-                  hyperdriveCount: shadow.length,
-                });
-              }
-            })
-            .catch(() => {
-              dependencies.log({
-                event: 'catalog_hyperdrive_failure',
-                traceId,
-                route: '/v1/catalog/products',
-                fallback: 'legacy',
-              });
-            }),
-        );
-      }
-      return publicCatalogResponse(legacy, traceId);
-    } catch {
-      dependencies.log({
-        event: 'catalog_legacy_failure',
-        traceId,
-        route: '/v1/catalog/products',
-      });
-      return privateJson({ error: 'catalog_unavailable' }, 503, traceId);
-    }
+  if (config.catalogSource === 'legacy') {
+    return legacyCatalog(request, env, ids, traceId, dependencies);
   }
 
+  if (config.catalogSource === 'shadow') {
+    let legacy: CatalogProductSummary[];
+    try {
+      legacy = await dependencies.queryLegacy(env, ids, request.signal);
+    } catch {
+      logCatalogFailure(
+        dependencies,
+        ALERT_EVENTS.catalogLegacyFailure,
+        traceId,
+        'unavailable',
+      );
+      return privateJson({ error: 'catalog_unavailable' }, 503, traceId);
+    }
+    ctx.waitUntil(
+      dependencies
+        .queryHyperdrive(env, ids)
+        .then((shadow) => {
+          if (!catalogResultsMatch(legacy, shadow)) {
+            dependencies.log({
+              event: ALERT_EVENTS.catalogShadowMismatch,
+              severity: 'critical',
+              traceId,
+              routeClass: 'catalog.products',
+              legacyCount: legacy.length,
+              hyperdriveCount: shadow.length,
+              fallback: 'legacy',
+            });
+          }
+        })
+        .catch(() => {
+          logCatalogFailure(
+            dependencies,
+            ALERT_EVENTS.catalogHyperdriveFailure,
+            traceId,
+            'legacy',
+          );
+        }),
+    );
+    return publicCatalogResponse(legacy, traceId);
+  }
+
+  const selected = isSelectedForRollout(
+    dependencies.cohortKey(request),
+    config.catalogHyperdrivePercent,
+  );
+  if (!selected) return legacyCatalog(request, env, ids, traceId, dependencies);
+
   const [legacyResult, hyperdriveResult] = await Promise.allSettled([
-    dependencies.queryLegacy(env, ids),
+    dependencies.queryLegacy(env, ids, request.signal),
     dependencies.queryHyperdrive(env, ids),
   ]);
   if (hyperdriveResult.status === 'rejected') {
-    dependencies.log({
-      event: 'catalog_hyperdrive_failure',
+    logCatalogFailure(
+      dependencies,
+      ALERT_EVENTS.catalogHyperdriveFailure,
       traceId,
-      route: '/v1/catalog/products',
-      fallback: legacyResult.status === 'fulfilled' ? 'legacy' : 'unavailable',
-    });
+      legacyResult.status === 'fulfilled' ? 'legacy' : 'unavailable',
+    );
     if (legacyResult.status === 'fulfilled') {
       return publicCatalogResponse(legacyResult.value, traceId);
     }
@@ -168,9 +220,10 @@ async function handleCatalog(
   if (legacyResult.status === 'fulfilled') {
     if (!catalogResultsMatch(legacyResult.value, hyperdriveResult.value)) {
       dependencies.log({
-        event: 'catalog_shadow_mismatch',
+        event: ALERT_EVENTS.catalogShadowMismatch,
+        severity: 'critical',
         traceId,
-        route: '/v1/catalog/products',
+        routeClass: 'catalog.products',
         legacyCount: legacyResult.value.length,
         hyperdriveCount: hyperdriveResult.value.length,
         fallback: 'legacy',
@@ -178,12 +231,12 @@ async function handleCatalog(
       return publicCatalogResponse(legacyResult.value, traceId);
     }
   } else {
-    dependencies.log({
-      event: 'catalog_legacy_failure',
+    logCatalogFailure(
+      dependencies,
+      ALERT_EVENTS.catalogLegacyFailure,
       traceId,
-      route: '/v1/catalog/products',
-      fallback: 'hyperdrive_public_view',
-    });
+      'hyperdrive_public_view',
+    );
   }
   return publicCatalogResponse(hyperdriveResult.value, traceId);
 }
@@ -221,14 +274,39 @@ export function createWorker(
   const dependencies = { ...defaultDependencies, ...overrides };
   return {
     async fetch(request, env, ctx): Promise<Response> {
-      const traceId = traceIdFor(request, dependencies.randomUUID);
+      const traceId = createTraceId(dependencies.randomUUID);
       const url = new URL(request.url);
+      const routeClass = routeClassFor(url.pathname);
+      let config: RuntimeConfig;
+      try {
+        config = validateRuntimeConfig(env);
+      } catch (error) {
+        if (error instanceof ConfigurationError) {
+          dependencies.log({
+            event: ALERT_EVENTS.configurationInvalid,
+            severity: 'critical',
+            traceId,
+            routeClass,
+            status: 503,
+          });
+          return privateJson({ error: 'service_unavailable' }, 503, traceId);
+        }
+        throw error;
+      }
+
       try {
         if (
           request.method === 'GET' &&
           url.pathname === '/v1/catalog/products'
         ) {
-          return await handleCatalog(request, env, ctx, traceId, dependencies);
+          return await handleCatalog(
+            request,
+            env,
+            config,
+            ctx,
+            traceId,
+            dependencies,
+          );
         }
         if (request.method === 'GET' && url.pathname === '/_internal/health') {
           return await handleHealth(request, env, traceId, dependencies);
@@ -237,16 +315,32 @@ export function createWorker(
           return await proxySupabaseRequest(
             request,
             env,
+            config,
             traceId,
             dependencies.fetcher,
           );
         }
         return privateJson({ error: 'not_found' }, 404, traceId);
-      } catch {
+      } catch (error) {
+        if (error instanceof UpstreamTimeoutError) {
+          dependencies.log({
+            event: ALERT_EVENTS.compatibilityTimeout,
+            severity: 'error',
+            traceId,
+            routeClass,
+            status: 504,
+          });
+          return privateJson({ error: 'upstream_timeout' }, 504, traceId);
+        }
+        if (error instanceof UpstreamAbortError) {
+          return privateJson({ error: 'request_aborted' }, 499, traceId);
+        }
         dependencies.log({
-          event: 'request_failure',
+          event: ALERT_EVENTS.requestFailure,
+          severity: 'error',
           traceId,
-          route: url.pathname,
+          routeClass,
+          status: 500,
         });
         return privateJson({ error: 'internal_error' }, 500, traceId);
       }

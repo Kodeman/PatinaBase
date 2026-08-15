@@ -1,4 +1,4 @@
-import { Client, type QueryResult } from 'pg';
+import type { QueryResult } from 'pg';
 import type { JWTPayload } from 'jose';
 import type { EdgeApiEnv } from './env';
 
@@ -13,22 +13,26 @@ export interface DatabaseClient {
 
 export type DatabaseClientFactory = (
   connectionString: string,
-) => DatabaseClient;
+) => DatabaseClient | Promise<DatabaseClient>;
 
-export const createDatabaseClient: DatabaseClientFactory = (connectionString) =>
-  new Client({
+export const createDatabaseClient: DatabaseClientFactory = async (
+  connectionString,
+) => {
+  const { Client } = await import('pg');
+  return new Client({
     connectionString,
     connectionTimeoutMillis: 3_000,
     query_timeout: 5_000,
     statement_timeout: 5_000,
   });
+};
 
 export async function withClient<T>(
   binding: Hyperdrive,
   work: (client: DatabaseClient) => Promise<T>,
   createClient: DatabaseClientFactory = createDatabaseClient,
 ): Promise<T> {
-  const client = createClient(binding.connectionString);
+  const client = await createClient(binding.connectionString);
   try {
     await client.connect();
     return await work(client);
@@ -39,6 +43,7 @@ export async function withClient<T>(
 
 export interface VerifiedSupabaseClaims extends JWTPayload {
   sub: string;
+  role: 'authenticated';
 }
 
 export async function withAuthenticatedTransaction<T>(

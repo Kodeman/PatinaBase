@@ -1,12 +1,19 @@
 import type { CatalogProductSummary } from '@patina/types';
 import type { EdgeApiEnv } from './env';
 import { withClient, type DatabaseClientFactory } from './database';
+import { fetchWithDeadline } from './deadline';
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export class CatalogRequestError extends Error {}
 export class CatalogSourceError extends Error {}
+
+export const CATALOG_SELECT_SQL = `SELECT id::text, name, brand, category, price_retail, images,
+                short_description, patina_managed, status
+           FROM public.edge_catalog_products
+          WHERE id = ANY($1::uuid[])
+          ORDER BY id`;
 
 interface CatalogRow {
   id?: unknown;
@@ -32,7 +39,7 @@ export function parseCatalogIds(url: URL): string[] {
 
   const unique = new Set<string>();
   for (const piece of pieces) {
-    const id = piece.toLowerCase();
+    const id = piece.trim().toLowerCase();
     if (!UUID_PATTERN.test(id))
       throw new CatalogRequestError('ids must be UUIDs');
     unique.add(id);
@@ -125,11 +132,7 @@ export async function queryCatalogViaHyperdrive(
     env.DB_PUBLIC_CACHE,
     async (client) => {
       const result = await client.query<CatalogRow & Record<string, unknown>>(
-        `SELECT id::text, name, brand, category, price_retail, images,
-                short_description, patina_managed, status
-           FROM public.edge_catalog_products
-          WHERE id = ANY($1::uuid[])
-          ORDER BY id`,
+        CATALOG_SELECT_SQL,
         [ids],
       );
       return result.rows;
@@ -142,9 +145,12 @@ export async function queryCatalogViaHyperdrive(
 export async function queryCatalogViaLegacy(
   env: EdgeApiEnv,
   ids: string[],
+  callerSignal?: AbortSignal,
   fetcher: typeof fetch = fetch,
 ): Promise<CatalogProductSummary[]> {
-  if (!env.SUPABASE_ANON_KEY) throw new CatalogSourceError('legacy catalog unavailable');
+  if (!env.SUPABASE_ANON_KEY) {
+    throw new CatalogSourceError('legacy catalog unavailable');
+  }
   const base = env.SUPABASE_UPSTREAM_URL.replace(/\/+$/, '');
   const url = new URL(`${base}/rest/v1/products`);
   url.searchParams.set('id', `in.(${ids.join(',')})`);
@@ -158,13 +164,19 @@ export async function queryCatalogViaLegacy(
 
   let response: Response;
   try {
-    response = await fetcher(url, {
-      headers: {
-        accept: 'application/json',
-        apikey: env.SUPABASE_ANON_KEY,
-        authorization: `Bearer ${env.SUPABASE_ANON_KEY}`,
+    response = await fetchWithDeadline(
+      fetcher,
+      url,
+      {
+        headers: {
+          accept: 'application/json',
+          apikey: env.SUPABASE_ANON_KEY,
+          authorization: `Bearer ${env.SUPABASE_ANON_KEY}`,
+        },
       },
-    });
+      callerSignal,
+      Number(env.LEGACY_FETCH_TIMEOUT_MS),
+    );
   } catch {
     throw new CatalogSourceError('legacy catalog unavailable');
   }
