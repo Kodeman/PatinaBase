@@ -135,7 +135,6 @@ export const GET = createRouteHandler(
         },
         retry: { maxRetries: 3 },
         timeout: { read: 10000 },
-        cache: { maxAge: 300, staleWhileRevalidate: 60 },
       });
     }
   ),
@@ -163,7 +162,7 @@ pnpm add @patina/api-routes
 
 Ensure peer dependencies are installed:
 ```bash
-pnpm add next@^15.0.0 next-auth@5.0.0-beta.29 zod@^3.22.4
+pnpm add next@^15.0.0
 ```
 
 ### Step 2: Identify Routes to Migrate
@@ -303,7 +302,7 @@ pnpm dev:designer
 curl http://localhost:3000/api/products
 
 # With authentication
-curl -H "Cookie: next-auth.session-token=..." http://localhost:3000/api/products
+curl -H "Authorization: Bearer <supabase-access-token>" http://localhost:3000/api/products
 ```
 
 Verify:
@@ -485,7 +484,6 @@ const { GET, POST } = createMultiMethodHandler({
         return proxyToBackend(request, context, {
           service: { name: 'catalog', baseUrl: CATALOG_URL },
           retry: { maxRetries: 3 },
-          cache: { maxAge: 60 },
         });
       }
     ),
@@ -554,7 +552,6 @@ export const GET = createRouteHandler(
           path: `/api/v1/projects/${id}/tasks`,
         },
         retry: { maxRetries: 3 },
-        cache: { maxAge: 30 },
       });
     }
   ),
@@ -755,7 +752,6 @@ export const catalogProxy = createProxyHandler(
     retry: { maxRetries: 3 },
     timeout: { read: 10000, write: 30000 },
     circuitBreaker: { failureThreshold: 5 },
-    cache: { maxAge: 300 },
   }
 );
 
@@ -836,7 +832,7 @@ compose(
 ```
 
 **Solutions:**
-1. Verify NextAuth is configured correctly
+1. Verify Supabase Auth is configured correctly
 2. Check `withAuth` middleware is applied
 3. Verify session contains `accessToken`
 4. Check backend JWT validation

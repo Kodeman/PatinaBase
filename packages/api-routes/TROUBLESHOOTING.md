@@ -78,7 +78,7 @@ warning "@patina/api-routes" has unmet peer dependency "next@>=15.0.0"
 **Solution:**
 ```bash
 # Install missing peer dependencies
-pnpm add next@^15.0.0 next-auth@5.0.0-beta.29 zod@^3.22.4
+pnpm add next@^15.0.0
 ```
 
 ### Issue: Build Fails with "No inputs found"
@@ -225,7 +225,7 @@ function myMiddleware(next: RouteHandler): RouteHandler {
 
 **Causes:**
 1. Missing `withAuth` middleware
-2. NextAuth session not valid
+2. Supabase session not valid
 3. Token not in request
 4. Backend JWT validation failing
 
@@ -251,28 +251,18 @@ export const GET = createRouteHandler(
 );
 ```
 
-**Solution 2: Check NextAuth configuration**
+**Solution 2: Check Supabase configuration**
 ```typescript
 // auth.ts
-import NextAuth from 'next-auth';
+import { createServerClient } from '@patina/supabase/server';
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
-  providers: [
-    // Your providers
-  ],
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.accessToken = user.accessToken; // Ensure token is set
-      }
-      return token;
-    },
-    async session({ session, token }) {
-      session.user.accessToken = token.accessToken; // Add to session
-      return session;
-    },
-  },
-});
+export async function auth() {
+  const supabase = await createServerClient();
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) return null;
+  const { data: sessionData } = await supabase.auth.getSession();
+  return { user: data.user, accessToken: sessionData.session?.access_token };
+}
 ```
 
 **Solution 3: Verify session exists**
@@ -699,16 +689,16 @@ Cache TTL is too long or SWR is keeping stale data alive.
 **Solution 1: Reduce cache TTL**
 ```typescript
 cache: {
-  maxAge: 60,  // Reduce from 300
-  staleWhileRevalidate: 15, // Reduce from 60
+  visibility: 'public',
+  reviewedPublic: true,
+  ttl: 60,  // Reduce from 300
+  swr: 15, // Reduce from 60
 }
 ```
 
 **Solution 2: Disable cache for specific routes**
 ```typescript
-cache: {
-  noCache: true,
-}
+// Omit cache. Responses default to Cache-Control: private, no-store.
 ```
 
 **Solution 3: Invalidate cache after writes**
@@ -748,8 +738,9 @@ export const PUT = createRouteHandler(
 ```typescript
 // Ensure cache is configured
 cache: {
-  maxAge: 300,
-  visibility: 'public', // Or 'private'
+  visibility: 'public',
+  reviewedPublic: true,
+  ttl: 300,
 }
 ```
 
@@ -761,13 +752,13 @@ curl -I http://localhost:3000/api/catalog/products
 # Cache-Control: public, max-age=300, stale-while-revalidate=60
 ```
 
-**Solution 3: Use correct visibility**
+**Solution 3: Keep authenticated data private**
 ```typescript
 // For user-specific data
-cache: { maxAge: 60, visibility: 'private' }
+// Omit cache. Responses default to Cache-Control: private, no-store.
 
 // For public data
-cache: { maxAge: 300, visibility: 'public' }
+cache: { visibility: 'public', reviewedPublic: true, ttl: 300 }
 ```
 
 ---
@@ -869,9 +860,10 @@ CATALOG_SERVICE_URL=https://catalog.patina.example.com
 **Solution 1: Add caching**
 ```typescript
 cache: {
-  maxAge: 300, // 5 minutes for static data
-  staleWhileRevalidate: 60,
   visibility: 'public',
+  reviewedPublic: true,
+  ttl: 300, // 5 minutes for static data
+  swr: 60,
 }
 ```
 
@@ -1074,7 +1066,7 @@ curl -v http://localhost:3000/api/catalog/products
 curl -v http://localhost:3011/api/v1/products
 
 # With auth
-curl -v -H "Cookie: next-auth.session-token=..." \
+curl -v -H "Authorization: Bearer <supabase-access-token>" \
   http://localhost:3000/api/catalog/products
 ```
 

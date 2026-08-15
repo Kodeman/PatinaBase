@@ -16,7 +16,6 @@ export const GET = createRouteHandler(
         requireAuth: true,
         retry: { maxRetries: 3 },
         timeout: { read: 10000 },
-        cache: { maxAge: 300 }, // 5 min cache for roles
       });
     } catch (error) {
       return apiError(error);

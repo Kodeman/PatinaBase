@@ -36,7 +36,6 @@
     "@opentelemetry/api": "^1.9.0",
     "@patina/auth": "workspace:*",
     "@patina/types": "workspace:*",
-    "next-auth": "5.0.0-beta.29",
     "zod": "^3.22.4"
   },
   "devDependencies": {

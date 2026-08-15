@@ -2,9 +2,8 @@
  * Backend Proxy Middleware
  *
  * Forwards Next.js API requests to NestJS services. Responsibilities:
- *   1. Reassemble the auth token from cookies — NextAuth chunks large JWTs
- *      across `next-auth.session-token.0`, `.1`, ...; Supabase chunks large
- *      session payloads across `sb-<host>-auth-token.0`, `.1`, ... The
+ *   1. Reassemble the Supabase auth token from the Authorization header or
+ *      `sb-<host>-auth-token.0`, `.1`, ... cookies. The
  *      reassembly is the load-bearing thing this module does that no library
  *      replaces.
  *   2. Verify the JWT signature before forwarding (A5 — defense-in-depth on
@@ -20,7 +19,6 @@
  * in-process per-worker CB was removed in this refactor — it never provided
  * system-wide protection and added 530 LOC of state-machine to maintain.
  */
-import { getToken } from 'next-auth/jwt';
 import { cookies } from 'next/headers';
 import { verifyJwtToken } from '@patina/auth';
 import type { RouteContext } from '../utils/request-context';
@@ -74,21 +72,30 @@ export interface ResponseTransformer {
   transform: (data: unknown, response: Response) => unknown;
 }
 
-export interface ProxyConfig {
+interface BaseProxyConfig {
   service: ServiceConfig;
   retry?: Partial<RetryConfig>;
   timeout?: Partial<TimeoutConfig>;
-  /** Whether authentication is required (default: true) */
-  requireAuth?: boolean;
   /** Additional headers to forward from client request */
   forwardHeaders?: string[];
   /** Custom error code mappings for this service */
   errorMapping?: ErrorMapping;
   /** Optional response transformer */
   responseTransformer?: ResponseTransformer;
-  /** Cache configuration for successful responses */
-  cache?: CacheConfig;
 }
+
+export type ProxyConfig =
+  | (BaseProxyConfig & {
+      /** Authentication is required by default. */
+      requireAuth?: true;
+      cache?: never;
+    })
+  | (BaseProxyConfig & {
+      /** Public routes must opt out of authentication explicitly. */
+      requireAuth: false;
+      /** Public caching also requires CacheConfig.reviewedPublic. */
+      cache?: CacheConfig;
+    });
 
 const DEFAULT_FORWARD_HEADERS = [
   'content-type',
@@ -107,81 +114,48 @@ const BLOCKED_HEADERS = new Set([
 ]);
 
 /**
- * Reassemble the auth token from cookies.
- * Handles NextAuth chunked session tokens and Supabase chunked auth tokens.
+ * Read a Supabase access token from the standard Bearer header or SSR cookie.
+ * Handles unchunked and chunked auth cookies without combining separate
+ * Supabase projects' sessions.
  * Returns null if no token found or extraction throws.
  */
 async function extractAuthToken(request: Request): Promise<string | null> {
+  const authorization = request.headers.get('authorization');
+  if (authorization?.startsWith('Bearer ')) {
+    const token = authorization.slice('Bearer '.length).trim();
+    if (token) return token;
+  }
+
   const cookieStore = await cookies();
 
-  // ─── NextAuth path ────────────────────────────────────────────────────────
-  // Single cookie first, then check for `.0`, `.1`, ... chunked variants.
-  let sessionToken =
-    cookieStore.get('next-auth.session-token')?.value ??
-    cookieStore.get('__Secure-next-auth.session-token')?.value;
-
-  if (!sessionToken) {
-    const chunks: string[] = [];
-    for (let i = 0; ; i++) {
-      const chunk =
-        cookieStore.get(`next-auth.session-token.${i}`)?.value ??
-        cookieStore.get(`__Secure-next-auth.session-token.${i}`)?.value;
-      if (!chunk) break;
-      chunks.push(chunk);
-    }
-    if (chunks.length > 0) sessionToken = chunks.join('');
+  const cookieGroups = new Map<string, Map<number | 'base', string>>();
+  for (const cookie of cookieStore.getAll()) {
+    const match = /^(sb-.*-auth-token)(?:\.(\d+))?$/.exec(cookie.name);
+    if (!match) continue;
+    const group = cookieGroups.get(match[1]) ?? new Map<number | 'base', string>();
+    group.set(match[2] === undefined ? 'base' : Number(match[2]), cookie.value);
+    cookieGroups.set(match[1], group);
   }
 
-  if (sessionToken) {
-    try {
-      const mockReq = {
-        headers: request.headers,
-        cookies: {
-          get: (name: string) => {
-            if (
-              name === 'next-auth.session-token' ||
-              name === '__Secure-next-auth.session-token'
-            ) {
-              return { value: sessionToken };
-            }
-            return cookieStore.get(name);
-          },
-          getAll: () => cookieStore.getAll(),
-        },
-      };
-      const jwtToken = await getToken({
-        req: mockReq as any,
-        secret: process.env.NEXTAUTH_SECRET,
-        cookieName: 'next-auth.session-token',
-      });
-      if (jwtToken?.accessToken && typeof jwtToken.accessToken === 'string') {
-        return jwtToken.accessToken;
-      }
-    } catch {
-      // Fall through to Supabase path.
+  for (const group of cookieGroups.values()) {
+    let raw = group.get('base');
+    if (!raw) {
+      const chunks: string[] = [];
+      for (let i = 0; group.has(i); i++) chunks.push(group.get(i)!);
+      raw = chunks.length > 0 ? chunks.join('') : undefined;
     }
-  }
+    if (!raw) continue;
 
-  // ─── Supabase path ────────────────────────────────────────────────────────
-  // `sb-<host>-auth-token` (or chunked `.0`, `.1`, ...) carries a base64-
-  // encoded JSON session with `access_token`. Used by @supabase/ssr.
-  const supabaseCookies = cookieStore
-    .getAll()
-    .filter((c) => /^sb-.*-auth-token(\.\d+)?$/.test(c.name))
-    .sort((a, b) => a.name.localeCompare(b.name));
-
-  if (supabaseCookies.length > 0) {
-    const raw = supabaseCookies.map((c) => c.value).join('');
-    const value = raw.startsWith('base64-')
-      ? Buffer.from(raw.slice(7), 'base64').toString('utf-8')
-      : raw;
     try {
+      const value = raw.startsWith('base64-')
+        ? Buffer.from(raw.slice(7), 'base64url').toString('utf-8')
+        : decodeURIComponent(raw);
       const parsed = JSON.parse(value);
       if (parsed && typeof parsed.access_token === 'string') {
         return parsed.access_token;
       }
     } catch {
-      // Malformed Supabase cookie — return null below.
+      continue;
     }
   }
 
@@ -223,12 +197,14 @@ function buildHeaders(
   headers['X-Forwarded-Host'] = url.host;
   headers['X-Forwarded-Proto'] = url.protocol.replace(':', '');
 
-  if (context.user) headers['X-User-Id'] = context.user.id;
+  if (config.requireAuth !== false && context.user) {
+    headers['X-User-Id'] = context.user.id;
+  }
 
   return headers;
 }
 
-async function extractRequestBody(request: Request): Promise<BodyInit | null> {
+async function extractRequestBody(request: Request): Promise<RequestInit['body']> {
   const method = request.method.toUpperCase();
   if (['GET', 'HEAD', 'OPTIONS'].includes(method)) return null;
 
@@ -316,12 +292,13 @@ export async function proxyToBackend(
 ): Promise<Response> {
   const method = request.method;
   const backendUrl = buildBackendUrl(request, config);
+  const requireAuth = config.requireAuth !== false;
   logRequestStart(context, method, backendUrl);
 
   try {
     // 1. Extract auth token from context (set by upstream middleware) or cookies.
     let authToken: string | null = getAuthToken(context) ?? null;
-    if (!authToken && config.requireAuth !== false) {
+    if (!authToken && requireAuth) {
       try {
         authToken = await extractAuthToken(request);
       } catch (err) {
@@ -330,7 +307,7 @@ export async function proxyToBackend(
     }
 
     // 2. If auth is required and we don't have a token, reject early.
-    if (config.requireAuth === true && !authToken) {
+    if (requireAuth && !authToken) {
       logRequestError(
         context,
         method,
@@ -368,7 +345,7 @@ export async function proxyToBackend(
       async () => {
         const response = await fetchWithTimeout(
           backendUrl,
-          { method, headers, body: body as BodyInit | undefined },
+          { method, headers, body },
           timeout,
           config.service.fetcher,
         );
@@ -379,7 +356,10 @@ export async function proxyToBackend(
     );
 
     logRequestComplete(context, method, backendUrl, 200);
-    return apiSuccess(data, undefined, { status: 200, cache: config.cache });
+    return apiSuccess(data, undefined, {
+      status: 200,
+      cache: requireAuth ? undefined : config.cache,
+    });
   } catch (error) {
     logRequestError(context, method, backendUrl, error);
 
@@ -448,7 +428,12 @@ export async function proxyToBackend(
 export function createProxyHandler(
   serviceName: string,
   baseUrl: string,
-  options: Partial<Omit<ProxyConfig, 'service'>> & { service?: Partial<ServiceConfig> } = {},
+  options: (Omit<BaseProxyConfig, 'service'> & {
+    service?: Partial<ServiceConfig>;
+  } & (
+      | { requireAuth?: true; cache?: never }
+      | { requireAuth: false; cache?: CacheConfig }
+    )) = {},
 ) {
   return async (request: Request, context: RouteContext): Promise<Response> => {
     return proxyToBackend(request, context, {

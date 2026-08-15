@@ -16,7 +16,6 @@ export const GET = createRouteHandler(
         requireAuth: true,
         retry: { maxRetries: 3 },
         timeout: { read: 10000 },
-        cache: { maxAge: 30 }, // Short cache for orders
       });
     } catch (error) {
       return apiError(error);
