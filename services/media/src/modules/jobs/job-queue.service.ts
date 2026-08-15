@@ -1,6 +1,15 @@
-import { Injectable, Logger, NotImplementedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  NotImplementedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PrismaClient, JobType, JobState } from '../../generated/prisma-client';
+import { Prisma, PrismaClient, JobType, JobState } from '../../generated/prisma-client';
+
+type DatabaseClient = PrismaClient | Prisma.TransactionClient;
 
 export interface JobPayload {
   assetId: string;
@@ -69,8 +78,8 @@ export class JobQueueService {
    * producer. Returns the ProcessJob id (also used as the worker's `jobId`,
    * so the completion callback can address the same row).
    */
-  async addJob(payload: JobPayload): Promise<string> {
-    const jobRecord = await this.prisma.processJob.create({
+  async addJob(payload: JobPayload, client: DatabaseClient = this.prisma): Promise<string> {
+    const jobRecord = await client.processJob.create({
       data: {
         assetId: payload.assetId,
         type: payload.type,
@@ -82,7 +91,7 @@ export class JobQueueService {
 
     if (!WORKER_SUPPORTED_TYPES.has(payload.type)) {
       const error = `Job type ${payload.type} has no executor on the Cloudflare Queues pipeline yet (bulk/3D/scan ops are pending a later migration wave)`;
-      await this.markFailed(jobRecord.id, error);
+      await this.markFailed(jobRecord.id, error, client);
       throw new NotImplementedException(error);
     }
 
@@ -92,11 +101,10 @@ export class JobQueueService {
       payload.type,
       payload.priority,
       payload.meta,
+      client,
     );
 
-    this.logger.log(
-      `Added job ${jobRecord.id} (${payload.type}) for asset ${payload.assetId}`,
-    );
+    this.logger.log('Added media processing job');
 
     return jobRecord.id;
   }
@@ -112,6 +120,7 @@ export class JobQueueService {
     type: JobType,
     priority: number | undefined,
     meta: Record<string, any> | undefined,
+    client: DatabaseClient,
   ): Promise<void> {
     const workerUrl = this.config.get<string>('MEDIA_WORKER_URL');
     const enqueueSecret = this.config.get<string>('MEDIA_WORKER_ENQUEUE_SECRET');
@@ -119,13 +128,13 @@ export class JobQueueService {
     if (!workerUrl || !enqueueSecret) {
       const error =
         'MEDIA_WORKER_URL / MEDIA_WORKER_ENQUEUE_SECRET are not configured — cannot enqueue processing jobs';
-      await this.markFailed(jobId, error);
+      await this.markFailed(jobId, error, client);
       throw new Error(error);
     }
 
     let rawKey: string | undefined = meta?.rawKey;
     if (!rawKey) {
-      const asset = await this.prisma.mediaAsset.findUnique({
+      const asset = await client.mediaAsset.findUnique({
         where: { id: assetId },
         select: { rawKey: true },
       });
@@ -152,26 +161,29 @@ export class JobQueueService {
       });
     } catch (err: any) {
       const error = `Failed to reach media-worker /enqueue: ${err.message}`;
-      await this.markFailed(jobId, error);
+      await this.markFailed(jobId, error, client);
       throw new Error(error);
     }
 
     if (!response.ok) {
-      const text = await response.text().catch(() => '');
-      const error = `media-worker /enqueue returned ${response.status}: ${text.slice(0, 500)}`;
-      await this.markFailed(jobId, error);
+      const error = `media-worker /enqueue returned ${response.status}`;
+      await this.markFailed(jobId, error, client);
       throw new Error(error);
     }
   }
 
-  private async markFailed(jobId: string, error: string): Promise<void> {
-    await this.prisma.processJob
+  private async markFailed(
+    jobId: string,
+    error: string,
+    client: DatabaseClient = this.prisma,
+  ): Promise<void> {
+    await client.processJob
       .update({
         where: { id: jobId },
         data: { state: 'FAILED', error, finishedAt: new Date() },
       })
       .catch((err) => {
-        this.logger.error(`Failed to mark job ${jobId} FAILED: ${err.message}`);
+        this.logger.error('Failed to mark media job as failed');
       });
   }
 
@@ -193,8 +205,8 @@ export class JobQueueService {
   /**
    * Get job status (ledger read).
    */
-  async getJobStatus(jobId: string) {
-    const job = await this.prisma.processJob.findUnique({
+  async getJobStatus(jobId: string, client: DatabaseClient = this.prisma) {
+    const job = await client.processJob.findUnique({
       where: { id: jobId },
       include: {
         asset: {
@@ -215,16 +227,16 @@ export class JobQueueService {
    * cannot be recalled, so this just stops the ledger (and any UI polling
    * it) from treating the job as pending.
    */
-  async cancelJob(jobId: string) {
-    const job = await this.prisma.processJob.findUnique({
+  async cancelJob(jobId: string, client: DatabaseClient = this.prisma) {
+    const job = await client.processJob.findUnique({
       where: { id: jobId },
     });
 
     if (!job) {
-      throw new Error('Job not found');
+      throw new NotFoundException('Media object not found');
     }
 
-    await this.prisma.processJob.update({
+    await client.processJob.update({
       where: { id: jobId },
       data: {
         state: 'CANCELED',
@@ -232,25 +244,23 @@ export class JobQueueService {
       },
     });
 
-    this.logger.log(
-      `Canceled job ${jobId} (ledger only — an in-flight Cloudflare Queue message, if any, cannot be recalled)`,
-    );
+    this.logger.log('Canceled media job');
   }
 
   /**
    * Retry failed job — resets the ledger row and re-POSTs to the worker.
    */
-  async retryJob(jobId: string) {
-    const job = await this.prisma.processJob.findUnique({
+  async retryJob(jobId: string, client: DatabaseClient = this.prisma) {
+    const job = await client.processJob.findUnique({
       where: { id: jobId },
     });
 
     if (!job) {
-      throw new Error('Job not found');
+      throw new NotFoundException('Media object not found');
     }
 
     if (job.state !== 'FAILED') {
-      throw new Error('Only failed jobs can be retried');
+      throw new ConflictException('Only failed jobs can be retried');
     }
 
     if (!WORKER_SUPPORTED_TYPES.has(job.type)) {
@@ -258,7 +268,7 @@ export class JobQueueService {
       throw new NotImplementedException(error);
     }
 
-    await this.prisma.processJob.update({
+    await client.processJob.update({
       where: { id: jobId },
       data: {
         state: 'QUEUED',
@@ -276,22 +286,29 @@ export class JobQueueService {
       job.type,
       job.priority,
       (job.meta as Record<string, any> | null) ?? undefined,
+      client,
     );
 
-    this.logger.log(`Retrying job ${jobId}`);
+    this.logger.log('Retrying media job');
   }
 
   /**
    * Get queue stats — derived from ProcessJob counts by state (there is no
    * BullMQ queue to introspect any more).
    */
-  async getQueueStats(type: JobType) {
-    const [waiting, active, completed, failed] = await Promise.all([
-      this.prisma.processJob.count({ where: { type, state: 'QUEUED' as JobState } }),
-      this.prisma.processJob.count({ where: { type, state: 'RUNNING' as JobState } }),
-      this.prisma.processJob.count({ where: { type, state: 'SUCCEEDED' as JobState } }),
-      this.prisma.processJob.count({ where: { type, state: 'FAILED' as JobState } }),
-    ]);
+  async getQueueStats(type: JobType, client: DatabaseClient = this.prisma) {
+    const waiting = await client.processJob.count({
+      where: { type, state: 'QUEUED' as JobState },
+    });
+    const active = await client.processJob.count({
+      where: { type, state: 'RUNNING' as JobState },
+    });
+    const completed = await client.processJob.count({
+      where: { type, state: 'SUCCEEDED' as JobState },
+    });
+    const failed = await client.processJob.count({
+      where: { type, state: 'FAILED' as JobState },
+    });
 
     return {
       type,
@@ -316,7 +333,7 @@ export class JobQueueService {
       },
     });
 
-    this.logger.log(`Cleaned up ${deleted.count} old jobs`);
+    this.logger.log('Cleaned up old media jobs');
     return deleted.count;
   }
 
@@ -333,22 +350,35 @@ export class JobQueueService {
    * ProcessJob ledger and, on success with metadata extraction results,
    * writes the resulting fields back onto MediaAsset.
    */
-  async completeJob(payload: {
-    jobId: string;
-    assetId: string;
-    state: 'SUCCEEDED' | 'FAILED';
-    result?: unknown;
-  }): Promise<{ ok: boolean; reason?: string }> {
+  async completeJob(
+    payload: {
+      jobId: string;
+      assetId: string;
+      state: 'SUCCEEDED' | 'FAILED';
+      result?: unknown;
+    },
+    client: DatabaseClient = this.prisma,
+  ): Promise<{ ok: boolean; reason?: string }> {
     const { jobId, assetId, state, result } = payload;
 
-    const job = await this.prisma.processJob.findUnique({ where: { id: jobId } });
+    const job = await client.processJob.findUnique({ where: { id: jobId } });
     if (!job) {
-      this.logger.warn(`completeJob: unknown jobId ${jobId} (asset ${assetId})`);
-      return { ok: false, reason: 'job not found' };
+      throw new NotFoundException('Media object not found');
+    }
+
+    if (assetId !== job.assetId) {
+      throw new BadRequestException('Completion asset does not match job');
+    }
+    if (job.state === state) return { ok: true };
+    if (['SUCCEEDED', 'FAILED', 'CANCELED'].includes(job.state)) {
+      throw new ConflictException('Media job is already terminal');
+    }
+    if (!['QUEUED', 'RUNNING', 'RETRY'].includes(job.state)) {
+      throw new ConflictException('Media job cannot be completed from its current state');
     }
 
     if (state === 'SUCCEEDED') {
-      await this.prisma.processJob.update({
+      await client.processJob.update({
         where: { id: jobId },
         data: {
           state: 'SUCCEEDED',
@@ -372,13 +402,7 @@ export class JobQueueService {
           };
         }
 
-        await this.prisma.mediaAsset
-          .update({ where: { id: assetId }, data })
-          .catch((err) => {
-            this.logger.error(
-              `completeJob: failed to update MediaAsset ${assetId}: ${err.message}`,
-            );
-          });
+        await client.mediaAsset.update({ where: { id: job.assetId }, data });
       }
     } else {
       const resultAny = result as any;
@@ -387,7 +411,7 @@ export class JobQueueService {
           ? resultAny.error
           : JSON.stringify(resultAny ?? {}).slice(0, 1000);
 
-      await this.prisma.processJob.update({
+      await client.processJob.update({
         where: { id: jobId },
         data: {
           state: 'FAILED',

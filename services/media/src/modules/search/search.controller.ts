@@ -8,8 +8,16 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  UseInterceptors,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
+import {
+  AuthenticatedUserIdentity,
+  CurrentUser,
+  JwtAuthGuard,
+  RequirePermissions,
+} from '@patina/auth';
+import { MediaAdminAuthorizationInterceptor } from '../authorization/media-admin-authorization.interceptor';
 import { MediaSearchService } from './media-search.service';
 import { AIFeaturesService } from './ai-features.service';
 import { AnalyticsService } from './analytics.service';
@@ -25,6 +33,9 @@ import {
 
 @ApiTags('Search & Analytics')
 @Controller('search')
+@UseGuards(JwtAuthGuard)
+@UseInterceptors(MediaAdminAuthorizationInterceptor)
+@RequirePermissions('media.admin.all')
 export class SearchController {
   constructor(
     private searchService: MediaSearchService,
@@ -109,10 +120,7 @@ export class SearchController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Generate smart crop suggestions' })
   @ApiResponse({ status: 200, description: 'Crop suggestions generated' })
-  async generateSmartCrops(
-    @Param('assetId') assetId: string,
-    @Query('ratios') ratios?: string,
-  ) {
+  async generateSmartCrops(@Param('assetId') assetId: string, @Query('ratios') ratios?: string) {
     const aspectRatios = ratios?.split(',') || ['1:1', '4:3', '16:9'];
     const buffer = Buffer.from(''); // Placeholder
     return this.aiService.generateSmartCrops(buffer, aspectRatios);
@@ -149,8 +157,8 @@ export class SearchController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Track asset view event' })
   @ApiResponse({ status: 204, description: 'View tracked' })
-  async trackView(@Body() event: any) {
-    await this.analytics.trackView(event);
+  async trackView(@CurrentUser() identity: AuthenticatedUserIdentity, @Body() event: any) {
+    await this.analytics.trackView({ ...event, userId: identity.sub });
   }
 
   /**
@@ -160,8 +168,8 @@ export class SearchController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Track asset download event' })
   @ApiResponse({ status: 204, description: 'Download tracked' })
-  async trackDownload(@Body() event: any) {
-    await this.analytics.trackDownload(event);
+  async trackDownload(@CurrentUser() identity: AuthenticatedUserIdentity, @Body() event: any) {
+    await this.analytics.trackDownload({ ...event, userId: identity.sub });
   }
 
   /**
@@ -171,10 +179,7 @@ export class SearchController {
   @ApiOperation({ summary: 'Get metrics for specific asset' })
   @ApiResponse({ status: 200, description: 'Asset metrics retrieved' })
   @ApiQuery({ name: 'days', required: false, type: Number })
-  async getAssetMetrics(
-    @Param('assetId') assetId: string,
-    @Query('days') days?: number,
-  ) {
+  async getAssetMetrics(@Param('assetId') assetId: string, @Query('days') days?: number) {
     return this.analytics.getAssetMetrics(assetId, days || 30);
   }
 
@@ -186,9 +191,7 @@ export class SearchController {
   @ApiResponse({ status: 200, description: 'Bandwidth metrics retrieved' })
   @ApiQuery({ name: 'period', required: false, enum: ['hour', 'day', 'week', 'month'] })
   async getBandwidthMetrics(@Query('period') period?: string) {
-    return this.analytics.getBandwidthMetrics(
-      (period as any) || 'month',
-    );
+    return this.analytics.getBandwidthMetrics((period as any) || 'month');
   }
 
   /**
@@ -209,14 +212,8 @@ export class SearchController {
   @ApiResponse({ status: 200, description: 'Top performers retrieved' })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'metric', required: false, enum: ['views', 'downloads', 'engagement'] })
-  async getTopPerformingAssets(
-    @Query('limit') limit?: number,
-    @Query('metric') metric?: string,
-  ) {
-    return this.analytics.getTopPerformingAssets(
-      limit || 10,
-      (metric as any) || 'engagement',
-    );
+  async getTopPerformingAssets(@Query('limit') limit?: number, @Query('metric') metric?: string) {
+    return this.analytics.getTopPerformingAssets(limit || 10, (metric as any) || 'engagement');
   }
 
   /**

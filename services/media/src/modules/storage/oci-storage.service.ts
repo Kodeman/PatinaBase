@@ -19,6 +19,7 @@ import {
   GetObjectCommand,
   DeleteObjectCommand,
   CopyObjectCommand,
+  HeadObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Readable } from 'stream';
@@ -49,9 +50,7 @@ export class OCIStorageService {
   }
 
   private initializeClient() {
-    const provider = (
-      this.configService.get<string>('STORAGE_PROVIDER') || 'R2'
-    ).toUpperCase();
+    const provider = (this.configService.get<string>('STORAGE_PROVIDER') || 'R2').toUpperCase();
 
     try {
       if (provider === 'R2') {
@@ -93,7 +92,7 @@ export class OCIStorageService {
       this.isConfigured = true;
       this.logger.log(`Object storage initialized (provider=${this.provider})`);
     } catch (error) {
-      this.logger.warn(`Failed to initialize object storage: ${error.message}`);
+      this.logger.warn('Failed to initialize object storage');
       this.initializationError = error.message;
       this.isConfigured = false;
     }
@@ -134,26 +133,18 @@ export class OCIStorageService {
         expiresIn: expiresInSeconds,
       });
 
-      this.logger.log(
-        `Created presigned URL for ${options.objectName} in ${options.bucketName}, expires ${options.timeExpires.toISOString()}`,
-      );
-
       return {
         parUrl: url,
         fullUrl: url,
         expiresAt: options.timeExpires,
       };
     } catch (error) {
-      this.logger.error(`Failed to create presigned URL: ${error.message}`, error.stack);
+      this.logger.error('Failed to create presigned URL');
       throw error;
     }
   }
 
-  async putObject(
-    bucketName: string,
-    objectName: string,
-    data: Buffer | NodeJS.ReadableStream,
-  ) {
+  async putObject(bucketName: string, objectName: string, data: Buffer | NodeJS.ReadableStream) {
     this.ensureConfigured();
     try {
       await this.s3Client!.send(
@@ -163,9 +154,8 @@ export class OCIStorageService {
           Body: data as any,
         }),
       );
-      this.logger.log(`Uploaded ${objectName} to ${bucketName}`);
     } catch (error) {
-      this.logger.error(`Failed to upload object: ${error.message}`, error.stack);
+      this.logger.error('Failed to upload object');
       throw error;
     }
   }
@@ -184,7 +174,7 @@ export class OCIStorageService {
         body.on('error', reject);
       });
     } catch (error) {
-      this.logger.error(`Failed to get object: ${error.message}`, error.stack);
+      this.logger.error('Failed to get object');
       throw error;
     }
   }
@@ -192,12 +182,9 @@ export class OCIStorageService {
   async deleteObject(bucketName: string, objectName: string) {
     this.ensureConfigured();
     try {
-      await this.s3Client!.send(
-        new DeleteObjectCommand({ Bucket: bucketName, Key: objectName }),
-      );
-      this.logger.log(`Deleted ${objectName} from ${bucketName}`);
+      await this.s3Client!.send(new DeleteObjectCommand({ Bucket: bucketName, Key: objectName }));
     } catch (error) {
-      this.logger.error(`Failed to delete object: ${error.message}`, error.stack);
+      this.logger.error('Failed to delete object');
       throw error;
     }
   }
@@ -217,11 +204,27 @@ export class OCIStorageService {
           CopySource: `${sourceBucket}/${sourceObject}`,
         }),
       );
-      this.logger.log(
-        `Copied ${sourceBucket}/${sourceObject} to ${destBucket}/${destObject}`,
-      );
     } catch (error) {
-      this.logger.error(`Failed to copy object: ${error.message}`, error.stack);
+      this.logger.error('Failed to copy object');
+      throw error;
+    }
+  }
+
+  async headObject(
+    bucketName: string,
+    objectName: string,
+  ): Promise<{ sizeBytes: number; contentType?: string }> {
+    this.ensureConfigured();
+    try {
+      const response = await this.s3Client!.send(
+        new HeadObjectCommand({ Bucket: bucketName, Key: objectName }),
+      );
+      return {
+        sizeBytes: response.ContentLength ?? 0,
+        contentType: response.ContentType,
+      };
+    } catch (error) {
+      this.logger.error('Failed to verify uploaded object');
       throw error;
     }
   }
@@ -242,15 +245,12 @@ export class OCIStorageService {
 
   generateObjectKey(assetId: string, kind: 'image' | '3d', filename: string): string {
     const prefix = kind === 'image' ? 'raw/images' : 'raw/3d';
-    return `${prefix}/${assetId}/${filename}`;
+    const basename = filename.split(/[\\/]/).pop() ?? 'upload';
+    const safeName = basename.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 255);
+    return `${prefix}/${assetId}/${safeName || 'upload'}`;
   }
 
-  generateRenditionKey(
-    assetId: string,
-    width: number,
-    height: number,
-    format: string,
-  ): string {
+  generateRenditionKey(assetId: string, width: number, height: number, format: string): string {
     return `processed/images/${assetId}/${width}x${height}.${format}`;
   }
 

@@ -106,8 +106,11 @@ export class IntelligenceService {
   /**
    * Detect duplicate and similar assets
    */
-  async detectDuplicates(assetId: string, threshold: number = 0.9): Promise<DuplicateDetectionResult> {
-    this.logger.log(`Detecting duplicates for asset ${assetId}`);
+  async detectDuplicates(
+    assetId: string,
+    threshold: number = 0.9,
+  ): Promise<DuplicateDetectionResult> {
+    this.logger.log('Detecting duplicate media');
 
     const sourceAsset = await this.prisma.mediaAsset.findUnique({
       where: { id: assetId },
@@ -133,10 +136,7 @@ export class IntelligenceService {
     const duplicates: DuplicateAsset[] = [];
 
     for (const candidate of candidates) {
-      const similarity = this.calculateHashSimilarity(
-        sourceHash,
-        candidate.phash as string,
-      );
+      const similarity = this.calculateHashSimilarity(sourceHash, candidate.phash as string);
 
       if (similarity >= threshold * 0.7) {
         const sameHash = sourceHash === candidate.phash;
@@ -247,7 +247,7 @@ export class IntelligenceService {
    * Check asset compliance
    */
   async checkCompliance(assetId: string): Promise<ComplianceCheckResult> {
-    this.logger.log(`Checking compliance for asset ${assetId}`);
+    this.logger.log('Checking media compliance');
 
     const asset = await this.prisma.mediaAsset.findUnique({
       where: { id: assetId },
@@ -358,9 +358,7 @@ export class IntelligenceService {
     this.logger.log('Calculating brand consistency score');
 
     const assets = await this.prisma.mediaAsset.findMany({
-      where: productIds
-        ? { productId: { in: productIds } }
-        : { kind: 'IMAGE' },
+      where: productIds ? { productId: { in: productIds } } : { kind: 'IMAGE' },
     });
 
     if (assets.length === 0) {
@@ -368,15 +366,9 @@ export class IntelligenceService {
     }
 
     // Extract metrics
-    const colors = assets
-      .map((a) => (a as any).dominantColor as string)
-      .filter(Boolean);
-    const qualities = assets
-      .map((a) => ((a as any).quality as any)?.sharpness)
-      .filter(Boolean);
-    const formats = assets
-      .map((a) => a.mimeType)
-      .filter(Boolean) as string[];
+    const colors = assets.map((a) => (a as any).dominantColor as string).filter(Boolean);
+    const qualities = assets.map((a) => ((a as any).quality as any)?.sharpness).filter(Boolean);
+    const formats = assets.map((a) => a.mimeType).filter(Boolean) as string[];
 
     // Calculate consistency scores
     const colorConsistency = this.calculateColorConsistencyScore(colors);
@@ -435,17 +427,17 @@ export class IntelligenceService {
    * Generate SEO optimization recommendations
    */
   async generateSEOOptimizations(assetId: string): Promise<SEOOptimization> {
-    this.logger.log(`Generating SEO optimizations for asset ${assetId}`);
+    this.logger.log('Generating media SEO optimizations');
 
-    const asset = await this.prisma.mediaAsset.findUnique({
+    const asset = (await this.prisma.mediaAsset.findUnique({
       where: { id: assetId },
-    }) as any;
+    })) as any;
 
     if (!asset) {
       throw new Error('Asset not found');
     }
 
-    const metadata = asset.metadata as any || {};
+    const metadata = (asset.metadata as any) || {};
     const aiTags = (asset.aiTags as any[]) || [];
     const tags = (asset.tags as string[]) || [];
 
@@ -567,9 +559,7 @@ export class IntelligenceService {
     const rgb2 = this.hexToRgb(color2);
 
     const distance = Math.sqrt(
-      Math.pow(rgb1.r - rgb2.r, 2) +
-        Math.pow(rgb1.g - rgb2.g, 2) +
-        Math.pow(rgb1.b - rgb2.b, 2),
+      Math.pow(rgb1.r - rgb2.r, 2) + Math.pow(rgb1.g - rgb2.g, 2) + Math.pow(rgb1.b - rgb2.b, 2),
     );
 
     return Math.max(0, 1 - distance / 441.67); // Max distance in RGB space
@@ -621,10 +611,7 @@ export class IntelligenceService {
     const variance =
       rgbs.reduce(
         (sum, rgb) =>
-          sum +
-          Math.pow(rgb.r - avgR, 2) +
-          Math.pow(rgb.g - avgG, 2) +
-          Math.pow(rgb.b - avgB, 2),
+          sum + Math.pow(rgb.r - avgR, 2) + Math.pow(rgb.g - avgG, 2) + Math.pow(rgb.b - avgB, 2),
         0,
       ) /
       (rgbs.length * 3);
@@ -639,8 +626,7 @@ export class IntelligenceService {
     if (values.length < 2) return 1;
 
     const avg = values.reduce((a, b) => a + b, 0) / values.length;
-    const variance =
-      values.reduce((sum, val) => sum + Math.pow(val - avg, 2), 0) / values.length;
+    const variance = values.reduce((sum, val) => sum + Math.pow(val - avg, 2), 0) / values.length;
 
     return Math.max(0, 1 - Math.sqrt(variance));
   }
@@ -681,9 +667,7 @@ export class IntelligenceService {
    */
   private generateDescription(asset: any, aiTags: any[]): string {
     const productName = asset.product?.name || 'product';
-    const attributes = aiTags
-      .filter((t) => t.category === 'attribute')
-      .map((t) => t.label);
+    const attributes = aiTags.filter((t) => t.category === 'attribute').map((t) => t.label);
 
     return `High-quality ${asset.role?.toLowerCase() || 'image'} of ${productName}${attributes.length > 0 ? ` featuring ${attributes.join(', ')}` : ''}`;
   }

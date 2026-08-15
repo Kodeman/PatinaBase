@@ -1,10 +1,10 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { createCorsOptions } from '@patina/auth';
 import { AppModule } from './app.module';
+import { registerPublicHealth } from './public-health';
 
 /**
  * Alias R2_BUCKET_* env vars to legacy OCI_BUCKET_* names so callers that still
@@ -26,7 +26,7 @@ function aliasStorageEnv() {
   }
 }
 
-async function bootstrap() {
+export async function bootstrap() {
   aliasStorageEnv();
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule);
@@ -54,12 +54,9 @@ async function bootstrap() {
   // CORS is centrally managed at the API Gateway level for consistency
   // across all services and to prevent duplicate headers.
   // See: /infra/nginx/snippets/cors.conf for CORS configuration
-  const corsOrigins = process.env.CORS_ORIGINS;
-
   logger.log(`CORS Configuration:`);
   logger.log(`  Environment: ${env}`);
   logger.log(`  Handled by: NGINX API Gateway`);
-  logger.log(`  Configured Origins: ${corsOrigins || 'see NGINX cors-map.conf'}`);
 
   // app.enableCors() - DISABLED: CORS handled by NGINX to prevent duplicate headers
 
@@ -72,52 +69,7 @@ async function bootstrap() {
     }),
   );
 
-  // OpenAPI/Swagger documentation
-  const config = new DocumentBuilder()
-    .setTitle('Patina Media & 3D Pipeline API')
-    .setDescription(
-      'API for media asset upload, transformation, and 3D model processing on Oracle Cloud Infrastructure',
-    )
-    .setVersion('1.0')
-    .addBearerAuth()
-    .addTag('Media Upload', 'Upload intent and PAR generation')
-    .addTag('Media Assets', 'Asset metadata and management')
-    .addTag('Jobs & Processing', 'Background job processing and monitoring')
-    .addServer(process.env.API_URL || 'http://localhost:3004', 'Development')
-    .addServer('https://api.patina.app', 'Production')
-    .build();
-
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document, {
-    customSiteTitle: 'Patina Media API Docs',
-    customCss: '.swagger-ui .topbar { display: none }',
-    swaggerOptions: {
-      persistAuthorization: true,
-      tagsSorter: 'alpha',
-      operationsSorter: 'alpha',
-    },
-  });
-
-  // Health check endpoint
-  app.getHttpAdapter().get('/health', (req, res) => {
-    res.json({
-      status: 'ok',
-      service: 'media',
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-    });
-  });
-
-  // Build version info supplied by the active Container deployment environment.
-  // Raw route (no global prefix, bypasses the auth guard).
-  app.getHttpAdapter().get('/version', (req, res) => {
-    res.json({
-      service: process.env.SERVICE_NAME ?? 'media',
-      version: process.env.APP_VERSION ?? '0.0.0',
-      gitSha: process.env.BUILD_SHA ?? 'unknown',
-      buildTime: process.env.BUILD_TIME ?? null,
-    });
-  });
+  registerPublicHealth(app);
 
   await app.listen(port);
 
@@ -125,10 +77,11 @@ async function bootstrap() {
 ╔═══════════════════════════════════════════════════╗
 ║  Patina Media & 3D Pipeline Service               ║
 ║  Running on: http://localhost:${port}              ║
-║  API Docs: http://localhost:${port}/api/docs       ║
 ║  Health: http://localhost:${port}/health           ║
 ╚═══════════════════════════════════════════════════╝
   `);
 }
 
-bootstrap();
+if (require.main === module) {
+  void bootstrap();
+}

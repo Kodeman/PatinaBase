@@ -11,13 +11,9 @@ import {
   HttpCode,
   HttpStatus,
   UseInterceptors,
-  UploadedFile,
   UploadedFiles,
-  ParseFilePipe,
-  MaxFileSizeValidator,
-  FileTypeValidator,
 } from '@nestjs/common';
-import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
   ApiOperation,
@@ -29,7 +25,6 @@ import {
 } from '@nestjs/swagger';
 import { MediaService } from './media.service';
 import {
-  UploadMediaDto,
   BatchUploadMediaDto,
   ProcessMediaDto,
   BatchProcessMediaDto,
@@ -38,8 +33,16 @@ import {
   MediaResponseDto,
   MediaListResponseDto,
 } from './dto';
-import { JwtAuthGuard } from '@patina/auth';
-import { CurrentUser } from '@patina/auth';
+import {
+  AuthenticatedUserIdentity,
+  CurrentUser,
+  JwtAuthGuard,
+  RequireAnyPermission,
+} from '@patina/auth';
+import {
+  MEDIA_MANAGE_PERMISSIONS,
+  MEDIA_READ_PERMISSIONS,
+} from '../authorization/media-authorization.constants';
 
 @ApiTags('Media')
 @Controller('v1/media')
@@ -49,44 +52,10 @@ export class MediaController {
   constructor(private readonly mediaService: MediaService) {}
 
   /**
-   * Upload single media asset
-   */
-  @Post('upload')
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({
-    summary: 'Upload single media asset',
-    description: 'Upload a single media file (image, video, or 3D model)',
-  })
-  @ApiConsumes('multipart/form-data')
-  @ApiResponse({
-    status: 201,
-    description: 'Media asset uploaded successfully',
-    schema: {
-      example: {
-        assetId: '550e8400-e29b-41d4-a716-446655440000',
-        uploadSessionId: '7c9e6679-7425-40de-944b-e07fc1f90ae7',
-        uploadUrl: 'https://objectstorage.us-ashburn-1.oraclecloud.com/p/...',
-        expiresAt: '2025-10-06T12:30:00Z',
-      },
-    },
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Invalid request or file validation failed',
-  })
-  @UseInterceptors(FileInterceptor('file'))
-  async uploadSingle(
-    @CurrentUser('userId') userId: string,
-    @Body() dto: UploadMediaDto,
-    @UploadedFile() file?: Express.Multer.File,
-  ) {
-    return this.mediaService.uploadSingle(userId || 'anonymous', dto, file?.buffer);
-  }
-
-  /**
    * Upload multiple media assets (batch)
    */
   @Post('upload/batch')
+  @RequireAnyPermission(...MEDIA_MANAGE_PERMISSIONS)
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Upload multiple media assets',
@@ -99,17 +68,18 @@ export class MediaController {
   })
   @UseInterceptors(FilesInterceptor('files', 20)) // Max 20 files
   async uploadBatch(
-    @CurrentUser('userId') userId: string,
+    @CurrentUser() identity: AuthenticatedUserIdentity,
     @Body() dto: BatchUploadMediaDto,
     @UploadedFiles() files?: Express.Multer.File[],
   ) {
-    return this.mediaService.uploadBatch(userId || 'anonymous', dto);
+    return this.mediaService.uploadBatch(identity.sub, dto);
   }
 
   /**
    * Get media asset by ID
    */
   @Get(':id')
+  @RequireAnyPermission(...MEDIA_READ_PERMISSIONS)
   @ApiOperation({
     summary: 'Get media asset by ID',
     description: 'Retrieve a single media asset by its ID',
@@ -135,16 +105,18 @@ export class MediaController {
     description: 'Media asset not found',
   })
   async getById(
+    @CurrentUser() identity: AuthenticatedUserIdentity,
     @Param('id') id: string,
     @Query('incrementViewCount') incrementViewCount?: boolean,
   ): Promise<MediaResponseDto> {
-    return this.mediaService.getById(id, incrementViewCount || false);
+    return this.mediaService.getById(identity.sub, id, incrementViewCount || false);
   }
 
   /**
    * Search/query media assets
    */
   @Get()
+  @RequireAnyPermission(...MEDIA_READ_PERMISSIONS)
   @ApiOperation({
     summary: 'Search media assets',
     description: 'Search and filter media assets with pagination',
@@ -154,14 +126,18 @@ export class MediaController {
     description: 'Media assets retrieved successfully',
     type: MediaListResponseDto,
   })
-  async search(@Query() query: MediaQueryDto): Promise<MediaListResponseDto> {
-    return this.mediaService.search(query);
+  async search(
+    @CurrentUser() identity: AuthenticatedUserIdentity,
+    @Query() query: MediaQueryDto,
+  ): Promise<MediaListResponseDto> {
+    return this.mediaService.search(identity.sub, query);
   }
 
   /**
    * Update media asset metadata
    */
   @Put(':id/metadata')
+  @RequireAnyPermission(...MEDIA_MANAGE_PERMISSIONS)
   @ApiOperation({
     summary: 'Update media asset metadata',
     description: 'Update metadata for a media asset (tags, role, permissions, etc.)',
@@ -180,16 +156,18 @@ export class MediaController {
     description: 'Media asset not found',
   })
   async updateMetadata(
+    @CurrentUser() identity: AuthenticatedUserIdentity,
     @Param('id') id: string,
     @Body() dto: UpdateMediaMetadataDto,
   ): Promise<MediaResponseDto> {
-    return this.mediaService.updateMetadata(id, dto);
+    return this.mediaService.updateMetadata(identity.sub, id, dto);
   }
 
   /**
    * Delete media asset
    */
   @Delete(':id')
+  @RequireAnyPermission(...MEDIA_MANAGE_PERMISSIONS)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Delete media asset',
@@ -221,16 +199,18 @@ export class MediaController {
     description: 'Media asset not found',
   })
   async delete(
+    @CurrentUser() identity: AuthenticatedUserIdentity,
     @Param('id') id: string,
     @Query('hardDelete') hardDelete?: boolean,
   ) {
-    return this.mediaService.delete(id, !hardDelete);
+    return this.mediaService.delete(identity.sub, id, !hardDelete);
   }
 
   /**
    * Process media asset
    */
   @Post(':id/process')
+  @RequireAnyPermission(...MEDIA_MANAGE_PERMISSIONS)
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({
     summary: 'Process media asset',
@@ -255,8 +235,12 @@ export class MediaController {
     status: 404,
     description: 'Media asset not found',
   })
-  async processAsset(@Param('id') id: string, @Body() dto: Partial<ProcessMediaDto>) {
-    return this.mediaService.processMedia({
+  async processAsset(
+    @CurrentUser() identity: AuthenticatedUserIdentity,
+    @Param('id') id: string,
+    @Body() dto: Partial<ProcessMediaDto>,
+  ) {
+    return this.mediaService.processMedia(identity.sub, {
       assetId: id,
       ...dto,
     });
@@ -266,6 +250,7 @@ export class MediaController {
    * Process multiple media assets (batch)
    */
   @Post('process/batch')
+  @RequireAnyPermission(...MEDIA_MANAGE_PERMISSIONS)
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({
     summary: 'Process multiple media assets',
@@ -275,14 +260,18 @@ export class MediaController {
     status: 202,
     description: 'Batch processing jobs queued successfully',
   })
-  async processBatch(@Body() dto: BatchProcessMediaDto) {
-    return this.mediaService.processBatch(dto);
+  async processBatch(
+    @CurrentUser() identity: AuthenticatedUserIdentity,
+    @Body() dto: BatchProcessMediaDto,
+  ) {
+    return this.mediaService.processBatch(identity.sub, dto);
   }
 
   /**
    * Get media asset download URL
    */
   @Get(':id/download')
+  @RequireAnyPermission(...MEDIA_READ_PERMISSIONS)
   @ApiOperation({
     summary: 'Get download URL for media asset',
     description: 'Generate a time-limited download URL for a media asset',
@@ -302,29 +291,18 @@ export class MediaController {
       },
     },
   })
-  async getDownloadUrl(@Param('id') id: string) {
-    const asset = await this.mediaService.getById(id);
-
-    // Increment download count
-    await this.mediaService['prisma'].mediaAsset.update({
-      where: { id },
-      data: {
-        downloadCount: { increment: 1 },
-      },
-    });
-
-    // In production, generate a time-limited presigned URL from OCI
-    return {
-      assetId: id,
-      downloadUrl: asset.uri || asset.rawKey,
-      expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
-    };
+  async getDownloadUrl(
+    @CurrentUser() identity: AuthenticatedUserIdentity,
+    @Param('id') id: string,
+  ) {
+    return this.mediaService.getDownloadUrl(identity.sub, id);
   }
 
   /**
    * Get media statistics
    */
   @Get('stats/overview')
+  @RequireAnyPermission(...MEDIA_READ_PERMISSIONS)
   @ApiOperation({
     summary: 'Get media statistics',
     description: 'Get overview statistics for media assets',
@@ -333,49 +311,10 @@ export class MediaController {
     status: 200,
     description: 'Statistics retrieved successfully',
   })
-  async getStats(@Query('productId') productId?: string) {
-    const where: any = {};
-    if (productId) where.productId = productId;
-
-    const [total, images, videos, models, pending, processing, completed, failed] =
-      await Promise.all([
-        this.mediaService['prisma'].mediaAsset.count({ where }),
-        this.mediaService['prisma'].mediaAsset.count({
-          where: { ...where, kind: 'image' },
-        }),
-        this.mediaService['prisma'].mediaAsset.count({
-          where: { ...where, kind: 'video' },
-        }),
-        this.mediaService['prisma'].mediaAsset.count({
-          where: { ...where, kind: 'model3d' },
-        }),
-        this.mediaService['prisma'].mediaAsset.count({
-          where: { ...where, status: 'pending' },
-        }),
-        this.mediaService['prisma'].mediaAsset.count({
-          where: { ...where, status: 'processing' },
-        }),
-        this.mediaService['prisma'].mediaAsset.count({
-          where: { ...where, status: 'completed' },
-        }),
-        this.mediaService['prisma'].mediaAsset.count({
-          where: { ...where, status: 'failed' },
-        }),
-      ]);
-
-    return {
-      total,
-      byKind: {
-        images,
-        videos,
-        models,
-      },
-      byStatus: {
-        pending,
-        processing,
-        completed,
-        failed,
-      },
-    };
+  async getStats(
+    @CurrentUser() identity: AuthenticatedUserIdentity,
+    @Query('productId') productId?: string,
+  ) {
+    return this.mediaService.getStats(identity.sub, productId);
   }
 }

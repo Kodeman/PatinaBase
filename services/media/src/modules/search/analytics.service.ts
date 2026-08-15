@@ -111,7 +111,7 @@ export class AnalyticsService {
    * Track asset view event
    */
   async trackView(event: AssetViewEvent): Promise<void> {
-    this.logger.debug(`Tracking view for asset ${event.assetId}`);
+    this.logger.debug('Tracking media view');
 
     try {
       await (this.prisma as any).assetAnalytics.upsert({
@@ -132,9 +132,7 @@ export class AnalyticsService {
         },
         update: {
           viewCount: { increment: 1 },
-          uniqueViewers: event.userId
-            ? { push: event.userId }
-            : undefined,
+          uniqueViewers: event.userId ? { push: event.userId } : undefined,
           totalViewDuration: { increment: event.duration || 0 },
           sources: {
             // Increment source count
@@ -147,7 +145,7 @@ export class AnalyticsService {
       // Emit event for real-time analytics
       this.eventEmitter.emit('asset.viewed', event);
     } catch (error) {
-      this.logger.error(`Failed to track view: ${error.message}`);
+      this.logger.error('Failed to track media view');
     }
   }
 
@@ -155,7 +153,7 @@ export class AnalyticsService {
    * Track asset download event
    */
   async trackDownload(event: AssetDownloadEvent): Promise<void> {
-    this.logger.debug(`Tracking download for asset ${event.assetId}`);
+    this.logger.debug('Tracking media download');
 
     try {
       await (this.prisma as any).assetAnalytics.upsert({
@@ -182,7 +180,7 @@ export class AnalyticsService {
       // Emit event
       this.eventEmitter.emit('asset.downloaded', event);
     } catch (error) {
-      this.logger.error(`Failed to track download: ${error.message}`);
+      this.logger.error('Failed to track media download');
     }
   }
 
@@ -203,8 +201,14 @@ export class AnalyticsService {
     });
 
     const viewCount = analytics.reduce((sum: number, a: any) => sum + (a.viewCount || 0), 0);
-    const downloadCount = analytics.reduce((sum: number, a: any) => sum + (a.downloadCount || 0), 0);
-    const totalDuration = analytics.reduce((sum: number, a: any) => sum + (a.totalViewDuration || 0), 0);
+    const downloadCount = analytics.reduce(
+      (sum: number, a: any) => sum + (a.downloadCount || 0),
+      0,
+    );
+    const totalDuration = analytics.reduce(
+      (sum: number, a: any) => sum + (a.totalViewDuration || 0),
+      0,
+    );
 
     const uniqueViewers = new Set(
       analytics.flatMap((a: any) => (a.uniqueViewers as string[]) || []),
@@ -212,13 +216,16 @@ export class AnalyticsService {
 
     const avgViewDuration = viewCount > 0 ? totalDuration / viewCount : 0;
 
-    const sources = analytics.reduce((acc: any, a: any) => {
-      const sources = a.sources as Record<string, number> || {};
-      Object.entries(sources).forEach(([source, count]) => {
-        acc[source] = (acc[source] || 0) + count;
-      });
-      return acc;
-    }, {} as Record<string, number>);
+    const sources = analytics.reduce(
+      (acc: any, a: any) => {
+        const sources = (a.sources as Record<string, number>) || {};
+        Object.entries(sources).forEach(([source, count]) => {
+          acc[source] = (acc[source] || 0) + count;
+        });
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
 
     const topSources = Object.entries(sources)
       .map(([source, count]) => ({ source, count: count as number }))
@@ -353,8 +360,7 @@ export class AnalyticsService {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const recentAssets = assets.filter((a) => a.createdAt >= thirtyDaysAgo);
     const assetsPerDay = recentAssets.length / 30;
-    const bytesPerDay =
-      recentAssets.reduce((sum, a) => sum + (a.sizeBytes || 0), 0) / 30;
+    const bytesPerDay = recentAssets.reduce((sum, a) => sum + (a.sizeBytes || 0), 0) / 30;
 
     // Cost estimates
     const storageCostPerGB = this.config.get('STORAGE_COST_PER_GB') || 0.025;
@@ -386,10 +392,7 @@ export class AnalyticsService {
   /**
    * Get performance metrics for asset
    */
-  async getPerformanceMetrics(
-    assetId: string,
-    period: Date,
-  ): Promise<PerformanceMetrics> {
+  async getPerformanceMetrics(assetId: string, period: Date): Promise<PerformanceMetrics> {
     const analytics = await (this.prisma as any).assetAnalytics.findUnique({
       where: {
         assetId_period: {
@@ -412,9 +415,8 @@ export class AnalyticsService {
 
     const currentViews = analytics?.viewCount || 0;
     const previousViews = previousAnalytics?.viewCount || 0;
-    const percentChange = previousViews > 0
-      ? ((currentViews - previousViews) / previousViews) * 100
-      : 0;
+    const percentChange =
+      previousViews > 0 ? ((currentViews - previousViews) / previousViews) * 100 : 0;
 
     return {
       assetId,
@@ -424,9 +426,8 @@ export class AnalyticsService {
         views: currentViews,
         downloads: analytics?.downloadCount || 0,
         shareCount: 0, // To be implemented
-        conversionRate: currentViews > 0
-          ? ((analytics?.downloadCount || 0) / currentViews) * 100
-          : 0,
+        conversionRate:
+          currentViews > 0 ? ((analytics?.downloadCount || 0) / currentViews) * 100 : 0,
         avgLoadTime: 0, // To be implemented
       },
       comparison: {

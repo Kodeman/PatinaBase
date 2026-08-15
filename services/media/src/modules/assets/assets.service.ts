@@ -1,17 +1,24 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { PrismaClient, AssetStatus, AssetKind, JobType } from '../../generated/prisma-client';
-import { OCIStorageService } from '../storage/oci-storage.service';
-import { CDNManagerService } from '../storage/cdn/cdn-manager.service';
-import { JobQueueService } from '../jobs/job-queue.service';
 import {
-  BulkUpdateAssetsDto,
+  AssetKind,
+  AssetStatus,
+  JobType,
+  Prisma,
+  PrismaClient,
+} from '../../generated/prisma-client';
+import { MediaAuthorizationResolver } from '../authorization/media-authorization.resolver';
+import { JobQueueService } from '../jobs/job-queue.service';
+import { CDNManagerService } from '../storage/cdn/cdn-manager.service';
+import { OCIStorageService } from '../storage/oci-storage.service';
+import {
   BulkDeleteAssetsDto,
-  MoveAssetsDto,
+  BulkUpdateAssetsDto,
   CopyAssetsDto,
+  MoveAssetsDto,
+  PurgeCdnDto,
   ReorderAssetsDto,
   UpdateAssetDto,
-  PurgeCdnDto,
 } from './dto';
 
 export interface BulkOperationResult {
@@ -28,550 +35,253 @@ export interface DeleteResult {
   jobId?: string;
 }
 
+interface AssetSearch {
+  productId?: string;
+  variantId?: string;
+  kind?: string;
+  role?: string;
+  status?: string;
+  limit?: number;
+  cursor?: string;
+}
+
 @Injectable()
 export class AssetsService {
-  private readonly logger = new Logger(AssetsService.name);
-
   constructor(
-    private prisma: PrismaClient,
-    private storage: OCIStorageService,
-    private cdn: CDNManagerService,
-    private jobQueue: JobQueueService,
-    private eventEmitter: EventEmitter2,
+    private readonly prisma: PrismaClient,
+    private readonly storage: OCIStorageService,
+    private readonly cdn: CDNManagerService,
+    private readonly jobQueue: JobQueueService,
+    private readonly eventEmitter: EventEmitter2,
+    private readonly authorization: MediaAuthorizationResolver,
   ) {}
 
-  /**
-   * Get asset by ID
-   */
-  async getAsset(id: string) {
-    const asset = await this.prisma.mediaAsset.findUnique({
-      where: { id },
-      include: {
+  async getAsset(subject: string, id: string) {
+    return this.authorization.withAssetScope(subject, 'read', (transaction, scope) =>
+      this.authorization.requireAsset(transaction, scope, id, {
         renditions: true,
         threeD: true,
-      },
-    });
-
-    if (!asset) {
-      throw new NotFoundException(`Asset ${id} not found`);
-    }
-
-    return asset;
+      }),
+    );
   }
 
-  /**
-   * Update single asset
-   */
-  async updateAsset(id: string, updates: UpdateAssetDto) {
-    const asset = await this.prisma.mediaAsset.update({
-      where: { id },
-      data: updates,
+  async getRenditions(subject: string, id: string) {
+    return this.authorization.withAssetScope(subject, 'read', async (transaction, scope) => {
+      const asset = await this.authorization.requireAsset(transaction, scope, id);
+      const renditions = await transaction.assetRendition.findMany({
+        where: { assetId: asset.id },
+        orderBy: { width: 'asc' },
+      });
+      return { data: renditions, count: renditions.length };
     });
-
-    this.eventEmitter.emit('media.asset.updated', { assetId: id, updates });
-
-    return asset;
   }
 
-  /**
-   * Delete single asset
-   */
+  async searchAssets(subject: string, query: AssetSearch) {
+    return this.authorization.withAssetScope(subject, 'read', async (transaction, scope) => {
+      if (query.cursor) {
+        await this.authorization.requireAsset(transaction, scope, query.cursor);
+      }
+      const where: Prisma.MediaAssetWhereInput = {};
+      if (query.productId) where.productId = query.productId;
+      if (query.variantId) where.variantId = query.variantId;
+      if (query.kind) where.kind = this.enumValue(AssetKind, query.kind, 'kind');
+      if (query.role) where.role = query.role as any;
+      if (query.status) where.status = this.enumValue(AssetStatus, query.status, 'status');
+      const limit = Math.min(Math.max(Number(query.limit) || 20, 1), 100);
+      const assets = await transaction.mediaAsset.findMany({
+        where: this.authorization.scopedWhere(scope, where),
+        take: limit + 1,
+        cursor: query.cursor ? { id: query.cursor } : undefined,
+        skip: query.cursor ? 1 : undefined,
+        orderBy: { createdAt: 'desc' },
+        include: { renditions: { take: 3 }, threeD: true },
+      });
+      const hasMore = assets.length > limit;
+      const data = assets.slice(0, limit);
+      return {
+        data,
+        meta: {
+          count: data.length,
+          nextCursor: hasMore ? (data[data.length - 1]?.id ?? null) : null,
+          hasMore,
+        },
+      };
+    });
+  }
+
+  async updateAsset(subject: string, id: string, updates: UpdateAssetDto) {
+    return this.authorization.withAssetScope(subject, 'manage', async (transaction, scope) => {
+      const asset = await this.authorization.requireAsset(transaction, scope, id);
+      const productId = updates.productId === undefined ? asset.productId : updates.productId;
+      const variantId = updates.variantId === undefined ? asset.variantId : updates.variantId;
+      if (updates.productId !== undefined || updates.variantId !== undefined) {
+        await this.authorization.requireProduct(transaction, scope, productId, variantId);
+      }
+      const updated = await transaction.mediaAsset.update({
+        where: { id: asset.id },
+        data: updates,
+      });
+      this.eventEmitter.emit('media.asset.updated', { actor: subject, assetId: asset.id });
+      return updated;
+    });
+  }
+
   async deleteAsset(
+    subject: string,
     id: string,
     softDelete = true,
     purgeCdn = true,
   ): Promise<DeleteResult> {
-    const asset = await this.getAsset(id);
-
-    if (softDelete) {
-      // Soft delete: update status
-      await this.prisma.mediaAsset.update({
-        where: { id },
-        data: {
-          status: AssetStatus.BLOCKED,
-          updatedAt: new Date(),
-        },
+    return this.authorization.withAssetScope(subject, 'manage', async (transaction, scope) => {
+      const asset = await this.authorization.requireAsset(transaction, scope, id, {
+        renditions: true,
       });
-
-      if (purgeCdn) {
-        await this.purgeCdnForAssets([id]);
+      const renditions = (asset.renditions ?? []) as Array<{ key: string }>;
+      if (softDelete) {
+        await transaction.mediaAsset.update({
+          where: { id: asset.id },
+          data: { status: AssetStatus.BLOCKED },
+        });
+      } else {
+        await this.storage.deleteObject(this.bucketName(), asset.rawKey);
+        for (const rendition of renditions) {
+          await this.storage.deleteObject(this.bucketName(), rendition.key);
+        }
+        await transaction.mediaAsset.delete({ where: { id: asset.id } });
       }
-
+      if (purgeCdn) {
+        await this.cdn.purgeCachePaths([asset.rawKey, ...renditions.map((item) => item.key)]);
+      }
       this.eventEmitter.emit('media.asset.deleted', {
-        assetId: id,
-        softDelete: true,
+        actor: subject,
+        assetId: asset.id,
+        softDelete,
       });
-
       return {
         deletedAssets: 1,
-        deletedRenditions: 0,
+        deletedRenditions: softDelete ? 0 : renditions.length,
         cdnPurged: purgeCdn,
       };
-    } else {
-      // Hard delete: remove from storage and database
-      const jobId = await this.jobQueue.addJob({
-        assetId: id,
-        type: 'ASSET_DELETE' as JobType,
-        meta: { hardDelete: true, purgeCdn },
-      });
-
-      return {
-        deletedAssets: 0,
-        deletedRenditions: 0,
-        cdnPurged: false,
-        jobId,
-      };
-    }
+    });
   }
 
-  /**
-   * Bulk update assets
-   */
-  async bulkUpdateAssets(dto: BulkUpdateAssetsDto): Promise<BulkOperationResult> {
-    const result: BulkOperationResult = {
-      success: 0,
-      failed: 0,
-      errors: [],
-    };
-
-    // Validate all assets exist
-    const assets = await this.prisma.mediaAsset.findMany({
-      where: { id: { in: dto.assetIds } },
-      select: { id: true },
-    });
-
-    const foundIds = new Set(assets.map((a) => a.id));
-    const missingIds = dto.assetIds.filter((id) => !foundIds.has(id));
-
-    if (missingIds.length > 0) {
-      result.errors.push(
-        ...missingIds.map((id) => ({
-          assetId: id,
-          error: 'Asset not found',
-        })),
-      );
-      result.failed = missingIds.length;
-    }
-
-    // Perform bulk update
-    try {
-      const updated = await this.prisma.mediaAsset.updateMany({
-        where: { id: { in: Array.from(foundIds) } },
+  async bulkUpdateAssets(subject: string, dto: BulkUpdateAssetsDto): Promise<BulkOperationResult> {
+    return this.authorization.withAssetScope(subject, 'manage', async (transaction, scope) => {
+      const ids = await this.authorization.requireAssets(transaction, scope, dto.assetIds);
+      if (dto.updates.productId !== undefined || dto.updates.variantId !== undefined) {
+        await this.authorization.requireProduct(
+          transaction,
+          scope,
+          dto.updates.productId,
+          dto.updates.variantId,
+        );
+      }
+      const updated = await transaction.mediaAsset.updateMany({
+        where: this.authorization.scopedWhere(scope, { id: { in: ids } }),
         data: dto.updates,
       });
-
-      result.success = updated.count;
-
       this.eventEmitter.emit('media.assets.bulk_updated', {
-        assetIds: Array.from(foundIds),
-        updates: dto.updates,
+        actor: subject,
         count: updated.count,
       });
-
-      this.logger.log(`Bulk updated ${updated.count} assets`);
-    } catch (error) {
-      this.logger.error(`Bulk update failed: ${error.message}`, error.stack);
-      throw new BadRequestException(`Bulk update failed: ${error.message}`);
-    }
-
-    return result;
+      return { success: updated.count, failed: 0, errors: [] };
+    });
   }
 
-  /**
-   * Bulk delete assets
-   */
-  async bulkDeleteAssets(dto: BulkDeleteAssetsDto): Promise<DeleteResult> {
-    const { assetIds, softDelete = true, purgeCdn = true } = dto;
-
-    // Validate assets exist
-    const assets = await this.prisma.mediaAsset.findMany({
-      where: { id: { in: assetIds } },
-      select: { id: true },
-    });
-
-    if (assets.length === 0) {
-      throw new NotFoundException('No assets found to delete');
-    }
-
-    const foundIds = assets.map((a) => a.id);
-
-    if (softDelete) {
-      // Soft delete
-      const updated = await this.prisma.mediaAsset.updateMany({
-        where: { id: { in: foundIds } },
-        data: {
-          status: AssetStatus.BLOCKED,
-          updatedAt: new Date(),
-        },
+  async bulkDeleteAssets(subject: string, dto: BulkDeleteAssetsDto): Promise<DeleteResult> {
+    return this.authorization.withAssetScope(subject, 'manage', async (transaction, scope) => {
+      const ids = await this.authorization.requireAssets(transaction, scope, dto.assetIds);
+      const assets = await transaction.mediaAsset.findMany({
+        where: this.authorization.scopedWhere(scope, { id: { in: ids } }),
+        include: { renditions: true },
       });
-
-      if (purgeCdn) {
-        await this.purgeCdnForAssets(foundIds);
-      }
-
-      this.eventEmitter.emit('media.assets.bulk_deleted', {
-        assetIds: foundIds,
-        count: updated.count,
-        softDelete: true,
-      });
-
-      this.logger.log(`Soft deleted ${updated.count} assets`);
-
-      return {
-        deletedAssets: updated.count,
-        deletedRenditions: 0,
-        cdnPurged: purgeCdn,
-      };
-    } else {
-      // Hard delete via background job for large operations
-      if (foundIds.length > 10) {
-        const jobId = await this.jobQueue.addJob({
-          assetId: foundIds[0], // Use first ID as reference
-          type: 'BULK_DELETE' as JobType,
-          meta: { assetIds: foundIds, hardDelete: true, purgeCdn },
+      if (dto.softDelete !== false) {
+        const updated = await transaction.mediaAsset.updateMany({
+          where: this.authorization.scopedWhere(scope, { id: { in: ids } }),
+          data: { status: AssetStatus.BLOCKED },
         });
-
-        this.logger.log(`Queued bulk hard delete job ${jobId} for ${foundIds.length} assets`);
-
+        if (dto.purgeCdn !== false) {
+          await this.cdn.purgeCachePaths(this.storageKeys(assets));
+        }
         return {
-          deletedAssets: 0,
+          deletedAssets: updated.count,
           deletedRenditions: 0,
-          cdnPurged: false,
-          jobId,
+          cdnPurged: dto.purgeCdn !== false,
         };
-      } else {
-        // Small batch - delete immediately
-        return await this.hardDeleteAssets(foundIds, purgeCdn);
       }
-    }
-  }
-
-  /**
-   * Move assets to different product/variant
-   */
-  async moveAssets(dto: MoveAssetsDto): Promise<BulkOperationResult> {
-    const { assetIds, fromProductId, toProductId, toVariantId, preserveOrder = true } = dto;
-
-    const result: BulkOperationResult = {
-      success: 0,
-      failed: 0,
-      errors: [],
-    };
-
-    // Validate assets exist
-    const assets = await this.prisma.mediaAsset.findMany({
-      where: { id: { in: assetIds } },
-      orderBy: preserveOrder ? { sortOrder: 'asc' } : undefined,
-    });
-
-    if (assets.length === 0) {
-      throw new NotFoundException('No assets found to move');
-    }
-
-    // Validate source product if specified
-    if (fromProductId) {
-      const invalidAssets = assets.filter((a) => a.productId !== fromProductId);
-      if (invalidAssets.length > 0) {
-        throw new BadRequestException(
-          `Assets do not belong to product ${fromProductId}: ${invalidAssets.map((a) => a.id).join(', ')}`,
-        );
+      for (const asset of assets) {
+        await this.storage.deleteObject(this.bucketName(), asset.rawKey);
+        for (const rendition of asset.renditions) {
+          await this.storage.deleteObject(this.bucketName(), rendition.key);
+        }
       }
-    }
-
-    // Update assets in transaction
-    try {
-      await this.prisma.$transaction(
-        assets.map((asset, index) =>
-          this.prisma.mediaAsset.update({
-            where: { id: asset.id },
-            data: {
-              productId: toProductId,
-              variantId: toVariantId || null,
-              sortOrder: preserveOrder ? asset.sortOrder : index,
-              updatedAt: new Date(),
-            },
-          }),
-        ),
-      );
-
-      result.success = assets.length;
-
-      this.eventEmitter.emit('media.assets.moved', {
-        assetIds: assets.map((a) => a.id),
-        fromProductId,
-        toProductId,
-        toVariantId,
-        count: assets.length,
+      const renditionCount = assets.reduce((total, asset) => total + asset.renditions.length, 0);
+      const deleted = await transaction.mediaAsset.deleteMany({
+        where: this.authorization.scopedWhere(scope, { id: { in: ids } }),
       });
-
-      this.logger.log(`Moved ${assets.length} assets from ${fromProductId} to ${toProductId}`);
-    } catch (error) {
-      this.logger.error(`Move operation failed: ${error.message}`, error.stack);
-      throw new BadRequestException(`Move operation failed: ${error.message}`);
-    }
-
-    return result;
-  }
-
-  /**
-   * Copy assets to different product/variant
-   */
-  async copyAssets(dto: CopyAssetsDto): Promise<BulkOperationResult> {
-    const {
-      assetIds,
-      toProductId,
-      toVariantId,
-      copyFiles = false,
-      copyRenditions = true,
-    } = dto;
-
-    // For large copy operations, use background job
-    if (assetIds.length > 5 || copyFiles) {
-      const jobId = await this.jobQueue.addJob({
-        assetId: assetIds[0],
-        type: 'BULK_COPY' as JobType,
-        meta: { assetIds, toProductId, toVariantId, copyFiles, copyRenditions },
+      if (dto.purgeCdn !== false) await this.cdn.purgeCachePaths(this.storageKeys(assets));
+      this.eventEmitter.emit('media.assets.bulk_deleted', {
+        actor: subject,
+        count: deleted.count,
       });
-
-      this.logger.log(`Queued bulk copy job ${jobId} for ${assetIds.length} assets`);
-
       return {
-        success: 0,
-        failed: 0,
-        errors: [],
-        jobId,
+        deletedAssets: deleted.count,
+        deletedRenditions: renditionCount,
+        cdnPurged: dto.purgeCdn !== false,
       };
-    }
-
-    // Small batch - copy immediately
-    return await this.copyAssetsSync(assetIds, toProductId, toVariantId, copyFiles, copyRenditions);
+    });
   }
 
-  /**
-   * Reorder assets for a product
-   */
-  async reorderAssets(productId: string, dto: ReorderAssetsDto): Promise<BulkOperationResult> {
-    const { assetIds } = dto;
-
-    const result: BulkOperationResult = {
-      success: 0,
-      failed: 0,
-      errors: [],
-    };
-
-    // Validate all assets belong to the product
-    const assets = await this.prisma.mediaAsset.findMany({
-      where: {
-        id: { in: assetIds },
-        productId,
-      },
-    });
-
-    if (assets.length !== assetIds.length) {
-      const foundIds = new Set(assets.map((a) => a.id));
-      const missingIds = assetIds.filter((id) => !foundIds.has(id));
-      throw new BadRequestException(
-        `Assets not found or don't belong to product ${productId}: ${missingIds.join(', ')}`,
-      );
-    }
-
-    // Update sort order in transaction
-    try {
-      await this.prisma.$transaction(
-        assetIds.map((id, index) =>
-          this.prisma.mediaAsset.update({
-            where: { id },
-            data: { sortOrder: index },
-          }),
-        ),
-      );
-
-      result.success = assetIds.length;
-
-      this.eventEmitter.emit('media.assets.reordered', {
-        productId,
-        assetIds,
-        count: assetIds.length,
+  async moveAssets(subject: string, dto: MoveAssetsDto): Promise<BulkOperationResult> {
+    return this.authorization.withAssetScope(subject, 'manage', async (transaction, scope) => {
+      const ids = await this.authorization.requireAssets(transaction, scope, dto.assetIds);
+      await this.authorization.requireProduct(transaction, scope, dto.toProductId, dto.toVariantId);
+      const assets = await transaction.mediaAsset.findMany({
+        where: this.authorization.scopedWhere(scope, { id: { in: ids } }),
+        orderBy: dto.preserveOrder === false ? undefined : { sortOrder: 'asc' },
       });
-
-      this.logger.log(`Reordered ${assetIds.length} assets for product ${productId}`);
-    } catch (error) {
-      this.logger.error(`Reorder operation failed: ${error.message}`, error.stack);
-      throw new BadRequestException(`Reorder operation failed: ${error.message}`);
-    }
-
-    return result;
-  }
-
-  /**
-   * Purge CDN cache
-   */
-  async purgeCdn(dto: PurgeCdnDto): Promise<{ invalidationId: string; purgedPaths: string[] }> {
-    const purgedPaths: string[] = [];
-
-    if (dto.purgeAll) {
-      this.logger.warn('Purging entire CDN cache');
-      const result = await this.cdn.purgeCache({ purgeAll: true });
-      return { invalidationId: result.invalidationId, purgedPaths: ['*'] };
-    }
-
-    // Purge by product ID
-    if (dto.productId) {
-      const assets = await this.prisma.mediaAsset.findMany({
-        where: { productId: dto.productId },
-        include: { renditions: dto.includeRenditions },
-      });
-
-      for (const asset of assets) {
-        purgedPaths.push(asset.rawKey);
-        if (dto.includeRenditions && asset.renditions) {
-          purgedPaths.push(...asset.renditions.map((r) => r.key));
-        }
+      if (dto.fromProductId && assets.some((asset) => asset.productId !== dto.fromProductId)) {
+        throw this.authorization.notFound();
       }
-    }
-
-    // Purge by asset IDs
-    if (dto.assetIds && dto.assetIds.length > 0) {
-      const assets = await this.prisma.mediaAsset.findMany({
-        where: { id: { in: dto.assetIds } },
-        include: { renditions: dto.includeRenditions },
-      });
-
-      for (const asset of assets) {
-        purgedPaths.push(asset.rawKey);
-        if (dto.includeRenditions && asset.renditions) {
-          purgedPaths.push(...asset.renditions.map((r) => r.key));
-        }
-      }
-    }
-
-    // Purge custom paths
-    if (dto.paths && dto.paths.length > 0) {
-      purgedPaths.push(...dto.paths);
-    }
-
-    if (purgedPaths.length === 0) {
-      throw new BadRequestException('No paths specified for CDN purge');
-    }
-
-    this.logger.log(`Purging ${purgedPaths.length} paths from CDN`);
-
-    const result = await this.cdn.purgeCachePaths(purgedPaths);
-
-    this.eventEmitter.emit('media.cdn.purged', {
-      invalidationId: result.invalidationId,
-      pathCount: purgedPaths.length,
-    });
-
-    return { invalidationId: result.invalidationId, purgedPaths };
-  }
-
-  /**
-   * Private: Hard delete assets from storage and database
-   */
-  private async hardDeleteAssets(assetIds: string[], purgeCdn: boolean): Promise<DeleteResult> {
-    const assets = await this.prisma.mediaAsset.findMany({
-      where: { id: { in: assetIds } },
-      include: { renditions: true },
-    });
-
-    let deletedRenditions = 0;
-
-    // Delete from storage
-    for (const asset of assets) {
-      try {
-        // Delete raw file
-        await this.storage.deleteObject(
-          this.getBucketName(asset.kind),
-          asset.rawKey,
-        );
-
-        // Delete renditions
-        if (asset.renditions) {
-          for (const rendition of asset.renditions) {
-            await this.storage.deleteObject(
-              this.getBucketName(asset.kind),
-              rendition.key,
-            );
-            deletedRenditions++;
-          }
-        }
-      } catch (error) {
-        this.logger.error(
-          `Failed to delete asset ${asset.id} from storage: ${error.message}`,
-        );
-      }
-    }
-
-    // Delete from database (cascades to renditions)
-    await this.prisma.mediaAsset.deleteMany({
-      where: { id: { in: assetIds } },
-    });
-
-    if (purgeCdn) {
-      await this.purgeCdnForAssets(assetIds);
-    }
-
-    this.eventEmitter.emit('media.assets.hard_deleted', {
-      assetIds,
-      count: assets.length,
-    });
-
-    this.logger.log(`Hard deleted ${assets.length} assets`);
-
-    return {
-      deletedAssets: assets.length,
-      deletedRenditions,
-      cdnPurged: purgeCdn,
-    };
-  }
-
-  /**
-   * Private: Copy assets synchronously
-   */
-  private async copyAssetsSync(
-    assetIds: string[],
-    toProductId: string,
-    toVariantId: string | undefined,
-    copyFiles: boolean,
-    copyRenditions: boolean,
-  ): Promise<BulkOperationResult> {
-    const result: BulkOperationResult = {
-      success: 0,
-      failed: 0,
-      errors: [],
-    };
-
-    const assets = await this.prisma.mediaAsset.findMany({
-      where: { id: { in: assetIds } },
-      include: { renditions: copyRenditions },
-    });
-
-    for (const asset of assets) {
-      try {
-        const newAssetId = this.generateUUID();
-
-        // Copy or reference file
-        let newRawKey = asset.rawKey;
-        if (copyFiles) {
-          newRawKey = this.storage.generateObjectKey(newAssetId, this.toStorageKind(asset.kind), 'copy');
-          await this.storage.copyObject(
-            this.getBucketName(asset.kind),
-            asset.rawKey,
-            this.getBucketName(asset.kind),
-            newRawKey,
-          );
-        }
-
-        // Create new asset record
-        const newAsset = await this.prisma.mediaAsset.create({
+      for (const [index, asset] of assets.entries()) {
+        await transaction.mediaAsset.update({
+          where: { id: asset.id },
           data: {
-            id: newAssetId,
+            productId: dto.toProductId,
+            variantId: dto.toVariantId ?? null,
+            sortOrder: dto.preserveOrder === false ? index : asset.sortOrder,
+          },
+        });
+      }
+      this.eventEmitter.emit('media.assets.moved', { actor: subject, count: assets.length });
+      return { success: assets.length, failed: 0, errors: [] };
+    });
+  }
+
+  async copyAssets(subject: string, dto: CopyAssetsDto): Promise<BulkOperationResult> {
+    return this.authorization.withAssetScope(subject, 'manage', async (transaction, scope) => {
+      const ids = await this.authorization.requireAssets(transaction, scope, dto.assetIds);
+      await this.authorization.requireProduct(transaction, scope, dto.toProductId, dto.toVariantId);
+      const assets = await transaction.mediaAsset.findMany({
+        where: this.authorization.scopedWhere(scope, { id: { in: ids } }),
+        include: { renditions: dto.copyRenditions !== false },
+      });
+      let copied = 0;
+      for (const asset of assets) {
+        const id = crypto.randomUUID();
+        const rawKey = this.storage.generateObjectKey(
+          id,
+          asset.kind === AssetKind.IMAGE ? 'image' : '3d',
+          asset.rawKey.split('/').pop() ?? 'copy',
+        );
+        await this.storage.copyObject(this.bucketName(), asset.rawKey, this.bucketName(), rawKey);
+        const created = await transaction.mediaAsset.create({
+          data: {
             kind: asset.kind,
-            productId: toProductId,
-            variantId: toVariantId,
+            productId: dto.toProductId,
+            variantId: dto.toVariantId,
             role: asset.role,
-            rawKey: newRawKey,
+            rawKey,
             processed: asset.processed,
             status: asset.status,
             width: asset.width,
@@ -579,108 +289,146 @@ export class AssetsService {
             format: asset.format,
             sizeBytes: asset.sizeBytes,
             mimeType: asset.mimeType,
-            phash: asset.phash,
-            palette: asset.palette || undefined,
-            blurhash: asset.blurhash,
+            license: asset.license ?? undefined,
             tags: asset.tags,
-            isPublic: asset.isPublic,
+            uploadedBy: subject,
           },
         });
-
-        // Copy renditions if requested
-        if (copyRenditions && asset.renditions) {
+        if (dto.copyRenditions !== false) {
           for (const rendition of asset.renditions) {
-            let newRenditionKey = rendition.key;
-            if (copyFiles) {
-              newRenditionKey = this.storage.generateRenditionKey(
-                newAssetId,
-                rendition.width || 0,
-                rendition.height || 0,
-                rendition.format,
-              );
-              await this.storage.copyObject(
-                this.getBucketName(asset.kind),
-                rendition.key,
-                this.getBucketName(asset.kind),
-                newRenditionKey,
-              );
-            }
-
-            await this.prisma.assetRendition.create({
+            const key = rendition.key.replace(asset.id, created.id);
+            await this.storage.copyObject(this.bucketName(), rendition.key, this.bucketName(), key);
+            await transaction.assetRendition.create({
               data: {
-                assetId: newAsset.id,
-                key: newRenditionKey,
+                assetId: created.id,
+                key,
                 width: rendition.width,
                 height: rendition.height,
                 format: rendition.format,
                 sizeBytes: rendition.sizeBytes,
                 purpose: rendition.purpose,
-                transform: rendition.transform || undefined,
+                transform: rendition.transform ?? undefined,
               },
             });
           }
         }
-
-        result.success++;
-      } catch (error) {
-        this.logger.error(`Failed to copy asset ${asset.id}: ${error.message}`);
-        result.failed++;
-        result.errors.push({ assetId: asset.id, error: error.message });
+        copied += 1;
       }
-    }
-
-    this.eventEmitter.emit('media.assets.copied', {
-      sourceIds: assetIds,
-      toProductId,
-      count: result.success,
+      this.eventEmitter.emit('media.assets.copied', { actor: subject, count: copied });
+      return { success: copied, failed: 0, errors: [] };
     });
-
-    this.logger.log(`Copied ${result.success} assets to product ${toProductId}`);
-
-    return result;
   }
 
-  /**
-   * Private: Purge CDN for specific assets
-   */
-  private async purgeCdnForAssets(assetIds: string[]): Promise<void> {
-    const assets = await this.prisma.mediaAsset.findMany({
-      where: { id: { in: assetIds } },
-      include: { renditions: true },
-    });
-
-    const paths: string[] = [];
-    for (const asset of assets) {
-      paths.push(asset.rawKey);
-      if (asset.renditions) {
-        paths.push(...asset.renditions.map((r) => r.key));
+  async reorderAssets(
+    subject: string,
+    productId: string,
+    dto: ReorderAssetsDto,
+  ): Promise<BulkOperationResult> {
+    return this.authorization.withAssetScope(subject, 'manage', async (transaction, scope) => {
+      await this.authorization.requireProduct(transaction, scope, productId);
+      const ids = await this.authorization.requireAssets(transaction, scope, dto.assetIds);
+      const count = await transaction.mediaAsset.count({
+        where: this.authorization.scopedWhere(scope, {
+          id: { in: ids },
+          productId,
+        }),
+      });
+      if (count !== ids.length) throw this.authorization.notFound();
+      for (const [index, id] of ids.entries()) {
+        await transaction.mediaAsset.update({ where: { id }, data: { sortOrder: index } });
       }
+      this.eventEmitter.emit('media.assets.reordered', { actor: subject, count: ids.length });
+      return { success: ids.length, failed: 0, errors: [] };
+    });
+  }
+
+  async purgeCdn(subject: string, dto: PurgeCdnDto) {
+    return this.authorization.withAdmin(subject, async (transaction) => {
+      if (dto.purgeAll) {
+        const result = await this.cdn.purgeCache({ purgeAll: true });
+        return { invalidationId: result.invalidationId, purgedPaths: ['*'] };
+      }
+      const paths = [...(dto.paths ?? [])];
+      const filters: Prisma.MediaAssetWhereInput[] = [];
+      if (dto.productId) filters.push({ productId: dto.productId });
+      if (dto.assetIds?.length) filters.push({ id: { in: dto.assetIds } });
+      if (filters.length) {
+        const assets = await transaction.mediaAsset.findMany({
+          where: { OR: filters },
+          include: { renditions: dto.includeRenditions !== false },
+        });
+        paths.push(...this.storageKeys(assets));
+      }
+      const uniquePaths = [...new Set(paths)];
+      if (!uniquePaths.length) throw new BadRequestException('No CDN targets specified');
+      const result = await this.cdn.purgeCachePaths(uniquePaths);
+      return { invalidationId: result.invalidationId, purgedPaths: uniquePaths };
+    });
+  }
+
+  async reprocessAsset(subject: string, id: string) {
+    return this.authorization.withAssetScope(subject, 'manage', async (transaction, scope) => {
+      const asset = await this.authorization.requireAsset(transaction, scope, id);
+      const jobId = await this.jobQueue.addJob(
+        {
+          assetId: asset.id,
+          type: JobType.IMAGE_PROCESS,
+          meta: { rawKey: asset.rawKey, operations: [{ type: 'generate_renditions' }] },
+        },
+        transaction,
+      );
+      return { message: 'Asset queued for reprocessing', jobId, assetId: asset.id };
+    });
+  }
+
+  async get3DPreview(subject: string, assetId: string) {
+    return this.authorization.withAssetScope(subject, 'read', async (transaction, scope) => {
+      const asset = await this.authorization.requireAsset(transaction, scope, assetId, {
+        threeD: true,
+      });
+      const threeD = asset.threeD as any;
+      if (!threeD) throw this.authorization.notFound();
+      return {
+        assetId: asset.id,
+        dimensions: {
+          width: threeD.widthM,
+          height: threeD.heightM,
+          depth: threeD.depthM,
+          volume: threeD.volumeM3,
+        },
+        geometry: {
+          triangles: threeD.triCount,
+          nodes: threeD.nodeCount,
+          materials: threeD.materialCount,
+          textures: threeD.textureCount,
+        },
+        snapshots: threeD.snapshots,
+        arReady: threeD.arReady,
+        lods: threeD.lods,
+        files: { glb: threeD.glbKey, usdz: threeD.usdzKey },
+      };
+    });
+  }
+
+  private storageKeys(
+    assets: Array<{ rawKey: string; renditions: Array<{ key: string }> }>,
+  ): string[] {
+    return assets.flatMap((asset) => [asset.rawKey, ...asset.renditions.map((item) => item.key)]);
+  }
+
+  private bucketName(): string {
+    return process.env.OCI_BUCKET_MEDIA ?? process.env.OCI_BUCKET_RAW ?? 'patina-media';
+  }
+
+  private enumValue<T extends Record<string, string>>(
+    values: T,
+    supplied: string,
+    field: string,
+  ): T[keyof T] {
+    const value = supplied.toUpperCase();
+    if (!Object.values(values).includes(value)) {
+      throw new BadRequestException(`Invalid ${field}`);
     }
-
-    if (paths.length > 0) {
-      await this.cdn.purgeCachePaths(paths);
-    }
-  }
-
-  /**
-   * Private: Get bucket name based on asset kind
-   */
-  private getBucketName(kind: AssetKind): string {
-    // Use environment variable or default
-    return process.env.OCI_BUCKET_MEDIA || 'patina-media';
-  }
-
-  /**
-   * Private: Convert AssetKind to storage kind format
-   */
-  private toStorageKind(kind: AssetKind): 'image' | '3d' {
-    return kind === 'IMAGE' ? 'image' : '3d';
-  }
-
-  /**
-   * Private: Generate UUID
-   */
-  private generateUUID(): string {
-    return crypto.randomUUID();
+    return value as T[keyof T];
   }
 }

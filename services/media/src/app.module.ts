@@ -1,17 +1,16 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
-import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 import { APP_GUARD } from '@nestjs/core';
 import { HybridAuthGuard, PermissionsGuard } from '@patina/auth';
 import { join } from 'path';
-import { PrismaClient } from './generated/prisma-client';
 
 // Modules
 import { MediaModule } from './modules/media/media.module';
 import { SearchModule } from './modules/search/search.module';
 import { ThreeDModule } from './modules/3d/3d.module';
 import { BackgroundRemovalModule } from './modules/background-removal/background-removal.module';
+import { MediaAuthorizationModule } from './modules/authorization/media-authorization.module';
 
 // Controllers
 import { UploadController } from './modules/upload/upload.controller';
@@ -30,6 +29,7 @@ import { VirusScannerService } from './modules/security/virus-scanner.service';
 import { CDNManagerService } from './modules/storage/cdn/cdn-manager.service';
 import { CloudFrontCDNProvider } from './modules/storage/cdn/cloudfront-cdn.provider';
 import { CloudflareCDNProvider } from './modules/storage/cdn/cloudflare-cdn.provider';
+import { SystemController } from './system.controller';
 
 @Module({
   imports: [
@@ -37,14 +37,6 @@ import { CloudflareCDNProvider } from './modules/storage/cdn/cloudflare-cdn.prov
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: [join(__dirname, '../.env.local'), join(__dirname, '../.env')],
-    }),
-
-    // Prometheus metrics
-    PrometheusModule.register({
-      path: '/metrics',
-      defaultMetrics: {
-        enabled: true,
-      },
     }),
 
     // Event emitter for internal events
@@ -55,24 +47,14 @@ import { CloudflareCDNProvider } from './modules/storage/cdn/cloudflare-cdn.prov
     }),
 
     // Feature modules
+    MediaAuthorizationModule,
     MediaModule,
     SearchModule,
     ThreeDModule,
     BackgroundRemovalModule,
   ],
-  controllers: [UploadController, AssetsController, JobsController],
+  controllers: [UploadController, AssetsController, JobsController, SystemController],
   providers: [
-    // Prisma
-    {
-      provide: PrismaClient,
-      useFactory: () => {
-        const prisma = new PrismaClient({
-          log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-        });
-        return prisma;
-      },
-    },
-
     // Services
     OCIStorageService,
     UploadService,
