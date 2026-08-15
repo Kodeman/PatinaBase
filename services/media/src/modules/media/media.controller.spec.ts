@@ -141,6 +141,24 @@ describe('MediaController', () => {
     });
   });
 
+  it('does not allow a body asset ID to override the trusted route asset', async () => {
+    service.processMedia.mockResolvedValue({
+      assetId: 'route-asset',
+      jobId: 'job-123',
+      status: 'processing',
+    });
+
+    await controller.processAsset(identity, 'route-asset', {
+      assetId: 'body-asset',
+      priority: 'high' as any,
+    });
+
+    expect(service.processMedia).toHaveBeenCalledWith(subject, {
+      assetId: 'route-asset',
+      priority: 'high',
+    });
+  });
+
   it('delegates download accounting through the scoped service method', async () => {
     const result = {
       assetId: 'asset-123',

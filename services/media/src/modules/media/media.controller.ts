@@ -241,8 +241,8 @@ export class MediaController {
     @Body() dto: Partial<ProcessMediaDto>,
   ) {
     return this.mediaService.processMedia(identity.sub, {
-      assetId: id,
       ...dto,
+      assetId: id,
     });
   }
 
