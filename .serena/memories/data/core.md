@@ -31,10 +31,10 @@ Root `CLAUDE.md` overview text is stale on counts (says ~35 hooks, migrations
 - SQL tests: `supabase/tests/{aesthete,procurement,rls}/*.sql` (pgTAP-style).
 
 ## Edge functions — `supabase/functions/`
-- **Deno** runtime. 37 functions + `_shared/`, `main/`, `deno.json`.
-- **Invoked BY NAME** = first URL path segment. Self-hosted prod uses a single
-  **`main/index.ts` dispatcher** that spawns a per-function user worker from
-  `/home/deno/functions/<name>`. Kong strips `/functions/v1/` before :9000.
+- **Deno** runtime. 75 deployable function directories plus `_shared/`,
+  `_tests/`, and `deno.json`.
+- **Invoked and deployed by name.** Supabase Cloud dispatches each function
+  directly; there is no repository-owned aggregate runtime dispatcher.
 - **`verify_jwt` defaults true.** Only exception: `stripe-webhook`
   (`[functions.stripe-webhook] verify_jwt = false` in `config.toml`) — Stripe
   can't carry a Supabase JWT; authenticity enforced via Stripe signature inside

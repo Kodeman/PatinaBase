@@ -24,13 +24,13 @@
 **Last reconciled:** 2026-07-06
 
 **Source docs:**
-- `docs/prds/Guide/patina-help-guidance-engineering-handoff.md`
-- `docs/prds/Guide/patina-help-guidance-system.html`
-- `docs/handoffs/help-system-sprint-1-report.md`
-- `docs/handoffs/help-system-sprint-2-report.md`
-- `docs/handoffs/help-system-sprint-3-report.md`
-- `docs/handoffs/help-system-sprint-4-report.md`
-- `docs/handoffs/help-system-production-verification-report.md`
+- [Historical help guidance engineering handoff](../../_archive/prds/Guide/patina-help-guidance-engineering-handoff.md)
+- [Historical help guidance system](../../_archive/prds/Guide/patina-help-guidance-system.html)
+- [Historical Sprint 1 report](../../_archive/handoffs/help-system-sprint-1-report.md)
+- [Historical Sprint 2 report](../../_archive/handoffs/help-system-sprint-2-report.md)
+- [Historical Sprint 3 report](../../_archive/handoffs/help-system-sprint-3-report.md)
+- [Historical Sprint 4 report](../../_archive/handoffs/help-system-sprint-4-report.md)
+- [Historical production verification report](../../_archive/handoffs/help-system-production-verification-report.md)
 - `packages/help-system/src/index.ts`
 - `packages/help-system/src/surfaceKeys.ts`
 - `packages/help-system/src/hooks/useHelpContent.ts`

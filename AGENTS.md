@@ -7,7 +7,7 @@ Patina connects interior designers with manufacturers for custom home furnishing
 - pnpm workspaces + Turborepo — pnpm `9.0.0` exact (corepack pin), node ≥20; Next.js 15 (App Router), React 19, TS, Tailwind, TanStack Query
 - **Auth = Supabase Auth (GoTrue) only — never NextAuth**
 - Prod DB = Supabase Cloud project **"Strata"** (ref `bkvcixdmuyejfzcijpdg`, CLI-linked); local dev via the Supabase CLI
-- Prod infra = **Cloudflare**: 4 portals on Workers (OpenNext), services on Containers. The self-hosted Coolify box is **RETIRED** — never deploy, SSH, or point anything at it, whatever older docs say. [retired-deploy-reference-allow]
+- Prod infra = **Cloudflare**: 4 portals on Workers (OpenNext), services on Containers. The self-hosted Coolify box is **RETIRED** — never deploy, SSH, or point anything at it, whatever older docs say. [retired-deploy-reference-allow: canonical repository retirement policy]
 - Native: 2 Swift/SwiftUI iOS apps — Patina (client, `apps/mobile/Patina`), Patina Field (designer/trades, `apps/mobile/Capture`) — plus a Plasmo Chrome extension
 
 ## Project skills

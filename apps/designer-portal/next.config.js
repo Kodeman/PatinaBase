@@ -203,11 +203,6 @@ const nextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 'storage.patina.cloud',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
         hostname: 'media.patina.cloud',
         pathname: '/**',
       },

@@ -35,9 +35,9 @@ public enum AppConfiguration {
     }
 
     public static var supabaseAnonKey: String {
-        // Resolved per deployment target by APIConfiguration. The cloud /
-        // self-hosted anon key comes from the gitignored Secrets.swift;
-        // the local CLI-stack key is a well-known constant. Safe to expose.
+        // Resolved per deployment target by APIConfiguration. The cloud anon
+        // key comes from the gitignored Secrets.swift; the local CLI-stack key
+        // is a well-known constant. Safe to expose.
         APIConfiguration.anonKey
     }
 

@@ -1,3 +1,5 @@
+> **HISTORICAL ONLY — DO NOT USE AS CURRENT IMPLEMENTATION OR OPERATING GUIDANCE.** This archived 2025 team report may describe retired auth, ports, services, or deployment paths; use root `AGENTS.md` and current source instead.
+
 # Patina Designer Portal - Implementation Summary
 
 **Generated:** 2025-10-03

@@ -31,14 +31,14 @@ Listed in CLAUDE.md: `supabase` (main data layer, hooks + generated `database.ty
 
 ### Other top-level
 - `docs/` — large: `prds/` (AE, Guide, …), `design/`, `product/`, `qa/`, `specs/`, `architecture/`, `code-review/`, `operations/`, `handoffs/`, `implementation/`, `wireframes/`, `follow-ups/`.
-- `scripts/` — ~18 files: `remote-db.sh` (backs `supabase:remote:*`), `deploy-edge-functions.sh`, `check-ios-tokens.sh`, aesthete-* eval/gate/seed, many `the-document-*` demo-seed SQLs, `verify-proposal-build.sql`.
+- `scripts/` — repository hooks/policy, local fixtures, evaluation tools, type/grant generation, and targeted verification helpers; enumerate the current tree rather than trusting a fixed count.
 - `studios/help-system` — Sanity Studio for the help system (project `kv3qrinl`).
-- `infra/` — Coolify + Cloudflare Tunnel compose files + `Dockerfile.nextjs`.
+- `infra/` — Cloudflare Worker/Container units plus the portal deployment entrypoint.
 
 ## Project-wide invariants
 - **Auth is Supabase Auth (GoTrue) only.** No NextAuth anywhere. Frontend via `useAuth()` (each portal wraps `@patina/supabase`); NestJS validates JWT via `SUPABASE_JWT_SECRET`.
 - **Data access split:** Supabase data → `@patina/supabase` hooks; NestJS-service data → `@patina/api-routes` proxy (retry + caching; intentionally NO circuit breaker). Types → always `@patina/types`. UI → `@patina/design-system` (~128 Radix+Tailwind components (count drifts)).
-- **DB:** single self-hosted Supabase Postgres (`api.patina.cloud`). `public` schema via Supabase client; `svc_*` schemas via Prisma per service.
+- **DB:** Supabase Cloud Strata. `public` schema via Supabase client; `svc_*` schemas via Prisma per retained service.
 - **Do not add new NestJS services** — use Supabase edge functions. The 3 NestJS services are frozen.
 - **Do NOT run `pnpm dev`** (concurrency-20, starts everything). Use `dev:minimal`/`dev:designer` (portal+orders+media+projects), `dev:admin`, `dev:client`, `dev:frontend`, `dev:backend`. All are `turbo run dev --filter=…`.
 - **Turbo tasks:** build, dev, lint, lint:fix, type-check, test, clean. DB helpers: `db:generate|push|studio` (→ `@patina/supabase`); production Strata migrations use the linked Supabase CLI only when explicitly authorized. Prisma remains across the 3 retained services.

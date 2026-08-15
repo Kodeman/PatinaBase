@@ -6,8 +6,8 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  ALLOW_MARKER,
   findRetiredDeployReferences,
+  retiredReferenceAllow,
 } from "./check-retired-deploy-references.mjs";
 
 async function repo(files) {
@@ -23,23 +23,26 @@ async function repo(files) {
 
 test("flags every tracked retired executable, configuration, and volume path", async () => {
   const root = await repo({
-    "infra/CooLiFy/deploy.yaml": "service: stale\n", // [retired-deploy-reference-allow]
-    "infra/Dockerfile.nestjs": "FROM node:20\n", // [retired-deploy-reference-allow]
-    "infra/volumes/db/roles.sql": "select 1;\n", // [retired-deploy-reference-allow]
-    "scripts/deploy-edge-functions.sh": "#!/bin/sh\n", // [retired-deploy-reference-allow]
+    "infra/CooLiFy/deploy.yaml": "service: stale\n",
+    "infra/Dockerfile.nestjs": "FROM node:20\n",
+    "infra/volumes/db/roles.sql": "select 1;\n",
+    "nested/infra/CooLiFy-Deploy.sh": "#!/bin/sh\n",
+    "scripts/deploy-edge-functions.sh": "#!/bin/sh\n",
+    "supabase/functions/main/index.ts": "Deno.serve(() => new Response());\n",
   });
   const findings = findRetiredDeployReferences(root);
-  assert.equal(findings.length, 4);
+  assert.equal(findings.length, 6);
   assert.ok(findings.some((finding) => finding.includes("infra/CooLiFy")));
   assert.ok(findings.some((finding) => finding.includes("infra/volumes")));
+  assert.ok(findings.some((finding) => finding.includes("functions/main")));
 });
 
 test("scans canonical PRDs and handoffs, not only selected documentation roots", async () => {
   const root = await repo({
-    "docs/prds/consolidated/12-platform-infra.md": "Deploy with Coolify today.\n", // [retired-deploy-reference-allow]
-    "docs/prds/auth.md": "Set NEXTAUTH_SECRET before the production build.\n", // [retired-deploy-reference-allow]
-    "handoffs/release.md": "Pull ghcr.io/kodeman/patina:latest.\n", // [retired-deploy-reference-allow]
-    "random/deploy.txt": "Run cloudflared tunnel for production.\n", // [retired-deploy-reference-allow]
+    "docs/prds/consolidated/12-platform-infra.md": "Deploy with Coolify today.\n",
+    "docs/prds/auth.md": "Set NEXTAUTH_SECRET before the production build.\n",
+    "handoffs/release.md": "Pull ghcr.io/kodeman/patina:latest.\n",
+    "random/deploy.txt": "Run cloudflared tunnel for production.\n",
   });
   const findings = findRetiredDeployReferences(root);
   assert.equal(findings.length, 4);
@@ -47,20 +50,69 @@ test("scans canonical PRDs and handoffs, not only selected documentation roots",
   assert.ok(findings.some((finding) => finding.startsWith("handoffs/")));
 });
 
-test("excludes only docs/_archive and requires the exact allow marker", async () => {
+test("excludes archives and accepts only reasoned prose markers", async () => {
   const root = await repo({
-    "docs/_archive/deploy.md": "Run ./infra/deploy.sh now.\n", // [retired-deploy-reference-allow]
-    "docs/operations/allowed.md": `Deploy with Coolify. ${ALLOW_MARKER}\n`, // [retired-deploy-reference-allow]
-    "docs/operations/not-allowed.md": "Coolify is retired; never deploy there.\n", // [retired-deploy-reference-allow]
+    "docs/_archive/deploy.md": "Run ./infra/deploy.sh now.\n",
+    "docs/operations/allowed.md": `Deploy with Coolify. ${retiredReferenceAllow("documents the retired platform prohibition")}\n`,
+    "docs/operations/not-allowed.md": "Coolify is retired; never deploy there.\n",
   });
   const findings = findRetiredDeployReferences(root);
   assert.equal(findings.length, 1);
   assert.match(findings[0], /not-allowed\.md/);
 });
 
+test("rejects empty, legacy, and non-prose allow markers", async () => {
+  const root = await repo({
+    "docs/empty.md": "Deploy with Coolify. [retired-deploy-reference-allow:]\n",
+    "docs/legacy.md": "Deploy with Coolify. [retired-deploy-reference-allow]\n",
+    "src/config.ts": `const target = "Coolify deploy"; // ${retiredReferenceAllow("test fixture")}\n`,
+  });
+  const findings = findRetiredDeployReferences(root);
+  assert.equal(findings.length, 3);
+  assert.equal(
+    findings.filter((finding) => finding.includes("nonempty rationale")).length,
+    2,
+  );
+  assert.ok(findings.some((finding) => finding.includes("reviewed prose")));
+});
+
+test("normalizes retired reference variants and blocks mobile legacy targets", async () => {
+  const root = await repo({
+    "docs/ops.md": [
+      "Run infra\\coolify\\coolify-deploy.sh.",
+      "Run infra/coolify-deploy.sh.",
+      "Run coolify-deploy.sh.",
+      "case selfHosted",
+      "wss://realtime.patina.cloud/socket",
+    ].join("\n"),
+  });
+  assert.equal(findRetiredDeployReferences(root).length, 5);
+});
+
+test("explicit policy sources may name blocked targets", async () => {
+  const root = await repo({
+    ".claude/settings.json": '{"deny":["Bash(ssh *192.168.1.14*)"]}\n',
+    "scripts/hooks/core.mjs": 'const blocked = "infra/coolify-deploy.sh";\n',
+    "scripts/hooks/core.test.mjs": 'assert(blocks("selfHosted"));\n',
+    "scripts/hooks/patina-hooks.mjs": 'run("scripts/check-retired-deploy-references.mjs");\n',
+    "scripts/check-retired-deploy-references.mjs": "export {};\n",
+    "scripts/check-retired-deploy-references.test.mjs": "export {};\n",
+  });
+  assert.deepEqual(findRetiredDeployReferences(root), []);
+});
+
+test("preserves local Supabase, root Docker, MinIO, and Cloudflare units", async () => {
+  const root = await repo({
+    "docker-compose.yml": "services:\n  minio:\n    image: minio/minio\n",
+    "docs/local.md": "Use http://127.0.0.1:54321 and http://localhost:9000.\n",
+    "infra/orders-worker/wrangler.jsonc": '{"name":"patina-orders-worker"}\n',
+  });
+  assert.deepEqual(findRetiredDeployReferences(root), []);
+});
+
 test("ignores untracked files and tracked binary content", async () => {
-  const root = await repo({ "tracked.bin": Buffer.from("Coolify deploy\0binary") }); // [retired-deploy-reference-allow]
-  await writeFile(path.join(root, "untracked.md"), "Deploy with Coolify.\n"); // [retired-deploy-reference-allow]
+  const root = await repo({ "tracked.bin": Buffer.from("Coolify deploy\0binary") });
+  await writeFile(path.join(root, "untracked.md"), "Deploy with Coolify.\n");
   assert.deepEqual(findRetiredDeployReferences(root), []);
 });
 
@@ -70,5 +122,6 @@ test("mandatory pre-push hook cannot bypass the tracked-file gate", async () => 
   const runner = await readFile(path.join(root, "scripts/hooks/patina-hooks.mjs"), "utf8");
   assert.match(hook, /patina-hooks\.mjs pre-push/);
   assert.doesNotMatch(hook, /\|\|\s*true/);
-  assert.match(runner, /check-retired-deploy-references\.mjs/); // [retired-deploy-reference-allow]
+  assert.match(runner, /check-retired-deploy-references\.mjs/);
+  assert.match(runner, /check-markdown-paths\.mjs/);
 });
