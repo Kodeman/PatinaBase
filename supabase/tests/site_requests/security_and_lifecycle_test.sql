@@ -75,6 +75,8 @@ BEGIN
 END;
 $$;
 
+GRANT EXECUTE ON FUNCTION pg_temp.reset_user_role() TO authenticated;
+
 DO $$
 DECLARE
   v_request_id uuid;

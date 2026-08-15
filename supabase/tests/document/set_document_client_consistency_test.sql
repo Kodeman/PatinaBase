@@ -165,6 +165,8 @@ BEGIN
 END;
 $$;
 
+GRANT EXECUTE ON FUNCTION pg_temp.assume_document_client_owner() TO authenticated;
+
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_document_client_owner();
 

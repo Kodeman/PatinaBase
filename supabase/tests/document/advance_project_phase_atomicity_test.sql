@@ -411,6 +411,8 @@ BEGIN
 END;
 $$;
 
+GRANT EXECUTE ON FUNCTION pg_temp.assume_phase_actor(uuid, text) TO authenticated;
+
 CREATE OR REPLACE FUNCTION pg_temp.expect_phase_failure(
   p_project_id uuid,
   p_phase_id uuid,
@@ -441,6 +443,8 @@ BEGIN
     format('expected error %L, got %L', p_expected_message, v_message);
 END;
 $$;
+
+GRANT EXECUTE ON FUNCTION pg_temp.expect_phase_failure(uuid, uuid, text, text, text) TO authenticated;
 
 -- Browser ACL: authenticated only. PUBLIC would make anon true, so the anon
 -- assertion also proves no inherited PUBLIC execute; service_role is explicit.
@@ -1096,6 +1100,8 @@ AS $$
   WHERE id = 'aa000000-0000-4000-8000-0000000001a2'
 $$;
 
+GRANT EXECUTE ON FUNCTION pg_temp.owner_phase_lifecycle_bypass() TO authenticated;
+
 CREATE OR REPLACE FUNCTION pg_temp.expect_direct_phase_failure(
   p_case text,
   p_expected_state text,
@@ -1244,6 +1250,8 @@ BEGIN
            p_case, p_expected_message, v_message);
 END;
 $$;
+
+GRANT EXECUTE ON FUNCTION pg_temp.expect_direct_phase_failure(text, text, text) TO authenticated;
 
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_phase_actor('a9000000-0000-4000-8000-000000000001');

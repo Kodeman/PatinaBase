@@ -275,6 +275,8 @@ BEGIN
 END;
 $$;
 
+GRANT EXECUTE ON FUNCTION pg_temp.assume_proposal_actor(uuid) TO authenticated;
+
 CREATE OR REPLACE FUNCTION pg_temp.assume_proposal_owner()
 RETURNS void
 LANGUAGE sql
@@ -283,6 +285,8 @@ AS $$
     'b7000000-0000-4000-8000-000000000001'
   );
 $$;
+
+GRANT EXECUTE ON FUNCTION pg_temp.assume_proposal_owner() TO authenticated;
 
 CREATE OR REPLACE FUNCTION pg_temp.expect_proposal_author_denied(
   p_actor uuid,
@@ -317,6 +321,8 @@ BEGIN
     format('%s send authority should be denied, got %L', p_label, v_error);
 END;
 $$;
+
+GRANT EXECUTE ON FUNCTION pg_temp.expect_proposal_author_denied(uuid, text) TO authenticated;
 
 CREATE OR REPLACE FUNCTION pg_temp.expect_proposal_insert_failure(
   p_proposal_id uuid,
@@ -357,6 +363,8 @@ BEGIN
   ), 'rejected proposal insert must leave no row';
 END;
 $$;
+
+GRANT EXECUTE ON FUNCTION pg_temp.expect_proposal_insert_failure(uuid, text, uuid, uuid, timestamptz, text) TO authenticated;
 
 CREATE OR REPLACE FUNCTION pg_temp.expect_sent_at_rewrite_denied(
   p_actor uuid,
@@ -414,6 +422,8 @@ BEGIN
 END;
 $$;
 
+GRANT EXECUTE ON FUNCTION pg_temp.expect_sent_at_rewrite_denied(uuid, boolean, text) TO authenticated;
+
 CREATE OR REPLACE FUNCTION pg_temp.expect_send_failure(
   p_proposal_id uuid,
   p_expected text
@@ -445,6 +455,8 @@ BEGIN
     'a rejected schedule must leave its proposal in draft';
 END;
 $$;
+
+GRANT EXECUTE ON FUNCTION pg_temp.expect_send_failure(uuid, text) TO authenticated;
 
 -- Exercise the real INVOKER/RLS/grant path, not postgres' RLS bypass.
 SET LOCAL ROLE authenticated;

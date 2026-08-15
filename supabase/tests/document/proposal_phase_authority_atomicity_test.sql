@@ -241,6 +241,8 @@ BEGIN
 END;
 $$;
 
+GRANT EXECUTE ON FUNCTION pg_temp.assume_phase_actor(uuid) TO authenticated;
+
 CREATE OR REPLACE FUNCTION pg_temp.phase_count(p_proposal_id uuid)
 RETURNS bigint
 LANGUAGE sql
@@ -251,6 +253,8 @@ AS $$
   WHERE proposal_id = p_proposal_id
 $$;
 
+GRANT EXECUTE ON FUNCTION pg_temp.phase_count(uuid) TO authenticated;
+
 CREATE OR REPLACE FUNCTION pg_temp.proposal_count()
 RETURNS bigint
 LANGUAGE sql
@@ -259,6 +263,8 @@ SET search_path = public, pg_temp
 AS $$
   SELECT count(*) FROM public.proposals
 $$;
+
+GRANT EXECUTE ON FUNCTION pg_temp.proposal_count() TO authenticated;
 
 CREATE OR REPLACE FUNCTION pg_temp.proposal_state(p_proposal_id uuid)
 RETURNS jsonb
@@ -273,6 +279,8 @@ AS $$
   FROM public.proposals
   WHERE id = p_proposal_id
 $$;
+
+GRANT EXECUTE ON FUNCTION pg_temp.proposal_state(uuid) TO authenticated;
 
 CREATE OR REPLACE FUNCTION pg_temp.proposal_phase_child_counts(
   p_proposal_id uuid
@@ -335,6 +343,8 @@ AS $$
   )
 $$;
 
+GRANT EXECUTE ON FUNCTION pg_temp.proposal_phase_child_counts(uuid) TO authenticated;
+
 CREATE OR REPLACE FUNCTION pg_temp.signature_engagement_count(
   p_proposal_id uuid
 )
@@ -347,6 +357,8 @@ AS $$
   WHERE proposal_id = p_proposal_id
     AND event_type IN ('signed', 'signed_offline')
 $$;
+
+GRANT EXECUTE ON FUNCTION pg_temp.signature_engagement_count(uuid) TO authenticated;
 
 CREATE OR REPLACE FUNCTION pg_temp.sign_proposal_compat(
   p_proposal_id uuid,
@@ -372,6 +384,8 @@ BEGIN
   RETURN v_receipt;
 END;
 $$;
+
+GRANT EXECUTE ON FUNCTION pg_temp.sign_proposal_compat(uuid, text) TO authenticated;
 
 -- Reproduce the migration-only issued-copy normalization window. The guard is
 -- restored before any authenticated exercise below.

@@ -280,6 +280,8 @@ BEGIN
 END;
 $$;
 
+GRANT EXECUTE ON FUNCTION pg_temp.assume_journey_actor(uuid, text) TO authenticated, service_role;
+
 CREATE OR REPLACE FUNCTION pg_temp.option_matches_client_truth(
   p_option_id uuid,
   p_note text,
@@ -300,6 +302,8 @@ AS $$
   ), false);
 $$;
 
+GRANT EXECUTE ON FUNCTION pg_temp.option_matches_client_truth(uuid, text, integer) TO authenticated;
+
 CREATE OR REPLACE FUNCTION pg_temp.decision_truth(p_decision_id uuid)
 RETURNS jsonb
 LANGUAGE sql
@@ -312,6 +316,8 @@ AS $$
   WHERE decision.id = p_decision_id
 $$;
 
+GRANT EXECUTE ON FUNCTION pg_temp.decision_truth(uuid) TO authenticated;
+
 CREATE OR REPLACE FUNCTION pg_temp.option_truth(p_option_id uuid)
 RETURNS jsonb
 LANGUAGE sql
@@ -323,6 +329,8 @@ AS $$
   FROM public.client_decision_options AS option
   WHERE option.id = p_option_id
 $$;
+
+GRANT EXECUTE ON FUNCTION pg_temp.option_truth(uuid) TO authenticated;
 
 DO $$
 BEGIN

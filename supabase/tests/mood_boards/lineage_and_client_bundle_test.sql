@@ -33,6 +33,8 @@ BEGIN
 END;
 $$;
 
+GRANT EXECUTE ON FUNCTION pg_temp.assume_mood_board_actor(uuid, text) TO authenticated;
+
 -- Source proposal board whose named sections are frozen with activation.
 INSERT INTO public.proposal_boards (
   id,

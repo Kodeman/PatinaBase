@@ -138,6 +138,8 @@ BEGIN
 END;
 $$;
 
+GRANT EXECUTE ON FUNCTION pg_temp.assume_authenticated(uuid) TO authenticated;
+
 -- Test-only inspectors keep assertions honest after the production ledger's
 -- direct SELECT privilege is revoked from every API role.
 CREATE OR REPLACE FUNCTION pg_temp.dispatch_count(p_proposal_id uuid)

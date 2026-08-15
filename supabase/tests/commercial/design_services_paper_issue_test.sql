@@ -89,6 +89,8 @@ $$;
 CREATE OR REPLACE FUNCTION pg_temp.paper_date() RETURNS date
 LANGUAGE sql IMMUTABLE AS $$ SELECT (DATE '2026-01-15') $$;
 
+GRANT EXECUTE ON FUNCTION pg_temp.paper_date() TO authenticated;
+
 -- guard_commercial_signature_insert short-circuits for a bare superuser
 -- session (00462:1948-1953) — current_user = session_user = postgres with no
 -- role GUC set returns NEW unchecked. Section (9) is ABOUT that guard, so it
@@ -107,6 +109,8 @@ BEGIN
   EXECUTE 'RESET ROLE';
 END;
 $$;
+
+GRANT EXECUTE ON FUNCTION pg_temp.reset_role() TO authenticated;
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- (0) FIXTURE — one studio, one client, one outsider, and one client who has

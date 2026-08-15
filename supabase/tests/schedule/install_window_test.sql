@@ -109,6 +109,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+GRANT EXECUTE ON FUNCTION pg_temp.reset_role() TO authenticated;
+
 CREATE OR REPLACE FUNCTION pg_temp.anchor_of(p_phase_id uuid)
 RETURNS date AS $$
   SELECT anchor_date FROM public.project_phases WHERE id = p_phase_id;

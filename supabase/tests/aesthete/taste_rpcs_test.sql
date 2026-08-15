@@ -107,6 +107,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+GRANT EXECUTE ON FUNCTION pg_temp.assume_user(uuid) TO authenticated;
+
 CREATE OR REPLACE FUNCTION pg_temp.assume_anon()
 RETURNS VOID AS $$
 BEGIN
@@ -122,6 +124,8 @@ BEGIN
   PERFORM set_config('request.jwt.claims', NULL, true);
 END;
 $$ LANGUAGE plpgsql;
+
+GRANT EXECUTE ON FUNCTION pg_temp.reset_role() TO authenticated, anon;
 
 -- ─── assertions ────────────────────────────────────────────────────────────
 

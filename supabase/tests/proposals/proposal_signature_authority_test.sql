@@ -290,6 +290,8 @@ BEGIN
 END;
 $$;
 
+GRANT EXECUTE ON FUNCTION pg_temp.assume_signature_actor(uuid, text) TO authenticated, service_role;
+
 -- Exact callable surface: the legacy caller-controlled overload is absent,
 -- browser execution is authenticated-only, trusted IP is service-only, and the
 -- shared implementation remains private to every API role.
