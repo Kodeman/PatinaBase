@@ -55,6 +55,8 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
 -- Statements naming a function signature a later migration DROPs are omitted
 -- entirely — the object they address no longer exists by the time this runs.
 -- The rest are guarded, so an object dropped some other way is skipped too.
+-- ALTER DEFAULT PRIVILEGES statements are replayed whole after the legacy
+-- header defaults. They are never reduced to a malformed GRANT/REVOKE suffix.
 
 -- 00008_similarity_functions.sql
 DO $g$ BEGIN
@@ -9201,10 +9203,7 @@ EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR unde
 END $g$;
 
 -- 00438_ffe_release_security_hardening.sql
-DO $g$ BEGIN
-  REVOKE INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER ON TABLES FROM authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER ON TABLES FROM authenticated;
 
 -- 00438_ffe_release_security_hardening.sql
 DO $g$ BEGIN
@@ -11051,5 +11050,128 @@ END $g$;
 -- 00481_edge_catalog_roles.sql
 DO $g$ BEGIN
   GRANT authenticated TO edge_rls_user WITH INHERIT FALSE, SET TRUE;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00483_edge_public_acl_boundary.sql
+DO $g$ BEGIN
+  GRANT USAGE ON SCHEMA public TO postgres, anon, authenticated, service_role, agent_reader, agent_writer;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00483_edge_public_acl_boundary.sql
+DO $g$ BEGIN
+  REVOKE CREATE, USAGE ON SCHEMA public FROM PUBLIC, edge_catalog_reader, edge_rls_user;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00483_edge_public_acl_boundary.sql
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
+
+-- 00483_edge_public_acl_boundary.sql
+DO $g$ BEGIN
+  REVOKE ALL ON SCHEMA edge_api FROM PUBLIC;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00483_edge_public_acl_boundary.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON TABLE edge_api.catalog_products FROM PUBLIC, anon, authenticated, service_role, edge_catalog_reader, edge_rls_user;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00483_edge_public_acl_boundary.sql
+DO $g$ BEGIN
+  GRANT USAGE ON SCHEMA edge_api TO edge_catalog_reader;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00483_edge_public_acl_boundary.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE edge_api.catalog_products TO edge_catalog_reader;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00483_edge_public_acl_boundary.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.grant_role_to_user(uuid, varchar, uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00483_edge_public_acl_boundary.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.revoke_role_from_user(uuid, varchar) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00483_edge_public_acl_boundary.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.grant_role_to_user(uuid, varchar, uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00483_edge_public_acl_boundary.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.revoke_role_from_user(uuid, varchar) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00483_edge_public_acl_boundary.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.get_user_permissions(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00483_edge_public_acl_boundary.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.invoke_edge_function(text, jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00483_edge_public_acl_boundary.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.increment_campaign_counter(uuid, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00483_edge_public_acl_boundary.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.increment_sequence_counter(uuid, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00483_edge_public_acl_boundary.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.increment_bounce_count(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00483_edge_public_acl_boundary.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_user_permissions(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00483_edge_public_acl_boundary.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.invoke_edge_function(text, jsonb) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00483_edge_public_acl_boundary.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.increment_campaign_counter(uuid, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00483_edge_public_acl_boundary.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.increment_sequence_counter(uuid, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00483_edge_public_acl_boundary.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.increment_bounce_count(uuid) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
