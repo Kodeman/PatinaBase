@@ -58,7 +58,27 @@ describe('SupabaseBoardAccessService', () => {
     const query = queryRaw.mock.calls[0][0];
     expect(query.strings.join('')).toContain("membership.status = 'active'");
     expect(query.strings.join('')).toContain("organization.status = 'active'");
+    expect(query.strings.join('')).toContain(
+      'actor_membership.organization_id = context.studio_id',
+    );
+    expect(query.strings.join('')).toContain(
+      'owner_membership.organization_id = context.studio_id',
+    );
     expect(query.values).toContain(SUBJECT);
+  });
+
+  it('denies a B-only actor when an A-board designer also shares unrelated studio B', async () => {
+    const { service, queryRaw } = harness([[]], ['media.manage.org']);
+
+    await expect(service.authorizeBoard(SUBJECT, BOARD_ID)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+
+    const sql = queryRaw.mock.calls[0][0].strings.join('');
+    expect(sql).toContain('context.studio_id IS NOT NULL');
+    expect(sql).toContain('actor_membership.organization_id = context.studio_id');
+    expect(sql).toContain('owner_membership.organization_id = context.studio_id');
+    expect(sql).toContain("organization.type = 'design_studio'");
   });
 
   it('denies on the next request when current membership query returns no board', async () => {

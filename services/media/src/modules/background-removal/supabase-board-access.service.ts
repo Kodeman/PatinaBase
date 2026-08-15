@@ -145,10 +145,14 @@ export class SupabaseBoardAccessService {
                   JOIN public.organizations AS organization
                     ON organization.id = actor_membership.organization_id
                    AND organization.status = 'active'
+                   AND organization.type = 'design_studio'
                   WHERE actor_membership.user_id = ${subject}::uuid
+                    AND context.studio_id IS NOT NULL
+                    AND actor_membership.organization_id = context.studio_id
                     AND actor_membership.status = 'active'
                     AND actor_membership.role <> 'guest'
                     AND owner_membership.user_id = context.designer_id
+                    AND owner_membership.organization_id = context.studio_id
                     AND owner_membership.status = 'active'
                     AND owner_membership.role <> 'guest'
                 )
