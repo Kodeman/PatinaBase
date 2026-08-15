@@ -18,6 +18,10 @@ interface ProductRow {
   id: string;
 }
 
+interface ProjectRow {
+  id: string;
+}
+
 interface AdminProofRow {
   user_id: string;
 }
@@ -26,6 +30,7 @@ export interface MediaAssetScope {
   readonly subject: string;
   readonly authorization: RequestAuthorization;
   readonly where: Prisma.MediaAssetWhereInput;
+  readonly projectIds: readonly string[];
   readonly admin: boolean;
 }
 
@@ -235,6 +240,23 @@ export class MediaAuthorizationResolver implements AuthorizationResolver {
     if (rows[0]?.allowed !== true) throw this.notFound();
   }
 
+  async requireProject(
+    transaction: Prisma.TransactionClient,
+    scope: MediaAssetScope,
+    projectId: string | null | undefined,
+  ): Promise<void> {
+    if (!projectId) return;
+    if (!scope.admin && !scope.projectIds.includes(projectId)) throw this.notFound();
+    const rows = await transaction.$queryRaw<Array<{ allowed: boolean }>>(Prisma.sql`
+      SELECT EXISTS (
+        SELECT 1
+        FROM public.projects AS project
+        WHERE project.id = ${projectId}::uuid
+      ) AS allowed
+    `);
+    if (rows[0]?.allowed !== true) throw this.notFound();
+  }
+
   notFound(): NotFoundException {
     return new NotFoundException('Media object not found');
   }
@@ -295,7 +317,13 @@ export class MediaAuthorizationResolver implements AuthorizationResolver {
       throw new ForbiddenException('Authorization denied');
     }
     if (admin) {
-      return { subject: authorization.subject, authorization, where: {}, admin: true };
+      return {
+        subject: authorization.subject,
+        authorization,
+        where: {},
+        projectIds: [],
+        admin: true,
+      };
     }
 
     const own =
@@ -329,12 +357,63 @@ export class MediaAuthorizationResolver implements AuthorizationResolver {
         )
       )
     `);
+    const projectRows = await transaction.$queryRaw<ProjectRow[]>(Prisma.sql`
+      SELECT project.id::text AS id
+      FROM public.projects AS project
+      WHERE (
+        ${own}
+        AND (
+          (
+            ${action} = 'read'
+            AND (
+              project.client_id = ${authorization.subject}::uuid
+              OR project.designer_id = ${authorization.subject}::uuid
+              OR EXISTS (
+                SELECT 1
+                FROM public.project_team_members AS team_member
+                WHERE team_member.project_id = project.id
+                  AND team_member.user_id = ${authorization.subject}::uuid
+                  AND team_member.removed_at IS NULL
+              )
+            )
+          )
+          OR (
+            ${action} = 'manage'
+            AND (
+              project.designer_id = ${authorization.subject}::uuid
+              OR EXISTS (
+                SELECT 1
+                FROM public.project_team_members AS team_member
+                WHERE team_member.project_id = project.id
+                  AND team_member.user_id = ${authorization.subject}::uuid
+                  AND team_member.removed_at IS NULL
+                  AND team_member.role IN ('lead_designer', 'support_designer')
+              )
+            )
+          )
+        )
+      ) OR (
+        ${organization}
+        AND EXISTS (
+          SELECT 1
+          FROM public.organization_members AS membership
+          JOIN public.organizations AS current_organization
+            ON current_organization.id = membership.organization_id
+           AND current_organization.status = 'active'
+          WHERE membership.user_id = ${authorization.subject}::uuid
+            AND membership.organization_id = project.studio_id
+            AND membership.status = 'active'
+        )
+      )
+    `);
     const productIds = productRows.map((row) => row.id);
+    const projectIds = projectRows.map((row) => row.id);
     const alternatives: Prisma.MediaAssetWhereInput[] = [];
     if (own) {
-      alternatives.push({ productId: null, uploadedBy: authorization.subject });
+      alternatives.push({ productId: null, projectId: null, uploadedBy: authorization.subject });
     }
     if (productIds.length > 0) alternatives.push({ productId: { in: productIds } });
+    if (projectIds.length > 0) alternatives.push({ projectId: { in: projectIds } });
 
     return {
       subject: authorization.subject,
@@ -345,6 +424,7 @@ export class MediaAuthorizationResolver implements AuthorizationResolver {
           : alternatives.length === 1
             ? alternatives[0]
             : { OR: alternatives },
+      projectIds,
       admin: false,
     };
   }

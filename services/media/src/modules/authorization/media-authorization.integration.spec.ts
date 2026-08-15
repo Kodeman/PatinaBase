@@ -33,6 +33,10 @@ const ASSET_A = 'cfb80000-0000-4000-8000-000000000001';
 const ASSET_B = 'cfb80000-0000-4000-8000-000000000002';
 const ASSET_ORG = 'cfb80000-0000-4000-8000-000000000003';
 const ABSENT_ASSET = 'cfb80000-0000-4000-8000-000000000099';
+const PROJECT_A = 'cfb90000-0000-4000-8000-000000000001';
+const PROJECT_ORG = 'cfb90000-0000-4000-8000-000000000002';
+const PROJECT_ASSET_A = 'cfba0000-0000-4000-8000-000000000001';
+const PROJECT_ASSET_ORG = 'cfba0000-0000-4000-8000-000000000002';
 
 describeDatabase('MediaAuthorizationResolver local Postgres boundary', () => {
   const prisma = new PrismaClient();
@@ -98,6 +102,30 @@ describeDatabase('MediaAuthorizationResolver local Postgres boundary', () => {
         ${SUBJECT_ORG}::uuid, ${ORGANIZATION_ID}::uuid, 'admin', 'active', now()
       )
     `);
+    await prisma.$executeRaw(Prisma.sql`
+      INSERT INTO public.projects (id, name, status, created_by, designer_id, client_id)
+      VALUES (
+        ${PROJECT_A}::uuid,
+        'Media project authz fixture',
+        'active',
+        ${SUBJECT_A}::uuid,
+        ${SUBJECT_A}::uuid,
+        ${SUBJECT_B}::uuid
+      )
+    `);
+    await prisma.$executeRaw(Prisma.sql`
+      INSERT INTO public.projects (
+        id, name, status, created_by, designer_id, client_id, studio_id
+      ) VALUES (
+        ${PROJECT_ORG}::uuid,
+        'Media organization project authz fixture',
+        'active',
+        ${SUBJECT_A}::uuid,
+        ${SUBJECT_A}::uuid,
+        ${SUBJECT_B}::uuid,
+        ${ORGANIZATION_ID}::uuid
+      )
+    `);
 
     await createPersonalProduct(PRODUCT_A, SUBJECT_A, 'Media authz A');
     await createPersonalProduct(PRODUCT_B, SUBJECT_B, 'Media authz B');
@@ -135,6 +163,20 @@ describeDatabase('MediaAuthorizationResolver local Postgres boundary', () => {
           productId: PRODUCT_ORG,
           rawKey: `authz-fixture/${ASSET_ORG}.jpg`,
           uploadedBy: SUBJECT_ORG,
+        },
+        {
+          id: PROJECT_ASSET_A,
+          kind: AssetKind.DOCUMENT,
+          projectId: PROJECT_A,
+          rawKey: `authz-fixture/${PROJECT_ASSET_A}.pdf`,
+          uploadedBy: SUBJECT_ADMIN,
+        },
+        {
+          id: PROJECT_ASSET_ORG,
+          kind: AssetKind.DOCUMENT,
+          projectId: PROJECT_ORG,
+          rawKey: `authz-fixture/${PROJECT_ASSET_ORG}.pdf`,
+          uploadedBy: SUBJECT_ADMIN,
         },
       ],
     });
@@ -227,6 +269,22 @@ describeDatabase('MediaAuthorizationResolver local Postgres boundary', () => {
       id: ASSET_ORG,
     });
     await expect(readAsset(SUBJECT_ORG, ASSET_A)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(readAsset(SUBJECT_ORG, PROJECT_ASSET_ORG)).resolves.toMatchObject({
+      id: PROJECT_ASSET_ORG,
+      projectId: PROJECT_ORG,
+    });
+    await expect(readAsset(SUBJECT_ORG, PROJECT_ASSET_A)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('authorizes a project asset from canonical client/designer assignment, not uploader metadata', async () => {
+    await expect(readAsset(SUBJECT_A, PROJECT_ASSET_A)).resolves.toMatchObject({
+      id: PROJECT_ASSET_A,
+      projectId: PROJECT_A,
+      uploadedBy: SUBJECT_ADMIN,
+    });
+    await expect(readAsset(SUBJECT_B, PROJECT_ASSET_A)).resolves.toMatchObject({
+      id: PROJECT_ASSET_A,
+    });
   });
 
   it('denies a removed organization member on the next request', async () => {
@@ -237,6 +295,9 @@ describeDatabase('MediaAuthorizationResolver local Postgres boundary', () => {
         AND organization_id = ${ORGANIZATION_ID}::uuid
     `);
     await expect(readAsset(SUBJECT_ORG, ASSET_ORG)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(readAsset(SUBJECT_ORG, PROJECT_ASSET_ORG)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
     await prisma.$executeRaw(Prisma.sql`
       UPDATE public.organization_members
       SET status = 'active'
@@ -406,8 +467,13 @@ describeDatabase('MediaAuthorizationResolver local Postgres boundary', () => {
         )
       `);
       await transaction.mediaAsset.deleteMany({
-        where: { id: { in: [ASSET_A, ASSET_B, ASSET_ORG] } },
+        where: {
+          id: { in: [ASSET_A, ASSET_B, ASSET_ORG, PROJECT_ASSET_A, PROJECT_ASSET_ORG] },
+        },
       });
+      await transaction.$executeRaw(Prisma.sql`
+        DELETE FROM public.projects WHERE id IN (${PROJECT_A}::uuid, ${PROJECT_ORG}::uuid)
+      `);
       await transaction.$executeRaw(Prisma.sql`
         DELETE FROM public.products
         WHERE id IN (${PRODUCT_A}::uuid, ${PRODUCT_B}::uuid, ${PRODUCT_ORG}::uuid)

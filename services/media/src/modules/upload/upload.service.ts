@@ -14,6 +14,7 @@ export interface UploadIntent {
   mimeType?: string;
   productId?: string;
   variantId?: string;
+  projectId?: string;
   role?: AssetRole;
 }
 
@@ -35,8 +36,16 @@ export class UploadService {
     'model/vnd.usdz+zip',
     'application/octet-stream',
   ];
+  private readonly ALLOWED_DOCUMENT_MIMES = [
+    'application/pdf',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  ];
   private readonly MAX_IMAGE_SIZE = 50 * 1024 * 1024;
   private readonly MAX_3D_SIZE = 500 * 1024 * 1024;
+  private readonly MAX_DOCUMENT_SIZE = 100 * 1024 * 1024;
   private readonly PAR_TTL_MINUTES = 15;
 
   constructor(
@@ -62,6 +71,7 @@ export class UploadService {
         normalized.productId,
         normalized.variantId,
       );
+      await this.authorization.requireProject(transaction, scope, normalized.projectId);
 
       if (actorKey) {
         const existing = await transaction.uploadSession.findUnique({
@@ -80,7 +90,14 @@ export class UploadService {
           ) {
             throw new ConflictException('Idempotency key was already used');
           }
-          await this.authorization.requireAsset(transaction, scope, existing.assetId ?? '');
+          const existingAsset = await this.authorization.requireAsset(
+            transaction,
+            scope,
+            existing.assetId ?? '',
+          );
+          if ((existingAsset.projectId ?? null) !== (normalized.projectId ?? null)) {
+            throw new ConflictException('Idempotency key was already used');
+          }
           return {
             assetId: existing.assetId as string,
             uploadSessionId: existing.id,
@@ -95,7 +112,11 @@ export class UploadService {
       const assetId = uuidv4();
       const targetKey = this.ociStorage.generateObjectKey(
         assetId,
-        normalized.kind === AssetKind.IMAGE ? 'image' : '3d',
+        normalized.kind === AssetKind.IMAGE
+          ? 'image'
+          : normalized.kind === AssetKind.DOCUMENT
+            ? 'document'
+            : '3d',
         normalized.filename,
       );
       const expiresAt = new Date(Date.now() + this.PAR_TTL_MINUTES * 60 * 1000);
@@ -114,6 +135,7 @@ export class UploadService {
           kind: normalized.kind,
           productId: normalized.productId,
           variantId: normalized.variantId,
+          projectId: normalized.projectId,
           role: normalized.role,
           rawKey: targetKey,
           status: 'PENDING',
@@ -204,16 +226,31 @@ export class UploadService {
     if (!Object.values(AssetKind).includes(intent.kind)) {
       throw new BadRequestException('Invalid media kind');
     }
+    if (intent.productId && intent.projectId) {
+      throw new BadRequestException('Media cannot belong to both a product and a project');
+    }
     const mimeType = intent.mimeType || mime.lookup(intent.filename) || 'application/octet-stream';
     const allowed =
-      intent.kind === AssetKind.IMAGE ? this.ALLOWED_IMAGE_MIMES : this.ALLOWED_3D_MIMES;
+      intent.kind === AssetKind.IMAGE
+        ? this.ALLOWED_IMAGE_MIMES
+        : intent.kind === AssetKind.DOCUMENT
+          ? this.ALLOWED_DOCUMENT_MIMES
+          : this.ALLOWED_3D_MIMES;
     if (!allowed.includes(mimeType)) throw new BadRequestException('Invalid media MIME type');
-    const maximum = intent.kind === AssetKind.IMAGE ? this.MAX_IMAGE_SIZE : this.MAX_3D_SIZE;
+    const maximum =
+      intent.kind === AssetKind.IMAGE
+        ? this.MAX_IMAGE_SIZE
+        : intent.kind === AssetKind.DOCUMENT
+          ? this.MAX_DOCUMENT_SIZE
+          : this.MAX_3D_SIZE;
     if (intent.fileSize !== undefined && (intent.fileSize < 0 || intent.fileSize > maximum)) {
       throw new BadRequestException('Invalid media file size');
     }
     if (intent.role === AssetRole.HERO && intent.kind !== AssetKind.IMAGE) {
       throw new BadRequestException('HERO role is only valid for images');
+    }
+    if (intent.kind === AssetKind.DOCUMENT && intent.role) {
+      throw new BadRequestException('Document uploads do not accept media roles');
     }
     return { ...intent, filename: intent.filename, mimeType };
   }

@@ -76,6 +76,7 @@ describe('MediaService', () => {
             organizationIds: [],
           },
           where: { uploadedBy: subject },
+          projectIds: [],
           admin: false,
         }),
       ),

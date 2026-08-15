@@ -20,6 +20,7 @@ model MediaAsset {
   kind      AssetKind // image | model3d
   productId String?    @map("product_id")
   variantId String?    @map("variant_id")
+  projectId String?    @map("project_id")
   role      AssetRole? // hero | angle | lifestyle | detail | ar-preview
 
   // Storage paths
@@ -81,6 +82,7 @@ model MediaAsset {
   @@index([phash])
   @@index([createdAt])
   @@index([uploadedBy])
+  @@index([projectId, createdAt(sort: Desc)], map: "idx_media_assets_project_created")
   @@map("media_assets")
 }
 
@@ -270,6 +272,7 @@ model LicenseRecord {
 enum AssetKind {
   IMAGE
   MODEL3D
+  DOCUMENT
 
   @@map("asset_kind")
 }

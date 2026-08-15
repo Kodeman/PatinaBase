@@ -119,7 +119,10 @@ export class AssetsService {
       }
       const updated = await transaction.mediaAsset.update({
         where: { id: asset.id },
-        data: updates,
+        data: {
+          ...updates,
+          ...(updates.productId ? { projectId: null } : {}),
+        },
       });
       this.eventEmitter.emit('media.asset.updated', { actor: subject, assetId: asset.id });
       return updated;
@@ -178,7 +181,10 @@ export class AssetsService {
       }
       const updated = await transaction.mediaAsset.updateMany({
         where: this.authorization.scopedWhere(scope, { id: { in: ids } }),
-        data: dto.updates,
+        data: {
+          ...dto.updates,
+          ...(dto.updates.productId ? { projectId: null } : {}),
+        },
       });
       this.eventEmitter.emit('media.assets.bulk_updated', {
         actor: subject,
@@ -249,6 +255,7 @@ export class AssetsService {
           data: {
             productId: dto.toProductId,
             variantId: dto.toVariantId ?? null,
+            projectId: null,
             sortOrder: dto.preserveOrder === false ? index : asset.sortOrder,
           },
         });
@@ -271,7 +278,11 @@ export class AssetsService {
         const id = crypto.randomUUID();
         const rawKey = this.storage.generateObjectKey(
           id,
-          asset.kind === AssetKind.IMAGE ? 'image' : '3d',
+          asset.kind === AssetKind.IMAGE
+            ? 'image'
+            : asset.kind === AssetKind.DOCUMENT
+              ? 'document'
+              : '3d',
           asset.rawKey.split('/').pop() ?? 'copy',
         );
         await this.storage.copyObject(this.bucketName(), asset.rawKey, this.bucketName(), rawKey);

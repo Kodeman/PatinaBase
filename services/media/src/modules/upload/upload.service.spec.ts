@@ -56,10 +56,12 @@ describe('UploadService', () => {
             organizationIds: [],
           },
           where: { uploadedBy: subject },
+          projectIds: [],
           admin: false,
         }),
       ),
       requireProduct: jest.fn().mockResolvedValue(undefined),
+      requireProject: jest.fn().mockResolvedValue(undefined),
       requireAsset: jest.fn().mockResolvedValue({ id: assetId }),
       notFound: jest.fn(() => new NotFoundException('Media object not found')),
     } as unknown as jest.Mocked<MediaAuthorizationResolver>;

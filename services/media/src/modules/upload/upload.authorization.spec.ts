@@ -17,6 +17,7 @@ describe('UploadService authorization binding', () => {
       organizationIds: [],
     },
     where: { uploadedBy: SUBJECT },
+    projectIds: [],
     admin: false,
   };
 
@@ -39,6 +40,7 @@ describe('UploadService authorization binding', () => {
         return operation(transaction, scope);
       }),
       requireProduct: jest.fn(),
+      requireProject: jest.fn(),
       requireAsset: jest.fn().mockResolvedValue({ id: 'asset-id' }),
       notFound: jest.fn(() => new Error('not found')),
     } as unknown as MediaAuthorizationResolver;
@@ -75,6 +77,35 @@ describe('UploadService authorization binding', () => {
     expect(sessionData.userId).toBe(SUBJECT);
     expect(sessionData.idempotencyKey).not.toBe('caller-key');
     expect(sessionData.idempotencyKey).toHaveLength(64);
+  });
+
+  it('authorizes and persists a canonical project relationship for document uploads', async () => {
+    const { service, transaction, authorization } = harness();
+    const projectId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+
+    await service.createUploadIntent(SUBJECT, {
+      kind: AssetKind.DOCUMENT,
+      filename: 'specification.pdf',
+      mimeType: 'application/pdf',
+      fileSize: 100,
+      projectId,
+    });
+
+    expect(authorization.requireProject).toHaveBeenCalledWith(
+      transaction,
+      expect.objectContaining({ subject: SUBJECT }),
+      projectId,
+    );
+    expect(transaction.mediaAsset.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          kind: AssetKind.DOCUMENT,
+          projectId,
+          productId: undefined,
+          uploadedBy: SUBJECT,
+        }),
+      }),
+    );
   });
 
   it('rejects a body session id that differs from the route without querying state', async () => {

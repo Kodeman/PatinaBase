@@ -243,8 +243,9 @@ export class OCIStorageService {
     return `https://${host}/${objectKey}`;
   }
 
-  generateObjectKey(assetId: string, kind: 'image' | '3d', filename: string): string {
-    const prefix = kind === 'image' ? 'raw/images' : 'raw/3d';
+  generateObjectKey(assetId: string, kind: 'image' | '3d' | 'document', filename: string): string {
+    const prefix =
+      kind === 'image' ? 'raw/images' : kind === 'document' ? 'raw/documents' : 'raw/3d';
     const basename = filename.split(/[\\/]/).pop() ?? 'upload';
     const safeName = basename.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 255);
     return `${prefix}/${assetId}/${safeName || 'upload'}`;

@@ -24,12 +24,14 @@ describe('AssetsService', () => {
       organizationIds: [],
     },
     where: { uploadedBy: subject },
+    projectIds: [],
     admin: false,
   } as const;
   const mockAsset = {
     id: 'asset-1',
     kind: AssetKind.IMAGE,
     productId: 'product-1',
+    projectId: null,
     variantId: null,
     role: AssetRole.HERO,
     rawKey: 'raw/images/asset-1/hero.jpg',
@@ -154,6 +156,26 @@ describe('AssetsService', () => {
     });
   });
 
+  it('clears project ownership when a single asset is assigned to a product', async () => {
+    authorization.requireAsset.mockResolvedValueOnce({
+      ...mockAsset,
+      productId: null,
+      projectId: 'project-1',
+    } as any);
+    transaction.mediaAsset.update.mockResolvedValue({
+      ...mockAsset,
+      productId: 'product-2',
+      projectId: null,
+    });
+
+    await service.updateAsset(subject, 'asset-1', { productId: 'product-2' });
+
+    expect(transaction.mediaAsset.update).toHaveBeenCalledWith({
+      where: { id: 'asset-1' },
+      data: { productId: 'product-2', projectId: null },
+    });
+  });
+
   it('soft deletes an authorized asset', async () => {
     await expect(service.deleteAsset(subject, 'asset-1', true, true)).resolves.toEqual({
       deletedAssets: 1,
@@ -187,6 +209,20 @@ describe('AssetsService', () => {
     await expect(
       service.bulkUpdateAssets(subject, { assetIds, updates: { isPublic: true } }),
     ).resolves.toEqual({ success: 3, failed: 0, errors: [] });
+  });
+
+  it('clears project ownership when a batch is assigned to a product', async () => {
+    transaction.mediaAsset.updateMany.mockResolvedValue({ count: 2 });
+
+    await service.bulkUpdateAssets(subject, {
+      assetIds: ['asset-1', 'asset-2'],
+      updates: { productId: 'product-2' },
+    });
+
+    expect(transaction.mediaAsset.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['asset-1', 'asset-2'] } },
+      data: { productId: 'product-2', projectId: null },
+    });
   });
 
   it('fails a mixed-access batch without revealing which ID was inaccessible', async () => {
@@ -252,6 +288,11 @@ describe('AssetsService', () => {
     ).resolves.toEqual({ success: 2, failed: 0, errors: [] });
     expect(authorization.requireProduct).toHaveBeenCalled();
     expect(transaction.mediaAsset.update).toHaveBeenCalledTimes(2);
+    expect(transaction.mediaAsset.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ productId: 'product-2', projectId: null }),
+      }),
+    );
   });
 
   it('uses a non-enumerating 404 for a source-product mismatch', async () => {

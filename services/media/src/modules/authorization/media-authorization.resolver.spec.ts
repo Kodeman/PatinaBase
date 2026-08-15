@@ -133,6 +133,7 @@ describe('MediaAuthorizationResolver', () => {
       [{ role_name: 'independent_designer', permission_name: 'media.read.own' }],
       [],
       [{ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }],
+      [],
     ]);
 
     const where = await resolver.withAssetScope(
@@ -142,8 +143,32 @@ describe('MediaAuthorizationResolver', () => {
     );
     expect(where).toEqual({
       OR: [
-        { productId: null, uploadedBy: SUBJECT_A },
+        { productId: null, projectId: null, uploadedBy: SUBJECT_A },
         { productId: { in: ['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'] } },
+      ],
+    });
+  });
+
+  it('includes only canonical projects assigned to the current subject', async () => {
+    const projectId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab';
+    const { resolver } = harness([
+      [{ role_name: 'independent_designer', permission_name: 'media.read.own' }],
+      [],
+      [],
+      [{ id: projectId }],
+    ]);
+
+    const scope = await resolver.withAssetScope(
+      SUBJECT_A,
+      'read',
+      async (_transaction, currentScope) => currentScope,
+    );
+
+    expect(scope.projectIds).toEqual([projectId]);
+    expect(scope.where).toEqual({
+      OR: [
+        { productId: null, projectId: null, uploadedBy: SUBJECT_A },
+        { projectId: { in: [projectId] } },
       ],
     });
   });
@@ -160,6 +185,7 @@ describe('MediaAuthorizationResolver', () => {
         organizationIds: [],
       },
       where: { uploadedBy: SUBJECT_A },
+      projectIds: [],
       admin: false,
     };
 
