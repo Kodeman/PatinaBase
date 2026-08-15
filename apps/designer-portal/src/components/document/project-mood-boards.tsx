@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { BoardComposition } from '@patina/design-system';
@@ -24,6 +24,9 @@ import { RegionHead, type RegionLedgerEntry } from './region/region-head';
 import { useRegionFold } from './region/use-region-fold';
 import { FoldSeam, focusRegionHeading } from './region/fold-seam';
 import { RegionRule } from './region/region-rule';
+import { useRoomLens } from './room-lens-context';
+import { liftByRoom } from '@/lib/document/room-state';
+import { NEW_BOARD_EVENT, requestShelfClose } from '@/lib/document/shelves';
 
 const HEADING_ID = 'project-mood-boards';
 const BODY_ID = 'project-mood-boards-body';
@@ -87,12 +90,45 @@ export function ProjectMoodBoards({
   const [error, setError] = useState<string | null>(null);
   const [startingBoard, setStartingBoard] = useState(false);
 
+  const { heldRoomId } = useRoomLens();
   const liveBoards = useMemo(
-    () => ((liveQuery.data ?? EMPTY_LIVE_BOARDS) as LiveBoardWithLineage[])
-      .filter((board) => board.status !== 'archived'),
-    [liveQuery.data],
+    () =>
+      liftByRoom(
+        ((liveQuery.data ?? EMPTY_LIVE_BOARDS) as LiveBoardWithLineage[]).filter(
+          (board) => board.status !== 'archived',
+        ),
+        heldRoomId,
+        (board) => board.project_room_id ?? null,
+      ),
+    [liveQuery.data, heldRoomId],
   );
-  const frozenBoards = (frozenQuery.data ?? EMPTY_FROZEN_BOARDS) as FrozenBoardWithSections[];
+  const frozenBoards = useMemo(
+    () =>
+      liftByRoom(
+        (frozenQuery.data ?? EMPTY_FROZEN_BOARDS) as FrozenBoardWithSections[],
+        heldRoomId,
+        (board) => board.project_room_id ?? null,
+      ),
+    [frozenQuery.data, heldRoomId],
+  );
+
+  // The boards now live on a shelf, and the FF&E line these three items point
+  // at lives on the paper behind it — so the leaf has to be put away before
+  // the row can be reached. A bare '#ffe-selection-…' hash scrolled a page the
+  // reader could not see.
+  const revealSelection = useCallback((selectionId: string) => {
+    requestShelfClose();
+    const reduceMotion = window.matchMedia?.(
+      '(prefers-reduced-motion: reduce)',
+    ).matches;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        document
+          .getElementById(`ffe-selection-${selectionId}`)
+          ?.scrollIntoView({ block: 'start', behavior: reduceMotion ? 'auto' : 'smooth' });
+      });
+    });
+  }, []);
   const continuedBySnapshot = useMemo(
     () =>
       new Map(
@@ -119,7 +155,7 @@ export function ProjectMoodBoards({
           ? 'Continue a client-requested change'
           : 'Answer a client question',
         detail: 'Open the selection from its latest published review.',
-        href: `#ffe-selection-${attention.selectionId}`,
+        action: () => revealSelection(attention.selectionId),
       });
     }
     const unsorted = rows
@@ -130,7 +166,7 @@ export function ProjectMoodBoards({
         key: `unsorted:${String(unsorted.id)}`,
         label: 'Route the oldest Unsorted selection',
         detail: 'Choose a room, Throughout, or a compatible board.',
-        href: `#ffe-selection-${String(unsorted.id)}`,
+        action: () => revealSelection(String(unsorted.id)),
       });
     }
     const lastBoard = [...liveBoards].sort((a, b) =>
@@ -156,7 +192,7 @@ export function ProjectMoodBoards({
         key: `readiness:${String(releaseGap.id)}`,
         label: 'Complete a release-blocking specification',
         detail: 'Resolve the oldest selected line that is not ready for authorization.',
-        href: `#ffe-selection-${String(releaseGap.id)}`,
+        action: () => revealSelection(String(releaseGap.id)),
       });
     }
     if (canCreate && rows.length === 0 && liveBoards.length === 0) {
@@ -168,7 +204,7 @@ export function ProjectMoodBoards({
       });
     }
     return result.slice(0, 3);
-  }, [activeSelectionRows, attentionQuery.data, canCreate, liveBoards, pathname, readinessQuery.data]);
+  }, [activeSelectionRows, attentionQuery.data, canCreate, liveBoards, pathname, readinessQuery.data, revealSelection]);
 
   const boardsEmpty = liveBoards.length === 0 && frozenBoards.length === 0;
   const { folded: boardsFolded, setFolded: setBoardsFolded } = useRegionFold({
@@ -191,8 +227,8 @@ export function ProjectMoodBoards({
       setBoardsFolded(false);
       setStartingBoard(true);
     };
-    window.addEventListener('document:new-project-board', openCreator);
-    return () => window.removeEventListener('document:new-project-board', openCreator);
+    window.addEventListener(NEW_BOARD_EVENT, openCreator);
+    return () => window.removeEventListener(NEW_BOARD_EVENT, openCreator);
   }, [canCreate, setBoardsFolded]);
   if (isLoading) {
     return (
