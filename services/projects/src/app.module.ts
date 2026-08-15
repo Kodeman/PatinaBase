@@ -11,7 +11,6 @@ import configuration from './config/configuration';
 import { CacheModule } from '@patina/cache';
 import { HybridAuthGuard, PermissionsGuard } from '@patina/auth';
 import { PrismaModule } from './prisma/prisma.module';
-import { AuthModule } from './common/auth/auth.module';
 import { HealthModule } from './health/health.module';
 import { ProjectsModule } from './projects/projects.module';
 import { TasksModule } from './tasks/tasks.module';
@@ -62,7 +61,6 @@ import { IntegrationsModule } from './integrations/integrations.module';
     }),
     CacheModule,
     PrismaModule,
-    AuthModule,
     IntegrationsModule,
     HealthModule,
     ProjectsModule,

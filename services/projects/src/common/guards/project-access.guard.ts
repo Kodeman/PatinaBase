@@ -11,7 +11,6 @@ export class ProjectAccessGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    // Check if endpoint is marked as @Public()
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -29,17 +28,29 @@ export class ProjectAccessGuard implements CanActivate {
       throw new ForbiddenException('User not authenticated');
     }
 
+    const id = typeof user.id === 'string' && user.id.length > 0 ? user.id : undefined;
+    const sub = typeof user.sub === 'string' && user.sub.length > 0 ? user.sub : undefined;
+    if ((!id && !sub) || (id && sub && id !== sub)) {
+      throw new ForbiddenException('Authenticated user identity is invalid');
+    }
+    const userId = id ?? sub;
+
+    const roles = Array.isArray(user.roles)
+      ? user.roles.filter((role: unknown): role is string => typeof role === 'string')
+      : [];
+    const knownRoles = new Set(['admin', 'designer', 'client', 'contractor']);
+    if (roles.length === 0 || roles.some((role: string) => !knownRoles.has(role))) {
+      throw new ForbiddenException('Authenticated user has no recognized application role');
+    }
+
     if (!projectId) {
-      // No project ID in route, allow (handled by roles guard)
+      throw new ForbiddenException('Project scope is required');
+    }
+
+    if (roles.includes('admin')) {
       return true;
     }
 
-    // Admins have access to all projects
-    if (user.role === 'admin') {
-      return true;
-    }
-
-    // Check if user has access to this project
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
       select: { id: true, clientId: true, designerId: true },
@@ -49,19 +60,13 @@ export class ProjectAccessGuard implements CanActivate {
       throw new NotFoundException('Project not found');
     }
 
-    // Designer must be assigned to project
-    if (user.role === 'designer' && project.designerId !== user.id) {
-      throw new ForbiddenException('You do not have access to this project');
+    if (
+      (roles.includes('designer') && project.designerId === userId) ||
+      (roles.includes('client') && project.clientId === userId)
+    ) {
+      return true;
     }
 
-    // Client must be the project client
-    if (user.role === 'client' && project.clientId !== user.id) {
-      throw new ForbiddenException('You do not have access to this project');
-    }
-
-    // Contractor access can be checked here (future)
-    // if (user.role === 'contractor') { ... }
-
-    return true;
+    throw new ForbiddenException('You do not have access to this project');
   }
 }
