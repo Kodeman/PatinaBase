@@ -13,12 +13,13 @@
  * Match row/why TYPES live here (portal-local): the shared hooks batch is
  * Wave 3B territory — fold these into @patina/types if 3B needs them too.
  */
-import type { SpectrumDimension } from '@patina/types';
+import type { CatalogProductSummary, SpectrumDimension } from '@patina/types';
 import {
   classifyRpcError,
   QuizNetworkError,
   type PostgrestErrorBody,
 } from '@patina/aesthete-quiz';
+import { hydrateCatalogProducts } from './product-hydration';
 
 // ─── wire shapes (mirror migration 00244 §10.1/§10.6 exactly) ────────────────
 
@@ -92,6 +93,7 @@ export interface MatchProduct {
 
 export interface WireConfig {
   baseUrl: string;
+  edgeApiUrl?: string;
   anonKey: string;
   accessToken?: string;
   signal?: AbortSignal;
@@ -152,25 +154,59 @@ export async function fetchAestheteMatches(
   return Array.isArray(rows) ? rows : [];
 }
 
-/** GET /rest/v1/products?id=in.(…) — anon RLS permits catalog-layer rows only. */
-export async function fetchMatchProducts(
+function matchProduct(summary: CatalogProductSummary): MatchProduct {
+  return {
+    id: summary.id,
+    name: summary.name,
+    brand: summary.brand,
+    category: summary.category,
+    price_retail: summary.retailCents,
+    images: summary.imageUrls,
+    short_description: summary.shortDescription,
+    patina_managed: summary.patinaManaged,
+    status: summary.status,
+  };
+}
+
+async function fetchLegacyMatchProducts(
   config: WireConfig,
   productIds: string[],
 ): Promise<Map<string, MatchProduct>> {
-  if (productIds.length === 0) return new Map();
-  const select =
-    'id,name,brand,category,price_retail,images,short_description,patina_managed,status';
-  const url =
-    `${config.baseUrl.replace(/\/+$/, '')}/rest/v1/products` +
-    `?id=in.(${productIds.join(',')})&select=${select}`;
+  const url = new URL(`${config.baseUrl.replace(/\/+$/, '')}/rest/v1/products`);
+  url.searchParams.set('id', `in.(${productIds.join(',')})`);
+  url.searchParams.set(
+    'select',
+    'id,name,brand,category,price_retail,images,short_description,patina_managed,status',
+  );
+  url.searchParams.set('layer', 'eq.catalog');
+  url.searchParams.set('status', 'eq.published');
+  url.searchParams.set('order', 'id.asc');
   let response: Response;
   try {
-    response = await fetch(url, { headers: headers(config), signal: config.signal });
+    response = await fetch(url, {
+      headers: headers(config),
+      signal: config.signal,
+    });
   } catch (cause) {
     throw new QuizNetworkError(
-      `Could not reach ${url}: ${cause instanceof Error ? cause.message : String(cause)}`,
+      `Could not reach the catalog: ${cause instanceof Error ? cause.message : String(cause)}`,
     );
   }
   const rows = await parseOrThrow<MatchProduct[]>(response, 'products');
   return new Map(rows.map((row) => [row.id, row]));
+}
+
+/** GET /v1/catalog/products with a constrained PostgREST fallback during the canary. */
+export async function fetchMatchProducts(
+  config: WireConfig,
+  productIds: string[],
+): Promise<Map<string, MatchProduct>> {
+  const edgeBase = (config.edgeApiUrl ?? config.baseUrl).replace(/\/+$/, '');
+  return hydrateCatalogProducts(
+    edgeBase,
+    productIds,
+    matchProduct,
+    (safeIds) => fetchLegacyMatchProducts(config, safeIds),
+    config.signal,
+  );
 }
