@@ -1,4 +1,5 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { ExecutionContext, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { PERMISSIONS_KEY, PermissionsGuard } from '@patina/auth';
 import { PrismaClient } from '../../generated/prisma-client';
 import { MediaAuthorizationResolver } from './media-authorization.resolver';
 
@@ -84,6 +85,45 @@ describe('MediaAuthorizationResolver', () => {
     await expect(resolver.resolve(SUBJECT_A)).resolves.toMatchObject({
       roles: ['super_admin', 'caller_invented_role'],
       permissions: [],
+      organizationIds: [],
+    });
+  });
+
+  it('ignores stale JWT metadata and denies from current Media database state', async () => {
+    const { resolver } = harness([
+      [{ role_name: 'independent_designer', permission_name: 'media.read.own' }],
+      [],
+    ]);
+    const handler = () => undefined;
+    Reflect.defineMetadata(PERMISSIONS_KEY, ['media.admin.all'], handler);
+    const request = {
+      user: {
+        id: SUBJECT_A,
+        sub: SUBJECT_A,
+        userId: SUBJECT_A,
+        role: 'authenticated',
+        roles: ['super_admin'],
+        permissions: ['media.admin.all'],
+        app_metadata: {
+          roles: ['super_admin'],
+          permissions: ['media.admin.all'],
+        },
+      },
+    };
+    const context = {
+      getHandler: () => handler,
+      getClass: () => class ProtectedMediaRoute {},
+      switchToHttp: () => ({ getRequest: () => request }),
+    } as unknown as ExecutionContext;
+
+    await expect(new PermissionsGuard(resolver).canActivate(context)).rejects.toMatchObject({
+      status: 403,
+      message: 'Authorization denied',
+    });
+    expect((request as any).authorization).toEqual({
+      subject: SUBJECT_A,
+      roles: ['independent_designer'],
+      permissions: ['media.read.own'],
       organizationIds: [],
     });
   });
