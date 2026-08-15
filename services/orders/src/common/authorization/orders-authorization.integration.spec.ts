@@ -3,7 +3,10 @@ import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaClient } from '../../generated/prisma-client';
 import { OrdersService } from '../../modules/orders/orders.service';
-import { OrdersAuthorizationResolver } from './orders-authorization.resolver';
+import {
+  ORDER_PERMISSIONS,
+  OrdersAuthorizationResolver,
+} from './orders-authorization.resolver';
 
 const databaseUrl = process.env.ORDERS_AUTHZ_TEST_DATABASE_URL;
 const isLocalDatabase = Boolean(databaseUrl && /(?:127\.0\.0\.1|localhost)/.test(databaseUrl));
@@ -82,8 +85,16 @@ describeLocal('Orders authorization with local Postgres', () => {
       INSERT INTO public.roles (name, display_name, description, domain, is_system, is_assignable)
       VALUES (
         ${`orders_authz_unknown_${suffix}`}, 'Orders authz unknown',
-        'Test-only role without permissions', 'consumer', false, false
+        'Test-only role with a canonical permission', 'consumer', false, false
       )
+    `;
+    await prisma.$executeRaw`
+      INSERT INTO public.role_permissions (role_id, permission_id)
+      SELECT role.id, permission.id
+      FROM public.roles AS role
+      CROSS JOIN public.permissions AS permission
+      WHERE role.name = ${`orders_authz_unknown_${suffix}`}
+        AND permission.name = ${ORDER_PERMISSIONS.ADMIN_ALL}
     `;
     await grantRole(ids.noRole, `orders_authz_unknown_${suffix}`);
     await setMembership('active');

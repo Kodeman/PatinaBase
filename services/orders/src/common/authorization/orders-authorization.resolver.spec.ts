@@ -58,6 +58,19 @@ describe('OrdersAuthorizationResolver', () => {
     }
   });
 
+  it('fails closed when an unknown role is mapped to a canonical permission', async () => {
+    database.$queryRaw
+      .mockResolvedValueOnce([{ role: 'invented_admin', permission: ORDER_PERMISSIONS.ADMIN_ALL }])
+      .mockResolvedValueOnce([{ organizationId: 'org-1' }]);
+
+    await expect(resolver.resolve(subject)).resolves.toEqual({
+      subject,
+      roles: ['invented_admin'],
+      permissions: [],
+      organizationIds: [],
+    });
+  });
+
   it('builds non-overridable own, organization, and admin scopes', () => {
     expect(resolver.orderScope(state([ORDER_PERMISSIONS.READ_OWN]), 'read')).toEqual({
       OR: [{ userId: subject }],

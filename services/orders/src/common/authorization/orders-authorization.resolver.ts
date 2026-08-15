@@ -28,6 +28,23 @@ type OrganizationMembershipRow = {
   organizationId: string;
 };
 
+const SUPPORTED_APPLICATION_ROLES = new Set([
+  'app_user',
+  'client',
+  'independent_designer',
+  'studio_owner',
+  'studio_admin',
+  'studio_designer',
+  'brand_admin',
+  'catalog_manager',
+  'operations_lead',
+  'partner_manager',
+  'super_admin',
+  'ml_operator',
+  'quality_control',
+  'support_agent',
+]);
+
 @Injectable()
 export class OrdersAuthorizationResolver implements AuthorizationResolver {
   constructor(private readonly prisma: PrismaClient) {}
@@ -59,18 +76,24 @@ export class OrdersAuthorizationResolver implements AuthorizationResolver {
       `,
     ]);
 
+    const roles = [...new Set(rolePermissions.map((row) => row.role))];
+    const supported =
+      roles.length > 0 && roles.every((role) => SUPPORTED_APPLICATION_ROLES.has(role));
+
     return Object.freeze({
       subject,
-      roles: Object.freeze([...new Set(rolePermissions.map((row) => row.role))]),
+      roles: Object.freeze(roles),
       permissions: Object.freeze([
         ...new Set(
-          rolePermissions
-            .map((row) => row.permission)
-            .filter((permission): permission is string => permission !== null),
+          supported
+            ? rolePermissions
+                .map((row) => row.permission)
+                .filter((permission): permission is string => permission !== null)
+            : [],
         ),
       ]),
       organizationIds: Object.freeze([
-        ...new Set(memberships.map((row) => row.organizationId)),
+        ...new Set(supported ? memberships.map((row) => row.organizationId) : []),
       ]),
     });
   }
