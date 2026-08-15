@@ -23,6 +23,10 @@ jest.mock('../../project-schedule-handoff-mount', () => ({
   ProjectScheduleHandoffMount: () => <div>the drafting strip</div>,
 }));
 
+jest.mock('../../phase-advance-control', () => ({
+  PhaseAdvanceControl: () => <div>advance the phase</div>,
+}));
+
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: {
     actionShown: jest.fn(),
@@ -65,6 +69,36 @@ describe('the schedule frame region', () => {
       screen.getByText('Week 1 of 14 · Install ~Sep 2026'),
     ).toBeInTheDocument();
     expect(screen.queryByText('the drafting strip')).not.toBeInTheDocument();
+  });
+
+  it('keeps the phase-advance control visible while the schedule is folded', () => {
+    // Advancing the phase is a lifecycle act, not a date edit. Inside a
+    // default-folded body it was invisible on every visit — a workflow that
+    // simply disappeared behind a seam.
+    render(
+      <ScheduleNavProvider>
+        <ScheduleRuleRegion {...props} />
+      </ScheduleNavProvider>,
+    );
+    expect(screen.queryByText('the drafting strip')).not.toBeInTheDocument();
+    expect(screen.getByText('advance the phase')).toBeInTheDocument();
+  });
+
+  it('keeps it visible unfolded too, and drops it off an inactive project', () => {
+    const { rerender } = render(
+      <ScheduleNavProvider>
+        <ScheduleRuleRegion {...props} />
+      </ScheduleNavProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Schedule/ }));
+    expect(screen.getByText('advance the phase')).toBeInTheDocument();
+
+    rerender(
+      <ScheduleNavProvider>
+        <ScheduleRuleRegion {...props} projectStatus="completed" />
+      </ScheduleNavProvider>,
+    );
+    expect(screen.queryByText('advance the phase')).not.toBeInTheDocument();
   });
 
   it('unfolds to the editor and its ledger', () => {

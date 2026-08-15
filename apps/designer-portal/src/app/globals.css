@@ -729,9 +729,12 @@
   --text-muted: var(--color-charcoal);
 }
 
-/* An open shelf leaf sits beside the spine, 320px wide. Below ~1900px it would
-   cover the paper's text, so the paper steps aside instead of being covered;
-   above that there is canvas enough for the leaf to overlay nothing. */
+/* An open shelf leaf sits beside the spine (200px) and is 320px wide, so its
+   right edge is at 520px. The paper is centred in the column that starts at
+   200px and caps at 1040px with 48px of padding, so its text edge sits at
+   200 + (W − 1472)/2 + 48 — which only clears 520px from W ≈ 2016px. Below
+   that the paper steps aside rather than being covered; 2020px is the
+   compute-safe threshold. */
 @media (min-width: 1440px) {
   [data-document-paper] {
     transition: padding-left 200ms ease;
@@ -740,7 +743,7 @@
     padding-left: 344px;
   }
 }
-@media (min-width: 1900px) {
+@media (min-width: 2020px) {
   [data-document-paper][data-shelf-open='true'] {
     padding-left: 3rem;
   }

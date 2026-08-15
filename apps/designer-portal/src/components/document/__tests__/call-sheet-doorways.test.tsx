@@ -9,6 +9,8 @@
  *      drafting-room-here).
  *   3. The letterhead instrument — present with the flag on, byte-absent
  *      (not merely hidden) with it off.
+ *   5. The spine's "The shelves" call-sheet row (I136) — the same gate: the
+ *      row is byte-absent with the flag off, not a disabled stub.
  *   4. The ⌘K TYPED-search leak fix — matchSurfaces has no scope/flag check
  *      of its own (registry.tsx stays data-only), so command-bar.tsx's typed
  *      branch must filter document-scoped surfaces itself: typing "roster"
@@ -103,6 +105,8 @@ jest.mock('../proposal-preview', () => ({ ProposalPreview: () => null }));
 // cosmetic, but it keeps the file honest about what's real vs stubbed).
 import { CommandBar } from '../command-bar';
 import { LetterheadInstruments } from '../letterhead-instruments';
+import { SpineShelvesBlock } from '../spine-shelves-block';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 
 function rosterRow(over: Partial<ProjectRosterRow> = {}): ProjectRosterRow {
   return {
@@ -418,5 +422,68 @@ describe('letterhead-instruments — the Call Sheet instrument', () => {
     // The roster query the instrument would have needed is never even
     // requested — the row isn't mounted at all, not just rendered null.
     expect(mockUseProjectRoster).not.toHaveBeenCalled();
+  });
+});
+
+
+// ============================================================================
+// 5. The spine's shelf row — the fourth doorway (I136, "The Shelved Spine")
+//    The row is a doorway to the SAME roster sheet the three above open, so it
+//    answers to the same flag. The page resolves it through `useFeatureFlag`
+//    and threads it down, exactly as this harness does.
+// ============================================================================
+
+describe('spine shelves — the Call sheet row', () => {
+  const statuses = {
+    planroom: '4 sheets',
+    specbook: '10 specified · by room',
+    moodboards: '3 boards',
+    callsheet: '3 on the roster',
+    knowledge: 'Studio library',
+  };
+
+  function ShelvesHarness({ onToggle }: { onToggle?: jest.Mock }) {
+    // Mirrors page.tsx: the flag is read once and threaded into the block.
+    const gate = useFeatureFlag('call-sheet');
+    return (
+      <SpineShelvesBlock
+        openShelf={null}
+        statuses={statuses}
+        callSheetEnabled={gate.value}
+        onToggleShelf={onToggle ?? jest.fn()}
+      />
+    );
+  }
+
+  it('renders the row with the flag on, beside the four leaf shelves', () => {
+    mockCallSheetFlag = true;
+    render(<ShelvesHarness />);
+
+    expect(screen.getByRole('button', { name: /Call sheet/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Plan room/ })).toBeInTheDocument();
+  });
+
+  it('is byte-absent — not a disabled stub — when the flag is off', () => {
+    mockCallSheetFlag = false;
+    const { baseElement } = render(<ShelvesHarness />);
+
+    expect(screen.queryByRole('button', { name: /Call sheet/ })).not.toBeInTheDocument();
+    expect(baseElement.querySelector('[data-shelf-trigger="callsheet"]')).toBeNull();
+    // The four leaf shelves are untouched by the flag.
+    expect(screen.getByRole('button', { name: /Plan room/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Knowledge/ })).toBeInTheDocument();
+  });
+
+  it('reaches the roster sheet — never a leaf — when pressed', () => {
+    mockCallSheetFlag = true;
+    const onToggle = jest.fn();
+    render(<ShelvesHarness onToggle={onToggle} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Call sheet/ }));
+    expect(onToggle).toHaveBeenCalledWith('callsheet');
+    // A doorway promises no panel of its own.
+    expect(
+      screen.getByRole('button', { name: /Call sheet/ }),
+    ).not.toHaveAttribute('aria-expanded');
   });
 });

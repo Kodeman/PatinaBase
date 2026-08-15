@@ -23,6 +23,14 @@ import {
 } from '@/lib/document/shelves';
 import { SHELF_LEAF_ID } from '../spine-shelves-block';
 
+/** A field, a picker, or rich text — anything Esc already means something to. */
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+}
+
 export function ShelfPanel({
   openShelf,
   onClose,
@@ -57,6 +65,10 @@ export function ShelfPanel({
       if (e.key !== 'Escape') return;
       // A DocSheet raised over the leaf owns Esc first.
       if (document.querySelector('[role="dialog"]')) return;
+      // So does a control the reader is typing in: Esc reverts a field or
+      // dismisses its combobox. Putting the whole shelf away instead would
+      // throw the edit out with the keystroke meant to undo it.
+      if (isEditableTarget(e.target)) return;
       e.preventDefault();
       onClose();
     };

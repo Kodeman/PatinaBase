@@ -122,6 +122,7 @@ describe('the shelves block', () => {
       <SpineShelvesBlock
         openShelf="specbook"
         statuses={statuses}
+        callSheetEnabled
         onToggleShelf={jest.fn()}
       />,
     );
@@ -145,12 +146,42 @@ describe('the shelves block', () => {
       <SpineShelvesBlock
         openShelf={null}
         statuses={statuses}
+        callSheetEnabled
         onToggleShelf={jest.fn()}
       />,
     );
     expect(
       screen.getByRole('button', { name: /Mood boards/ }),
     ).toHaveAttribute('data-shelf-trigger', 'moodboards');
+  });
+
+  it('points aria-controls at the leaf only while the leaf is on the page', () => {
+    const { rerender } = render(
+      <SpineShelvesBlock
+        openShelf={null}
+        statuses={statuses}
+        callSheetEnabled
+        onToggleShelf={jest.fn()}
+      />,
+    );
+    // A closed leaf renders nothing — naming its id would offer a jump into a
+    // void.
+    expect(
+      screen.getByRole('button', { name: /Spec book/ }),
+    ).not.toHaveAttribute('aria-controls');
+
+    rerender(
+      <SpineShelvesBlock
+        openShelf="specbook"
+        statuses={statuses}
+        callSheetEnabled
+        onToggleShelf={jest.fn()}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /Spec book/ })).toHaveAttribute(
+      'aria-controls',
+      'doc-shelf-leaf',
+    );
   });
 });
 

@@ -9,6 +9,14 @@
  * headings because a folded region unmounts its body: heading and fold seam
  * swap, the root does not move.
  *
+ * Attachment is a QUERY, not a subscription — there is no event when a region
+ * mounts. Regions arrive as their own queries settle, several paints after this
+ * hook first runs, so a single attach would silently observe two of four roots
+ * forever. The effect therefore re-queries on a short retry until every root it
+ * expects is found (or the window lapses), and re-runs whenever the key list
+ * changes. A region that mounts after that window is genuinely not picked up;
+ * that is the known limit, not an oversight.
+ *
  * A jump LOCKS the line onto its target for the length of the smooth scroll,
  * so the line commits to where you asked to go instead of walking every region
  * the scroll passes through.
@@ -24,6 +32,9 @@ import {
 
 const READING_BAND = '-20% 0px -62% 0px';
 const JUMP_LOCK_MS = 700;
+/** Re-query for roots that have not mounted yet: ~2s at 8 tries. */
+const ATTACH_RETRY_MS = 250;
+const ATTACH_RETRIES = 8;
 
 export interface DocumentRunningIndex {
   activeKey: DocumentIndexKey | null;
@@ -88,10 +99,27 @@ export function useDocumentRunningIndex(
       { rootMargin: READING_BAND, threshold: 0 },
     );
 
-    for (const key of ordered) {
-      const el = document.querySelector(regionAnchorSelector(key));
-      if (el) observer.observe(el);
-    }
+    // `observe` is idempotent per element, so a retry that re-finds an
+    // already-observed root costs nothing and simply picks up the new ones.
+    const attached = new Set<DocumentIndexKey>();
+    let retriesLeft = ATTACH_RETRIES;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const attach = () => {
+      retryTimer = null;
+      for (const key of ordered) {
+        const el = document.querySelector(regionAnchorSelector(key));
+        if (!el) continue;
+        observer.observe(el);
+        attached.add(key);
+      }
+      resolve();
+      if (attached.size < ordered.length && retriesLeft > 0) {
+        retriesLeft -= 1;
+        retryTimer = setTimeout(attach, ATTACH_RETRY_MS);
+      }
+    };
+    attach();
 
     let ticking = false;
     const onScroll = () => {
@@ -103,9 +131,9 @@ export function useDocumentRunningIndex(
       });
     };
     window.addEventListener('scroll', onScroll, { passive: true });
-    resolve();
 
     return () => {
+      if (retryTimer) clearTimeout(retryTimer);
       observer.disconnect();
       window.removeEventListener('scroll', onScroll);
     };

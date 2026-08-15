@@ -97,7 +97,11 @@ import { RegionHead, type RegionLedgerEntry } from './region/region-head';
 import { RegionRule } from './region/region-rule';
 import { FoldSeam, focusRegionHeading } from './region/fold-seam';
 import { useRegionFold } from './region/use-region-fold';
-import { liftByRoom, roomState as deriveRoomState } from '@/lib/document/room-state';
+import {
+  liftByRoom,
+  roomState as deriveRoomState,
+  roomStateRowFromStamp,
+} from '@/lib/document/room-state';
 import { useRoomLens } from './room-lens-context';
 import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
 
@@ -486,9 +490,7 @@ function RoomHeading({
     .filter((r) => COMMITTED.has(r.stamp.kind))
     .reduce((s, r) => s + (r.item.line_total_cents ?? 0), 0);
   const underway = rows.filter((r) => UNDERWAY.has(r.stamp.kind)).length;
-  const state = deriveRoomState(
-    rows.map((r) => ({ installed: r.stamp.kind === 'installed' })),
-  );
+  const state = deriveRoomState(rows.map((r) => roomStateRowFromStamp(r.stamp)));
 
   const releasedCents = rows
     .filter((r) => r.auth.track !== 'none')

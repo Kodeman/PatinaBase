@@ -1,5 +1,4 @@
 import { render, screen } from '@testing-library/react';
-import type { Database } from '@patina/supabase';
 
 import { ProjectScheduleHandoffMount } from '../project-schedule-handoff-mount';
 
@@ -24,73 +23,38 @@ jest.mock('@/components/document/schedule/schedule-confirm-strip', () => ({
 }));
 
 jest.mock('@/components/document/phase-advance-control', () => ({
-  PhaseAdvanceControl: ({
-    projectId,
-    phases,
-  }: {
-    projectId: string;
-    phases: readonly unknown[] | undefined;
-  }) => (
-    <div data-testid="phase-handoffs">
-      Phase handoffs · {projectId} · {phases?.length ?? 0}
-    </div>
-  ),
+  PhaseAdvanceControl: () => <div data-testid="phase-handoffs">Phase handoffs</div>,
 }));
-
-type PhaseRow = Database['public']['Tables']['project_phases']['Row'];
-
-const schedulePhases = [
-  {
-    id: 'phase-1',
-    name: 'Design Development',
-    project_id: 'project-1',
-    status: 'in_progress',
-    lane: 'main',
-    sort_order: 0,
-  } as PhaseRow,
-];
 
 const scheduleMountProps = {
   engagementKind: 'project',
   projectId: 'project-1',
   projectTitle: 'Lakeshore House',
-  projectStatus: 'active',
-  phases: schedulePhases,
 };
 
 describe('ProjectScheduleHandoffMount', () => {
-  it('mounts the Rule and the phase handoffs under it — no renderer choice left (B3)', () => {
+  it('mounts the Rule and its confirm strip — no renderer choice left (B3)', () => {
     render(<ProjectScheduleHandoffMount {...scheduleMountProps} />);
 
     expect(screen.getByTestId('schedule-rule')).toHaveTextContent(
       'project-1 · Lakeshore House',
     );
     expect(screen.getByTestId('schedule-confirm')).toBeVisible();
-    expect(screen.getByTestId('phase-handoffs')).toHaveTextContent('project-1 · 1');
   });
 
-  it.each(['on_hold', 'completed', 'archived', 'draft'])(
-    'keeps the schedule visible but hides phase mutation controls for %s projects',
-    (projectStatus) => {
-      render(
-        <ProjectScheduleHandoffMount
-          {...scheduleMountProps}
-          projectStatus={projectStatus}
-        />,
-      );
+  it('does NOT carry the phase-advance control — this mount is a foldable body', () => {
+    // The control moved up to ScheduleRuleRegion, which renders it in both
+    // fold states; behind a default-folded body it was invisible on every
+    // visit. Its status gating is asserted in schedule-rule-region.test.tsx.
+    render(<ProjectScheduleHandoffMount {...scheduleMountProps} />);
+    expect(screen.queryByTestId('phase-handoffs')).not.toBeInTheDocument();
+  });
 
-      expect(screen.getByTestId('schedule-rule')).toBeVisible();
-      expect(screen.getByTestId('schedule-confirm')).toBeVisible();
-      expect(screen.queryByTestId('phase-handoffs')).not.toBeInTheDocument();
-    },
-  );
-
-  it('mounts no project schedule or mutation control on proposal documents', () => {
+  it('mounts no project schedule on proposal documents', () => {
     const { container } = render(
       <ProjectScheduleHandoffMount {...scheduleMountProps} engagementKind="proposal" />,
     );
 
     expect(container).toBeEmptyDOMElement();
-    expect(screen.queryByTestId('phase-handoffs')).not.toBeInTheDocument();
   });
 });

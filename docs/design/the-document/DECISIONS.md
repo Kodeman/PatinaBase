@@ -8540,4 +8540,59 @@ inline region); a room dimension on approvals (no schema for it); real
 Knowledge data (no feature for it); the plan-room band's separate component,
 now unmounted but left in place rather than deleted outside this scope.
 
-*Entries add: I136 · last id = I136*
+### I136-errata · Review corrections to "The Shelved Spine" before ship — 2026-08-15
+
+Adversarial review of I136 found two blockers and a set of minors. All are
+fixed on the same branch; the entries below correct what I136 above records.
+
+**The call-sheet shelf row obeys the `call-sheet` flag.** I136 described the row
+as a doorway to the roster sheet but did not gate it. Every sibling doorway is
+flag-gated (⌘K's "This surface" row, the letterhead instrument, the kickoff
+band) and `call-sheet-doorways.test.tsx` asserts it. The row is now **absent
+entirely** with the flag off — not a disabled stub, which would still name a
+surface the studio does not have. `shelvesFor({ callSheetEnabled })` is the one
+place that decides; the page threads the flag it already resolves. Covered by a
+fifth section in `call-sheet-doorways.test.tsx`.
+
+**The phase-advance control leaves the fold.** I136 folded the whole schedule
+mount by default. `PhaseAdvanceControl` was inside it, so advancing a project's
+phase became invisible on every visit — a workflow regression, not a fold.
+Advancing the phase is a lifecycle act, not a date edit, so it now renders at
+REGION level in both fold states; `ProjectScheduleHandoffMount` keeps only the
+instrument (the strip and its confirm strip) and its docstring says so.
+
+**Corrections to what I136 claimed:**
+
+- *"One derivation" for the room word was not yet true.* The spine read the raw
+  `status` column while the FF&E heading read the derived stamp: an installed
+  piece with an open damage claim stamps `damaged`, so one surface said
+  "Installed" and the other "Underway". The normalization now lives inside
+  `room-state.ts` (`roomStateRowFromLine` / `roomStateRowFromStamp`), and both
+  callers enter through it.
+- *The Design authority index line derived its own figure* from
+  `projects.total_amount_cents` while the region it points at states from
+  `useProjectBillingAuthority` — the exact R108 drift I136 claims to have
+  avoided elsewhere. The spine now reads the same door (same query key, so
+  React Query genuinely dedupes this one).
+- *The React-Query dedupe claimed for the spine blocks and the spec-book leaf
+  does not happen.* FF&E reads with `withLifecycle: true`, a different query
+  key; those are separate fetches. The comments now say so rather than
+  asserting a shared cache entry.
+- *The paper-push threshold was ~116px early.* The leaf's right edge is at
+  520px and the paper's text edge only clears it from ≈2016px, so the release
+  threshold moved from 1900px to 2020px.
+
+**Also fixed:** the armed edit re-fired against a strip whose scroll target was
+still null (a state-held callback ref read on the strip's first render) — the
+strip now holds it in a ref, which is assigned during commit, before the
+region's post-unfold effect can call in; the shelf releases below 1440px where
+its rows and leaf are `display:none`, mirroring the room lens's safeguard, so
+Esc and focus-restore cannot target hidden elements; Esc inside a leaf's input,
+textarea, select or contenteditable belongs to that control, not to the shelf;
+the new-board intent is caught only where the shelves actually render (the
+Project section); `aria-controls` is set only while the leaf is on the page;
+and the scrollspy re-queries for region roots on a short retry, because regions
+mount as their own queries settle and there is no event to subscribe to — a
+region arriving after that window is a known limit, now stated in the code.
+
+*Entries add: I136-errata · last id = I136*

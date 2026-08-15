@@ -5,8 +5,9 @@
  * room, read-only. The working state stays on the paper, in FF&E; this is the
  * same rows regrouped, never a second place to change them.
  *
- * `useProjectFFEItems` is the section's own query — React Query hands back the
- * cached rows rather than reading again.
+ * NOT deduped against the FF&E section: that call passes `withLifecycle: true`,
+ * which is a different query key, so this is its own read of the schedule. The
+ * rows are the same rows; the fetch is not the same fetch.
  */
 
 import { useMemo } from 'react';

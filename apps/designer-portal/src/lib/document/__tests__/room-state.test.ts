@@ -1,4 +1,43 @@
-import { liftByRoom, roomState, roomStateWord } from '../room-state';
+import {
+  liftByRoom,
+  roomState,
+  roomStateRowFromLine,
+  roomStateRowFromStamp,
+  roomStateWord,
+} from '../room-state';
+
+describe('the one normalization', () => {
+  const line = {
+    status: 'installed',
+    blocked: false,
+    received_quantity: null,
+  };
+
+  it('agrees whether it is handed a line or an already-derived stamp', () => {
+    expect(roomStateRowFromLine(line)).toEqual({ installed: true });
+    expect(roomStateRowFromStamp({ kind: 'installed' })).toEqual({
+      installed: true,
+    });
+  });
+
+  it('does not call an installed line with an open damage claim settled', () => {
+    // The raw `status` column still reads 'installed'; the derived stamp reads
+    // `damaged`. Reading the column in the spine and the stamp in the section
+    // let one call the room "Installed" while the other called it "Underway".
+    const damaged = { ...line, item_claims: [{ state: 'drafted' }] };
+    expect(roomStateRowFromLine(damaged)).toEqual({ installed: false });
+    expect(roomStateWord([roomStateRowFromLine(damaged)])).toBe('Underway');
+  });
+
+  it('does not call a blocked line settled either', () => {
+    const blocked = {
+      ...line,
+      blocked: true,
+      blocking_decision: { status: 'pending', due_date: null },
+    };
+    expect(roomStateRowFromLine(blocked)).toEqual({ installed: false });
+  });
+});
 
 describe('roomState', () => {
   it('is future with nothing on the books', () => {
