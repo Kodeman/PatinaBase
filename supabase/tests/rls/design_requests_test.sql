@@ -107,6 +107,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+GRANT EXECUTE ON FUNCTION pg_temp.reset_role() TO anon, authenticated;
+
 -- Cross-block state (lead ids created inside DO blocks).
 CREATE TEMP TABLE pg_temp_state (k text PRIMARY KEY, v uuid) ON COMMIT DROP;
 

@@ -53,6 +53,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+GRANT EXECUTE ON FUNCTION pg_temp.reset_role() TO anon;
+
 -- Rebuild the audit substrate deterministically INSIDE the transaction:
 -- the audit RPC is global by design (it reads a whole trailing window), so
 -- the suite clears windowed rows and owns exactly what the checks see.

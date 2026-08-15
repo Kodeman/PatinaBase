@@ -108,6 +108,8 @@ BEGIN
 END;
 $$;
 
+GRANT EXECUTE ON FUNCTION pg_temp.reset_role() TO authenticated;
+
 -- ═══════════════════════════════════════════════════════════════════════════
 -- (0) FIXTURE — one studio, one client, one outsider, and one client who has
 --     no email address at all (the person the emailed rail cannot serve).

@@ -76,6 +76,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+GRANT EXECUTE ON FUNCTION pg_temp.reset_role() TO anon, authenticated;
+
 -- Unit basis vector along dim 1..768 scaled by k.
 CREATE OR REPLACE FUNCTION pg_temp.axis_vec(p_dim int, p_k real)
 RETURNS vector AS $$
