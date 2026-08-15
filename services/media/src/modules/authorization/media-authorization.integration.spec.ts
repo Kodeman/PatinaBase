@@ -1,4 +1,6 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   AssetKind,
   AssetRole,
@@ -6,6 +8,10 @@ import {
   Prisma,
   PrismaClient,
 } from '../../generated/prisma-client';
+import { JobQueueService } from '../jobs/job-queue.service';
+import { MediaService } from '../media/media.service';
+import { OCIStorageService } from '../storage/oci-storage.service';
+import { UploadService } from '../upload/upload.service';
 import { MediaAuthorizationResolver } from './media-authorization.resolver';
 import {
   createTransactionBoundPrisma,
@@ -15,29 +21,44 @@ import {
 const enabled = process.env.RUN_MEDIA_DB_AUTHZ_INTEGRATION === '1';
 const describeDatabase = enabled ? describe : describe.skip;
 
-const SUBJECT_A = 'cfa10000-0000-4000-8000-000000000001';
-const SUBJECT_B = 'cfa10000-0000-4000-8000-000000000002';
-const SUBJECT_ORG = 'cfa10000-0000-4000-8000-000000000003';
-const SUBJECT_ADMIN = 'cfa10000-0000-4000-8000-000000000004';
-const ORGANIZATION_ID = 'cfa20000-0000-4000-8000-000000000001';
-const PRODUCT_A = 'cfa30000-0000-4000-8000-000000000001';
-const PRODUCT_B = 'cfa30000-0000-4000-8000-000000000002';
-const PRODUCT_ORG = 'cfa30000-0000-4000-8000-000000000003';
-const ASSET_A = 'cfa40000-0000-4000-8000-000000000001';
-const ASSET_B = 'cfa40000-0000-4000-8000-000000000002';
-const ASSET_ORG = 'cfa40000-0000-4000-8000-000000000003';
+const SUBJECT_A = 'cfb50000-0000-4000-8000-000000000001';
+const SUBJECT_B = 'cfb50000-0000-4000-8000-000000000002';
+const SUBJECT_ORG = 'cfb50000-0000-4000-8000-000000000003';
+const SUBJECT_ADMIN = 'cfb50000-0000-4000-8000-000000000004';
+const ORGANIZATION_ID = 'cfb60000-0000-4000-8000-000000000001';
+const PRODUCT_A = 'cfb70000-0000-4000-8000-000000000001';
+const PRODUCT_B = 'cfb70000-0000-4000-8000-000000000002';
+const PRODUCT_ORG = 'cfb70000-0000-4000-8000-000000000003';
+const ASSET_A = 'cfb80000-0000-4000-8000-000000000001';
+const ASSET_B = 'cfb80000-0000-4000-8000-000000000002';
+const ASSET_ORG = 'cfb80000-0000-4000-8000-000000000003';
+const ABSENT_ASSET = 'cfb80000-0000-4000-8000-000000000099';
 
 describeDatabase('MediaAuthorizationResolver local Postgres boundary', () => {
   const prisma = new PrismaClient();
   const resolver = new MediaAuthorizationResolver(prisma);
+  const eventEmitter = { emit: jest.fn() };
+  const jobQueue = { addJob: jest.fn().mockResolvedValue('fixture-job') };
+  const service = new MediaService(
+    prisma,
+    new ConfigService(),
+    eventEmitter as unknown as EventEmitter2,
+    { deleteObject: jest.fn() } as unknown as OCIStorageService,
+    {} as unknown as UploadService,
+    jobQueue as unknown as JobQueueService,
+    resolver,
+  );
 
   beforeAll(async () => {
+    if (!process.env.DATABASE_URL?.includes('127.0.0.1:54322')) {
+      throw new Error('This suite requires the local Supabase Postgres DATABASE_URL');
+    }
     await cleanup();
     for (const [id, email] of [
-      [SUBJECT_A, 'media-authz-a@invalid.test'],
-      [SUBJECT_B, 'media-authz-b@invalid.test'],
-      [SUBJECT_ORG, 'media-authz-org@invalid.test'],
-      [SUBJECT_ADMIN, 'media-authz-admin@invalid.test'],
+      [SUBJECT_A, 'media-authz-gaps-a@invalid.test'],
+      [SUBJECT_B, 'media-authz-gaps-b@invalid.test'],
+      [SUBJECT_ORG, 'media-authz-gaps-org@invalid.test'],
+      [SUBJECT_ADMIN, 'media-authz-gaps-admin@invalid.test'],
     ]) {
       await prisma.$executeRaw(Prisma.sql`
         INSERT INTO auth.users (
@@ -66,7 +87,7 @@ describeDatabase('MediaAuthorizationResolver local Postgres boundary', () => {
         ${ORGANIZATION_ID}::uuid,
         'design_studio',
         'Media authz fixture',
-        'media-authz-cfa2-fixture',
+        'media-authz-cfb6-fixture',
         'active'
       )
     `);
@@ -124,9 +145,69 @@ describeDatabase('MediaAuthorizationResolver local Postgres boundary', () => {
     await prisma.$disconnect();
   });
 
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   it('allows own and returns the same non-enumerating 404 for another user', async () => {
     await expect(readAsset(SUBJECT_A, ASSET_A)).resolves.toMatchObject({ id: ASSET_A });
     await expect(readAsset(SUBJECT_A, ASSET_B)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('returns an identical service 404 for an inaccessible and an absent asset', async () => {
+    const inaccessible = await captureNotFound(() => service.getById(SUBJECT_A, ASSET_B));
+    const absent = await captureNotFound(() => service.getById(SUBJECT_A, ABSENT_ASSET));
+
+    expect(inaccessible).toEqual(absent);
+    expect(JSON.stringify(inaccessible)).not.toContain(ASSET_B);
+    expect(JSON.stringify(inaccessible)).not.toContain(ABSENT_ASSET);
+  });
+
+  it('scopes real search rows and pagination counts to the current subject', async () => {
+    const page = await service.search(SUBJECT_A, { page: 1, limit: 1 });
+
+    expect(page.pagination).toEqual({ page: 1, limit: 1, total: 1, totalPages: 1 });
+    expect(page.data.map((asset) => asset.id)).toEqual([ASSET_A]);
+    expect(JSON.stringify(page)).not.toContain(ASSET_B);
+    expect(JSON.stringify(page)).not.toContain(ASSET_ORG);
+  });
+
+  it('does not mutate or disclose ids from a mixed-access processing batch', async () => {
+    const before = await prisma.mediaAsset.findMany({
+      where: { id: { in: [ASSET_A, ASSET_B] } },
+      select: { id: true, status: true, tags: true },
+      orderBy: { id: 'asc' },
+    });
+    const mixed = await captureNotFound(() =>
+      service.processBatch(SUBJECT_A, { assetIds: [ASSET_A, ASSET_B] }),
+    );
+    const absent = await captureNotFound(() =>
+      service.processBatch(SUBJECT_A, { assetIds: [ASSET_A, ABSENT_ASSET] }),
+    );
+
+    expect(mixed).toEqual(absent);
+    expect(JSON.stringify(mixed)).not.toContain(ASSET_A);
+    expect(JSON.stringify(mixed)).not.toContain(ASSET_B);
+    expect(jobQueue.addJob).not.toHaveBeenCalled();
+    await expect(
+      prisma.mediaAsset.findMany({
+        where: { id: { in: [ASSET_A, ASSET_B] } },
+        select: { id: true, status: true, tags: true },
+        orderBy: { id: 'asc' },
+      }),
+    ).resolves.toEqual(before);
+  });
+
+  it('allows an actual own metadata write and leaves a foreign asset unchanged', async () => {
+    await expect(
+      service.updateMetadata(SUBJECT_A, ASSET_A, { tags: ['authorized-write'] }),
+    ).resolves.toMatchObject({ id: ASSET_A, tags: ['authorized-write'] });
+    await expect(
+      service.updateMetadata(SUBJECT_A, ASSET_B, { tags: ['foreign-write'] }),
+    ).rejects.toMatchObject({ status: 404, message: 'Media object not found' });
+    await expect(
+      prisma.mediaAsset.findUniqueOrThrow({ where: { id: ASSET_B } }),
+    ).resolves.toMatchObject({ tags: [] });
   });
 
   it('writes mapped media enums through the generated Prisma client', async () => {
@@ -233,15 +314,22 @@ describeDatabase('MediaAuthorizationResolver local Postgres boundary', () => {
     await expect(readAsset(SUBJECT_A, ASSET_A)).resolves.toBeDefined();
   });
 
-  it('does not retain authorization between sequential subjects', async () => {
-    await expect(readAsset(SUBJECT_A, ASSET_A)).resolves.toBeDefined();
-    await expect(readAsset(SUBJECT_B, ASSET_B)).resolves.toBeDefined();
+  it('does not retain authorization between sequential subjects on one pooled backend', async () => {
+    const first = await readAssetWithBackendPid(SUBJECT_A, ASSET_A);
+    const second = await readAssetWithBackendPid(SUBJECT_B, ASSET_B);
+    expect(second.pid).toBe(first.pid);
     await expect(readAsset(SUBJECT_B, ASSET_A)).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('rolls back a failed protected write without leaking state to the next caller', async () => {
+    const before = await prisma.mediaAsset.findUniqueOrThrow({ where: { id: ASSET_A } });
+    let rollbackPid: number | undefined;
     await expect(
       resolver.withAssetScope(SUBJECT_A, 'manage', async (transaction, scope) => {
+        const rows = await transaction.$queryRaw<Array<{ pid: number }>>(Prisma.sql`
+          SELECT pg_backend_pid()::integer AS pid
+        `);
+        rollbackPid = rows[0].pid;
         const asset = await resolver.requireAsset(transaction, scope, ASSET_A);
         await transaction.mediaAsset.update({
           where: { id: asset.id },
@@ -252,15 +340,38 @@ describeDatabase('MediaAuthorizationResolver local Postgres boundary', () => {
     ).rejects.toThrow('fixture rollback');
 
     await expect(prisma.mediaAsset.findUnique({ where: { id: ASSET_A } })).resolves.toMatchObject({
-      tags: [],
+      tags: before.tags,
     });
     await expect(readAsset(SUBJECT_B, ASSET_A)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(readAssetWithBackendPid(SUBJECT_B, ASSET_B)).resolves.toMatchObject({
+      pid: rollbackPid,
+    });
   });
 
   async function readAsset(subject: string, assetId: string) {
     return resolver.withAssetScope(subject, 'read', (transaction, scope) =>
       resolver.requireAsset(transaction, scope, assetId),
     );
+  }
+
+  async function readAssetWithBackendPid(subject: string, assetId: string) {
+    return resolver.withAssetScope(subject, 'read', async (transaction, scope) => {
+      const asset = await resolver.requireAsset(transaction, scope, assetId);
+      const rows = await transaction.$queryRaw<Array<{ pid: number }>>(Prisma.sql`
+        SELECT pg_backend_pid()::integer AS pid
+      `);
+      return { asset, pid: rows[0].pid };
+    });
+  }
+
+  async function captureNotFound(operation: () => Promise<unknown>) {
+    try {
+      await operation();
+      throw new Error('Expected operation to return 404');
+    } catch (error) {
+      if (!(error instanceof NotFoundException)) throw error;
+      return { status: error.getStatus(), response: error.getResponse() };
+    }
   }
 
   async function assignRole(subject: string, roleName: string) {
