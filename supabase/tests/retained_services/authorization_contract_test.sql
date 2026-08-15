@@ -145,12 +145,13 @@ VALUES
   ('c4820000-0000-4000-8000-000000000302', NULL, 'Retained Foreign Project', 'c4820000-0000-4000-8000-000000000006', 'c4820000-0000-4000-8000-000000000006');
 
 INSERT INTO svc_media.media_assets (
-  id, kind, raw_key, product_id, uploaded_by
+  id, kind, raw_key, product_id, project_id, uploaded_by
 )
 VALUES
-  ('c4820000-0000-4000-8000-000000000501', 'IMAGE', 'retained/own.jpg', NULL, 'c4820000-0000-4000-8000-000000000001'),
-  ('c4820000-0000-4000-8000-000000000502', 'IMAGE', 'retained/other.jpg', NULL, 'c4820000-0000-4000-8000-000000000002'),
-  ('c4820000-0000-4000-8000-000000000503', 'IMAGE', 'retained/org.jpg', 'c4820000-0000-4000-8000-000000000402', 'c4820000-0000-4000-8000-000000000002');
+  ('c4820000-0000-4000-8000-000000000501', 'IMAGE', 'retained/own.jpg', NULL, NULL, 'c4820000-0000-4000-8000-000000000001'),
+  ('c4820000-0000-4000-8000-000000000502', 'IMAGE', 'retained/other.jpg', NULL, NULL, 'c4820000-0000-4000-8000-000000000002'),
+  ('c4820000-0000-4000-8000-000000000503', 'IMAGE', 'retained/org.jpg', 'c4820000-0000-4000-8000-000000000402', NULL, 'c4820000-0000-4000-8000-000000000002'),
+  ('c4820000-0000-4000-8000-000000000504', 'DOCUMENT', 'retained/project.pdf', NULL, 'c4820000-0000-4000-8000-000000000201', 'c4820000-0000-4000-8000-000000000002');
 
 -- These temporary functions intentionally take the verified subject as an
 -- explicit argument. They model the parameterized state and object predicates
@@ -272,17 +273,74 @@ AS $$
   FROM svc_media.media_assets AS asset
   LEFT JOIN public.products AS product_row
     ON product_row.id::text = asset.product_id
+  LEFT JOIN public.projects AS project_row
+    ON project_row.id = asset.project_id
   CROSS JOIN authorization_state
   WHERE 'media.admin.all' = ANY (authorization_state.permissions)
      OR (
-       (asset.uploaded_by = p_subject::text OR product_row.owner_user_id = p_subject)
+       (
+         (
+           asset.product_id IS NULL
+           AND asset.project_id IS NULL
+           AND asset.uploaded_by = p_subject::text
+         )
+         OR product_row.owner_user_id = p_subject
+       )
        AND CASE WHEN p_manage
          THEN 'media.manage.own' = ANY (authorization_state.permissions)
-         ELSE 'media.read.own' = ANY (authorization_state.permissions)
+         ELSE (
+           'media.read.own' = ANY (authorization_state.permissions)
+           OR 'media.manage.own' = ANY (authorization_state.permissions)
+         )
        END
      )
      OR (
        product_row.studio_id = ANY (authorization_state.organizations)
+       AND CASE WHEN p_manage
+         THEN 'media.manage.org' = ANY (authorization_state.permissions)
+         ELSE (
+           'media.read.org' = ANY (authorization_state.permissions)
+           OR 'media.manage.org' = ANY (authorization_state.permissions)
+         )
+       END
+     )
+     OR (
+       CASE WHEN p_manage
+         THEN (
+           'media.manage.own' = ANY (authorization_state.permissions)
+           AND (
+             project_row.designer_id = p_subject
+             OR EXISTS (
+               SELECT 1
+               FROM public.project_team_members AS team_member
+               WHERE team_member.project_id = project_row.id
+                 AND team_member.user_id = p_subject
+                 AND team_member.removed_at IS NULL
+                 AND team_member.role IN ('lead_designer', 'support_designer')
+             )
+           )
+         )
+         ELSE (
+           (
+             'media.read.own' = ANY (authorization_state.permissions)
+             OR 'media.manage.own' = ANY (authorization_state.permissions)
+           )
+           AND (
+             project_row.client_id = p_subject
+             OR project_row.designer_id = p_subject
+             OR EXISTS (
+               SELECT 1
+               FROM public.project_team_members AS team_member
+               WHERE team_member.project_id = project_row.id
+                 AND team_member.user_id = p_subject
+                 AND team_member.removed_at IS NULL
+             )
+           )
+         )
+       END
+     )
+     OR (
+       project_row.studio_id = ANY (authorization_state.organizations)
        AND CASE WHEN p_manage
          THEN 'media.manage.org' = ANY (authorization_state.permissions)
          ELSE (
@@ -313,6 +371,22 @@ BEGIN
       AND column_name = 'public_project_id'
       AND data_type = 'uuid'
   ), 'projects public-project bridge is missing';
+
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'svc_media.media_assets'::regclass
+      AND conname = 'media_assets_single_owner'
+      AND contype = 'c'
+  ), 'media project/product ownership exclusion is missing';
+  BEGIN
+    UPDATE svc_media.media_assets
+    SET project_id = 'c4820000-0000-4000-8000-000000000201',
+        product_id = 'c4820000-0000-4000-8000-000000000401'
+    WHERE id = 'c4820000-0000-4000-8000-000000000501';
+    RAISE EXCEPTION 'dual project/product media ownership was accepted';
+  EXCEPTION WHEN check_violation THEN
+    NULL;
+  END;
 
   ASSERT to_regclass('svc_orders.stripe_webhook_receipts') IS NOT NULL,
     'Stripe webhook receipt relation is missing';
@@ -395,6 +469,18 @@ BEGIN
     SELECT 1 FROM pg_temp.visible_media('c4820000-0000-4000-8000-000000000001')
     WHERE visible_media = 'c4820000-0000-4000-8000-000000000502'
   ), 'media cross-user read leaked';
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_temp.visible_media('c4820000-0000-4000-8000-000000000001')
+    WHERE visible_media = 'c4820000-0000-4000-8000-000000000504'
+  ), 'project client media read denied';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM pg_temp.visible_media('c4820000-0000-4000-8000-000000000001', true)
+    WHERE visible_media = 'c4820000-0000-4000-8000-000000000504'
+  ), 'project client received document manage scope';
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_temp.visible_media('c4820000-0000-4000-8000-000000000002', true)
+    WHERE visible_media = 'c4820000-0000-4000-8000-000000000504'
+  ), 'project designer media manage denied';
 
   -- Active organization membership permits only linked organization rows.
   ASSERT EXISTS (
@@ -483,9 +569,10 @@ BEGIN
   WHERE visible_media IN (
     'c4820000-0000-4000-8000-000000000501',
     'c4820000-0000-4000-8000-000000000502',
-    'c4820000-0000-4000-8000-000000000503'
+    'c4820000-0000-4000-8000-000000000503',
+    'c4820000-0000-4000-8000-000000000504'
   );
-  ASSERT v_count = 3, 'media admin did not receive all reviewed rows';
+  ASSERT v_count = 4, 'media admin did not receive all reviewed rows';
 
   -- List/count/page and batch predicates operate on the scoped relation.
   SELECT count(*) INTO v_count

@@ -209,6 +209,21 @@ ALTER TABLE svc_media.media_assets
   ADD COLUMN IF NOT EXISTS project_id UUID
     REFERENCES public.projects(id) ON DELETE CASCADE;
 
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid = 'svc_media.media_assets'::regclass
+      AND conname = 'media_assets_single_owner'
+  ) THEN
+    ALTER TABLE svc_media.media_assets
+      ADD CONSTRAINT media_assets_single_owner
+      CHECK (project_id IS NULL OR product_id IS NULL);
+  END IF;
+END
+$$;
+
 CREATE INDEX IF NOT EXISTS idx_media_assets_project_created
   ON svc_media.media_assets (project_id, created_at DESC)
   WHERE project_id IS NOT NULL;
