@@ -41,7 +41,12 @@ from .photos import (
     fetch_photo,
     heif_available,
 )
-from .safe_fetch import HostnameResolver, create_public_network_transport, resolve_hostname
+from .safe_fetch import (
+    EncodedByteBudget,
+    HostnameResolver,
+    create_public_network_transport,
+    resolve_hostname,
+)
 from .schemas import (
     EmbedResponse,
     Healthz,
@@ -95,6 +100,10 @@ def create_app(
     hostname_resolver: HostnameResolver = resolve_hostname,
 ) -> FastAPI:
     settings = settings or settings_from_env()
+    if settings.image_fetch_concurrency < 1:
+        raise ValueError("IMAGE_FETCH_CONCURRENCY must be positive")
+    if settings.image_batch_max_bytes < 1:
+        raise ValueError("IMAGE_BATCH_MAX_BYTES must be positive")
     gate = ConcurrencyGate(settings.max_concurrency)
 
     @asynccontextmanager
@@ -201,20 +210,25 @@ def create_app(
         enter_gate()
         try:
             pixel_budget = DecodedPixelBudget(settings.image_batch_max_pixels)
-            # Per-item error isolation: one bad URL never fails the batch.
-            fetches = await asyncio.gather(
-                *(
-                    fetch_image(
+            byte_budget = EncodedByteBudget(settings.image_batch_max_bytes)
+            fetch_gate = asyncio.Semaphore(settings.image_fetch_concurrency)
+
+            async def fetch_one(url: str):
+                async with fetch_gate:
+                    return await fetch_image(
                         client,
-                        item.url,
+                        url,
                         timeout_s=settings.image_fetch_timeout_s,
                         max_bytes=settings.image_max_bytes,
                         max_pixels=settings.image_max_pixels,
                         pixel_budget=pixel_budget,
+                        byte_budget=byte_budget,
                         resolver=hostname_resolver,
                     )
-                    for item in req.inputs
-                ),
+
+            # Per-item error isolation: one bad URL never fails the batch.
+            fetches = await asyncio.gather(
+                *(fetch_one(item.url) for item in req.inputs),
                 return_exceptions=True,
             )
 

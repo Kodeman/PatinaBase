@@ -27,6 +27,23 @@ class SafeFetchError(Exception):
     """A URL, connection, or response failed the external-media policy."""
 
 
+class EncodedByteBudget:
+    """Concurrency-safe aggregate ingress limit shared by a request batch."""
+
+    def __init__(self, max_bytes: int) -> None:
+        if max_bytes < 1:
+            raise ValueError("encoded-byte budget must be positive")
+        self.max_bytes = max_bytes
+        self.consumed = 0
+        self._lock = asyncio.Lock()
+
+    async def consume(self, size: int) -> None:
+        async with self._lock:
+            if self.consumed + size > self.max_bytes:
+                raise SafeFetchError("image batch exceeds encoded-byte limit")
+            self.consumed += size
+
+
 async def resolve_hostname(host: str, port: int) -> Sequence[str]:
     loop = asyncio.get_running_loop()
     records = await loop.getaddrinfo(host, port, type=socket.SOCK_STREAM)
@@ -243,6 +260,7 @@ async def fetch_public_bytes(
     max_bytes: int,
     allowed_content_types: set[str],
     allowed_content_prefixes: tuple[str, ...] = (),
+    byte_budget: EncodedByteBudget | None = None,
     resolver: HostnameResolver = resolve_hostname,
 ) -> bytes:
     try:
@@ -298,6 +316,8 @@ async def fetch_public_bytes(
                     else:
                         chunks = response.aiter_raw()
                     async for chunk in chunks:
+                        if byte_budget is not None:
+                            await byte_budget.consume(len(chunk))
                         body.extend(chunk)
                         if len(body) > max_bytes:
                             raise SafeFetchError(f"body exceeds limit of {max_bytes} bytes")
