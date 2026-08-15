@@ -95,9 +95,12 @@ export const RequireAnyPermission = (...permissions: string[]) =>
 
 // Parameter decorator to extract current user from request
 export const CurrentUser = createParamDecorator(
-  (data: unknown, ctx: ExecutionContext) => {
+  (
+    data: keyof AuthenticatedUserIdentity | undefined,
+    ctx: ExecutionContext,
+  ) => {
     const request = ctx.switchToHttp().getRequest();
-    return request.user;
+    return data ? request.user?.[data] : request.user;
   },
 );
 
