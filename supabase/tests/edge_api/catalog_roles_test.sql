@@ -453,9 +453,9 @@ DECLARE
   second_result jsonb;
   reset_result jsonb;
   error_result text;
+  error_role text;
 BEGIN
   PERFORM extensions.dblink_exec('cf481_auth', 'BEGIN');
-  PERFORM extensions.dblink_exec('cf481_auth', 'SET LOCAL ROLE edge_rls_user');
   PERFORM extensions.dblink_exec('cf481_auth', 'SET LOCAL ROLE authenticated');
   PERFORM extensions.dblink_exec(
     'cf481_auth',
@@ -468,6 +468,7 @@ BEGIN
       'cf481_auth',
       $remote$
         SELECT jsonb_build_object(
+          'role', current_user,
           'uid', auth.uid(),
           'personal', count(*) FILTER (
             WHERE id = 'cf130000-0000-4000-8000-000000000003'
@@ -490,6 +491,7 @@ BEGIN
       $remote$
     ) AS result(value jsonb);
   ASSERT first_result = jsonb_build_object(
+    'role', 'authenticated',
     'uid', 'cf100000-0000-4000-8000-000000000001',
     'personal', 1,
     'studio', 1,
@@ -514,13 +516,20 @@ BEGIN
   ), 'role or Alice claims leaked after commit';
 
   PERFORM extensions.dblink_exec('cf481_auth', 'BEGIN');
-  PERFORM extensions.dblink_exec('cf481_auth', 'SET LOCAL ROLE edge_rls_user');
   PERFORM extensions.dblink_exec('cf481_auth', 'SET LOCAL ROLE authenticated');
   PERFORM extensions.dblink_exec(
     'cf481_auth',
     $remote$SET LOCAL request.jwt.claims TO
       '{"sub":"cf100000-0000-4000-8000-000000000001","role":"authenticated"}'$remote$
   );
+  SELECT role
+    INTO error_role
+    FROM extensions.dblink(
+      'cf481_auth',
+      'SELECT current_user'
+    ) AS result(role text);
+  ASSERT error_role = 'authenticated',
+    'errored transaction did not assume authenticated directly';
   SELECT extensions.dblink_exec(
     'cf481_auth',
     'DO $remote_error$ BEGIN RAISE EXCEPTION ''cf481 forced rollback''; END $remote_error$',
@@ -545,7 +554,6 @@ BEGIN
   ), 'role or claims leaked after an errored transaction rollback';
 
   PERFORM extensions.dblink_exec('cf481_auth', 'BEGIN');
-  PERFORM extensions.dblink_exec('cf481_auth', 'SET LOCAL ROLE edge_rls_user');
   PERFORM extensions.dblink_exec('cf481_auth', 'SET LOCAL ROLE authenticated');
   PERFORM extensions.dblink_exec(
     'cf481_auth',
@@ -558,6 +566,7 @@ BEGIN
       'cf481_auth',
       $remote$
         SELECT jsonb_build_object(
+          'role', current_user,
           'uid', auth.uid(),
           'personal', count(*) FILTER (
             WHERE id = 'cf130000-0000-4000-8000-000000000003'
@@ -574,6 +583,7 @@ BEGIN
       $remote$
     ) AS result(value jsonb);
   ASSERT second_result = jsonb_build_object(
+    'role', 'authenticated',
     'uid', 'cf100000-0000-4000-8000-000000000002',
     'personal', 0,
     'studio', 0,
