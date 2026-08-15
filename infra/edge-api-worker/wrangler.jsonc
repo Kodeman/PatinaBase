@@ -1,0 +1,77 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "patina-edge-api-local",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  // SUPABASE_ANON_KEY and health service-token values are Wrangler/.dev.vars
+  // secrets. ACCESS_TEAM_DOMAIN and ACCESS_AUDIENCE are added with the Access app.
+  "vars": {
+    "SUPABASE_UPSTREAM_URL": "http://127.0.0.1:54321",
+    "SUPABASE_JWT_ISSUER": "http://127.0.0.1:54321/auth/v1",
+    "SUPABASE_JWT_AUDIENCE": "authenticated",
+    "SUPABASE_JWKS_URL": "http://127.0.0.1:54321/auth/v1/.well-known/jwks.json",
+    "CATALOG_SOURCE": "legacy",
+    "CATALOG_HYPERDRIVE_PERCENT": "0",
+    "CATALOG_SHADOW_ENABLED": "false",
+  },
+  // Wave 2 inserts DB_FRESH and DB_PUBLIC_CACHE here after Wrangler returns
+  // the real Hyperdrive IDs. Empty bindings keep legacy compatibility mode deployable.
+  "hyperdrive": [],
+  "env": {
+    "local": {
+      "name": "patina-edge-api-local",
+      "vars": {
+        "SUPABASE_UPSTREAM_URL": "http://127.0.0.1:54321",
+        "SUPABASE_JWT_ISSUER": "http://127.0.0.1:54321/auth/v1",
+        "SUPABASE_JWT_AUDIENCE": "authenticated",
+        "SUPABASE_JWKS_URL": "http://127.0.0.1:54321/auth/v1/.well-known/jwks.json",
+        "CATALOG_SOURCE": "legacy",
+        "CATALOG_HYPERDRIVE_PERCENT": "0",
+        "CATALOG_SHADOW_ENABLED": "false",
+      },
+      // Add both real binding IDs here. Each local binding also gets
+      // localConnectionString=postgresql://postgres:postgres@127.0.0.1:54322/postgres.
+      "hyperdrive": [],
+    },
+    "staging": {
+      "name": "patina-edge-api-staging",
+      "workers_dev": false,
+      "routes": [
+        {
+          "pattern": "api-staging.patina.cloud/*",
+          "zone_name": "patina.cloud",
+        },
+      ],
+      "vars": {
+        "SUPABASE_JWT_AUDIENCE": "authenticated",
+        "CATALOG_SOURCE": "legacy",
+        "CATALOG_HYPERDRIVE_PERCENT": "0",
+        "CATALOG_SHADOW_ENABLED": "false",
+      },
+      // Add the staging branch upstream/JWT URLs and both real staging Hyperdrive IDs,
+      // then enable shadowing after the persistent branch and Hyperdrives are provisioned.
+      "hyperdrive": [],
+    },
+    "production": {
+      "name": "patina-edge-api",
+      "workers_dev": false,
+      "routes": [
+        { "pattern": "api.patina.cloud/*", "zone_name": "patina.cloud" },
+      ],
+      "vars": {
+        "SUPABASE_UPSTREAM_URL": "https://bkvcixdmuyejfzcijpdg.supabase.co",
+        "SUPABASE_JWT_ISSUER": "https://bkvcixdmuyejfzcijpdg.supabase.co/auth/v1",
+        "SUPABASE_JWT_AUDIENCE": "authenticated",
+        "SUPABASE_JWKS_URL": "https://bkvcixdmuyejfzcijpdg.supabase.co/auth/v1/.well-known/jwks.json",
+        "CATALOG_SOURCE": "legacy",
+        "CATALOG_HYPERDRIVE_PERCENT": "0",
+        "CATALOG_SHADOW_ENABLED": "false",
+      },
+      // Add DB_FRESH=strata-prod-fresh and DB_PUBLIC_CACHE=strata-prod-public-cache
+      // using the literal IDs returned by Cloudflare provisioning, then enable shadowing.
+      "hyperdrive": [],
+    },
+  },
+}

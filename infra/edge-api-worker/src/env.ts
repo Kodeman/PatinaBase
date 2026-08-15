@@ -1,0 +1,16 @@
+export interface EdgeApiEnv {
+  DB_FRESH?: Hyperdrive;
+  DB_PUBLIC_CACHE?: Hyperdrive;
+  SUPABASE_UPSTREAM_URL: string;
+  SUPABASE_ANON_KEY?: string;
+  SUPABASE_JWT_ISSUER: string;
+  SUPABASE_JWT_AUDIENCE: string;
+  SUPABASE_JWKS_URL: string;
+  ACCESS_TEAM_DOMAIN?: string;
+  ACCESS_AUDIENCE?: string;
+  HEALTH_SERVICE_TOKEN_ID?: string;
+  HEALTH_SERVICE_TOKEN_SECRET?: string;
+  CATALOG_SOURCE?: string;
+  CATALOG_HYPERDRIVE_PERCENT?: string;
+  CATALOG_SHADOW_ENABLED?: string;
+}

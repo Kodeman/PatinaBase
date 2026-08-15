@@ -27,6 +27,10 @@ import { useAuth } from '@/hooks/use-auth';
 export function aestheteWireConfig(): WireConfig {
   return {
     baseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ?? '',
+    edgeApiUrl:
+      process.env.NEXT_PUBLIC_EDGE_API_URL ??
+      process.env.NEXT_PUBLIC_SUPABASE_URL ??
+      '',
     anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '',
   };
 }
