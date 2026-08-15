@@ -8424,4 +8424,120 @@ not a deliberate design call on any given region's correct leader, and is
 flagged here for a design ruling on whether each demoted action should
 become that region's declared leader instead.
 
-*Entries add: I135 · last id = I135*
+### I136 · "The Shelved Spine" ratified — the running index, the room lens, the shelves, and the folded schedule frame — 2026-08-15
+
+The Document reorganizes around one sentence: **the paper holds the work, the
+shelves hold the artifacts.** Ratified from the prototype
+`artifacts/spine-shelves-prototype-2026-08-15/prototype.html` and shipped GA
+with no feature flag, matching the I135 same-day-GA precedent (rollback = git
+revert; no migrations are involved).
+
+**The spine grows three blocks — ≥1440px only.** The compact rail (1180–1439px)
+and D13's mobile sheet are untouched; `data-spine-regime` and the responsive
+shell's asserted class list are unchanged. The blocks are:
+
+1. **The running index — "In this document."** Five region names with the one
+   thing each currently says, and a reading line that rides down the list as
+   the paper scrolls (one IntersectionObserver at the prototype's reading band,
+   `-20% 0px -62% 0px`). v1 indexes the FOUR Project regions that carry a real
+   inline surface: Schedule, Client approvals, Project · FF&E, Design
+   authority. **Communications and Action items are deliberately omitted** —
+   the prototype draws them, but no inline region exists for either, and the
+   index will not name a place the paper does not have. Deferred until they do.
+2. **Rooms.** The project's rooms, each with the one word its FF&E lines
+   justify (`lib/document/room-state.ts`, extracted from the FF&E room
+   heading's own tri-state so the two cannot drift).
+3. **The shelves.** Plan room, spec book, mood boards, call sheet, knowledge.
+
+**The presence line gives up its name.** "In this document" now belongs to the
+running index; the presence sentence moves to the spine's foot beneath the
+timer, unlabelled. One rail cannot carry one name twice.
+
+**The room lens.** Taking a room in hand LIFTS it — a stable partition sort
+that moves what belongs to that room to the front of every list with a room
+dimension, on the paper and on the open shelf at once, washed in flat clay
+(`.doc-room-lifted`; no shadow, D4). It never filters: nothing hides, and a
+held room keeps its state word with the "In hand" tag added, never swapped in.
+The letterhead names the room in hand so the lift below it is never
+unexplained. The hold releases if the window drops below 1440px, where nothing
+on screen could put it down.
+
+What lifts, and what was verified at build time:
+- **FF&E** — lifts (`project_ffe_items.project_room_id`).
+- **Spec book leaf** — lifts (same rows, regrouped read-only).
+- **Mood boards leaf** — lifts. `proposal_boards.project_room_id` and
+  `project_boards.project_room_id` are real columns (00179 / 00434), previously
+  persisted but unread by this UI.
+- **Plan room leaf** — LENS-INERT, verified: `plan_sheets` (00429) carries no
+  room association at all; its only axes are discipline and sheet number. The
+  leaf makes no claim about the lens rather than reporting an empty one.
+- **Client approvals** — LENS-INERT in v1: approvals carry no room dimension in
+  the schema, and no room join was invented. Deferred.
+- **Schedule and Money** never lift — both hold the whole project, and the
+  prototype says so in words on the paper.
+
+**The shelves.** One leaf at a time, 320px beside the spine, `role="region"`
+and not `dialog` — the paper behind it stays live (D1 forbids split views, but
+reference material is not modal either). Below ~1900px the paper steps aside
+rather than being covered. Esc precedence runs **sheet → leaf → put down**: a
+DocSheet raised from inside a leaf owns Esc first, then the leaf closes, and
+only a bare document is put down. *(The blueprint listed the chain as leaf →
+dialog → put-down; dialog-first is the deviation, because a sheet opened FROM a
+leaf must not close the leaf underneath itself.)*
+
+**The call sheet shelf is a doorway, not a leaf** — a deliberate deviation from
+the prototype's uniform treatment. The row dispatches the existing
+`document:open-call-sheet`; the roster already has a sheet, and a second
+thinner copy of it in a leaf would be two answers to one question. It therefore
+declares no `aria-expanded`.
+
+**Knowledge is an honest empty shelf.** Nothing in this codebase records
+cross-project standards or lessons, so nothing is listed. Verified: `/library`
+exists and its middle shelf is literally named "Studio Library", but it holds
+proven PIECES, not written standards — it is offered as the one real door, as
+what it is. **Open for a design ruling:** whether "Knowledge" should name a
+surface that does not exist yet, or be renamed to what `/library` actually
+holds.
+
+**The schedule frame folds — a new fold key.** `ScheduleRule` (the drafting
+strip) sat unconditionally at the top of every project document and pushed the
+work down the page. It now opens as a region like any other, **folded by
+default, always** — an editor that opens itself on every visit is a claim that
+dates need adjusting. The folded seam draws the glance track (extracted as the
+presentational `ScheduleGlanceStrip`, shared with the pinned fold) and speaks
+the page's ONE schedule derivation, threaded down as a prop so it cannot drift
+from the letterhead's sentence (R108).
+
+The fold key is **`schedule-rule`, never `schedule`**: the ledger
+(`ScheduleSpine`, inside the Project section) already owns `schedule`, both are
+mounted at once on a project document, and one storage key between them would
+fold each with the other's choice.
+
+Its ledger is "Adjust dates" (inked) + Fold. **"Open the schedule" is dropped
+for v1** — no separate schedule page exists, and the prototype's verb will not
+be faked into a mapping.
+
+**Armed edit across the fold.** The ledger's per-phase "Edit dates" reaches the
+strip through `ScheduleNavContext`, and a folded region UNMOUNTS its body — so
+the region stands in for the absent strip: it catches the arm, unfolds, and
+re-fires once the strip has mounted and registered its own handler. Without the
+stand-in the ledger's action was a silent no-op on a folded schedule.
+
+**The not-started band is retired.** W3's collapsed line existed to fold four
+empty supporting rooms into one; all four now live on the shelves, so it has
+nothing left to collapse. `ProjectMoodBoards` transplants whole into its leaf
+(same fold, same creator, same board-intent listener). Two re-points were
+required and made: the `document:new-project-board` intent is now caught by the
+page, which opens the mood-board shelf and re-fires once the room is listening;
+and the three `#ffe-selection-…` continue-item hashes became actions that put
+the leaf away FIRST — a bare hash scrolled a page the reader could not see.
+`KickoffBand` stays mounted standalone after the account band, ungated by the
+old emptiness collapse: its first-staffing nudge has no other home, and it
+self-silences on the flag, a staffed sheet, or its own dismissal.
+
+**Deferred, explicitly:** Communications and Action-items index entries (no
+inline region); a room dimension on approvals (no schema for it); real
+Knowledge data (no feature for it); the plan-room band's separate component,
+now unmounted but left in place rather than deleted outside this scope.
+
+*Entries add: I136 · last id = I136*
