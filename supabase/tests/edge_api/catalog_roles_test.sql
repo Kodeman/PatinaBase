@@ -321,32 +321,45 @@ CREATE EXTENSION IF NOT EXISTS dblink WITH SCHEMA extensions;
 SELECT replace(gen_random_uuid()::text, '-', '') AS cf481_login_password \gset
 
 CREATE ROLE edge_catalog_login_cf481
-  NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT LOGIN NOREPLICATION NOBYPASSRLS
+  NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT LOGIN NOREPLICATION NOBYPASSRLS
   PASSWORD :'cf481_login_password';
 CREATE ROLE edge_rls_login_cf481
   NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT LOGIN NOREPLICATION NOBYPASSRLS
   PASSWORD :'cf481_login_password';
 
 GRANT edge_catalog_reader TO edge_catalog_login_cf481
-  WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;
+  WITH ADMIN FALSE, INHERIT TRUE, SET FALSE;
 GRANT edge_rls_user TO edge_rls_login_cf481
   WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;
 
 DO $$
 BEGIN
+  ASSERT EXISTS (
+    SELECT 1
+      FROM pg_roles
+     WHERE rolname = 'edge_catalog_login_cf481'
+       AND rolinherit
+       AND rolcanlogin
+       AND NOT rolsuper
+       AND NOT rolcreatedb
+       AND NOT rolcreaterole
+       AND NOT rolreplication
+       AND NOT rolbypassrls
+  ), 'catalog LOGIN must be INHERIT with no elevated attributes';
+
   ASSERT (
     SELECT count(*) = 1
        AND bool_and(
          granted.rolname = 'edge_catalog_reader'
          AND NOT am.admin_option
-         AND NOT am.inherit_option
-         AND am.set_option
+         AND am.inherit_option
+         AND NOT am.set_option
        )
       FROM pg_auth_members AS am
       JOIN pg_roles AS granted ON granted.oid = am.roleid
       JOIN pg_roles AS member ON member.oid = am.member
      WHERE member.rolname = 'edge_catalog_login_cf481'
-  ), 'catalog LOGIN must have exactly one SET-only capability membership';
+  ), 'catalog LOGIN must have exactly one inherited, non-SET capability membership';
 
   ASSERT (
     SELECT count(*) = 1
@@ -377,7 +390,7 @@ DO $$
 DECLARE
   inherited_select boolean;
   catalog_result jsonb;
-  reset_role text;
+  session_role text;
 BEGIN
   SELECT value
     INTO inherited_select
@@ -387,13 +400,9 @@ BEGIN
         current_user, 'public.edge_catalog_products', 'SELECT'
       )$remote$
     ) AS result(value boolean);
-  ASSERT NOT inherited_select,
-    'NOINHERIT catalog LOGIN unexpectedly inherited the view grant';
+  ASSERT inherited_select,
+    'INHERIT catalog LOGIN did not inherit the view grant';
 
-  PERFORM extensions.dblink_exec('cf481_catalog', 'BEGIN');
-  PERFORM extensions.dblink_exec(
-    'cf481_catalog', 'SET LOCAL ROLE edge_catalog_reader'
-  );
   SELECT value
     INTO catalog_result
     FROM extensions.dblink(
@@ -416,15 +425,14 @@ BEGIN
     'managed', jsonb_build_array(true, true),
     'published', true
   ), 'production-shaped catalog LOGIN returned wrong layer/status visibility';
-  PERFORM extensions.dblink_exec('cf481_catalog', 'COMMIT');
 
   SELECT value
-    INTO reset_role
+    INTO session_role
     FROM extensions.dblink(
       'cf481_catalog', 'SELECT current_user::text'
     ) AS result(value text);
-  ASSERT reset_role = 'edge_catalog_login_cf481',
-    'catalog SET LOCAL ROLE leaked after commit';
+  ASSERT session_role = 'edge_catalog_login_cf481',
+    'catalog direct SELECT changed the LOGIN role';
 END
 $$;
 
