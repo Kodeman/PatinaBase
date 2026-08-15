@@ -87,6 +87,11 @@ def test_convert_empty_bytes_is_decode_error():
         convert_heic_to_jpeg(b"")
 
 
+def test_convert_rejects_heic_dimensions_over_decoded_pixel_cap():
+    with pytest.raises(PhotoDecodeError, match="too large"):
+        convert_heic_to_jpeg(fixture_bytes(), max_pixels=100)
+
+
 # ── HTTP route ──────────────────────────────────────────────────────────────
 
 

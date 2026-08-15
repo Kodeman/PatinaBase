@@ -41,5 +41,5 @@ Listed in CLAUDE.md: `supabase` (main data layer, hooks + generated `database.ty
 - **DB:** single self-hosted Supabase Postgres (`api.patina.cloud`). `public` schema via Supabase client; `svc_*` schemas via Prisma per service.
 - **Do not add new NestJS services** — use Supabase edge functions. The 3 NestJS services are frozen.
 - **Do NOT run `pnpm dev`** (concurrency-20, starts everything). Use `dev:minimal`/`dev:designer` (portal+orders+media+projects), `dev:admin`, `dev:client`, `dev:frontend`, `dev:backend`. All are `turbo run dev --filter=…`.
-- **Turbo tasks:** build, dev, lint, lint:fix, type-check, test, clean. DB helpers: `db:generate|push|studio` (→ `@patina/supabase`); remote DB via `supabase:remote:*` → `scripts/remote-db.sh`; Prisma via `prisma:generate|push` across the 3 services.
-- **Migrations before app** on prod deploys; Coolify deploys don't force-pull (see MEMORY.md deploy notes).
+- **Turbo tasks:** build, dev, lint, lint:fix, type-check, test, clean. DB helpers: `db:generate|push|studio` (→ `@patina/supabase`); production Strata migrations use the linked Supabase CLI only when explicitly authorized. Prisma remains across the 3 retained services.
+- **Migrations before app** on approved production releases; portals and service Containers deploy through the current Cloudflare procedures.

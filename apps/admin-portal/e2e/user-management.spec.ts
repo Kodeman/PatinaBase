@@ -81,7 +81,7 @@ test.describe('Admin Portal - User Management', () => {
 
     if (url.includes('/auth/signin')) {
       console.warn('⚠ Authentication failed - still on signin page');
-      console.warn('This indicates an issue with the NextAuth configuration or backend service');
+      console.warn('This indicates an issue with Supabase Auth or the backend service');
 
       // Check for error messages
       const bodyText = await page.locator('body').textContent();
@@ -90,7 +90,7 @@ test.describe('Admin Portal - User Management', () => {
       }
 
       // Mark test as failed with helpful message
-      throw new Error('Authentication system is not working - admin signin failed. Check that user-management service is running and NextAuth is configured correctly.');
+      throw new Error('Authentication system is not working - admin signin failed. Check that Supabase Auth and the user-management service are configured correctly.');
     }
 
     // Verify we're on a dashboard or authenticated page

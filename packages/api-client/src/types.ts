@@ -26,24 +26,10 @@ export interface ApiClientConfig {
   baseURL: string;
   timeout?: number;
   /**
-   * DEPRECATED: getSession is deprecated. Use getAccessToken instead.
-   * This function should NOT read from session.accessToken as that exposes tokens to XSS.
-   * @deprecated Use getAccessToken instead
-   */
-  getSession?: () => Promise<{ accessToken?: string } | null>;
-  /**
-   * Function to retrieve access token securely from server-side JWT.
-   * For Next.js: Use getToken() from next-auth/jwt server-side.
-   * This should NEVER read from client-side session object.
+   * Retrieves the current Supabase access token. Server code should obtain it
+   * from the request-scoped Supabase server client; browser code may use the
+   * configured Supabase browser client's auth session.
    */
   getAccessToken?: () => Promise<string | null>;
   isDevelopment?: boolean;
-}
-
-export interface SessionProvider {
-  /**
-   * DEPRECATED: Use getAccessToken instead
-   * @deprecated
-   */
-  getSession: () => Promise<{ accessToken?: string } | null>;
 }

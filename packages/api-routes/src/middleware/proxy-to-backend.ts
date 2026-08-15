@@ -22,7 +22,7 @@
 import { cookies } from 'next/headers';
 import { verifyJwtToken } from '@patina/auth';
 import type { RouteContext } from '../utils/request-context';
-import { getAuthToken } from '../utils/request-context';
+import { extractTrustedIpAddress, getAuthToken } from '../utils/request-context';
 import {
   retryRequest,
   fetchWithTimeout,
@@ -111,7 +111,30 @@ const BLOCKED_HEADERS = new Set([
   'connection',
   'content-length', // will be recalculated
   'transfer-encoding',
+  'cf-connecting-ip',
+  'x-forwarded-for',
+  'x-forwarded-host',
+  'x-forwarded-proto',
+  'x-real-ip',
+  'x-request-id',
+  'x-user-id',
 ]);
+
+function getSupabaseProjectRef(): string | null {
+  const explicit = process.env.SUPABASE_PROJECT_REF?.trim();
+  if (explicit) return explicit;
+
+  const configuredUrl =
+    process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
+  if (!configuredUrl) return null;
+  try {
+    const hostname = new URL(configuredUrl).hostname;
+    const projectRef = hostname.match(/^([a-z0-9-]+)\.supabase\.co$/i)?.[1];
+    return projectRef ?? null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Read a Supabase access token from the standard Bearer header or SSR cookie.
@@ -121,45 +144,42 @@ const BLOCKED_HEADERS = new Set([
  */
 async function extractAuthToken(request: Request): Promise<string | null> {
   const authorization = request.headers.get('authorization');
-  if (authorization?.startsWith('Bearer ')) {
-    const token = authorization.slice('Bearer '.length).trim();
-    if (token) return token;
-  }
+  const bearerMatch = authorization ? /^Bearer\s+(\S+)$/i.exec(authorization.trim()) : null;
+  if (bearerMatch) return bearerMatch[1];
+
+  const projectRef = getSupabaseProjectRef();
+  if (!projectRef) return null;
 
   const cookieStore = await cookies();
-
-  const cookieGroups = new Map<string, Map<number | 'base', string>>();
+  const expectedName = `sb-${projectRef}-auth-token`;
+  const cookieParts = new Map<number | 'base', string>();
   for (const cookie of cookieStore.getAll()) {
-    const match = /^(sb-.*-auth-token)(?:\.(\d+))?$/.exec(cookie.name);
+    const match = new RegExp(`^${expectedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\.(\\d+))?$`).exec(
+      cookie.name,
+    );
     if (!match) continue;
-    const group = cookieGroups.get(match[1]) ?? new Map<number | 'base', string>();
-    group.set(match[2] === undefined ? 'base' : Number(match[2]), cookie.value);
-    cookieGroups.set(match[1], group);
+    cookieParts.set(match[1] === undefined ? 'base' : Number(match[1]), cookie.value);
   }
 
-  for (const group of cookieGroups.values()) {
-    let raw = group.get('base');
-    if (!raw) {
-      const chunks: string[] = [];
-      for (let i = 0; group.has(i); i++) chunks.push(group.get(i)!);
-      raw = chunks.length > 0 ? chunks.join('') : undefined;
-    }
-    if (!raw) continue;
-
-    try {
-      const value = raw.startsWith('base64-')
-        ? Buffer.from(raw.slice(7), 'base64url').toString('utf-8')
-        : decodeURIComponent(raw);
-      const parsed = JSON.parse(value);
-      if (parsed && typeof parsed.access_token === 'string') {
-        return parsed.access_token;
-      }
-    } catch {
-      continue;
-    }
+  let raw = cookieParts.get('base');
+  if (!raw) {
+    const chunks: string[] = [];
+    for (let i = 0; cookieParts.has(i); i++) chunks.push(cookieParts.get(i)!);
+    raw = chunks.length > 0 ? chunks.join('') : undefined;
   }
+  if (!raw) return null;
 
-  return null;
+  try {
+    const value = raw.startsWith('base64-')
+      ? Buffer.from(raw.slice(7), 'base64url').toString('utf-8')
+      : decodeURIComponent(raw);
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed.access_token === 'string'
+      ? parsed.access_token
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 function buildBackendUrl(request: Request, config: ProxyConfig): string {
@@ -192,7 +212,7 @@ function buildHeaders(
   }
 
   headers['X-Request-Id'] = context.requestId;
-  headers['X-Forwarded-For'] = context.ip;
+  headers['X-Forwarded-For'] = extractTrustedIpAddress(request);
   const url = new URL(request.url);
   headers['X-Forwarded-Host'] = url.host;
   headers['X-Forwarded-Proto'] = url.protocol.replace(':', '');

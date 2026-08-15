@@ -108,8 +108,7 @@ async function bootstrap() {
     });
   });
 
-  // Build version info — stamped into the image at build time
-  // (GIT_SHA / BUILD_TIME / APP_VERSION via infra/build-and-push.sh).
+  // Build version info supplied by the active Container deployment environment.
   // Raw route (no global prefix, bypasses the auth guard).
   app.getHttpAdapter().get('/version', (req, res) => {
     res.json({

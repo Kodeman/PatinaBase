@@ -36,13 +36,13 @@ splat training is not pursued. Rationale: the on-site question is
 coverage, not beauty; Metal-based training is months of work that buys
 neither pillar.
 
-**R{next}.4 — Reconstruction home: homelab behind a burst-ready
-queue.** Pipeline runs on the homelab GPU (2080 Ti) from day one. The
+**R{next}.4 — Reconstruction home: native Linux worker behind a burst-ready
+queue.** Pipeline runs on the separately managed reconstruction worker from day one. The
 worker contract is designed so a cloud burst worker is a config
 change, not code. Flip trigger: the first non-Leah designer in
-production. Rationale: pilot volume is single-designer scale; zero
-marginal cost inside the existing Coolify stack; the SLA risk is
-accepted until someone outside the house depends on it.
+production. Rationale: pilot volume is single-designer scale; the SLA risk is
+accepted until someone outside the house depends on it. Site-scan reconstruction
+remains separate from capture enrichment.
 
 **R{next}.5 — Anchor gate: soft, with a loud stamp.** A session may
 close with fewer than three anchors, but the Room File is stamped
@@ -115,7 +115,7 @@ Voice notes and detail photos pinned to pose during the scan, landing in the Cap
 Checksummed bundle, background `URLSession`, resumable with retries. *AC:* airplane mode mid-upload resumes cleanly; server verifies checksums; a 500 MB bundle completes without user intervention. **M2 here.**
 
 **9 · Server: ingest, queue, burst-ready worker contract (R4).**
-Validate incoming bundles; enqueue; worker interface defined so a cloud worker registers against the same queue by configuration alone. Runs on the homelab GPU via Coolify; job states queryable in Postgres. *AC:* a second worker instance (even a stub) attaches with config only; failed jobs are inspectable and re-runnable.
+Validate incoming bundles; enqueue; worker interface defined so a cloud worker registers against the same queue by configuration alone. Runs on the native Linux reconstruction worker; job states queryable in Postgres. *AC:* a second worker instance (even a stub) attaches with config only; failed jobs are inspectable and re-runnable.
 
 **10 · Server: anchor solve + tolerance model (R5).**
 Fit scale and correct the parametric graph against the anchors; compute per-dimension tolerance class; emit the accuracy certificate (anchors used, residuals, class per dimension). Fewer than three anchors → UNVERIFIED propagates to every downstream artifact. *AC:* on a test room, anchored spans match typed values exactly; residuals reported; certificate JSON validates.

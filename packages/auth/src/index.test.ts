@@ -1,93 +1,202 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import 'reflect-metadata';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SignJWT, generateKeyPair } from 'jose';
 
-// Snapshot the env once so each test can restore a clean slate. verifyJwtToken
-// caches its secret/JWKS resolver at module scope (mirroring the existing
-// `cachedSecret` pattern), so we force a fresh module instance per test via
-// vi.resetModules() + a dynamic import — this resets both caches without
-// adding a test-only reset seam to the production API.
 const ORIGINAL_ENV = { ...process.env };
+const SUPABASE_URL = 'https://bkvcixdmuyejfzcijpdg.supabase.co';
+const ISSUER = `${SUPABASE_URL}/auth/v1`;
+const SECRET = 'test-hs256-secret-at-least-32-characters-long';
 
 beforeEach(() => {
   vi.resetModules();
   process.env = { ...ORIGINAL_ENV };
-  delete process.env.SUPABASE_JWT_SECRET;
-  delete process.env.SUPABASE_URL;
+  process.env.SUPABASE_URL = SUPABASE_URL;
+  process.env.SUPABASE_JWT_SECRET = SECRET;
+  delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+  delete process.env.SUPABASE_JWT_ISSUER;
+  delete process.env.SUPABASE_JWT_AUDIENCE;
   delete process.env.SUPABASE_JWKS_URL;
 });
 
-describe('verifyJwtToken — HS256 (self-hosted / local Supabase)', () => {
-  it('verifies a token signed with the shared secret and returns its payload', async () => {
-    const secretString = 'test-hs256-secret-at-least-32-characters-long';
-    process.env.SUPABASE_JWT_SECRET = secretString;
+async function signToken(
+  payload: Record<string, unknown> = {},
+  options: { issuer?: string; audience?: string; expires?: string | number; subject?: string } = {},
+) {
+  const signer = new SignJWT({ role: 'authenticated', ...payload })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuer(options.issuer ?? ISSUER)
+    .setAudience(options.audience ?? 'authenticated')
+    .setIssuedAt();
+  if (options.subject !== '') signer.setSubject(options.subject ?? 'user-123');
+  if (options.expires !== '') signer.setExpirationTime(options.expires ?? '1h');
+  return signer.sign(new TextEncoder().encode(SECRET));
+}
 
-    const token = await new SignJWT({
-      sub: 'user-123',
-      email: 'designer@example.com',
-      role: 'authenticated',
-    })
-      .setProtectedHeader({ alg: 'HS256' })
-      .setIssuedAt()
-      .setExpirationTime('1h')
-      .sign(new TextEncoder().encode(secretString));
-
+describe('verifyJwtToken', () => {
+  it('accepts a scoped authenticated Supabase user JWT', async () => {
+    const token = await signToken({ email: 'designer@example.com' });
     const { verifyJwtToken } = await import('./index');
-    const payload = await verifyJwtToken(token);
 
-    expect(payload.sub).toBe('user-123');
-    expect(payload.email).toBe('designer@example.com');
-    expect(payload.role).toBe('authenticated');
+    await expect(verifyJwtToken(token)).resolves.toMatchObject({
+      sub: 'user-123',
+      role: 'authenticated',
+      iss: ISSUER,
+      aud: 'authenticated',
+    });
   });
 
-  it('rejects a token signed with a different secret than SUPABASE_JWT_SECRET', async () => {
-    process.env.SUPABASE_JWT_SECRET = 'the-correct-secret-that-is-long-enough-12345';
+  it('rejects the Supabase anon-token claim shape even when correctly signed', async () => {
+    const token = await signToken(
+      { role: 'anon', ref: 'bkvcixdmuyejfzcijpdg' },
+      { subject: '' },
+    );
+    const { verifyJwtToken } = await import('./index');
 
-    const token = await new SignJWT({ sub: 'user-123' })
-      .setProtectedHeader({ alg: 'HS256' })
-      .setIssuedAt()
-      .setExpirationTime('1h')
-      .sign(new TextEncoder().encode('a-completely-different-wrong-secret-here'));
+    await expect(verifyJwtToken(token)).rejects.toThrow();
+  });
 
+  it.each([
+    ['issuer', { issuer: 'https://foreign-project.supabase.co/auth/v1' }, {}],
+    ['audience', { audience: 'service_role' }, {}],
+    ['role', {}, { role: 'anon' }],
+  ])('rejects a token with the wrong %s', async (_claim, options, payload) => {
+    const token = await signToken(payload, options);
     const { verifyJwtToken } = await import('./index');
     await expect(verifyJwtToken(token)).rejects.toThrow();
   });
 
-  it('does not require SUPABASE_URL for the HS256 path', async () => {
-    const secretString = 'another-hs256-secret-at-least-32-chars-long';
-    process.env.SUPABASE_JWT_SECRET = secretString;
-    // SUPABASE_URL intentionally left unset.
+  it('rejects a token without a subject', async () => {
+    const token = await signToken({}, { subject: '' });
+    const { verifyJwtToken } = await import('./index');
+    await expect(verifyJwtToken(token)).rejects.toThrow();
+  });
 
-    const token = await new SignJWT({ sub: 'user-789' })
+  it('rejects a token without an expiration', async () => {
+    const token = await signToken({}, { expires: '' });
+    const { verifyJwtToken } = await import('./index');
+    await expect(verifyJwtToken(token)).rejects.toThrow();
+  });
+
+  it('rejects an expired token', async () => {
+    const token = await signToken({}, { expires: Math.floor(Date.now() / 1000) - 60 });
+    const { verifyJwtToken } = await import('./index');
+    await expect(verifyJwtToken(token)).rejects.toThrow();
+  });
+
+  it('rejects a token signed with a different secret', async () => {
+    const token = await new SignJWT({ role: 'authenticated' })
       .setProtectedHeader({ alg: 'HS256' })
+      .setIssuer(ISSUER)
+      .setAudience('authenticated')
+      .setSubject('user-123')
       .setIssuedAt()
       .setExpirationTime('1h')
-      .sign(new TextEncoder().encode(secretString));
-
+      .sign(new TextEncoder().encode('a-completely-different-wrong-secret-here'));
     const { verifyJwtToken } = await import('./index');
-    await expect(verifyJwtToken(token)).resolves.toMatchObject({ sub: 'user-789' });
+    await expect(verifyJwtToken(token)).rejects.toThrow();
   });
-});
 
-describe('verifyJwtToken — ES256/RS256 (Supabase Cloud, asymmetric)', () => {
-  it('routes an ES256 token to the asymmetric branch and fails closed without SUPABASE_URL/SUPABASE_JWKS_URL', async () => {
+  it('rejects an unapproved algorithm before choosing a verifier', async () => {
+    const token = await new SignJWT({ role: 'authenticated' })
+      .setProtectedHeader({ alg: 'HS384' })
+      .setIssuer(ISSUER)
+      .setAudience('authenticated')
+      .setSubject('user-123')
+      .setIssuedAt()
+      .setExpirationTime('1h')
+      .sign(new TextEncoder().encode(SECRET));
+    const { verifyJwtToken } = await import('./index');
+    await expect(verifyJwtToken(token)).rejects.toThrow(/unsupported jwt algorithm/i);
+  });
+
+  it('fails closed when no configured Supabase issuer can be derived', async () => {
+    delete process.env.SUPABASE_URL;
+    const token = await signToken();
+    const { verifyJwtToken } = await import('./index');
+    await expect(verifyJwtToken(token)).rejects.toThrow(/issuer/i);
+  });
+
+  it('routes ES256 to JWKS verification and fails closed without a JWKS URL', async () => {
+    delete process.env.SUPABASE_URL;
+    process.env.SUPABASE_JWT_ISSUER = ISSUER;
     const { privateKey } = await generateKeyPair('ES256');
-    const token = await new SignJWT({ sub: 'user-456' })
+    const token = await new SignJWT({ role: 'authenticated' })
       .setProtectedHeader({ alg: 'ES256' })
+      .setIssuer(ISSUER)
+      .setAudience('authenticated')
+      .setSubject('user-456')
       .setIssuedAt()
       .setExpirationTime('1h')
       .sign(privateKey);
-
-    // Deliberately no SUPABASE_URL / SUPABASE_JWKS_URL set, and no
-    // SUPABASE_JWT_SECRET either — proves the asymmetric branch doesn't
-    // fall back to (or require) the HS256 secret.
     const { verifyJwtToken } = await import('./index');
     await expect(verifyJwtToken(token)).rejects.toThrow(/SUPABASE_URL/);
   });
-});
 
-describe('verifyJwtToken — malformed input', () => {
-  it('throws a clear error when the token cannot be decoded', async () => {
+  it('rejects malformed input', async () => {
     const { verifyJwtToken } = await import('./index');
     await expect(verifyJwtToken('not-a-jwt')).rejects.toThrow(/malformed/i);
+  });
+});
+
+function executionContext(request: Record<string, unknown>, handler = () => undefined) {
+  class Controller {}
+  return {
+    switchToHttp: () => ({ getRequest: () => request }),
+    getHandler: () => handler,
+    getClass: () => Controller,
+  } as any;
+}
+
+describe('JwtAuthGuard', () => {
+  it('parses the Bearer scheme case-insensitively and trusts app_metadata permissions', async () => {
+    const token = await signToken({
+      app_metadata: { permissions: ['projects:read'] },
+      user_metadata: { permissions: ['admin:all'] },
+    });
+    const { JwtAuthGuard } = await import('./index');
+    const request = { headers: { authorization: `bEaReR ${token}` } };
+
+    await expect(new JwtAuthGuard().canActivate(executionContext(request))).resolves.toBe(true);
+    expect((request as any).user.permissions).toEqual(['projects:read']);
+  });
+});
+
+describe('PermissionsGuard', () => {
+  it('allows undecorated routes', async () => {
+    const { PermissionsGuard } = await import('./index');
+    expect(new PermissionsGuard().canActivate(executionContext({}))).toBe(true);
+  });
+
+  it('requires every permission from trusted app_metadata-derived request.user permissions', async () => {
+    const { PermissionsGuard, PERMISSIONS_KEY } = await import('./index');
+    const handler = () => undefined;
+    Reflect.defineMetadata(PERMISSIONS_KEY, ['projects:read', 'projects:write'], handler);
+
+    expect(
+      new PermissionsGuard().canActivate(
+        executionContext(
+          { user: { permissions: ['projects:read', 'projects:write'] } },
+          handler,
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it.each([
+    ['no authenticated user', {}],
+    ['no permission claim', { user: {} }],
+    ['only some permissions', { user: { permissions: ['projects:read'] } }],
+  ])('denies a decorated route with %s', async (_case, request) => {
+    const { PermissionsGuard, PERMISSIONS_KEY } = await import('./index');
+    const handler = () => undefined;
+    Reflect.defineMetadata(PERMISSIONS_KEY, ['projects:read', 'projects:write'], handler);
+    expect(new PermissionsGuard().canActivate(executionContext(request, handler))).toBe(false);
+  });
+
+  it('default-denies an empty permission decorator', async () => {
+    const { PermissionsGuard, PERMISSIONS_KEY } = await import('./index');
+    const handler = () => undefined;
+    Reflect.defineMetadata(PERMISSIONS_KEY, [], handler);
+    expect(new PermissionsGuard().canActivate(executionContext({ user: {} }, handler))).toBe(false);
   });
 });

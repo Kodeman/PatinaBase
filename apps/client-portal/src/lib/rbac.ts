@@ -16,7 +16,7 @@ export { PermissionCode, RoleName, type AnyPermission, type PermissionString };
 
 /**
  * Session shape used by RBAC functions.
- * Compatible with both the Supabase auth session and legacy NextAuth shape.
+ * Supabase session projection used by the client portal.
  */
 export interface Session {
   user: {

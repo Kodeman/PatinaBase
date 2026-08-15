@@ -1,3 +1,6 @@
+> [!WARNING]
+> Historical only. Do not use these operating steps. The current email runbook is `infra/runbooks/email-ops.md`.
+
 # Email & Engagement System Runbook
 
 Patina's campaign + transactional email stack. Every piece needed to run it in

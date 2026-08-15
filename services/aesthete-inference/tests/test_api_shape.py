@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from conftest import AUTH
 
 
@@ -154,6 +156,40 @@ def test_embed_image_streaming_body_cap(fake_embedder):
     assert "exceeds limit" in res.json()["errors"][0]["reason"]
 
 
+@pytest.mark.parametrize("path", ["/gzip-bomb.png", "/brotli-bomb.png"])
+def test_embed_image_rejects_compressed_responses_without_decoding(client, path):
+    res = client.post("/embed/image", json=image_payload(path), headers=AUTH)
+    assert res.status_code == 200
+    assert res.json()["vectors"] == []
+    assert "content-encoding" in res.json()["errors"][0]["reason"]
+
+
+def test_embed_image_enforces_aggregate_decoded_pixel_budget(fake_embedder):
+    from fastapi.testclient import TestClient
+
+    from conftest import make_settings, mock_image_transport, public_test_resolver
+    from app.main import create_app
+
+    app = create_app(
+        make_settings(image_max_pixels=20_000, image_batch_max_pixels=15_000),
+        embedder=fake_embedder,
+        http_transport=mock_image_transport(),
+        hostname_resolver=public_test_resolver,
+    )
+    with TestClient(app) as c:
+        res = c.post(
+            "/embed/image",
+            json=image_payload("/budget1.png", "/budget2.png"),
+            headers=AUTH,
+        )
+
+    assert res.status_code == 200
+    assert [vector["id"] for vector in res.json()["vectors"]] == ["i0"]
+    assert res.json()["errors"] == [
+        {"id": "i1", "reason": "image batch exceeds decoded-pixel limit"}
+    ]
+
+
 def test_embed_image_batch_limit(client):
     res = client.post("/embed/image", json=image_payload(*(["/ok.png"] * 17)), headers=AUTH)
     assert res.status_code == 400
@@ -178,7 +214,7 @@ def test_embed_image_blocks_literal_private_and_reserved_addresses(client):
 
     assert res.status_code == 200
     assert res.json()["vectors"] == []
-    assert all("not public" in error["reason"] for error in res.json()["errors"])
+    assert all("destination address" in error["reason"] for error in res.json()["errors"])
 
 
 def test_embed_image_blocks_redirect_to_private_address(client):

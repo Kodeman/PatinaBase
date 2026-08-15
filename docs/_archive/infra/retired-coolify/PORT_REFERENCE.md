@@ -1,3 +1,6 @@
+> [!WARNING]
+> Historical only. These retired-host ports are not an active operations reference. See `docs/engineering/patina-cloudflare-plan.md`.
+
 # Patina Deployment - Port Mapping Reference
 
 ## Port Allocation

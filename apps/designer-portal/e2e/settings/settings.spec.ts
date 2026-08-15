@@ -126,5 +126,5 @@ test.describe('Settings Page - Account Tab', () => {
 // Helper function (to be implemented with proper auth mocking)
 async function setupAuthenticatedSession(context: any, options?: any) {
   // Implementation would add session cookies
-  // Example: context.addCookies([{ name: 'next-auth.session-token', value: 'mock-token', ... }])
+  // Example: inject a valid local Supabase auth cookie through the test helper.
 }

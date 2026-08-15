@@ -11,8 +11,7 @@
   // container, see infra/media-worker/) — this container's job-queue service
   // just enqueues to it and receives its completion callback. Built from the
   // monorepo root (image_build_context) because services/media/Dockerfile.cf's
-  // COPY paths are root-relative — same Dockerfile the Coolify deploy used,
-  // just built by wrangler instead. instance_type standard-1 (heavier than
+  // COPY paths are root-relative. instance_type standard-1 (heavier than
   // orders' basic — sharp/@gltf-transform/three are still in the dependency
   // tree even though the actual transform work now happens in
   // patina-media-worker's own container).

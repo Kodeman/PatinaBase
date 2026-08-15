@@ -203,6 +203,16 @@ async function verify() {
 }
 
 async function prePush() {
+  const retiredReferenceGate = spawnSync(
+    process.execPath,
+    [path.join(root, "scripts/check-retired-deploy-references.mjs")], // [retired-deploy-reference-allow]
+    { cwd: root, stdio: "inherit" },
+  );
+  if (retiredReferenceGate.status !== 0) {
+    process.exitCode = retiredReferenceGate.status ?? 1;
+    return;
+  }
+
   const base = option("--base", defaultBase());
   const head = option("--head", "HEAD");
   const paths = changedPaths({ root, base, head });

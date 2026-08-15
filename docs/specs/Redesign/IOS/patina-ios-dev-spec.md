@@ -22,7 +22,7 @@ This is a sprint-by-sprint, file-by-file development specification for building 
 | **Team** | One developer + Claude Code. No iOS specialist. |
 | **iOS Stack** | Swift / SwiftUI / RealityKit / RoomPlan |
 | **Backend** | Next.js API routes on `api.patina.cloud`, Supabase Auth + PostgreSQL |
-| **Infrastructure** | Proxmox + Coolify + Cloudflare Tunnel. Self-hosted. |
+| **Infrastructure** | Supabase Strata + Cloudflare Workers/Containers. |
 | **Auth** | Supabase Auth (Apple Sign-In configured: Team ID VP22LXHT7L, Key ID 2HGZ6W89AU, Service ID cloud.patina.app) |
 | **Monorepo** | `strata` repo, pnpm workspaces + Turborepo, packages namespaced `@strata/*` |
 | **Budget** | Zero SaaS spend beyond existing free tiers |

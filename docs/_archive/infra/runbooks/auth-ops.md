@@ -1,3 +1,6 @@
+> [!WARNING]
+> Historical only. Do not use this retired self-hosted auth procedure. Supabase Strata owns production Auth.
+
 # Auth operations runbook
 
 Operational steps for the Patina authentication system that cannot be performed by code changes alone — Supabase Studio toggles, redirect-allowlist edits, deploy-time checks. Pair with the implementation plan at `docs/plans/patina-auth-full-rollout.md` (mirror of `~/.claude/plans/using-the-chrome-extention-lazy-stream.md`).

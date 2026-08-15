@@ -9,9 +9,8 @@ import type { NextConfig } from 'next';
  * products → layer='catalog' rows tagged with their nomination_id)
  * ships in a dedicated post-pilot session.
  *
- * Production URL placeholder: manufacturer.patina.cloud. The
- * Cloudflare tunnel + Coolify deployment lands when the full flow
- * arrives; this config is local-dev-ready and that's it.
+ * Production URL: manufacturer.patina.cloud. The portal is packaged for
+ * Cloudflare Workers through its checked-in Wrangler configuration.
  */
 const nextConfig: NextConfig = {
   reactStrictMode: true,

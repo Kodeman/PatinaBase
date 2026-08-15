@@ -8,15 +8,11 @@ fails the batch.
 
 from __future__ import annotations
 
-from io import BytesIO
-
 import httpx
 from PIL import Image
 
+from .image_safety import DecodedPixelBudget, UnsafeImageError, load_image_bytes
 from .safe_fetch import HostnameResolver, SafeFetchError, fetch_public_bytes, resolve_hostname
-
-# Guard against decompression bombs before Pillow's own (much higher) default.
-Image.MAX_IMAGE_PIXELS = 64_000_000
 
 # Retailer CDNs are sloppy about content types; accept obvious image types and
 # generic byte streams (Pillow decode is the real arbiter), reject clear
@@ -34,6 +30,8 @@ async def fetch_image(
     *,
     timeout_s: float,
     max_bytes: int,
+    max_pixels: int = 16_000_000,
+    pixel_budget: DecodedPixelBudget | None = None,
     resolver: HostnameResolver = resolve_hostname,
 ) -> Image.Image:
     try:
@@ -50,15 +48,16 @@ async def fetch_image(
         reason = str(exc).replace(" is not allowed", " is not an image")
         raise ImageFetchError(reason) from None
 
-    return decode_image(data)
+    return decode_image(data, max_pixels=max_pixels, pixel_budget=pixel_budget)
 
 
-def decode_image(data: bytes) -> Image.Image:
+def decode_image(
+    data: bytes,
+    *,
+    max_pixels: int = 16_000_000,
+    pixel_budget: DecodedPixelBudget | None = None,
+) -> Image.Image:
     try:
-        img = Image.open(BytesIO(data))
-        img.load()
-        return img
-    except Image.DecompressionBombError:
-        raise ImageFetchError("image too large to decode safely") from None
-    except Exception:
-        raise ImageFetchError("body is not a decodable image") from None
+        return load_image_bytes(data, max_pixels=max_pixels, budget=pixel_budget)
+    except UnsafeImageError as exc:
+        raise ImageFetchError(str(exc)) from None

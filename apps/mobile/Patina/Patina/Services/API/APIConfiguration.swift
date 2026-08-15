@@ -2,8 +2,7 @@
 //  APIConfiguration.swift
 //  Patina
 //
-//  Extended API configuration for self-hosted Coolify deployment
-//  This configuration supports both Supabase Cloud and self-hosted environments
+//  API configuration for Supabase Strata and local development
 //
 
 import Foundation
@@ -15,7 +14,7 @@ public enum DeploymentTarget {
     /// Supabase Cloud (current)
     case cloud
 
-    /// Self-hosted on Coolify (production)
+    /// Legacy compatibility target; never selected by default
     case selfHosted
 
     /// Local development
@@ -23,8 +22,7 @@ public enum DeploymentTarget {
 
     /// Current deployment target.
     ///
-    /// The self-hosted Coolify box is RETIRED, so the default is now
-    /// `.cloud` (Supabase Cloud "Strata"). A UserDefaults / launch-argument
+    /// The default is `.cloud` (Supabase Cloud "Strata"). A UserDefaults / launch-argument
     /// override repoints at runtime — pass `-DeploymentTarget local` to run
     /// against the local Supabase CLI stack, or `selfHosted` only for legacy
     /// diagnostics. An unknown override value falls back to `.cloud` so a
@@ -43,7 +41,7 @@ public enum DeploymentTarget {
 
 // MARK: - API Configuration
 
-/// Extended API configuration for self-hosted deployment
+/// API configuration by deployment target
 public enum APIConfiguration {
 
     // MARK: - Base URLs

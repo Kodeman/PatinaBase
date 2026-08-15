@@ -391,7 +391,7 @@ Automatic alerts at 30/7/1 days before expiry.
 - **Virus Scanning**: ClamAV integration, automatic quarantine
 - **EXIF Stripping**: Privacy protection for public images
 - **Rate Limiting**: Per-user and per-IP limits
-- **Authentication**: JWT validation via OCI Identity Domains
+- **Authentication**: Supabase access-token validation via `@patina/auth`
 
 ## Support
 

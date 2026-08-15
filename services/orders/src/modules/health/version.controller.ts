@@ -3,8 +3,7 @@ import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Public } from '@patina/auth';
 
 /**
- * Build version info — stamped into the image at build time
- * (GIT_SHA / BUILD_TIME / APP_VERSION via infra/build-and-push.sh).
+ * Build version info supplied by the active Container deployment environment.
  * Public so the admin portal can fan out to it without auth.
  * Served at /v1/version (global prefix applies).
  */

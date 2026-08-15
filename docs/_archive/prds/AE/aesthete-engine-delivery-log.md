@@ -1,3 +1,6 @@
+> [!WARNING]
+> Historical only. This delivery snapshot is not an operations guide. See `infra/inference-worker/README.md` and the Cloudflare roadmap.
+
 # Aesthete Engine — Delivery Log
 
 Program: `aesthete-engine-delivery-plan.md` · Contract: `aesthete-engine-system-design.md` (v1.0)
