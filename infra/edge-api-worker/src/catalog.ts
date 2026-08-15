@@ -1,13 +1,15 @@
 import type { CatalogProductSummary } from '@patina/types';
 import type { EdgeApiEnv } from './env';
 import { withClient, type DatabaseClientFactory } from './database';
-import { fetchWithDeadline } from './deadline';
+import { withDeadline } from './deadline';
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export class CatalogRequestError extends Error {}
 export class CatalogSourceError extends Error {}
+
+export const LEGACY_CATALOG_MAX_BYTES = 1_048_576;
 
 export const CATALOG_SELECT_SQL = `SELECT id::text, name, brand, category, price_retail, images,
                 short_description, patina_managed, status
@@ -148,7 +150,8 @@ export async function queryCatalogViaLegacy(
   callerSignal?: AbortSignal,
   fetcher: typeof fetch = fetch,
 ): Promise<CatalogProductSummary[]> {
-  if (!env.SUPABASE_ANON_KEY) {
+  const publishableKey = env.SUPABASE_ANON_KEY;
+  if (!publishableKey?.trim()) {
     throw new CatalogSourceError('legacy catalog unavailable');
   }
   const base = env.SUPABASE_UPSTREAM_URL.replace(/\/+$/, '');
@@ -162,33 +165,88 @@ export async function queryCatalogViaLegacy(
   url.searchParams.set('status', 'eq.published');
   url.searchParams.set('order', 'id.asc');
 
-  let response: Response;
+  let body: Uint8Array;
   try {
-    response = await fetchWithDeadline(
-      fetcher,
-      url,
-      {
-        headers: {
-          accept: 'application/json',
-          apikey: env.SUPABASE_ANON_KEY,
-          authorization: `Bearer ${env.SUPABASE_ANON_KEY}`,
-        },
-      },
+    body = await withDeadline(
       callerSignal,
       Number(env.LEGACY_FETCH_TIMEOUT_MS),
+      async (signal) => {
+        const response = await fetcher(url, {
+          headers: {
+            accept: 'application/json',
+            apikey: publishableKey,
+            authorization: `Bearer ${publishableKey}`,
+          },
+          signal,
+        });
+        if (!response.ok) {
+          throw new CatalogSourceError('legacy catalog unavailable');
+        }
+        return readBoundedBody(response, LEGACY_CATALOG_MAX_BYTES, signal);
+      },
     );
   } catch {
     throw new CatalogSourceError('legacy catalog unavailable');
   }
-  if (!response.ok) throw new CatalogSourceError('legacy catalog unavailable');
 
   let rows: unknown;
   try {
-    rows = await response.json();
+    rows = JSON.parse(new TextDecoder().decode(body));
   } catch {
     throw new CatalogSourceError('malformed catalog result');
   }
   return normalizeCatalogRows(rows, ids, true);
+}
+
+async function readBoundedBody(
+  response: Response,
+  maximumBytes: number,
+  signal: AbortSignal,
+): Promise<Uint8Array> {
+  const contentLength = response.headers.get('content-length');
+  if (
+    contentLength !== null &&
+    /^\d+$/.test(contentLength) &&
+    Number(contentLength) > maximumBytes
+  ) {
+    await response.body?.cancel();
+    throw new CatalogSourceError('legacy catalog response too large');
+  }
+  if (!response.body) return new Uint8Array();
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let observedBytes = 0;
+  if (signal.aborted) {
+    await reader.cancel();
+    throw new CatalogSourceError('legacy catalog unavailable');
+  }
+  const abort = () => {
+    void reader.cancel().catch(() => undefined);
+  };
+  signal.addEventListener('abort', abort, { once: true });
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      observedBytes += value.byteLength;
+      if (observedBytes > maximumBytes) {
+        await reader.cancel();
+        throw new CatalogSourceError('legacy catalog response too large');
+      }
+      chunks.push(value);
+    }
+  } finally {
+    signal.removeEventListener('abort', abort);
+  }
+
+  const body = new Uint8Array(observedBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return body;
 }
 
 export function catalogResultsMatch(

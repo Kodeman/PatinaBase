@@ -5,6 +5,9 @@ export default defineConfig({
   plugins: [
     cloudflareTest({
       wrangler: { configPath: './wrangler.jsonc' },
+      miniflare: {
+        bindings: { SUPABASE_ANON_KEY: 'workerd-test-publishable-key' },
+      },
     }),
   ],
   test: {

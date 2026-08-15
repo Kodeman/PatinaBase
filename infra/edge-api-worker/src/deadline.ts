@@ -12,13 +12,11 @@ export class UpstreamAbortError extends Error {
   }
 }
 
-export async function fetchWithDeadline(
-  fetcher: typeof fetch,
-  input: RequestInfo | URL,
-  init: RequestInit,
+export async function withDeadline<T>(
   callerSignal: AbortSignal | undefined,
   timeoutMs: number,
-): Promise<Response> {
+  work: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
   const controller = new AbortController();
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   let removeCallerAbort: (() => void) | undefined;
@@ -45,7 +43,7 @@ export async function fetchWithDeadline(
 
   try {
     return await Promise.race([
-      fetcher(input, { ...init, signal: controller.signal }),
+      work(controller.signal),
       timeout,
       callerAbort,
     ]);
@@ -53,4 +51,16 @@ export async function fetchWithDeadline(
     if (timeoutId !== undefined) clearTimeout(timeoutId);
     removeCallerAbort?.();
   }
+}
+
+export async function fetchWithDeadline(
+  fetcher: typeof fetch,
+  input: RequestInfo | URL,
+  init: RequestInit,
+  callerSignal: AbortSignal | undefined,
+  timeoutMs: number,
+): Promise<Response> {
+  return withDeadline(callerSignal, timeoutMs, (signal) =>
+    fetcher(input, { ...init, signal }),
+  );
 }

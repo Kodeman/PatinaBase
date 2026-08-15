@@ -1,4 +1,6 @@
 import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { parse, printParseErrorCode } from 'jsonc-parser';
 
 const errors = [];
@@ -21,6 +23,7 @@ const requiredVars = [
   'COMPATIBILITY_FETCH_TIMEOUT_MS',
   'WEBSOCKET_HANDSHAKE_TIMEOUT_MS',
 ];
+const requiredSecrets = ['SUPABASE_ANON_KEY'];
 
 function validateScope(label, scope) {
   if (scope.workers_dev !== true) {
@@ -32,6 +35,11 @@ function validateScope(label, scope) {
   for (const name of requiredVars) {
     if (typeof scope.vars?.[name] !== 'string' || scope.vars[name].trim() === '') {
       errors.push(`${label}: missing ${name}`);
+    }
+  }
+  for (const name of requiredSecrets) {
+    if (Object.hasOwn(scope.vars ?? {}, name)) {
+      errors.push(`${label}: ${name} must be a Wrangler secret, not a committed variable`);
     }
   }
   for (const name of [
@@ -92,9 +100,41 @@ for (const name of ['local', 'staging', 'production']) {
   else validateScope(`env.${name}`, config.env[name]);
 }
 
+const provisionedFlag = process.argv.indexOf('--provisioned');
+if (provisionedFlag !== -1 && errors.length === 0) {
+  const environment = process.argv[provisionedFlag + 1];
+  if (!['default', 'local', 'staging', 'production'].includes(environment)) {
+    errors.push('provisioned secret check requires default, local, staging, or production');
+  } else {
+    const wrangler = fileURLToPath(
+      new URL('../node_modules/wrangler/bin/wrangler.js', import.meta.url),
+    );
+    const args = [wrangler, 'secret', 'list', '--format', 'json'];
+    if (environment === 'default') args.push('--env=');
+    else args.push('--env', environment);
+    const result = spawnSync(process.execPath, args, { encoding: 'utf8' });
+    if (result.status !== 0) {
+      errors.push(`env.${environment}: unable to verify Wrangler secrets`);
+    } else {
+      try {
+        const parsed = JSON.parse(result.stdout);
+        const secrets = Array.isArray(parsed) ? parsed : parsed.secrets;
+        const names = new Set(secrets.map((secret) => secret.name));
+        for (const name of requiredSecrets) {
+          if (!names.has(name)) errors.push(`env.${environment}: missing Wrangler secret ${name}`);
+        }
+      } catch {
+        errors.push(`env.${environment}: Wrangler secret inventory was malformed`);
+      }
+    }
+  }
+}
+
 if (errors.length > 0) {
   for (const error of errors) console.error(error);
   process.exit(1);
 }
 
-console.log('Wrangler config contract: 4 environments complete; no attached routes');
+console.log(
+  'Wrangler config contract: 4 environments complete; no attached routes; SUPABASE_ANON_KEY required as an environment-specific secret',
+);
