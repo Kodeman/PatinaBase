@@ -206,20 +206,22 @@ domain tests.
 
 ### pg_net callable surface
 
-The 12 callable pg_net signatures are:
+The prokind-qualified census returns exactly 12 callable pg_net rows. All 12
+are functions (prokind=f); there is no procedure overload, and
+wait_until_running appears once:
 
-- net._await_response(bigint)
-- net._encode_url_with_params_array(text,text[])
-- net._http_collect_response(bigint,boolean)
-- net._urlencode_string(character varying)
-- net.check_worker_is_up()
-- net.http_collect_response(bigint,boolean)
-- net.http_delete(text,jsonb,jsonb,integer,jsonb)
-- net.http_get(text,jsonb,jsonb,integer)
-- net.http_post(text,jsonb,jsonb,jsonb,integer)
-- net.wait_until_running()
-- net.wake()
-- net.worker_restart()
+- FUNCTION net._await_response(request_id bigint)
+- FUNCTION net._encode_url_with_params_array(url text, params_array text[])
+- FUNCTION net._http_collect_response(request_id bigint, async boolean)
+- FUNCTION net._urlencode_string(string character varying)
+- FUNCTION net.check_worker_is_up()
+- FUNCTION net.http_collect_response(request_id bigint, async boolean)
+- FUNCTION net.http_delete(url text, params jsonb, headers jsonb, timeout_milliseconds integer, body jsonb)
+- FUNCTION net.http_get(url text, params jsonb, headers jsonb, timeout_milliseconds integer)
+- FUNCTION net.http_post(url text, body jsonb, params jsonb, headers jsonb, timeout_milliseconds integer)
+- FUNCTION net.wait_until_running()
+- FUNCTION net.wake()
+- FUNCTION net.worker_restart()
 
 All are owned by supabase_admin, are SECURITY INVOKER, have PUBLIC EXECUTE, and
 are callable only because net also has PUBLIC USAGE. Revoking PUBLIC USAGE on
