@@ -7,9 +7,7 @@ import { setAuthToken } from '../../utils/request-context';
 // before vi.mock factories run.
 const mocks = vi.hoisted(() => ({
   verifyJwtToken: vi.fn(),
-  cookiesGet: vi.fn().mockReturnValue(undefined),
   cookiesGetAll: vi.fn().mockReturnValue([]),
-  getNextAuthToken: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('@patina/auth', () => ({
@@ -17,12 +15,8 @@ vi.mock('@patina/auth', () => ({
 }));
 vi.mock('next/headers', () => ({
   cookies: async () => ({
-    get: mocks.cookiesGet,
     getAll: mocks.cookiesGetAll,
   }),
-}));
-vi.mock('next-auth/jwt', () => ({
-  getToken: mocks.getNextAuthToken,
 }));
 vi.mock('../../utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -32,7 +26,7 @@ vi.mock('../../utils/logger', () => ({
   loggerFromContext: vi.fn().mockReturnValue({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }));
 
-const { verifyJwtToken, cookiesGet, cookiesGetAll, getNextAuthToken } = mocks;
+const { verifyJwtToken, cookiesGetAll } = mocks;
 
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
@@ -93,6 +87,7 @@ describe('proxyToBackend — happy path', () => {
     expect(opts.headers['Authorization']).toBe('Bearer test-token-123');
     expect(opts.headers['X-Request-Id']).toBe('test-request-id');
     expect(opts.headers['X-User-Id']).toBe('user-123');
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
 
     const body = await response.json();
     expect(body.success).toBe(true);
@@ -168,14 +163,12 @@ describe('proxyToBackend — happy path', () => {
 });
 
 describe('proxyToBackend — authentication', () => {
-  it('returns 401 when requireAuth=true and no token is found', async () => {
+  it('requires authentication by default when no token is found', async () => {
     const ctx = mkContext(); // no auth token set
-    cookiesGet.mockReturnValue(undefined);
     cookiesGetAll.mockReturnValue([]);
 
     const response = await proxyToBackend(mkRequest(), ctx, {
       service: { name: 'catalog', baseUrl: 'http://x' },
-      requireAuth: true,
     });
 
     expect(response.status).toBe(401);
@@ -197,7 +190,30 @@ describe('proxyToBackend — authentication', () => {
     expect(response.status).toBe(200);
     const opts = mockFetch.mock.calls[0][1];
     expect(opts.headers['Authorization']).toBeUndefined();
+    expect(opts.headers['X-User-Id']).toBeUndefined();
     expect(verifyJwtToken).not.toHaveBeenCalled();
+  });
+
+  it('reads and verifies a Supabase Bearer token', async () => {
+    const ctx = mkContext();
+    const request = mkRequest(undefined, {
+      headers: {
+        'content-type': 'application/json',
+        authorization: 'Bearer supabase-bearer-token',
+      },
+    });
+    mockFetch.mockResolvedValueOnce(
+      new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } }),
+    );
+
+    await proxyToBackend(request, ctx, {
+      service: { name: 'catalog', baseUrl: 'http://x' },
+    });
+
+    expect(verifyJwtToken).toHaveBeenCalledWith('supabase-bearer-token');
+    expect(mockFetch.mock.calls[0][1].headers.Authorization).toBe(
+      'Bearer supabase-bearer-token',
+    );
   });
 
   it('A5: rejects with 401 when JWT verification fails', async () => {
@@ -226,35 +242,9 @@ describe('proxyToBackend — authentication', () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
-  it('extracts NextAuth chunked session token and forwards the accessToken', async () => {
-    const ctx = mkContext(); // no token in context
-
-    // Simulate chunked NextAuth cookies
-    cookiesGet.mockImplementation((name: string) => {
-      if (name === 'next-auth.session-token.0') return { value: 'chunk-a' };
-      if (name === 'next-auth.session-token.1') return { value: 'chunk-b' };
-      return undefined;
-    });
-    cookiesGetAll.mockReturnValue([]);
-    getNextAuthToken.mockResolvedValueOnce({ accessToken: 'reassembled-supabase-jwt' });
-
-    mockFetch.mockResolvedValueOnce(
-      new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } }),
-    );
-
-    await proxyToBackend(mkRequest(), ctx, {
-      service: { name: 'catalog', baseUrl: 'http://x' },
-    });
-
-    expect(verifyJwtToken).toHaveBeenCalledWith('reassembled-supabase-jwt');
-    const opts = mockFetch.mock.calls[0][1];
-    expect(opts.headers['Authorization']).toBe('Bearer reassembled-supabase-jwt');
-  });
-
   it('falls back to Supabase chunked auth-token cookie', async () => {
     const ctx = mkContext();
 
-    cookiesGet.mockReturnValue(undefined);
     const supabasePayload = JSON.stringify({ access_token: 'sb-access-token' });
     cookiesGetAll.mockReturnValue([
       { name: 'sb-api-auth-token.0', value: supabasePayload.slice(0, 20) },
@@ -276,9 +266,8 @@ describe('proxyToBackend — authentication', () => {
     const ctx = mkContext();
 
     const supabasePayload = JSON.stringify({ access_token: 'sb-token-from-b64' });
-    const b64 = `base64-${Buffer.from(supabasePayload).toString('base64')}`;
+    const b64 = `base64-${Buffer.from(supabasePayload).toString('base64url')}`;
 
-    cookiesGet.mockReturnValue(undefined);
     cookiesGetAll.mockReturnValue([{ name: 'sb-api-auth-token', value: b64 }]);
 
     mockFetch.mockResolvedValueOnce(
@@ -290,6 +279,69 @@ describe('proxyToBackend — authentication', () => {
     });
 
     expect(verifyJwtToken).toHaveBeenCalledWith('sb-token-from-b64');
+  });
+
+  it('does not combine cookies from separate Supabase projects', async () => {
+    const ctx = mkContext();
+    const first = JSON.stringify({ access_token: 'first-project-token' });
+    const second = JSON.stringify({ access_token: 'second-project-token' });
+    cookiesGetAll.mockReturnValue([
+      { name: 'sb-first-auth-token.0', value: first.slice(0, 10) },
+      { name: 'sb-second-auth-token.0', value: second.slice(0, 12) },
+      { name: 'sb-first-auth-token.1', value: first.slice(10) },
+      { name: 'sb-second-auth-token.1', value: second.slice(12) },
+    ]);
+    mockFetch.mockResolvedValueOnce(
+      new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } }),
+    );
+
+    await proxyToBackend(mkRequest(), ctx, {
+      service: { name: 'catalog', baseUrl: 'http://x' },
+    });
+
+    expect(verifyJwtToken).toHaveBeenCalledWith('first-project-token');
+  });
+});
+
+describe('proxyToBackend — cache policy', () => {
+  it('allows reviewed public caching only on an explicitly public proxy', async () => {
+    mockFetch.mockResolvedValueOnce(
+      new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } }),
+    );
+
+    const response = await proxyToBackend(mkRequest(), mkContext(), {
+      service: { name: 'catalog', baseUrl: 'http://x' },
+      requireAuth: false,
+      cache: {
+        visibility: 'public',
+        reviewedPublic: true,
+        ttl: 60,
+        swr: 15,
+      },
+    });
+
+    expect(response.headers.get('cache-control')).toBe(
+      'public, max-age=60, stale-while-revalidate=15',
+    );
+  });
+
+  it('forces no-store for authenticated proxies even if untyped input includes cache', async () => {
+    const ctx = setAuthToken(mkContext(), 'tok');
+    mockFetch.mockResolvedValueOnce(
+      new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } }),
+    );
+
+    const response = await proxyToBackend(mkRequest(), ctx, {
+      service: { name: 'catalog', baseUrl: 'http://x' },
+      requireAuth: true,
+      cache: {
+        visibility: 'public',
+        reviewedPublic: true,
+        ttl: 60,
+      },
+    } as any);
+
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
   });
 });
 

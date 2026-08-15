@@ -17,7 +17,6 @@ export const POST = createRouteHandler(
         requireAuth: true,
         retry: { maxRetries: 1 }, // Single attempt for analytics events
         timeout: { write: 5000 },
-        cache: { noCache: true },
       });
     } catch (error) {
       return apiError(error);

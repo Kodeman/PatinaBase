@@ -14,7 +14,7 @@ Successfully built enterprise-grade backend proxy middleware that integrates ret
 - ✅ Main `proxyToBackend()` function with complete proxy workflow
 - ✅ Integration with retry logic (Agent 1)
 - ✅ Integration with circuit breaker pattern (Agent 2)
-- ✅ Authentication token forwarding from NextAuth sessions
+- ✅ Authentication token forwarding from Supabase sessions
 - ✅ Request ID propagation (X-Request-Id, X-Forwarded-*)
 - ✅ Header forwarding (default + custom headers)
 - ✅ Body handling (JSON, FormData, text, binary)
@@ -190,7 +190,6 @@ export const GET = createRouteHandler(
         },
         retry: { maxRetries: 3 },
         timeout: { read: 10000 },
-        cache: { ttl: 300 },
       });
     }
   ),

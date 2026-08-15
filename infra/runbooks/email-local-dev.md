@@ -48,4 +48,4 @@ For edge functions, the same line appears in `supabase functions logs <function-
 
 ## Production safety
 
-The dev flags must never be set in production. Coolify env config + Supabase secrets must omit `EMAIL_DEV_MODE` and `EMAIL_DEV_REDIRECT_TO`. There's no allowlist enforcement; the responsibility lives with the operator.
+The dev flags must never be set in production. Cloudflare Worker/Container configuration and Supabase secrets must omit `EMAIL_DEV_MODE` and `EMAIL_DEV_REDIRECT_TO`. There's no allowlist enforcement; the responsibility lives with the operator.

@@ -40,6 +40,7 @@ from .photos import (
     fetch_photo,
     heif_available,
 )
+from .safe_fetch import HostnameResolver, create_public_network_transport, resolve_hostname
 from .schemas import (
     EmbedResponse,
     Healthz,
@@ -90,6 +91,7 @@ def create_app(
     *,
     embedder: EmbedderLike | None = None,
     http_transport: httpx.AsyncBaseTransport | None = None,
+    hostname_resolver: HostnameResolver = resolve_hostname,
 ) -> FastAPI:
     settings = settings or settings_from_env()
     gate = ConcurrencyGate(settings.max_concurrency)
@@ -109,7 +111,8 @@ def create_app(
                 return eng
 
             app.state.embedder = await run_in_threadpool(_load)
-        app.state.http_client = httpx.AsyncClient(transport=http_transport)
+        transport = http_transport or create_public_network_transport()
+        app.state.http_client = httpx.AsyncClient(transport=transport, trust_env=False)
         try:
             yield
         finally:
@@ -204,6 +207,7 @@ def create_app(
                         item.url,
                         timeout_s=settings.image_fetch_timeout_s,
                         max_bytes=settings.image_max_bytes,
+                        resolver=hostname_resolver,
                     )
                     for item in req.inputs
                 ),
@@ -333,6 +337,7 @@ def create_app(
                 req.usdz_url,
                 timeout_s=settings.usdz_fetch_timeout_s,
                 max_bytes=settings.usdz_max_bytes,
+                resolver=hostname_resolver,
             )
         except UsdFetchError as err:
             raise HTTPException(status_code=502, detail=f"usdz fetch failed: {err}")
@@ -370,6 +375,7 @@ def create_app(
                 req.image_url,
                 timeout_s=settings.photo_fetch_timeout_s,
                 max_bytes=settings.photo_max_bytes,
+                resolver=hostname_resolver,
             )
         except PhotoFetchError as err:
             raise HTTPException(status_code=502, detail=f"photo fetch failed: {err}")

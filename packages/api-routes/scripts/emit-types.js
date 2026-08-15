@@ -46,23 +46,54 @@ export declare function createQuerySchema(transforms?: any): any;
 export declare const queryTransforms: any;
 export type ValidationSchemas = any;
 export type RouteHandler = any;
-export declare function proxyToBackend(request: any, context: any, config: any): Promise<Response>;
-export declare function createProxyHandler(name: string, baseUrl: string, options?: any): any;
-export type ProxyConfig = any;
-export type ServiceConfig = any;
-export type ErrorMapping = any;
-export type ResponseTransformer = any;
+export interface ServiceConfig {
+  name: string;
+  baseUrl: string;
+  path?: string;
+  fetcher?: typeof fetch;
+}
+export interface ErrorMapping {
+  [statusCode: number]: { code: string; message: string };
+}
+export interface ResponseTransformer {
+  transform: (data: unknown, response: Response) => unknown;
+}
+export interface BaseProxyConfig {
+  service: ServiceConfig;
+  retry?: any;
+  timeout?: any;
+  forwardHeaders?: string[];
+  errorMapping?: ErrorMapping;
+  responseTransformer?: ResponseTransformer;
+}
+export type ProxyConfig =
+  | (BaseProxyConfig & { requireAuth?: true; cache?: never })
+  | (BaseProxyConfig & { requireAuth: false; cache?: CacheConfig });
+export type ProxyHandlerOptions = Omit<BaseProxyConfig, 'service'> &
+  { service?: Partial<ServiceConfig> } &
+  ({ requireAuth?: true; cache?: never } | { requireAuth: false; cache?: CacheConfig });
+export declare function proxyToBackend(request: any, context: any, config: ProxyConfig): Promise<Response>;
+export declare function createProxyHandler(name: string, baseUrl: string, options?: ProxyHandlerOptions): any;
 
 // Response wrappers (src/utils/response-wrapper.ts)
-export declare function apiSuccess(data: any, message?: any, options?: any): Response;
+export interface CacheConfig {
+  visibility: 'public';
+  reviewedPublic: true;
+  ttl: number;
+  swr?: number;
+}
+export interface ApiResponseOptions {
+  status?: number;
+  headers?: Record<string, string>;
+  cache?: CacheConfig;
+}
+export declare function apiSuccess<T>(data: T, meta?: Record<string, unknown>, options?: ApiResponseOptions): Response;
 export declare function apiError(error: any, status?: number): Response;
 export declare function apiValidationError(errors: any, message?: string): Response;
 export declare function apiUnauthorized(message?: string): Response;
 export declare function apiForbidden(message?: string): Response;
 export declare function apiNotFound(message?: string): Response;
 export declare function apiRateLimitExceeded(message?: string, retryAfter?: number): Response;
-export type CacheConfig = any;
-export type ApiResponseOptions = any;
 
 // Error handling (src/utils/error-transformer.ts)
 export declare function transformError(error: unknown): any;

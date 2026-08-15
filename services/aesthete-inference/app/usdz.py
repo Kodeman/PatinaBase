@@ -29,6 +29,8 @@ from functools import lru_cache
 
 import httpx
 
+from .safe_fetch import HostnameResolver, SafeFetchError, fetch_public_bytes, resolve_hostname
+
 
 class UsdFetchError(Exception):
     """Upstream USDZ fetch failed (bad URL / HTTP status / timeout / size) → 502."""
@@ -61,44 +63,31 @@ async def fetch_usdz(
     *,
     timeout_s: float,
     max_bytes: int,
+    resolver: HostnameResolver = resolve_hostname,
 ) -> bytes:
     """Stream a USDZ from a (signed) URL with a hard size cap.
 
-    No content-type gate — USDZ is served as anything from ``model/vnd.usdz+zip``
-    to ``application/octet-stream``; ``Usd.Stage.Open`` is the real arbiter.
-    Any fetch-side failure raises :class:`UsdFetchError` (the route maps it to 502).
+    Known USDZ, ZIP, and generic binary content types are accepted; unrelated
+    types are rejected before the body is read. Any fetch-side failure raises
+    :class:`UsdFetchError` (the route maps it to 502).
     """
-    if not url.lower().startswith(("http://", "https://")):
-        raise UsdFetchError("url must be http(s)")
-
     try:
-        async with client.stream(
-            "GET", url, timeout=timeout_s, follow_redirects=True
-        ) as resp:
-            if resp.status_code != 200:
-                raise UsdFetchError(f"fetch failed: HTTP {resp.status_code}")
-
-            declared = resp.headers.get("content-length")
-            if declared is not None and declared.isdigit() and int(declared) > max_bytes:
-                raise UsdFetchError(
-                    f"content-length {declared} exceeds limit of {max_bytes} bytes"
-                )
-
-            buf = bytearray()
-            async for chunk in resp.aiter_bytes():
-                buf.extend(chunk)
-                if len(buf) > max_bytes:
-                    raise UsdFetchError(f"body exceeds limit of {max_bytes} bytes")
-    except UsdFetchError:
-        raise
-    except httpx.TimeoutException:
-        raise UsdFetchError(f"fetch timed out after {timeout_s:g}s") from None
-    except httpx.HTTPError as exc:
-        raise UsdFetchError(f"fetch failed: {exc.__class__.__name__}") from None
-
-    if not buf:
-        raise UsdFetchError("empty response body")
-    return bytes(buf)
+        return await fetch_public_bytes(
+            client,
+            url,
+            timeout_s=timeout_s,
+            max_bytes=max_bytes,
+            allowed_content_types={
+                "application/octet-stream",
+                "application/usd",
+                "application/zip",
+                "model/vnd.usd+zip",
+                "model/vnd.usdz+zip",
+            },
+            resolver=resolver,
+        )
+    except SafeFetchError as exc:
+        raise UsdFetchError(str(exc)) from None
 
 
 def _triangulate(counts: list[int], indices: list[int]) -> list[int]:

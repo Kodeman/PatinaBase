@@ -5,14 +5,13 @@ import { transformError, getErrorStatus } from './error-transformer';
  * Cache control configuration for responses
  */
 export interface CacheConfig {
+  /** Public caching requires an explicit security-review acknowledgement. */
+  visibility: 'public';
+  reviewedPublic: true;
   /** Cache TTL in seconds */
-  ttl?: number;
+  ttl: number;
   /** Stale-while-revalidate window in seconds */
   swr?: number;
-  /** Whether the cache is public or private */
-  visibility?: 'public' | 'private';
-  /** Disable caching entirely */
-  noCache?: boolean;
 }
 
 /**
@@ -223,31 +222,22 @@ export function apiRateLimitExceeded(
  * Generate Cache-Control headers based on cache configuration
  */
 function getCacheHeaders(cache?: CacheConfig): Record<string, string> {
-  if (!cache) {
-    return {};
-  }
-
-  if (cache.noCache) {
+  if (
+    !cache ||
+    cache.visibility !== 'public' ||
+    cache.reviewedPublic !== true ||
+    !Number.isInteger(cache.ttl) ||
+    cache.ttl < 0 ||
+    (cache.swr !== undefined &&
+      (!Number.isInteger(cache.swr) || cache.swr < 0))
+  ) {
     return {
-      'Cache-Control': 'no-store, no-cache, must-revalidate',
+      'Cache-Control': 'private, no-store',
     };
   }
 
-  const parts: string[] = [];
+  const parts = ['public', `max-age=${cache.ttl}`];
 
-  // Visibility
-  parts.push(cache.visibility || 'public');
-
-  // Max age / s-maxage
-  if (cache.ttl !== undefined) {
-    if (cache.visibility === 'private') {
-      parts.push(`max-age=${cache.ttl}`);
-    } else {
-      parts.push(`s-maxage=${cache.ttl}`);
-    }
-  }
-
-  // Stale-while-revalidate
   if (cache.swr !== undefined) {
     parts.push(`stale-while-revalidate=${cache.swr}`);
   }
