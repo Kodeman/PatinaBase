@@ -90,6 +90,8 @@ BEGIN
 END;
 $$;
 
+GRANT EXECUTE ON FUNCTION pg_temp.reset_user_role() TO authenticated;
+
 -- ═══════════════════════════════════════════════════════════════════════════
 -- ACLs, helper contracts, and groups 12a / 1 / 2 / 3
 -- ═══════════════════════════════════════════════════════════════════════════

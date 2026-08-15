@@ -9,8 +9,8 @@
 #   scripts/aesthete-gate.sh <tier> [--no-reset]
 #
 # Tiers:
-#   db      `supabase db reset` + every supabase/tests/aesthete/*.sql via
-#           docker exec psql (ON_ERROR_STOP). --no-reset runs suites without
+#   db      `supabase db reset` + every supabase/tests/aesthete/*.sql via the
+#           same-session SQL-test runner. --no-reset runs suites without
 #           resetting (worktree agents: the wave's migration owner owns resets).
 #   edge    `deno test` over each supabase/functions/aesthete-*/ that has tests,
 #           plus supabase/functions/_shared/ (G3 decision #3: the shared-helper
@@ -89,7 +89,8 @@ gate_db() {
   for f in "${suites[@]}"; do
     total=$((total + 1))
     bold "▶ suite: ${f#"$ROOT"/}"
-    if ! docker exec -i "$DB_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < "$f"; then
+    if ! SUPABASE_SQL_TEST_BACKEND=docker \
+      "$ROOT/scripts/run-supabase-sql-test.sh" "$f"; then
       printf '\033[31m  suite failed: %s\033[0m\n' "${f#"$ROOT"/}" >&2
       failed=$((failed + 1))
     fi

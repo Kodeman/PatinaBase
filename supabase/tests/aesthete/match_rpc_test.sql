@@ -61,6 +61,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+GRANT EXECUTE ON FUNCTION pg_temp.reset_role() TO anon, authenticated;
+
 -- ─── fixtures: a controlled 'bench' category ────────────────────────────────
 -- Client profile (below) comes out of the §7.2 loadings math as:
 --   warmth .74 · complexity −.50 · formality −.26 · timelessness .53 ·

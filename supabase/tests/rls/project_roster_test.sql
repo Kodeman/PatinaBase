@@ -90,6 +90,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+GRANT EXECUTE ON FUNCTION pg_temp.reset_role() TO authenticated;
+
 -- ─── (a) party_kind CHECK admits the 4 new roster kinds, rejects bogus ──────
 DO $$
 DECLARE

@@ -76,6 +76,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+GRANT EXECUTE ON FUNCTION pg_temp.reset_role() TO authenticated, service_role;
+
 -- Realistic payload: 2 walls + 1 window (child of wall A) + 1 detected object.
 -- wall_ref on the window carries wall A's apple_id → must resolve to its row id.
 CREATE TEMP TABLE geo_payload (k text PRIMARY KEY, v jsonb) ON COMMIT DROP;

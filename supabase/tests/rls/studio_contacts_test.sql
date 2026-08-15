@@ -77,6 +77,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+GRANT EXECUTE ON FUNCTION pg_temp.reset_role() TO authenticated;
+
 -- ─── (1) member CRUD on live cards ─────────────────────────────────────────
 DO $$
 DECLARE

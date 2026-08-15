@@ -121,6 +121,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+GRANT EXECUTE ON FUNCTION pg_temp.reset_role() TO anon, authenticated;
+
 -- ─── assertions ────────────────────────────────────────────────────────────
 
 DO $$

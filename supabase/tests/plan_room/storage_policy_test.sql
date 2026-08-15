@@ -80,6 +80,8 @@ BEGIN
 END;
 $$;
 
+GRANT EXECUTE ON FUNCTION pg_temp.reset_user_role() TO authenticated;
+
 DO $$
 DECLARE
   v_project  uuid := '6c000000-0000-4000-8000-000000000101';

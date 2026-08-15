@@ -79,6 +79,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+GRANT EXECUTE ON FUNCTION pg_temp.reset_role() TO authenticated, service_role;
+
 -- Scan (a): will carry an open lead, then graduate to a relationship.
 INSERT INTO room_scans (id, user_id, name, status, room_type, floor_area)
 VALUES ('9d000000-0000-4000-8000-0000000000a1',
