@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { RegionHead, type RegionLedgerEntry } from '../region/region-head';
 import { useRegionFold } from '../region/use-region-fold';
+import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
 import { FoldSeam, focusRegionHeading } from '../region/fold-seam';
 import { RegionRule } from '../region/region-rule';
 import {
@@ -536,6 +537,14 @@ export function ProjectApprovalDocument({
     defaultFolded,
   });
   const unfoldFocusRef = useRef(false);
+  const foldSetFolded = fold.setFolded;
+
+  // The running index jumps to readable content, never to a seam.
+  const openApprovalsRegion = useCallback(
+    () => foldSetFolded(false),
+    [foldSetFolded],
+  );
+  useRegionUnfoldRequest('approvals', openApprovalsRegion);
 
   useEffect(() => {
     if (!fold.folded && unfoldFocusRef.current) {
@@ -553,7 +562,7 @@ export function ProjectApprovalDocument({
         ? 'no approvals authored'
         : `${approvals.length} approval${approvals.length === 1 ? '' : 's'} authored`;
     return (
-      <>
+      <div data-index-region="approvals">
         <RegionRule />
         <FoldSeam
           headingId="project-approvals-title"
@@ -567,13 +576,14 @@ export function ProjectApprovalDocument({
           surfaceKey="open-document"
           regionKey="approvals-head"
         />
-      </>
+      </div>
     );
   }
 
   return (
     <section
       aria-labelledby="project-approvals-title"
+      data-index-region="approvals"
       data-project-approval-document
       className="mt-6 min-w-0 border-y border-[var(--border-subtle)] py-6"
     >

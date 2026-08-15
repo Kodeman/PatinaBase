@@ -87,6 +87,7 @@ import { RegionHead, type RegionLedgerEntry } from '../region/region-head';
 import { useRegionFold, type RegionFold } from '../region/use-region-fold';
 import { FoldSeam, focusRegionHeading } from '../region/fold-seam';
 import { RegionRule } from '../region/region-rule';
+import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
 import { DocSheet } from '../overlays/doc-sheet';
 import { OpenItemSheet } from '../coordination/open-item-sheet';
 import {
@@ -847,6 +848,12 @@ export function ScheduleSpine({
     scheduleFold.setFolded(false);
   };
 
+  // The running index jumps to readable content, never to a seam.
+  const openScheduleRegion = useCallback(() => {
+    scheduleFoldRef.current.setFolded(false);
+  }, []);
+  useRegionUnfoldRequest('schedule', openScheduleRegion);
+
   const scheduleBody = (
     <>
       {!loading && (
@@ -1047,6 +1054,7 @@ export function ScheduleSpine({
   return (
     <section
       id="document-decision-controls"
+      data-index-region="schedule"
       tabIndex={-1}
       aria-label="Project schedule"
       className="mt-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"

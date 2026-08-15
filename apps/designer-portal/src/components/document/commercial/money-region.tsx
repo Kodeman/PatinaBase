@@ -26,7 +26,7 @@
  * region head now carries it.
  */
 
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useAccountPage } from '@/hooks/use-account-page';
 import {
   useProjectBillingAuthority,
@@ -43,6 +43,7 @@ import { FoldSeam, focusRegionHeading } from '../region/fold-seam';
 import { RegionHead, type RegionLedgerEntry } from '../region/region-head';
 import { RegionRule } from '../region/region-rule';
 import { useRegionFold } from '../region/use-region-fold';
+import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
 import { ProjectAuthorityBandForProject } from './project-authority-band';
 import { ProjectCommerceSection } from './project-commerce-section';
 
@@ -194,6 +195,10 @@ export function MoneyRegion({
     defaultFolded,
   });
 
+  // The running index jumps to readable content, never to a seam.
+  const openMoneyRegion = useCallback(() => setFolded(false), [setFolded]);
+  useRegionUnfoldRequest('money', openMoneyRegion);
+
   // FoldSeam only calls onUnfold; it unmounts on the caller's re-render and so
   // cannot move focus itself. Land focus on the heading once the body (and its
   // heading) is actually on the page.
@@ -244,7 +249,7 @@ export function MoneyRegion({
 
   if (folded) {
     return (
-      <section aria-label="Money" className="mb-5">
+      <section aria-label="Money" data-index-region="money" className="mb-5">
         <RegionRule />
         <FoldSeam
           headingId={HEADING_ID}
@@ -260,7 +265,7 @@ export function MoneyRegion({
   }
 
   return (
-    <section aria-label="Money" className="mb-5">
+    <section aria-label="Money" data-index-region="money" className="mb-5">
       <RegionRule />
       <RegionHead
         headingId={HEADING_ID}

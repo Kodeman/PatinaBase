@@ -24,7 +24,11 @@ import { documentEvents } from '@/lib/analytics/document-events';
 
 export type RegionFoldKey =
   | 'approvals'
+  // The ledger (ScheduleSpine, inside the Project section) and the drafting
+  // strip (ScheduleRule, top of the paper) are BOTH mounted on a project
+  // document and fold independently — so they cannot share one storage key.
   | 'schedule'
+  | 'schedule-rule'
   | 'ffe'
   | 'money'
   | 'boards'
