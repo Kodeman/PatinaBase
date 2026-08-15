@@ -79,10 +79,9 @@ import { snapshotToResolverInputs, baselineGhostDiff } from '@/lib/document/sche
 import { scheduleEvents } from '@/lib/analytics/schedule-events';
 import { useScheduleNav } from './schedule-nav-context';
 import { useRippleSession } from './schedule-ripple-context';
-import { RuleTrack } from './rule-track';
 import { RuleDiamond } from './rule-diamond';
-import { RuleToday } from './rule-today';
 import { RuleBoundaryHandle } from './rule-boundary-handle';
+import { ScheduleGlanceStrip } from './schedule-glance-strip';
 import { DraftingStrip } from './drafting-strip';
 import { RulePhaseBar, barOwnsSession, type BarEditState } from './rule-phase-bar';
 import { useArmedBarFocus } from './use-armed-bar-focus';
@@ -93,10 +92,6 @@ export interface ScheduleRuleProps {
   /** row.title — the inline title shown beside the line when pinned. */
   projectTitle: string;
 }
-
-/** The pinned glance's height — the prototype's `.pin-rule` fold. The strip
- *  below it is ordinary in-flow content, so this is the ONLY reserved band. */
-const PIN_BAND_H = 22;
 
 export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
   const schedule = useResolvedSchedule(projectId);
@@ -485,6 +480,9 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
       {/* THE EDITOR — the drafting strip, ordinary in-flow content. One lane per
           phase over month/week graph paper; this is where dates are adjusted. */}
       <div ref={setStripEl}>
+        <p className="mb-2 font-mono text-[0.56rem] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]">
+          Frame · Phase dates
+        </p>
         <DraftingStrip
           layout={laneLayout}
           bars={bars}
@@ -548,8 +546,13 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
             <span className="whitespace-nowrap font-heading text-[0.95rem] text-[var(--color-charcoal)]">
               {projectTitle}
             </span>
-            <div ref={trackRef} className="relative flex-1" style={{ height: PIN_BAND_H }}>
-              <RuleTrack segments={segments} pinned todayXPct={todayX} />
+            <ScheduleGlanceStrip
+              segments={segments}
+              todayXPct={todayX}
+              today={today}
+              trackRef={trackRef}
+              className="flex-1"
+            >
               {diamonds.map((d) => {
                 const pe = phaseEndEpochById.get(d.phaseId) ?? null;
                 return (
@@ -584,9 +587,8 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
                     onDragFrame={(x) => frameBoundary(b, x)}
                   />
                 ))}
-              {todayX != null && <RuleToday xPct={todayX} today={today} pinned />}
               {ripple.diff && <RuleGhostLayer diff={ripple.diff} scale={scale} pinned />}
-            </div>
+            </ScheduleGlanceStrip>
           </div>
         )}
       </section>
