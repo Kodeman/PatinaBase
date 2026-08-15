@@ -1,8 +1,6 @@
 -- Client-decision option numeric integrity regression (00402)
 -- Run:
---   psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
---     -v ON_ERROR_STOP=1 \
---     -f supabase/tests/document/client_decision_option_numeric_integrity_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/document/client_decision_option_numeric_integrity_test.sql
 
 BEGIN;
 

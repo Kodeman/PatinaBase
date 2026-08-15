@@ -24,8 +24,7 @@
 --      none.
 --
 -- How to run:
---   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
---     -f supabase/tests/rooms/room_scan_documents_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/rooms/room_scan_documents_test.sql
 --   ($SUPABASE_DB_URL local default: postgresql://postgres:postgres@127.0.0.1:54322/postgres)
 --
 -- Transaction-wrapped + ROLLBACK — rerunnable, no side effects.

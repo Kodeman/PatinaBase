@@ -1,7 +1,6 @@
 -- create_client_scope_change_request authority/closure regression (00395)
 -- Run after 00394 + 00395 land:
---   psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
---     -v ON_ERROR_STOP=1 -f supabase/tests/document/client_scope_change_request_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/document/client_scope_change_request_test.sql
 
 BEGIN;
 

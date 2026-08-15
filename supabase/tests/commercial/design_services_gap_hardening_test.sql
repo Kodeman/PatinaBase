@@ -1,8 +1,7 @@
 -- 00414 design-services rail completion (gap hardening) integration test.
--- Runner: plain psql, ON_ERROR_STOP=1. The transaction rolls back.
+-- Runner: same-session SQL-test helper. The transaction rolls back.
 -- Run:
---   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
---     -v ON_ERROR_STOP=1 -f supabase/tests/commercial/design_services_gap_hardening_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/commercial/design_services_gap_hardening_test.sql
 --
 -- What this suite is for: 00412 stood the commercial rail up beside the legacy
 -- proposal lifecycle. 00414 closes the seams it left — where a legacy project

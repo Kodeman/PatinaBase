@@ -39,8 +39,7 @@
 -- Run after `supabase db reset` so seeds are present.
 --
 -- How to run:
---   docker exec -i supabase_db_supabase psql -U postgres -d postgres \
---     -v ON_ERROR_STOP=1 < supabase/tests/aesthete/house_portfolio_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/aesthete/house_portfolio_test.sql
 -- ═══════════════════════════════════════════════════════════════════════════
 
 BEGIN;

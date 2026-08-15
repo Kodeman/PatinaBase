@@ -28,8 +28,7 @@
 -- Run after `supabase db reset` so seeds are present.
 --
 -- How to run:
---   docker exec -i supabase_db_supabase psql -U postgres -d postgres \
---     -v ON_ERROR_STOP=1 < supabase/tests/aesthete/taste_foundation_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/aesthete/taste_foundation_test.sql
 --
 -- The script wraps everything in a single transaction and ROLLBACKs at the
 -- end so it can be re-run without side effects. Identity switching uses the

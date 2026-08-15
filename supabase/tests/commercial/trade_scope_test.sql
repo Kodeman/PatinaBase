@@ -1,8 +1,7 @@
 -- 00423 Trade Scope integration test.
--- Runner: plain psql, ON_ERROR_STOP=1. The transaction rolls back.
+-- Runner: same-session SQL-test helper. The transaction rolls back.
 -- Run:
---   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
---     -v ON_ERROR_STOP=1 -f supabase/tests/commercial/trade_scope_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/commercial/trade_scope_test.sql
 --
 -- What this suite is for: a trade scope is the third instrument on the
 -- commercial rail, and the first one whose money is billed on a SCHEDULE rather

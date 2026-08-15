@@ -1,7 +1,6 @@
 -- Journey authority / decision atomicity regression (00399)
 -- Run:
---   psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
---     -v ON_ERROR_STOP=1 -f supabase/tests/document/journey_authority_integrity_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/document/journey_authority_integrity_test.sql
 
 CREATE EXTENSION IF NOT EXISTS dblink WITH SCHEMA extensions;
 

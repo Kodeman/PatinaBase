@@ -25,8 +25,7 @@
 --      NULL inserts no homeowner notification (keeps 00288 reconciles silent).
 --
 -- How to run:
---   docker exec -i supabase_db_supabase psql -U postgres -d postgres \
---     -v ON_ERROR_STOP=1 < supabase/tests/rls/design_requests_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/rls/design_requests_test.sql
 --
 -- Transaction-wrapped + ROLLBACK — rerunnable, no side effects.
 -- ═══════════════════════════════════════════════════════════════════════════

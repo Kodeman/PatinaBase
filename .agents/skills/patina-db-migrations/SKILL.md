@@ -44,8 +44,8 @@ supabase migration up          # incremental, stack already up
 pnpm db:generate               # supabase gen types typescript --db-url "$SUPABASE_DB_URL" > packages/supabase/src/database.types.ts
 git diff --exit-code packages/supabase/src/database.types.ts   # expect: no output (in sync)
 
-# SQL tests (LOCAL_DB_URL / SUPABASE_DB_URL = local default postgresql://postgres:postgres@127.0.0.1:54322/postgres)
-psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/procurement/state_chain_test.sql
+# SQL tests (SUPABASE_DB_URL is optional; the runner defaults to the local stack)
+scripts/run-supabase-sql-test.sh supabase/tests/procurement/state_chain_test.sql
 # also: procurement/dual_pricing_test.sql, procurement/crons_test.sql, rls/products_three_layer_test.sql,
 #       and the aesthete/*.sql suite under supabase/tests/aesthete/
 

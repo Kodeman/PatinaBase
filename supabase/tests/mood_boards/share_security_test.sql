@@ -1,8 +1,6 @@
 -- Mood-board storage + third-target share regressions (00406)
 -- Run after a fresh reset:
---   psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
---     -v ON_ERROR_STOP=1 \
---     -f supabase/tests/mood_boards/share_security_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/mood_boards/share_security_test.sql
 
 BEGIN;
 

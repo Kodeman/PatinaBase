@@ -688,11 +688,11 @@ run against that reset database and all passed.
 ### 8.1 Contract test inventory
 
 These are the wave1 contract tests, renumbered alongside their migrations. Run each
-against the freshly reset local stack with `ON_ERROR_STOP=1`; a clean run ends in
-`ROLLBACK` with no raised assertion.
+against the freshly reset local stack through the same-session SQL-test runner; a
+clean run ends in `ROLLBACK` with no raised assertion.
 
 ```bash
-psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' -v ON_ERROR_STOP=1 -f <file>
+scripts/run-supabase-sql-test.sh <file>
 ```
 
 | Migration | Test file |

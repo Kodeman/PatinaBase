@@ -2,9 +2,7 @@
 -- Integration prerequisite: 00399 journey authority includes
 -- reassign_project_lead(uuid,uuid,uuid).
 -- Run:
---   psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
---     -v ON_ERROR_STOP=1 \
---     -f supabase/tests/proposals/proposal_signature_authority_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/proposals/proposal_signature_authority_test.sql
 
 BEGIN;
 

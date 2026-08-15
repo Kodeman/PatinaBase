@@ -23,8 +23,7 @@
 --      the live-phase unique rather than stacking, and the ratchet holds it.
 --
 -- How to run:
---   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
---     -f supabase/tests/schedule/install_window_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/schedule/install_window_test.sql
 --
 -- Single transaction, ROLLBACK at the end — re-runnable with no side effects.
 -- Runs as superuser except where a case explicitly assumes a role.

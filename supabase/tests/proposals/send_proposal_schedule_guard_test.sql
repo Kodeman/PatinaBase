@@ -1,7 +1,6 @@
 -- send_proposal payment + reviewed-copy authority regression (00384, 00387)
 -- Run:
---   psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
---     -v ON_ERROR_STOP=1 -f supabase/tests/proposals/send_proposal_schedule_guard_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/proposals/send_proposal_schedule_guard_test.sql
 
 BEGIN;
 

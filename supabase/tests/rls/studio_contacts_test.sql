@@ -18,8 +18,7 @@
 --      EXISTING 00021 org UPDATE policy, and not by a plain member.
 --
 -- How to run:
---   docker exec -i supabase_db_supabase psql -U postgres -d postgres \
---     -v ON_ERROR_STOP=1 < supabase/tests/rls/studio_contacts_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/rls/studio_contacts_test.sql
 --
 -- Transaction-wrapped + ROLLBACK — rerunnable, no side effects.
 -- ═══════════════════════════════════════════════════════════════════════════

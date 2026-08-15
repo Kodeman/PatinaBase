@@ -1,7 +1,6 @@
 -- proposal builder atomic RPC regression (00389)
 -- Run:
---   psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
---     -v ON_ERROR_STOP=1 -f supabase/tests/proposals/proposal_builder_atomicity_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/proposals/proposal_builder_atomicity_test.sql
 
 BEGIN;
 

@@ -15,8 +15,7 @@
 --      designer-only token table.
 --
 -- How to run:
---   docker exec -i supabase_db_supabase psql -U postgres -d postgres \
---     -v ON_ERROR_STOP=1 < supabase/tests/field/field_links_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/field/field_links_test.sql
 --
 -- Transaction-wrapped + ROLLBACK. The RPCs are SECURITY DEFINER and resolve the
 -- caller via auth.uid() = request.jwt.claims->>'sub'.

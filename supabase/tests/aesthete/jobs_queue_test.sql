@@ -20,8 +20,7 @@
 --   8. Both pg_cron drains are registered against the right edge functions.
 --
 -- How to run:
---   docker exec -i supabase_db_supabase psql -U postgres -d postgres \
---     -v ON_ERROR_STOP=1 < supabase/tests/aesthete/jobs_queue_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/aesthete/jobs_queue_test.sql
 --
 -- The script wraps everything in a single transaction and ROLLBACKs at the
 -- end so it can be re-run without side effects (including the mid-test

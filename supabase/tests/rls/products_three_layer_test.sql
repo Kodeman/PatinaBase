@@ -9,8 +9,7 @@
 --   5. Catalog UPDATE: only super_admin.
 --
 -- How to run:
---   docker exec -i supabase_db_supabase psql -U postgres -d postgres \
---     < supabase/tests/rls/products_three_layer_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/rls/products_three_layer_test.sql
 --
 -- The script:
 --   • Wraps everything in a single transaction and ROLLBACKs at the end so it
