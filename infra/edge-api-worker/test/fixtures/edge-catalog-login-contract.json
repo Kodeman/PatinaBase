@@ -1,7 +1,7 @@
 {
   "loginRole": "edge_catalog_login",
   "inheritedRoles": ["edge_catalog_reader"],
-  "allowedRelations": ["public.edge_catalog_products"],
+  "allowedRelations": ["edge_api.catalog_products"],
   "forbiddenRelations": ["public.products"],
   "queryRoleChanges": false
 }

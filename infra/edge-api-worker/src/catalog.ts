@@ -13,7 +13,7 @@ export const LEGACY_CATALOG_MAX_BYTES = 1_048_576;
 
 export const CATALOG_SELECT_SQL = `SELECT id::text, name, brand, category, price_retail, images,
                 short_description, patina_managed, status
-           FROM public.edge_catalog_products
+           FROM edge_api.catalog_products
           WHERE id = ANY($1::uuid[])
           ORDER BY id`;
 

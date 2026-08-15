@@ -150,7 +150,7 @@ describe('catalog sources', () => {
       'postgres://edge_catalog_login@public-cache',
     );
     expect(query.mock.calls[0][0]).toContain(
-      'FROM public.edge_catalog_products',
+      'FROM edge_api.catalog_products',
     );
     expect(query.mock.calls[0][0]).toContain('id = ANY($1::uuid[])');
     expect(query.mock.calls[0][0]).not.toContain(A);
@@ -164,11 +164,11 @@ describe('catalog sources', () => {
     expect(loginContract).toEqual({
       loginRole: 'edge_catalog_login',
       inheritedRoles: ['edge_catalog_reader'],
-      allowedRelations: ['public.edge_catalog_products'],
+      allowedRelations: ['edge_api.catalog_products'],
       forbiddenRelations: ['public.products'],
       queryRoleChanges: false,
     });
-    expect(CATALOG_SELECT_SQL).toContain('FROM public.edge_catalog_products');
+    expect(CATALOG_SELECT_SQL).toContain('FROM edge_api.catalog_products');
     expect(CATALOG_SELECT_SQL).not.toMatch(/public\.products|set\s+(local\s+)?role/i);
     expect(CATALOG_SELECT_SQL).toContain('ANY($1::uuid[])');
   });
