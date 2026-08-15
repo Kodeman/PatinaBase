@@ -69,9 +69,9 @@ router. They are not public fallbacks.
 
 The reviewed public surface is deliberately small:
 
-- orders health routes;
-- orders Stripe webhook, only after Stripe verifies the signature against the
-  exact raw request body;
+- orders `GET /v1/health`;
+- orders `POST /v1/webhooks/stripe`, only after Stripe verifies the signature
+  against the exact raw request body;
 - projects `/v1/health`, `/v1/healthz`, and `/v1/ready`;
 - media `/health`, registered directly as a minimal adapter health response;
 - media `POST /v1/media/jobs/complete`, only after verification of a current
