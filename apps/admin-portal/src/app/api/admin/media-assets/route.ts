@@ -3,6 +3,12 @@ import { createServerClient } from '@patina/supabase/server';
 import { getAuthenticatedAdmin, serverError } from '@/lib/supabase-admin';
 
 const MEDIA_URL = process.env.MEDIA_SERVICE_URL || 'http://localhost:3014';
+const PRIVATE_NO_STORE = 'private, no-store';
+
+function privateNoStore<T extends Response>(response: T): T {
+  response.headers.set('Cache-Control', PRIVATE_NO_STORE);
+  return response;
+}
 
 // GET /api/admin/media-assets — proxies to media service /v1/media/search.
 // The browser session is cookie-based (Supabase SSR); we extract the user's
@@ -11,7 +17,7 @@ const MEDIA_URL = process.env.MEDIA_SERVICE_URL || 'http://localhost:3014';
 // media.asset.read on the searchAssets controller.
 export async function GET(request: NextRequest) {
   const auth = await getAuthenticatedAdmin(request);
-  if ('error' in auth) return auth.error;
+  if ('error' in auth && auth.error) return privateNoStore(auth.error);
 
   const supabase = await createServerClient();
   const {
@@ -19,9 +25,11 @@ export async function GET(request: NextRequest) {
   } = await supabase.auth.getSession();
 
   if (!session?.access_token) {
-    return NextResponse.json(
-      { error: 'No session access token; sign in again.' },
-      { status: 401 },
+    return privateNoStore(
+      NextResponse.json(
+        { error: 'No session access token; sign in again.' },
+        { status: 401 },
+      ),
     );
   }
 
@@ -43,14 +51,17 @@ export async function GET(request: NextRequest) {
     });
 
     const body = await res.text();
-    return new NextResponse(body, {
-      status: res.status,
-      headers: {
-        'Content-Type': res.headers.get('content-type') ?? 'application/json',
-        'Cache-Control': 'private, max-age=30',
-      },
-    });
+    return privateNoStore(
+      new NextResponse(body, {
+        status: res.status,
+        headers: {
+          'Content-Type': res.headers.get('content-type') ?? 'application/json',
+        },
+      }),
+    );
   } catch (err) {
-    return serverError((err as Error).message ?? 'Failed to reach media service');
+    return privateNoStore(
+      serverError((err as Error).message ?? 'Failed to reach media service'),
+    );
   }
 }

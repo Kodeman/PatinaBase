@@ -155,6 +155,8 @@ onnxruntime intra-op threads = 2.
 | `ORT_INTRA_OP_THREADS` | `2` | match the cpu limit |
 | `IMAGE_FETCH_TIMEOUT_S` | `10` | per-URL httpx timeout |
 | `IMAGE_MAX_BYTES` | `15728640` (15 MB) | content-length + streamed-body cap |
+| `IMAGE_BATCH_MAX_BYTES` | `67108864` (64 MB) | aggregate streamed-byte cap per image batch |
+| `IMAGE_FETCH_CONCURRENCY` | `4` | maximum concurrent URL fetches per image batch |
 | `TEXT_MAX_TOKENS` | `2048` | tokenizer truncation |
 
 ## Latency (measured)

@@ -12,7 +12,13 @@ import httpx
 from PIL import Image
 
 from .image_safety import DecodedPixelBudget, UnsafeImageError, load_image_bytes
-from .safe_fetch import HostnameResolver, SafeFetchError, fetch_public_bytes, resolve_hostname
+from .safe_fetch import (
+    EncodedByteBudget,
+    HostnameResolver,
+    SafeFetchError,
+    fetch_public_bytes,
+    resolve_hostname,
+)
 
 # Retailer CDNs are sloppy about content types; accept obvious image types and
 # generic byte streams (Pillow decode is the real arbiter), reject clear
@@ -32,6 +38,7 @@ async def fetch_image(
     max_bytes: int,
     max_pixels: int = 16_000_000,
     pixel_budget: DecodedPixelBudget | None = None,
+    byte_budget: EncodedByteBudget | None = None,
     resolver: HostnameResolver = resolve_hostname,
 ) -> Image.Image:
     try:
@@ -42,6 +49,7 @@ async def fetch_image(
             max_bytes=max_bytes,
             allowed_content_types=_ACCEPTABLE_OPAQUE_TYPES,
             allowed_content_prefixes=("image/",),
+            byte_budget=byte_budget,
             resolver=resolver,
         )
     except SafeFetchError as exc:

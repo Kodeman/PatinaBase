@@ -23,7 +23,11 @@ def test_env_overrides_flow_through(monkeypatch):
     monkeypatch.setenv("INFERENCE_TOKEN", "tok")
     monkeypatch.setenv("INFERENCE_MAX_CONCURRENCY", "4")
     monkeypatch.setenv("TEXT_MAX_TOKENS", "512")
+    monkeypatch.setenv("IMAGE_BATCH_MAX_BYTES", "123456")
+    monkeypatch.setenv("IMAGE_FETCH_CONCURRENCY", "2")
     s = settings_from_env()
     assert s.inference_token == "tok"
     assert s.max_concurrency == 4
     assert s.text_max_tokens == 512
+    assert s.image_batch_max_bytes == 123456
+    assert s.image_fetch_concurrency == 2

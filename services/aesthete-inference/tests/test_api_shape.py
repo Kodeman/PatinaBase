@@ -190,6 +190,77 @@ def test_embed_image_enforces_aggregate_decoded_pixel_budget(fake_embedder):
     ]
 
 
+def test_embed_image_enforces_per_request_aggregate_encoded_byte_budget(fake_embedder):
+    from fastapi.testclient import TestClient
+
+    from conftest import make_settings, mock_image_transport, png_bytes, public_test_resolver
+    from app.main import create_app
+
+    encoded_size = len(png_bytes())
+    app = create_app(
+        make_settings(
+            image_batch_max_bytes=encoded_size + encoded_size // 2,
+            image_fetch_concurrency=1,
+        ),
+        embedder=fake_embedder,
+        http_transport=mock_image_transport(),
+        hostname_resolver=public_test_resolver,
+    )
+    with TestClient(app) as c:
+        res = c.post(
+            "/embed/image",
+            json=image_payload("/ok.png", "/ok.png"),
+            headers=AUTH,
+        )
+
+    assert res.status_code == 200
+    assert [vector["id"] for vector in res.json()["vectors"]] == ["i0"]
+    assert res.json()["errors"] == [
+        {"id": "i1", "reason": "image batch exceeds encoded-byte limit"}
+    ]
+
+
+def test_embed_image_bounds_concurrent_url_fetches(fake_embedder, monkeypatch):
+    import asyncio
+
+    from fastapi.testclient import TestClient
+    from PIL import Image
+
+    from conftest import make_settings, mock_image_transport, public_test_resolver
+    from app.main import create_app
+
+    active = 0
+    max_active = 0
+
+    async def controlled_fetch(*_args, **_kwargs):
+        nonlocal active, max_active
+        active += 1
+        max_active = max(max_active, active)
+        try:
+            await asyncio.sleep(0.02)
+            return Image.new("RGB", (10, 10))
+        finally:
+            active -= 1
+
+    monkeypatch.setattr("app.main.fetch_image", controlled_fetch)
+    app = create_app(
+        make_settings(image_fetch_concurrency=2),
+        embedder=fake_embedder,
+        http_transport=mock_image_transport(),
+        hostname_resolver=public_test_resolver,
+    )
+    with TestClient(app) as c:
+        res = c.post(
+            "/embed/image",
+            json=image_payload(*(["/ok.png"] * 6)),
+            headers=AUTH,
+        )
+
+    assert res.status_code == 200
+    assert len(res.json()["vectors"]) == 6
+    assert max_active == 2
+
+
 def test_embed_image_batch_limit(client):
     res = client.post("/embed/image", json=image_payload(*(["/ok.png"] * 17)), headers=AUTH)
     assert res.status_code == 400

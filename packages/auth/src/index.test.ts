@@ -1,6 +1,8 @@
 import 'reflect-metadata';
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { SignJWT, generateKeyPair } from 'jose';
+import { SignJWT, exportJWK, generateKeyPair, type JWK, type KeyLike } from 'jose';
 
 const ORIGINAL_ENV = { ...process.env };
 const SUPABASE_URL = 'https://bkvcixdmuyejfzcijpdg.supabase.co';
@@ -30,6 +32,50 @@ async function signToken(
   if (options.subject !== '') signer.setSubject(options.subject ?? 'user-123');
   if (options.expires !== '') signer.setExpirationTime(options.expires ?? '1h');
   return signer.sign(new TextEncoder().encode(SECRET));
+}
+
+async function startJwksServer(initialKeys: JWK[]) {
+  const server: Server = createServer((_request, response) => {
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({ keys: initialKeys }));
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const address = server.address() as AddressInfo;
+  return {
+    url: `http://127.0.0.1:${address.port}/jwks.json`,
+    async close() {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    },
+  };
+}
+
+async function createEsKey(kid: string) {
+  const { publicKey, privateKey } = await generateKeyPair('ES256');
+  const publicJwk = await exportJWK(publicKey);
+  return {
+    privateKey,
+    publicJwk: { ...publicJwk, alg: 'ES256', kid, use: 'sig' },
+    kid,
+  };
+}
+
+async function signEsToken(
+  key: { privateKey: KeyLike; kid: string },
+  options: { issuer?: string; audience?: string; subject?: string } = {},
+) {
+  return new SignJWT({ role: 'authenticated' })
+    .setProtectedHeader({ alg: 'ES256', kid: key.kid })
+    .setIssuer(options.issuer ?? ISSUER)
+    .setAudience(options.audience ?? 'authenticated')
+    .setSubject(options.subject ?? 'user-es256')
+    .setIssuedAt()
+    .setExpirationTime('1h')
+    .sign(key.privateKey);
 }
 
 describe('verifyJwtToken', () => {
@@ -132,6 +178,87 @@ describe('verifyJwtToken', () => {
     await expect(verifyJwtToken(token)).rejects.toThrow(/SUPABASE_URL/);
   });
 
+  it('accepts a correctly scoped ES256 token from the configured JWKS', async () => {
+    const key = await createEsKey('current');
+    const jwks = await startJwksServer([key.publicJwk]);
+    process.env.SUPABASE_JWKS_URL = jwks.url;
+    try {
+      const token = await signEsToken(key);
+      const { verifyJwtToken } = await import('./index');
+
+      await expect(verifyJwtToken(token)).resolves.toMatchObject({
+        sub: 'user-es256',
+        role: 'authenticated',
+        iss: ISSUER,
+        aud: 'authenticated',
+      });
+    } finally {
+      await jwks.close();
+    }
+  });
+
+  it.each([
+    ['issuer', { issuer: 'https://foreign-project.supabase.co/auth/v1' }],
+    ['audience', { audience: 'service_role' }],
+  ])('rejects an ES256 token with the wrong %s', async (_claim, options) => {
+    const key = await createEsKey('current');
+    const jwks = await startJwksServer([key.publicJwk]);
+    process.env.SUPABASE_JWKS_URL = jwks.url;
+    try {
+      const token = await signEsToken(key, options);
+      const { verifyJwtToken } = await import('./index');
+      await expect(verifyJwtToken(token)).rejects.toThrow();
+    } finally {
+      await jwks.close();
+    }
+  });
+
+  it('rejects an ES256 token whose kid is absent from the configured JWKS', async () => {
+    const trusted = await createEsKey('trusted');
+    const unknown = await createEsKey('unknown');
+    const jwks = await startJwksServer([trusted.publicJwk]);
+    process.env.SUPABASE_JWKS_URL = jwks.url;
+    try {
+      const token = await signEsToken(unknown);
+      const { verifyJwtToken } = await import('./index');
+      await expect(verifyJwtToken(token)).rejects.toThrow();
+    } finally {
+      await jwks.close();
+    }
+  });
+
+  it('rejects algorithm confusion even when the altered token names an approved algorithm', async () => {
+    const key = await createEsKey('current');
+    const token = await signEsToken(key);
+    const [, payload, signature] = token.split('.');
+    const confusedHeader = Buffer.from(JSON.stringify({ alg: 'HS256', kid: key.kid })).toString(
+      'base64url',
+    );
+    const confusedToken = `${confusedHeader}.${payload}.${signature}`;
+    const { verifyJwtToken } = await import('./index');
+
+    await expect(verifyJwtToken(confusedToken)).rejects.toThrow();
+  });
+
+  it('accepts both signing keys during a Supabase JWKS rotation window', async () => {
+    const previous = await createEsKey('previous');
+    const current = await createEsKey('current');
+    const jwks = await startJwksServer([previous.publicJwk, current.publicJwk]);
+    process.env.SUPABASE_JWKS_URL = jwks.url;
+    try {
+      const { verifyJwtToken } = await import('./index');
+      await expect(verifyJwtToken(await signEsToken(previous))).resolves.toMatchObject({
+        sub: 'user-es256',
+      });
+
+      await expect(verifyJwtToken(await signEsToken(current))).resolves.toMatchObject({
+        sub: 'user-es256',
+      });
+    } finally {
+      await jwks.close();
+    }
+  });
+
   it('rejects malformed input', async () => {
     const { verifyJwtToken } = await import('./index');
     await expect(verifyJwtToken('not-a-jwt')).rejects.toThrow(/malformed/i);
@@ -157,7 +284,34 @@ describe('JwtAuthGuard', () => {
     const request = { headers: { authorization: `bEaReR ${token}` } };
 
     await expect(new JwtAuthGuard().canActivate(executionContext(request))).resolves.toBe(true);
+    expect((request as any).user).toMatchObject({
+      id: 'user-123',
+      sub: 'user-123',
+      userId: 'user-123',
+    });
     expect((request as any).user.permissions).toEqual(['projects:read']);
+  });
+
+  it('accepts an ES256 Supabase access token and exposes compatible user ids', async () => {
+    const key = await createEsKey('guard-key');
+    const jwks = await startJwksServer([key.publicJwk]);
+    process.env.SUPABASE_JWKS_URL = jwks.url;
+    try {
+      const { JwtAuthGuard } = await import('./index');
+      const request = {
+        headers: { authorization: `Bearer ${await signEsToken(key)}` },
+      };
+
+      await expect(new JwtAuthGuard().canActivate(executionContext(request))).resolves.toBe(true);
+      expect((request as any).user).toMatchObject({
+        id: 'user-es256',
+        sub: 'user-es256',
+        userId: 'user-es256',
+        role: 'authenticated',
+      });
+    } finally {
+      await jwks.close();
+    }
   });
 });
 
