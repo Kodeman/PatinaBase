@@ -1,5 +1,46 @@
--- Cloudflare Phase 1 database contract conformance (migration 00481).
+-- Cloudflare Phase 1 database contract conformance (migrations 00481 + 00483).
 -- Run with psql -v ON_ERROR_STOP=1 after pnpm supabase:reset.
+
+DO $$
+BEGIN
+  ASSERT NOT EXISTS (
+    SELECT 1
+      FROM pg_default_acl AS defaults
+      JOIN LATERAL aclexplode(defaults.defaclacl) AS acl ON true
+     WHERE pg_get_userbyid(defaults.defaclrole) = 'postgres'
+       AND defaults.defaclnamespace = 0
+       AND defaults.defaclobjtype = 'f'
+       AND acl.grantee = 0
+       AND acl.privilege_type = 'EXECUTE'
+  ), 'seed replay restored global PUBLIC routine EXECUTE';
+
+  ASSERT EXISTS (
+    SELECT 1
+      FROM pg_default_acl AS defaults
+      JOIN LATERAL aclexplode(defaults.defaclacl) AS acl ON true
+     WHERE pg_get_userbyid(defaults.defaclrole) = 'postgres'
+       AND defaults.defaclnamespace = 0
+       AND defaults.defaclobjtype = 'f'
+       AND acl.grantee = defaults.defaclrole
+       AND acl.privilege_type = 'EXECUTE'
+  ), 'postgres global routine defaults lost owner EXECUTE';
+
+  ASSERT NOT EXISTS (
+    SELECT 1
+      FROM pg_default_acl AS defaults
+      JOIN pg_namespace AS n ON n.oid = defaults.defaclnamespace
+      JOIN LATERAL aclexplode(defaults.defaclacl) AS acl ON true
+      JOIN pg_roles AS role ON role.oid = acl.grantee
+     WHERE pg_get_userbyid(defaults.defaclrole) = 'postgres'
+       AND n.nspname = 'public'
+       AND defaults.defaclobjtype = 'r'
+       AND role.rolname = 'authenticated'
+       AND acl.privilege_type IN (
+         'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'
+       )
+  ), 'seed replay dropped the 00438 authenticated table-default revoke';
+END
+$$;
 
 ALTER ROLE edge_catalog_reader
   CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS;
@@ -11,6 +52,7 @@ GRANT edge_catalog_reader TO edge_membership_probe_cf481
   WITH ADMIN FALSE, INHERIT TRUE, SET TRUE;
 
 \ir ../../migrations/00481_edge_catalog_roles.sql
+\ir ../../migrations/00483_edge_public_acl_boundary.sql
 
 DROP ROLE edge_membership_probe_cf481;
 
@@ -86,66 +128,109 @@ BEGIN
   ASSERT NOT EXISTS (
     SELECT 1
       FROM pg_namespace AS n
-     WHERE (
-       has_schema_privilege('edge_rls_user', n.oid, 'USAGE')
-       AND NOT has_schema_privilege('authenticated', n.oid, 'USAGE')
-     ) OR (
-       has_schema_privilege('edge_rls_user', n.oid, 'CREATE')
-       AND NOT has_schema_privilege('authenticated', n.oid, 'CREATE')
-     )
-  ), 'edge_rls_user has a schema privilege broader than authenticated';
+     WHERE n.nspname !~ '^pg_'
+       AND n.nspname <> 'information_schema'
+       AND (
+         has_schema_privilege('edge_rls_user', n.oid, 'USAGE')
+         OR has_schema_privilege('edge_rls_user', n.oid, 'CREATE')
+       )
+  ), 'edge_rls_user must have no application schema capability before SET ROLE';
+
+  ASSERT NOT has_database_privilege(
+    'edge_rls_user', current_database(), 'CREATE'
+  ) AND NOT has_database_privilege(
+    'edge_rls_user', current_database(), 'TEMP'
+  ), 'edge_rls_user must have no database creation capability before SET ROLE';
 
   ASSERT NOT EXISTS (
     SELECT 1
       FROM pg_class AS c
+      JOIN pg_namespace AS n ON n.oid = c.relnamespace
       CROSS JOIN LATERAL (
         VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE'),
-               ('TRUNCATE'), ('REFERENCES'), ('TRIGGER')
+               ('TRUNCATE'), ('REFERENCES'), ('TRIGGER'), ('MAINTAIN')
       ) AS privilege(name)
-     WHERE has_table_privilege('edge_rls_user', c.oid, privilege.name)
-       AND NOT has_table_privilege('authenticated', c.oid, privilege.name)
-  ), 'edge_rls_user has a relation privilege broader than authenticated';
+     WHERE n.nspname !~ '^pg_'
+       AND n.nspname <> 'information_schema'
+       AND has_schema_privilege('edge_rls_user', n.oid, 'USAGE')
+       AND has_table_privilege('edge_rls_user', c.oid, privilege.name)
+  ), 'edge_rls_user must have no effective relation capability before SET ROLE';
 
   ASSERT NOT EXISTS (
     SELECT 1
       FROM pg_class AS c
+      JOIN pg_namespace AS n ON n.oid = c.relnamespace
+      JOIN pg_attribute AS a ON a.attrelid = c.oid
+      CROSS JOIN LATERAL (
+        VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('REFERENCES')
+      ) AS privilege(name)
+     WHERE n.nspname !~ '^pg_'
+       AND n.nspname <> 'information_schema'
+       AND a.attnum > 0
+       AND NOT a.attisdropped
+       AND has_schema_privilege('edge_rls_user', n.oid, 'USAGE')
+       AND has_column_privilege(
+         'edge_rls_user', c.oid, a.attnum, privilege.name
+       )
+  ), 'edge_rls_user must have no effective column capability before SET ROLE';
+
+  ASSERT NOT EXISTS (
+    SELECT 1
+      FROM pg_class AS c
+      JOIN pg_namespace AS n ON n.oid = c.relnamespace
       CROSS JOIN LATERAL (VALUES ('USAGE'), ('SELECT'), ('UPDATE')) AS privilege(name)
      WHERE c.relkind = 'S'
+       AND has_schema_privilege('edge_rls_user', n.oid, 'USAGE')
        AND has_sequence_privilege('edge_rls_user', c.oid, privilege.name)
-       AND NOT has_sequence_privilege('authenticated', c.oid, privilege.name)
-  ), 'edge_rls_user has a sequence privilege broader than authenticated';
+  ), 'edge_rls_user must have no effective sequence capability before SET ROLE';
 
   ASSERT NOT EXISTS (
     SELECT 1
       FROM pg_proc AS p
-     WHERE has_function_privilege('edge_rls_user', p.oid, 'EXECUTE')
-       AND NOT has_function_privilege('authenticated', p.oid, 'EXECUTE')
-  ), 'edge_rls_user has a routine privilege broader than authenticated';
+      JOIN pg_namespace AS n ON n.oid = p.pronamespace
+     WHERE n.nspname !~ '^pg_'
+       AND n.nspname <> 'information_schema'
+       AND has_schema_privilege('edge_rls_user', n.oid, 'USAGE')
+       AND has_function_privilege('edge_rls_user', p.oid, 'EXECUTE')
+  ), 'edge_rls_user must have no callable routine before SET ROLE';
 
   ASSERT has_table_privilege(
-    'edge_catalog_reader', 'public.edge_catalog_products', 'SELECT'
+    'edge_catalog_reader', 'edge_api.catalog_products', 'SELECT'
   ), 'edge_catalog_reader must be able to SELECT the catalog projection';
   ASSERT NOT has_table_privilege('edge_catalog_reader', 'public.products', 'SELECT'),
     'edge_catalog_reader must not SELECT products directly';
   ASSERT NOT has_table_privilege(
-    'edge_catalog_reader', 'public.edge_catalog_products', 'INSERT'
+    'edge_catalog_reader', 'edge_api.catalog_products', 'INSERT'
   ), 'edge_catalog_reader must not INSERT through the catalog projection';
   ASSERT NOT has_table_privilege('edge_rls_user', 'public.products', 'SELECT'),
     'edge_rls_user must have no direct products privilege before SET ROLE';
   ASSERT NOT has_table_privilege(
-    'edge_rls_user', 'public.edge_catalog_products', 'SELECT'
+    'edge_rls_user', 'edge_api.catalog_products', 'SELECT'
   ), 'edge_rls_user must not inherit the public-cache projection';
   ASSERT NOT has_table_privilege(
-    'authenticated', 'public.edge_catalog_products', 'SELECT'
+    'authenticated', 'edge_api.catalog_products', 'SELECT'
   ), 'authenticated must not receive the public-cache projection directly';
-  ASSERT NOT has_table_privilege('anon', 'public.edge_catalog_products', 'SELECT'),
+  ASSERT NOT has_table_privilege('anon', 'edge_api.catalog_products', 'SELECT'),
     'anon must not receive the public-cache projection directly';
+
+  ASSERT NOT EXISTS (
+    SELECT 1
+      FROM pg_namespace AS n
+      JOIN LATERAL aclexplode(
+        COALESCE(n.nspacl, acldefault('n', n.nspowner))
+      ) AS acl ON true
+     WHERE n.nspname = 'public'
+       AND acl.grantee = 0
+       AND acl.privilege_type IN ('CREATE', 'USAGE')
+  ) AND NOT has_schema_privilege('anon', 'public', 'CREATE')
+     AND NOT has_schema_privilege('authenticated', 'public', 'CREATE'),
+    'public schema creation/reachability boundary is not explicit';
 
   SELECT array_agg(column_name ORDER BY ordinal_position)
     INTO actual_columns
     FROM information_schema.columns
-   WHERE table_schema = 'public'
-     AND table_name = 'edge_catalog_products';
+   WHERE table_schema = 'edge_api'
+     AND table_name = 'catalog_products';
 
   ASSERT actual_columns = ARRAY[
     'id', 'name', 'brand', 'category', 'price_retail', 'images',
@@ -155,9 +240,73 @@ BEGIN
   SELECT reloptions
     INTO relation_options
     FROM pg_class
-   WHERE oid = 'public.edge_catalog_products'::regclass;
+   WHERE oid = 'edge_api.catalog_products'::regclass;
   ASSERT 'security_barrier=true' = ANY(relation_options),
-    'edge_catalog_products must be a security-barrier view';
+    'edge_api.catalog_products must be a security-barrier view';
+
+  ASSERT NOT EXISTS (
+    SELECT 1
+      FROM pg_class AS c
+      JOIN pg_namespace AS n ON n.oid = c.relnamespace
+     WHERE n.nspname = 'public'
+       AND c.relname = 'edge_catalog_products'
+  ), 'legacy public.edge_catalog_products must not remain';
+
+  ASSERT (
+    SELECT pg_get_userbyid(c.relowner) = 'postgres'
+      FROM pg_class AS c
+     WHERE c.oid = 'edge_api.catalog_products'::regclass
+  ), 'edge catalog view owner must be postgres';
+
+  ASSERT (
+    WITH actual(grantee, privilege_type, is_grantable) AS (
+      SELECT role.rolname, acl.privilege_type, acl.is_grantable
+        FROM pg_class AS c
+        JOIN LATERAL aclexplode(c.relacl) AS acl ON true
+        JOIN pg_roles AS role ON role.oid = acl.grantee
+       WHERE c.oid = 'edge_api.catalog_products'::regclass
+    ),
+    expected(grantee, privilege_type, is_grantable) AS (
+      VALUES
+        ('postgres'::name, 'DELETE'::text, false),
+        ('postgres'::name, 'INSERT'::text, false),
+        ('postgres'::name, 'MAINTAIN'::text, false),
+        ('postgres'::name, 'REFERENCES'::text, false),
+        ('postgres'::name, 'SELECT'::text, false),
+        ('postgres'::name, 'TRIGGER'::text, false),
+        ('postgres'::name, 'TRUNCATE'::text, false),
+        ('postgres'::name, 'UPDATE'::text, false),
+        ('edge_catalog_reader'::name, 'SELECT'::text, false)
+    )
+    SELECT NOT EXISTS (
+      (SELECT * FROM actual EXCEPT SELECT * FROM expected)
+      UNION ALL
+      (SELECT * FROM expected EXCEPT SELECT * FROM actual)
+    )
+  ), 'edge catalog view ACL differs from the exact allow-list';
+
+  ASSERT (
+    WITH actual(grantee, privilege_type, is_grantable) AS (
+      SELECT role.rolname, acl.privilege_type, acl.is_grantable
+        FROM pg_namespace AS n
+        JOIN LATERAL aclexplode(
+          COALESCE(n.nspacl, acldefault('n', n.nspowner))
+        ) AS acl ON true
+        JOIN pg_roles AS role ON role.oid = acl.grantee
+       WHERE n.nspname = 'edge_api'
+    ),
+    expected(grantee, privilege_type, is_grantable) AS (
+      VALUES
+        ('postgres'::name, 'CREATE'::text, false),
+        ('postgres'::name, 'USAGE'::text, false),
+        ('edge_catalog_reader'::name, 'USAGE'::text, false)
+    )
+    SELECT NOT EXISTS (
+      (SELECT * FROM actual EXCEPT SELECT * FROM expected)
+      UNION ALL
+      (SELECT * FROM expected EXCEPT SELECT * FROM actual)
+    )
+  ), 'edge_api schema ACL differs from owner plus edge reader USAGE';
 
   ASSERT (
     SELECT count(*) = 2
@@ -222,7 +371,7 @@ BEGIN
            'published', bool_and(status = 'published')
          )
     INTO projected
-    FROM public.edge_catalog_products
+    FROM edge_api.catalog_products
    WHERE id::text LIKE 'cf130000-%';
 
   ASSERT projected = jsonb_build_object(
@@ -327,6 +476,13 @@ CREATE ROLE edge_rls_login_cf481
   NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT LOGIN NOREPLICATION NOBYPASSRLS
   PASSWORD :'cf481_login_password';
 
+ALTER ROLE edge_catalog_login_cf481
+  SET search_path TO pg_catalog, edge_api;
+ALTER ROLE edge_catalog_login_cf481
+  SET default_transaction_read_only TO on;
+ALTER ROLE edge_rls_login_cf481
+  SET search_path TO pg_catalog, public, extensions;
+
 GRANT edge_catalog_reader TO edge_catalog_login_cf481
   WITH ADMIN FALSE, INHERIT TRUE, SET FALSE;
 GRANT edge_rls_user TO edge_rls_login_cf481
@@ -345,6 +501,10 @@ BEGIN
        AND NOT rolcreaterole
        AND NOT rolreplication
        AND NOT rolbypassrls
+       AND rolconfig @> ARRAY[
+         'search_path=pg_catalog, edge_api',
+         'default_transaction_read_only=on'
+       ]
   ), 'catalog LOGIN must be INHERIT with no elevated attributes';
 
   ASSERT (
@@ -360,6 +520,13 @@ BEGIN
       JOIN pg_roles AS member ON member.oid = am.member
      WHERE member.rolname = 'edge_catalog_login_cf481'
   ), 'catalog LOGIN must have exactly one inherited, non-SET capability membership';
+
+  ASSERT EXISTS (
+    SELECT 1
+      FROM pg_roles
+     WHERE rolname = 'edge_rls_login_cf481'
+       AND rolconfig @> ARRAY['search_path=pg_catalog, public, extensions']
+  ), 'RLS LOGIN must pin its qualified application/extension search path';
 
   ASSERT (
     SELECT count(*) = 1
@@ -391,13 +558,15 @@ DECLARE
   inherited_select boolean;
   catalog_result jsonb;
   session_role text;
+  login_contract jsonb;
+  forbidden_ddl text;
 BEGIN
   SELECT value
     INTO inherited_select
     FROM extensions.dblink(
       'cf481_catalog',
       $remote$SELECT has_table_privilege(
-        current_user, 'public.edge_catalog_products', 'SELECT'
+        current_user, 'edge_api.catalog_products', 'SELECT'
       )$remote$
     ) AS result(value boolean);
   ASSERT inherited_select,
@@ -413,7 +582,7 @@ BEGIN
           'managed', jsonb_agg(patina_managed ORDER BY id),
           'published', bool_and(status = 'published')
         )
-          FROM public.edge_catalog_products
+          FROM edge_api.catalog_products
          WHERE id::text LIKE 'cf130000-%'
       $remote$
     ) AS result(value jsonb);
@@ -433,6 +602,36 @@ BEGIN
     ) AS result(value text);
   ASSERT session_role = 'edge_catalog_login_cf481',
     'catalog direct SELECT changed the LOGIN role';
+
+  SELECT value
+    INTO login_contract
+    FROM extensions.dblink(
+      'cf481_catalog',
+      $remote$
+        SELECT jsonb_build_object(
+          'connect', has_database_privilege(current_user, current_database(), 'CONNECT'),
+          'create', has_database_privilege(current_user, current_database(), 'CREATE'),
+          'temp', has_database_privilege(current_user, current_database(), 'TEMP'),
+          'read_only', current_setting('default_transaction_read_only'),
+          'search_path', current_setting('search_path')
+        )
+      $remote$
+    ) AS result(value jsonb);
+  ASSERT login_contract = jsonb_build_object(
+    'connect', true,
+    'create', false,
+    'temp', false,
+    'read_only', 'on',
+    'search_path', 'pg_catalog, edge_api'
+  ), 'catalog LOGIN ACL contract or advisory connection settings changed';
+
+  SELECT extensions.dblink_exec(
+    'cf481_catalog',
+    'CREATE TEMP TABLE cf481_forbidden_temp(id integer)',
+    false
+  ) INTO forbidden_ddl;
+  ASSERT forbidden_ddl = 'ERROR',
+    'catalog LOGIN unexpectedly created a temporary table';
 END
 $$;
 
@@ -452,9 +651,44 @@ DECLARE
   first_result jsonb;
   second_result jsonb;
   reset_result jsonb;
+  abuse_result text;
   error_result text;
   error_role text;
 BEGIN
+  PERFORM extensions.dblink_exec('cf481_auth', 'BEGIN');
+  PERFORM extensions.dblink_exec('cf481_auth', 'SET LOCAL ROLE authenticated');
+  PERFORM extensions.dblink_exec(
+    'cf481_auth',
+    $remote$SET LOCAL request.jwt.claims TO
+      '{"sub":"cf100000-0000-4000-8000-000000000001","role":"service_role"}'$remote$
+  );
+  SELECT extensions.dblink_exec(
+    'cf481_auth',
+    $remote$
+      DO $abuse$
+      BEGIN
+        PERFORM public.grant_role_to_user(
+          'cf100000-0000-4000-8000-000000000002',
+          'super_admin',
+          'a0000000-0000-0000-0000-000000000001'
+        );
+      END
+      $abuse$
+    $remote$,
+    false
+  ) INTO abuse_result;
+  ASSERT abuse_result = 'ERROR',
+    'authenticated LOGIN invoked grant_role_to_user with forged service claims';
+  PERFORM extensions.dblink_exec('cf481_auth', 'ROLLBACK');
+
+  ASSERT NOT EXISTS (
+    SELECT 1
+      FROM public.user_roles AS ur
+      JOIN public.roles AS role ON role.id = ur.role_id
+     WHERE ur.user_id = 'cf100000-0000-4000-8000-000000000002'
+       AND role.name = 'super_admin'
+  ), 'real authenticated LOGIN created an elevated role assignment';
+
   PERFORM extensions.dblink_exec('cf481_auth', 'BEGIN');
   PERFORM extensions.dblink_exec('cf481_auth', 'SET LOCAL ROLE authenticated');
   PERFORM extensions.dblink_exec(
@@ -624,14 +858,27 @@ DROP EXTENSION dblink;
 
 DO $$
 DECLARE
+  unexpected_database integer;
   unexpected_schemas integer;
   unexpected_relations integer;
+  unexpected_columns integer;
   unexpected_sequences integer;
-  executable_routines integer;
+  raw_routines integer;
+  raw_application_routines integer;
   callable_routines integer;
   callable_definers integer;
+  effective_types integer;
+  raw_platform_relations integer;
+  raw_platform_sequences integer;
   unsafe_role_grant boolean;
 BEGIN
+  SELECT count(*)
+    INTO unexpected_database
+    FROM (VALUES ('CREATE'), ('TEMP')) AS privilege(name)
+   WHERE has_database_privilege(
+     'edge_catalog_reader', current_database(), privilege.name
+   );
+
   SELECT count(*)
     INTO unexpected_schemas
     FROM pg_namespace AS n
@@ -641,7 +888,7 @@ BEGIN
        has_schema_privilege('edge_catalog_reader', n.oid, 'CREATE')
        OR (
          has_schema_privilege('edge_catalog_reader', n.oid, 'USAGE')
-         AND n.nspname <> 'public'
+         AND n.nspname <> 'edge_api'
        )
      );
 
@@ -651,14 +898,37 @@ BEGIN
     JOIN pg_namespace AS n ON n.oid = c.relnamespace
     CROSS JOIN LATERAL (
       VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE'),
-             ('TRUNCATE'), ('REFERENCES'), ('TRIGGER')
+             ('TRUNCATE'), ('REFERENCES'), ('TRIGGER'), ('MAINTAIN')
     ) AS privilege(name)
    WHERE n.nspname !~ '^pg_'
      AND n.nspname <> 'information_schema'
      AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+     AND has_schema_privilege('edge_catalog_reader', n.oid, 'USAGE')
      AND has_table_privilege('edge_catalog_reader', c.oid, privilege.name)
      AND NOT (
-       c.oid = 'public.edge_catalog_products'::regclass
+       c.oid = 'edge_api.catalog_products'::regclass
+       AND privilege.name = 'SELECT'
+     );
+
+  SELECT count(DISTINCT format('%s:%s', c.oid, a.attnum))
+    INTO unexpected_columns
+    FROM pg_class AS c
+    JOIN pg_namespace AS n ON n.oid = c.relnamespace
+    JOIN pg_attribute AS a ON a.attrelid = c.oid
+    CROSS JOIN LATERAL (
+      VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('REFERENCES')
+    ) AS privilege(name)
+   WHERE n.nspname !~ '^pg_'
+     AND n.nspname <> 'information_schema'
+     AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+     AND a.attnum > 0
+     AND NOT a.attisdropped
+     AND has_schema_privilege('edge_catalog_reader', n.oid, 'USAGE')
+     AND has_column_privilege(
+       'edge_catalog_reader', c.oid, a.attnum, privilege.name
+     )
+     AND NOT (
+       c.oid = 'edge_api.catalog_products'::regclass
        AND privilege.name = 'SELECT'
      );
 
@@ -670,6 +940,7 @@ BEGIN
    WHERE c.relkind = 'S'
      AND n.nspname !~ '^pg_'
      AND n.nspname <> 'information_schema'
+     AND has_schema_privilege('edge_catalog_reader', n.oid, 'USAGE')
      AND has_sequence_privilege('edge_catalog_reader', c.oid, privilege.name);
 
   SELECT count(*),
@@ -680,12 +951,58 @@ BEGIN
            WHERE has_schema_privilege('edge_catalog_reader', n.oid, 'USAGE')
              AND p.prosecdef
          )
-    INTO executable_routines, callable_routines, callable_definers
+    INTO raw_routines, callable_routines, callable_definers
     FROM pg_proc AS p
     JOIN pg_namespace AS n ON n.oid = p.pronamespace
    WHERE n.nspname !~ '^pg_'
      AND n.nspname <> 'information_schema'
      AND has_function_privilege('edge_catalog_reader', p.oid, 'EXECUTE');
+
+  SELECT count(*)
+    INTO raw_application_routines
+    FROM pg_proc AS p
+    JOIN pg_namespace AS n ON n.oid = p.pronamespace
+    JOIN LATERAL aclexplode(
+      COALESCE(p.proacl, acldefault('f', p.proowner))
+    ) AS acl ON true
+   WHERE n.nspname = 'public'
+     AND pg_get_userbyid(p.proowner) = 'postgres'
+     AND p.prokind IN ('f', 'p', 'a', 'w')
+     AND acl.grantee = 0
+     AND acl.privilege_type = 'EXECUTE';
+
+  SELECT count(*)
+    INTO effective_types
+    FROM pg_type AS t
+    JOIN pg_namespace AS n ON n.oid = t.typnamespace
+   WHERE n.nspname !~ '^pg_'
+     AND n.nspname <> 'information_schema'
+     AND has_schema_privilege('edge_catalog_reader', n.oid, 'USAGE')
+     AND has_type_privilege('edge_catalog_reader', t.oid, 'USAGE');
+
+  SELECT count(DISTINCT c.oid)
+    INTO raw_platform_relations
+    FROM pg_class AS c
+    JOIN pg_namespace AS n ON n.oid = c.relnamespace
+    CROSS JOIN LATERAL aclexplode(
+      COALESCE(c.relacl, acldefault('r', c.relowner))
+    ) AS acl
+   WHERE n.nspname !~ '^pg_'
+     AND n.nspname <> 'information_schema'
+     AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+     AND acl.grantee = 0;
+
+  SELECT count(DISTINCT c.oid)
+    INTO raw_platform_sequences
+    FROM pg_class AS c
+    JOIN pg_namespace AS n ON n.oid = c.relnamespace
+    CROSS JOIN LATERAL aclexplode(
+      COALESCE(c.relacl, acldefault('S', c.relowner))
+    ) AS acl
+   WHERE n.nspname !~ '^pg_'
+     AND n.nspname <> 'information_schema'
+     AND c.relkind = 'S'
+     AND acl.grantee = 0;
 
   SELECT has_schema_privilege('edge_catalog_reader', 'public', 'USAGE')
          AND has_function_privilege(
@@ -695,20 +1012,30 @@ BEGIN
          )
     INTO unsafe_role_grant;
 
-  IF unexpected_schemas <> 0
+  IF unexpected_database <> 0
+     OR unexpected_schemas <> 0
      OR unexpected_relations <> 0
+     OR unexpected_columns <> 0
      OR unexpected_sequences <> 0
-     OR executable_routines <> 0
+     OR callable_routines <> 0
+     OR raw_application_routines <> 0
+     OR effective_types <> 0
      OR unsafe_role_grant THEN
     RAISE EXCEPTION USING MESSAGE = format(
-      'PROVISIONING BLOCKED: edge_catalog_reader is not SELECT-only because inherited PUBLIC ACLs expose schemas=%s, relation_objects=%s, sequence_objects=%s, executable_routines=%s, callable_routines=%s, callable_security_definers=%s, grant_role_to_user=%s',
+      'PROVISIONING BLOCKED: edge catalog capability exceeds connect/read-only-view contract: database=%s schemas=%s relations=%s columns=%s sequences=%s callable_routines=%s callable_definers=%s application_public_routines=%s effective_types=%s grant_role_to_user=%s; raw drift routines=%s relations=%s sequences=%s',
+      unexpected_database,
       unexpected_schemas,
       unexpected_relations,
+      unexpected_columns,
       unexpected_sequences,
-      executable_routines,
       callable_routines,
       callable_definers,
-      unsafe_role_grant
+      raw_application_routines,
+      effective_types,
+      unsafe_role_grant,
+      raw_routines,
+      raw_platform_relations,
+      raw_platform_sequences
     );
   END IF;
 END

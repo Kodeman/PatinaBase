@@ -33,6 +33,7 @@ DOLLAR_BODY = re.compile(r"\$([A-Za-z_]*)\$.*?\$\1\$", re.DOTALL)
 LINE_COMMENT = re.compile(r"--[^\n]*")
 BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
 STMT = re.compile(r"(?:GRANT|REVOKE)\s[^;]*;", re.DOTALL)
+ALTER_DEFAULT = re.compile(r"ALTER\s+DEFAULT\s+PRIVILEGES\b[^;]*;", re.IGNORECASE | re.DOTALL)
 DROP_FN = re.compile(
     r"DROP\s+FUNCTION\s+(?:IF\s+EXISTS\s+)?([A-Za-z_.\"]+\s*\([^)]*\))", re.IGNORECASE
 )
@@ -77,10 +78,18 @@ def extract_statements() -> list[tuple[str, str]]:
 
     out: list[tuple[str, str]] = []
     for index, path in enumerate(paths):
-        for m in STMT.finditer(cleaned[path]):
+        text = cleaned[path]
+        default_matches = list(ALTER_DEFAULT.finditer(text))
+        without_defaults = ALTER_DEFAULT.sub(
+            lambda match: " " * len(match.group(0)), text
+        )
+        matches = [*default_matches, *STMT.finditer(without_defaults)]
+        for m in sorted(matches, key=lambda match: match.start()):
             stmt = " ".join(m.group(0).split())
             # Only statements that start with the keyword survive (defensive).
-            if not stmt.startswith(("GRANT ", "REVOKE ")):
+            if not stmt.startswith(
+                ("GRANT ", "REVOKE ", "ALTER DEFAULT PRIVILEGES ")
+            ):
                 continue
             target = ON_FN.search(stmt)
             if target and last_drop.get(signature(target.group(1)), (-1, -1)) > (
@@ -153,11 +162,17 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
 -- Statements naming a function signature a later migration DROPs are omitted
 -- entirely — the object they address no longer exists by the time this runs.
 -- The rest are guarded, so an object dropped some other way is skipped too.
+-- ALTER DEFAULT PRIVILEGES statements are replayed whole after the legacy
+-- header defaults. They are never reduced to a malformed GRANT/REVOKE suffix.
 """
     )
     for fname, stmt in stmts:
         assert "$g$" not in stmt, f"dollar-tag collision in {fname}: {stmt}"
         lines.append(f"-- {fname}")
+        if stmt.startswith("ALTER DEFAULT PRIVILEGES "):
+            lines.append(stmt)
+            lines.append("")
+            continue
         lines.append("DO $g$ BEGIN")
         lines.append(f"  {stmt}")
         lines.append(

@@ -217,13 +217,6 @@ export type Database = {
             foreignKeyName: "aesthete_jobs_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "aesthete_jobs_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
@@ -1305,13 +1298,6 @@ export type Database = {
             foreignKeyName: "catalog_feed_items_committed_product_id_fkey"
             columns: ["committed_product_id"]
             isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "catalog_feed_items_committed_product_id_fkey"
-            columns: ["committed_product_id"]
-            isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
@@ -1342,13 +1328,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_promotion_candidates"
             referencedColumns: ["product_id"]
-          },
-          {
-            foreignKeyName: "catalog_feed_items_match_product_id_fkey"
-            columns: ["match_product_id"]
-            isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "catalog_feed_items_match_product_id_fkey"
@@ -1599,13 +1578,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "task_blocked_state"
             referencedColumns: ["blocking_item_id"]
-          },
-          {
-            foreignKeyName: "client_decision_options_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "client_decision_options_product_id_fkey"
@@ -2219,13 +2191,6 @@ export type Database = {
             foreignKeyName: "client_nurture_touchpoints_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "client_nurture_touchpoints_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
@@ -2510,13 +2475,6 @@ export type Database = {
             columns: ["collection_id"]
             isOneToOne: false
             referencedRelation: "collections"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "collection_products_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "edge_catalog_products"
             referencedColumns: ["id"]
           },
           {
@@ -4931,13 +4889,6 @@ export type Database = {
             foreignKeyName: "direct_orders_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "direct_orders_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
@@ -5139,13 +5090,6 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "editorial_stories_featured_product_id_fkey"
-            columns: ["featured_product_id"]
-            isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "editorial_stories_featured_product_id_fkey"
             columns: ["featured_product_id"]
@@ -5767,13 +5711,6 @@ export type Database = {
             foreignKeyName: "field_captures_catalog_match_product_id_fkey"
             columns: ["catalog_match_product_id"]
             isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "field_captures_catalog_match_product_id_fkey"
-            columns: ["catalog_match_product_id"]
-            isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
@@ -5831,13 +5768,6 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "v_studios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "field_captures_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "edge_catalog_products"
             referencedColumns: ["id"]
           },
           {
@@ -6452,13 +6382,6 @@ export type Database = {
             foreignKeyName: "fulfillment_order_items_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fulfillment_order_items_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
@@ -6887,13 +6810,6 @@ export type Database = {
             columns: ["commercial_document_id"]
             isOneToOne: false
             referencedRelation: "project_commercial_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "furnishing_authorization_items_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "edge_catalog_products"
             referencedColumns: ["id"]
           },
           {
@@ -10179,13 +10095,6 @@ export type Database = {
             foreignKeyName: "product_appeal_signals_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "product_appeal_signals_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
@@ -10256,13 +10165,6 @@ export type Database = {
             columns: ["archetype_id"]
             isOneToOne: false
             referencedRelation: "client_archetypes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "product_client_matches_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "edge_catalog_products"
             referencedColumns: ["id"]
           },
           {
@@ -10367,13 +10269,6 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "product_components_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "product_components_product_id_fkey"
             columns: ["product_id"]
@@ -10497,13 +10392,6 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "product_configuration_rules_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "product_configuration_rules_product_id_fkey"
             columns: ["product_id"]
@@ -10709,13 +10597,6 @@ export type Database = {
             columns: ["previous_configuration_id"]
             isOneToOne: false
             referencedRelation: "product_configurations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "product_configurations_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "edge_catalog_products"
             referencedColumns: ["id"]
           },
           {
@@ -10949,13 +10830,6 @@ export type Database = {
             foreignKeyName: "product_dna_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: true
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "product_dna_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: true
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
@@ -11018,13 +10892,6 @@ export type Database = {
           prompt_version?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "product_dna_drafts_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "product_dna_drafts_product_id_fkey"
             columns: ["product_id"]
@@ -11107,13 +10974,6 @@ export type Database = {
             foreignKeyName: "product_engagement_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: true
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "product_engagement_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: true
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
@@ -11173,13 +11033,6 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "product_inventory_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: true
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "product_inventory_product_id_fkey"
             columns: ["product_id"]
@@ -11261,13 +11114,6 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "product_option_groups_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "product_option_groups_product_id_fkey"
             columns: ["product_id"]
@@ -11406,13 +11252,6 @@ export type Database = {
             foreignKeyName: "product_relations_product_a_id_fkey"
             columns: ["product_a_id"]
             isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "product_relations_product_a_id_fkey"
-            columns: ["product_a_id"]
-            isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
@@ -11443,13 +11282,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_promotion_candidates"
             referencedColumns: ["product_id"]
-          },
-          {
-            foreignKeyName: "product_relations_product_b_id_fkey"
-            columns: ["product_b_id"]
-            isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "product_relations_product_b_id_fkey"
@@ -11539,13 +11371,6 @@ export type Database = {
             foreignKeyName: "product_style_spectrum_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: true
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "product_style_spectrum_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: true
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
@@ -11615,13 +11440,6 @@ export type Database = {
             foreignKeyName: "product_styles_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "product_styles_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
@@ -11682,13 +11500,6 @@ export type Database = {
           tag_id?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "product_tags_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "product_tags_product_id_fkey"
             columns: ["product_id"]
@@ -11771,13 +11582,6 @@ export type Database = {
           view_count?: number | null
         }
         Relationships: [
-          {
-            foreignKeyName: "product_user_dwell_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "product_user_dwell_product_id_fkey"
             columns: ["product_id"]
@@ -11904,13 +11708,6 @@ export type Database = {
           weight?: Json | null
         }
         Relationships: [
-          {
-            foreignKeyName: "product_variants_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "product_variants_product_id_fkey"
             columns: ["product_id"]
@@ -12164,13 +11961,6 @@ export type Database = {
             foreignKeyName: "products_catalog_equivalent_id_fkey"
             columns: ["catalog_equivalent_id"]
             isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "products_catalog_equivalent_id_fkey"
-            columns: ["catalog_equivalent_id"]
-            isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
@@ -12213,13 +12003,6 @@ export type Database = {
             foreignKeyName: "products_merged_into_id_fkey"
             columns: ["merged_into_id"]
             isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "products_merged_into_id_fkey"
-            columns: ["merged_into_id"]
-            isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
@@ -12277,13 +12060,6 @@ export type Database = {
             columns: ["promoted_by"]
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "products_promoted_from_id_fkey"
-            columns: ["promoted_from_id"]
-            isOneToOne: false
-            referencedRelation: "edge_catalog_products"
             referencedColumns: ["id"]
           },
           {
@@ -14084,13 +13860,6 @@ export type Database = {
             foreignKeyName: "project_ffe_items_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_ffe_items_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
@@ -15143,13 +14912,6 @@ export type Database = {
             foreignKeyName: "project_products_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_products_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
@@ -15566,13 +15328,6 @@ export type Database = {
             columns: ["edition_id"]
             isOneToOne: false
             referencedRelation: "project_review_editions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_review_items_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "edge_catalog_products"
             referencedColumns: ["id"]
           },
           {
@@ -16441,13 +16196,6 @@ export type Database = {
             foreignKeyName: "promotion_audit_log_merged_into_id_fkey"
             columns: ["merged_into_id"]
             isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "promotion_audit_log_merged_into_id_fkey"
-            columns: ["merged_into_id"]
-            isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
@@ -16478,13 +16226,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_promotion_candidates"
             referencedColumns: ["product_id"]
-          },
-          {
-            foreignKeyName: "promotion_audit_log_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "promotion_audit_log_product_id_fkey"
@@ -16610,13 +16351,6 @@ export type Database = {
             columns: ["palette_id"]
             isOneToOne: false
             referencedRelation: "proposal_palettes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "proposal_board_items_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "edge_catalog_products"
             referencedColumns: ["id"]
           },
           {
@@ -16846,13 +16580,6 @@ export type Database = {
             columns: ["designer_id"]
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "proposal_captures_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "edge_catalog_products"
             referencedColumns: ["id"]
           },
           {
@@ -17132,13 +16859,6 @@ export type Database = {
           vendor_name?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "proposal_items_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "proposal_items_product_id_fkey"
             columns: ["product_id"]
@@ -20027,13 +19747,6 @@ export type Database = {
             foreignKeyName: "saved_items_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "saved_items_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
@@ -21821,13 +21534,6 @@ export type Database = {
             foreignKeyName: "spatial_context_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "spatial_context_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
@@ -22416,13 +22122,6 @@ export type Database = {
             foreignKeyName: "spectrum_calibration_products_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "spectrum_calibration_products_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
@@ -22870,13 +22569,6 @@ export type Database = {
             foreignKeyName: "suggestion_events_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "suggestion_events_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
@@ -22986,13 +22678,6 @@ export type Database = {
             foreignKeyName: "taste_corrections_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "taste_corrections_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
@@ -23023,13 +22708,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_promotion_candidates"
             referencedColumns: ["product_id"]
-          },
-          {
-            foreignKeyName: "taste_corrections_replacement_product_id_fkey"
-            columns: ["replacement_product_id"]
-            isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "taste_corrections_replacement_product_id_fkey"
@@ -23120,13 +22798,6 @@ export type Database = {
             foreignKeyName: "taste_judgments_product_a_fkey"
             columns: ["product_a"]
             isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "taste_judgments_product_a_fkey"
-            columns: ["product_a"]
-            isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
@@ -23157,13 +22828,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_promotion_candidates"
             referencedColumns: ["product_id"]
-          },
-          {
-            foreignKeyName: "taste_judgments_product_b_fkey"
-            columns: ["product_b"]
-            isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "taste_judgments_product_b_fkey"
@@ -23255,13 +22919,6 @@ export type Database = {
             foreignKeyName: "taste_probe_queue_product_a_fkey"
             columns: ["product_a"]
             isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "taste_probe_queue_product_a_fkey"
-            columns: ["product_a"]
-            isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
@@ -23292,13 +22949,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_promotion_candidates"
             referencedColumns: ["product_id"]
-          },
-          {
-            foreignKeyName: "taste_probe_queue_product_b_fkey"
-            columns: ["product_b"]
-            isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "taste_probe_queue_product_b_fkey"
@@ -23425,13 +23075,6 @@ export type Database = {
             foreignKeyName: "teaching_queue_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: true
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "teaching_queue_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: true
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
@@ -23524,13 +23167,6 @@ export type Database = {
           vote?: Database["public"]["Enums"]["validation_vote"]
         }
         Relationships: [
-          {
-            foreignKeyName: "teaching_validations_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "teaching_validations_product_id_fkey"
             columns: ["product_id"]
@@ -24370,13 +24006,6 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "user_wishlist_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "edge_catalog_products"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "user_wishlist_product_id_fkey"
             columns: ["product_id"]
@@ -25611,42 +25240,6 @@ export type Database = {
           unacked_po_label: string | null
           unsent_pulse_count: number | null
           updated_at: string | null
-        }
-        Relationships: []
-      }
-      edge_catalog_products: {
-        Row: {
-          brand: string | null
-          category: string | null
-          id: string | null
-          images: string[] | null
-          name: string | null
-          patina_managed: boolean | null
-          price_retail: number | null
-          short_description: string | null
-          status: string | null
-        }
-        Insert: {
-          brand?: string | null
-          category?: string | null
-          id?: string | null
-          images?: string[] | null
-          name?: string | null
-          patina_managed?: boolean | null
-          price_retail?: number | null
-          short_description?: string | null
-          status?: string | null
-        }
-        Update: {
-          brand?: string | null
-          category?: string | null
-          id?: string | null
-          images?: string[] | null
-          name?: string | null
-          patina_managed?: boolean | null
-          price_retail?: number | null
-          short_description?: string | null
-          status?: string | null
         }
         Relationships: []
       }
