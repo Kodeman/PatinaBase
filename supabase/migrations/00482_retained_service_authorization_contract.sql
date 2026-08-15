@@ -157,6 +157,23 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_svc_projects_public_project
 COMMENT ON COLUMN svc_projects.projects.public_project_id IS
   'Authoritative bridge to public.projects for current client, designer, team, and studio scope. Never infer this value from service metadata.';
 
+-- Project documents need a canonical Media relationship that can be checked
+-- for the current client, designer, team, and organization. Uploader identity
+-- and JSON metadata cannot represent shared project authority.
+ALTER TYPE svc_media.asset_kind
+  ADD VALUE IF NOT EXISTS 'DOCUMENT';
+
+ALTER TABLE svc_media.media_assets
+  ADD COLUMN IF NOT EXISTS project_id UUID
+    REFERENCES public.projects(id) ON DELETE CASCADE;
+
+CREATE INDEX IF NOT EXISTS idx_media_assets_project_created
+  ON svc_media.media_assets (project_id, created_at DESC)
+  WHERE project_id IS NOT NULL;
+
+COMMENT ON COLUMN svc_media.media_assets.project_id IS
+  'Authoritative public.projects scope for project documents. Never infer project access from asset metadata or caller input.';
+
 -- No GRANT is added here. Existing Container login privileges cover their
 -- service schemas; widening PUBLIC, anon, or authenticated is out of scope and
 -- would weaken the separate database ACL boundary.
