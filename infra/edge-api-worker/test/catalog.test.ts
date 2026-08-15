@@ -2,6 +2,7 @@ import {
   CATALOG_SELECT_SQL,
   CatalogRequestError,
   CatalogSourceError,
+  LEGACY_CATALOG_MAX_BYTES,
   normalizeCatalogRows,
   parseCatalogIds,
   queryCatalogViaHyperdrive,
@@ -211,5 +212,76 @@ describe('catalog sources', () => {
         () => new Promise<Response>(() => undefined),
       ),
     ).rejects.toThrow(CatalogSourceError);
+  });
+
+  it('keeps the deadline active after headers while the response body never closes', async () => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('['));
+      },
+    });
+    await expect(
+      queryCatalogViaLegacy(
+        {
+          SUPABASE_UPSTREAM_URL: 'https://project.supabase.co',
+          SUPABASE_ANON_KEY: 'anon-key',
+          LEGACY_FETCH_TIMEOUT_MS: '5',
+        } as EdgeApiEnv,
+        [A],
+        undefined,
+        async () => new Response(body),
+      ),
+    ).rejects.toThrow(CatalogSourceError);
+  });
+
+  it('rejects a streaming body as soon as it exceeds the bounded maximum', async () => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(LEGACY_CATALOG_MAX_BYTES));
+        controller.enqueue(new Uint8Array(1));
+        controller.close();
+      },
+    });
+    await expect(
+      queryCatalogViaLegacy(
+        {
+          SUPABASE_UPSTREAM_URL: 'https://project.supabase.co',
+          SUPABASE_ANON_KEY: 'anon-key',
+          LEGACY_FETCH_TIMEOUT_MS: '1000',
+        } as EdgeApiEnv,
+        [A],
+        undefined,
+        async () => new Response(body),
+      ),
+    ).rejects.toThrow(CatalogSourceError);
+  });
+
+  it('cancels a pending body read when the caller aborts after headers', async () => {
+    const controller = new AbortController();
+    let bodyReadStarted: (() => void) | undefined;
+    const readingBody = new Promise<void>((resolve) => {
+      bodyReadStarted = resolve;
+    });
+    const pending = queryCatalogViaLegacy(
+      {
+        SUPABASE_UPSTREAM_URL: 'https://project.supabase.co',
+        SUPABASE_ANON_KEY: 'anon-key',
+        LEGACY_FETCH_TIMEOUT_MS: '1000',
+      } as EdgeApiEnv,
+      [A],
+      controller.signal,
+      async () =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            pull() {
+              bodyReadStarted?.();
+              return new Promise<void>(() => undefined);
+            },
+          }),
+        ),
+    );
+    await readingBody;
+    controller.abort();
+    await expect(pending).rejects.toThrow(CatalogSourceError);
   });
 });

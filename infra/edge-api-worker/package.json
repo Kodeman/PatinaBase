@@ -5,6 +5,7 @@
   "description": "Cloudflare edge router and typed API for Patina",
   "scripts": {
     "config:check": "node scripts/validate-config.mjs",
+    "config:check:provisioned": "node scripts/validate-config.mjs --provisioned",
     "deploy": "npm run config:check && wrangler deploy --env=\"\"",
     "dev": "wrangler dev --env local",
     "test": "vitest run --config vitest.config.mts",

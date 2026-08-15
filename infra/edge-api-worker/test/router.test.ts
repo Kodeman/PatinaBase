@@ -1,6 +1,9 @@
 import type { CatalogProductSummary } from '@patina/types';
 import { createWorker, type WorkerDependencies } from '../src';
-import { queryCatalogViaHyperdrive } from '../src/catalog';
+import {
+  queryCatalogViaHyperdrive,
+  queryCatalogViaLegacy,
+} from '../src/catalog';
 import { probeBinding } from '../src/database';
 import type { EdgeApiEnv } from '../src/env';
 import { ALERT_EVENTS, rolloutBucket } from '../src/security';
@@ -192,6 +195,35 @@ describe('catalog route', () => {
     );
   });
 
+  it('returns the approved Hyperdrive result when the legacy body misses its deadline', async () => {
+    const deps = dependencies({
+      queryLegacy: (requestEnv, ids, signal) =>
+        queryCatalogViaLegacy(
+          requestEnv,
+          ids,
+          signal,
+          async () =>
+            new Response(new ReadableStream<Uint8Array>({ start() {} })),
+        ),
+    });
+    const { response } = await request(
+      createWorker(deps),
+      env({
+        CATALOG_SOURCE: 'hyperdrive',
+        CATALOG_HYPERDRIVE_PERCENT: '100',
+        LEGACY_FETCH_TIMEOUT_MS: '5',
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual([product]);
+    expect(deps.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: ALERT_EVENTS.catalogLegacyFailure,
+        fallback: 'hyperdrive_public_view',
+      }),
+    );
+  });
+
   it('fails a missing public-cache binding safely to the legacy catalog', async () => {
     const deps = dependencies({ queryHyperdrive: queryCatalogViaHyperdrive });
     const { response } = await request(
@@ -272,6 +304,30 @@ describe('catalog route', () => {
       expect.objectContaining({ event: ALERT_EVENTS.configurationInvalid }),
     );
   });
+
+  it.each([undefined, '', '   '])(
+    'fails closed without logging a missing or blank publishable secret: %o',
+    async (publishableKey) => {
+      const deps = dependencies();
+      const { response } = await request(
+        createWorker(deps),
+        env({ SUPABASE_ANON_KEY: publishableKey }),
+      );
+      expect(response.status).toBe(503);
+      expect(deps.queryLegacy).not.toHaveBeenCalled();
+      expect(deps.queryHyperdrive).not.toHaveBeenCalled();
+      expect(deps.log).toHaveBeenCalledWith({
+        event: ALERT_EVENTS.configurationInvalid,
+        severity: 'critical',
+        traceId: 'trace-0000000000000000000000001',
+        routeClass: 'catalog.products',
+        status: 503,
+      });
+      expect(JSON.stringify(vi.mocked(deps.log).mock.calls)).not.toContain(
+        'SUPABASE_ANON_KEY',
+      );
+    },
+  );
 });
 
 describe('health, proxy deadline, and default response policy', () => {

@@ -59,6 +59,7 @@ export function validateRuntimeConfig(env: EdgeApiEnv): RuntimeConfig {
   requiredHttpUrl(env.SUPABASE_JWT_ISSUER);
   requiredHttpUrl(env.SUPABASE_JWKS_URL);
   requiredString(env.SUPABASE_JWT_AUDIENCE);
+  requiredString(env.SUPABASE_ANON_KEY);
 
   const source = env.CATALOG_SOURCE;
   if (source !== 'legacy' && source !== 'shadow' && source !== 'hyperdrive') {
