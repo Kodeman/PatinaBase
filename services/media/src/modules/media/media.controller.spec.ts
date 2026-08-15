@@ -1,38 +1,42 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { AuthenticatedUserIdentity } from '@patina/auth';
+import { MediaKind, MediaRole, MediaStatus } from './dto';
 import { MediaController } from './media.controller';
 import { MediaService } from './media.service';
-import { MediaKind, MediaRole, MediaStatus } from './dto';
 
 describe('MediaController', () => {
-  let controller: MediaController;
-  let service: jest.Mocked<MediaService>;
-
+  const subject = '11111111-1111-4111-8111-111111111111';
+  const identity: AuthenticatedUserIdentity = {
+    id: subject,
+    sub: subject,
+    userId: subject,
+    role: 'authenticated',
+  };
   const mockMediaResponse = {
     id: 'asset-123',
-    kind: 'image',
+    kind: 'IMAGE',
     productId: 'product-123',
-    variantId: undefined,
-    role: 'hero',
+    role: 'HERO',
     rawKey: 'raw/images/asset-123/hero.jpg',
-    uri: 'processed/images/asset-123/hero.webp',
     width: 1920,
     height: 1080,
     format: 'webp',
-    status: 'completed',
+    status: 'READY',
     tags: ['furniture', 'modern'],
     viewCount: 10,
     downloadCount: 5,
     sizeBytes: '2048576',
     mimeType: 'image/jpeg',
     isPublic: true,
-    uploadedBy: 'user-123',
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    uploadedBy: subject,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
   };
 
-  beforeEach(async () => {
-    const mockService = {
-      uploadSingle: jest.fn(),
+  let controller: MediaController;
+  let service: jest.Mocked<MediaService>;
+
+  beforeEach(() => {
+    service = {
       uploadBatch: jest.fn(),
       getById: jest.fn(),
       search: jest.fn(),
@@ -40,217 +44,124 @@ describe('MediaController', () => {
       delete: jest.fn(),
       processMedia: jest.fn(),
       processBatch: jest.fn(),
-      prisma: {
-        mediaAsset: {
-          update: jest.fn(),
-          count: jest.fn(),
-        },
-      },
-    };
+      getDownloadUrl: jest.fn(),
+      getStats: jest.fn(),
+    } as unknown as jest.Mocked<MediaService>;
+    controller = new MediaController(service);
+  });
 
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [MediaController],
-      providers: [
+  it('binds batch upload to the verified subject', async () => {
+    const dto = {
+      uploads: [
         {
-          provide: MediaService,
-          useValue: mockService,
+          kind: MediaKind.IMAGE,
+          filename: 'test.jpg',
+          fileSize: 1024000,
+          mimeType: 'image/jpeg',
         },
       ],
-    }).compile();
+    };
+    service.uploadBatch.mockResolvedValue({ total: 1, successful: 1, failed: 0, results: [] });
 
-    controller = module.get<MediaController>(MediaController);
-    service = module.get(MediaService) as jest.Mocked<MediaService>;
+    await controller.uploadBatch(identity, dto);
+
+    expect(service.uploadBatch).toHaveBeenCalledWith(subject, dto);
   });
 
-  describe('uploadSingle', () => {
-    it('should upload single media asset', async () => {
-      const user = { id: 'user-123' };
-      const dto = {
-        kind: MediaKind.IMAGE,
-        filename: 'test.jpg',
-        fileSize: 1024000,
-        mimeType: 'image/jpeg',
-      };
-
-      const uploadResult = {
-        assetId: 'asset-123',
-        uploadSessionId: 'session-123',
-        uploadUrl: 'https://upload.url',
-        expiresAt: new Date(),
-      };
-
-      service.uploadSingle.mockResolvedValue(uploadResult);
-
-      const result = await controller.uploadSingle(user, dto);
-
-      expect(result).toEqual(uploadResult);
-      expect(service.uploadSingle).toHaveBeenCalledWith('user-123', dto, undefined);
-    });
+  it('gets an asset with verified subject scope', async () => {
+    service.getById.mockResolvedValue(mockMediaResponse);
+    await expect(controller.getById(identity, 'asset-123', false)).resolves.toEqual(
+      mockMediaResponse,
+    );
+    expect(service.getById).toHaveBeenCalledWith(subject, 'asset-123', false);
   });
 
-  describe('getById', () => {
-    it('should retrieve asset by ID', async () => {
-      service.getById.mockResolvedValue(mockMediaResponse);
-
-      const result = await controller.getById('asset-123', false);
-
-      expect(result).toEqual(mockMediaResponse);
-      expect(service.getById).toHaveBeenCalledWith('asset-123', false);
-    });
-
-    it('should increment view count when requested', async () => {
-      service.getById.mockResolvedValue(mockMediaResponse);
-
-      await controller.getById('asset-123', true);
-
-      expect(service.getById).toHaveBeenCalledWith('asset-123', true);
-    });
+  it('passes the view-count flag only after verified subject extraction', async () => {
+    service.getById.mockResolvedValue(mockMediaResponse);
+    await controller.getById(identity, 'asset-123', true);
+    expect(service.getById).toHaveBeenCalledWith(subject, 'asset-123', true);
   });
 
-  describe('search', () => {
-    it('should search media assets with filters', async () => {
-      const searchResult = {
-        data: [mockMediaResponse],
-        pagination: {
-          page: 1,
-          limit: 20,
-          total: 1,
-          totalPages: 1,
-        },
-      };
+  it('searches with verified subject scope', async () => {
+    const query = {
+      kind: MediaKind.IMAGE,
+      status: MediaStatus.COMPLETED,
+      page: 1,
+      limit: 20,
+    };
+    const result = {
+      data: [mockMediaResponse],
+      pagination: { page: 1, limit: 20, total: 1, totalPages: 1 },
+    };
+    service.search.mockResolvedValue(result);
 
-      service.search.mockResolvedValue(searchResult);
-
-      const query = {
-        kind: MediaKind.IMAGE,
-        status: MediaStatus.COMPLETED,
-        page: 1,
-        limit: 20,
-      };
-
-      const result = await controller.search(query);
-
-      expect(result).toEqual(searchResult);
-      expect(service.search).toHaveBeenCalledWith(query);
-    });
+    await expect(controller.search(identity, query)).resolves.toEqual(result);
+    expect(service.search).toHaveBeenCalledWith(subject, query);
   });
 
-  describe('updateMetadata', () => {
-    it('should update asset metadata', async () => {
-      const updateDto = {
-        tags: ['updated', 'tags'],
-        role: MediaRole.HERO,
-      };
+  it('updates metadata with verified subject scope', async () => {
+    const dto = { tags: ['updated'], role: MediaRole.HERO };
+    service.updateMetadata.mockResolvedValue({ ...mockMediaResponse, tags: dto.tags });
 
-      service.updateMetadata.mockResolvedValue({
-        ...mockMediaResponse,
-        tags: ['updated', 'tags'],
-      });
+    await controller.updateMetadata(identity, 'asset-123', dto);
 
-      const result = await controller.updateMetadata('asset-123', updateDto);
+    expect(service.updateMetadata).toHaveBeenCalledWith(subject, 'asset-123', dto);
+  });
 
-      expect(result.tags).toEqual(['updated', 'tags']);
-      expect(service.updateMetadata).toHaveBeenCalledWith('asset-123', updateDto);
+  it('soft deletes by default with verified subject scope', async () => {
+    service.delete.mockResolvedValue({ success: true, assetId: 'asset-123', deleted: false });
+
+    await controller.delete(identity, 'asset-123');
+
+    expect(service.delete).toHaveBeenCalledWith(subject, 'asset-123', true);
+  });
+
+  it('hard deletes only after verified subject extraction', async () => {
+    service.delete.mockResolvedValue({ success: true, assetId: 'asset-123', deleted: true });
+
+    await controller.delete(identity, 'asset-123', true);
+
+    expect(service.delete).toHaveBeenCalledWith(subject, 'asset-123', false);
+  });
+
+  it('queues route-scoped processing under the verified subject', async () => {
+    service.processMedia.mockResolvedValue({
+      assetId: 'asset-123',
+      jobId: 'job-123',
+      status: 'processing',
+    });
+
+    await controller.processAsset(identity, 'asset-123', {
+      priority: 'high' as any,
+    });
+
+    expect(service.processMedia).toHaveBeenCalledWith(subject, {
+      assetId: 'asset-123',
+      priority: 'high',
     });
   });
 
-  describe('delete', () => {
-    it('should soft delete by default', async () => {
-      const deleteResult = {
-        success: true,
-        assetId: 'asset-123',
-        deleted: false,
-      };
+  it('delegates download accounting through the scoped service method', async () => {
+    const result = {
+      assetId: 'asset-123',
+      downloadUrl: mockMediaResponse.rawKey,
+      expiresAt: new Date('2030-01-01T00:00:00.000Z'),
+    };
+    service.getDownloadUrl.mockResolvedValue(result);
 
-      service.delete.mockResolvedValue(deleteResult);
-
-      const result = await controller.delete('asset-123');
-
-      expect(result).toEqual(deleteResult);
-      expect(service.delete).toHaveBeenCalledWith('asset-123', true);
-    });
-
-    it('should hard delete when requested', async () => {
-      const deleteResult = {
-        success: true,
-        assetId: 'asset-123',
-        deleted: true,
-      };
-
-      service.delete.mockResolvedValue(deleteResult);
-
-      const result = await controller.delete('asset-123', true);
-
-      expect(result.deleted).toBe(true);
-      expect(service.delete).toHaveBeenCalledWith('asset-123', false);
-    });
+    await expect(controller.getDownloadUrl(identity, 'asset-123')).resolves.toEqual(result);
+    expect(service.getDownloadUrl).toHaveBeenCalledWith(subject, 'asset-123');
   });
 
-  describe('processAsset', () => {
-    it('should queue processing job', async () => {
-      const processResult = {
-        assetId: 'asset-123',
-        jobId: 'job-123',
-        status: 'processing',
-      };
+  it('delegates statistics to the subject-scoped service query', async () => {
+    const stats = {
+      total: 10,
+      byKind: { images: 8, videos: 0, models: 2 },
+      byStatus: { pending: 1, processing: 1, completed: 7, failed: 1 },
+    };
+    service.getStats.mockResolvedValue(stats);
 
-      service.processMedia.mockResolvedValue(processResult);
-
-      const result = await controller.processAsset('asset-123', {
-        priority: 'high' as any,
-      });
-
-      expect(result).toEqual(processResult);
-      expect(service.processMedia).toHaveBeenCalledWith({
-        assetId: 'asset-123',
-        priority: 'high',
-      });
-    });
-  });
-
-  describe('getDownloadUrl', () => {
-    it('should generate download URL and increment count', async () => {
-      service.getById.mockResolvedValue(mockMediaResponse);
-      service['prisma'].mediaAsset.update.mockResolvedValue({} as any);
-
-      const result = await controller.getDownloadUrl('asset-123');
-
-      expect(result).toHaveProperty('downloadUrl');
-      expect(result).toHaveProperty('expiresAt');
-      expect(service['prisma'].mediaAsset.update).toHaveBeenCalledWith({
-        where: { id: 'asset-123' },
-        data: { downloadCount: { increment: 1 } },
-      });
-    });
-  });
-
-  describe('getStats', () => {
-    it('should return media statistics', async () => {
-      service['prisma'].mediaAsset.count
-        .mockResolvedValueOnce(100) // total
-        .mockResolvedValueOnce(60) // images
-        .mockResolvedValueOnce(30) // videos
-        .mockResolvedValueOnce(10) // models
-        .mockResolvedValueOnce(5) // pending
-        .mockResolvedValueOnce(10) // processing
-        .mockResolvedValueOnce(80) // completed
-        .mockResolvedValueOnce(5); // failed
-
-      const result = await controller.getStats();
-
-      expect(result.total).toBe(100);
-      expect(result.byKind.images).toBe(60);
-      expect(result.byStatus.completed).toBe(80);
-    });
-
-    it('should filter stats by product ID', async () => {
-      service['prisma'].mediaAsset.count.mockResolvedValue(10);
-
-      await controller.getStats('product-123');
-
-      expect(service['prisma'].mediaAsset.count).toHaveBeenCalledWith({
-        where: { productId: 'product-123' },
-      });
-    });
+    await expect(controller.getStats(identity, 'product-123')).resolves.toEqual(stats);
+    expect(service.getStats).toHaveBeenCalledWith(subject, 'product-123');
   });
 });

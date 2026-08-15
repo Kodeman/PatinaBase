@@ -1,393 +1,285 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { UploadService, UploadIntent } from './upload.service';
+import { AssetKind, AssetRole } from '../../generated/prisma-client';
+import { MediaAuthorizationResolver } from '../authorization/media-authorization.resolver';
 import { OCIStorageService } from '../storage/oci-storage.service';
-import { PrismaClient, AssetKind, AssetRole } from '../../generated/prisma-client';
+import { UploadIntent, UploadService } from './upload.service';
+
+jest.mock('uuid', () => ({
+  v4: jest.fn(() => '550e8400-e29b-41d4-a716-446655440000'),
+}));
 
 describe('UploadService', () => {
+  const subject = '11111111-1111-4111-8111-111111111111';
+  const assetId = '550e8400-e29b-41d4-a716-446655440000';
+  const sessionId = '22222222-2222-4222-8222-222222222222';
+  const expiresAt = new Date('2030-01-01T00:00:00.000Z');
+
   let service: UploadService;
-  let prisma: jest.Mocked<PrismaClient>;
-  let ociStorage: jest.Mocked<OCIStorageService>;
+  let transaction: any;
+  let storage: jest.Mocked<OCIStorageService>;
   let config: jest.Mocked<ConfigService>;
+  let authorization: jest.Mocked<MediaAuthorizationResolver>;
 
-  const mockUserId = 'user-123';
-  const mockAssetId = '550e8400-e29b-41d4-a716-446655440000';
-  const mockSessionId = 'session-123';
-
-  beforeEach(async () => {
-    const mockPrisma = {
+  beforeEach(() => {
+    transaction = {
       mediaAsset: {
-        create: jest.fn(),
-        update: jest.fn(),
-        findUnique: jest.fn(),
+        create: jest.fn().mockResolvedValue({ id: assetId }),
+        update: jest.fn().mockResolvedValue({ id: assetId }),
       },
       uploadSession: {
-        create: jest.fn(),
+        create: jest.fn().mockResolvedValue({ id: sessionId }),
         findUnique: jest.fn(),
-        updateMany: jest.fn(),
-        findMany: jest.fn(),
+        findFirst: jest.fn(),
+        update: jest.fn(),
       },
-      $transaction: jest.fn(),
-    } as any;
-
-    const mockOCIStorage = {
-      generateObjectKey: jest.fn(),
-      createPAR: jest.fn(),
     };
+    storage = {
+      generateObjectKey: jest.fn().mockReturnValue(`raw/images/${assetId}/hero.jpg`),
+      createPAR: jest.fn().mockResolvedValue({
+        fullUrl: 'https://example.test/upload',
+        expiresAt,
+      }),
+      headObject: jest.fn().mockResolvedValue({ sizeBytes: 10, contentType: 'image/jpeg' }),
+    } as unknown as jest.Mocked<OCIStorageService>;
+    config = {
+      get: jest.fn().mockReturnValue('raw-bucket'),
+    } as unknown as jest.Mocked<ConfigService>;
+    authorization = {
+      withAssetScope: jest.fn(async (_subject, _action, operation) =>
+        operation(transaction, {
+          subject,
+          authorization: {
+            subject,
+            roles: ['independent_designer'],
+            permissions: ['media.manage.own'],
+            organizationIds: [],
+          },
+          where: { uploadedBy: subject },
+          admin: false,
+        }),
+      ),
+      requireProduct: jest.fn().mockResolvedValue(undefined),
+      requireAsset: jest.fn().mockResolvedValue({ id: assetId }),
+      notFound: jest.fn(() => new NotFoundException('Media object not found')),
+    } as unknown as jest.Mocked<MediaAuthorizationResolver>;
 
-    const mockConfig = {
-      get: jest.fn(),
-    };
-
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        UploadService,
-        { provide: PrismaClient, useValue: mockPrisma },
-        { provide: OCIStorageService, useValue: mockOCIStorage },
-        { provide: ConfigService, useValue: mockConfig },
-      ],
-    }).compile();
-
-    service = module.get<UploadService>(UploadService);
-    prisma = module.get(PrismaClient) as jest.Mocked<PrismaClient>;
-    ociStorage = module.get(OCIStorageService) as jest.Mocked<OCIStorageService>;
-    config = module.get(ConfigService) as jest.Mocked<ConfigService>;
-  });
-
-  afterEach(() => {
-    jest.clearAllMocks();
+    service = new UploadService(storage, config, authorization);
   });
 
   describe('createUploadIntent', () => {
-    it('should create upload intent for valid image', async () => {
+    it('creates an image upload intent bound to the verified subject', async () => {
       const intent: UploadIntent = {
-        kind: 'IMAGE',
+        kind: AssetKind.IMAGE,
         filename: 'hero.jpg',
-        fileSize: 10 * 1024 * 1024, // 10MB
+        fileSize: 10,
         mimeType: 'image/jpeg',
-        role: 'HERO',
+        role: AssetRole.HERO,
       };
 
-      const mockAsset = {
-        id: mockAssetId,
-        kind: 'IMAGE',
-        status: 'PENDING',
-        uploadedBy: mockUserId,
-      };
-
-      const mockTargetKey = 'raw/images/550e8400-e29b-41d4-a716-446655440000/hero.jpg';
-      const mockPAR = {
-        parUrl: '/p/abc123',
-        fullUrl: 'https://objectstorage.us-ashburn-1.oraclecloud.com/p/abc123',
-        expiresAt: new Date(),
-      };
-
-      const mockSession = {
-        id: mockSessionId,
-        assetId: mockAssetId,
-        parUrl: mockPAR.fullUrl,
-        targetKey: mockTargetKey,
-      };
-
-      (prisma.mediaAsset.create as jest.Mock).mockResolvedValue(mockAsset as any);
-      ociStorage.generateObjectKey.mockReturnValue(mockTargetKey);
-      ociStorage.createPAR.mockResolvedValue(mockPAR);
-      (prisma.uploadSession.create as jest.Mock).mockResolvedValue(mockSession as any);
-      config.get.mockReturnValue('raw-bucket');
-
-      const result = await service.createUploadIntent(mockUserId, intent);
+      const result = await service.createUploadIntent(subject, intent);
 
       expect(result).toEqual({
-        assetId: mockAssetId,
-        uploadSessionId: mockSessionId,
-        parUrl: mockPAR.fullUrl,
-        targetKey: mockTargetKey,
+        assetId,
+        uploadSessionId: sessionId,
+        parUrl: 'https://example.test/upload',
+        targetKey: `raw/images/${assetId}/hero.jpg`,
         headers: { 'x-content-type': 'image/jpeg' },
-        expiresAt: mockPAR.expiresAt,
+        expiresAt: expect.any(Date),
       });
-
-      expect(prisma.mediaAsset.create).toHaveBeenCalledWith({
+      expect(transaction.mediaAsset.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
-          kind: 'IMAGE',
-          mimeType: 'image/jpeg',
-          role: 'HERO',
-          uploadedBy: mockUserId,
+          id: assetId,
+          kind: AssetKind.IMAGE,
+          uploadedBy: subject,
           status: 'PENDING',
         }),
       });
-    });
-
-    it('should create upload intent for 3D model', async () => {
-      const intent: UploadIntent = {
-        kind: 'MODEL3D',
-        filename: 'chair.glb',
-        fileSize: 20 * 1024 * 1024, // 20MB
-        mimeType: 'model/gltf-binary',
-      };
-
-      (prisma.mediaAsset.create as jest.Mock).mockResolvedValue({ id: mockAssetId } as any);
-      ociStorage.generateObjectKey.mockReturnValue('raw/3d/123/chair.glb');
-      ociStorage.createPAR.mockResolvedValue({
-        fullUrl: 'https://example.com/par',
-        expiresAt: new Date(),
-      } as any);
-      (prisma.uploadSession.create as jest.Mock).mockResolvedValue({ id: mockSessionId } as any);
-      config.get.mockReturnValue('raw-bucket');
-
-      const result = await service.createUploadIntent(mockUserId, intent);
-
-      expect(result.assetId).toBe(mockAssetId);
-      expect(ociStorage.generateObjectKey).toHaveBeenCalledWith(
-        expect.any(String),
-        '3d',
-        'chair.glb',
-      );
-    });
-
-    it('should reject invalid MIME type for image', async () => {
-      const intent: UploadIntent = {
-        kind: 'IMAGE',
-        filename: 'test.bmp',
-        mimeType: 'image/bmp', // Not allowed
-      };
-
-      await expect(service.createUploadIntent(mockUserId, intent)).rejects.toThrow(
-        BadRequestException,
-      );
-    });
-
-    it('should reject invalid MIME type for 3D model', async () => {
-      const intent: UploadIntent = {
-        kind: 'MODEL3D',
-        filename: 'test.obj',
-        mimeType: 'model/obj', // Not allowed
-      };
-
-      await expect(service.createUploadIntent(mockUserId, intent)).rejects.toThrow(
-        BadRequestException,
-      );
-    });
-
-    it('should reject image file size exceeding limit', async () => {
-      const intent: UploadIntent = {
-        kind: 'IMAGE',
-        filename: 'large.jpg',
-        fileSize: 60 * 1024 * 1024, // 60MB exceeds 50MB limit
-        mimeType: 'image/jpeg',
-      };
-
-      await expect(service.createUploadIntent(mockUserId, intent)).rejects.toThrow(
-        BadRequestException,
-      );
-    });
-
-    it('should reject 3D file size exceeding limit', async () => {
-      const intent: UploadIntent = {
-        kind: 'MODEL3D',
-        filename: 'large.glb',
-        fileSize: 600 * 1024 * 1024, // 600MB exceeds 500MB limit
-        mimeType: 'model/gltf-binary',
-      };
-
-      await expect(service.createUploadIntent(mockUserId, intent)).rejects.toThrow(
-        BadRequestException,
-      );
-    });
-
-    it('should reject invalid filename', async () => {
-      const intent: UploadIntent = {
-        kind: 'IMAGE',
-        filename: '', // Empty filename
-        mimeType: 'image/jpeg',
-      };
-
-      await expect(service.createUploadIntent(mockUserId, intent)).rejects.toThrow(
-        BadRequestException,
-      );
-    });
-
-    it('should reject filename exceeding max length', async () => {
-      const intent: UploadIntent = {
-        kind: 'IMAGE',
-        filename: 'a'.repeat(300), // Too long
-        mimeType: 'image/jpeg',
-      };
-
-      await expect(service.createUploadIntent(mockUserId, intent)).rejects.toThrow(
-        BadRequestException,
-      );
-    });
-
-    it('should reject HERO role for non-image assets', async () => {
-      const intent: UploadIntent = {
-        kind: 'MODEL3D',
-        filename: 'model.glb',
-        mimeType: 'model/gltf-binary',
-        role: 'HERO', // Invalid for 3D
-      };
-
-      await expect(service.createUploadIntent(mockUserId, intent)).rejects.toThrow(
-        BadRequestException,
-      );
-    });
-
-    it('should handle idempotency key for duplicate requests', async () => {
-      const intent: UploadIntent = {
-        kind: 'IMAGE',
-        filename: 'test.jpg',
-        mimeType: 'image/jpeg',
-      };
-
-      const existingSession = {
-        id: mockSessionId,
-        assetId: mockAssetId,
-        parUrl: 'https://example.com/par',
-        targetKey: 'raw/images/123/test.jpg',
-        expiresAt: new Date(),
-      };
-
-      (prisma.uploadSession.findUnique as jest.Mock).mockResolvedValue(existingSession as any);
-
-      const result = await service.createUploadIntent(mockUserId, intent, 'idempotency-key-123');
-
-      expect(result.uploadSessionId).toBe(mockSessionId);
-      expect(prisma.mediaAsset.create).not.toHaveBeenCalled();
-      expect(prisma.uploadSession.findUnique).toHaveBeenCalledWith({
-        where: { idempotencyKey: 'idempotency-key-123' },
+      expect(transaction.uploadSession.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ userId: subject, assetId }),
       });
     });
 
-    it('should accept all allowed image MIME types', async () => {
-      const allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/avif'];
+    it('creates a 3D upload intent', async () => {
+      const result = await service.createUploadIntent(subject, {
+        kind: AssetKind.MODEL3D,
+        filename: 'chair.glb',
+        fileSize: 20,
+        mimeType: 'model/gltf-binary',
+      });
 
-      for (const mimeType of allowedMimes) {
-        const intent: UploadIntent = {
-          kind: 'IMAGE',
-          filename: `test.${mimeType.split('/')[1]}`,
-          mimeType,
-        };
-
-        (prisma.mediaAsset.create as jest.Mock).mockResolvedValue({ id: mockAssetId } as any);
-        ociStorage.generateObjectKey.mockReturnValue('raw/images/123/test.jpg');
-        ociStorage.createPAR.mockResolvedValue({
-          fullUrl: 'https://example.com/par',
-          expiresAt: new Date(),
-        } as any);
-        (prisma.uploadSession.create as jest.Mock).mockResolvedValue({ id: mockSessionId } as any);
-        config.get.mockReturnValue('raw-bucket');
-
-        await expect(service.createUploadIntent(mockUserId, intent)).resolves.toBeDefined();
-      }
+      expect(result.assetId).toBe(assetId);
+      expect(storage.generateObjectKey).toHaveBeenCalledWith(assetId, '3d', 'chair.glb');
     });
 
-    it('should accept all allowed 3D MIME types', async () => {
-      const allowedMimes = [
-        'model/gltf-binary',
-        'model/gltf+json',
-        'model/vnd.usdz+zip',
-        'application/octet-stream',
-      ];
+    it.each([
+      {
+        kind: AssetKind.IMAGE,
+        filename: 'test.bmp',
+        mimeType: 'image/bmp',
+      },
+      {
+        kind: AssetKind.MODEL3D,
+        filename: 'test.obj',
+        mimeType: 'model/obj',
+      },
+    ])('rejects unsupported MIME type $mimeType', async (intent) => {
+      await expect(service.createUploadIntent(subject, intent)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
 
-      for (const mimeType of allowedMimes) {
-        const intent: UploadIntent = {
-          kind: 'MODEL3D',
+    it.each([
+      {
+        kind: AssetKind.IMAGE,
+        filename: 'large.jpg',
+        fileSize: 60 * 1024 * 1024,
+        mimeType: 'image/jpeg',
+      },
+      {
+        kind: AssetKind.MODEL3D,
+        filename: 'large.glb',
+        fileSize: 600 * 1024 * 1024,
+        mimeType: 'model/gltf-binary',
+      },
+    ])('rejects an oversized $kind upload', async (intent) => {
+      await expect(service.createUploadIntent(subject, intent)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+
+    it.each(['', 'a'.repeat(300)])('rejects invalid filename length', async (filename) => {
+      await expect(
+        service.createUploadIntent(subject, {
+          kind: AssetKind.IMAGE,
+          filename,
+          mimeType: 'image/jpeg',
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('rejects HERO role for non-image assets', async () => {
+      await expect(
+        service.createUploadIntent(subject, {
+          kind: AssetKind.MODEL3D,
+          filename: 'model.glb',
+          mimeType: 'model/gltf-binary',
+          role: AssetRole.HERO,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('scopes an idempotent replay to the same subject and intent', async () => {
+      transaction.uploadSession.findUnique.mockResolvedValue({
+        id: sessionId,
+        assetId,
+        userId: subject,
+        filename: 'test.jpg',
+        fileSize: null,
+        mimeType: 'image/jpeg',
+        productId: null,
+        variantId: null,
+        kind: AssetKind.IMAGE,
+        role: null,
+        parUrl: 'https://example.test/upload',
+        targetKey: `raw/images/${assetId}/test.jpg`,
+        expiresAt,
+      });
+
+      const result = await service.createUploadIntent(
+        subject,
+        { kind: AssetKind.IMAGE, filename: 'test.jpg', mimeType: 'image/jpeg' },
+        'same-key',
+      );
+
+      expect(result.uploadSessionId).toBe(sessionId);
+      expect(transaction.uploadSession.findUnique).toHaveBeenCalledWith({
+        where: { idempotencyKey: expect.stringMatching(/^[a-f0-9]{64}$/) },
+      });
+      expect(transaction.mediaAsset.create).not.toHaveBeenCalled();
+      expect(authorization.requireAsset).toHaveBeenCalled();
+    });
+
+    it.each(['image/jpeg', 'image/png', 'image/webp', 'image/avif'])(
+      'accepts allowed image MIME %s',
+      async (mimeType) => {
+        await expect(
+          service.createUploadIntent(subject, {
+            kind: AssetKind.IMAGE,
+            filename: `test.${mimeType.split('/')[1]}`,
+            mimeType,
+          }),
+        ).resolves.toBeDefined();
+      },
+    );
+
+    it.each([
+      'model/gltf-binary',
+      'model/gltf+json',
+      'model/vnd.usdz+zip',
+      'application/octet-stream',
+    ])('accepts allowed 3D MIME %s', async (mimeType) => {
+      await expect(
+        service.createUploadIntent(subject, {
+          kind: AssetKind.MODEL3D,
           filename: 'test.glb',
           mimeType,
-        };
-
-        (prisma.mediaAsset.create as jest.Mock).mockResolvedValue({ id: mockAssetId } as any);
-        ociStorage.generateObjectKey.mockReturnValue('raw/3d/123/test.glb');
-        ociStorage.createPAR.mockResolvedValue({
-          fullUrl: 'https://example.com/par',
-          expiresAt: new Date(),
-        } as any);
-        (prisma.uploadSession.create as jest.Mock).mockResolvedValue({ id: mockSessionId } as any);
-        config.get.mockReturnValue('raw-bucket');
-
-        await expect(service.createUploadIntent(mockUserId, intent)).resolves.toBeDefined();
-      }
+        }),
+      ).resolves.toBeDefined();
     });
   });
 
   describe('confirmUpload', () => {
-    it('should confirm successful upload', async () => {
-      const mockSession = {
-        id: mockSessionId,
-        assetId: mockAssetId,
-        status: 'PENDING',
-        targetKey: 'raw/images/123/test.jpg',
-      };
+    const pendingSession = {
+      id: sessionId,
+      assetId,
+      userId: subject,
+      status: 'PENDING',
+      targetKey: `raw/images/${assetId}/test.jpg`,
+      fileSize: 10,
+      mimeType: 'image/jpeg',
+      expiresAt,
+    };
 
-      (prisma.uploadSession.findUnique as jest.Mock).mockResolvedValue(mockSession as any);
-      prisma.$transaction.mockResolvedValue([{}, {}]);
+    it('confirms an uploaded object for the verified subject', async () => {
+      transaction.uploadSession.findFirst.mockResolvedValue(pendingSession);
 
-      const result = await service.confirmUpload(mockSessionId);
+      const result = await service.confirmUpload(subject, sessionId);
 
-      expect(result).toEqual({
-        assetId: mockAssetId,
-        targetKey: mockSession.targetKey,
+      expect(result).toEqual({ assetId, targetKey: pendingSession.targetKey });
+      expect(transaction.uploadSession.findFirst).toHaveBeenCalledWith({
+        where: { id: sessionId, userId: subject },
       });
-
-      expect(prisma.$transaction).toHaveBeenCalledWith([
-        expect.objectContaining({
-          where: { id: mockSessionId },
-        }),
-        expect.objectContaining({
-          where: { id: mockAssetId },
-        }),
-      ]);
+      expect(transaction.uploadSession.update).toHaveBeenCalledWith({
+        where: { id: sessionId },
+        data: { status: 'UPLOADED', uploadedAt: expect.any(Date) },
+      });
+      expect(transaction.mediaAsset.update).toHaveBeenCalledWith({
+        where: { id: assetId },
+        data: { rawKey: pendingSession.targetKey },
+      });
     });
 
-    it('should throw error for non-existent session', async () => {
-      (prisma.uploadSession.findUnique as jest.Mock).mockResolvedValue(null);
+    it('returns the common 404 for a missing or foreign session', async () => {
+      transaction.uploadSession.findFirst.mockResolvedValue(null);
 
-      await expect(service.confirmUpload('invalid-session')).rejects.toThrow(BadRequestException);
+      await expect(service.confirmUpload(subject, sessionId)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
 
-    it('should skip confirmation if already uploaded', async () => {
-      const mockSession = {
-        id: mockSessionId,
-        assetId: mockAssetId,
+    it('does not repeat storage or database writes for an uploaded session', async () => {
+      transaction.uploadSession.findFirst.mockResolvedValue({
+        ...pendingSession,
         status: 'UPLOADED',
-      };
-
-      (prisma.uploadSession.findUnique as jest.Mock).mockResolvedValue(mockSession as any);
-
-      await service.confirmUpload(mockSessionId);
-
-      expect(prisma.$transaction).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('cleanupExpiredSessions', () => {
-    it('should mark expired sessions as EXPIRED', async () => {
-      const expiredSessions = [
-        { id: 'session-1', expiresAt: new Date(Date.now() - 3600000) },
-        { id: 'session-2', expiresAt: new Date(Date.now() - 7200000) },
-      ];
-
-      (prisma.uploadSession.findMany as jest.Mock).mockResolvedValue(expiredSessions as any);
-      (prisma.uploadSession.updateMany as jest.Mock).mockResolvedValue({ count: 2 } as any);
-
-      await service.cleanupExpiredSessions();
-
-      expect(prisma.uploadSession.updateMany).toHaveBeenCalledWith({
-        where: {
-          id: { in: ['session-1', 'session-2'] },
-        },
-        data: {
-          status: 'EXPIRED',
-        },
       });
-    });
 
-    it('should not update if no expired sessions', async () => {
-      (prisma.uploadSession.findMany as jest.Mock).mockResolvedValue([]);
-
-      await service.cleanupExpiredSessions();
-
-      expect(prisma.uploadSession.updateMany).not.toHaveBeenCalled();
+      await expect(service.confirmUpload(subject, sessionId)).resolves.toEqual({
+        assetId,
+        targetKey: pendingSession.targetKey,
+      });
+      expect(storage.headObject).not.toHaveBeenCalled();
+      expect(transaction.uploadSession.update).not.toHaveBeenCalled();
     });
   });
 });
