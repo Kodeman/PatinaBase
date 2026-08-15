@@ -18,13 +18,30 @@ const DESIGNER_ID = 'cfb10000-0000-4000-8000-000000000003';
 const ORG_MEMBER_ID = 'cfb10000-0000-4000-8000-000000000004';
 const ADMIN_ID = 'cfb10000-0000-4000-8000-000000000005';
 const PERMISSION_USER_ID = 'cfb10000-0000-4000-8000-000000000006';
-const USER_IDS = [CLIENT_ID, OTHER_ID, DESIGNER_ID, ORG_MEMBER_ID, ADMIN_ID, PERMISSION_USER_ID];
+const NO_ROLE_ID = 'cfb10000-0000-4000-8000-000000000007';
+const NO_PROJECT_PERMISSION_ID = 'cfb10000-0000-4000-8000-000000000008';
+const UNKNOWN_ROLE_USER_ID = 'cfb10000-0000-4000-8000-000000000009';
+const STALE_METADATA_ID = 'cfb10000-0000-4000-8000-000000000010';
+const USER_IDS = [
+  CLIENT_ID,
+  OTHER_ID,
+  DESIGNER_ID,
+  ORG_MEMBER_ID,
+  ADMIN_ID,
+  PERMISSION_USER_ID,
+  NO_ROLE_ID,
+  NO_PROJECT_PERMISSION_ID,
+  UNKNOWN_ROLE_USER_ID,
+  STALE_METADATA_ID,
+];
 const ORGANIZATION_ID = 'cfb20000-0000-4000-8000-000000000001';
 const PUBLIC_PROJECT_ID = 'cfb30000-0000-4000-8000-000000000001';
 const OTHER_PUBLIC_PROJECT_ID = 'cfb30000-0000-4000-8000-000000000002';
 const SERVICE_PROJECT_ID = 'cfb40000-0000-4000-8000-000000000001';
 const OTHER_SERVICE_PROJECT_ID = 'cfb40000-0000-4000-8000-000000000002';
 const ABSENT_PROJECT_ID = 'cfb40000-0000-4000-8000-000000000099';
+const UNKNOWN_ROLE_ID = 'cfb50000-0000-4000-8000-000000000001';
+const UNKNOWN_ROLE_NAME = 'cfb_invented_project_admin';
 
 describe('ProjectsAuthorizationResolver (real local Postgres)', () => {
   let prisma: PrismaService;
@@ -56,6 +73,11 @@ describe('ProjectsAuthorizationResolver (real local Postgres)', () => {
       `);
       await tx.$executeRaw(Prisma.sql`
         DELETE FROM auth.users WHERE id::text IN (${Prisma.join(USER_IDS)})
+      `);
+      await tx.$executeRaw(Prisma.sql`
+        DELETE FROM public.roles
+        WHERE id::text = ${UNKNOWN_ROLE_ID}
+           OR name = ${UNKNOWN_ROLE_NAME}
       `);
     });
   };
@@ -129,6 +151,48 @@ describe('ProjectsAuthorizationResolver (real local Postgres)', () => {
     await assignRole(ORG_MEMBER_ID, 'studio_owner');
     await assignRole(ADMIN_ID, 'super_admin');
     await assignRole(PERMISSION_USER_ID, 'quality_control');
+    await assignRole(NO_PROJECT_PERMISSION_ID, 'quality_control');
+
+    await prisma.$executeRaw(Prisma.sql`
+      INSERT INTO public.roles (
+        id,
+        name,
+        display_name,
+        description,
+        domain,
+        is_system,
+        is_assignable
+      ) VALUES (
+        ${UNKNOWN_ROLE_ID}::uuid,
+        ${UNKNOWN_ROLE_NAME},
+        'CFB Invented Project Admin',
+        'Negative retained-project authorization fixture',
+        'admin',
+        false,
+        true
+      )
+    `);
+    await prisma.$executeRaw(Prisma.sql`
+      INSERT INTO public.role_permissions (role_id, permission_id)
+      SELECT ${UNKNOWN_ROLE_ID}::uuid, permission.id
+      FROM public.permissions AS permission
+      WHERE permission.name = 'project.admin.all'
+    `);
+    await assignRole(UNKNOWN_ROLE_USER_ID, UNKNOWN_ROLE_NAME);
+
+    await prisma.$executeRaw(Prisma.sql`
+      UPDATE auth.users
+      SET raw_app_meta_data = ${JSON.stringify({
+        provider: 'email',
+        providers: ['email'],
+        role: 'super_admin',
+        roles: ['super_admin'],
+        permissions: ['project.admin.all'],
+        organization_id: ORGANIZATION_ID,
+        organizationIds: [ORGANIZATION_ID],
+      })}::jsonb
+      WHERE id = ${STALE_METADATA_ID}::uuid
+    `);
 
     await prisma.$executeRaw(Prisma.sql`
       INSERT INTO public.organizations (id, type, name, slug, status)
@@ -182,7 +246,10 @@ describe('ProjectsAuthorizationResolver (real local Postgres)', () => {
     `);
     await prisma.$executeRaw(Prisma.sql`
       INSERT INTO public.project_team_members (project_id, user_id, role)
-      VALUES (${PUBLIC_PROJECT_ID}::uuid, ${PERMISSION_USER_ID}::uuid, 'client')
+      VALUES
+        (${PUBLIC_PROJECT_ID}::uuid, ${PERMISSION_USER_ID}::uuid, 'client'),
+        (${PUBLIC_PROJECT_ID}::uuid, ${NO_ROLE_ID}::uuid, 'client'),
+        (${PUBLIC_PROJECT_ID}::uuid, ${NO_PROJECT_PERMISSION_ID}::uuid, 'client')
     `);
     await prisma.project.create({
       data: {
@@ -235,6 +302,80 @@ describe('ProjectsAuthorizationResolver (real local Postgres)', () => {
     );
     expect(project.publicProjectId).toBe(PUBLIC_PROJECT_ID);
     expect(project.clientId).toBe(CLIENT_ID);
+  });
+
+  it('denies a subject with no current user role', async () => {
+    await expect(resolver.resolve(NO_ROLE_ID)).resolves.toEqual({
+      subject: NO_ROLE_ID,
+      roles: [],
+      permissions: [],
+      organizationIds: [],
+    });
+    await expect(
+      resolver.assertProjectAccess(NO_ROLE_ID, SERVICE_PROJECT_ID, 'read'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('denies a supported current role with no canonical project permission', async () => {
+    const authorization = await resolver.resolve(NO_PROJECT_PERMISSION_ID);
+
+    expect(authorization.roles).toEqual(['quality_control']);
+    expect(
+      authorization.permissions.filter((permission) => permission.startsWith('project.')),
+    ).toEqual([]);
+    await expect(
+      resolver.assertProjectAccess(NO_PROJECT_PERMISSION_ID, SERVICE_PROJECT_ID, 'read'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('denies an invented current role even when Strata maps it to project.admin.all', async () => {
+    const mappedPermissions = await prisma.$queryRaw<Array<{ permissionName: string }>>(Prisma.sql`
+      SELECT permission.name AS "permissionName"
+      FROM public.roles AS role
+      JOIN public.role_permissions AS role_permission ON role_permission.role_id = role.id
+      JOIN public.permissions AS permission ON permission.id = role_permission.permission_id
+      WHERE role.id = ${UNKNOWN_ROLE_ID}::uuid
+        AND role.name = ${UNKNOWN_ROLE_NAME}
+    `);
+    expect(mappedPermissions).toEqual([{ permissionName: 'project.admin.all' }]);
+
+    const authorization = await resolver.resolve(UNKNOWN_ROLE_USER_ID);
+    expect(authorization.roles).toEqual([UNKNOWN_ROLE_NAME]);
+    expect(authorization.permissions).toEqual([]);
+    await expect(
+      resolver.assertProjectAccess(UNKNOWN_ROLE_USER_ID, SERVICE_PROJECT_ID, 'manage'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('ignores stale JWT app_metadata role, permission, and organization claims', async () => {
+    const metadataRows = await prisma.$queryRaw<Array<{ appMetadata: Record<string, unknown> }>>(
+      Prisma.sql`
+        SELECT raw_app_meta_data AS "appMetadata"
+        FROM auth.users
+        WHERE id = ${STALE_METADATA_ID}::uuid
+      `,
+    );
+    expect(metadataRows).toEqual([
+      {
+        appMetadata: expect.objectContaining({
+          role: 'super_admin',
+          roles: ['super_admin'],
+          permissions: ['project.admin.all'],
+          organization_id: ORGANIZATION_ID,
+          organizationIds: [ORGANIZATION_ID],
+        }),
+      },
+    ]);
+
+    await expect(resolver.resolve(STALE_METADATA_ID)).resolves.toEqual({
+      subject: STALE_METADATA_ID,
+      roles: [],
+      permissions: [],
+      organizationIds: [],
+    });
+    await expect(
+      resolver.assertProjectAccess(STALE_METADATA_ID, SERVICE_PROJECT_ID, 'manage'),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('returns an identical 404 for an inaccessible and an absent project', async () => {
