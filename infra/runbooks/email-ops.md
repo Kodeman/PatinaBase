@@ -36,7 +36,7 @@ Key cron jobs (see `supabase/migrations/00079_cron_schedules.sql`, plus 00120, 0
 
 Check in this order:
 
-1. `RESEND_API_KEY` is set on the affected service (Coolify env or `supabase secrets list`). The per-call check throws if missing.
+1. `RESEND_API_KEY` is set on the affected Cloudflare service or in `supabase secrets list`. The per-call check throws if missing.
 2. `notification_log` for fresh rows. If status='queued' is piling up, the dispatcher isn't running.
 3. `cron.job` table — confirm the relevant job exists and is scheduled.
 4. Resend dashboard → Logs. If we sent successfully but the user didn't receive, it's deliverability not orchestration.
