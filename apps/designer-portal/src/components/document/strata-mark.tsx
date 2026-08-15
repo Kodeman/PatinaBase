@@ -34,10 +34,12 @@ const STATE_COLOR: Record<StrataMarkState, string> = {
 const MOVEMENT = ['var(--color-mocha)', 'var(--color-clay)', 'var(--color-dusty-blue)'] as const;
 const LINE3_OPACITY = 0.55;
 
-// Size variants (R35): overall mark width sm/md/lg/xl = 48/88/120/150; lines
-// at the canonical 100/80/60 ratio. The ⌘K and tab marks use sm — wide enough
-// that result-row progress reads before opening.
+// Size variants (R35): overall mark width xs/sm/md/lg/xl = 22/48/88/120/150;
+// lines at the canonical 100/80/60 ratio. The ⌘K and tab marks use sm — wide
+// enough that result-row progress reads before opening. xs is the spine's
+// full-tier strip — the only place seven marks must sit in one row at rest.
 const SIZES = {
+  xs: { w: 22, bar: 2, gap: 2 },
   sm: { w: 48, bar: 2, gap: 2.5 },
   md: { w: 88, bar: 3, gap: 4 },
   lg: { w: 120, bar: 4, gap: 6 },

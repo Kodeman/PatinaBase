@@ -54,11 +54,13 @@ export function DocSpine({
       </Link>
 
       {/* Full tier (≥1440): the seven marks travel in one row rather than
-          seven labelled rows — the fixed 200px spine column is narrower
-          than seven sm marks laid end to end, so the row scrolls its own
-          overflow. Per-mark text drops out here; the active phase's line
-          renders once, below the row. */}
-      <ul className="flex flex-col items-center gap-1 min-[1440px]:flex-row min-[1440px]:flex-nowrap min-[1440px]:items-center min-[1440px]:gap-2 min-[1440px]:overflow-x-auto min-[1440px]:pb-1">
+          seven labelled rows, and all seven must sit AT REST — the
+          progression is the point, so nothing may hide behind a scroll.
+          The fixed 200px spine column leaves ~168px inside its own px-4;
+          `xs` marks (22px) plus a reclaimed slice of that padding (-mx-2)
+          fit seven with room to spare. Per-mark text drops out here; the
+          active phase's line renders once, below the row. */}
+      <ul className="flex flex-col items-center gap-1 min-[1440px]:flex-row min-[1440px]:flex-nowrap min-[1440px]:items-center min-[1440px]:gap-0.5 min-[1440px]:-mx-2">
         {sections.map((s) => {
           const mark = (
             <StrataMark
@@ -73,16 +75,31 @@ export function DocSpine({
               }
             />
           );
+          const markXs = (
+            <StrataMark
+              fill={fillStateAtSection(s.key)}
+              size="xs"
+              breathing={s.state === 'active'}
+              label={
+                s.state === 'active' ? `${s.label} — ${s.sub}` : undefined
+              }
+            />
+          );
           // Settled + active markers jump to their section; future ones are
           // inert (nothing to reach yet). The jump button gives keyboard reach.
+          // The full-tier cell holds the row's 44px height but only 24px of
+          // width (the xs mark is 22px) — narrower than the usual 44px
+          // target, so it stays at the 24px floor rather than the mark's
+          // own 22px.
           return (
             <li key={s.key} className="w-full shrink-0 min-[1440px]:w-auto">
               {s.state === 'future' || s.state === 'unrecorded' || !onJump ? (
                 <div
                   aria-label={`${s.label}: ${s.sub}`}
-                  className="flex min-h-11 items-center justify-center min-[1440px]:w-11"
+                  className="flex min-h-11 items-center justify-center min-[1440px]:w-6"
                 >
-                  {mark}
+                  <span className="min-[1440px]:hidden">{mark}</span>
+                  <span className="hidden min-[1440px]:block">{markXs}</span>
                 </div>
               ) : (
                 <button
@@ -90,9 +107,10 @@ export function DocSpine({
                   onClick={() => onJump(s.key)}
                   title={`Jump to ${s.label}`}
                   aria-label={`Jump to ${s.label}: ${s.sub}`}
-                  className="flex min-h-11 w-full min-w-11 items-center justify-center rounded-[4px] transition-colors hover:bg-[rgba(196,165,123,0.08)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none min-[1440px]:w-11"
+                  className="flex min-h-11 w-full min-w-11 items-center justify-center rounded-[4px] transition-colors hover:bg-[rgba(196,165,123,0.08)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none min-[1440px]:w-6"
                 >
-                  {mark}
+                  <span className="min-[1440px]:hidden">{mark}</span>
+                  <span className="hidden min-[1440px]:block">{markXs}</span>
                 </button>
               )}
             </li>
