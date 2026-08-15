@@ -2,9 +2,11 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { OrdersService } from './orders.service';
 import { PrismaClient } from '../../generated/prisma-client';
 import { ConfigService } from '@nestjs/config';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { OrdersAuthorizationResolver } from '../../common/authorization/orders-authorization.resolver';
 
 describe('OrdersService', () => {
+  const subject = 'user-123';
   let service: OrdersService;
   let prisma: PrismaClient;
   let eventsService: any;
@@ -29,6 +31,21 @@ describe('OrdersService', () => {
     get: jest.fn((key, defaultValue) => defaultValue),
   };
 
+  const mockAuthorization = {
+    authorize: jest.fn(async (_subject, _action, operation) =>
+      operation(
+        mockPrismaClient,
+        { subject, roles: [], permissions: [], organizationIds: [] },
+        { userId: subject },
+      ),
+    ),
+    requireOrder: jest.fn(async (database, _scope, where) => {
+      const order = await database.order.findUnique({ where });
+      if (!order) throw new NotFoundException('Order not found');
+      return order;
+    }),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -44,6 +61,10 @@ describe('OrdersService', () => {
         {
           provide: 'EVENTS_SERVICE',
           useValue: mockEventsService,
+        },
+        {
+          provide: OrdersAuthorizationResolver,
+          useValue: mockAuthorization,
         },
       ],
     }).compile();
@@ -78,7 +99,7 @@ describe('OrdersService', () => {
         paidAt: new Date(),
       });
 
-      const result = await service.updateStatus('order-123', 'paid');
+      const result = await service.updateStatus('order-123', 'paid', subject);
 
       expect(result.status).toBe('paid');
       expect(mockPrismaClient.auditLog.create).toHaveBeenCalled();
@@ -110,7 +131,7 @@ describe('OrdersService', () => {
         fulfillmentStatus: 'fulfilled',
       });
 
-      const result = await service.updateStatus('order-123', 'fulfilled');
+      const result = await service.updateStatus('order-123', 'fulfilled', subject);
 
       expect(result.status).toBe('fulfilled');
       expect(result.fulfillmentStatus).toBe('fulfilled');
@@ -136,7 +157,7 @@ describe('OrdersService', () => {
         closedAt: new Date(),
       });
 
-      const result = await service.updateStatus('order-123', 'closed');
+      const result = await service.updateStatus('order-123', 'closed', subject);
 
       expect(result.status).toBe('closed');
     });
@@ -154,7 +175,7 @@ describe('OrdersService', () => {
 
       mockPrismaClient.order.findUnique.mockResolvedValue(mockOrder);
 
-      await expect(service.updateStatus('order-123', 'paid')).rejects.toThrow(
+      await expect(service.updateStatus('order-123', 'paid', subject)).rejects.toThrow(
         BadRequestException,
       );
     });
@@ -173,7 +194,7 @@ describe('OrdersService', () => {
       mockPrismaClient.order.findUnique.mockResolvedValue(mockOrder);
 
       await expect(
-        service.updateStatus('order-123', 'fulfilled'),
+        service.updateStatus('order-123', 'fulfilled', subject),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -196,7 +217,7 @@ describe('OrdersService', () => {
         canceledAt: new Date(),
       });
 
-      const result = await service.cancel('order-123', 'Customer request');
+      await service.cancel('order-123', 'Customer request', subject);
 
       expect(mockEventsService.publish).toHaveBeenCalledWith(
         'order.canceled',
@@ -223,7 +244,7 @@ describe('OrdersService', () => {
       mockPrismaClient.order.findUnique.mockResolvedValue(mockOrder);
 
       await expect(
-        service.cancel('order-123', 'Customer request'),
+        service.cancel('order-123', 'Customer request', subject),
       ).rejects.toThrow('Cannot cancel paid order without refund');
     });
   });
@@ -238,13 +259,13 @@ describe('OrdersService', () => {
       mockPrismaClient.order.findMany.mockResolvedValue(mockOrders);
       mockPrismaClient.order.count.mockResolvedValue(2);
 
-      const result = await service.findAll({ userId: 'user-123' });
+      const result = await service.findAll({ userId: 'caller-controlled-user' }, subject);
 
       expect(result.data).toHaveLength(2);
       expect(result.pagination.total).toBe(2);
       expect(mockPrismaClient.order.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { userId: 'user-123' },
+          where: { AND: [{ userId: subject }, {}] },
         }),
       );
     });
@@ -255,12 +276,12 @@ describe('OrdersService', () => {
       mockPrismaClient.order.findMany.mockResolvedValue(mockOrders);
       mockPrismaClient.order.count.mockResolvedValue(1);
 
-      const result = await service.findAll({ status: 'paid' });
+      const result = await service.findAll({ status: 'paid' }, subject);
 
       expect(result.data).toHaveLength(1);
       expect(mockPrismaClient.order.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { status: 'paid' },
+          where: { AND: [{ userId: subject }, { status: 'paid' }] },
         }),
       );
     });
@@ -272,15 +293,15 @@ describe('OrdersService', () => {
       mockPrismaClient.order.findMany.mockResolvedValue([]);
       mockPrismaClient.order.count.mockResolvedValue(0);
 
-      await service.findAll({ from: fromDate, to: toDate });
+      await service.findAll({ from: fromDate, to: toDate }, subject);
 
       expect(mockPrismaClient.order.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: {
-            createdAt: {
-              gte: fromDate,
-              lte: toDate,
-            },
+            AND: [
+              { userId: subject },
+              { createdAt: { gte: fromDate, lte: toDate } },
+            ],
           },
         }),
       );
@@ -290,7 +311,7 @@ describe('OrdersService', () => {
       mockPrismaClient.order.findMany.mockResolvedValue([]);
       mockPrismaClient.order.count.mockResolvedValue(100);
 
-      await service.findAll({ skip: 20, take: 10 });
+      await service.findAll({ skip: 20, take: 10 }, subject);
 
       expect(mockPrismaClient.order.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -331,7 +352,7 @@ describe('OrdersService', () => {
           status: to,
         });
 
-        await expect(service.updateStatus('order-123', to)).resolves.toBeDefined();
+        await expect(service.updateStatus('order-123', to, subject)).resolves.toBeDefined();
       });
     });
 
@@ -357,7 +378,7 @@ describe('OrdersService', () => {
 
         mockPrismaClient.order.findUnique.mockResolvedValue(mockOrder);
 
-        await expect(service.updateStatus('order-123', to)).rejects.toThrow(
+        await expect(service.updateStatus('order-123', to, subject)).rejects.toThrow(
           BadRequestException,
         );
       });

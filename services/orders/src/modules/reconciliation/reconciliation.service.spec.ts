@@ -3,6 +3,7 @@ import { ServiceUnavailableException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ReconciliationService } from './reconciliation.service';
 import { PrismaClient } from '../../generated/prisma-client';
+import { OrdersAuthorizationResolver } from '../../common/authorization/orders-authorization.resolver';
 
 describe('ReconciliationService - Stripe unconfigured (parked payment rail)', () => {
   let service: ReconciliationService;
@@ -10,6 +11,7 @@ describe('ReconciliationService - Stripe unconfigured (parked payment rail)', ()
     reconciliation: { create: jest.fn() },
   } as unknown as PrismaClient;
   const mockEvents = { publish: jest.fn() };
+  const mockAuthorization = { authorize: jest.fn() };
   const config = { get: jest.fn((_key: string, defaultValue?: unknown) => defaultValue) } as unknown as ConfigService;
 
   async function buildService(stripe: unknown) {
@@ -20,6 +22,7 @@ describe('ReconciliationService - Stripe unconfigured (parked payment rail)', ()
         { provide: ConfigService, useValue: config },
         { provide: 'STRIPE_CLIENT', useValue: stripe },
         { provide: 'EVENTS_SERVICE', useValue: mockEvents },
+        { provide: OrdersAuthorizationResolver, useValue: mockAuthorization },
       ],
     }).compile();
 

@@ -3,16 +3,24 @@ import { CartsService } from './carts.service';
 import { PrismaClient } from '../../generated/prisma-client';
 import { ConfigService } from '@nestjs/config';
 import { Decimal } from '../../generated/prisma-client/runtime/library';
+import { NotFoundException } from '@nestjs/common';
+import { OrdersAuthorizationResolver } from '../../common/authorization/orders-authorization.resolver';
 
 describe('CartsService', () => {
+  const subject = 'user-123';
   let service: CartsService;
   let prisma: PrismaClient;
   let eventsService: any;
 
-  const mockPrismaClient = {
+  const mockPrismaClient: any = {
     cart: {
       create: jest.fn(),
       findUnique: jest.fn(),
+      findUniqueOrThrow: jest.fn(async (args) => {
+        const cart = await mockPrismaClient.cart.findUnique(args);
+        if (!cart) throw new NotFoundException('Cart not found');
+        return cart;
+      }),
       findFirst: jest.fn(),
       update: jest.fn(),
     },
@@ -35,6 +43,22 @@ describe('CartsService', () => {
     get: jest.fn((key, defaultValue) => defaultValue),
   };
 
+  const authorizationState = { subject, roles: [], permissions: [], organizationIds: [] };
+  const mockAuthorization = {
+    authorize: jest.fn(async (_subject, _action, operation) =>
+      operation(mockPrismaClient, authorizationState, { userId: subject }),
+    ),
+    authorizeCart: jest.fn(async (_subject, _action, cartId, operation) => {
+      const cart = await mockPrismaClient.cart.findUnique({
+        where: { id: cartId },
+        include: { items: true },
+      });
+      if (!cart) throw new NotFoundException('Cart not found');
+      return operation(mockPrismaClient, authorizationState, cart);
+    }),
+    cartScope: jest.fn(() => ({ userId: subject })),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -50,6 +74,10 @@ describe('CartsService', () => {
         {
           provide: 'EVENTS_SERVICE',
           useValue: mockEventsService,
+        },
+        {
+          provide: OrdersAuthorizationResolver,
+          useValue: mockAuthorization,
         },
       ],
     }).compile();
@@ -83,24 +111,26 @@ describe('CartsService', () => {
       mockPrismaClient.cart.findUnique.mockResolvedValue(mockCart);
 
       const result = await service.create({
-        userId: 'user-123',
+        userId: 'caller-controlled-user',
         currency: 'USD',
-      });
+      } as any, subject);
 
       expect(result).toBeDefined();
       expect(result.userId).toBe('user-123');
-      expect(mockPrismaClient.cart.create).toHaveBeenCalled();
+      expect(mockPrismaClient.cart.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ userId: subject }),
+      });
       expect(mockEventsService.publish).toHaveBeenCalledWith(
         'cart.created',
         expect.objectContaining({ type: 'cart.created' }),
       );
     });
 
-    it('should create an anonymous cart with session token', async () => {
+    it('should bind a cart without caller identity fields to the verified subject', async () => {
       const mockCart = {
         id: 'cart-456',
-        userId: null,
-        sessionToken: 'session-abc',
+        userId: subject,
+        sessionToken: null,
         status: 'active',
         currency: 'USD',
         items: [],
@@ -114,11 +144,13 @@ describe('CartsService', () => {
       mockPrismaClient.cart.create.mockResolvedValue(mockCart);
       mockPrismaClient.cart.findUnique.mockResolvedValue(mockCart);
 
-      const result = await service.create({ currency: 'USD' });
+      const result = await service.create({ currency: 'USD' }, subject);
 
       expect(result).toBeDefined();
-      expect(result.sessionToken).toBeDefined();
-      expect(result.userId).toBeNull();
+      expect(result.userId).toBe(subject);
+      expect(mockPrismaClient.cart.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ userId: subject }),
+      });
     });
   });
 
@@ -160,7 +192,7 @@ describe('CartsService', () => {
         discountCode: 'SAVE10',
       });
 
-      await service.applyDiscount('cart-123', { code: 'SAVE10' });
+      await service.applyDiscount('cart-123', { code: 'SAVE10' }, subject);
 
       expect(mockPrismaClient.discount.findUnique).toHaveBeenCalledWith({
         where: { code: 'SAVE10' },
@@ -191,7 +223,7 @@ describe('CartsService', () => {
       mockPrismaClient.discount.findUnique.mockResolvedValue(expiredDiscount);
 
       await expect(
-        service.applyDiscount('cart-123', { code: 'EXPIRED' }),
+        service.applyDiscount('cart-123', { code: 'EXPIRED' }, subject),
       ).rejects.toThrow('Discount has expired');
     });
 
@@ -218,7 +250,7 @@ describe('CartsService', () => {
       mockPrismaClient.discount.findUnique.mockResolvedValue(limitedDiscount);
 
       await expect(
-        service.applyDiscount('cart-123', { code: 'LIMITED' }),
+        service.applyDiscount('cart-123', { code: 'LIMITED' }, subject),
       ).rejects.toThrow('Discount usage limit reached');
     });
   });
@@ -304,16 +336,22 @@ describe('CartsService', () => {
       const mockCart = {
         id: 'cart-123',
         status: 'active',
+        subtotal: new Decimal(20),
+        discountCode: null,
+        discountAmount: new Decimal(0),
+        taxTotal: new Decimal(0),
+        shippingTotal: new Decimal(0),
+        total: new Decimal(20),
         items: [
-          { id: 'item-1', productId: 'prod-1' },
-          { id: 'item-2', productId: 'prod-2' },
+          { id: 'item-1', productId: 'prod-1', unitPrice: new Decimal(10), qty: 1 },
+          { id: 'item-2', productId: 'prod-2', unitPrice: new Decimal(10), qty: 1 },
         ],
       };
 
       mockPrismaClient.cart.findUnique.mockResolvedValue(mockCart);
       mockPrismaClient.cartItem.delete.mockResolvedValue({});
 
-      await service.removeItem('cart-123', 'item-1');
+      await service.removeItem('cart-123', 'item-1', subject);
 
       expect(mockPrismaClient.cartItem.delete).toHaveBeenCalledWith({
         where: { id: 'item-1' },
@@ -333,7 +371,7 @@ describe('CartsService', () => {
 
       mockPrismaClient.cart.findUnique.mockResolvedValue(mockCart);
 
-      await expect(service.removeItem('cart-123', 'item-1')).rejects.toThrow(
+      await expect(service.removeItem('cart-123', 'item-1', subject)).rejects.toThrow(
         'Cannot modify inactive cart',
       );
     });
