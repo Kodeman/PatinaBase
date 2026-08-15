@@ -4,8 +4,9 @@
  * The document spine (spec §3, D12): Put down, seven section markers, the
  * timer (D9 — capture in the document), presence line. A sticky full-height
  * rail only when the paper can keep its working measure: compact index from
- * 1180px, full labelled spine from 1440px. Below that, D13's mobile sheet is
- * the document index.
+ * 1180px; from 1440px the seven marks travel in one row with only the active
+ * phase's line beneath them. Below 1180px, D13's mobile sheet is the
+ * document index.
  */
 
 import type { ReactNode } from 'react';
@@ -52,61 +53,36 @@ export function DocSpine({
         </span>
       </Link>
 
-      <ul className="flex flex-col items-center gap-1 min-[1440px]:items-stretch min-[1440px]:gap-0">
+      {/* Full tier (≥1440): the seven marks travel in one row rather than
+          seven labelled rows — the fixed 200px spine column is narrower
+          than seven sm marks laid end to end, so the row scrolls its own
+          overflow. Per-mark text drops out here; the active phase's line
+          renders once, below the row. */}
+      <ul className="flex flex-col items-center gap-1 min-[1440px]:flex-row min-[1440px]:flex-nowrap min-[1440px]:items-center min-[1440px]:gap-2 min-[1440px]:overflow-x-auto min-[1440px]:pb-1">
         {sections.map((s) => {
-          const inner = (
-            <>
-              <span className="min-[1440px]:mt-[5px]">
-                {/* R35: each marker carries the engagement's fill as of its
-                    section (the filling staircase); R15: only the active one
-                    breathes — "alive" is literally true here. */}
-                <StrataMark
-                  fill={fillStateAtSection(s.key)}
-                  size="sm"
-                  breathing={s.state === 'active'}
-                  label={
-                    s.state === 'active' ? `${s.label} — ${s.sub}` : undefined
-                  }
-                />
-              </span>
-              <span
-                className={`sr-only min-[1440px]:not-sr-only ${
-                  s.state === 'future' || s.state === 'unrecorded' ? 'min-[1440px]:opacity-45' : ''
-                }`}
-              >
-                <span
-                  className={`block text-[12px] leading-tight ${
-                    s.state === 'active'
-                      ? 'font-semibold text-[var(--color-charcoal)]'
-                      : s.state === 'settled'
-                        ? 'text-[var(--color-aged-oak)]'
-                        : 'text-[var(--text-muted)]'
-                  }`}
-                >
-                  {s.label}
-                </span>
-                <span
-                  className={`mt-px block font-mono text-[12px] uppercase tracking-[0.05em] ${
-                    s.state === 'active'
-                      ? 'text-[var(--color-clay)]'
-                      : 'text-[var(--text-muted)]'
-                  }`}
-                >
-                  {s.sub}
-                </span>
-              </span>
-            </>
+          const mark = (
+            <StrataMark
+              // R35: each marker carries the engagement's fill as of its
+              // section (the filling staircase); R15: only the active one
+              // breathes — "alive" is literally true here.
+              fill={fillStateAtSection(s.key)}
+              size="sm"
+              breathing={s.state === 'active'}
+              label={
+                s.state === 'active' ? `${s.label} — ${s.sub}` : undefined
+              }
+            />
           );
           // Settled + active markers jump to their section; future ones are
           // inert (nothing to reach yet). The jump button gives keyboard reach.
           return (
-            <li key={s.key} className="w-full shrink-0">
+            <li key={s.key} className="w-full shrink-0 min-[1440px]:w-auto">
               {s.state === 'future' || s.state === 'unrecorded' || !onJump ? (
                 <div
                   aria-label={`${s.label}: ${s.sub}`}
-                  className="flex min-h-11 items-center justify-center gap-2.5 min-[1440px]:justify-start min-[1440px]:py-[0.45rem]"
+                  className="flex min-h-11 items-center justify-center min-[1440px]:w-11"
                 >
-                  {inner}
+                  {mark}
                 </div>
               ) : (
                 <button
@@ -114,9 +90,9 @@ export function DocSpine({
                   onClick={() => onJump(s.key)}
                   title={`Jump to ${s.label}`}
                   aria-label={`Jump to ${s.label}: ${s.sub}`}
-                  className="flex min-h-11 w-full min-w-11 items-center justify-center gap-2.5 rounded-[4px] text-left transition-colors hover:bg-[rgba(196,165,123,0.08)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none min-[1440px]:-mx-2 min-[1440px]:justify-start min-[1440px]:px-2 min-[1440px]:py-[0.45rem]"
+                  className="flex min-h-11 w-full min-w-11 items-center justify-center rounded-[4px] transition-colors hover:bg-[rgba(196,165,123,0.08)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none min-[1440px]:w-11"
                 >
-                  {inner}
+                  {mark}
                 </button>
               )}
             </li>
@@ -125,8 +101,13 @@ export function DocSpine({
       </ul>
 
       {activeSection && (
-        <p className="mt-2.5 hidden font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] min-[1440px]:block">
-          {activeSection.label} · {activeSection.sub}
+        <p className="mt-2.5 hidden min-[1440px]:block">
+          <span className="block text-[12px] font-semibold leading-tight text-[var(--color-charcoal)]">
+            {activeSection.label}
+          </span>
+          <span className="mt-px block font-mono text-[12px] uppercase tracking-[0.05em] text-[var(--color-clay)]">
+            {activeSection.sub}
+          </span>
         </p>
       )}
 
