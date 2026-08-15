@@ -319,7 +319,9 @@ export class BackgroundRemovalLedgerService {
   }
 
   private async lock(transaction: Prisma.TransactionClient, key: string): Promise<void> {
-    await transaction.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', key);
+    await transaction.$queryRaw(Prisma.sql`
+      SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))
+    `);
   }
 
   private periods(now: Date): Periods {
