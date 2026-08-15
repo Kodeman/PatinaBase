@@ -1,6 +1,7 @@
 # Patina Cloudflare Phase 1 runbook
 
-Status: execution runbook  
+Status: execution runbook; blocker 1 is repository-ready but not operationally closed
+
 Owner: Platform  
 Alert recipient: `kody@patina.cloud`  
 Rollback objective: restore the catalog path within five minutes
@@ -15,10 +16,83 @@ This runbook authorizes no hidden credentials. Password-bearing database logins,
 
 Do not create staging or production database logins, Hyperdrive configurations, Workers, or routes until both blockers below are independently reviewed and closed:
 
-1. The catalog privilege allow-list currently fails because PostgreSQL `PUBLIC` grants expose additional schemas, relations, sequences, and routines to the edge roles. The local conformance test intentionally exits nonzero after its functional assertions and prints only aggregate counts. Resolution requires a platform-admin review of database-wide `PUBLIC` ACLs plus exact re-grants for the existing Supabase roles; role-local revokes cannot create a deny ACL.
+1. The catalog privilege allow-list needs two owners. The repository migration can close the `public` schema, database, application-routine, and `edge_api` boundaries, but only the Supabase platform owner can remove `PUBLIC` access from the managed `net` schema. Production remains blocked until the owner action, its preflight, migration `00483`, postconditions, and compatibility probes all pass with sanitized evidence. A ready repository commit is not operational closure.
 2. Retained orders, projects, and media Containers do not yet share a trustworthy per-request Strata authorization resolver or complete object-level own/organization/admin contract. Their decorated routes remain fail-closed. Do not restore availability by trusting JWT `app_metadata` permission lists, inventing controller permission names, or allowing unscoped list/batch reads. Resolve current authorization through each Container's Supavisor path and prove own/other/organization/admin, role-change, list, and batch behavior before deploying the retained-service auth changes.
 
 Neither blocker permits a compatibility fallback to broaden authorization. Record closure evidence in this runbook before requesting the independent production sign-off.
+
+### Blocker 1 mandatory order
+
+The following order is fail-closed and applies separately to staging and production:
+
+| Step | Owner                   | Required action and gate                                                                                                                                                                                                                                                             |
+| ---- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 0    | coordinator             | Prove `edge_catalog_login` and `edge_rls_login` do not exist and no environment Hyperdrive configuration points at them. If either was created early, stop and follow **Premature pool/login reconciliation** below.                                                                 |
+| 1    | Supabase/platform owner | Run `supabase/platform-admin/00483_platform_public_acl.sql` as the actual owner of `net`. The artifact changes only `PUBLIC` schema `USAGE`, preserves the complete named ACL snapshot, and fails unless its session owns `net`.                                                     |
+| 2    | migration operator      | Run `supabase/tests/edge_api/platform_acl_preflight.sql` through the normal environment database URL. It must prove `PUBLIC` cannot use `net`, named pg_net callers still can, and the catalog role cannot. Do not continue on a warning, skipped file, or `insufficient_privilege`. |
+| 3    | migration operator      | Apply reviewed migration `supabase/migrations/00483_edge_public_acl_boundary.sql`, then rerun the platform preflight and `supabase/tests/edge_api/remote_acl_postflight.sql`.                                                                                                        |
+| 4    | compatibility owner     | Complete the SQL/SDK compatibility probes for Auth, REST/RPC, Functions, Storage, Realtime, cron, pg_net, and extensions. No unexplained regression may remain.                                                                                                                      |
+| 5    | database operator       | Create or reconcile the actual password-bearing logins, set their exact role configuration, and pass `supabase/tests/edge_api/catalog_login_probe.sql` and `supabase/tests/edge_api/rls_login_probe.sql` through their respective real credentials.                                  |
+| 6    | Cloudflare operator     | Only now create fresh Hyperdrive pools/configurations and bind them to the Worker. Never reuse a configuration that may hold a pre-closure session.                                                                                                                                  |
+
+No edge login or Hyperdrive pool exists while steps 1–4 change and verify the ACL boundary. That ordering is part of the security control, not a scheduling preference.
+
+### Supabase platform-owner escalation
+
+Hosted Dashboard SQL and the normal direct connection run as `postgres`. The live Strata census found that `net` is owned by the internal `supabase_admin` role and that `postgres` is neither a member of nor able to assume that role. Schema `USAGE` does not confer owner authority, so a normal SQL Editor or migration session cannot run `REVOKE USAGE ON SCHEMA net FROM PUBLIC`; PostgreSQL must reject it with `insufficient_privilege`.
+
+Unless Supabase supplies another supported owner context, open a platform-action request at [Supabase Support](https://supabase.com/dashboard/support/new). Include:
+
+- project ref `bkvcixdmuyejfzcijpdg` for production, or the staging branch ref;
+- the reviewed `supabase/platform-admin/00483_platform_public_acl.sql` artifact;
+- sanitized evidence that `net` is owned by `supabase_admin` and normal `postgres` cannot assume it;
+- the requirement that only `PUBLIC` schema `USAGE` change and the complete named ACL snapshot remain identical;
+- a request for sanitized execution identity, before/after named-ACL, and postcondition evidence.
+
+Do not include a database URL, password, token, customer row, object key, or other customer data in the ticket. Inability to obtain owner execution leaves production blocked; it is not permission to bypass the preflight or create the edge resources.
+
+If an approved owner connection is supplied, the exact operator command is:
+
+```bash
+set -euo pipefail
+: "${PLATFORM_ADMIN_DATABASE_URL:?load the owner URL from the password manager}"
+psql "$PLATFORM_ADMIN_DATABASE_URL" -X -v ON_ERROR_STOP=1 \
+  -f supabase/platform-admin/00483_platform_public_acl.sql
+unset PLATFORM_ADMIN_DATABASE_URL
+```
+
+Then run the normal-session preflight before any application migration:
+
+```bash
+psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 \
+  -f supabase/tests/edge_api/platform_acl_preflight.sql
+```
+
+The successful `all assertions passed` line and sanitized ACL evidence are the gate. A zero shell exit caused by omitted execution, a caught privilege error, or a hand-written substitute is not evidence.
+
+### Preserve managed pg_net internals
+
+The platform artifact must not revoke or rewrite pg_net relation, sequence, routine, helper, or default privileges. In Strata pg_net 0.19.5, `net.http_get`, `net.http_post`, and `net.http_delete` are `SECURITY INVOKER`; they use `net.http_request_queue`, its sequence, and internal encoding/wake helpers. Stripping those grants or converting managed functions would break legitimate callers and extension upgrades. Blocker 1 removes only `PUBLIC` schema `USAGE` while retaining every named schema grantee.
+
+### Database TEMP compatibility census
+
+Migration `00483` removes database `CREATE` and `TEMPORARY` from `PUBLIC`, then explicitly restores `TEMPORARY` only to the reviewed application/managed roles. Before and after the migration, enumerate every login—not only repository-known roles:
+
+```sql
+SELECT rolname, rolsuper, rolreplication,
+       has_database_privilege(oid, current_database(), 'TEMP') AS effective_temp
+FROM pg_roles
+WHERE rolcanlogin
+ORDER BY rolname;
+```
+
+The sanitized 2026-08-15 Strata census found 11 login roles, all with pre-migration effective TEMP through `PUBLIC`, and no custom application login. The fixed regrant covers the seven ordinary login roles that need it. `supabase_admin` remains effective through superuser authority. Any unexpected login in a later preflight blocks the migration until it receives an explicit reviewed disposition. The intentional direct-role removals are:
+
+- `cli_login_postgres`: false as the ingress-only `NOINHERIT` role, then true after it enters the explicitly granted `postgres` role through `SET`;
+- `pgbouncer`: authenticates/pools and must not issue application/temp-object SQL as itself;
+- `supabase_replication_admin`: replication login with no TEMP workload.
+
+The live routine-body census found no custom invoker application TEMP dependency. `public.get_aesthete_matches(...)` creates its temp tables as its `postgres` SECURITY DEFINER owner; `extensions.pgrst_ddl_watch()` was a comment-only text match. Staging must positively probe direct, Supavisor, and dedicated PgBouncer connections; Auth, Storage, and Realtime; and replication health. Treat a different login set, a real invoker TEMP dependency, or a failed managed-service probe as a stop condition. Any fix-forward TEMP grant must name the proven role; never restore TEMP to `PUBLIC`.
 
 ## Scope
 
@@ -64,7 +138,7 @@ Never reuse a password or connection string across staging and production. Hyper
 | Binding           | Caching                | Permitted                                                                         | Forbidden                                                                        |
 | ----------------- | ---------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | `DB_FRESH`        | disabled               | authenticated reads, RLS, permissions, writes, read-after-write, status, pgvector | migrations, Prisma, locks, `LISTEN`/`NOTIFY`, admin sessions                     |
-| `DB_PUBLIC_CACHE` | 60s max age, 15s stale | exact approved public catalog-view query                                          | user-scoped data, permissions, writes, fresh-after-write, vectors, arbitrary SQL |
+| `DB_PUBLIC_CACHE` | 60s max age, 15s stale | exact parameterized `edge_api.catalog_products` query                             | user-scoped data, permissions, writes, fresh-after-write, vectors, arbitrary SQL |
 
 Cloudflare local mode does not prove remote Hyperdrive pooling or caching. Pool/cache evidence must come from a deployed staging Worker.
 
@@ -78,34 +152,66 @@ The migration creates or reconciles:
 CREATE ROLE edge_catalog_reader NOLOGIN NOBYPASSRLS NOINHERIT;
 CREATE ROLE edge_rls_user       NOLOGIN NOBYPASSRLS NOINHERIT;
 
-GRANT USAGE ON SCHEMA public TO edge_catalog_reader;
-GRANT SELECT ON public.edge_catalog_products TO edge_catalog_reader;
+CREATE SCHEMA IF NOT EXISTS edge_api AUTHORIZATION postgres;
+REVOKE ALL ON SCHEMA edge_api FROM PUBLIC;
+GRANT USAGE ON SCHEMA edge_api TO edge_catalog_reader;
+GRANT SELECT ON edge_api.catalog_products TO edge_catalog_reader;
 REVOKE ALL ON public.products FROM edge_catalog_reader;
 
 GRANT authenticated TO edge_rls_user;
 ```
 
-The exact idempotent form lives in the numbered migration. The catalog view is `security_barrier`, contains only approved columns, and fixes `layer = 'catalog'` plus `status = 'published'` inside its definition. `edge_rls_user` receives no direct service-role membership, no `BYPASSRLS`, and no database ownership.
+The exact idempotent form lives in migrations `00481` and `00483`. The canonical view is `edge_api.catalog_products`; it is `security_barrier`, contains only approved columns, and fixes `layer = 'catalog'` plus `status = 'published'` inside its definition. The reader has no `public` or `net` schema access. `edge_rls_user` receives no direct service-role membership, no `BYPASSRLS`, and no database ownership.
 
 PostgreSQL role privileges are additive and every login is a member of `PUBLIC`. Before either password login exists, the SQL gate must enumerate effective schema, table, sequence, and routine privileges for both group roles. `edge_catalog_reader` must have no effective capability beyond database connection plus usage/select on the approved catalog surface; `edge_rls_user` must have no capability broader than the reviewed `authenticated` role chain. Any inherited `PUBLIC` privilege that breaks those allow-lists is a provisioning blocker, not a warning.
 
-### Out-of-band login creation
+### Out-of-band login creation and reconciliation
 
-Run once per environment from an administrative `psql` session. Supply passwords through `psql` variables or a password manager, never shell history or a checked-in file.
+Run only after the platform preflight, migration postconditions, and compatibility probes all pass in that environment. Supply passwords through `psql` variables or a password manager, never shell history or a checked-in file.
 
 ```sql
 CREATE ROLE edge_catalog_login LOGIN INHERIT NOBYPASSRLS PASSWORD :'catalog_password';
 CREATE ROLE edge_rls_login     LOGIN NOINHERIT NOBYPASSRLS PASSWORD :'rls_password';
+
+ALTER ROLE edge_catalog_login SET search_path TO pg_catalog, edge_api;
+ALTER ROLE edge_catalog_login SET default_transaction_read_only TO on;
+ALTER ROLE edge_rls_login SET search_path TO pg_catalog, public, extensions;
+
 GRANT edge_catalog_reader TO edge_catalog_login
   WITH INHERIT TRUE, SET FALSE;
 GRANT edge_rls_user TO edge_rls_login
   WITH INHERIT FALSE, SET TRUE;
 ```
 
-If a login already exists, rotate its password out of band and reconcile only the intended memberships. Confirm:
+`default_transaction_read_only = on` is an advisory accident guard for the catalog login, not the authorization boundary: a session setting can be changed. The enforceable boundary is the role's lack of database `CREATE`/`TEMP`, lack of `public`/`net` access, lack of callable routines or types, and sole `SELECT` on `edge_api.catalog_products`. The RLS login must not be read-only because reviewed `DB_FRESH` routes may write.
+
+#### Premature pool/login reconciliation
+
+If a login or Hyperdrive configuration already exists before ACL closure, fail the rollout rather than updating it in place:
+
+1. keep the catalog source on `legacy` and detach the affected binding/route;
+2. delete the old Hyperdrive configuration with `wrangler hyperdrive delete <id>`;
+3. `ALTER ROLE edge_catalog_login NOLOGIN;` and `ALTER ROLE edge_rls_login NOLOGIN;`, then rotate both passwords;
+4. use a read-only `pg_stat_activity` census and require zero sessions for both login names;
+5. finish the owner action, preflight, migration, postconditions, and compatibility probes;
+6. reconcile exact attributes, settings, and memberships, then enable the logins and create fresh Hyperdrive configurations.
+
+Never print connection strings or `pg_stat_activity` query text. The sanitized zero-session census is:
 
 ```sql
-SELECT rolname, rolcanlogin, rolinherit, rolbypassrls
+SELECT usename, count(*) AS session_count
+FROM pg_stat_activity
+WHERE usename IN ('edge_catalog_login', 'edge_rls_login')
+GROUP BY usename
+ORDER BY usename;
+```
+
+Expected: zero rows. For a new deployment, prove the login roles are absent before step 1 of the mandatory order.
+
+After creation/reconciliation, confirm role metadata through the administrator connection:
+
+```sql
+SELECT rolname, rolcanlogin, rolinherit, rolbypassrls, rolconfig
 FROM pg_roles
 WHERE rolname IN (
   'edge_catalog_reader', 'edge_rls_user',
@@ -114,7 +220,15 @@ WHERE rolname IN (
 ORDER BY rolname;
 ```
 
-Expected: group roles cannot log in; login roles can; all four are `NOBYPASSRLS`. The catalog login inherits only the audited catalog-reader membership. The RLS login inherits nothing and can enter only the reviewed role chain with `SET LOCAL ROLE`.
+Expected: group roles cannot log in; login roles can; all four are `NOBYPASSRLS`. The catalog login inherits only the audited catalog-reader membership and reports `search_path=pg_catalog, edge_api` plus `default_transaction_read_only=on`. The RLS login inherits nothing, reports `search_path=pg_catalog, public, extensions`, and can enter only the reviewed role chain with `SET LOCAL ROLE`.
+
+Finally connect with each actual password—not an administrator using `SET ROLE`. The catalog login must report `CONNECT=true`, `CREATE=false`, `TEMP=false`, the exact search path/read-only settings above, and effective capability limited to `edge_api` `USAGE` plus view `SELECT`. Direct `public.products` access, temp creation, schema creation, sequences, types, and routine execution must fail. The RLS login must prove successive transaction-local callers do not retain role or JWT claims. Only sanitized booleans/counts belong in evidence.
+
+### Session and pool handling
+
+When the mandatory order is honored, no edge login or Hyperdrive session exists during ACL closure, so no blanket Supabase restart is required. Existing Supabase roles retain their explicit named schema grants. `NOTIFY pgrst, 'reload schema'` refreshes PostgREST's schema cache only; it is not a connection-pool recycle. Do not use ad-hoc `pg_terminate_backend` against managed Supabase.
+
+If evidence shows an edge login or Hyperdrive configuration was created prematurely, use the fail-rollout reconciliation above and require zero old sessions before continuing. Create a new login password and a new Hyperdrive configuration after closure rather than updating the old pool in place. Use a Supabase-supported Dashboard/Support restart for a managed PostgREST/Supavisor pool only if Supabase Support confirms it is needed, and record that action. Compatibility probes must run after any such restart.
 
 ### Authenticated request transaction
 
@@ -132,18 +246,18 @@ On any error, issue `ROLLBACK`, close the client, and return a redacted error. N
 
 ## Route matrix
 
-| Route                      | Auth                    | Upstream/binding                | Cache                        | Failure behavior                          |
-| -------------------------- | ----------------------- | ------------------------------- | ---------------------------- | ----------------------------------------- |
-| `/auth/v1/*`               | Supabase protocol       | Supabase Auth                   | no-store                     | preserve upstream status/body             |
-| `/realtime/v1/*`           | Supabase protocol       | Supabase Realtime               | no-store                     | preserve WebSocket status/frames          |
-| `/rest/v1/*`               | Supabase protocol       | Supabase REST                   | no-store                     | preserve upstream status/body/CORS        |
-| `/graphql/v1/*`            | Supabase protocol       | Supabase GraphQL                | no-store                     | preserve upstream status/body             |
-| `/functions/v1/*`          | function-specific JWT   | Supabase Functions              | no-store                     | preserve upstream status/body             |
-| `/storage/v1/*`            | Supabase protocol       | Supabase Storage                | no-store                     | preserve upstream status/body             |
-| `GET /v1/catalog/products` | public                  | public view via selected source | public 60s + 15s stale       | legacy public result on HD error/mismatch |
-| `GET /_internal/health`    | Access or service token | probe both bindings             | private, no-store            | generic binding readiness only            |
-| other `/v1/*`              | route-defined           | `DB_FRESH` or Container binding | private, no-store by default | fail closed                               |
-| unmatched                  | none                    | none                            | no-store                     | 404                                       |
+| Route                      | Auth                    | Upstream/binding                    | Cache                        | Failure behavior                          |
+| -------------------------- | ----------------------- | ----------------------------------- | ---------------------------- | ----------------------------------------- |
+| `/auth/v1/*`               | Supabase protocol       | Supabase Auth                       | no-store                     | preserve upstream status/body             |
+| `/realtime/v1/*`           | Supabase protocol       | Supabase Realtime                   | no-store                     | preserve WebSocket status/frames          |
+| `/rest/v1/*`               | Supabase protocol       | Supabase REST                       | no-store                     | preserve upstream status/body/CORS        |
+| `/graphql/v1/*`            | Supabase protocol       | Supabase GraphQL                    | no-store                     | preserve upstream status/body             |
+| `/functions/v1/*`          | function-specific JWT   | Supabase Functions                  | no-store                     | preserve upstream status/body             |
+| `/storage/v1/*`            | Supabase protocol       | Supabase Storage                    | no-store                     | preserve upstream status/body             |
+| `GET /v1/catalog/products` | public                  | `edge_api` view via selected source | public 60s + 15s stale       | legacy public result on HD error/mismatch |
+| `GET /_internal/health`    | Access or service token | probe both bindings                 | private, no-store            | generic binding readiness only            |
+| other `/v1/*`              | route-defined           | `DB_FRESH` or Container binding     | private, no-store by default | fail closed                               |
+| unmatched                  | none                    | none                                | no-store                     | 404                                       |
 
 Compatibility responses must preserve Supabase CORS headers and cookies. The Worker must not forward to a hostname that routes back to itself. Logging is allow-list based and excludes authorization, API keys, cookies, query contents, SQL, PII, and bodies.
 
@@ -197,11 +311,27 @@ Database owner:
 ```bash
 ls supabase/migrations/*.sql | sort | tail
 python3 scripts/generate-legacy-grants.py
+python3 scripts/test_generate_legacy_grants.py
 pnpm supabase:reset
+PGPASSWORD=postgres psql \
+  "postgresql://supabase_admin@127.0.0.1:54322/postgres" \
+  -X -v ON_ERROR_STOP=1 \
+  -f supabase/platform-admin/00483_platform_public_acl.sql
 psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
-  -v ON_ERROR_STOP=1 -f supabase/tests/edge_api/catalog_roles_test.sql
+  -X -v ON_ERROR_STOP=1 \
+  -f supabase/tests/edge_api/platform_acl_preflight.sql
+psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
+  -X -v ON_ERROR_STOP=1 \
+  -f supabase/tests/edge_api/catalog_roles_test.sql
+psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
+  -X -v ON_ERROR_STOP=1 \
+  -f supabase/tests/edge_api/platform_compatibility_test.sql
 pnpm db:generate
 ```
+
+Local reset must create the disposable database before its local `supabase_admin` owner can run the platform artifact; this bootstrap exception is not evidence for remote ordering. Staging and production must run the owner artifact and preflight before pushing `00483`.
+
+`catalog_roles_test.sql` and `platform_compatibility_test.sql` are local-only. They deliberately alter/create/drop probe roles, touch synthetic fixtures, exercise pg_net, and use a local dblink endpoint. Never run either file against staging or production; remote environments use the read-only ACL postflight, actual-password-login probe, and protocol/managed-service checks below.
 
 Edge owner, from `infra/edge-api-worker`:
 
@@ -270,7 +400,7 @@ enabled = true
 sql_paths = ["./seed/<phase-1-staging-seed>.sql"]
 ```
 
-The remote cannot be configured before the branch exists. Load `STAGING_PROJECT_REF` and the percent-encoded `STAGING_DB_URL` from the password manager without printing them. Abort unless the URL contains the branch ref and the ref is not the production ref:
+The remote cannot be configured before the branch exists. Load `STAGING_PROJECT_REF` and the percent-encoded `STAGING_DB_URL` from the password manager without printing them. Abort unless the URL contains the branch ref and the ref is not the production ref. Before these commands, prove both edge logins are absent, take the all-login TEMP census, and obtain successful staging owner-action evidence through Supabase Support or an approved staging owner URL.
 
 ```bash
 set -euo pipefail
@@ -288,16 +418,31 @@ case "$STAGING_DB_HOST" in
   *) echo "staging direct host/ref mismatch" >&2; exit 1 ;;
 esac
 printf 'validated staging database host: %s\n' "$STAGING_DB_HOST"
-
-pnpm exec supabase db push --dry-run --db-url "$STAGING_DB_URL"
-pnpm exec supabase db push --db-url "$STAGING_DB_URL"
-psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 \
-  -f supabase/seed/cloudflare-phase1-staging.sql
-psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 \
-  -f supabase/tests/edge_api/catalog_roles_test.sql
 ```
 
-The explicit `--db-url` is mandatory: a bare `supabase db push` targets linked production Strata. Never point `pnpm supabase:reset` at a remote URL. Record the sanitized branch ref and direct role/view probes before proceeding.
+Next, the platform owner or Supabase Support must run this exact artifact and return the required evidence:
+
+```bash
+psql "$STAGING_PLATFORM_ADMIN_DATABASE_URL" -X -v ON_ERROR_STOP=1 \
+  -f supabase/platform-admin/00483_platform_public_acl.sql
+```
+
+Do not substitute the normal `STAGING_DB_URL`; it cannot own `net`. When Support executes the artifact, its sanitized action/postcondition evidence replaces the owner command transcript, not the normal-session preflight. Only after that evidence exists may the normal staging operator continue:
+
+```bash
+psql "$STAGING_DB_URL" -X -v ON_ERROR_STOP=1 \
+  -f supabase/tests/edge_api/platform_acl_preflight.sql
+pnpm exec supabase db push --dry-run --db-url "$STAGING_DB_URL"
+pnpm exec supabase db push --db-url "$STAGING_DB_URL"
+psql "$STAGING_DB_URL" -X -v ON_ERROR_STOP=1 \
+  -f supabase/tests/edge_api/platform_acl_preflight.sql
+psql "$STAGING_DB_URL" -X -v ON_ERROR_STOP=1 \
+  -f supabase/tests/edge_api/remote_acl_postflight.sql
+psql "$STAGING_DB_URL" -X -v ON_ERROR_STOP=1 \
+  -f supabase/seed/cloudflare-phase1-staging.sql
+```
+
+The explicit `--db-url` is mandatory: a bare `supabase db push` targets linked production Strata. Never point `pnpm supabase:reset` at a remote URL. After the migration, rerun the all-login TEMP census and require the reviewed exact poststate before proceeding. Record only the sanitized branch ref, role/view booleans, named ACL metadata, and test pass lines.
 
 The committed staging seed contains deterministic IDs and non-secret fixture identities only. Seeded Auth users are passwordless, unconfirmed, and indefinitely banned. Activate only the accounts needed for the compatibility test by calling `supabase.auth.admin.updateUserById` from a server-only operator script using the staging service-role credential:
 
@@ -311,9 +456,31 @@ await stagingAdmin.auth.admin.updateUserById(userId, {
 
 Never expose the service-role credential to a browser or commit the password. After the test window, set a new discarded random password and restore a long ban through the same Admin API, then prove sign-in fails. Record only the synthetic user ID, activation/deactivation timestamps, and pass/fail result.
 
+Complete the existing-role SQL/SDK and managed-service compatibility rows in the staging matrix before creating either edge login. Then run the out-of-band login SQL above and probe each login through its own password-bearing URL:
+
+```bash
+set -euo pipefail
+
+read -s STAGING_EDGE_CATALOG_DB_URL
+psql "$STAGING_EDGE_CATALOG_DB_URL" -X -v ON_ERROR_STOP=1 \
+  -v expected_login=edge_catalog_login \
+  -f supabase/tests/edge_api/catalog_login_probe.sql
+unset STAGING_EDGE_CATALOG_DB_URL
+
+: "${STAGING_EDGE_RLS_TEST_USER_ID:?load the deterministic synthetic user ID}"
+read -s STAGING_EDGE_RLS_DB_URL
+psql "$STAGING_EDGE_RLS_DB_URL" -X -v ON_ERROR_STOP=1 \
+  -v expected_login=edge_rls_login \
+  -v test_user_id="$STAGING_EDGE_RLS_TEST_USER_ID" \
+  -f supabase/tests/edge_api/rls_login_probe.sql
+unset STAGING_EDGE_RLS_DB_URL STAGING_EDGE_RLS_TEST_USER_ID
+```
+
+Do not replace either connection with an administrator plus `SET ROLE`: that would fail to test login attributes, `rolconfig`, membership options, inherited capability, and pooled caller reset under the real principal. Both probe scripts must finish successfully before Hyperdrive creation.
+
 ### Hyperdrive
 
-Use the branch's direct Supabase database endpoint and its environment-specific logins:
+This is mandatory-order step 6. Do not enter this section until the owner action, both preflight runs, `00483` postconditions, compatibility probes, out-of-band login reconciliation, and actual-password-login probes have passed. Use the branch's direct Supabase database endpoint and its new environment-specific logins:
 
 ```bash
 read -s STAGING_EDGE_RLS_URL
@@ -324,11 +491,13 @@ unset STAGING_EDGE_RLS_URL
 
 read -s STAGING_CATALOG_URL
 npx wrangler hyperdrive create strata-staging-public-cache \
-  --connection-string="$STAGING_CATALOG_URL"
+  --connection-string="$STAGING_CATALOG_URL" \
+  --max-age=60 \
+  --swr=15
 unset STAGING_CATALOG_URL
 ```
 
-The URL values do not enter shell history, but Wrangler necessarily expands them into a short-lived process argument. Run this on the private operator host, ensure no process tracing is active, and unset each variable immediately. Confirm the public-cache defaults are `max_age=60` and `stale_while_revalidate=15`; update explicitly if the live account differs. Put the returned configuration IDs into the staging Wrangler environment's `DB_FRESH` and `DB_PUBLIC_CACHE` bindings. Set secrets with `wrangler secret put`; never pass values in a report.
+The URL values do not enter shell history, but Wrangler necessarily expands them into a short-lived process argument. Run this on the private operator host, ensure no process tracing is active, and unset each variable immediately. Confirm the fresh config reports caching disabled and the public config reports `max_age=60` and `stale_while_revalidate=15`. Put only the new configuration IDs into the staging Wrangler environment's `DB_FRESH` and `DB_PUBLIC_CACHE` bindings. Set secrets with `wrangler secret put`; never pass values in a report.
 
 ### Worker and host
 
@@ -344,20 +513,25 @@ Attach `api-staging.patina.cloud` only after direct `workers.dev` probes pass. V
 
 Record each row as pass/fail with trace ID, timestamp, and sanitized evidence:
 
-| Area      | Required cases                                                                                                        |
-| --------- | --------------------------------------------------------------------------------------------------------------------- |
-| Auth      | sign-in, refresh, OAuth callback, expired JWT, wrong issuer, wrong audience                                           |
-| Claims    | two successive users through pooled connections; no role/JWT retention                                                |
-| Catalog   | catalog visible; personal/studio absent; 1/50/51 IDs; duplicate/malformed/injection-shaped input; deterministic order |
-| Sources   | normalized legacy = fresh = cached for fixtures; cache expiry observed remotely                                       |
-| REST      | select, filtered select, RPC, error/status/CORS preservation                                                          |
-| Functions | authenticated function and deliberate upstream error                                                                  |
-| Storage   | authorized read/upload protocol and error preservation                                                                |
-| Realtime  | WebSocket upgrade, auth, subscribe, event, reconnect                                                                  |
-| Proxy     | cookies, refresh headers, redirects, route-loop prevention                                                            |
-| Health    | Access/service-token allow; anonymous deny; both binding failures redacted                                            |
-| Failure   | DB unavailable, timeout, pool pressure/exhaustion, malformed DB result, upstream timeout                              |
-| Logging   | no tokens, API keys, cookies, SQL parameters, URLs/PII, or bodies                                                     |
+| Area         | Required cases                                                                                                                          |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Platform ACL | owner artifact identity/postcondition; `PUBLIC` lacks `net` USAGE; complete named `net` ACL snapshot unchanged before/after             |
+| App ACL      | post-`00483` `public`/database/routine/`edge_api` allow-lists; remote-safe postflight passes without fixture or role mutation           |
+| TEMP         | exact all-login pre/post manifest; no unexpected login; direct, Supavisor, dedicated PgBouncer, managed-service, and replication probes |
+| Edge logins  | actual-password catalog/RLS connections; exact search paths; catalog advisory read-only; no capability or successive-claims leakage     |
+| Auth         | sign-in, refresh, OAuth callback, expired JWT, wrong issuer, wrong audience                                                             |
+| Claims       | two successive users through pooled connections; no role/JWT retention                                                                  |
+| Catalog      | catalog visible; personal/studio absent; 1/50/51 IDs; duplicate/malformed/injection-shaped input; deterministic order                   |
+| Sources      | normalized legacy = fresh = cached for fixtures; cache expiry observed remotely                                                         |
+| REST         | select, filtered select, RPC, error/status/CORS preservation                                                                            |
+| Functions    | authenticated function and deliberate upstream error                                                                                    |
+| Storage      | authorized read/upload protocol and error preservation                                                                                  |
+| Realtime     | WebSocket upgrade, auth, subscribe, event, reconnect                                                                                    |
+| Managed DB   | Auth, Storage, Realtime, cron, pg_net, vector/extension, Supavisor, and replication health after ACL change                             |
+| Proxy        | cookies, refresh headers, redirects, route-loop prevention                                                                              |
+| Health       | Access/service-token allow; anonymous deny; both binding failures redacted                                                              |
+| Failure      | DB unavailable, timeout, pool pressure/exhaustion, malformed DB result, upstream timeout                                                |
+| Logging      | no tokens, API keys, cookies, SQL parameters, URLs/PII, or bodies                                                                       |
 
 Local mode is insufficient for the cache/pool rows.
 
@@ -426,8 +600,10 @@ Before production mutation:
 - integration branch reviewed and clean;
 - migration head reconciled with Strata; undeployed collisions renumbered;
 - all required local and staging gates pass;
+- Supabase Support/platform owner execution is scheduled and the ticket references only the exact reviewed `net` schema artifact;
+- production edge logins and Hyperdrive configurations are absent until ACL closure; distinct production secret values are ready in the password manager but unused;
+- the all-login TEMP census exactly matches the reviewed manifest and contains no unexpected login;
 - zero unexplained authorization or normalized shadow mismatches;
-- production logins are new, least-privilege, and distinct from staging;
 - current `api.patina.cloud` DNS target is confirmed as the direct Supabase endpoint;
 - Cloudflare Worker route addition/removal procedure is tested;
 - alert delivery to `kody@patina.cloud` is tested without exposing customer content;
@@ -437,21 +613,27 @@ Before production mutation:
 
 Execute in this order:
 
-1. apply the reviewed migration to Strata and probe roles/view/grants directly;
-2. create/rotate out-of-band production logins;
-3. create `strata-prod-fresh` with caching disabled;
-4. create `strata-prod-public-cache` and confirm 60s/15s policy;
-5. deploy `patina-edge-api` in compatibility/legacy mode;
-6. attach `api.patina.cloud/*` as a Worker route without changing the Supabase CNAME;
-7. validate compatibility routes and log redaction;
-8. enable catalog shadow queries and require zero unexplained mismatches;
-9. run the rollback drill;
-10. promote Hyperdrive catalog source to 10%, hold one hour;
-11. promote to 50%, hold one hour;
-12. promote to 100%, hold one hour;
-13. merge/deploy only the independently reviewed commit and archive sanitized evidence.
+1. prove both production edge logins and both production Hyperdrive configurations are absent; keep catalog source `legacy` and take the exact all-login TEMP/named-ACL census;
+2. have Supabase Support/platform owner execute `supabase/platform-admin/00483_platform_public_acl.sql` as the actual `net` owner and return sanitized identity, named-ACL preservation, and no-PUBLIC-USAGE evidence;
+3. through normal Strata `postgres`, run `supabase/tests/edge_api/platform_acl_preflight.sql`; any failure leaves production blocked;
+4. dry-run and apply `supabase/migrations/00483_edge_public_acl_boundary.sql`, then rerun `supabase/tests/edge_api/platform_acl_preflight.sql`, `supabase/tests/edge_api/remote_acl_postflight.sql`, and the all-login TEMP manifest;
+5. handle sessions exactly as described above—there should be no edge pool to recycle; use a supported managed-pool restart only if Support says it is required;
+6. run compatibility probes through the existing Supabase roles and hostname for Auth, refresh/OAuth, REST/RPC, Functions, Storage, Realtime, cron, pg_net, extensions, direct/Supavisor/PgBouncer paths, and replication health;
+7. create/reconcile the two out-of-band production logins with fresh production-only passwords and exact settings/memberships, then run `supabase/tests/edge_api/catalog_login_probe.sql` through `EDGE_CATALOG_DB_URL` and `supabase/tests/edge_api/rls_login_probe.sql` through `EDGE_RLS_DB_URL` with a designated production test-user UUID;
+8. create a fresh `strata-prod-fresh` with caching disabled and a fresh `strata-prod-public-cache` with explicit 60s/15s policy; bind only their new IDs;
+9. deploy `patina-edge-api` in compatibility/legacy mode;
+10. attach `api.patina.cloud/*` as a Worker route without changing the Supabase CNAME;
+11. validate compatibility routes and log redaction again through the Worker;
+12. enable catalog shadow queries and require zero unexplained mismatches;
+13. run the rollback drill;
+14. promote Hyperdrive catalog source to 10%, hold one hour;
+15. promote to 50%, hold one hour;
+16. promote to 100%, hold one hour;
+17. merge/deploy only the independently reviewed commit and archive sanitized evidence.
 
 At every canary level, a mismatch or Hyperdrive failure returns the legacy public-catalog result and alerts. It never returns a broader direct-table query.
+
+Steps 2–7 are blocker 1's operational closure. Until all six pass, production status remains **blocked**, even if migration `00483` and all repository tests are green.
 
 ## Promotion checklist
 
@@ -498,7 +680,11 @@ ALTER ROLE edge_catalog_login NOLOGIN;
 ALTER ROLE edge_rls_login NOLOGIN;
 ```
 
-Use only when required and from an authorized administrative session. Hyperdrive may retain connections briefly, so also disable/delete the affected configuration if credentials are compromised. Migrations are append-only: fix forward with a new migration rather than editing an applied production migration.
+Use only when required and from an authorized administrative session. First put the catalog source on `legacy` or remove the Worker route, detach/delete both Hyperdrive configurations, set the logins `NOLOGIN`, rotate/revoke their credentials, and require the zero-session census. Do not broadly grant `public`/`net` schema access, database TEMP, or routine EXECUTE back to `PUBLIC` after an edge login or pool has existed.
+
+If a compatibility probe identifies an omitted legitimate caller, restore only that verified named role's exact privilege through a reviewed fix-forward migration or, for `net`, a reviewed platform-owner action. Rerun owner/preflight/postflight/compatibility evidence before recreating logins or pools. Never use `GRANT ... TO PUBLIC` as a convenience rollback.
+
+The only exception is a reversal of the owner `net` action before any edge login/pool has ever existed. If Supabase determines that reversal is necessary, only the platform owner may restore the exact captured prior `PUBLIC USAGE` entry, then prove every named ACL is unchanged. That deliberately reopens blocker 1: the platform preflight must fail, and no migration/login/Hyperdrive rollout may continue. Migrations are append-only; fix forward rather than editing an applied production migration.
 
 ### Timed drill
 
@@ -510,7 +696,11 @@ For each execution, retain a sanitized record containing:
 
 - reviewed commit SHA and branch;
 - migration number and direct object/grant probes;
+- Supabase Support ticket/action reference, platform execution identity, and owner check;
+- `net` before/after named ACL snapshot plus platform-preflight result;
+- `public`, database, routine, `edge_api`, and all-login TEMP pre/postcondition manifests;
 - Supabase branch project ID (not credentials);
+- actual-password-login search-path/read-only/effective-capability probe results;
 - Hyperdrive configuration IDs/names and cache mode;
 - Worker deployment ID and bottom-row timestamp;
 - compatibility and canary case results with trace IDs;
@@ -523,6 +713,8 @@ Never store secret values, connection strings, JWTs, cookies, customer filenames
 
 ## References
 
+- [Sanitized Strata PUBLIC ACL inventory](./patina-strata-public-acl-inventory.md)
+- [Supabase platform support request](https://supabase.com/dashboard/support/new)
 - [Supabase persistent-branch configuration](https://supabase.com/docs/guides/deployment/branching/configuration)
 - [Supabase Branching](https://supabase.com/docs/guides/deployment/branching)
 - [Cloudflare Wrangler configuration](https://developers.cloudflare.com/workers/wrangler/configuration/)

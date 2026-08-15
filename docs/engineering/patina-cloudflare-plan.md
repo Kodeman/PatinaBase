@@ -34,7 +34,7 @@ Capture intake ──► Postgres outbox ──► Cloudflare Queue
 - Strata remains the production data platform. New Supabase branches are data-less and receive synthetic fixtures only.
 - Hyperdrive is for Worker-native SQL. Retained Prisma Containers keep using Supavisor; a Hyperdrive binding is not a transparent TCP socket inside a Container.
 - Authenticated, permission, write, read-after-write, vector, and session-sensitive queries use the cache-disabled `DB_FRESH` binding.
-- `DB_PUBLIC_CACHE` is restricted to an approved public catalog view. It never handles user-scoped data.
+- `DB_PUBLIC_CACHE` is restricted to `edge_api.catalog_products`. It never handles user-scoped data.
 - Migrations, Prisma, advisory locks, `LISTEN`/`NOTIFY`, admin tooling, and other session-dependent SQL never move to Hyperdrive.
 - Supabase compatibility routes are uncached. Authenticated responses default to `Cache-Control: private, no-store`; public caching is an explicit route-level opt-in.
 - R2 origins remain private. `assets.patina.cloud` is the sole delivery plane.
@@ -84,7 +84,7 @@ Two Hyperdrive configurations exist per remote environment:
 | Binding           | Staging resource              | Production resource        | Cache policy    | Allowed workload                                                       |
 | ----------------- | ----------------------------- | -------------------------- | --------------- | ---------------------------------------------------------------------- |
 | `DB_FRESH`        | `strata-staging-fresh`        | `strata-prod-fresh`        | disabled        | authz, status, writes, read-after-write, pgvector, authenticated reads |
-| `DB_PUBLIC_CACHE` | `strata-staging-public-cache` | `strata-prod-public-cache` | 60s + 15s stale | approved public catalog view only                                      |
+| `DB_PUBLIC_CACHE` | `strata-staging-public-cache` | `strata-prod-public-cache` | 60s + 15s stale | `edge_api.catalog_products` only                                       |
 
 Hyperdrive connects to the direct Supabase database endpoint with a dedicated least-privilege login and `pg` 8.16.3 or newer. Because Hyperdrive writes do not invalidate cached reads, no user-scoped or freshness-sensitive query may use `DB_PUBLIC_CACHE`.
 
@@ -92,7 +92,7 @@ Hyperdrive connects to the direct Supabase database endpoint with a dedicated le
 
 Migrations own two passwordless group roles:
 
-- `edge_catalog_reader`: `NOLOGIN`, `NOBYPASSRLS`, schema usage plus `SELECT` on the public catalog view only. It has no direct `products` privilege.
+- `edge_catalog_reader`: `NOLOGIN`, `NOBYPASSRLS`, `USAGE` only on the dedicated `edge_api` schema plus `SELECT` only on `edge_api.catalog_products`. It has no `public`/`net` schema access or direct `products` privilege.
 - `edge_rls_user`: `NOLOGIN`, `NOBYPASSRLS`, permitted to assume the existing `authenticated` role through the fresh connection. It receives no broad bypass or service-role privilege.
 
 Password-bearing `edge_catalog_login` and `edge_rls_login` are created out of band per environment, stored only in the relevant Hyperdrive configuration, and never committed or written by a migration.
@@ -207,11 +207,11 @@ Compatibility `/rest/v1` and `/storage/v1` retire only after repository search, 
 
 1. Build the edge Worker, database roles/view/tests, shared type, client pilot, cache/auth cleanup, SSRF hardening, and legacy deployment removal in isolated branches.
 2. Independently review authorization, pooled claims, caching, SQL input, SSRF, route loops, logs, and legacy-path removal.
-3. Create the persistent data-less `staging` branch and apply deterministic synthetic fixtures.
-4. Create the staging Worker and dual Hyperdrive configurations; validate complete Supabase compatibility plus catalog legacy/fresh/cached parity.
+3. Create the persistent data-less `staging` branch. Have the Supabase platform owner remove `PUBLIC` access to `net`, pass the normal-session preflight, and apply the application ACL migration; then apply deterministic synthetic fixtures and complete compatibility probes before creating any edge login or pool.
+4. Reconcile and probe the actual staging logins, then create fresh dual Hyperdrive configurations and the staging Worker; validate complete Supabase compatibility plus catalog legacy/fresh/cached parity.
 5. Perform a sanitized read-only production media/reference census and finalize later-phase contracts.
 6. Independently sign off before production resource creation.
-7. Create production roles/logins, Hyperdrive configurations, and Worker. Attach `api.patina.cloud/*` while retaining the direct Supabase DNS target.
+7. Repeat the platform-owner action → preflight → migration → compatibility → actual-login sequence in production. Only after it closes create fresh Hyperdrive configurations and the Worker; attach `api.patina.cloud/*` while retaining the direct Supabase DNS target.
 8. Run compatibility mode, then a 10% → 50% → 100% catalog canary with one hour at each level and zero unexplained auth or normalized-result mismatches.
 9. Drill the sub-five-minute rollback before 100%.
 
