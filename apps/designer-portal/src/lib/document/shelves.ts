@@ -24,7 +24,7 @@ export interface ShelfDefinition {
   kind: 'leaf' | 'doorway';
 }
 
-export const SHELVES: readonly ShelfDefinition[] = [
+const ALL_SHELVES: readonly ShelfDefinition[] = [
   {
     key: 'planroom',
     title: 'Plan room',
@@ -57,8 +57,25 @@ export const SHELVES: readonly ShelfDefinition[] = [
   },
 ];
 
+/**
+ * The shelves this document actually has. The call sheet row is a doorway to
+ * the roster sheet, and that sheet is flag-gated (`call-sheet`) — so with the
+ * flag off the row is not rendered at all, exactly as every sibling doorway
+ * behaves (⌘K, the letterhead instrument, the kickoff band). A disabled stub
+ * would still name a surface this studio does not have.
+ */
+export function shelvesFor({
+  callSheetEnabled,
+}: {
+  callSheetEnabled: boolean;
+}): readonly ShelfDefinition[] {
+  return callSheetEnabled
+    ? ALL_SHELVES
+    : ALL_SHELVES.filter((s) => s.key !== 'callsheet');
+}
+
 export function shelfDefinition(key: ShelfKey): ShelfDefinition {
-  const found = SHELVES.find((s) => s.key === key);
+  const found = ALL_SHELVES.find((s) => s.key === key);
   if (!found) throw new Error(`Unknown shelf: ${key}`);
   return found;
 }

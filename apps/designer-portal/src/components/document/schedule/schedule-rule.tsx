@@ -322,15 +322,21 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
   const { registerBarEl, arm: armBarFocus } = useArmedBarFocus();
   // Which phase the strip's header line speaks for when no edit is in flight.
   const [armedPhaseId, setArmedPhaseId] = useState<string | null>(null);
-  const [stripEl, setStripEl] = useState<HTMLDivElement | null>(null);
+  // A REF, not state: the only reader is `handleArmEdit`, which runs after the
+  // commit that attached it. Held in state, the handler registered on the
+  // strip's FIRST render closed over `null` — and an arm re-fired the instant
+  // the region unfolded (schedule-rule-region.tsx) landed on that closure and
+  // scrolled nowhere. Refs are assigned during commit, before any effect, so
+  // this is set by the time the region's post-unfold effect can call in.
+  const stripRef = useRef<HTMLDivElement | null>(null);
 
   const handleArmEdit = useCallback(
     (phaseId: string) => {
       setArmedPhaseId(phaseId);
       armBarFocus(phaseId);
-      stripEl?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      stripRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     },
-    [armBarFocus, stripEl],
+    [armBarFocus],
   );
 
   useEffect(() => {
@@ -479,7 +485,7 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
     <>
       {/* THE EDITOR — the drafting strip, ordinary in-flow content. One lane per
           phase over month/week graph paper; this is where dates are adjusted. */}
-      <div ref={setStripEl}>
+      <div ref={stripRef}>
         <p className="mb-2 font-mono text-[0.56rem] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]">
           Frame · Phase dates
         </p>

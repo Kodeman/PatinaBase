@@ -7,19 +7,24 @@
  * on it would promise a panel that never appears here.
  */
 
-import { SHELVES, type ShelfKey } from '@/lib/document/shelves';
+import { shelvesFor, type ShelfKey } from '@/lib/document/shelves';
 
 export const SHELF_LEAF_ID = 'doc-shelf-leaf';
 
 export function SpineShelvesBlock({
   openShelf,
   statuses,
+  callSheetEnabled,
   onToggleShelf,
 }: {
   openShelf: ShelfKey | null;
   statuses: Record<ShelfKey, string>;
+  /** The `call-sheet` flag, as the page resolved it. Off ⇒ that row is not
+   *  rendered at all, matching every other call-sheet doorway. */
+  callSheetEnabled: boolean;
   onToggleShelf: (key: ShelfKey) => void;
 }) {
+  const shelves = shelvesFor({ callSheetEnabled });
   return (
     <div className="mt-4 border-t border-[var(--color-pearl)] pt-3">
       <p
@@ -29,7 +34,7 @@ export function SpineShelvesBlock({
         The shelves
       </p>
       <div role="group" aria-labelledby="doc-spine-shelves-label">
-        {SHELVES.map((shelf) => {
+        {shelves.map((shelf) => {
           const open = shelf.kind === 'leaf' && openShelf === shelf.key;
           return (
             <button
@@ -37,7 +42,13 @@ export function SpineShelvesBlock({
               type="button"
               data-shelf-trigger={shelf.key}
               {...(shelf.kind === 'leaf'
-                ? { 'aria-expanded': open, 'aria-controls': SHELF_LEAF_ID }
+                ? {
+                    'aria-expanded': open,
+                    // Only while the leaf is mounted: a closed leaf renders
+                    // nothing, and aria-controls pointing at an id that is not
+                    // in the document offers a jump into a void.
+                    ...(open ? { 'aria-controls': SHELF_LEAF_ID } : {}),
+                  }
                 : {})}
               onClick={() => onToggleShelf(shelf.key)}
               className={`-mx-1.5 flex w-[calc(100%+0.75rem)] items-center justify-between gap-2 px-1.5 py-1.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${

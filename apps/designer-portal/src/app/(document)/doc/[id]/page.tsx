@@ -514,11 +514,32 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     setOpenShelf((current) => (current === key ? null : key));
   }, []);
 
+  // The leaf and its shelf rows only exist from 1440px. Narrower than that
+  // they are display:none, so an open shelf would leave Esc and focus-restore
+  // aiming at elements nobody can see — the same safeguard the room lens keeps.
+  useEffect(() => {
+    if (!openShelf || typeof window === 'undefined') return;
+    const query = window.matchMedia?.('(min-width: 1440px)');
+    if (!query) return;
+    const release = () => {
+      if (!query.matches) setOpenShelf(null);
+    };
+    query.addEventListener('change', release);
+    return () => query.removeEventListener('change', release);
+  }, [openShelf]);
+
   // "Start a board" from the Add-to-project sheet reaches a room that now lives
   // on a shelf. Catch the intent, open the shelf, and re-fire once the room is
   // listening — the guard is the shelf's own state, so the re-fire cannot loop.
   const forwardBoardIntent = useRef(false);
+  const shelvesAvailable =
+    row?.active_section === 'project' && Boolean(row?.project_id);
   useEffect(() => {
+    // Only where the shelves are actually on the rail. Off the Project
+    // section there is no mood-board room to open and no shelf row to press,
+    // so the intent is left alone rather than opening a leaf that will not
+    // render and stranding the focus that was following it.
+    if (!shelvesAvailable) return;
     const onNewBoard = () => {
       setOpenShelf((current) => {
         if (current === 'moodboards') return current;
@@ -528,7 +549,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     };
     window.addEventListener(NEW_BOARD_EVENT, onNewBoard);
     return () => window.removeEventListener(NEW_BOARD_EVENT, onNewBoard);
-  }, []);
+  }, [shelvesAvailable]);
   useEffect(() => {
     if (openShelf !== 'moodboards' || !forwardBoardIntent.current) return;
     forwardBoardIntent.current = false;
@@ -851,12 +872,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             ? 'Reading…'
             : `${(approvalsQuery.data ?? []).length} in the log`
         }
-        moneyValue={
-          project?.total_amount_cents != null
-            ? `${fmtUsd(project.total_amount_cents)} authority`
-            : 'No authority yet'
-        }
         rosterCount={(rosterRows ?? []).length}
+        callSheetEnabled={callSheetGate.value}
         openShelf={openShelf}
         onToggleShelf={toggleShelf}
       />

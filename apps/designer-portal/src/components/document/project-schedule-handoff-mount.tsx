@@ -1,17 +1,18 @@
 'use client';
 
-import type { Database } from '@patina/supabase';
-
-import { PhaseAdvanceControl } from './phase-advance-control';
 import { ScheduleConfirmStrip } from './schedule/schedule-confirm-strip';
 import { ScheduleRule } from './schedule/schedule-rule';
 
-type ProjectPhaseRow = Database['public']['Tables']['project_phases']['Row'];
-
 /**
- * Keep the project schedule and its lifecycle actions under one mount. Closed
- * projects remain readable without exposing phase mutation controls;
- * non-project documents receive no project schedule UI.
+ * The project schedule INSTRUMENT — the drafting strip and the confirm strip
+ * that commits an edit made on it. Non-project documents receive no project
+ * schedule UI.
+ *
+ * `PhaseAdvanceControl` deliberately does NOT live here any more. This mount is
+ * the body of a region that is folded by default (schedule-rule-region.tsx),
+ * and advancing the phase is a lifecycle act with nothing to do with editing
+ * dates — behind the fold it was simply invisible. It now renders at region
+ * level, in both fold states.
  *
  * B3 retired the `schedule-spine` flip gate: the Rule is the schedule, so there
  * is no second renderer to choose between and no `showScheduleRule` prop.
@@ -20,14 +21,10 @@ export function ProjectScheduleHandoffMount({
   engagementKind,
   projectId,
   projectTitle,
-  projectStatus,
-  phases,
 }: {
   engagementKind: string;
   projectId: string | null;
   projectTitle: string;
-  projectStatus: string | null | undefined;
-  phases: readonly ProjectPhaseRow[] | undefined;
 }) {
   if (engagementKind !== 'project' || !projectId) return null;
 
@@ -35,9 +32,6 @@ export function ProjectScheduleHandoffMount({
     <>
       <ScheduleRule projectId={projectId} projectTitle={projectTitle} />
       <ScheduleConfirmStrip projectId={projectId} />
-      {projectStatus === 'active' ? (
-        <PhaseAdvanceControl projectId={projectId} phases={phases} />
-      ) : null}
     </>
   );
 }

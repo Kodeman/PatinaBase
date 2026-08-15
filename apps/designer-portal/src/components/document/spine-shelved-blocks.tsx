@@ -3,9 +3,13 @@
 /**
  * The three blocks the shelved spine grows on a project document: the running
  * index, the rooms, the shelves. It owns the small reads that state each line's
- * truth — the same canonical queries the surfaces themselves call, deduped by
- * React Query rather than fetched again (they are the reads the retired
- * not-started band used to make).
+ * truth — the same canonical queries the retired not-started band used to make,
+ * so the document is no worse off for the reads.
+ *
+ * NOT deduped against FF&E: that section reads `useProjectFFEItems` with
+ * `withLifecycle: true`, which is a different query key, so this is a second
+ * fetch of the schedule. Cheap and already paid for before this wave, but the
+ * cost is real — do not "optimize" it away by assuming a shared cache entry.
  *
  * The page hands down the facts it has already derived — the schedule's
  * position, the approvals count, the money figure — so the spine never states a
@@ -19,12 +23,15 @@ import {
   useProjectOwnedBoards,
   usePlanRoom,
 } from '@patina/supabase';
+import { useProjectBillingAuthority } from '@/hooks/use-commercial-documents';
+import { money } from '@/lib/document/project-commerce';
 import {
   DOCUMENT_INDEX_KEYS,
   DOCUMENT_INDEX_LABELS,
   type DocumentIndexKey,
 } from '@/lib/document/document-index';
-import { roomStateWord } from '@/lib/document/room-state';
+import { roomStateRowFromLine, roomStateWord } from '@/lib/document/room-state';
+import type { LineStampInput } from '@/lib/document/stamp-derivation';
 import type { ShelfKey } from '@/lib/document/shelves';
 import type { DocumentRoom } from '@/hooks/use-document-rooms';
 import { useDocumentRunningIndex } from '@/hooks/use-document-running-index';
@@ -33,19 +40,20 @@ import { SpineRunningIndex } from './spine-running-index';
 import { SpineRoomsBlock } from './spine-rooms-block';
 import { SpineShelvesBlock } from './spine-shelves-block';
 
-interface SpineFfeRow {
+/** The schedule line as the spine reads it: what `deriveLineStamp` needs, plus
+ *  the room it belongs to. */
+type SpineFfeRow = LineStampInput & {
   id: string;
-  status: string | null;
   project_room_id: string | null;
-}
+};
 
 export function DocSpineShelvedBlocks({
   projectId,
   rooms,
   scheduleValue,
   approvalsValue,
-  moneyValue,
   rosterCount,
+  callSheetEnabled,
   openShelf,
   onToggleShelf,
 }: {
@@ -53,8 +61,8 @@ export function DocSpineShelvedBlocks({
   rooms: readonly DocumentRoom[];
   scheduleValue: string;
   approvalsValue: string;
-  moneyValue: string;
   rosterCount: number;
+  callSheetEnabled: boolean;
   openShelf: ShelfKey | null;
   onToggleShelf: (key: ShelfKey) => void;
 }) {
@@ -67,6 +75,11 @@ export function DocSpineShelvedBlocks({
   const { data: ffeRows } = useProjectFFEItems(projectId) as {
     data: SpineFfeRow[] | undefined;
   };
+  // R108 — the Design authority line reads the SAME door MoneyRegion states
+  // from (React Query dedupes this one: identical key, identical args). A
+  // second derivation off `projects.total_amount_cents` said a different
+  // number than the region it points at.
+  const authorityQuery = useProjectBillingAuthority(projectId);
   const planRoom = usePlanRoom(projectId);
   const liveBoards = useProjectOwnedBoards(projectId);
   const frozenBoards = useProjectBoards(projectId);
@@ -81,7 +94,7 @@ export function DocSpineShelvedBlocks({
         stateWord: roomStateWord(
           rows
             .filter((r) => r.project_room_id === room.id)
-            .map((r) => ({ installed: r.status === 'installed' })),
+            .map((line) => roomStateRowFromLine(line)),
         ),
       })),
     [rooms, rows],
@@ -93,7 +106,13 @@ export function DocSpineShelvedBlocks({
     ffe: `${rows.length} ${rows.length === 1 ? 'piece' : 'pieces'} · ${
       rooms.length
     } ${rooms.length === 1 ? 'room' : 'rooms'}`,
-    money: moneyValue,
+    money: authorityQuery.isLoading
+      ? 'Reading…'
+      : authorityQuery.error
+        ? 'Authority unread'
+        : authorityQuery.data
+          ? `${money(authorityQuery.data.authorizedCents)} authorized`
+          : 'No authority yet',
   };
 
   const entries = DOCUMENT_INDEX_KEYS.map((key) => ({
@@ -142,6 +161,7 @@ export function DocSpineShelvedBlocks({
       <SpineShelvesBlock
         openShelf={openShelf}
         statuses={shelfStatuses}
+        callSheetEnabled={callSheetEnabled}
         onToggleShelf={onToggleShelf}
       />
     </>

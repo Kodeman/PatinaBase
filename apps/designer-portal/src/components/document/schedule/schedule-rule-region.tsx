@@ -14,6 +14,10 @@
  * Default folded — always, not derived. The strip is an editor, and an editor
  * that opens itself on every visit is a claim that dates need adjusting.
  *
+ * `PhaseAdvanceControl` therefore renders at REGION level, outside the fold, in
+ * both states: advancing the phase is a lifecycle act, not a date edit, and a
+ * default-folded region would otherwise have hidden it on every visit.
+ *
  * ARMED EDIT. "Edit dates" in the ledger reaches the strip through
  * ScheduleNavContext, and the strip is UNMOUNTED while folded — so this region
  * stands in for it: it catches the arm, unfolds, and re-fires once the strip
@@ -37,6 +41,7 @@ import { useRegionFold } from '../region/use-region-fold';
 import { useScheduleNav } from './schedule-nav-context';
 import { ScheduleGlanceStrip } from './schedule-glance-strip';
 import { ProjectScheduleHandoffMount } from '../project-schedule-handoff-mount';
+import { PhaseAdvanceControl } from '../phase-advance-control';
 
 const HEADING_ID = 'schedule-rule-title';
 const BODY_ID = 'schedule-rule-body';
@@ -46,7 +51,7 @@ export interface ScheduleRuleRegionProps {
   projectId: string | null;
   projectTitle: string;
   projectStatus: string | null | undefined;
-  phases: Parameters<typeof ProjectScheduleHandoffMount>[0]['phases'];
+  phases: Parameters<typeof PhaseAdvanceControl>[0]['phases'];
   /** R108 — the page's ONE schedule derivation, spoken here too. The seam must
    *  not compute a second position sentence that can drift from the letterhead's. */
   summary: string;
@@ -155,6 +160,11 @@ function ScheduleRuleRegionBody({
       ]
     : [];
 
+  const phaseAdvance =
+    projectStatus === 'active' ? (
+      <PhaseAdvanceControl projectId={projectId} phases={phases} />
+    ) : null;
+
   const glance =
     scale && segments.length > 0 ? (
       <ScheduleGlanceStrip
@@ -180,6 +190,7 @@ function ScheduleRuleRegionBody({
           regionKey="schedule-rule"
         />
         {glance}
+        {phaseAdvance}
       </section>
     );
   }
@@ -202,10 +213,9 @@ function ScheduleRuleRegionBody({
           engagementKind={engagementKind}
           projectId={projectId}
           projectTitle={projectTitle}
-          projectStatus={projectStatus}
-          phases={phases}
         />
       </div>
+      {phaseAdvance}
     </section>
   );
 }
