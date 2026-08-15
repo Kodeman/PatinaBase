@@ -81,6 +81,19 @@ describe('SupabaseBoardAccessService', () => {
     expect(sql).toContain("organization.type = 'design_studio'");
   });
 
+  it('does not invent organization scope for a proposal-only board', async () => {
+    const { service, queryRaw } = harness([[]], ['media.manage.org']);
+
+    await expect(service.authorizeBoard(SUBJECT, BOARD_ID)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+
+    const sql = queryRaw.mock.calls[0][0].strings.join('');
+    expect(sql).toContain('project.studio_id AS studio_id');
+    expect(sql).not.toContain('SELECT membership.organization_id');
+    expect(sql).not.toContain('(membership.role =');
+  });
+
   it('denies on the next request when current membership query returns no board', async () => {
     const first = harness([[board]], ['media.manage.org']);
     await expect(first.service.authorizeBoard(SUBJECT, BOARD_ID)).resolves.toBeDefined();

@@ -98,24 +98,7 @@ export class SupabaseBoardAccessService {
               board.proposal_id,
               board.project_id,
               COALESCE(proposal.designer_id, project.designer_id) AS designer_id,
-              COALESCE(
-                project.studio_id,
-                (
-                  SELECT membership.organization_id
-                  FROM public.organization_members AS membership
-                  JOIN public.organizations AS organization
-                    ON organization.id = membership.organization_id
-                   AND organization.status = 'active'
-                   AND organization.type = 'design_studio'
-                  WHERE membership.user_id = COALESCE(proposal.designer_id, project.designer_id)
-                    AND membership.status = 'active'
-                  ORDER BY
-                    (membership.role = 'owner') DESC,
-                    membership.joined_at NULLS LAST,
-                    membership.created_at
-                  LIMIT 1
-                )
-              ) AS studio_id
+              project.studio_id AS studio_id
             FROM public.proposal_boards AS board
             LEFT JOIN public.proposals AS proposal
               ON proposal.id = board.proposal_id
