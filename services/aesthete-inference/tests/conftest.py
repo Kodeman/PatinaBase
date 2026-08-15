@@ -67,6 +67,13 @@ def png_bytes(color=(200, 60, 30), size=(64, 48)) -> bytes:
 def mock_image_transport() -> httpx.MockTransport:
     """Fake CDN for /embed/image tests."""
 
+    class AsyncBytes(httpx.AsyncByteStream):
+        def __init__(self, content: bytes) -> None:
+            self.content = content
+
+        async def __aiter__(self):
+            yield self.content
+
     def handler(request: httpx.Request) -> httpx.Response:
         path = request.url.path
         if path == "/ok.png":
@@ -100,6 +107,24 @@ def mock_image_transport() -> httpx.MockTransport:
         if path == "/huge-body.png":
             return httpx.Response(
                 200, content=b"\x00" * (2 * 1024 * 1024), headers={"content-type": "image/png"}
+            )
+        if path == "/gzip-bomb.png":
+            return httpx.Response(
+                200,
+                stream=AsyncBytes(b"tiny encoded body"),
+                headers={"content-type": "image/png", "content-encoding": "gzip"},
+            )
+        if path == "/brotli-bomb.png":
+            return httpx.Response(
+                200,
+                stream=AsyncBytes(b"tiny encoded body"),
+                headers={"content-type": "image/png", "content-encoding": "br"},
+            )
+        if path in {"/budget1.png", "/budget2.png"}:
+            return httpx.Response(
+                200,
+                content=png_bytes(size=(100, 100)),
+                headers={"content-type": "image/png"},
             )
         return httpx.Response(500, content=b"unhandled fixture route")
 

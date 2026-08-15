@@ -33,6 +33,7 @@ from .config import Settings, settings_from_env
 from .embedder import EmbedderLike
 from .fit import FitInputError, backtest, fit_bt_map
 from .images import ImageFetchError, fetch_image
+from .image_safety import DecodedPixelBudget
 from .photos import (
     PhotoDecodeError,
     PhotoFetchError,
@@ -199,6 +200,7 @@ def create_app(
 
         enter_gate()
         try:
+            pixel_budget = DecodedPixelBudget(settings.image_batch_max_pixels)
             # Per-item error isolation: one bad URL never fails the batch.
             fetches = await asyncio.gather(
                 *(
@@ -207,6 +209,8 @@ def create_app(
                         item.url,
                         timeout_s=settings.image_fetch_timeout_s,
                         max_bytes=settings.image_max_bytes,
+                        max_pixels=settings.image_max_pixels,
+                        pixel_budget=pixel_budget,
                         resolver=hostname_resolver,
                     )
                     for item in req.inputs
@@ -230,11 +234,15 @@ def create_app(
 
             vectors: list[Vector] = []
             if good_images:
-                embs = await run_in_threadpool(eng.embed_images, good_images)
-                vectors = [
-                    Vector(id=item_id, dim=int(emb.shape[-1]), v=emb.tolist())
-                    for item_id, emb in zip(good_ids, embs)
-                ]
+                try:
+                    embs = await run_in_threadpool(eng.embed_images, good_images)
+                    vectors = [
+                        Vector(id=item_id, dim=int(emb.shape[-1]), v=emb.tolist())
+                        for item_id, emb in zip(good_ids, embs)
+                    ]
+                finally:
+                    for image in good_images:
+                        image.close()
         finally:
             gate.leave()
 
@@ -388,6 +396,7 @@ def create_app(
                 thumb_max_px=req.thumb_max_px,
                 preview_max_px=req.preview_max_px,
                 jpeg_quality=req.jpeg_quality,
+                max_pixels=settings.photo_max_pixels,
             )
         except PhotoDecodeError as err:
             raise HTTPException(status_code=422, detail=str(err))

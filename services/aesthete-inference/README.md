@@ -142,8 +142,8 @@ onnxruntime intra-op threads = 2.
 > Everything the image runs was verified outside Docker on the same machine:
 > the full pytest suite (incl. golden-cosine against the real int8 models) and
 > a live `uvicorn` smoke of `/healthz` + authed `/embed/text` + `/embed/image`
-> with a real external URL. Wave 5B re-runs `docker build` on the Coolify
-> host (its own network) as part of prod prep.
+> with a real external URL. The active Cloudflare inference Worker build is
+> documented in `infra/inference-worker/README.md`.
 
 ### Environment
 

@@ -20,9 +20,9 @@ from __future__ import annotations
 import base64
 from functools import lru_cache
 from io import BytesIO
-
 import httpx
 
+from .image_safety import UnsafeImageError, load_image_bytes
 from .safe_fetch import HostnameResolver, SafeFetchError, fetch_public_bytes, resolve_hostname
 
 
@@ -93,6 +93,7 @@ def convert_heic_to_jpeg(
     thumb_max_px: int = 512,
     preview_max_px: int = 1600,
     jpeg_quality: float = 0.8,
+    max_pixels: int = 32_000_000,
 ) -> dict:
     """Decode HEIC bytes ONCE → a 512px thumb + a 1600px preview, both JPEG-b64.
 
@@ -111,32 +112,40 @@ def convert_heic_to_jpeg(
         raise PhotoDecodeError("empty request body")
 
     try:
-        base = Image.open(BytesIO(data))
-        base.load()
-    except PhotoDecodeError:
-        raise
-    except Exception:
-        raise PhotoDecodeError("body is not a decodable image") from None
+        base = load_image_bytes(data, max_pixels=max_pixels)
+    except UnsafeImageError as exc:
+        raise PhotoDecodeError(str(exc)) from None
 
     # Respect EXIF orientation, then normalise to RGB (JPEG has no alpha).
-    base = ImageOps.exif_transpose(base) or base
+    oriented = ImageOps.exif_transpose(base)
+    if oriented is not base:
+        base.close()
+        base = oriented
     if base.mode != "RGB":
-        base = base.convert("RGB")
+        converted = base.convert("RGB")
+        base.close()
+        base = converted
 
     # jpeg_quality arrives as a 0–1 float; Pillow wants an int 1–95.
     quality = max(1, min(95, int(round(jpeg_quality * 100))))
 
     def render(max_px: int) -> dict:
         variant = base.copy()
-        variant.thumbnail((max_px, max_px), Image.Resampling.LANCZOS)
-        out = BytesIO()
-        variant.save(out, format="JPEG", quality=quality, optimize=True)
-        raw = out.getvalue()
-        return {
-            "b64": base64.b64encode(raw).decode("ascii"),
-            "width": variant.width,
-            "height": variant.height,
-            "bytes": len(raw),
-        }
+        try:
+            variant.thumbnail((max_px, max_px), Image.Resampling.LANCZOS)
+            out = BytesIO()
+            variant.save(out, format="JPEG", quality=quality, optimize=True)
+            raw = out.getvalue()
+            return {
+                "b64": base64.b64encode(raw).decode("ascii"),
+                "width": variant.width,
+                "height": variant.height,
+                "bytes": len(raw),
+            }
+        finally:
+            variant.close()
 
-    return {"thumb": render(thumb_max_px), "preview": render(preview_max_px)}
+    try:
+        return {"thumb": render(thumb_max_px), "preview": render(preview_max_px)}
+    finally:
+        base.close()

@@ -5,7 +5,7 @@
 # the full lineage). Stage 2 is a slim runtime with the weights baked into the
 # image — atomic deploy/rollback; model_version travels with the container.
 #
-# Deploy sizing (compose / Coolify):   mem_limit: 2g   cpus: 2.0
+# Container sizing:                   memory: 2 GB   cpu: 2
 # Runtime env (required):              INFERENCE_TOKEN
 #
 #   docker build -t aesthete-inference services/aesthete-inference
