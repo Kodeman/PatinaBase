@@ -3,15 +3,16 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ProjectsService } from './projects.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotFoundException } from '@nestjs/common';
-import { ProjectStatus } from './dto/create-project.dto';
 import { CacheService } from '@patina/cache';
+import { ProjectsAuthorizationResolver } from '../common/authorization/projects-authorization.resolver';
 
 describe('ProjectsService', () => {
   let service: ProjectsService;
   let prisma: PrismaService;
   let eventEmitter: EventEmitter2;
 
-  const mockPrismaService = {
+  const mockPrismaService: any = {
+    $transaction: jest.fn(),
     project: {
       create: jest.fn(),
       findMany: jest.fn(),
@@ -35,6 +36,16 @@ describe('ProjectsService', () => {
     invalidateProject: jest.fn().mockResolvedValue(undefined),
   };
 
+  const authorizationMock = {
+    assertProjectAccess: jest.fn().mockResolvedValue('project-123'),
+    authorizePublicProjectLink: jest.fn(),
+    accessibleProjectIds: jest.fn(),
+    withProjectAccess: jest.fn(
+      async (_userId: string, _projectId: string, _mode: string, operation: (tx: any) => any) =>
+        operation(mockPrismaService),
+    ),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -42,12 +53,16 @@ describe('ProjectsService', () => {
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: EventEmitter2, useValue: mockEventEmitter },
         { provide: CacheService, useValue: cacheServiceMock },
+        { provide: ProjectsAuthorizationResolver, useValue: authorizationMock },
       ],
     }).compile();
 
     service = module.get<ProjectsService>(ProjectsService);
     prisma = module.get<PrismaService>(PrismaService);
     eventEmitter = module.get<EventEmitter2>(EventEmitter2);
+    mockPrismaService.$transaction.mockImplementation(
+      async (callback: (client: unknown) => Promise<unknown>) => callback(mockPrismaService),
+    );
   });
 
   afterEach(() => {
@@ -59,10 +74,16 @@ describe('ProjectsService', () => {
   describe('create', () => {
     it('should create a new project', async () => {
       const createDto = {
+        publicProjectId: 'public-project-123',
         title: 'Test Project',
         clientId: 'client-123',
         designerId: 'designer-123',
       };
+      authorizationMock.authorizePublicProjectLink.mockResolvedValue({
+        publicProjectId: 'public-project-123',
+        clientId: 'client-123',
+        designerId: 'designer-123',
+      });
 
       const mockProject = {
         id: 'project-123',
@@ -74,7 +95,7 @@ describe('ProjectsService', () => {
 
       mockPrismaService.project.create.mockResolvedValue(mockProject);
 
-      const result = await service.create(createDto, 'user-123');
+      const result = await service.create(createDto, 'designer-123');
 
       expect(result).toEqual(mockProject);
       expect(prisma.project.create).toHaveBeenCalledWith({
@@ -100,7 +121,7 @@ describe('ProjectsService', () => {
 
       mockPrismaService.project.findUnique.mockResolvedValue(mockProject);
 
-      const result = await service.findOne('project-123');
+      const result = await service.findOne('project-123', 'user-123');
 
       expect(result).toEqual(mockProject);
       expect(prisma.project.findUnique).toHaveBeenCalledWith({
@@ -112,7 +133,7 @@ describe('ProjectsService', () => {
     it('should throw NotFoundException if project not found', async () => {
       mockPrismaService.project.findUnique.mockResolvedValue(null);
 
-      await expect(service.findOne('nonexistent')).rejects.toThrow(NotFoundException);
+      await expect(service.findOne('nonexistent', 'user-123')).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -128,12 +149,15 @@ describe('ProjectsService', () => {
       const result = await service.update('project-123', updateDto, 'user-123');
 
       expect(result).toEqual(mockUpdated);
-      expect(eventEmitter.emit).not.toHaveBeenCalledWith('project.status_changed', expect.any(Object));
+      expect(eventEmitter.emit).not.toHaveBeenCalledWith(
+        'project.status_changed',
+        expect.any(Object),
+      );
     });
 
     it('should emit status_changed event when status changes', async () => {
-      const updateDto = { status: ProjectStatus.ACTIVE };
-      const mockExisting = { id: 'project-123', status: ProjectStatus.DRAFT };
+      const updateDto = { status: 'active' as const };
+      const mockExisting = { id: 'project-123', status: 'draft' };
       const mockUpdated = { ...mockExisting, ...updateDto };
 
       mockPrismaService.project.findUnique.mockResolvedValue(mockExisting);
@@ -157,7 +181,7 @@ describe('ProjectsService', () => {
       mockPrismaService.issue.groupBy.mockResolvedValue([]);
       mockPrismaService.changeOrder.groupBy.mockResolvedValue([]);
 
-      const result = await service.getStats('project-123');
+      const result = await service.getStats('project-123', 'user-123');
 
       expect(result).toHaveProperty('tasks');
       expect(result.tasks).toEqual({ todo: 5, done: 3 });

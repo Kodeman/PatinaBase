@@ -20,15 +20,12 @@ export class RealtimeBroadcasterService {
   private readonly serviceRoleKey: string | null;
 
   constructor(private readonly config: ConfigService) {
-    const url =
-      this.config.get<string>('supabase.url') ?? process.env.SUPABASE_URL ?? null;
+    const url = this.config.get<string>('supabase.url') ?? process.env.SUPABASE_URL ?? null;
     this.serviceRoleKey =
       this.config.get<string>('supabase.serviceRoleKey') ??
       process.env.SUPABASE_SERVICE_ROLE_KEY ??
       null;
-    this.endpoint = url
-      ? `${url.replace(/\/$/, '')}/realtime/v1/api/broadcast`
-      : null;
+    this.endpoint = url ? `${url.replace(/\/$/, '')}/realtime/v1/api/broadcast` : null;
 
     if (!this.endpoint || !this.serviceRoleKey) {
       this.logger.warn(
@@ -64,13 +61,10 @@ export class RealtimeBroadcasterService {
       });
 
       if (!res.ok) {
-        const body = await res.text().catch(() => '');
-        this.logger.warn(
-          `Realtime broadcast ${event} → ${topic} failed: ${res.status} ${body}`,
-        );
+        this.logger.warn(`Realtime broadcast failed with status ${res.status}`);
       }
-    } catch (err) {
-      this.logger.error(`Realtime broadcast ${event} → ${topic} errored`, err as Error);
+    } catch {
+      this.logger.error('Realtime broadcast errored');
     }
   }
 }

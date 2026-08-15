@@ -91,7 +91,7 @@ export class MediaClientService {
         headers: data.headers,
       };
     } catch (error) {
-      this.logger.error('Failed to get upload URL:', error);
+      this.logger.error('Failed to get upload URL');
       throw error;
     }
   }
@@ -124,7 +124,7 @@ export class MediaClientService {
         expiresIn: data.expiresIn || 3600, // Default 1 hour
       };
     } catch (error) {
-      this.logger.error(`Failed to get download URL for key ${key}:`, error);
+      this.logger.error('Failed to get download URL');
       throw error;
     }
   }
@@ -144,13 +144,11 @@ export class MediaClientService {
         config.headers!['Authorization'] = `Bearer ${token}`;
       }
 
-      await firstValueFrom(
-        this.httpService.delete(`${this.baseUrl}/assets/${assetId}`, config),
-      );
+      await firstValueFrom(this.httpService.delete(`${this.baseUrl}/assets/${assetId}`, config));
 
-      this.logger.log(`Deleted media asset ${assetId}`);
+      this.logger.log('Deleted media asset');
     } catch (error) {
-      this.logger.error(`Failed to delete asset ${assetId}:`, error);
+      this.logger.error('Failed to delete media asset');
       throw error;
     }
   }
@@ -175,8 +173,8 @@ export class MediaClientService {
       );
 
       return (response as any)?.data || response;
-    } catch (error) {
-      this.logger.error(`Failed to get asset ${assetId}:`, error);
+    } catch {
+      this.logger.error('Failed to get media asset');
       return null;
     }
   }
@@ -204,8 +202,8 @@ export class MediaClientService {
       );
 
       return (response as any)?.data || response;
-    } catch (error) {
-      this.logger.error('Failed to get assets:', error);
+    } catch {
+      this.logger.error('Failed to get media assets');
       return [];
     }
   }
@@ -235,9 +233,9 @@ export class MediaClientService {
         ),
       );
 
-      this.logger.log(`Triggered processing for asset ${assetId}`);
-    } catch (error) {
-      this.logger.error(`Failed to process asset ${assetId}:`, error);
+      this.logger.log('Triggered media processing');
+    } catch {
+      this.logger.error('Failed to process media asset');
       // Don't throw - processing is often async and non-critical
     }
   }
@@ -253,7 +251,11 @@ export class MediaClientService {
   /**
    * Validate file type and size
    */
-  validateFile(filename: string, mimeType: string, fileSize: number): { valid: boolean; error?: string } {
+  validateFile(
+    filename: string,
+    mimeType: string,
+    fileSize: number,
+  ): { valid: boolean; error?: string } {
     const ALLOWED_DOCUMENT_TYPES = [
       'application/pdf',
       'application/vnd.ms-excel',

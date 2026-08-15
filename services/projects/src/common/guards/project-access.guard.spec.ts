@@ -1,92 +1,125 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-
-jest.mock('../../prisma/prisma.service', () => ({ PrismaService: class PrismaService {} }));
-
+import { IS_PUBLIC_KEY } from '@patina/auth';
+import {
+  PROJECT_ACCESS_MODE_KEY,
+  PROJECT_ENTITY_KEY,
+} from '../decorators/project-authorization.decorator';
 import { ProjectAccessGuard } from './project-access.guard';
 
 describe('ProjectAccessGuard', () => {
-  const findUnique = jest.fn();
-  const reflector = {
-    getAllAndOverride: jest.fn().mockReturnValue(false),
-  } as unknown as Reflector;
-  const guard = new ProjectAccessGuard({ project: { findUnique } } as any, reflector);
+  const authorization = {
+    assertProjectAccess: jest.fn(),
+    assertChangeOrderAccess: jest.fn(),
+  };
+  const reflector = { getAllAndOverride: jest.fn() } as unknown as Reflector;
+  const guard = new ProjectAccessGuard(authorization as any, reflector);
 
-  const context = (
-    user: Record<string, unknown> | undefined,
-    params: Record<string, string> = { projectId: 'project-1' },
-  ) =>
+  const request = (user?: Record<string, unknown>, params = { projectId: 'project-1' }) => ({
+    user,
+    params,
+  });
+  const context = (httpRequest: ReturnType<typeof request>) =>
     ({
       getHandler: () => () => undefined,
       getClass: () => class Controller {},
-      switchToHttp: () => ({ getRequest: () => ({ user, params }) }),
+      switchToHttp: () => ({ getRequest: () => httpRequest }),
     }) as any;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    (reflector.getAllAndOverride as jest.Mock).mockReturnValue(false);
-    findUnique.mockResolvedValue({
-      id: 'project-1',
-      clientId: 'client-1',
-      designerId: 'designer-1',
+    authorization.assertProjectAccess.mockResolvedValue('project-1');
+    authorization.assertChangeOrderAccess.mockResolvedValue('project-1');
+    (reflector.getAllAndOverride as jest.Mock).mockImplementation((key: string) => {
+      if (key === IS_PUBLIC_KEY) return false;
+      if (key === PROJECT_ACCESS_MODE_KEY) return 'read';
+      if (key === PROJECT_ENTITY_KEY) return undefined;
+      return undefined;
     });
   });
 
-  it('allows public routes without an authenticated user', async () => {
-    (reflector.getAllAndOverride as jest.Mock).mockReturnValue(true);
-    await expect(guard.canActivate(context(undefined))).resolves.toBe(true);
-  });
-
-  it.each([
-    ['missing user', undefined],
-    ['missing application roles', { id: 'user-1', sub: 'user-1' }],
-    ['unknown application role', { id: 'user-1', sub: 'user-1', roles: ['owner'] }],
-    ['mixed known and unknown roles', { id: 'user-1', sub: 'user-1', roles: ['admin', 'owner'] }],
-    ['missing id and sub', { roles: ['admin'] }],
-    ['mismatched id and sub', { id: 'user-1', sub: 'user-2', roles: ['admin'] }],
-  ])('default-denies %s', async (_case, user) => {
-    await expect(guard.canActivate(context(user))).rejects.toBeInstanceOf(ForbiddenException);
-    expect(findUnique).not.toHaveBeenCalled();
-  });
-
-  it('default-denies routes without an object scope', async () => {
-    const user = { id: 'admin-1', sub: 'admin-1', roles: ['admin'] };
-    await expect(guard.canActivate(context(user, {}))).rejects.toThrow('Project scope is required');
-  });
-
-  it.each([
-    ['id', { id: 'admin-1', roles: ['admin'] }],
-    ['sub', { sub: 'admin-1', roles: ['admin'] }],
-  ])('allows an app_metadata admin using %s identity', async (_case, user) => {
-    await expect(guard.canActivate(context(user))).resolves.toBe(true);
-    expect(findUnique).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    ['designer by id', { id: 'designer-1', roles: ['designer'] }],
-    ['designer by sub', { sub: 'designer-1', roles: ['designer'] }],
-    ['client by id', { id: 'client-1', roles: ['client'] }],
-    ['client by sub', { sub: 'client-1', roles: ['client'] }],
-  ])('allows the assigned %s', async (_case, user) => {
-    await expect(guard.canActivate(context(user))).resolves.toBe(true);
-  });
-
-  it.each([
-    ['other designer', { id: 'designer-2', sub: 'designer-2', roles: ['designer'] }],
-    ['other client', { id: 'client-2', sub: 'client-2', roles: ['client'] }],
-    [
-      'contractor without a project ownership relation',
-      { id: 'contractor-1', roles: ['contractor'] },
-    ],
-  ])('denies %s', async (_case, user) => {
-    await expect(guard.canActivate(context(user))).rejects.toThrow(
-      'You do not have access to this project',
+  it('retains the explicit public exception without resolving authorization', async () => {
+    (reflector.getAllAndOverride as jest.Mock).mockImplementation((key: string) =>
+      key === IS_PUBLIC_KEY ? true : undefined,
     );
+
+    await expect(guard.canActivate(context(request()))).resolves.toBe(true);
+    expect(authorization.assertProjectAccess).not.toHaveBeenCalled();
   });
 
-  it('returns not found for a missing project without broadening access', async () => {
-    findUnique.mockResolvedValue(null);
-    const user = { id: 'designer-1', sub: 'designer-1', roles: ['designer'] };
-    await expect(guard.canActivate(context(user))).rejects.toBeInstanceOf(NotFoundException);
+  it.each([
+    ['missing identity', undefined],
+    ['missing sub', { id: 'actor', userId: 'actor' }],
+    ['mismatched id', { sub: 'actor', id: 'other', userId: 'actor' }],
+    ['mismatched userId', { sub: 'actor', id: 'actor', userId: 'other' }],
+  ])('returns 401 for %s', async (_case, user) => {
+    await expect(guard.canActivate(context(request(user)))).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+    expect(authorization.assertProjectAccess).not.toHaveBeenCalled();
+  });
+
+  it('uses only the verified subject and ignores stale JWT authorization metadata', async () => {
+    const httpRequest = request({
+      sub: 'actor',
+      id: 'actor',
+      userId: 'actor',
+      role: 'super_admin',
+      roles: ['super_admin'],
+      permissions: ['project.admin.all'],
+    });
+
+    await expect(guard.canActivate(context(httpRequest))).resolves.toBe(true);
+    expect(authorization.assertProjectAccess).toHaveBeenCalledWith('actor', 'project-1', 'read');
+    expect(httpRequest).toHaveProperty('authorizedProjectId', 'project-1');
+  });
+
+  it('uses manage scope from route metadata', async () => {
+    (reflector.getAllAndOverride as jest.Mock).mockImplementation((key: string) => {
+      if (key === IS_PUBLIC_KEY) return false;
+      if (key === PROJECT_ACCESS_MODE_KEY) return 'manage';
+      return undefined;
+    });
+
+    await guard.canActivate(context(request({ sub: 'actor', id: 'actor', userId: 'actor' })));
+    expect(authorization.assertProjectAccess).toHaveBeenCalledWith('actor', 'project-1', 'manage');
+  });
+
+  it('resolves a standalone change order to its authoritative project', async () => {
+    (reflector.getAllAndOverride as jest.Mock).mockImplementation((key: string) => {
+      if (key === IS_PUBLIC_KEY) return false;
+      if (key === PROJECT_ACCESS_MODE_KEY) return 'read';
+      if (key === PROJECT_ENTITY_KEY) return { type: 'changeOrder', param: 'id' };
+      return undefined;
+    });
+    const httpRequest = request({ sub: 'actor', id: 'actor', userId: 'actor' }, {
+      id: 'change-order-1',
+    } as any);
+
+    await guard.canActivate(context(httpRequest));
+    expect(authorization.assertChangeOrderAccess).toHaveBeenCalledWith(
+      'actor',
+      'change-order-1',
+      'read',
+    );
+    expect(httpRequest).toHaveProperty('authorizedProjectId', 'project-1');
+  });
+
+  it('fails closed with 403 when a protected route has no authorization contract', async () => {
+    (reflector.getAllAndOverride as jest.Mock).mockImplementation((key: string) =>
+      key === IS_PUBLIC_KEY ? false : undefined,
+    );
+
+    await expect(
+      guard.canActivate(context(request({ sub: 'actor', id: 'actor', userId: 'actor' }))),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('preserves non-enumerating 404 failures from the resolver', async () => {
+    authorization.assertProjectAccess.mockRejectedValue(new NotFoundException('Project not found'));
+
+    await expect(
+      guard.canActivate(context(request({ sub: 'actor', id: 'actor', userId: 'actor' }))),
+    ).rejects.toMatchObject({ status: 404, message: 'Project not found' });
   });
 });

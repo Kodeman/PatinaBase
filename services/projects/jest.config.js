@@ -8,11 +8,16 @@ module.exports = {
   ...baseConfig,
   rootDir: '.',
   displayName: 'projects-service',
+  moduleFileExtensions: ['ts', 'js', 'json'],
+  modulePathIgnorePatterns: ['<rootDir>/dist/'],
   coverageDirectory: '<rootDir>/coverage',
   transform: {
-    '^.+\\.ts$': ['ts-jest', {
-      tsconfig: '<rootDir>/tsconfig.spec.json',
-      isolatedModules: false,
-    }],
+    '^.+\\.ts$': [
+      'ts-jest',
+      {
+        tsconfig: '<rootDir>/tsconfig.spec.json',
+        isolatedModules: false,
+      },
+    ],
   },
 };

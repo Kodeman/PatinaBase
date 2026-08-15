@@ -29,6 +29,7 @@ import { ApprovalsModule } from './approvals/approvals.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { IntegrationsModule } from './integrations/integrations.module';
+import { MetricsController } from './common/metrics.controller';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { IntegrationsModule } from './integrations/integrations.module';
     }),
     PrometheusModule.register({
       path: '/metrics',
+      controller: MetricsController,
       defaultMetrics: {
         enabled: true,
       },

@@ -12,14 +12,20 @@ import {
   HttpStatus,
   BadRequestException,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiParam,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { ApprovalsService } from './approvals.service';
 import { CreateApprovalDto } from './dto/create-approval.dto';
 import { ApproveDto, RejectDto, DiscussDto, SignatureDto } from './dto/approval-action.dto';
-import { RolesGuard } from '../common/guards/roles.guard';
 import { ProjectAccessGuard } from '../common/guards/project-access.guard';
-import { Roles } from '../common/decorators/roles.decorator';
 import { GetCurrentUser } from '../common/decorators/current-user.decorator';
+import { ProjectManage, ProjectRead } from '../common/decorators/project-authorization.decorator';
 import { Request } from 'express';
 
 /**
@@ -28,7 +34,6 @@ import { Request } from 'express';
 @ApiTags('approvals')
 @ApiBearerAuth()
 @Controller('approvals')
-@UseGuards(RolesGuard)
 export class GlobalApprovalsController {
   constructor(private readonly approvalsService: ApprovalsService) {}
 
@@ -36,7 +41,7 @@ export class GlobalApprovalsController {
    * Get all approvals for the current user (across all projects)
    */
   @Get()
-  @Roles('admin', 'designer', 'client')
+  @ProjectRead()
   @ApiOperation({ summary: 'Get all approvals for current user across projects' })
   @ApiQuery({ name: 'type', required: false, description: 'Filter by approval type' })
   @ApiQuery({ name: 'status', required: false, description: 'Filter by status' })
@@ -59,12 +64,12 @@ export class GlobalApprovalsController {
 @ApiTags('approvals')
 @ApiBearerAuth()
 @Controller('projects/:projectId/approvals')
-@UseGuards(RolesGuard, ProjectAccessGuard)
+@UseGuards(ProjectAccessGuard)
 export class ApprovalsController {
   constructor(private readonly approvalsService: ApprovalsService) {}
 
   @Post()
-  @Roles('admin', 'designer')
+  @ProjectManage()
   @ApiOperation({ summary: 'Create a new approval request' })
   @ApiParam({ name: 'projectId', description: 'Project ID' })
   @ApiResponse({ status: 201, description: 'Approval created successfully' })
@@ -78,39 +83,40 @@ export class ApprovalsController {
   }
 
   @Get()
-  @Roles('admin', 'designer', 'client')
+  @ProjectRead()
   @ApiOperation({ summary: 'Get all approvals for a project' })
   @ApiParam({ name: 'projectId', description: 'Project ID' })
   @ApiQuery({ name: 'status', required: false, description: 'Filter by status' })
   @ApiResponse({ status: 200, description: 'Approvals retrieved successfully' })
   findAll(
     @Param('projectId') projectId: string,
+    @GetCurrentUser('id') userId: string,
     @Query('status') status?: string,
   ) {
-    return this.approvalsService.findByProject(projectId, status);
+    return this.approvalsService.findByProject(projectId, userId, status);
   }
 
   @Get('pending')
-  @Roles('admin', 'designer', 'client')
+  @ProjectRead()
   @ApiOperation({ summary: 'Get pending approvals for a project' })
   @ApiParam({ name: 'projectId', description: 'Project ID' })
   @ApiResponse({ status: 200, description: 'Pending approvals retrieved' })
   @ApiResponse({ status: 404, description: 'Project not found' })
-  getPending(@Param('projectId') projectId: string) {
-    return this.approvalsService.getPending(projectId);
+  getPending(@Param('projectId') projectId: string, @GetCurrentUser('id') userId: string) {
+    return this.approvalsService.getPending(projectId, userId);
   }
 
   @Get('metrics')
-  @Roles('admin', 'designer')
+  @ProjectRead()
   @ApiOperation({ summary: 'Get approval metrics for a project' })
   @ApiParam({ name: 'projectId', description: 'Project ID' })
   @ApiResponse({ status: 200, description: 'Metrics retrieved successfully' })
-  getMetrics(@Param('projectId') projectId: string) {
-    return this.approvalsService.getApprovalMetrics(projectId);
+  getMetrics(@Param('projectId') projectId: string, @GetCurrentUser('id') userId: string) {
+    return this.approvalsService.getApprovalMetrics(projectId, userId);
   }
 
   @Get(':approvalId')
-  @Roles('admin', 'designer', 'client')
+  @ProjectRead()
   @ApiOperation({ summary: 'Get specific approval details' })
   @ApiParam({ name: 'projectId', description: 'Project ID' })
   @ApiParam({ name: 'approvalId', description: 'Approval ID' })
@@ -119,13 +125,14 @@ export class ApprovalsController {
   findOne(
     @Param('projectId') projectId: string,
     @Param('approvalId') approvalId: string,
+    @GetCurrentUser('id') userId: string,
   ) {
-    return this.approvalsService.findOne(projectId, approvalId);
+    return this.approvalsService.findOne(projectId, approvalId, userId);
   }
 
   @Post(':approvalId/approve')
   @HttpCode(HttpStatus.OK)
-  @Roles('admin', 'client')
+  @ProjectRead()
   @ApiOperation({ summary: 'Approve an approval request' })
   @ApiParam({ name: 'projectId', description: 'Project ID' })
   @ApiParam({ name: 'approvalId', description: 'Approval ID' })
@@ -146,7 +153,7 @@ export class ApprovalsController {
 
   @Post(':approvalId/reject')
   @HttpCode(HttpStatus.OK)
-  @Roles('admin', 'client')
+  @ProjectRead()
   @ApiOperation({ summary: 'Reject an approval request' })
   @ApiParam({ name: 'projectId', description: 'Project ID' })
   @ApiParam({ name: 'approvalId', description: 'Approval ID' })
@@ -165,7 +172,7 @@ export class ApprovalsController {
 
   @Post(':approvalId/discuss')
   @HttpCode(HttpStatus.OK)
-  @Roles('admin', 'designer', 'client')
+  @ProjectRead()
   @ApiOperation({ summary: 'Add a discussion comment to an approval' })
   @ApiParam({ name: 'projectId', description: 'Project ID' })
   @ApiParam({ name: 'approvalId', description: 'Approval ID' })
@@ -181,7 +188,7 @@ export class ApprovalsController {
   }
 
   @Put(':approvalId/signature')
-  @Roles('admin', 'client')
+  @ProjectRead()
   @ApiOperation({ summary: 'Add/update digital signature for an approval' })
   @ApiParam({ name: 'projectId', description: 'Project ID' })
   @ApiParam({ name: 'approvalId', description: 'Approval ID' })
@@ -196,6 +203,12 @@ export class ApprovalsController {
     @Req() req: Request,
   ) {
     const ipAddress = req.ip || req.socket.remoteAddress;
-    return this.approvalsService.addSignature(projectId, approvalId, signatureDto, userId, ipAddress);
+    return this.approvalsService.addSignature(
+      projectId,
+      approvalId,
+      signatureDto,
+      userId,
+      ipAddress,
+    );
   }
 }

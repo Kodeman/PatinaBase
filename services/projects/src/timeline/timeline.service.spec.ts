@@ -13,6 +13,7 @@ describe('TimelineService', () => {
   let service: TimelineService;
   let mockPrismaService: any;
   let mockEventEmitter: any;
+  let mockAuthorization: any;
 
   // Mock data factories
   const createMockProject = (overrides = {}) => ({
@@ -76,7 +77,8 @@ describe('TimelineService', () => {
         create: jest.fn(),
         findMany: jest.fn(),
         findFirst: jest.fn(),
-        update: jest.fn(),
+        findFirstOrThrow: jest.fn(),
+        updateMany: jest.fn(),
       },
       milestone: {
         findMany: jest.fn(),
@@ -101,9 +103,15 @@ describe('TimelineService', () => {
     mockEventEmitter = {
       emit: jest.fn(),
     };
+    mockAuthorization = {
+      withProjectAccess: jest.fn(
+        async (_userId: string, _projectId: string, _mode: string, operation: (tx: any) => any) =>
+          operation(mockPrismaService),
+      ),
+    };
 
     // Manual instantiation - bypasses NestJS DI metadata issues in test environment
-    service = new TimelineService(mockPrismaService, mockEventEmitter);
+    service = new TimelineService(mockEventEmitter, mockAuthorization);
   });
 
   describe('createSegment', () => {
@@ -129,17 +137,24 @@ describe('TimelineService', () => {
         where: { id: 'project-123' },
         select: expect.any(Object),
       });
-      expect(mockEventEmitter.emit).toHaveBeenCalledWith('timeline.segment.created', expect.objectContaining({
-        projectId: 'project-123',
-        segmentId: 'segment-123',
-      }));
+      expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+        'timeline.segment.created',
+        expect.objectContaining({
+          projectId: 'project-123',
+          segmentId: 'segment-123',
+        }),
+      );
     });
 
     it('should throw NotFoundException if project not found', async () => {
       mockPrismaService.project.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.createSegment('nonexistent', { title: 'Test', phase: 'design', startDate: '2024-01-01', endDate: '2024-03-31' } as any, 'user-123')
+        service.createSegment(
+          'nonexistent',
+          { title: 'Test', phase: 'design', startDate: '2024-01-01', endDate: '2024-03-31' } as any,
+          'user-123',
+        ),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -156,7 +171,7 @@ describe('TimelineService', () => {
       mockPrismaService.timelineSegment.findMany.mockResolvedValue([{ id: 'seg-1' }]); // Only 1 found
 
       await expect(
-        service.createSegment('project-123', createDto as any, 'user-123')
+        service.createSegment('project-123', createDto as any, 'user-123'),
       ).rejects.toThrow(BadRequestException);
     });
   });
@@ -173,7 +188,7 @@ describe('TimelineService', () => {
       mockPrismaService.project.findUnique.mockResolvedValue(mockProject);
       mockPrismaService.timelineSegment.findMany.mockResolvedValue(mockSegments);
 
-      const result = await service.getProjectTimeline('project-123');
+      const result = await service.getProjectTimeline('project-123', 'user-123');
 
       expect(result.projectId).toBe('project-123');
       expect(result.segmentCount).toBe(3);
@@ -184,14 +199,16 @@ describe('TimelineService', () => {
     it('should throw NotFoundException for invalid project', async () => {
       mockPrismaService.project.findUnique.mockResolvedValue(null);
 
-      await expect(service.getProjectTimeline('nonexistent')).rejects.toThrow(NotFoundException);
+      await expect(service.getProjectTimeline('nonexistent', 'user-123')).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('should handle project with no segments', async () => {
       mockPrismaService.project.findUnique.mockResolvedValue(createMockProject());
       mockPrismaService.timelineSegment.findMany.mockResolvedValue([]);
 
-      const result = await service.getProjectTimeline('project-123');
+      const result = await service.getProjectTimeline('project-123', 'user-123');
 
       expect(result.segmentCount).toBe(0);
       expect(result.overallProgress).toBe(0);
@@ -204,7 +221,7 @@ describe('TimelineService', () => {
       const mockSegment = createMockSegment();
       mockPrismaService.timelineSegment.findFirst.mockResolvedValue(mockSegment);
 
-      const result = await service.getSegment('project-123', 'segment-123');
+      const result = await service.getSegment('project-123', 'segment-123', 'user-123');
 
       expect(result.id).toBe('segment-123');
       expect(result.title).toBe('Design Phase');
@@ -213,20 +230,34 @@ describe('TimelineService', () => {
     it('should throw NotFoundException for non-existent segment', async () => {
       mockPrismaService.timelineSegment.findFirst.mockResolvedValue(null);
 
-      await expect(service.getSegment('project-123', 'nonexistent')).rejects.toThrow(NotFoundException);
+      await expect(service.getSegment('project-123', 'nonexistent', 'user-123')).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('should include dependent segments', async () => {
       const mockSegment = createMockSegment({ dependencies: ['dep-1', 'dep-2'] });
       const mockDependencies = [
-        { id: 'dep-1', title: 'Previous Phase', status: 'completed', progress: 100, endDate: new Date() },
-        { id: 'dep-2', title: 'Earlier Phase', status: 'completed', progress: 100, endDate: new Date() },
+        {
+          id: 'dep-1',
+          title: 'Previous Phase',
+          status: 'completed',
+          progress: 100,
+          endDate: new Date(),
+        },
+        {
+          id: 'dep-2',
+          title: 'Earlier Phase',
+          status: 'completed',
+          progress: 100,
+          endDate: new Date(),
+        },
       ];
 
       mockPrismaService.timelineSegment.findFirst.mockResolvedValue(mockSegment);
       mockPrismaService.timelineSegment.findMany.mockResolvedValue(mockDependencies);
 
-      const result = await service.getSegment('project-123', 'segment-123');
+      const result = await service.getSegment('project-123', 'segment-123', 'user-123');
 
       expect(result.dependentSegments).toHaveLength(2);
     });
@@ -239,10 +270,16 @@ describe('TimelineService', () => {
       const mockUpdated = { ...mockExisting, ...updateDto };
 
       mockPrismaService.timelineSegment.findFirst.mockResolvedValue(mockExisting);
-      mockPrismaService.timelineSegment.update.mockResolvedValue(mockUpdated);
+      mockPrismaService.timelineSegment.updateMany.mockResolvedValue({ count: 1 });
+      mockPrismaService.timelineSegment.findFirstOrThrow.mockResolvedValue(mockUpdated);
       mockPrismaService.auditLog.create.mockResolvedValue({});
 
-      const result = await service.updateSegment('project-123', 'segment-123', updateDto as any, 'user-123');
+      const result = await service.updateSegment(
+        'project-123',
+        'segment-123',
+        updateDto as any,
+        'user-123',
+      );
 
       expect(result.title).toBe('Updated Title');
       expect(result.progress).toBe(75);
@@ -254,16 +291,20 @@ describe('TimelineService', () => {
       const mockUpdated = { ...mockExisting, ...updateDto };
 
       mockPrismaService.timelineSegment.findFirst.mockResolvedValue(mockExisting);
-      mockPrismaService.timelineSegment.update.mockResolvedValue(mockUpdated);
+      mockPrismaService.timelineSegment.updateMany.mockResolvedValue({ count: 1 });
+      mockPrismaService.timelineSegment.findFirstOrThrow.mockResolvedValue(mockUpdated);
       mockPrismaService.auditLog.create.mockResolvedValue({});
 
       await service.updateSegment('project-123', 'segment-123', updateDto as any, 'user-123');
 
-      expect(mockEventEmitter.emit).toHaveBeenCalledWith('timeline.segment.updated', expect.objectContaining({
-        projectId: 'project-123',
-        oldProgress: 50,
-        newProgress: 80,
-      }));
+      expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+        'timeline.segment.updated',
+        expect.objectContaining({
+          projectId: 'project-123',
+          oldProgress: 50,
+          newProgress: 80,
+        }),
+      );
     });
 
     it('should not emit event for small progress changes', async () => {
@@ -272,19 +313,23 @@ describe('TimelineService', () => {
       const mockUpdated = { ...mockExisting, ...updateDto };
 
       mockPrismaService.timelineSegment.findFirst.mockResolvedValue(mockExisting);
-      mockPrismaService.timelineSegment.update.mockResolvedValue(mockUpdated);
+      mockPrismaService.timelineSegment.updateMany.mockResolvedValue({ count: 1 });
+      mockPrismaService.timelineSegment.findFirstOrThrow.mockResolvedValue(mockUpdated);
       mockPrismaService.auditLog.create.mockResolvedValue({});
 
       await service.updateSegment('project-123', 'segment-123', updateDto as any, 'user-123');
 
-      expect(mockEventEmitter.emit).not.toHaveBeenCalledWith('timeline.segment.updated', expect.anything());
+      expect(mockEventEmitter.emit).not.toHaveBeenCalledWith(
+        'timeline.segment.updated',
+        expect.anything(),
+      );
     });
 
     it('should throw NotFoundException for non-existent segment', async () => {
       mockPrismaService.timelineSegment.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.updateSegment('project-123', 'nonexistent', { title: 'Test' } as any, 'user-123')
+        service.updateSegment('project-123', 'nonexistent', { title: 'Test' } as any, 'user-123'),
       ).rejects.toThrow(NotFoundException);
     });
   });
@@ -318,7 +363,7 @@ describe('TimelineService', () => {
       mockPrismaService.project.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.logActivity('nonexistent', { activityType: 'view' } as any, 'user-123')
+        service.logActivity('nonexistent', { activityType: 'view' } as any, 'user-123'),
       ).rejects.toThrow(NotFoundException);
     });
   });
@@ -330,16 +375,13 @@ describe('TimelineService', () => {
         { phase: 'design', progress: 100, status: 'completed' },
         { phase: 'development', progress: 50, status: 'in_progress' },
       ];
-      const mockMilestones = [
-        { status: 'completed' },
-        { status: 'pending' },
-      ];
+      const mockMilestones = [{ status: 'completed' }, { status: 'pending' }];
 
       mockPrismaService.project.findUnique.mockResolvedValue(mockProject);
       mockPrismaService.timelineSegment.findMany.mockResolvedValue(mockSegments);
       mockPrismaService.milestone.findMany.mockResolvedValue(mockMilestones);
 
-      const result = await service.getProgressMetrics('project-123');
+      const result = await service.getProgressMetrics('project-123', 'user-123');
 
       expect(result.overallProgress).toBe(75); // (100 + 50) / 2
       expect(result.milestoneCompletionRate).toBe(50); // 1/2 * 100
@@ -348,7 +390,9 @@ describe('TimelineService', () => {
     it('should throw NotFoundException for invalid project', async () => {
       mockPrismaService.project.findUnique.mockResolvedValue(null);
 
-      await expect(service.getProgressMetrics('nonexistent')).rejects.toThrow(NotFoundException);
+      await expect(service.getProgressMetrics('nonexistent', 'user-123')).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('should handle project with no progress data', async () => {
@@ -356,7 +400,7 @@ describe('TimelineService', () => {
       mockPrismaService.timelineSegment.findMany.mockResolvedValue([]);
       mockPrismaService.milestone.findMany.mockResolvedValue([]);
 
-      const result = await service.getProgressMetrics('project-123');
+      const result = await service.getProgressMetrics('project-123', 'user-123');
 
       expect(result.overallProgress).toBe(0);
       expect(result.milestoneCompletionRate).toBe(0);
@@ -377,7 +421,7 @@ describe('TimelineService', () => {
       ]);
       mockPrismaService.approvalRecord.findMany.mockResolvedValue([]);
 
-      const result = await service.getUpcomingEvents('project-123', 30);
+      const result = await service.getUpcomingEvents('project-123', 'user-123', 30);
 
       expect(result.segments).toHaveLength(1);
       expect(result.milestones).toHaveLength(1);
@@ -386,7 +430,9 @@ describe('TimelineService', () => {
     it('should throw NotFoundException for invalid project', async () => {
       mockPrismaService.project.findUnique.mockResolvedValue(null);
 
-      await expect(service.getUpcomingEvents('nonexistent', 30)).rejects.toThrow(NotFoundException);
+      await expect(service.getUpcomingEvents('nonexistent', 'user-123', 30)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });

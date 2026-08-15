@@ -6,43 +6,50 @@ import {
   Patch,
   Param,
   Query,
-  UseGuards,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiParam,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { NotificationsService } from './notifications.service';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 import { UpdatePreferenceDto } from './dto/update-preference.dto';
-import { RolesGuard } from '../common/guards/roles.guard';
-import { Roles } from '../common/decorators/roles.decorator';
 import { GetCurrentUser } from '../common/decorators/current-user.decorator';
+import { ProjectAdmin, ProjectRead } from '../common/decorators/project-authorization.decorator';
 
 @ApiTags('notifications')
 @ApiBearerAuth()
 @Controller('notifications')
-@UseGuards(RolesGuard)
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
   @Post()
-  @Roles('admin', 'designer')
+  @ProjectAdmin()
   @ApiOperation({ summary: 'Create a new notification (admin/designer only)' })
   @ApiResponse({ status: 201, description: 'Notification created and queued' })
-  create(@Body() createDto: CreateNotificationDto) {
-    return this.notificationsService.create(createDto);
+  create(@Body() createDto: CreateNotificationDto, @GetCurrentUser('id') userId: string) {
+    return this.notificationsService.create(createDto, userId);
   }
 
   @Post('batch')
-  @Roles('admin', 'designer')
+  @ProjectAdmin()
   @ApiOperation({ summary: 'Create multiple notifications in batch' })
   @ApiResponse({ status: 201, description: 'Notifications created' })
-  createBatch(@Body() notifications: CreateNotificationDto[]) {
-    return this.notificationsService.createBatch(notifications);
+  createBatch(
+    @Body() notifications: CreateNotificationDto[],
+    @GetCurrentUser('id') userId: string,
+  ) {
+    return this.notificationsService.createBatch(notifications, userId);
   }
 
   @Get()
-  @Roles('admin', 'designer', 'client')
+  @ProjectRead()
   @ApiOperation({ summary: 'Get notifications for current user' })
   @ApiQuery({ name: 'status', required: false })
   @ApiQuery({ name: 'projectId', required: false })
@@ -66,33 +73,27 @@ export class NotificationsController {
 
   @Patch(':id/read')
   @HttpCode(HttpStatus.OK)
-  @Roles('admin', 'designer', 'client')
+  @ProjectRead()
   @ApiOperation({ summary: 'Mark notification as read' })
   @ApiParam({ name: 'id', description: 'Notification ID' })
   @ApiResponse({ status: 200, description: 'Notification marked as read' })
   @ApiResponse({ status: 404, description: 'Notification not found' })
-  markAsRead(
-    @Param('id') id: string,
-    @GetCurrentUser('id') userId: string,
-  ) {
+  markAsRead(@Param('id') id: string, @GetCurrentUser('id') userId: string) {
     return this.notificationsService.markAsRead(id, userId);
   }
 
   @Post('read-all')
   @HttpCode(HttpStatus.OK)
-  @Roles('admin', 'designer', 'client')
+  @ProjectRead()
   @ApiOperation({ summary: 'Mark all notifications as read' })
   @ApiQuery({ name: 'projectId', required: false, description: 'Limit to specific project' })
   @ApiResponse({ status: 200, description: 'All notifications marked as read' })
-  markAllAsRead(
-    @GetCurrentUser('id') userId: string,
-    @Query('projectId') projectId?: string,
-  ) {
+  markAllAsRead(@GetCurrentUser('id') userId: string, @Query('projectId') projectId?: string) {
     return this.notificationsService.markAllAsRead(userId, projectId);
   }
 
   @Get('preferences')
-  @Roles('admin', 'designer', 'client')
+  @ProjectRead()
   @ApiOperation({ summary: 'Get notification preferences for current user' })
   @ApiResponse({ status: 200, description: 'Preferences retrieved' })
   getPreferences(@GetCurrentUser('id') userId: string) {
@@ -100,25 +101,19 @@ export class NotificationsController {
   }
 
   @Patch('preferences')
-  @Roles('admin', 'designer', 'client')
+  @ProjectRead()
   @ApiOperation({ summary: 'Update notification preferences' })
   @ApiResponse({ status: 200, description: 'Preferences updated' })
-  updatePreferences(
-    @GetCurrentUser('id') userId: string,
-    @Body() updateDto: UpdatePreferenceDto,
-  ) {
+  updatePreferences(@GetCurrentUser('id') userId: string, @Body() updateDto: UpdatePreferenceDto) {
     return this.notificationsService.updatePreferences(userId, updateDto);
   }
 
   @Post('push-token')
   @HttpCode(HttpStatus.OK)
-  @Roles('admin', 'designer', 'client')
+  @ProjectRead()
   @ApiOperation({ summary: 'Register a push notification token' })
   @ApiResponse({ status: 200, description: 'Token registered' })
-  registerPushToken(
-    @GetCurrentUser('id') userId: string,
-    @Body() body: { token: string },
-  ) {
+  registerPushToken(@GetCurrentUser('id') userId: string, @Body() body: { token: string }) {
     return this.notificationsService.registerPushToken(userId, body.token);
   }
 }
