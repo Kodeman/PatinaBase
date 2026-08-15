@@ -9,7 +9,7 @@ Production application platform: Cloudflare Workers, Containers, Queues, R2, Ima
 
 Patina will use a Cloudflare edge API as a strangler in front of Strata. Supabase remains the system of record for Auth, Postgres, Realtime, and the compatibility API surface. Cloudflare becomes the public routing, Worker-native API, media-delivery, and asynchronous enrichment plane.
 
-The retired Coolify host, its tunnels, its self-hosted Supabase deployment, and its GHCR deployment path are not part of the target state. They must not be used for runtime, staging, administration, or background jobs.
+The retired Coolify host, its tunnels, its self-hosted Supabase deployment, and its GHCR deployment path are not part of the target state. They must not be used for runtime, staging, administration, or background jobs. <!-- [retired-deploy-reference-allow] -->
 
 ```text
 Web / iOS / Extension
