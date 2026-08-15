@@ -13,12 +13,21 @@ This runbook authorizes no hidden credentials. Password-bearing database logins,
 
 ## Current provisioning blockers
 
-Do not create staging or production database logins, Hyperdrive configurations, Workers, or routes until both blockers below are independently reviewed and closed:
+Do not create staging or production database logins, Hyperdrive configurations, Workers, or routes until every blocker below is independently reviewed and closed. Blocker 1 remains open; blocker 2 is closed with the evidence recorded below:
 
-1. The catalog privilege allow-list currently fails because PostgreSQL `PUBLIC` grants expose additional schemas, relations, sequences, and routines to the edge roles. The local conformance test intentionally exits nonzero after its functional assertions and prints only aggregate counts. Resolution requires a platform-admin review of database-wide `PUBLIC` ACLs plus exact re-grants for the existing Supabase roles; role-local revokes cannot create a deny ACL.
-2. Retained orders, projects, and media Containers do not yet share a trustworthy per-request Strata authorization resolver or complete object-level own/organization/admin contract. Their decorated routes remain fail-closed. Do not restore availability by trusting JWT `app_metadata` permission lists, inventing controller permission names, or allowing unscoped list/batch reads. Resolve current authorization through each Container's Supavisor path and prove own/other/organization/admin, role-change, list, and batch behavior before deploying the retained-service auth changes.
+1. **OPEN — database `PUBLIC` ACLs.** The catalog privilege allow-list currently fails because PostgreSQL `PUBLIC` grants expose additional schemas, relations, sequences, and routines to the edge roles. The local conformance test intentionally exits nonzero after its functional assertions and prints only aggregate counts. Resolution requires a platform-admin review of database-wide `PUBLIC` ACLs plus exact re-grants for the existing Supabase roles; role-local revokes cannot create a deny ACL.
+2. **CLOSED 2026-08-15 — retained Container authorization.** Orders, projects, and media now treat verified Supabase JWTs as identity only, resolve current permissions and memberships through their own Prisma/Supavisor connections, and enforce own/organization/admin scope in protected database operations. No JWT `app_metadata`, caller identity field, JSON metadata, or compatibility fallback grants access.
 
-Neither blocker permits a compatibility fallback to broaden authorization. Record closure evidence in this runbook before requesting the independent production sign-off.
+Neither blocker permits a compatibility fallback to broaden authorization. Blocker 1 must close independently before any Phase 1 provisioning or production sign-off.
+
+### Blocker 2 closure evidence
+
+- A clean local `pnpm supabase:reset` replayed through migration `00482`; `supabase/tests/retained_services/authorization_contract_test.sql` passed and confirmed the canonical relationships, permission mappings, and absence of `PUBLIC`, `anon`, or generic `authenticated` grants added by this contract.
+- Real local-Postgres boundaries passed 7/7 Orders, 14/14 Projects, and 18/18 Media tests. They cover own/other non-enumerating denial, current organization membership and removal, reviewed admin scope, missing/unknown roles and permissions, stale JWT metadata, next-request role changes, scoped list/count/batch/write behavior, one-backend pooled callers, authorization leases, and rollback isolation.
+- The signed Stripe boundary passed its three real-Postgres claim, rollback/reclaim, and stale-lease cases. The Media completion callback verifies a timestamped HMAC over the exact raw body before any job transition.
+- Active route inventories classify 44 Orders, 106 Projects, and 61 Media handlers. The only public exceptions are the exact health and signature-verified callback paths documented in the retained Container authorization contract; all other active handlers declare canonical permissions and fail closed.
+- Required Auth, Orders, Projects, Media, API-route, portal-proxy, and Media Worker builds/tests passed. Separate-context adversarial review returned `APPROVE` after checking cross-user and cross-organization access, list/count/batch leakage, freshness, pooled state and rollback, authorization/query TOCTOU, SQL parameterization, caller-controlled fields, admin scope, public bypasses, and sensitive logging.
+- The separate database-wide `PUBLIC` ACL blocker above remains open and was not widened, remediated, or reclassified by this work.
 
 ## Scope
 
