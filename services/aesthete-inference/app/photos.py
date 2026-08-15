@@ -23,6 +23,8 @@ from io import BytesIO
 
 import httpx
 
+from .safe_fetch import HostnameResolver, SafeFetchError, fetch_public_bytes, resolve_hostname
+
 
 class PhotoFetchError(Exception):
     """Upstream photo fetch failed (bad URL / HTTP status / timeout / size) → 502."""
@@ -57,45 +59,32 @@ async def fetch_photo(
     *,
     timeout_s: float,
     max_bytes: int,
+    resolver: HostnameResolver = resolve_hostname,
 ) -> bytes:
     """Stream a photo from a (signed) URL with a hard size cap.
 
-    No content-type gate — HEIC is served as anything from ``image/heic`` to
-    ``application/octet-stream``, and the source is our own signed storage URL;
-    the Pillow/pillow-heif decode is the real arbiter. Any fetch-side failure
-    raises :class:`PhotoFetchError` (the route maps it to 502).
+    HEIC and generic binary storage content types are accepted; unrelated
+    types are rejected before the body is read. Any fetch-side failure raises
+    :class:`PhotoFetchError` (the route maps it to 502).
     """
-    if not url.lower().startswith(("http://", "https://")):
-        raise PhotoFetchError("url must be http(s)")
-
     try:
-        async with client.stream(
-            "GET", url, timeout=timeout_s, follow_redirects=True
-        ) as resp:
-            if resp.status_code != 200:
-                raise PhotoFetchError(f"fetch failed: HTTP {resp.status_code}")
-
-            declared = resp.headers.get("content-length")
-            if declared is not None and declared.isdigit() and int(declared) > max_bytes:
-                raise PhotoFetchError(
-                    f"content-length {declared} exceeds limit of {max_bytes} bytes"
-                )
-
-            buf = bytearray()
-            async for chunk in resp.aiter_bytes():
-                buf.extend(chunk)
-                if len(buf) > max_bytes:
-                    raise PhotoFetchError(f"body exceeds limit of {max_bytes} bytes")
-    except PhotoFetchError:
-        raise
-    except httpx.TimeoutException:
-        raise PhotoFetchError(f"fetch timed out after {timeout_s:g}s") from None
-    except httpx.HTTPError as exc:
-        raise PhotoFetchError(f"fetch failed: {exc.__class__.__name__}") from None
-
-    if not buf:
-        raise PhotoFetchError("empty response body")
-    return bytes(buf)
+        return await fetch_public_bytes(
+            client,
+            url,
+            timeout_s=timeout_s,
+            max_bytes=max_bytes,
+            allowed_content_types={
+                "application/octet-stream",
+                "binary/octet-stream",
+                "image/heic",
+                "image/heif",
+                "image/heic-sequence",
+                "image/heif-sequence",
+            },
+            resolver=resolver,
+        )
+    except SafeFetchError as exc:
+        raise PhotoFetchError(str(exc)) from None
 
 
 def convert_heic_to_jpeg(

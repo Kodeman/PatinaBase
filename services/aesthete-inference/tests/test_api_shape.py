@@ -139,13 +139,14 @@ def test_embed_image_streaming_body_cap(fake_embedder):
     """A body that overruns the cap mid-stream is caught even without content-length."""
     from fastapi.testclient import TestClient
 
-    from conftest import make_settings, mock_image_transport
+    from conftest import make_settings, mock_image_transport, public_test_resolver
     from app.main import create_app
 
     app = create_app(
         make_settings(image_max_bytes=1024),
         embedder=fake_embedder,
         http_transport=mock_image_transport(),
+        hostname_resolver=public_test_resolver,
     )
     with TestClient(app) as c:
         res = c.post("/embed/image", json=image_payload("/huge-body.png"), headers=AUTH)
@@ -156,3 +157,79 @@ def test_embed_image_streaming_body_cap(fake_embedder):
 def test_embed_image_batch_limit(client):
     res = client.post("/embed/image", json=image_payload(*(["/ok.png"] * 17)), headers=AUTH)
     assert res.status_code == 400
+
+
+def test_embed_image_blocks_literal_private_and_reserved_addresses(client):
+    urls = [
+        "http://0.0.0.0/image.png",
+        "http://10.0.0.1/image.png",
+        "http://127.0.0.1/image.png",
+        "http://169.254.169.254/latest/meta-data",
+        "http://192.0.2.1/image.png",
+        "http://[::1]/image.png",
+        "http://[fe80::1]/image.png",
+        "http://[fc00::1]/image.png",
+        "http://[2001:db8::1]/image.png",
+        "http://[::ffff:127.0.0.1]/image.png",
+    ]
+    payload = {"inputs": [{"id": f"i{n}", "url": url} for n, url in enumerate(urls)]}
+
+    res = client.post("/embed/image", json=payload, headers=AUTH)
+
+    assert res.status_code == 200
+    assert res.json()["vectors"] == []
+    assert all("not public" in error["reason"] for error in res.json()["errors"])
+
+
+def test_embed_image_blocks_redirect_to_private_address(client):
+    res = client.post(
+        "/embed/image", json=image_payload("/redirect-private.png"), headers=AUTH
+    )
+
+    assert res.status_code == 200
+    assert "not public" in res.json()["errors"][0]["reason"]
+
+
+def test_embed_image_reports_timeout(client):
+    res = client.post("/embed/image", json=image_payload("/timeout.png"), headers=AUTH)
+
+    assert res.status_code == 200
+    assert "timed out" in res.json()["errors"][0]["reason"]
+
+
+def test_embed_image_revalidates_dns_after_redirect(fake_embedder):
+    import httpx
+    from fastapi.testclient import TestClient
+
+    from app.main import create_app
+    from conftest import make_settings, png_bytes
+
+    requests = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(str(request.url))
+        if request.url.path == "/redirect.png":
+            return httpx.Response(302, headers={"location": "/ok.png"})
+        return httpx.Response(
+            200, content=png_bytes(), headers={"content-type": "image/png"}
+        )
+
+    answers = iter((["93.184.216.34"], ["127.0.0.1"]))
+
+    async def rebinding_resolver(_host: str, _port: int) -> list[str]:
+        return next(answers)
+
+    app = create_app(
+        make_settings(),
+        embedder=fake_embedder,
+        http_transport=httpx.MockTransport(handler),
+        hostname_resolver=rebinding_resolver,
+    )
+    with TestClient(app) as test_client:
+        res = test_client.post(
+            "/embed/image", json=image_payload("/redirect.png"), headers=AUTH
+        )
+
+    assert res.status_code == 200
+    assert "not public" in res.json()["errors"][0]["reason"]
+    assert requests == ["https://cdn.test/redirect.png"]
