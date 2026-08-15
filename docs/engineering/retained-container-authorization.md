@@ -1,6 +1,6 @@
 # Retained Container authorization contract
 
-Status: Phase 1 blocker 2 implementation contract  
+Status: Phase 1 blocker 2 implementation contract
 Applies to: orders, projects, and media Containers
 
 ## Request contract
