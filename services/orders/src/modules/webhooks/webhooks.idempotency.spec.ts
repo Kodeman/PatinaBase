@@ -71,6 +71,7 @@ function createHarness(event: Stripe.Event, holdFirstTransaction = false) {
   const transactionEntered = deferred();
   const releaseTransaction = deferred();
   let transactionCount = 0;
+  let completedTransactionCount = 0;
 
   const updateReceipt = jest.fn(async ({ where, data }: any) => {
     const receipt = receipts.get(where.eventId);
@@ -133,7 +134,9 @@ function createHarness(event: Stripe.Event, holdFirstTransaction = false) {
         transactionEntered.resolve();
         await releaseTransaction.promise;
       }
-      return operation(transactionClient);
+      const result = await operation(transactionClient);
+      completedTransactionCount += 1;
+      return result;
     }),
   };
 
@@ -168,6 +171,7 @@ function createHarness(event: Stripe.Event, holdFirstTransaction = false) {
     eventsService,
     transactionEntered,
     releaseTransaction,
+    completedTransactionCount: () => completedTransactionCount,
   };
 }
 
@@ -220,6 +224,55 @@ describe('WebhooksService durable Stripe receipt idempotency', () => {
       harness.service.handleStripeWebhook('valid-signature', Buffer.from('{}')),
     ).resolves.toEqual({ received: true, eventId: event.id, duplicate: true });
     expect(harness.transactionClient.order.update).toHaveBeenCalledTimes(1);
+  });
+
+  it('commits the receipt before waiting for a delayed external side effect', async () => {
+    const event = canceledEvent('evt_delayed_side_effect');
+    const harness = createHarness(event);
+    const sideEffectEntered = deferred();
+    const releaseSideEffect = deferred();
+    harness.eventsService.publish.mockImplementationOnce(async () => {
+      sideEffectEntered.resolve();
+      await releaseSideEffect.promise;
+    });
+
+    const first = harness.service.handleStripeWebhook('valid-signature', Buffer.from('{}'));
+    await sideEffectEntered.promise;
+
+    expect(harness.completedTransactionCount()).toBe(1);
+    expect(harness.receipts.get(event.id)).toMatchObject({
+      status: 'succeeded',
+      attempts: 1,
+    });
+    await expect(
+      harness.service.handleStripeWebhook('valid-signature', Buffer.from('{}')),
+    ).resolves.toEqual({ received: true, eventId: event.id, duplicate: true });
+    expect(harness.transactionClient.order.update).toHaveBeenCalledTimes(1);
+    expect(harness.eventsService.publish).toHaveBeenCalledTimes(1);
+
+    releaseSideEffect.resolve();
+    await expect(first).resolves.toEqual({ received: true, eventId: event.id });
+  });
+
+  it('does not roll back or replay committed database effects when external dispatch fails', async () => {
+    const event = canceledEvent('evt_failed_side_effect');
+    const harness = createHarness(event);
+    harness.eventsService.publish.mockRejectedValueOnce(new Error('publisher unavailable'));
+
+    await expect(
+      harness.service.handleStripeWebhook('valid-signature', Buffer.from('{}')),
+    ).resolves.toEqual({ received: true, eventId: event.id });
+    expect(harness.receipts.get(event.id)).toMatchObject({
+      status: 'succeeded',
+      attempts: 1,
+      lastErrorCode: null,
+    });
+
+    await expect(
+      harness.service.handleStripeWebhook('valid-signature', Buffer.from('{}')),
+    ).resolves.toEqual({ received: true, eventId: event.id, duplicate: true });
+    expect(harness.transactionClient.order.update).toHaveBeenCalledTimes(1);
+    expect(harness.eventsService.publish).toHaveBeenCalledTimes(1);
   });
 
   it('marks a failed owner with a sanitized code and retries it with a new fenced claim', async () => {
@@ -295,10 +348,11 @@ describe('WebhooksService durable Stripe receipt idempotency', () => {
     const event = canceledEvent('evt_claim_fence');
     const harness = createHarness(event);
     const newerClaimToken = '00000000-0000-4000-8000-000000000002';
-    harness.eventsService.publish.mockImplementationOnce(async () => {
+    harness.transactionClient.order.update.mockImplementationOnce(async () => {
       const receipt = harness.receipts.get(event.id)!;
       receipt.claimToken = newerClaimToken;
       receipt.processingStartedAt = new Date();
+      return {};
     });
 
     await expect(

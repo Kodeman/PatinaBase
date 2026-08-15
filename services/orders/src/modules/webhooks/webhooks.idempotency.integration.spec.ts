@@ -6,11 +6,15 @@ import { Prisma, PrismaClient } from '../../generated/prisma-client';
 import { NotificationDispatchClient } from '../../infrastructure/notification-dispatch.client';
 import { WebhooksService } from './webhooks.service';
 
-const databaseUrl =
-  process.env.ORDERS_WEBHOOK_TEST_DATABASE_URL ??
-  process.env.ORDERS_AUTHZ_TEST_DATABASE_URL;
+const databaseUrl = process.env.ORDERS_WEBHOOK_TEST_DATABASE_URL;
 const isLocalDatabase = Boolean(databaseUrl && /(?:127\.0\.0\.1|localhost)/.test(databaseUrl));
-const describeLocal = isLocalDatabase ? describe : describe.skip;
+// The race case holds one interactive transaction while issuing a second request.
+const hasConcurrentPool = Boolean(
+  databaseUrl &&
+  (!new URL(databaseUrl).searchParams.has('connection_limit') ||
+    Number(new URL(databaseUrl).searchParams.get('connection_limit')) >= 2),
+);
+const describeLocal = isLocalDatabase && hasConcurrentPool ? describe : describe.skip;
 
 type Deferred = {
   promise: Promise<void>;
@@ -54,7 +58,9 @@ describeLocal('Stripe webhook receipt idempotency with local Postgres', () => {
       config as unknown as ConfigService,
       stripe as unknown as Stripe,
       { publish: jest.fn().mockResolvedValue(undefined) },
-      { enqueue: jest.fn().mockResolvedValue({ success: true }) } as unknown as NotificationDispatchClient,
+      {
+        enqueue: jest.fn().mockResolvedValue({ success: true }),
+      } as unknown as NotificationDispatchClient,
     );
   });
 
@@ -145,9 +151,9 @@ describeLocal('Stripe webhook receipt idempotency with local Postgres', () => {
       if (attempt === 1) throw new Error('forced transactional rollback');
     });
 
-    await expect(
-      service.handleStripeWebhook('valid-signature', Buffer.from('{}')),
-    ).rejects.toThrow('forced transactional rollback');
+    await expect(service.handleStripeWebhook('valid-signature', Buffer.from('{}'))).rejects.toThrow(
+      'forced transactional rollback',
+    );
 
     expect(await prisma.outboxEvent.findUnique({ where: { id: outboxId } })).toBeNull();
     expect(await prisma.stripeWebhookReceipt.findUnique({ where: { eventId } })).toMatchObject({
