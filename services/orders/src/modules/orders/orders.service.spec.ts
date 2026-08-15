@@ -219,6 +219,12 @@ describe('OrdersService', () => {
 
       await service.cancel('order-123', 'Customer request', subject);
 
+      expect(mockAuthorization.authorize).toHaveBeenCalledWith(
+        subject,
+        'manage',
+        expect.any(Function),
+      );
+
       expect(mockEventsService.publish).toHaveBeenCalledWith(
         'order.canceled',
         expect.objectContaining({

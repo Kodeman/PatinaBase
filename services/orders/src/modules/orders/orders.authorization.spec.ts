@@ -70,6 +70,12 @@ describe('OrdersService authorization boundary', () => {
       subject,
     );
 
+    expect(authorization.authorize).toHaveBeenCalledWith(
+      subject,
+      'staff',
+      expect.any(Function),
+    );
+
     expect(database.order.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.not.objectContaining({

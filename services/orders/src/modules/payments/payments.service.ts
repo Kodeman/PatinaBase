@@ -32,7 +32,7 @@ export class PaymentsService {
 
     const order = await this.authorization.authorize(
       subject,
-      'manage',
+      'staff',
       (database, _auth, scope) =>
         this.authorization.requireOrder(database, scope, { id: orderId }, { payments: true }),
     );
@@ -54,7 +54,7 @@ export class PaymentsService {
 
     const payments = await this.authorization.authorize(
       subject,
-      'manage',
+      'staff',
       async (database, _auth, scope) => {
         const current = await this.authorization.requireOrder(database, scope, {
           id: orderId,
@@ -107,7 +107,7 @@ export class PaymentsService {
 
     const order = await this.authorization.authorize(
       subject,
-      'manage',
+      'staff',
       (database, _auth, scope) =>
         this.authorization.requireOrder(database, scope, { id: orderId }),
     );
@@ -123,7 +123,7 @@ export class PaymentsService {
     // Cancel the payment intent
     await this.stripe.paymentIntents.cancel(order.paymentIntentId);
 
-    await this.authorization.authorize(subject, 'manage', async (database, _auth, scope) => {
+    await this.authorization.authorize(subject, 'staff', async (database, _auth, scope) => {
       const current = await this.authorization.requireOrder(database, scope, {
         id: orderId,
         paymentIntentId: order.paymentIntentId,

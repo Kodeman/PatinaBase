@@ -87,6 +87,21 @@ describe('OrdersAuthorizationResolver', () => {
     expect(resolver.orderScope(state([ORDER_PERMISSIONS.ADMIN_ALL]), 'admin')).toEqual({});
   });
 
+  it('keeps merchant mutations out of the customer own scope', () => {
+    expect(() =>
+      resolver.orderScope(state([ORDER_PERMISSIONS.MANAGE_OWN]), 'staff'),
+    ).toThrow(ForbiddenException);
+    expect(
+      resolver.orderScope(
+        state([ORDER_PERMISSIONS.MANAGE_ORG], ['org-current']),
+        'staff',
+      ),
+    ).toEqual({ organizationId: { in: ['org-current'] } });
+    expect(resolver.orderScope(state([ORDER_PERMISSIONS.MANAGE_ORG]), 'staff')).toEqual({
+      id: { in: [] },
+    });
+  });
+
   it('denies missing, stale-JWT-only, and unsupported authorization state', () => {
     expect(() => resolver.orderScope(state([]), 'read')).toThrow(ForbiddenException);
     expect(() => resolver.orderScope(state(['order.read']), 'read')).toThrow(ForbiddenException);

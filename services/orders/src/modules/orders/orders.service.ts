@@ -113,7 +113,7 @@ export class OrdersService {
     },
     subject: string,
   ) {
-    return this.authorization.authorize(subject, 'manage', async (database, _auth, scope) => {
+    return this.authorization.authorize(subject, 'staff', async (database, _auth, scope) => {
       const order = await this.authorization.requireOrder(database, scope, { id: orderId });
       if (input.status !== undefined) this.validateStatusTransition(order.status, input.status);
       const data = {
@@ -148,7 +148,7 @@ export class OrdersService {
   async updateStatus(orderId: string, status: string, subject: string) {
     const { order, updated } = await this.authorization.authorize(
       subject,
-      'manage',
+      'staff',
       async (database, _auth, scope) => {
         const order = await this.authorization.requireOrder(database, scope, { id: orderId });
         this.validateStatusTransition(order.status, status);
@@ -200,27 +200,39 @@ export class OrdersService {
    * Cancel order
    */
   async cancel(orderId: string, reason: string | undefined, subject: string) {
-    const order = await this.authorization.authorize(
+    const { order, updated } = await this.authorization.authorize(
       subject,
       'manage',
-      (database, _auth, scope) =>
-        this.authorization.requireOrder(database, scope, { id: orderId }),
+      async (database, _auth, scope) => {
+        const order = await this.authorization.requireOrder(database, scope, { id: orderId });
+
+        if (!['created', 'paid', 'processing'].includes(order.status)) {
+          throw new BadRequestException(`Cannot cancel order in ${order.status} status`);
+        }
+        if (order.paymentStatus === 'captured' || order.paymentStatus === 'authorized') {
+          throw new BadRequestException(
+            'Cannot cancel paid order without refund. Use refund endpoint.',
+          );
+        }
+
+        const updated = await database.order.update({
+          where: { id: orderId },
+          data: { status: 'canceled', canceledAt: order.canceledAt ?? new Date() },
+          include: { items: true, payments: true, refunds: true, shipments: true },
+        });
+        await database.auditLog.create({
+          data: {
+            entityType: 'order',
+            entityId: orderId,
+            action: 'canceled',
+            actor: subject,
+            actorType: 'user',
+            changes: { field: 'status', from: order.status, to: 'canceled', reason },
+          },
+        });
+        return { order, updated };
+      },
     );
-
-    if (!['created', 'paid', 'processing'].includes(order.status)) {
-      throw new BadRequestException(
-        `Cannot cancel order in ${order.status} status`,
-      );
-    }
-
-    // If paid, would need to process refund
-    if (order.paymentStatus === 'captured' || order.paymentStatus === 'authorized') {
-      throw new BadRequestException(
-        'Cannot cancel paid order without refund. Use refund endpoint.',
-      );
-    }
-
-    await this.updateStatus(orderId, 'canceled', subject);
 
     await this.eventsService.publish('order.canceled', {
       id: uuidv4(),
@@ -235,7 +247,7 @@ export class OrdersService {
       },
     });
 
-    return this.findOne(orderId, subject);
+    return updated;
   }
 
   /**

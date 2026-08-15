@@ -31,7 +31,6 @@ export class PaymentsController {
 
   @Post('order/:orderId/capture')
   @RequireAnyPermission(
-    ORDER_PERMISSIONS.MANAGE_OWN,
     ORDER_PERMISSIONS.MANAGE_ORG,
     ORDER_PERMISSIONS.ADMIN_ALL,
   )
@@ -58,7 +57,6 @@ export class PaymentsController {
 
   @Post('order/:orderId/cancel')
   @RequireAnyPermission(
-    ORDER_PERMISSIONS.MANAGE_OWN,
     ORDER_PERMISSIONS.MANAGE_ORG,
     ORDER_PERMISSIONS.ADMIN_ALL,
   )

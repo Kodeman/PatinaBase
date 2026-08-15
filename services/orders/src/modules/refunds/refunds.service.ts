@@ -28,7 +28,7 @@ export class RefundsService {
 
     const order = await this.authorization.authorize(
       subject,
-      'manage',
+      'staff',
       (database, _auth, scope) =>
         this.authorization.requireOrder(database, scope, { id: orderId }, {
           payments: true,
@@ -79,7 +79,7 @@ export class RefundsService {
 
     const refund = await this.authorization.authorize(
       subject,
-      'manage',
+      'staff',
       async (database, _auth, scope) => {
         const current = await this.authorization.requireOrder(database, scope, {
           id: orderId,

@@ -92,7 +92,6 @@ export class OrdersController {
 
   @Patch(':id')
   @RequireAnyPermission(
-    ORDER_PERMISSIONS.MANAGE_OWN,
     ORDER_PERMISSIONS.MANAGE_ORG,
     ORDER_PERMISSIONS.ADMIN_ALL,
   )
@@ -114,7 +113,6 @@ export class OrdersController {
 
   @Patch(':id/status')
   @RequireAnyPermission(
-    ORDER_PERMISSIONS.MANAGE_OWN,
     ORDER_PERMISSIONS.MANAGE_ORG,
     ORDER_PERMISSIONS.ADMIN_ALL,
   )

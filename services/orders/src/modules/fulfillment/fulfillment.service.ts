@@ -85,7 +85,7 @@ export class FulfillmentService {
     this.logger.debug('Creating shipment');
 
     // Verify order exists and is paid
-    const order = await this.authorization.authorize(subject, 'manage', (database, _state, scope) => {
+    const order = await this.authorization.authorize(subject, 'staff', (database, _state, scope) => {
       return this.authorization.requireOrder(database, scope, { id: orderId }, { items: true });
     });
 
@@ -134,7 +134,7 @@ export class FulfillmentService {
     const shipmentNumber = `SHIP-${Date.now()}-${generateIdentifierSuffix(9)}`;
 
     // Create shipment record
-    const shipment = await this.authorization.authorize(subject, 'manage', async (database, _state, scope) => {
+    const shipment = await this.authorization.authorize(subject, 'staff', async (database, _state, scope) => {
       const currentOrder = await this.authorization.requireOrder(
         database,
         scope,
@@ -289,7 +289,7 @@ export class FulfillmentService {
 
     const shipment = await this.authorization.authorizeShipment(
       subject,
-      'manage',
+      'staff',
       shipmentId,
       async (database) => {
         const updated = await database.shipment.update({ where: { id: shipmentId }, data: updates });
@@ -333,7 +333,7 @@ export class FulfillmentService {
     this.logger.debug('Updating shipment');
     return this.authorization.authorizeShipment(
       subject,
-      'manage',
+      'staff',
       shipmentId,
       async (database) => database.shipment.update({
         where: { id: shipmentId },
@@ -357,7 +357,7 @@ export class FulfillmentService {
     if (!shipmentId) throw new BadRequestException('Shipment identifier is required');
     return this.authorization.authorizeShipment(
       subject,
-      'manage',
+      'staff',
       shipmentId,
       async (database, _state, shipment) => {
         if (shipment.orderId !== orderId) throw new NotFoundException('Shipment not found');
@@ -419,7 +419,7 @@ export class FulfillmentService {
 
     const shipment = await this.authorization.authorizeShipment(
       subject,
-      'manage',
+      'staff',
       shipmentId,
       async (_database, _state, currentShipment) => currentShipment,
     );
@@ -434,7 +434,7 @@ export class FulfillmentService {
     // Update shipment status
     await this.authorization.authorizeShipment(
       subject,
-      'manage',
+      'staff',
       shipmentId,
       async (database, _state, currentShipment) => {
         await database.shipment.update({

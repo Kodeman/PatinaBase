@@ -15,7 +15,6 @@ export class RefundsController {
 
   @Post()
   @RequireAnyPermission(
-    ORDER_PERMISSIONS.MANAGE_OWN,
     ORDER_PERMISSIONS.MANAGE_ORG,
     ORDER_PERMISSIONS.ADMIN_ALL,
   )

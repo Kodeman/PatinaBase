@@ -71,4 +71,30 @@ describe('Orders public route contract', () => {
       'WebhooksController.handleStripeWebhook',
     ]);
   });
+
+  it('reserves merchant state, money, and fulfillment operations for staff scopes', () => {
+    const staffHandlers = [
+      OrdersController.prototype.update,
+      OrdersController.prototype.updateStatus,
+      PaymentsController.prototype.capturePayment,
+      PaymentsController.prototype.cancelPayment,
+      RefundsController.prototype.create,
+      FulfillmentController.prototype.create,
+      FulfillmentController.prototype.updateForOrder,
+      ShipmentsController.prototype.update,
+      ShipmentsController.prototype.updateStatus,
+      ShipmentsController.prototype.refund,
+    ];
+
+    for (const handler of staffHandlers) {
+      const permissions = Reflect.getMetadata(PERMISSIONS_KEY, handler);
+      expect(permissions).toEqual(
+        expect.arrayContaining(['order.manage.org', 'order.admin.all']),
+      );
+      expect(permissions).not.toContain('order.manage.own');
+    }
+    expect(Reflect.getMetadata(PERMISSIONS_KEY, OrdersController.prototype.cancel)).toContain(
+      'order.manage.own',
+    );
+  });
 });

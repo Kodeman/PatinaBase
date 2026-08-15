@@ -45,7 +45,6 @@ export class FulfillmentController {
 
   @Post()
   @RequireAnyPermission(
-    ORDER_PERMISSIONS.MANAGE_OWN,
     ORDER_PERMISSIONS.MANAGE_ORG,
     ORDER_PERMISSIONS.ADMIN_ALL,
   )
@@ -92,7 +91,6 @@ export class FulfillmentController {
 
   @Patch()
   @RequireAnyPermission(
-    ORDER_PERMISSIONS.MANAGE_OWN,
     ORDER_PERMISSIONS.MANAGE_ORG,
     ORDER_PERMISSIONS.ADMIN_ALL,
   )
@@ -205,7 +203,6 @@ export class ShipmentsController {
 
   @Patch(':id')
   @RequireAnyPermission(
-    ORDER_PERMISSIONS.MANAGE_OWN,
     ORDER_PERMISSIONS.MANAGE_ORG,
     ORDER_PERMISSIONS.ADMIN_ALL,
   )
@@ -229,7 +226,6 @@ export class ShipmentsController {
 
   @Patch(':id/status')
   @RequireAnyPermission(
-    ORDER_PERMISSIONS.MANAGE_OWN,
     ORDER_PERMISSIONS.MANAGE_ORG,
     ORDER_PERMISSIONS.ADMIN_ALL,
   )
@@ -253,7 +249,6 @@ export class ShipmentsController {
 
   @Post(':id/refund')
   @RequireAnyPermission(
-    ORDER_PERMISSIONS.MANAGE_OWN,
     ORDER_PERMISSIONS.MANAGE_ORG,
     ORDER_PERMISSIONS.ADMIN_ALL,
   )

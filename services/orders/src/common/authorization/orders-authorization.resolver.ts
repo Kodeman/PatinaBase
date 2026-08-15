@@ -16,7 +16,7 @@ export const ORDER_PERMISSIONS = {
   ADMIN_ALL: 'order.admin.all',
 } as const;
 
-export type OrderAuthorizationAction = 'read' | 'manage' | 'admin';
+export type OrderAuthorizationAction = 'read' | 'manage' | 'staff' | 'admin';
 export type OrdersDatabaseClient = PrismaClient | Prisma.TransactionClient;
 
 type RolePermissionRow = {
@@ -119,7 +119,7 @@ export class OrdersAuthorizationResolver implements AuthorizationResolver {
 
   async authorizeCart<T>(
     subject: string,
-    action: Exclude<OrderAuthorizationAction, 'admin'>,
+    action: Extract<OrderAuthorizationAction, 'read' | 'manage'>,
     cartId: string,
     operation: (
       database: Prisma.TransactionClient,
@@ -144,7 +144,7 @@ export class OrdersAuthorizationResolver implements AuthorizationResolver {
 
   async authorizeShipment<T>(
     subject: string,
-    action: Exclude<OrderAuthorizationAction, 'admin'>,
+    action: OrderAuthorizationAction,
     shipmentId: string,
     operation: (
       database: Prisma.TransactionClient,
@@ -175,6 +175,15 @@ export class OrdersAuthorizationResolver implements AuthorizationResolver {
     if (permissions.has(ORDER_PERMISSIONS.ADMIN_ALL)) return {};
     if (action === 'admin') throw new ForbiddenException('Authorization denied');
 
+    if (action === 'staff') {
+      if (!permissions.has(ORDER_PERMISSIONS.MANAGE_ORG)) {
+        throw new ForbiddenException('Authorization denied');
+      }
+      return authorization.organizationIds.length > 0
+        ? { organizationId: { in: [...authorization.organizationIds] } }
+        : { id: { in: [] } };
+    }
+
     const ownPermission =
       action === 'read' ? ORDER_PERMISSIONS.READ_OWN : ORDER_PERMISSIONS.MANAGE_OWN;
     const orgPermission =
@@ -199,7 +208,7 @@ export class OrdersAuthorizationResolver implements AuthorizationResolver {
 
   cartScope(
     authorization: RequestAuthorization,
-    action: Exclude<OrderAuthorizationAction, 'admin'>,
+    action: Extract<OrderAuthorizationAction, 'read' | 'manage'>,
   ): Prisma.CartWhereInput {
     const permissions = new Set(authorization.permissions);
     if (permissions.has(ORDER_PERMISSIONS.ADMIN_ALL)) return {};

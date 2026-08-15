@@ -124,7 +124,7 @@ describeLocal('Orders authorization with local Postgres', () => {
     await prisma.$disconnect();
   });
 
-  it('allows own rows and scopes list, count, batch, and write predicates', async () => {
+  it('allows own rows and only the reviewed customer cancellation write', async () => {
     const own = await service.findOne(orderIds.owner, ids.owner);
     expect(own.id).toBe(orderIds.owner);
 
@@ -138,12 +138,15 @@ describeLocal('Orders authorization with local Postgres', () => {
     );
     expect(batch.map((order) => order.id)).toEqual([orderIds.owner]);
 
-    const updated = await service.updateStatus(orderIds.owner, 'paid', ids.owner);
-    expect(updated.status).toBe('paid');
-    await expect(service.updateStatus(orderIds.other, 'paid', ids.owner)).rejects.toMatchObject({
+    const canceled = await service.cancel(orderIds.owner, 'customer request', ids.owner);
+    expect(canceled.status).toBe('canceled');
+    await expect(service.cancel(orderIds.other, 'customer request', ids.owner)).rejects.toMatchObject({
       status: 404,
       message: 'Order not found',
     });
+    await expect(service.updateStatus(orderIds.mutable, 'paid', ids.owner)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
   });
 
   it('uses the same non-enumerating 404 for another user and an absent object', async () => {
