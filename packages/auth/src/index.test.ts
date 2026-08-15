@@ -384,14 +384,14 @@ describe("PermissionsGuard", () => {
     organizationIds: string[] = [],
   ) => ({ subject, permissions, roles, organizationIds });
 
-  it("resolves current Strata authorization even for an undecorated protected route", async () => {
+  it("resolves current Strata authorization and denies an undecorated protected route", async () => {
     const { PermissionsGuard } = await import("./index");
     const resolver = { resolve: vi.fn().mockResolvedValue(snapshot()) };
     const request = { user: identity() };
 
     await expect(
       new PermissionsGuard(resolver).canActivate(executionContext(request)),
-    ).resolves.toBe(true);
+    ).rejects.toMatchObject({ status: 403 });
     expect(resolver.resolve).toHaveBeenCalledWith("user-123");
     expect((request as any).authorization).toEqual(snapshot());
   });

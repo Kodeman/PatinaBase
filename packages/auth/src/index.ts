@@ -368,7 +368,13 @@ export class PermissionsGuard implements CanActivate {
     });
     request.authorization = authorization;
 
-    if (required === undefined) return true;
+    // Retained services must make the action contract explicit. An
+    // authenticated route is not authorized merely because current Strata
+    // state could be resolved; it needs a canonical permission decorator (or
+    // an independently reviewed @Public exception handled above).
+    if (required === undefined) {
+      throw new ForbiddenException("Authorization denied");
+    }
     if (
       !Array.isArray(required) ||
       required.length === 0 ||
