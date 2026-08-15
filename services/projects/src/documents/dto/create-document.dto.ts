@@ -15,10 +15,6 @@ export class CreateDocumentDto {
   @IsString()
   title: string;
 
-  @ApiProperty({ description: 'Object storage key' })
-  @IsString()
-  key: string;
-
   @ApiProperty({ description: 'Document category', enum: DocumentCategory })
   @IsEnum(DocumentCategory)
   category: DocumentCategory;

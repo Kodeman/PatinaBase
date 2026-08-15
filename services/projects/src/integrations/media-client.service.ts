@@ -1,11 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { AxiosRequestConfig } from 'axios';
 
 export interface UploadUrlRequest {
-  projectId: string;
+  publicProjectId: string;
   category: string;
   filename: string;
   mimeType?: string;
@@ -16,6 +16,7 @@ export interface UploadUrlResponse {
   uploadUrl: string;
   key: string;
   assetId: string;
+  uploadSessionId: string;
   expiresAt: Date;
   headers?: Record<string, string>;
 }
@@ -52,31 +53,24 @@ export class MediaClientService {
   /**
    * Get pre-signed URL for uploading a document
    */
-  async getUploadUrl(request: UploadUrlRequest, token?: string): Promise<UploadUrlResponse> {
+  async getUploadUrl(
+    request: UploadUrlRequest,
+    authorization: string,
+    idempotencyKey: string,
+  ): Promise<UploadUrlResponse> {
     try {
-      const config: AxiosRequestConfig = {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      };
-
-      if (token) {
-        config.headers!['Authorization'] = `Bearer ${token}`;
-      }
+      const config = this.delegatedConfig(authorization);
+      config.headers!['Idempotency-Key'] = idempotencyKey;
 
       const response = await firstValueFrom(
         this.httpService.post<UploadUrlResponse>(
-          `${this.baseUrl}/upload/presigned`,
+          `${this.baseUrl}/v1/media/upload`,
           {
-            kind: 'DOCUMENT',
+            kind: request.mimeType?.startsWith('image/') ? 'IMAGE' : 'DOCUMENT',
             filename: request.filename,
             fileSize: request.fileSize,
             mimeType: request.mimeType,
-            metadata: {
-              projectId: request.projectId,
-              category: request.category,
-            },
-            role: 'DOCUMENT',
+            projectId: request.publicProjectId,
           },
           config,
         ),
@@ -84,9 +78,10 @@ export class MediaClientService {
 
       const data = (response as any)?.data || response;
       return {
-        uploadUrl: data.uploadUrl || data.parUrl, // Handle different response formats
-        key: data.key || data.targetKey,
+        uploadUrl: data.parUrl,
+        key: data.targetKey,
         assetId: data.assetId,
+        uploadSessionId: data.uploadSessionId,
         expiresAt: new Date(data.expiresAt),
         headers: data.headers,
       };
@@ -96,24 +91,27 @@ export class MediaClientService {
     }
   }
 
+  async confirmUpload(sessionId: string, authorization: string): Promise<void> {
+    const config = this.delegatedConfig(authorization);
+    await firstValueFrom(
+      this.httpService.post(
+        `${this.baseUrl}/v1/media/upload/${encodeURIComponent(sessionId)}/confirm`,
+        { sessionId },
+        config,
+      ),
+    );
+  }
+
   /**
    * Get pre-signed URL for downloading a document
    */
-  async getDownloadUrl(key: string, token?: string): Promise<DownloadUrlResponse> {
+  async getDownloadUrl(assetId: string, authorization: string): Promise<DownloadUrlResponse> {
     try {
-      const config: AxiosRequestConfig = {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      };
-
-      if (token) {
-        config.headers!['Authorization'] = `Bearer ${token}`;
-      }
+      const config = this.delegatedConfig(authorization);
 
       const response = await firstValueFrom(
         this.httpService.get<DownloadUrlResponse>(
-          `${this.baseUrl}/download/presigned/${encodeURIComponent(key)}`,
+          `${this.baseUrl}/v1/media/${encodeURIComponent(assetId)}/download`,
           config,
         ),
       );
@@ -121,7 +119,9 @@ export class MediaClientService {
       const data = (response as any)?.data || response;
       return {
         downloadUrl: data.downloadUrl,
-        expiresIn: data.expiresIn || 3600, // Default 1 hour
+        expiresIn: data.expiresAt
+          ? Math.max(0, Math.floor((new Date(data.expiresAt).getTime() - Date.now()) / 1000))
+          : 3600,
       };
     } catch (error) {
       this.logger.error('Failed to get download URL');
@@ -132,19 +132,13 @@ export class MediaClientService {
   /**
    * Delete a media asset
    */
-  async deleteAsset(assetId: string, token?: string): Promise<void> {
+  async deleteAsset(assetId: string, authorization: string): Promise<void> {
     try {
-      const config: AxiosRequestConfig = {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      };
+      const config = this.delegatedConfig(authorization);
 
-      if (token) {
-        config.headers!['Authorization'] = `Bearer ${token}`;
-      }
-
-      await firstValueFrom(this.httpService.delete(`${this.baseUrl}/assets/${assetId}`, config));
+      await firstValueFrom(
+        this.httpService.delete(`${this.baseUrl}/v1/media/${encodeURIComponent(assetId)}`, config),
+      );
 
       this.logger.log('Deleted media asset');
     } catch (error) {
@@ -156,76 +150,41 @@ export class MediaClientService {
   /**
    * Get media asset details
    */
-  async getAsset(assetId: string, token?: string): Promise<MediaAsset | null> {
+  async getAsset(assetId: string, authorization: string): Promise<MediaAsset> {
     try {
-      const config: AxiosRequestConfig = {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      };
-
-      if (token) {
-        config.headers!['Authorization'] = `Bearer ${token}`;
-      }
+      const config = this.delegatedConfig(authorization);
 
       const response = await firstValueFrom(
-        this.httpService.get<MediaAsset>(`${this.baseUrl}/assets/${assetId}`, config),
+        this.httpService.get<MediaAsset>(
+          `${this.baseUrl}/v1/media/${encodeURIComponent(assetId)}`,
+          config,
+        ),
       );
 
       return (response as any)?.data || response;
-    } catch {
+    } catch (error) {
       this.logger.error('Failed to get media asset');
-      return null;
+      throw error;
     }
   }
 
   /**
    * Get multiple media assets
    */
-  async getAssets(assetIds: string[], token?: string): Promise<MediaAsset[]> {
-    try {
-      const config: AxiosRequestConfig = {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        params: {
-          ids: assetIds.join(','),
-        },
-      };
-
-      if (token) {
-        config.headers!['Authorization'] = `Bearer ${token}`;
-      }
-
-      const response = await firstValueFrom(
-        this.httpService.get<MediaAsset[]>(`${this.baseUrl}/assets`, config),
-      );
-
-      return (response as any)?.data || response;
-    } catch {
-      this.logger.error('Failed to get media assets');
-      return [];
-    }
+  async getAssets(assetIds: string[], authorization: string): Promise<MediaAsset[]> {
+    return Promise.all(assetIds.map((assetId) => this.getAsset(assetId, authorization)));
   }
 
   /**
    * Process media asset (e.g., generate thumbnails, extract metadata)
    */
-  async processAsset(assetId: string, operations?: string[], token?: string): Promise<void> {
+  async processAsset(assetId: string, authorization: string, operations?: string[]): Promise<void> {
     try {
-      const config: AxiosRequestConfig = {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      };
-
-      if (token) {
-        config.headers!['Authorization'] = `Bearer ${token}`;
-      }
+      const config = this.delegatedConfig(authorization);
 
       await firstValueFrom(
         this.httpService.post(
-          `${this.baseUrl}/assets/${assetId}/process`,
+          `${this.baseUrl}/v1/media/${encodeURIComponent(assetId)}/process`,
           {
             operations: operations || ['thumbnail', 'metadata'],
           },
@@ -234,9 +193,9 @@ export class MediaClientService {
       );
 
       this.logger.log('Triggered media processing');
-    } catch {
+    } catch (error) {
       this.logger.error('Failed to process media asset');
-      // Don't throw - processing is often async and non-critical
+      throw error;
     }
   }
 
@@ -284,5 +243,17 @@ export class MediaClientService {
     }
 
     return { valid: true };
+  }
+
+  private delegatedConfig(authorization: string): AxiosRequestConfig {
+    if (!/^Bearer\s+\S+$/i.test(authorization?.trim())) {
+      throw new UnauthorizedException('A verified delegated identity is required');
+    }
+    return {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: authorization.trim(),
+      },
+    };
   }
 }

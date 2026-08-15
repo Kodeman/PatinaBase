@@ -9,6 +9,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Headers,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { DocumentsService } from './documents.service';
@@ -32,8 +33,23 @@ export class DocumentsController {
     @Param('projectId') projectId: string,
     @Body() createDto: CreateDocumentDto,
     @GetCurrentUser('id') userId: string,
+    @Headers('authorization') authorizationHeader: string,
   ) {
-    return this.documentsService.create(projectId, createDto, userId);
+    return this.documentsService.create(projectId, createDto, userId, authorizationHeader);
+  }
+
+  @Post(':id/complete')
+  @ProjectManage()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Confirm a document upload' })
+  @ApiResponse({ status: 200, description: 'Document upload confirmed' })
+  completeUpload(
+    @Param('projectId') projectId: string,
+    @Param('id') id: string,
+    @GetCurrentUser('id') userId: string,
+    @Headers('authorization') authorizationHeader: string,
+  ) {
+    return this.documentsService.completeUpload(projectId, id, userId, authorizationHeader);
   }
 
   @Get()
@@ -72,6 +88,19 @@ export class DocumentsController {
     return this.documentsService.findOne(projectId, id, userId);
   }
 
+  @Get(':id/download')
+  @ProjectRead()
+  @ApiOperation({ summary: 'Get a document download URL' })
+  @ApiResponse({ status: 200, description: 'Document download URL generated' })
+  getDownloadUrl(
+    @Param('projectId') projectId: string,
+    @Param('id') id: string,
+    @GetCurrentUser('id') userId: string,
+    @Headers('authorization') authorizationHeader: string,
+  ) {
+    return this.documentsService.getDownloadUrl(projectId, id, userId, authorizationHeader);
+  }
+
   @Delete(':id')
   @ProjectManage()
   @HttpCode(HttpStatus.NO_CONTENT)
@@ -81,7 +110,8 @@ export class DocumentsController {
     @Param('projectId') projectId: string,
     @Param('id') id: string,
     @GetCurrentUser('id') userId: string,
+    @Headers('authorization') authorizationHeader: string,
   ) {
-    return this.documentsService.remove(projectId, id, userId);
+    return this.documentsService.remove(projectId, id, userId, authorizationHeader);
   }
 }

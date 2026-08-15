@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MediaClientService } from '../integrations/media-client.service';
 import { CreateDocumentDto, DocumentCategory } from './dto/create-document.dto';
 import { ProjectsAuthorizationResolver } from '../common/authorization/projects-authorization.resolver';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class DocumentsService {
@@ -19,7 +20,12 @@ export class DocumentsService {
   /**
    * Initialize document upload - returns pre-signed URL
    */
-  async initializeUpload(projectId: string, createDto: CreateDocumentDto, uploadedBy: string) {
+  async initializeUpload(
+    projectId: string,
+    createDto: CreateDocumentDto,
+    uploadedBy: string,
+    authorizationHeader: string,
+  ) {
     const validation = this.mediaClient.validateFile(
       createDto.title,
       createDto.mimeType || 'application/octet-stream',
@@ -30,6 +36,7 @@ export class DocumentsService {
       throw new BadRequestException(validation.error);
     }
 
+    const idempotencyKey = randomUUID();
     const result = await this.authorization.withProjectAccess(
       uploadedBy,
       projectId,
@@ -37,28 +44,39 @@ export class DocumentsService {
       async (tx) => {
         const project = await tx.project.findUnique({
           where: { id: projectId },
-          select: { id: true },
+          select: { id: true, publicProjectId: true },
         });
-        if (!project) throw new NotFoundException('Project not found');
+        if (!project?.publicProjectId) throw new NotFoundException('Project not found');
         const existing = await tx.document.findFirst({
           where: { projectId, title: createDto.title },
           orderBy: { version: 'desc' },
         });
-        const uploadData = await this.mediaClient.getUploadUrl({
-          projectId,
-          category: createDto.category,
-          filename: createDto.title,
-          mimeType: createDto.mimeType,
-          fileSize: createDto.sizeBytes,
-        });
+        const uploadData = await this.mediaClient.getUploadUrl(
+          {
+            publicProjectId: project.publicProjectId,
+            category: createDto.category,
+            filename: createDto.title,
+            mimeType: createDto.mimeType,
+            fileSize: createDto.sizeBytes,
+          },
+          authorizationHeader,
+          idempotencyKey,
+        );
         const document = await tx.document.create({
           data: {
-            ...createDto,
+            title: createDto.title,
+            category: createDto.category,
+            size: createDto.sizeBytes,
+            mimeType: createDto.mimeType,
             projectId,
             uploadedBy,
             version: existing ? existing.version + 1 : 1,
             key: uploadData.key,
-            metadata: { assetId: uploadData.assetId, uploadInitiatedAt: new Date() },
+            metadata: {
+              assetId: uploadData.assetId,
+              uploadSessionId: uploadData.uploadSessionId,
+              uploadInitiatedAt: new Date(),
+            },
           },
         });
         return { document, uploadData };
@@ -77,18 +95,70 @@ export class DocumentsService {
   /**
    * Mark document upload as complete
    */
-  async completeUpload(documentId: string, uploadedBy: string) {
-    const document = await this.prisma.document.update({
-      where: { id: documentId },
-      data: {
-        metadata: {
-          uploadCompletedAt: new Date(),
-        },
+  async completeUpload(
+    projectId: string,
+    documentId: string,
+    uploadedBy: string,
+    authorizationHeader: string,
+  ) {
+    const pending = await this.authorization.withProjectAccess(
+      uploadedBy,
+      projectId,
+      'manage',
+      async (tx) => {
+        const document = await tx.document.findFirst({
+          where: { id: documentId, projectId },
+        });
+        if (!document) throw new NotFoundException('Document not found');
+        const reference = this.mediaReference(document.metadata);
+        if (!reference.uploadSessionId) {
+          throw new BadRequestException('Document upload session not found');
+        }
+        return { document, uploadSessionId: reference.uploadSessionId };
       },
-      include: {
-        project: { select: { id: true } },
+    );
+
+    await this.mediaClient.confirmUpload(pending.uploadSessionId, authorizationHeader);
+
+    const document = await this.authorization.withProjectAccess(
+      uploadedBy,
+      projectId,
+      'manage',
+      async (tx) => {
+        const current = await tx.document.findFirst({ where: { id: documentId, projectId } });
+        if (!current) throw new NotFoundException('Document not found');
+        const currentReference = this.mediaReference(current.metadata);
+        if (currentReference.uploadSessionId !== pending.uploadSessionId) {
+          throw new NotFoundException('Document not found');
+        }
+        await tx.document.updateMany({
+          where: { id: documentId, projectId },
+          data: {
+            metadata: {
+              ...this.jsonObject(current.metadata),
+              uploadCompletedAt: new Date(),
+            },
+          },
+        });
+        const updated = await tx.document.findFirstOrThrow({
+          where: { id: documentId, projectId },
+        });
+        await tx.auditLog.create({
+          data: {
+            entityType: 'document',
+            entityId: updated.id,
+            action: 'uploaded',
+            actor: uploadedBy,
+            metadata: {
+              projectId: updated.projectId,
+              category: updated.category,
+              version: updated.version,
+            },
+          },
+        });
+        return updated;
       },
-    });
+    );
 
     this.eventEmitter.emit('document.uploaded', {
       documentId: document.id,
@@ -99,28 +169,19 @@ export class DocumentsService {
       timestamp: new Date(),
     });
 
-    await this.prisma.auditLog.create({
-      data: {
-        entityType: 'document',
-        entityId: document.id,
-        action: 'uploaded',
-        actor: uploadedBy,
-        metadata: {
-          projectId: document.projectId,
-          category: document.category,
-          version: document.version,
-        },
-      },
-    });
-
     return document;
   }
 
   /**
    * Legacy create method for backwards compatibility
    */
-  async create(projectId: string, createDto: CreateDocumentDto, uploadedBy: string) {
-    return this.initializeUpload(projectId, createDto, uploadedBy);
+  async create(
+    projectId: string,
+    createDto: CreateDocumentDto,
+    uploadedBy: string,
+    authorizationHeader: string,
+  ) {
+    return this.initializeUpload(projectId, createDto, uploadedBy, authorizationHeader);
   }
 
   async findAll(projectId: string, userId: string, category?: DocumentCategory) {
@@ -171,14 +232,16 @@ export class DocumentsService {
   /**
    * Get download URL for a document
    */
-  async getDownloadUrl(projectId: string, documentId: string, userId: string) {
+  async getDownloadUrl(
+    projectId: string,
+    documentId: string,
+    userId: string,
+    authorizationHeader: string,
+  ) {
     const document = await this.findOne(projectId, documentId, userId);
-
-    if (!document.key) {
-      throw new BadRequestException('Document key not found');
-    }
-
-    const downloadData = await this.mediaClient.getDownloadUrl(document.key);
+    const assetId = this.mediaReference(document.metadata).assetId;
+    if (!assetId) throw new BadRequestException('Document media asset not found');
+    const downloadData = await this.mediaClient.getDownloadUrl(assetId, authorizationHeader);
 
     this.logger.log('Generated document download URL');
 
@@ -190,7 +253,7 @@ export class DocumentsService {
     };
   }
 
-  async remove(projectId: string, id: string, userId: string) {
+  async remove(projectId: string, id: string, userId: string, authorizationHeader: string) {
     const existing = await this.authorization.withProjectAccess(
       userId,
       projectId,
@@ -201,34 +264,48 @@ export class DocumentsService {
           select: { id: true, projectId: true, key: true, metadata: true },
         });
         if (!existing) throw new NotFoundException('Document not found');
-        await tx.document.deleteMany({ where: { id, projectId } });
-        await tx.auditLog.create({
-          data: {
-            entityType: 'document',
-            entityId: id,
-            action: 'deleted',
-            actor: userId,
-            metadata: { projectId },
-          },
-        });
         return existing;
       },
     );
 
-    // Delete from object storage
-    if (existing.key) {
-      const metadata = existing.metadata as any;
-      const assetId = metadata?.assetId;
+    const assetId = this.mediaReference(existing.metadata).assetId;
+    if (!assetId) throw new BadRequestException('Document media asset not found');
+    await this.mediaClient.deleteAsset(assetId, authorizationHeader);
 
-      if (assetId) {
-        this.mediaClient.deleteAsset(assetId).catch(() => {
-          this.logger.error('Failed to delete document asset from media service');
-        });
+    await this.authorization.withProjectAccess(userId, projectId, 'manage', async (tx) => {
+      const current = await tx.document.findFirst({ where: { id, projectId } });
+      if (!current || this.mediaReference(current.metadata).assetId !== assetId) {
+        throw new NotFoundException('Document not found');
       }
-    }
+      await tx.document.deleteMany({ where: { id, projectId } });
+      await tx.auditLog.create({
+        data: {
+          entityType: 'document',
+          entityId: id,
+          action: 'deleted',
+          actor: userId,
+          metadata: { projectId },
+        },
+      });
+    });
 
     this.logger.log('Document deleted');
 
     return { message: 'Document deleted successfully' };
+  }
+
+  private mediaReference(metadata: unknown): { assetId?: string; uploadSessionId?: string } {
+    const value = this.jsonObject(metadata);
+    return {
+      assetId: typeof value.assetId === 'string' ? value.assetId : undefined,
+      uploadSessionId:
+        typeof value.uploadSessionId === 'string' ? value.uploadSessionId : undefined,
+    };
+  }
+
+  private jsonObject(value: unknown): Record<string, unknown> {
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
   }
 }

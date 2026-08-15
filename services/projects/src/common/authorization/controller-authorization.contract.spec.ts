@@ -82,7 +82,7 @@ describe('projects controller authorization contract', () => {
       'HealthController.liveness',
       'HealthController.readiness',
     ]);
-    expect(protectedRoutes).toHaveLength(103);
+    expect(protectedRoutes).toHaveLength(105);
     expect(publicRoutes).toHaveLength(3);
   });
 });
