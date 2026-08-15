@@ -1,11 +1,13 @@
 import { BadRequestException } from '@nestjs/common';
-import { ProjectsService } from './projects.service';
+
+const { ProjectsService } = require('./projects.service.ts') as typeof import('./projects.service');
 
 describe('ProjectsService authorization scoping', () => {
   const project = {
     findMany: jest.fn(),
     count: jest.fn(),
     create: jest.fn(),
+    update: jest.fn(),
   };
   const auditLog = { create: jest.fn() };
   const prisma = {
@@ -17,9 +19,23 @@ describe('ProjectsService authorization scoping', () => {
   };
   const eventEmitter = { emit: jest.fn() };
   const cache = { invalidateProject: jest.fn() };
+  const accessibleProjectIds = jest.fn();
+  const authorizePublicProjectLink = jest.fn();
   const authorization = {
-    accessibleProjectIds: jest.fn(),
-    authorizePublicProjectLink: jest.fn(),
+    accessibleProjectIds,
+    authorizePublicProjectLink,
+    withAccessibleProjectIds: jest.fn(
+      async (_subject: string, _mode: string, operation: (ids: string[], tx: any) => unknown) =>
+        operation(await accessibleProjectIds(), { project, auditLog }),
+    ),
+    withPublicProjectLink: jest.fn(
+      async (_subject: string, _publicProjectId: string, operation: Function) =>
+        operation(await authorizePublicProjectLink(), { project, auditLog }),
+    ),
+    withProjectAccess: jest.fn(
+      async (_subject: string, _projectId: string, _mode: string, operation: Function) =>
+        operation({ project, auditLog }),
+    ),
   };
   const service = new ProjectsService(
     prisma as any,
@@ -42,10 +58,10 @@ describe('ProjectsService authorization scoping', () => {
       'actor-1',
     );
 
-    expect(authorization.accessibleProjectIds).toHaveBeenCalledWith(
+    expect(authorization.withAccessibleProjectIds).toHaveBeenCalledWith(
       'actor-1',
       'read',
-      expect.anything(),
+      expect.any(Function),
     );
     expect(project.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -114,6 +130,20 @@ describe('ProjectsService authorization scoping', () => {
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(project.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects canonical public project re-parenting before any authorized write', async () => {
+    await expect(
+      service.update(
+        'service-project-1',
+        { publicProjectId: 'different-public-project' } as any,
+        'actor-1',
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(authorization.withProjectAccess).not.toHaveBeenCalled();
+    expect(project.update).not.toHaveBeenCalled();
+    expect(auditLog.create).not.toHaveBeenCalled();
   });
 
   it('resolves a fresh authorized-ID set for successive pooled callers', async () => {

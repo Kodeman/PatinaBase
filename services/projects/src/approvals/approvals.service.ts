@@ -26,73 +26,77 @@ export class ApprovalsService {
    */
   async create(projectId: string, createDto: CreateApprovalDto, requestedBy: string) {
     // Create approval and outbox event in transaction
-    const approval = await this.prisma.$transaction(async (tx) => {
-      await this.authorization.assertProjectAccess(requestedBy, projectId, 'manage', tx);
-      const project = await tx.project.findUnique({
-        where: { id: projectId },
-        select: { id: true, clientId: true, designerId: true },
-      });
-      if (!project) throw new NotFoundException('Project not found');
-      if (createDto.segmentId) {
-        const segment = await tx.timelineSegment.findFirst({
-          where: { id: createDto.segmentId, projectId },
-          select: { id: true },
+    const approval = await this.authorization.withProjectAccess(
+      requestedBy,
+      projectId,
+      'manage',
+      async (tx) => {
+        const project = await tx.project.findUnique({
+          where: { id: projectId },
+          select: { id: true, clientId: true, designerId: true },
         });
-        if (!segment) throw new NotFoundException('Timeline segment not found');
-      }
-      const newApproval = await tx.approvalRecord.create({
-        data: {
-          projectId,
-          segmentId: createDto.segmentId,
-          title: createDto.title,
-          description: createDto.description,
-          approvalType: createDto.approvalType,
-          priority: createDto.priority || 'normal',
-          requestedBy,
-          assignedTo: createDto.assignedTo,
-          dueDate: createDto.dueDate ? new Date(createDto.dueDate) : null,
-          documents: createDto.documents || [],
-          comments: [],
-          metadata: createDto.metadata,
-        },
-      });
-
-      // Create outbox event
-      await tx.outboxEvent.create({
-        data: {
-          type: 'approval.requested',
-          payload: {
-            approvalId: newApproval.id,
+        if (!project) throw new NotFoundException('Project not found');
+        if (createDto.segmentId) {
+          const segment = await tx.timelineSegment.findFirst({
+            where: { id: createDto.segmentId, projectId },
+            select: { id: true },
+          });
+          if (!segment) throw new NotFoundException('Timeline segment not found');
+        }
+        const newApproval = await tx.approvalRecord.create({
+          data: {
             projectId,
-            assignedTo: newApproval.assignedTo,
+            segmentId: createDto.segmentId,
+            title: createDto.title,
+            description: createDto.description,
+            approvalType: createDto.approvalType,
+            priority: createDto.priority || 'normal',
             requestedBy,
-            approvalType: newApproval.approvalType,
-            priority: newApproval.priority,
-            title: newApproval.title,
-            dueDate: newApproval.dueDate,
-            clientId: project.clientId,
-            designerId: project.designerId,
+            assignedTo: createDto.assignedTo,
+            dueDate: createDto.dueDate ? new Date(createDto.dueDate) : null,
+            documents: createDto.documents || [],
+            comments: [],
+            metadata: createDto.metadata,
           },
-          headers: {
-            timestamp: new Date().toISOString(),
-            source: 'projects-service',
+        });
+
+        // Create outbox event
+        await tx.outboxEvent.create({
+          data: {
+            type: 'approval.requested',
+            payload: {
+              approvalId: newApproval.id,
+              projectId,
+              assignedTo: newApproval.assignedTo,
+              requestedBy,
+              approvalType: newApproval.approvalType,
+              priority: newApproval.priority,
+              title: newApproval.title,
+              dueDate: newApproval.dueDate,
+              clientId: project.clientId,
+              designerId: project.designerId,
+            },
+            headers: {
+              timestamp: new Date().toISOString(),
+              source: 'projects-service',
+            },
           },
-        },
-      });
+        });
 
-      // Log audit
-      await tx.auditLog.create({
-        data: {
-          entityType: 'approval_record',
-          entityId: newApproval.id,
-          action: 'created',
-          actor: requestedBy,
-          metadata: { projectId },
-        },
-      });
+        // Log audit
+        await tx.auditLog.create({
+          data: {
+            entityType: 'approval_record',
+            entityId: newApproval.id,
+            action: 'created',
+            actor: requestedBy,
+            metadata: { projectId },
+          },
+        });
 
-      return newApproval;
-    });
+        return newApproval;
+      },
+    );
 
     // Emit in-process event for notification
     this.eventEmitter.emit('approval.requested', {
@@ -144,22 +148,25 @@ export class ApprovalsService {
       where.status = status;
     }
 
-    const approvals = await this.prisma.$transaction(async (tx) => {
-      const projectIds = await this.authorization.accessibleProjectIds(userId, 'read', tx);
-      where.projectId = { in: projectIds };
-      return tx.approvalRecord.findMany({
-        where,
-        include: {
-          project: {
-            select: {
-              id: true,
-              title: true,
+    const approvals = await this.authorization.withAccessibleProjectIds(
+      userId,
+      'read',
+      async (projectIds, tx) => {
+        where.projectId = { in: projectIds };
+        return tx.approvalRecord.findMany({
+          where,
+          include: {
+            project: {
+              select: {
+                id: true,
+                title: true,
+              },
             },
           },
-        },
-        orderBy: [{ priority: 'desc' }, { dueDate: 'asc' }, { createdAt: 'desc' }],
-      });
-    });
+          orderBy: [{ priority: 'desc' }, { dueDate: 'asc' }, { createdAt: 'desc' }],
+        });
+      },
+    );
 
     // Map to include project title for client portal
     return approvals.map((approval) => ({
@@ -224,84 +231,88 @@ export class ApprovalsService {
     }
 
     // Update approval and create outbox event in transaction
-    const result = await this.prisma.$transaction(async (tx) => {
-      await this.authorization.assertProjectAccess(userId, projectId, 'read', tx);
-      const current = await tx.approvalRecord.findFirst({
-        where: { id: approvalId, projectId },
-      });
-      if (!current) throw new NotFoundException('Approval not found');
-      if (current.status !== 'pending' && current.status !== 'needs_discussion') {
-        throw new BadRequestException('Approval has already been processed');
-      }
-      if (current.assignedTo !== userId) {
-        throw new ForbiddenException('You are not authorized to approve this request');
-      }
-      const project = await tx.project.findUnique({
-        where: { id: projectId },
-        select: { clientId: true, designerId: true },
-      });
-      const comments = (current.comments as any[]) || [];
-      if (approveDto.comments) {
-        comments.push({
-          userId,
-          action: 'approved',
-          comment: approveDto.comments,
-          timestamp: new Date().toISOString(),
+    const result = await this.authorization.withProjectAccess(
+      userId,
+      projectId,
+      'read',
+      async (tx) => {
+        const current = await tx.approvalRecord.findFirst({
+          where: { id: approvalId, projectId },
         });
-      }
-      await tx.approvalRecord.updateMany({
-        where: { id: approvalId, projectId },
-        data: {
-          status: 'approved',
-          approvedBy: userId,
-          approvedAt: new Date(),
-          signature: signatureData,
-          comments,
-          metadata: (approveDto.metadata || current.metadata) as any,
-        },
-      });
-      const updatedApproval = await tx.approvalRecord.findFirstOrThrow({
-        where: { id: approvalId, projectId },
-      });
-
-      // Create outbox event
-      await tx.outboxEvent.create({
-        data: {
-          type: 'approval.approved',
-          payload: {
-            approvalId,
-            projectId,
-            approvedBy: userId,
-            requestedBy: current.requestedBy,
-            approvalType: current.approvalType,
-            title: current.title,
-            clientId: project?.clientId,
-            designerId: project?.designerId,
-          },
-          headers: {
+        if (!current) throw new NotFoundException('Approval not found');
+        if (current.status !== 'pending' && current.status !== 'needs_discussion') {
+          throw new BadRequestException('Approval has already been processed');
+        }
+        if (current.assignedTo !== userId) {
+          throw new ForbiddenException('You are not authorized to approve this request');
+        }
+        const project = await tx.project.findUnique({
+          where: { id: projectId },
+          select: { clientId: true, designerId: true },
+        });
+        const comments = (current.comments as any[]) || [];
+        if (approveDto.comments) {
+          comments.push({
+            userId,
+            action: 'approved',
+            comment: approveDto.comments,
             timestamp: new Date().toISOString(),
-            source: 'projects-service',
+          });
+        }
+        await tx.approvalRecord.updateMany({
+          where: { id: approvalId, projectId },
+          data: {
+            status: 'approved',
+            approvedBy: userId,
+            approvedAt: new Date(),
+            signature: signatureData,
+            comments,
+            metadata: (approveDto.metadata || current.metadata) as any,
           },
-        },
-      });
+        });
+        const updatedApproval = await tx.approvalRecord.findFirstOrThrow({
+          where: { id: approvalId, projectId },
+        });
 
-      // Log audit
-      await tx.auditLog.create({
-        data: {
-          entityType: 'approval_record',
-          entityId: approvalId,
-          action: 'approved',
-          actor: userId,
-          metadata: { projectId, comments: approveDto.comments },
-        },
-      });
+        // Create outbox event
+        await tx.outboxEvent.create({
+          data: {
+            type: 'approval.approved',
+            payload: {
+              approvalId,
+              projectId,
+              approvedBy: userId,
+              requestedBy: current.requestedBy,
+              approvalType: current.approvalType,
+              title: current.title,
+              clientId: project?.clientId,
+              designerId: project?.designerId,
+            },
+            headers: {
+              timestamp: new Date().toISOString(),
+              source: 'projects-service',
+            },
+          },
+        });
 
-      return {
-        updatedApproval,
-        requestedBy: current.requestedBy,
-        approvalType: current.approvalType,
-      };
-    });
+        // Log audit
+        await tx.auditLog.create({
+          data: {
+            entityType: 'approval_record',
+            entityId: approvalId,
+            action: 'approved',
+            actor: userId,
+            metadata: { projectId, comments: approveDto.comments },
+          },
+        });
+
+        return {
+          updatedApproval,
+          requestedBy: current.requestedBy,
+          approvalType: current.approvalType,
+        };
+      },
+    );
 
     // Emit in-process event
     this.eventEmitter.emit('approval.approved', {
@@ -323,82 +334,86 @@ export class ApprovalsService {
    */
   async reject(projectId: string, approvalId: string, rejectDto: RejectDto, userId: string) {
     // Update approval and create outbox event in transaction
-    const result = await this.prisma.$transaction(async (tx) => {
-      await this.authorization.assertProjectAccess(userId, projectId, 'read', tx);
-      const current = await tx.approvalRecord.findFirst({
-        where: { id: approvalId, projectId },
-      });
-      if (!current) throw new NotFoundException('Approval not found');
-      if (current.status !== 'pending' && current.status !== 'needs_discussion') {
-        throw new BadRequestException('Approval has already been processed');
-      }
-      if (current.assignedTo !== userId) {
-        throw new ForbiddenException('You are not authorized to reject this request');
-      }
-      const project = await tx.project.findUnique({
-        where: { id: projectId },
-        select: { clientId: true, designerId: true },
-      });
-      const comments = (current.comments as any[]) || [];
-      comments.push({
-        userId,
-        action: 'rejected',
-        comment: rejectDto.comments || rejectDto.reason,
-        timestamp: new Date().toISOString(),
-      });
-      await tx.approvalRecord.updateMany({
-        where: { id: approvalId, projectId },
-        data: {
-          status: 'rejected',
-          rejectedBy: userId,
-          rejectedAt: new Date(),
-          rejectionReason: rejectDto.reason,
-          comments,
-        },
-      });
-      const updatedApproval = await tx.approvalRecord.findFirstOrThrow({
-        where: { id: approvalId, projectId },
-      });
-
-      // Create outbox event
-      await tx.outboxEvent.create({
-        data: {
-          type: 'approval.rejected',
-          payload: {
-            approvalId,
-            projectId,
-            rejectedBy: userId,
-            requestedBy: current.requestedBy,
-            approvalType: current.approvalType,
-            title: current.title,
-            reason: rejectDto.reason,
-            clientId: project?.clientId,
-            designerId: project?.designerId,
-          },
-          headers: {
-            timestamp: new Date().toISOString(),
-            source: 'projects-service',
-          },
-        },
-      });
-
-      // Log audit
-      await tx.auditLog.create({
-        data: {
-          entityType: 'approval_record',
-          entityId: approvalId,
+    const result = await this.authorization.withProjectAccess(
+      userId,
+      projectId,
+      'read',
+      async (tx) => {
+        const current = await tx.approvalRecord.findFirst({
+          where: { id: approvalId, projectId },
+        });
+        if (!current) throw new NotFoundException('Approval not found');
+        if (current.status !== 'pending' && current.status !== 'needs_discussion') {
+          throw new BadRequestException('Approval has already been processed');
+        }
+        if (current.assignedTo !== userId) {
+          throw new ForbiddenException('You are not authorized to reject this request');
+        }
+        const project = await tx.project.findUnique({
+          where: { id: projectId },
+          select: { clientId: true, designerId: true },
+        });
+        const comments = (current.comments as any[]) || [];
+        comments.push({
+          userId,
           action: 'rejected',
-          actor: userId,
-          metadata: { projectId, reason: rejectDto.reason },
-        },
-      });
+          comment: rejectDto.comments || rejectDto.reason,
+          timestamp: new Date().toISOString(),
+        });
+        await tx.approvalRecord.updateMany({
+          where: { id: approvalId, projectId },
+          data: {
+            status: 'rejected',
+            rejectedBy: userId,
+            rejectedAt: new Date(),
+            rejectionReason: rejectDto.reason,
+            comments,
+          },
+        });
+        const updatedApproval = await tx.approvalRecord.findFirstOrThrow({
+          where: { id: approvalId, projectId },
+        });
 
-      return {
-        updatedApproval,
-        requestedBy: current.requestedBy,
-        approvalType: current.approvalType,
-      };
-    });
+        // Create outbox event
+        await tx.outboxEvent.create({
+          data: {
+            type: 'approval.rejected',
+            payload: {
+              approvalId,
+              projectId,
+              rejectedBy: userId,
+              requestedBy: current.requestedBy,
+              approvalType: current.approvalType,
+              title: current.title,
+              reason: rejectDto.reason,
+              clientId: project?.clientId,
+              designerId: project?.designerId,
+            },
+            headers: {
+              timestamp: new Date().toISOString(),
+              source: 'projects-service',
+            },
+          },
+        });
+
+        // Log audit
+        await tx.auditLog.create({
+          data: {
+            entityType: 'approval_record',
+            entityId: approvalId,
+            action: 'rejected',
+            actor: userId,
+            metadata: { projectId, reason: rejectDto.reason },
+          },
+        });
+
+        return {
+          updatedApproval,
+          requestedBy: current.requestedBy,
+          approvalType: current.approvalType,
+        };
+      },
+    );
 
     // Emit in-process event
     this.eventEmitter.emit('approval.rejected', {
@@ -421,63 +436,67 @@ export class ApprovalsService {
    */
   async discuss(projectId: string, approvalId: string, discussDto: DiscussDto, userId: string) {
     // Update approval and create outbox event in transaction
-    const result = await this.prisma.$transaction(async (tx) => {
-      await this.authorization.assertProjectAccess(userId, projectId, 'read', tx);
-      const current = await tx.approvalRecord.findFirst({
-        where: { id: approvalId, projectId },
-      });
-      if (!current) throw new NotFoundException('Approval not found');
-      const project = await tx.project.findUnique({
-        where: { id: projectId },
-        select: { clientId: true, designerId: true },
-      });
-      const comments = (current.comments as any[]) || [];
-      comments.push({
-        userId,
-        action: 'discussed',
-        comment: discussDto.comment,
-        timestamp: new Date().toISOString(),
-      });
-      await tx.approvalRecord.updateMany({
-        where: { id: approvalId, projectId },
-        data: {
-          status: 'needs_discussion',
-          comments,
-        },
-      });
-      const updatedApproval = await tx.approvalRecord.findFirstOrThrow({
-        where: { id: approvalId, projectId },
-      });
-
-      // Create outbox event
-      await tx.outboxEvent.create({
-        data: {
-          type: 'approval.discussion_started',
-          payload: {
-            approvalId,
-            projectId,
-            userId,
-            requestedBy: current.requestedBy,
-            assignedTo: current.assignedTo,
-            approvalType: current.approvalType,
-            title: current.title,
-            comment: discussDto.comment,
-            clientId: project?.clientId,
-            designerId: project?.designerId,
+    const result = await this.authorization.withProjectAccess(
+      userId,
+      projectId,
+      'read',
+      async (tx) => {
+        const current = await tx.approvalRecord.findFirst({
+          where: { id: approvalId, projectId },
+        });
+        if (!current) throw new NotFoundException('Approval not found');
+        const project = await tx.project.findUnique({
+          where: { id: projectId },
+          select: { clientId: true, designerId: true },
+        });
+        const comments = (current.comments as any[]) || [];
+        comments.push({
+          userId,
+          action: 'discussed',
+          comment: discussDto.comment,
+          timestamp: new Date().toISOString(),
+        });
+        await tx.approvalRecord.updateMany({
+          where: { id: approvalId, projectId },
+          data: {
+            status: 'needs_discussion',
+            comments,
           },
-          headers: {
-            timestamp: new Date().toISOString(),
-            source: 'projects-service',
-          },
-        },
-      });
+        });
+        const updatedApproval = await tx.approvalRecord.findFirstOrThrow({
+          where: { id: approvalId, projectId },
+        });
 
-      return {
-        updatedApproval,
-        requestedBy: current.requestedBy,
-        assignedTo: current.assignedTo,
-      };
-    });
+        // Create outbox event
+        await tx.outboxEvent.create({
+          data: {
+            type: 'approval.discussion_started',
+            payload: {
+              approvalId,
+              projectId,
+              userId,
+              requestedBy: current.requestedBy,
+              assignedTo: current.assignedTo,
+              approvalType: current.approvalType,
+              title: current.title,
+              comment: discussDto.comment,
+              clientId: project?.clientId,
+              designerId: project?.designerId,
+            },
+            headers: {
+              timestamp: new Date().toISOString(),
+              source: 'projects-service',
+            },
+          },
+        });
+
+        return {
+          updatedApproval,
+          requestedBy: current.requestedBy,
+          assignedTo: current.assignedTo,
+        };
+      },
+    );
 
     // Emit in-process event
     this.eventEmitter.emit('approval.discussed', {

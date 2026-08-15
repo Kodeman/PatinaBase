@@ -337,10 +337,68 @@ describe('ProjectsAuthorizationResolver (real local Postgres)', () => {
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
+  it('holds current authorization rows for the protected operation and revokes next request', async () => {
+    let releaseLease!: () => void;
+    const leaseReleased = new Promise<void>((resolve) => {
+      releaseLease = resolve;
+    });
+    let signalLeaseStarted!: () => void;
+    const leaseStarted = new Promise<void>((resolve) => {
+      signalLeaseStarted = resolve;
+    });
+
+    const lease = resolver.withProjectAccess(
+      CLIENT_ID,
+      SERVICE_PROJECT_ID,
+      'read',
+      async (transaction) => {
+        await transaction.project.findUniqueOrThrow({ where: { id: SERVICE_PROJECT_ID } });
+        signalLeaseStarted();
+        await leaseReleased;
+        return true;
+      },
+    );
+    await Promise.race([leaseStarted, lease]);
+
+    const revoke = prisma.$executeRaw(Prisma.sql`
+      DELETE FROM public.user_roles AS user_role
+      USING public.roles AS role
+      WHERE user_role.role_id = role.id
+        AND user_role.user_id = ${CLIENT_ID}::uuid
+        AND role.name = 'client'
+    `);
+
+    try {
+      await expect(
+        Promise.race([
+          revoke.then(() => 'revoked'),
+          new Promise<'blocked'>((resolve) => setTimeout(() => resolve('blocked'), 100)),
+        ]),
+      ).resolves.toBe('blocked');
+    } finally {
+      releaseLease();
+      await lease;
+      await revoke;
+    }
+
+    await expect(
+      resolver.assertProjectAccess(CLIENT_ID, SERVICE_PROJECT_ID, 'read'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    await assignRole(CLIENT_ID, 'client');
+  });
+
   it('does not retain authorization across successive callers on one pooled backend', async () => {
     const clientPid = await projectAccessBackendPid(CLIENT_ID);
     const designerPid = await projectAccessBackendPid(DESIGNER_ID);
     expect(designerPid).toBe(clientPid);
+
+    const own = await resolver.resolve(CLIENT_ID);
+    const other = await resolver.resolve(OTHER_ID);
+    expect(own.subject).toBe(CLIENT_ID);
+    expect(other.subject).toBe(OTHER_ID);
+    await expect(resolver.assertProjectAccess(CLIENT_ID, SERVICE_PROJECT_ID, 'read')).resolves.toBe(
+      SERVICE_PROJECT_ID,
+    );
     await expect(
       resolver.assertProjectAccess(OTHER_ID, SERVICE_PROJECT_ID, 'read'),
     ).rejects.toBeInstanceOf(NotFoundException);

@@ -344,6 +344,7 @@ describe('TimelineService', () => {
       };
 
       mockPrismaService.project.findUnique.mockResolvedValue(createMockProject());
+      mockPrismaService.timelineSegment.findFirst.mockResolvedValue({ id: 'segment-123' });
       mockPrismaService.clientActivity.create.mockResolvedValue({});
       mockPrismaService.engagementMetrics.upsert.mockResolvedValue({});
 

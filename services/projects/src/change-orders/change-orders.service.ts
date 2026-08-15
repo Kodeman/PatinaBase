@@ -149,57 +149,59 @@ export class ChangeOrdersService {
   }
 
   async approve(projectId: string, id: string, approvalDto: ApproveChangeOrderDto, userId: string) {
-    const { changeOrder, updated } = await this.prisma.$transaction(async (tx) => {
-      await this.authorization.assertProjectAccess(userId, projectId, 'read', tx);
-      await this.authorization.assertProjectApprovalAccess(userId, projectId, tx);
-      const changeOrder = await tx.changeOrder.findFirst({
-        where: { id, projectId },
-        include: {
-          project: {
-            select: {
-              id: true,
-              clientId: true,
-              status: true,
+    const { changeOrder, updated } = await this.authorization.withProjectApprovalAccess(
+      userId,
+      projectId,
+      async (tx) => {
+        const changeOrder = await tx.changeOrder.findFirst({
+          where: { id, projectId },
+          include: {
+            project: {
+              select: {
+                id: true,
+                clientId: true,
+                status: true,
+              },
             },
           },
-        },
-      });
+        });
 
-      if (!changeOrder) {
-        throw new NotFoundException('Change order not found');
-      }
+        if (!changeOrder) {
+          throw new NotFoundException('Change order not found');
+        }
 
-      if (changeOrder.status !== ChangeOrderStatus.SUBMITTED) {
-        throw new BadRequestException('Only submitted change orders can be approved/rejected');
-      }
+        if (changeOrder.status !== ChangeOrderStatus.SUBMITTED) {
+          throw new BadRequestException('Only submitted change orders can be approved/rejected');
+        }
 
-      const newStatus =
-        approvalDto.action === ApprovalAction.APPROVE
-          ? ChangeOrderStatus.APPROVED
-          : ChangeOrderStatus.REJECTED;
+        const newStatus =
+          approvalDto.action === ApprovalAction.APPROVE
+            ? ChangeOrderStatus.APPROVED
+            : ChangeOrderStatus.REJECTED;
 
-      await tx.changeOrder.updateMany({
-        where: { id, projectId },
-        data: {
-          status: newStatus,
-          approvedBy: userId,
-          approvedAt: new Date(),
-          reason: approvalDto.reason,
-        },
-      });
-      const updated = await tx.changeOrder.findFirstOrThrow({ where: { id, projectId } });
+        await tx.changeOrder.updateMany({
+          where: { id, projectId },
+          data: {
+            status: newStatus,
+            approvedBy: userId,
+            approvedAt: new Date(),
+            reason: approvalDto.reason,
+          },
+        });
+        const updated = await tx.changeOrder.findFirstOrThrow({ where: { id, projectId } });
 
-      await tx.auditLog.create({
-        data: {
-          entityType: 'change_order',
-          entityId: id,
-          action: approvalDto.action === ApprovalAction.APPROVE ? 'approved' : 'rejected',
-          actor: userId,
-          metadata: { projectId },
-        },
-      });
-      return { changeOrder, updated };
-    });
+        await tx.auditLog.create({
+          data: {
+            entityType: 'change_order',
+            entityId: id,
+            action: approvalDto.action === ApprovalAction.APPROVE ? 'approved' : 'rejected',
+            actor: userId,
+            metadata: { projectId },
+          },
+        });
+        return { changeOrder, updated };
+      },
+    );
 
     // Emit event
     const eventName =
@@ -262,8 +264,7 @@ export class ChangeOrdersService {
   }
 
   async getPendingApprovals(userId: string) {
-    return this.prisma.$transaction(async (tx) => {
-      const projectIds = await this.authorization.accessibleProjectIds(userId, 'read', tx);
+    return this.authorization.withAccessibleProjectIds(userId, 'read', (projectIds, tx) => {
       return tx.changeOrder.findMany({
         where: {
           status: ChangeOrderStatus.SUBMITTED,

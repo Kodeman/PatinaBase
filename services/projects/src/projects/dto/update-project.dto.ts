@@ -1,15 +1,10 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsOptional, IsDateString, IsNumber, IsEnum, IsUUID } from 'class-validator';
+import { IsString, IsOptional, IsDateString, IsNumber, IsEnum } from 'class-validator';
 import { Type } from 'class-transformer';
 import { type ProjectStatus } from '@patina/types';
 import { ProjectStatusEnum } from './create-project.dto';
 
 export class UpdateProjectDto {
-  @ApiPropertyOptional({ description: 'Canonical public project ID' })
-  @IsOptional()
-  @IsUUID()
-  publicProjectId?: string;
-
   @ApiPropertyOptional({ description: 'Project title' })
   @IsOptional()
   @IsString()

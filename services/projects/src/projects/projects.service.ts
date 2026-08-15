@@ -24,43 +24,41 @@ export class ProjectsService {
     if (!publicProjectId) {
       throw new BadRequestException('A canonical public project link is required');
     }
-    const project = await this.prisma.$transaction(async (tx) => {
-      const assignment = await this.authorization.authorizePublicProjectLink(
-        userId,
-        publicProjectId,
-        tx,
-      );
+    const project = await this.authorization.withPublicProjectLink(
+      userId,
+      publicProjectId,
+      async (assignment, tx) => {
+        const created = await tx.project.create({
+          data: {
+            ...data,
+            publicProjectId,
+            proposalId,
+            clientId: assignment.clientId,
+            designerId: assignment.designerId,
+            budget: budget ? new Decimal(budget) : null,
+            status: 'draft',
+          },
+          include: {
+            tasks: true,
+            rfis: true,
+            changeOrders: true,
+            issues: true,
+            milestones: true,
+          },
+        });
 
-      const created = await tx.project.create({
-        data: {
-          ...data,
-          publicProjectId,
-          proposalId,
-          clientId: assignment.clientId,
-          designerId: assignment.designerId,
-          budget: budget ? new Decimal(budget) : null,
-          status: 'draft',
-        },
-        include: {
-          tasks: true,
-          rfis: true,
-          changeOrders: true,
-          issues: true,
-          milestones: true,
-        },
-      });
-
-      await tx.auditLog.create({
-        data: {
-          entityType: 'project',
-          entityId: created.id,
-          action: 'created',
-          actor: userId,
-          metadata: { proposalId },
-        },
-      });
-      return created;
-    });
+        await tx.auditLog.create({
+          data: {
+            entityType: 'project',
+            entityId: created.id,
+            action: 'created',
+            actor: userId,
+            metadata: { proposalId },
+          },
+        });
+        return created;
+      },
+    );
 
     this.eventEmitter.emit('project.created', {
       projectId: project.id,
@@ -77,50 +75,52 @@ export class ProjectsService {
 
   async findAll(query: QueryProjectsDto, userId: string) {
     const { clientId, designerId, status, page = 1, limit = 20 } = query;
-    return this.prisma.$transaction(async (tx) => {
-      const skip = (page - 1) * limit;
-      const authorizedIds = await this.authorization.accessibleProjectIds(userId, 'read', tx);
-      const where: any = { id: { in: authorizedIds } };
+    return this.authorization.withAccessibleProjectIds(
+      userId,
+      'read',
+      async (authorizedIds, tx) => {
+        const skip = (page - 1) * limit;
+        const where: any = { id: { in: authorizedIds } };
 
-      if (clientId) where.clientId = clientId;
-      if (designerId) where.designerId = designerId;
-      if (status) where.status = status;
+        if (clientId) where.clientId = clientId;
+        if (designerId) where.designerId = designerId;
+        if (status) where.status = status;
 
-      const [projects, total] = await Promise.all([
-        tx.project.findMany({
-          where,
-          skip,
-          take: limit,
-          orderBy: { createdAt: 'desc' },
-          include: {
-            _count: {
-              select: {
-                tasks: true,
-                rfis: true,
-                changeOrders: true,
-                issues: true,
+        const [projects, total] = await Promise.all([
+          tx.project.findMany({
+            where,
+            skip,
+            take: limit,
+            orderBy: { createdAt: 'desc' },
+            include: {
+              _count: {
+                select: {
+                  tasks: true,
+                  rfis: true,
+                  changeOrders: true,
+                  issues: true,
+                },
               },
             },
-          },
-        }),
-        tx.project.count({ where }),
-      ]);
+          }),
+          tx.project.count({ where }),
+        ]);
 
-      return {
-        data: projects,
-        pagination: {
-          page,
-          limit,
-          total,
-          totalPages: Math.ceil(total / limit),
-        },
-      };
-    });
+        return {
+          data: projects,
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+          },
+        };
+      },
+    );
   }
 
   async findOne(id: string, userId: string) {
-    return this.prisma.$transaction(async (tx) => {
-      await this.authorization.assertProjectAccess(userId, id, 'read', tx);
+    return this.authorization.withProjectAccess(userId, id, 'read', async (tx) => {
       const project = await tx.project.findUnique({
         where: { id },
         include: {
@@ -167,8 +167,11 @@ export class ProjectsService {
   }
 
   async update(id: string, updateDto: UpdateProjectDto, userId: string) {
-    const updated = await this.prisma.$transaction(async (tx) => {
-      await this.authorization.assertProjectAccess(userId, id, 'manage', tx);
+    if ('publicProjectId' in updateDto) {
+      throw new BadRequestException('Canonical project links cannot be changed');
+    }
+
+    const updated = await this.authorization.withProjectAccess(userId, id, 'manage', async (tx) => {
       const existing = await tx.project.findUnique({
         where: { id },
         select: { id: true, status: true },
@@ -178,18 +181,12 @@ export class ProjectsService {
         throw new NotFoundException('Project not found');
       }
 
-      const { publicProjectId, budget, ...data } = updateDto;
-      const assignment = publicProjectId
-        ? await this.authorization.authorizePublicProjectLink(userId, publicProjectId, tx)
-        : undefined;
+      const { budget, ...data } = updateDto;
 
       const result = await tx.project.update({
         where: { id },
         data: {
           ...data,
-          publicProjectId,
-          clientId: assignment?.clientId,
-          designerId: assignment?.designerId,
           budget: budget ? new Decimal(budget) : undefined,
         },
         include: {
@@ -303,8 +300,7 @@ export class ProjectsService {
    * Get projects by multiple IDs (bulk fetch)
    */
   async findByIds(ids: string[], userId: string) {
-    return this.prisma.$transaction(async (tx) => {
-      const authorizedIds = await this.authorization.accessibleProjectIds(userId, 'read', tx);
+    return this.authorization.withAccessibleProjectIds(userId, 'read', (authorizedIds, tx) => {
       return tx.project.findMany({
         where: { id: { in: ids.filter((id) => authorizedIds.includes(id)) } },
         include: {
@@ -327,8 +323,7 @@ export class ProjectsService {
    * Get client-safe project data (filtered for client portal)
    */
   async getClientSafeData(projectId: string, clientId: string) {
-    return this.prisma.$transaction(async (tx) => {
-      await this.authorization.assertProjectAccess(clientId, projectId, 'read', tx);
+    return this.authorization.withProjectAccess(clientId, projectId, 'read', async (tx) => {
       const project = await tx.project.findUnique({
         where: { id: projectId },
         include: {

@@ -194,11 +194,8 @@ export class AnalyticsService {
    * Get user-specific analytics
    */
   async getUserAnalytics(userId: string, projectId?: string) {
-    const activities = await this.prisma.$transaction(async (tx) => {
-      const projectIds = projectId
-        ? [await this.authorization.assertProjectAccess(userId, projectId, 'read', tx)]
-        : await this.authorization.accessibleProjectIds(userId, 'read', tx);
-      return tx.clientActivity.findMany({
+    const loadActivities = (projectIds: string[], tx: ProjectQueryClient) =>
+      tx.clientActivity.findMany({
         where: { userId, projectId: { in: projectIds } },
         select: {
           projectId: true,
@@ -209,7 +206,11 @@ export class AnalyticsService {
         orderBy: { createdAt: 'desc' },
         take: 1000,
       });
-    });
+    const activities = projectId
+      ? await this.authorization.withProjectAccess(userId, projectId, 'read', (tx) =>
+          loadActivities([projectId], tx),
+        )
+      : await this.authorization.withAccessibleProjectIds(userId, 'read', loadActivities);
 
     // Calculate metrics
     const totalActivities = activities.length;
@@ -477,8 +478,7 @@ export class AnalyticsService {
       throw new Error('Satisfaction score must be between 1 and 5');
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      await this.authorization.assertProjectApprovalAccess(userId, projectId, tx);
+    return this.authorization.withProjectApprovalAccess(userId, projectId, async (tx) => {
       const metrics = await tx.engagementMetrics.findUnique({ where: { projectId } });
       if (!metrics) {
         throw new NotFoundException('Engagement metrics not found');

@@ -3,14 +3,22 @@ import { ProjectsAuthorizationResolver } from './projects-authorization.resolver
 
 describe('ProjectsAuthorizationResolver', () => {
   const queryRaw = jest.fn();
+  const transactionClient = { $queryRaw: queryRaw };
   const prisma: { $queryRaw: jest.Mock; $transaction: jest.Mock } = {
     $queryRaw: queryRaw,
-    $transaction: jest.fn(async (input: Promise<unknown>[]) => Promise.all(input)),
+    $transaction: jest.fn(async (input: unknown) => {
+      if (typeof input === 'function') return input(transactionClient);
+      return Promise.all(input as Promise<unknown>[]);
+    }),
   };
   const resolver = new ProjectsAuthorizationResolver(prisma as any);
 
   beforeEach(() => {
     jest.clearAllMocks();
+    prisma.$transaction.mockImplementation(async (input: unknown) => {
+      if (typeof input === 'function') return input(transactionClient);
+      return Promise.all(input as Promise<unknown>[]);
+    });
   });
 
   it('resolves current roles, permissions, and active organizations on every call', async () => {
@@ -36,7 +44,32 @@ describe('ProjectsAuthorizationResolver', () => {
       organizationIds: [],
     });
     expect(prisma.$transaction).toHaveBeenCalledTimes(2);
+    expect(prisma.$transaction).toHaveBeenLastCalledWith(expect.any(Function), {
+      isolationLevel: 'Serializable',
+    });
     expect(Object.isFrozen(first)).toBe(true);
+  });
+
+  it('surfaces serialization conflicts without replaying the protected callback', async () => {
+    const conflict = { code: 'P2034' };
+    prisma.$transaction.mockImplementationOnce(async (operation: Function) => {
+      await operation(transactionClient);
+      throw conflict;
+    });
+    queryRaw.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+
+    await expect(resolver.resolve('actor-1')).rejects.toBe(conflict);
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(queryRaw).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry non-serialization failures', async () => {
+    const failure = new Error('operation failed');
+    prisma.$transaction.mockRejectedValueOnce(failure);
+
+    await expect(resolver.resolve('actor-1')).rejects.toBe(failure);
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
   });
 
   it.each([

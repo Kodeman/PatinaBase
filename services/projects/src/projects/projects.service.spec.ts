@@ -36,13 +36,25 @@ describe('ProjectsService', () => {
     invalidateProject: jest.fn().mockResolvedValue(undefined),
   };
 
+  const authorizePublicProjectLink = jest.fn();
+  const accessibleProjectIds = jest.fn();
   const authorizationMock = {
     assertProjectAccess: jest.fn().mockResolvedValue('project-123'),
-    authorizePublicProjectLink: jest.fn(),
-    accessibleProjectIds: jest.fn(),
+    authorizePublicProjectLink,
+    accessibleProjectIds,
     withProjectAccess: jest.fn(
       async (_userId: string, _projectId: string, _mode: string, operation: (tx: any) => any) =>
         operation(mockPrismaService),
+    ),
+    withPublicProjectLink: jest.fn(
+      async (_userId: string, publicProjectId: string, operation: Function) =>
+        operation(
+          await authorizePublicProjectLink('designer-123', publicProjectId),
+          mockPrismaService,
+        ),
+    ),
+    withAccessibleProjectIds: jest.fn(async (_userId: string, _mode: string, operation: Function) =>
+      operation(await accessibleProjectIds(), mockPrismaService),
     ),
   };
 

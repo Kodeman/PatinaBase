@@ -26,6 +26,10 @@ interface PublicProjectAssignmentRow {
   designerId: string;
 }
 
+interface ServiceProjectRelationshipRow {
+  publicProjectId: string | null;
+}
+
 const SUPPORTED_ROLES = [
   'app_user',
   'client',
@@ -50,8 +54,14 @@ export class ProjectsAuthorizationResolver implements AuthorizationResolver {
   constructor(private readonly prisma: PrismaService) {}
 
   async resolve(subject: string): Promise<RequestAuthorization> {
-    const [rolePermissions, organizations] = await this.prisma.$transaction([
-      this.prisma.$queryRaw<RolePermissionRow[]>(Prisma.sql`
+    return this.runSerializable((client) => this.resolveWithClient(subject, client));
+  }
+
+  private async resolveWithClient(
+    subject: string,
+    client: ProjectQueryClient,
+  ): Promise<RequestAuthorization> {
+    const rolePermissions = await client.$queryRaw<RolePermissionRow[]>(Prisma.sql`
         SELECT
           role.name AS "roleName",
           permission.name AS "permissionName"
@@ -63,8 +73,8 @@ export class ProjectsAuthorizationResolver implements AuthorizationResolver {
         LEFT JOIN public.permissions AS permission
           ON permission.id = role_permission.permission_id
         WHERE user_role.user_id::text = ${subject}
-      `),
-      this.prisma.$queryRaw<OrganizationRow[]>(Prisma.sql`
+      `);
+    const organizations = await client.$queryRaw<OrganizationRow[]>(Prisma.sql`
         SELECT organization.id::text AS "organizationId"
         FROM public.organization_members AS membership
         JOIN public.organizations AS organization
@@ -72,8 +82,7 @@ export class ProjectsAuthorizationResolver implements AuthorizationResolver {
         WHERE membership.user_id::text = ${subject}
           AND membership.status::text = 'active'
           AND organization.status::text = 'active'
-      `),
-    ]);
+      `);
 
     const roles = [...new Set(rolePermissions.map((row) => row.roleName))];
     const supported =
@@ -227,7 +236,9 @@ export class ProjectsAuthorizationResolver implements AuthorizationResolver {
     mode: ProjectAccessMode,
     operation: (client: Prisma.TransactionClient) => Promise<T>,
   ): Promise<T> {
-    return this.prisma.$transaction(async (client) => {
+    return this.runSerializable(async (client) => {
+      await this.lockActorAuthorizationState(subject, client);
+      await this.lockProjectRelationships(subject, [projectId], client);
       await this.assertProjectAccess(subject, projectId, mode, client);
       return operation(client);
     });
@@ -239,9 +250,56 @@ export class ProjectsAuthorizationResolver implements AuthorizationResolver {
     mode: ProjectAccessMode,
     operation: (projectId: string, client: Prisma.TransactionClient) => Promise<T>,
   ): Promise<T> {
-    return this.prisma.$transaction(async (client) => {
-      const projectId = await this.assertChangeOrderAccess(subject, changeOrderId, mode, client);
+    return this.runSerializable(async (client) => {
+      await this.lockActorAuthorizationState(subject, client);
+      const projectId = await this.lockChangeOrderRelationship(changeOrderId, client);
+      await this.lockProjectRelationships(subject, [projectId], client);
+      await this.assertProjectAccess(subject, projectId, mode, client);
       return operation(projectId, client);
+    });
+  }
+
+  async withAccessibleProjectIds<T>(
+    subject: string,
+    mode: ProjectAccessMode,
+    operation: (projectIds: string[], client: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    return this.runSerializable(async (client) => {
+      await this.lockActorAuthorizationState(subject, client);
+      const candidateIds = await this.accessibleProjectIds(subject, mode, client);
+      await this.lockProjectRelationships(subject, candidateIds, client);
+      const projectIds = await this.accessibleProjectIds(subject, mode, client);
+      return operation(projectIds, client);
+    });
+  }
+
+  async withProjectApprovalAccess<T>(
+    subject: string,
+    projectId: string,
+    operation: (client: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    return this.runSerializable(async (client) => {
+      await this.lockActorAuthorizationState(subject, client);
+      await this.lockProjectRelationships(subject, [projectId], client);
+      await this.assertProjectAccess(subject, projectId, 'read', client);
+      await this.assertProjectApprovalAccess(subject, projectId, client);
+      return operation(client);
+    });
+  }
+
+  async withPublicProjectLink<T>(
+    subject: string,
+    publicProjectId: string,
+    operation: (
+      assignment: PublicProjectAssignmentRow,
+      client: Prisma.TransactionClient,
+    ) => Promise<T>,
+  ): Promise<T> {
+    return this.runSerializable(async (client) => {
+      await this.lockActorAuthorizationState(subject, client);
+      await this.lockPublicProjectRelationships(subject, [publicProjectId], client);
+      const assignment = await this.authorizePublicProjectLink(subject, publicProjectId, client);
+      return operation(assignment, client);
     });
   }
 
@@ -279,7 +337,8 @@ export class ProjectsAuthorizationResolver implements AuthorizationResolver {
     permissionNames: readonly string[],
     operation: (client: Prisma.TransactionClient) => Promise<T>,
   ): Promise<T> {
-    return this.prisma.$transaction(async (client) => {
+    return this.runSerializable(async (client) => {
+      await this.lockActorAuthorizationState(subject, client);
       const decisions = await Promise.all(
         permissionNames.map((permissionName) =>
           this.hasPermission(subject, permissionName, client),
@@ -290,6 +349,105 @@ export class ProjectsAuthorizationResolver implements AuthorizationResolver {
       }
       return operation(client);
     });
+  }
+
+  private async runSerializable<T>(
+    operation: (client: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    return this.prisma.$transaction(operation, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    });
+  }
+
+  private async lockActorAuthorizationState(
+    subject: string,
+    client: Prisma.TransactionClient,
+  ): Promise<void> {
+    await client.$queryRaw(Prisma.sql`
+      SELECT user_role.user_id
+      FROM public.user_roles AS user_role
+      JOIN public.roles AS role ON role.id = user_role.role_id
+      WHERE user_role.user_id::text = ${subject}
+      FOR SHARE OF user_role, role
+    `);
+    await client.$queryRaw(Prisma.sql`
+      SELECT role_permission.role_id
+      FROM public.user_roles AS user_role
+      JOIN public.role_permissions AS role_permission
+        ON role_permission.role_id = user_role.role_id
+      JOIN public.permissions AS permission
+        ON permission.id = role_permission.permission_id
+      WHERE user_role.user_id::text = ${subject}
+      FOR SHARE OF role_permission, permission
+    `);
+    await client.$queryRaw(Prisma.sql`
+      SELECT membership.organization_id
+      FROM public.organization_members AS membership
+      JOIN public.organizations AS organization
+        ON organization.id = membership.organization_id
+      WHERE membership.user_id::text = ${subject}
+      FOR SHARE OF membership, organization
+    `);
+  }
+
+  private async lockProjectRelationships(
+    subject: string,
+    projectIds: readonly string[],
+    client: Prisma.TransactionClient,
+  ): Promise<void> {
+    if (projectIds.length === 0) return;
+    const relationships = await client.$queryRaw<ServiceProjectRelationshipRow[]>(Prisma.sql`
+      SELECT service_project.public_project_id::text AS "publicProjectId"
+      FROM svc_projects.projects AS service_project
+      WHERE service_project.id::text IN (${Prisma.join([...projectIds])})
+      FOR SHARE OF service_project
+    `);
+    const publicProjectIds = [
+      ...new Set(
+        relationships.flatMap((relationship) =>
+          relationship.publicProjectId ? [relationship.publicProjectId] : [],
+        ),
+      ),
+    ];
+    await this.lockPublicProjectRelationships(subject, publicProjectIds, client);
+  }
+
+  private async lockPublicProjectRelationships(
+    subject: string,
+    publicProjectIds: readonly string[],
+    client: Prisma.TransactionClient,
+  ): Promise<void> {
+    if (publicProjectIds.length === 0) return;
+    await client.$queryRaw(Prisma.sql`
+      SELECT public_project.id
+      FROM public.projects AS public_project
+      WHERE public_project.id::text IN (${Prisma.join([...publicProjectIds])})
+      FOR SHARE OF public_project
+    `);
+    await client.$queryRaw(Prisma.sql`
+      SELECT team_member.project_id
+      FROM public.project_team_members AS team_member
+      WHERE team_member.project_id::text IN (${Prisma.join([...publicProjectIds])})
+        AND team_member.user_id::text = ${subject}
+      FOR SHARE OF team_member
+    `);
+  }
+
+  private async lockChangeOrderRelationship(
+    changeOrderId: string,
+    client: Prisma.TransactionClient,
+  ): Promise<string> {
+    const rows = await client.$queryRaw<ProjectAccessRow[]>(Prisma.sql`
+      SELECT change_order.project_id::text AS "projectId"
+      FROM svc_projects.change_orders AS change_order
+      WHERE change_order.id::text = ${changeOrderId}
+      LIMIT 1
+      FOR SHARE OF change_order
+    `);
+    if (rows.length !== 1) {
+      throw new NotFoundException('Change order not found');
+    }
+    return rows[0].projectId;
   }
 
   async assertProjectApprovalAccess(

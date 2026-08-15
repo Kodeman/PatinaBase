@@ -26,13 +26,24 @@ describe('ChangeOrdersService', () => {
   const mockEventEmitter = {
     emit: jest.fn(),
   };
+  const assertProjectApprovalAccess = jest.fn().mockResolvedValue(undefined);
   const authorizationMock = {
     withProjectAccess: jest.fn(
       async (_userId: string, _projectId: string, _mode: string, operation: (tx: any) => any) =>
         operation(mockPrismaService),
     ),
     assertProjectAccess: jest.fn().mockResolvedValue('project-123'),
-    assertProjectApprovalAccess: jest.fn().mockResolvedValue(undefined),
+    assertProjectApprovalAccess,
+    withProjectApprovalAccess: jest.fn(
+      async (userId: string, projectId: string, operation: (tx: any) => any) => {
+        await assertProjectApprovalAccess(userId, projectId, mockPrismaService);
+        return operation(mockPrismaService);
+      },
+    ),
+    withAccessibleProjectIds: jest.fn(
+      async (_userId: string, _mode: string, operation: (ids: string[], tx: any) => any) =>
+        operation([], mockPrismaService),
+    ),
   };
 
   beforeEach(async () => {

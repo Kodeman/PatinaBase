@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { CreateTimelineSegmentDto } from './dto/create-timeline-segment.dto';
 import { UpdateTimelineSegmentDto } from './dto/update-timeline-segment.dto';
-import { LogActivityDto } from './dto/log-activity.dto';
+import { EntityType, LogActivityDto } from './dto/log-activity.dto';
 import {
   ImmersiveTimelineDto,
   ImmersiveSegmentDto,
@@ -305,6 +305,8 @@ export class TimelineService {
         throw new NotFoundException('Project not found');
       }
 
+      await this.assertActivityTargets(projectId, logDto, tx);
+
       const activity = await tx.clientActivity.create({
         data: {
           projectId,
@@ -332,6 +334,82 @@ export class TimelineService {
 
       return activity;
     });
+  }
+
+  private async assertActivityTargets(
+    projectId: string,
+    logDto: LogActivityDto,
+    tx: ProjectQueryClient,
+  ): Promise<void> {
+    if (Boolean(logDto.entityType) !== Boolean(logDto.entityId)) {
+      throw new BadRequestException('Activity entity type and ID must be provided together');
+    }
+
+    if (logDto.segmentId) {
+      const segment = await tx.timelineSegment.findFirst({
+        where: { id: logDto.segmentId, projectId },
+        select: { id: true },
+      });
+      if (!segment) throw new NotFoundException('Activity target not found');
+    }
+
+    if (!logDto.entityType || !logDto.entityId) return;
+
+    let found = false;
+    let relatedSegmentId: string | null | undefined;
+    switch (logDto.entityType) {
+      case EntityType.SEGMENT: {
+        const segment = await tx.timelineSegment.findFirst({
+          where: { id: logDto.entityId, projectId },
+          select: { id: true },
+        });
+        found = Boolean(segment);
+        relatedSegmentId = segment?.id;
+        break;
+      }
+      case EntityType.APPROVAL: {
+        const approval = await tx.approvalRecord.findFirst({
+          where: { id: logDto.entityId, projectId },
+          select: { id: true, segmentId: true },
+        });
+        found = Boolean(approval);
+        relatedSegmentId = approval?.segmentId;
+        break;
+      }
+      case EntityType.DOCUMENT:
+        found = Boolean(
+          await tx.document.findFirst({
+            where: { id: logDto.entityId, projectId },
+            select: { id: true },
+          }),
+        );
+        break;
+      case EntityType.TASK:
+        found = Boolean(
+          await tx.task.findFirst({
+            where: { id: logDto.entityId, projectId },
+            select: { id: true },
+          }),
+        );
+        break;
+      case EntityType.MILESTONE:
+        found = Boolean(
+          await tx.milestone.findFirst({
+            where: { id: logDto.entityId, projectId },
+            select: { id: true },
+          }),
+        );
+        break;
+    }
+
+    if (!found) throw new NotFoundException('Activity target not found');
+    if (
+      logDto.segmentId &&
+      (logDto.entityType === EntityType.SEGMENT || logDto.entityType === EntityType.APPROVAL) &&
+      relatedSegmentId !== logDto.segmentId
+    ) {
+      throw new NotFoundException('Activity target not found');
+    }
   }
 
   /**
