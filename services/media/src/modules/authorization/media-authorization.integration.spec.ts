@@ -206,10 +206,12 @@ describeDatabase('MediaAuthorizationResolver local Postgres boundary', () => {
   });
 
   it('scopes real search rows and pagination counts to the current subject', async () => {
-    const page = await service.search(SUBJECT_A, { page: 1, limit: 1 });
+    const page = await service.search(SUBJECT_A, { page: 1, limit: 10 });
 
-    expect(page.pagination).toEqual({ page: 1, limit: 1, total: 1, totalPages: 1 });
-    expect(page.data.map((asset) => asset.id)).toEqual([ASSET_A]);
+    expect(page.pagination).toEqual({ page: 1, limit: 10, total: 3, totalPages: 1 });
+    expect(new Set(page.data.map((asset) => asset.id))).toEqual(
+      new Set([ASSET_A, PROJECT_ASSET_A, PROJECT_ASSET_ORG]),
+    );
     expect(JSON.stringify(page)).not.toContain(ASSET_B);
     expect(JSON.stringify(page)).not.toContain(ASSET_ORG);
   });
