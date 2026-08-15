@@ -264,11 +264,21 @@ sql_paths = ["./seed/<phase-1-staging-seed>.sql"]
 The remote cannot be configured before the branch exists. Load `STAGING_PROJECT_REF` and the percent-encoded `STAGING_DB_URL` from the password manager without printing them. Abort unless the URL contains the branch ref and the ref is not the production ref:
 
 ```bash
+set -euo pipefail
+: "${STAGING_PROJECT_REF:?load the staging branch ref}"
+: "${STAGING_DB_URL:?load the percent-encoded staging direct URL}"
+
+STAGING_DB_HOST="$(
+  STAGING_DB_URL="$STAGING_DB_URL" node -e \
+    'process.stdout.write(new URL(process.env.STAGING_DB_URL).hostname)'
+)"
 test "$STAGING_PROJECT_REF" != "bkvcixdmuyejfzcijpdg"
-case "$STAGING_DB_URL" in
-  *"$STAGING_PROJECT_REF"*) ;;
-  *) echo "staging URL/ref mismatch" >&2; exit 1 ;;
+test "$STAGING_DB_HOST" != "db.bkvcixdmuyejfzcijpdg.supabase.co"
+case "$STAGING_DB_HOST" in
+  "db.${STAGING_PROJECT_REF}.supabase.co") ;;
+  *) echo "staging direct host/ref mismatch" >&2; exit 1 ;;
 esac
+printf 'validated staging database host: %s\n' "$STAGING_DB_HOST"
 
 pnpm exec supabase db push --dry-run --db-url "$STAGING_DB_URL"
 pnpm exec supabase db push --db-url "$STAGING_DB_URL"
@@ -280,7 +290,17 @@ psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 \
 
 The explicit `--db-url` is mandatory: a bare `supabase db push` targets linked production Strata. Never point `pnpm supabase:reset` at a remote URL. Record the sanitized branch ref and direct role/view probes before proceeding.
 
-The committed staging seed contains deterministic IDs and non-secret fixture identities only. Create or rotate any credential needed for sign-in tests out of band after seeding; no known password may be present in the seed or repository.
+The committed staging seed contains deterministic IDs and non-secret fixture identities only. Seeded Auth users are passwordless, unconfirmed, and indefinitely banned. Activate only the accounts needed for the compatibility test by calling `supabase.auth.admin.updateUserById` from a server-only operator script using the staging service-role credential:
+
+```ts
+await stagingAdmin.auth.admin.updateUserById(userId, {
+  password: passwordLoadedFromThePasswordManager,
+  email_confirm: true,
+  ban_duration: 'none',
+});
+```
+
+Never expose the service-role credential to a browser or commit the password. After the test window, set a new discarded random password and restore a long ban through the same Admin API, then prove sign-in fails. Record only the synthetic user ID, activation/deactivation timestamps, and pass/fail result.
 
 ### Hyperdrive
 
