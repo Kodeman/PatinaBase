@@ -1,6 +1,7 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { ExecutionContext, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { PERMISSIONS_KEY, PermissionsGuard, RequestAuthorization } from '@patina/auth';
 import {
   AssetKind,
   AssetRole,
@@ -25,6 +26,10 @@ const SUBJECT_A = 'cfb50000-0000-4000-8000-000000000001';
 const SUBJECT_B = 'cfb50000-0000-4000-8000-000000000002';
 const SUBJECT_ORG = 'cfb50000-0000-4000-8000-000000000003';
 const SUBJECT_ADMIN = 'cfb50000-0000-4000-8000-000000000004';
+const SUBJECT_NO_ROLE = 'cfb50000-0000-4000-8000-000000000005';
+const SUBJECT_NO_MEDIA_PERMISSION = 'cfb50000-0000-4000-8000-000000000006';
+const SUBJECT_UNKNOWN_ROLE = 'cfb50000-0000-4000-8000-000000000007';
+const SUBJECT_STALE_METADATA = 'cfb50000-0000-4000-8000-000000000008';
 const ORGANIZATION_ID = 'cfb60000-0000-4000-8000-000000000001';
 const PRODUCT_A = 'cfb70000-0000-4000-8000-000000000001';
 const PRODUCT_B = 'cfb70000-0000-4000-8000-000000000002';
@@ -37,6 +42,22 @@ const PROJECT_A = 'cfb90000-0000-4000-8000-000000000001';
 const PROJECT_ORG = 'cfb90000-0000-4000-8000-000000000002';
 const PROJECT_ASSET_A = 'cfba0000-0000-4000-8000-000000000001';
 const PROJECT_ASSET_ORG = 'cfba0000-0000-4000-8000-000000000002';
+const UNKNOWN_ROLE_ID = 'cfbb0000-0000-4000-8000-000000000001';
+const UNKNOWN_ROLE_PERMISSION_ID = 'cfbc0000-0000-4000-8000-000000000001';
+const UNKNOWN_ROLE_NAME = 'cfb_media_invented_admin';
+const STALE_APP_METADATA = {
+  roles: ['super_admin'],
+  permissions: ['media.admin.all'],
+  organization_id: ORGANIZATION_ID,
+  organization_ids: [ORGANIZATION_ID],
+};
+const CANONICAL_MEDIA_PERMISSIONS = new Set([
+  'media.read.own',
+  'media.manage.own',
+  'media.read.org',
+  'media.manage.org',
+  'media.admin.all',
+]);
 
 describeDatabase('MediaAuthorizationResolver local Postgres boundary', () => {
   const prisma = new PrismaClient();
@@ -58,19 +79,25 @@ describeDatabase('MediaAuthorizationResolver local Postgres boundary', () => {
       throw new Error('This suite requires the local Supabase Postgres DATABASE_URL');
     }
     await cleanup();
-    for (const [id, email] of [
-      [SUBJECT_A, 'media-authz-gaps-a@invalid.test'],
-      [SUBJECT_B, 'media-authz-gaps-b@invalid.test'],
-      [SUBJECT_ORG, 'media-authz-gaps-org@invalid.test'],
-      [SUBJECT_ADMIN, 'media-authz-gaps-admin@invalid.test'],
-    ]) {
+    const users: Array<[string, string, Record<string, unknown>]> = [
+      [SUBJECT_A, 'media-authz-gaps-a@invalid.test', {}],
+      [SUBJECT_B, 'media-authz-gaps-b@invalid.test', {}],
+      [SUBJECT_ORG, 'media-authz-gaps-org@invalid.test', {}],
+      [SUBJECT_ADMIN, 'media-authz-gaps-admin@invalid.test', {}],
+      [SUBJECT_NO_ROLE, 'media-authz-cfb-no-role@invalid.test', {}],
+      [SUBJECT_NO_MEDIA_PERMISSION, 'media-authz-cfb-no-media-permission@invalid.test', {}],
+      [SUBJECT_UNKNOWN_ROLE, 'media-authz-cfb-unknown-role@invalid.test', {}],
+      [SUBJECT_STALE_METADATA, 'media-authz-cfb-stale-metadata@invalid.test', STALE_APP_METADATA],
+    ];
+    for (const [id, email, appMetadata] of users) {
       await prisma.$executeRaw(Prisma.sql`
         INSERT INTO auth.users (
           id, aud, role, email, raw_app_meta_data, raw_user_meta_data,
           created_at, updated_at, is_sso_user, is_anonymous
         ) VALUES (
           ${id}::uuid, 'authenticated', 'authenticated', ${email},
-          '{}'::jsonb, '{}'::jsonb, now(), now(), false, false
+          ${JSON.stringify(appMetadata)}::jsonb, '{}'::jsonb,
+          now(), now(), false, false
         )
       `);
       await prisma.$executeRaw(Prisma.sql`
@@ -79,11 +106,47 @@ describeDatabase('MediaAuthorizationResolver local Postgres boundary', () => {
         ON CONFLICT (id) DO NOTHING
       `);
     }
+    await prisma.$executeRaw(Prisma.sql`
+      DELETE FROM public.user_roles
+      WHERE user_id IN (
+        ${SUBJECT_NO_ROLE}::uuid,
+        ${SUBJECT_NO_MEDIA_PERMISSION}::uuid,
+        ${SUBJECT_UNKNOWN_ROLE}::uuid,
+        ${SUBJECT_STALE_METADATA}::uuid
+      )
+    `);
 
     await assignRole(SUBJECT_A, 'independent_designer');
     await assignRole(SUBJECT_B, 'independent_designer');
     await assignRole(SUBJECT_ORG, 'brand_admin');
     await assignRole(SUBJECT_ADMIN, 'super_admin');
+    await assignRole(SUBJECT_NO_MEDIA_PERMISSION, 'ml_operator');
+
+    await prisma.$executeRaw(Prisma.sql`
+      INSERT INTO public.roles (
+        id, name, display_name, description, domain, is_system, is_assignable
+      ) VALUES (
+        ${UNKNOWN_ROLE_ID}::uuid,
+        ${UNKNOWN_ROLE_NAME},
+        'CFB invented media admin',
+        'Integration-only unsupported role',
+        'admin',
+        false,
+        false
+      )
+    `);
+    await prisma.$executeRaw(Prisma.sql`
+      INSERT INTO public.role_permissions (id, role_id, permission_id)
+      SELECT
+        ${UNKNOWN_ROLE_PERMISSION_ID}::uuid,
+        role.id,
+        permission.id
+      FROM public.roles AS role
+      JOIN public.permissions AS permission
+        ON permission.name = 'media.admin.all'
+      WHERE role.id = ${UNKNOWN_ROLE_ID}::uuid
+    `);
+    await assignRole(SUBJECT_UNKNOWN_ROLE, UNKNOWN_ROLE_NAME);
 
     await prisma.$executeRaw(Prisma.sql`
       INSERT INTO public.organizations (id, type, name, slug, status)
@@ -315,6 +378,97 @@ describeDatabase('MediaAuthorizationResolver local Postgres boundary', () => {
     });
   });
 
+  it('denies a current subject with no user role', async () => {
+    await expect(resolver.resolve(SUBJECT_NO_ROLE)).resolves.toEqual({
+      subject: SUBJECT_NO_ROLE,
+      roles: [],
+      permissions: [],
+      organizationIds: [],
+    });
+    await expect(
+      resolver.withAssetScope(SUBJECT_NO_ROLE, 'read', async () => true),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('denies a supported current role without a canonical media permission', async () => {
+    const current = await resolver.resolve(SUBJECT_NO_MEDIA_PERMISSION);
+
+    expect(current.roles).toEqual(['ml_operator']);
+    expect(current.permissions.length).toBeGreaterThan(0);
+    expect(
+      current.permissions.filter((permission) => CANONICAL_MEDIA_PERMISSIONS.has(permission)),
+    ).toEqual([]);
+    await expect(
+      resolver.withAssetScope(SUBJECT_NO_MEDIA_PERMISSION, 'read', async () => true),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('denies an invented current role even when Strata maps it to media.admin.all', async () => {
+    const mappedPermissions = await prisma.$queryRaw<Array<{ permission_name: string }>>(
+      Prisma.sql`
+        SELECT permission.name AS permission_name
+        FROM public.role_permissions AS role_permission
+        JOIN public.permissions AS permission
+          ON permission.id = role_permission.permission_id
+        WHERE role_permission.role_id = ${UNKNOWN_ROLE_ID}::uuid
+      `,
+    );
+    expect(mappedPermissions).toEqual([{ permission_name: 'media.admin.all' }]);
+
+    await expect(resolver.resolve(SUBJECT_UNKNOWN_ROLE)).resolves.toEqual({
+      subject: SUBJECT_UNKNOWN_ROLE,
+      roles: [UNKNOWN_ROLE_NAME],
+      permissions: [],
+      organizationIds: [],
+    });
+    await expect(resolver.withAdmin(SUBJECT_UNKNOWN_ROLE, async () => true)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+  });
+
+  it('ignores stale caller and JWT app_metadata claims when current Strata state denies', async () => {
+    const storedMetadata = await prisma.$queryRaw<Array<{ app_metadata: unknown }>>(Prisma.sql`
+      SELECT auth_user.raw_app_meta_data AS app_metadata
+      FROM auth.users AS auth_user
+      WHERE auth_user.id = ${SUBJECT_STALE_METADATA}::uuid
+    `);
+    expect(storedMetadata[0]?.app_metadata).toEqual(STALE_APP_METADATA);
+
+    const handler = () => undefined;
+    Reflect.defineMetadata(PERMISSIONS_KEY, ['media.admin.all'], handler);
+    const request: {
+      user: Record<string, unknown>;
+      authorization?: RequestAuthorization;
+    } = {
+      user: {
+        id: SUBJECT_STALE_METADATA,
+        sub: SUBJECT_STALE_METADATA,
+        userId: SUBJECT_STALE_METADATA,
+        role: 'authenticated',
+        roles: ['super_admin'],
+        permissions: ['media.admin.all'],
+        organizationId: ORGANIZATION_ID,
+        organizationIds: [ORGANIZATION_ID],
+        app_metadata: STALE_APP_METADATA,
+      },
+    };
+    const context = {
+      getHandler: () => handler,
+      getClass: () => class ProtectedMediaRoute {},
+      switchToHttp: () => ({ getRequest: () => request }),
+    } as unknown as ExecutionContext;
+
+    await expect(new PermissionsGuard(resolver).canActivate(context)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(request.authorization).toEqual({
+      subject: SUBJECT_STALE_METADATA,
+      roles: [],
+      permissions: [],
+      organizationIds: [],
+    });
+  });
+
   it('holds the admin proof rows until a leased operation completes', async () => {
     let releaseLease!: () => void;
     const leaseReleased = new Promise<void>((resolve) => {
@@ -481,6 +635,30 @@ describeDatabase('MediaAuthorizationResolver local Postgres boundary', () => {
         WHERE id IN (${PRODUCT_A}::uuid, ${PRODUCT_B}::uuid, ${PRODUCT_ORG}::uuid)
       `);
       await transaction.$executeRaw(Prisma.sql`
+        DELETE FROM public.user_roles
+        WHERE user_id IN (
+          ${SUBJECT_A}::uuid,
+          ${SUBJECT_B}::uuid,
+          ${SUBJECT_ORG}::uuid,
+          ${SUBJECT_ADMIN}::uuid,
+          ${SUBJECT_NO_ROLE}::uuid,
+          ${SUBJECT_NO_MEDIA_PERMISSION}::uuid,
+          ${SUBJECT_UNKNOWN_ROLE}::uuid,
+          ${SUBJECT_STALE_METADATA}::uuid
+        )
+           OR role_id = ${UNKNOWN_ROLE_ID}::uuid
+      `);
+      await transaction.$executeRaw(Prisma.sql`
+        DELETE FROM public.role_permissions
+        WHERE id = ${UNKNOWN_ROLE_PERMISSION_ID}::uuid
+           OR role_id = ${UNKNOWN_ROLE_ID}::uuid
+      `);
+      await transaction.$executeRaw(Prisma.sql`
+        DELETE FROM public.roles
+        WHERE id = ${UNKNOWN_ROLE_ID}::uuid
+           OR name = ${UNKNOWN_ROLE_NAME}
+      `);
+      await transaction.$executeRaw(Prisma.sql`
         DELETE FROM public.organizations AS organization
         WHERE organization.id = ${ORGANIZATION_ID}::uuid
            OR EXISTS (
@@ -491,7 +669,11 @@ describeDatabase('MediaAuthorizationResolver local Postgres boundary', () => {
                  ${SUBJECT_A}::uuid,
                  ${SUBJECT_B}::uuid,
                  ${SUBJECT_ORG}::uuid,
-                 ${SUBJECT_ADMIN}::uuid
+                 ${SUBJECT_ADMIN}::uuid,
+                 ${SUBJECT_NO_ROLE}::uuid,
+                 ${SUBJECT_NO_MEDIA_PERMISSION}::uuid,
+                 ${SUBJECT_UNKNOWN_ROLE}::uuid,
+                 ${SUBJECT_STALE_METADATA}::uuid
                )
            )
       `);
@@ -501,7 +683,11 @@ describeDatabase('MediaAuthorizationResolver local Postgres boundary', () => {
           ${SUBJECT_A}::uuid,
           ${SUBJECT_B}::uuid,
           ${SUBJECT_ORG}::uuid,
-          ${SUBJECT_ADMIN}::uuid
+          ${SUBJECT_ADMIN}::uuid,
+          ${SUBJECT_NO_ROLE}::uuid,
+          ${SUBJECT_NO_MEDIA_PERMISSION}::uuid,
+          ${SUBJECT_UNKNOWN_ROLE}::uuid,
+          ${SUBJECT_STALE_METADATA}::uuid
         )
       `);
     });
