@@ -81,10 +81,10 @@ Clients migrate from compatibility endpoints to typed `/v1` routes one domain at
 
 Two Hyperdrive configurations exist per remote environment:
 
-| Binding | Staging resource | Production resource | Cache policy | Allowed workload |
-|---|---|---|---|---|
-| `DB_FRESH` | `strata-staging-fresh` | `strata-prod-fresh` | disabled | authz, status, writes, read-after-write, pgvector, authenticated reads |
-| `DB_PUBLIC_CACHE` | `strata-staging-public-cache` | `strata-prod-public-cache` | 60s + 15s stale | approved public catalog view only |
+| Binding           | Staging resource              | Production resource        | Cache policy    | Allowed workload                                                       |
+| ----------------- | ----------------------------- | -------------------------- | --------------- | ---------------------------------------------------------------------- |
+| `DB_FRESH`        | `strata-staging-fresh`        | `strata-prod-fresh`        | disabled        | authz, status, writes, read-after-write, pgvector, authenticated reads |
+| `DB_PUBLIC_CACHE` | `strata-staging-public-cache` | `strata-prod-public-cache` | 60s + 15s stale | approved public catalog view only                                      |
 
 Hyperdrive connects to the direct Supabase database endpoint with a dedicated least-privilege login and `pg` 8.16.3 or newer. Because Hyperdrive writes do not invalidate cached reads, no user-scoped or freshness-sensitive query may use `DB_PUBLIC_CACHE`.
 
@@ -105,10 +105,10 @@ An authenticated Worker route verifies the Supabase JWT issuer, audience, signat
 
 Private US-jurisdiction buckets are split by durability contract:
 
-| Environment | Originals | Artifacts |
-|---|---|---|
-| staging | `patina-staging-media-originals-us` | `patina-staging-media-artifacts-us` |
-| production | `patina-media-originals-us` | `patina-media-artifacts-us` |
+| Environment | Originals                           | Artifacts                           |
+| ----------- | ----------------------------------- | ----------------------------------- |
+| staging     | `patina-staging-media-originals-us` | `patina-staging-media-artifacts-us` |
+| production  | `patina-media-originals-us`         | `patina-media-artifacts-us`         |
 
 Originals contain immutable uploaded or fetched source bytes. Artifacts contain print, offline, released-share, audit, processed non-image, and other materialized outputs. Existing `patina-raw` and `patina-processed` objects are inventoried and copied when their location or ledger contract does not satisfy this model.
 
@@ -249,4 +249,3 @@ Complete the risk-ordered compatibility migration and retire direct REST/Storage
 - [Workers AI: Moondream](https://developers.cloudflare.com/workers-ai/models/moondream3.1-9B-A2B/)
 - [Workers AI: Whisper](https://developers.cloudflare.com/workers-ai/models/whisper-large-v3-turbo/)
 - [Workers AI: Gemma](https://developers.cloudflare.com/workers-ai/models/gemma-4-26b-a4b-it/)
-

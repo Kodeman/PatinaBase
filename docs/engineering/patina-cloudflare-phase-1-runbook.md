@@ -37,25 +37,25 @@ Excluded:
 
 ## Resource names
 
-| Resource | Local | Staging | Production |
-|---|---|---|---|
-| Worker | `patina-edge-api-local` | `patina-edge-api-staging` | `patina-edge-api` |
-| Host | `localhost` | `api-staging.patina.cloud` | `api.patina.cloud` |
-| Fresh binding | local direct Postgres | `strata-staging-fresh` | `strata-prod-fresh` |
-| Public-cache binding | local direct Postgres | `strata-staging-public-cache` | `strata-prod-public-cache` |
-| Supabase environment | local CLI | persistent branch `staging` | Strata `bkvcixdmuyejfzcijpdg` |
-| Catalog group role | `edge_catalog_reader` | same | same |
-| Authenticated group role | `edge_rls_user` | same | same |
-| Password login | local disposable | `edge_catalog_login`, `edge_rls_login` | same role names in the separate database; production-only passwords |
+| Resource                 | Local                   | Staging                                | Production                                                          |
+| ------------------------ | ----------------------- | -------------------------------------- | ------------------------------------------------------------------- |
+| Worker                   | `patina-edge-api-local` | `patina-edge-api-staging`              | `patina-edge-api`                                                   |
+| Host                     | `localhost`             | `api-staging.patina.cloud`             | `api.patina.cloud`                                                  |
+| Fresh binding            | local direct Postgres   | `strata-staging-fresh`                 | `strata-prod-fresh`                                                 |
+| Public-cache binding     | local direct Postgres   | `strata-staging-public-cache`          | `strata-prod-public-cache`                                          |
+| Supabase environment     | local CLI               | persistent branch `staging`            | Strata `bkvcixdmuyejfzcijpdg`                                       |
+| Catalog group role       | `edge_catalog_reader`   | same                                   | same                                                                |
+| Authenticated group role | `edge_rls_user`         | same                                   | same                                                                |
+| Password login           | local disposable        | `edge_catalog_login`, `edge_rls_login` | same role names in the separate database; production-only passwords |
 
 Never reuse a password or connection string across staging and production. Hyperdrive configuration IDs are deployment outputs and are committed only as Wrangler binding IDs if project policy permits; connection strings and passwords never enter Git.
 
 ## Binding policy
 
-| Binding | Caching | Permitted | Forbidden |
-|---|---|---|---|
-| `DB_FRESH` | disabled | authenticated reads, RLS, permissions, writes, read-after-write, status, pgvector | migrations, Prisma, locks, `LISTEN`/`NOTIFY`, admin sessions |
-| `DB_PUBLIC_CACHE` | 60s max age, 15s stale | exact approved public catalog-view query | user-scoped data, permissions, writes, fresh-after-write, vectors, arbitrary SQL |
+| Binding           | Caching                | Permitted                                                                         | Forbidden                                                                        |
+| ----------------- | ---------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `DB_FRESH`        | disabled               | authenticated reads, RLS, permissions, writes, read-after-write, status, pgvector | migrations, Prisma, locks, `LISTEN`/`NOTIFY`, admin sessions                     |
+| `DB_PUBLIC_CACHE` | 60s max age, 15s stale | exact approved public catalog-view query                                          | user-scoped data, permissions, writes, fresh-after-write, vectors, arbitrary SQL |
 
 Cloudflare local mode does not prove remote Hyperdrive pooling or caching. Pool/cache evidence must come from a deployed staging Worker.
 
@@ -123,18 +123,18 @@ On any error, issue `ROLLBACK`, close the client, and return a redacted error. N
 
 ## Route matrix
 
-| Route | Auth | Upstream/binding | Cache | Failure behavior |
-|---|---|---|---|---|
-| `/auth/v1/*` | Supabase protocol | Supabase Auth | no-store | preserve upstream status/body |
-| `/realtime/v1/*` | Supabase protocol | Supabase Realtime | no-store | preserve WebSocket status/frames |
-| `/rest/v1/*` | Supabase protocol | Supabase REST | no-store | preserve upstream status/body/CORS |
-| `/graphql/v1/*` | Supabase protocol | Supabase GraphQL | no-store | preserve upstream status/body |
-| `/functions/v1/*` | function-specific JWT | Supabase Functions | no-store | preserve upstream status/body |
-| `/storage/v1/*` | Supabase protocol | Supabase Storage | no-store | preserve upstream status/body |
-| `GET /v1/catalog/products` | public | public view via selected source | public 60s + 15s stale | legacy public result on HD error/mismatch |
-| `GET /_internal/health` | Access or service token | probe both bindings | private, no-store | generic binding readiness only |
-| other `/v1/*` | route-defined | `DB_FRESH` or Container binding | private, no-store by default | fail closed |
-| unmatched | none | none | no-store | 404 |
+| Route                      | Auth                    | Upstream/binding                | Cache                        | Failure behavior                          |
+| -------------------------- | ----------------------- | ------------------------------- | ---------------------------- | ----------------------------------------- |
+| `/auth/v1/*`               | Supabase protocol       | Supabase Auth                   | no-store                     | preserve upstream status/body             |
+| `/realtime/v1/*`           | Supabase protocol       | Supabase Realtime               | no-store                     | preserve WebSocket status/frames          |
+| `/rest/v1/*`               | Supabase protocol       | Supabase REST                   | no-store                     | preserve upstream status/body/CORS        |
+| `/graphql/v1/*`            | Supabase protocol       | Supabase GraphQL                | no-store                     | preserve upstream status/body             |
+| `/functions/v1/*`          | function-specific JWT   | Supabase Functions              | no-store                     | preserve upstream status/body             |
+| `/storage/v1/*`            | Supabase protocol       | Supabase Storage                | no-store                     | preserve upstream status/body             |
+| `GET /v1/catalog/products` | public                  | public view via selected source | public 60s + 15s stale       | legacy public result on HD error/mismatch |
+| `GET /_internal/health`    | Access or service token | probe both bindings             | private, no-store            | generic binding readiness only            |
+| other `/v1/*`              | route-defined           | `DB_FRESH` or Container binding | private, no-store by default | fail closed                               |
+| unmatched                  | none                    | none                            | no-store                     | 404                                       |
 
 Compatibility responses must preserve Supabase CORS headers and cookies. The Worker must not forward to a hostname that routes back to itself. Logging is allow-list based and excludes authorization, API keys, cookies, query contents, SQL, PII, and bodies.
 
@@ -163,13 +163,13 @@ Canary configuration supports `legacy`, `shadow`, and `hyperdrive` catalog sourc
 
 ## Agent and path ownership
 
-| Owner | Exclusive paths | Required evidence |
-|---|---|---|
-| database/staging | numbered migration, `supabase/tests/**`, `supabase/config.toml`, staging seeds, generated grants/types | clean reset, SQL assertions, object probes, type diff |
-| edge router | `infra/edge-api-worker/**`, catalog shared type, client hydration adapter/tests | Worker tests/types/dry-run, shared/client gates |
-| security/legacy | `@patina/api-routes`, cache callsites, active Supabase auth consumers, Aesthete fetch/tests, retired executable infra/reference gate | package/portal tests, hostile fetch cases, reference inventory |
-| coordinator | these two documents, integration merges, live preflight, staging/prod execution, rollback | merge/review record, account/resource outputs, canary log |
-| independent reviewer | read-only diff and commits | every finding with severity and confidence |
+| Owner                | Exclusive paths                                                                                                                      | Required evidence                                              |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------- |
+| database/staging     | numbered migration, `supabase/tests/**`, `supabase/config.toml`, staging seeds, generated grants/types                               | clean reset, SQL assertions, object probes, type diff          |
+| edge router          | `infra/edge-api-worker/**`, catalog shared type, client hydration adapter/tests                                                      | Worker tests/types/dry-run, shared/client gates                |
+| security/legacy      | `@patina/api-routes`, cache callsites, active Supabase auth consumers, Aesthete fetch/tests, retired executable infra/reference gate | package/portal tests, hostile fetch cases, reference inventory |
+| coordinator          | these two documents, integration merges, live preflight, staging/prod execution, rollback                                            | merge/review record, account/resource outputs, canary log      |
+| independent reviewer | read-only diff and commits                                                                                                           | every finding with severity and confidence                     |
 
 Only the database agent resets/seeds local Supabase and owns migration numbering. Each implementation branch uses an `agent-*` worktree, explicit pathspec staging, Conventional Commits, and mandatory worktree retirement.
 
@@ -296,7 +296,7 @@ The committed staging seed contains deterministic IDs and non-secret fixture ide
 await stagingAdmin.auth.admin.updateUserById(userId, {
   password: passwordLoadedFromThePasswordManager,
   email_confirm: true,
-  ban_duration: 'none',
+  ban_duration: "none",
 });
 ```
 
@@ -335,20 +335,20 @@ Attach `api-staging.patina.cloud` only after direct `workers.dev` probes pass. V
 
 Record each row as pass/fail with trace ID, timestamp, and sanitized evidence:
 
-| Area | Required cases |
-|---|---|
-| Auth | sign-in, refresh, OAuth callback, expired JWT, wrong issuer, wrong audience |
-| Claims | two successive users through pooled connections; no role/JWT retention |
-| Catalog | catalog visible; personal/studio absent; 1/50/51 IDs; duplicate/malformed/injection-shaped input; deterministic order |
-| Sources | normalized legacy = fresh = cached for fixtures; cache expiry observed remotely |
-| REST | select, filtered select, RPC, error/status/CORS preservation |
-| Functions | authenticated function and deliberate upstream error |
-| Storage | authorized read/upload protocol and error preservation |
-| Realtime | WebSocket upgrade, auth, subscribe, event, reconnect |
-| Proxy | cookies, refresh headers, redirects, route-loop prevention |
-| Health | Access/service-token allow; anonymous deny; both binding failures redacted |
-| Failure | DB unavailable, timeout, pool pressure/exhaustion, malformed DB result, upstream timeout |
-| Logging | no tokens, API keys, cookies, SQL parameters, URLs/PII, or bodies |
+| Area      | Required cases                                                                                                        |
+| --------- | --------------------------------------------------------------------------------------------------------------------- |
+| Auth      | sign-in, refresh, OAuth callback, expired JWT, wrong issuer, wrong audience                                           |
+| Claims    | two successive users through pooled connections; no role/JWT retention                                                |
+| Catalog   | catalog visible; personal/studio absent; 1/50/51 IDs; duplicate/malformed/injection-shaped input; deterministic order |
+| Sources   | normalized legacy = fresh = cached for fixtures; cache expiry observed remotely                                       |
+| REST      | select, filtered select, RPC, error/status/CORS preservation                                                          |
+| Functions | authenticated function and deliberate upstream error                                                                  |
+| Storage   | authorized read/upload protocol and error preservation                                                                |
+| Realtime  | WebSocket upgrade, auth, subscribe, event, reconnect                                                                  |
+| Proxy     | cookies, refresh headers, redirects, route-loop prevention                                                            |
+| Health    | Access/service-token allow; anonymous deny; both binding failures redacted                                            |
+| Failure   | DB unavailable, timeout, pool pressure/exhaustion, malformed DB result, upstream timeout                              |
+| Logging   | no tokens, API keys, cookies, SQL parameters, URLs/PII, or bodies                                                     |
 
 Local mode is insufficient for the cache/pool rows.
 
@@ -368,14 +368,14 @@ Do not record customer filenames, object contents, complete object keys, signed 
 
 ## Phase 2 media decision matrix
 
-| Access/lifecycle | Authorization owner | URL | Cache | Retention/transform |
-|---|---|---|---|---|
-| public catalog | catalog publication rules | stable versioned | public immutable | original retained; fixed presets |
-| authenticated project | project/RLS/domain policy | short capability | auth before cache | lifecycle follows project/registry |
-| guest share | share ledger, expiry, revocation | short capability | auth before cache | share does not change ownership |
-| released deliverable | release ledger | stable or capability per release | immutable after auth classification | audit artifact retained |
-| legal hold | domain + legal hold | never broadens access | no accidental public cache | blocks GC |
-| third-party product source | catalog/license provenance | delivered from owned R2 copy | policy-derived | original fetch retained with license/source |
+| Access/lifecycle           | Authorization owner              | URL                              | Cache                               | Retention/transform                         |
+| -------------------------- | -------------------------------- | -------------------------------- | ----------------------------------- | ------------------------------------------- |
+| public catalog             | catalog publication rules        | stable versioned                 | public immutable                    | original retained; fixed presets            |
+| authenticated project      | project/RLS/domain policy        | short capability                 | auth before cache                   | lifecycle follows project/registry          |
+| guest share                | share ledger, expiry, revocation | short capability                 | auth before cache                   | share does not change ownership             |
+| released deliverable       | release ledger                   | stable or capability per release | immutable after auth classification | audit artifact retained                     |
+| legal hold                 | domain + legal hold              | never broadens access            | no accidental public cache          | blocks GC                                   |
+| third-party product source | catalog/license provenance       | delivered from owned R2 copy     | policy-derived                      | original fetch retained with license/source |
 
 Canonical domain references contain registry object ID/version, not signed URLs. Upload intents are idempotent and domain-authorized; confirmation matches actor, route/body IDs, and R2-observed checksum/type/size before enqueue.
 
