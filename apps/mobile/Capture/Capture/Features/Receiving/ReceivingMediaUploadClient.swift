@@ -10,8 +10,8 @@
 //    2. PUT  <parUrl>                            → raw bytes, direct to storage
 //    3. POST {media}/v1/media/upload/<id>/confirm
 //  Auth: Supabase JWT bearer (`client.auth.session.accessToken`), same client
-//  Receiving's other Supabase calls use. Base URL confirmed live in
-//  infra/cloudflare-tunnel-config.yml (`media.patina.cloud`).
+//  Receiving's other Supabase calls use. The service binding and host are
+//  configured by the active media-svc Cloudflare Worker unit.
 
 import Foundation
 import UIKit

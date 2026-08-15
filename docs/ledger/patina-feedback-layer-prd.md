@@ -190,7 +190,7 @@ create table feedback_events (
 - **Store** — Supabase (Postgres). Screenshots in a private storage bucket.
 - **Ledger** — reads from the same store; no separate service.
 - **Fan-out (optional, Phase 3)** — a Supabase edge function / webhook on insert can hand a note off into Kody's workflow: an OmniFocus task, a line in Ada's digest, or a direct ping. Decoupled and non-blocking — the layer works with none of it.
-- **Deployment** — alongside the portal on **Coolify**.
+- **Deployment** — bundled with the portal's Cloudflare Worker release.
 
 The capture path (write) and the review path (read) are independent, so Phase 1 can ship with no Ledger UI at all — Kody can triage from a simple query/view until the Ledger lands.
 

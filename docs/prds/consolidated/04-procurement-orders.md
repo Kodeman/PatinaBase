@@ -32,7 +32,7 @@
 - `docs/follow-ups/procurement-pilot-metrics.md`
 - `docs/prds/Projects/patina-designer-portal-mvp-additions-spec.md`
 - `supabase/CLAUDE.md`
-- `docs/prds/AE/aesthete-engine-delivery-log.md`
+- `docs/engineering/patina-cloudflare-plan.md` (current platform dependencies)
 
 ## 2. Overview
 
@@ -198,7 +198,7 @@ All `project_time_entries` access is direct table CRUD via the browser Supabase 
 
 **On prod (DB):** the procurement/invoicing bundle shipped to prod at commit `c224b0e7` (2026-06-16, migrations 00177–00220 + apps). The 2026-07-02 "tier 1" prod deploy (`cb15fb37`) then applied 00230–00254 (prod tip 00229 → **00254**, the 25 migrations 00230–00254 applied via `docker exec … psql -U supabase_admin` because the pooler tunnel runs as non-owner `postgres`). So the DB tier for this entire area is on prod through 00254.
 
-**On prod (edge functions):** the six area edge fns were baked into `ghcr.io/kodeman/edge-runtime:latest` and deployed with the 2026-06-16 push, so they are live. (The 2026-07-02 note flags that the edge-runtime image rebuild for NEW fns — proposal-nudge etc. — is still pending, but that does not affect the billing/procurement fns already in the image.)
+**Edge functions:** Deploy each changed function to linked Strata with `supabase functions deploy <name>` and verify behavior live. Historical image-build notes are not evidence of current deployment state.
 
 **On prod (app tier):** the designer-portal billing/procurement/earnings/time UI shipped at `c224b0e7`. Procurement is gated behind the PostHog flag `procurement-workspace-pilot` (initial cohort = Kody + 2 designers TBD). The Document "Accounts book" invoicing surfaces and the newest proposal-watch/portal work are on `main`; whether the latest designer-portal image is redeployed to prod is not confirmed here.
 

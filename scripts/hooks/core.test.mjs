@@ -20,7 +20,7 @@ test("command policy blocks dangerous shortcuts and retired production paths", a
     "git add -A",
     "git add .",
     "pnpm dev",
-    "./infra/build-and-push.sh designer-portal",
+    "./infra/build-and-push.sh designer-portal", // [retired-deploy-reference-allow]
     "supabase db push",
     "npx wrangler deploy",
     "cd apps/designer-portal && npx opennextjs-cloudflare build",

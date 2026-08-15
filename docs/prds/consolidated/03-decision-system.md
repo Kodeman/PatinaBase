@@ -35,7 +35,7 @@
 - `docs/design/the-document/portal-vs-desk-feature-gap-matrix-v2.md`
 - `docs/design/the-document/the-document-parity-backlog-2026-07.md`
 - `docs/design/the-document/the-document-needs-ruling-2026-07.md`
-- `docs/prds/AE/aesthete-engine-delivery-log.md`
+- `docs/engineering/patina-cloudflare-plan.md` (current platform dependencies)
 
 ## 2. Overview
 
@@ -197,7 +197,7 @@ Decisions are pure Supabase (RPC + RLS + realtime). The 3 retained NestJS servic
 
 **On main**: Everything through `00220` (core spine `00171`–`00175` + coordination `00212`–`00220`), plus `00210` sign_proposal and the `00254` offline-signature migration. All decision hooks, both portals, iOS, and extension surfaces are on main. The Document is the designer default (the `/portal→/desk` flip). The offline-signature *designer-portal UI* is the exception — it is on unmerged branch `the-document/offline-signature`.
 
-**On prod**: The core decision spine (`00171`–`00175`) and Track 5 coordination (`00212`–`00220`) + `00210` are live — Track 5 shipped to prod 2026-06-16 (`c224b0e7`, full `00177`–`00220`). On 2026-07-02 the prod DB was pushed from tip `00229` to **`00254`** (tier-1/database only, applied via `docker exec psql -U supabase_admin`), so migrations `00230`–`00254` — including `00231` (proposal nudge) and `00254` (`record_offline_signature`) — are now on the prod database. ⚠ The **app tier was handed back to Kody and is NOT deployed**: the offline-signature UI is unmerged; the proposal-nudge edge fn (`00231`) is not in the deployed edge-runtime image; portals need a Coolify redeploy for newer app code. The older decision edge functions (decision-reminders / decision-resolved-notify / expire-decisions) predate this and are served by the live edge-runtime container.
+**Production status:** Historical notes record the core decision and Track 5 database rollout, but they are not proof of current portal or Edge Function state. Verify Strata migrations and each function live. Deploy changed functions with `supabase functions deploy <name>` and portals through `infra/deploy-portal.sh`.
 
 **Net**: the decision engine + coordination are fully live on prod; `record_offline_signature` is present in the DB but not reachable from the prod UI.
 

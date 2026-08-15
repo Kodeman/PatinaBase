@@ -153,7 +153,7 @@ Client-portal and admin-portal are separate apps/PRDs. Native/extension surfaces
 - **Dashboard metrics**: spec §7.1 defines newLeads/activeProjects/**monthRevenue**/**avgResponseTime**. Code renders New Leads / Active Projects / This Month / **Avg Match** — avgResponseTime was replaced by average match score.
 - **Dashboard data source**: spec §7.1 specifies a composite `GET /api/portal/dashboard` endpoint. No such endpoint exists — the dashboard composes client-side from `useLeads`, `useLeadStats`, `useProjects`, `useEarningsStats`, `useAllDecisions`.
 - ⚠ **Resources page**: spec §4 / file structure imply a real Help & Resources surface. `portal/resources/page.tsx` is **fully static hardcoded copy** with no links and no data.
-- **Design tokens & stack**: spec header names package `@strata/designer-portal`, React 18, and `strata` monorepo. Reality (per `apps/designer-portal/CLAUDE.md`) is `@patina/*`, React 19, self-hosted Supabase; the spec's CSS token tables were physically migrated into `apps/designer-portal/src/app/globals.css`, which is now the token source of truth (spec md is no longer authoritative).
+- **Design tokens & stack**: spec header names package `@strata/designer-portal`, React 18, and `strata` monorepo. Reality is `@patina/*`, React 19, and Supabase Strata; the spec's CSS token tables were physically migrated into `apps/designer-portal/src/app/globals.css`, which is now the token source of truth (spec md is no longer authoritative).
 - **Mobile tab bar**: spec §3.3/§6 specifies Work / Clients / Rooms / Studio tabs; `MobileTabBar` uses the current 8-zone set, not the specced four.
 
 ### Known bugs / TODOs

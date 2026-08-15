@@ -25,8 +25,8 @@ so those items only replace a stub body.
 
 - **Pull-based, zero-ingress.** Reaches production over **outbound HTTPS only**
   (PostgREST RPCs + the `room-scans` Storage API). No inbound listener, no port
-  forwarded. Kody's Cloudflare Tunnel is ops access (SSH/monitoring), **not** a
-  dependency — the pipeline drains with the tunnel down.
+  forwarded. Cloudflare Access is an operations boundary, **not** a pipeline
+  dependency — the pipeline drains without an interactive operator session.
 - **The queue is `agent_tasks`.** Claims, completions, and successor enqueues
   use SECURITY DEFINER RPCs. Each successor is created through
   `enqueue_agent_successor_if_owned`, which locks the running owner task and checks

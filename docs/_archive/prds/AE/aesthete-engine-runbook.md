@@ -1,3 +1,6 @@
+> [!WARNING]
+> Historical only. Do not execute this retired-host runbook. Use `infra/inference-worker/README.md` and supported Supabase function deploy commands.
+
 # Aesthete Engine — Deploy & Operations Runbook
 
 **Audience:** the operator deploying the Aesthete Engine to production (Coolify + self-hosted Supabase).

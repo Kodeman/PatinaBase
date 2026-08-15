@@ -41,7 +41,7 @@ Two distinct layers — do not confuse them:
   - `pnpm prisma:push` → orders + media + projects `prisma db push`
 
 ## Remote / prod DB
-`pnpm supabase:remote:{bootstrap,push,pull,diff,types,psql}` — all wrap `./scripts/remote-db.sh`.
+Production database work uses the linked Supabase CLI procedures in `.agents/skills/patina-db-migrations/SKILL.md`; no remote-host wrapper is supported.
 
 ## Cleanup
 `pnpm clean` (turbo clean + rm node_modules) ; `pnpm clean:cache` (also rm .turbo).

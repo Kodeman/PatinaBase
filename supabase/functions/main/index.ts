@@ -1,4 +1,5 @@
-// Main dispatcher for the self-hosted Supabase Edge Runtime.
+// Legacy multi-function dispatcher retained for migration compatibility.
+// Production Strata functions deploy individually through the Supabase CLI.
 //
 // Kong strips `/functions/v1/` from incoming requests before they hit :9000,
 // so the first path segment here is the function name. We spawn a user worker

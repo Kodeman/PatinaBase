@@ -242,5 +242,5 @@ This consolidated PRD does not fully supersede any single source document (no `s
 - `docs/prds/Projects/patina-project-creation-detailed-screens.html` — retained; screen reference for project creation flows.
 - `docs/prds/in-app-messaging-prd.md` — retained; source for the Messages/Inbox surface.
 - `docs/prds/AE/aesthete-engine-system-design.md` — retained; source for the pre-auth Aesthete quiz.
-- `docs/operations/email-system-runbook.md` — retained; operational reference for notification/email delivery underlying invoice/proposal/review emails.
+- `infra/runbooks/email-ops.md` — operational reference for notification/email delivery underlying invoice/proposal/review emails.
 - `docs/operations/e2e-local-test.md` — retained; operational reference for local e2e testing conventions.

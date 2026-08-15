@@ -25,14 +25,14 @@
 **Source docs**:
 - `docs/prds/communications-command-center-prd.md`
 - `docs/prds/in-app-messaging-prd.md`
-- `docs/operations/email-system-runbook.md`
+- `infra/runbooks/email-ops.md`
 - `docs/engagement-tracking-plan.md`
 
 ## 2. Overview
 
 Patina's "Communications, Email & Notifications" area is really three distinct-but-interlocking subsystems, all Supabase-native:
 
-1. **Programmatic email + notifications** — the plumbing. `@patina/notifications` `notify()` + `@patina/email` React-Email templates render and dispatch transactional/lifecycle email through Resend, logging to `notification_log`, honoring `notification_preferences`, and reacting to Resend delivery/open/click/bounce webhooks. Primary users: the platform itself (triggers, crons, service calls), not a human-facing surface. `docs/operations/email-system-runbook.md` is the canonical operations reference.
+1. **Programmatic email + notifications** — the plumbing. `@patina/notifications` `notify()` + `@patina/email` React-Email templates render and dispatch transactional/lifecycle email through Resend, logging to `notification_log`, honoring `notification_preferences`, and reacting to Resend delivery/open/click/bounce webhooks. Primary users: the platform itself (triggers, crons, service calls), not a human-facing surface. `infra/runbooks/email-ops.md` is the canonical operations reference.
 
 2. **Communications Command Center** — admin marketing orchestration (campaigns, templates, audiences, automations, analytics, suppression, DLQ, thread audit). Lives in the **admin portal** at `/communications/*`. Primary users: Kody (ops) and Leah (marketing). A partial, self-scoped mirror also exists in the designer portal under "People Room — Outreach."
 
@@ -265,4 +265,4 @@ This consolidated PRD supersedes:
 - `docs/engagement-tracking-plan.md`
 
 Retained as a live operational reference (not superseded):
-- `docs/operations/email-system-runbook.md`
+- `infra/runbooks/email-ops.md`

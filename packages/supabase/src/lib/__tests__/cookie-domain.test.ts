@@ -45,7 +45,7 @@ describe('getCookieDomain', () => {
   });
 
   it('returns undefined for a private LAN IP', () => {
-    expect(getCookieDomain('192.168.1.14')).toBeUndefined();
+    expect(getCookieDomain('192.0.2.14')).toBeUndefined();
   });
 
   it('returns undefined for an unrelated host', () => {

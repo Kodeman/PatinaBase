@@ -1,3 +1,6 @@
+> [!WARNING]
+> Historical only. Do not execute this retired-host procedure. Current operations use Cloudflare and Supabase Strata; see `docs/engineering/patina-cloudflare-plan.md`.
+
 # Patina Deployment - Coolify Quick Start Guide
 
 ## Table of Contents

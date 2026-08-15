@@ -575,8 +575,8 @@ All errors are captured in payment records with `failureCode` and `failureMessag
 
 ### Authentication & Authorization
 
-- OAuth2/OIDC tokens required
-- JWT validation via OCI API Gateway
+- Supabase user access tokens required
+- Issuer, audience, signature, expiry, subject, and authenticated role validated server-side
 - Rate limiting: 60 requests/minute per user
 - Idempotency keys for mutations
 

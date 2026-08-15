@@ -1,3 +1,6 @@
+> [!WARNING]
+> Historical only. Do not execute this retired storage procedure. See `docs/engineering/patina-cloudflare-plan.md` for the current R2 roadmap.
+
 # Runbook — Migrate Supabase Storage backend from local disk to Cloudflare R2
 
 **Goal:** move the self-hosted `supabase/storage-api` object store off the local

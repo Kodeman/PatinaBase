@@ -181,7 +181,7 @@ Guest auth: token exchange (`guest_bootstrap`) mints a short-lived JWT carrying 
 
 - **Guest entry.** SMS link → universal link. Full app if installed; otherwise **App Clip** (proposal): checklist + measure + photo kits inside the clip budget, graduating to the full app for walkthrough video. Web fulfillment (P2) backstops non-iOS pros — photo and measure kits first (O3).
 - **Offline.** On-device queue (SQLite/GRDB); background `URLSession`; resumable uploads via Supabase Storage TUS. Delivery is server-acknowledged; the checklist never claims what the server hasn't received.
-- **Media pipeline.** Upload → transcode worker (video preview) → (P3) transcription worker → chapter/segment write → embedding job (pgvector). Workers ride the existing Coolify deploy.
+- **Media pipeline.** Upload → transcode worker (video preview) → (P3) transcription worker → chapter/segment write → embedding job (pgvector). Workers use the active Cloudflare Queue and Container units.
 - **Notifications.** APNs for designers (and pros with the app); SMS via provider for guests. All events also land in the request's activity thread — the in-app record is primary.
 - **Token lifecycle.** Expires at request close + 7 days (redo grace); resend regenerates and revokes; designer can revoke manually.
 

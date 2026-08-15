@@ -1,3 +1,5 @@
+-- HISTORICAL ONLY: do not execute against Supabase Strata or any active environment.
+-- See docs/engineering/patina-cloudflare-plan.md for the current architecture.
 -- Patina: Initialize PostgreSQL schemas for schema-per-service isolation
 -- Run this after Supabase deployment to create isolated schemas for each service.
 -- Extensions are shared across all schemas.

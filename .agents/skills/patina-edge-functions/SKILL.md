@@ -21,8 +21,8 @@ Last verified: 2026-07-09 (main @ c4de810d, migrations head 00284). Re-verify lo
 4. **Decide `verify_jwt` deliberately.** It defaults to `true` (the platform default; `config.toml` documents it as a commented `# verify_jwt = true`). Only FOUR functions opt out, each with a compensating in-code auth check: `stripe-webhook` (Stripe signature IS the auth), `resend-webhook` (provider webhook), `comms-mute` (HS256 signed token via `_shared/comms-token.ts`), `sms-inbound` (Twilio `X-Twilio-Signature` — HMAC-SHA1 over `SMS_INBOUND_PUBLIC_URL`+params, keyed by `TWILIO_AUTH_TOKEN`). Rule: set `verify_jwt = false` ONLY when the function verifies a signature/token itself. Server-to-server webhooks skip CORS; any browser-called function must define `corsHeaders` inline and answer `OPTIONS` (≈30 functions do — copy the shape from `create-checkout-session`).
 5. **For webhooks, follow the `stripe-webhook/index.ts` anatomy** (see Quality bar). For cron/trigger-invoked functions, the caller is `public.invoke_edge_function(fn, body)` which POSTs with `apikey` + `Authorization: Bearer <service-role>` (from Vault, migration 00258) — so those functions keep `verify_jwt = true`.
 6. **Test locally** (Commands): unit tests via `deno test`, or run the stack + `supabase functions serve` + curl / the `_tests` harness.
-7. **Deploy is gated.** Only when the user asked to ship this function this session. Then `supabase functions deploy <name>` to the linked Strata project is authorized as part of the chain. NEVER use `scripts/deploy-edge-functions.sh` for a real deploy — it hardcodes only 13 of the ~45 functions (12 email/engagement + `resend-webhook`) and will silently skip everything else.
-8. **Verify with a live probe**, not an assumption: curl the function, or trigger its cron/webhook and check the side effect (a DB row, a `notification_log` entry, a Stripe object). Read-only probing is always allowed. The old self-hosted Coolify box is DEAD — never deploy or curl against it.
+7. **Deploy is gated.** Only when the user asked to ship this function this session. Then `supabase functions deploy <name>` to the linked Strata project is authorized as part of the chain. NEVER use `scripts/deploy-edge-functions.sh` for a real deploy — it hardcodes only 13 of the ~45 functions (12 email/engagement + `resend-webhook`) and will silently skip everything else. [retired-deploy-reference-allow]
+8. **Verify with a live probe**, not an assumption: curl the function, or trigger its cron/webhook and check the side effect (a DB row, a `notification_log` entry, a Stripe object). Read-only probing is always allowed. The old self-hosted Coolify box is DEAD — never deploy or curl against it. [retired-deploy-reference-allow]
 
 ## Commands
 ```bash
@@ -62,7 +62,7 @@ Webhook / handler anatomy, from `stripe-webhook/index.ts` (the reference; ~1722 
 - **Consistent error shape** — a small `json(body, status=200)` helper.
 Env & config:
 - Read env with `Deno.env.get('X')`. `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` are auto-injected by the platform. Other secrets: `--env-file` locally, `supabase secrets set` in prod (gated). Reference secret NAMES only in code review and reports.
-- `verify_jwt = false` must live in `config.toml [functions.<name>]` (the declarative source of truth). The deploy also passes `--no-verify-jwt` for such functions (belt-and-braces, as `scripts/deploy-edge-functions.sh` does for `resend-webhook`); for a new public function, set BOTH.
+- `verify_jwt = false` must live in `config.toml [functions.<name>]` (the declarative source of truth). The deploy also passes `--no-verify-jwt` for such functions (belt-and-braces, as `scripts/deploy-edge-functions.sh` does for `resend-webhook`); for a new public function, set BOTH. [retired-deploy-reference-allow]
 Inventory (verify names by `ls supabase/functions/`; group labels only):
 - payments/procurement: `stripe-webhook`, `create-checkout-session`, `invoice-send`, `invoice-reminders`, `po-send`, `expire-po-session`, `quote-request-send`, `qbo-export`
 - notifications/email/SMS: `notification-dispatch`, `notification-digest`, `digest-dispatcher`, `comms-mute`, `comms-notification-dispatch`, `sms-dispatch`, `sms-inbound`, `field-daily`, `resend-webhook`, `waitlist-notify`, `client-invite`
@@ -100,12 +100,12 @@ Deno.serve(async (req) => {
 - [ ] `verify_jwt` correct: `true` unless the function self-verifies a signature/token; any `false` is in `config.toml` AND matched by an in-code check.
 - [ ] Webhook follows the anatomy (raw body, async verify, service client after auth, idempotency claim, guarded updates).
 - [ ] Tests run with `--config supabase/functions/deno.json`; no `deno.lock` left at repo root.
-- [ ] After deploy (if shipped): a live curl/trigger probe confirmed behavior; you did NOT rely on `scripts/deploy-edge-functions.sh`.
+- [ ] After deploy (if shipped): a live curl/trigger probe confirmed behavior; you did NOT rely on `scripts/deploy-edge-functions.sh`. [retired-deploy-reference-allow]
 
 ## Common mistakes
 | Situation | Wrong move | Right move |
 |---|---|---|
-| Deploy the whole function set | Run `scripts/deploy-edge-functions.sh` | Deploy each changed fn: `supabase functions deploy <name>` (script covers only 13 of ~45) |
+| Deploy the whole function set | Run `scripts/deploy-edge-functions.sh` | Deploy each changed fn: `supabase functions deploy <name>` (script covers only 13 of ~45) | [retired-deploy-reference-allow]
 | Edited a `_shared/*` file | Redeploy just one function | `grep -rl "_shared/<file>" … --include=index.ts` and redeploy every importer |
 | Function keeps 401ing | Add `verify_jwt=false` to dodge it | Send `Authorization: Bearer <service-role>` (that's what `invoke_edge_function` does), or add a real in-code auth check before disabling |
 | Parsing a signed webhook | `await req.json()` then verify | `const raw = await req.text()`; verify `raw`; parse after |

@@ -1170,7 +1170,7 @@ export function sessionFindings(root = resolveRepoRoot()) {
 
 export async function auditRepository(root = resolveRepoRoot()) {
   const findings = [...sessionFindings(root)];
-  if (fs.existsSync(path.join(root, ".github/workflows/docker-publish.yml"))) {
+  if (fs.existsSync(path.join(root, ".github/workflows/docker-publish.yml"))) { // [retired-deploy-reference-allow]
     findings.push(
       finding(
         "legacy-docker-workflow",

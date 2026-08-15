@@ -1,3 +1,6 @@
+> [!WARNING]
+> Historical only. This readiness snapshot is superseded by the Cloudflare roadmap and `infra/inference-worker/README.md`.
+
 # Aesthete Engine — Production Readiness Report (go/no-go)
 
 **For:** Kody (human deploy gate) · **From:** Agent 5B (prod prep) · **Date:** 2026-07-02

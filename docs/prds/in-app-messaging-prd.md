@@ -94,7 +94,7 @@ The designer-portal `/portal/messages` page renders a list of clients sorted by 
 - **Realtime is native.** Supabase JS client `.channel().on('postgres_changes', …)` gives sub-second message fan-out without standing up a WebSocket gateway.
 - **RLS is the authorization model.** Per-participant access falls out of policy declarations, no service-level guards needed.
 - **`notify()` is already wired** to Postgres triggers. New-message emails are a trigger, not a service responsibility.
-- **One less deploy unit.** Coolify already runs three retained NestJS services + the Supabase stack. A fourth service for messaging is operational debt without offsetting upside.
+- **One less deploy unit.** Cloudflare already retains three NestJS Container services while Supabase Strata owns the data plane. A fourth service for messaging is operational debt without offsetting upside.
 
 ---
 
@@ -920,5 +920,5 @@ Resolved 2026-04-29.
 - **Communications Command Center PRD** (`docs/prds/communications-command-center-prd.md`) — admin marketing email orchestration. **Distinct system**; this PRD does not modify it.
 - **Designer Portal MVP Additions Spec** (`docs/prds/Projects/patina-designer-portal-mvp-additions-spec.md`) — Zone 11 "Communications" requirement satisfied by §7.4.
 - **Vendor Pipeline PRD** (`docs/prds/vendor-pipeline-prd.md`) — vendor brief flow consumes `kind='vendor_brief'` threads.
-- **Email System Runbook** (`docs/operations/email-system-runbook.md`) — operational context for `notify()` and Resend integration.
+- **Email operations runbook** (`infra/runbooks/email-ops.md`) — operational context for `notify()` and Resend integration.
 - **CLAUDE.md** — architectural directive: Supabase-native over new NestJS services.

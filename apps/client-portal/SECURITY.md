@@ -296,7 +296,7 @@ curl -H "Origin: https://attacker.com" \
 | A04: Insecure Design | Security headers, defense in depth |
 | A05: Security Misconfiguration | Comprehensive security headers |
 | A06: Vulnerable Components | Automated dependency scanning |
-| A07: Authentication Failures | NextAuth with secure session management |
+| A07: Authentication Failures | Supabase Auth with server-side user validation |
 | A08: Software/Data Integrity | CSP, SRI (to be implemented) |
 | A09: Logging Failures | Centralized logging (to be implemented) |
 | A10: SSRF | Network-level controls, input validation |

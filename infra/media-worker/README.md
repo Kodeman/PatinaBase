@@ -78,6 +78,6 @@ never the `wrangler r2 object` CLI.
 
 ## Blocked on Supabase Cloud (phase 1)
 The container/Worker cannot reach the home Postgres (behind the cloudflared TCP
-tunnel), so DB job-state / `MediaAsset` writes flow back through NestJS via
+private network), so DB job-state / `MediaAsset` writes flow back through NestJS via
 `COMPLETE_CALLBACK_URL`. When Postgres is on Supabase Cloud, give the Worker a
 Hyperdrive binding and write `svc_media` directly.

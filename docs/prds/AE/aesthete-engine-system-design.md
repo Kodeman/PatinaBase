@@ -4,13 +4,13 @@
 
 ---
 
-**Status:** v1.0.1 — in delivery (see `aesthete-engine-delivery-plan.md` + delivery log)
+**Status:** v1.0.3 — product/system design; deployment follows the current Cloudflare roadmap and inference Worker README
 **Owner:** Kody / Patina Engineering
 **Last updated:** 2026-07-01
 **v1.0.3 amendments (from Wave 2 build):** §10.3 T_taste as shipped: term weight is additionally scaled by w_eff, and when both θ are NULL (pre-learning) the term drops and weights renormalize; T_behavioral = affine-calibrated smoothed save-rate (`/0.2`, Laplace prior ⇒ 0.5 cold); §10.5 exploration pool falls back to remaining candidates when ranks 20–80 are empty (small-catalog reality); the 94-d φ archetype block ordering contract is `styles.display_order NULLS LAST, name` — the Wave-4 refit must use the identical ordering; quiz shims raise on unknown Q1/Q3/Q4 option keys.
 **v1.0.2 amendments (from Wave 1 build):** §7.1 response carries three additive keys as shipped (`spectrum_confidence`, `patina_affinity`, `version`); `client_profiles` gained a nullable `user_id` (+partial unique) to make claim-upsert possible; probes are implemented as a `taste_probe_queue` (4% rate via GUC `aesthete.probe_rate`, reversed pair due +14 d, auto-recorded `kind='probe'`); `designer_taste_profiles.retired_at` added (stored retire semantics); Q5 catalyst vocabulary seeded as `new_home | moving | milestone | refresh | just_looking` (provisional until quiz content lands); client dense vector may be NULL until product vectors exist (centroid fallback renormalizes; nothing downstream may assume NOT NULL).
 **v1.0.1 amendments (from Wave 0 build):** §5.1 helper bodies corrected (`(1 − w)::real` cast in `vec_lerp`; `vector_norm()` not `l2_norm()` — the latter doesn't exist for `vector` in pgvector ≤ 0.8); migration numbering shifted — the foundation block landed as **00239–00241** and later blocks are reserved as **00242–00246** (The Document tracks consumed 00236–00238 concurrently); `aesthete_jobs` dedupe uses resurrect-on-conflict (`DO UPDATE … WHERE status IN ('done','failed')`) rather than plain `DO NOTHING` so re-embeds per §6.1 actually re-enqueue.
-**Designs to:** `aesthete-engine-product-brief.md` (2026-07-01) + `aesthete-engine-deck.html`
+**Designs to:** `docs/prds/consolidated/05-aesthete-engine.md` + `aesthete-engine-deck.html`
 **Supersedes:** `docs/specs/Redesign/patina-aesthete-engine-design.html` (March 2026 UX design) and the deferred `services/aesthete-engine` Python service (Dec 2025) — see §16 Reconciliation
 **Companion:** `aesthete-engine-system-design-deck.html` (presentation form)
 
@@ -47,9 +47,9 @@ These were ratified in The Document program (shipped June 2026) and bind every d
 | **"Designer-Taught Intelligence," never "AI"** | copy law | Enforced *server-side*: all match reasons render from the `why_phrases` table, one string source for web + iOS. Draft-fill surfaces say "the Engine's first read," never a model name. |
 | **Style DNA is derived, no parallel store** | R58 | Client margin notes / contraindications become columns on `designer_clients`, not a new profile table. The client style *vector* is new state (nothing derivable exists), but display-layer DNA stays derivation. |
 
-### 2.2 Infrastructure reality (verified 2026-07-01)
+### 2.2 Infrastructure reality (reconciled 2026-08-15)
 
-- **Single Coolify host, no GPU.** Self-hosted Supabase (Postgres 15, Kong, GoTrue, PostgREST, Deno edge-runtime), Redis 7 (256 MB cap), MinIO; prod media on Cloudflare R2. Postgres tuning: `shared_buffers=512MB`, `work_mem=32MB`, `max_connections=100`.
+- **Supabase Strata + Cloudflare.** Supabase Cloud owns Postgres, Auth, Realtime, Storage, and Edge Functions. The stateless inference service runs as the retained Cloudflare inference Container described by `infra/inference-worker/README.md`; production media uses private Cloudflare R2.
 - **pgvector installed** (local dev 0.8.0; **prod version unverified** — week-0 checklist item; the design requires ≥ 0.5.0 for `sum(vector)` and vector↔array casts, and works with either HNSW or ivfflat).
 - **No Typesense, Qdrant, or OpenSearch exists anywhere.** The brief's "keyword/facet on Typesense" is aspirational; locked decision: Postgres FTS (`search_vector` tsvector + pg_trgm, already live) for MVP, behind a single `aesthete_search()` seam Typesense can replace in Phase 2 without touching callers.
 - **Sanctioned backend pattern:** no new NestJS services; Deno edge functions (33 exist) + pg_cron → `invoke_edge_function()` (00081) for scheduling. One narrow exception granted: the stateless Python inference worker, because ONNX vision inference is not a thing the edge runtime can do.
@@ -982,7 +982,7 @@ One outbox (`aesthete_jobs`), one claim pattern (`FOR UPDATE SKIP LOCKED` via `c
 
 - RLS boundaries per §5.6; DEFINER RPCs pin `search_path` and filter layers internally.
 - **Fix shipped in 00240:** `quiz_sessions` RLS is currently wide-open to anon+authenticated — restricted to owner/claimed reads; anon INSERT stays (waitlist pattern).
-- **Anthropic API key**: edge-fn secret only (supabase secrets / Coolify env), read solely by `aesthete-dna-draft`; never in DB, client bundles, or logs; the spend ledger bounds the blast radius of a leak or a loop.
+- **Anthropic API key**: Supabase Edge Function secret only, read solely by `aesthete-dna-draft`; never in DB, client bundles, or logs; the spend ledger bounds the blast radius of a leak or a loop.
 - **Taste vectors are designer IP**: raw vectors never leave PostgREST to any client role (redacting views); "Your Eye" renders derived spectrums + named biases; export is owner-initiated (`export_designer_taste` → full JSON: vectors, θ, biases, judgments, snapshots); `retire_designer_taste` excludes a departing designer from the next house recompute and tombstones profile versions (judgment hard-delete per contract terms). Both ship week 0 — cheap now, contractual later.
 - Anon quiz abuse: §7.1 posture (Cloudflare wall, in-DB backstop, engagement-gated learning).
 
@@ -1022,7 +1022,7 @@ Eval harness lives at `scripts/aesthete-eval/`; the labeled sets are built as a 
 | Week | Build | Reuse | Exit criterion |
 |---|---|---|---|
 | **0** | Migrations 00236–00241 (§15.4); delete `services/aesthete-engine`; scaffold `aesthete-inference` (/healthz, /embed/text); **verify prod pgvector** (`SELECT extversion FROM pg_extension WHERE extname='vector'`) | migration conventions, `supabase db reset` | reset green; prod extversion known; export/retire RPCs exist |
-| **1** | /embed/image + int8 ONNX bake; Coolify internal deploy; `aesthete-embed-worker` + claim RPCs + product triggers; backfill seed vectors | `_shared/` edge helpers, 00081 invoke pattern | seed products have vectors; cron drain visible in Logflare |
+| **1** | /embed/image + int8 ONNX bake; deploy the inference Worker through `infra/inference-worker`; deploy `aesthete-embed-worker` to Strata; claim RPCs + product triggers; backfill seed vectors | `_shared/` edge helpers, 00081 invoke pattern | seed products have vectors; cron drain visible in logs |
 | **2** | `_compute_quiz_profile()`; `submit_style_quiz` + `claim_quiz_session`; `quiz_option_loadings` seed; `packages/aesthete-quiz` core + wire client; quiz SQL smoke | 00067 quiz logic, waitlist anon pattern | anon curl → full profile JSON |
 | **3** | `get_aesthete_matches` v1 (filters, spectrum, cosine, budget bell, exploration floor, whys, `match_events`); `get_recommendations` shim | spectrum schema, three-layer RLS | deterministic seed test asserts ranking + whys; iOS contract test green |
 | **4** | `aesthete-dna-draft` (Claude structured output + spend ledger); teaching-UI prefill from drafts; **designer validation sprint on a curated 300–500 demo set** | teaching_queue trigger, teaching sliders | ≥ 300 validated products with spectrums + vectors |
@@ -1147,5 +1147,4 @@ Auth: Bearer $INFERENCE_TOKEN · 429 past concurrency 8 (callers re-enqueue)
 ---
 
 *The Aesthete Engine, built where Patina lives: taste as data, learning as append-only history, matching as one honest query — and every designer action doing double duty, exactly as promised.*
-
 
