@@ -25,12 +25,14 @@ class PublicRouteGuard implements CanActivate {
 describe('Stripe webhook HTTP boundary', () => {
   const secret = 'whsec_http_boundary_test';
   const stripe = new Stripe('sk_test_http_boundary', { apiVersion: '2023-10-16' });
-  const prisma = {
-    auditLog: {
-      findFirst: jest.fn().mockResolvedValue(null),
-      create: jest.fn().mockResolvedValue({}),
+  const prisma: any = {
+    stripeWebhookReceipt: {
+      create: jest.fn().mockResolvedValue({ status: 'processing' }),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      findUnique: jest.fn().mockResolvedValue(null),
     },
   };
+  prisma.$transaction = jest.fn((operation: (database: any) => unknown) => operation(prisma));
   let app: any;
 
   beforeAll(async () => {
@@ -71,11 +73,18 @@ describe('Stripe webhook HTTP boundary', () => {
       .expect(201)
       .expect(({ body }) => expect(body).toEqual(expect.objectContaining({ received: true })));
 
-    expect(prisma.auditLog.create).toHaveBeenCalled();
+    expect(prisma.stripeWebhookReceipt.create).toHaveBeenCalled();
+    expect(prisma.stripeWebhookReceipt.updateMany).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        eventId: 'evt_http_valid',
+        status: 'processing',
+      }),
+      data: expect.objectContaining({ status: 'succeeded' }),
+    });
   });
 
-  it('rejects an invalid signature before processing or audit insertion', async () => {
-    prisma.auditLog.create.mockClear();
+  it('rejects an invalid signature before claiming a durable receipt', async () => {
+    prisma.stripeWebhookReceipt.create.mockClear();
     await request(app.getHttpServer())
       .post('/v1/webhooks/stripe')
       .set('content-type', 'application/json')
@@ -83,6 +92,6 @@ describe('Stripe webhook HTTP boundary', () => {
       .send('{"id":"evt_tampered","type":"customer.created","data":{"object":{}}}')
       .expect(400);
 
-    expect(prisma.auditLog.create).not.toHaveBeenCalled();
+    expect(prisma.stripeWebhookReceipt.create).not.toHaveBeenCalled();
   });
 });

@@ -22,6 +22,13 @@ describe('WebhooksService - Security Tests', () => {
     payment: { create: jest.fn(), findUnique: jest.fn() },
     refund: { create: jest.fn(), findUnique: jest.fn() },
     auditLog: { create: jest.fn(), findFirst: jest.fn() },
+    address: { findUnique: jest.fn().mockResolvedValue(null) },
+    stripeWebhookReceipt: {
+      create: jest.fn(),
+      updateMany: jest.fn(),
+      findUnique: jest.fn(),
+    },
+    $transaction: jest.fn(),
   };
 
   const mockEventsService = {
@@ -54,6 +61,14 @@ describe('WebhooksService - Security Tests', () => {
     }).compile();
 
     service = module.get<WebhooksService>(WebhooksService);
+    mockPrismaClient.stripeWebhookReceipt.create.mockResolvedValue({
+      status: 'processing',
+    });
+    mockPrismaClient.stripeWebhookReceipt.updateMany.mockResolvedValue({
+      count: 1,
+    });
+    mockPrismaClient.stripeWebhookReceipt.findUnique.mockResolvedValue(null);
+    mockPrismaClient.$transaction.mockImplementation((operation) => operation(mockPrismaClient));
   });
 
   afterEach(() => {
@@ -187,11 +202,14 @@ describe('WebhooksService - Security Tests', () => {
 
       mockStripe.webhooks.constructEvent.mockReturnValue(mockEvent);
 
-      // First call - event already processed
-      mockPrismaClient.auditLog.findFirst.mockResolvedValue({
-        id: 'audit-1',
-        entityType: 'webhook',
-        entityId: 'evt_duplicate',
+      mockPrismaClient.stripeWebhookReceipt.create.mockRejectedValue(
+        Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }),
+      );
+      mockPrismaClient.stripeWebhookReceipt.updateMany.mockResolvedValue({
+        count: 0,
+      });
+      mockPrismaClient.stripeWebhookReceipt.findUnique.mockResolvedValue({
+        status: 'succeeded',
       });
 
       const result = await service.handleStripeWebhook(signature, rawBody);
@@ -239,13 +257,12 @@ describe('WebhooksService - Security Tests', () => {
 
       await service.handleStripeWebhook(signature, rawBody);
 
-      // Should mark event as processed
-      expect(mockPrismaClient.auditLog.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          entityType: 'webhook',
-          entityId: 'evt_new',
-          action: 'processed',
+      expect(mockPrismaClient.stripeWebhookReceipt.updateMany).toHaveBeenCalledWith({
+        where: expect.objectContaining({
+          eventId: 'evt_new',
+          status: 'processing',
         }),
+        data: expect.objectContaining({ status: 'succeeded' }),
       });
     });
   });

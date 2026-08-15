@@ -1,11 +1,24 @@
-import { Injectable, BadRequestException, Inject, Logger } from '@nestjs/common';
-import { PrismaClient } from '../../generated/prisma-client';
+import {
+  Injectable,
+  BadRequestException,
+  Inject,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
+import { Prisma, PrismaClient } from '../../generated/prisma-client';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { v4 as uuidv4 } from 'uuid';
 import { Decimal } from '../../generated/prisma-client/runtime/library';
 import { NotificationDispatchClient } from '../../infrastructure/notification-dispatch.client';
 import { assertStripeConfigured } from '../../config/stripe.module';
+
+const WEBHOOK_PROCESSING_LEASE_MS = 5 * 60 * 1000;
+const WEBHOOK_PROCESSING_FAILED = 'processing_failed';
+
+type StripeWebhookClaim =
+  | { claimed: true; status: 'processing'; claimToken: string }
+  | { claimed: false; status: string };
 
 @Injectable()
 export class WebhooksService {
@@ -38,66 +51,93 @@ export class WebhooksService {
 
     this.logger.log(`Processing webhook event type: ${event.type}`);
 
-    // Route to appropriate handler
-    try {
-      // Check for duplicate event processing
-      const isDuplicate = await this.checkDuplicateEvent(event.id);
-      if (isDuplicate) {
+    const claim = await this.claimEvent(event.id, event.type);
+    if (!claim.claimed) {
+      if (claim.status === 'succeeded') {
         this.logger.log('Webhook event already processed, skipping');
         return { received: true, eventId: event.id, duplicate: true };
       }
 
-      switch (event.type) {
-        case 'checkout.session.completed':
-          await this.handleCheckoutSessionCompleted(event);
-          break;
-        case 'payment_intent.succeeded':
-          await this.handlePaymentIntentSucceeded(event);
-          break;
-        case 'payment_intent.payment_failed':
-          await this.handlePaymentIntentFailed(event);
-          break;
-        case 'payment_intent.canceled':
-          await this.handlePaymentIntentCanceled(event);
-          break;
-        case 'payment_intent.requires_action':
-          await this.handlePaymentIntentRequiresAction(event);
-          break;
-        case 'payment_intent.amount_capturable_updated':
-          await this.handlePaymentIntentAmountCapturableUpdated(event);
-          break;
-        case 'charge.refunded':
-          await this.handleChargeRefunded(event);
-          break;
-        case 'charge.dispute.created':
-          await this.handleDisputeCreated(event);
-          break;
-        case 'charge.dispute.closed':
-          await this.handleDisputeClosed(event);
-          break;
-        default:
-          this.logger.warn(`Unhandled event type: ${event.type}`);
-      }
+      throw new ServiceUnavailableException('Webhook processing in progress');
+    }
 
-      // Mark event as processed
-      await this.markEventProcessed(event.id, event.type);
+    try {
+      await this.prisma.$transaction(async (database) => {
+        await this.processEvent(event, database);
+
+        const completed = await database.stripeWebhookReceipt.updateMany({
+          where: {
+            eventId: event.id,
+            status: 'processing',
+            claimToken: claim.claimToken,
+          },
+          data: {
+            status: 'succeeded',
+            succeededAt: new Date(),
+            failedAt: null,
+            lastErrorCode: null,
+          },
+        });
+
+        if (completed.count !== 1) {
+          throw new Error('Webhook receipt lease lost');
+        }
+      });
 
       return { received: true, eventId: event.id };
     } catch (error: any) {
+      await this.markEventFailed(event.id, claim.claimToken);
       this.logger.error('Error processing webhook');
       throw error;
+    }
+  }
+
+  private async processEvent(event: Stripe.Event, database: Prisma.TransactionClient) {
+    switch (event.type) {
+      case 'checkout.session.completed':
+        await this.handleCheckoutSessionCompleted(event, database);
+        break;
+      case 'payment_intent.succeeded':
+        await this.handlePaymentIntentSucceeded(event, database);
+        break;
+      case 'payment_intent.payment_failed':
+        await this.handlePaymentIntentFailed(event, database);
+        break;
+      case 'payment_intent.canceled':
+        await this.handlePaymentIntentCanceled(event, database);
+        break;
+      case 'payment_intent.requires_action':
+        await this.handlePaymentIntentRequiresAction(event, database);
+        break;
+      case 'payment_intent.amount_capturable_updated':
+        await this.handlePaymentIntentAmountCapturableUpdated(event, database);
+        break;
+      case 'charge.refunded':
+        await this.handleChargeRefunded(event, database);
+        break;
+      case 'charge.dispute.created':
+        await this.handleDisputeCreated(event, database);
+        break;
+      case 'charge.dispute.closed':
+        await this.handleDisputeClosed(event, database);
+        break;
+      default:
+        this.logger.warn(`Unhandled event type: ${event.type}`);
     }
   }
 
   /**
    * Handle checkout.session.completed
    */
-  private async handleCheckoutSessionCompleted(event: Stripe.Event) {
+  private async handleCheckoutSessionCompleted(
+    event: Stripe.Event,
+    database: Prisma.TransactionClient,
+  ) {
     const session = event.data.object as Stripe.Checkout.Session;
 
     this.logger.log('Checkout session completed');
 
-    const order = await this.prisma.order.findUnique({
+    const order = await database.order.findUnique({
       where: { checkoutSessionId: session.id },
     });
 
@@ -107,7 +147,7 @@ export class WebhooksService {
     }
 
     // Update order with payment intent
-    await this.prisma.order.update({
+    await database.order.update({
       where: { id: order.id },
       data: {
         paymentIntentId: session.payment_intent as string,
@@ -133,12 +173,15 @@ export class WebhooksService {
   /**
    * Handle payment_intent.succeeded
    */
-  private async handlePaymentIntentSucceeded(event: Stripe.Event) {
+  private async handlePaymentIntentSucceeded(
+    event: Stripe.Event,
+    database: Prisma.TransactionClient,
+  ) {
     const paymentIntent = event.data.object as Stripe.PaymentIntent;
 
     this.logger.log('Payment intent succeeded');
 
-    const order = await this.prisma.order.findUnique({
+    const order = await database.order.findUnique({
       where: { paymentIntentId: paymentIntent.id },
     });
 
@@ -155,7 +198,7 @@ export class WebhooksService {
       : (paymentIntent as any).charges?.data || [];
     const charge = chargesData[0];
 
-    await this.prisma.payment.create({
+    await database.payment.create({
       data: {
         orderId: order.id,
         provider: 'stripe',
@@ -175,7 +218,7 @@ export class WebhooksService {
     });
 
     // Update order status
-    await this.prisma.order.update({
+    await database.order.update({
       where: { id: order.id },
       data: {
         status: 'paid',
@@ -186,7 +229,7 @@ export class WebhooksService {
 
     // Mark cart as converted
     if (order.cartId) {
-      await this.prisma.cart.update({
+      await database.cart.update({
         where: { id: order.cartId },
         data: {
           status: 'converted',
@@ -196,7 +239,7 @@ export class WebhooksService {
     }
 
     // Audit log
-    await this.prisma.auditLog.create({
+    await database.auditLog.create({
       data: {
         entityType: 'order',
         entityId: order.id,
@@ -249,7 +292,7 @@ export class WebhooksService {
         paymentIntent.currency,
       );
       const shippingAddress = order.shippingAddressId
-        ? await this.prisma.address.findUnique({
+        ? await database.address.findUnique({
             where: { id: order.shippingAddressId },
           })
         : null;
@@ -292,12 +335,12 @@ export class WebhooksService {
   /**
    * Handle payment_intent.payment_failed
    */
-  private async handlePaymentIntentFailed(event: Stripe.Event) {
+  private async handlePaymentIntentFailed(event: Stripe.Event, database: Prisma.TransactionClient) {
     const paymentIntent = event.data.object as Stripe.PaymentIntent;
 
     this.logger.log('Payment intent failed');
 
-    const order = await this.prisma.order.findUnique({
+    const order = await database.order.findUnique({
       where: { paymentIntentId: paymentIntent.id },
     });
 
@@ -307,7 +350,7 @@ export class WebhooksService {
     }
 
     // Create failed payment record
-    await this.prisma.payment.create({
+    await database.payment.create({
       data: {
         orderId: order.id,
         provider: 'stripe',
@@ -322,7 +365,7 @@ export class WebhooksService {
     });
 
     // Update order
-    await this.prisma.order.update({
+    await database.order.update({
       where: { id: order.id },
       data: {
         paymentStatus: 'failed',
@@ -348,12 +391,15 @@ export class WebhooksService {
   /**
    * Handle payment_intent.canceled
    */
-  private async handlePaymentIntentCanceled(event: Stripe.Event) {
+  private async handlePaymentIntentCanceled(
+    event: Stripe.Event,
+    database: Prisma.TransactionClient,
+  ) {
     const paymentIntent = event.data.object as Stripe.PaymentIntent;
 
     this.logger.log('Payment intent canceled');
 
-    const order = await this.prisma.order.findUnique({
+    const order = await database.order.findUnique({
       where: { paymentIntentId: paymentIntent.id },
     });
 
@@ -361,7 +407,7 @@ export class WebhooksService {
       return;
     }
 
-    await this.prisma.order.update({
+    await database.order.update({
       where: { id: order.id },
       data: {
         paymentStatus: 'canceled',
@@ -385,12 +431,12 @@ export class WebhooksService {
   /**
    * Handle charge.refunded
    */
-  private async handleChargeRefunded(event: Stripe.Event) {
+  private async handleChargeRefunded(event: Stripe.Event, database: Prisma.TransactionClient) {
     const charge = event.data.object as Stripe.Charge;
 
     this.logger.log('Charge refunded');
 
-    const payment = await this.prisma.payment.findUnique({
+    const payment = await database.payment.findUnique({
       where: { chargeId: charge.id },
       include: { order: true },
     });
@@ -403,12 +449,12 @@ export class WebhooksService {
     // Get refund details
     for (const refund of charge.refunds?.data || []) {
       // Check if refund already exists
-      const existing = await this.prisma.refund.findUnique({
+      const existing = await database.refund.findUnique({
         where: { providerRefundId: refund.id },
       });
 
       if (!existing) {
-        await this.prisma.refund.create({
+        await database.refund.create({
           data: {
             orderId: payment.orderId,
             amount: new Decimal(refund.amount).div(100),
@@ -442,7 +488,7 @@ export class WebhooksService {
 
     // Update order status if fully refunded
     if (charge.refunded) {
-      await this.prisma.order.update({
+      await database.order.update({
         where: { id: payment.orderId },
         data: {
           status: 'refunded',
@@ -455,12 +501,12 @@ export class WebhooksService {
   /**
    * Handle charge.dispute.created
    */
-  private async handleDisputeCreated(event: Stripe.Event) {
+  private async handleDisputeCreated(event: Stripe.Event, database: Prisma.TransactionClient) {
     const dispute = event.data.object as Stripe.Dispute;
 
     this.logger.log('Dispute created');
 
-    const payment = await this.prisma.payment.findUnique({
+    const payment = await database.payment.findUnique({
       where: { chargeId: dispute.charge as string },
     });
 
@@ -485,12 +531,12 @@ export class WebhooksService {
   /**
    * Handle charge.dispute.closed
    */
-  private async handleDisputeClosed(event: Stripe.Event) {
+  private async handleDisputeClosed(event: Stripe.Event, database: Prisma.TransactionClient) {
     const dispute = event.data.object as Stripe.Dispute;
 
     this.logger.log('Dispute closed');
 
-    const payment = await this.prisma.payment.findUnique({
+    const payment = await database.payment.findUnique({
       where: { chargeId: dispute.charge as string },
     });
 
@@ -514,12 +560,15 @@ export class WebhooksService {
   /**
    * Handle payment_intent.requires_action (3DS challenge)
    */
-  private async handlePaymentIntentRequiresAction(event: Stripe.Event) {
+  private async handlePaymentIntentRequiresAction(
+    event: Stripe.Event,
+    database: Prisma.TransactionClient,
+  ) {
     const paymentIntent = event.data.object as Stripe.PaymentIntent;
 
     this.logger.log('Payment intent requires action');
 
-    const order = await this.prisma.order.findUnique({
+    const order = await database.order.findUnique({
       where: { paymentIntentId: paymentIntent.id },
     });
 
@@ -547,12 +596,15 @@ export class WebhooksService {
   /**
    * Handle payment_intent.amount_capturable_updated (authorized but not captured)
    */
-  private async handlePaymentIntentAmountCapturableUpdated(event: Stripe.Event) {
+  private async handlePaymentIntentAmountCapturableUpdated(
+    event: Stripe.Event,
+    database: Prisma.TransactionClient,
+  ) {
     const paymentIntent = event.data.object as Stripe.PaymentIntent;
 
     this.logger.log('Payment intent amount capturable updated');
 
-    const order = await this.prisma.order.findUnique({
+    const order = await database.order.findUnique({
       where: { paymentIntentId: paymentIntent.id },
     });
 
@@ -561,7 +613,7 @@ export class WebhooksService {
     }
 
     // Update order to authorized status
-    await this.prisma.order.update({
+    await database.order.update({
       where: { id: order.id },
       data: {
         paymentStatus: 'authorized',
@@ -582,38 +634,89 @@ export class WebhooksService {
     });
   }
 
-  /**
-   * Check if event has already been processed (idempotency)
-   */
-  private async checkDuplicateEvent(eventId: string): Promise<boolean> {
-    const existing = await this.prisma.auditLog.findFirst({
-      where: {
-        entityType: 'webhook',
-        entityId: eventId,
-      },
-    });
+  private async claimEvent(eventId: string, eventType: string): Promise<StripeWebhookClaim> {
+    const claimToken = uuidv4();
+    const processingStartedAt = new Date();
 
-    return !!existing;
-  }
-
-  /**
-   * Mark event as processed
-   */
-  private async markEventProcessed(eventId: string, eventType: string) {
-    await this.prisma.auditLog.create({
-      data: {
-        entityType: 'webhook',
-        entityId: eventId,
-        action: 'processed',
-        actorType: 'webhook',
-        actor: 'stripe',
-        metadata: {
+    try {
+      await this.prisma.stripeWebhookReceipt.create({
+        data: {
+          eventId,
           eventType,
-          processedAt: new Date().toISOString(),
+          status: 'processing',
+          claimToken,
+          processingStartedAt,
         },
+      });
+
+      return { claimed: true, status: 'processing', claimToken };
+    } catch (error: unknown) {
+      if (!isUniqueConstraintError(error)) throw error;
+    }
+
+    const staleBefore = new Date(processingStartedAt.getTime() - WEBHOOK_PROCESSING_LEASE_MS);
+    const reclaimed = await this.prisma.stripeWebhookReceipt.updateMany({
+      where: {
+        eventId,
+        OR: [
+          { status: 'failed' },
+          {
+            status: 'processing',
+            processingStartedAt: { lt: staleBefore },
+          },
+        ],
+      },
+      data: {
+        eventType,
+        status: 'processing',
+        claimToken,
+        attempts: { increment: 1 },
+        processingStartedAt,
+        succeededAt: null,
+        failedAt: null,
+        lastErrorCode: null,
       },
     });
+
+    if (reclaimed.count === 1) {
+      return { claimed: true, status: 'processing', claimToken };
+    }
+
+    const existing = await this.prisma.stripeWebhookReceipt.findUnique({
+      where: { eventId },
+      select: { status: true },
+    });
+
+    return { claimed: false, status: existing?.status ?? 'processing' };
   }
+
+  private async markEventFailed(eventId: string, claimToken: string): Promise<void> {
+    try {
+      await this.prisma.stripeWebhookReceipt.updateMany({
+        where: {
+          eventId,
+          status: 'processing',
+          claimToken,
+        },
+        data: {
+          status: 'failed',
+          failedAt: new Date(),
+          lastErrorCode: WEBHOOK_PROCESSING_FAILED,
+        },
+      });
+    } catch {
+      this.logger.error('Failed to record webhook receipt failure');
+    }
+  }
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'P2002'
+  );
 }
 
 // ─── Helpers for email formatting ──────────────────────────────────────

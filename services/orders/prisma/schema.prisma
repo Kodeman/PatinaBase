@@ -408,6 +408,24 @@ model IdempotencyKey {
   @@map("idempotency_keys")
 }
 
+// Durable ownership lease for Stripe webhook delivery processing.
+model StripeWebhookReceipt {
+  eventId             String    @id @map("event_id")
+  eventType           String    @map("event_type")
+  status              String    @default("processing") // processing|succeeded|failed
+  claimToken          String    @map("claim_token") @db.Uuid
+  attempts            Int       @default(1)
+  processingStartedAt DateTime  @default(now()) @map("processing_started_at")
+  succeededAt         DateTime? @map("succeeded_at")
+  failedAt            DateTime? @map("failed_at")
+  lastErrorCode       String?   @map("last_error_code")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  @@index([status, processingStartedAt], map: "idx_stripe_webhook_receipts_status_started")
+  @@map("stripe_webhook_receipts")
+}
+
 model AuditLog {
   id         String   @id @default(uuid()) @db.Uuid
   entityType String   @map("entity_type") // cart|order|payment|refund|shipment
