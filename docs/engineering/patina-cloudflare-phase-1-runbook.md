@@ -13,12 +13,22 @@ This runbook authorizes no hidden credentials. Password-bearing database logins,
 
 ## Current provisioning blockers
 
-Do not create staging or production database logins, Hyperdrive configurations, Workers, or routes until every blocker below is independently reviewed and closed. Blocker 1 remains open; blocker 2 is closed with the evidence recorded below:
+Do not create staging or production database logins, Hyperdrive configurations, Workers, or routes until every blocker below is independently reviewed and closed. Both repository contracts are implemented. Blocker 1 also has a mandatory per-environment platform-administrator apply and read-only conformance gate; that apply has not been performed against staging or production:
 
-1. **OPEN — database `PUBLIC` ACLs.** The catalog privilege allow-list currently fails because PostgreSQL `PUBLIC` grants expose additional schemas, relations, sequences, and routines to the edge roles. The local conformance test intentionally exits nonzero after its functional assertions and prints only aggregate counts. Resolution requires a platform-admin review of database-wide `PUBLIC` ACLs plus exact re-grants for the existing Supabase roles; role-local revokes cannot create a deny ACL.
+1. **CLOSED IN REPOSITORY 2026-08-15; REMOTE APPLY REQUIRED — database `PUBLIC` ACLs.** Migration `00483` removes the ACLs owned by the ordinary migration principal and hardens the owner-global routine defaults it can lawfully change. The separately reviewed, transactional platform-admin artifact closes Supabase-reserved-owner ACLs and defaults. The aggregate-only remote gate is authoritative for each environment. A failed or unexecuted platform-admin phase keeps that environment provisioning-blocked.
 2. **CLOSED 2026-08-15 — retained Container authorization.** Orders, projects, and media now treat verified Supabase JWTs as identity only, resolve current permissions and memberships through their own Prisma/Supavisor connections, and enforce own/organization/admin scope in protected database operations. No JWT `app_metadata`, caller identity field, JSON metadata, or compatibility fallback grants access.
 
-Neither blocker permits a compatibility fallback to broaden authorization. Blocker 1 must close independently before any Phase 1 provisioning or production sign-off.
+Neither blocker permits a compatibility fallback to broaden authorization. Before any login is created, the target database must have migration `00483`, the platform-admin artifact, and the read-only remote conformance gate completed in that order.
+
+### Blocker 1 closure evidence
+
+- The clean `00482` baseline reproduced the blocker: database `PUBLIC` had `CONNECT` plus `TEMPORARY`; `public` and `net` exposed schema access; six relations, one sequence, and 412 non-system routines were reachable through `PUBLIC`. The edge guard reported 295 callable routines, including 80 `SECURITY DEFINER` routines.
+- A clean local reset replayed through `00483`. The ordinary phase removed database `TEMPORARY`, all migration-owned routine exposure, the public-schema grant, and the unsafe generic grants on `grant_role_to_user` / `revoke_role_from_user`. It also installed global private-by-default routine ACLs for the owners it can `SET`.
+- `scripts/run-local-public-acl-platform-admin.sh` applied `supabase/platform-admin/00483_public_acl_allowlist.sql` twice successfully against only the hard-validated local Supabase CLI container. Afterward, non-system `PUBLIC` schema, relation, column, sequence, and routine counts were all zero; only database `CONNECT` remained.
+- Current Auth, Storage, Realtime, pg_net, GraphQL, cron, extension, Studio, Agent OS, and retained-service compatibility is preserved by named grants. The most sensitive reductions are `extensions.digest(...)` to `service_role` only and the two unguarded role-mutator RPCs to their owner plus `service_role` only.
+- Global future-routine defaults are hardened for `postgres`, `supabase_admin`, `supabase_auth_admin`, `supabase_functions_admin`, `supabase_realtime_admin`, and `supabase_storage_admin`. A schema-local default revoke is not accepted because it cannot subtract PostgreSQL's intrinsic global `PUBLIC EXECUTE` default.
+- The rollback-safe local capability test, named platform compatibility suite, and SELECT-only remote aggregate conformance gate pass after both phases. The remote gate intentionally fails on the `00482` baseline and reports aggregate counts only.
+- The ordinary `postgres` migration role cannot alter objects or defaults owned by `supabase_admin`, `supabase_auth_admin`, or `supabase_storage_admin`; warning-only no-op revokes are not closure. Staging and production therefore require an explicitly authorized Supabase platform-administrator execution channel. No staging or production ACL was changed while producing this evidence.
 
 ### Blocker 2 closure evidence
 
@@ -97,6 +107,18 @@ GRANT authenticated TO edge_rls_user;
 The exact idempotent form lives in the numbered migration. The catalog view is `security_barrier`, contains only approved columns, and fixes `layer = 'catalog'` plus `status = 'published'` inside its definition. `edge_rls_user` receives no direct service-role membership, no `BYPASSRLS`, and no database ownership.
 
 PostgreSQL role privileges are additive and every login is a member of `PUBLIC`. Before either password login exists, the SQL gate must enumerate effective schema, table, sequence, and routine privileges for both group roles. `edge_catalog_reader` must have no effective capability beyond database connection plus usage/select on the approved catalog surface; `edge_rls_user` must have no capability broader than the reviewed `authenticated` role chain. Any inherited `PUBLIC` privilege that breaks those allow-lists is a provisioning blocker, not a warning.
+
+### Two-principal `PUBLIC` ACL closure
+
+The normal migration connection is intentionally not a Supabase platform superuser. Closure is split without an authority bypass:
+
+1. `supabase/migrations/00483_public_acl_allowlist.sql` changes only ACLs/defaults its principal can actually own or `SET` and reports the remaining platform-phase routine count.
+2. `supabase/platform-admin/00483_public_acl_allowlist.sql` verifies its superuser principal plus the reviewed owner/schema/extension manifest, applies reserved-owner changes in one transaction, and asserts the final allow-list before commit.
+3. `supabase/tests/edge_api/catalog_roles_remote_conformance_test.sql` is the definitive target-environment gate. It begins a read-only transaction, performs no includes or mutations, emits aggregate failure counts only, and exits nonzero on any drift.
+
+The local runner has no target, user, credential, database, container, port, or SQL-path override. It accepts only the checked-in SQL file and the Supabase CLI container identified by project labels and the configured `54322 -> 5432` mapping. Never adapt it into a remote runner.
+
+For staging or production, stop unless an approved Supabase platform-administrator channel can execute the checked-in artifact as a verified superuser. The ordinary `postgres` URL is insufficient. Apply no partial hand-written subset and do not treat PostgreSQL `no privileges were granted` warnings as success.
 
 ### Out-of-band login creation
 
@@ -215,10 +237,20 @@ Database owner:
 ls supabase/migrations/*.sql | sort | tail
 python3 scripts/generate-legacy-grants.py
 pnpm supabase:reset
+./scripts/run-local-public-acl-platform-admin.sh
 psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
-  -v ON_ERROR_STOP=1 -f supabase/tests/edge_api/catalog_roles_test.sql
+  -X -v ON_ERROR_STOP=1 \
+  -f supabase/tests/edge_api/catalog_roles_test.sql
+psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
+  -X -v ON_ERROR_STOP=1 \
+  -f supabase/tests/edge_api/platform_acl_compatibility_test.sql
+psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
+  -X -v ON_ERROR_STOP=1 \
+  -f supabase/tests/edge_api/catalog_roles_remote_conformance_test.sql
 pnpm db:generate
 ```
+
+`catalog_roles_test.sql` is local-only: it transactionally exercises migration reconciliation and creates exception-cleaned disposable login sessions. Never point it at a remote database. The remote conformance file is the only ACL gate intended for an ordinary staging/production connection.
 
 Edge owner, from `infra/edge-api-worker`:
 
@@ -310,11 +342,18 @@ pnpm exec supabase db push --dry-run --db-url "$STAGING_DB_URL"
 pnpm exec supabase db push --db-url "$STAGING_DB_URL"
 psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 \
   -f supabase/seed/cloudflare-phase1-staging.sql
-psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 \
-  -f supabase/tests/edge_api/catalog_roles_test.sql
 ```
 
-The explicit `--db-url` is mandatory: a bare `supabase db push` targets linked production Strata. Never point `pnpm supabase:reset` at a remote URL. Record the sanitized branch ref and direct role/view probes before proceeding.
+The explicit `--db-url` is mandatory: a bare `supabase db push` targets linked production Strata. Never point `pnpm supabase:reset` or the local-only `catalog_roles_test.sql` at a remote URL.
+
+At this point, stop unless the approved platform-administrator channel is available. Through that channel, execute exactly `supabase/platform-admin/00483_public_acl_allowlist.sql` after verifying the target branch and current principal. Do not use the ordinary `STAGING_DB_URL`; it is expected to fail the superuser preflight. Then use the ordinary direct URL for the portable, read-only gate:
+
+```bash
+psql "$STAGING_DB_URL" -X -v ON_ERROR_STOP=1 \
+  -f supabase/tests/edge_api/catalog_roles_remote_conformance_test.sql
+```
+
+Any nonzero result blocks login and Hyperdrive creation. Record only the aggregate pass/fail output, sanitized branch ref, migration number, and reviewed platform-admin execution record. Never record the administrator connection string.
 
 The committed staging seed contains deterministic IDs and non-secret fixture identities only. Seeded Auth users are passwordless, unconfirmed, and indefinitely banned. Activate only the accounts needed for the compatibility test by calling `supabase.auth.admin.updateUserById` from a server-only operator script using the staging service-role credential:
 
