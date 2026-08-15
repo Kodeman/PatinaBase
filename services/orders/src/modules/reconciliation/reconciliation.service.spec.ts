@@ -12,7 +12,9 @@ describe('ReconciliationService - Stripe unconfigured (parked payment rail)', ()
   } as unknown as PrismaClient;
   const mockEvents = { publish: jest.fn() };
   const mockAuthorization = { authorize: jest.fn() };
-  const config = { get: jest.fn((_key: string, defaultValue?: unknown) => defaultValue) } as unknown as ConfigService;
+  const config = {
+    get: jest.fn((_key: string, defaultValue?: unknown) => defaultValue),
+  } as unknown as ConfigService;
 
   async function buildService(stripe: unknown) {
     const module: TestingModule = await Test.createTestingModule({
@@ -40,7 +42,7 @@ describe('ReconciliationService - Stripe unconfigured (parked payment rail)', ()
 
       const promise = service.runReconciliation();
       await expect(promise).rejects.toBeInstanceOf(ServiceUnavailableException);
-      await expect(promise.catch(e => JSON.stringify(e.getResponse()))).resolves.toContain(
+      await expect(promise.catch((e) => JSON.stringify(e.getResponse()))).resolves.toContain(
         'stripe_not_configured',
       );
       expect((mockPrisma as any).reconciliation.create).not.toHaveBeenCalled();
@@ -65,6 +67,18 @@ describe('ReconciliationService - Stripe unconfigured (parked payment rail)', ()
       await service.scheduledReconciliation();
 
       expect(runSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('contains and redacts a scheduled provider failure', async () => {
+      service = await buildService({} as any);
+      const sentinel = 'customer-123 raw.sql($1) provider-secret';
+      jest.spyOn(service, 'runReconciliation').mockRejectedValue(new Error(sentinel));
+      const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+
+      await expect(service.scheduledReconciliation()).resolves.toBeUndefined();
+
+      expect(errorSpy).toHaveBeenCalledWith('Scheduled reconciliation failed');
+      expect(JSON.stringify(errorSpy.mock.calls)).not.toContain(sentinel);
     });
   });
 });

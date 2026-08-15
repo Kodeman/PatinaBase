@@ -23,14 +23,20 @@
  * dev fallback.
  */
 import {
+  ArgumentsHost,
   applyDecorators,
+  Catch,
   SetMetadata,
   Injectable,
   CanActivate,
   ExecutionContext,
+  ExceptionFilter,
   createParamDecorator,
   ForbiddenException,
+  HttpException,
+  HttpStatus,
   Inject,
+  Logger,
   Optional,
   UnauthorizedException,
 } from "@nestjs/common";
@@ -74,6 +80,40 @@ export interface RequestAuthorization {
  */
 export interface AuthorizationResolver {
   resolve(subject: string): Promise<RequestAuthorization>;
+}
+
+/**
+ * Prevents raw exceptions from reaching Nest's default exception logger.
+ * Protected request failures may contain provider responses or database
+ * details, so the server log and unknown-error response stay deliberately
+ * content-free.
+ */
+@Catch()
+export class RedactedHttpExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger(RedactedHttpExceptionFilter.name);
+
+  catch(exception: unknown, host: ArgumentsHost): void {
+    const response = host.switchToHttp().getResponse<{
+      status(code: number): { json(body: unknown): void };
+    }>();
+    const isHttpException = exception instanceof HttpException;
+    const status = isHttpException
+      ? exception.getStatus()
+      : HttpStatus.INTERNAL_SERVER_ERROR;
+
+    if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+      this.logger.error("Request failed");
+    }
+
+    const body = isHttpException
+      ? exception.getResponse()
+      : {
+          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+          message: "Internal server error",
+        };
+
+    response.status(status).json(body);
+  }
 }
 
 // Decorator to mark routes as public (no auth required)

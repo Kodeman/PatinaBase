@@ -5,8 +5,13 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { PrometheusController, PrometheusModule } from '@willsoto/nestjs-prometheus';
 import { CacheModule } from '@patina/cache';
-import { APP_GUARD } from '@nestjs/core';
-import { HybridAuthGuard, PermissionsGuard, RequirePermissions } from '@patina/auth';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import {
+  HybridAuthGuard,
+  PermissionsGuard,
+  RedactedHttpExceptionFilter,
+  RequirePermissions,
+} from '@patina/auth';
 import { join } from 'path';
 
 import configuration from './config/configuration';
@@ -78,6 +83,10 @@ RequirePermissions(ORDER_PERMISSIONS.ADMIN_ALL)(PrometheusController);
     FulfillmentModule,
   ],
   providers: [
+    {
+      provide: APP_FILTER,
+      useClass: RedactedHttpExceptionFilter,
+    },
     // Global Authentication Guard — Supabase JWT validation
     {
       provide: APP_GUARD,

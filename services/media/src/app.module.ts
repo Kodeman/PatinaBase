@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
-import { APP_GUARD } from '@nestjs/core';
-import { HybridAuthGuard, PermissionsGuard } from '@patina/auth';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { HybridAuthGuard, PermissionsGuard, RedactedHttpExceptionFilter } from '@patina/auth';
 import { join } from 'path';
 
 // Modules
@@ -55,6 +55,10 @@ import { SystemController } from './system.controller';
   ],
   controllers: [UploadController, AssetsController, JobsController, SystemController],
   providers: [
+    {
+      provide: APP_FILTER,
+      useClass: RedactedHttpExceptionFilter,
+    },
     // Services
     OCIStorageService,
     UploadService,

@@ -552,3 +552,60 @@ describe("PermissionsGuard", () => {
     expect(resolver.resolve).not.toHaveBeenCalled();
   });
 });
+
+describe("RedactedHttpExceptionFilter", () => {
+  function httpHost() {
+    const json = vi.fn();
+    const status = vi.fn().mockReturnValue({ json });
+    return {
+      host: {
+        switchToHttp: () => ({ getResponse: () => ({ status }) }),
+      } as any,
+      json,
+      status,
+    };
+  }
+
+  it("does not log or return details from an unknown exception", async () => {
+    const { RedactedHttpExceptionFilter } = await import("./index");
+    const { host, json, status } = httpHost();
+    const filter = new RedactedHttpExceptionFilter();
+    const log = vi.fn();
+    (filter as any).logger.error = log;
+
+    filter.catch(
+      new Error(
+        "Bearer sensitive.jwt.value query user_id = $1 params customer-123",
+      ),
+      host,
+    );
+
+    expect(log).toHaveBeenCalledWith("Request failed");
+    expect(status).toHaveBeenCalledWith(500);
+    expect(json).toHaveBeenCalledWith({
+      statusCode: 500,
+      message: "Internal server error",
+    });
+    expect(JSON.stringify(log.mock.calls)).not.toContain("sensitive");
+    expect(JSON.stringify(json.mock.calls)).not.toContain("customer-123");
+  });
+
+  it("preserves an intentional HTTP status without logging a client failure", async () => {
+    const { BadRequestException } = await import("@nestjs/common");
+    const { RedactedHttpExceptionFilter } = await import("./index");
+    const { host, json, status } = httpHost();
+    const filter = new RedactedHttpExceptionFilter();
+    const log = vi.fn();
+    (filter as any).logger.error = log;
+
+    filter.catch(new BadRequestException("Invalid request"), host);
+
+    expect(log).not.toHaveBeenCalled();
+    expect(status).toHaveBeenCalledWith(400);
+    expect(json).toHaveBeenCalledWith({
+      statusCode: 400,
+      message: "Invalid request",
+      error: "Bad Request",
+    });
+  });
+});

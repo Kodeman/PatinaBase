@@ -36,7 +36,12 @@ export class ReconciliationService {
       return;
     }
 
-    await this.runReconciliation();
+    try {
+      await this.runReconciliation();
+    } catch {
+      // Cron executions do not pass through the HTTP exception filter.
+      this.logger.error('Scheduled reconciliation failed');
+    }
   }
 
   /**
