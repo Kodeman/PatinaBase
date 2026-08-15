@@ -46,7 +46,7 @@ Excluded:
 | Supabase environment | local CLI | persistent branch `staging` | Strata `bkvcixdmuyejfzcijpdg` |
 | Catalog group role | `edge_catalog_reader` | same | same |
 | Authenticated group role | `edge_rls_user` | same | same |
-| Password login | local disposable | `edge_catalog_login`, `edge_rls_login` | environment-distinct names/passwords |
+| Password login | local disposable | `edge_catalog_login`, `edge_rls_login` | same role names in the separate database; production-only passwords |
 
 Never reuse a password or connection string across staging and production. Hyperdrive configuration IDs are deployment outputs and are committed only as Wrangler binding IDs if project policy permits; connection strings and passwords never enter Git.
 
@@ -70,7 +70,7 @@ CREATE ROLE edge_catalog_reader NOLOGIN NOBYPASSRLS NOINHERIT;
 CREATE ROLE edge_rls_user       NOLOGIN NOBYPASSRLS NOINHERIT;
 
 GRANT USAGE ON SCHEMA public TO edge_catalog_reader;
-GRANT SELECT ON public.edge_catalog_product_summaries TO edge_catalog_reader;
+GRANT SELECT ON public.edge_catalog_products TO edge_catalog_reader;
 REVOKE ALL ON public.products FROM edge_catalog_reader;
 
 GRANT authenticated TO edge_rls_user;
@@ -78,12 +78,14 @@ GRANT authenticated TO edge_rls_user;
 
 The exact idempotent form lives in the numbered migration. The catalog view is `security_barrier`, contains only approved columns, and fixes `layer = 'catalog'` plus `status = 'published'` inside its definition. `edge_rls_user` receives no direct service-role membership, no `BYPASSRLS`, and no database ownership.
 
+PostgreSQL role privileges are additive and every login is a member of `PUBLIC`. Before either password login exists, the SQL gate must enumerate effective schema, table, sequence, and routine privileges for both group roles. `edge_catalog_reader` must have no effective capability beyond database connection plus usage/select on the approved catalog surface; `edge_rls_user` must have no capability broader than the reviewed `authenticated` role chain. Any inherited `PUBLIC` privilege that breaks those allow-lists is a provisioning blocker, not a warning.
+
 ### Out-of-band login creation
 
 Run once per environment from an administrative `psql` session. Supply passwords through `psql` variables or a password manager, never shell history or a checked-in file.
 
 ```sql
-CREATE ROLE edge_catalog_login LOGIN NOINHERIT NOBYPASSRLS PASSWORD :'catalog_password';
+CREATE ROLE edge_catalog_login LOGIN INHERIT NOBYPASSRLS PASSWORD :'catalog_password';
 CREATE ROLE edge_rls_login     LOGIN NOINHERIT NOBYPASSRLS PASSWORD :'rls_password';
 GRANT edge_catalog_reader TO edge_catalog_login;
 GRANT edge_rls_user       TO edge_rls_login;
@@ -101,7 +103,7 @@ WHERE rolname IN (
 ORDER BY rolname;
 ```
 
-Expected: group roles cannot log in; login roles can; all four are `NOBYPASSRLS`; no role inherits broad privileges automatically.
+Expected: group roles cannot log in; login roles can; all four are `NOBYPASSRLS`. The catalog login inherits only the audited catalog-reader membership. The RLS login inherits nothing and can enter only the reviewed role chain with `SET LOCAL ROLE`.
 
 ### Authenticated request transaction
 
@@ -186,7 +188,7 @@ ls supabase/migrations/*.sql | sort | tail
 python3 scripts/generate-legacy-grants.py
 pnpm supabase:reset
 psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
-  -v ON_ERROR_STOP=1 -f supabase/tests/edge/catalog_access_test.sql
+  -v ON_ERROR_STOP=1 -f supabase/tests/edge_api/catalog_roles_test.sql
 pnpm db:generate
 ```
 
@@ -257,22 +259,45 @@ enabled = true
 sql_paths = ["./seed/<phase-1-staging-seed>.sql"]
 ```
 
-The remote cannot be configured before the branch exists. Apply the reviewed migration and synthetic fixtures to the staging branch using the branch-specific project/database credentials. Never point `pnpm supabase:reset` at a remote URL.
+The remote cannot be configured before the branch exists. Load `STAGING_PROJECT_REF` and the percent-encoded `STAGING_DB_URL` from the password manager without printing them. Abort unless the URL contains the branch ref and the ref is not the production ref:
+
+```bash
+test "$STAGING_PROJECT_REF" != "bkvcixdmuyejfzcijpdg"
+case "$STAGING_DB_URL" in
+  *"$STAGING_PROJECT_REF"*) ;;
+  *) echo "staging URL/ref mismatch" >&2; exit 1 ;;
+esac
+
+pnpm exec supabase db push --dry-run --db-url "$STAGING_DB_URL"
+pnpm exec supabase db push --db-url "$STAGING_DB_URL"
+psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 \
+  -f supabase/seed/cloudflare-phase1-staging.sql
+psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 \
+  -f supabase/tests/edge_api/catalog_roles_test.sql
+```
+
+The explicit `--db-url` is mandatory: a bare `supabase db push` targets linked production Strata. Never point `pnpm supabase:reset` at a remote URL. Record the sanitized branch ref and direct role/view probes before proceeding.
+
+The committed staging seed contains deterministic IDs and non-secret fixture identities only. Create or rotate any credential needed for sign-in tests out of band after seeding; no known password may be present in the seed or repository.
 
 ### Hyperdrive
 
 Use the branch's direct Supabase database endpoint and its environment-specific logins:
 
 ```bash
+read -s STAGING_EDGE_RLS_URL
 npx wrangler hyperdrive create strata-staging-fresh \
-  --connection-string="<staging-edge-rls-direct-url>" \
+  --connection-string="$STAGING_EDGE_RLS_URL" \
   --caching-disabled
+unset STAGING_EDGE_RLS_URL
 
+read -s STAGING_CATALOG_URL
 npx wrangler hyperdrive create strata-staging-public-cache \
-  --connection-string="<staging-catalog-direct-url>"
+  --connection-string="$STAGING_CATALOG_URL"
+unset STAGING_CATALOG_URL
 ```
 
-Confirm the public-cache defaults are `max_age=60` and `stale_while_revalidate=15`; update explicitly if the live account differs. Put the returned configuration IDs into the staging Wrangler environment's `DB_FRESH` and `DB_PUBLIC_CACHE` bindings. Set secrets with `wrangler secret put`; never pass values in a report.
+The URL values do not enter shell history, but Wrangler necessarily expands them into a short-lived process argument. Run this on the private operator host, ensure no process tracing is active, and unset each variable immediately. Confirm the public-cache defaults are `max_age=60` and `stale_while_revalidate=15`; update explicitly if the live account differs. Put the returned configuration IDs into the staging Wrangler environment's `DB_FRESH` and `DB_PUBLIC_CACHE` bindings. Set secrets with `wrangler secret put`; never pass values in a report.
 
 ### Worker and host
 
@@ -473,4 +498,3 @@ Never store secret values, connection strings, JWTs, cookies, customer filenames
 - [Hyperdrive query caching](https://developers.cloudflare.com/hyperdrive/concepts/query-caching/)
 - [Hyperdrive Supabase guide](https://developers.cloudflare.com/hyperdrive/examples/connect-to-postgres/postgres-database-providers/supabase/)
 - [Cloudflare Container connections](https://developers.cloudflare.com/containers/platform-details/workers-connections/)
-
