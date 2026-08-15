@@ -11053,15 +11053,3 @@ DO $g$ BEGIN
   GRANT authenticated TO edge_rls_user WITH INHERIT FALSE, SET TRUE;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
-
--- 00481_edge_catalog_roles.sql
-DO $g$ BEGIN
-  GRANT edge_catalog_reader TO postgres WITH INHERIT FALSE, SET TRUE;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00481_edge_catalog_roles.sql
-DO $g$ BEGIN
-  GRANT edge_rls_user TO postgres WITH INHERIT FALSE, SET TRUE;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
