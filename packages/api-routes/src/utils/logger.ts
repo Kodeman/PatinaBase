@@ -1,10 +1,10 @@
-import type { RouteContext } from './request-context';
-import { getRequestDuration } from './request-context';
+import type { RouteContext } from "./request-context";
+import { getRequestDuration } from "./request-context";
 
 /**
  * Log levels
  */
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+export type LogLevel = "debug" | "info" | "warn" | "error";
 
 /**
  * Structured log entry
@@ -35,8 +35,8 @@ export interface LoggerConfig {
  * Default logger configuration
  */
 const defaultConfig: LoggerConfig = {
-  level: (process.env.LOG_LEVEL as LogLevel) || 'info',
-  pretty: process.env.NODE_ENV === 'development',
+  level: (process.env.LOG_LEVEL as LogLevel) || "info",
+  pretty: process.env.NODE_ENV === "development",
 };
 
 /**
@@ -63,12 +63,12 @@ function formatLog(entry: LogEntry, config: LoggerConfig): string {
   if (config.pretty) {
     const { level, message, timestamp, ...rest } = entry;
     const colorMap: Record<LogLevel, string> = {
-      debug: '\x1b[36m', // Cyan
-      info: '\x1b[32m',  // Green
-      warn: '\x1b[33m',  // Yellow
-      error: '\x1b[31m', // Red
+      debug: "\x1b[36m", // Cyan
+      info: "\x1b[32m", // Green
+      warn: "\x1b[33m", // Yellow
+      error: "\x1b[31m", // Red
     };
-    const reset = '\x1b[0m';
+    const reset = "\x1b[0m";
     const color = colorMap[level];
 
     let output = `${color}[${level.toUpperCase()}]${reset} ${message}`;
@@ -88,7 +88,7 @@ function log(
   level: LogLevel,
   message: string,
   meta: Record<string, unknown> = {},
-  config: LoggerConfig = defaultConfig
+  config: LoggerConfig = defaultConfig,
 ): void {
   if (!shouldLog(level, config)) {
     return;
@@ -106,16 +106,16 @@ function log(
 
   // Output to appropriate console method
   switch (level) {
-    case 'debug':
+    case "debug":
       console.debug(output);
       break;
-    case 'info':
+    case "info":
       console.info(output);
       break;
-    case 'warn':
+    case "warn":
       console.warn(output);
       break;
-    case 'error':
+    case "error":
       console.error(output);
       break;
   }
@@ -126,7 +126,7 @@ function log(
  */
 export function createLogger(
   defaultFields?: Record<string, unknown>,
-  config: Partial<LoggerConfig> = {}
+  config: Partial<LoggerConfig> = {},
 ): Logger {
   const mergedConfig: LoggerConfig = {
     ...defaultConfig,
@@ -138,14 +138,12 @@ export function createLogger(
   };
 
   return {
-    debug: (message, meta?) => log('debug', message, meta, mergedConfig),
-    info: (message, meta?) => log('info', message, meta, mergedConfig),
-    warn: (message, meta?) => log('warn', message, meta, mergedConfig),
-    error: (message, meta?) => log('error', message, meta, mergedConfig),
-    child: (childFields) => createLogger(
-      { ...mergedConfig.defaultFields, ...childFields },
-      config
-    ),
+    debug: (message, meta?) => log("debug", message, meta, mergedConfig),
+    info: (message, meta?) => log("info", message, meta, mergedConfig),
+    warn: (message, meta?) => log("warn", message, meta, mergedConfig),
+    error: (message, meta?) => log("error", message, meta, mergedConfig),
+    child: (childFields) =>
+      createLogger({ ...mergedConfig.defaultFields, ...childFields }, config),
   };
 }
 
@@ -171,8 +169,6 @@ export const logger = createLogger();
 export function loggerFromContext(context: RouteContext): Logger {
   return createLogger({
     requestId: context.requestId,
-    userId: context.user?.id,
-    ip: context.ip,
   });
 }
 
@@ -182,13 +178,11 @@ export function loggerFromContext(context: RouteContext): Logger {
 export function logRequestStart(
   context: RouteContext,
   method: string,
-  path: string
+  _path: string,
 ): void {
   const log = loggerFromContext(context);
-  log.info('API request started', {
+  log.info("API request started", {
     method,
-    path,
-    userAgent: context.userAgent,
   });
 }
 
@@ -198,17 +192,16 @@ export function logRequestStart(
 export function logRequestComplete(
   context: RouteContext,
   method: string,
-  path: string,
-  status: number
+  _path: string,
+  status: number,
 ): void {
   const log = loggerFromContext(context);
   const duration = getRequestDuration(context);
 
-  const level = status >= 500 ? 'error' : status >= 400 ? 'warn' : 'info';
+  const level = status >= 500 ? "error" : status >= 400 ? "warn" : "info";
 
-  log[level]('API request completed', {
+  log[level]("API request completed", {
     method,
-    path,
     status,
     duration,
   });
@@ -220,21 +213,16 @@ export function logRequestComplete(
 export function logRequestError(
   context: RouteContext,
   method: string,
-  path: string,
-  error: unknown
+  _path: string,
+  error: unknown,
 ): void {
   const log = loggerFromContext(context);
   const duration = getRequestDuration(context);
 
-  log.error('API request failed', {
+  log.error("API request failed", {
     method,
-    path,
     duration,
-    error: error instanceof Error ? {
-      name: error.name,
-      message: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
-    } : String(error),
+    errorType: error instanceof Error ? error.name : "UnknownError",
   });
 }
 
@@ -243,13 +231,12 @@ export function logRequestError(
  */
 export function logValidationError(
   context: RouteContext,
-  field: 'body' | 'query' | 'params',
-  error: unknown
+  field: "body" | "query" | "params",
+  _error: unknown,
 ): void {
   const log = loggerFromContext(context);
-  log.warn('Validation failed', {
+  log.warn("Validation failed", {
     field,
-    error: error instanceof Error ? error.message : String(error),
   });
 }
 
@@ -259,10 +246,10 @@ export function logValidationError(
 export function logRateLimitExceeded(
   context: RouteContext,
   limit: number,
-  window: number
+  window: number,
 ): void {
   const log = loggerFromContext(context);
-  log.warn('Rate limit exceeded', {
+  log.warn("Rate limit exceeded", {
     limit,
     window,
   });
@@ -271,14 +258,9 @@ export function logRateLimitExceeded(
 /**
  * Log authentication failure
  */
-export function logAuthFailure(
-  context: RouteContext,
-  reason: string
-): void {
+export function logAuthFailure(context: RouteContext, _reason: string): void {
   const log = loggerFromContext(context);
-  log.warn('Authentication failed', {
-    reason,
-  });
+  log.warn("Authentication failed");
 }
 
 /**
@@ -286,12 +268,9 @@ export function logAuthFailure(
  */
 export function logAuthzFailure(
   context: RouteContext,
-  requiredRoles: string[],
-  userRoles: string[]
+  _requiredRoles: string[],
+  _userRoles: string[],
 ): void {
   const log = loggerFromContext(context);
-  log.warn('Authorization failed', {
-    requiredRoles,
-    userRoles,
-  });
+  log.warn("Authorization failed");
 }

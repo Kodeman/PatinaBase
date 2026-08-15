@@ -7,8 +7,8 @@
  * @module tracing
  */
 
-import { trace, context, SpanStatusCode, type Span } from '@opentelemetry/api';
-import type { RouteContext } from './request-context';
+import { trace, context, SpanStatusCode, type Span } from "@opentelemetry/api";
+import type { RouteContext } from "./request-context";
 
 /**
  * Configuration for tracing
@@ -48,12 +48,12 @@ export function createTracer(config: TracingConfig) {
   if (!config.enabled) {
     return createNoOpTracer();
   }
-  return trace.getTracer(config.serviceName, '1.0.0');
+  return trace.getTracer(config.serviceName, "1.0.0");
 }
 
 /**
  * Start a span for an API route request
- * Records HTTP method, route path, request metadata, and user information
+ * Records only non-customer request metadata.
  *
  * @param tracerName - Name of the tracer (service name)
  * @param method - HTTP method (GET, POST, etc.)
@@ -75,26 +75,16 @@ export function createTracer(config: TracingConfig) {
 export function startRouteSpan(
   tracerName: string,
   method: string,
-  path: string,
-  routeContext: RouteContext
+  _path: string,
+  routeContext: RouteContext,
 ): Span {
   const tracer = trace.getTracer(tracerName);
-  const span = tracer.startSpan(`${method} ${path}`, {
+  const span = tracer.startSpan(`${method} request`, {
     attributes: {
-      'http.method': method,
-      'http.route': path,
-      'http.request_id': routeContext.requestId,
-      'http.client_ip': routeContext.ip,
-      'http.user_agent': routeContext.userAgent || 'unknown',
+      "http.method": method,
+      "http.request_id": routeContext.requestId,
     },
   });
-
-  // Add user information if authenticated
-  if (routeContext.user) {
-    span.setAttribute('user.id', routeContext.user.id);
-    span.setAttribute('user.role', routeContext.user.roles.join(','));
-    span.setAttribute('user.email_verified', routeContext.user.emailVerified);
-  }
 
   return span;
 }
@@ -116,18 +106,17 @@ export function startRouteSpan(
  * ```
  */
 export function startProxySpan(
-  parentSpan: Span,
+  _parentSpan: Span,
   serviceName: string,
   method: string,
-  url: string
+  _url: string,
 ): Span {
-  const tracer = trace.getTracer('api-routes-proxy');
+  const tracer = trace.getTracer("api-routes-proxy");
   const span = tracer.startSpan(`proxy to ${serviceName}`, {
     attributes: {
-      'service.name': serviceName,
-      'http.method': method,
-      'http.url': url,
-      'span.kind': 'client',
+      "service.name": serviceName,
+      "http.method": method,
+      "span.kind": "client",
     },
   });
 
@@ -153,11 +142,14 @@ export function startProxySpan(
  * }
  * ```
  */
-export function recordRetryAttempt(span: Span, attempt: number, error?: Error): void {
-  span.addEvent('retry_attempt', {
-    'retry.attempt': attempt,
-    'retry.error': error?.message || 'unknown',
-    'retry.error_name': error?.name || 'unknown',
+export function recordRetryAttempt(
+  span: Span,
+  attempt: number,
+  error?: Error,
+): void {
+  span.addEvent("retry_attempt", {
+    "retry.attempt": attempt,
+    "retry.error_name": error?.name || "unknown",
   });
 }
 
@@ -179,11 +171,11 @@ export function recordRetryAttempt(span: Span, attempt: number, error?: Error): 
 export function recordCircuitBreakerEvent(
   span: Span,
   serviceName: string,
-  state: 'OPEN' | 'CLOSED' | 'HALF_OPEN'
+  state: "OPEN" | "CLOSED" | "HALF_OPEN",
 ): void {
-  span.addEvent('circuit_breaker_state_change', {
-    'circuit_breaker.service': serviceName,
-    'circuit_breaker.state': state,
+  span.addEvent("circuit_breaker_state_change", {
+    "circuit_breaker.service": serviceName,
+    "circuit_breaker.state": state,
   });
 }
 
@@ -201,10 +193,13 @@ export function recordCircuitBreakerEvent(
  * recordCacheEvent(span, cached !== null, key);
  * ```
  */
-export function recordCacheEvent(span: Span, hit: boolean, key?: string): void {
-  span.addEvent(hit ? 'cache_hit' : 'cache_miss', {
-    'cache.hit': hit,
-    ...(key && { 'cache.key': key }),
+export function recordCacheEvent(
+  span: Span,
+  hit: boolean,
+  _key?: string,
+): void {
+  span.addEvent(hit ? "cache_hit" : "cache_miss", {
+    "cache.hit": hit,
   });
 }
 
@@ -223,7 +218,7 @@ export function recordCacheEvent(span: Span, hit: boolean, key?: string): void {
  * ```
  */
 export function endSpanSuccess(span: Span, statusCode: number): void {
-  span.setAttribute('http.status_code', statusCode);
+  span.setAttribute("http.status_code", statusCode);
   span.setStatus({ code: SpanStatusCode.OK });
   span.end();
 }
@@ -246,14 +241,18 @@ export function endSpanSuccess(span: Span, statusCode: number): void {
  * }
  * ```
  */
-export function endSpanError(span: Span, error: Error, statusCode?: number): void {
-  span.recordException(error);
+export function endSpanError(
+  span: Span,
+  error: Error,
+  statusCode?: number,
+): void {
+  span.recordException(new Error(error.name));
   span.setStatus({
     code: SpanStatusCode.ERROR,
-    message: error.message,
+    message: "Request failed",
   });
   if (statusCode) {
-    span.setAttribute('http.status_code', statusCode);
+    span.setAttribute("http.status_code", statusCode);
   }
   span.end();
 }
@@ -279,17 +278,17 @@ function createNoOpTracer() {
 function createNoOpSpan(): Span {
   return {
     spanContext: () => ({
-      traceId: '',
-      spanId: '',
+      traceId: "",
+      spanId: "",
       traceFlags: 0,
     }),
-    setAttribute: () => ({} as Span),
-    setAttributes: () => ({} as Span),
-    addEvent: () => ({} as Span),
-    addLink: () => ({} as Span),
-    addLinks: () => ({} as Span),
-    setStatus: () => ({} as Span),
-    updateName: () => ({} as Span),
+    setAttribute: () => ({}) as Span,
+    setAttributes: () => ({}) as Span,
+    addEvent: () => ({}) as Span,
+    addLink: () => ({}) as Span,
+    addLinks: () => ({}) as Span,
+    setStatus: () => ({}) as Span,
+    updateName: () => ({}) as Span,
     end: () => {},
     isRecording: () => false,
     recordException: () => {},

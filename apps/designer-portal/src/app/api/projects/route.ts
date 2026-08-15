@@ -1,11 +1,9 @@
-import { NextRequest } from 'next/server';
-import {
-  createRouteHandler,
-  proxyToBackend
-} from '@patina/api-routes';
-import { apiError, type RouteContext } from '@patina/api-routes';
+import { NextRequest } from "next/server";
+import { createRouteHandler, proxyToBackend } from "@patina/api-routes";
+import { apiError, type RouteContext } from "@patina/api-routes";
 
-const PROJECTS_URL = process.env.PROJECTS_SERVICE_URL || 'http://localhost:3016';
+const PROJECTS_URL =
+  process.env.PROJECTS_SERVICE_URL || "http://localhost:3016";
 
 // GET /api/projects - List projects
 export const GET = createRouteHandler(
@@ -13,9 +11,9 @@ export const GET = createRouteHandler(
     try {
       return await proxyToBackend(request, context, {
         service: {
-          name: 'projects',
+          name: "projects",
           baseUrl: PROJECTS_URL,
-          path: '/api/v1/projects',
+          path: "/v1/projects",
         },
         requireAuth: true,
         retry: { maxRetries: 3 },
@@ -25,7 +23,7 @@ export const GET = createRouteHandler(
       return apiError(error);
     }
   },
-  { method: 'GET' }
+  { method: "GET" },
 );
 
 // POST /api/projects - Create project
@@ -34,9 +32,9 @@ export const POST = createRouteHandler(
     try {
       return await proxyToBackend(request, context, {
         service: {
-          name: 'projects',
+          name: "projects",
           baseUrl: PROJECTS_URL,
-          path: '/api/v1/projects',
+          path: "/v1/projects",
         },
         requireAuth: true,
         retry: { maxRetries: 2 },
@@ -46,5 +44,5 @@ export const POST = createRouteHandler(
       return apiError(error);
     }
   },
-  { method: 'POST' }
+  { method: "POST" },
 );
