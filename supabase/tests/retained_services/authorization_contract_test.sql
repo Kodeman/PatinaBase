@@ -314,6 +314,47 @@ BEGIN
       AND data_type = 'uuid'
   ), 'projects public-project bridge is missing';
 
+  ASSERT to_regclass('svc_orders.stripe_webhook_receipts') IS NOT NULL,
+    'Stripe webhook receipt relation is missing';
+  ASSERT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'svc_orders.stripe_webhook_receipts'::regclass
+      AND contype = 'p'
+      AND conname = 'stripe_webhook_receipts_pkey'
+  ), 'Stripe webhook event identity is not unique';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM information_schema.role_table_grants
+    WHERE table_schema = 'svc_orders'
+      AND table_name = 'stripe_webhook_receipts'
+      AND grantee IN ('PUBLIC', 'anon', 'authenticated')
+  ), 'Stripe webhook receipt privileges were widened';
+
+  INSERT INTO svc_orders.stripe_webhook_receipts (
+    event_id, event_type, claim_token
+  ) VALUES (
+    'evt_retained_contract',
+    'payment_intent.succeeded',
+    'c4820000-0000-4000-8000-000000000601'
+  );
+  BEGIN
+    INSERT INTO svc_orders.stripe_webhook_receipts (
+      event_id, event_type, claim_token
+    ) VALUES (
+      'evt_retained_contract',
+      'payment_intent.succeeded',
+      'c4820000-0000-4000-8000-000000000602'
+    );
+    RAISE EXCEPTION 'duplicate Stripe event identity was accepted';
+  EXCEPTION WHEN unique_violation THEN
+    NULL;
+  END;
+  UPDATE svc_orders.stripe_webhook_receipts
+  SET status = 'succeeded', succeeded_at = now()
+  WHERE event_id = 'evt_retained_contract'
+    AND claim_token = 'c4820000-0000-4000-8000-000000000601';
+  GET DIAGNOSTICS v_updated = ROW_COUNT;
+  ASSERT v_updated = 1, 'token-fenced Stripe receipt transition failed';
+
   ASSERT (
     SELECT count(*) = 8
     FROM public.permissions

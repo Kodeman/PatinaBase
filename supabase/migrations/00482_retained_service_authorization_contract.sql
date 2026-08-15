@@ -142,6 +142,48 @@ CREATE INDEX IF NOT EXISTS idx_orders_organization_created
 COMMENT ON COLUMN svc_orders.orders.organization_id IS
   'Authoritative organization scope for retained-service authorization. NULL means no organization access; never infer this value from order JSON.';
 
+-- Stripe webhook delivery claims are durable and unique before any effect.
+-- A token-fenced state transition lets retries recover failed or stale claims
+-- without allowing concurrent deliveries to execute the same event twice.
+CREATE TABLE IF NOT EXISTS svc_orders.stripe_webhook_receipts (
+  event_id TEXT PRIMARY KEY,
+  event_type TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'processing',
+  claim_token UUID NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 1,
+  processing_started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  succeeded_at TIMESTAMPTZ,
+  failed_at TIMESTAMPTZ,
+  last_error_code TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT stripe_webhook_receipts_status_check
+    CHECK (status IN ('processing', 'succeeded', 'failed')),
+  CONSTRAINT stripe_webhook_receipts_attempts_check
+    CHECK (attempts > 0),
+  CONSTRAINT stripe_webhook_receipts_state_time_check
+    CHECK (
+      (status = 'processing' AND succeeded_at IS NULL AND failed_at IS NULL)
+      OR (status = 'succeeded' AND succeeded_at IS NOT NULL AND failed_at IS NULL)
+      OR (status = 'failed' AND succeeded_at IS NULL AND failed_at IS NOT NULL)
+    )
+);
+
+CREATE INDEX IF NOT EXISTS idx_stripe_webhook_receipts_status_started
+  ON svc_orders.stripe_webhook_receipts (status, processing_started_at);
+
+DROP TRIGGER IF EXISTS set_stripe_webhook_receipts_updated_at
+  ON svc_orders.stripe_webhook_receipts;
+CREATE TRIGGER set_stripe_webhook_receipts_updated_at
+  BEFORE UPDATE ON svc_orders.stripe_webhook_receipts
+  FOR EACH ROW EXECUTE FUNCTION svc_orders.set_updated_at();
+
+COMMENT ON TABLE svc_orders.stripe_webhook_receipts IS
+  'Private retained-Container ledger for Stripe signature-verified delivery claims. It is intentionally not an RLS/PostgREST surface: broad API roles have no table privileges, and event identity and claim tokens are provider-derived.';
+
+REVOKE ALL ON TABLE svc_orders.stripe_webhook_receipts
+  FROM PUBLIC, anon, authenticated;
+
 -- The service project and the canonical public project were previously separate.
 -- A nullable, unique FK is the smallest safe bridge for current team/studio scope.
 -- Existing rows intentionally remain unlinked rather than guessing from IDs,
