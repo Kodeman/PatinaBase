@@ -11,8 +11,7 @@
 --      rejected, and ON CONFLICT (twilio_sid) DO NOTHING inserts no second row.
 --
 -- How to run:
---   docker exec -i supabase_db_supabase psql -U postgres -d postgres \
---     -v ON_ERROR_STOP=1 < supabase/tests/rls/sms_tables_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/rls/sms_tables_test.sql
 --
 -- Transaction-wrapped + ROLLBACK. RLS SELECT cases switch to the authenticated
 -- role + jwt claims (the products_three_layer_test idiom).

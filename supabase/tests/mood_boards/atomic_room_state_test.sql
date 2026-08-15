@@ -1,8 +1,6 @@
 -- Atomic MoodBoard room-state persistence regression (00411).
 -- Run after a fresh reset:
---   psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
---     -v ON_ERROR_STOP=1 \
---     -f supabase/tests/mood_boards/atomic_room_state_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/mood_boards/atomic_room_state_test.sql
 
 BEGIN;
 

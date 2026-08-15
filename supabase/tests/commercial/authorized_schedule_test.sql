@@ -1,8 +1,7 @@
 -- 00422 Authorized Schedule (phase 1) integration test.
--- Runner: plain psql, ON_ERROR_STOP=1. The transaction rolls back.
+-- Runner: same-session SQL-test helper. The transaction rolls back.
 -- Run:
---   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
---     -v ON_ERROR_STOP=1 -f supabase/tests/commercial/authorized_schedule_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/commercial/authorized_schedule_test.sql
 --
 -- What this suite is for: before 00422 a furnishing authorization was a
 -- re-authored parallel proposal, and executing it MINTED a second population of

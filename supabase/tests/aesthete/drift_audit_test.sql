@@ -27,8 +27,7 @@
 --   5. Grants: anon/authenticated cannot EXECUTE the janitor or the audit.
 --
 -- How to run:
---   docker exec -i supabase_db_supabase psql -U postgres -d postgres \
---     -v ON_ERROR_STOP=1 < supabase/tests/aesthete/drift_audit_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/aesthete/drift_audit_test.sql
 --
 -- Single transaction, ROLLBACK at the end — safe on a live/seeded DB.
 -- ═══════════════════════════════════════════════════════════════════════════

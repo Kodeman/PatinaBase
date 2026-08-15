@@ -1,8 +1,7 @@
 -- 00425 Executed-on-paper integration test.
--- Runner: plain psql, ON_ERROR_STOP=1. The transaction rolls back.
+-- Runner: same-session SQL-test helper. The transaction rolls back.
 -- Run:
---   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
---     -v ON_ERROR_STOP=1 -f supabase/tests/commercial/executed_on_paper_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/commercial/executed_on_paper_test.sql
 --
 -- What this suite is for. A client who prints an agreement, signs it, and hands
 -- it back has EXECUTED IT. 00425 lets the studio say so. The whole risk of that

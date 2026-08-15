@@ -14,8 +14,7 @@
 --   (f) the 00319 last-owner guard still blocks demoting the sole owner.
 --
 -- How to run:
---   docker exec -i supabase_db_supabase psql -U postgres -d postgres \
---     -v ON_ERROR_STOP=1 < supabase/tests/rls/studio_titles_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/rls/studio_titles_test.sql
 --
 -- Transaction-wrapped + ROLLBACK — rerunnable, no side effects.
 -- ═══════════════════════════════════════════════════════════════════════════

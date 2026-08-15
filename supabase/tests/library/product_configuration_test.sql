@@ -1,7 +1,6 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 -- Furniture configuration: four archetypes, invariants, snapshot handoff
--- Run: psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1
---        -f supabase/tests/library/product_configuration_test.sql
+-- Run: scripts/run-supabase-sql-test.sh supabase/tests/library/product_configuration_test.sql
 -- ═══════════════════════════════════════════════════════════════════════════
 
 BEGIN;

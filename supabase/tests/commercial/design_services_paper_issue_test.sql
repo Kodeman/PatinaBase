@@ -1,9 +1,8 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 00477 — Issued-on-paper integration test.
--- Runner: plain psql, ON_ERROR_STOP=1. Single transaction, ROLLBACK at the end.
+-- Runner: same-session SQL-test helper. Single transaction, ROLLBACK at the end.
 -- Run:
---   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
---     -v ON_ERROR_STOP=1 -f supabase/tests/commercial/design_services_paper_issue_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/commercial/design_services_paper_issue_test.sql
 --
 -- What this suite is for. 00425 let the studio record a signature taken on a
 -- printed copy — but only against a document already 'sent', and the only door

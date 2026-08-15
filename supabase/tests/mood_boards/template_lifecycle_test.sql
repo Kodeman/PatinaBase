@@ -1,8 +1,6 @@
 -- Board-template isolation, starter stability, and materialization regressions
 -- (00408 + 00409). Run after a fresh reset:
---   psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
---     -v ON_ERROR_STOP=1 \
---     -f supabase/tests/mood_boards/template_lifecycle_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/mood_boards/template_lifecycle_test.sql
 
 BEGIN;
 

@@ -2,9 +2,7 @@
 -- Plan Room schema/RLS/RPC/security lifecycle (00429)
 --
 -- Run:
---   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -X -q \
---     -v ON_ERROR_STOP=1 \
---     -f supabase/tests/plan_room/security_and_lifecycle_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/plan_room/security_and_lifecycle_test.sql
 -- ═══════════════════════════════════════════════════════════════════════════
 
 BEGIN;

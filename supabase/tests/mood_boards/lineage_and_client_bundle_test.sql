@@ -1,8 +1,6 @@
 -- Frozen section snapshot, continuation lineage, and client DTO regressions
 -- (00407). Run after a fresh reset:
---   psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
---     -v ON_ERROR_STOP=1 \
---     -f supabase/tests/mood_boards/lineage_and_client_bundle_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/mood_boards/lineage_and_client_bundle_test.sql
 
 BEGIN;
 

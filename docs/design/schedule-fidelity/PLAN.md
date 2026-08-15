@@ -215,7 +215,7 @@ Each ceremony UI computes impact **client-side, pre-confirmation**, using the sa
 - **Actor-neutral copy (§7 guard, №7/№8 open).** Every string this wave adds must avoid commercial-actor language. Follow the I125 sweep's register: anchors are named by the *act*, not the party. Add these strings to the string-absence contract test from 1.4.
 
 ### Wave 2 gates / flags / risks
-Gates: Wave 1's command set, plus `pnpm supabase:reset` + `psql -v ON_ERROR_STOP=1 -f supabase/tests/procurement/state_chain_test.sql` and the rls suites; `pnpm db:generate` + `git diff --exit-code packages/supabase/src/database.types.ts`; a direct RPC probe of each re-cut ceremony (call it, then `SELECT` the resulting `project_phases.anchor_date` **and** the `schedule_revisions` row — the migrations ledger proves nothing).
+Gates: Wave 1's command set, plus `pnpm supabase:reset` + `scripts/run-supabase-sql-test.sh supabase/tests/procurement/state_chain_test.sql` and each RLS suite through the same runner; `pnpm db:generate` + `git diff --exit-code packages/supabase/src/database.types.ts`; a direct RPC probe of each re-cut ceremony (call it, then `SELECT` the resulting `project_phases.anchor_date` **and** the `schedule_revisions` row — the migrations ledger proves nothing).
 Flag: `schedule-hardening`, separate from `schedule-fidelity`, fail-closed. Server side has no flag — the flag gates whether ceremony UIs render the IMPACT block and pass a disclosed impact; with the flag off, ceremonies pass `NULL` and therefore never harden. Clean, testable off-state with no SQL branch.
 Size: mechanism/migration **L** · ceremony wiring **L** · R110 impact UI **M** · operational proposals **M** · copy sweep **S**.
 

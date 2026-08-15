@@ -38,8 +38,7 @@
 -- Run after `supabase db reset` so seeds are present.
 --
 -- How to run:
---   docker exec -i supabase_db_supabase psql -U postgres -d postgres \
---     -v ON_ERROR_STOP=1 < supabase/tests/aesthete/nightly_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/aesthete/nightly_test.sql
 --
 -- Single transaction; plpgsql ASSERTs; final ROLLBACK — re-runnable with no
 -- side effects. aesthete.probe_rate is pinned to 0 for determinism.

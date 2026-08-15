@@ -15,8 +15,7 @@
 --      touch parse_attempts ("bump nothing").
 --
 -- How to run:
---   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
---     -f supabase/tests/rooms/geometry_rls_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/rooms/geometry_rls_test.sql
 --   ($SUPABASE_DB_URL local default: postgresql://postgres:postgres@127.0.0.1:54322/postgres)
 --
 -- Transaction-wrapped + ROLLBACK — rerunnable, no side effects.

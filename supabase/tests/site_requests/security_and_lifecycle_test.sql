@@ -1,8 +1,7 @@
 -- Field Site Request P1 adversarial database contract (00374).
 --
 -- Run:
---   psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
---     -v ON_ERROR_STOP=1 -f supabase/tests/site_requests/security_and_lifecycle_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/site_requests/security_and_lifecycle_test.sql
 
 BEGIN;
 

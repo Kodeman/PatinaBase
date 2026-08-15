@@ -2,8 +2,7 @@
 -- Spec Books schema/RLS/RPC/security lifecycle (00380)
 --
 -- Run:
---   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
---     -f supabase/tests/spec_books/security_and_lifecycle_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/spec_books/security_and_lifecycle_test.sql
 -- ═══════════════════════════════════════════════════════════════════════════
 
 BEGIN;

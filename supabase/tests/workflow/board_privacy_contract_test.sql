@@ -6,8 +6,7 @@
 -- because an earlier assertion failed.
 --
 -- Run:
---   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
---     -f supabase/tests/workflow/board_privacy_contract_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/workflow/board_privacy_contract_test.sql
 
 BEGIN;
 

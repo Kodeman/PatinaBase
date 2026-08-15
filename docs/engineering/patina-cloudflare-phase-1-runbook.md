@@ -336,6 +336,8 @@ Local reset must create the disposable database before its local `supabase_admin
 
 `catalog_roles_test.sql` and `platform_compatibility_test.sql` are local-only. They deliberately alter/create/drop probe roles, touch synthetic fixtures, exercise pg_net, and use a local dblink endpoint. Never run either file against staging or production; remote environments use the read-only ACL postflight, actual-password-login probe, and protocol/managed-service checks below.
 
+All Phase 1 ACL, preflight, postflight, compatibility, and actual-login probe commands intentionally use direct `psql`. Do not replace them with `scripts/run-supabase-sql-test.sh`: that local domain-test runner injects test-only `pg_temp` ACLs, while these probes must observe the unmodified session, default-ACL, and real-credential boundary.
+
 Edge owner, from `infra/edge-api-worker`:
 
 ```bash

@@ -19,8 +19,7 @@
 --       false after revocation, false once expired.
 --
 -- How to run:
---   docker exec -i supabase_db_supabase psql -U postgres -d postgres \
---     -v ON_ERROR_STOP=1 < supabase/tests/rls/project_roster_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/rls/project_roster_test.sql
 --
 -- Transaction-wrapped + ROLLBACK — rerunnable, no side effects.
 -- ═══════════════════════════════════════════════════════════════════════════

@@ -2,10 +2,9 @@
 -- 00422: the furnishing-wave sections now walk the Authorized Schedule
 -- ceremony — create_furnishings_authorization_from_schedule over existing
 -- project_ffe_items — because the re-authoring RPC it used to call is retired.
--- Runner: plain psql, ON_ERROR_STOP=1. The transaction rolls back.
+-- Runner: same-session SQL-test helper. The transaction rolls back.
 -- Run:
---   docker exec -i supabase_db_supabase psql -U postgres -d postgres \
---     -v ON_ERROR_STOP=1 < supabase/tests/commercial/design_services_authority_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/commercial/design_services_authority_test.sql
 
 BEGIN;
 

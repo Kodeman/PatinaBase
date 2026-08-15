@@ -26,15 +26,12 @@ Stage-2 migration they stop with SQLSTATE `55000` and list the absent objects.
 Run them only after `00462` and their named migration exist:
 
 ```sh
-psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
-  -v ON_ERROR_STOP=1 \
-  -f supabase/tests/workflow/approval_authority/00463_authority_evidence_contract_test.sql
-psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
-  -v ON_ERROR_STOP=1 \
-  -f supabase/tests/workflow/approval_authority/00464_lifecycle_compatibility_contract_test.sql
-psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
-  -v ON_ERROR_STOP=1 \
-  -f supabase/tests/workflow/approval_authority/00465_notification_traceability_contract_test.sql
+scripts/run-supabase-sql-test.sh \
+  supabase/tests/workflow/approval_authority/00463_authority_evidence_contract_test.sql
+scripts/run-supabase-sql-test.sh \
+  supabase/tests/workflow/approval_authority/00464_lifecycle_compatibility_contract_test.sql
+scripts/run-supabase-sql-test.sh \
+  supabase/tests/workflow/approval_authority/00465_notification_traceability_contract_test.sql
 ```
 
 ## Preserved contract

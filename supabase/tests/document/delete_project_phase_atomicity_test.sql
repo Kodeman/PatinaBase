@@ -1,7 +1,6 @@
 -- Atomic project-phase delete/topology regression (00398)
 -- Run with:
---   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
---     -f supabase/tests/document/delete_project_phase_atomicity_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/document/delete_project_phase_atomicity_test.sql
 
 BEGIN;
 

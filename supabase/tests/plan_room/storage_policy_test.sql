@@ -8,9 +8,7 @@
 -- would pass on BYPASSRLS while proving nothing.
 --
 -- Run:
---   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -X -q \
---     -v ON_ERROR_STOP=1 \
---     -f supabase/tests/plan_room/storage_policy_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/plan_room/storage_policy_test.sql
 -- ═══════════════════════════════════════════════════════════════════════════
 
 BEGIN;

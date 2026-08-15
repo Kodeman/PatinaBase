@@ -1,8 +1,6 @@
 -- Proposal policy locking / exact-authority regression (00401)
 -- Run after a fresh reset:
---   psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
---     -v ON_ERROR_STOP=1 \
---     -f supabase/tests/proposals/proposal_policy_locking_integrity_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/proposals/proposal_policy_locking_integrity_test.sql
 
 BEGIN;
 

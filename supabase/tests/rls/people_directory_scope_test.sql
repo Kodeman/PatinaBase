@@ -38,8 +38,7 @@
 --       with the caller's own RLS on `proposals`.
 --
 -- How to run:
---   docker exec -i supabase_db_supabase psql -U postgres -d postgres \
---     -v ON_ERROR_STOP=1 < supabase/tests/rls/people_directory_scope_test.sql
+--   scripts/run-supabase-sql-test.sh supabase/tests/rls/people_directory_scope_test.sql
 --
 -- Transaction-wrapped + ROLLBACK — rerunnable, no side effects.
 -- ═══════════════════════════════════════════════════════════════════════════
