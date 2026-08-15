@@ -46,17 +46,17 @@ The connector confirmed the expected project name, reference, and healthy
 status before SQL was run. The SQL session reported current_user = postgres,
 session_user = postgres, and current_database() = postgres.
 
-| Object class | Owner | Can current postgres session alter it? | Consequence |
-| --- | --- | ---: | --- |
-| Database postgres | postgres | yes | Can reconcile PUBLIC TEMP/CONNECT |
-| Schema public | pg_database_owner | yes | Can revoke PUBLIC USAGE and explicitly regrant |
-| Application routines in public | postgres | yes | Can harden legacy application functions |
-| Schema edge_api and catalog view | migration-owned postgres | yes | Normal migration is sufficient |
-| Schema net | supabase_admin | no | Requires platform-owner execution |
-| pg_net relations, sequence, routines | supabase_admin | no | Requires platform-owner execution for object ACL changes |
-| vector and pg_trgm routines in public | supabase_admin | no | Normal migration cannot alter their ACLs |
-| cron objects and routines | supabase_admin | no | Normal migration cannot alter their ACLs |
-| pgcrypto, uuid-ossp, pg_stat_statements objects | postgres | yes | Not callable without extensions schema USAGE |
+| Object class                                    | Owner                    | Can current postgres session alter it? | Consequence                                              |
+| ----------------------------------------------- | ------------------------ | -------------------------------------: | -------------------------------------------------------- |
+| Database postgres                               | postgres                 |                                    yes | Can reconcile PUBLIC TEMP/CONNECT                        |
+| Schema public                                   | pg_database_owner        |                                    yes | Can revoke PUBLIC USAGE and explicitly regrant           |
+| Application routines in public                  | postgres                 |                                    yes | Can harden legacy application functions                  |
+| Schema edge_api and catalog view                | migration-owned postgres |                                    yes | Normal migration is sufficient                           |
+| Schema net                                      | supabase_admin           |                                     no | Requires platform-owner execution                        |
+| pg_net relations, sequence, routines            | supabase_admin           |                                     no | Requires platform-owner execution for object ACL changes |
+| vector and pg_trgm routines in public           | supabase_admin           |                                     no | Normal migration cannot alter their ACLs                 |
+| cron objects and routines                       | supabase_admin           |                                     no | Normal migration cannot alter their ACLs                 |
+| pgcrypto, uuid-ossp, pg_stat_statements objects | postgres                 |                                    yes | Not callable without extensions schema USAGE             |
 
 The postgres session is not MEMBER of, and has no USAGE membership in,
 supabase_admin. The edge_catalog_reader, edge_catalog_login, edge_rls_user, and
@@ -89,10 +89,10 @@ Recommended database contract:
 
 Only two non-system schemas grant PUBLIC USAGE:
 
-| Schema | Owner | Existing explicit USAGE grantees |
-| --- | --- | --- |
-| public | pg_database_owner | agent_writer, anon, authenticated, postgres, service_role |
-| net | supabase_admin | anon, authenticated, postgres, service_role, supabase_functions_admin, supabase_admin, plus PUBLIC |
+| Schema | Owner             | Existing explicit USAGE grantees                                                                   |
+| ------ | ----------------- | -------------------------------------------------------------------------------------------------- |
+| public | pg_database_owner | agent_writer, anon, authenticated, postgres, service_role                                          |
+| net    | supabase_admin    | anon, authenticated, postgres, service_role, supabase_functions_admin, supabase_admin, plus PUBLIC |
 
 The following relevant schemas do not grant PUBLIC USAGE: app_private, auth,
 cron, extensions, graphql, graphql_public, realtime, storage, vault,
@@ -141,15 +141,15 @@ There are no PUBLIC relation or sequence grants in public.
 
 These platform objects have PUBLIC object ACLs:
 
-| Schema/object | Owner | PUBLIC privileges | Callable/reachable by a new role today? |
-| --- | --- | --- | ---: |
-| cron.job | supabase_admin | SELECT | no; cron lacks PUBLIC schema USAGE |
-| cron.job_run_details | supabase_admin | DELETE, SELECT | no; cron lacks PUBLIC schema USAGE |
-| extensions.pg_stat_statements | postgres | SELECT | no; extensions lacks PUBLIC schema USAGE |
-| extensions.pg_stat_statements_info | postgres | SELECT | no; extensions lacks PUBLIC schema USAGE |
-| net._http_response | supabase_admin | DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE | yes |
-| net.http_request_queue | supabase_admin | DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE | yes |
-| net.http_request_queue_id_seq | supabase_admin | SELECT, UPDATE, USAGE | yes |
+| Schema/object                      | Owner          | PUBLIC privileges                                                       |  Callable/reachable by a new role today? |
+| ---------------------------------- | -------------- | ----------------------------------------------------------------------- | ---------------------------------------: |
+| cron.job                           | supabase_admin | SELECT                                                                  |       no; cron lacks PUBLIC schema USAGE |
+| cron.job_run_details               | supabase_admin | DELETE, SELECT                                                          |       no; cron lacks PUBLIC schema USAGE |
+| extensions.pg_stat_statements      | postgres       | SELECT                                                                  | no; extensions lacks PUBLIC schema USAGE |
+| extensions.pg_stat_statements_info | postgres       | SELECT                                                                  | no; extensions lacks PUBLIC schema USAGE |
+| net.\_http_response                | supabase_admin | DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE |                                      yes |
+| net.http_request_queue             | supabase_admin | DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE |                                      yes |
+| net.http_request_queue_id_seq      | supabase_admin | SELECT, UPDATE, USAGE                                                   |                                      yes |
 
 The catalog-role conformance query must include PostgreSQL 17 MAINTAIN when it
 enumerates table privileges. Omitting it understates the raw pg_net exposure.
@@ -158,15 +158,15 @@ enumerates table privileges. Omitting it understates the raw pg_net exposure.
 
 PUBLIC EXECUTE counts by live owner and schema:
 
-| Schema/owner | Kind | Count | Callable by a new role today? |
-| --- | --- | ---: | ---: |
-| public / postgres | application SECURITY DEFINER | 80 | yes |
-| public / postgres | application invoker | 56 | yes |
-| public / supabase_admin | vector extension | 118 | yes |
-| public / supabase_admin | pg_trgm extension | 31 | yes |
-| net / supabase_admin | pg_net invoker routines | 12 | yes |
-| cron / supabase_admin | pg_cron routines | 5 | no |
-| extensions / mixed owners | pgcrypto, uuid-ossp, pg_stat_statements and platform helpers | 55 | no |
+| Schema/owner              | Kind                                                         | Count | Callable by a new role today? |
+| ------------------------- | ------------------------------------------------------------ | ----: | ----------------------------: |
+| public / postgres         | application SECURITY DEFINER                                 |    80 |                           yes |
+| public / postgres         | application invoker                                          |    56 |                           yes |
+| public / supabase_admin   | vector extension                                             |   118 |                           yes |
+| public / supabase_admin   | pg_trgm extension                                            |    31 |                           yes |
+| net / supabase_admin      | pg_net invoker routines                                      |    12 |                           yes |
+| cron / supabase_admin     | pg_cron routines                                             |     5 |                            no |
+| extensions / mixed owners | pgcrypto, uuid-ossp, pg_stat_statements and platform helpers |    55 |                            no |
 
 Of the 80 callable legacy application SECURITY DEFINER routines, 52 pin a
 search_path and 28 do not. The unpinned set is:
@@ -210,10 +210,10 @@ The prokind-qualified census returns exactly 12 callable pg_net rows. All 12
 are functions (prokind=f); there is no procedure overload, and
 wait_until_running appears once:
 
-- FUNCTION net._await_response(request_id bigint)
-- FUNCTION net._encode_url_with_params_array(url text, params_array text[])
-- FUNCTION net._http_collect_response(request_id bigint, async boolean)
-- FUNCTION net._urlencode_string(string character varying)
+- FUNCTION net.\_await_response(request_id bigint)
+- FUNCTION net.\_encode_url_with_params_array(url text, params_array text[])
+- FUNCTION net.\_http_collect_response(request_id bigint, async boolean)
+- FUNCTION net.\_urlencode_string(string character varying)
 - FUNCTION net.check_worker_is_up()
 - FUNCTION net.http_collect_response(request_id bigint, async boolean)
 - FUNCTION net.http_delete(url text, params jsonb, headers jsonb, timeout_milliseconds integer, body jsonb)
@@ -231,7 +231,7 @@ grants used by Supabase's grant_pg_net_access event trigger.
 Do not grant only the three public API routines after stripping the underlying
 object ACLs. In pg_net 0.19.5, http_get, http_post, and http_delete are
 SECURITY INVOKER. Their bodies insert net.http_request_queue, consume its
-sequence, and call _urlencode_string, _encode_url_with_params_array, and wake.
+sequence, and call \_urlencode_string, \_encode_url_with_params_array, and wake.
 They fail for postgres/anon/authenticated/service_role unless those transitive
 dependencies remain granted, or a platform owner deliberately converts the API
 routines to pinned SECURITY DEFINER functions and proves the extension-upgrade
@@ -284,16 +284,16 @@ already-installed trigger. The 31 trigger-linked functions are:
 
 The RLS helper manifest is:
 
-| Routine | Roles on dependent policies | Intended EXECUTE floor |
-| --- | --- | --- |
-| is_comms_admin | authenticated | authenticated |
-| is_comms_thread_participant | authenticated | authenticated |
-| is_coordination_party | authenticated | authenticated |
-| is_org_admin_or_owner | authenticated, PUBLIC | anon, authenticated |
-| is_project_team_member | authenticated, PUBLIC | anon, authenticated |
-| realtime_project_access | authenticated | authenticated |
-| user_has_role | authenticated | authenticated |
-| user_has_role_domain | authenticated | authenticated |
+| Routine                     | Roles on dependent policies | Intended EXECUTE floor |
+| --------------------------- | --------------------------- | ---------------------- |
+| is_comms_admin              | authenticated               | authenticated          |
+| is_comms_thread_participant | authenticated               | authenticated          |
+| is_coordination_party       | authenticated               | authenticated          |
+| is_org_admin_or_owner       | authenticated, PUBLIC       | anon, authenticated    |
+| is_project_team_member      | authenticated, PUBLIC       | anon, authenticated    |
+| realtime_project_access     | authenticated               | authenticated          |
+| user_has_role               | authenticated               | authenticated          |
+| user_has_role_domain        | authenticated               | authenticated          |
 
 postgres retains ownership execution and service_role may retain explicit
 execution for operational compatibility. PUBLIC policy targeting means the
@@ -304,12 +304,12 @@ EXECUTE without changing the policy can turn a filtered query into an error.
 
 These are justified for postgres/service_role, not anon/authenticated:
 
-| Routine(s) | Evidence |
-| --- | --- |
-| grant_role_to_user, revoke_role_from_user | Admin-only role assignment; the two grant callsites use the server-side adminClient; no active revoke callsite |
-| get_user_permissions | Sole active callsite is admin-portal with-permission using adminClient |
-| invoke_edge_function | Called by pg_cron and postgres-owned trigger/helpers; it reads a service-role secret through app_setting |
-| increment_campaign_counter, increment_sequence_counter, increment_bounce_count | Called by service-role webhook/automation edge functions |
+| Routine(s)                                                                     | Evidence                                                                                                       |
+| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| grant_role_to_user, revoke_role_from_user                                      | Admin-only role assignment; the two grant callsites use the server-side adminClient; no active revoke callsite |
+| get_user_permissions                                                           | Sole active callsite is admin-portal with-permission using adminClient                                         |
+| invoke_edge_function                                                           | Called by pg_cron and postgres-owned trigger/helpers; it reads a service-role secret through app_setting       |
+| increment_campaign_counter, increment_sequence_counter, increment_bounce_count | Called by service-role webhook/automation edge functions                                                       |
 
 Every redefined routine must pin search_path, revoke EXECUTE from PUBLIC, anon,
 and authenticated, then explicitly grant only postgres/service_role. The role
@@ -392,18 +392,18 @@ receive PUBLIC execution.
 
 Installed owner-sensitive extensions:
 
-| Extension | Version | Declared schema | Owner |
-| --- | --- | --- | --- |
-| pg_net | 0.19.5 | extensions; creates net objects | supabase_admin |
-| vector | 0.8.0 | public | supabase_admin |
-| pg_trgm | 1.6 | public | supabase_admin |
-| pg_cron | 1.6.4 | pg_catalog; creates cron objects | supabase_admin |
-| pg_graphql | 1.5.11 | graphql | supabase_admin |
-| moddatetime | 1.0 | extensions | supabase_admin |
-| supabase_vault | 0.3.1 | vault | supabase_admin |
-| pgcrypto | 1.3 | extensions | postgres |
-| uuid-ossp | 1.1 | extensions | postgres |
-| pg_stat_statements | 1.11 | extensions | postgres |
+| Extension          | Version | Declared schema                  | Owner          |
+| ------------------ | ------- | -------------------------------- | -------------- |
+| pg_net             | 0.19.5  | extensions; creates net objects  | supabase_admin |
+| vector             | 0.8.0   | public                           | supabase_admin |
+| pg_trgm            | 1.6     | public                           | supabase_admin |
+| pg_cron            | 1.6.4   | pg_catalog; creates cron objects | supabase_admin |
+| pg_graphql         | 1.5.11  | graphql                          | supabase_admin |
+| moddatetime        | 1.0     | extensions                       | supabase_admin |
+| supabase_vault     | 0.3.1   | vault                            | supabase_admin |
+| pgcrypto           | 1.3     | extensions                       | postgres       |
+| uuid-ossp          | 1.1     | extensions                       | postgres       |
+| pg_stat_statements | 1.11    | extensions                       | postgres       |
 
 extensions.grant_pg_net_access explicitly grants net schema USAGE to
 supabase_functions_admin, postgres, anon, authenticated, and service_role when
