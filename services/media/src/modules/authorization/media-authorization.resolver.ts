@@ -90,7 +90,10 @@ export class MediaAuthorizationResolver implements AuthorizationResolver {
     );
   }
 
-  async withAdminLease<T>(subject: string, operation: () => Promise<T>): Promise<T> {
+  async withAdminLease<T>(
+    subject: string,
+    operation: (transaction: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
     this.assertSubject(subject);
     return this.prisma.$transaction(
       async (transaction) => {
@@ -106,13 +109,21 @@ export class MediaAuthorizationResolver implements AuthorizationResolver {
           WHERE user_role.user_id = ${subject}::uuid
             AND permission.name = ${'media.admin.all'}
             AND role.name IN (${Prisma.join(SUPPORTED_APPLICATION_ROLE_NAMES)})
+            AND NOT EXISTS (
+              SELECT 1
+              FROM public.user_roles AS assigned_user_role
+              JOIN public.roles AS assigned_role
+                ON assigned_role.id = assigned_user_role.role_id
+              WHERE assigned_user_role.user_id = user_role.user_id
+                AND assigned_role.name NOT IN (${Prisma.join(SUPPORTED_APPLICATION_ROLE_NAMES)})
+            )
           LIMIT 1
           FOR SHARE OF user_role, role, role_permission, permission
         `);
         if (proof.length === 0) {
           throw new ForbiddenException('Authorization denied');
         }
-        return operation();
+        return operation(transaction);
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
     );
@@ -252,20 +263,24 @@ export class MediaAuthorizationResolver implements AuthorizationResolver {
         AND membership.status = 'active'
     `);
 
-    const supportedRows = rolePermissions.filter((row) =>
-      SUPPORTED_APPLICATION_ROLES.has(row.role_name),
-    );
+    const roles = [...new Set(rolePermissions.map((row) => row.role_name))];
+    const supported =
+      roles.length > 0 && roles.every((role) => SUPPORTED_APPLICATION_ROLES.has(role));
     return Object.freeze({
       subject,
-      roles: Object.freeze([...new Set(supportedRows.map((row) => row.role_name))]),
+      roles: Object.freeze(roles),
       permissions: Object.freeze([
         ...new Set(
-          supportedRows
-            .map((row) => row.permission_name)
-            .filter((permission): permission is string => Boolean(permission)),
+          supported
+            ? rolePermissions
+                .map((row) => row.permission_name)
+                .filter((permission): permission is string => Boolean(permission))
+            : [],
         ),
       ]),
-      organizationIds: Object.freeze([...new Set(organizations.map((row) => row.organization_id))]),
+      organizationIds: Object.freeze([
+        ...new Set(supported ? organizations.map((row) => row.organization_id) : []),
+      ]),
     });
   }
 

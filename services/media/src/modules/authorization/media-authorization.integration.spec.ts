@@ -7,6 +7,10 @@ import {
   PrismaClient,
 } from '../../generated/prisma-client';
 import { MediaAuthorizationResolver } from './media-authorization.resolver';
+import {
+  createTransactionBoundPrisma,
+  MediaAdminTransactionContext,
+} from './media-admin-transaction.context';
 
 const enabled = process.env.RUN_MEDIA_DB_AUTHZ_INTEGRATION === '1';
 const describeDatabase = enabled ? describe : describe.skip;
@@ -177,7 +181,18 @@ describeDatabase('MediaAuthorizationResolver local Postgres boundary', () => {
       signalLeaseStarted = resolve;
     });
 
-    const lease = resolver.withAdminLease(SUBJECT_ADMIN, async () => {
+    const context = new MediaAdminTransactionContext();
+    const transactionBoundPrisma = createTransactionBoundPrisma(context);
+    const lease = resolver.withAdminLease(SUBJECT_ADMIN, async (transaction) => {
+      await context.run(transaction, async () => {
+        const authorizationConnection = await transaction.$queryRaw<Array<{ pid: number }>>(
+          Prisma.sql`SELECT pg_backend_pid() AS pid`,
+        );
+        const handlerConnection = await transactionBoundPrisma.$queryRaw<Array<{ pid: number }>>(
+          Prisma.sql`SELECT pg_backend_pid() AS pid`,
+        );
+        expect(handlerConnection[0].pid).toBe(authorizationConnection[0].pid);
+      });
       signalLeaseStarted();
       await leaseReleased;
       return true;

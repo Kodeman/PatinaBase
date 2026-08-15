@@ -68,8 +68,23 @@ describe('MediaAuthorizationResolver', () => {
       [],
     ]);
     await expect(resolver.resolve(SUBJECT_A)).resolves.toMatchObject({
-      roles: [],
+      roles: ['caller_invented_role'],
       permissions: [],
+    });
+  });
+
+  it('fails closed when a supported assignment is mixed with an unsupported role', async () => {
+    const { resolver } = harness([
+      [
+        { role_name: 'super_admin', permission_name: 'media.admin.all' },
+        { role_name: 'caller_invented_role', permission_name: 'media.admin.all' },
+      ],
+      [{ organization_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }],
+    ]);
+    await expect(resolver.resolve(SUBJECT_A)).resolves.toMatchObject({
+      roles: ['super_admin', 'caller_invented_role'],
+      permissions: [],
+      organizationIds: [],
     });
   });
 
@@ -122,7 +137,7 @@ describe('MediaAuthorizationResolver', () => {
   });
 
   it('holds a parameterized share lock on the exact current admin proof rows', async () => {
-    const { resolver, queryRaw } = harness([[{ user_id: SUBJECT_A }]]);
+    const { resolver, queryRaw, transaction } = harness([[{ user_id: SUBJECT_A }]]);
     const operation = jest.fn().mockResolvedValue('complete');
 
     await expect(resolver.withAdminLease(SUBJECT_A, operation)).resolves.toBe('complete');
@@ -131,8 +146,9 @@ describe('MediaAuthorizationResolver', () => {
     expect(query.strings.join('')).toContain(
       'FOR SHARE OF user_role, role, role_permission, permission',
     );
+    expect(query.strings.join('')).toContain('assigned_role.name NOT IN');
     expect(query.strings.join('')).not.toContain(SUBJECT_A);
     expect(query.values).toEqual(expect.arrayContaining([SUBJECT_A, 'media.admin.all']));
-    expect(operation).toHaveBeenCalledTimes(1);
+    expect(operation).toHaveBeenCalledWith(transaction);
   });
 });
