@@ -9,6 +9,7 @@ import { WebhooksService } from './webhooks.service';
 import { PrismaClient } from '../../generated/prisma-client';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
+import { NotificationDispatchClient } from '../../infrastructure/notification-dispatch.client';
 
 describe('WebhooksService - Security Tests', () => {
   let service: WebhooksService;
@@ -48,6 +49,7 @@ describe('WebhooksService - Security Tests', () => {
         { provide: ConfigService, useValue: mockConfigService },
         { provide: 'STRIPE_CLIENT', useValue: mockStripe },
         { provide: 'EVENTS_SERVICE', useValue: mockEventsService },
+        { provide: NotificationDispatchClient, useValue: { enqueue: jest.fn() } },
       ],
     }).compile();
 
@@ -274,6 +276,7 @@ describe('WebhooksService - Security Tests', () => {
           { provide: ConfigService, useValue: mockConfigService },
           { provide: 'STRIPE_CLIENT', useValue: mockStripe },
           { provide: 'EVENTS_SERVICE', useValue: mockEventsService },
+          { provide: NotificationDispatchClient, useValue: { enqueue: jest.fn() } },
         ],
       }).compile();
 

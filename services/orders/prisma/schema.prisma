@@ -13,33 +13,32 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-
 model Cart {
-  id                String      @id @default(uuid())
-  userId            String?
-  sessionToken      String?     // for anonymous carts
-  status            String      @default("active") // active|expired|converted|abandoned
-  currency          String      @default("USD")
-  discountCode      String?
-  discountAmount    Decimal?    @db.Decimal(10, 2)
-  subtotal          Decimal     @default(0) @db.Decimal(10, 2)
-  taxTotal          Decimal     @default(0) @db.Decimal(10, 2)
-  shippingTotal     Decimal     @default(0) @db.Decimal(10, 2)
-  total             Decimal     @default(0) @db.Decimal(10, 2)
-  metadata          Json?
-  expiresAt         DateTime?
-  convertedAt       DateTime?
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String?   @map("user_id")
+  sessionToken   String?   @map("session_token") // for anonymous carts
+  status         String    @default("active") // active|expired|converted|abandoned
+  currency       String    @default("USD")
+  discountCode   String?   @map("discount_code")
+  discountAmount Decimal?  @map("discount_amount") @db.Decimal(10, 2)
+  subtotal       Decimal   @default(0) @db.Decimal(10, 2)
+  taxTotal       Decimal   @default(0) @map("tax_total") @db.Decimal(10, 2)
+  shippingTotal  Decimal   @default(0) @map("shipping_total") @db.Decimal(10, 2)
+  total          Decimal   @default(0) @db.Decimal(10, 2)
+  metadata       Json?
+  expiresAt      DateTime? @map("expires_at")
+  convertedAt    DateTime? @map("converted_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
 
   // Address references
-  shippingAddressId String?
-  billingAddressId  String?
+  shippingAddressId String? @map("shipping_address_id") @db.Uuid
+  billingAddressId  String? @map("billing_address_id") @db.Uuid
 
-  items             CartItem[]
-  discount          Discount?   @relation(fields: [discountCode], references: [code])
-  shippingAddress   Address?    @relation("CartShippingAddress", fields: [shippingAddressId], references: [id])
-  billingAddress    Address?    @relation("CartBillingAddress", fields: [billingAddressId], references: [id])
+  items           CartItem[]
+  discount        Discount?  @relation(fields: [discountCode], references: [code])
+  shippingAddress Address?   @relation("CartShippingAddress", fields: [shippingAddressId], references: [id])
+  billingAddress  Address?   @relation("CartBillingAddress", fields: [billingAddressId], references: [id])
 
   @@index([userId, status])
   @@index([sessionToken])
@@ -49,23 +48,23 @@ model Cart {
 }
 
 model CartItem {
-  id            String   @id @default(uuid())
-  cartId        String
-  productId     String
-  variantId     String?
+  id            String   @id @default(uuid()) @db.Uuid
+  cartId        String   @map("cart_id") @db.Uuid
+  productId     String   @map("product_id")
+  variantId     String?  @map("variant_id")
   name          String
   sku           String?
   qty           Int
-  unitPrice     Decimal  @db.Decimal(10, 2)
+  unitPrice     Decimal  @map("unit_price") @db.Decimal(10, 2)
   currency      String   @default("USD")
-  discountAlloc Decimal? @db.Decimal(10, 2) // per-line discount allocation
-  taxAmount     Decimal? @db.Decimal(10, 2)
-  snapshot      Json?    // product/variant snapshot at add time
+  discountAlloc Decimal? @map("discount_alloc") @db.Decimal(10, 2) // per-line discount allocation
+  taxAmount     Decimal? @map("tax_amount") @db.Decimal(10, 2)
+  snapshot      Json? // product/variant snapshot at add time
   metadata      Json?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
-  cart          Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  cart Cart @relation(fields: [cartId], references: [id], onDelete: Cascade)
 
   @@index([cartId])
   @@index([productId])
@@ -73,29 +72,29 @@ model CartItem {
 }
 
 model Discount {
-  id                String    @id @default(uuid())
-  code              String    @unique
-  name              String
-  description       String?
-  kind              String    // percent|fixed|bogo
-  value             Decimal   @db.Decimal(10, 2) // percent e.g. 10.00; fixed e.g. 25.00
-  currency          String?   @default("USD")
-  minPurchase       Decimal?  @db.Decimal(10, 2)
-  maxDiscount       Decimal?  @db.Decimal(10, 2)
-  usageLimit        Int?      // total usage limit
-  usageCount        Int       @default(0)
-  perUserLimit      Int?      // per-user limit
-  eligibleProducts  String[]  // product IDs
-  eligibleCategories String[] // category IDs
-  startsAt          DateTime?
-  endsAt            DateTime?
-  rules             Json?     // additional eligibility rules
-  active            Boolean   @default(true)
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  createdBy         String?
+  id                 String    @id @default(uuid()) @db.Uuid
+  code               String    @unique
+  name               String
+  description        String?
+  kind               String // percent|fixed|bogo
+  value              Decimal   @db.Decimal(10, 2) // percent e.g. 10.00; fixed e.g. 25.00
+  currency           String?   @default("USD")
+  minPurchase        Decimal?  @map("min_purchase") @db.Decimal(10, 2)
+  maxDiscount        Decimal?  @map("max_discount") @db.Decimal(10, 2)
+  usageLimit         Int?      @map("usage_limit") // total usage limit
+  usageCount         Int       @default(0) @map("usage_count")
+  perUserLimit       Int?      @map("per_user_limit") // per-user limit
+  eligibleProducts   String[]  @map("eligible_products") // product IDs
+  eligibleCategories String[]  @map("eligible_categories") // category IDs
+  startsAt           DateTime? @map("starts_at")
+  endsAt             DateTime? @map("ends_at")
+  rules              Json? // additional eligibility rules
+  active             Boolean   @default(true)
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  createdBy          String?   @map("created_by")
 
-  carts             Cart[]
+  carts Cart[]
 
   @@index([code, active])
   @@index([startsAt, endsAt])
@@ -103,60 +102,62 @@ model Discount {
 }
 
 model Order {
-  id                String    @id @default(uuid())
-  orderNumber       String    @unique
-  userId            String
-  cartId            String?
-  status            String    @default("created") // created|paid|processing|fulfilled|closed|refunded|canceled
-  paymentStatus     String    @default("pending") // pending|authorized|captured|refunded|failed|canceled|partially_refunded
-  fulfillmentStatus String    @default("unfulfilled") // unfulfilled|partial|fulfilled
-  currency          String    @default("USD")
-  subtotal          Decimal   @db.Decimal(10, 2)
-  discountTotal     Decimal   @default(0) @db.Decimal(10, 2)
-  taxTotal          Decimal   @default(0) @db.Decimal(10, 2)
-  shippingTotal     Decimal   @default(0) @db.Decimal(10, 2)
-  total             Decimal   @db.Decimal(10, 2)
+  id                String  @id @default(uuid()) @db.Uuid
+  orderNumber       String  @unique @map("order_number")
+  userId            String  @map("user_id")
+  organizationId    String? @map("organization_id") @db.Uuid
+  cartId            String? @map("cart_id")
+  status            String  @default("created") // created|paid|processing|fulfilled|closed|refunded|canceled
+  paymentStatus     String  @default("pending") @map("payment_status") // pending|authorized|captured|refunded|failed|canceled|partially_refunded
+  fulfillmentStatus String  @default("unfulfilled") @map("fulfillment_status") // unfulfilled|partial|fulfilled
+  currency          String  @default("USD")
+  subtotal          Decimal @db.Decimal(10, 2)
+  discountTotal     Decimal @default(0) @map("discount_total") @db.Decimal(10, 2)
+  taxTotal          Decimal @default(0) @map("tax_total") @db.Decimal(10, 2)
+  shippingTotal     Decimal @default(0) @map("shipping_total") @db.Decimal(10, 2)
+  total             Decimal @db.Decimal(10, 2)
 
   // Stripe references
-  paymentIntentId   String?   @unique
-  checkoutSessionId String?   @unique
-  customerId        String?   // Stripe customer ID
+  paymentIntentId   String? @unique @map("payment_intent_id")
+  checkoutSessionId String? @unique @map("checkout_session_id")
+  customerId        String? @map("customer_id") // Stripe customer ID
 
   // Addresses
-  shippingAddressId String?
-  billingAddressId  String?
+  shippingAddressId String? @map("shipping_address_id") @db.Uuid
+  billingAddressId  String? @map("billing_address_id") @db.Uuid
 
   // Shipping
-  shippingMethod    String?   // standard|express|overnight
+  shippingMethod String? @map("shipping_method") // standard|express|overnight
 
   // Tax
-  taxLines          Json?     // [{jurisdiction, rate, amount}]
+  taxLines Json? @map("tax_lines") // [{jurisdiction, rate, amount}]
 
   // Immutable snapshot
-  snapshot          Json      // complete order snapshot
+  snapshot Json // complete order snapshot
 
   // Notes and metadata
-  customerNotes     String?
-  internalNotes     String?
-  metadata          Json?
+  customerNotes String? @map("customer_notes")
+  internalNotes String? @map("internal_notes")
+  metadata      Json?
 
   // Timestamps
-  paidAt            DateTime?
-  fulfilledAt       DateTime?
-  closedAt          DateTime?
-  canceledAt        DateTime?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  paidAt      DateTime? @map("paid_at")
+  fulfilledAt DateTime? @map("fulfilled_at")
+  closedAt    DateTime? @map("closed_at")
+  canceledAt  DateTime? @map("canceled_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
   // Relations
-  items             OrderItem[]
-  payments          Payment[]
-  refunds           Refund[]
-  shipments         Shipment[]
-  shippingAddress   Address?  @relation("ShippingAddress", fields: [shippingAddressId], references: [id])
-  billingAddress    Address?  @relation("BillingAddress", fields: [billingAddressId], references: [id])
+  items           OrderItem[]
+  payments        Payment[]
+  refunds         Refund[]
+  shipments       Shipment[]
+  shippingAddress Address?    @relation("ShippingAddress", fields: [shippingAddressId], references: [id])
+  billingAddress  Address?    @relation("BillingAddress", fields: [billingAddressId], references: [id])
 
   @@index([userId, status])
+  @@index([organizationId])
   @@index([orderNumber])
   @@index([status])
   @@index([paymentStatus])
@@ -168,29 +169,29 @@ model Order {
 }
 
 model OrderItem {
-  id            String   @id @default(uuid())
-  orderId       String
-  productId     String
-  variantId     String?
+  id            String   @id @default(uuid()) @db.Uuid
+  orderId       String   @map("order_id") @db.Uuid
+  productId     String   @map("product_id")
+  variantId     String?  @map("variant_id")
   name          String
   sku           String?
   qty           Int
-  unitPrice     Decimal  @db.Decimal(10, 2)
+  unitPrice     Decimal  @map("unit_price") @db.Decimal(10, 2)
   currency      String   @default("USD")
-  taxLines      Json?    // [{jurisdiction, rate, amount}]
-  discountAlloc Decimal? @db.Decimal(10, 2)
+  taxLines      Json?    @map("tax_lines") // [{jurisdiction, rate, amount}]
+  discountAlloc Decimal? @map("discount_alloc") @db.Decimal(10, 2)
   subtotal      Decimal  @db.Decimal(10, 2)
   total         Decimal  @db.Decimal(10, 2)
-  snapshot      Json?    // product/variant snapshot
+  snapshot      Json? // product/variant snapshot
   metadata      Json?
 
   // Fulfillment tracking
-  qtyFulfilled  Int      @default(0)
-  qtyRefunded   Int      @default(0)
+  qtyFulfilled Int @default(0) @map("qty_fulfilled")
+  qtyRefunded  Int @default(0) @map("qty_refunded")
 
-  createdAt     DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
-  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
   @@index([productId])
@@ -198,37 +199,37 @@ model OrderItem {
 }
 
 model Payment {
-  id              String   @id @default(uuid())
-  orderId         String
-  provider        String   @default("stripe")
-  status          String   @default("pending") // pending|succeeded|failed|canceled|refunded
-  amount          Decimal  @db.Decimal(10, 2)
-  currency        String   @default("USD")
+  id       String  @id @default(uuid()) @db.Uuid
+  orderId  String  @map("order_id") @db.Uuid
+  provider String  @default("stripe")
+  status   String  @default("pending") // pending|succeeded|failed|canceled|refunded
+  amount   Decimal @db.Decimal(10, 2)
+  currency String  @default("USD")
 
   // Stripe references
-  paymentIntentId String?
-  chargeId        String?  @unique
-  paymentMethodId String?
+  paymentIntentId String? @map("payment_intent_id")
+  chargeId        String? @unique @map("charge_id")
+  paymentMethodId String? @map("payment_method_id")
 
   // Details
-  last4           String?
-  brand           String?  // visa|mastercard|amex|etc
-  country         String?
+  last4   String?
+  brand   String? // visa|mastercard|amex|etc
+  country String?
 
   // Risk & Fraud
-  riskScore       Int?
-  riskLevel       String?  // normal|elevated|highest
+  riskScore Int?    @map("risk_score")
+  riskLevel String? @map("risk_level") // normal|elevated|highest
 
   // Metadata
-  raw             Json?    // full Stripe response
-  metadata        Json?
-  failureCode     String?
-  failureMessage  String?
+  raw            Json? // full Stripe response
+  metadata       Json?
+  failureCode    String? @map("failure_code")
+  failureMessage String? @map("failure_message")
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
   @@index([paymentIntentId])
@@ -237,30 +238,30 @@ model Payment {
 }
 
 model Refund {
-  id               String   @id @default(uuid())
-  orderId          String
-  amount           Decimal  @db.Decimal(10, 2)
-  currency         String   @default("USD")
-  reason           String?  // duplicate|fraudulent|requested_by_customer
-  status           String   @default("pending") // pending|succeeded|failed|canceled
-  provider         String   @default("stripe")
+  id       String  @id @default(uuid()) @db.Uuid
+  orderId  String  @map("order_id") @db.Uuid
+  amount   Decimal @db.Decimal(10, 2)
+  currency String  @default("USD")
+  reason   String? // duplicate|fraudulent|requested_by_customer
+  status   String  @default("pending") // pending|succeeded|failed|canceled
+  provider String  @default("stripe")
 
   // Stripe references
-  providerRefundId String?  @unique
-  chargeId         String?
-  paymentIntentId  String?
+  providerRefundId String? @unique @map("provider_refund_id")
+  chargeId         String? @map("charge_id")
+  paymentIntentId  String? @map("payment_intent_id")
 
   // Details
-  description      String?
-  metadata         Json?
-  raw              Json?    // full Stripe response
+  description String?
+  metadata    Json?
+  raw         Json? // full Stripe response
 
   // Timestamps
-  processedAt      DateTime?
-  createdAt        DateTime @default(now())
-  createdBy        String?  // admin user who initiated
+  processedAt DateTime? @map("processed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  createdBy   String?   @map("created_by") // admin user who initiated
 
-  order            Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
   @@index([providerRefundId])
@@ -269,59 +270,59 @@ model Refund {
 }
 
 model Shipment {
-  id             String    @id @default(uuid())
-  orderId        String
-  shipmentNumber String?   @unique
-  carrier        String?   // USPS|FedEx|UPS
-  service        String?   // Priority|Ground|Express
-  trackingNumber String?
-  trackingUrl    String?
-  status         String    @default("pending") // pending|in_transit|out_for_delivery|delivered|exception|returned
-  method         String?   // standard|express|overnight
+  id             String  @id @default(uuid()) @db.Uuid
+  orderId        String  @map("order_id") @db.Uuid
+  shipmentNumber String? @unique @map("shipment_number")
+  carrier        String? // USPS|FedEx|UPS
+  service        String? // Priority|Ground|Express
+  trackingNumber String? @map("tracking_number")
+  trackingUrl    String? @map("tracking_url")
+  status         String  @default("pending") // pending|in_transit|out_for_delivery|delivered|exception|returned
+  method         String? // standard|express|overnight
 
   // Items in this shipment
-  items          Json      // [{orderItemId, qty}]
+  items Json // [{orderItemId, qty}]
 
   // Carrier Integration
-  carrierShipmentId String?   // EasyPost shipment ID
-  labelUrl          String?   // URL to shipping label PDF/PNG
-  labelFormat       String?   // PDF|PNG|ZPL
-  labelSize         String?   // 4x6|4x8
-  commercialInvoiceUrl String? // For international shipments
-  rateId            String?   // Carrier rate ID used for purchase
+  carrierShipmentId    String? @map("carrier_shipment_id") // EasyPost shipment ID
+  labelUrl             String? @map("label_url") // URL to shipping label PDF/PNG
+  labelFormat          String? @map("label_format") // PDF|PNG|ZPL
+  labelSize            String? @map("label_size") // 4x6|4x8
+  commercialInvoiceUrl String? @map("commercial_invoice_url") // For international shipments
+  rateId               String? @map("rate_id") // Carrier rate ID used for purchase
 
   // Tracking
-  trackingStatus    String?   // Carrier-specific status
-  trackingEvents    Json?     // Array of tracking events
-  publicTrackingUrl String?   // Public tracking URL
+  trackingStatus    String? @map("tracking_status") // Carrier-specific status
+  trackingEvents    Json?   @map("tracking_events") // Array of tracking events
+  publicTrackingUrl String? @map("public_tracking_url") // Public tracking URL
 
   // Addresses (stored as JSON for historical record)
-  fromAddress    Json?     // Address snapshot
-  toAddress      Json?     // Address snapshot
-  addressId      String?   // Reference to Address table
+  fromAddress Json?   @map("from_address") // Address snapshot
+  toAddress   Json?   @map("to_address") // Address snapshot
+  addressId   String? @map("address_id") @db.Uuid // Reference to Address table
 
   // Parcel details
-  parcel         Json?     // {length, width, height, weight, predefinedPackage}
+  parcel Json? // {length, width, height, weight, predefinedPackage}
 
   // Costs
-  cost           Decimal?  @db.Decimal(10, 2)
-  currency       String?   @default("USD")
+  cost     Decimal? @db.Decimal(10, 2)
+  currency String?  @default("USD")
 
   // Timestamps
-  estimatedDelivery DateTime?
-  shippedAt         DateTime?
-  deliveredAt       DateTime?
+  estimatedDelivery DateTime? @map("estimated_delivery")
+  shippedAt         DateTime? @map("shipped_at")
+  deliveredAt       DateTime? @map("delivered_at")
 
   // Notes and metadata
-  notes          String?
-  metadata       Json?     // Additional carrier-specific data
+  notes    String?
+  metadata Json? // Additional carrier-specific data
 
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  createdBy      String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdBy String?  @map("created_by")
 
-  order          Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  address        Address?  @relation(fields: [addressId], references: [id])
+  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  address Address? @relation(fields: [addressId], references: [id])
 
   @@index([orderId])
   @@index([trackingNumber])
@@ -332,61 +333,61 @@ model Shipment {
 }
 
 model Address {
-  id        String   @id @default(uuid())
-  userId    String?
-  kind      String   // shipping|billing
-  firstName String?
-  lastName  String?
+  id        String  @id @default(uuid()) @db.Uuid
+  userId    String? @map("user_id")
+  kind      String // shipping|billing
+  firstName String? @map("first_name")
+  lastName  String? @map("last_name")
   company   String?
   line1     String
   line2     String?
   city      String
-  region    String?  // state/province
+  region    String? // state/province
   postal    String
-  country   String   // ISO-3166-1 alpha-2
+  country   String // ISO-3166-1 alpha-2
   phone     String?
 
   // Validation
-  verified  Boolean  @default(false)
+  verified Boolean @default(false)
 
   metadata  Json?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  ordersShipping     Order[]    @relation("ShippingAddress")
-  ordersBilling      Order[]    @relation("BillingAddress")
-  cartsShipping      Cart[]     @relation("CartShippingAddress")
-  cartsBilling       Cart[]     @relation("CartBillingAddress")
-  shipments          Shipment[]
+  ordersShipping Order[]    @relation("ShippingAddress")
+  ordersBilling  Order[]    @relation("BillingAddress")
+  cartsShipping  Cart[]     @relation("CartShippingAddress")
+  cartsBilling   Cart[]     @relation("CartBillingAddress")
+  shipments      Shipment[]
 
   @@index([userId])
   @@map("addresses")
 }
 
 model Reconciliation {
-  id             String    @id @default(uuid())
-  jobId          String    @unique
-  status         String    @default("running") // running|completed|failed
-  window         Json      // {start, end} timestamps
+  id     String @id @default(uuid()) @db.Uuid
+  jobId  String @unique @map("job_id")
+  status String @default("running") // running|completed|failed
+  window Json // {start, end} timestamps
 
   // Statistics
-  stripeCount    Int       @default(0)
-  patinaCount    Int       @default(0)
-  matchedCount   Int       @default(0)
-  discrepancies  Int       @default(0)
+  stripeCount   Int @default(0) @map("stripe_count")
+  patinaCount   Int @default(0) @map("patina_count")
+  matchedCount  Int @default(0) @map("matched_count")
+  discrepancies Int @default(0)
 
   // Results
-  orphanStripe   Json?     // Stripe payments not in Patina
-  orphanPatina   Json?     // Patina orders not in Stripe
-  mismatches     Json?     // Amount/status mismatches
+  orphanStripe Json? @map("orphan_stripe") // Stripe payments not in Patina
+  orphanPatina Json? @map("orphan_patina") // Patina orders not in Stripe
+  mismatches   Json? // Amount/status mismatches
 
   // Resolution
-  resolutionNotes String?
-  resolvedBy      String?
-  resolvedAt      DateTime?
+  resolutionNotes String?   @map("resolution_notes")
+  resolvedBy      String?   @map("resolved_by")
+  resolvedAt      DateTime? @map("resolved_at")
 
-  startedAt      DateTime  @default(now())
-  completedAt    DateTime?
+  startedAt   DateTime  @default(now()) @map("started_at")
+  completedAt DateTime? @map("completed_at")
 
   @@index([status])
   @@index([startedAt])
@@ -394,13 +395,13 @@ model Reconciliation {
 }
 
 model IdempotencyKey {
-  id         String   @id @default(uuid())
+  id         String   @id @default(uuid()) @db.Uuid
   key        String   @unique
   endpoint   String
-  statusCode Int?
+  statusCode Int?     @map("status_code")
   response   Json?
-  expiresAt  DateTime
-  createdAt  DateTime @default(now())
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
 
   @@index([key])
   @@index([expiresAt])
@@ -408,17 +409,17 @@ model IdempotencyKey {
 }
 
 model AuditLog {
-  id         String   @id @default(uuid())
-  entityType String   // cart|order|payment|refund|shipment
-  entityId   String
-  action     String   // created|updated|deleted|status_changed|etc
-  actor      String?  // user ID or system
-  actorType  String?  // user|system|admin|webhook
-  changes    Json?    // diff of changes
+  id         String   @id @default(uuid()) @db.Uuid
+  entityType String   @map("entity_type") // cart|order|payment|refund|shipment
+  entityId   String   @map("entity_id")
+  action     String // created|updated|deleted|status_changed|etc
+  actor      String? // user ID or system
+  actorType  String?  @map("actor_type") // user|system|admin|webhook
+  changes    Json? // diff of changes
   metadata   Json?
-  ipAddress  String?
-  userAgent  String?
-  createdAt  DateTime @default(now())
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at")
 
   @@index([entityType, entityId])
   @@index([action])
@@ -428,15 +429,15 @@ model AuditLog {
 
 // Outbox Pattern for Event Publishing (Transactional Outbox)
 model OutboxEvent {
-  id          String   @id @default(uuid())
-  type        String   // e.g., "order.created", "order.paid", "order.fulfilled"
-  payload     Json     // Event payload
-  headers     Json?    // Additional headers (traceId, etc.)
-  published   Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  publishedAt DateTime?
-  retryCount  Int      @default(0)
-  lastError   String?
+  id          String    @id @default(uuid()) @db.Uuid
+  type        String // e.g., "order.created", "order.paid", "order.fulfilled"
+  payload     Json // Event payload
+  headers     Json? // Additional headers (traceId, etc.)
+  published   Boolean   @default(false)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  publishedAt DateTime? @map("published_at")
+  retryCount  Int       @default(0) @map("retry_count")
+  lastError   String?   @map("last_error")
 
   @@index([type, published])
   @@index([createdAt])

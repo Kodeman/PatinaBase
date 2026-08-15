@@ -32,18 +32,18 @@ export class WebhooksService {
     try {
       event = this.stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
     } catch (err: any) {
-      this.logger.error(`Webhook signature verification failed: ${err.message}`);
+      this.logger.error('Webhook signature verification failed');
       throw new BadRequestException(`Webhook signature verification failed`);
     }
 
-    this.logger.log(`Processing webhook event: ${event.type} ${event.id}`);
+    this.logger.log(`Processing webhook event type: ${event.type}`);
 
     // Route to appropriate handler
     try {
       // Check for duplicate event processing
       const isDuplicate = await this.checkDuplicateEvent(event.id);
       if (isDuplicate) {
-        this.logger.log(`Event ${event.id} already processed, skipping`);
+        this.logger.log('Webhook event already processed, skipping');
         return { received: true, eventId: event.id, duplicate: true };
       }
 
@@ -84,7 +84,7 @@ export class WebhooksService {
 
       return { received: true, eventId: event.id };
     } catch (error: any) {
-      this.logger.error(`Error processing webhook: ${error.message}`, error.stack);
+      this.logger.error('Error processing webhook');
       throw error;
     }
   }
@@ -95,14 +95,14 @@ export class WebhooksService {
   private async handleCheckoutSessionCompleted(event: Stripe.Event) {
     const session = event.data.object as Stripe.Checkout.Session;
 
-    this.logger.log(`Checkout session completed: ${session.id}`);
+    this.logger.log('Checkout session completed');
 
     const order = await this.prisma.order.findUnique({
       where: { checkoutSessionId: session.id },
     });
 
     if (!order) {
-      this.logger.error(`Order not found for checkout session: ${session.id}`);
+      this.logger.error('Order not found for checkout session');
       return;
     }
 
@@ -136,14 +136,14 @@ export class WebhooksService {
   private async handlePaymentIntentSucceeded(event: Stripe.Event) {
     const paymentIntent = event.data.object as Stripe.PaymentIntent;
 
-    this.logger.log(`Payment intent succeeded: ${paymentIntent.id}`);
+    this.logger.log('Payment intent succeeded');
 
     const order = await this.prisma.order.findUnique({
       where: { paymentIntentId: paymentIntent.id },
     });
 
     if (!order) {
-      this.logger.error(`Order not found for payment intent: ${paymentIntent.id}`);
+      this.logger.error('Order not found for payment intent');
       return;
     }
 
@@ -295,14 +295,14 @@ export class WebhooksService {
   private async handlePaymentIntentFailed(event: Stripe.Event) {
     const paymentIntent = event.data.object as Stripe.PaymentIntent;
 
-    this.logger.log(`Payment intent failed: ${paymentIntent.id}`);
+    this.logger.log('Payment intent failed');
 
     const order = await this.prisma.order.findUnique({
       where: { paymentIntentId: paymentIntent.id },
     });
 
     if (!order) {
-      this.logger.error(`Order not found for payment intent: ${paymentIntent.id}`);
+      this.logger.error('Order not found for payment intent');
       return;
     }
 
@@ -351,7 +351,7 @@ export class WebhooksService {
   private async handlePaymentIntentCanceled(event: Stripe.Event) {
     const paymentIntent = event.data.object as Stripe.PaymentIntent;
 
-    this.logger.log(`Payment intent canceled: ${paymentIntent.id}`);
+    this.logger.log('Payment intent canceled');
 
     const order = await this.prisma.order.findUnique({
       where: { paymentIntentId: paymentIntent.id },
@@ -388,7 +388,7 @@ export class WebhooksService {
   private async handleChargeRefunded(event: Stripe.Event) {
     const charge = event.data.object as Stripe.Charge;
 
-    this.logger.log(`Charge refunded: ${charge.id}`);
+    this.logger.log('Charge refunded');
 
     const payment = await this.prisma.payment.findUnique({
       where: { chargeId: charge.id },
@@ -396,7 +396,7 @@ export class WebhooksService {
     });
 
     if (!payment) {
-      this.logger.error(`Payment not found for charge: ${charge.id}`);
+      this.logger.error('Payment not found for charge');
       return;
     }
 
@@ -458,7 +458,7 @@ export class WebhooksService {
   private async handleDisputeCreated(event: Stripe.Event) {
     const dispute = event.data.object as Stripe.Dispute;
 
-    this.logger.log(`Dispute created: ${dispute.id}`);
+    this.logger.log('Dispute created');
 
     const payment = await this.prisma.payment.findUnique({
       where: { chargeId: dispute.charge as string },
@@ -488,7 +488,7 @@ export class WebhooksService {
   private async handleDisputeClosed(event: Stripe.Event) {
     const dispute = event.data.object as Stripe.Dispute;
 
-    this.logger.log(`Dispute closed: ${dispute.id} - Status: ${dispute.status}`);
+    this.logger.log('Dispute closed');
 
     const payment = await this.prisma.payment.findUnique({
       where: { chargeId: dispute.charge as string },
@@ -517,14 +517,14 @@ export class WebhooksService {
   private async handlePaymentIntentRequiresAction(event: Stripe.Event) {
     const paymentIntent = event.data.object as Stripe.PaymentIntent;
 
-    this.logger.log(`Payment intent requires action: ${paymentIntent.id}`);
+    this.logger.log('Payment intent requires action');
 
     const order = await this.prisma.order.findUnique({
       where: { paymentIntentId: paymentIntent.id },
     });
 
     if (!order) {
-      this.logger.error(`Order not found for payment intent: ${paymentIntent.id}`);
+      this.logger.error('Order not found for payment intent');
       return;
     }
 
@@ -550,7 +550,7 @@ export class WebhooksService {
   private async handlePaymentIntentAmountCapturableUpdated(event: Stripe.Event) {
     const paymentIntent = event.data.object as Stripe.PaymentIntent;
 
-    this.logger.log(`Payment intent amount capturable updated: ${paymentIntent.id}`);
+    this.logger.log('Payment intent amount capturable updated');
 
     const order = await this.prisma.order.findUnique({
       where: { paymentIntentId: paymentIntent.id },

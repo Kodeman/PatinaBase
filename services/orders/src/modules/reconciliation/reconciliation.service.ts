@@ -6,6 +6,7 @@ import Stripe from 'stripe';
 import { v4 as uuidv4 } from 'uuid';
 import { Decimal } from '../../generated/prisma-client/runtime/library';
 import { assertStripeConfigured } from '../../config/stripe.module';
+import { OrdersAuthorizationResolver } from '../../common/authorization/orders-authorization.resolver';
 
 @Injectable()
 export class ReconciliationService {
@@ -16,6 +17,7 @@ export class ReconciliationService {
     private configService: ConfigService,
     @Inject('STRIPE_CLIENT') private stripe: Stripe,
     @Inject('EVENTS_SERVICE') private eventsService: any,
+    private readonly authorization: OrdersAuthorizationResolver,
   ) {}
 
   /**
@@ -42,6 +44,15 @@ export class ReconciliationService {
    * manual `POST /reconciliation/run` endpoint.
    */
   async runReconciliation() {
+    return this.runReconciliationInternal('reconciliation', 'system');
+  }
+
+  async runReconciliationAs(subject: string) {
+    await this.authorization.authorize(subject, 'admin', async () => undefined);
+    return this.runReconciliationInternal(subject, 'user');
+  }
+
+  private async runReconciliationInternal(actor: string, actorType: string) {
     assertStripeConfigured(this.stripe);
 
     const windowHours = this.configService.get<number>('RECONCILIATION_WINDOW_HOURS', 24);
@@ -49,7 +60,7 @@ export class ReconciliationService {
     startTime.setHours(startTime.getHours() - windowHours);
     const endTime = new Date();
 
-    this.logger.log(`Starting reconciliation for window: ${startTime} - ${endTime}`);
+    this.logger.log('Starting reconciliation');
 
     const jobId = uuidv4();
 
@@ -107,13 +118,13 @@ export class ReconciliationService {
       // Attempt automatic recovery for orphan Stripe payments
       for (const paymentIntentId of orphanStripe) {
         try {
-          const recovered_success = await this.recoverMissedWebhook(paymentIntentId);
+          const recovered_success = await this.recoverMissedWebhook(paymentIntentId, actor, actorType);
           if (recovered_success) {
             recovered.push(paymentIntentId);
-            this.logger.log(`Successfully recovered missed webhook for ${paymentIntentId}`);
+            this.logger.log('Successfully recovered missed webhook');
           }
         } catch (error: any) {
-          this.logger.error(`Failed to recover ${paymentIntentId}: ${error.message}`);
+          this.logger.error('Failed to recover payment');
         }
       }
 
@@ -158,7 +169,7 @@ export class ReconciliationService {
 
       return reconciliation;
     } catch (error: any) {
-      this.logger.error(`Reconciliation failed: ${error.message}`, error.stack);
+      this.logger.error('Reconciliation failed');
 
       await this.prisma.reconciliation.update({
         where: { id: reconciliation.id },
@@ -182,17 +193,21 @@ export class ReconciliationService {
     });
   }
 
-  async getReconciliationHistory(limit = 10) {
-    return this.prisma.reconciliation.findMany({
-      take: limit,
+  async getReconciliationHistory(limit = 10, subject: string) {
+    return this.authorization.authorize(subject, 'admin', async (database) => database.reconciliation.findMany({
+      take: Math.min(Math.max(limit, 1), 100),
       orderBy: { startedAt: 'desc' },
-    });
+    }));
   }
 
   /**
    * Recover a missed webhook by fetching payment intent and processing manually
    */
-  private async recoverMissedWebhook(paymentIntentId: string): Promise<boolean> {
+  private async recoverMissedWebhook(
+    paymentIntentId: string,
+    actor: string,
+    actorType: string,
+  ): Promise<boolean> {
     try {
       // Fetch payment intent from Stripe
       const paymentIntent = await this.stripe.paymentIntents.retrieve(paymentIntentId);
@@ -210,7 +225,7 @@ export class ReconciliationService {
       }
 
       if (!order) {
-        this.logger.error(`Cannot recover: No order found for payment intent ${paymentIntentId}`);
+        this.logger.error('Cannot recover payment without an order');
         return false;
       }
 
@@ -224,7 +239,7 @@ export class ReconciliationService {
       });
 
       if (existingPayment) {
-        this.logger.log(`Payment already exists for ${paymentIntentId}, no recovery needed`);
+        this.logger.log('Payment already exists; no recovery needed');
         return false;
       }
 
@@ -284,8 +299,8 @@ export class ReconciliationService {
             entityType: 'order',
             entityId: order.id,
             action: 'payment_recovered',
-            actorType: 'system',
-            actor: 'reconciliation',
+            actorType,
+            actor,
             changes: {
               paymentIntentId: paymentIntent.id,
               amount: paymentIntent.amount,
@@ -313,7 +328,7 @@ export class ReconciliationService {
 
       return false;
     } catch (error: any) {
-      this.logger.error(`Error recovering payment intent ${paymentIntentId}: ${error.message}`);
+      this.logger.error('Error recovering payment intent');
       return false;
     }
   }

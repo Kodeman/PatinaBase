@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsObject } from 'class-validator';
+import { IsString, IsOptional, IsObject, IsUUID } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateCheckoutDto {
@@ -14,10 +14,10 @@ export class CreateCheckoutDto {
   @IsString()
   cancelUrl: string;
 
-  @ApiProperty({ description: 'User ID', required: false })
-  @IsString()
+  @ApiProperty({ description: 'Active buyer organization context', required: false })
+  @IsUUID()
   @IsOptional()
-  userId?: string;
+  organizationId?: string;
 
   @ApiProperty({ description: 'Customer email', required: false })
   @IsString()

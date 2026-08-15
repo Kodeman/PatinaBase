@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, Inject } from '@nes
 import { PrismaClient } from '../../generated/prisma-client';
 import { ConfigService } from '@nestjs/config';
 import { v4 as uuidv4 } from 'uuid';
+import { OrdersAuthorizationResolver } from '../../common/authorization/orders-authorization.resolver';
 
 @Injectable()
 export class OrdersService {
@@ -9,52 +10,39 @@ export class OrdersService {
     private prisma: PrismaClient,
     private configService: ConfigService,
     @Inject('EVENTS_SERVICE') private eventsService: any,
+    private readonly authorization: OrdersAuthorizationResolver,
   ) {}
 
   /**
    * Find order by ID
    */
-  async findOne(id: string) {
-    const order = await this.prisma.order.findUnique({
-      where: { id },
-      include: {
+  async findOne(id: string, subject: string) {
+    return this.authorization.authorize(subject, 'read', (database, _auth, scope) =>
+      this.authorization.requireOrder(database, scope, { id }, {
         items: true,
         payments: true,
         refunds: true,
         shipments: true,
         shippingAddress: true,
         billingAddress: true,
-      },
-    });
-
-    if (!order) {
-      throw new NotFoundException(`Order ${id} not found`);
-    }
-
-    return order;
+      }),
+    );
   }
 
   /**
    * Find order by order number
    */
-  async findByOrderNumber(orderNumber: string) {
-    const order = await this.prisma.order.findUnique({
-      where: { orderNumber },
-      include: {
+  async findByOrderNumber(orderNumber: string, subject: string) {
+    return this.authorization.authorize(subject, 'read', (database, _auth, scope) =>
+      this.authorization.requireOrder(database, scope, { orderNumber }, {
         items: true,
         payments: true,
         refunds: true,
         shipments: true,
         shippingAddress: true,
         billingAddress: true,
-      },
-    });
-
-    if (!order) {
-      throw new NotFoundException(`Order ${orderNumber} not found`);
-    }
-
-    return order;
+      }),
+    );
   }
 
   /**
@@ -68,12 +56,8 @@ export class OrdersService {
     to?: Date;
     skip?: number;
     take?: number;
-  }) {
+  }, subject: string) {
     const where: any = {};
-
-    if (filters.userId) {
-      where.userId = filters.userId;
-    }
 
     if (filters.status) {
       where.status = filters.status;
@@ -93,80 +77,107 @@ export class OrdersService {
       }
     }
 
-    const [orders, total] = await Promise.all([
-      this.prisma.order.findMany({
-        where,
-        include: {
-          items: true,
-          payments: { take: 1, orderBy: { createdAt: 'desc' } },
-          shipments: { take: 1, orderBy: { createdAt: 'desc' } },
-        },
-        orderBy: { createdAt: 'desc' },
-        skip: filters.skip || 0,
-        take: filters.take || 50,
-      }),
-      this.prisma.order.count({ where }),
-    ]);
-
-    return {
-      data: orders,
-      pagination: {
-        total,
-        skip: filters.skip || 0,
-        take: filters.take || 50,
-      },
-    };
+    return this.authorization.authorize(subject, 'read', async (database, _auth, scope) => {
+      const scopedWhere = { AND: [scope, where] };
+      const skip = Math.max(0, Number(filters.skip) || 0);
+      const take = Math.min(100, Math.max(1, Number(filters.take) || 50));
+      const [orders, total] = await Promise.all([
+        database.order.findMany({
+          where: scopedWhere,
+          include: {
+            items: true,
+            payments: { take: 1, orderBy: { createdAt: 'desc' } },
+            shipments: { take: 1, orderBy: { createdAt: 'desc' } },
+          },
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take,
+        }),
+        database.order.count({ where: scopedWhere }),
+      ]);
+      return { data: orders, pagination: { total, skip, take } };
+    });
   }
 
   /**
    * Update order status
    */
-  async updateStatus(orderId: string, status: string, actor?: string) {
-    const order = await this.findOne(orderId);
-
-    // Validate state transition
-    this.validateStatusTransition(order.status, status);
-
-    const updates: any = { status };
-
-    // Set timestamps based on status
-    if (status === 'paid' && !order.paidAt) {
-      updates.paidAt = new Date();
-    } else if (status === 'fulfilled' && !order.fulfilledAt) {
-      updates.fulfilledAt = new Date();
-      updates.fulfillmentStatus = 'fulfilled';
-    } else if (status === 'closed' && !order.closedAt) {
-      updates.closedAt = new Date();
-    } else if (status === 'canceled' && !order.canceledAt) {
-      updates.canceledAt = new Date();
-    }
-
-    const updated = await this.prisma.order.update({
-      where: { id: orderId },
-      data: updates,
-      include: {
-        items: true,
-        payments: true,
-        refunds: true,
-        shipments: true,
-      },
-    });
-
-    // Audit log
-    await this.prisma.auditLog.create({
-      data: {
-        entityType: 'order',
-        entityId: orderId,
-        action: 'status_changed',
-        actor: actor || 'system',
-        actorType: actor ? 'admin' : 'system',
-        changes: {
-          field: 'status',
-          from: order.status,
-          to: status,
+  async update(
+    orderId: string,
+    input: {
+      status?: string;
+      fulfillmentStatus?: string;
+      shippingMethod?: string;
+      customerNotes?: string;
+      internalNotes?: string;
+    },
+    subject: string,
+  ) {
+    return this.authorization.authorize(subject, 'manage', async (database, _auth, scope) => {
+      const order = await this.authorization.requireOrder(database, scope, { id: orderId });
+      if (input.status !== undefined) this.validateStatusTransition(order.status, input.status);
+      const data = {
+        status: input.status,
+        fulfillmentStatus: input.fulfillmentStatus,
+        shippingMethod: input.shippingMethod,
+        customerNotes: input.customerNotes,
+        internalNotes: input.internalNotes,
+      };
+      if (Object.values(data).every((value) => value === undefined)) {
+        throw new BadRequestException('No supported order fields supplied');
+      }
+      const updated = await database.order.update({
+        where: { id: orderId },
+        data,
+        include: { items: true, payments: true, refunds: true, shipments: true },
+      });
+      await database.auditLog.create({
+        data: {
+          entityType: 'order',
+          entityId: orderId,
+          action: 'updated',
+          actor: subject,
+          actorType: 'user',
+          changes: { fields: Object.keys(data).filter((key) => data[key as keyof typeof data] !== undefined) },
         },
-      },
+      });
+      return updated;
     });
+  }
+
+  async updateStatus(orderId: string, status: string, subject: string) {
+    const { order, updated } = await this.authorization.authorize(
+      subject,
+      'manage',
+      async (database, _auth, scope) => {
+        const order = await this.authorization.requireOrder(database, scope, { id: orderId });
+        this.validateStatusTransition(order.status, status);
+        const updates: any = { status };
+        if (status === 'paid' && !order.paidAt) updates.paidAt = new Date();
+        else if (status === 'fulfilled' && !order.fulfilledAt) {
+          updates.fulfilledAt = new Date();
+          updates.fulfillmentStatus = 'fulfilled';
+        } else if (status === 'closed' && !order.closedAt) updates.closedAt = new Date();
+        else if (status === 'canceled' && !order.canceledAt) updates.canceledAt = new Date();
+
+        const updated = await database.order.update({
+          where: { id: orderId },
+          data: updates,
+          include: { items: true, payments: true, refunds: true, shipments: true },
+        });
+        await database.auditLog.create({
+          data: {
+            entityType: 'order',
+            entityId: orderId,
+            action: 'status_changed',
+            actor: subject,
+            actorType: 'user',
+            changes: { field: 'status', from: order.status, to: status },
+          },
+        });
+        return { order, updated };
+      },
+    );
 
     // Emit event
     await this.eventsService.publish(`order.${status}`, {
@@ -188,8 +199,13 @@ export class OrdersService {
   /**
    * Cancel order
    */
-  async cancel(orderId: string, reason?: string, actor?: string) {
-    const order = await this.findOne(orderId);
+  async cancel(orderId: string, reason: string | undefined, subject: string) {
+    const order = await this.authorization.authorize(
+      subject,
+      'manage',
+      (database, _auth, scope) =>
+        this.authorization.requireOrder(database, scope, { id: orderId }),
+    );
 
     if (!['created', 'paid', 'processing'].includes(order.status)) {
       throw new BadRequestException(
@@ -204,7 +220,7 @@ export class OrdersService {
       );
     }
 
-    await this.updateStatus(orderId, 'canceled', actor);
+    await this.updateStatus(orderId, 'canceled', subject);
 
     await this.eventsService.publish('order.canceled', {
       id: uuidv4(),
@@ -215,27 +231,29 @@ export class OrdersService {
         orderId,
         orderNumber: order.orderNumber,
         reason,
-        actor,
+        actor: subject,
       },
     });
 
-    return this.findOne(orderId);
+    return this.findOne(orderId, subject);
   }
 
   /**
    * Get orders by multiple IDs (bulk fetch)
    */
-  async findByIds(ids: string[]) {
-    return this.prisma.order.findMany({
-      where: { id: { in: ids } },
-      include: {
-        items: true,
-        payments: { take: 1, orderBy: { createdAt: 'desc' } },
-        shipments: { take: 1, orderBy: { createdAt: 'desc' } },
-        shippingAddress: true,
-        billingAddress: true,
-      },
-    });
+  async findByIds(ids: string[], subject: string) {
+    return this.authorization.authorize(subject, 'read', (database, _auth, scope) =>
+      database.order.findMany({
+        where: { AND: [{ id: { in: ids } }, scope] },
+        include: {
+          items: true,
+          payments: { take: 1, orderBy: { createdAt: 'desc' } },
+          shipments: { take: 1, orderBy: { createdAt: 'desc' } },
+          shippingAddress: true,
+          billingAddress: true,
+        },
+      }),
+    );
   }
 
   /**

@@ -30,6 +30,12 @@ import {
   ValidateAddressDto,
   ShippingRatesResponseDto,
 } from './dto';
+import {
+  CurrentUser,
+  RequireAnyPermission,
+  type AuthenticatedUserIdentity,
+} from '@patina/auth';
+import { ORDER_PERMISSIONS } from '../../common/authorization/orders-authorization.resolver';
 
 @ApiTags('fulfillment')
 @ApiBearerAuth()
@@ -38,6 +44,11 @@ export class FulfillmentController {
   constructor(private readonly fulfillmentService: FulfillmentService) {}
 
   @Post()
+  @RequireAnyPermission(
+    ORDER_PERMISSIONS.MANAGE_OWN,
+    ORDER_PERMISSIONS.MANAGE_ORG,
+    ORDER_PERMISSIONS.ADMIN_ALL,
+  )
   @ApiOperation({ summary: 'Create shipment and generate shipping label for order' })
   @ApiParam({ name: 'orderId', description: 'Order UUID' })
   @ApiResponse({
@@ -55,19 +66,43 @@ export class FulfillmentController {
   async create(
     @Param('orderId') orderId: string,
     @Body() createShipmentDto: CreateShipmentDto,
+    @CurrentUser() user: AuthenticatedUserIdentity,
   ) {
-    return this.fulfillmentService.createShipment(orderId, createShipmentDto);
+    return this.fulfillmentService.createShipment(orderId, createShipmentDto, user.sub);
   }
 
   @Get()
+  @RequireAnyPermission(
+    ORDER_PERMISSIONS.READ_OWN,
+    ORDER_PERMISSIONS.READ_ORG,
+    ORDER_PERMISSIONS.ADMIN_ALL,
+  )
   @ApiOperation({ summary: 'Get all shipments for order' })
   @ApiParam({ name: 'orderId', description: 'Order UUID' })
   @ApiResponse({
     status: 200,
     description: 'List of shipments',
   })
-  async findByOrder(@Param('orderId') orderId: string) {
-    return this.fulfillmentService.findByOrder(orderId);
+  async findByOrder(
+    @Param('orderId') orderId: string,
+    @CurrentUser() user: AuthenticatedUserIdentity,
+  ) {
+    return this.fulfillmentService.findByOrder(orderId, user.sub);
+  }
+
+  @Patch()
+  @RequireAnyPermission(
+    ORDER_PERMISSIONS.MANAGE_OWN,
+    ORDER_PERMISSIONS.MANAGE_ORG,
+    ORDER_PERMISSIONS.ADMIN_ALL,
+  )
+  @ApiOperation({ summary: 'Update a shipment belonging to this order' })
+  async updateForOrder(
+    @Param('orderId') orderId: string,
+    @Body() body: UpdateShipmentDto & { id?: string; shipmentId?: string; status?: string },
+    @CurrentUser() user: AuthenticatedUserIdentity,
+  ) {
+    return this.fulfillmentService.updateShipmentForOrder(orderId, body, user.sub);
   }
 }
 
@@ -78,6 +113,10 @@ export class ShipmentsController {
   constructor(private readonly fulfillmentService: FulfillmentService) {}
 
   @Post('rates')
+  @RequireAnyPermission(
+    ORDER_PERMISSIONS.MANAGE_OWN,
+    ORDER_PERMISSIONS.ADMIN_ALL,
+  )
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get shipping rates for a shipment' })
   @ApiResponse({
@@ -89,22 +128,37 @@ export class ShipmentsController {
     status: 400,
     description: 'Invalid address or parcel data',
   })
-  async getRates(@Body() getRatesDto: GetRatesDto) {
-    return this.fulfillmentService.getRates(getRatesDto);
+  async getRates(
+    @Body() getRatesDto: GetRatesDto,
+    @CurrentUser() user: AuthenticatedUserIdentity,
+  ) {
+    return this.fulfillmentService.getRates(getRatesDto, user.sub);
   }
 
   @Post('validate-address')
+  @RequireAnyPermission(
+    ORDER_PERMISSIONS.MANAGE_OWN,
+    ORDER_PERMISSIONS.ADMIN_ALL,
+  )
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Validate a shipping address' })
   @ApiResponse({
     status: 200,
     description: 'Address validation result',
   })
-  async validateAddress(@Body() addressDto: ValidateAddressDto) {
-    return this.fulfillmentService.validateAddress(addressDto);
+  async validateAddress(
+    @Body() addressDto: ValidateAddressDto,
+    @CurrentUser() user: AuthenticatedUserIdentity,
+  ) {
+    return this.fulfillmentService.validateAddress(addressDto, user.sub);
   }
 
   @Get(':id')
+  @RequireAnyPermission(
+    ORDER_PERMISSIONS.READ_OWN,
+    ORDER_PERMISSIONS.READ_ORG,
+    ORDER_PERMISSIONS.ADMIN_ALL,
+  )
   @ApiOperation({ summary: 'Get shipment by ID' })
   @ApiParam({ name: 'id', description: 'Shipment UUID' })
   @ApiResponse({
@@ -115,11 +169,19 @@ export class ShipmentsController {
     status: 404,
     description: 'Shipment not found',
   })
-  async findById(@Param('id') id: string) {
-    return this.fulfillmentService.findById(id);
+  async findById(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUserIdentity,
+  ) {
+    return this.fulfillmentService.findById(id, user.sub);
   }
 
   @Get(':id/tracking')
+  @RequireAnyPermission(
+    ORDER_PERMISSIONS.READ_OWN,
+    ORDER_PERMISSIONS.READ_ORG,
+    ORDER_PERMISSIONS.ADMIN_ALL,
+  )
   @ApiOperation({ summary: 'Get real-time tracking information for shipment' })
   @ApiParam({ name: 'id', description: 'Shipment UUID' })
   @ApiResponse({
@@ -134,11 +196,19 @@ export class ShipmentsController {
     status: 400,
     description: 'Shipment does not have tracking number',
   })
-  async getTracking(@Param('id') id: string) {
-    return this.fulfillmentService.getTracking(id);
+  async getTracking(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUserIdentity,
+  ) {
+    return this.fulfillmentService.getTracking(id, user.sub);
   }
 
   @Patch(':id')
+  @RequireAnyPermission(
+    ORDER_PERMISSIONS.MANAGE_OWN,
+    ORDER_PERMISSIONS.MANAGE_ORG,
+    ORDER_PERMISSIONS.ADMIN_ALL,
+  )
   @ApiOperation({ summary: 'Update shipment details' })
   @ApiParam({ name: 'id', description: 'Shipment UUID' })
   @ApiResponse({
@@ -152,11 +222,17 @@ export class ShipmentsController {
   async update(
     @Param('id') id: string,
     @Body() updateShipmentDto: UpdateShipmentDto,
+    @CurrentUser() user: AuthenticatedUserIdentity,
   ) {
-    return this.fulfillmentService.updateShipment(id, updateShipmentDto);
+    return this.fulfillmentService.updateShipment(id, updateShipmentDto, user.sub);
   }
 
   @Patch(':id/status')
+  @RequireAnyPermission(
+    ORDER_PERMISSIONS.MANAGE_OWN,
+    ORDER_PERMISSIONS.MANAGE_ORG,
+    ORDER_PERMISSIONS.ADMIN_ALL,
+  )
   @ApiOperation({ summary: 'Update shipment status (manual or webhook)' })
   @ApiParam({ name: 'id', description: 'Shipment UUID' })
   @ApiResponse({
@@ -170,11 +246,17 @@ export class ShipmentsController {
   async updateStatus(
     @Param('id') id: string,
     @Body() statusDto: UpdateShipmentStatusDto,
+    @CurrentUser() user: AuthenticatedUserIdentity,
   ) {
-    return this.fulfillmentService.updateShipmentStatus(id, statusDto);
+    return this.fulfillmentService.updateShipmentStatus(id, statusDto, user.sub);
   }
 
   @Post(':id/refund')
+  @RequireAnyPermission(
+    ORDER_PERMISSIONS.MANAGE_OWN,
+    ORDER_PERMISSIONS.MANAGE_ORG,
+    ORDER_PERMISSIONS.ADMIN_ALL,
+  )
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refund a shipment (carrier must support refunds)' })
   @ApiParam({ name: 'id', description: 'Shipment UUID' })
@@ -190,7 +272,10 @@ export class ShipmentsController {
     status: 400,
     description: 'Shipment cannot be refunded',
   })
-  async refund(@Param('id') id: string) {
-    return this.fulfillmentService.refundShipment(id);
+  async refund(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUserIdentity,
+  ) {
+    return this.fulfillmentService.refundShipment(id, user.sub);
   }
 }

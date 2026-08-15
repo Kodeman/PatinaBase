@@ -3,10 +3,10 @@ import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { EventEmitterModule } from '@nestjs/event-emitter';
-import { PrometheusModule } from '@willsoto/nestjs-prometheus';
+import { PrometheusController, PrometheusModule } from '@willsoto/nestjs-prometheus';
 import { CacheModule } from '@patina/cache';
 import { APP_GUARD } from '@nestjs/core';
-import { HybridAuthGuard, PermissionsGuard } from '@patina/auth';
+import { HybridAuthGuard, PermissionsGuard, RequirePermissions } from '@patina/auth';
 import { join } from 'path';
 
 import configuration from './config/configuration';
@@ -23,6 +23,10 @@ import { HealthModule } from './modules/health/health.module';
 import { PrismaModule } from './config/prisma.module';
 import { StripeModule } from './config/stripe.module';
 import { EventsModule } from './config/events.module';
+import { OrdersAuthorizationModule } from './common/authorization/orders-authorization.module';
+import { ORDER_PERMISSIONS } from './common/authorization/orders-authorization.resolver';
+
+RequirePermissions(ORDER_PERMISSIONS.ADMIN_ALL)(PrometheusController);
 
 @Module({
   imports: [
@@ -57,6 +61,7 @@ import { EventsModule } from './config/events.module';
 
     // Infrastructure
     PrismaModule,
+    OrdersAuthorizationModule,
     StripeModule,
     EventsModule,
     CacheModule,

@@ -1,41 +1,41 @@
-import { Injectable, NotFoundException, BadRequestException, Inject } from '@nestjs/common';
+import { Injectable, BadRequestException, Inject } from '@nestjs/common';
 import { PrismaClient } from '../../generated/prisma-client';
-import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { v4 as uuidv4 } from 'uuid';
-import { Decimal } from '../../generated/prisma-client/runtime/library';
 import { assertStripeConfigured } from '../../config/stripe.module';
+import { OrdersAuthorizationResolver } from '../../common/authorization/orders-authorization.resolver';
 
 @Injectable()
 export class PaymentsService {
   constructor(
     private prisma: PrismaClient,
-    private configService: ConfigService,
     @Inject('STRIPE_CLIENT') private stripe: Stripe,
     @Inject('EVENTS_SERVICE') private eventsService: any,
+    private readonly authorization: OrdersAuthorizationResolver,
   ) {}
 
-  async findByOrder(orderId: string) {
-    return this.prisma.payment.findMany({
-      where: { orderId },
-      orderBy: { createdAt: 'desc' },
+  async findByOrder(orderId: string, subject: string) {
+    return this.authorization.authorize(subject, 'read', async (database, _auth, scope) => {
+      await this.authorization.requireOrder(database, scope, { id: orderId });
+      return database.payment.findMany({
+        where: { orderId },
+        orderBy: { createdAt: 'desc' },
+      });
     });
   }
 
   /**
    * Capture an authorized payment
    */
-  async capturePayment(orderId: string, amount?: number, actor?: string) {
+  async capturePayment(orderId: string, amount: number | undefined, subject: string) {
     assertStripeConfigured(this.stripe);
 
-    const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
-      include: { payments: true },
-    });
-
-    if (!order) {
-      throw new NotFoundException('Order not found');
-    }
+    const order = await this.authorization.authorize(
+      subject,
+      'manage',
+      (database, _auth, scope) =>
+        this.authorization.requireOrder(database, scope, { id: orderId }, { payments: true }),
+    );
 
     if (order.paymentStatus !== 'authorized') {
       throw new BadRequestException('Order payment is not in authorized state');
@@ -52,30 +52,35 @@ export class PaymentsService {
       captureAmount ? { amount_to_capture: captureAmount } : undefined
     );
 
-    // Update order status
-    await this.prisma.order.update({
-      where: { id: orderId },
-      data: {
-        paymentStatus: 'captured',
-        status: 'paid',
-        paidAt: new Date(),
+    const payments = await this.authorization.authorize(
+      subject,
+      'manage',
+      async (database, _auth, scope) => {
+        const current = await this.authorization.requireOrder(database, scope, {
+          id: orderId,
+          paymentIntentId: order.paymentIntentId,
+          paymentStatus: 'authorized',
+        });
+        await database.order.update({
+          where: { id: current.id },
+          data: { paymentStatus: 'captured', status: 'paid', paidAt: new Date() },
+        });
+        await database.auditLog.create({
+          data: {
+            entityType: 'order',
+            entityId: orderId,
+            action: 'payment_captured',
+            actor: subject,
+            actorType: 'user',
+            changes: { capturedAmount: amount || order.total.toString() },
+          },
+        });
+        return database.payment.findMany({
+          where: { orderId },
+          orderBy: { createdAt: 'desc' },
+        });
       },
-    });
-
-    // Create audit log
-    await this.prisma.auditLog.create({
-      data: {
-        entityType: 'order',
-        entityId: orderId,
-        action: 'payment_captured',
-        actor: actor || 'system',
-        actorType: actor ? 'admin' : 'system',
-        changes: {
-          paymentIntentId: paymentIntent.id,
-          capturedAmount: amount || order.total.toString(),
-        },
-      },
-    });
+    );
 
     // Emit event
     await this.eventsService.publish('payment.captured', {
@@ -91,22 +96,21 @@ export class PaymentsService {
       },
     });
 
-    return this.findByOrder(orderId);
+    return payments;
   }
 
   /**
    * Cancel an authorized payment
    */
-  async cancelPayment(orderId: string, actor?: string) {
+  async cancelPayment(orderId: string, subject: string) {
     assertStripeConfigured(this.stripe);
 
-    const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
-    });
-
-    if (!order) {
-      throw new NotFoundException('Order not found');
-    }
+    const order = await this.authorization.authorize(
+      subject,
+      'manage',
+      (database, _auth, scope) =>
+        this.authorization.requireOrder(database, scope, { id: orderId }),
+    );
 
     if (order.paymentStatus !== 'authorized') {
       throw new BadRequestException('Can only cancel authorized payments');
@@ -119,25 +123,25 @@ export class PaymentsService {
     // Cancel the payment intent
     await this.stripe.paymentIntents.cancel(order.paymentIntentId);
 
-    // Update order
-    await this.prisma.order.update({
-      where: { id: orderId },
-      data: {
-        paymentStatus: 'canceled',
-        status: 'canceled',
-        canceledAt: new Date(),
-      },
-    });
-
-    // Create audit log
-    await this.prisma.auditLog.create({
-      data: {
-        entityType: 'order',
-        entityId: orderId,
-        action: 'payment_canceled',
-        actor: actor || 'system',
-        actorType: actor ? 'admin' : 'system',
-      },
+    await this.authorization.authorize(subject, 'manage', async (database, _auth, scope) => {
+      const current = await this.authorization.requireOrder(database, scope, {
+        id: orderId,
+        paymentIntentId: order.paymentIntentId,
+        paymentStatus: 'authorized',
+      });
+      await database.order.update({
+        where: { id: current.id },
+        data: { paymentStatus: 'canceled', status: 'canceled', canceledAt: new Date() },
+      });
+      await database.auditLog.create({
+        data: {
+          entityType: 'order',
+          entityId: orderId,
+          action: 'payment_canceled',
+          actor: subject,
+          actorType: 'user',
+        },
+      });
     });
 
     // Emit event
@@ -158,9 +162,11 @@ export class PaymentsService {
   /**
    * Get payment details from Stripe
    */
-  async getPaymentIntent(paymentIntentId: string) {
+  async getPaymentIntent(paymentIntentId: string, subject: string) {
     assertStripeConfigured(this.stripe);
-
+    await this.authorization.authorize(subject, 'read', (database, _auth, scope) =>
+      this.authorization.requireOrder(database, scope, { paymentIntentId }),
+    );
     return this.stripe.paymentIntents.retrieve(paymentIntentId);
   }
 }
