@@ -838,11 +838,11 @@ BEGIN
              'edge_catalog_reader', d.oid, privilege.name
            )
          )
-         + (
-           NOT has_database_privilege(
+         + count(DISTINCT d.oid) FILTER (
+           WHERE NOT has_database_privilege(
              'edge_catalog_reader', d.oid, 'CONNECT'
            )
-         )::integer
+         )
     INTO unexpected_database
     FROM pg_database AS d
     CROSS JOIN LATERAL (VALUES ('CREATE'), ('TEMP')) AS privilege(name)
