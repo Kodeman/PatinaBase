@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const PORTALS = ["admin", "client", "designer", "manufacturer"];
+// Historical Coolify address retained only so policy can reject SSH access.
 const RETIRED_DEPLOY_PATTERNS = [
   /(?:^|[\s;&|])(?:\.\/)?infra\/deploy\.sh(?:\s|$)/,
   /(?:^|[\s;&|])(?:\.\/)?infra\/build-and-push\.sh(?:\s|$)/,
@@ -10,6 +11,7 @@ const RETIRED_DEPLOY_PATTERNS = [
   /(?:^|[\s;&|])(?:\.\/)?scripts\/deploy-edge-functions\.sh(?:\s|$)/,
   /infra\/coolify\//,
   /coolify\.patina\.cloud/,
+  /(?:^|[;&|]\s*)(?:\w+=\S+\s+)*ssh\b[^;&|]*\b192\.168\.1\.14\b/i,
 ];
 
 const PROD_MUTATION_PATTERNS = [
@@ -1170,7 +1172,7 @@ export function sessionFindings(root = resolveRepoRoot()) {
 
 export async function auditRepository(root = resolveRepoRoot()) {
   const findings = [...sessionFindings(root)];
-  if (fs.existsSync(path.join(root, ".github/workflows/docker-publish.yml"))) { // [retired-deploy-reference-allow]
+  if (fs.existsSync(path.join(root, ".github/workflows/docker-publish.yml"))) {
     findings.push(
       finding(
         "legacy-docker-workflow",

@@ -6,7 +6,7 @@ description: Use when investigating or operating Patina production (Strata Supab
 
 Last verified: 2026-07-09 (main @ c4de810d, migrations head 00284). Re-verify load-bearing claims if the repo has moved.
 
-Production = **Supabase Cloud "Strata" (ref `bkvcixdmuyejfzcijpdg`)** + **Cloudflare** (portals on Workers, services on Containers). The self-hosted Coolify box is **DEAD** — never SSH/deploy/reconfigure it. [retired-deploy-reference-allow]
+Production = **Supabase Cloud "Strata" (ref `bkvcixdmuyejfzcijpdg`)** + **Cloudflare** (portals on Workers, services on Containers). The self-hosted Coolify box is **DEAD** — never SSH/deploy/reconfigure it. [retired-deploy-reference-allow: production boundary explicitly prohibits the historical host]
 
 ## Use when / Don't use when
 Use when: diagnosing a prod incident; a cron/email/notification/webhook "ran but nothing happened"; reading edge-function or Worker logs; a prod SQL/data question; admin access; seeded test data; service health. Read-only by default.
@@ -99,7 +99,7 @@ From `supabase/config.toml`, only these skip JWT: `stripe-webhook` (Stripe-signa
 Reported open post-cutover: designer PDF route WASM-broken on Workers; cron-trigger / DLQ semantics on the new stack still being settled; inference-worker deploy state uncertain; old-box decommission pending; Stripe **LIVE** keys owed (sandbox is live — see patina-stripe-payments); `po_payments` self-mark-paid RLS hole open; **Field/SMS shipped 2026-07-09** (00281–00284 on Strata, `sms-dispatch`/`field-daily`/`sms-inbound` live) but **SMS is dormant** until Twilio 10DLC brand/campaign registration + Twilio secrets land (runbook `docs/field/sms-10dlc-runbook.md`; the Twilio webhook URL needs NO `?apikey=` on Cloud). These are memory/report-sourced, not all repo-verifiable — confirm each live before you rely on or "fix" it.
 
 ## Name-collision warning
-"**Strata**" means THREE things — the Supabase Cloud **project** (prod), the `StrataMark` **design-system component** (`packages/patina-design-system/src/components/StrataMark/`), and an old **Coolify project** name (`infra/coolify/*`, DEAD). Read context before acting on "Strata". [retired-deploy-reference-allow]
+"**Strata**" means THREE things — the Supabase Cloud **project** (prod), the `StrataMark` **design-system component** (`packages/patina-design-system/src/components/StrataMark/`), and an old **Coolify project** name (`infra/coolify/*`, DEAD). Read context before acting on "Strata". [retired-deploy-reference-allow: disambiguates the active cloud project from a retired platform label]
 
 ## Quality bar
 - Read-only unless an in-session ask authorizes the write; when gated, you report + propose, not execute.

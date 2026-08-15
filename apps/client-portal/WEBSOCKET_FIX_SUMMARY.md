@@ -88,7 +88,7 @@ A complete guide covering:
 - Troubleshooting
 - Service port reference
 
-**Updated File**: `/apps/client-portal/QUICK_START_GUIDE.md`
+**Updated File**: [archived Quick Start guide](../../docs/_archive/apps/client-portal/QUICK_START_GUIDE.md)
 
 - Updated environment variables section
 - Fixed service ports throughout

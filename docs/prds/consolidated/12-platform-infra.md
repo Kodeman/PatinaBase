@@ -8,15 +8,14 @@ This document was reconciled on 2026-08-15. Historical deployment material is is
 
 ## Authoritative references
 
-- `AGENTS.md`
-- `docs/engineering/patina-cloudflare-plan.md`
-- `docs/engineering/patina-cloudflare-phase-1-runbook.md`
-- `infra/runbooks/portal-ops.md`
-- `infra/runbooks/service-ops.md`
-- `infra/runbooks/email-ops.md`
-- `infra/inference-worker/README.md`
-- `supabase/config.toml`
-- portal and service `wrangler.jsonc` units
+- [Repository operating policy](../../../AGENTS.md)
+- [Cloudflare target-state roadmap](../../engineering/patina-cloudflare-plan.md)
+- [Cloudflare Phase 1 runbook](../../engineering/patina-cloudflare-phase-1-runbook.md)
+- [Deployment procedure](../../../.agents/skills/patina-deploy/SKILL.md)
+- [Email operations](../../../infra/runbooks/email-ops.md)
+- [Inference Worker operations](../../../infra/inference-worker/README.md)
+- [Supabase configuration](../../../supabase/config.toml)
+- Portal and service `wrangler.jsonc` units listed in the repository source-of-truth section below
 
 ## Runtime topology
 

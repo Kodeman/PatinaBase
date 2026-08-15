@@ -5,51 +5,85 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const ALLOW_MARKER = "[retired-deploy-reference-allow]";
+const ALLOW_MARKER_PATTERN =
+  /\[retired-deploy-reference-allow:\s*([^\]\r\n]*\S[^\]\r\n]*)\s*\]/i;
+const ANY_ALLOW_MARKER_PATTERN =
+  /\[retired-deploy-reference-allow(?:[^\]]*)?\]/i;
+
+export function retiredReferenceAllow(reason) {
+  return `[retired-deploy-reference-allow: ${reason}]`;
+}
+
+const POLICY_SOURCE_PATHS = new Set([
+  ".claude/settings.json",
+  "scripts/check-retired-deploy-references.mjs",
+  "scripts/check-retired-deploy-references.test.mjs",
+  "scripts/hooks/core.mjs",
+  "scripts/hooks/core.test.mjs",
+  "scripts/hooks/patina-hooks.mjs",
+]);
 
 const RETIRED_PATHS = [
-  ".github/workflows/docker-publish.yml", // [retired-deploy-reference-allow]
-  "infra/.env.example", // [retired-deploy-reference-allow]
-  "infra/Dockerfile.edge-runtime", // [retired-deploy-reference-allow]
-  "infra/Dockerfile.nestjs", // [retired-deploy-reference-allow]
-  "infra/Dockerfile.nextjs", // [retired-deploy-reference-allow]
-  "infra/build-and-push.sh", // [retired-deploy-reference-allow]
-  "infra/cloudflare-tunnel-config.yml", // [retired-deploy-reference-allow]
-  "infra/coolify/", // [retired-deploy-reference-allow]
-  "infra/deploy.sh", // [retired-deploy-reference-allow]
-  "infra/docker-compose.deploy.yml", // [retired-deploy-reference-allow]
-  "infra/docker-compose.frontend.yml", // [retired-deploy-reference-allow]
-  "infra/docker-compose.services.yml", // [retired-deploy-reference-allow]
-  "infra/docker-compose.supabase.yml", // [retired-deploy-reference-allow]
-  "infra/seed-prod-middlewest-accounts.sh", // [retired-deploy-reference-allow]
-  "infra/seed-prod-middlewest-accounts.sql", // [retired-deploy-reference-allow]
-  "infra/seed-prod-test-account.sh", // [retired-deploy-reference-allow]
-  "infra/seed-prod-test-account.sql", // [retired-deploy-reference-allow]
-  "infra/volumes/", // [retired-deploy-reference-allow]
-  "scripts/deploy-edge-functions.sh", // [retired-deploy-reference-allow]
-  "scripts/remote-db.sh", // [retired-deploy-reference-allow]
+  ".github/workflows/docker-publish.yml",
+  "infra/.env.example",
+  "infra/Dockerfile.edge-runtime",
+  "infra/Dockerfile.nestjs",
+  "infra/Dockerfile.nextjs",
+  "infra/build-and-push.sh",
+  "infra/cloudflare-tunnel-config.yml",
+  "infra/coolify/",
+  "infra/coolify-deploy.sh",
+  "infra/coolify-setup.sh",
+  "infra/deploy.sh",
+  "infra/docker-compose.deploy.yml",
+  "infra/docker-compose.frontend.yml",
+  "infra/docker-compose.services.yml",
+  "infra/docker-compose.supabase.yml",
+  "infra/seed-prod-middlewest-accounts.sh",
+  "infra/seed-prod-middlewest-accounts.sql",
+  "infra/seed-prod-test-account.sh",
+  "infra/seed-prod-test-account.sql",
+  "infra/volumes/",
+  "scripts/deploy-edge-functions.sh",
+  "scripts/remote-db.sh",
+  "supabase/functions/main/",
 ];
+
+const RETIRED_BASENAMES = new Set([
+  "build-and-push.sh",
+  "cloudflare-tunnel-config.yml",
+  "coolify-deploy.sh",
+  "coolify-setup.sh",
+  "deploy-edge-functions.sh",
+  "docker-publish.yml",
+  "remote-db.sh",
+]);
 
 const RETIRED_CONTENT_RULES = [
   {
     label: "retired executable or configuration path",
     pattern:
-      /(?:\.github\/workflows\/docker-publish\.yml|infra\/\.env\.example|infra\/Dockerfile\.(?:edge-runtime|nestjs|nextjs)|infra\/(?:build-and-push|deploy)\.sh|infra\/cloudflare-tunnel-config\.yml|infra\/coolify\/|infra\/docker-compose\.(?:deploy|frontend|services|supabase)\.yml|infra\/seed-prod-(?:middlewest-accounts|test-account)\.(?:sh|sql)|infra\/volumes\/|scripts\/(?:deploy-edge-functions|remote-db)\.sh)/i, // [retired-deploy-reference-allow]
+      /(?:\.github\/workflows\/docker-publish\.yml|infra\/\.env\.example|infra\/dockerfile\.(?:edge-runtime|nestjs|nextjs)|infra\/(?:build-and-push|deploy)\.sh|infra\/cloudflare-tunnel-config\.yml|infra\/coolify(?:\/|-(?:deploy|setup)\.sh)|infra\/docker-compose\.(?:deploy|frontend|services|supabase)\.yml|infra\/seed-prod-(?:middlewest-accounts|test-account)\.(?:sh|sql)|infra\/volumes\/|scripts\/(?:deploy-edge-functions|remote-db)\.sh|supabase\/functions\/main(?:\/index\.ts)?|\b(?:coolify-deploy|coolify-setup|deploy-edge-functions|remote-db)\.sh\b)/i,
   },
   {
     label: "retired deployment platform procedure",
     pattern:
-      /(?:\bcoolify\b.{0,120}\b(?:deploy|deployment|ssh|configure|restart|pull|push|build)\b|\b(?:deploy|deployment|ssh|configure|restart|pull|push|build)\b.{0,120}\bcoolify\b|ghcr\.io\/kodeman|cfargotunnel\.com|cloudflared\s+tunnel|192\.168\.1\.14)/i, // [retired-deploy-reference-allow]
+      /(?:\bcoolify\b.{0,120}\b(?:deploy|deployment|ssh|configure|restart|pull|push|build)\b|\b(?:deploy|deployment|ssh|configure|restart|pull|push|build)\b.{0,120}\bcoolify\b|ghcr\.io\/kodeman|cfargotunnel\.com|cloudflared\s+tunnel|192\.168\.1\.14)/i,
   },
   {
     label: "retired self-hosted Supabase procedure",
     pattern:
-      /(?:self[- ]hosted\s+supabase.{0,120}\b(?:deploy|deployment|production|prod|run|compose|host)\b|\b(?:deploy|deployment|production|prod|run|compose|host)\b.{0,120}self[- ]hosted\s+supabase)/i, // [retired-deploy-reference-allow]
+      /(?:self[- ]hosted\s+supabase.{0,120}\b(?:deploy|deployment|production|prod|run|compose|host)\b|\b(?:deploy|deployment|production|prod|run|compose|host)\b.{0,120}self[- ]hosted\s+supabase)/i,
+  },
+  {
+    label: "retired mobile deployment target or host",
+    pattern:
+      /(?:\bselfhosted\b|(?:storage|realtime|search|ml)\.patina\.cloud)/i,
   },
   {
     label: "NextAuth installation, environment guidance, or runtime import",
     pattern:
-      /(?:\b(?:npm|pnpm|yarn)\s+(?:add|install)\s+next-auth\b|\bNEXTAUTH_(?:URL|SECRET|DEBUG)\b|\bfrom\s+["']next-auth(?:\/[^"']+)?["']|\brequire\(["']next-auth(?:\/[^"']+)?["'])/i, // [retired-deploy-reference-allow]
+      /(?:\b(?:npm|pnpm|yarn)\s+(?:add|install)\s+next-auth\b|\bNEXTAUTH_(?:URL|SECRET|DEBUG)\b|\bfrom\s+["']next-auth(?:\/[^"']+)?["']|\brequire\(["']next-auth(?:\/[^"']+)?["'])/i,
   },
 ];
 
@@ -65,15 +99,24 @@ function trackedFiles(root) {
 }
 
 function normalized(relative) {
-  return relative.replaceAll("\\", "/").toLowerCase();
+  return relative
+    .replaceAll("\\", "/")
+    .replace(/\/{2,}/g, "/")
+    .replace(/^\.\//, "")
+    .toLowerCase();
 }
 
 function isRetiredPath(relative) {
   const candidate = normalized(relative);
-  return RETIRED_PATHS.some((retired) => {
-    const target = retired.toLowerCase();
+  if (RETIRED_BASENAMES.has(path.posix.basename(candidate))) return true;
+  return RETIRED_PATHS.some((retiredPath) => {
+    const target = normalized(retiredPath);
     return target.endsWith("/") ? candidate.startsWith(target) : candidate === target;
   });
+}
+
+function isApprovedProse(relative) {
+  return /\.(?:html?|md|mdx)$/i.test(relative);
 }
 
 function readTrackedText(root, relative) {
@@ -95,6 +138,7 @@ export function findRetiredDeployReferences(root) {
   for (const relative of trackedFiles(root)) {
     const candidate = normalized(relative);
     if (candidate.startsWith("docs/_archive/")) continue;
+    if (POLICY_SOURCE_PATHS.has(candidate)) continue;
     if (isRetiredPath(relative)) {
       findings.push(`${relative}: retired executable or configuration remains tracked`);
       continue;
@@ -103,9 +147,25 @@ export function findRetiredDeployReferences(root) {
     const content = readTrackedText(root, relative);
     if (content === null) continue;
     content.split(/\r?\n/).forEach((line, index) => {
-      if (line.includes(ALLOW_MARKER)) return;
+      if (ANY_ALLOW_MARKER_PATTERN.test(line)) {
+        if (!isApprovedProse(relative)) {
+          findings.push(
+            `${relative}:${index + 1}: allow marker is permitted only in reviewed prose files`,
+          );
+          return;
+        }
+        const marker = line.match(ALLOW_MARKER_PATTERN);
+        if (!marker || !marker[1].trim()) {
+          findings.push(
+            `${relative}:${index + 1}: allow marker requires a nonempty rationale`,
+          );
+          return;
+        }
+        return;
+      }
+      const normalizedLine = normalized(line);
       for (const rule of RETIRED_CONTENT_RULES) {
-        if (rule.pattern.test(line)) {
+        if (rule.pattern.test(normalizedLine)) {
           findings.push(`${relative}:${index + 1}: ${rule.label}: ${line.trim()}`);
           break;
         }
