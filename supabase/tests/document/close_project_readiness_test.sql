@@ -175,6 +175,8 @@ BEGIN
 END;
 $$;
 
+GRANT EXECUTE ON FUNCTION pg_temp.assume_closeout_owner() TO authenticated;
+
 CREATE OR REPLACE FUNCTION pg_temp.assume_closeout_actor(p_actor uuid)
 RETURNS void
 LANGUAGE plpgsql
@@ -187,6 +189,8 @@ BEGIN
   );
 END;
 $$;
+
+GRANT EXECUTE ON FUNCTION pg_temp.assume_closeout_actor(uuid) TO authenticated;
 
 CREATE OR REPLACE FUNCTION pg_temp.complete_closeout()
 RETURNS jsonb
@@ -202,6 +206,8 @@ AS $$
     {"key":"case_study","label":"Case study","completed":true}
   ]'::jsonb;
 $$;
+
+GRANT EXECUTE ON FUNCTION pg_temp.complete_closeout() TO authenticated;
 
 CREATE OR REPLACE FUNCTION pg_temp.expect_close_failure(
   p_project_id uuid,
@@ -226,6 +232,8 @@ BEGIN
     'a rejected closeout must not complete the project';
 END;
 $$;
+
+GRANT EXECUTE ON FUNCTION pg_temp.expect_close_failure(uuid, text, jsonb) TO authenticated;
 
 CREATE OR REPLACE FUNCTION pg_temp.expect_project_insert_failure(
   p_project_id uuid,
@@ -268,6 +276,8 @@ BEGIN
   ), format('%s rejected insert must leave no row', p_label);
 END;
 $$;
+
+GRANT EXECUTE ON FUNCTION pg_temp.expect_project_insert_failure(uuid, public.project_status, timestamptz, boolean, text) TO authenticated;
 
 DO $$
 BEGIN

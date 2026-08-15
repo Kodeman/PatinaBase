@@ -57,6 +57,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+GRANT EXECUTE ON FUNCTION pg_temp.reset_role() TO authenticated, anon;
+
 -- Demo catalog (spectrums/DNA) so the shims have matchable products.
 SELECT public.aesthete_dev_demo_seed();
 

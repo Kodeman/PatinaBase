@@ -81,6 +81,8 @@ BEGIN
 END;
 $$;
 
+GRANT EXECUTE ON FUNCTION pg_temp.assume_workflow_actor(uuid) TO authenticated;
+
 CREATE TEMP TABLE workflow_test_result (
   project_id uuid,
   primary_phase_id uuid,
@@ -223,6 +225,7 @@ DECLARE
   );
   v_state text;
 BEGIN
+  EXECUTE 'RESET ROLE';
   PERFORM extensions.dblink_connect('workflow_template_locker', v_conninfo);
   PERFORM extensions.dblink_exec('workflow_template_locker', 'BEGIN');
   PERFORM locked.id
@@ -236,6 +239,7 @@ BEGIN
     $remote$
   ) AS locked(id text);
 
+  EXECUTE 'SET LOCAL ROLE authenticated';
   PERFORM set_config('lock_timeout', '250ms', true);
   BEGIN
     PERFORM public.apply_phase_template(
@@ -251,6 +255,7 @@ BEGIN
   ASSERT v_state = '55P03',
     'apply_phase_template must wait on a concurrent template content writer';
 
+  EXECUTE 'RESET ROLE';
   PERFORM extensions.dblink_exec('workflow_template_locker', 'ROLLBACK');
   PERFORM extensions.dblink_disconnect('workflow_template_locker');
 END;

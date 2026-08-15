@@ -402,6 +402,8 @@ BEGIN
 END;
 $$;
 
+GRANT EXECUTE ON FUNCTION pg_temp.assume_copy_actor(uuid, text) TO authenticated, service_role, anon;
+
 CREATE OR REPLACE FUNCTION pg_temp.copy_proposal_signed_ip(
   p_proposal_id uuid
 )
@@ -414,6 +416,8 @@ AS $$
   FROM public.proposals AS proposal
   WHERE proposal.id = p_proposal_id
 $$;
+
+GRANT EXECUTE ON FUNCTION pg_temp.copy_proposal_signed_ip(uuid) TO authenticated;
 
 CREATE OR REPLACE FUNCTION pg_temp.expect_fingerprint_change(
   p_label text,
@@ -1723,8 +1727,12 @@ $$;
 -- Draft share preview is an explicit product contract. Revised editions are
 -- the only lifecycle state that is superseded: creation and resolution fail
 -- closed, and a rejected resolve never increments the token's view count.
-SELECT pg_temp.assume_copy_actor('e8000000-0000-4000-8000-000000000001');
+RESET ROLE;
 CREATE TEMP TABLE draft_share_token (token text NOT NULL) ON COMMIT DROP;
+GRANT INSERT ON draft_share_token TO authenticated;
+GRANT SELECT ON draft_share_token TO service_role;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_copy_actor('e8000000-0000-4000-8000-000000000001');
 INSERT INTO draft_share_token
 SELECT token
 FROM public.create_document_share(
@@ -1733,7 +1741,6 @@ FROM public.create_document_share(
   '{"itemDetails":true}'::jsonb,
   now() + interval '1 day'
 );
-GRANT SELECT ON draft_share_token TO service_role;
 
 DO $$
 DECLARE

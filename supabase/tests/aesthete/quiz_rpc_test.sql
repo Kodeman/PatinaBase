@@ -80,6 +80,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+GRANT EXECUTE ON FUNCTION pg_temp.reset_role() TO authenticated, anon;
+
 -- ─── fixtures ──────────────────────────────────────────────────────────────
 
 -- Cases 2j/6 premise: vector assembly starts from an EMPTY style_centroids.

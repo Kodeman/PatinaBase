@@ -77,6 +77,8 @@ BEGIN
 END;
 $$;
 
+GRANT EXECUTE ON FUNCTION pg_temp.reset_user() TO authenticated;
+
 CREATE OR REPLACE FUNCTION pg_temp.configuration_snapshot_hash(p_snapshot jsonb)
 RETURNS text
 LANGUAGE sql
@@ -89,6 +91,8 @@ AS $$
     'sha256'
   ), 'hex');
 $$;
+
+GRANT EXECUTE ON FUNCTION pg_temp.configuration_snapshot_hash(jsonb) TO authenticated;
 
 DO $$
 DECLARE

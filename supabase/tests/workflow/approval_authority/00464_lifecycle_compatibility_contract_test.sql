@@ -307,6 +307,8 @@ AS $$
     );
 $$;
 
+GRANT EXECUTE ON FUNCTION pg_temp.stage2_response_evidence_is_absent(uuid) TO authenticated;
+
 
 CREATE TEMP TABLE approval_lifecycle_results (
   label text PRIMARY KEY,
@@ -439,6 +441,8 @@ SELECT 'authority-a1', public.set_project_decision_authority(
   'a4360000-0000-4000-8000-000000000002', NULL, 0
 );
 
+RESET ROLE;
+
 CREATE OR REPLACE FUNCTION pg_temp.create_lifecycle_approval(
   p_label text,
   p_issue_no integer,
@@ -473,6 +477,10 @@ BEGIN
   RETURN (v_result->>'decisionId')::uuid;
 END;
 $$;
+
+GRANT EXECUTE ON FUNCTION pg_temp.create_lifecycle_approval(text, integer, uuid)
+  TO authenticated;
+SET LOCAL ROLE authenticated;
 
 SELECT pg_temp.create_lifecycle_approval(
   'advance-approved', 1, 'a4363100-0000-4000-8000-000000000001'
@@ -577,15 +585,15 @@ WHERE create_row.label LIKE '%-create'
 ORDER BY create_row.label;
 
 RESET ROLE;
-SELECT pg_temp.assume_approval_actor('a4360000-0000-4000-8000-000000000001');
-SET LOCAL ROLE authenticated;
-
 CREATE TEMP TABLE approval_pending_tokens (
   label text PRIMARY KEY,
   decision_id uuid NOT NULL,
   updated_at timestamptz NOT NULL
 ) ON COMMIT DROP;
 GRANT SELECT, INSERT ON approval_pending_tokens TO authenticated, service_role;
+
+SELECT pg_temp.assume_approval_actor('a4360000-0000-4000-8000-000000000001');
+SET LOCAL ROLE authenticated;
 
 INSERT INTO approval_pending_tokens(label, decision_id, updated_at)
 SELECT replace(create_row.label, '-create', ''), decision.id, published.updated_at

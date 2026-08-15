@@ -176,6 +176,8 @@ BEGIN
 END;
 $$;
 
+GRANT EXECUTE ON FUNCTION pg_temp.assume_atomic_actor(uuid, text) TO authenticated;
+
 -- ACL contract: browser callers are authenticated only. PUBLIC grants would
 -- make anon true too, so the anon assertion also proves PUBLIC is absent.
 DO $$

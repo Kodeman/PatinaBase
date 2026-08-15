@@ -141,6 +141,8 @@ BEGIN
 END;
 $$;
 
+GRANT EXECUTE ON FUNCTION pg_temp.assume_begin_actor(uuid) TO authenticated;
+
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_begin_actor('d6000000-0000-4000-8000-000000000001');
 
@@ -171,6 +173,8 @@ BEGIN
     'progressed registered retry must not duplicate the engagement';
 END;
 $$;
+
+RESET ROLE;
 
 CREATE OR REPLACE FUNCTION pg_temp.reject_rollback_relationship()
 RETURNS trigger
