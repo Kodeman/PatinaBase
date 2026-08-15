@@ -11023,3 +11023,45 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.materialize_schedule_dates(uuid, jsonb) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00481_edge_catalog_roles.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON TABLE public.edge_catalog_products FROM PUBLIC, anon, authenticated, service_role, edge_rls_user;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00481_edge_catalog_roles.sql
+DO $g$ BEGIN
+  REVOKE ALL PRIVILEGES ON TABLE public.products FROM edge_catalog_reader, edge_rls_user;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00481_edge_catalog_roles.sql
+DO $g$ BEGIN
+  GRANT USAGE ON SCHEMA public TO edge_catalog_reader;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00481_edge_catalog_roles.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.edge_catalog_products TO edge_catalog_reader;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00481_edge_catalog_roles.sql
+DO $g$ BEGIN
+  GRANT authenticated TO edge_rls_user WITH INHERIT FALSE, SET TRUE;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00481_edge_catalog_roles.sql
+DO $g$ BEGIN
+  GRANT edge_catalog_reader TO postgres WITH INHERIT FALSE, SET TRUE;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00481_edge_catalog_roles.sql
+DO $g$ BEGIN
+  GRANT edge_rls_user TO postgres WITH INHERIT FALSE, SET TRUE;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
