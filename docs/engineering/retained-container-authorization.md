@@ -29,11 +29,11 @@ through Prisma's parameterized tagged templates; unsafe raw SQL is prohibited.
 
 ## Canonical scopes
 
-| Container | Permission alternatives                                                                                      | Authoritative object relationship                                                                                                                                                                                                                                                                                            |
-| --------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| orders    | `order.read.own`, `order.read.org`, `order.manage.own`, `order.manage.org`, `order.admin.all`                | Own scope is `svc_orders.orders.user_id = sub`. Organization scope is the order's `organization_id` FK plus current active membership in an active organization. Cart scope is `carts.user_id = sub`; payments, refunds, and shipments inherit scope only through their order.                                               |
-| projects  | `project.read.assigned`, `project.manage.own`, `project.read.org`, `project.manage.org`, `project.admin.all` | Direct service client/designer assignments remain authoritative. `svc_projects.projects.public_project_id` links to the canonical public project for current client, designer, active team, and active studio membership. Nested records inherit only through their `project_id`.                                            |
-| media     | `media.read.own`, `media.manage.own`, `media.read.org`, `media.manage.org`, `media.admin.all`                | Personal assets use `uploaded_by = sub` when they are not product-owned. Product assets use the product's `owner_user_id` or `studio_id` plus current active membership. Board operations use the board's relational proposal/project, designer, and studio graph; JSON metadata and asset `permissions` never grant access. |
+| Container | Permission alternatives                                                                                      | Authoritative object relationship                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| --------- | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| orders    | `order.read.own`, `order.read.org`, `order.manage.own`, `order.manage.org`, `order.admin.all`                | Own scope is `svc_orders.orders.user_id = sub`. Organization scope is the order's `organization_id` FK plus current active membership in an active organization. Cart scope is `carts.user_id = sub`; payments, refunds, and shipments inherit scope only through their order.                                                                                                                                                                                                                                                                              |
+| projects  | `project.read.assigned`, `project.manage.own`, `project.read.org`, `project.manage.org`, `project.admin.all` | Direct service client/designer assignments remain authoritative. `svc_projects.projects.public_project_id` links to the canonical public project for current client, designer, active team, and active studio membership. Nested records inherit only through their `project_id`.                                                                                                                                                                                                                                                                           |
+| media     | `media.read.own`, `media.manage.own`, `media.read.org`, `media.manage.org`, `media.admin.all`                | Personal assets use `uploaded_by = sub` only when they are neither product- nor project-owned. Product assets use the product's `owner_user_id` or `studio_id` plus current active membership. Project documents use `media_assets.project_id` plus the canonical project's current client, designer, active team, or active studio relationship; project and product ownership are mutually exclusive. Board operations use the board's relational proposal/project, designer, and studio graph. JSON metadata and asset `permissions` never grant access. |
 
 The `*.admin.all` permissions are the only unscoped alternatives. Media job
 administration, CDN purge, broad search/reporting, and equivalent global
@@ -57,6 +57,14 @@ or inaccessible identifiers. List and count queries share the same scope
 predicate. Body/query `userId`, organization, role, permission, or actor values
 cannot replace verified/current state.
 
+Media has no global Nest prefix, so its protected runtime path inventory is
+intentionally mixed: asset, upload, and job routes are under `/v1/media/*`;
+administrative search/reporting routes are under `/search/*`; board background
+removal routes are under `/boards/*`; and `/version` is protected directly.
+These non-`/v1` paths require the same verified identity and current Strata
+authorization contract and must be enumerated explicitly by any Container
+router. They are not public fallbacks.
+
 ## Public exceptions
 
 The reviewed public surface is deliberately small:
@@ -78,7 +86,9 @@ are not public.
 
 Migration `00482_retained_service_authorization_contract.sql` owns the new
 permission rows, least-privilege role mappings, the nullable orders
-organization FK, and the nullable unique service-to-public project FK. Existing
-rows remain unlinked when no authoritative relationship exists; no JSON
-backfill is allowed. The migration adds no `PUBLIC`, `anon`, or generic
-`authenticated` grants and does not change the separate database ACL blocker.
+organization FK, the private Stripe webhook receipt ledger, the nullable unique
+service-to-public project FK, and the project-document Media FK plus its
+project/product ownership exclusion. Existing rows remain unlinked when no
+authoritative relationship exists; no JSON backfill is allowed. The migration
+adds no `PUBLIC`, `anon`, or generic `authenticated` grants and does not change
+the separate database ACL blocker.

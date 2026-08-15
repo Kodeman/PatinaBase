@@ -132,20 +132,28 @@ On any error, issue `ROLLBACK`, close the client, and return a redacted error. N
 
 ## Route matrix
 
-| Route                      | Auth                    | Upstream/binding                | Cache                        | Failure behavior                          |
-| -------------------------- | ----------------------- | ------------------------------- | ---------------------------- | ----------------------------------------- |
-| `/auth/v1/*`               | Supabase protocol       | Supabase Auth                   | no-store                     | preserve upstream status/body             |
-| `/realtime/v1/*`           | Supabase protocol       | Supabase Realtime               | no-store                     | preserve WebSocket status/frames          |
-| `/rest/v1/*`               | Supabase protocol       | Supabase REST                   | no-store                     | preserve upstream status/body/CORS        |
-| `/graphql/v1/*`            | Supabase protocol       | Supabase GraphQL                | no-store                     | preserve upstream status/body             |
-| `/functions/v1/*`          | function-specific JWT   | Supabase Functions              | no-store                     | preserve upstream status/body             |
-| `/storage/v1/*`            | Supabase protocol       | Supabase Storage                | no-store                     | preserve upstream status/body             |
-| `GET /v1/catalog/products` | public                  | public view via selected source | public 60s + 15s stale       | legacy public result on HD error/mismatch |
-| `GET /_internal/health`    | Access or service token | probe both bindings             | private, no-store            | generic binding readiness only            |
-| other `/v1/*`              | route-defined           | `DB_FRESH` or Container binding | private, no-store by default | fail closed                               |
-| unmatched                  | none                    | none                            | no-store                     | 404                                       |
+| Route                      | Auth                                          | Upstream/binding                       | Cache                        | Failure behavior                          |
+| -------------------------- | --------------------------------------------- | -------------------------------------- | ---------------------------- | ----------------------------------------- |
+| `/auth/v1/*`               | Supabase protocol                             | Supabase Auth                          | no-store                     | preserve upstream status/body             |
+| `/realtime/v1/*`           | Supabase protocol                             | Supabase Realtime                      | no-store                     | preserve WebSocket status/frames          |
+| `/rest/v1/*`               | Supabase protocol                             | Supabase REST                          | no-store                     | preserve upstream status/body/CORS        |
+| `/graphql/v1/*`            | Supabase protocol                             | Supabase GraphQL                       | no-store                     | preserve upstream status/body             |
+| `/functions/v1/*`          | function-specific JWT                         | Supabase Functions                     | no-store                     | preserve upstream status/body             |
+| `/storage/v1/*`            | Supabase protocol                             | Supabase Storage                       | no-store                     | preserve upstream status/body             |
+| `GET /v1/catalog/products` | public                                        | public view via selected source        | public 60s + 15s stale       | legacy public result on HD error/mismatch |
+| `GET /_internal/health`    | Access or service token                       | probe both bindings                    | private, no-store            | generic binding readiness only            |
+| other `/v1/*`              | route-defined                                 | `DB_FRESH` or Container binding        | private, no-store by default | fail closed                               |
+| Media `/search/*`          | Supabase identity + current `media.admin.all` | retained Media Container via Supavisor | private, no-store            | 401/403; no compatibility fallback        |
+| Media `/boards/*`          | Supabase identity + current object scope      | retained Media Container via Supavisor | private, no-store            | 401/403/404 without enumeration           |
+| Media `/version`           | Supabase identity + current `media.admin.all` | retained Media Container via Supavisor | private, no-store            | 401/403; no public version fallback       |
+| unmatched                  | none                                          | none                                   | no-store                     | 404                                       |
 
 Compatibility responses must preserve Supabase CORS headers and cookies. The Worker must not forward to a hostname that routes back to itself. Logging is allow-list based and excludes authorization, API keys, cookies, query contents, SQL, PII, and bodies.
+
+The retained Media service deliberately has no global Nest prefix. Its
+`/search/*`, `/boards/*`, and `/version` routes therefore require explicit
+Container routing and the same current-state authorization as `/v1/media/*`;
+they must never fall through to a public or compatibility upstream.
 
 ## Public catalog contract
 
