@@ -1,5 +1,32 @@
 -- Cloudflare Phase 1 database contract conformance (migration 00481).
--- Run with psql -v ON_ERROR_STOP=1 after pnpm supabase:reset.
+-- Run only against the local CLI database after pnpm supabase:reset and the
+-- verified local runner has applied
+-- supabase/platform-admin/00483_public_acl_allowlist.sql as supabase_admin:
+--   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
+--     -X -v ON_ERROR_STOP=1 -f supabase/tests/edge_api/catalog_roles_test.sql
+--
+-- Every direct role/data/extension mutation is enclosed by the outer
+-- transaction and rolled back. The two disposable LOGIN roles must commit so
+-- separate backends can authenticate; their complete lifecycle instead lives
+-- in one exception-cleaned dblink block below.
+
+\set ON_ERROR_STOP on
+
+SELECT (
+  :'HOST' IN ('127.0.0.1', 'localhost', '::1')
+  AND :'PORT' = '54322'
+  AND current_database() = 'postgres'
+) AS cf481_local_target
+\gset
+
+\if :cf481_local_target
+\else
+  \warn 'catalog_roles_test.sql refused: destructive reconciliation probes are local-only'
+  SELECT 1 / 0 AS cf481_local_target_required;
+\endif
+
+BEGIN;
+SAVEPOINT cf481_role_reconciliation;
 
 ALTER ROLE edge_catalog_reader
   CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS;
@@ -85,6 +112,15 @@ BEGIN
 
   ASSERT NOT EXISTS (
     SELECT 1
+      FROM pg_database AS d
+      CROSS JOIN LATERAL (VALUES ('CREATE'), ('TEMP')) AS privilege(name)
+     WHERE d.datname = current_database()
+       AND has_database_privilege('edge_rls_user', d.oid, privilege.name)
+       AND NOT has_database_privilege('authenticated', d.oid, privilege.name)
+  ), 'edge_rls_user has a database privilege broader than authenticated';
+
+  ASSERT NOT EXISTS (
+    SELECT 1
       FROM pg_namespace AS n
      WHERE (
        has_schema_privilege('edge_rls_user', n.oid, 'USAGE')
@@ -97,10 +133,26 @@ BEGIN
 
   ASSERT NOT EXISTS (
     SELECT 1
+      FROM pg_attribute AS a
+      CROSS JOIN LATERAL (
+        VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('REFERENCES')
+      ) AS privilege(name)
+     WHERE a.attnum > 0
+       AND NOT a.attisdropped
+       AND has_column_privilege(
+         'edge_rls_user', a.attrelid, a.attnum, privilege.name
+       )
+       AND NOT has_column_privilege(
+         'authenticated', a.attrelid, a.attnum, privilege.name
+       )
+  ), 'edge_rls_user has a column privilege broader than authenticated';
+
+  ASSERT NOT EXISTS (
+    SELECT 1
       FROM pg_class AS c
       CROSS JOIN LATERAL (
         VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE'),
-               ('TRUNCATE'), ('REFERENCES'), ('TRIGGER')
+               ('TRUNCATE'), ('REFERENCES'), ('TRIGGER'), ('MAINTAIN')
       ) AS privilege(name)
      WHERE has_table_privilege('edge_rls_user', c.oid, privilege.name)
        AND NOT has_table_privilege('authenticated', c.oid, privilege.name)
@@ -125,6 +177,8 @@ BEGIN
   ASSERT has_table_privilege(
     'edge_catalog_reader', 'public.edge_catalog_products', 'SELECT'
   ), 'edge_catalog_reader must be able to SELECT the catalog projection';
+  ASSERT has_schema_privilege('edge_catalog_reader', 'public', 'USAGE'),
+    'edge_catalog_reader must be able to use the public schema';
   ASSERT NOT has_table_privilege('edge_catalog_reader', 'public.products', 'SELECT'),
     'edge_catalog_reader must not SELECT products directly';
   ASSERT NOT has_table_privilege(
@@ -206,7 +260,10 @@ BEGIN
 END
 $$;
 
-BEGIN;
+ROLLBACK TO SAVEPOINT cf481_role_reconciliation;
+RELEASE SAVEPOINT cf481_role_reconciliation;
+
+SAVEPOINT cf481_projection_probe;
 ALTER TABLE public.products
   DROP CONSTRAINT products_catalog_requires_management;
 UPDATE public.products
@@ -235,7 +292,8 @@ BEGIN
   ), 'catalog projection must use only layer/status and preserve patina_managed';
 END
 $$;
-ROLLBACK;
+ROLLBACK TO SAVEPOINT cf481_projection_probe;
+RELEASE SAVEPOINT cf481_projection_probe;
 
 UPDATE public.aesthete_jobs
    SET status = 'done',
@@ -312,86 +370,163 @@ BEGIN
 END
 $$;
 
-SELECT CASE WHEN EXISTS (
-  SELECT 1 FROM pg_extension WHERE extname = 'dblink'
-) THEN 'true' ELSE 'false' END AS cf481_dblink_preexisting \gset
-
 CREATE EXTENSION IF NOT EXISTS dblink WITH SCHEMA extensions;
 
-SELECT replace(gen_random_uuid()::text, '-', '') AS cf481_login_password \gset
-
-CREATE ROLE edge_catalog_login_cf481
-  NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT LOGIN NOREPLICATION NOBYPASSRLS
-  PASSWORD :'cf481_login_password';
-CREATE ROLE edge_rls_login_cf481
-  NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT LOGIN NOREPLICATION NOBYPASSRLS
-  PASSWORD :'cf481_login_password';
-
-GRANT edge_catalog_reader TO edge_catalog_login_cf481
-  WITH ADMIN FALSE, INHERIT TRUE, SET FALSE;
-GRANT edge_rls_user TO edge_rls_login_cf481
-  WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;
-
-DO $$
-BEGIN
-  ASSERT EXISTS (
-    SELECT 1
-      FROM pg_roles
-     WHERE rolname = 'edge_catalog_login_cf481'
-       AND rolinherit
-       AND rolcanlogin
-       AND NOT rolsuper
-       AND NOT rolcreatedb
-       AND NOT rolcreaterole
-       AND NOT rolreplication
-       AND NOT rolbypassrls
-  ), 'catalog LOGIN must be INHERIT with no elevated attributes';
-
-  ASSERT (
-    SELECT count(*) = 1
-       AND bool_and(
-         granted.rolname = 'edge_catalog_reader'
-         AND NOT am.admin_option
-         AND am.inherit_option
-         AND NOT am.set_option
-       )
-      FROM pg_auth_members AS am
-      JOIN pg_roles AS granted ON granted.oid = am.roleid
-      JOIN pg_roles AS member ON member.oid = am.member
-     WHERE member.rolname = 'edge_catalog_login_cf481'
-  ), 'catalog LOGIN must have exactly one inherited, non-SET capability membership';
-
-  ASSERT (
-    SELECT count(*) = 1
-       AND bool_and(
-         granted.rolname = 'edge_rls_user'
-         AND NOT am.admin_option
-         AND NOT am.inherit_option
-         AND am.set_option
-       )
-      FROM pg_auth_members AS am
-      JOIN pg_roles AS granted ON granted.oid = am.roleid
-      JOIN pg_roles AS member ON member.oid = am.member
-     WHERE member.rolname = 'edge_rls_login_cf481'
-  ), 'RLS LOGIN must have exactly one SET-only capability membership';
-END
-$$;
-
-SELECT extensions.dblink_connect(
-  'cf481_catalog',
-  format(
-    'host=%s port=54322 dbname=postgres user=edge_catalog_login_cf481 password=%s connect_timeout=5',
-    host(network(set_masklen(inet_server_addr(), 16)) + 1),
-    :'cf481_login_password'
-  )
-);
-
-DO $$
+DO $cf481_login_lifecycle$
 DECLARE
+  login_password text := replace(gen_random_uuid()::text, '-', '');
+  gateway_host text := host(network(set_masklen(inet_server_addr(), 16)) + 1);
+  admin_dsn text;
+  catalog_dsn text;
+  auth_dsn text;
+  admin_connected boolean := false;
+  catalog_connected boolean := false;
+  auth_connected boolean := false;
+  cleanup_connection text;
+  live_connections text[];
+  catalog_role_ok boolean;
+  catalog_membership_ok boolean;
+  auth_membership_ok boolean;
   inherited_select boolean;
   catalog_result jsonb;
   session_role text;
+  first_result jsonb;
+  second_result jsonb;
+  reset_result jsonb;
+  error_result text;
+  error_role text;
 BEGIN
+  admin_dsn := format(
+    'host=%s port=54322 dbname=%s user=postgres password=postgres connect_timeout=5',
+    gateway_host,
+    current_database()
+  );
+  catalog_dsn := format(
+    'host=%s port=54322 dbname=%s user=edge_catalog_login_cf481 password=%s connect_timeout=5',
+    gateway_host,
+    current_database(),
+    login_password
+  );
+  auth_dsn := format(
+    'host=%s port=54322 dbname=%s user=edge_rls_login_cf481 password=%s connect_timeout=5',
+    gateway_host,
+    current_database(),
+    login_password
+  );
+
+  admin_connected := extensions.dblink_connect('cf481_admin', admin_dsn) = 'OK';
+
+  -- Remove only fixed, local test-role names left by an older interrupted
+  -- version of this test, then commit production-shaped disposable logins.
+  PERFORM extensions.dblink_exec(
+    'cf481_admin',
+    $cleanup$
+      DO $terminate$
+      BEGIN
+        PERFORM pg_terminate_backend(pid)
+        FROM pg_stat_activity
+        WHERE usename IN (
+          'edge_catalog_login_cf481', 'edge_rls_login_cf481'
+        )
+          AND pid <> pg_backend_pid();
+      END
+      $terminate$
+    $cleanup$
+  );
+  PERFORM extensions.dblink_exec(
+    'cf481_admin', 'DROP ROLE IF EXISTS edge_catalog_login_cf481'
+  );
+  PERFORM extensions.dblink_exec(
+    'cf481_admin', 'DROP ROLE IF EXISTS edge_rls_login_cf481'
+  );
+  PERFORM extensions.dblink_exec(
+    'cf481_admin',
+    format(
+      'CREATE ROLE edge_catalog_login_cf481 NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT LOGIN NOREPLICATION NOBYPASSRLS PASSWORD %L',
+      login_password
+    )
+  );
+  PERFORM extensions.dblink_exec(
+    'cf481_admin',
+    format(
+      'CREATE ROLE edge_rls_login_cf481 NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT LOGIN NOREPLICATION NOBYPASSRLS PASSWORD %L',
+      login_password
+    )
+  );
+  PERFORM extensions.dblink_exec(
+    'cf481_admin',
+    'GRANT edge_catalog_reader TO edge_catalog_login_cf481 WITH ADMIN FALSE, INHERIT TRUE, SET FALSE'
+  );
+  PERFORM extensions.dblink_exec(
+    'cf481_admin',
+    'GRANT edge_rls_user TO edge_rls_login_cf481 WITH ADMIN FALSE, INHERIT FALSE, SET TRUE'
+  );
+
+  SELECT value
+    INTO catalog_role_ok
+    FROM extensions.dblink(
+      'cf481_admin',
+      $remote$
+        SELECT rolinherit
+           AND rolcanlogin
+           AND NOT rolsuper
+           AND NOT rolcreatedb
+           AND NOT rolcreaterole
+           AND NOT rolreplication
+           AND NOT rolbypassrls
+          FROM pg_roles
+         WHERE rolname = 'edge_catalog_login_cf481'
+      $remote$
+    ) AS result(value boolean);
+  ASSERT catalog_role_ok,
+    'catalog LOGIN must be INHERIT with no elevated attributes';
+
+  SELECT value
+    INTO catalog_membership_ok
+    FROM extensions.dblink(
+      'cf481_admin',
+      $remote$
+        SELECT count(*) = 1
+           AND bool_and(
+             granted.rolname = 'edge_catalog_reader'
+             AND NOT am.admin_option
+             AND am.inherit_option
+             AND NOT am.set_option
+           )
+          FROM pg_auth_members AS am
+          JOIN pg_roles AS granted ON granted.oid = am.roleid
+          JOIN pg_roles AS member ON member.oid = am.member
+         WHERE member.rolname = 'edge_catalog_login_cf481'
+      $remote$
+    ) AS result(value boolean);
+  ASSERT catalog_membership_ok,
+    'catalog LOGIN must have exactly one inherited, non-SET capability membership';
+
+  SELECT value
+    INTO auth_membership_ok
+    FROM extensions.dblink(
+      'cf481_admin',
+      $remote$
+        SELECT count(*) = 1
+           AND bool_and(
+             granted.rolname = 'edge_rls_user'
+             AND NOT am.admin_option
+             AND NOT am.inherit_option
+             AND am.set_option
+           )
+          FROM pg_auth_members AS am
+          JOIN pg_roles AS granted ON granted.oid = am.roleid
+          JOIN pg_roles AS member ON member.oid = am.member
+         WHERE member.rolname = 'edge_rls_login_cf481'
+      $remote$
+    ) AS result(value boolean);
+  ASSERT auth_membership_ok,
+    'RLS LOGIN must have exactly one SET-only capability membership';
+
+  catalog_connected := extensions.dblink_connect(
+    'cf481_catalog', catalog_dsn
+  ) = 'OK';
+
   SELECT value
     INTO inherited_select
     FROM extensions.dblink(
@@ -433,28 +568,12 @@ BEGIN
     ) AS result(value text);
   ASSERT session_role = 'edge_catalog_login_cf481',
     'catalog direct SELECT changed the LOGIN role';
-END
-$$;
 
-SELECT extensions.dblink_disconnect('cf481_catalog');
+  PERFORM extensions.dblink_disconnect('cf481_catalog');
+  catalog_connected := false;
 
-SELECT extensions.dblink_connect(
-  'cf481_auth',
-  format(
-    'host=%s port=54322 dbname=postgres user=edge_rls_login_cf481 password=%s connect_timeout=5',
-    host(network(set_masklen(inet_server_addr(), 16)) + 1),
-    :'cf481_login_password'
-  )
-);
+  auth_connected := extensions.dblink_connect('cf481_auth', auth_dsn) = 'OK';
 
-DO $$
-DECLARE
-  first_result jsonb;
-  second_result jsonb;
-  reset_result jsonb;
-  error_result text;
-  error_role text;
-BEGIN
   PERFORM extensions.dblink_exec('cf481_auth', 'BEGIN');
   PERFORM extensions.dblink_exec('cf481_auth', 'SET LOCAL ROLE authenticated');
   PERFORM extensions.dblink_exec(
@@ -605,34 +724,136 @@ BEGIN
   ASSERT reset_result = jsonb_build_object(
     'role', 'edge_rls_login_cf481', 'claims', NULL
   ), 'role or Bob claims leaked after the second caller';
+
+  PERFORM extensions.dblink_disconnect('cf481_auth');
+  auth_connected := false;
+  PERFORM extensions.dblink_exec(
+    'cf481_admin', 'DROP ROLE edge_catalog_login_cf481'
+  );
+  PERFORM extensions.dblink_exec(
+    'cf481_admin', 'DROP ROLE edge_rls_login_cf481'
+  );
+  PERFORM extensions.dblink_disconnect('cf481_admin');
+  admin_connected := false;
+EXCEPTION WHEN OTHERS THEN
+  IF catalog_connected THEN
+    BEGIN
+      PERFORM extensions.dblink_disconnect('cf481_catalog');
+    EXCEPTION WHEN OTHERS THEN
+      NULL;
+    END;
+  END IF;
+  IF auth_connected THEN
+    BEGIN
+      PERFORM extensions.dblink_disconnect('cf481_auth');
+    EXCEPTION WHEN OTHERS THEN
+      NULL;
+    END;
+  END IF;
+  -- Do not trust the boolean connection flags after a dblink error. Resolve a
+  -- live admin connection by name, or create a fresh cleanup connection.
+  live_connections := COALESCE(
+    extensions.dblink_get_connections(), ARRAY[]::text[]
+  );
+  IF 'cf481_admin' = ANY(live_connections) THEN
+    cleanup_connection := 'cf481_admin';
+  ELSIF 'cf481_admin_cleanup' = ANY(live_connections) THEN
+    cleanup_connection := 'cf481_admin_cleanup';
+  ELSE
+    BEGIN
+      IF extensions.dblink_connect('cf481_admin_cleanup', admin_dsn) = 'OK' THEN
+        cleanup_connection := 'cf481_admin_cleanup';
+      END IF;
+    EXCEPTION WHEN OTHERS THEN
+      cleanup_connection := NULL;
+    END;
+  END IF;
+  IF cleanup_connection IS NOT NULL THEN
+    BEGIN
+      PERFORM extensions.dblink_exec(
+        cleanup_connection,
+        $cleanup$
+          DO $terminate$
+          BEGIN
+            PERFORM pg_terminate_backend(pid)
+            FROM pg_stat_activity
+            WHERE usename IN (
+              'edge_catalog_login_cf481', 'edge_rls_login_cf481'
+            )
+              AND pid <> pg_backend_pid();
+          END
+          $terminate$
+        $cleanup$
+      );
+    EXCEPTION WHEN OTHERS THEN
+      NULL;
+    END;
+    BEGIN
+      PERFORM extensions.dblink_exec(
+        cleanup_connection,
+        'DROP ROLE IF EXISTS edge_catalog_login_cf481'
+      );
+    EXCEPTION WHEN OTHERS THEN
+      NULL;
+    END;
+    BEGIN
+      PERFORM extensions.dblink_exec(
+        cleanup_connection,
+        'DROP ROLE IF EXISTS edge_rls_login_cf481'
+      );
+    EXCEPTION WHEN OTHERS THEN
+      NULL;
+    END;
+    BEGIN
+      PERFORM extensions.dblink_disconnect(
+        cleanup_connection
+      );
+    EXCEPTION WHEN OTHERS THEN
+      NULL;
+    END;
+  END IF;
+  RAISE;
 END
-$$;
-
-SELECT extensions.dblink_disconnect('cf481_auth');
-
-REVOKE edge_catalog_reader FROM edge_catalog_login_cf481;
-REVOKE edge_rls_user FROM edge_rls_login_cf481;
-DROP ROLE edge_catalog_login_cf481;
-DROP ROLE edge_rls_login_cf481;
-
-\if :cf481_dblink_preexisting
-\else
-DROP EXTENSION dblink;
-\endif
+$cf481_login_lifecycle$;
 
 \echo 'edge_api/catalog_roles_test.sql: functional assertions passed; running provisioning guard'
 
 DO $$
 DECLARE
+  unexpected_database integer;
   unexpected_schemas integer;
   unexpected_relations integer;
+  unexpected_columns integer;
   unexpected_sequences integer;
   executable_routines integer;
   callable_routines integer;
   callable_definers integer;
+  unexpected_memberships integer;
+  public_default_privileges integer;
+  unhardened_owner_defaults integer;
   unsafe_role_grant boolean;
 BEGIN
+  SELECT count(*) FILTER (
+           WHERE has_database_privilege(
+             'edge_catalog_reader', d.oid, privilege.name
+           )
+         )
+         + (
+           NOT has_database_privilege(
+             'edge_catalog_reader', d.oid, 'CONNECT'
+           )
+         )::integer
+    INTO unexpected_database
+    FROM pg_database AS d
+    CROSS JOIN LATERAL (VALUES ('CREATE'), ('TEMP')) AS privilege(name)
+   WHERE d.datname = current_database();
+
   SELECT count(*)
+         + (
+           NOT has_schema_privilege(
+             'edge_catalog_reader', 'public', 'USAGE'
+           )
+         )::integer
     INTO unexpected_schemas
     FROM pg_namespace AS n
    WHERE n.nspname !~ '^pg_'
@@ -645,13 +866,34 @@ BEGIN
        )
      );
 
+  SELECT count(*)
+    INTO unexpected_columns
+    FROM pg_attribute AS a
+    JOIN pg_class AS c ON c.oid = a.attrelid
+    JOIN pg_namespace AS n ON n.oid = c.relnamespace
+    CROSS JOIN LATERAL (
+      VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('REFERENCES')
+    ) AS privilege(name)
+   WHERE a.attnum > 0
+     AND NOT a.attisdropped
+     AND n.nspname !~ '^pg_'
+     AND n.nspname <> 'information_schema'
+     AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+     AND has_column_privilege(
+       'edge_catalog_reader', c.oid, a.attnum, privilege.name
+     )
+     AND NOT (
+       c.oid = 'public.edge_catalog_products'::regclass
+       AND privilege.name = 'SELECT'
+     );
+
   SELECT count(DISTINCT c.oid)
     INTO unexpected_relations
     FROM pg_class AS c
     JOIN pg_namespace AS n ON n.oid = c.relnamespace
     CROSS JOIN LATERAL (
       VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE'),
-             ('TRUNCATE'), ('REFERENCES'), ('TRIGGER')
+             ('TRUNCATE'), ('REFERENCES'), ('TRIGGER'), ('MAINTAIN')
     ) AS privilege(name)
    WHERE n.nspname !~ '^pg_'
      AND n.nspname <> 'information_schema'
@@ -687,6 +929,63 @@ BEGIN
      AND n.nspname <> 'information_schema'
      AND has_function_privilege('edge_catalog_reader', p.oid, 'EXECUTE');
 
+  SELECT count(*)
+    INTO unexpected_memberships
+    FROM pg_auth_members AS am
+    JOIN pg_roles AS granted ON granted.oid = am.roleid
+    JOIN pg_roles AS member ON member.oid = am.member
+    JOIN pg_roles AS grantor ON grantor.oid = am.grantor
+   WHERE (
+     member.rolname = 'edge_catalog_reader'
+   ) OR (
+     member.rolname = 'edge_rls_user'
+     AND NOT (
+       granted.rolname = 'authenticated'
+       AND NOT am.admin_option
+       AND NOT am.inherit_option
+       AND am.set_option
+     )
+   ) OR (
+     granted.rolname IN ('edge_catalog_reader', 'edge_rls_user')
+     AND NOT (
+       member.rolname = current_user
+       AND grantor.rolname = 'supabase_admin'
+       AND am.admin_option
+       AND NOT am.inherit_option
+       AND NOT am.set_option
+     )
+   );
+
+  SELECT count(*)
+    INTO public_default_privileges
+    FROM pg_default_acl AS d
+    CROSS JOIN LATERAL aclexplode(d.defaclacl) AS acl
+   WHERE acl.grantee = 0;
+
+  SELECT count(*)
+    INTO unhardened_owner_defaults
+    FROM unnest(ARRAY[
+      'postgres',
+      'supabase_admin',
+      'supabase_auth_admin',
+      'supabase_storage_admin',
+      'supabase_realtime_admin',
+      'supabase_functions_admin'
+    ]::text[]) AS expected(role_name)
+    LEFT JOIN pg_roles AS owner ON owner.rolname = expected.role_name
+    LEFT JOIN pg_default_acl AS d
+      ON d.defaclrole = owner.oid
+     AND d.defaclnamespace = 0
+     AND d.defaclobjtype = 'f'
+   WHERE owner.oid IS NULL
+      OR d.oid IS NULL
+      OR EXISTS (
+        SELECT 1
+        FROM aclexplode(d.defaclacl) AS acl
+        WHERE acl.grantee = 0
+          AND acl.privilege_type = 'EXECUTE'
+      );
+
   SELECT has_schema_privilege('edge_catalog_reader', 'public', 'USAGE')
          AND has_function_privilege(
            'edge_catalog_reader',
@@ -695,23 +994,35 @@ BEGIN
          )
     INTO unsafe_role_grant;
 
-  IF unexpected_schemas <> 0
+  IF unexpected_database <> 0
+     OR unexpected_schemas <> 0
      OR unexpected_relations <> 0
+     OR unexpected_columns <> 0
      OR unexpected_sequences <> 0
      OR executable_routines <> 0
+     OR unexpected_memberships <> 0
+     OR public_default_privileges <> 0
+     OR unhardened_owner_defaults <> 0
      OR unsafe_role_grant THEN
     RAISE EXCEPTION USING MESSAGE = format(
-      'PROVISIONING BLOCKED: edge_catalog_reader is not SELECT-only because inherited PUBLIC ACLs expose schemas=%s, relation_objects=%s, sequence_objects=%s, executable_routines=%s, callable_routines=%s, callable_security_definers=%s, grant_role_to_user=%s',
+      'PROVISIONING BLOCKED: edge_catalog_reader is not SELECT-only because ACL drift exposes database=%s, schemas=%s, relation_objects=%s, column_privileges=%s, sequence_objects=%s, executable_routines=%s, callable_routines=%s, callable_security_definers=%s, memberships=%s, public_default_privileges=%s, unhardened_owner_defaults=%s, grant_role_to_user=%s',
+      unexpected_database,
       unexpected_schemas,
       unexpected_relations,
+      unexpected_columns,
       unexpected_sequences,
       executable_routines,
       callable_routines,
       callable_definers,
+      unexpected_memberships,
+      public_default_privileges,
+      unhardened_owner_defaults,
       unsafe_role_grant
     );
   END IF;
 END
 $$;
+
+ROLLBACK;
 
 \echo 'edge_api/catalog_roles_test.sql: all assertions and provisioning guard passed'
