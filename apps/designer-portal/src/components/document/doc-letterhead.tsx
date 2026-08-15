@@ -24,6 +24,7 @@ export function DocLetterhead({
   client,
   projectId = null,
   needsSetup = null,
+  inHandRoomName = null,
 }: {
   title: string;
   vitals: string;
@@ -38,6 +39,9 @@ export function DocLetterhead({
   /** W1: the open setup needs, each with its own remedy. Empty, null and
    *  undefined all render nothing — the chip never announces a zero. */
   needsSetup?: NeedsSetupEntry[] | null;
+  /** The room lens: the room currently taken in hand, named on the paper's own
+   *  letterhead so the lift below it is never unexplained. */
+  inHandRoomName?: string | null;
 }) {
   return (
     <header id="document-project-status" tabIndex={-1} className="mb-4 border-b border-[var(--color-pearl)] pb-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]">
@@ -56,6 +60,14 @@ export function DocLetterhead({
         <LetterheadVitals projectId={projectId} />
       ) : (
         vitals && <p className="mt-1 text-[11px] text-[var(--text-muted)]">{vitals}</p>
+      )}
+      {inHandRoomName && (
+        <p
+          data-in-hand-room
+          className="doc-room-lifted mt-2.5 border-l-2 border-[var(--color-clay)] px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-charcoal)]"
+        >
+          In hand · {inHandRoomName}
+        </p>
       )}
       <NeedsSetupChip count={needsSetup?.length ?? 0} entries={needsSetup ?? []} />
     </header>

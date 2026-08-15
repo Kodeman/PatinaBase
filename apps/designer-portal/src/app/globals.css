@@ -718,6 +718,39 @@
   border-bottom: 1px solid rgba(44, 41, 38, 0.18);
 }
 
+/* The room lens — a room taken in hand washes what belongs to it. A flat clay
+   tint, no edge and no shadow (D4): the ground lifts, the ink stays put. The
+   wash raises the ground about four stops, so the quietest inks printed on it
+   darken to keep their contrast. ─────────────────────────────────────────── */
+.doc-room-lifted {
+  background: rgba(196, 165, 123, 0.15);
+  /* Re-pointed for the subtree, so every quiet ink printed on the wash
+     darkens with it rather than fading into it. */
+  --text-muted: var(--color-charcoal);
+}
+
+/* An open shelf leaf sits beside the spine, 320px wide. Below ~1900px it would
+   cover the paper's text, so the paper steps aside instead of being covered;
+   above that there is canvas enough for the leaf to overlay nothing. */
+@media (min-width: 1440px) {
+  [data-document-paper] {
+    transition: padding-left 200ms ease;
+  }
+  [data-document-paper][data-shelf-open='true'] {
+    padding-left: 344px;
+  }
+}
+@media (min-width: 1900px) {
+  [data-document-paper][data-shelf-open='true'] {
+    padding-left: 3rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-document-paper] {
+    transition: none;
+  }
+}
+
 /* Typography: now provided by @patina/design-system/styles/typography.css.
    Font variable mappings set on body below in @layer base. */
 

@@ -42,7 +42,7 @@ import { openInvoiceComposer } from './accounts/invoice-overlays';
 import { MobileMarginChips } from './mobile/mobile-margin-chips';
 import { STAGE_CONFIG } from '@/components/portal/ffe/stages';
 import type { FFEStageKey } from '@patina/types';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   deriveLineStamp,
   type LineStamp,
@@ -97,6 +97,9 @@ import { RegionHead, type RegionLedgerEntry } from './region/region-head';
 import { RegionRule } from './region/region-rule';
 import { FoldSeam, focusRegionHeading } from './region/fold-seam';
 import { useRegionFold } from './region/use-region-fold';
+import { liftByRoom, roomState as deriveRoomState } from '@/lib/document/room-state';
+import { useRoomLens } from './room-lens-context';
+import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
 
 /** Warm borders need darker text ink on paper (prototype stamp treatment). */
 const STAGE_INK: Partial<Record<FFEStageKey, string>> = {
@@ -482,14 +485,10 @@ function RoomHeading({
   const committed = rows
     .filter((r) => COMMITTED.has(r.stamp.kind))
     .reduce((s, r) => s + (r.item.line_total_cents ?? 0), 0);
-  const installed = rows.filter((r) => r.stamp.kind === 'installed').length;
   const underway = rows.filter((r) => UNDERWAY.has(r.stamp.kind)).length;
-  const state: 'settled' | 'active' | 'future' =
-    rows.length > 0 && installed === rows.length
-      ? 'settled'
-      : rows.length > 0
-        ? 'active'
-        : 'future';
+  const state = deriveRoomState(
+    rows.map((r) => ({ installed: r.stamp.kind === 'installed' })),
+  );
 
   const releasedCents = rows
     .filter((r) => r.auth.track !== 'none')
@@ -678,6 +677,7 @@ function FFESectionBody({
   sectionDragOver = false,
   instruments,
 }: FFESectionProps & { instruments: InstrumentLike[] }) {
+  const { heldRoomId } = useRoomLens();
   const [openLineId, setOpenLineId] = useState<string | null>(null);
   const [addLineRoom, setAddLineRoom] = useState<{
     id: string | null;
@@ -871,10 +871,14 @@ function FFESectionBody({
   // R25 grouping (project mode): rooms in sort order, then Throughout.
   const groupByRoom = mode === 'project';
   const roomGroups = groupByRoom
-    ? (rooms ?? []).map((room) => ({
-        room,
-        rows: rows.filter((r) => r.item.project_room_id === room.id),
-      }))
+    ? liftByRoom(
+        (rooms ?? []).map((room) => ({
+          room,
+          rows: rows.filter((r) => r.item.project_room_id === room.id),
+        })),
+        heldRoomId,
+        (group) => group.room.id,
+      )
     : [];
   const throughout = groupByRoom
     ? rows.filter(
@@ -902,6 +906,12 @@ function FFESectionBody({
     region: 'ffe',
     defaultFolded: ffeDefaultFolded,
   });
+  const ffeSetFolded = ffeFold.setFolded;
+  const openFfeRegion = useCallback(() => {
+    if (mode !== 'project') return;
+    ffeSetFolded(false);
+  }, [mode, ffeSetFolded]);
+  useRegionUnfoldRequest('ffe', openFfeRegion);
   const ffeHeadingId = `ffe-region-heading-${projectId}`;
   const ffeBodyId = `ffe-region-body-${projectId}`;
   const ffeFolded = mode === 'project' && !selecting && ffeFold.folded;
@@ -980,7 +990,11 @@ function FFESectionBody({
   ];
 
   return (
-    <section id="project-ffe">
+    <section
+      id="project-ffe"
+      data-index-region={groupByRoom ? 'ffe' : undefined}
+      className="scroll-mt-16"
+    >
       {mode === 'install' || selecting ? (
         <div className="mb-1.5 mt-5 flex items-baseline justify-between gap-3">
           <h2 className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]">
@@ -1190,7 +1204,10 @@ function FFESectionBody({
       {groupByRoom ? (
         <>
           {roomGroups.map(({ room, rows: roomRows }) => (
-            <div key={room.id}>
+            <div
+              key={room.id}
+              className={room.id === heldRoomId ? 'doc-room-lifted' : undefined}
+            >
               <RoomHeading
                 name={room.name}
                 roomId={room.id}
