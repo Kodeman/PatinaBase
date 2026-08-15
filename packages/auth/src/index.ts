@@ -33,13 +33,14 @@ import { jwtVerify, decodeProtectedHeader, createRemoteJWKSet, type JWTVerifyGet
 
 // Metadata key for public routes
 export const IS_PUBLIC_KEY = 'isPublic';
+export const PERMISSIONS_KEY = 'permissions';
 
 // Decorator to mark routes as public (no auth required)
 export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
 
 // Decorator to require specific permissions
 export const RequirePermissions = (...permissions: string[]) =>
-  SetMetadata('permissions', permissions);
+  SetMetadata(PERMISSIONS_KEY, permissions);
 
 // Parameter decorator to extract current user from request
 export const CurrentUser = createParamDecorator(
@@ -57,7 +58,7 @@ export interface SupabaseJwtPayload {
   sub: string;
   email?: string;
   role?: string;
-  aud?: string;
+  aud?: string | string[];
   iat?: number;
   exp?: number;
   user_metadata?: Record<string, any>;
@@ -82,6 +83,24 @@ function getJwtSecret(): Uint8Array {
 }
 
 let cachedJwks: JWTVerifyGetKey | null = null;
+
+function getExpectedIssuer(): string {
+  const explicit = process.env.SUPABASE_JWT_ISSUER;
+  if (explicit) return explicit.replace(/\/$/, '');
+
+  const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!supabaseUrl) {
+    throw new Error(
+      '[@patina/auth] SUPABASE_URL (or SUPABASE_JWT_ISSUER) is required to ' +
+        'verify the token issuer. Refusing to accept an unscoped JWT.',
+    );
+  }
+  return `${supabaseUrl.replace(/\/$/, '')}/auth/v1`;
+}
+
+function getExpectedAudience(): string {
+  return process.env.SUPABASE_JWT_AUDIENCE || 'authenticated';
+}
 
 function getJwksUrl(): string {
   const explicit = process.env.SUPABASE_JWKS_URL;
@@ -128,17 +147,37 @@ export async function verifyJwtToken(token: string): Promise<SupabaseJwtPayload>
     throw new Error('[@patina/auth] Malformed token: unable to decode JWT protected header.');
   }
 
-  if (alg === 'HS256') {
-    const { payload } = await jwtVerify(token, getJwtSecret(), {
-      algorithms: ['HS256'],
-    });
-    return payload as SupabaseJwtPayload;
+  if (!alg || !['HS256', 'ES256', 'RS256'].includes(alg)) {
+    throw new Error(`[@patina/auth] Unsupported JWT algorithm: ${alg ?? 'missing'}.`);
   }
 
-  const { payload } = await jwtVerify(token, getJwks(), {
-    algorithms: ['ES256', 'RS256'],
-  });
-  return payload as SupabaseJwtPayload;
+  const verificationOptions = {
+    algorithms: [alg],
+    issuer: getExpectedIssuer(),
+    audience: getExpectedAudience(),
+  };
+
+  const { payload } = alg === 'HS256'
+    ? await jwtVerify(token, getJwtSecret(), {
+        ...verificationOptions,
+      algorithms: ['HS256'],
+      })
+    : await jwtVerify(token, getJwks(), {
+        ...verificationOptions,
+        algorithms: ['ES256', 'RS256'],
+      });
+
+  if (
+    typeof payload.sub !== 'string' ||
+    payload.sub.trim().length === 0 ||
+    payload.role !== 'authenticated' ||
+    typeof payload.exp !== 'number' ||
+    !Number.isFinite(payload.exp)
+  ) {
+    throw new Error('[@patina/auth] JWT is missing required authenticated-user claims.');
+  }
+
+  return payload as unknown as SupabaseJwtPayload;
 }
 
 /**
@@ -157,8 +196,10 @@ export class JwtAuthGuard implements CanActivate {
     if (isPublic) return true;
 
     const authHeader = request.headers?.authorization;
-    if (!authHeader?.startsWith('Bearer ')) return false;
-    const token = authHeader.substring(7);
+    const bearerMatch =
+      typeof authHeader === 'string' ? /^Bearer\s+(\S+)$/i.exec(authHeader.trim()) : null;
+    if (!bearerMatch) return false;
+    const token = bearerMatch[1];
 
     try {
       const payload = await verifyJwtToken(token);
@@ -168,8 +209,15 @@ export class JwtAuthGuard implements CanActivate {
         userId: payload.sub,
         email: payload.email,
         role: payload.role,
-        roles: payload.app_metadata?.roles || [],
-        permissions: payload.app_metadata?.permissions || [],
+        roles: Array.isArray(payload.app_metadata?.roles)
+          ? payload.app_metadata.roles.filter((role): role is string => typeof role === 'string')
+          : [],
+        permissions: Array.isArray(payload.app_metadata?.permissions)
+          ? payload.app_metadata.permissions.filter(
+              (permission): permission is string =>
+                typeof permission === 'string' && permission.length > 0,
+            )
+          : [],
         metadata: payload.user_metadata,
       };
       return true;
@@ -183,14 +231,23 @@ export class JwtAuthGuard implements CanActivate {
 @Injectable()
 export class HybridAuthGuard extends JwtAuthGuard {}
 
-// PermissionsGuard stub — A4 in the architecture review tracks implementing
-// real permission enforcement (read @RequirePermissions metadata, compare
-// against request.user.permissions, default deny). Until then this is a
-// no-op gate.
 @Injectable()
 export class PermissionsGuard implements CanActivate {
-  canActivate(_context: ExecutionContext): boolean {
-    return true;
+  canActivate(context: ExecutionContext): boolean {
+    const required =
+      Reflect.getMetadata(PERMISSIONS_KEY, context.getHandler()) ??
+      Reflect.getMetadata(PERMISSIONS_KEY, context.getClass());
+    if (required === undefined) return true;
+    if (!Array.isArray(required) || required.length === 0) return false;
+
+    const granted = context.switchToHttp().getRequest()?.user?.permissions;
+    if (!Array.isArray(granted)) return false;
+    return required.every(
+      (permission) =>
+        typeof permission === 'string' &&
+        permission.length > 0 &&
+        granted.includes(permission),
+    );
   }
 }
 

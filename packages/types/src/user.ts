@@ -84,13 +84,13 @@ export type PrivacyOpStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
 
 /**
  * Core User entity matching the database schema.
- * Represents the authenticated user record with OIDC integration.
+ * Represents the authenticated Supabase user record.
  */
 export interface User extends Timestamps {
   /** Unique user identifier */
   id: UUID;
 
-  /** OIDC subject identifier from identity provider */
+  /** Supabase Auth subject identifier */
   sub: string;
 
   /** User email address (optional for some OAuth providers) */

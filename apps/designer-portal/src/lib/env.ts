@@ -31,29 +31,6 @@ export const env = {
   userManagementApiUrl: process.env.NEXT_PUBLIC_USER_MANAGEMENT_API_URL || '/api/auth',
   apiTimeout: parseInt(process.env.NEXT_PUBLIC_API_TIMEOUT || '30000', 10),
 
-  // OIDC Configuration
-  oidc: {
-    issuer: process.env.NEXT_PUBLIC_OIDC_ISSUER || '',
-    clientId: process.env.NEXT_PUBLIC_OIDC_CLIENT_ID || '',
-    clientSecret: process.env.OIDC_CLIENT_SECRET || '',
-    redirectUri: process.env.NEXT_PUBLIC_OIDC_REDIRECT_URI || (
-      (process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_ENV === 'development')
-        ? 'http://designer.localhost/api/auth/callback/oci-identity-domains'
-        : 'https://designer.patina.cloud/api/auth/callback/oci-identity-domains'
-    ),
-    scope: process.env.NEXT_PUBLIC_OIDC_SCOPE || 'openid profile email',
-  },
-
-  // NextAuth
-  nextAuth: {
-    url: process.env.NEXTAUTH_URL || (
-      (process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_ENV === 'development')
-        ? 'http://designer.localhost'
-        : 'https://designer.patina.cloud'
-    ),
-    secret: process.env.NEXTAUTH_SECRET || '',
-  },
-
   // Feature Flags
   features: {
     proposals: process.env.NEXT_PUBLIC_ENABLE_PROPOSALS === 'true',
@@ -100,10 +77,8 @@ if (
   process.env.NEXT_PHASE === 'phase-production-server'
 ) {
   const requiredEnvVars = [
-    'NEXT_PUBLIC_OIDC_ISSUER',
-    'NEXT_PUBLIC_OIDC_CLIENT_ID',
-    'OIDC_CLIENT_SECRET',
-    'NEXTAUTH_SECRET',
+    'NEXT_PUBLIC_SUPABASE_URL',
+    'NEXT_PUBLIC_SUPABASE_ANON_KEY',
   ];
 
   const missing = requiredEnvVars.filter((key) => !process.env[key]);

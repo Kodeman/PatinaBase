@@ -35,18 +35,19 @@ const products = await catalogApi.getProducts({ status: 'published' });
 const product = await catalogApi.getProduct('product-id');
 ```
 
-### With NextAuth (Recommended)
+### With Supabase Auth
 
 ```typescript
 import { CatalogApiClient } from '@patina/api-client';
-import { getSession } from 'next-auth/react';
+import { createClient } from '@/lib/supabase/server';
 
 const catalogApi = new CatalogApiClient({
   baseURL: process.env.NEXT_PUBLIC_CATALOG_API_URL!,
   timeout: 30000,
-  getSession: async () => {
-    const session = await getSession();
-    return session;
+  getAccessToken: async () => {
+    const supabase = await createClient();
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token ?? null;
   },
   isDevelopment: process.env.NODE_ENV === 'development',
 });
@@ -172,7 +173,7 @@ await client.checkout(cartId, { shippingAddress, paymentMethodId });
 interface ApiClientConfig {
   baseURL: string;
   timeout?: number; // Default: 30000ms
-  getSession?: () => Promise<{ accessToken?: string } | null>;
+  getAccessToken?: () => Promise<string | null>;
   isDevelopment?: boolean; // Enables debug logging
 }
 ```
@@ -241,11 +242,15 @@ export const catalogApi = new CatalogApiClient();
 ```typescript
 // apps/designer-portal/src/lib/api-client.ts
 import { CatalogApiClient } from '@patina/api-client';
-import { getSession } from 'next-auth/react';
+import { createClient } from '@/lib/supabase/server';
 
 export const catalogApi = new CatalogApiClient({
   baseURL: env.catalogApiUrl,
-  getSession,
+  getAccessToken: async () => {
+    const supabase = await createClient();
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token ?? null;
+  },
   isDevelopment: env.isDevelopment,
 });
 ```

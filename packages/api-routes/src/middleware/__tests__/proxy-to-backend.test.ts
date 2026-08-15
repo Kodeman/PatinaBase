@@ -59,6 +59,7 @@ function mkRequest(url = 'https://example.com/api/catalog/products', init: Reque
 
 beforeEach(() => {
   vi.clearAllMocks();
+  process.env.SUPABASE_PROJECT_REF = 'api';
   // Default: token verification passes
   verifyJwtToken.mockResolvedValue({ sub: 'user-123' });
 });
@@ -199,7 +200,7 @@ describe('proxyToBackend — authentication', () => {
     const request = mkRequest(undefined, {
       headers: {
         'content-type': 'application/json',
-        authorization: 'Bearer supabase-bearer-token',
+        authorization: 'bEaReR supabase-bearer-token',
       },
     });
     mockFetch.mockResolvedValueOnce(
@@ -281,15 +282,14 @@ describe('proxyToBackend — authentication', () => {
     expect(verifyJwtToken).toHaveBeenCalledWith('sb-token-from-b64');
   });
 
-  it('does not combine cookies from separate Supabase projects', async () => {
+  it('ignores a stale foreign-project cookie and selects only the configured project', async () => {
     const ctx = mkContext();
-    const first = JSON.stringify({ access_token: 'first-project-token' });
-    const second = JSON.stringify({ access_token: 'second-project-token' });
+    const foreign = JSON.stringify({ access_token: 'foreign-project-token' });
+    const configured = JSON.stringify({ access_token: 'configured-project-token' });
     cookiesGetAll.mockReturnValue([
-      { name: 'sb-first-auth-token.0', value: first.slice(0, 10) },
-      { name: 'sb-second-auth-token.0', value: second.slice(0, 12) },
-      { name: 'sb-first-auth-token.1', value: first.slice(10) },
-      { name: 'sb-second-auth-token.1', value: second.slice(12) },
+      { name: 'sb-foreign-auth-token', value: foreign },
+      { name: 'sb-api-auth-token.0', value: configured.slice(0, 12) },
+      { name: 'sb-api-auth-token.1', value: configured.slice(12) },
     ]);
     mockFetch.mockResolvedValueOnce(
       new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } }),
@@ -299,7 +299,54 @@ describe('proxyToBackend — authentication', () => {
       service: { name: 'catalog', baseUrl: 'http://x' },
     });
 
-    expect(verifyJwtToken).toHaveBeenCalledWith('first-project-token');
+    expect(verifyJwtToken).toHaveBeenCalledWith('configured-project-token');
+    expect(verifyJwtToken).not.toHaveBeenCalledWith('foreign-project-token');
+  });
+
+  it('does not use an arbitrary Supabase cookie when the project ref is not configured', async () => {
+    delete process.env.SUPABASE_PROJECT_REF;
+    delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    delete process.env.SUPABASE_URL;
+    cookiesGetAll.mockReturnValue([
+      {
+        name: 'sb-foreign-auth-token',
+        value: JSON.stringify({ access_token: 'foreign-project-token' }),
+      },
+    ]);
+
+    const response = await proxyToBackend(mkRequest(), mkContext(), {
+      service: { name: 'catalog', baseUrl: 'http://x' },
+    });
+
+    expect(response.status).toBe(401);
+    expect(verifyJwtToken).not.toHaveBeenCalled();
+  });
+
+  it('rebuilds forwarding headers from Cloudflare context and ignores caller spoofing', async () => {
+    const ctx = setAuthToken({ ...mkContext(), ip: '198.51.100.99' }, 'valid-token');
+    const request = mkRequest(undefined, {
+      headers: {
+        'content-type': 'application/json',
+        'cf-connecting-ip': '203.0.113.42',
+        'x-forwarded-for': '10.0.0.1',
+        'x-real-ip': '127.0.0.1',
+        'x-user-id': 'attacker',
+        'x-request-id': 'attacker-request',
+      },
+    });
+    mockFetch.mockResolvedValueOnce(
+      new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } }),
+    );
+
+    await proxyToBackend(request, ctx, {
+      service: { name: 'catalog', baseUrl: 'http://x' },
+      forwardHeaders: ['x-forwarded-for', 'x-real-ip', 'x-user-id', 'x-request-id'],
+    });
+
+    const headers = mockFetch.mock.calls[0][1].headers;
+    expect(headers['X-Forwarded-For']).toBe('203.0.113.42');
+    expect(headers['X-User-Id']).toBe('user-123');
+    expect(headers['X-Request-Id']).toBe('test-request-id');
   });
 });
 

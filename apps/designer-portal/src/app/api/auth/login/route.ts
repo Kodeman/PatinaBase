@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { createRouteHandler, proxyToBackend, apiError } from '@patina/api-routes';
 
 /**
- * Login API route handler for credential-based authentication
- * This handles direct credential login, which will be used by NextAuth credentials provider
+ * Legacy credential-login proxy retained for callers that have not moved to
+ * the Supabase client auth methods.
  */
 
 const loginSchema = z.object({

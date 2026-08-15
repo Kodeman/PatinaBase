@@ -13,14 +13,11 @@ const CSRF_TOKEN_HEADER = 'x-csrf-token';
 const CSRF_COOKIE_NAME = 'csrf-token';
 const TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-/**
- * Get the CSRF signing secret. Falls back to NEXTAUTH_SECRET for simplicity
- * since this only needs to be consistent within a single deployment.
- */
+/** Get the deployment-specific CSRF signing secret. */
 function getSecret(): string {
-  const secret = process.env.CSRF_SECRET || process.env.NEXTAUTH_SECRET;
+  const secret = process.env.CSRF_SECRET;
   if (!secret) {
-    throw new Error('CSRF_SECRET or NEXTAUTH_SECRET must be set');
+    throw new Error('CSRF_SECRET must be set');
   }
   return secret;
 }
@@ -214,4 +211,3 @@ export function addCsrfToRequest(init?: RequestInit): RequestInit {
     },
   };
 }
-

@@ -15,8 +15,7 @@ import {
 export { PermissionCode, RoleName, type AnyPermission, type PermissionString };
 
 /**
- * Session shape used by RBAC functions.
- * Compatible with both the Supabase auth session and legacy NextAuth shape.
+ * Supabase session projection used by RBAC functions.
  */
 export interface Session {
   user: {
@@ -127,7 +126,7 @@ const rolePermissions: Record<Role, Permission[]> = {
  * Uses JWT permissions if available, falls back to role-based derivation.
  * Accepts both legacy codes (create:client) and canonical codes (identity.user.create).
  *
- * @param session - NextAuth session
+ * @param session - Supabase session projection
  * @param permission - Permission to check (legacy or canonical)
  * @returns true if user has the permission
  */

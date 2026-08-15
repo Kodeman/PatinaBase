@@ -104,8 +104,8 @@ test.describe('Protected Routes', () => {
     // Example structure (needs actual session implementation):
     /*
     await context.addCookies([{
-      name: 'next-auth.session-token',
-      value: 'mock-designer-token',
+      name: 'sb-local-auth-token',
+      value: 'mock-supabase-session',
       domain: 'localhost',
       path: '/',
     }]);

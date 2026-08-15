@@ -4,7 +4,7 @@
  */
 
 // Export types
-export type { ApiError, ApiResponse, ApiClientConfig, SessionProvider } from './types';
+export type { ApiError, ApiResponse, ApiClientConfig } from './types';
 
 // Export base client
 export { BaseApiClient } from './base-client';

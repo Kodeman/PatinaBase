@@ -9,13 +9,10 @@ import { ApiError, ApiResponse, ApiClientConfig } from './types';
 export class BaseApiClient {
   protected client: AxiosInstance;
   private getAccessToken?: () => Promise<string | null>;
-  private getSession?: () => Promise<{ accessToken?: string } | null>;
   private isDevelopment: boolean;
 
   constructor(config: ApiClientConfig) {
-    // Prefer new getAccessToken over deprecated getSession
     this.getAccessToken = config.getAccessToken;
-    this.getSession = config.getSession;
     this.isDevelopment = config.isDevelopment ?? false;
 
     this.client = axios.create({
@@ -33,34 +30,13 @@ export class BaseApiClient {
     // Request interceptor - add auth token and request metadata
     this.client.interceptors.request.use(
       async (config) => {
-        // SECURITY: Get token securely from server-side JWT, NOT from client session
-        // This prevents XSS attacks from stealing tokens
         let accessToken: string | null = null;
 
-        // Prefer new getAccessToken method
         if (this.getAccessToken) {
           try {
             accessToken = await this.getAccessToken();
           } catch (error) {
             console.error('[API Client] Failed to get access token:', error);
-          }
-        }
-        // Fallback to deprecated getSession (for backwards compatibility)
-        else if (this.getSession) {
-          try {
-            const session = await this.getSession();
-            accessToken = session?.accessToken || null;
-
-            // Warn about deprecated usage in development
-            if (this.isDevelopment && accessToken) {
-              console.warn(
-                '[API Client] Using deprecated getSession. ' +
-                'Please migrate to getAccessToken for better security. ' +
-                'See: https://next-auth.js.org/configuration/nextjs#gettoken'
-              );
-            }
-          } catch (error) {
-            console.error('[API Client] Failed to get session:', error);
           }
         }
 
@@ -105,14 +81,8 @@ export class BaseApiClient {
       try {
         let accessToken: string | null = null;
 
-        // Try new getAccessToken method first
         if (this.getAccessToken) {
           accessToken = await this.getAccessToken();
-        }
-        // Fallback to deprecated getSession
-        else if (this.getSession) {
-          const session = await this.getSession();
-          accessToken = session?.accessToken || null;
         }
 
         if (accessToken) {
