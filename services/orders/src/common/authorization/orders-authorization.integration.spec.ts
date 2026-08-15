@@ -206,6 +206,11 @@ describeLocal('Orders authorization with local Postgres', () => {
   });
 
   it('does not retain subject state across one-connection requests or rollback paths', async () => {
+    expect(new URL(databaseUrl!).searchParams.get('connection_limit')).toBe('1');
+    const [{ pid: initialPid }] = await prisma.$queryRaw<Array<{ pid: number }>>`
+      SELECT pg_backend_pid()::integer AS pid
+    `;
+
     await expect(service.findOne(orderIds.owner, ids.owner)).resolves.toMatchObject({
       id: orderIds.owner,
     });
@@ -228,6 +233,11 @@ describeLocal('Orders authorization with local Postgres', () => {
     ).rejects.toThrow('force rollback');
     await expect(service.findOne(orderIds.owner, ids.other)).rejects.toMatchObject({ status: 404 });
     expect(await prisma.auditLog.count({ where: { action: marker } })).toBe(0);
+
+    const [{ pid: finalPid }] = await prisma.$queryRaw<Array<{ pid: number }>>`
+      SELECT pg_backend_pid()::integer AS pid
+    `;
+    expect(finalPid).toBe(initialPid);
   });
 
   async function grantRole(userId: string, role: string) {
