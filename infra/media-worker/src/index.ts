@@ -146,7 +146,7 @@ export default {
       const job = message.body;
       try {
         if (!CONTAINER_JOB_TYPES.has(job.type)) {
-          console.log(`skipping unported job type ${job.type} (job ${job.jobId})`);
+          console.log('Skipping unsupported media job type');
           message.ack();
           continue;
         }
@@ -156,11 +156,11 @@ export default {
           await reportCompletion(env, job, 'SUCCEEDED', result);
           message.ack();
         } else {
-          console.error(`job ${job.jobId} failed:`, JSON.stringify(result).slice(0, 500));
+          console.error('Media job processing failed');
           message.retry(); // Queues re-delivers; exhausted retries → DLQ
         }
-      } catch (err) {
-        console.error(`job ${message.body?.jobId} errored`, err);
+      } catch {
+        console.error('Media job processing errored');
         message.retry();
       }
     }
