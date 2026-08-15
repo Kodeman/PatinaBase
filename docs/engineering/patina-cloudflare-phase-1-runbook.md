@@ -87,8 +87,10 @@ Run once per environment from an administrative `psql` session. Supply passwords
 ```sql
 CREATE ROLE edge_catalog_login LOGIN INHERIT NOBYPASSRLS PASSWORD :'catalog_password';
 CREATE ROLE edge_rls_login     LOGIN NOINHERIT NOBYPASSRLS PASSWORD :'rls_password';
-GRANT edge_catalog_reader TO edge_catalog_login;
-GRANT edge_rls_user       TO edge_rls_login;
+GRANT edge_catalog_reader TO edge_catalog_login
+  WITH INHERIT TRUE, SET FALSE;
+GRANT edge_rls_user TO edge_rls_login
+  WITH INHERIT FALSE, SET TRUE;
 ```
 
 If a login already exists, rotate its password out of band and reconcile only the intended memberships. Confirm:
