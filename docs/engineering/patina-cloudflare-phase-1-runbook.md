@@ -11,6 +11,15 @@ Phase 1 ends when current Supabase SDK traffic is compatible through the edge ro
 
 This runbook authorizes no hidden credentials. Password-bearing database logins, Cloudflare resource creation, Supabase branch creation, DNS/Worker route changes, migrations, and deploys are performed only from an explicitly authorized execution session with the correct account already authenticated.
 
+## Current provisioning blockers
+
+Do not create staging or production database logins, Hyperdrive configurations, Workers, or routes until both blockers below are independently reviewed and closed:
+
+1. The catalog privilege allow-list currently fails because PostgreSQL `PUBLIC` grants expose additional schemas, relations, sequences, and routines to the edge roles. The local conformance test intentionally exits nonzero after its functional assertions and prints only aggregate counts. Resolution requires a platform-admin review of database-wide `PUBLIC` ACLs plus exact re-grants for the existing Supabase roles; role-local revokes cannot create a deny ACL.
+2. Retained orders, projects, and media Containers do not yet share a trustworthy per-request Strata authorization resolver or complete object-level own/organization/admin contract. Their decorated routes remain fail-closed. Do not restore availability by trusting JWT `app_metadata` permission lists, inventing controller permission names, or allowing unscoped list/batch reads. Resolve current authorization through each Container's Supavisor path and prove own/other/organization/admin, role-change, list, and batch behavior before deploying the retained-service auth changes.
+
+Neither blocker permits a compatibility fallback to broaden authorization. Record closure evidence in this runbook before requesting the independent production sign-off.
+
 ## Scope
 
 Included:
