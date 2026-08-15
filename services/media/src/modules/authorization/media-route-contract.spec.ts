@@ -47,8 +47,9 @@ describe('media route authorization contract', () => {
     ]);
   });
 
-  it('gives every registered Nest route canonical permission metadata and no public bypass', () => {
+  it('gives every registered Nest route canonical permissions or the reviewed callback exception', () => {
     const checkedRoutes: string[] = [];
+    const publicRoutes: string[] = [];
 
     for (const controller of REGISTERED_CONTROLLERS) {
       const classPermissions = Reflect.getMetadata(PERMISSIONS_KEY, controller) as
@@ -69,15 +70,20 @@ describe('media route authorization contract', () => {
         const permissions = (Reflect.getMetadata(PERMISSIONS_KEY, handler) ?? classPermissions) as
           | string[]
           | undefined;
-        expect(Reflect.getMetadata(IS_PUBLIC_KEY, handler)).not.toBe(true);
-        expect(permissions?.length).toBeGreaterThan(0);
-        expect(
-          permissions?.every((permission) => CANONICAL_MEDIA_PERMISSIONS.has(permission)),
-        ).toBe(true);
-        checkedRoutes.push(`${controller.name}.${methodName}`);
+        const routeName = `${controller.name}.${methodName}`;
+        if (Reflect.getMetadata(IS_PUBLIC_KEY, handler) === true) {
+          publicRoutes.push(routeName);
+        } else {
+          expect(permissions?.length).toBeGreaterThan(0);
+          expect(
+            permissions?.every((permission) => CANONICAL_MEDIA_PERMISSIONS.has(permission)),
+          ).toBe(true);
+        }
+        checkedRoutes.push(routeName);
       }
     }
 
     expect(checkedRoutes.length).toBeGreaterThan(0);
+    expect(publicRoutes).toEqual(['JobsController.completeJob']);
   });
 });

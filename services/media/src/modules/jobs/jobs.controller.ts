@@ -7,6 +7,9 @@ import {
   Param,
   Post,
   Query,
+  Headers,
+  RawBodyRequest,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -14,12 +17,15 @@ import {
   AuthenticatedUserIdentity,
   CurrentUser,
   JwtAuthGuard,
+  Public,
   RequirePermissions,
 } from '@patina/auth';
+import { Request } from 'express';
 import { JobState, JobType } from '../../generated/prisma-client';
 import { MEDIA_ADMIN_PERMISSION } from '../authorization/media-authorization.constants';
 import { MediaAuthorizationResolver } from '../authorization/media-authorization.resolver';
 import { JobQueueService } from './job-queue.service';
+import { WorkerCallbackAuthService } from './worker-callback-auth.service';
 
 @ApiTags('Jobs & Processing')
 @Controller('v1/media')
@@ -30,6 +36,7 @@ export class JobsController {
   constructor(
     private readonly jobQueue: JobQueueService,
     private readonly authorization: MediaAuthorizationResolver,
+    private readonly callbackAuth: WorkerCallbackAuthService,
   ) {}
 
   @Get('jobs')
@@ -87,10 +94,13 @@ export class JobsController {
   }
 
   @Post('jobs/complete')
+  @Public()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Complete a media processing job' })
   async completeJob(
-    @CurrentUser() identity: AuthenticatedUserIdentity,
+    @Req() request: RawBodyRequest<Request>,
+    @Headers('x-patina-timestamp') timestamp: string | undefined,
+    @Headers('x-patina-signature') signature: string | undefined,
     @Body()
     body: {
       jobId: string;
@@ -99,9 +109,8 @@ export class JobsController {
       result?: unknown;
     },
   ) {
-    return this.authorization.withAdmin(identity.sub, (transaction) =>
-      this.jobQueue.completeJob(body, transaction),
-    );
+    this.callbackAuth.verify(request.rawBody, timestamp, signature);
+    return this.jobQueue.completeJobCallback(body);
   }
 
   @Get('qc/issues')

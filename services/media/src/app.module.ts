@@ -30,6 +30,7 @@ import { CDNManagerService } from './modules/storage/cdn/cdn-manager.service';
 import { CloudFrontCDNProvider } from './modules/storage/cdn/cloudfront-cdn.provider';
 import { CloudflareCDNProvider } from './modules/storage/cdn/cloudflare-cdn.provider';
 import { SystemController } from './system.controller';
+import { WorkerCallbackAuthService } from './modules/jobs/worker-callback-auth.service';
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import { SystemController } from './system.controller';
     CDNManagerService,
     CloudFrontCDNProvider,
     CloudflareCDNProvider,
+    WorkerCallbackAuthService,
 
     // Global Authentication Guard — Supabase JWT validation
     {

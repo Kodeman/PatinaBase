@@ -29,7 +29,7 @@ function aliasStorageEnv() {
 export async function bootstrap() {
   aliasStorageEnv();
   const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   const env = process.env.NODE_ENV || 'development';
   const port = process.env.PORT || 3014;

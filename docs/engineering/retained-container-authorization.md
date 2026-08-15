@@ -37,7 +37,10 @@ through Prisma's parameterized tagged templates; unsafe raw SQL is prohibited.
 
 The `*.admin.all` permissions are the only unscoped alternatives. Media job
 administration, CDN purge, broad search/reporting, and equivalent global
-operations require `media.admin.all`; order reconciliation and protected
+operations require `media.admin.all`. Order state, financial, refund, and
+fulfillment operations require current organization staff scope or
+`order.admin.all`; `order.manage.own` is limited to reviewed customer
+self-service such as eligible cancellation. Order reconciliation and protected
 provider administration require `order.admin.all`; global project
 administration requires `project.admin.all`.
 
@@ -62,12 +65,14 @@ The reviewed public surface is deliberately small:
 - orders Stripe webhook, only after Stripe verifies the signature against the
   exact raw request body;
 - projects `/v1/health`, `/v1/healthz`, and `/v1/ready`;
-- media `/health`, registered directly as a minimal adapter health response.
+- media `/health`, registered directly as a minimal adapter health response;
+- media `POST /v1/media/jobs/complete`, only after verification of a current
+  timestamp and HMAC-SHA256 signature over the exact raw request body. Terminal
+  job state makes signed retries idempotent.
 
 Orders carrier webhooks remain authenticated because their signature verifier
-is not implemented. Media job completion remains authenticated and requires
-`media.admin.all`; its former shared-secret callback is not a signed provider
-webhook. Version, metrics, Swagger, and all business routes are not public.
+is not implemented. Version, metrics, Swagger, and all other business routes
+are not public.
 
 ## Migration ownership
 

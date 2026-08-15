@@ -388,8 +388,8 @@ export class JobQueueService {
       });
 
       const metadata = (result as any)?.results?.extract_metadata;
+      const data: Record<string, any> = { processed: true, status: 'READY' };
       if (metadata && typeof metadata === 'object') {
-        const data: Record<string, any> = { processed: true, status: 'READY' };
         if (typeof metadata.width === 'number') data.width = metadata.width;
         if (typeof metadata.height === 'number') data.height = metadata.height;
         if (typeof metadata.format === 'string') data.format = metadata.format;
@@ -401,9 +401,8 @@ export class JobQueueService {
             hasAlpha: metadata.hasAlpha,
           };
         }
-
-        await client.mediaAsset.update({ where: { id: job.assetId }, data });
       }
+      await client.mediaAsset.update({ where: { id: job.assetId }, data });
     } else {
       const resultAny = result as any;
       const errorMessage =
@@ -422,5 +421,16 @@ export class JobQueueService {
     }
 
     return { ok: true };
+  }
+
+  async completeJobCallback(payload: {
+    jobId: string;
+    assetId: string;
+    state: 'SUCCEEDED' | 'FAILED';
+    result?: unknown;
+  }): Promise<{ ok: boolean; reason?: string }> {
+    return this.prisma.$transaction((transaction) => this.completeJob(payload, transaction), {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    });
   }
 }

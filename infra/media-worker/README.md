@@ -62,11 +62,15 @@ WK=https://patina-media-worker.<subdomain>.workers.dev
 # — that hits a different, jurisdiction-scoped bucket the binding cannot see):
 curl -X PUT "$WK/debug-raw?key=images/test/original.jpg" --data-binary @some.jpg   # (debug route; add if needed)
 curl -X POST "$WK/enqueue" -H 'content-type: application/json' \
+  -H 'x-enqueue-secret: <MEDIA_WORKER_ENQUEUE_SECRET>' \
   -d '{"jobId":"t1","assetId":"test","type":"IMAGE_PROCESS","meta":{"rawKey":"images/test/original.jpg","operations":[{"type":"generate_renditions"},{"type":"extract_metadata"}]}}'
 # renditions land at patina-processed/images/test/{256x256..1600x1600}.{webp,avif,jpeg}
 ```
-`/enqueue` is an unauthenticated **test producer**; it is replaced by the NestJS
-producer in Milestone 2 and should be removed or secured before then.
+`/enqueue` requires the same `MEDIA_WORKER_ENQUEUE_SECRET` configured on the
+NestJS producer. Configure `COMPLETE_CALLBACK_URL` on this Worker and the same
+`COMPLETE_CALLBACK_SECRET` on this Worker and the Media service Container. The
+Worker signs `timestamp + "." + exact JSON body` and retries the queue message
+for any callback network error or non-2xx response.
 
 ## R2 jurisdiction gotcha
 `wrangler r2 object put/get/list` (CLI) and the Worker's R2 **binding** resolved
@@ -76,8 +80,9 @@ what the production media service (S3 API) reads/writes, so it is authoritative.
 Always seed/inspect objects the Worker touches via the binding or the S3 API,
 never the `wrangler r2 object` CLI.
 
-## Blocked on Supabase Cloud (phase 1)
-The container/Worker cannot reach the home Postgres (behind the cloudflared TCP
-private network), so DB job-state / `MediaAsset` writes flow back through NestJS via
-`COMPLETE_CALLBACK_URL`. When Postgres is on Supabase Cloud, give the Worker a
-Hyperdrive binding and write `svc_media` directly.
+## Completion ownership
+
+The processing Worker never connects to Strata. Job-state and `MediaAsset`
+writes flow through the signed `COMPLETE_CALLBACK_URL` into the retained Media
+Container, which uses its existing Prisma/Supavisor connection. Do not add a
+Hyperdrive path for this contract.
