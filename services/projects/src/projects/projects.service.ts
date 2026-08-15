@@ -1,19 +1,12 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { CacheService, buildProjectCacheKey } from '@patina/cache';
+import { CacheService } from '@patina/cache';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { QueryProjectsDto } from './dto/query-projects.dto';
 import { Decimal } from 'decimal.js';
-
-const PROJECT_DETAIL_TTL = 300;
-const PROJECT_LIST_TTL = 60;
-const PROJECT_STATS_TTL = 120;
-const PROJECT_PROGRESS_TTL = 120;
-const PROJECT_CLIENT_VIEW_TTL = 300;
-const PROJECT_ACTIVITY_TTL = 45;
-const PROJECT_UPCOMING_TTL = 60;
+import { ProjectsAuthorizationResolver } from '../common/authorization/projects-authorization.resolver';
 
 @Injectable()
 export class ProjectsService {
@@ -23,26 +16,49 @@ export class ProjectsService {
     private prisma: PrismaService,
     private eventEmitter: EventEmitter2,
     private readonly cacheService: CacheService,
+    private readonly authorization: ProjectsAuthorizationResolver,
   ) {}
 
   async create(createDto: CreateProjectDto, userId: string) {
-    const { proposalId, budget, ...data } = createDto;
+    const { publicProjectId, proposalId, budget, clientId, designerId, ...data } = createDto;
+    if (!publicProjectId) {
+      throw new BadRequestException('A canonical public project link is required');
+    }
+    const project = await this.authorization.withPublicProjectLink(
+      userId,
+      publicProjectId,
+      async (assignment, tx) => {
+        const created = await tx.project.create({
+          data: {
+            ...data,
+            publicProjectId,
+            proposalId,
+            clientId: assignment.clientId,
+            designerId: assignment.designerId,
+            budget: budget ? new Decimal(budget) : null,
+            status: 'draft',
+          },
+          include: {
+            tasks: true,
+            rfis: true,
+            changeOrders: true,
+            issues: true,
+            milestones: true,
+          },
+        });
 
-    const project = await this.prisma.project.create({
-      data: {
-        ...data,
-        proposalId,
-        budget: budget ? new Decimal(budget) : null,
-        status: 'draft',
+        await tx.auditLog.create({
+          data: {
+            entityType: 'project',
+            entityId: created.id,
+            action: 'created',
+            actor: userId,
+            metadata: { proposalId },
+          },
+        });
+        return created;
       },
-      include: {
-        tasks: true,
-        rfis: true,
-        changeOrders: true,
-        issues: true,
-        milestones: true,
-      },
-    });
+    );
 
     this.eventEmitter.emit('project.created', {
       projectId: project.id,
@@ -52,83 +68,60 @@ export class ProjectsService {
       timestamp: new Date(),
     });
 
-    await this.prisma.auditLog.create({
-      data: {
-        entityType: 'project',
-        entityId: project.id,
-        action: 'created',
-        actor: userId,
-        metadata: { proposalId },
-      },
-    });
-
     await this.cacheService.invalidateProject(project.id);
 
     return project;
   }
 
-  async findAll(query: QueryProjectsDto, userId: string, userRole: string) {
+  async findAll(query: QueryProjectsDto, userId: string) {
     const { clientId, designerId, status, page = 1, limit = 20 } = query;
-
-    const cacheKey = buildProjectCacheKey('list', {
+    return this.authorization.withAccessibleProjectIds(
       userId,
-      role: userRole,
-      filters: { clientId, designerId, status },
-      page,
-      limit,
-    });
+      'read',
+      async (authorizedIds, tx) => {
+        const skip = (page - 1) * limit;
+        const where: any = { id: { in: authorizedIds } };
 
-    return this.cacheService.wrap(cacheKey, async () => {
-      const skip = (page - 1) * limit;
-      const where: any = {};
+        if (clientId) where.clientId = clientId;
+        if (designerId) where.designerId = designerId;
+        if (status) where.status = status;
 
-      if (userRole === 'client') {
-        where.clientId = userId;
-      } else if (userRole === 'designer') {
-        where.designerId = userId;
-      }
-
-      if (clientId) where.clientId = clientId;
-      if (designerId) where.designerId = designerId;
-      if (status) where.status = status;
-
-      const [projects, total] = await Promise.all([
-        this.prisma.project.findMany({
-          where,
-          skip,
-          take: limit,
-          orderBy: { createdAt: 'desc' },
-          include: {
-            _count: {
-              select: {
-                tasks: true,
-                rfis: true,
-                changeOrders: true,
-                issues: true,
+        const [projects, total] = await Promise.all([
+          tx.project.findMany({
+            where,
+            skip,
+            take: limit,
+            orderBy: { createdAt: 'desc' },
+            include: {
+              _count: {
+                select: {
+                  tasks: true,
+                  rfis: true,
+                  changeOrders: true,
+                  issues: true,
+                },
               },
             },
-          },
-        }),
-        this.prisma.project.count({ where }),
-      ]);
+          }),
+          tx.project.count({ where }),
+        ]);
 
-      return {
-        data: projects,
-        pagination: {
-          page,
-          limit,
-          total,
-          totalPages: Math.ceil(total / limit),
-        },
-      };
-    }, PROJECT_LIST_TTL);
+        return {
+          data: projects,
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+          },
+        };
+      },
+    );
   }
 
-  async findOne(id: string) {
-    const cacheKey = buildProjectCacheKey('detail', { projectId: id });
-
-    return this.cacheService.wrap(cacheKey, async () => {
-      const project = await this.prisma.project.findUnique({
+  async findOne(id: string, userId: string) {
+    return this.authorization.withProjectAccess(userId, id, 'read', async (tx) => {
+      const project = await tx.project.findUnique({
         where: { id },
         include: {
           tasks: {
@@ -170,71 +163,75 @@ export class ProjectsService {
       }
 
       return project;
-    }, PROJECT_DETAIL_TTL);
+    });
   }
 
   async update(id: string, updateDto: UpdateProjectDto, userId: string) {
-    const existing = await this.prisma.project.findUnique({
-      where: { id },
-      select: { id: true, status: true },
-    });
-
-    if (!existing) {
-      throw new NotFoundException('Project not found');
+    if ('publicProjectId' in updateDto) {
+      throw new BadRequestException('Canonical project links cannot be changed');
     }
 
-    const { budget, ...data } = updateDto;
+    const updated = await this.authorization.withProjectAccess(userId, id, 'manage', async (tx) => {
+      const existing = await tx.project.findUnique({
+        where: { id },
+        select: { id: true, status: true },
+      });
 
-    const updated = await this.prisma.project.update({
-      where: { id },
-      data: {
-        ...data,
-        budget: budget ? new Decimal(budget) : undefined,
-      },
-      include: {
-        _count: {
-          select: {
-            tasks: true,
-            rfis: true,
-            changeOrders: true,
-            issues: true,
+      if (!existing) {
+        throw new NotFoundException('Project not found');
+      }
+
+      const { budget, ...data } = updateDto;
+
+      const result = await tx.project.update({
+        where: { id },
+        data: {
+          ...data,
+          budget: budget ? new Decimal(budget) : undefined,
+        },
+        include: {
+          _count: {
+            select: {
+              tasks: true,
+              rfis: true,
+              changeOrders: true,
+              issues: true,
+            },
           },
         },
-      },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          entityType: 'project',
+          entityId: id,
+          action: 'updated',
+          actor: userId,
+          changes: updateDto as any,
+        },
+      });
+      return { existing, result };
     });
 
     // Emit event if status changed
-    if (updateDto.status && updateDto.status !== existing.status) {
+    if (updateDto.status && updateDto.status !== updated.existing.status) {
       this.eventEmitter.emit('project.status_changed', {
         projectId: id,
-        oldStatus: existing.status,
+        oldStatus: updated.existing.status,
         newStatus: updateDto.status,
         userId,
         timestamp: new Date(),
       });
     }
 
-    // Log audit
-    await this.prisma.auditLog.create({
-      data: {
-        entityType: 'project',
-        entityId: id,
-        action: 'updated',
-        actor: userId,
-        changes: updateDto as any,
-      },
-    });
-
     await this.cacheService.invalidateProject(id);
 
-    return updated;
+    return updated.result;
   }
 
-  async getStats(id: string) {
-    const cacheKey = buildProjectCacheKey('stats', { projectId: id });
-
-    return this.cacheService.wrap(cacheKey, async () => {
-      const project = await this.prisma.project.findUnique({
+  async getStats(id: string, userId: string) {
+    return this.authorization.withProjectAccess(userId, id, 'read', async (tx) => {
+      const project = await tx.project.findUnique({
         where: { id },
         select: { id: true },
       });
@@ -244,22 +241,22 @@ export class ProjectsService {
       }
 
       const [taskStats, rfiStats, issueStats, changeOrderStats] = await Promise.all([
-        this.prisma.task.groupBy({
+        tx.task.groupBy({
           by: ['status'],
           where: { projectId: id },
           _count: true,
         }),
-        this.prisma.rFI.groupBy({
+        tx.rFI.groupBy({
           by: ['status'],
           where: { projectId: id },
           _count: true,
         }),
-        this.prisma.issue.groupBy({
+        tx.issue.groupBy({
           by: ['status'],
           where: { projectId: id },
           _count: true,
         }),
-        this.prisma.changeOrder.groupBy({
+        tx.changeOrder.groupBy({
           by: ['status'],
           where: { projectId: id },
           _count: true,
@@ -267,44 +264,58 @@ export class ProjectsService {
       ]);
 
       return {
-        tasks: taskStats.reduce((acc, stat) => {
-          acc[stat.status] = stat._count;
-          return acc;
-        }, {} as Record<string, number>),
-        rfis: rfiStats.reduce((acc, stat) => {
-          acc[stat.status] = stat._count;
-          return acc;
-        }, {} as Record<string, number>),
-        issues: issueStats.reduce((acc, stat) => {
-          acc[stat.status] = stat._count;
-          return acc;
-        }, {} as Record<string, number>),
-        changeOrders: changeOrderStats.reduce((acc, stat) => {
-          acc[stat.status] = stat._count;
-          return acc;
-        }, {} as Record<string, number>),
+        tasks: taskStats.reduce(
+          (acc, stat) => {
+            acc[stat.status] = stat._count;
+            return acc;
+          },
+          {} as Record<string, number>,
+        ),
+        rfis: rfiStats.reduce(
+          (acc, stat) => {
+            acc[stat.status] = stat._count;
+            return acc;
+          },
+          {} as Record<string, number>,
+        ),
+        issues: issueStats.reduce(
+          (acc, stat) => {
+            acc[stat.status] = stat._count;
+            return acc;
+          },
+          {} as Record<string, number>,
+        ),
+        changeOrders: changeOrderStats.reduce(
+          (acc, stat) => {
+            acc[stat.status] = stat._count;
+            return acc;
+          },
+          {} as Record<string, number>,
+        ),
       };
-    }, PROJECT_STATS_TTL);
+    });
   }
 
   /**
    * Get projects by multiple IDs (bulk fetch)
    */
-  async findByIds(ids: string[]) {
-    return this.prisma.project.findMany({
-      where: { id: { in: ids } },
-      include: {
-        _count: {
-          select: {
-            tasks: true,
-            rfis: true,
-            issues: true,
-            changeOrders: true,
-            documents: true,
-            milestones: true,
+  async findByIds(ids: string[], userId: string) {
+    return this.authorization.withAccessibleProjectIds(userId, 'read', (authorizedIds, tx) => {
+      return tx.project.findMany({
+        where: { id: { in: ids.filter((id) => authorizedIds.includes(id)) } },
+        include: {
+          _count: {
+            select: {
+              tasks: true,
+              rfis: true,
+              issues: true,
+              changeOrders: true,
+              documents: true,
+              milestones: true,
+            },
           },
         },
-      },
+      });
     });
   }
 
@@ -312,17 +323,9 @@ export class ProjectsService {
    * Get client-safe project data (filtered for client portal)
    */
   async getClientSafeData(projectId: string, clientId: string) {
-    const cacheKey = buildProjectCacheKey('client-view', { projectId, clientId });
-
-    return this.cacheService.wrap(cacheKey, async () => {
-      // For local dev with @Public(), clientId might be 'dev-client', so we skip the clientId filter
-      const whereClause: any = { id: projectId };
-      if (clientId && clientId !== 'dev-client') {
-        whereClause.clientId = clientId; // Ensure client owns this project
-      }
-
-      const project = await this.prisma.project.findFirst({
-        where: whereClause,
+    return this.authorization.withProjectAccess(clientId, projectId, 'read', async (tx) => {
+      const project = await tx.project.findUnique({
+        where: { id: projectId },
         include: {
           timelineSegments: {
             orderBy: { order: 'asc' },
@@ -345,11 +348,7 @@ export class ProjectsService {
           documents: {
             where: {
               // Only show documents marked for client viewing
-              OR: [
-                { category: 'drawing' },
-                { category: 'photo' },
-                { category: 'invoice' },
-              ],
+              OR: [{ category: 'drawing' }, { category: 'photo' }, { category: 'invoice' }],
             },
             orderBy: { createdAt: 'desc' },
           },
@@ -362,12 +361,13 @@ export class ProjectsService {
       }
 
       const segments = project.timelineSegments;
-      const overallProgress = segments.length > 0
-        ? Math.round(segments.reduce((sum, seg) => sum + seg.progress, 0) / segments.length)
-        : 0;
+      const overallProgress =
+        segments.length > 0
+          ? Math.round(segments.reduce((sum, seg) => sum + seg.progress, 0) / segments.length)
+          : 0;
 
       const pendingApprovalsCount = project.approvalRecords.filter(
-        a => a.status === 'pending' || a.status === 'needs_discussion'
+        (a) => a.status === 'pending' || a.status === 'needs_discussion',
       ).length;
 
       return {
@@ -387,17 +387,15 @@ export class ProjectsService {
         documents: project.documents,
         engagement: project.engagementMetrics,
       };
-    }, PROJECT_CLIENT_VIEW_TTL);
+    });
   }
 
   /**
    * Calculate comprehensive project progress
    */
-  async calculateProgress(projectId: string) {
-    const cacheKey = buildProjectCacheKey('progress', { projectId });
-
-    return this.cacheService.wrap(cacheKey, async () => {
-      const project = await this.prisma.project.findUnique({
+  async calculateProgress(projectId: string, userId: string) {
+    return this.authorization.withProjectAccess(userId, projectId, 'read', async (tx) => {
+      const project = await tx.project.findUnique({
         where: { id: projectId },
         select: {
           id: true,
@@ -411,28 +409,35 @@ export class ProjectsService {
         throw new NotFoundException('Project not found');
       }
 
-      const segments = await this.prisma.timelineSegment.findMany({
+      const segments = await tx.timelineSegment.findMany({
         where: { projectId },
         select: { progress: true, phase: true, status: true },
       });
 
-      const totalProgress = segments.length > 0
-        ? Math.round(segments.reduce((sum, seg) => sum + seg.progress, 0) / segments.length)
-        : 0;
+      const totalProgress =
+        segments.length > 0
+          ? Math.round(segments.reduce((sum, seg) => sum + seg.progress, 0) / segments.length)
+          : 0;
 
-      const progressByPhase = segments.reduce((acc, seg) => {
-        if (!acc[seg.phase]) {
-          acc[seg.phase] = { total: 0, count: 0 };
-        }
-        acc[seg.phase].total += seg.progress;
-        acc[seg.phase].count += 1;
-        return acc;
-      }, {} as Record<string, { total: number; count: number }>);
+      const progressByPhase = segments.reduce(
+        (acc, seg) => {
+          if (!acc[seg.phase]) {
+            acc[seg.phase] = { total: 0, count: 0 };
+          }
+          acc[seg.phase].total += seg.progress;
+          acc[seg.phase].count += 1;
+          return acc;
+        },
+        {} as Record<string, { total: number; count: number }>,
+      );
 
-      const phaseProgress = Object.entries(progressByPhase).reduce((acc, [phase, data]) => {
-        acc[phase] = Math.round(data.total / data.count);
-        return acc;
-      }, {} as Record<string, number>);
+      const phaseProgress = Object.entries(progressByPhase).reduce(
+        (acc, [phase, data]) => {
+          acc[phase] = Math.round(data.total / data.count);
+          return acc;
+        },
+        {} as Record<string, number>,
+      );
 
       let timeProgress = 0;
       let daysElapsed = 0;
@@ -450,22 +455,20 @@ export class ProjectsService {
       }
 
       const [totalTasks, completedTasks] = await Promise.all([
-        this.prisma.task.count({ where: { projectId } }),
-        this.prisma.task.count({ where: { projectId, status: 'done' } }),
+        tx.task.count({ where: { projectId } }),
+        tx.task.count({ where: { projectId, status: 'done' } }),
       ]);
 
-      const taskCompletionRate = totalTasks > 0
-        ? Math.round((completedTasks / totalTasks) * 100)
-        : 0;
+      const taskCompletionRate =
+        totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
       const [totalMilestones, completedMilestones] = await Promise.all([
-        this.prisma.milestone.count({ where: { projectId } }),
-        this.prisma.milestone.count({ where: { projectId, status: 'completed' } }),
+        tx.milestone.count({ where: { projectId } }),
+        tx.milestone.count({ where: { projectId, status: 'completed' } }),
       ]);
 
-      const milestoneCompletionRate = totalMilestones > 0
-        ? Math.round((completedMilestones / totalMilestones) * 100)
-        : 0;
+      const milestoneCompletionRate =
+        totalMilestones > 0 ? Math.round((completedMilestones / totalMilestones) * 100) : 0;
 
       const isOnSchedule = timeProgress <= totalProgress + 10; // Within 10% tolerance
       const isBehindSchedule = totalProgress < timeProgress - 10;
@@ -499,21 +502,15 @@ export class ProjectsService {
           completedMilestones,
         },
       };
-    }, PROJECT_PROGRESS_TTL);
+    });
   }
 
   /**
    * Generate activity feed for a project
    */
-  async getActivityFeed(projectId: string, limit = 50, offset = 0) {
-    const cacheKey = buildProjectCacheKey('activity', {
-      projectId,
-      limit,
-      offset,
-    });
-
-    return this.cacheService.wrap(cacheKey, async () => {
-      const project = await this.prisma.project.findUnique({
+  async getActivityFeed(projectId: string, userId: string, limit = 50, offset = 0) {
+    return this.authorization.withProjectAccess(userId, projectId, 'read', async (tx) => {
+      const project = await tx.project.findUnique({
         where: { id: projectId },
         select: { id: true },
       });
@@ -522,18 +519,25 @@ export class ProjectsService {
         throw new NotFoundException('Project not found');
       }
 
-      const activities = await this.prisma.auditLog.findMany({
+      const activities = await tx.auditLog.findMany({
         where: {
           OR: [
             { entityType: 'project', entityId: projectId },
-            { entityType: 'timeline_segment', metadata: { path: ['projectId'], equals: projectId } },
-            { entityType: 'approval_record', metadata: { path: ['projectId'], equals: projectId } },
-            { entityType: 'task' },
-            { entityType: 'milestone' },
-            { entityType: 'change_order' },
-            { entityType: 'rfi' },
-            { entityType: 'issue' },
-            { entityType: 'daily_log' },
+            {
+              entityType: {
+                in: [
+                  'timeline_segment',
+                  'approval_record',
+                  'task',
+                  'milestone',
+                  'change_order',
+                  'rfi',
+                  'issue',
+                  'daily_log',
+                ],
+              },
+              metadata: { path: ['projectId'], equals: projectId },
+            },
           ],
         },
         orderBy: { createdAt: 'desc' },
@@ -541,14 +545,14 @@ export class ProjectsService {
         skip: offset,
       });
 
-      const clientActivities = await this.prisma.clientActivity.findMany({
+      const clientActivities = await tx.clientActivity.findMany({
         where: { projectId },
         orderBy: { createdAt: 'desc' },
         take: Math.floor(limit / 2),
       });
 
       const allActivities = [
-        ...activities.map(a => ({
+        ...activities.map((a) => ({
           id: a.id,
           type: 'audit',
           entityType: a.entityType,
@@ -557,7 +561,7 @@ export class ProjectsService {
           timestamp: a.createdAt,
           metadata: a.metadata,
         })),
-        ...clientActivities.map(a => ({
+        ...clientActivities.map((a) => ({
           id: a.id,
           type: 'client_activity',
           activityType: a.activityType,
@@ -574,17 +578,15 @@ export class ProjectsService {
         total: allActivities.length,
         hasMore: allActivities.length > limit,
       };
-    }, PROJECT_ACTIVITY_TTL);
+    });
   }
 
   /**
    * Get upcoming events and deadlines for a project
    */
-  async getUpcomingEvents(projectId: string, daysAhead = 30) {
-    const cacheKey = buildProjectCacheKey('upcoming', { projectId, daysAhead });
-
-    return this.cacheService.wrap(cacheKey, async () => {
-      const project = await this.prisma.project.findUnique({
+  async getUpcomingEvents(projectId: string, userId: string, daysAhead = 30) {
+    return this.authorization.withProjectAccess(userId, projectId, 'read', async (tx) => {
+      const project = await tx.project.findUnique({
         where: { id: projectId },
         select: { id: true },
       });
@@ -597,42 +599,43 @@ export class ProjectsService {
       const futureDate = new Date();
       futureDate.setDate(futureDate.getDate() + daysAhead);
 
-      const [upcomingMilestones, upcomingTasks, upcomingApprovals, upcomingSegments] = await Promise.all([
-        this.prisma.milestone.findMany({
-          where: {
-            projectId,
-            targetDate: { gte: now, lte: futureDate },
-            status: { in: ['pending', 'delayed'] },
-          },
-          orderBy: { targetDate: 'asc' },
-        }),
-        this.prisma.task.findMany({
-          where: {
-            projectId,
-            dueDate: { gte: now, lte: futureDate },
-            status: { notIn: ['done', 'cancelled'] },
-          },
-          orderBy: { dueDate: 'asc' },
-        }),
-        this.prisma.approvalRecord.findMany({
-          where: {
-            projectId,
-            dueDate: { gte: now, lte: futureDate },
-            status: { in: ['pending', 'needs_discussion'] },
-          },
-          orderBy: { dueDate: 'asc' },
-        }),
-        this.prisma.timelineSegment.findMany({
-          where: {
-            projectId,
-            OR: [
-              { startDate: { gte: now, lte: futureDate } },
-              { endDate: { gte: now, lte: futureDate } },
-            ],
-          },
-          orderBy: { startDate: 'asc' },
-        }),
-      ]);
+      const [upcomingMilestones, upcomingTasks, upcomingApprovals, upcomingSegments] =
+        await Promise.all([
+          tx.milestone.findMany({
+            where: {
+              projectId,
+              targetDate: { gte: now, lte: futureDate },
+              status: { in: ['pending', 'delayed'] },
+            },
+            orderBy: { targetDate: 'asc' },
+          }),
+          tx.task.findMany({
+            where: {
+              projectId,
+              dueDate: { gte: now, lte: futureDate },
+              status: { notIn: ['done', 'cancelled'] },
+            },
+            orderBy: { dueDate: 'asc' },
+          }),
+          tx.approvalRecord.findMany({
+            where: {
+              projectId,
+              dueDate: { gte: now, lte: futureDate },
+              status: { in: ['pending', 'needs_discussion'] },
+            },
+            orderBy: { dueDate: 'asc' },
+          }),
+          tx.timelineSegment.findMany({
+            where: {
+              projectId,
+              OR: [
+                { startDate: { gte: now, lte: futureDate } },
+                { endDate: { gte: now, lte: futureDate } },
+              ],
+            },
+            orderBy: { startDate: 'asc' },
+          }),
+        ]);
 
       return {
         milestones: upcomingMilestones,
@@ -641,6 +644,6 @@ export class ProjectsService {
         segments: upcomingSegments,
         totalEvents: upcomingMilestones.length + upcomingTasks.length + upcomingApprovals.length,
       };
-    }, PROJECT_UPCOMING_TTL);
+    });
   }
 }

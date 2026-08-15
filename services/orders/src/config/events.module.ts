@@ -21,11 +21,7 @@ export interface StreamEvent {
           async publish(topic: string, event: StreamEvent) {
             // TODO: Implement OCI Streaming integration
             // For now, just log events
-            console.log(`[EVENT] ${topic}:${event.type}`, {
-              id: event.id,
-              resource: event.resource,
-              timestamp: event.timestamp,
-            });
+            console.log(`[EVENT] ${topic}:${event.type}`);
           },
         };
       },

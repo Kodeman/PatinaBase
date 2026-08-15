@@ -18,6 +18,12 @@ import {
 import { ApiTags, ApiOperation, ApiResponse, ApiExcludeEndpoint } from '@nestjs/swagger';
 import { FulfillmentService } from './fulfillment.service';
 import { WebhookEventType } from './carriers/carrier.interface';
+import {
+  CurrentUser,
+  RequirePermissions,
+  type AuthenticatedUserIdentity,
+} from '@patina/auth';
+import { ORDER_PERMISSIONS } from '../../common/authorization/orders-authorization.resolver';
 
 @ApiTags('webhooks')
 @Controller('webhooks/carriers')
@@ -27,6 +33,7 @@ export class CarrierWebhooksController {
   constructor(private readonly fulfillmentService: FulfillmentService) {}
 
   @Post('easypost')
+  @RequirePermissions(ORDER_PERMISSIONS.ADMIN_ALL)
   @HttpCode(HttpStatus.OK)
   @ApiExcludeEndpoint() // Exclude from public API docs
   @ApiOperation({ summary: 'Handle EasyPost webhook events' })
@@ -37,8 +44,9 @@ export class CarrierWebhooksController {
   async handleEasyPostWebhook(
     @Body() payload: any,
     @Headers('x-hmac-signature') signature?: string,
+    @CurrentUser() user?: AuthenticatedUserIdentity,
   ) {
-    this.logger.debug('Received EasyPost webhook', payload);
+    this.logger.debug('Received authenticated EasyPost webhook request');
 
     // TODO: Validate webhook signature
     // const isValid = this.validateEasyPostSignature(payload, signature);
@@ -52,11 +60,11 @@ export class CarrierWebhooksController {
       switch (eventType) {
         case WebhookEventType.TRACKER_CREATED:
         case WebhookEventType.TRACKER_UPDATED:
-          await this.handleTrackerUpdate(payload.result);
+          await this.handleTrackerUpdate(payload.result, user!.sub);
           break;
 
         case WebhookEventType.REFUND_SUCCESSFUL:
-          await this.handleRefundSuccess(payload.result);
+          await this.handleRefundSuccess(payload.result, user!.sub);
           break;
 
         case WebhookEventType.BATCH_CREATED:
@@ -65,12 +73,12 @@ export class CarrierWebhooksController {
           break;
 
         default:
-          this.logger.warn(`Unknown webhook event type: ${eventType}`);
+          this.logger.warn('Unknown webhook event type');
       }
 
       return { success: true };
     } catch (error) {
-      this.logger.error('Failed to process EasyPost webhook', error);
+      this.logger.error('Failed to process EasyPost webhook');
       throw new BadRequestException('Webhook processing failed');
     }
   }
@@ -78,16 +86,17 @@ export class CarrierWebhooksController {
   /**
    * Handle tracker update from carrier
    */
-  private async handleTrackerUpdate(tracker: any) {
-    this.logger.debug(`Processing tracker update: ${tracker.tracking_code}`);
+  private async handleTrackerUpdate(tracker: any, subject: string) {
+    this.logger.debug('Processing tracker update');
 
     // Find shipment by tracking number
-    const shipment = await this.fulfillmentService['prisma'].shipment.findFirst({
-      where: { trackingNumber: tracker.tracking_code },
-    });
+    const shipment = await this.fulfillmentService.findShipmentByTrackingNumber(
+      tracker.tracking_code,
+      subject,
+    );
 
     if (!shipment) {
-      this.logger.warn(`No shipment found for tracking number: ${tracker.tracking_code}`);
+      this.logger.warn('No shipment found for tracking update');
       return;
     }
 
@@ -112,45 +121,29 @@ export class CarrierWebhooksController {
       status,
       statusDetail: tracker.status_detail,
       estimatedDelivery: tracker.est_delivery_date ? new Date(tracker.est_delivery_date) : undefined,
-    });
+    }, subject);
 
-    this.logger.log(`Updated shipment ${shipment.id} status to ${status}`);
+    this.logger.log('Updated shipment status');
   }
 
   /**
    * Handle successful refund from carrier
    */
-  private async handleRefundSuccess(refund: any) {
-    this.logger.debug(`Processing refund success: ${refund.id}`);
+  private async handleRefundSuccess(refund: any, subject: string) {
+    this.logger.debug('Processing carrier refund');
 
     // Find shipment by carrier shipment ID
-    const shipment = await this.fulfillmentService['prisma'].shipment.findFirst({
-      where: { carrierShipmentId: refund.shipment_id },
-    });
+    const updated = await this.fulfillmentService.recordCarrierRefund(
+      refund.shipment_id,
+      refund,
+      subject,
+    );
 
-    if (!shipment) {
-      this.logger.warn(`No shipment found for refund: ${refund.shipment_id}`);
+    if (!updated) {
+      this.logger.warn('No shipment found for carrier refund');
       return;
     }
-
-    // Update shipment metadata with refund info
-    await this.fulfillmentService['prisma'].shipment.update({
-      where: { id: shipment.id },
-      data: {
-        status: 'returned',
-        metadata: {
-          ...((shipment.metadata as any) || {}),
-          refund: {
-            id: refund.id,
-            status: refund.status,
-            refundAmount: refund.refund_amount,
-            processedAt: new Date(),
-          },
-        },
-      },
-    });
-
-    this.logger.log(`Processed refund for shipment ${shipment.id}`);
+    this.logger.log('Processed carrier refund');
   }
 
   /**

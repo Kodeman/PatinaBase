@@ -75,13 +75,11 @@ export class CloudFrontCDNProvider implements ICDNProvider {
 
       const response = await this.cloudFrontClient.send(command);
 
-      this.logger.log(
-        `Created CloudFront invalidation ${response.Invalidation?.Id || 'unknown'} for ${paths.length} paths`,
-      );
+      this.logger.log('Created CloudFront invalidation');
 
       return { invalidationId: response.Invalidation?.Id || '' };
     } catch (error) {
-      this.logger.error(`Failed to purge CloudFront cache: ${error.message}`, error.stack);
+      this.logger.error('Failed to purge CloudFront cache');
       throw error;
     }
   }
@@ -94,9 +92,9 @@ export class CloudFrontCDNProvider implements ICDNProvider {
       try {
         const url = this.getCDNUrl(path);
         const response = await fetch(url, { method: 'HEAD' });
-        this.logger.debug(`Preloaded ${path}: ${response.status}`);
+        this.logger.debug('Preloaded CloudFront path');
       } catch (error) {
-        this.logger.warn(`Failed to preload ${path}: ${error.message}`);
+        this.logger.warn('Failed to preload CloudFront path');
       }
     });
 
@@ -123,7 +121,7 @@ export class CloudFrontCDNProvider implements ICDNProvider {
 
       return signedUrl;
     } catch (error) {
-      this.logger.error(`Failed to generate signed URL: ${error.message}`, error.stack);
+      this.logger.error('Failed to generate signed URL');
       throw error;
     }
   }
@@ -187,7 +185,7 @@ export class CloudFrontCDNProvider implements ICDNProvider {
 
       this.logger.log(`Updated CloudFront distribution with ${rules.length} edge rules`);
     } catch (error) {
-      this.logger.error(`Failed to set edge rules: ${error.message}`, error.stack);
+      this.logger.error('Failed to set edge rules');
       throw error;
     }
   }
@@ -228,7 +226,7 @@ export class CloudFrontCDNProvider implements ICDNProvider {
 
       this.logger.log('Updated CloudFront security headers');
     } catch (error) {
-      this.logger.error(`Failed to set security headers: ${error.message}`, error.stack);
+      this.logger.error('Failed to set security headers');
       throw error;
     }
   }
@@ -263,7 +261,7 @@ export class CloudFrontCDNProvider implements ICDNProvider {
         edgeLocations: this.parseEdgeLocations(distResponse.Distribution?.ActiveTrustedSigners),
       };
     } catch (error) {
-      this.logger.error(`Failed to get cache stats: ${error.message}`, error.stack);
+      this.logger.error('Failed to get cache stats');
       throw error;
     }
   }
@@ -304,7 +302,7 @@ export class CloudFrontCDNProvider implements ICDNProvider {
 
       this.logger.log(`${enabled ? 'Enabled' : 'Disabled'} Brotli compression`);
     } catch (error) {
-      this.logger.error(`Failed to set Brotli compression: ${error.message}`, error.stack);
+      this.logger.error('Failed to set Brotli compression');
       throw error;
     }
   }
@@ -333,7 +331,7 @@ export class CloudFrontCDNProvider implements ICDNProvider {
 
       this.logger.log(`${enabled ? 'Enabled' : 'Disabled'} HTTP/3 support`);
     } catch (error) {
-      this.logger.error(`Failed to set HTTP/3 support: ${error.message}`, error.stack);
+      this.logger.error('Failed to set HTTP/3 support');
       throw error;
     }
   }
@@ -375,19 +373,13 @@ export class CloudFrontCDNProvider implements ICDNProvider {
     return policy ? policies[policy] || policies[CachePolicy.MEDIUM] : policies[CachePolicy.MEDIUM];
   }
 
-  private async createResponseHeadersPolicy(
-    headers: Record<string, string>,
-  ): Promise<string> {
+  private async createResponseHeadersPolicy(headers: Record<string, string>): Promise<string> {
     // In production, create a response headers policy
     // For now, return a default managed policy ID
     return 'eaab4381-ed33-4a86-88ca-d9558dc6cd63'; // Managed-CORS-S3Origin
   }
 
-  private async getMetric(
-    metricName: string,
-    startTime: Date,
-    endTime: Date,
-  ): Promise<number> {
+  private async getMetric(metricName: string, startTime: Date, endTime: Date): Promise<number> {
     try {
       const command = new GetMetricStatisticsCommand({
         Namespace: 'AWS/CloudFront',
@@ -409,7 +401,7 @@ export class CloudFrontCDNProvider implements ICDNProvider {
 
       return datapoints.reduce((sum, dp) => sum + (dp.Sum || 0), 0);
     } catch (error) {
-      this.logger.warn(`Failed to get metric ${metricName}: ${error.message}`);
+      this.logger.warn('Failed to get CDN metric');
       return 0;
     }
   }

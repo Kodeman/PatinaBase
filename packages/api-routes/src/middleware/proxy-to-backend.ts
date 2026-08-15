@@ -19,10 +19,13 @@
  * in-process per-worker CB was removed in this refactor — it never provided
  * system-wide protection and added 530 LOC of state-machine to maintain.
  */
-import { cookies } from 'next/headers';
-import { verifyJwtToken } from '@patina/auth';
-import type { RouteContext } from '../utils/request-context';
-import { extractTrustedIpAddress, getAuthToken } from '../utils/request-context';
+import { cookies } from "next/headers";
+import { verifyJwtToken } from "@patina/auth";
+import type { RouteContext } from "../utils/request-context";
+import {
+  extractTrustedIpAddress,
+  getAuthToken,
+} from "../utils/request-context";
 import {
   retryRequest,
   fetchWithTimeout,
@@ -31,23 +34,23 @@ import {
   TimeoutError,
   type RetryConfig,
   type TimeoutConfig,
-} from '../utils/retry';
+} from "../utils/retry";
 import {
   apiError,
   apiSuccess,
   apiUnauthorized,
   type CacheConfig,
-} from '../utils/response-wrapper';
+} from "../utils/response-wrapper";
 import {
   transformError,
   ApiErrorCode,
   createApiError,
-} from '../utils/error-transformer';
+} from "../utils/error-transformer";
 import {
   logRequestStart,
   logRequestComplete,
   logRequestError,
-} from '../utils/logger';
+} from "../utils/logger";
 
 export interface ServiceConfig {
   /** Service name (used for logging + trace correlation) */
@@ -98,26 +101,26 @@ export type ProxyConfig =
     });
 
 const DEFAULT_FORWARD_HEADERS = [
-  'content-type',
-  'accept',
-  'accept-language',
-  'user-agent',
+  "content-type",
+  "accept",
+  "accept-language",
+  "user-agent",
 ];
 
 const BLOCKED_HEADERS = new Set([
-  'cookie',
-  'authorization', // we set this explicitly with the verified token
-  'host',
-  'connection',
-  'content-length', // will be recalculated
-  'transfer-encoding',
-  'cf-connecting-ip',
-  'x-forwarded-for',
-  'x-forwarded-host',
-  'x-forwarded-proto',
-  'x-real-ip',
-  'x-request-id',
-  'x-user-id',
+  "cookie",
+  "authorization", // we set this explicitly with the verified token
+  "host",
+  "connection",
+  "content-length", // will be recalculated
+  "transfer-encoding",
+  "cf-connecting-ip",
+  "x-forwarded-for",
+  "x-forwarded-host",
+  "x-forwarded-proto",
+  "x-real-ip",
+  "x-request-id",
+  "x-user-id",
 ]);
 
 function getSupabaseProjectRef(): string | null {
@@ -143,8 +146,10 @@ function getSupabaseProjectRef(): string | null {
  * Returns null if no token found or extraction throws.
  */
 async function extractAuthToken(request: Request): Promise<string | null> {
-  const authorization = request.headers.get('authorization');
-  const bearerMatch = authorization ? /^Bearer\s+(\S+)$/i.exec(authorization.trim()) : null;
+  const authorization = request.headers.get("authorization");
+  const bearerMatch = authorization
+    ? /^Bearer\s+(\S+)$/i.exec(authorization.trim())
+    : null;
   if (bearerMatch) return bearerMatch[1];
 
   const projectRef = getSupabaseProjectRef();
@@ -152,29 +157,32 @@ async function extractAuthToken(request: Request): Promise<string | null> {
 
   const cookieStore = await cookies();
   const expectedName = `sb-${projectRef}-auth-token`;
-  const cookieParts = new Map<number | 'base', string>();
+  const cookieParts = new Map<number | "base", string>();
   for (const cookie of cookieStore.getAll()) {
-    const match = new RegExp(`^${expectedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\.(\\d+))?$`).exec(
-      cookie.name,
-    );
+    const match = new RegExp(
+      `^${expectedName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\\.(\\d+))?$`,
+    ).exec(cookie.name);
     if (!match) continue;
-    cookieParts.set(match[1] === undefined ? 'base' : Number(match[1]), cookie.value);
+    cookieParts.set(
+      match[1] === undefined ? "base" : Number(match[1]),
+      cookie.value,
+    );
   }
 
-  let raw = cookieParts.get('base');
+  let raw = cookieParts.get("base");
   if (!raw) {
     const chunks: string[] = [];
     for (let i = 0; cookieParts.has(i); i++) chunks.push(cookieParts.get(i)!);
-    raw = chunks.length > 0 ? chunks.join('') : undefined;
+    raw = chunks.length > 0 ? chunks.join("") : undefined;
   }
   if (!raw) return null;
 
   try {
-    const value = raw.startsWith('base64-')
-      ? Buffer.from(raw.slice(7), 'base64url').toString('utf-8')
+    const value = raw.startsWith("base64-")
+      ? Buffer.from(raw.slice(7), "base64url").toString("utf-8")
       : decodeURIComponent(raw);
     const parsed = JSON.parse(value);
-    return parsed && typeof parsed.access_token === 'string'
+    return parsed && typeof parsed.access_token === "string"
       ? parsed.access_token
       : null;
   } catch {
@@ -183,9 +191,16 @@ async function extractAuthToken(request: Request): Promise<string | null> {
 }
 
 function buildBackendUrl(request: Request, config: ProxyConfig): string {
-  const baseUrl = config.service.baseUrl.replace(/\/$/, '');
-  if (config.service.path) return `${baseUrl}${config.service.path}`;
+  const baseUrl = config.service.baseUrl.replace(/\/$/, "");
   const url = new URL(request.url);
+  if (config.service.path) {
+    const target = new URL(`${baseUrl}${config.service.path}`);
+    for (const [name, value] of url.searchParams) {
+      if (!target.searchParams.has(name))
+        target.searchParams.append(name, value);
+    }
+    return target.toString();
+  }
   return `${baseUrl}${url.pathname}${url.search}`;
 }
 
@@ -208,43 +223,45 @@ function buildHeaders(
   }
 
   if (config.requireAuth !== false && authToken) {
-    headers['Authorization'] = `Bearer ${authToken}`;
+    headers["Authorization"] = `Bearer ${authToken}`;
   }
 
-  headers['X-Request-Id'] = context.requestId;
-  headers['X-Forwarded-For'] = extractTrustedIpAddress(request);
+  headers["X-Request-Id"] = context.requestId;
+  headers["X-Forwarded-For"] = extractTrustedIpAddress(request);
   const url = new URL(request.url);
-  headers['X-Forwarded-Host'] = url.host;
-  headers['X-Forwarded-Proto'] = url.protocol.replace(':', '');
+  headers["X-Forwarded-Host"] = url.host;
+  headers["X-Forwarded-Proto"] = url.protocol.replace(":", "");
 
   if (config.requireAuth !== false && context.user) {
-    headers['X-User-Id'] = context.user.id;
+    headers["X-User-Id"] = context.user.id;
   }
 
   return headers;
 }
 
-async function extractRequestBody(request: Request): Promise<RequestInit['body']> {
+async function extractRequestBody(
+  request: Request,
+): Promise<RequestInit["body"]> {
   const method = request.method.toUpperCase();
-  if (['GET', 'HEAD', 'OPTIONS'].includes(method)) return null;
+  if (["GET", "HEAD", "OPTIONS"].includes(method)) return null;
 
-  const contentType = request.headers.get('content-type') || '';
+  const contentType = request.headers.get("content-type") || "";
   try {
-    if (contentType.includes('application/json')) {
+    if (contentType.includes("application/json")) {
       return JSON.stringify(await request.json());
     }
-    if (contentType.includes('multipart/form-data')) {
+    if (contentType.includes("multipart/form-data")) {
       return await request.formData();
     }
     if (
-      contentType.includes('application/x-www-form-urlencoded') ||
-      contentType.includes('text/')
+      contentType.includes("application/x-www-form-urlencoded") ||
+      contentType.includes("text/")
     ) {
       return await request.text();
     }
     return await request.arrayBuffer();
   } catch (error) {
-    throw createApiError(ApiErrorCode.BAD_REQUEST, 'Invalid request body', {
+    throw createApiError(ApiErrorCode.BAD_REQUEST, "Invalid request body", {
       originalError: error instanceof Error ? error.message : String(error),
     });
   }
@@ -254,12 +271,12 @@ async function processBackendResponse(
   response: Response,
   config: ProxyConfig,
 ): Promise<unknown> {
-  const contentType = response.headers.get('content-type') || '';
+  const contentType = response.headers.get("content-type") || "";
 
   if (!response.ok) {
     let errorData: any;
     try {
-      errorData = contentType.includes('application/json')
+      errorData = contentType.includes("application/json")
         ? await response.json()
         : { message: await response.text() };
     } catch {
@@ -268,11 +285,15 @@ async function processBackendResponse(
 
     const customError = config.errorMapping?.[response.status];
     if (customError) {
-      throw createApiError(customError.code as ApiErrorCode, customError.message, {
-        status: response.status,
-        statusText: response.statusText,
-        backendError: errorData,
-      });
+      throw createApiError(
+        customError.code as ApiErrorCode,
+        customError.message,
+        {
+          status: response.status,
+          statusText: response.statusText,
+          backendError: errorData,
+        },
+      );
     }
 
     const error: any = new Error(errorData.message || response.statusText);
@@ -282,7 +303,7 @@ async function processBackendResponse(
     throw error;
   }
 
-  const data = contentType.includes('application/json')
+  const data = contentType.includes("application/json")
     ? await response.json()
     : await response.text();
 
@@ -321,8 +342,8 @@ export async function proxyToBackend(
     if (!authToken && requireAuth) {
       try {
         authToken = await extractAuthToken(request);
-      } catch (err) {
-        console.error('[ProxyToBackend] Token extraction error:', err);
+      } catch {
+        authToken = null;
       }
     }
 
@@ -332,9 +353,9 @@ export async function proxyToBackend(
         context,
         method,
         backendUrl,
-        new Error('Authentication required'),
+        new Error("Authentication required"),
       );
-      return apiUnauthorized('Authentication required to access this resource');
+      return apiUnauthorized("Authentication required to access this resource");
     }
 
     // 3. A5: verify JWT signature before forwarding. Defense-in-depth on top
@@ -348,9 +369,9 @@ export async function proxyToBackend(
           context,
           method,
           backendUrl,
-          new Error('JWT verification failed at proxy'),
+          new Error("JWT verification failed at proxy"),
         );
-        return apiUnauthorized('Invalid or expired authentication token');
+        return apiUnauthorized("Invalid or expired authentication token");
       }
     }
 
@@ -415,9 +436,9 @@ export async function proxyToBackend(
     // Generic error path — preserve mapped-error status if present.
     const transformed = transformError(error);
     let status: number | undefined;
-    if (error && typeof error === 'object' && 'details' in error) {
+    if (error && typeof error === "object" && "details" in error) {
       const details = (error as any).details;
-      if (details && typeof details === 'object' && 'status' in details) {
+      if (details && typeof details === "object" && "status" in details) {
         status = details.status as number;
       }
     }
@@ -448,12 +469,12 @@ export async function proxyToBackend(
 export function createProxyHandler(
   serviceName: string,
   baseUrl: string,
-  options: (Omit<BaseProxyConfig, 'service'> & {
+  options: Omit<BaseProxyConfig, "service"> & {
     service?: Partial<ServiceConfig>;
   } & (
       | { requireAuth?: true; cache?: never }
       | { requireAuth: false; cache?: CacheConfig }
-    )) = {},
+    ) = {},
 ) {
   return async (request: Request, context: RouteContext): Promise<Response> => {
     return proxyToBackend(request, context, {

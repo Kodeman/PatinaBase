@@ -1,23 +1,32 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
-import { RequirePermissions } from '@patina/auth';
 import { MilestonesService } from './milestones.service';
 import { CreateMilestoneDto } from './dto/create-milestone.dto';
 import { UpdateMilestoneDto } from './dto/update-milestone.dto';
-import { RolesGuard } from '../common/guards/roles.guard';
 import { ProjectAccessGuard } from '../common/guards/project-access.guard';
-import { Roles } from '../common/decorators/roles.decorator';
 import { GetCurrentUser } from '../common/decorators/current-user.decorator';
+import { ProjectManage, ProjectRead } from '../common/decorators/project-authorization.decorator';
 
 @ApiTags('milestones')
 @ApiBearerAuth()
 @Controller('projects/:projectId/milestones')
-@UseGuards(RolesGuard, ProjectAccessGuard)
+@UseGuards(ProjectAccessGuard)
 export class MilestonesController {
   constructor(private readonly milestonesService: MilestonesService) {}
 
   @Post()
-  @RequirePermissions('projects.milestone.create')
+  @ProjectManage()
   @ApiOperation({ summary: 'Create a milestone' })
   @ApiResponse({ status: 201, description: 'Milestone created successfully' })
   create(
@@ -29,39 +38,48 @@ export class MilestonesController {
   }
 
   @Get()
-  @RequirePermissions('projects.milestone.read')
+  @ProjectRead()
   @ApiOperation({ summary: 'Get all milestones for a project' })
   @ApiResponse({ status: 200, description: 'Milestones retrieved successfully' })
-  findAll(@Param('projectId') projectId: string) {
-    return this.milestonesService.findAll(projectId);
+  findAll(@Param('projectId') projectId: string, @GetCurrentUser('id') userId: string) {
+    return this.milestonesService.findAll(projectId, userId);
   }
 
   @Get(':id')
-  @RequirePermissions('projects.milestone.read')
+  @ProjectRead()
   @ApiOperation({ summary: 'Get milestone by ID' })
   @ApiResponse({ status: 200, description: 'Milestone retrieved successfully' })
-  findOne(@Param('id') id: string) {
-    return this.milestonesService.findOne(id);
+  findOne(
+    @Param('projectId') projectId: string,
+    @Param('id') id: string,
+    @GetCurrentUser('id') userId: string,
+  ) {
+    return this.milestonesService.findOne(projectId, id, userId);
   }
 
   @Patch(':id')
-  @RequirePermissions('projects.milestone.update')
+  @ProjectManage()
   @ApiOperation({ summary: 'Update milestone' })
   @ApiResponse({ status: 200, description: 'Milestone updated successfully' })
   update(
+    @Param('projectId') projectId: string,
     @Param('id') id: string,
     @Body() updateDto: UpdateMilestoneDto,
     @GetCurrentUser('id') userId: string,
   ) {
-    return this.milestonesService.update(id, updateDto, userId);
+    return this.milestonesService.update(projectId, id, updateDto, userId);
   }
 
   @Delete(':id')
-  @RequirePermissions('projects.milestone.delete')
+  @ProjectManage()
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete milestone' })
   @ApiResponse({ status: 204, description: 'Milestone deleted successfully' })
-  remove(@Param('id') id: string, @GetCurrentUser('id') userId: string) {
-    return this.milestonesService.remove(id, userId);
+  remove(
+    @Param('projectId') projectId: string,
+    @Param('id') id: string,
+    @GetCurrentUser('id') userId: string,
+  ) {
+    return this.milestonesService.remove(projectId, id, userId);
   }
 }

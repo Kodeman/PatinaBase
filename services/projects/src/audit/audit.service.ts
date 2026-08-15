@@ -1,5 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { Injectable } from '@nestjs/common';
+import { ProjectsAuthorizationResolver } from '../common/authorization/projects-authorization.resolver';
 
 export interface QueryAuditLogsDto {
   entityType?: string;
@@ -14,11 +14,9 @@ export interface QueryAuditLogsDto {
 
 @Injectable()
 export class AuditService {
-  private readonly logger = new Logger(AuditService.name);
+  constructor(private readonly authorization: ProjectsAuthorizationResolver) {}
 
-  constructor(private prisma: PrismaService) {}
-
-  async queryLogs(query: QueryAuditLogsDto) {
+  async queryLogs(userId: string, query: QueryAuditLogsDto) {
     const { entityType, entityId, action, actor, startDate, endDate, page = 1, limit = 50 } = query;
     const skip = (page - 1) * limit;
 
@@ -35,53 +33,57 @@ export class AuditService {
       if (endDate) where.createdAt.lte = endDate;
     }
 
-    const [logs, total] = await Promise.all([
-      this.prisma.auditLog.findMany({
-        where,
-        skip,
-        take: limit,
+    return this.authorization.withAnyPermission(userId, ['project.admin.all'], async (tx) => {
+      const [logs, total] = await Promise.all([
+        tx.auditLog.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: { createdAt: 'desc' },
+        }),
+        tx.auditLog.count({ where }),
+      ]);
+
+      return {
+        data: logs,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+    });
+  }
+
+  async getEntityHistory(userId: string, entityType: string, entityId: string) {
+    return this.authorization.withAnyPermission(userId, ['project.admin.all'], (tx) =>
+      tx.auditLog.findMany({
+        where: {
+          entityType,
+          entityId,
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+    );
+  }
+
+  async getProjectAuditTrail(userId: string, projectId: string) {
+    // Get all audit logs related to a project
+    return this.authorization.withAnyPermission(userId, ['project.admin.all'], (tx) =>
+      tx.auditLog.findMany({
+        where: {
+          OR: [
+            { entityType: 'project', entityId: projectId },
+            { metadata: { path: ['projectId'], equals: projectId } },
+          ],
+        },
         orderBy: { createdAt: 'desc' },
       }),
-      this.prisma.auditLog.count({ where }),
-    ]);
-
-    return {
-      data: logs,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
+    );
   }
 
-  async getEntityHistory(entityType: string, entityId: string) {
-    return this.prisma.auditLog.findMany({
-      where: {
-        entityType,
-        entityId,
-      },
-      orderBy: { createdAt: 'asc' },
-    });
-  }
-
-  async getProjectAuditTrail(projectId: string) {
-    // Get all audit logs related to a project
-    const projectLog = await this.prisma.auditLog.findMany({
-      where: {
-        OR: [
-          { entityType: 'project', entityId: projectId },
-          { metadata: { path: ['projectId'], equals: projectId } },
-        ],
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    return projectLog;
-  }
-
-  async exportAuditTrail(query: QueryAuditLogsDto): Promise<any[]> {
+  async exportAuditTrail(userId: string, query: QueryAuditLogsDto): Promise<any[]> {
     // Export all matching logs (no pagination)
     const where: any = {};
 
@@ -96,9 +98,11 @@ export class AuditService {
       if (query.endDate) where.createdAt.lte = query.endDate;
     }
 
-    return this.prisma.auditLog.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-    });
+    return this.authorization.withAnyPermission(userId, ['project.admin.all'], (tx) =>
+      tx.auditLog.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+      }),
+    );
   }
 }

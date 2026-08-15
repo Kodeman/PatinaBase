@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, Inject, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException, Inject } from '@nestjs/common';
 import { PrismaClient } from '../../generated/prisma-client';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
@@ -7,6 +7,7 @@ import { generateIdentifierSuffix } from '@patina/utils';
 import { Decimal } from '../../generated/prisma-client/runtime/library';
 import { CreateCheckoutDto } from './dto/create-checkout.dto';
 import { assertStripeConfigured } from '../../config/stripe.module';
+import { OrdersAuthorizationResolver } from '../../common/authorization/orders-authorization.resolver';
 
 @Injectable()
 export class CheckoutService {
@@ -15,31 +16,17 @@ export class CheckoutService {
     private configService: ConfigService,
     @Inject('STRIPE_CLIENT') private stripe: Stripe,
     @Inject('EVENTS_SERVICE') private eventsService: any,
+    private readonly authorization: OrdersAuthorizationResolver,
   ) {}
 
   /**
    * Create a Stripe Checkout Session
    */
-  async createCheckoutSession(dto: CreateCheckoutDto) {
+  async createCheckoutSession(dto: CreateCheckoutDto, subject: string) {
     assertStripeConfigured(this.stripe);
 
     // Get cart
-    const cart = await this.prisma.cart.findUnique({
-      where: { id: dto.cartId },
-      include: { items: true },
-    });
-
-    if (!cart) {
-      throw new NotFoundException('Cart not found');
-    }
-
-    if (cart.status !== 'active') {
-      throw new BadRequestException('Cart is not active');
-    }
-
-    if (cart.items.length === 0) {
-      throw new BadRequestException('Cart is empty');
-    }
+    const { cart, organizationId } = await this.authorizedCart(dto, subject);
 
     // Build line items for Stripe
     const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
@@ -83,14 +70,16 @@ export class CheckoutService {
       customer_email: dto.customerEmail,
       client_reference_id: cart.id,
       metadata: {
-        cartId: cart.id,
-        userId: cart.userId || dto.userId || '',
         ...dto.metadata,
+        cartId: cart.id,
+        userId: subject,
+        organizationId: organizationId || '',
       },
       payment_intent_data: {
         metadata: {
           cartId: cart.id,
-          userId: cart.userId || dto.userId || '',
+          userId: subject,
+          organizationId: organizationId || '',
         },
       },
       automatic_tax: {
@@ -114,28 +103,30 @@ export class CheckoutService {
     // Create placeholder order
     const orderNumber = await this.generateOrderNumber();
 
-    await this.prisma.order.create({
-      data: {
-        orderNumber,
-        userId: cart.userId || dto.userId || 'guest',
-        cartId: cart.id,
-        status: 'created',
-        paymentStatus: 'pending',
-        fulfillmentStatus: 'unfulfilled',
-        currency: cart.currency,
-        subtotal: cart.subtotal,
-        discountTotal: cart.discountAmount || new Decimal(0),
-        taxTotal: cart.taxTotal,
-        shippingTotal: cart.shippingTotal,
-        total: cart.total,
-        checkoutSessionId: session.id,
-        shippingAddressId: dto.shippingAddressId,
-        billingAddressId: dto.billingAddressId,
-        snapshot: {
-          cart,
-          items: cart.items,
+    await this.authorization.authorizeCart(subject, 'manage', dto.cartId, async (database, state, currentCart) => {
+      this.assertCartReady(currentCart);
+      this.assertOrganizationContext(dto.organizationId, state.organizationIds);
+      await database.order.create({
+        data: {
+          orderNumber,
+          userId: subject,
+          organizationId,
+          cartId: currentCart.id,
+          status: 'created',
+          paymentStatus: 'pending',
+          fulfillmentStatus: 'unfulfilled',
+          currency: currentCart.currency,
+          subtotal: currentCart.subtotal,
+          discountTotal: currentCart.discountAmount || new Decimal(0),
+          taxTotal: currentCart.taxTotal,
+          shippingTotal: currentCart.shippingTotal,
+          total: currentCart.total,
+          checkoutSessionId: session.id,
+          shippingAddressId: dto.shippingAddressId,
+          billingAddressId: dto.billingAddressId,
+          snapshot: { cart: currentCart, items: currentCart.items },
         },
-      },
+      });
     });
 
     // Emit event
@@ -161,25 +152,10 @@ export class CheckoutService {
   /**
    * Create Payment Intent (for direct card processing)
    */
-  async createPaymentIntent(dto: CreateCheckoutDto) {
+  async createPaymentIntent(dto: CreateCheckoutDto, subject: string) {
     assertStripeConfigured(this.stripe);
 
-    const cart = await this.prisma.cart.findUnique({
-      where: { id: dto.cartId },
-      include: { items: true },
-    });
-
-    if (!cart) {
-      throw new NotFoundException('Cart not found');
-    }
-
-    if (cart.status !== 'active') {
-      throw new BadRequestException('Cart is not active');
-    }
-
-    if (cart.items.length === 0) {
-      throw new BadRequestException('Cart is empty');
-    }
+    const { cart, organizationId } = await this.authorizedCart(dto, subject);
 
     const amount = cart.total.mul(100).toNumber(); // Convert to cents
 
@@ -188,7 +164,8 @@ export class CheckoutService {
       currency: cart.currency.toLowerCase(),
       metadata: {
         cartId: cart.id,
-        userId: cart.userId || dto.userId || '',
+        userId: subject,
+        organizationId: organizationId || '',
       },
       automatic_payment_methods: {
         enabled: true,
@@ -198,28 +175,30 @@ export class CheckoutService {
     // Create order
     const orderNumber = await this.generateOrderNumber();
 
-    await this.prisma.order.create({
-      data: {
-        orderNumber,
-        userId: cart.userId || dto.userId || 'guest',
-        cartId: cart.id,
-        status: 'created',
-        paymentStatus: 'pending',
-        fulfillmentStatus: 'unfulfilled',
-        currency: cart.currency,
-        subtotal: cart.subtotal,
-        discountTotal: cart.discountAmount || new Decimal(0),
-        taxTotal: cart.taxTotal,
-        shippingTotal: cart.shippingTotal,
-        total: cart.total,
-        paymentIntentId: paymentIntent.id,
-        shippingAddressId: dto.shippingAddressId,
-        billingAddressId: dto.billingAddressId,
-        snapshot: {
-          cart,
-          items: cart.items,
+    await this.authorization.authorizeCart(subject, 'manage', dto.cartId, async (database, state, currentCart) => {
+      this.assertCartReady(currentCart);
+      this.assertOrganizationContext(dto.organizationId, state.organizationIds);
+      await database.order.create({
+        data: {
+          orderNumber,
+          userId: subject,
+          organizationId,
+          cartId: currentCart.id,
+          status: 'created',
+          paymentStatus: 'pending',
+          fulfillmentStatus: 'unfulfilled',
+          currency: currentCart.currency,
+          subtotal: currentCart.subtotal,
+          discountTotal: currentCart.discountAmount || new Decimal(0),
+          taxTotal: currentCart.taxTotal,
+          shippingTotal: currentCart.shippingTotal,
+          total: currentCart.total,
+          paymentIntentId: paymentIntent.id,
+          shippingAddressId: dto.shippingAddressId,
+          billingAddressId: dto.billingAddressId,
+          snapshot: { cart: currentCart, items: currentCart.items },
         },
-      },
+      });
     });
 
     await this.eventsService.publish('payment.intent.created', {
@@ -275,6 +254,30 @@ export class CheckoutService {
         return await this.stripe.coupons.create(couponParams);
       }
       throw error;
+    }
+  }
+
+  private async authorizedCart(dto: CreateCheckoutDto, subject: string) {
+    return this.authorization.authorizeCart(
+      subject,
+      'manage',
+      dto.cartId,
+      async (_database, state, cart) => {
+        this.assertCartReady(cart);
+        this.assertOrganizationContext(dto.organizationId, state.organizationIds);
+        return { cart, organizationId: dto.organizationId ?? null };
+      },
+    );
+  }
+
+  private assertCartReady(cart: { status: string; items: unknown[] }) {
+    if (cart.status !== 'active') throw new BadRequestException('Cart is not active');
+    if (cart.items.length === 0) throw new BadRequestException('Cart is empty');
+  }
+
+  private assertOrganizationContext(organizationId: string | undefined, activeOrganizationIds: readonly string[]) {
+    if (organizationId && !activeOrganizationIds.includes(organizationId)) {
+      throw new ForbiddenException('Authorization denied');
     }
   }
 

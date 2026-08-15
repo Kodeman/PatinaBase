@@ -27,6 +27,7 @@ import {
 } from './dto';
 import { Address, CreateShipmentOptions, Parcel } from './carriers/carrier.interface';
 import { generateIdentifierSuffix } from '@patina/utils';
+import { OrdersAuthorizationResolver } from '../../common/authorization/orders-authorization.resolver';
 
 @Injectable()
 export class FulfillmentService {
@@ -36,12 +37,19 @@ export class FulfillmentService {
     private prisma: PrismaClient,
     @Inject('EVENTS_SERVICE') private eventsService: any,
     private carrierFactory: CarrierFactory,
+    private readonly authorization: OrdersAuthorizationResolver,
   ) {}
 
   /**
    * Get shipping rates for a shipment
    */
-  async getRates(getRatesDto: GetRatesDto): Promise<{ rates: ShippingRateDto[]; recommendedRate?: ShippingRateDto }> {
+  async getRates(
+    getRatesDto: GetRatesDto,
+    subject: string,
+  ): Promise<{ rates: ShippingRateDto[]; recommendedRate?: ShippingRateDto }> {
+    await this.authorization.authorize(subject, 'manage', async (_database, state) => {
+      this.authorization.cartScope(state, 'manage');
+    });
     this.logger.debug('Getting shipping rates');
 
     const carrier = this.carrierFactory.getCarrier();
@@ -69,18 +77,17 @@ export class FulfillmentService {
   /**
    * Create shipment and generate shipping label
    */
-  async createShipment(orderId: string, createShipmentDto: CreateShipmentDto): Promise<any> {
-    this.logger.debug(`Creating shipment for order ${orderId}`);
+  async createShipment(
+    orderId: string,
+    createShipmentDto: CreateShipmentDto,
+    subject: string,
+  ): Promise<any> {
+    this.logger.debug('Creating shipment');
 
     // Verify order exists and is paid
-    const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
-      include: { items: true },
+    const order = await this.authorization.authorize(subject, 'staff', (database, _state, scope) => {
+      return this.authorization.requireOrder(database, scope, { id: orderId }, { items: true });
     });
-
-    if (!order) {
-      throw new NotFoundException(`Order ${orderId} not found`);
-    }
 
     if (order.paymentStatus !== 'captured') {
       throw new BadRequestException('Order must be paid before creating shipment');
@@ -118,8 +125,8 @@ export class FulfillmentService {
         const rates = await carrier.getRates(options);
         const selectedRate = rates.find(r => r.rateId === createShipmentDto.rateId);
         shipmentCost = selectedRate?.rate;
-      } catch (error) {
-        this.logger.warn('Failed to get rate for cost calculation', error);
+      } catch {
+        this.logger.warn('Failed to get rate for cost calculation');
       }
     }
 
@@ -127,72 +134,68 @@ export class FulfillmentService {
     const shipmentNumber = `SHIP-${Date.now()}-${generateIdentifierSuffix(9)}`;
 
     // Create shipment record
-    const shipment = await this.prisma.shipment.create({
-      data: {
-        orderId,
-        shipmentNumber,
-        carrier: createShipmentDto.carrier,
-        service: createShipmentDto.service,
-        trackingNumber: label.trackingNumber,
-        trackingUrl: label.postageLabel?.labelUrl,
-        publicTrackingUrl: label.postageLabel?.labelUrl,
-        status: 'pending',
-        items: createShipmentDto.items,
-        carrierShipmentId: (label as any).shipmentId, // EasyPost shipment ID for refunds
-        labelUrl: label.labelUrl,
-        labelFormat: label.labelFormat,
-        labelSize: label.labelSize,
-        commercialInvoiceUrl: label.commercialInvoiceUrl,
-        rateId: createShipmentDto.rateId,
-        fromAddress: JSON.parse(JSON.stringify(createShipmentDto.fromAddress)),
-        toAddress: JSON.parse(JSON.stringify(createShipmentDto.toAddress)),
-        parcel: JSON.parse(JSON.stringify(createShipmentDto.parcel)),
-        cost: shipmentCost,
-        currency: 'USD',
-        shippedAt: new Date(),
-        metadata: JSON.parse(JSON.stringify({
-          reference: createShipmentDto.reference,
-          options: createShipmentDto.options,
-        })),
-      },
-    });
+    const shipment = await this.authorization.authorize(subject, 'staff', async (database, _state, scope) => {
+      const currentOrder = await this.authorization.requireOrder(
+        database,
+        scope,
+        { id: orderId },
+        { items: true },
+      );
+      const currentItemIds = new Set(currentOrder.items.map((item) => item.id));
+      if (createShipmentDto.items.some((item) => !currentItemIds.has(item.orderItemId))) {
+        throw new BadRequestException('Invalid order items specified');
+      }
 
-    // Update order items fulfillment quantities
-    for (const item of createShipmentDto.items) {
-      await this.prisma.orderItem.update({
-        where: { id: item.orderItemId },
+      const created = await database.shipment.create({
         data: {
-          qtyFulfilled: {
-            increment: item.qty,
-          },
+          orderId,
+          shipmentNumber,
+          carrier: createShipmentDto.carrier,
+          service: createShipmentDto.service,
+          trackingNumber: label.trackingNumber,
+          trackingUrl: label.postageLabel?.labelUrl,
+          publicTrackingUrl: label.postageLabel?.labelUrl,
+          status: 'pending',
+          items: createShipmentDto.items,
+          carrierShipmentId: (label as any).shipmentId,
+          labelUrl: label.labelUrl,
+          labelFormat: label.labelFormat,
+          labelSize: label.labelSize,
+          commercialInvoiceUrl: label.commercialInvoiceUrl,
+          rateId: createShipmentDto.rateId,
+          fromAddress: JSON.parse(JSON.stringify(createShipmentDto.fromAddress)),
+          toAddress: JSON.parse(JSON.stringify(createShipmentDto.toAddress)),
+          parcel: JSON.parse(JSON.stringify(createShipmentDto.parcel)),
+          cost: shipmentCost,
+          currency: 'USD',
+          shippedAt: new Date(),
+          metadata: JSON.parse(JSON.stringify({
+            reference: createShipmentDto.reference,
+            options: createShipmentDto.options,
+          })),
         },
       });
-    }
 
-    // Update order fulfillment status
-    const updatedOrder = await this.prisma.order.findUnique({
-      where: { id: orderId },
-      include: { items: true },
-    });
-
-    const allItemsFulfilled = updatedOrder!.items.every(
-      item => item.qtyFulfilled >= item.qty,
-    );
-    const someItemsFulfilled = updatedOrder!.items.some(item => item.qtyFulfilled > 0);
-
-    let fulfillmentStatus = 'unfulfilled';
-    if (allItemsFulfilled) {
-      fulfillmentStatus = 'fulfilled';
-    } else if (someItemsFulfilled) {
-      fulfillmentStatus = 'partial';
-    }
-
-    await this.prisma.order.update({
-      where: { id: orderId },
-      data: {
-        fulfillmentStatus,
-        fulfilledAt: allItemsFulfilled ? new Date() : null,
-      },
+      for (const item of createShipmentDto.items) {
+        await database.orderItem.update({
+          where: { id: item.orderItemId },
+          data: { qtyFulfilled: { increment: item.qty } },
+        });
+      }
+      const updatedOrder = await database.order.findUniqueOrThrow({
+        where: { id: orderId },
+        include: { items: true },
+      });
+      const allItemsFulfilled = updatedOrder.items.every((item) => item.qtyFulfilled >= item.qty);
+      const someItemsFulfilled = updatedOrder.items.some((item) => item.qtyFulfilled > 0);
+      await database.order.update({
+        where: { id: orderId },
+        data: {
+          fulfillmentStatus: allItemsFulfilled ? 'fulfilled' : someItemsFulfilled ? 'partial' : 'unfulfilled',
+          fulfilledAt: allItemsFulfilled ? new Date() : null,
+        },
+      });
+      return created;
     });
 
     // Publish event
@@ -209,7 +212,7 @@ export class FulfillmentService {
       },
     });
 
-    this.logger.log(`Shipment created: ${shipment.id} (${label.trackingNumber})`);
+    this.logger.log('Shipment created');
 
     return {
       ...shipment,
@@ -226,16 +229,15 @@ export class FulfillmentService {
   /**
    * Get tracking information for a shipment
    */
-  async getTracking(shipmentId: string): Promise<TrackingDetailsDto> {
-    this.logger.debug(`Getting tracking for shipment ${shipmentId}`);
+  async getTracking(shipmentId: string, subject: string): Promise<TrackingDetailsDto> {
+    this.logger.debug('Getting tracking');
 
-    const shipment = await this.prisma.shipment.findUnique({
-      where: { id: shipmentId },
-    });
-
-    if (!shipment) {
-      throw new NotFoundException(`Shipment ${shipmentId} not found`);
-    }
+    const shipment = await this.authorization.authorizeShipment(
+      subject,
+      'read',
+      shipmentId,
+      async (_database, _state, currentShipment) => currentShipment,
+    );
 
     if (!shipment.trackingNumber) {
       throw new BadRequestException('Shipment does not have a tracking number');
@@ -245,15 +247,22 @@ export class FulfillmentService {
     const tracking = await carrier.getTracking(shipment.trackingNumber, shipment.carrier || undefined);
 
     // Update shipment with latest tracking info
-    await this.prisma.shipment.update({
-      where: { id: shipmentId },
-      data: {
-        trackingStatus: tracking.status,
-        trackingEvents: JSON.parse(JSON.stringify(tracking.trackingEvents)),
-        estimatedDelivery: tracking.estimatedDelivery,
-        publicTrackingUrl: tracking.publicUrl,
+    await this.authorization.authorizeShipment(
+      subject,
+      'read',
+      shipmentId,
+      async (database) => {
+        await database.shipment.update({
+          where: { id: shipmentId },
+          data: {
+            trackingStatus: tracking.status,
+            trackingEvents: JSON.parse(JSON.stringify(tracking.trackingEvents)),
+            estimatedDelivery: tracking.estimatedDelivery,
+            publicTrackingUrl: tracking.publicUrl,
+          },
+        });
       },
-    });
+    );
 
     return tracking as TrackingDetailsDto;
   }
@@ -261,8 +270,12 @@ export class FulfillmentService {
   /**
    * Update shipment status (webhook or manual)
    */
-  async updateShipmentStatus(shipmentId: string, statusDto: UpdateShipmentStatusDto): Promise<any> {
-    this.logger.debug(`Updating shipment ${shipmentId} status to ${statusDto.status}`);
+  async updateShipmentStatus(
+    shipmentId: string,
+    statusDto: UpdateShipmentStatusDto,
+    subject: string,
+  ): Promise<any> {
+    this.logger.debug('Updating shipment status');
 
     const updates: any = {
       status: statusDto.status,
@@ -274,28 +287,28 @@ export class FulfillmentService {
       updates.deliveredAt = new Date();
     }
 
-    const shipment = await this.prisma.shipment.update({
-      where: { id: shipmentId },
-      data: updates,
-    });
-
-    // If delivered, check if order is fully fulfilled
-    if (statusDto.status === 'delivered') {
-      const order = await this.prisma.order.findUnique({
-        where: { id: shipment.orderId },
-        include: { shipments: true },
-      });
-
-      if (order) {
-        const allDelivered = order.shipments.every(s => s.status === 'delivered');
-        if (allDelivered && order.fulfillmentStatus === 'fulfilled') {
-          await this.prisma.order.update({
-            where: { id: order.id },
-            data: { status: 'fulfilled' },
+    const shipment = await this.authorization.authorizeShipment(
+      subject,
+      'staff',
+      shipmentId,
+      async (database) => {
+        const updated = await database.shipment.update({ where: { id: shipmentId }, data: updates });
+        if (statusDto.status === 'delivered') {
+          const order = await database.order.findUnique({
+            where: { id: updated.orderId },
+            include: { shipments: true },
           });
+          if (
+            order &&
+            order.shipments.every((candidate) => candidate.status === 'delivered') &&
+            order.fulfillmentStatus === 'fulfilled'
+          ) {
+            await database.order.update({ where: { id: order.id }, data: { status: 'fulfilled' } });
+          }
         }
-      }
-    }
+        return updated;
+      },
+    );
 
     // Publish event
     await this.eventsService.publish('shipment.status_updated', {
@@ -316,59 +329,82 @@ export class FulfillmentService {
   /**
    * Update shipment details
    */
-  async updateShipment(shipmentId: string, updateDto: UpdateShipmentDto): Promise<any> {
-    this.logger.debug(`Updating shipment ${shipmentId}`);
+  async updateShipment(shipmentId: string, updateDto: UpdateShipmentDto, subject: string): Promise<any> {
+    this.logger.debug('Updating shipment');
+    return this.authorization.authorizeShipment(
+      subject,
+      'staff',
+      shipmentId,
+      async (database) => database.shipment.update({
+        where: { id: shipmentId },
+        data: {
+          carrier: updateDto.carrier,
+          trackingNumber: updateDto.trackingNumber,
+          trackingUrl: updateDto.trackingUrl,
+          method: updateDto.method,
+          notes: updateDto.notes,
+        },
+      }),
+    );
+  }
 
-    const shipment = await this.prisma.shipment.findUnique({
-      where: { id: shipmentId },
-    });
-
-    if (!shipment) {
-      throw new NotFoundException(`Shipment ${shipmentId} not found`);
-    }
-
-    return this.prisma.shipment.update({
-      where: { id: shipmentId },
-      data: {
-        carrier: updateDto.carrier,
-        trackingNumber: updateDto.trackingNumber,
-        trackingUrl: updateDto.trackingUrl,
-        method: updateDto.method,
-        notes: updateDto.notes,
+  async updateShipmentForOrder(
+    orderId: string,
+    body: UpdateShipmentDto & { id?: string; shipmentId?: string; status?: string },
+    subject: string,
+  ) {
+    const shipmentId = body.shipmentId ?? body.id;
+    if (!shipmentId) throw new BadRequestException('Shipment identifier is required');
+    return this.authorization.authorizeShipment(
+      subject,
+      'staff',
+      shipmentId,
+      async (database, _state, shipment) => {
+        if (shipment.orderId !== orderId) throw new NotFoundException('Shipment not found');
+        return database.shipment.update({
+          where: { id: shipmentId },
+          data: {
+            carrier: body.carrier,
+            trackingNumber: body.trackingNumber,
+            trackingUrl: body.trackingUrl,
+            method: body.method,
+            notes: body.notes,
+            status: body.status,
+          },
+        });
       },
-    });
+    );
   }
 
   /**
    * Get shipments for an order
    */
-  async findByOrder(orderId: string): Promise<any[]> {
-    return this.prisma.shipment.findMany({
-      where: { orderId },
-      orderBy: { createdAt: 'desc' },
+  async findByOrder(orderId: string, subject: string): Promise<any[]> {
+    return this.authorization.authorize(subject, 'read', async (database, _state, scope) => {
+      await this.authorization.requireOrder(database, scope, { id: orderId });
+      return database.shipment.findMany({ where: { orderId }, orderBy: { createdAt: 'desc' } });
     });
   }
 
   /**
    * Get shipment by ID
    */
-  async findById(shipmentId: string): Promise<any> {
-    const shipment = await this.prisma.shipment.findUnique({
-      where: { id: shipmentId },
-      include: { order: true },
-    });
-
-    if (!shipment) {
-      throw new NotFoundException(`Shipment ${shipmentId} not found`);
-    }
-
-    return shipment;
+  async findById(shipmentId: string, subject: string): Promise<any> {
+    return this.authorization.authorizeShipment(
+      subject,
+      'read',
+      shipmentId,
+      async (_database, _state, shipment) => shipment,
+    );
   }
 
   /**
    * Validate an address
    */
-  async validateAddress(addressDto: AddressDto): Promise<any> {
+  async validateAddress(addressDto: AddressDto, subject: string): Promise<any> {
+    await this.authorization.authorize(subject, 'manage', async (_database, state) => {
+      this.authorization.cartScope(state, 'manage');
+    });
     this.logger.debug('Validating address');
 
     const carrier = this.carrierFactory.getCarrier();
@@ -378,16 +414,15 @@ export class FulfillmentService {
   /**
    * Refund a shipment
    */
-  async refundShipment(shipmentId: string): Promise<any> {
-    this.logger.debug(`Refunding shipment ${shipmentId}`);
+  async refundShipment(shipmentId: string, subject: string): Promise<any> {
+    this.logger.debug('Refunding shipment');
 
-    const shipment = await this.prisma.shipment.findUnique({
-      where: { id: shipmentId },
-    });
-
-    if (!shipment) {
-      throw new NotFoundException(`Shipment ${shipmentId} not found`);
-    }
+    const shipment = await this.authorization.authorizeShipment(
+      subject,
+      'staff',
+      shipmentId,
+      async (_database, _state, currentShipment) => currentShipment,
+    );
 
     if (!shipment.carrierShipmentId) {
       throw new BadRequestException('Shipment does not have a carrier shipment ID');
@@ -397,18 +432,59 @@ export class FulfillmentService {
     const refund = await carrier.refundShipment(shipment.carrierShipmentId);
 
     // Update shipment status
-    await this.prisma.shipment.update({
-      where: { id: shipmentId },
-      data: {
-        status: 'returned',
-        metadata: {
-          ...((shipment.metadata as any) || {}),
-          refund,
-        },
+    await this.authorization.authorizeShipment(
+      subject,
+      'staff',
+      shipmentId,
+      async (database, _state, currentShipment) => {
+        await database.shipment.update({
+          where: { id: shipmentId },
+          data: {
+            status: 'returned',
+            metadata: {
+              ...((currentShipment.metadata as any) || {}),
+              refund,
+            },
+          },
+        });
       },
-    });
+    );
 
     return refund;
+  }
+
+  async findShipmentByTrackingNumber(trackingNumber: string, subject: string) {
+    return this.authorization.authorize(subject, 'admin', async (database) => {
+      return database.shipment.findFirst({ where: { trackingNumber } });
+    });
+  }
+
+  async recordCarrierRefund(
+    carrierShipmentId: string,
+    refund: { id?: string; status?: string; refund_amount?: unknown },
+    subject: string,
+  ): Promise<boolean> {
+    return this.authorization.authorize(subject, 'admin', async (database) => {
+      const shipment = await database.shipment.findFirst({ where: { carrierShipmentId } });
+      if (!shipment) return false;
+      await database.shipment.update({
+        where: { id: shipment.id },
+        data: {
+          status: 'returned',
+          metadata: {
+            ...((shipment.metadata as any) || {}),
+            refund: {
+              id: refund.id,
+              status: refund.status,
+              refundAmount: refund.refund_amount,
+              processedAt: new Date(),
+              processedBy: subject,
+            },
+          },
+        },
+      });
+      return true;
+    });
   }
 
   /**

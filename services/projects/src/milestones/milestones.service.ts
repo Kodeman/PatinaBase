@@ -3,6 +3,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateMilestoneDto } from './dto/create-milestone.dto';
 import { UpdateMilestoneDto, MilestoneStatusEnum } from './dto/update-milestone.dto';
+import { ProjectsAuthorizationResolver } from '../common/authorization/projects-authorization.resolver';
 
 @Injectable()
 export class MilestonesService {
@@ -11,65 +12,66 @@ export class MilestonesService {
   constructor(
     private prisma: PrismaService,
     private eventEmitter: EventEmitter2,
+    private readonly authorization: ProjectsAuthorizationResolver,
   ) {}
 
   async create(projectId: string, createDto: CreateMilestoneDto, userId: string) {
-    const project = await this.prisma.project.findUnique({
-      where: { id: projectId },
-      select: { id: true, clientId: true, designerId: true },
-    });
-
-    if (!project) {
-      throw new NotFoundException('Project not found');
-    }
-
-    // Create milestone and outbox event in a transaction
-    const milestone = await this.prisma.$transaction(async (tx) => {
-      const newMilestone = await tx.milestone.create({
-        data: {
-          projectId,
-          title: createDto.title,
-          description: createDto.description,
-          targetDate: new Date(createDto.targetDate),
-          order: createDto.order ?? 0,
-          media: createDto.media ? JSON.parse(JSON.stringify(createDto.media)) : null,
-          metadata: createDto.metadata,
-        },
-      });
-
-      // Create outbox event for reliable event publishing
-      await tx.outboxEvent.create({
-        data: {
-          type: 'project.milestone.created',
-          payload: {
-            milestoneId: newMilestone.id,
+    const milestone = await this.authorization.withProjectAccess(
+      userId,
+      projectId,
+      'manage',
+      async (tx) => {
+        const project = await tx.project.findUnique({
+          where: { id: projectId },
+          select: { id: true, clientId: true, designerId: true },
+        });
+        if (!project) throw new NotFoundException('Project not found');
+        const newMilestone = await tx.milestone.create({
+          data: {
             projectId,
-            title: newMilestone.title,
-            targetDate: newMilestone.targetDate,
-            clientId: project.clientId,
-            designerId: project.designerId,
-            createdBy: userId,
+            title: createDto.title,
+            description: createDto.description,
+            targetDate: new Date(createDto.targetDate),
+            order: createDto.order ?? 0,
+            media: createDto.media ? JSON.parse(JSON.stringify(createDto.media)) : null,
+            metadata: createDto.metadata,
           },
-          headers: {
-            timestamp: new Date().toISOString(),
-            source: 'projects-service',
+        });
+
+        // Create outbox event for reliable event publishing
+        await tx.outboxEvent.create({
+          data: {
+            type: 'project.milestone.created',
+            payload: {
+              milestoneId: newMilestone.id,
+              projectId,
+              title: newMilestone.title,
+              targetDate: newMilestone.targetDate,
+              clientId: project.clientId,
+              designerId: project.designerId,
+              createdBy: userId,
+            },
+            headers: {
+              timestamp: new Date().toISOString(),
+              source: 'projects-service',
+            },
           },
-        },
-      });
+        });
 
-      // Create audit log
-      await tx.auditLog.create({
-        data: {
-          entityType: 'milestone',
-          entityId: newMilestone.id,
-          action: 'created',
-          actor: userId,
-          metadata: { projectId },
-        },
-      });
+        // Create audit log
+        await tx.auditLog.create({
+          data: {
+            entityType: 'milestone',
+            entityId: newMilestone.id,
+            action: 'created',
+            actor: userId,
+            metadata: { projectId },
+          },
+        });
 
-      return newMilestone;
-    });
+        return newMilestone;
+      },
+    );
 
     // Emit in-process event for immediate handling
     this.eventEmitter.emit('milestone.created', {
@@ -79,108 +81,86 @@ export class MilestonesService {
       timestamp: new Date(),
     });
 
-    this.logger.log(`Milestone created: ${milestone.id} for project ${projectId}`);
+    this.logger.log('Milestone created');
 
     return milestone;
   }
 
-  async findAll(projectId: string) {
-    return this.prisma.milestone.findMany({
-      where: { projectId },
-      orderBy: { order: 'asc' },
-    });
+  async findAll(projectId: string, userId: string) {
+    return this.authorization.withProjectAccess(userId, projectId, 'read', (tx) =>
+      tx.milestone.findMany({ where: { projectId }, orderBy: { order: 'asc' } }),
+    );
   }
 
-  async findOne(id: string) {
-    const milestone = await this.prisma.milestone.findUnique({
-      where: { id },
-      include: {
-        project: {
-          select: { id: true, title: true },
-        },
-      },
-    });
-
-    if (!milestone) {
-      throw new NotFoundException('Milestone not found');
-    }
-
-    return milestone;
-  }
-
-  async update(id: string, updateDto: UpdateMilestoneDto, userId: string) {
-    const existing = await this.prisma.milestone.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        status: true,
-        projectId: true,
-        project: {
-          select: {
-            clientId: true,
-            designerId: true,
+  async findOne(projectId: string, id: string, userId: string) {
+    return this.authorization.withProjectAccess(userId, projectId, 'read', async (tx) => {
+      const milestone = await tx.milestone.findFirst({
+        where: { id, projectId },
+        include: {
+          project: {
+            select: { id: true, title: true },
           },
-        },
-      },
-    });
-
-    if (!existing) {
-      throw new NotFoundException('Milestone not found');
-    }
-
-    // Check if status is changing to completed
-    const isCompleting = updateDto.status === MilestoneStatusEnum.COMPLETED && existing.status !== MilestoneStatusEnum.COMPLETED;
-
-    // Update milestone and create outbox event if status changed
-    const milestone = await this.prisma.$transaction(async (tx) => {
-      const updated = await tx.milestone.update({
-        where: { id },
-        data: {
-          title: updateDto.title,
-          description: updateDto.description,
-          targetDate: updateDto.targetDate ? new Date(updateDto.targetDate) : undefined,
-          status: updateDto.status,
-          order: updateDto.order,
-          media: updateDto.media !== undefined ? JSON.parse(JSON.stringify(updateDto.media)) : undefined,
-          metadata: updateDto.metadata,
-          completedAt: isCompleting ? new Date() : undefined,
         },
       });
 
-      // Create outbox event for status changes
-      if (updateDto.status && updateDto.status !== existing.status) {
-        await tx.outboxEvent.create({
-          data: {
-            type: 'project.milestone.status_changed',
-            payload: {
-              milestoneId: id,
-              projectId: existing.projectId,
-              oldStatus: existing.status,
-              newStatus: updateDto.status,
-              clientId: existing.project.clientId,
-              designerId: existing.project.designerId,
-              updatedBy: userId,
-            },
-            headers: {
-              timestamp: new Date().toISOString(),
-              source: 'projects-service',
-            },
+      if (!milestone) {
+        throw new NotFoundException('Milestone not found');
+      }
+
+      return milestone;
+    });
+  }
+
+  async update(projectId: string, id: string, updateDto: UpdateMilestoneDto, userId: string) {
+    const { existing, milestone } = await this.authorization.withProjectAccess(
+      userId,
+      projectId,
+      'manage',
+      async (tx) => {
+        const existing = await tx.milestone.findFirst({
+          where: { id, projectId },
+          select: {
+            id: true,
+            status: true,
+            projectId: true,
+            project: { select: { clientId: true, designerId: true } },
           },
         });
+        if (!existing) throw new NotFoundException('Milestone not found');
+        const isCompleting =
+          updateDto.status === MilestoneStatusEnum.COMPLETED &&
+          existing.status !== MilestoneStatusEnum.COMPLETED;
+        await tx.milestone.updateMany({
+          where: { id, projectId },
+          data: {
+            title: updateDto.title,
+            description: updateDto.description,
+            targetDate: updateDto.targetDate ? new Date(updateDto.targetDate) : undefined,
+            status: updateDto.status,
+            order: updateDto.order,
+            media:
+              updateDto.media !== undefined
+                ? JSON.parse(JSON.stringify(updateDto.media))
+                : undefined,
+            metadata: updateDto.metadata,
+            completedAt: isCompleting ? new Date() : undefined,
+          },
+        });
+        const updated = await tx.milestone.findFirstOrThrow({ where: { id, projectId } });
 
-        // Additional event for completion
-        if (isCompleting) {
+        // Create outbox event for status changes
+        if (updateDto.status && updateDto.status !== existing.status) {
           await tx.outboxEvent.create({
             data: {
-              type: 'project.milestone.completed',
+              type: 'project.milestone.status_changed',
               payload: {
                 milestoneId: id,
                 projectId: existing.projectId,
-                title: updated.title,
-                completedAt: updated.completedAt,
+                oldStatus: existing.status,
+                newStatus: updateDto.status,
                 clientId: existing.project.clientId,
                 designerId: existing.project.designerId,
-                completedBy: userId,
+                updatedBy: userId,
               },
               headers: {
                 timestamp: new Date().toISOString(),
@@ -188,22 +168,47 @@ export class MilestonesService {
               },
             },
           });
+
+          // Additional event for completion
+          if (isCompleting) {
+            await tx.outboxEvent.create({
+              data: {
+                type: 'project.milestone.completed',
+                payload: {
+                  milestoneId: id,
+                  projectId: existing.projectId,
+                  title: updated.title,
+                  completedAt: updated.completedAt,
+                  clientId: existing.project.clientId,
+                  designerId: existing.project.designerId,
+                  completedBy: userId,
+                },
+                headers: {
+                  timestamp: new Date().toISOString(),
+                  source: 'projects-service',
+                },
+              },
+            });
+          }
         }
-      }
 
-      // Create audit log
-      await tx.auditLog.create({
-        data: {
-          entityType: 'milestone',
-          entityId: id,
-          action: 'updated',
-          actor: userId,
-          changes: updateDto as any,
-        },
-      });
+        // Create audit log
+        await tx.auditLog.create({
+          data: {
+            entityType: 'milestone',
+            entityId: id,
+            action: 'updated',
+            actor: userId,
+            changes: updateDto as any,
+          },
+        });
 
-      return updated;
-    });
+        return { existing, milestone: updated, isCompleting };
+      },
+    );
+    const isCompleting =
+      updateDto.status === MilestoneStatusEnum.COMPLETED &&
+      existing.status !== MilestoneStatusEnum.COMPLETED;
 
     // Emit in-process events
     if (updateDto.status && updateDto.status !== existing.status) {
@@ -226,33 +231,28 @@ export class MilestonesService {
       }
     }
 
-    this.logger.log(`Milestone updated: ${id}`);
+    this.logger.log('Milestone updated');
 
     return milestone;
   }
 
-  async remove(id: string, userId: string) {
-    const existing = await this.prisma.milestone.findUnique({
-      where: { id },
-      select: { id: true, projectId: true },
-    });
-
-    if (!existing) {
-      throw new NotFoundException('Milestone not found');
-    }
-
-    await this.prisma.milestone.delete({
-      where: { id },
-    });
-
-    await this.prisma.auditLog.create({
-      data: {
-        entityType: 'milestone',
-        entityId: id,
-        action: 'deleted',
-        actor: userId,
-        metadata: { projectId: existing.projectId },
-      },
+  async remove(projectId: string, id: string, userId: string) {
+    await this.authorization.withProjectAccess(userId, projectId, 'manage', async (tx) => {
+      const existing = await tx.milestone.findFirst({
+        where: { id, projectId },
+        select: { id: true },
+      });
+      if (!existing) throw new NotFoundException('Milestone not found');
+      await tx.milestone.deleteMany({ where: { id, projectId } });
+      await tx.auditLog.create({
+        data: {
+          entityType: 'milestone',
+          entityId: id,
+          action: 'deleted',
+          actor: userId,
+          metadata: { projectId },
+        },
+      });
     });
 
     return { message: 'Milestone deleted successfully' };

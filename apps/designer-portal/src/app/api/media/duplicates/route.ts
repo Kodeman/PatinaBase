@@ -4,6 +4,7 @@ import {
   proxyToBackend,
   apiError,
   apiSuccess,
+  type RouteContext,
 } from '@patina/api-routes';
 
 const MEDIA_SERVICE_URL =
@@ -73,7 +74,7 @@ export const GET = createRouteHandler(
  * Body: { action: 'scan' | 'dismiss' | 'mark' | 'merge', ...params }
  */
 export const POST = createRouteHandler(
-  async (request: NextRequest) => {
+  async (request: NextRequest, context: RouteContext) => {
     try {
       const body = await request.json();
       const { action, ...params } = body;
@@ -100,29 +101,24 @@ export const POST = createRouteHandler(
         );
       }
 
-      // Forward the request to the media service
-      const backendUrl = `${MEDIA_SERVICE_URL}${path}`;
-      const backendResponse = await fetch(backendUrl, {
+      // Rebuild the already-consumed request body while retaining the caller's
+      // bearer/cookie headers for proxy verification and forwarding.
+      const proxyRequest = new Request(request.url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Request-Id': crypto.randomUUID(),
-        },
+        headers: request.headers,
         body: JSON.stringify(params),
       });
 
-      const responseData = await backendResponse.text();
-
-      return new NextResponse(responseData, {
-        status: backendResponse.status,
-        statusText: backendResponse.statusText,
-        headers: {
-          'Content-Type':
-            backendResponse.headers.get('Content-Type') || 'application/json',
+      return await proxyToBackend(proxyRequest, context, {
+        service: {
+          name: 'media',
+          baseUrl: MEDIA_SERVICE_URL,
+          path,
         },
+        requireAuth: true,
+        timeout: { read: 60000 },
       });
     } catch (error) {
-      console.error('[API] Duplicate detection error:', error);
       return apiError(error);
     }
   },

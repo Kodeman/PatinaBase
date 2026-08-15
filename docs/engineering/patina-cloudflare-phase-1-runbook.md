@@ -13,12 +13,21 @@ This runbook authorizes no hidden credentials. Password-bearing database logins,
 
 ## Current provisioning blockers
 
-Do not create staging or production database logins, Hyperdrive configurations, Workers, or routes until both blockers below are independently reviewed and closed:
+Do not create staging or production database logins, Hyperdrive configurations, Workers, or routes until every blocker below is independently reviewed and closed. Blocker 1 remains open; blocker 2 is closed with the evidence recorded below:
 
-1. The catalog privilege allow-list currently fails because PostgreSQL `PUBLIC` grants expose additional schemas, relations, sequences, and routines to the edge roles. The local conformance test intentionally exits nonzero after its functional assertions and prints only aggregate counts. Resolution requires a platform-admin review of database-wide `PUBLIC` ACLs plus exact re-grants for the existing Supabase roles; role-local revokes cannot create a deny ACL.
-2. Retained orders, projects, and media Containers do not yet share a trustworthy per-request Strata authorization resolver or complete object-level own/organization/admin contract. Their decorated routes remain fail-closed. Do not restore availability by trusting JWT `app_metadata` permission lists, inventing controller permission names, or allowing unscoped list/batch reads. Resolve current authorization through each Container's Supavisor path and prove own/other/organization/admin, role-change, list, and batch behavior before deploying the retained-service auth changes.
+1. **OPEN — database `PUBLIC` ACLs.** The catalog privilege allow-list currently fails because PostgreSQL `PUBLIC` grants expose additional schemas, relations, sequences, and routines to the edge roles. The local conformance test intentionally exits nonzero after its functional assertions and prints only aggregate counts. Resolution requires a platform-admin review of database-wide `PUBLIC` ACLs plus exact re-grants for the existing Supabase roles; role-local revokes cannot create a deny ACL.
+2. **CLOSED 2026-08-15 — retained Container authorization.** Orders, projects, and media now treat verified Supabase JWTs as identity only, resolve current permissions and memberships through their own Prisma/Supavisor connections, and enforce own/organization/admin scope in protected database operations. No JWT `app_metadata`, caller identity field, JSON metadata, or compatibility fallback grants access.
 
-Neither blocker permits a compatibility fallback to broaden authorization. Record closure evidence in this runbook before requesting the independent production sign-off.
+Neither blocker permits a compatibility fallback to broaden authorization. Blocker 1 must close independently before any Phase 1 provisioning or production sign-off.
+
+### Blocker 2 closure evidence
+
+- A clean local `pnpm supabase:reset` replayed through migration `00482`; `supabase/tests/retained_services/authorization_contract_test.sql` passed and confirmed the canonical relationships, permission mappings, and absence of `PUBLIC`, `anon`, or generic `authenticated` grants added by this contract.
+- Real local-Postgres boundaries passed 7/7 Orders, 14/14 Projects, and 18/18 Media tests. They cover own/other non-enumerating denial, current organization membership and removal, reviewed admin scope, missing/unknown roles and permissions, stale JWT metadata, next-request role changes, scoped list/count/batch/write behavior, one-backend pooled callers, authorization leases, and rollback isolation.
+- The signed Stripe boundary passed its three real-Postgres claim, rollback/reclaim, and stale-lease cases. The Media completion callback verifies a timestamped HMAC over the exact raw body before any job transition.
+- Active route inventories classify 44 Orders, 108 Projects, and 61 Media handlers. The only public exceptions are the exact health and signature-verified callback paths documented in the retained Container authorization contract; all other active handlers declare canonical permissions and fail closed.
+- Required Auth, Orders, Projects, Media, API-route, portal-proxy, and Media Worker builds/tests passed. Separate-context adversarial review returned `APPROVE` after checking cross-user and cross-organization access, list/count/batch leakage, freshness, pooled state and rollback, authorization/query TOCTOU, SQL parameterization, caller-controlled fields, admin scope, public bypasses, and sensitive logging.
+- The separate database-wide `PUBLIC` ACL blocker above remains open and was not widened, remediated, or reclassified by this work.
 
 ## Scope
 
@@ -132,20 +141,28 @@ On any error, issue `ROLLBACK`, close the client, and return a redacted error. N
 
 ## Route matrix
 
-| Route                      | Auth                    | Upstream/binding                | Cache                        | Failure behavior                          |
-| -------------------------- | ----------------------- | ------------------------------- | ---------------------------- | ----------------------------------------- |
-| `/auth/v1/*`               | Supabase protocol       | Supabase Auth                   | no-store                     | preserve upstream status/body             |
-| `/realtime/v1/*`           | Supabase protocol       | Supabase Realtime               | no-store                     | preserve WebSocket status/frames          |
-| `/rest/v1/*`               | Supabase protocol       | Supabase REST                   | no-store                     | preserve upstream status/body/CORS        |
-| `/graphql/v1/*`            | Supabase protocol       | Supabase GraphQL                | no-store                     | preserve upstream status/body             |
-| `/functions/v1/*`          | function-specific JWT   | Supabase Functions              | no-store                     | preserve upstream status/body             |
-| `/storage/v1/*`            | Supabase protocol       | Supabase Storage                | no-store                     | preserve upstream status/body             |
-| `GET /v1/catalog/products` | public                  | public view via selected source | public 60s + 15s stale       | legacy public result on HD error/mismatch |
-| `GET /_internal/health`    | Access or service token | probe both bindings             | private, no-store            | generic binding readiness only            |
-| other `/v1/*`              | route-defined           | `DB_FRESH` or Container binding | private, no-store by default | fail closed                               |
-| unmatched                  | none                    | none                            | no-store                     | 404                                       |
+| Route                      | Auth                                          | Upstream/binding                       | Cache                        | Failure behavior                          |
+| -------------------------- | --------------------------------------------- | -------------------------------------- | ---------------------------- | ----------------------------------------- |
+| `/auth/v1/*`               | Supabase protocol                             | Supabase Auth                          | no-store                     | preserve upstream status/body             |
+| `/realtime/v1/*`           | Supabase protocol                             | Supabase Realtime                      | no-store                     | preserve WebSocket status/frames          |
+| `/rest/v1/*`               | Supabase protocol                             | Supabase REST                          | no-store                     | preserve upstream status/body/CORS        |
+| `/graphql/v1/*`            | Supabase protocol                             | Supabase GraphQL                       | no-store                     | preserve upstream status/body             |
+| `/functions/v1/*`          | function-specific JWT                         | Supabase Functions                     | no-store                     | preserve upstream status/body             |
+| `/storage/v1/*`            | Supabase protocol                             | Supabase Storage                       | no-store                     | preserve upstream status/body             |
+| `GET /v1/catalog/products` | public                                        | public view via selected source        | public 60s + 15s stale       | legacy public result on HD error/mismatch |
+| `GET /_internal/health`    | Access or service token                       | probe both bindings                    | private, no-store            | generic binding readiness only            |
+| other `/v1/*`              | route-defined                                 | `DB_FRESH` or Container binding        | private, no-store by default | fail closed                               |
+| Media `/search/*`          | Supabase identity + current `media.admin.all` | retained Media Container via Supavisor | private, no-store            | 401/403; no compatibility fallback        |
+| Media `/boards/*`          | Supabase identity + current object scope      | retained Media Container via Supavisor | private, no-store            | 401/403/404 without enumeration           |
+| Media `/version`           | Supabase identity + current `media.admin.all` | retained Media Container via Supavisor | private, no-store            | 401/403; no public version fallback       |
+| unmatched                  | none                                          | none                                   | no-store                     | 404                                       |
 
 Compatibility responses must preserve Supabase CORS headers and cookies. The Worker must not forward to a hostname that routes back to itself. Logging is allow-list based and excludes authorization, API keys, cookies, query contents, SQL, PII, and bodies.
+
+The retained Media service deliberately has no global Nest prefix. Its
+`/search/*`, `/boards/*`, and `/version` routes therefore require explicit
+Container routing and the same current-state authorization as `/v1/media/*`;
+they must never fall through to a public or compatibility upstream.
 
 ## Public catalog contract
 

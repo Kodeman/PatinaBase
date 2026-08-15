@@ -1,18 +1,25 @@
-import { Controller, Get, Patch, Post, Delete, Param, Query, Body, HttpCode, HttpStatus, UseInterceptors } from '@nestjs/common';
+import { Controller, Get, Patch, Post, Param, Query, Body, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
-import { CacheInterceptor, CacheKey, CacheTTL } from '@patina/cache';
-import { RequirePermissions } from '@patina/auth';
+import {
+  CurrentUser,
+  RequireAnyPermission,
+  type AuthenticatedUserIdentity,
+} from '@patina/auth';
 import { OrdersService } from './orders.service';
 import { OrderResponseDto } from './dto/order-response.dto';
+import { ORDER_PERMISSIONS } from '../../common/authorization/orders-authorization.resolver';
 
 @ApiTags('orders')
 @Controller('orders')
-@UseInterceptors(CacheInterceptor)
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   @Get()
-  @RequirePermissions('orders.order.read')
+  @RequireAnyPermission(
+    ORDER_PERMISSIONS.READ_OWN,
+    ORDER_PERMISSIONS.READ_ORG,
+    ORDER_PERMISSIONS.ADMIN_ALL,
+  )
   @ApiOperation({ summary: 'List orders with filters' })
   @ApiQuery({ name: 'userId', required: false })
   @ApiQuery({ name: 'status', required: false })
@@ -38,10 +45,11 @@ export class OrdersController {
       },
     },
   })
-  @CacheKey('orders:list:user::userId:status::status:skip::skip:take::take')
-  @CacheTTL(60) // 1 minute
-  async findAll(@Query() query: any) {
-    const result = await this.ordersService.findAll(query);
+  async findAll(
+    @Query() query: any,
+    @CurrentUser() user: AuthenticatedUserIdentity,
+  ) {
+    const result = await this.ordersService.findAll(query, user.sub);
     return {
       data: OrderResponseDto.fromPrismaMany(result.data),
       pagination: result.pagination,
@@ -49,61 +57,107 @@ export class OrdersController {
   }
 
   @Get(':id')
-  @RequirePermissions('orders.order.read')
+  @RequireAnyPermission(
+    ORDER_PERMISSIONS.READ_OWN,
+    ORDER_PERMISSIONS.READ_ORG,
+    ORDER_PERMISSIONS.ADMIN_ALL,
+  )
   @ApiOperation({ summary: 'Get order by ID' })
   @ApiResponse({ status: 200, description: 'Order found', type: OrderResponseDto })
   @ApiResponse({ status: 404, description: 'Order not found' })
-  async findOne(@Param('id') id: string): Promise<OrderResponseDto> {
-    const order = await this.ordersService.findOne(id);
+  async findOne(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUserIdentity,
+  ): Promise<OrderResponseDto> {
+    const order = await this.ordersService.findOne(id, user.sub);
     return OrderResponseDto.fromPrisma(order)!;
   }
 
   @Get('number/:orderNumber')
-  @RequirePermissions('orders.order.read')
+  @RequireAnyPermission(
+    ORDER_PERMISSIONS.READ_OWN,
+    ORDER_PERMISSIONS.READ_ORG,
+    ORDER_PERMISSIONS.ADMIN_ALL,
+  )
   @ApiOperation({ summary: 'Get order by order number' })
   @ApiResponse({ status: 200, description: 'Order found', type: OrderResponseDto })
   @ApiResponse({ status: 404, description: 'Order not found' })
-  async findByOrderNumber(@Param('orderNumber') orderNumber: string): Promise<OrderResponseDto> {
-    const order = await this.ordersService.findByOrderNumber(orderNumber);
+  async findByOrderNumber(
+    @Param('orderNumber') orderNumber: string,
+    @CurrentUser() user: AuthenticatedUserIdentity,
+  ): Promise<OrderResponseDto> {
+    const order = await this.ordersService.findByOrderNumber(orderNumber, user.sub);
+    return OrderResponseDto.fromPrisma(order)!;
+  }
+
+  @Patch(':id')
+  @RequireAnyPermission(
+    ORDER_PERMISSIONS.MANAGE_ORG,
+    ORDER_PERMISSIONS.ADMIN_ALL,
+  )
+  @ApiOperation({ summary: 'Update scoped order workflow fields' })
+  async update(
+    @Param('id') id: string,
+    @Body() body: {
+      status?: string;
+      fulfillmentStatus?: string;
+      shippingMethod?: string;
+      customerNotes?: string;
+      internalNotes?: string;
+    },
+    @CurrentUser() user: AuthenticatedUserIdentity,
+  ): Promise<OrderResponseDto> {
+    const order = await this.ordersService.update(id, body, user.sub);
     return OrderResponseDto.fromPrisma(order)!;
   }
 
   @Patch(':id/status')
-  @RequirePermissions('orders.order.update')
+  @RequireAnyPermission(
+    ORDER_PERMISSIONS.MANAGE_ORG,
+    ORDER_PERMISSIONS.ADMIN_ALL,
+  )
   @ApiOperation({ summary: 'Update order status' })
   @ApiResponse({ status: 200, description: 'Order status updated', type: OrderResponseDto })
   async updateStatus(
     @Param('id') id: string,
-    @Body() body: { status: string; actor?: string },
+    @Body() body: { status: string },
+    @CurrentUser() user: AuthenticatedUserIdentity,
   ): Promise<OrderResponseDto> {
-    const order = await this.ordersService.updateStatus(id, body.status, body.actor);
+    const order = await this.ordersService.updateStatus(id, body.status, user.sub);
     return OrderResponseDto.fromPrisma(order)!;
   }
 
   @Post(':id/cancel')
-  @RequirePermissions('orders.order.cancel')
+  @RequireAnyPermission(
+    ORDER_PERMISSIONS.MANAGE_OWN,
+    ORDER_PERMISSIONS.MANAGE_ORG,
+    ORDER_PERMISSIONS.ADMIN_ALL,
+  )
   @ApiOperation({ summary: 'Cancel order' })
   @ApiResponse({ status: 200, description: 'Order canceled', type: OrderResponseDto })
   async cancel(
     @Param('id') id: string,
-    @Body() body: { reason?: string; actor?: string },
+    @Body() body: { reason?: string },
+    @CurrentUser() user: AuthenticatedUserIdentity,
   ): Promise<OrderResponseDto> {
-    const order = await this.ordersService.cancel(id, body.reason, body.actor);
+    const order = await this.ordersService.cancel(id, body.reason, user.sub);
     return OrderResponseDto.fromPrisma(order)!;
   }
 
   @Post('batch')
-  @RequirePermissions('orders.order.read')
+  @RequireAnyPermission(
+    ORDER_PERMISSIONS.READ_OWN,
+    ORDER_PERMISSIONS.READ_ORG,
+    ORDER_PERMISSIONS.ADMIN_ALL,
+  )
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Batch fetch orders by IDs' })
-  @ApiResponse({ status: 200, description: 'Orders retrieved in order of requested IDs', type: [OrderResponseDto] })
-  async findByIds(@Body() body: { ids: string[] }): Promise<(OrderResponseDto | null)[]> {
-    const orders = await this.ordersService.findByIds(body.ids);
-    // CRITICAL: Return in same order as requested IDs for DataLoader
-    const ordersMap = new Map(orders.map(o => [o.id, o]));
-    return body.ids.map(id => {
-      const order = ordersMap.get(id);
-      return order ? OrderResponseDto.fromPrisma(order)! : null;
-    });
+  @ApiResponse({ status: 200, description: 'Accessible orders', type: [OrderResponseDto] })
+  async findByIds(
+    @Body() body: { ids: string[] },
+    @CurrentUser() user: AuthenticatedUserIdentity,
+  ): Promise<OrderResponseDto[]> {
+    const orders = await this.ordersService.findByIds(body.ids, user.sub);
+    return OrderResponseDto.fromPrismaMany(orders);
   }
 }

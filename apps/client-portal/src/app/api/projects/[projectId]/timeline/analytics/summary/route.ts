@@ -1,18 +1,24 @@
-import { NextRequest } from 'next/server';
-import { createRouteHandler, proxyToBackend, apiError } from '@patina/api-routes';
+import { NextRequest } from "next/server";
+import {
+  createRouteHandler,
+  proxyToBackend,
+  apiError,
+  type RouteContext,
+} from "@patina/api-routes";
 
-const PROJECTS_URL = process.env.PROJECTS_SERVICE_URL || 'http://localhost:3016';
+const PROJECTS_URL =
+  process.env.PROJECTS_SERVICE_URL || "http://localhost:3016";
 
 // GET /api/projects/:projectId/timeline/analytics/summary - Get project progress analytics
 export const GET = createRouteHandler(
-  async (request: NextRequest, context: { params: Promise<{ projectId: string }> }) => {
+  async (request: NextRequest, context: RouteContext) => {
     try {
-      const { projectId } = await context.params;
+      const projectId = context.custom?.params?.projectId as string;
       return await proxyToBackend(request, context, {
         service: {
-          name: 'projects',
+          name: "projects",
           baseUrl: PROJECTS_URL,
-          path: `/v1/projects/${projectId}/timeline/analytics/summary`,
+          path: `/v1/projects/${encodeURIComponent(projectId)}/timeline/analytics/summary`,
         },
         requireAuth: true,
         retry: { maxRetries: 3 },
@@ -22,5 +28,5 @@ export const GET = createRouteHandler(
       return apiError(error);
     }
   },
-  { method: 'GET' }
+  { method: "GET" },
 );

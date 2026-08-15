@@ -79,8 +79,8 @@ describe('retained service JWKS authentication', () => {
           sub: 'designer-1',
           userId: 'designer-1',
           role: 'authenticated',
-          roles: ['designer'],
         });
+        expect(body.roles).toBeUndefined();
       });
 
     await app.close();

@@ -89,7 +89,7 @@ export class EasyPostCarrier implements ICarrier {
       this.logger.debug(`Retrieved ${rates.length} rates`);
       return rates;
     } catch (error) {
-      this.logger.error('Failed to get rates from EasyPost', error);
+      this.logger.error('Failed to get rates from EasyPost');
       throw new Error(`EasyPost rate retrieval failed: ${error.message}`);
     }
   }
@@ -143,7 +143,7 @@ export class EasyPostCarrier implements ICarrier {
         boughtShipment = await this.client!.Shipment.buy(shipment.id, lowestRate.id);
       }
 
-      this.logger.log(`Label created: ${boughtShipment.tracking_code}`);
+      this.logger.log('Shipping label created');
 
       return {
         trackingNumber: boughtShipment.tracking_code,
@@ -160,7 +160,7 @@ export class EasyPostCarrier implements ICarrier {
         shipmentId: boughtShipment.id, // EasyPost shipment ID for refunds
       } as any;
     } catch (error) {
-      this.logger.error('Failed to create label via EasyPost', error);
+      this.logger.error('Failed to create label via EasyPost');
       throw new Error(`EasyPost label creation failed: ${error.message}`);
     }
   }
@@ -172,7 +172,7 @@ export class EasyPostCarrier implements ICarrier {
     this.ensureConfigured();
 
     try {
-      this.logger.debug(`Fetching tracking for ${trackingNumber}`);
+      this.logger.debug('Fetching tracking from EasyPost');
 
       const tracker = await this.client!.Tracker.create({
         tracking_code: trackingNumber,
@@ -181,7 +181,7 @@ export class EasyPostCarrier implements ICarrier {
 
       return this.mapFromEasyPostTracker(tracker);
     } catch (error) {
-      this.logger.error(`Failed to get tracking for ${trackingNumber}`, error);
+      this.logger.error('Failed to get tracking from EasyPost');
       throw new Error(`EasyPost tracking retrieval failed: ${error.message}`);
     }
   }
@@ -224,7 +224,7 @@ export class EasyPostCarrier implements ICarrier {
         warnings,
       };
     } catch (error) {
-      this.logger.error('Failed to validate address via EasyPost', error);
+      this.logger.error('Failed to validate address via EasyPost');
       return {
         valid: false,
         address,
@@ -240,7 +240,7 @@ export class EasyPostCarrier implements ICarrier {
     this.ensureConfigured();
 
     try {
-      this.logger.debug(`Refunding shipment ${shipmentId}`);
+      this.logger.debug('Refunding shipment through EasyPost');
 
       const refund = await this.client!.Refund.create({ shipment: { id: shipmentId } });
 
@@ -249,7 +249,7 @@ export class EasyPostCarrier implements ICarrier {
         refundAmount: parseFloat((refund as any).refund_amount || '0'),
       };
     } catch (error) {
-      this.logger.error(`Failed to refund shipment ${shipmentId}`, error);
+      this.logger.error('Failed to refund shipment through EasyPost');
       throw new Error(`EasyPost refund failed: ${error.message}`);
     }
   }

@@ -1,52 +1,40 @@
-import {
-  Injectable,
-  Logger,
-  NotFoundException,
-  BadRequestException,
-  InternalServerErrorException,
-} from '@nestjs/common';
-import { PrismaClient, JobType } from '../../generated/prisma-client';
+import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { createHash } from 'crypto';
-import * as crypto from 'crypto';
-
-// Services
+import { randomUUID } from 'crypto';
+import {
+  AssetKind,
+  AssetRole,
+  AssetStatus,
+  JobType,
+  Prisma,
+  PrismaClient,
+} from '../../generated/prisma-client';
+import { MediaAuthorizationResolver } from '../authorization/media-authorization.resolver';
+import { JobQueueService } from '../jobs/job-queue.service';
 import { OCIStorageService } from '../storage/oci-storage.service';
 import { UploadService } from '../upload/upload.service';
-import { MetadataExtractionService } from '../assets/metadata-extraction.service';
-import { ImageTransformService } from '../transform/image-transform.service';
-import { ThreeDProcessingService } from '../3d/3d-processing.service';
-import { VirusScannerService } from '../security/virus-scanner.service';
-import { JobQueueService } from '../jobs/job-queue.service';
-
-// DTOs
 import {
-  UploadMediaDto,
-  BatchUploadMediaDto,
-  ProcessMediaDto,
   BatchProcessMediaDto,
-  UpdateMediaMetadataDto,
+  BatchUploadMediaDto,
+  MediaKind,
+  MediaListResponseDto,
   MediaQueryDto,
   MediaResponseDto,
-  MediaListResponseDto,
-  MediaKind,
   ProcessingPriority,
-  MediaStatus,
+  ProcessMediaDto,
   SortBy,
   SortOrder,
+  UpdateMediaMetadataDto,
+  UploadMediaDto,
 } from './dto';
 
 @Injectable()
 export class MediaService {
-  private readonly logger = new Logger(MediaService.name);
+  private readonly MAX_IMAGE_SIZE = 50 * 1024 * 1024;
+  private readonly MAX_VIDEO_SIZE = 500 * 1024 * 1024;
+  private readonly MAX_3D_SIZE = 500 * 1024 * 1024;
 
-  // File size limits (in bytes)
-  private readonly MAX_IMAGE_SIZE = 50 * 1024 * 1024; // 50MB
-  private readonly MAX_VIDEO_SIZE = 500 * 1024 * 1024; // 500MB
-  private readonly MAX_3D_SIZE = 500 * 1024 * 1024; // 500MB
-
-  // Allowed MIME types
   private readonly ALLOWED_IMAGE_TYPES = [
     'image/jpeg',
     'image/jpg',
@@ -55,18 +43,12 @@ export class MediaService {
     'image/avif',
     'image/heic',
   ];
-
-  private readonly ALLOWED_VIDEO_TYPES = [
-    'video/mp4',
-    'video/webm',
-    'video/quicktime',
-  ];
-
+  private readonly ALLOWED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime'];
   private readonly ALLOWED_3D_TYPES = [
     'model/gltf-binary',
     'model/gltf+json',
     'model/vnd.usdz+zip',
-    'application/octet-stream', // For GLB/USDZ
+    'application/octet-stream',
   ];
 
   constructor(
@@ -75,65 +57,40 @@ export class MediaService {
     private readonly eventEmitter: EventEmitter2,
     private readonly ociStorage: OCIStorageService,
     private readonly uploadService: UploadService,
-    private readonly metadataService: MetadataExtractionService,
-    private readonly imageTransform: ImageTransformService,
-    private readonly threeDProcessing: ThreeDProcessingService,
-    private readonly virusScanner: VirusScannerService,
     private readonly jobQueue: JobQueueService,
+    private readonly authorization: MediaAuthorizationResolver,
   ) {}
 
-  /**
-   * Upload single media asset
-   */
-  async uploadSingle(userId: string, dto: UploadMediaDto, file?: Buffer) {
-    this.logger.log(`Starting upload for user ${userId}: ${dto.filename}`);
-
-    // Validate file
+  async uploadSingle(subject: string, dto: UploadMediaDto) {
     this.validateUpload(dto);
-
-    // Check for duplicates using perceptual hash if file is provided
-    let duplicateAssetId: string | null = null;
-    if (file && dto.kind === MediaKind.IMAGE) {
-      duplicateAssetId = await this.checkDuplicate(file);
-      if (duplicateAssetId) {
-        this.logger.warn(`Duplicate asset detected: ${duplicateAssetId}`);
-        return {
-          duplicate: true,
-          existingAssetId: duplicateAssetId,
-        };
-      }
-    }
-
-    // Create upload intent
     const uploadIntent = await this.uploadService.createUploadIntent(
-      userId,
+      subject,
       {
-        kind: dto.kind as any,
+        kind: this.toAssetKind(dto.kind),
         filename: dto.filename,
         fileSize: dto.fileSize,
         mimeType: dto.mimeType,
         productId: dto.productId,
         variantId: dto.variantId,
-        role: dto.role as any,
+        role: dto.role ? this.toAssetRole(dto.role) : undefined,
       },
-      crypto.randomUUID(), // idempotency key
+      randomUUID(),
     );
 
-    // Update asset with additional metadata
-    const licenseData: any = {};
-    if (dto.licenseType) licenseData.licenseType = dto.licenseType;
-    if (dto.attribution) licenseData.attribution = dto.attribution;
-
-    await this.prisma.mediaAsset.update({
-      where: { id: uploadIntent.assetId },
-      data: {
-        tags: dto.tags || [],
-        isPublic: dto.isPublic || false,
-        license: Object.keys(licenseData).length > 0 ? licenseData : undefined,
-      },
+    await this.authorization.withAssetScope(subject, 'manage', async (transaction, scope) => {
+      await this.authorization.requireAsset(transaction, scope, uploadIntent.assetId);
+      const license: Record<string, string> = {};
+      if (dto.licenseType) license.licenseType = dto.licenseType;
+      if (dto.attribution) license.attribution = dto.attribution;
+      await transaction.mediaAsset.update({
+        where: { id: uploadIntent.assetId },
+        data: {
+          tags: dto.tags ?? [],
+          isPublic: dto.isPublic ?? false,
+          license: Object.keys(license).length > 0 ? license : undefined,
+        },
+      });
     });
-
-    this.logger.log(`Upload intent created: ${uploadIntent.assetId}`);
 
     return {
       assetId: uploadIntent.assetId,
@@ -143,95 +100,258 @@ export class MediaService {
     };
   }
 
-  /**
-   * Upload multiple media assets (batch)
-   */
-  async uploadBatch(userId: string, dto: BatchUploadMediaDto) {
-    this.logger.log(`Starting batch upload for user ${userId}: ${dto.uploads.length} files`);
-
-    const results = await Promise.allSettled(
-      dto.uploads.map((upload) => this.uploadSingle(userId, upload)),
-    );
-
-    const successful = results.filter((r) => r.status === 'fulfilled').length;
-    const failed = results.filter((r) => r.status === 'rejected').length;
-
-    this.logger.log(`Batch upload complete: ${successful} successful, ${failed} failed`);
-
-    return {
-      total: dto.uploads.length,
-      successful,
-      failed,
-      results: results.map((r, index) => ({
-        filename: dto.uploads[index].filename,
-        status: r.status,
-        data: r.status === 'fulfilled' ? r.value : null,
-        error: r.status === 'rejected' ? r.reason.message : null,
-      })),
-    };
+  async uploadBatch(subject: string, dto: BatchUploadMediaDto) {
+    const results = [];
+    for (const upload of dto.uploads) {
+      results.push(await this.uploadSingle(subject, upload));
+    }
+    return { total: results.length, successful: results.length, failed: 0, results };
   }
 
-  /**
-   * Process media asset (queue processing job)
-   */
-  async processMedia(dto: ProcessMediaDto) {
-    const asset = await this.prisma.mediaAsset.findUnique({
-      where: { id: dto.assetId },
+  async processMedia(subject: string, dto: ProcessMediaDto) {
+    return this.authorization.withAssetScope(subject, 'manage', async (transaction, scope) => {
+      const asset = await this.authorization.requireAsset(transaction, scope, dto.assetId);
+      if (asset.status === AssetStatus.PROCESSING && !dto.forceReprocess) {
+        throw new BadRequestException('Media object is already being processed');
+      }
+      await transaction.mediaAsset.update({
+        where: { id: asset.id },
+        data: { status: AssetStatus.PROCESSING },
+      });
+      const jobId = await this.jobQueue.addJob(
+        {
+          assetId: asset.id,
+          type: JobType.IMAGE_PROCESS,
+          priority: this.getPriority(dto.priority),
+          meta: {
+            rawKey: asset.rawKey,
+            operations: this.buildOperationsFromOptions(dto.options),
+          },
+        },
+        transaction,
+      );
+      return { assetId: asset.id, jobId, status: 'processing' };
     });
-
-    if (!asset) {
-      throw new NotFoundException(`Asset ${dto.assetId} not found`);
-    }
-
-    // Check if already processing
-    if (asset.status === 'PROCESSING' && !dto.forceReprocess) {
-      throw new BadRequestException(`Asset ${dto.assetId} is already being processed`);
-    }
-
-    // Update status
-    await this.prisma.mediaAsset.update({
-      where: { id: dto.assetId },
-      data: {
-        status: 'PROCESSING',
-      },
-    });
-
-    // Queue processing job — routes through JobQueueService.addJob(), which
-    // POSTs to the Cloudflare Queues pipeline (infra/media-worker) instead of
-    // the old in-process BullMQ 'media-processing' queue.
-    const jobId = await this.jobQueue.addJob({
-      assetId: dto.assetId,
-      type: 'IMAGE_PROCESS' as JobType,
-      priority: this.getPriority(dto.priority),
-      meta: {
-        rawKey: asset.rawKey,
-        operations: this.buildOperationsFromOptions(dto.options),
-      },
-    });
-
-    this.logger.log(`Queued processing job ${jobId} for asset ${dto.assetId}`);
-
-    return {
-      assetId: dto.assetId,
-      jobId,
-      status: 'processing',
-    };
   }
 
-  /**
-   * Translate the free-form ProcessMediaDto.options flags into the
-   * operation list the media-worker container understands
-   * (generate_renditions / extract_metadata / optimize — see
-   * infra/media-worker/container/server.mjs). Options with no cloud-pipeline
-   * equivalent yet (generate3DPreview, extractColorPalette,
-   * generatePerceptualHash, runVirusScan) are silently dropped — those
-   * operations aren't ported to the container yet (see infra/media-worker/README.md).
-   */
-  private buildOperationsFromOptions(
-    options?: ProcessMediaDto['options'],
-  ): Array<{ type: string; params?: Record<string, any> }> {
-    const operations: Array<{ type: string; params?: Record<string, any> }> = [];
+  async processBatch(subject: string, dto: BatchProcessMediaDto) {
+    return this.authorization.withAssetScope(subject, 'manage', async (transaction, scope) => {
+      const ids = await this.authorization.requireAssets(transaction, scope, dto.assetIds);
+      const assets = await transaction.mediaAsset.findMany({
+        where: this.authorization.scopedWhere(scope, { id: { in: ids } }),
+      });
+      for (const asset of assets) {
+        if (asset.status === AssetStatus.PROCESSING) {
+          throw new BadRequestException('One or more media objects are already processing');
+        }
+      }
+      await transaction.mediaAsset.updateMany({
+        where: this.authorization.scopedWhere(scope, { id: { in: ids } }),
+        data: { status: AssetStatus.PROCESSING },
+      });
+      for (const asset of assets) {
+        await this.jobQueue.addJob(
+          {
+            assetId: asset.id,
+            type: JobType.IMAGE_PROCESS,
+            priority: this.getPriority(dto.priority),
+            meta: {
+              rawKey: asset.rawKey,
+              operations: this.buildOperationsFromOptions(dto.options),
+            },
+          },
+          transaction,
+        );
+      }
+      return { total: ids.length, queued: ids.length, failed: 0 };
+    });
+  }
 
+  async getById(
+    subject: string,
+    assetId: string,
+    incrementViewCount = false,
+  ): Promise<MediaResponseDto> {
+    return this.authorization.withAssetScope(subject, 'read', async (transaction, scope) => {
+      const asset = await this.authorization.requireAsset(transaction, scope, assetId);
+      if (incrementViewCount) {
+        await transaction.mediaAsset.update({
+          where: { id: asset.id },
+          data: { viewCount: { increment: 1 } },
+        });
+        asset.viewCount += 1;
+      }
+      return this.transformToDto(asset);
+    });
+  }
+
+  async getDownloadUrl(subject: string, assetId: string) {
+    return this.authorization.withAssetScope(subject, 'read', async (transaction, scope) => {
+      const asset = await this.authorization.requireAsset(transaction, scope, assetId);
+      await transaction.mediaAsset.update({
+        where: { id: asset.id },
+        data: { downloadCount: { increment: 1 } },
+      });
+      return {
+        assetId: asset.id,
+        downloadUrl: asset.rawKey,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      };
+    });
+  }
+
+  async search(subject: string, query: MediaQueryDto): Promise<MediaListResponseDto> {
+    return this.authorization.withAssetScope(subject, 'read', async (transaction, scope) => {
+      if (query.uploadedBy && !scope.admin && query.uploadedBy !== subject) {
+        throw new BadRequestException('Uploader filter must match authenticated identity');
+      }
+      const page = query.page ?? 1;
+      const limit = Math.min(query.limit ?? 20, 100);
+      const where: Prisma.MediaAssetWhereInput = {};
+      if (query.kind) where.kind = this.toAssetKind(query.kind);
+      if (query.productId) where.productId = query.productId;
+      if (query.variantId) where.variantId = query.variantId;
+      if (query.role) where.role = this.toAssetRole(query.role);
+      if (query.status) where.status = this.toAssetStatus(query.status);
+      if (query.uploadedBy) where.uploadedBy = query.uploadedBy;
+      if (query.isPublic !== undefined) where.isPublic = query.isPublic;
+      if (query.mimeType) where.mimeType = query.mimeType;
+      if (query.processedOnly) where.processed = true;
+      if (query.tags?.length) where.tags = { hasSome: query.tags };
+      if (query.minSize !== undefined || query.maxSize !== undefined) {
+        where.sizeBytes = {
+          gte: query.minSize,
+          lte: query.maxSize,
+        };
+      }
+      if (query.search) {
+        where.OR = [
+          { rawKey: { contains: query.search, mode: 'insensitive' } },
+          { tags: { has: query.search } },
+        ];
+      }
+      const scopedWhere = this.authorization.scopedWhere(scope, where);
+      const orderBy: Prisma.MediaAssetOrderByWithRelationInput = {
+        [query.sortBy ?? SortBy.CREATED_AT]: query.sortOrder ?? SortOrder.DESC,
+      };
+      const assets = await transaction.mediaAsset.findMany({
+        where: scopedWhere,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy,
+      });
+      const total = await transaction.mediaAsset.count({ where: scopedWhere });
+      return {
+        data: assets.map((asset) => this.transformToDto(asset)),
+        pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      };
+    });
+  }
+
+  async updateMetadata(subject: string, assetId: string, dto: UpdateMediaMetadataDto) {
+    if (dto.permissions !== undefined) {
+      throw new BadRequestException('Caller-provided permissions are not accepted');
+    }
+    return this.authorization.withAssetScope(subject, 'manage', async (transaction, scope) => {
+      const asset = await this.authorization.requireAsset(transaction, scope, assetId);
+      const data: Prisma.MediaAssetUpdateInput = {};
+      if (dto.role !== undefined) data.role = this.toAssetRole(dto.role);
+      if (dto.tags !== undefined) data.tags = dto.tags;
+      if (dto.isPublic !== undefined) data.isPublic = dto.isPublic;
+      if (dto.width !== undefined) data.width = dto.width;
+      if (dto.height !== undefined) data.height = dto.height;
+      if (dto.format !== undefined) data.format = dto.format;
+      if (dto.licenseType !== undefined || dto.attribution !== undefined) {
+        const current = this.objectValue(asset.license);
+        data.license = {
+          ...current,
+          ...(dto.licenseType === undefined ? {} : { licenseType: dto.licenseType }),
+          ...(dto.attribution === undefined ? {} : { attribution: dto.attribution }),
+        };
+      }
+      if (dto.meta !== undefined) {
+        data.palette = { ...this.objectValue(asset.palette), ...dto.meta };
+      }
+      const updated = await transaction.mediaAsset.update({
+        where: { id: asset.id },
+        data,
+      });
+      this.eventEmitter.emit('media.metadata.updated', {
+        actor: subject,
+        assetId: asset.id,
+      });
+      return this.transformToDto(updated);
+    });
+  }
+
+  async delete(subject: string, assetId: string, softDelete = true) {
+    return this.authorization.withAssetScope(subject, 'manage', async (transaction, scope) => {
+      const asset = await this.authorization.requireAsset(transaction, scope, assetId);
+      if (softDelete) {
+        await transaction.mediaAsset.update({
+          where: { id: asset.id },
+          data: { status: AssetStatus.BLOCKED },
+        });
+      } else {
+        try {
+          if (asset.rawKey) {
+            await this.ociStorage.deleteObject(
+              this.config.get<string>('OCI_BUCKET_RAW') ?? '',
+              asset.rawKey,
+            );
+          }
+        } catch {
+          throw new InternalServerErrorException('Media deletion failed');
+        }
+        await transaction.mediaAsset.delete({ where: { id: asset.id } });
+      }
+      this.eventEmitter.emit('media.deleted', {
+        actor: subject,
+        assetId: asset.id,
+        softDelete,
+      });
+      return { success: true, assetId: asset.id, deleted: !softDelete };
+    });
+  }
+
+  async getStats(subject: string, productId?: string) {
+    return this.authorization.withAssetScope(subject, 'read', async (transaction, scope) => {
+      const base = this.authorization.scopedWhere(scope, productId ? { productId } : undefined);
+      const total = await transaction.mediaAsset.count({ where: base });
+      const images = await transaction.mediaAsset.count({
+        where: this.authorization.scopedWhere(scope, {
+          ...(productId ? { productId } : {}),
+          kind: AssetKind.IMAGE,
+        }),
+      });
+      const models = await transaction.mediaAsset.count({
+        where: this.authorization.scopedWhere(scope, {
+          ...(productId ? { productId } : {}),
+          kind: AssetKind.MODEL3D,
+        }),
+      });
+      const byStatus = async (status: AssetStatus) =>
+        transaction.mediaAsset.count({
+          where: this.authorization.scopedWhere(scope, {
+            ...(productId ? { productId } : {}),
+            status,
+          }),
+        });
+      return {
+        total,
+        byKind: { images, videos: 0, models },
+        byStatus: {
+          pending: await byStatus(AssetStatus.PENDING),
+          processing: await byStatus(AssetStatus.PROCESSING),
+          completed: await byStatus(AssetStatus.READY),
+          failed: await byStatus(AssetStatus.FAILED),
+        },
+      };
+    });
+  }
+
+  private buildOperationsFromOptions(options?: ProcessMediaDto['options']) {
+    const operations: Array<{ type: string; params?: Record<string, unknown> }> = [];
     if (!options || options.generateThumbnails !== false) {
       operations.push({ type: 'generate_renditions' });
     }
@@ -241,342 +361,15 @@ export class MediaService {
     if (options?.optimizeQuality !== undefined) {
       operations.push({ type: 'optimize', params: { quality: options.optimizeQuality } });
     }
-
     return operations;
   }
 
-  /**
-   * Process multiple media assets (batch)
-   */
-  async processBatch(dto: BatchProcessMediaDto) {
-    this.logger.log(`Starting batch processing: ${dto.assetIds.length} assets`);
-
-    const results = await Promise.allSettled(
-      dto.assetIds.map((assetId) =>
-        this.processMedia({
-          assetId,
-          priority: dto.priority,
-          options: dto.options,
-        }),
-      ),
-    );
-
-    return {
-      total: dto.assetIds.length,
-      queued: results.filter((r) => r.status === 'fulfilled').length,
-      failed: results.filter((r) => r.status === 'rejected').length,
-      results,
-    };
-  }
-
-  /**
-   * Get media asset by ID
-   */
-  async getById(assetId: string, incrementViewCount = false): Promise<MediaResponseDto> {
-    const asset = await this.prisma.mediaAsset.findUnique({
-      where: { id: assetId },
-    });
-
-    if (!asset) {
-      throw new NotFoundException(`Asset ${assetId} not found`);
-    }
-
-    // Increment view count if requested
-    if (incrementViewCount) {
-      await this.prisma.mediaAsset.update({
-        where: { id: assetId },
-        data: {
-          viewCount: { increment: 1 },
-        },
-      });
-    }
-
-    return this.transformToDto(asset);
-  }
-
-  /**
-   * Search/query media assets with pagination
-   */
-  async search(query: MediaQueryDto): Promise<MediaListResponseDto> {
-    const page = query.page || 1;
-    const limit = Math.min(query.limit || 20, 100);
-    const skip = (page - 1) * limit;
-
-    // Build where clause
-    const where: any = {};
-
-    if (query.kind) where.kind = query.kind;
-    if (query.productId) where.productId = query.productId;
-    if (query.variantId) where.variantId = query.variantId;
-    if (query.role) where.role = query.role;
-    if (query.status) where.status = query.status;
-    if (query.uploadedBy) where.uploadedBy = query.uploadedBy;
-    if (query.isPublic !== undefined) where.isPublic = query.isPublic;
-    if (query.mimeType) where.mimeType = query.mimeType;
-    if (query.processedOnly) where.processed = true;
-
-    // Tags filter (any of)
-    if (query.tags && query.tags.length > 0) {
-      where.tags = { hasSome: query.tags };
-    }
-
-    // Size filters
-    if (query.minSize !== undefined || query.maxSize !== undefined) {
-      where.sizeBytes = {};
-      if (query.minSize !== undefined) where.sizeBytes.gte = query.minSize;
-      if (query.maxSize !== undefined) where.sizeBytes.lte = query.maxSize;
-    }
-
-    // Search filter (filename or tags)
-    if (query.search) {
-      where.OR = [
-        { rawKey: { contains: query.search, mode: 'insensitive' } },
-        { tags: { has: query.search } },
-      ];
-    }
-
-    // Build orderBy
-    const orderBy: any = {};
-    const sortBy = query.sortBy || SortBy.CREATED_AT;
-    const sortOrder = query.sortOrder || SortOrder.DESC;
-    orderBy[sortBy] = sortOrder;
-
-    // Execute query with pagination
-    const [assets, total] = await this.prisma.$transaction([
-      this.prisma.mediaAsset.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy,
-      }),
-      this.prisma.mediaAsset.count({ where }),
-    ]);
-
-    this.logger.log(`Search returned ${assets.length} of ${total} total assets`);
-
-    return {
-      data: assets.map((asset) => this.transformToDto(asset)),
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
-  }
-
-  /**
-   * Update media asset metadata
-   */
-  async updateMetadata(assetId: string, dto: UpdateMediaMetadataDto) {
-    const asset = await this.prisma.mediaAsset.findUnique({
-      where: { id: assetId },
-    });
-
-    if (!asset) {
-      throw new NotFoundException(`Asset ${assetId} not found`);
-    }
-
-    // Prepare update data
-    const updateData: any = {};
-
-    if (dto.role !== undefined) updateData.role = dto.role;
-    if (dto.tags !== undefined) updateData.tags = dto.tags;
-    if (dto.isPublic !== undefined) updateData.isPublic = dto.isPublic;
-    if (dto.width !== undefined) updateData.width = dto.width;
-    if (dto.height !== undefined) updateData.height = dto.height;
-    if (dto.format !== undefined) updateData.format = dto.format;
-    if (dto.permissions !== undefined) updateData.permissions = dto.permissions;
-
-    // Handle license fields - store in license Json field
-    if (dto.licenseType !== undefined || dto.attribution !== undefined) {
-      const currentLicense = (asset.license as any) || {};
-      updateData.license = { ...currentLicense };
-      if (dto.licenseType !== undefined) updateData.license.licenseType = dto.licenseType;
-      if (dto.attribution !== undefined) updateData.license.attribution = dto.attribution;
-    }
-
-    // Handle custom metadata - route to appropriate fields
-    // Note: MediaAsset schema doesn't have generic 'meta' field
-    // Data should be stored in specific fields: palette, qcIssues, scanResult
-    if (dto.meta) {
-      this.logger.warn(
-        'UpdateMediaMetadataDto.meta is deprecated. Use specific fields (palette, qcIssues, scanResult) instead.',
-      );
-      // For backwards compatibility, store in palette field if provided
-      const currentPalette = (asset.palette as any) || {};
-      updateData.palette = { ...currentPalette, ...dto.meta };
-    }
-
-    const updated = await this.prisma.mediaAsset.update({
-      where: { id: assetId },
-      data: updateData,
-    });
-
-    this.logger.log(`Updated metadata for asset ${assetId}`);
-
-    // Emit event
-    this.eventEmitter.emit('media.metadata.updated', {
-      assetId,
-      changes: dto,
-    });
-
-    return this.transformToDto(updated);
-  }
-
-  /**
-   * Delete media asset
-   */
-  async delete(assetId: string, softDelete = true) {
-    const asset = await this.prisma.mediaAsset.findUnique({
-      where: { id: assetId },
-    });
-
-    if (!asset) {
-      throw new NotFoundException(`Asset ${assetId} not found`);
-    }
-
-    if (softDelete) {
-      // Soft delete by setting status to BLOCKED or QUARANTINED
-      // Note: schema doesn't have 'archived' status - using BLOCKED instead
-      await this.prisma.mediaAsset.update({
-        where: { id: assetId },
-        data: {
-          status: 'BLOCKED',
-        },
-      });
-
-      this.logger.log(`Soft deleted (blocked) asset ${assetId}`);
-    } else {
-      // Hard delete - remove from storage and database
-      try {
-        // Delete from object storage
-        if (asset.rawKey) {
-          await this.ociStorage.deleteObject(
-            this.config.get('OCI_BUCKET_RAW') || '',
-            asset.rawKey,
-          );
-        }
-        // Note: schema doesn't have 'uri' field for processed files
-        // Renditions are stored in AssetRendition table
-      } catch (error) {
-        this.logger.error(`Failed to delete asset from storage: ${error.message}`);
-      }
-
-      // Delete from database
-      await this.prisma.mediaAsset.delete({
-        where: { id: assetId },
-      });
-
-      this.logger.log(`Hard deleted asset ${assetId}`);
-    }
-
-    // Emit event
-    this.eventEmitter.emit('media.deleted', {
-      assetId,
-      softDelete,
-    });
-
-    return { success: true, assetId, deleted: !softDelete };
-  }
-
-  /**
-   * Check for duplicate assets using perceptual hash
-   */
-  private async checkDuplicate(fileBuffer: Buffer): Promise<string | null> {
-    try {
-      // Calculate perceptual hash
-      const phash = await this.calculatePerceptualHash(fileBuffer);
-
-      // Search for existing asset with same hash
-      const existing = await this.prisma.mediaAsset.findFirst({
-        where: {
-          phash,
-          status: { not: 'BLOCKED' as any },
-        },
-      });
-
-      return existing?.id || null;
-    } catch (error) {
-      this.logger.error(`Failed to check for duplicates: ${error.message}`);
-      return null;
-    }
-  }
-
-  /**
-   * Calculate perceptual hash for duplicate detection
-   */
-  private async calculatePerceptualHash(fileBuffer: Buffer): Promise<string> {
-    // This is a simplified implementation
-    // In production, use a proper perceptual hashing library like pHash or dHash
-    const hash = createHash('sha256').update(fileBuffer).digest('hex');
-    return hash.substring(0, 16); // Use first 16 chars as simplified perceptual hash
-  }
-
-  /**
-   * Validate upload request
-   */
-  private validateUpload(dto: UploadMediaDto) {
-    // Validate file size
-    if (dto.fileSize) {
-      let maxSize: number;
-      switch (dto.kind) {
-        case MediaKind.IMAGE:
-          maxSize = this.MAX_IMAGE_SIZE;
-          break;
-        case MediaKind.VIDEO:
-          maxSize = this.MAX_VIDEO_SIZE;
-          break;
-        case MediaKind.MODEL_3D:
-          maxSize = this.MAX_3D_SIZE;
-          break;
-        default:
-          throw new BadRequestException('Invalid media kind');
-      }
-
-      if (dto.fileSize > maxSize) {
-        throw new BadRequestException(
-          `File size exceeds maximum allowed (${maxSize} bytes for ${dto.kind})`,
-        );
-      }
-    }
-
-    // Validate MIME type
-    if (dto.mimeType) {
-      let allowedTypes: string[];
-      switch (dto.kind) {
-        case MediaKind.IMAGE:
-          allowedTypes = this.ALLOWED_IMAGE_TYPES;
-          break;
-        case MediaKind.VIDEO:
-          allowedTypes = this.ALLOWED_VIDEO_TYPES;
-          break;
-        case MediaKind.MODEL_3D:
-          allowedTypes = this.ALLOWED_3D_TYPES;
-          break;
-        default:
-          throw new BadRequestException('Invalid media kind');
-      }
-
-      if (!allowedTypes.includes(dto.mimeType)) {
-        throw new BadRequestException(
-          `Invalid MIME type for ${dto.kind}. Allowed: ${allowedTypes.join(', ')}`,
-        );
-      }
-    }
-  }
-
-  /**
-   * Get job priority value
-   */
   private getPriority(priority?: ProcessingPriority): number {
     switch (priority) {
       case ProcessingPriority.URGENT:
         return 1;
       case ProcessingPriority.HIGH:
         return 5;
-      case ProcessingPriority.NORMAL:
-        return 10;
       case ProcessingPriority.LOW:
         return 20;
       default:
@@ -584,29 +377,95 @@ export class MediaService {
     }
   }
 
-  /**
-   * Transform database model to DTO
-   */
-  private transformToDto(asset: any): MediaResponseDto {
+  private validateUpload(dto: UploadMediaDto): void {
+    const maximum =
+      dto.kind === MediaKind.IMAGE
+        ? this.MAX_IMAGE_SIZE
+        : dto.kind === MediaKind.VIDEO
+          ? this.MAX_VIDEO_SIZE
+          : this.MAX_3D_SIZE;
+    if (dto.fileSize !== undefined && dto.fileSize > maximum) {
+      throw new BadRequestException('File size exceeds the allowed maximum');
+    }
+    const allowed =
+      dto.kind === MediaKind.IMAGE
+        ? this.ALLOWED_IMAGE_TYPES
+        : dto.kind === MediaKind.VIDEO
+          ? this.ALLOWED_VIDEO_TYPES
+          : this.ALLOWED_3D_TYPES;
+    if (dto.mimeType && !allowed.includes(dto.mimeType)) {
+      throw new BadRequestException('Invalid media MIME type');
+    }
+  }
+
+  private toAssetKind(kind: MediaKind): AssetKind {
+    if (kind === MediaKind.IMAGE) return AssetKind.IMAGE;
+    if (kind === MediaKind.MODEL_3D) return AssetKind.MODEL3D;
+    throw new BadRequestException('Video assets are not supported by the retained schema');
+  }
+
+  private toAssetRole(role: string): AssetRole {
+    const normalized = role.replace('-', '_').toUpperCase();
+    if (!Object.values(AssetRole).includes(normalized as AssetRole)) {
+      throw new BadRequestException('Invalid media role');
+    }
+    return normalized as AssetRole;
+  }
+
+  private toAssetStatus(status: string): AssetStatus {
+    const mapped = status === 'completed' ? AssetStatus.READY : status.toUpperCase();
+    if (mapped === 'ARCHIVED') return AssetStatus.BLOCKED;
+    if (!Object.values(AssetStatus).includes(mapped as AssetStatus)) {
+      throw new BadRequestException('Invalid media status');
+    }
+    return mapped as AssetStatus;
+  }
+
+  private objectValue(value: unknown): Record<string, unknown> {
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+  }
+
+  private transformToDto(asset: {
+    id: string;
+    kind: AssetKind;
+    productId: string | null;
+    variantId: string | null;
+    role: AssetRole | null;
+    rawKey: string;
+    width: number | null;
+    height: number | null;
+    format: string | null;
+    status: AssetStatus;
+    tags: string[];
+    viewCount: number;
+    downloadCount: number;
+    sizeBytes: number | null;
+    mimeType: string | null;
+    isPublic: boolean;
+    uploadedBy: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }): MediaResponseDto {
     return {
       id: asset.id,
       kind: asset.kind,
-      productId: asset.productId,
-      variantId: asset.variantId,
-      role: asset.role,
+      productId: asset.productId ?? undefined,
+      variantId: asset.variantId ?? undefined,
+      role: asset.role ?? undefined,
       rawKey: asset.rawKey,
-      uri: undefined, // Note: schema doesn't have 'uri' field - use rawKey or renditions
-      width: asset.width,
-      height: asset.height,
-      format: asset.format,
+      width: asset.width ?? undefined,
+      height: asset.height ?? undefined,
+      format: asset.format ?? undefined,
       status: asset.status,
-      tags: asset.tags || [],
-      viewCount: asset.viewCount || 0,
-      downloadCount: asset.downloadCount || 0,
+      tags: asset.tags,
+      viewCount: asset.viewCount,
+      downloadCount: asset.downloadCount,
       sizeBytes: asset.sizeBytes?.toString(),
-      mimeType: asset.mimeType,
-      isPublic: asset.isPublic || false,
-      uploadedBy: asset.uploadedBy,
+      mimeType: asset.mimeType ?? undefined,
+      isPublic: asset.isPublic,
+      uploadedBy: asset.uploadedBy ?? undefined,
       createdAt: asset.createdAt,
       updatedAt: asset.updatedAt,
     };

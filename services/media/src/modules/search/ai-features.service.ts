@@ -89,7 +89,7 @@ export class AIFeaturesService {
    * Auto-tag image using computer vision API
    */
   async autoTagImage(imageBuffer: Buffer, assetId: string): Promise<AutoTagResult> {
-    this.logger.log(`Auto-tagging image for asset ${assetId}`);
+    this.logger.log('Auto-tagging media asset');
 
     try {
       // Extract metadata for basic tagging
@@ -130,7 +130,7 @@ export class AIFeaturesService {
         scene,
       };
     } catch (error) {
-      this.logger.error(`Failed to auto-tag image: ${error.message}`);
+      this.logger.error('Failed to auto-tag media asset');
       throw error;
     }
   }
@@ -189,7 +189,7 @@ export class AIFeaturesService {
 
       return suggestions;
     } catch (error) {
-      this.logger.error(`Failed to generate smart crops: ${error.message}`);
+      this.logger.error('Failed to generate smart crops');
       throw error;
     }
   }
@@ -231,7 +231,7 @@ export class AIFeaturesService {
         confidence: products.length > 0 ? products[0].confidence : 0,
       };
     } catch (error) {
-      this.logger.error(`Failed to detect products: ${error.message}`);
+      this.logger.error('Failed to detect products');
       return {
         products: [],
         totalCount: 0,
@@ -326,7 +326,7 @@ export class AIFeaturesService {
         recommendations,
       };
     } catch (error) {
-      this.logger.error(`Failed to calculate quality score: ${error.message}`);
+      this.logger.error('Failed to calculate quality score');
       throw error;
     }
   }
@@ -376,7 +376,9 @@ export class AIFeaturesService {
     objects: DetectedObject[],
   ): Promise<SceneAnalysis> {
     const hasProduct = objects.some((obj) => this.isProductCategory(obj.category));
-    const hasLifestyle = objects.some((obj) => obj.category === 'scene' || obj.category === 'background');
+    const hasLifestyle = objects.some(
+      (obj) => obj.category === 'scene' || obj.category === 'background',
+    );
 
     if (hasProduct && !hasLifestyle) {
       return {
@@ -476,9 +478,7 @@ export class AIFeaturesService {
   /**
    * Detect focus points in image
    */
-  private async detectFocusPoints(
-    imageBuffer: Buffer,
-  ): Promise<Array<{ x: number; y: number }>> {
+  private async detectFocusPoints(imageBuffer: Buffer): Promise<Array<{ x: number; y: number }>> {
     const metadata = await sharp(imageBuffer).metadata();
     const width = metadata.width!;
     const height = metadata.height!;
@@ -536,8 +536,8 @@ export class AIFeaturesService {
       stats.channels.reduce((sum, ch) => sum + ch.mean, 0) / stats.channels.length / 255;
 
     // Ideal brightness is around 0.5-0.7
-    if (avgBrightness < 0.3) return avgBrightness / 0.3 * 0.5;
-    if (avgBrightness > 0.8) return (1 - avgBrightness) / 0.2 * 0.5;
+    if (avgBrightness < 0.3) return (avgBrightness / 0.3) * 0.5;
+    if (avgBrightness > 0.8) return ((1 - avgBrightness) / 0.2) * 0.5;
     return 0.8 + (avgBrightness - 0.5) * 0.4;
   }
 

@@ -4,8 +4,14 @@ import { CheckoutService } from './checkout.service';
 import { PrismaClient } from '../../generated/prisma-client';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
+import { OrdersAuthorizationResolver } from '../../common/authorization/orders-authorization.resolver';
 
 class FakeStripe {} // Minimal placeholder for type compatibility
+
+const subject = 'user-123';
+const mockAuthorization = {
+  authorizeCart: jest.fn(),
+};
 
 describe('CheckoutService - Order Numbers', () => {
   let service: CheckoutService;
@@ -28,6 +34,7 @@ describe('CheckoutService - Order Numbers', () => {
         { provide: ConfigService, useValue: config },
         { provide: 'STRIPE_CLIENT', useValue: new FakeStripe() as unknown as Stripe },
         { provide: 'EVENTS_SERVICE', useValue: mockEvents },
+        { provide: OrdersAuthorizationResolver, useValue: mockAuthorization },
       ],
     }).compile();
 
@@ -67,6 +74,7 @@ describe('CheckoutService - Stripe unconfigured (parked payment rail)', () => {
         { provide: ConfigService, useValue: config },
         { provide: 'STRIPE_CLIENT', useValue: null },
         { provide: 'EVENTS_SERVICE', useValue: mockEvents },
+        { provide: OrdersAuthorizationResolver, useValue: mockAuthorization },
       ],
     }).compile();
 
@@ -78,14 +86,14 @@ describe('CheckoutService - Stripe unconfigured (parked payment rail)', () => {
   });
 
   it('createCheckoutSession fails fast with 503 stripe_not_configured', async () => {
-    await expect(service.createCheckoutSession({ cartId: 'cart-1' } as any)).rejects.toMatchObject(
+    await expect(service.createCheckoutSession({ cartId: 'cart-1' } as any, subject)).rejects.toMatchObject(
       {
         status: 503,
       },
     );
 
     try {
-      await service.createCheckoutSession({ cartId: 'cart-1' } as any);
+      await service.createCheckoutSession({ cartId: 'cart-1' } as any, subject);
       fail('expected createCheckoutSession to throw');
     } catch (error: any) {
       expect(error).toBeInstanceOf(ServiceUnavailableException);
@@ -97,7 +105,7 @@ describe('CheckoutService - Stripe unconfigured (parked payment rail)', () => {
   });
 
   it('createPaymentIntent fails fast with 503 stripe_not_configured', async () => {
-    await expect(service.createPaymentIntent({ cartId: 'cart-1' } as any)).rejects.toMatchObject({
+    await expect(service.createPaymentIntent({ cartId: 'cart-1' } as any, subject)).rejects.toMatchObject({
       status: 503,
     });
 

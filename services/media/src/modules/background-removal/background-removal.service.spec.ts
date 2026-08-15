@@ -62,12 +62,8 @@ function setup() {
     readCanonicalPublicUrl: jest.fn(),
     upload: jest
       .fn()
-      .mockResolvedValueOnce(
-        `${OWNER_ID}/boards/${BOARD_ID}/${REQUEST_ID}-original.png`,
-      )
-      .mockResolvedValueOnce(
-        `${OWNER_ID}/boards/${BOARD_ID}/${REQUEST_ID}-cutout.png`,
-      ),
+      .mockResolvedValueOnce(`${OWNER_ID}/boards/${BOARD_ID}/${REQUEST_ID}-original.png`)
+      .mockResolvedValueOnce(`${OWNER_ID}/boards/${BOARD_ID}/${REQUEST_ID}-cutout.png`),
   };
   const external = {
     fetch: jest.fn().mockResolvedValue({
@@ -121,13 +117,7 @@ describe('BackgroundRemovalService', () => {
   it('copies an external item source into canonical board storage, stores the cutout, and returns URLs/quota', async () => {
     const { service, ledger, storage, external, vendor } = setup();
 
-    const result = await service.removeBackground(
-      'forwarded-jwt',
-      USER_ID,
-      BOARD_ID,
-      ITEM_ID,
-      'request-key-1',
-    );
+    const result = await service.removeBackground(USER_ID, BOARD_ID, ITEM_ID, 'request-key-1');
 
     expect(external.fetch).toHaveBeenCalledWith('https://images.example/chair.png');
     expect(storage.upload).toHaveBeenNthCalledWith(
@@ -170,7 +160,7 @@ describe('BackgroundRemovalService', () => {
       declaredMime: 'image/png',
     });
 
-    await service.removeBackground('forwarded-jwt', USER_ID, BOARD_ID, ITEM_ID, 'request-key-2');
+    await service.removeBackground(USER_ID, BOARD_ID, ITEM_ID, 'request-key-2');
 
     expect(storage.readCanonicalPublicUrl).toHaveBeenCalledWith(canonical);
     expect(external.fetch).not.toHaveBeenCalled();
@@ -183,7 +173,7 @@ describe('BackgroundRemovalService', () => {
 
     let caught: BadGatewayException | undefined;
     try {
-      await service.removeBackground('forwarded-jwt', USER_ID, BOARD_ID, ITEM_ID, 'request-key-3');
+      await service.removeBackground(USER_ID, BOARD_ID, ITEM_ID, 'request-key-3');
     } catch (error) {
       caught = error as BadGatewayException;
     }
@@ -203,7 +193,7 @@ describe('BackgroundRemovalService', () => {
     external.fetch.mockRejectedValue(new BackgroundRemovalSourceError());
 
     await expect(
-      service.removeBackground('forwarded-jwt', USER_ID, BOARD_ID, ITEM_ID, 'request-key-source'),
+      service.removeBackground(USER_ID, BOARD_ID, ITEM_ID, 'request-key-source'),
     ).rejects.toMatchObject({ status: 422 });
 
     expect(vendor.removeBackground).not.toHaveBeenCalled();
@@ -218,7 +208,7 @@ describe('BackgroundRemovalService', () => {
     ledger.markSucceeded.mockRejectedValue(new Error('zero rows transitioned'));
 
     await expect(
-      service.removeBackground('forwarded-jwt', USER_ID, BOARD_ID, ITEM_ID, 'request-key-ledger'),
+      service.removeBackground(USER_ID, BOARD_ID, ITEM_ID, 'request-key-ledger'),
     ).rejects.toBeInstanceOf(BadGatewayException);
     expect(ledger.markFailed).not.toHaveBeenCalled();
   });
@@ -234,7 +224,7 @@ describe('BackgroundRemovalService', () => {
     });
 
     await expect(
-      service.removeBackground('forwarded-jwt', USER_ID, BOARD_ID, ITEM_ID, 'request-key-4'),
+      service.removeBackground(USER_ID, BOARD_ID, ITEM_ID, 'request-key-4'),
     ).resolves.toEqual({
       originalUrl: 'https://storage.example/original.png',
       cutoutUrl: 'https://storage.example/cutout.png',
@@ -250,7 +240,7 @@ describe('BackgroundRemovalService', () => {
     vendor.isConfigured.mockReturnValue(false);
 
     await expect(
-      service.removeBackground('forwarded-jwt', USER_ID, BOARD_ID, ITEM_ID, 'request-key-5'),
+      service.removeBackground(USER_ID, BOARD_ID, ITEM_ID, 'request-key-5'),
     ).rejects.toBeInstanceOf(ServiceUnavailableException);
     expect(access.authorizeBoardItem).toHaveBeenCalled();
     expect(ledger.reserve).not.toHaveBeenCalled();

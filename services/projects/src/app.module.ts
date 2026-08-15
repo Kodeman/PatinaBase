@@ -4,12 +4,12 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { PrometheusModule } from '@willsoto/nestjs-prometheus';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { join } from 'path';
 
 import configuration from './config/configuration';
 import { CacheModule } from '@patina/cache';
-import { HybridAuthGuard, PermissionsGuard } from '@patina/auth';
+import { HybridAuthGuard, PermissionsGuard, RedactedHttpExceptionFilter } from '@patina/auth';
 import { PrismaModule } from './prisma/prisma.module';
 import { HealthModule } from './health/health.module';
 import { ProjectsModule } from './projects/projects.module';
@@ -29,6 +29,7 @@ import { ApprovalsModule } from './approvals/approvals.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { IntegrationsModule } from './integrations/integrations.module';
+import { MetricsController } from './common/metrics.controller';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { IntegrationsModule } from './integrations/integrations.module';
     }),
     PrometheusModule.register({
       path: '/metrics',
+      controller: MetricsController,
       defaultMetrics: {
         enabled: true,
       },
@@ -81,6 +83,10 @@ import { IntegrationsModule } from './integrations/integrations.module';
     RealtimeModule,
   ],
   providers: [
+    {
+      provide: APP_FILTER,
+      useClass: RedactedHttpExceptionFilter,
+    },
     // Global Authentication Guard — Supabase JWT validation
     {
       provide: APP_GUARD,

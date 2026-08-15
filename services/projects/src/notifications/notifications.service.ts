@@ -3,6 +3,18 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 import { UpdatePreferenceDto } from './dto/update-preference.dto';
+import {
+  ProjectsAuthorizationResolver,
+  type ProjectQueryClient,
+} from '../common/authorization/projects-authorization.resolver';
+
+const PROJECT_READ_PERMISSIONS = [
+  'project.read.assigned',
+  'project.manage.own',
+  'project.read.org',
+  'project.manage.org',
+  'project.admin.all',
+] as const;
 
 @Injectable()
 export class NotificationsService {
@@ -11,20 +23,27 @@ export class NotificationsService {
   constructor(
     private prisma: PrismaService,
     private eventEmitter: EventEmitter2,
+    private readonly authorization: ProjectsAuthorizationResolver,
   ) {}
 
   /**
    * Create and send a notification
    */
-  async create(createDto: CreateNotificationDto) {
+  async create(createDto: CreateNotificationDto, actorId: string) {
+    return this.authorization.withAnyPermission(actorId, ['project.admin.all'], (tx) =>
+      this.createWithClient(createDto, tx),
+    );
+  }
+
+  private async createWithClient(createDto: CreateNotificationDto, client: ProjectQueryClient) {
     // Get user preferences
-    const preferences = await this.getOrCreatePreferences(createDto.userId);
+    const preferences = await this.getOrCreatePreferencesWithClient(createDto.userId, client);
 
     // Determine which channels to use
     const channels = this.resolveChannels(createDto, preferences);
 
     // Create notification record
-    const notification = await this.prisma.notification.create({
+    const notification = await client.notification.create({
       data: {
         userId: createDto.userId,
         projectId: createDto.projectId,
@@ -40,10 +59,10 @@ export class NotificationsService {
 
     // Queue for delivery based on user preferences
     if (preferences.frequency === 'immediate') {
-      await this.queueForDelivery(notification, channels, preferences);
+      await this.queueForDelivery(notification, channels, preferences, client);
     } else {
       // Will be picked up by batch digest job
-      this.logger.log(`Notification ${notification.id} queued for ${preferences.frequency}`);
+      this.logger.log('Notification queued');
     }
 
     return notification;
@@ -52,12 +71,14 @@ export class NotificationsService {
   /**
    * Batch create notifications
    */
-  async createBatch(notifications: CreateNotificationDto[]) {
-    const created = await Promise.all(
-      notifications.map(dto => this.create(dto)),
+  async createBatch(notifications: CreateNotificationDto[], actorId: string) {
+    const created = await this.authorization.withAnyPermission(
+      actorId,
+      ['project.admin.all'],
+      (tx) => Promise.all(notifications.map((dto) => this.createWithClient(dto, tx))),
     );
 
-    this.logger.log(`Created ${created.length} notifications in batch`);
+    this.logger.log('Notification batch created');
     return created;
   }
 
@@ -79,40 +100,40 @@ export class NotificationsService {
     if (status) where.status = status;
     if (projectId) where.projectId = projectId;
 
-    const [notifications, total] = await Promise.all([
-      this.prisma.notification.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        take: limit,
-        skip: offset,
-      }),
-      this.prisma.notification.count({ where }),
-    ]);
+    return this.authorization.withAnyPermission(userId, PROJECT_READ_PERMISSIONS, async (tx) => {
+      const [notifications, total, unread] = await Promise.all([
+        tx.notification.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          take: limit,
+          skip: offset,
+        }),
+        tx.notification.count({ where }),
+        tx.notification.count({ where: { userId, readAt: null } }),
+      ]);
 
-    return {
-      data: notifications,
-      total,
-      unread: await this.prisma.notification.count({
-        where: { userId, readAt: null },
-      }),
-    };
+      return { data: notifications, total, unread };
+    });
   }
 
   /**
    * Mark notification as read
    */
   async markAsRead(id: string, userId: string) {
-    const notification = await this.prisma.notification.findFirst({
-      where: { id, userId },
-    });
+    return this.authorization.withAnyPermission(userId, PROJECT_READ_PERMISSIONS, async (tx) => {
+      const notification = await tx.notification.findFirst({
+        where: { id, userId },
+      });
 
-    if (!notification) {
-      throw new NotFoundException('Notification not found');
-    }
+      if (!notification) {
+        throw new NotFoundException('Notification not found');
+      }
 
-    return this.prisma.notification.update({
-      where: { id },
-      data: { readAt: new Date(), status: 'read' },
+      await tx.notification.updateMany({
+        where: { id, userId },
+        data: { readAt: new Date(), status: 'read' },
+      });
+      return tx.notification.findFirstOrThrow({ where: { id, userId } });
     });
   }
 
@@ -123,24 +144,32 @@ export class NotificationsService {
     const where: any = { userId, readAt: null };
     if (projectId) where.projectId = projectId;
 
-    const result = await this.prisma.notification.updateMany({
-      where,
-      data: { readAt: new Date(), status: 'read' },
-    });
+    return this.authorization.withAnyPermission(userId, PROJECT_READ_PERMISSIONS, async (tx) => {
+      const result = await tx.notification.updateMany({
+        where,
+        data: { readAt: new Date(), status: 'read' },
+      });
 
-    return { updated: result.count };
+      return { updated: result.count };
+    });
   }
 
   /**
    * Get or create user notification preferences
    */
   async getOrCreatePreferences(userId: string) {
-    let preferences = await this.prisma.notificationPreference.findUnique({
+    return this.authorization.withAnyPermission(userId, PROJECT_READ_PERMISSIONS, (tx) =>
+      this.getOrCreatePreferencesWithClient(userId, tx),
+    );
+  }
+
+  private async getOrCreatePreferencesWithClient(userId: string, client: ProjectQueryClient) {
+    let preferences = await client.notificationPreference.findUnique({
       where: { userId },
     });
 
     if (!preferences) {
-      preferences = await this.prisma.notificationPreference.create({
+      preferences = await client.notificationPreference.create({
         data: { userId },
       });
     }
@@ -152,21 +181,23 @@ export class NotificationsService {
    * Update user notification preferences
    */
   async updatePreferences(userId: string, updateDto: UpdatePreferenceDto) {
-    const existing = await this.getOrCreatePreferences(userId);
+    return this.authorization.withAnyPermission(userId, PROJECT_READ_PERMISSIONS, async (tx) => {
+      const existing = await this.getOrCreatePreferencesWithClient(userId, tx);
 
-    return this.prisma.notificationPreference.update({
-      where: { userId },
-      data: {
-        email: updateDto.email ?? existing.email,
-        emailAddress: updateDto.emailAddress ?? existing.emailAddress,
-        sms: updateDto.sms ?? existing.sms,
-        phoneNumber: updateDto.phoneNumber ?? existing.phoneNumber,
-        push: updateDto.push ?? existing.push,
-        pushTokens: (updateDto.pushTokens ?? existing.pushTokens) as any,
-        channels: (updateDto.channels ?? existing.channels) as any,
-        frequency: updateDto.frequency ?? existing.frequency,
-        quietHours: (updateDto.quietHours ?? existing.quietHours) as any,
-      },
+      return tx.notificationPreference.update({
+        where: { userId },
+        data: {
+          email: updateDto.email ?? existing.email,
+          emailAddress: updateDto.emailAddress ?? existing.emailAddress,
+          sms: updateDto.sms ?? existing.sms,
+          phoneNumber: updateDto.phoneNumber ?? existing.phoneNumber,
+          push: updateDto.push ?? existing.push,
+          pushTokens: (updateDto.pushTokens ?? existing.pushTokens) as any,
+          channels: (updateDto.channels ?? existing.channels) as any,
+          frequency: updateDto.frequency ?? existing.frequency,
+          quietHours: (updateDto.quietHours ?? existing.quietHours) as any,
+        },
+      });
     });
   }
 
@@ -174,26 +205,28 @@ export class NotificationsService {
    * Register a push notification token for a user
    */
   async registerPushToken(userId: string, token: string) {
-    const preferences = await this.getOrCreatePreferences(userId);
+    return this.authorization.withAnyPermission(userId, PROJECT_READ_PERMISSIONS, async (tx) => {
+      const preferences = await this.getOrCreatePreferencesWithClient(userId, tx);
 
-    const currentTokens = (preferences.pushTokens as string[]) || [];
-    if (!currentTokens.includes(token)) {
-      currentTokens.push(token);
+      const currentTokens = (preferences.pushTokens as string[]) || [];
+      if (!currentTokens.includes(token)) {
+        currentTokens.push(token);
 
-      return this.prisma.notificationPreference.update({
-        where: { userId },
-        data: { pushTokens: currentTokens },
-      });
-    }
+        return tx.notificationPreference.update({
+          where: { userId },
+          data: { pushTokens: currentTokens },
+        });
+      }
 
-    return preferences;
+      return preferences;
+    });
   }
 
   /**
    * Send digest notifications (called by scheduled job)
    */
   async sendDigests(frequency: 'daily_digest' | 'weekly_digest') {
-    this.logger.log(`Processing ${frequency} notifications`);
+    this.logger.log('Processing notification digests');
 
     // Get users with this frequency preference
     const users = await this.prisma.notificationPreference.findMany({
@@ -204,7 +237,7 @@ export class NotificationsService {
       await this.sendDigestForUser(user.userId, frequency);
     }
 
-    this.logger.log(`Completed ${frequency} for ${users.length} users`);
+    this.logger.log('Notification digests completed');
   }
 
   /**
@@ -262,20 +295,19 @@ export class NotificationsService {
     notification: any,
     channels: Record<string, boolean>,
     preferences: any,
+    client: ProjectQueryClient = this.prisma,
   ) {
     const resolvedChannels = (['email', 'sms', 'push'] as const).filter(
       (channel) => channels[channel],
     );
 
     // Update notification status
-    await this.prisma.notification.update({
+    await client.notification.update({
       where: { id: notification.id },
       data: { status: 'sent', sentAt: new Date() },
     });
 
-    this.logger.log(
-      `Resolved ${resolvedChannels.length} delivery channel(s) [${resolvedChannels.join(', ')}] for notification ${notification.id} (no delivery backend configured)`,
-    );
+    this.logger.log('Notification delivery channels resolved');
   }
 
   /**
@@ -318,26 +350,27 @@ export class NotificationsService {
     }
 
     // Group by project
-    const byProject = notifications.reduce((acc, notif) => {
-      const key = notif.projectId || 'general';
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(notif);
-      return acc;
-    }, {} as Record<string, any[]>);
+    const byProject = notifications.reduce(
+      (acc, notif) => {
+        const key = notif.projectId || 'general';
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(notif);
+        return acc;
+      },
+      {} as Record<string, any[]>,
+    );
 
     // Send digest email — see queueForDelivery() note: no delivery backend
     // is wired up (the Bull 'send-digest' job was producer-only dead code).
     const preferences = await this.getOrCreatePreferences(userId);
     if (preferences.email && preferences.emailAddress) {
-      this.logger.log(
-        `Digest (${frequency}) resolved for ${preferences.emailAddress}: ${notifications.length} notification(s) across ${Object.keys(byProject).length} project(s) (no delivery backend configured)`,
-      );
+      this.logger.log('Notification digest resolved');
     }
 
     // Mark as sent
     await this.prisma.notification.updateMany({
       where: {
-        id: { in: notifications.map(n => n.id) },
+        id: { in: notifications.map((n) => n.id) },
       },
       data: { status: 'sent', sentAt: new Date() },
     });

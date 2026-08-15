@@ -41,7 +41,7 @@ export class NotificationDispatchClient {
   async enqueue(job: NotificationJob): Promise<NotificationDispatchResult> {
     if (!this.endpoint || !this.serviceKey) {
       this.logger.warn(
-        `notification-dispatch not configured (SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing); skipping ${job.type} for user ${job.user_id}`,
+        'notification-dispatch not configured; skipping notification',
       );
       return { success: false, error: 'not_configured' };
     }
@@ -62,7 +62,7 @@ export class NotificationDispatchClient {
 
       if (!response.ok) {
         this.logger.error(
-          `notification-dispatch failed (${response.status}) for ${job.type}: ${text}`,
+          `notification-dispatch failed with HTTP ${response.status}`,
         );
         return {
           success: false,
@@ -72,10 +72,8 @@ export class NotificationDispatchClient {
 
       return body as NotificationDispatchResult;
     } catch (err: any) {
-      this.logger.error(
-        `notification-dispatch threw for ${job.type}: ${err.message}`,
-      );
-      return { success: false, error: err.message };
+      this.logger.error('notification-dispatch request failed');
+      return { success: false, error: 'dispatch_failed' };
     }
   }
 }

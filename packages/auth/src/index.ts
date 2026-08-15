@@ -23,30 +23,132 @@
  * dev fallback.
  */
 import {
+  ArgumentsHost,
+  applyDecorators,
+  Catch,
   SetMetadata,
   Injectable,
   CanActivate,
   ExecutionContext,
+  ExceptionFilter,
   createParamDecorator,
-} from '@nestjs/common';
-import { jwtVerify, decodeProtectedHeader, createRemoteJWKSet, type JWTVerifyGetKey } from 'jose';
+  ForbiddenException,
+  HttpException,
+  HttpStatus,
+  Inject,
+  Logger,
+  Optional,
+  UnauthorizedException,
+} from "@nestjs/common";
+import {
+  jwtVerify,
+  decodeProtectedHeader,
+  createRemoteJWKSet,
+  type JWTVerifyGetKey,
+} from "jose";
 
 // Metadata key for public routes
-export const IS_PUBLIC_KEY = 'isPublic';
-export const PERMISSIONS_KEY = 'permissions';
+export const IS_PUBLIC_KEY = "isPublic";
+export const PERMISSIONS_KEY = "permissions";
+export const PERMISSIONS_MODE_KEY = "permissionsMode";
+export const AUTHORIZATION_RESOLVER = Symbol.for(
+  "@patina/auth/authorization-resolver",
+);
+
+export type PermissionsMode = "all" | "any";
+
+/** Identity established exclusively from a verified Supabase access token. */
+export interface AuthenticatedUserIdentity {
+  id: string;
+  sub: string;
+  userId: string;
+  email?: string;
+  role: "authenticated";
+}
+
+/** Current database-derived authorization state for exactly one request. */
+export interface RequestAuthorization {
+  subject: string;
+  roles: readonly string[];
+  permissions: readonly string[];
+  organizationIds: readonly string[];
+}
+
+/**
+ * Implemented by each retained service using its own Prisma/Supavisor path.
+ * Implementations must query Strata for every call and must not cache results.
+ */
+export interface AuthorizationResolver {
+  resolve(subject: string): Promise<RequestAuthorization>;
+}
+
+/**
+ * Prevents raw exceptions from reaching Nest's default exception logger.
+ * Protected request failures may contain provider responses or database
+ * details, so the server log and unknown-error response stay deliberately
+ * content-free.
+ */
+@Catch()
+export class RedactedHttpExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger(RedactedHttpExceptionFilter.name);
+
+  catch(exception: unknown, host: ArgumentsHost): void {
+    const response = host.switchToHttp().getResponse<{
+      status(code: number): { json(body: unknown): void };
+    }>();
+    const isHttpException = exception instanceof HttpException;
+    const status = isHttpException
+      ? exception.getStatus()
+      : HttpStatus.INTERNAL_SERVER_ERROR;
+
+    if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+      this.logger.error("Request failed");
+    }
+
+    const body = isHttpException
+      ? exception.getResponse()
+      : {
+          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+          message: "Internal server error",
+        };
+
+    response.status(status).json(body);
+  }
+}
 
 // Decorator to mark routes as public (no auth required)
 export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
 
 // Decorator to require specific permissions
 export const RequirePermissions = (...permissions: string[]) =>
-  SetMetadata(PERMISSIONS_KEY, permissions);
+  applyDecorators(
+    SetMetadata(PERMISSIONS_KEY, permissions),
+    SetMetadata(PERMISSIONS_MODE_KEY, "all" satisfies PermissionsMode),
+  );
+
+// Decorator to require at least one current Strata permission.
+export const RequireAnyPermission = (...permissions: string[]) =>
+  applyDecorators(
+    SetMetadata(PERMISSIONS_KEY, permissions),
+    SetMetadata(PERMISSIONS_MODE_KEY, "any" satisfies PermissionsMode),
+  );
 
 // Parameter decorator to extract current user from request
 export const CurrentUser = createParamDecorator(
-  (data: unknown, ctx: ExecutionContext) => {
+  (
+    data: keyof AuthenticatedUserIdentity | undefined,
+    ctx: ExecutionContext,
+  ) => {
     const request = ctx.switchToHttp().getRequest();
-    return request.user;
+    return data ? request.user?.[data] : request.user;
+  },
+);
+
+// Parameter decorator to extract current database-derived authorization state.
+export const CurrentAuthorization = createParamDecorator(
+  (data: keyof RequestAuthorization | undefined, ctx: ExecutionContext) => {
+    const authorization = ctx.switchToHttp().getRequest().authorization;
+    return data ? authorization?.[data] : authorization;
   },
 );
 
@@ -57,12 +159,11 @@ export const CurrentUser = createParamDecorator(
 export interface SupabaseJwtPayload {
   sub: string;
   email?: string;
-  role?: string;
+  role: "authenticated";
   aud?: string | string[];
+  iss?: string;
   iat?: number;
-  exp?: number;
-  user_metadata?: Record<string, any>;
-  app_metadata?: Record<string, any>;
+  exp: number;
 }
 
 let cachedSecret: Uint8Array | null = null;
@@ -72,10 +173,10 @@ function getJwtSecret(): Uint8Array {
   const secret = process.env.SUPABASE_JWT_SECRET;
   if (!secret) {
     throw new Error(
-      '[@patina/auth] SUPABASE_JWT_SECRET is not set. ' +
+      "[@patina/auth] SUPABASE_JWT_SECRET is not set. " +
         'Local dev: run `supabase status` and copy "JWT secret" into your .env. ' +
-        'Production: configure the env var on your deployment platform. ' +
-        'Refusing to operate without it.',
+        "Production: configure the env var on your deployment platform. " +
+        "Refusing to operate without it.",
     );
   }
   cachedSecret = new TextEncoder().encode(secret);
@@ -86,20 +187,21 @@ let cachedJwks: JWTVerifyGetKey | null = null;
 
 function getExpectedIssuer(): string {
   const explicit = process.env.SUPABASE_JWT_ISSUER;
-  if (explicit) return explicit.replace(/\/$/, '');
+  if (explicit) return explicit.replace(/\/$/, "");
 
-  const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseUrl =
+    process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!supabaseUrl) {
     throw new Error(
-      '[@patina/auth] SUPABASE_URL (or SUPABASE_JWT_ISSUER) is required to ' +
-        'verify the token issuer. Refusing to accept an unscoped JWT.',
+      "[@patina/auth] SUPABASE_URL (or SUPABASE_JWT_ISSUER) is required to " +
+        "verify the token issuer. Refusing to accept an unscoped JWT.",
     );
   }
-  return `${supabaseUrl.replace(/\/$/, '')}/auth/v1`;
+  return `${supabaseUrl.replace(/\/$/, "")}/auth/v1`;
 }
 
 function getExpectedAudience(): string {
-  return process.env.SUPABASE_JWT_AUDIENCE || 'authenticated';
+  return process.env.SUPABASE_JWT_AUDIENCE || "authenticated";
 }
 
 function getJwksUrl(): string {
@@ -109,15 +211,15 @@ function getJwksUrl(): string {
   const supabaseUrl = process.env.SUPABASE_URL;
   if (!supabaseUrl) {
     throw new Error(
-      '[@patina/auth] Received an asymmetrically-signed (ES256/RS256) JWT but ' +
-        'neither SUPABASE_JWKS_URL nor SUPABASE_URL is set. ' +
-        'Supabase Cloud projects sign JWTs with an asymmetric key — configure ' +
-        'SUPABASE_URL (e.g. https://<project-ref>.supabase.co) so the JWKS can be ' +
-        'derived as `${SUPABASE_URL}/auth/v1/.well-known/jwks.json`, or set ' +
-        'SUPABASE_JWKS_URL directly. Refusing to operate without it.',
+      "[@patina/auth] Received an asymmetrically-signed (ES256/RS256) JWT but " +
+        "neither SUPABASE_JWKS_URL nor SUPABASE_URL is set. " +
+        "Supabase Cloud projects sign JWTs with an asymmetric key — configure " +
+        "SUPABASE_URL (e.g. https://<project-ref>.supabase.co) so the JWKS can be " +
+        "derived as `${SUPABASE_URL}/auth/v1/.well-known/jwks.json`, or set " +
+        "SUPABASE_JWKS_URL directly. Refusing to operate without it.",
     );
   }
-  return `${supabaseUrl.replace(/\/$/, '')}/auth/v1/.well-known/jwks.json`;
+  return `${supabaseUrl.replace(/\/$/, "")}/auth/v1/.well-known/jwks.json`;
 }
 
 function getJwks(): JWTVerifyGetKey {
@@ -139,16 +241,22 @@ function getJwks(): JWTVerifyGetKey {
  * algorithm, or missing configuration for the branch the token requires.
  * Used by JwtAuthGuard below and by @patina/api-routes' proxy layer.
  */
-export async function verifyJwtToken(token: string): Promise<SupabaseJwtPayload> {
+export async function verifyJwtToken(
+  token: string,
+): Promise<SupabaseJwtPayload> {
   let alg: string | undefined;
   try {
     ({ alg } = decodeProtectedHeader(token));
   } catch {
-    throw new Error('[@patina/auth] Malformed token: unable to decode JWT protected header.');
+    throw new Error(
+      "[@patina/auth] Malformed token: unable to decode JWT protected header.",
+    );
   }
 
-  if (!alg || !['HS256', 'ES256', 'RS256'].includes(alg)) {
-    throw new Error(`[@patina/auth] Unsupported JWT algorithm: ${alg ?? 'missing'}.`);
+  if (!alg || !["HS256", "ES256", "RS256"].includes(alg)) {
+    throw new Error(
+      `[@patina/auth] Unsupported JWT algorithm: ${alg ?? "missing"}.`,
+    );
   }
 
   const verificationOptions = {
@@ -157,27 +265,38 @@ export async function verifyJwtToken(token: string): Promise<SupabaseJwtPayload>
     audience: getExpectedAudience(),
   };
 
-  const { payload } = alg === 'HS256'
-    ? await jwtVerify(token, getJwtSecret(), {
-        ...verificationOptions,
-      algorithms: ['HS256'],
-      })
-    : await jwtVerify(token, getJwks(), {
-        ...verificationOptions,
-        algorithms: ['ES256', 'RS256'],
-      });
+  const { payload } =
+    alg === "HS256"
+      ? await jwtVerify(token, getJwtSecret(), {
+          ...verificationOptions,
+          algorithms: ["HS256"],
+        })
+      : await jwtVerify(token, getJwks(), {
+          ...verificationOptions,
+          algorithms: ["ES256", "RS256"],
+        });
 
   if (
-    typeof payload.sub !== 'string' ||
+    typeof payload.sub !== "string" ||
     payload.sub.trim().length === 0 ||
-    payload.role !== 'authenticated' ||
-    typeof payload.exp !== 'number' ||
+    payload.role !== "authenticated" ||
+    typeof payload.exp !== "number" ||
     !Number.isFinite(payload.exp)
   ) {
-    throw new Error('[@patina/auth] JWT is missing required authenticated-user claims.');
+    throw new Error(
+      "[@patina/auth] JWT is missing required authenticated-user claims.",
+    );
   }
 
-  return payload as unknown as SupabaseJwtPayload;
+  return Object.freeze({
+    sub: payload.sub,
+    email: typeof payload.email === "string" ? payload.email : undefined,
+    role: "authenticated" as const,
+    aud: payload.aud,
+    iss: payload.iss,
+    iat: payload.iat,
+    exp: payload.exp,
+  });
 }
 
 /**
@@ -197,33 +316,27 @@ export class JwtAuthGuard implements CanActivate {
 
     const authHeader = request.headers?.authorization;
     const bearerMatch =
-      typeof authHeader === 'string' ? /^Bearer\s+(\S+)$/i.exec(authHeader.trim()) : null;
-    if (!bearerMatch) return false;
+      typeof authHeader === "string"
+        ? /^Bearer\s+(\S+)$/i.exec(authHeader.trim())
+        : null;
+    if (!bearerMatch) {
+      throw new UnauthorizedException("Authentication required");
+    }
     const token = bearerMatch[1];
 
     try {
       const payload = await verifyJwtToken(token);
 
-      request.user = {
+      request.user = Object.freeze({
         id: payload.sub,
         sub: payload.sub,
         userId: payload.sub,
         email: payload.email,
-        role: payload.role,
-        roles: Array.isArray(payload.app_metadata?.roles)
-          ? payload.app_metadata.roles.filter((role): role is string => typeof role === 'string')
-          : [],
-        permissions: Array.isArray(payload.app_metadata?.permissions)
-          ? payload.app_metadata.permissions.filter(
-              (permission): permission is string =>
-                typeof permission === 'string' && permission.length > 0,
-            )
-          : [],
-        metadata: payload.user_metadata,
-      };
+        role: "authenticated" as const,
+      } satisfies AuthenticatedUserIdentity);
       return true;
     } catch {
-      return false;
+      throw new UnauthorizedException("Invalid authentication");
     }
   }
 }
@@ -234,21 +347,97 @@ export class HybridAuthGuard extends JwtAuthGuard {}
 
 @Injectable()
 export class PermissionsGuard implements CanActivate {
-  canActivate(context: ExecutionContext): boolean {
-    const required =
-      Reflect.getMetadata(PERMISSIONS_KEY, context.getHandler()) ??
-      Reflect.getMetadata(PERMISSIONS_KEY, context.getClass());
-    if (required === undefined) return true;
-    if (!Array.isArray(required) || required.length === 0) return false;
+  constructor(
+    @Optional()
+    @Inject(AUTHORIZATION_RESOLVER)
+    private readonly resolver?: AuthorizationResolver,
+  ) {}
 
-    const granted = context.switchToHttp().getRequest()?.user?.permissions;
-    if (!Array.isArray(granted)) return false;
-    return required.every(
-      (permission) =>
-        typeof permission === 'string' &&
-        permission.length > 0 &&
-        granted.includes(permission),
-    );
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const handler = context.getHandler();
+    const classRef = context.getClass();
+    const isPublic =
+      Reflect.getMetadata(IS_PUBLIC_KEY, handler) ||
+      Reflect.getMetadata(IS_PUBLIC_KEY, classRef);
+    if (isPublic) return true;
+
+    const request = context.switchToHttp().getRequest();
+    const user = request?.user as
+      | Partial<AuthenticatedUserIdentity>
+      | undefined;
+    if (
+      !user ||
+      typeof user.sub !== "string" ||
+      user.sub.length === 0 ||
+      user.id !== user.sub ||
+      user.userId !== user.sub
+    ) {
+      throw new UnauthorizedException("Authentication required");
+    }
+
+    const required =
+      Reflect.getMetadata(PERMISSIONS_KEY, handler) ??
+      Reflect.getMetadata(PERMISSIONS_KEY, classRef);
+
+    if (!this.resolver) {
+      if (required === undefined) return true;
+      throw new ForbiddenException("Authorization denied");
+    }
+
+    let resolved: RequestAuthorization;
+    try {
+      resolved = await this.resolver.resolve(user.sub);
+    } catch {
+      throw new ForbiddenException("Authorization denied");
+    }
+
+    if (
+      resolved?.subject !== user.sub ||
+      !Array.isArray(resolved.roles) ||
+      !Array.isArray(resolved.permissions) ||
+      !Array.isArray(resolved.organizationIds)
+    ) {
+      throw new ForbiddenException("Authorization denied");
+    }
+
+    const authorization: RequestAuthorization = Object.freeze({
+      subject: resolved.subject,
+      roles: Object.freeze([...resolved.roles]),
+      permissions: Object.freeze([...resolved.permissions]),
+      organizationIds: Object.freeze([...resolved.organizationIds]),
+    });
+    request.authorization = authorization;
+
+    // Retained services must make the action contract explicit. An
+    // authenticated route is not authorized merely because current Strata
+    // state could be resolved; it needs a canonical permission decorator (or
+    // an independently reviewed @Public exception handled above).
+    if (required === undefined) {
+      throw new ForbiddenException("Authorization denied");
+    }
+    if (
+      !Array.isArray(required) ||
+      required.length === 0 ||
+      required.some(
+        (permission) =>
+          typeof permission !== "string" || permission.length === 0,
+      )
+    ) {
+      throw new ForbiddenException("Authorization denied");
+    }
+
+    const granted = new Set(authorization.permissions);
+    const mode = (Reflect.getMetadata(PERMISSIONS_MODE_KEY, handler) ??
+      Reflect.getMetadata(PERMISSIONS_MODE_KEY, classRef) ??
+      "all") as PermissionsMode;
+    const allowed =
+      mode === "any"
+        ? required.some((permission) => granted.has(permission))
+        : required.every((permission) => granted.has(permission));
+    if (!allowed) {
+      throw new ForbiddenException("Authorization denied");
+    }
+    return true;
   }
 }
 
@@ -256,8 +445,8 @@ export class PermissionsGuard implements CanActivate {
 export function createCorsOptions() {
   return {
     origin: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Request-ID"],
     credentials: true,
   };
 }

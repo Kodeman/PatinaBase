@@ -18,11 +18,6 @@ export class CartItemDto {
 }
 
 export class CreateCartDto {
-  @ApiProperty({ description: 'User ID', required: false })
-  @IsString()
-  @IsOptional()
-  userId?: string;
-
   @ApiProperty({ description: 'Initial items', type: [CartItemDto], required: false })
   @IsArray()
   @ValidateNested({ each: true })
