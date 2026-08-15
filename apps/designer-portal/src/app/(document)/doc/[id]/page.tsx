@@ -77,10 +77,10 @@ import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 import { AccountBand } from '@/components/document/account-band';
 import { MoneyRegion } from '@/components/document/commercial/money-region';
-import { NotStartedBand } from '@/components/document/not-started-band';
+import { KickoffBand } from '@/components/document/roster/kickoff-band';
 import { ScheduleNavProvider } from '@/components/document/schedule/schedule-nav-context';
 import { RippleProvider } from '@/components/document/schedule/schedule-ripple-context';
-import { ProjectScheduleHandoffMount } from '@/components/document/project-schedule-handoff-mount';
+import { ScheduleRuleRegion } from '@/components/document/schedule/schedule-rule-region';
 import { SectionStageLineMount } from '@/components/document/section-stage-line-mount';
 import { ProjectApprovalDocumentMount } from '@/components/document/project-approval-document-mount';
 import { LetterheadInstruments } from '@/components/document/letterhead-instruments';
@@ -117,6 +117,18 @@ import {
 } from '@/hooks/use-desk-engagements';
 import { openLedger } from '@/components/document/command-bar';
 import { RedLetterZone, type RedLetterRow } from '@/components/document/red-letter-zone';
+import {
+  RoomLensProvider,
+  useRoomLens,
+} from '@/components/document/room-lens-context';
+import { DocSpineShelvedBlocks } from '@/components/document/spine-shelved-blocks';
+import { DocumentShelves } from '@/components/document/shelves/document-shelves';
+import {
+  NEW_BOARD_EVENT,
+  isShelfLeafKey,
+  type ShelfKey,
+  type ShelfLeafKey,
+} from '@/lib/document/shelves';
 
 const prettyPhase = (phase: string | null) =>
   phase
@@ -221,6 +233,17 @@ function vitalsFor(
 }
 
 export default function DocumentPage({ params }: { params: Promise<{ id: string }> }) {
+  // The room lens wraps the whole document: the letterhead names the room in
+  // hand, the paper lifts by it, and the shelves lift by it too — one hold,
+  // read in three places.
+  return (
+    <RoomLensProvider>
+      <DocumentPageBody params={params} />
+    </RoomLensProvider>
+  );
+}
+
+function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   useDocumentSurface(DOCUMENT_SURFACE_KEYS.doc); // R89 — scope help to the open document
   const { id } = use(params);
   const router = useRouter();
@@ -356,6 +379,10 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   // FIX 2 — the event's optional { mode } detail (default 'sheet'), read off
   // whichever dispatch opened it and forwarded straight through to CallSheet.
   const [callSheetMode, setCallSheetMode] = useState<CallSheetOpenMode>('sheet');
+  // The shelves — one leaf open at a time, beside the spine. The call sheet is
+  // not one of them: it is a doorway to the roster sheet mounted below.
+  const [openShelf, setOpenShelf] = useState<ShelfLeafKey | null>(null);
+  const { heldRoomId } = useRoomLens();
   // R24: drags anywhere on the active section land in the folio.
   const [sectionDrag, setSectionDrag] = useState(false);
   const [folioDrop, setFolioDrop] = useState<File[] | null>(null);
@@ -461,16 +488,52 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     target.focus({ preventScroll: true });
   }, []);
 
-  // Esc puts down (D1) — unless an overlay owns it (ledger sheet first, §3).
+  // Esc puts down (D1) — unless something above it owns the key. A sheet is
+  // first (it is the topmost thing on the screen and closes itself), then an
+  // open shelf leaf (ShelfPanel closes it); only a bare document is put down.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       if (document.querySelector('[role="dialog"]')) return;
+      if (openShelf) return;
       router.push('/desk');
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [router]);
+  }, [router, openShelf]);
+
+  // The shelf rows. A leaf toggles; the call sheet dispatches at the roster
+  // sheet that already exists rather than printing a second, thinner copy.
+  const toggleShelf = useCallback((key: ShelfKey) => {
+    if (!isShelfLeafKey(key)) {
+      window.dispatchEvent(
+        new CustomEvent('document:open-call-sheet', { detail: { mode: 'sheet' } }),
+      );
+      return;
+    }
+    setOpenShelf((current) => (current === key ? null : key));
+  }, []);
+
+  // "Start a board" from the Add-to-project sheet reaches a room that now lives
+  // on a shelf. Catch the intent, open the shelf, and re-fire once the room is
+  // listening — the guard is the shelf's own state, so the re-fire cannot loop.
+  const forwardBoardIntent = useRef(false);
+  useEffect(() => {
+    const onNewBoard = () => {
+      setOpenShelf((current) => {
+        if (current === 'moodboards') return current;
+        forwardBoardIntent.current = true;
+        return 'moodboards';
+      });
+    };
+    window.addEventListener(NEW_BOARD_EVENT, onNewBoard);
+    return () => window.removeEventListener(NEW_BOARD_EVENT, onNewBoard);
+  }, []);
+  useEffect(() => {
+    if (openShelf !== 'moodboards' || !forwardBoardIntent.current) return;
+    forwardBoardIntent.current = false;
+    window.dispatchEvent(new CustomEvent(NEW_BOARD_EVENT));
+  }, [openShelf]);
 
   // Open lands at the active section (§4): settled bars compress above it —
   // but only for a visitor who has been in this document before (A8). A
@@ -548,6 +611,21 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
       target: targetEnd(resolved),
     };
   }, [scheduleQuery.resolved, scheduleQuery.phases, scheduleFacts]);
+
+  // R108 — the seam over the folded drafting strip and the running index's
+  // Schedule line both read the derivation above. Neither computes a second
+  // position sentence that could drift from the letterhead's.
+  const scheduleRuleSummary = useMemo(() => {
+    if (!scheduleFacts) return 'Phase dates';
+    const install = scheduleFacts.install;
+    const installText =
+      install?.date != null
+        ? install.fidelity === 'committed' || install.fidelity === 'record'
+          ? `Install ${fmtMonthYear(install.date)}`
+          : `Install ~${fmtMonthYear(install.date)}`
+        : null;
+    return [scheduleFacts.positionText, installText].filter(Boolean).join(' · ');
+  }, [scheduleFacts]);
 
   const sections = row
     ? deriveSections(
@@ -756,6 +834,33 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
 
   const settled = sections.filter((s) => s.state === 'settled');
   settledCountRef.current = settled.length;
+  const heldRoomName =
+    (docRooms ?? []).find((r) => r.id === heldRoomId)?.name ?? null;
+  // The shelved spine's blocks stand only where their subjects do: the running
+  // index names Project regions, and the rooms and shelves are project things.
+  const shelvedSpine =
+    row.engagement_kind === 'project' &&
+    row.project_id &&
+    row.active_section === 'project' ? (
+      <DocSpineShelvedBlocks
+        projectId={row.project_id}
+        rooms={docRooms ?? []}
+        scheduleValue={scheduleFacts?.positionText ?? 'Not scheduled'}
+        approvalsValue={
+          approvalsQuery.isLoading
+            ? 'Reading…'
+            : `${(approvalsQuery.data ?? []).length} in the log`
+        }
+        moneyValue={
+          project?.total_amount_cents != null
+            ? `${fmtUsd(project.total_amount_cents)} authority`
+            : 'No authority yet'
+        }
+        rosterCount={(rosterRows ?? []).length}
+        openShelf={openShelf}
+        onToggleShelf={toggleShelf}
+      />
+    ) : null;
   // W1 — the letterhead's setup chip. deriveNeed returns at most one need per
   // document, so this list holds one entry or none; `undefined` (the Desk has
   // not answered) and `null` (it answered "nothing") both render nothing. The
@@ -807,7 +912,12 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
         }}
       />
 
-      <DocSpine sections={sections} others={others} onJump={jumpToSection} />
+      <DocSpine
+        sections={sections}
+        others={others}
+        onJump={jumpToSection}
+        shelved={shelvedSpine}
+      />
 
       {/* No z-index here: a stacking context on main would trap the fixed
           procurement panels (inspection drawer, Order Assistant) mounted in
@@ -816,6 +926,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
       <main
         ref={mainRef}
         data-document-paper
+        data-shelf-open={openShelf ? 'true' : undefined}
         className="w-full min-w-0 max-w-[1040px] justify-self-center px-7 pb-32 pt-8 min-[1180px]:px-10 min-[1440px]:px-12"
       >
         {/* The household — who this document is for — is a first-class subtitle
@@ -845,6 +956,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
             ) : undefined
           }
           needsSetup={needsSetup}
+          inHandRoomName={heldRoomName}
         />
 
         {/* The red letter replaces the guide only where it can actually speak
@@ -1018,12 +1130,13 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
                 top of the project document so it reads as a project overview
                 above the section work. B3 retired the flip gate: the Rule is the
                 schedule, unconditionally. */}
-            <ProjectScheduleHandoffMount
+            <ScheduleRuleRegion
               engagementKind={row.engagement_kind}
               projectId={row.project_id}
               projectTitle={row.title}
               projectStatus={project?.status}
               phases={phases}
+              summary={scheduleRuleSummary}
             />
 
           {/* The active section — exactly one (§4). */}
@@ -1224,16 +1337,12 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
                 activeSection={row.active_section}
               />
             )}
-            {/* W3 — mood boards, plan room, spec book and call sheet collapse
-                to one line while all of them are still empty, and mount
-                individually the moment any one of them holds something. */}
-            <NotStartedBand
-              projectId={row.project_id}
-              routeId={id}
-              callSheetEnabled={callSheetGate.value}
-              rosterRows={rosterRows ?? []}
-              canCreateBoards={row.active_section === 'project'}
-            />
+            {/* The four supporting rooms moved to the shelves, so the
+                not-started band that collapsed them has nothing left to
+                collapse. The first-staffing nudge has no other home and stays
+                here, ungated: it self-silences on the flag, a staffed sheet, or
+                its own dismissal. */}
+            <KickoffBand projectId={row.project_id} rows={rosterRows ?? []} />
           </>
         )}
 
@@ -1286,6 +1395,19 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           identity the roster view cannot give us — `client_name` /
           `client_profile_id`, the same pair the letterhead instruments read,
           which become the synthetic row leading the CLIENT SIDE group. */}
+      {/* The shelves' leaf — the reference material that does not fit inline,
+          beside the spine and over the canvas, never over the paper's text. */}
+      {row.engagement_kind === 'project' && row.project_id && (
+        <DocumentShelves
+          openShelf={openShelf}
+          onClose={() => setOpenShelf(null)}
+          projectId={row.project_id}
+          routeId={id}
+          rooms={docRooms ?? []}
+          canCreateBoards={row.active_section === 'project'}
+        />
+      )}
+
       {row.engagement_kind === 'project' && row.project_id && (
         <CallSheetMount
           open={callSheetOpen}

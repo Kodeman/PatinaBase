@@ -8,6 +8,7 @@
  * the document index.
  */
 
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { StrataMark } from './strata-mark';
 import { CompactSpineTimerDoorway, SpineTimer } from './spine-timer';
@@ -19,12 +20,18 @@ export function DocSpine({
   sections,
   others,
   onJump,
+  shelved,
 }: {
   sections: SpineSection[];
   others: string[];
   /** Click a settled/active marker to scroll to (and unfold) that section. */
   onJump?: (key: SectionKey) => void;
+  /** The running index, the rooms and the shelves — the full spine's three
+   *  blocks (≥1440px only; the compact rail and the mobile sheet are
+   *  untouched). Absent on documents with no Project section open. */
+  shelved?: ReactNode;
 }) {
+  const activeSection = sections.find((s) => s.state === 'active');
   return (
     <aside
       aria-label="Document spine"
@@ -117,17 +124,24 @@ export function DocSpine({
         })}
       </ul>
 
+      {activeSection && (
+        <p className="mt-2.5 hidden font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] min-[1440px]:block">
+          {activeSection.label} · {activeSection.sub}
+        </p>
+      )}
+
+      {/* The shelved spine's three blocks — the running index, the rooms, the
+          shelves. Full spine only: below 1440px the paper needs its measure
+          more than the rail needs its furniture. */}
+      {shelved && <div className="hidden min-[1440px]:block">{shelved}</div>}
+
       <CompactSpineTimerDoorway />
 
-      <div className="hidden min-[1440px]:block">
+      <div className="hidden min-[1440px]:mt-4 min-[1440px]:block">
         <SpineTimer />
-      </div>
-
-      <div className="hidden border-t border-[var(--color-pearl)] pt-3 min-[1440px]:mt-4 min-[1440px]:block">
-        <p className="mb-1 font-mono text-[12px] uppercase tracking-[0.07em] text-[var(--color-charcoal)]">
-          In this document
-        </p>
-        <p className="text-[14px] leading-snug text-[var(--color-charcoal)]">
+        {/* Presence, unlabelled, at the spine's foot: "In this document" is now
+            the running index's name, and one rail cannot carry it twice. */}
+        <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.08em] leading-relaxed text-[var(--color-aged-oak)]">
           {others.length === 0
             ? 'Just you · visible to the studio'
             : `You and ${others.join(', ')}`}
