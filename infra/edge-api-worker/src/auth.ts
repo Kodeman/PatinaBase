@@ -14,6 +14,9 @@ import {
 
 type VerificationKey = CryptoKey | Uint8Array | JWTVerifyGetKey;
 
+const ALLOWED_JWT_ALGORITHMS = ['RS256', 'ES256'] as const;
+const CLOCK_TOLERANCE_SECONDS = 30;
+
 const remoteKeySets = new Map<string, JWTVerifyGetKey>();
 
 function remoteKeySet(url: string): JWTVerifyGetKey {
@@ -36,7 +39,27 @@ export async function verifyJwt(
   issuer: string,
   audience: string | string[],
 ): Promise<JWTPayload> {
-  const { payload } = await jwtVerify(token, key, { issuer, audience });
+  const { payload } = await jwtVerify(token, key, {
+    issuer,
+    audience,
+    algorithms: [...ALLOWED_JWT_ALGORITHMS],
+    requiredClaims: ['exp', 'iat'],
+    clockTolerance: CLOCK_TOLERANCE_SECONDS,
+  });
+  const now = Math.floor(Date.now() / 1000);
+  if (
+    typeof payload.exp !== 'number' ||
+    !Number.isFinite(payload.exp) ||
+    typeof payload.iat !== 'number' ||
+    !Number.isFinite(payload.iat) ||
+    payload.iat > now + CLOCK_TOLERANCE_SECONDS ||
+    (payload.nbf !== undefined &&
+      (typeof payload.nbf !== 'number' ||
+        !Number.isFinite(payload.nbf) ||
+        payload.nbf > now + CLOCK_TOLERANCE_SECONDS))
+  ) {
+    throw new Error('unauthorized');
+  }
   return payload;
 }
 
@@ -59,6 +82,7 @@ export async function verifySupabaseRequest(
   if (typeof payload.sub !== 'string' || payload.sub.length === 0) {
     throw new Error('unauthorized');
   }
+  if (payload.role !== 'authenticated') throw new Error('unauthorized');
   return payload as VerifiedSupabaseClaims;
 }
 

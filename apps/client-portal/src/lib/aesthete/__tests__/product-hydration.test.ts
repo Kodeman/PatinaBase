@@ -1,4 +1,7 @@
-import { hydrateCatalogProducts } from '../product-hydration';
+import {
+  configuredEdgeApiUrl,
+  hydrateCatalogProducts,
+} from '../product-hydration';
 
 const ID = '00000000-0000-4000-8000-000000000001';
 
@@ -9,6 +12,19 @@ describe('Aesthete product hydration adapter', () => {
   beforeEach(() => {
     global.fetch = fetchMock;
     fallback.mockResolvedValue(new Map([[ID, { source: 'legacy' }]]));
+  });
+
+  it('uses the configured production edge endpoint and safely falls back when absent', () => {
+    const original = process.env.NEXT_PUBLIC_EDGE_API_URL;
+    process.env.NEXT_PUBLIC_EDGE_API_URL = 'https://api.patina.cloud';
+    expect(configuredEdgeApiUrl('https://project.supabase.co')).toBe(
+      'https://api.patina.cloud',
+    );
+    delete process.env.NEXT_PUBLIC_EDGE_API_URL;
+    expect(configuredEdgeApiUrl('https://project.supabase.co')).toBe(
+      'https://project.supabase.co',
+    );
+    if (original !== undefined) process.env.NEXT_PUBLIC_EDGE_API_URL = original;
   });
 
   it('hydrates from the typed edge catalog endpoint and maps the shared type', async () => {

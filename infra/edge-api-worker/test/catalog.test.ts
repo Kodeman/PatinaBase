@@ -1,4 +1,5 @@
 import {
+  CATALOG_SELECT_SQL,
   CatalogRequestError,
   CatalogSourceError,
   normalizeCatalogRows,
@@ -6,6 +7,7 @@ import {
   queryCatalogViaHyperdrive,
   queryCatalogViaLegacy,
 } from '../src/catalog';
+import loginContract from './fixtures/edge-catalog-login-contract.json';
 import type { DatabaseClientFactory } from '../src/database';
 import type { EdgeApiEnv } from '../src/env';
 
@@ -36,6 +38,16 @@ describe('catalog request contract', () => {
       ),
     );
     expect(ids).toEqual([A, B]);
+  });
+
+  it('trims comma-separated ids before validation and deduplication', () => {
+    expect(
+      parseCatalogIds(
+        new URL(
+          `https://api.example/v1/catalog/products?ids=${encodeURIComponent(` ${B} , ${A} `)}`,
+        ),
+      ),
+    ).toEqual([A, B]);
   });
 
   it.each([
@@ -127,13 +139,15 @@ describe('catalog sources', () => {
       {
         DB_FRESH: { connectionString: 'postgres://fresh' } as Hyperdrive,
         DB_PUBLIC_CACHE: {
-          connectionString: 'postgres://public-cache',
+          connectionString: 'postgres://edge_catalog_login@public-cache',
         } as Hyperdrive,
       } as EdgeApiEnv,
       [A],
       createClient,
     );
-    expect(createClient).toHaveBeenCalledWith('postgres://public-cache');
+    expect(createClient).toHaveBeenCalledWith(
+      'postgres://edge_catalog_login@public-cache',
+    );
     expect(query.mock.calls[0][0]).toContain(
       'FROM public.edge_catalog_products',
     );
@@ -145,6 +159,19 @@ describe('catalog sources', () => {
     ]);
   });
 
+  it('matches the inherited edge_catalog_reader login contract without role changes', () => {
+    expect(loginContract).toEqual({
+      loginRole: 'edge_catalog_login',
+      inheritedRoles: ['edge_catalog_reader'],
+      allowedRelations: ['public.edge_catalog_products'],
+      forbiddenRelations: ['public.products'],
+      queryRoleChanges: false,
+    });
+    expect(CATALOG_SELECT_SQL).toContain('FROM public.edge_catalog_products');
+    expect(CATALOG_SELECT_SQL).not.toMatch(/public\.products|set\s+(local\s+)?role/i);
+    expect(CATALOG_SELECT_SQL).toContain('ANY($1::uuid[])');
+  });
+
   it('constrains the legacy source to catalog and published with the anon credential', async () => {
     let requestUrl: URL | undefined;
     let requestHeaders: Headers | undefined;
@@ -152,8 +179,10 @@ describe('catalog sources', () => {
       {
         SUPABASE_UPSTREAM_URL: 'https://project.supabase.co',
         SUPABASE_ANON_KEY: 'anon-key',
+        LEGACY_FETCH_TIMEOUT_MS: '1000',
       } as EdgeApiEnv,
       [A],
+      undefined,
       async (input, init) => {
         requestUrl = new URL(input.toString());
         requestHeaders = new Headers(init?.headers);
@@ -167,5 +196,20 @@ describe('catalog sources', () => {
     expect(requestHeaders?.get('apikey')).toBe('anon-key');
     expect(requestHeaders?.get('authorization')).toBe('Bearer anon-key');
     expect(result).toHaveLength(1);
+  });
+
+  it('times out a legacy fetch that never settles even when it ignores abort', async () => {
+    await expect(
+      queryCatalogViaLegacy(
+        {
+          SUPABASE_UPSTREAM_URL: 'https://project.supabase.co',
+          SUPABASE_ANON_KEY: 'anon-key',
+          LEGACY_FETCH_TIMEOUT_MS: '5',
+        } as EdgeApiEnv,
+        [A],
+        undefined,
+        () => new Promise<Response>(() => undefined),
+      ),
+    ).rejects.toThrow(CatalogSourceError);
   });
 });

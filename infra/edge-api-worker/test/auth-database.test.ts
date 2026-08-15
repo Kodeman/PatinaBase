@@ -1,4 +1,4 @@
-import { generateKeyPair, SignJWT } from 'jose';
+import { generateKeyPair, SignJWT, type JWTPayload } from 'jose';
 import {
   isHealthAuthorized,
   verifyJwt,
@@ -21,19 +21,33 @@ async function token(
   overrides: {
     issuer?: string;
     audience?: string;
-    expiration?: number;
-    subject?: string;
+    expiration?: number | null;
+    issuedAt?: number | null;
+    notBefore?: number;
+    subject?: string | null;
+    role?: string | null;
   } = {},
 ) {
   const now = Math.floor(Date.now() / 1000);
-  return new SignJWT({ role: 'authenticated' })
+  const jwt = new SignJWT(
+    overrides.role === null
+      ? {}
+      : { role: overrides.role ?? 'authenticated' },
+  )
     .setProtectedHeader({ alg: 'RS256' })
-    .setSubject(overrides.subject ?? '00000000-0000-4000-8000-000000000001')
     .setIssuer(overrides.issuer ?? ISSUER)
-    .setAudience(overrides.audience ?? AUDIENCE)
-    .setIssuedAt(now)
-    .setExpirationTime(overrides.expiration ?? now + 60)
-    .sign(privateKey);
+    .setAudience(overrides.audience ?? AUDIENCE);
+  if (overrides.subject !== null) {
+    jwt.setSubject(
+      overrides.subject ?? '00000000-0000-4000-8000-000000000001',
+    );
+  }
+  if (overrides.issuedAt !== null) jwt.setIssuedAt(overrides.issuedAt ?? now);
+  if (overrides.expiration !== null) {
+    jwt.setExpirationTime(overrides.expiration ?? now + 60);
+  }
+  if (overrides.notBefore !== undefined) jwt.setNotBefore(overrides.notBefore);
+  return jwt.sign(privateKey);
 }
 
 describe('Supabase JWT verification', () => {
@@ -64,12 +78,52 @@ describe('Supabase JWT verification', () => {
     await expect(
       verifyJwt(
         await token(privateKey, {
-          expiration: Math.floor(Date.now() / 1000) - 1,
+          expiration: Math.floor(Date.now() / 1000) - 60,
         }),
         publicKey,
         ISSUER,
         AUDIENCE,
       ),
+    ).rejects.toThrow();
+  });
+
+  it.each([
+    { expiration: null },
+    { issuedAt: null },
+  ])('rejects a token missing required temporal claims: %o', async (claims) => {
+    const { privateKey, publicKey } = await generateKeyPair('RS256');
+    await expect(
+      verifyJwt(await token(privateKey, claims), publicKey, ISSUER, AUDIENCE),
+    ).rejects.toThrow();
+  });
+
+  it('rejects an invalid exp claim type', async () => {
+    const { privateKey, publicKey } = await generateKeyPair('RS256');
+    const now = Math.floor(Date.now() / 1000);
+    const invalid = await new SignJWT(
+      {
+        role: 'authenticated',
+        sub: 'user-a',
+        iat: now,
+        exp: 'later',
+      } as unknown as JWTPayload,
+    )
+      .setProtectedHeader({ alg: 'RS256' })
+      .setIssuer(ISSUER)
+      .setAudience(AUDIENCE)
+      .sign(privateKey);
+    await expect(
+      verifyJwt(invalid, publicKey, ISSUER, AUDIENCE),
+    ).rejects.toThrow();
+  });
+
+  it.each([
+    { issuedAt: Math.floor(Date.now() / 1000) + 120 },
+    { notBefore: Math.floor(Date.now() / 1000) + 120 },
+  ])('rejects a token with a future temporal claim: %o', async (claims) => {
+    const { privateKey, publicKey } = await generateKeyPair('RS256');
+    await expect(
+      verifyJwt(await token(privateKey, claims), publicKey, ISSUER, AUDIENCE),
     ).rejects.toThrow();
   });
 
@@ -82,6 +136,34 @@ describe('Supabase JWT verification', () => {
         ISSUER,
         AUDIENCE,
       ),
+    ).rejects.toThrow();
+  });
+
+  it('rejects the wrong audience', async () => {
+    const { privateKey, publicKey } = await generateKeyPair('RS256');
+    await expect(
+      verifyJwt(
+        await token(privateKey, { audience: 'wrong-audience' }),
+        publicKey,
+        ISSUER,
+        AUDIENCE,
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('rejects a symmetric algorithm outside the asymmetric allowlist', async () => {
+    const secret = new TextEncoder().encode('a-secret-with-sufficient-length');
+    const now = Math.floor(Date.now() / 1000);
+    const symmetric = await new SignJWT({ role: 'authenticated' })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setSubject('user-a')
+      .setIssuer(ISSUER)
+      .setAudience(AUDIENCE)
+      .setIssuedAt(now)
+      .setExpirationTime(now + 60)
+      .sign(secret);
+    await expect(
+      verifyJwt(symmetric, secret, ISSUER, AUDIENCE),
     ).rejects.toThrow();
   });
 
@@ -109,6 +191,29 @@ describe('Supabase JWT verification', () => {
       ),
     ).rejects.toThrow('unauthorized');
   });
+
+  it.each([{ role: null }, { role: 'anon' }])(
+    'rejects a Supabase request without the authenticated role: %o',
+    async (claims) => {
+      const { privateKey, publicKey } = await generateKeyPair('RS256');
+      const requestEnv = {
+        SUPABASE_JWT_ISSUER: ISSUER,
+        SUPABASE_JWT_AUDIENCE: AUDIENCE,
+        SUPABASE_JWKS_URL: 'https://unused.example/jwks',
+      } as EdgeApiEnv;
+      await expect(
+        verifySupabaseRequest(
+          new Request('https://api.example/v1/private', {
+            headers: {
+              authorization: `Bearer ${await token(privateKey, claims)}`,
+            },
+          }),
+          requestEnv,
+          publicKey,
+        ),
+      ).rejects.toThrow('unauthorized');
+    },
+  );
 });
 
 describe('health authorization', () => {
@@ -194,7 +299,7 @@ function clientFactory(clients: RecordedClient[]): DatabaseClientFactory {
   };
 }
 
-describe('authenticated fresh-connection transactions', () => {
+describe('authenticated transaction cleanup unit contract with mocked clients', () => {
   const env = {
     DB_FRESH: { connectionString: 'postgres://fresh' },
   } as EdgeApiEnv;
@@ -248,7 +353,7 @@ describe('authenticated fresh-connection transactions', () => {
     await expect(
       withAuthenticatedTransaction(
         env,
-        { sub: 'user-a' } as VerifiedSupabaseClaims,
+        { sub: 'user-a', role: 'authenticated' } as VerifiedSupabaseClaims,
         async () => {
           throw new Error('database timeout');
         },

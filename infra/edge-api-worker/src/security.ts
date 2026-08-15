@@ -1,30 +1,90 @@
-const REDACTED = '[REDACTED]';
-const SENSITIVE_KEY =
-  /authorization|apikey|api_key|cookie|token|secret|password|email|phone|address|name|body|content|claims|params|query|sql|stack|cause|message/i;
+export const ALERT_EVENTS = {
+  catalogShadowMismatch: 'edge_api_catalog_shadow_mismatch',
+  catalogHyperdriveFailure: 'edge_api_catalog_hyperdrive_failure',
+  catalogLegacyFailure: 'edge_api_catalog_legacy_failure',
+  compatibilityTimeout: 'edge_api_compatibility_timeout',
+  configurationInvalid: 'edge_api_configuration_invalid',
+  requestFailure: 'edge_api_request_failure',
+} as const;
 
-export function redactRecord(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(redactRecord);
-  if (!value || typeof value !== 'object') return value;
+export type AlertEventName = (typeof ALERT_EVENTS)[keyof typeof ALERT_EVENTS];
+export type AlertSeverity = 'warning' | 'error' | 'critical';
+export type RouteClass =
+  | 'catalog.products'
+  | 'internal.health'
+  | 'compat.auth'
+  | 'compat.realtime'
+  | 'compat.rest'
+  | 'compat.graphql'
+  | 'compat.functions'
+  | 'compat.storage'
+  | 'unknown';
 
-  return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>).map(([key, nested]) => [
-      key,
-      SENSITIVE_KEY.test(key) ? REDACTED : redactRecord(nested),
-    ]),
-  );
+export interface AlertLogEvent {
+  event: AlertEventName;
+  severity: AlertSeverity;
+  traceId: string;
+  routeClass: RouteClass;
+  fallback?: 'legacy' | 'hyperdrive_public_view' | 'unavailable';
+  legacyCount?: number;
+  hyperdriveCount?: number;
+  status?: number;
 }
 
-export function structuredLog(event: Record<string, unknown>): void {
-  console.log(JSON.stringify(redactRecord(event)));
+export function structuredLog(input: AlertLogEvent): void {
+  const event: AlertLogEvent = {
+    event: input.event,
+    severity: input.severity,
+    traceId: input.traceId,
+    routeClass: input.routeClass,
+  };
+  if (input.fallback !== undefined) event.fallback = input.fallback;
+  if (input.legacyCount !== undefined) event.legacyCount = input.legacyCount;
+  if (input.hyperdriveCount !== undefined) {
+    event.hyperdriveCount = input.hyperdriveCount;
+  }
+  if (input.status !== undefined) event.status = input.status;
+  console.log(JSON.stringify(event));
 }
 
-export function traceIdFor(
-  request: Request,
+export function createTraceId(
   randomUUID: () => string = () => crypto.randomUUID(),
 ): string {
-  const supplied = request.headers.get('x-patina-trace-id');
-  if (supplied && /^[A-Za-z0-9_-]{16,128}$/.test(supplied)) return supplied;
   return randomUUID();
+}
+
+export function routeClassFor(pathname: string): RouteClass {
+  if (pathname === '/v1/catalog/products') return 'catalog.products';
+  if (pathname === '/_internal/health') return 'internal.health';
+  if (pathname === '/auth/v1' || pathname.startsWith('/auth/v1/')) {
+    return 'compat.auth';
+  }
+  if (pathname === '/realtime/v1' || pathname.startsWith('/realtime/v1/')) {
+    return 'compat.realtime';
+  }
+  if (pathname === '/rest/v1' || pathname.startsWith('/rest/v1/')) {
+    return 'compat.rest';
+  }
+  if (pathname === '/graphql/v1' || pathname.startsWith('/graphql/v1/')) {
+    return 'compat.graphql';
+  }
+  if (pathname === '/functions/v1' || pathname.startsWith('/functions/v1/')) {
+    return 'compat.functions';
+  }
+  if (pathname === '/storage/v1' || pathname.startsWith('/storage/v1/')) {
+    return 'compat.storage';
+  }
+  return 'unknown';
+}
+
+export function trustedRolloutKey(request: Request): string {
+  const cloudflareRequest = request as Request<
+    unknown,
+    IncomingRequestCfProperties
+  >;
+  const colo = cloudflareRequest.cf?.colo ?? 'preview';
+  const connectingIp = request.headers.get('cf-connecting-ip') ?? 'local';
+  return `${colo}:${connectingIp}`;
 }
 
 export function rolloutBucket(key: string): number {
@@ -40,14 +100,4 @@ export function isSelectedForRollout(key: string, percentage: number): boolean {
   if (percentage <= 0) return false;
   if (percentage >= 100) return true;
   return rolloutBucket(key) < percentage;
-}
-
-export function clampPercentage(value: string | undefined): number {
-  const parsed = Number(value ?? '0');
-  if (!Number.isFinite(parsed)) return 0;
-  return Math.min(100, Math.max(0, Math.floor(parsed)));
-}
-
-export function isEnabled(value: string | undefined): boolean {
-  return value?.toLowerCase() === 'true';
 }

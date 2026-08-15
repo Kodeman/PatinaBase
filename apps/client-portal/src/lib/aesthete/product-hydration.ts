@@ -3,6 +3,10 @@ import type { CatalogProductSummary } from '@patina/types';
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+export function configuredEdgeApiUrl(supabaseUrl: string): string {
+  return process.env.NEXT_PUBLIC_EDGE_API_URL ?? supabaseUrl;
+}
+
 function isCatalogProductSummary(
   value: unknown,
 ): value is CatalogProductSummary {
