@@ -163,7 +163,7 @@ GRANT authenticated TO edge_rls_user;
 
 The exact idempotent form lives in migrations `00481` and `00483`. The canonical view is `edge_api.catalog_products`; it is `security_barrier`, contains only approved columns, and fixes `layer = 'catalog'` plus `status = 'published'` inside its definition. The reader has no `public` or `net` schema access. `edge_rls_user` receives no direct service-role membership, no `BYPASSRLS`, and no database ownership.
 
-PostgreSQL role privileges are additive and every login is a member of `PUBLIC`. Before either password login exists, the SQL gate must enumerate effective schema, table, sequence, and routine privileges for both group roles. `edge_catalog_reader` must have no effective capability beyond database connection plus usage/select on the approved catalog surface; `edge_rls_user` must have no capability broader than the reviewed `authenticated` role chain. Any inherited `PUBLIC` privilege that breaks those allow-lists is a provisioning blocker, not a warning.
+PostgreSQL role privileges are additive and every login is a member of `PUBLIC`. Before either password login exists, the SQL gate must enumerate effective schema, relation, column, sequence, routine, and type privileges for both group roles. `edge_catalog_reader` must have no effective capability beyond database connection plus usage/select on the approved catalog surface; `edge_rls_user` must have no capability broader than the reviewed `authenticated` role chain. Any inherited `PUBLIC` privilege that breaks those allow-lists is a provisioning blocker, not a warning.
 
 ### Out-of-band login creation and reconciliation
 
@@ -196,7 +196,7 @@ If a login or Hyperdrive configuration already exists before ACL closure, fail t
 5. finish the owner action, preflight, migration, postconditions, and compatibility probes;
 6. reconcile exact attributes, settings, and memberships, then enable the logins and create fresh Hyperdrive configurations.
 
-Never print connection strings or `pg_stat_activity` query text. The sanitized zero-session census is:
+Never print connection strings or the application-query text column from `pg_stat_activity`; record only role names and aggregate counts. The sanitized zero-session census is:
 
 ```sql
 SELECT usename, count(*) AS session_count
@@ -222,7 +222,7 @@ ORDER BY rolname;
 
 Expected: group roles cannot log in; login roles can; all four are `NOBYPASSRLS`. The catalog login inherits only the audited catalog-reader membership and reports `search_path=pg_catalog, edge_api` plus `default_transaction_read_only=on`. The RLS login inherits nothing, reports `search_path=pg_catalog, public, extensions`, and can enter only the reviewed role chain with `SET LOCAL ROLE`.
 
-Finally connect with each actual password—not an administrator using `SET ROLE`. The catalog login must report `CONNECT=true`, `CREATE=false`, `TEMP=false`, the exact search path/read-only settings above, and effective capability limited to `edge_api` `USAGE` plus view `SELECT`. Direct `public.products` access, temp creation, schema creation, sequences, types, and routine execution must fail. The RLS login must prove successive transaction-local callers do not retain role or JWT claims. Only sanitized booleans/counts belong in evidence.
+Finally connect with each actual password—not an administrator using `SET ROLE`. The catalog login must report `CONNECT=true`, `CREATE=false`, `TEMP=false`, the exact search path/read-only settings above, and effective capability limited to `edge_api` `USAGE` plus view `SELECT`. Every other relation/column privilege, direct `public.products` access, temp or schema creation, sequence privilege, routine execution, and type usage must fail. The RLS login must prove successive transaction-local callers do not retain role or JWT claims. Only sanitized booleans/counts belong in evidence.
 
 ### Session and pool handling
 
@@ -320,6 +320,9 @@ PGPASSWORD=postgres psql \
 psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
   -X -v ON_ERROR_STOP=1 \
   -f supabase/tests/edge_api/platform_acl_preflight.sql
+psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
+  -X -v ON_ERROR_STOP=1 \
+  -f supabase/tests/edge_api/remote_acl_postflight.sql
 psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
   -X -v ON_ERROR_STOP=1 \
   -f supabase/tests/edge_api/catalog_roles_test.sql
@@ -516,7 +519,7 @@ Record each row as pass/fail with trace ID, timestamp, and sanitized evidence:
 | Area         | Required cases                                                                                                                          |
 | ------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
 | Platform ACL | owner artifact identity/postcondition; `PUBLIC` lacks `net` USAGE; complete named `net` ACL snapshot unchanged before/after             |
-| App ACL      | post-`00483` `public`/database/routine/`edge_api` allow-lists; remote-safe postflight passes without fixture or role mutation           |
+| App ACL      | post-`00483` database/schema/relation/column/sequence/routine/type and `edge_api` allow-lists; remote-safe postflight passes read-only  |
 | TEMP         | exact all-login pre/post manifest; no unexpected login; direct, Supavisor, dedicated PgBouncer, managed-service, and replication probes |
 | Edge logins  | actual-password catalog/RLS connections; exact search paths; catalog advisory read-only; no capability or successive-claims leakage     |
 | Auth         | sign-in, refresh, OAuth callback, expired JWT, wrong issuer, wrong audience                                                             |
@@ -698,7 +701,7 @@ For each execution, retain a sanitized record containing:
 - migration number and direct object/grant probes;
 - Supabase Support ticket/action reference, platform execution identity, and owner check;
 - `net` before/after named ACL snapshot plus platform-preflight result;
-- `public`, database, routine, `edge_api`, and all-login TEMP pre/postcondition manifests;
+- database, schema, relation, column, sequence, routine, type, `edge_api`, and all-login TEMP pre/postcondition manifests;
 - Supabase branch project ID (not credentials);
 - actual-password-login search-path/read-only/effective-capability probe results;
 - Hyperdrive configuration IDs/names and cache mode;
