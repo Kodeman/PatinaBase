@@ -25,7 +25,7 @@ Supabase-first hybrid monorepo. Verified against the tree 2026-07-02 (CLAUDE.md 
 - `services/aesthete-inference` is **Python 3.12 / FastAPI** (uvicorn, onnxruntime, tokenizers, pillow, numpy) — the embedding worker, NOT NestJS. So `services/` has 4 dirs but only 3 are NestJS.
 
 ## Database
-- Single self-hosted **Supabase Postgres, major_version 15** (supabase/config.toml). `public` schema via Supabase client; svc_* schemas via Prisma. (Orders schema.prisma header comment "PostgreSQL 16 on OCI" is stale.)
+- **Supabase Cloud Strata** is the production data platform. The `public` schema is accessed through Supabase clients; retained Prisma services use their `svc_*` schemas through Supavisor. `supabase/config.toml` describes local development and does not identify the production database version.
 - **254 SQL migrations** (`supabase/migrations`, latest `00254_*`) and **39 edge functions** (Deno) — CLAUDE.md's "52 migrations / 33+ functions" is very stale.
 
 ## Native / extension

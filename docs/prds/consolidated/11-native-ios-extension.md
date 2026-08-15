@@ -23,14 +23,14 @@
 **Source docs:**
 - `docs/specs/_active/mobile-companion.md`
 - `docs/specs/_active/mobile-first-launch.md`
-- `docs/specs/_active/patina-companion-dev-spec.md`
+- `docs/_archive/specs/_active/patina-companion-dev-spec.md`
 - `docs/specs/_active/patina-roomplan-specification.md`
 - `docs/specs/_active/product-capture.md`
 - `docs/specs/IOS Scann/quiet-conversation-prd.md`
 - `docs/specs/IOS Scann/quiet-conversation-screens.html`
 - `docs/design/ios-Capture/patina-mobile-ux-flow.html`
 - `docs/design/ios-ux-review/index.html`
-- `docs/architecture/ios-development-plan.md`
+- `docs/_archive/architecture/ios-development-plan.md`
 - `docs/wireframes/mobile-companion-flow.html`
 - `docs/wireframes/mobile-immersive-experience.html`
 - `docs/wireframes/mobile-immersive-exp-v2.html`
@@ -171,8 +171,8 @@ This area has no bespoke Next.js API routes and no NestJS endpoints of its own â
 
 This consolidated PRD replaces the following documents as the system of record for native iOS/extension capture:
 
-- `docs/architecture/ios-development-plan.md`
-- `docs/specs/_active/patina-companion-dev-spec.md`
+- `docs/_archive/architecture/ios-development-plan.md`
+- `docs/_archive/specs/_active/patina-companion-dev-spec.md`
 - `docs/wireframes/mobile-companion-flow.html`
 - `docs/wireframes/mobile-immersive-experience.html`
 - `docs/wireframes/mobile-immersive-exp-v2.html`

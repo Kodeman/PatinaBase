@@ -23,6 +23,16 @@ const POLICY_SOURCE_PATHS = new Set([
   "scripts/hooks/patina-hooks.mjs",
 ]);
 
+const MARKER_ALLOWED_PROSE_PATHS = new Set([
+  ".agents/skills/patina-db-migrations/skill.md",
+  ".agents/skills/patina-deploy/skill.md",
+  ".agents/skills/patina-edge-functions/skill.md",
+  ".agents/skills/patina-prod-ops/skill.md",
+  "agents.md",
+  "claude.md",
+  "docs/engineering/patina-cloudflare-plan.md",
+]);
+
 const RETIRED_PATHS = [
   ".github/workflows/docker-publish.yml",
   "infra/.env.example",
@@ -111,12 +121,14 @@ function isRetiredPath(relative) {
   if (RETIRED_BASENAMES.has(path.posix.basename(candidate))) return true;
   return RETIRED_PATHS.some((retiredPath) => {
     const target = normalized(retiredPath);
-    return target.endsWith("/") ? candidate.startsWith(target) : candidate === target;
+    if (!target.endsWith("/")) return candidate === target;
+    const directory = target.slice(0, -1);
+    return (
+      candidate === directory ||
+      candidate.startsWith(target) ||
+      candidate.includes(`/${target}`)
+    );
   });
-}
-
-function isApprovedProse(relative) {
-  return /\.(?:html?|md|mdx)$/i.test(relative);
 }
 
 function readTrackedText(root, relative) {
@@ -148,9 +160,9 @@ export function findRetiredDeployReferences(root) {
     if (content === null) continue;
     content.split(/\r?\n/).forEach((line, index) => {
       if (ANY_ALLOW_MARKER_PATTERN.test(line)) {
-        if (!isApprovedProse(relative)) {
+        if (!MARKER_ALLOWED_PROSE_PATHS.has(candidate)) {
           findings.push(
-            `${relative}:${index + 1}: allow marker is permitted only in reviewed prose files`,
+            `${relative}:${index + 1}: allow marker is permitted only in the reviewed prose allowlist`,
           );
           return;
         }

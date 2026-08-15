@@ -24,6 +24,7 @@ async function repo(files) {
 test("flags every tracked retired executable, configuration, and volume path", async () => {
   const root = await repo({
     "infra/CooLiFy/deploy.yaml": "service: stale\n",
+    "nested/infra/CooLiFy/deploy.yaml": "service: stale nested\n",
     "infra/Dockerfile.nestjs": "FROM node:20\n",
     "infra/volumes/db/roles.sql": "select 1;\n",
     "nested/infra/CooLiFy-Deploy.sh": "#!/bin/sh\n",
@@ -31,7 +32,7 @@ test("flags every tracked retired executable, configuration, and volume path", a
     "supabase/functions/main/index.ts": "Deno.serve(() => new Response());\n",
   });
   const findings = findRetiredDeployReferences(root);
-  assert.equal(findings.length, 6);
+  assert.equal(findings.length, 7);
   assert.ok(findings.some((finding) => finding.includes("infra/CooLiFy")));
   assert.ok(findings.some((finding) => finding.includes("infra/volumes")));
   assert.ok(findings.some((finding) => finding.includes("functions/main")));
@@ -53,7 +54,7 @@ test("scans canonical PRDs and handoffs, not only selected documentation roots",
 test("excludes archives and accepts only reasoned prose markers", async () => {
   const root = await repo({
     "docs/_archive/deploy.md": "Run ./infra/deploy.sh now.\n",
-    "docs/operations/allowed.md": `Deploy with Coolify. ${retiredReferenceAllow("documents the retired platform prohibition")}\n`,
+    "AGENTS.md": `Deploy with Coolify. ${retiredReferenceAllow("documents the retired platform prohibition")}\n`,
     "docs/operations/not-allowed.md": "Coolify is retired; never deploy there.\n",
   });
   const findings = findRetiredDeployReferences(root);
@@ -61,19 +62,24 @@ test("excludes archives and accepts only reasoned prose markers", async () => {
   assert.match(findings[0], /not-allowed\.md/);
 });
 
-test("rejects empty, legacy, and non-prose allow markers", async () => {
+test("rejects empty, legacy, non-allowlisted, and executable MDX markers", async () => {
   const root = await repo({
-    "docs/empty.md": "Deploy with Coolify. [retired-deploy-reference-allow:]\n",
-    "docs/legacy.md": "Deploy with Coolify. [retired-deploy-reference-allow]\n",
+    "AGENTS.md": "Deploy with Coolify. [retired-deploy-reference-allow:]\n",
+    "CLAUDE.md": "Deploy with Coolify. [retired-deploy-reference-allow]\n",
+    "docs/operations/unreviewed.md": `Deploy with Coolify. ${retiredReferenceAllow("not an approved marker location")}\n`,
+    "apps/portal/page.mdx": `Deploy with Coolify. ${retiredReferenceAllow("executable prose")}\n`,
     "src/config.ts": `const target = "Coolify deploy"; // ${retiredReferenceAllow("test fixture")}\n`,
   });
   const findings = findRetiredDeployReferences(root);
-  assert.equal(findings.length, 3);
+  assert.equal(findings.length, 5);
   assert.equal(
     findings.filter((finding) => finding.includes("nonempty rationale")).length,
     2,
   );
-  assert.ok(findings.some((finding) => finding.includes("reviewed prose")));
+  assert.equal(
+    findings.filter((finding) => finding.includes("reviewed prose allowlist")).length,
+    3,
+  );
 });
 
 test("normalizes retired reference variants and blocks mobile legacy targets", async () => {

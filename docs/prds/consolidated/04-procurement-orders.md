@@ -117,7 +117,7 @@ Data/UI: `packages/supabase/src/hooks/use-invoices.ts` (`useInvoices`, `useCreat
 ### Supabase edge functions (Deno) — `supabase/functions/`
 
 - `create-checkout-session` — POST `{invoiceId}` → `{url}`. verify_jwt default (on). Authorizes caller as invoice client or designer; guards status sent/partially_paid + amount_due>0; lazy Stripe customer; session reuse/expire; inserts pending stripe `invoice_payments` row. Env: `STRIPE_SECRET_KEY`, `CLIENT_PORTAL_URL`.
-- `stripe-webhook` — **verify_jwt = false** (config.toml, the only one) — Stripe signature instead. On self-hosted prod the Stripe endpoint URL must carry `?apikey=<ANON_KEY>` past Kong. Handles checkout.session.completed / async_payment_(succeeded|failed) / payment_intent.(succeeded|payment_failed) / charge.refunded(record-only). Flips `invoice_payments` only; 00178 trigger owns effects. Env: `STRIPE_WEBHOOK_SECRET`, `STRIPE_SECRET_KEY`, `CLIENT_PORTAL_URL`.
+- `stripe-webhook` — **verify_jwt = false** (config.toml, the only one) — Stripe signature instead. Register the Supabase Cloud Strata function URL directly; no API-key query parameter is part of the current contract. Handles checkout.session.completed / async_payment_(succeeded|failed) / payment_intent.(succeeded|payment_failed) / charge.refunded(record-only). Flips `invoice_payments` only; 00178 trigger owns effects. Env: `STRIPE_WEBHOOK_SECRET`, `STRIPE_SECRET_KEY`, `CLIENT_PORTAL_URL`.
 - `po-send` — POST `{purchaseOrderId, mode: preview|send|mark_sent, recipientEmail?, message?, ccDesigner?}`. Calls `assign_po_number` AS THE CALLER, renders PDF via `_shared/po-pdf.ts`, uploads to `project-documents/{projectId}/po-{poNumber}.pdf`, emails vendor (orders_email → contact_info.email). Send is guarded 422 `po_out_of_sync` when line-trade-total ≠ total_cents ≠ Σ po_payments (blocks pre-00186 client-price POs). verify_jwt default.
 - `invoice-send` — POST `{invoiceId, message?, type: sent|reminder}`. Emails client via `sendCompliantEmail`; type `reminder` = manual A/R nudge that does NOT perturb the automated cadence.
 - `invoice-reminders` — cron-invoked (00181, 15:00 UTC). Cadence due−3/+1/+7/+14 keyed by `reminder_count`; final stage stamps `ar_flagged_at` + designer escalation, then hands off to the human A/R page.
@@ -173,7 +173,7 @@ All `project_time_entries` access is direct table CRUD via the browser Supabase 
 - ⚠ Invoice/Stripe refunds are v2: `stripe-webhook` records `charge.refunded` in the events ledger only ("refund state machine is v2") with no state change. (The unused NestJS orders service has a refunds module, but it is not on the invoice path.)
 - ⚠ Procurement pilot is not GA — gated behind PostHog flag `procurement-workspace-pilot`; non-pilot users see a "Coming soon" placeholder. Flag setup + the 5-metric PostHog dashboard are a manual Kody step (`docs/follow-ups/procurement-pilot-metrics.md`).
 - ⚠ Analytics events `procurement_status_advanced` and `procurement_conflict_acknowledged` are documented but explicitly NOT wired (deferred to v1.1) — so the pilot's order-day-duration and conflicts-prevented metrics only have approximations.
-- ⚠ Stripe is not confirmed production-configured: needs real `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET`, and the prod webhook endpoint URL must be registered with `?apikey=<ANON_KEY>` to pass Kong key-auth (per critical-gaps memory + stripe-webhook header comment). No live-payment smoke on prod recorded.
+- ⚠ Stripe is not confirmed production-configured: it needs real `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET`, and the Supabase Cloud Strata function URL must be registered as the production webhook endpoint. No live-payment smoke on prod is recorded.
 - ⚠ The 90-day lower bound on `po-payments-due-daily` (00189) is a documented temporary guard against stale pre-00189 rows flooding feeds — intended to be dropped in a later migration once prod cycles; still present.
 - ⚠ EasyPost shipping / carrier fulfillment exists only inside the unused NestJS orders service (`fulfillment/carriers/easypost.carrier.ts`); the live procurement flow tracks delivery manually via `receiving_inspections` and PO `confirmed_eta`, with no carrier-tracking integration.
 - ⚠ Time idle detection: `project_time_entries.idle_seconds` (00198) is an annotation-only column never subtracted; the idle detector that writes it was slated for a Slice-6 polish pass and may not be wired.
@@ -183,7 +183,7 @@ All `project_time_entries` access is direct table CRUD via the browser Supabase 
 
 | Item | Priority |
 |---|---|
-| Confirm/complete Stripe production configuration (live keys + prod webhook endpoint registered with `?apikey=`) and run a real end-to-end client-payment smoke on prod before relying on online invoice payment. | P0 |
+| Confirm/complete Stripe production configuration (live keys + the Strata function registered as the production webhook endpoint) and run a real end-to-end client-payment smoke on prod before relying on online invoice payment. | P0 |
 | Build a procurement notifications feed UI (bell/inbox) consuming the existing `useProcurementNotifications` hooks — the deposit_due/balance_due/delivery_this_week rows are being generated with nothing to render them. | P1 |
 | Decide the invoicing front-door strategy: reconcile the zone `/portal/billing` pages with The Document Accounts book so there is one canonical UI (or an explicit, documented split) over the same tables. | P1 |
 | Formally deprecate or delete the unused NestJS orders service (carts/checkout/orders/fulfillment/payments/refunds) OR document its intended future role — it is deployed, proxied, and Stripe/EasyPost-wired but disconnected from the live flow, which is a maintenance and security surface. | P1 |
@@ -204,7 +204,7 @@ All `project_time_entries` access is direct table CRUD via the browser Supabase 
 
 **Crons:** `invoice-reminders-daily` (15:00 UTC), `po-payments-due-daily` (14:00 UTC), `delivery-this-week-weekly` (Mon 13:00 UTC) are scheduled via pg_cron and depend on the `app.settings` GUCs resolving the edge-fn URL + service key.
 
-**Caveat:** ⚠ Stripe live-key configuration and a prod webhook endpoint registered with `?apikey=` are still open (see Section 7) — schema/functions are deployed but real-money online payment is unverified on prod.
+**Caveat:** ⚠ Stripe live-key configuration and registration of the Strata function as the production webhook endpoint are still open (see Section 7) — schema/functions are deployed but real-money online payment is unverified on prod.
 
 ## 10. Superseded Sources
 
