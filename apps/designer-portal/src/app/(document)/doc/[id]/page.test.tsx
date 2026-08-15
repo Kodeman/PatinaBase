@@ -123,7 +123,13 @@ jest.mock('@/components/document/commercial/project-commerce-section', () => ({
 jest.mock('@/components/document/care-band', () => ({ CareBand: () => null }));
 jest.mock('@/components/document/account-band', () => ({ AccountBand: () => null }));
 jest.mock('@/components/document/commercial/money-region', () => ({ MoneyRegion: () => null }));
-jest.mock('@/components/document/not-started-band', () => ({ NotStartedBand: () => null }));
+jest.mock('@/components/document/roster/kickoff-band', () => ({ KickoffBand: () => null }));
+jest.mock('@/components/document/spine-shelved-blocks', () => ({
+  DocSpineShelvedBlocks: () => null,
+}));
+jest.mock('@/components/document/shelves/document-shelves', () => ({
+  DocumentShelves: () => null,
+}));
 jest.mock('@/components/document/roster/call-sheet-mount', () => ({ CallSheetMount: () => null }));
 
 jest.mock('@/hooks/use-hydrated', () => ({
@@ -196,6 +202,9 @@ jest.mock('@/components/document/schedule/schedule-ripple-context', () => ({
   RippleProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 jest.mock('@/components/document/project-schedule-handoff-mount', () => ({ ProjectScheduleHandoffMount: () => null }));
+jest.mock('@/components/document/schedule/schedule-rule-region', () => ({
+  ScheduleRuleRegion: () => null,
+}));
 // margin-rail is deliberately NOT mocked: the pulse activation path runs
 // through the real MarginRail → MarginItem, which is where the targetId and the
 // aria-expanded contract actually live. Only its data and its unfolded body are

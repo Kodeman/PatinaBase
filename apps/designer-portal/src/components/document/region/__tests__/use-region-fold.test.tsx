@@ -122,6 +122,34 @@ describe('useRegionFold', () => {
     expect(state()).toBe('open');
   });
 
+  it('keeps the drafting strip\'s fold apart from the ledger schedule\'s', () => {
+    // Both are mounted at once on a project document; one storage key between
+    // them would fold each with the other's choice.
+    const { rerender } = render(
+      <Probe docId="doc-1" region="schedule" defaultFolded={false} />,
+    );
+    act(() => {
+      screen.getByRole('button', { name: 'fold' }).click();
+    });
+    expect(window.localStorage.getItem(KEY)).toBe('1');
+
+    rerender(
+      <Probe docId="doc-1" region="schedule-rule" defaultFolded={false} />,
+    );
+    expect(state()).toBe('open');
+    expect(
+      window.localStorage.getItem('patina:doc-fold:doc-1:schedule-rule'),
+    ).toBeNull();
+
+    act(() => {
+      screen.getByRole('button', { name: 'fold' }).click();
+    });
+    expect(
+      window.localStorage.getItem('patina:doc-fold:doc-1:schedule-rule'),
+    ).toBe('1');
+    expect(window.localStorage.getItem(KEY)).toBe('1');
+  });
+
   it('releases the latched default when the document changes', () => {
     const { rerender } = render(
       <Probe docId="doc-1" region="schedule" defaultFolded={true} />,
