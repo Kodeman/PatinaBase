@@ -76,6 +76,18 @@ type WorkspaceView = "workbench" | "preview" | "preflight" | "history";
 type DerivedReadiness = "ready" | "incomplete" | "checking" | "unavailable";
 type ReadinessFilter = "all" | "ready" | "incomplete" | "unassigned" | "drift";
 
+export function specBookArtifactRetryLabel(
+  artifactStatus: SpecBookArtifact["status"],
+  revisionStatus: string,
+): "Render" | "Retry" | "Finalize" | null {
+  if (artifactStatus === "pending") return "Render";
+  if (artifactStatus === "failed") return "Retry";
+  if (artifactStatus === "ready" && revisionStatus !== "issued") {
+    return "Finalize";
+  }
+  return null;
+}
+
 function readinessLabel(value: DerivedReadiness): string {
   return value;
 }
@@ -958,13 +970,14 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
     });
     try {
       const result = await renderArtifact.mutateAsync(artifact.id);
+      const action = artifact.status === "ready" ? "finalized" : "rendered";
       if (result.finalized) {
         setIssueFeedback(
-          `${artifact.audience} artifact rendered and the revision is issued.`,
+          `${artifact.audience} artifact ${action} and the revision is issued.`,
         );
       } else {
         setIssueFeedback(
-          `${artifact.audience} artifact rendered. Other editions still need attention.`,
+          `${artifact.audience} artifact ${action}. Other editions still need attention.`,
         );
       }
     } catch (error) {
@@ -1560,8 +1573,10 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                               ? ` · ${artifact.error_message}`
                               : ""}
                           </span>
-                          {(artifact.status === "failed" ||
-                            artifact.status === "pending") && (
+                          {specBookArtifactRetryLabel(
+                            artifact.status,
+                            revision.status,
+                          ) && (
                             <Button
                               size="sm"
                               variant="secondary"
@@ -1569,9 +1584,10 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
                               onClick={() => void retryArtifact(artifact)}
                             >
                               <RefreshCw className="h-3 w-3" />
-                              {artifact.status === "failed"
-                                ? "Retry"
-                                : "Render"}
+                              {specBookArtifactRetryLabel(
+                                artifact.status,
+                                revision.status,
+                              )}
                             </Button>
                           )}
                           {artifact.status === "ready" && (

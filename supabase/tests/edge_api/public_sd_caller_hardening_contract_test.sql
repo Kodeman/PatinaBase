@@ -17,6 +17,99 @@ $assertion_preflight$;
 
 CREATE EXTENSION IF NOT EXISTS dblink WITH SCHEMA extensions;
 
+CREATE OR REPLACE FUNCTION pg_temp._00486_references_routine(
+  p_source text,
+  p_schema text,
+  p_name text
+)
+RETURNS boolean
+LANGUAGE plpgsql
+IMMUTABLE
+SECURITY INVOKER
+SET search_path = pg_catalog, pg_temp
+AS $caller_scan$
+DECLARE
+  v_without_comments text;
+  v_direct_source text;
+  v_scan_source text;
+  v_match text[];
+  v_schema_token text;
+  v_name_token text;
+BEGIN
+  v_without_comments := regexp_replace(
+    regexp_replace(
+      COALESCE(p_source, ''),
+      $block_comment$/\*([^*]|\*+[^*/])*\*+/$block_comment$,
+      ' ',
+      'g'
+    ),
+    $line_comment$--[^\r\n]*$line_comment$,
+    ' ',
+    'g'
+  );
+  v_direct_source := regexp_replace(
+    v_without_comments,
+    $quoted_text$'([^']|'')*'$quoted_text$,
+    ' ',
+    'g'
+  );
+
+  FOREACH v_scan_source IN ARRAY CASE
+    WHEN v_direct_source ~* '(^|[^[:alnum:]_$])execute([^[:alnum:]_$]|$)'
+      THEN ARRAY[v_direct_source, v_without_comments]
+    ELSE ARRAY[v_direct_source]
+  END
+  LOOP
+    FOR v_match IN
+      SELECT matches.match_row
+      FROM regexp_matches(
+        v_scan_source,
+        $routine_token$(?:
+          ("(?:[^"]|"")*"|[[:alpha:]_][[:alnum:]_$]*)
+          [[:space:]]*\.[[:space:]]*
+        )?
+        ("(?:[^"]|"")*"|[[:alpha:]_][[:alnum:]_$]*)
+        [[:space:]]*\($routine_token$,
+        'gx'
+      ) AS matches(match_row)
+    LOOP
+      v_schema_token := v_match[1];
+      v_name_token := v_match[2];
+
+      IF v_name_token IS NULL THEN
+        CONTINUE;
+      END IF;
+
+      IF left(v_name_token, 1) = '"' THEN
+        v_name_token := replace(
+          substr(v_name_token, 2, length(v_name_token) - 2), '""', '"'
+        );
+        IF v_name_token IS DISTINCT FROM p_name THEN
+          CONTINUE;
+        END IF;
+      ELSIF lower(v_name_token) IS DISTINCT FROM lower(p_name) THEN
+        CONTINUE;
+      END IF;
+
+      IF v_schema_token IS NULL THEN
+        RETURN true;
+      ELSIF left(v_schema_token, 1) = '"' THEN
+        v_schema_token := replace(
+          substr(v_schema_token, 2, length(v_schema_token) - 2), '""', '"'
+        );
+        IF v_schema_token IS NOT DISTINCT FROM p_schema THEN
+          RETURN true;
+        END IF;
+      ELSIF lower(v_schema_token) IS NOT DISTINCT FROM lower(p_schema) THEN
+        RETURN true;
+      END IF;
+    END LOOP;
+  END LOOP;
+
+  RETURN false;
+END;
+$caller_scan$;
+
 CREATE TEMP TABLE _00486_expected (
   signature text PRIMARY KEY,
   arguments text NOT NULL,
@@ -350,7 +443,7 @@ INSERT INTO _00486_dependencies VALUES
    ARRAY['service_role']),
   ('public.draft_invoice_from_milestone(uuid)', 'p_milestone_id uuid',
    'uuid', 'plpgsql', true, 'v',
-   'fabe4d94f7ecfccca36f27e9252db735b4a66806dcb49d2aebcaaf83dfbdc535',
+   '6a2df0b14e06aa00ad2bc90b59346c46c4b1e0cbc20ffa972b6ab63cdbeb8472',
    ARRAY['service_role']),
   ('public._draft_invoice_from_milestone_00486(uuid)', 'p_milestone_id uuid',
    'uuid', 'plpgsql', true, 'v',
@@ -358,7 +451,7 @@ INSERT INTO _00486_dependencies VALUES
    ARRAY[]::text[]),
   ('public.sync_invoice_line_milestone_latch()', '', 'trigger',
    'plpgsql', false, 'v',
-   '08c4238609969828678c5997330d32b726164561b0b0d21321dda95ec53686ba',
+   'fb3520a732378efe39f0e68838bcfada60cad47a1ac9c440fc3feedd1aa596b0',
    ARRAY[]::text[]);
 
 DO $dependency_catalog_contract$
@@ -455,8 +548,28 @@ BEGIN
       AND binding.tgrelid = 'public.invoice_line_items'::regclass
       AND binding.tgtype = 29
       AND binding.tgenabled = 'O'
+      AND binding.tgnargs = 0
+      AND octet_length(binding.tgargs) = 0
+      AND binding.tgqual IS NULL
+      AND binding.tgattr::text = ''
       AND NOT binding.tgisinternal
   ), 'invoice milestone latch binding drifted';
+
+  ASSERT position(
+    'FOR UPDATE' IN upper((
+      SELECT routine.prosrc
+      FROM pg_proc AS routine
+      WHERE routine.oid =
+        'public.sync_invoice_line_milestone_latch()'::regprocedure
+    ))
+  ) = 0, 'invoice-line AFTER trigger reacquired a parent row lock';
+
+  ASSERT obj_description(
+    'public.sync_invoice_line_milestone_latch()'::regprocedure,
+    'pg_proc'
+  ) =
+    'Exact invoice/project milestone latch validation: draft attachment is canonical; authenticated direct detach is denied; owner/service detach is accepted only after void released the latch; the AFTER trigger takes no parent row locks.',
+    'invoice milestone latch authority comment drifted';
 
   ASSERT NOT EXISTS (
     SELECT 1
@@ -510,29 +623,39 @@ BEGIN
     ) = 0
   ), 'scope-change caller lost the exact project helper argument';
 
-  ASSERT 'SELECT public._draft_invoice_from_milestone_00486(' ~
-      $milestone_core_token$(^|[^[:alnum:]_$"'.])(("public"|public)[[:space:]]*\.[[:space:]]*)?("_draft_invoice_from_milestone_00486"|_draft_invoice_from_milestone_00486)[[:space:]]*\($milestone_core_token$
-     AND 'SELECT _draft_invoice_from_milestone_00486 (' ~
-      $milestone_core_token$(^|[^[:alnum:]_$"'.])(("public"|public)[[:space:]]*\.[[:space:]]*)?("_draft_invoice_from_milestone_00486"|_draft_invoice_from_milestone_00486)[[:space:]]*\($milestone_core_token$
-     AND 'SELECT "public"."_draft_invoice_from_milestone_00486" (' ~
-      $milestone_core_token$(^|[^[:alnum:]_$"'.])(("public"|public)[[:space:]]*\.[[:space:]]*)?("_draft_invoice_from_milestone_00486"|_draft_invoice_from_milestone_00486)[[:space:]]*\($milestone_core_token$
-     AND 'SELECT other._draft_invoice_from_milestone_00486(' !~
-      $milestone_core_token$(^|[^[:alnum:]_$"'.])(("public"|public)[[:space:]]*\.[[:space:]]*)?("_draft_invoice_from_milestone_00486"|_draft_invoice_from_milestone_00486)[[:space:]]*\($milestone_core_token$
-     AND 'SELECT ''public._draft_invoice_from_milestone_00486(' !~
-      $milestone_core_token$(^|[^[:alnum:]_$"'.])(("public"|public)[[:space:]]*\.[[:space:]]*)?("_draft_invoice_from_milestone_00486"|_draft_invoice_from_milestone_00486)[[:space:]]*\($milestone_core_token$,
-    'milestone core caller token matcher lost quoting or identifier boundaries';
+  ASSERT pg_temp._00486_references_routine(
+      'SELECT PUBLIC._DRAFT_INVOICE_FROM_MILESTONE_00486($1)',
+      'public', '_draft_invoice_from_milestone_00486'
+    ) AND pg_temp._00486_references_routine(
+      'SELECT "public"."_draft_invoice_from_milestone_00486"($1)',
+      'public', '_draft_invoice_from_milestone_00486'
+    ) AND pg_temp._00486_references_routine(
+      $source$BEGIN EXECUTE format('SELECT public._draft_invoice_from_milestone_00486(%L)', value); END$source$,
+      'public', '_draft_invoice_from_milestone_00486'
+    ) AND NOT pg_temp._00486_references_routine(
+      'SELECT "public"."_DRAFT_INVOICE_FROM_MILESTONE_00486"($1)',
+      'public', '_draft_invoice_from_milestone_00486'
+    ) AND NOT pg_temp._00486_references_routine(
+      'SELECT other._draft_invoice_from_milestone_00486($1)',
+      'public', '_draft_invoice_from_milestone_00486'
+    ) AND NOT pg_temp._00486_references_routine(
+      $source$PERFORM 'public._draft_invoice_from_milestone_00486(';$source$,
+      'public', '_draft_invoice_from_milestone_00486'
+    ), 'milestone core scanner lost case, quoting, dynamic SQL, or literal boundaries';
 
-  ASSERT 'SELECT public.draft_invoice_from_milestone(' ~
-      $milestone_wrapper_token$(^|[^[:alnum:]_$"'.])(("public"|public)[[:space:]]*\.[[:space:]]*)?("draft_invoice_from_milestone"|draft_invoice_from_milestone)[[:space:]]*\($milestone_wrapper_token$
-     AND 'SELECT draft_invoice_from_milestone (' ~
-      $milestone_wrapper_token$(^|[^[:alnum:]_$"'.])(("public"|public)[[:space:]]*\.[[:space:]]*)?("draft_invoice_from_milestone"|draft_invoice_from_milestone)[[:space:]]*\($milestone_wrapper_token$
-     AND 'SELECT "public"."draft_invoice_from_milestone" (' ~
-      $milestone_wrapper_token$(^|[^[:alnum:]_$"'.])(("public"|public)[[:space:]]*\.[[:space:]]*)?("draft_invoice_from_milestone"|draft_invoice_from_milestone)[[:space:]]*\($milestone_wrapper_token$
-     AND 'SELECT other.draft_invoice_from_milestone(' !~
-      $milestone_wrapper_token$(^|[^[:alnum:]_$"'.])(("public"|public)[[:space:]]*\.[[:space:]]*)?("draft_invoice_from_milestone"|draft_invoice_from_milestone)[[:space:]]*\($milestone_wrapper_token$
-     AND 'SELECT ''public.draft_invoice_from_milestone(' !~
-      $milestone_wrapper_token$(^|[^[:alnum:]_$"'.])(("public"|public)[[:space:]]*\.[[:space:]]*)?("draft_invoice_from_milestone"|draft_invoice_from_milestone)[[:space:]]*\($milestone_wrapper_token$,
-    'milestone wrapper caller token matcher lost quoting or identifier boundaries';
+  ASSERT pg_temp._00486_references_routine(
+      'SELECT PUBLIC.DRAFT_INVOICE_FROM_MILESTONE($1)',
+      'public', 'draft_invoice_from_milestone'
+    ) AND pg_temp._00486_references_routine(
+      'SELECT "public"."draft_invoice_from_milestone"($1)',
+      'public', 'draft_invoice_from_milestone'
+    ) AND NOT pg_temp._00486_references_routine(
+      'SELECT "public"."DRAFT_INVOICE_FROM_MILESTONE"($1)',
+      'public', 'draft_invoice_from_milestone'
+    ) AND NOT pg_temp._00486_references_routine(
+      'SELECT other.draft_invoice_from_milestone($1)',
+      'public', 'draft_invoice_from_milestone'
+    ), 'milestone wrapper scanner lost case, quoting, or schema boundaries';
 
   ASSERT (
     SELECT array_agg(caller.oid ORDER BY caller.oid)
@@ -541,7 +664,9 @@ BEGIN
       ON caller_namespace.oid = caller.pronamespace
     WHERE caller_namespace.nspname !~ '^pg_'
       AND caller_namespace.nspname <> 'information_schema'
-      AND caller.prosrc ~ $milestone_core_call$(^|[^[:alnum:]_$"'.])(("public"|public)[[:space:]]*\.[[:space:]]*)?("_draft_invoice_from_milestone_00486"|_draft_invoice_from_milestone_00486)[[:space:]]*\($milestone_core_call$
+      AND pg_temp._00486_references_routine(
+        caller.prosrc, 'public', '_draft_invoice_from_milestone_00486'
+      )
   ) IS NOT DISTINCT FROM ARRAY[
     'public.draft_invoice_from_milestone(uuid)'::regprocedure::oid
   ], 'milestone-invoice legacy core caller graph drifted';
@@ -553,7 +678,9 @@ BEGIN
       ON caller_namespace.oid = caller.pronamespace
     WHERE caller_namespace.nspname !~ '^pg_'
       AND caller_namespace.nspname <> 'information_schema'
-      AND caller.prosrc ~ $milestone_wrapper_call$(^|[^[:alnum:]_$"'.])(("public"|public)[[:space:]]*\.[[:space:]]*)?("draft_invoice_from_milestone"|draft_invoice_from_milestone)[[:space:]]*\($milestone_wrapper_call$
+      AND pg_temp._00486_references_routine(
+        caller.prosrc, 'public', 'draft_invoice_from_milestone'
+      )
   ) IS NOT DISTINCT FROM (
     SELECT array_agg(signature::regprocedure::oid ORDER BY signature::regprocedure::oid)
     FROM unnest(ARRAY[
@@ -582,6 +709,37 @@ BEGIN
   ], 'SMS field-effect relay caller graph drifted';
 END
 $dependency_catalog_contract$;
+
+DO $invoice_line_policy_contract$
+BEGIN
+  ASSERT (
+    SELECT count(*) = 5
+    FROM pg_policy AS policy
+    WHERE policy.polrelid = 'public.invoice_line_items'::regclass
+  ), 'invoice-line RLS retained a permissive legacy policy';
+
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM (VALUES
+      ('invoice_line_items_exact_studio_select', 'r'::"char", true, false),
+      ('invoice_line_items_exact_studio_insert_draft', 'a'::"char", false, true),
+      ('invoice_line_items_exact_studio_update_draft', 'w'::"char", true, true),
+      ('invoice_line_items_exact_studio_delete_draft', 'd'::"char", true, false),
+      ('invoice_line_items_exact_client_select', 'r'::"char", true, false)
+    ) AS expected(policy_name, command, has_qual, has_check)
+    LEFT JOIN pg_policy AS policy
+      ON policy.polrelid = 'public.invoice_line_items'::regclass
+     AND policy.polname = expected.policy_name
+    WHERE policy.oid IS NULL
+       OR NOT policy.polpermissive
+       OR policy.polcmd IS DISTINCT FROM expected.command
+       OR policy.polroles IS DISTINCT FROM
+          ARRAY['authenticated'::regrole::oid]
+       OR (policy.polqual IS NOT NULL) IS DISTINCT FROM expected.has_qual
+       OR (policy.polwithcheck IS NOT NULL) IS DISTINCT FROM expected.has_check
+  ), 'invoice-line exact policy catalog contract drifted';
+END
+$invoice_line_policy_contract$;
 
 DO $body_contract$
 DECLARE
@@ -743,12 +901,18 @@ BEGIN
   WHERE routine.oid =
     'public.draft_invoice_from_milestone(uuid)'::regprocedure;
   ASSERT body LIKE '%_draft_invoice_from_milestone_00486%'
-     AND body LIKE '%organization.id = v_project.studio_id%'
-     AND body LIKE '%membership.user_id = v_invoice.designer_id%'
+     AND body LIKE '%project_team_members AS historical_lead%'
      AND body LIKE
        '%v_invoice.studio_id IS DISTINCT FROM v_project.studio_id%'
+     AND position('FOR UPDATE' IN body) > 0
+     AND position('SELECT * INTO v_project' IN body) <
+         position('PERFORM invoice.id' IN body)
+     AND position('PERFORM invoice.id' IN body) <
+         position('PERFORM line.id' IN body)
+     AND position('PERFORM line.id' IN body) <
+         position('SELECT * INTO v_milestone' IN body)
      AND body NOT LIKE '%_can_manage_invoice_owner%',
-    'milestone invoice wrapper did not validate the exact project studio';
+    'milestone invoice wrapper lost canonical identity or lock order';
 
   ASSERT (
     SELECT routine.prosrc LIKE '%public.draft_invoice_from_milestone(%'
@@ -768,14 +932,17 @@ BEGIN
     'public.sync_invoice_line_milestone_latch()'::regprocedure;
   ASSERT body LIKE '%organization.id = v_project.studio_id%'
      AND body LIKE '%membership.user_id = auth.uid()%'
-     AND body LIKE '%membership.user_id = v_invoice.designer_id%'
+     AND body LIKE '%current_user = ''authenticated''%'
+     AND body LIKE '%project_team_members AS historical_lead%'
      AND body LIKE
        '%v_invoice.studio_id IS DISTINCT FROM v_project.studio_id%'
-     AND body LIKE
-       '%v_previous_invoice.studio_id IS NOT DISTINCT FROM%'
+     AND body LIKE '%v_previous_invoice.status IS DISTINCT FROM ''void''%'
+     AND body LIKE '%milestone.invoice_id = OLD.invoice_id%'
+     AND body NOT LIKE '%current_setting(''role'', true) = ''authenticated''%'
+     AND body NOT LIKE '%FOR UPDATE%'
      AND body NOT LIKE '%owner_membership%'
      AND body NOT LIKE '%_can_manage_invoice_owner%',
-    'invoice milestone latch retained a generic shared-studio boundary';
+    'invoice milestone latch lost effective-role, canonical, or lock-order guard';
 
   SELECT routine.prosrc INTO body
   FROM pg_proc AS routine
@@ -1105,8 +1272,15 @@ INSERT INTO public.project_payment_milestones (
 VALUES
   ('48600000-0000-4000-8000-000000000070', '48600000-0000-4000-8000-000000000040', '00486 Milestone A', 0, 1000, 'pending', 1),
   ('48600000-0000-4000-8000-000000000071', '48600000-0000-4000-8000-000000000041', '00486 Milestone B hostile latch', 0, 1000, 'pending', 1),
-  ('48600000-0000-4000-8000-000000000072', '48600000-0000-4000-8000-000000000041', '00486 Milestone B direct latch', 0, 1000, 'pending', 2);
+  ('48600000-0000-4000-8000-000000000072', '48600000-0000-4000-8000-000000000041', '00486 Milestone B direct latch', 0, 1000, 'pending', 2),
+  ('48600000-0000-4000-8000-000000000076', '48600000-0000-4000-8000-000000000040', '00486 Canonical latch', 0, 1200, 'pending', 2),
+  ('48600000-0000-4000-8000-000000000088', '48600000-0000-4000-8000-000000000040', '00486 Decision settlement', 0, 1300, 'pending', 3);
 
+UPDATE public.project_payment_milestones
+SET trigger_kind = 'on_section_settled', trigger_section_key = 'brief'
+WHERE id = '48600000-0000-4000-8000-000000000088';
+
+SET LOCAL session_replication_role = replica;
 INSERT INTO public.invoices (
   id, project_id, designer_id, client_id, studio_id, status,
   subtotal_cents, tax_cents, total_cents, amount_paid_cents, memo
@@ -1115,11 +1289,34 @@ VALUES
   ('48600000-0000-4000-8000-000000000073', '48600000-0000-4000-8000-000000000041', '48600000-0000-4000-8000-000000000001', '48600000-0000-4000-8000-000000000004', '48600000-0000-4000-8000-000000000010', 'draft', 1000, 0, 1000, 0, '00486 hostile pre-latch'),
   ('48600000-0000-4000-8000-000000000074', '48600000-0000-4000-8000-000000000041', '48600000-0000-4000-8000-000000000001', '48600000-0000-4000-8000-000000000004', '48600000-0000-4000-8000-000000000010', 'draft', 1000, 0, 1000, 0, '00486 hostile direct latch');
 
-SET LOCAL session_replication_role = replica;
 UPDATE public.project_payment_milestones
 SET invoice_id = '48600000-0000-4000-8000-000000000073'
 WHERE id = '48600000-0000-4000-8000-000000000071';
 SET LOCAL session_replication_role = origin;
+
+INSERT INTO public.invoices (
+  id, project_id, designer_id, client_id, studio_id, status,
+  subtotal_cents, tax_cents, total_cents, amount_paid_cents, memo
+)
+VALUES (
+  '48600000-0000-4000-8000-000000000077',
+  '48600000-0000-4000-8000-000000000040',
+  '48600000-0000-4000-8000-000000000001',
+  '48600000-0000-4000-8000-000000000003',
+  '48600000-0000-4000-8000-000000000010',
+  'draft', 1200, 0, 1200, 0, '00486 canonical line policy fixture'
+);
+
+INSERT INTO public.invoice_line_items (
+  id, invoice_id, kind, milestone_id, description,
+  quantity, unit_amount_cents, amount_cents, metadata, sort_order
+)
+VALUES (
+  '48600000-0000-4000-8000-000000000078',
+  '48600000-0000-4000-8000-000000000077', 'milestone',
+  '48600000-0000-4000-8000-000000000076',
+  '00486 canonical milestone line', 1, 1200, 1200, '{}'::jsonb, 0
+);
 
 INSERT INTO public.proposals (
   id, designer_id, designer_client_id, client_id, project_id,
@@ -1131,7 +1328,20 @@ VALUES
   ('48600000-0000-4000-8000-000000000082', '48600000-0000-4000-8000-000000000001', '48600000-0000-4000-8000-000000000030', '48600000-0000-4000-8000-000000000003', NULL, '00486 Change A', 0, 'sent', now(), now() + interval '30 days'),
   ('48600000-0000-4000-8000-000000000083', '48600000-0000-4000-8000-000000000001', '48600000-0000-4000-8000-000000000030', '48600000-0000-4000-8000-000000000003', NULL, '00486 Offline A', 0, 'expired', now() - interval '60 days', now() - interval '30 days'),
   ('48600000-0000-4000-8000-000000000084', '48600000-0000-4000-8000-000000000002', '48600000-0000-4000-8000-000000000031', '48600000-0000-4000-8000-000000000004', '48600000-0000-4000-8000-000000000041', '00486 Foreign B', 0, 'sent', now(), now() + interval '30 days'),
-  ('48600000-0000-4000-8000-000000000085', '48600000-0000-4000-8000-000000000001', '48600000-0000-4000-8000-000000000030', '48600000-0000-4000-8000-000000000003', '48600000-0000-4000-8000-000000000040', '00486 Feedback A', 0, 'sent', now(), now() + interval '30 days');
+  ('48600000-0000-4000-8000-000000000085', '48600000-0000-4000-8000-000000000001', '48600000-0000-4000-8000-000000000030', '48600000-0000-4000-8000-000000000003', '48600000-0000-4000-8000-000000000040', '00486 Feedback A', 0, 'sent', now(), now() + interval '30 days'),
+  ('48600000-0000-4000-8000-000000000086', '48600000-0000-4000-8000-000000000001', '48600000-0000-4000-8000-000000000030', '48600000-0000-4000-8000-000000000003', NULL, '00486 Signing Deposit', 2500, 'sent', now(), now() + interval '30 days');
+
+SET LOCAL session_replication_role = replica;
+INSERT INTO public.proposal_payment_milestones (
+  id, proposal_id, label, percentage, amount_cents,
+  trigger_condition, sort_order
+)
+VALUES (
+  '48600000-0000-4000-8000-000000000087',
+  '48600000-0000-4000-8000-000000000086',
+  '00486 Signing Deposit', 100, 2500, 'on signing', 0
+);
+SET LOCAL session_replication_role = origin;
 
 INSERT INTO public.proposal_items (
   id, proposal_id, name, quantity, unit_price, unit_sell_price,
@@ -1189,6 +1399,28 @@ VALUES
   ('48600000-0000-4000-8000-0000000000b6', '48600000-0000-4000-8000-000000000032', '48600000-0000-4000-8000-000000000001', '48600000-0000-4000-8000-000000000044', '00486 Same designer mismatch', 'approval', 'selection', 'designer', 'pending');
 
 SET LOCAL session_replication_role = replica;
+INSERT INTO public.client_decisions (
+  id, designer_client_id, designer_id, project_id, title,
+  decision_type, decision_kind, coordination_kind, court, section_key,
+  blocking_status, status, sent_at
+)
+VALUES (
+  '48600000-0000-4000-8000-000000000089',
+  '48600000-0000-4000-8000-000000000030',
+  '48600000-0000-4000-8000-000000000001',
+  '48600000-0000-4000-8000-000000000040',
+  '00486 Client Settlement', 'approval', 'approval', 'selection',
+  'client', 'brief', 'non_blocking', 'pending', now()
+);
+INSERT INTO public.client_decision_options (
+  id, decision_id, name, approves, selected, sort_order
+)
+VALUES (
+  '48600000-0000-4000-8000-000000000092',
+  '48600000-0000-4000-8000-000000000089',
+  'Approve settlement', true, false, 0
+);
+
 UPDATE public.client_decisions
 SET due_date = '2000-01-01T00:00:00Z'
 WHERE id = '48600000-0000-4000-8000-0000000000b5';
@@ -1413,11 +1645,139 @@ AS $$
   WHERE decision_id = p_decision_id
 $$;
 
+CREATE OR REPLACE FUNCTION pg_temp.count_00486_project_trigger_lines(
+  p_project_id uuid,
+  p_trigger_kind text
+)
+RETURNS bigint
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp
+AS $$
+  SELECT count(*)
+  FROM public.invoices AS invoice
+  JOIN public.invoice_line_items AS line ON line.invoice_id = invoice.id
+  JOIN public.project_payment_milestones AS milestone
+    ON milestone.id = line.milestone_id
+  WHERE invoice.project_id = p_project_id
+    AND milestone.trigger_kind = p_trigger_kind
+    AND milestone.invoice_id = invoice.id
+    AND line.kind = 'milestone'
+$$;
+
+CREATE OR REPLACE FUNCTION pg_temp.count_00486_milestone_lines(
+  p_milestone_id uuid
+)
+RETURNS bigint
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp
+AS $$
+  SELECT count(*)
+  FROM public.invoice_line_items AS line
+  JOIN public.project_payment_milestones AS milestone
+    ON milestone.id = line.milestone_id
+  WHERE milestone.id = p_milestone_id
+    AND milestone.invoice_id = line.invoice_id
+    AND line.kind = 'milestone'
+$$;
+
 GRANT EXECUTE ON FUNCTION pg_temp.capture_00486_error(text) TO
   authenticated, service_role;
 GRANT EXECUTE ON FUNCTION pg_temp.count_00486_field_links() TO authenticated;
 GRANT EXECUTE ON FUNCTION pg_temp.count_00486_party_field_links(uuid),
-  pg_temp.count_00486_coordination_revisions(uuid) TO authenticated;
+  pg_temp.count_00486_coordination_revisions(uuid),
+  pg_temp.count_00486_project_trigger_lines(uuid, text),
+  pg_temp.count_00486_milestone_lines(uuid) TO authenticated;
+
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_00486_actor('48600000-0000-4000-8000-000000000001');
+DO $exact_invoice_line_policy_contract$
+DECLARE
+  affected integer;
+  failure record;
+BEGIN
+  UPDATE public.invoice_line_items
+  SET description = '00486 canonical exact-studio edit'
+  WHERE id = '48600000-0000-4000-8000-000000000078';
+  GET DIAGNOSTICS affected = ROW_COUNT;
+  ASSERT affected = 1,
+    'exact-studio designer could not edit its canonical draft line';
+
+  SELECT * INTO failure FROM pg_temp.capture_00486_error(
+    $call$UPDATE public.invoice_line_items
+      SET milestone_id = NULL
+      WHERE id = '48600000-0000-4000-8000-000000000078'$call$
+  );
+  ASSERT failure.error_state = '42501'
+     AND failure.error_message =
+       'invoice milestone latch: direct detach is not allowed',
+    'effective authenticated current_user did not deny direct detach';
+END
+$exact_invoice_line_policy_contract$;
+RESET ROLE;
+
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_00486_actor('48600000-0000-4000-8000-000000000009');
+DO $cross_studio_invoice_line_policy_contract$
+DECLARE
+  affected integer;
+BEGIN
+  UPDATE public.invoice_line_items
+  SET milestone_id = NULL
+  WHERE id = '48600000-0000-4000-8000-000000000078';
+  GET DIAGNOSTICS affected = ROW_COUNT;
+  ASSERT affected = 0,
+    'Studio-B-only actor reached Studio-A milestone detach';
+
+  DELETE FROM public.invoice_line_items
+  WHERE id = '48600000-0000-4000-8000-000000000078';
+  GET DIAGNOSTICS affected = ROW_COUNT;
+  ASSERT affected = 0,
+    'Studio-B-only actor reached Studio-A line delete';
+END
+$cross_studio_invoice_line_policy_contract$;
+RESET ROLE;
+
+DO $invoice_line_denial_residue_contract$
+BEGIN
+  ASSERT (
+    SELECT milestone_id = '48600000-0000-4000-8000-000000000076'
+       AND description = '00486 canonical exact-studio edit'
+    FROM public.invoice_line_items
+    WHERE id = '48600000-0000-4000-8000-000000000078'
+  ) AND (
+    SELECT invoice_id = '48600000-0000-4000-8000-000000000077'
+    FROM public.project_payment_milestones
+    WHERE id = '48600000-0000-4000-8000-000000000076'
+  ), 'invoice-line detach/delete denials left residue';
+END
+$invoice_line_denial_residue_contract$;
+
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_00486_actor('48600000-0000-4000-8000-000000000001');
+DO $owner_void_releases_latch_contract$
+DECLARE
+  voided public.invoices;
+BEGIN
+  voided := public.void_invoice(
+    '48600000-0000-4000-8000-000000000077', '00486 real void path'
+  );
+  ASSERT voided.status = 'void'
+     AND (
+       SELECT milestone_id IS NULL AND kind = 'adhoc'
+       FROM public.invoice_line_items
+       WHERE id = '48600000-0000-4000-8000-000000000078'
+     ) AND (
+       SELECT invoice_id IS NULL AND status = 'pending'
+       FROM public.project_payment_milestones
+       WHERE id = '48600000-0000-4000-8000-000000000076'
+     ), 'real void path did not release the latch before line detach';
+END
+$owner_void_releases_latch_contract$;
+RESET ROLE;
 
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_00486_actor(NULL);
@@ -2321,6 +2681,8 @@ SELECT pg_temp.assume_00486_actor('48600000-0000-4000-8000-000000000003');
 DO $authorized_client_contract$
 DECLARE
   v_receipt jsonb;
+  v_decision public.client_decisions;
+  v_project_id uuid;
   v_event public.item_feedback_events;
 BEGIN
   v_receipt := public.mark_proposal_viewed(
@@ -2356,6 +2718,28 @@ BEGIN
   ASSERT v_event.actor = '48600000-0000-4000-8000-000000000003'
      AND v_event.body = 'Client follow-up',
     'exact feedback client could not reply';
+
+  v_receipt := public.sign_proposal(
+    '48600000-0000-4000-8000-000000000086', '00486 Client A'
+  );
+  v_project_id := (v_receipt->>'project_id')::uuid;
+  ASSERT v_receipt->>'status' = 'accepted'
+     AND v_project_id IS NOT NULL
+     AND pg_temp.count_00486_project_trigger_lines(
+       v_project_id, 'on_signing'
+     ) = 1,
+    'real sign_proposal path did not draft and latch its kickoff deposit';
+
+  v_decision := public.apply_client_decision(
+    '48600000-0000-4000-8000-000000000089',
+    '48600000-0000-4000-8000-000000000092',
+    'click_through', NULL, 'Approved in 00486', 1
+  );
+  ASSERT v_decision.status = 'responded'
+     AND pg_temp.count_00486_milestone_lines(
+       '48600000-0000-4000-8000-000000000088'
+     ) = 1,
+    'real client-decision settlement did not draft and latch its invoice';
 END
 $authorized_client_contract$;
 
@@ -2654,6 +3038,269 @@ BEGIN
   PERFORM extensions.dblink_disconnect('scope486_setup');
 END
 $scope_membership_revocation_race$;
+
+DO $invoice_lock_order_contract$
+DECLARE
+  v_conninfo text := format(
+    'hostaddr=%s port=%s dbname=postgres user=postgres password=postgres',
+    inet_server_addr(), inet_server_port()
+  );
+  v_generate_pid integer;
+  v_waiting boolean := false;
+  v_attempt integer;
+  v_invoice_id uuid;
+  v_detach_error text;
+  v_void_status text;
+  v_consistent boolean;
+BEGIN
+  PERFORM extensions.dblink_connect('invoice486_setup', v_conninfo);
+  PERFORM extensions.dblink_exec(
+    'invoice486_setup', 'SET session_replication_role = replica'
+  );
+  PERFORM extensions.dblink_exec('invoice486_setup', $cleanup$
+    DELETE FROM public.invoice_line_items
+    WHERE invoice_id IN (
+      SELECT id FROM public.invoices
+      WHERE project_id = '48680000-0000-4000-8000-000000000040'
+    );
+    DELETE FROM public.invoices
+    WHERE project_id = '48680000-0000-4000-8000-000000000040';
+    DELETE FROM public.project_payment_milestones
+    WHERE project_id = '48680000-0000-4000-8000-000000000040';
+    DELETE FROM public.projects
+    WHERE id = '48680000-0000-4000-8000-000000000040';
+    DELETE FROM public.user_roles
+    WHERE user_id = '48680000-0000-4000-8000-000000000001';
+    DELETE FROM public.organization_members
+    WHERE id = '48680000-0000-4000-8000-000000000020';
+    DELETE FROM public.organizations
+    WHERE id = '48680000-0000-4000-8000-000000000010';
+  $cleanup$);
+  PERFORM extensions.dblink_exec('invoice486_setup', $setup$
+    INSERT INTO public.organizations (id, type, name, slug, status)
+    VALUES (
+      '48680000-0000-4000-8000-000000000010', 'design_studio',
+      '00486 Invoice Lock Studio', 'sd486-invoice-lock', 'active'
+    );
+    INSERT INTO public.organization_members (
+      id, user_id, organization_id, role, status, joined_at
+    ) VALUES (
+      '48680000-0000-4000-8000-000000000020',
+      '48680000-0000-4000-8000-000000000001',
+      '48680000-0000-4000-8000-000000000010',
+      'owner', 'active', now()
+    );
+    INSERT INTO public.user_roles (user_id, role_id)
+    SELECT '48680000-0000-4000-8000-000000000001', role_row.id
+    FROM public.roles AS role_row
+    WHERE role_row.name = 'independent_designer';
+    INSERT INTO public.projects (
+      id, name, designer_id, client_id, studio_id, created_by, status,
+      total_amount_cents, budget_cents, design_fee_cents, target_end_date
+    ) VALUES (
+      '48680000-0000-4000-8000-000000000040',
+      '00486 Invoice Lock Project',
+      '48680000-0000-4000-8000-000000000001', NULL,
+      '48680000-0000-4000-8000-000000000010',
+      '48680000-0000-4000-8000-000000000001', 'active',
+      0, 0, 0, current_date + 30
+    );
+    INSERT INTO public.project_payment_milestones (
+      id, project_id, label, percentage, amount_cents, status, sort_order
+    ) VALUES (
+      '48680000-0000-4000-8000-000000000070',
+      '48680000-0000-4000-8000-000000000040',
+      '00486 Lock-Order Milestone', 0, 1400, 'pending', 0
+    );
+  $setup$);
+  PERFORM extensions.dblink_exec(
+    'invoice486_setup', 'SET session_replication_role = origin'
+  );
+
+  PERFORM extensions.dblink_connect('invoice486_close', v_conninfo);
+  PERFORM extensions.dblink_connect('invoice486_generate', v_conninfo);
+  PERFORM extensions.dblink_exec('invoice486_close', $session$
+    BEGIN;
+    SET LOCAL ROLE authenticated;
+    SET LOCAL request.jwt.claims =
+      '{"sub":"48680000-0000-4000-8000-000000000001","role":"authenticated"}';
+    SET LOCAL request.jwt.claim.sub =
+      '48680000-0000-4000-8000-000000000001';
+    SET LOCAL lock_timeout = '5s';
+    DO $remote$
+    BEGIN
+      PERFORM 1 FROM public.projects
+      WHERE id = '48680000-0000-4000-8000-000000000040'
+      FOR UPDATE;
+    END
+    $remote$;
+  $session$);
+  PERFORM extensions.dblink_exec('invoice486_generate', $session$
+    BEGIN;
+    SET LOCAL ROLE authenticated;
+    SET LOCAL request.jwt.claims =
+      '{"sub":"48680000-0000-4000-8000-000000000001","role":"authenticated"}';
+    SET LOCAL request.jwt.claim.sub =
+      '48680000-0000-4000-8000-000000000001';
+    SET LOCAL lock_timeout = '5s';
+  $session$);
+  SELECT remote.pid INTO v_generate_pid
+  FROM extensions.dblink(
+    'invoice486_generate', 'SELECT pg_backend_pid()'
+  ) AS remote(pid integer);
+  PERFORM extensions.dblink_send_query(
+    'invoice486_generate',
+    $generate$SELECT public.generate_milestone_invoice(
+      '48680000-0000-4000-8000-000000000070'
+    )$generate$
+  );
+  FOR v_attempt IN 1..40 LOOP
+    SELECT activity.wait_event_type = 'Lock'
+    INTO v_waiting
+    FROM pg_stat_activity AS activity
+    WHERE activity.pid = v_generate_pid;
+    EXIT WHEN COALESCE(v_waiting, false);
+    PERFORM pg_sleep(0.025);
+  END LOOP;
+  ASSERT COALESCE(v_waiting, false)
+     AND extensions.dblink_is_busy('invoice486_generate') = 1,
+    'milestone generator did not wait first on the project lock';
+
+  PERFORM extensions.dblink_exec('invoice486_close', $close$
+    DO $remote$
+    BEGIN
+      BEGIN
+        PERFORM public.close_project(
+          '48680000-0000-4000-8000-000000000040',
+          '[{"key":"walkthrough","completed":true},{"key":"punch_list","completed":true},{"key":"payment","completed":true},{"key":"photography","completed":true},{"key":"photos","completed":true},{"key":"case_study","completed":true}]'::jsonb,
+          '{}'::jsonb
+        );
+        RAISE EXCEPTION 'close unexpectedly succeeded';
+      EXCEPTION WHEN check_violation THEN
+        IF position('positive payment milestone' IN SQLERRM) = 0 THEN
+          RAISE;
+        END IF;
+      END;
+    END
+    $remote$;
+    COMMIT;
+  $close$);
+  SELECT generated.invoice_id INTO v_invoice_id
+  FROM extensions.dblink_get_result('invoice486_generate', false)
+    AS generated(invoice_id uuid);
+  ASSERT v_invoice_id IS NOT NULL,
+    format(
+      'close/generate ordering did not complete the generator: %L',
+      extensions.dblink_error_message('invoice486_generate')
+    );
+  PERFORM extensions.dblink_exec('invoice486_generate', 'COMMIT');
+  PERFORM extensions.dblink_disconnect('invoice486_generate');
+  PERFORM extensions.dblink_disconnect('invoice486_close');
+
+  PERFORM extensions.dblink_connect('invoice486_void', v_conninfo);
+  PERFORM extensions.dblink_connect('invoice486_detach', v_conninfo);
+  PERFORM extensions.dblink_exec(
+    'invoice486_void',
+    format($session$
+      BEGIN;
+      SET LOCAL ROLE authenticated;
+      SET LOCAL request.jwt.claims =
+        '{"sub":"48680000-0000-4000-8000-000000000001","role":"authenticated"}';
+      SET LOCAL request.jwt.claim.sub =
+        '48680000-0000-4000-8000-000000000001';
+      SET LOCAL lock_timeout = '5s';
+      DO $remote$
+      BEGIN
+        PERFORM 1 FROM public.invoices WHERE id = %L::uuid FOR UPDATE;
+      END
+      $remote$;
+    $session$, v_invoice_id)
+  );
+  PERFORM extensions.dblink_exec('invoice486_detach', $session$
+    BEGIN;
+    SET LOCAL ROLE service_role;
+    SET LOCAL lock_timeout = '5s';
+  $session$);
+  PERFORM extensions.dblink_send_query(
+    'invoice486_detach',
+    format(
+      'UPDATE public.invoice_line_items SET milestone_id = NULL WHERE invoice_id = %L::uuid RETURNING id',
+      v_invoice_id
+    )
+  );
+  FOR v_attempt IN 1..40 LOOP
+    EXIT WHEN extensions.dblink_is_busy('invoice486_detach') = 0;
+    PERFORM pg_sleep(0.025);
+  END LOOP;
+  ASSERT extensions.dblink_is_busy('invoice486_detach') = 0,
+    'line detach waited on the invoice parent from an AFTER trigger';
+  PERFORM denied.id
+  FROM extensions.dblink_get_result('invoice486_detach', false)
+    AS denied(id uuid);
+  v_detach_error := extensions.dblink_error_message('invoice486_detach');
+  ASSERT position(
+    'cannot detach milestone' IN v_detach_error
+  ) > 0, format('draft detach returned the wrong fixed denial: %L', v_detach_error);
+  PERFORM extensions.dblink_exec('invoice486_detach', 'ROLLBACK');
+
+  SELECT voided.status INTO v_void_status
+  FROM extensions.dblink(
+    'invoice486_void',
+    format(
+      'SELECT (public.void_invoice(%L::uuid, %L)).status::text',
+      v_invoice_id, '00486 dblink void'
+    )
+  ) AS voided(status text);
+  ASSERT v_void_status = 'void',
+    'real void path failed after a concurrent rejected detach';
+  PERFORM extensions.dblink_exec('invoice486_void', 'COMMIT');
+  PERFORM extensions.dblink_disconnect('invoice486_detach');
+  PERFORM extensions.dblink_disconnect('invoice486_void');
+
+  SELECT checked.consistent INTO v_consistent
+  FROM extensions.dblink(
+    'invoice486_setup',
+    format($check$
+      SELECT
+        (SELECT status = 'void' FROM public.invoices WHERE id = %L::uuid)
+        AND (SELECT milestone_id IS NULL AND kind = 'adhoc'
+             FROM public.invoice_line_items WHERE invoice_id = %L::uuid)
+        AND (SELECT invoice_id IS NULL AND status = 'pending'
+             FROM public.project_payment_milestones
+             WHERE id = '48680000-0000-4000-8000-000000000070')
+    $check$, v_invoice_id, v_invoice_id)
+  ) AS checked(consistent boolean);
+  ASSERT v_consistent,
+    'void/detach lock-order probe left an inconsistent latch graph';
+
+  PERFORM extensions.dblink_exec(
+    'invoice486_setup', 'SET session_replication_role = replica'
+  );
+  PERFORM extensions.dblink_exec('invoice486_setup', $cleanup$
+    DELETE FROM public.invoice_line_items
+    WHERE invoice_id IN (
+      SELECT id FROM public.invoices
+      WHERE project_id = '48680000-0000-4000-8000-000000000040'
+    );
+    DELETE FROM public.invoices
+    WHERE project_id = '48680000-0000-4000-8000-000000000040';
+    DELETE FROM public.project_payment_milestones
+    WHERE project_id = '48680000-0000-4000-8000-000000000040';
+    DELETE FROM public.projects
+    WHERE id = '48680000-0000-4000-8000-000000000040';
+    DELETE FROM public.user_roles
+    WHERE user_id = '48680000-0000-4000-8000-000000000001';
+    DELETE FROM public.organization_members
+    WHERE id = '48680000-0000-4000-8000-000000000020';
+    DELETE FROM public.organizations
+    WHERE id = '48680000-0000-4000-8000-000000000010';
+  $cleanup$);
+  PERFORM extensions.dblink_exec(
+    'invoice486_setup', 'SET session_replication_role = origin'
+  );
+  PERFORM extensions.dblink_disconnect('invoice486_setup');
+END
+$invoice_lock_order_contract$;
 
 CREATE TEMP TABLE _00486_enumeration_pairs (
   signature text PRIMARY KEY,

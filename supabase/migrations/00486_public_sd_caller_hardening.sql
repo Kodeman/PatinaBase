@@ -372,7 +372,7 @@ INSERT INTO _00486_dependency_profile VALUES
     'uuid', 'plpgsql', true, 'v', ARRAY['search_path=public'],
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     '000414169a6d57ee560f901d5ad8acef1aafcaf607de21df395ec8045db60c50',
-    'fabe4d94f7ecfccca36f27e9252db735b4a66806dcb49d2aebcaaf83dfbdc535',
+    '6a2df0b14e06aa00ad2bc90b59346c46c4b1e0cbc20ffa972b6ab63cdbeb8472',
     ARRAY['service_role'], ARRAY['service_role'], true
   ),
   (
@@ -389,9 +389,136 @@ INSERT INTO _00486_dependency_profile VALUES
     'plpgsql', false, 'v', ARRAY['search_path=public, pg_temp'],
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     '4e8568994c57300bc7eef68e408fbd6956fc474ddf272bfaf96ccbfcf3687b56',
-    '08c4238609969828678c5997330d32b726164561b0b0d21321dda95ec53686ba',
+    'fb3520a732378efe39f0e68838bcfada60cad47a1ac9c440fc3feedd1aa596b0',
     ARRAY[]::text[], ARRAY[]::text[], true
   );
+
+CREATE OR REPLACE FUNCTION pg_temp._00486_references_routine(
+  p_source text,
+  p_schema text,
+  p_name text
+)
+RETURNS boolean
+LANGUAGE plpgsql
+IMMUTABLE
+SECURITY INVOKER
+SET search_path = pg_catalog, pg_temp
+AS $caller_scan$
+DECLARE
+  v_without_comments text;
+  v_direct_source text;
+  v_scan_source text;
+  v_match text[];
+  v_schema_token text;
+  v_name_token text;
+BEGIN
+  v_without_comments := regexp_replace(
+    regexp_replace(
+      COALESCE(p_source, ''),
+      $block_comment$/\*([^*]|\*+[^*/])*\*+/$block_comment$,
+      ' ',
+      'g'
+    ),
+    $line_comment$--[^\r\n]*$line_comment$,
+    ' ',
+    'g'
+  );
+  v_direct_source := regexp_replace(
+    v_without_comments,
+    $quoted_text$'([^']|'')*'$quoted_text$,
+    ' ',
+    'g'
+  );
+
+  FOREACH v_scan_source IN ARRAY CASE
+    WHEN v_direct_source ~* '(^|[^[:alnum:]_$])execute([^[:alnum:]_$]|$)'
+      THEN ARRAY[v_direct_source, v_without_comments]
+    ELSE ARRAY[v_direct_source]
+  END
+  LOOP
+    FOR v_match IN
+      SELECT matches.match_row
+      FROM regexp_matches(
+        v_scan_source,
+        $routine_token$(?:
+          ("(?:[^"]|"")*"|[[:alpha:]_][[:alnum:]_$]*)
+          [[:space:]]*\.[[:space:]]*
+        )?
+        ("(?:[^"]|"")*"|[[:alpha:]_][[:alnum:]_$]*)
+        [[:space:]]*\($routine_token$,
+        'gx'
+      ) AS matches(match_row)
+    LOOP
+      v_schema_token := v_match[1];
+      v_name_token := v_match[2];
+
+      IF v_name_token IS NULL THEN
+        CONTINUE;
+      END IF;
+
+      IF left(v_name_token, 1) = '"' THEN
+        v_name_token := replace(
+          substr(v_name_token, 2, length(v_name_token) - 2),
+          '""',
+          '"'
+        );
+        IF v_name_token IS DISTINCT FROM p_name THEN
+          CONTINUE;
+        END IF;
+      ELSIF lower(v_name_token) IS DISTINCT FROM lower(p_name) THEN
+        CONTINUE;
+      END IF;
+
+      IF v_schema_token IS NULL THEN
+        RETURN true;
+      ELSIF left(v_schema_token, 1) = '"' THEN
+        v_schema_token := replace(
+          substr(v_schema_token, 2, length(v_schema_token) - 2),
+          '""',
+          '"'
+        );
+        IF v_schema_token IS NOT DISTINCT FROM p_schema THEN
+          RETURN true;
+        END IF;
+      ELSIF lower(v_schema_token) IS NOT DISTINCT FROM lower(p_schema) THEN
+        RETURN true;
+      END IF;
+    END LOOP;
+  END LOOP;
+
+  RETURN false;
+END;
+$caller_scan$;
+
+DO $caller_scan_contract$
+BEGIN
+  IF NOT pg_temp._00486_references_routine(
+    $source$SELECT PUBLIC._DRAFT_INVOICE_FROM_MILESTONE_00486($1)$source$,
+    'public', '_draft_invoice_from_milestone_00486'
+  ) OR NOT pg_temp._00486_references_routine(
+    $source$SELECT "public"."_draft_invoice_from_milestone_00486"($1)$source$,
+    'public', '_draft_invoice_from_milestone_00486'
+  ) OR NOT pg_temp._00486_references_routine(
+    $source$BEGIN EXECUTE format('SELECT public._draft_invoice_from_milestone_00486(%L)', value); END$source$,
+    'public', '_draft_invoice_from_milestone_00486'
+  ) OR pg_temp._00486_references_routine(
+    $source$SELECT "public"."_DRAFT_INVOICE_FROM_MILESTONE_00486"($1)$source$,
+    'public', '_draft_invoice_from_milestone_00486'
+  ) OR pg_temp._00486_references_routine(
+    $source$SELECT private._draft_invoice_from_milestone_00486($1)$source$,
+    'public', '_draft_invoice_from_milestone_00486'
+  ) OR pg_temp._00486_references_routine(
+    $source$PERFORM 'public._draft_invoice_from_milestone_00486(';$source$,
+    'public', '_draft_invoice_from_milestone_00486'
+  ) OR pg_temp._00486_references_routine(
+    $source$-- public._draft_invoice_from_milestone_00486(
+      PERFORM 1;$source$,
+    'public', '_draft_invoice_from_milestone_00486'
+  ) THEN
+    RAISE EXCEPTION '00486 routine-reference scanner contract failed';
+  END IF;
+END
+$caller_scan_contract$;
 
 DO $source_profile_preflight$
 BEGIN
@@ -3338,6 +3465,221 @@ BEGIN
 END;
 $$;
 
+DROP POLICY IF EXISTS "Designers can view line items on their invoices"
+  ON public.invoice_line_items;
+DROP POLICY IF EXISTS "Designers can add line items to their draft invoices"
+  ON public.invoice_line_items;
+DROP POLICY IF EXISTS "Designers can update line items on their draft invoices"
+  ON public.invoice_line_items;
+DROP POLICY IF EXISTS "Designers can delete line items on their draft invoices"
+  ON public.invoice_line_items;
+DROP POLICY IF EXISTS "Clients can view line items on issued invoices"
+  ON public.invoice_line_items;
+DROP POLICY IF EXISTS invoice_line_items_studio_select
+  ON public.invoice_line_items;
+DROP POLICY IF EXISTS invoice_line_items_studio_insert_draft
+  ON public.invoice_line_items;
+DROP POLICY IF EXISTS invoice_line_items_studio_update_draft
+  ON public.invoice_line_items;
+DROP POLICY IF EXISTS invoice_line_items_studio_delete_draft
+  ON public.invoice_line_items;
+DROP POLICY IF EXISTS invoice_line_items_exact_studio_select
+  ON public.invoice_line_items;
+DROP POLICY IF EXISTS invoice_line_items_exact_studio_insert_draft
+  ON public.invoice_line_items;
+DROP POLICY IF EXISTS invoice_line_items_exact_studio_update_draft
+  ON public.invoice_line_items;
+DROP POLICY IF EXISTS invoice_line_items_exact_studio_delete_draft
+  ON public.invoice_line_items;
+DROP POLICY IF EXISTS invoice_line_items_exact_client_select
+  ON public.invoice_line_items;
+
+CREATE POLICY invoice_line_items_exact_studio_select
+ON public.invoice_line_items FOR SELECT TO authenticated
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.invoices AS invoice
+    JOIN public.projects AS project ON project.id = invoice.project_id
+    JOIN public.organizations AS studio
+      ON studio.id = project.studio_id
+     AND studio.type = 'design_studio'
+     AND studio.status = 'active'
+    JOIN public.organization_members AS actor_membership
+      ON actor_membership.organization_id = studio.id
+     AND actor_membership.user_id = auth.uid()
+     AND actor_membership.status = 'active'
+     AND actor_membership.role <> 'guest'
+    WHERE invoice.id = invoice_line_items.invoice_id
+      AND invoice.client_id IS NOT DISTINCT FROM project.client_id
+      AND invoice.studio_id IS NOT DISTINCT FROM project.studio_id
+      AND (
+        invoice.designer_id = project.designer_id
+        OR EXISTS (
+          SELECT 1
+          FROM public.project_team_members AS historical_lead
+          WHERE historical_lead.project_id = project.id
+            AND historical_lead.user_id = invoice.designer_id
+            AND historical_lead.role = 'previous_lead'
+        )
+      )
+  )
+);
+
+CREATE POLICY invoice_line_items_exact_studio_insert_draft
+ON public.invoice_line_items FOR INSERT TO authenticated
+WITH CHECK (
+  EXISTS (
+    SELECT 1
+    FROM public.invoices AS invoice
+    JOIN public.projects AS project ON project.id = invoice.project_id
+    JOIN public.organizations AS studio
+      ON studio.id = project.studio_id
+     AND studio.type = 'design_studio'
+     AND studio.status = 'active'
+    JOIN public.organization_members AS actor_membership
+      ON actor_membership.organization_id = studio.id
+     AND actor_membership.user_id = auth.uid()
+     AND actor_membership.status = 'active'
+     AND actor_membership.role <> 'guest'
+    WHERE invoice.id = invoice_line_items.invoice_id
+      AND invoice.status = 'draft'
+      AND invoice.client_id IS NOT DISTINCT FROM project.client_id
+      AND invoice.studio_id IS NOT DISTINCT FROM project.studio_id
+      AND (
+        invoice.designer_id = project.designer_id
+        OR EXISTS (
+          SELECT 1
+          FROM public.project_team_members AS historical_lead
+          WHERE historical_lead.project_id = project.id
+            AND historical_lead.user_id = invoice.designer_id
+            AND historical_lead.role = 'previous_lead'
+        )
+      )
+  )
+);
+
+CREATE POLICY invoice_line_items_exact_studio_update_draft
+ON public.invoice_line_items FOR UPDATE TO authenticated
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.invoices AS invoice
+    JOIN public.projects AS project ON project.id = invoice.project_id
+    JOIN public.organizations AS studio
+      ON studio.id = project.studio_id
+     AND studio.type = 'design_studio'
+     AND studio.status = 'active'
+    JOIN public.organization_members AS actor_membership
+      ON actor_membership.organization_id = studio.id
+     AND actor_membership.user_id = auth.uid()
+     AND actor_membership.status = 'active'
+     AND actor_membership.role <> 'guest'
+    WHERE invoice.id = invoice_line_items.invoice_id
+      AND invoice.status = 'draft'
+      AND invoice.client_id IS NOT DISTINCT FROM project.client_id
+      AND invoice.studio_id IS NOT DISTINCT FROM project.studio_id
+      AND (
+        invoice.designer_id = project.designer_id
+        OR EXISTS (
+          SELECT 1
+          FROM public.project_team_members AS historical_lead
+          WHERE historical_lead.project_id = project.id
+            AND historical_lead.user_id = invoice.designer_id
+            AND historical_lead.role = 'previous_lead'
+        )
+      )
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1
+    FROM public.invoices AS invoice
+    JOIN public.projects AS project ON project.id = invoice.project_id
+    JOIN public.organizations AS studio
+      ON studio.id = project.studio_id
+     AND studio.type = 'design_studio'
+     AND studio.status = 'active'
+    JOIN public.organization_members AS actor_membership
+      ON actor_membership.organization_id = studio.id
+     AND actor_membership.user_id = auth.uid()
+     AND actor_membership.status = 'active'
+     AND actor_membership.role <> 'guest'
+    WHERE invoice.id = invoice_line_items.invoice_id
+      AND invoice.status = 'draft'
+      AND invoice.client_id IS NOT DISTINCT FROM project.client_id
+      AND invoice.studio_id IS NOT DISTINCT FROM project.studio_id
+      AND (
+        invoice.designer_id = project.designer_id
+        OR EXISTS (
+          SELECT 1
+          FROM public.project_team_members AS historical_lead
+          WHERE historical_lead.project_id = project.id
+            AND historical_lead.user_id = invoice.designer_id
+            AND historical_lead.role = 'previous_lead'
+        )
+      )
+  )
+);
+
+CREATE POLICY invoice_line_items_exact_studio_delete_draft
+ON public.invoice_line_items FOR DELETE TO authenticated
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.invoices AS invoice
+    JOIN public.projects AS project ON project.id = invoice.project_id
+    JOIN public.organizations AS studio
+      ON studio.id = project.studio_id
+     AND studio.type = 'design_studio'
+     AND studio.status = 'active'
+    JOIN public.organization_members AS actor_membership
+      ON actor_membership.organization_id = studio.id
+     AND actor_membership.user_id = auth.uid()
+     AND actor_membership.status = 'active'
+     AND actor_membership.role <> 'guest'
+    WHERE invoice.id = invoice_line_items.invoice_id
+      AND invoice.status = 'draft'
+      AND invoice.client_id IS NOT DISTINCT FROM project.client_id
+      AND invoice.studio_id IS NOT DISTINCT FROM project.studio_id
+      AND (
+        invoice.designer_id = project.designer_id
+        OR EXISTS (
+          SELECT 1
+          FROM public.project_team_members AS historical_lead
+          WHERE historical_lead.project_id = project.id
+            AND historical_lead.user_id = invoice.designer_id
+            AND historical_lead.role = 'previous_lead'
+        )
+      )
+  )
+);
+
+CREATE POLICY invoice_line_items_exact_client_select
+ON public.invoice_line_items FOR SELECT TO authenticated
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.invoices AS invoice
+    JOIN public.projects AS project ON project.id = invoice.project_id
+    WHERE invoice.id = invoice_line_items.invoice_id
+      AND invoice.status <> 'draft'
+      AND project.client_id = auth.uid()
+      AND invoice.client_id IS NOT DISTINCT FROM project.client_id
+      AND invoice.studio_id IS NOT DISTINCT FROM project.studio_id
+      AND (
+        invoice.designer_id = project.designer_id
+        OR EXISTS (
+          SELECT 1
+          FROM public.project_team_members AS historical_lead
+          WHERE historical_lead.project_id = project.id
+            AND historical_lead.user_id = invoice.designer_id
+            AND historical_lead.role = 'previous_lead'
+        )
+      )
+  )
+);
+
 DO $retire_milestone_invoice_core$
 BEGIN
   IF to_regprocedure(
@@ -3370,28 +3712,75 @@ DECLARE
   v_project public.projects%ROWTYPE;
   v_line public.invoice_line_items%ROWTYPE;
   v_invoice public.invoices%ROWTYPE;
+  v_project_id uuid;
+  v_latched_invoice_id uuid;
+  v_line_invoice_id uuid;
 BEGIN
-  SELECT * INTO v_line
-  FROM public.invoice_line_items AS line
-  WHERE line.milestone_id = p_milestone_id
-  FOR UPDATE;
-
-  SELECT milestone, project
-  INTO v_milestone, v_project
+  SELECT milestone.project_id INTO v_project_id
   FROM public.project_payment_milestones AS milestone
-  JOIN public.projects AS project ON project.id = milestone.project_id
-  WHERE milestone.id = p_milestone_id
-  FOR UPDATE OF milestone, project;
+  WHERE milestone.id = p_milestone_id;
   IF NOT FOUND THEN
     RAISE EXCEPTION
       'draft_invoice_from_milestone: milestone % not found', p_milestone_id;
   END IF;
 
+  SELECT * INTO v_project
+  FROM public.projects AS project
+  WHERE project.id = v_project_id
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION
+      'draft_invoice_from_milestone: project % not found', v_project_id;
+  END IF;
+
+  SELECT milestone.invoice_id INTO v_latched_invoice_id
+  FROM public.project_payment_milestones AS milestone
+  WHERE milestone.id = p_milestone_id
+    AND milestone.project_id = v_project.id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION
+      'draft_invoice_from_milestone: milestone % changed projects',
+      p_milestone_id USING ERRCODE = '23514';
+  END IF;
+
+  SELECT line.invoice_id INTO v_line_invoice_id
+  FROM public.invoice_line_items AS line
+  WHERE line.milestone_id = p_milestone_id;
+
+  PERFORM invoice.id
+  FROM public.invoices AS invoice
+  WHERE invoice.project_id = v_project.id
+     OR invoice.id = v_latched_invoice_id
+     OR invoice.id = v_line_invoice_id
+  ORDER BY invoice.id
+  FOR UPDATE;
+
+  PERFORM line.id
+  FROM public.invoice_line_items AS line
+  LEFT JOIN public.invoices AS invoice ON invoice.id = line.invoice_id
+  WHERE invoice.project_id = v_project.id
+     OR line.milestone_id = p_milestone_id
+  ORDER BY line.id
+  FOR UPDATE OF line;
+
+  SELECT * INTO v_milestone
+  FROM public.project_payment_milestones AS milestone
+  WHERE milestone.id = p_milestone_id
+  FOR UPDATE;
+  IF NOT FOUND OR v_milestone.project_id IS DISTINCT FROM v_project.id THEN
+    RAISE EXCEPTION
+      'draft_invoice_from_milestone: milestone % changed projects',
+      p_milestone_id USING ERRCODE = '23514';
+  END IF;
+
+  SELECT * INTO v_line
+  FROM public.invoice_line_items AS line
+  WHERE line.milestone_id = p_milestone_id;
+
   IF v_line.id IS NOT NULL THEN
     SELECT * INTO v_invoice
     FROM public.invoices AS invoice
-    WHERE invoice.id = v_line.invoice_id
-    FOR UPDATE;
+    WHERE invoice.id = v_line.invoice_id;
     IF NOT FOUND
        OR v_invoice.project_id IS DISTINCT FROM v_project.id
        OR v_invoice.client_id IS DISTINCT FROM v_project.client_id
@@ -3400,15 +3789,10 @@ BEGIN
          v_invoice.designer_id = v_project.designer_id
          OR EXISTS (
            SELECT 1
-           FROM public.organizations AS organization
-           JOIN public.organization_members AS membership
-             ON membership.organization_id = organization.id
-           WHERE organization.id = v_project.studio_id
-             AND organization.type = 'design_studio'
-             AND organization.status = 'active'
-             AND membership.user_id = v_invoice.designer_id
-             AND membership.status = 'active'
-             AND membership.role <> 'guest'
+           FROM public.project_team_members AS historical_lead
+           WHERE historical_lead.project_id = v_project.id
+             AND historical_lead.user_id = v_invoice.designer_id
+             AND historical_lead.role = 'previous_lead'
          )
        )
     THEN
@@ -3426,8 +3810,7 @@ BEGIN
   THEN
     SELECT * INTO v_invoice
     FROM public.invoices AS invoice
-    WHERE invoice.id = v_milestone.invoice_id
-    FOR UPDATE;
+    WHERE invoice.id = v_milestone.invoice_id;
     IF FOUND
        AND (
          v_invoice.studio_id IS DISTINCT FROM v_project.studio_id
@@ -3440,15 +3823,10 @@ BEGIN
                v_invoice.designer_id = v_project.designer_id
                OR EXISTS (
                  SELECT 1
-                 FROM public.organizations AS organization
-                 JOIN public.organization_members AS membership
-                   ON membership.organization_id = organization.id
-                 WHERE organization.id = v_project.studio_id
-                   AND organization.type = 'design_studio'
-                   AND organization.status = 'active'
-                   AND membership.user_id = v_invoice.designer_id
-                   AND membership.status = 'active'
-                   AND membership.role <> 'guest'
+                 FROM public.project_team_members AS historical_lead
+                 WHERE historical_lead.project_id = v_project.id
+                   AND historical_lead.user_id = v_invoice.designer_id
+                   AND historical_lead.role = 'previous_lead'
                )
              )
            )
@@ -3483,6 +3861,7 @@ DECLARE
   v_milestone public.project_payment_milestones%ROWTYPE;
   v_project public.projects%ROWTYPE;
   v_detach boolean := false;
+  v_updated integer;
 BEGIN
   IF TG_OP = 'DELETE' THEN
     v_detach := OLD.milestone_id IS NOT NULL;
@@ -3495,21 +3874,25 @@ BEGIN
   END IF;
 
   IF v_detach THEN
+    IF current_user = 'authenticated' THEN
+      RAISE EXCEPTION
+        'invoice milestone latch: direct detach is not allowed'
+        USING ERRCODE = '42501';
+    END IF;
+
     SELECT * INTO v_previous_invoice
     FROM public.invoices
-    WHERE id = OLD.invoice_id
-    FOR UPDATE;
+    WHERE id = OLD.invoice_id;
 
     SELECT milestone, project
     INTO v_milestone, v_project
     FROM public.project_payment_milestones AS milestone
     JOIN public.projects AS project ON project.id = milestone.project_id
-    WHERE milestone.id = OLD.milestone_id
-    FOR UPDATE OF milestone, project;
+    WHERE milestone.id = OLD.milestone_id;
 
-    IF v_previous_invoice.id IS NOT NULL
-       AND v_milestone.id IS NOT NULL
-       AND (
+    IF v_previous_invoice.id IS NULL
+       OR v_milestone.id IS NULL
+       OR (
          v_previous_invoice.project_id IS DISTINCT FROM v_project.id
          OR v_previous_invoice.client_id IS DISTINCT FROM v_project.client_id
          OR v_previous_invoice.studio_id IS DISTINCT FROM v_project.studio_id
@@ -3517,17 +3900,16 @@ BEGIN
            v_previous_invoice.designer_id = v_project.designer_id
            OR EXISTS (
              SELECT 1
-             FROM public.organizations AS organization
-             JOIN public.organization_members AS membership
-               ON membership.organization_id = organization.id
-             WHERE organization.id = v_project.studio_id
-               AND organization.type = 'design_studio'
-               AND organization.status = 'active'
-               AND membership.user_id = v_previous_invoice.designer_id
-               AND membership.status = 'active'
-               AND membership.role <> 'guest'
+             FROM public.project_team_members AS historical_lead
+             WHERE historical_lead.project_id = v_project.id
+               AND historical_lead.user_id = v_previous_invoice.designer_id
+               AND historical_lead.role = 'previous_lead'
            )
          )
+         OR OLD.kind IS DISTINCT FROM 'milestone'
+         OR OLD.quantity IS DISTINCT FROM 1
+         OR OLD.unit_amount_cents IS DISTINCT FROM v_milestone.amount_cents
+         OR OLD.amount_cents IS DISTINCT FROM v_milestone.amount_cents
        )
     THEN
       RAISE EXCEPTION
@@ -3535,9 +3917,8 @@ BEGIN
         OLD.milestone_id USING ERRCODE = '23514';
     END IF;
 
-    IF v_previous_invoice.id IS NOT NULL
-       AND v_previous_invoice.status NOT IN ('draft', 'void')
-       AND EXISTS (
+    IF v_previous_invoice.status IS DISTINCT FROM 'void'
+       OR EXISTS (
          SELECT 1
          FROM public.project_payment_milestones AS milestone
          WHERE milestone.id = OLD.milestone_id
@@ -3549,12 +3930,6 @@ BEGIN
         OLD.milestone_id, v_previous_invoice.status, OLD.invoice_id
         USING ERRCODE = '23514';
     END IF;
-
-    UPDATE public.project_payment_milestones
-    SET invoice_id = NULL, status = 'pending', due_date = NULL,
-        paid_at = NULL, updated_at = now()
-    WHERE id = OLD.milestone_id
-      AND invoice_id = OLD.invoice_id;
   END IF;
 
   IF TG_OP = 'DELETE' THEN
@@ -3575,8 +3950,7 @@ BEGIN
 
   SELECT * INTO v_milestone
   FROM public.project_payment_milestones
-  WHERE id = NEW.milestone_id
-  FOR UPDATE;
+  WHERE id = NEW.milestone_id;
   IF NOT FOUND THEN
     RAISE EXCEPTION
       'invoice milestone latch: milestone % not found', NEW.milestone_id
@@ -3592,7 +3966,7 @@ BEGIN
       USING ERRCODE = '23514';
   END IF;
 
-  IF current_setting('role', true) = 'authenticated'
+  IF current_user = 'authenticated'
      AND NOT (
        v_project.designer_id = auth.uid()
        OR EXISTS (
@@ -3621,15 +3995,10 @@ BEGIN
        v_invoice.designer_id = v_project.designer_id
        OR EXISTS (
          SELECT 1
-         FROM public.organizations AS organization
-         JOIN public.organization_members AS membership
-           ON membership.organization_id = organization.id
-         WHERE organization.id = v_project.studio_id
-           AND organization.type = 'design_studio'
-           AND organization.status = 'active'
-           AND membership.user_id = v_invoice.designer_id
-           AND membership.status = 'active'
-           AND membership.role <> 'guest'
+         FROM public.project_team_members AS historical_lead
+         WHERE historical_lead.project_id = v_project.id
+           AND historical_lead.user_id = v_invoice.designer_id
+           AND historical_lead.role = 'previous_lead'
        )
      )
      OR NEW.kind IS DISTINCT FROM 'milestone'
@@ -3646,6 +4015,14 @@ BEGIN
     RAISE EXCEPTION
       'invoice milestone latch: paid milestone % cannot be attached to a draft invoice',
       NEW.milestone_id USING ERRCODE = '23514';
+  END IF;
+
+  IF TG_OP = 'UPDATE'
+     AND OLD.milestone_id IS NOT DISTINCT FROM NEW.milestone_id
+     AND OLD.invoice_id IS NOT DISTINCT FROM NEW.invoice_id
+     AND v_milestone.invoice_id IS NOT DISTINCT FROM NEW.invoice_id
+  THEN
+    RETURN NEW;
   END IF;
 
   IF v_milestone.invoice_id IS NOT NULL
@@ -3709,7 +4086,14 @@ BEGIN
   UPDATE public.project_payment_milestones
   SET invoice_id = NEW.invoice_id, status = 'pending', due_date = NULL,
       paid_at = NULL, updated_at = now()
-  WHERE id = NEW.milestone_id;
+  WHERE id = NEW.milestone_id
+    AND invoice_id IS NOT DISTINCT FROM v_milestone.invoice_id;
+  GET DIAGNOSTICS v_updated = ROW_COUNT;
+  IF v_updated <> 1 THEN
+    RAISE EXCEPTION
+      'invoice milestone latch: milestone % changed concurrently',
+      NEW.milestone_id USING ERRCODE = '40001';
+  END IF;
   RETURN NEW;
 END;
 $$;
@@ -3724,6 +4108,9 @@ CREATE TRIGGER sync_invoice_line_milestone_latch_trg
   AFTER INSERT OR UPDATE OR DELETE ON public.invoice_line_items
   FOR EACH ROW
   EXECUTE FUNCTION public.sync_invoice_line_milestone_latch();
+
+COMMENT ON FUNCTION public.sync_invoice_line_milestone_latch() IS
+  'Exact invoice/project milestone latch validation: draft attachment is canonical; authenticated direct detach is denied; owner/service detach is accepted only after void released the latch; the AFTER trigger takes no parent row locks.';
 
 CREATE OR REPLACE FUNCTION public.generate_milestone_invoice(p_milestone_id uuid)
 RETURNS uuid
@@ -4788,6 +5175,37 @@ BEGIN
 END
 $final_profile_postcondition$;
 
+DO $invoice_line_policy_postcondition$
+BEGIN
+  IF (
+    SELECT count(*)
+    FROM pg_policy AS policy
+    WHERE policy.polrelid = 'public.invoice_line_items'::regclass
+  ) <> 5 OR EXISTS (
+    SELECT 1
+    FROM (VALUES
+      ('invoice_line_items_exact_studio_select', 'r'::"char", true, false),
+      ('invoice_line_items_exact_studio_insert_draft', 'a'::"char", false, true),
+      ('invoice_line_items_exact_studio_update_draft', 'w'::"char", true, true),
+      ('invoice_line_items_exact_studio_delete_draft', 'd'::"char", true, false),
+      ('invoice_line_items_exact_client_select', 'r'::"char", true, false)
+    ) AS expected(policy_name, command, has_qual, has_check)
+    LEFT JOIN pg_policy AS policy
+      ON policy.polrelid = 'public.invoice_line_items'::regclass
+     AND policy.polname = expected.policy_name
+    WHERE policy.oid IS NULL
+       OR NOT policy.polpermissive
+       OR policy.polcmd IS DISTINCT FROM expected.command
+       OR policy.polroles IS DISTINCT FROM
+          ARRAY['authenticated'::regrole::oid]
+       OR (policy.polqual IS NOT NULL) IS DISTINCT FROM expected.has_qual
+       OR (policy.polwithcheck IS NOT NULL) IS DISTINCT FROM expected.has_check
+  ) THEN
+    RAISE EXCEPTION '00486 exact invoice-line policy set drifted';
+  END IF;
+END
+$invoice_line_policy_postcondition$;
+
 DO $dependency_profile_postcondition$
 BEGIN
   IF (SELECT count(*) FROM _00486_dependency_profile) <> 13 THEN
@@ -4887,9 +5305,34 @@ BEGIN
       )
       AND binding.tgtype = 29
       AND binding.tgenabled = 'O'
+      AND binding.tgnargs = 0
+      AND octet_length(binding.tgargs) = 0
+      AND binding.tgqual IS NULL
+      AND binding.tgattr::text = ''
       AND NOT binding.tgisinternal
   ) THEN
     RAISE EXCEPTION '00486 invoice milestone latch trigger binding drifted';
+  END IF;
+
+  IF position(
+    'FOR UPDATE' IN upper((
+      SELECT routine.prosrc
+      FROM pg_proc AS routine
+      WHERE routine.oid = to_regprocedure(
+        'public.sync_invoice_line_milestone_latch()'
+      )
+    ))
+  ) > 0 THEN
+    RAISE EXCEPTION '00486 line latch reacquired an AFTER-trigger parent lock';
+  END IF;
+
+  IF obj_description(
+    to_regprocedure('public.sync_invoice_line_milestone_latch()'),
+    'pg_proc'
+  ) IS DISTINCT FROM
+    'Exact invoice/project milestone latch validation: draft attachment is canonical; authenticated direct detach is denied; owner/service detach is accepted only after void released the latch; the AFTER trigger takes no parent row locks.'
+  THEN
+    RAISE EXCEPTION '00486 invoice milestone latch authority comment drifted';
   END IF;
 
   IF EXISTS (
@@ -4959,7 +5402,9 @@ BEGIN
       ON caller_namespace.oid = caller.pronamespace
     WHERE caller_namespace.nspname !~ '^pg_'
       AND caller_namespace.nspname <> 'information_schema'
-      AND caller.prosrc ~ $milestone_core_call$(^|[^[:alnum:]_$"'.])(("public"|public)[[:space:]]*\.[[:space:]]*)?("_draft_invoice_from_milestone_00486"|_draft_invoice_from_milestone_00486)[[:space:]]*\($milestone_core_call$
+      AND pg_temp._00486_references_routine(
+        caller.prosrc, 'public', '_draft_invoice_from_milestone_00486'
+      )
   ) IS DISTINCT FROM ARRAY[
     to_regprocedure('public.draft_invoice_from_milestone(uuid)')::oid
   ] THEN
@@ -4973,7 +5418,9 @@ BEGIN
       ON caller_namespace.oid = caller.pronamespace
     WHERE caller_namespace.nspname !~ '^pg_'
       AND caller_namespace.nspname <> 'information_schema'
-      AND caller.prosrc ~ $milestone_wrapper_call$(^|[^[:alnum:]_$"'.])(("public"|public)[[:space:]]*\.[[:space:]]*)?("draft_invoice_from_milestone"|draft_invoice_from_milestone)[[:space:]]*\($milestone_wrapper_call$
+      AND pg_temp._00486_references_routine(
+        caller.prosrc, 'public', 'draft_invoice_from_milestone'
+      )
   ) IS DISTINCT FROM (
     SELECT array_agg(signature::regprocedure::oid ORDER BY signature::regprocedure::oid)
     FROM unnest(ARRAY[

@@ -29,6 +29,7 @@ class FakeRepository implements SpecBookRenderRepository {
     audience: "client",
     format: "pdf",
     attemptCount: 1,
+    mode: "render",
   };
   revision!: FrozenRevision;
   baseRevision: FrozenRevision | null = null;
@@ -39,17 +40,23 @@ class FakeRepository implements SpecBookRenderRepository {
   ready: unknown[] = [];
   failed: Array<{ id: string; code: string; message: string }> = [];
   finalizeCalls: string[] = [];
+  loadRevisionCalls = 0;
+  loadBaseRevisionCalls = 0;
+  resolveImageCalls = 0;
 
   claimArtifact(): Promise<ClaimedArtifact | null> {
     return Promise.resolve(this.claim);
   }
   loadRevision(): Promise<FrozenRevision> {
+    this.loadRevisionCalls += 1;
     return Promise.resolve(this.revision);
   }
   loadBaseRevision(): Promise<FrozenRevision | null> {
+    this.loadBaseRevisionCalls += 1;
     return Promise.resolve(this.baseRevision);
   }
   resolveImage(_media: RenderMedia): Promise<string | null> {
+    this.resolveImageCalls += 1;
     return Promise.resolve(null);
   }
   uploadPdf(path: string, bytes: Uint8Array): Promise<void> {
@@ -181,6 +188,38 @@ Deno.test("non-guard finalization failures remain fatal after the artifact is du
   );
   assertEquals(repo.ready.length, 1);
   assertEquals(repo.failed, []);
+});
+
+Deno.test("ready artifact retry finalizes existing durable identity without rendering or mutation", async () => {
+  const repo = await repository();
+  repo.claim = {
+    id: ARTIFACT_ID,
+    revisionId: REVISION_ID,
+    audience: "client",
+    format: "pdf",
+    attemptCount: 2,
+    mode: "finalize",
+    storagePath: "project/spec-books/revision/client.pdf",
+    checksumSha256: "a".repeat(64),
+    sizeBytes: 486,
+  };
+
+  const first = await runSpecBookRender(repo, ARTIFACT_ID);
+  const second = await runSpecBookRender(repo, ARTIFACT_ID);
+
+  assertEquals(first, second);
+  assertEquals(first.finalized, true);
+  assertEquals(first.storagePath, "project/spec-books/revision/client.pdf");
+  assertEquals(first.checksumSha256, "a".repeat(64));
+  assertEquals(first.sizeBytes, 486);
+  assertEquals(repo.loadRevisionCalls, 0);
+  assertEquals(repo.loadBaseRevisionCalls, 0);
+  assertEquals(repo.resolveImageCalls, 0);
+  assertEquals(repo.uploads, []);
+  assertEquals(repo.documents, []);
+  assertEquals(repo.ready, []);
+  assertEquals(repo.failed, []);
+  assertEquals(repo.finalizeCalls, [REVISION_ID, REVISION_ID]);
 });
 
 Deno.test("upload failure marks the same artifact failed and retryable", async () => {

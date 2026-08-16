@@ -15,13 +15,25 @@ import { renderSpecBookPdf } from "./pdf.ts";
 export const SPEC_BOOK_BUCKET = "project-documents";
 export const MAX_PDF_BYTES = 50 * 1024 * 1024;
 
-export interface ClaimedArtifact {
+interface ClaimedArtifactBase {
   id: string;
   revisionId: string;
   audience: SpecBookAudience;
   format: "pdf";
   attemptCount: number;
 }
+
+export type ClaimedArtifact =
+  & ClaimedArtifactBase
+  & (
+    | { mode: "render" }
+    | {
+      mode: "finalize";
+      storagePath: string;
+      checksumSha256: string;
+      sizeBytes: number;
+    }
+  );
 
 export interface FrozenRevision {
   id: string;
@@ -140,7 +152,7 @@ export async function runSpecBookRender(
     if (!claimed) {
       throw new SpecBookRenderError(
         "artifact_not_claimable",
-        "Artifact is not pending, failed, or eligible for retry",
+        "Artifact is not pending, failed, stale, or ready for finalization",
       );
     }
     if (claimed.format !== "pdf") {
@@ -148,6 +160,26 @@ export async function runSpecBookRender(
         "unsupported_format",
         `Unsupported format: ${claimed.format}`,
       );
+    }
+
+    if (claimed.mode === "finalize") {
+      artifactReady = true;
+      let finalized = true;
+      try {
+        await repository.finalizeRevision(claimed.revisionId);
+      } catch (error) {
+        if (!expectedFinalizeGuard(error)) throw error;
+        finalized = false;
+      }
+      return {
+        artifactId: claimed.id,
+        revisionId: claimed.revisionId,
+        audience: claimed.audience,
+        storagePath: claimed.storagePath,
+        checksumSha256: claimed.checksumSha256,
+        sizeBytes: claimed.sizeBytes,
+        finalized,
+      };
     }
 
     const revision = await repository.loadRevision(claimed.revisionId);
