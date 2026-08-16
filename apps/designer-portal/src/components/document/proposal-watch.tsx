@@ -33,7 +33,7 @@ import { useActivateProposal } from '@patina/supabase';
 import { familyLabel } from '@/lib/document/family-label';
 import { useProposalWatch } from '@/hooks/use-proposal-watch';
 import { useProposalProject } from '@/hooks/use-proposal-project';
-import { useNudgeProposal, useProposal } from '@/hooks/use-proposals';
+import { useProposal } from '@/hooks/use-proposals';
 import type { ProposalWatchModel } from '@/lib/document/proposal-watch-derivation';
 import { Stamp } from './stamp';
 import {
@@ -138,37 +138,9 @@ export function ProposalWatch({
   const [recordOpen, setRecordOpen] = useState(false);
   const [markSignedOpen, setMarkSignedOpen] = useState(false);
 
-  const nudge = useNudgeProposal();
   const family = familyLabel(clientName);
   const signable =
     w?.status === 'sent' || w?.status === 'viewed' || w?.status === 'expired';
-
-  // Send the client a gentle reminder. The RPC stamps + cools down; the email is
-  // best-effort (surfaced via _emailDispatched). The outcome reads inline at the
-  // act (R83 — no toasts on Document surfaces).
-  const [nudgeNote, setNudgeNote] = useState<{
-    text: string;
-    tone: 'ok' | 'warn' | 'err';
-  } | null>(null);
-  const onNudge = async () => {
-    setNudgeNote(null);
-    try {
-      const res = await nudge.mutateAsync({ proposalId });
-      setNudgeNote(
-        res._emailDispatched
-          ? { text: `Reminder sent to ${family}.`, tone: 'ok' }
-          : {
-              text: 'Nudge recorded, but the email couldn’t be sent — follow up directly.',
-              tone: 'warn',
-            },
-      );
-    } catch (e) {
-      setNudgeNote({
-        text: e instanceof Error ? e.message : 'Could not send the reminder.',
-        tone: 'err',
-      });
-    }
-  };
 
   useMobilePrimaryAction(
     w && !w.settled && signable
@@ -306,35 +278,15 @@ export function ProposalWatch({
             Email delivery status
           </DocumentAction>
         ) : (
-          <>
-            <DocumentAction
-              actionKey="proposal-email-delivery"
-              variant="secondary"
-              onClick={() => setResendOpen(true)}
-            >
-              Email delivery
-            </DocumentAction>
-            {/* Nudge — a gentle reminder while it's in their hands. After a nudge
-                it rests for the cooldown, reading "Nudged {date}" so the designer
-                sees it's already been done (and can't pester). */}
-            {w.canNudge ? (
-              <DocumentAction
-                actionKey="nudge-client"
-                variant="secondary"
-                loading={nudge.isPending}
-                loadingLabel="Nudging…"
-                onClick={onNudge}
-              >
-                {nudge.isPending ? 'Nudging…' : `Nudge ${family}`}
-              </DocumentAction>
-            ) : (
-              w.lastNudgedAt && (
-                <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
-                  Nudged {fmtDay(w.lastNudgedAt)}
-                </span>
-              )
-            )}
-          </>
+          /* SP3: the nudge (and its cooled-down "nudged {date}" state) moved to
+             the send-wall state line above, so the word prints once per wall. */
+          <DocumentAction
+            actionKey="proposal-email-delivery"
+            variant="secondary"
+            onClick={() => setResendOpen(true)}
+          >
+            Email delivery
+          </DocumentAction>
         )}
         {/* Mark signed — the designer records a paper signature (R92). Only for a
             proposal that's out and still signable (not revised/declined). */}
@@ -360,24 +312,6 @@ export function ProposalWatch({
       <p className="mt-2 border-l-2 border-[var(--color-aged-oak)] pl-3 text-[12px] text-[var(--text-muted)]">
         Changes now travel as a design services agreement.
       </p>
-
-      {/* The nudge outcome — quiet, inline at the act (R83/R51 grammar). */}
-      {nudgeNote && (
-        <p
-          role={nudgeNote.tone === 'err' ? 'alert' : 'status'}
-          className="mt-2 font-mono text-[10px] uppercase tracking-[0.06em]"
-          style={{
-            color:
-              nudgeNote.tone === 'ok'
-                ? 'var(--color-sage)'
-                : nudgeNote.tone === 'warn'
-                  ? 'var(--color-aged-oak)'
-                  : '#C77B6E',
-          }}
-        >
-          {nudgeNote.text}
-        </p>
-      )}
 
       {/* Overlays — local state over the still-mounted document (D1). */}
       <SendSheet

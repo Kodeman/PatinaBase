@@ -15,6 +15,12 @@
  *      and center, since the document is parked in this state (or revisions of
  *      it) until the client advances it.
  *
+ *   3. SP3 — the send wall is never silent. Whichever wall renders below (the
+ *      legacy watch or the design-services status block), one scored state line
+ *      opens it: how long it has been out, and the verb that is actually
+ *      available — or the state word when none is. The nudge lives HERE and
+ *      nowhere else on this wall, so the word is printed once.
+ *
  * Every overlay is local state over a DocSheet / full-screen layer — the
  * document beneath NEVER unmounts or resets (D1). Typography-first, zero
  * shadows (D4).
@@ -22,7 +28,10 @@
 
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { useProposal } from '@/hooks/use-proposals';
+import { useNudgeProposal, useProposal } from '@/hooks/use-proposals';
+import { useProposalWatch } from '@/hooks/use-proposal-watch';
+import { familyLabel } from '@/lib/document/family-label';
+import { deriveSendWallLine } from '@/lib/document/proposal-watch-derivation';
 import { rememberRoomOrigin } from '@/lib/document/room-origin';
 import { useDraftingState } from '@/hooks/use-drafting-state';
 import { displayDraftingState } from '@/lib/document/drafting-progress';
@@ -50,9 +59,6 @@ export function ProposalInstruments({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: proposal } = useProposal(proposalId) as { data: any };
   const experience = commercialDocumentExperience(proposal?.document_kind);
-  if (experience === 'design_services') {
-    return <ServiceAgreementInstruments proposal={proposal} clientName={clientName} />;
-  }
   if (experience === 'commercial_readonly') {
     return (
       <p className="mt-2 border-l-2 border-[var(--color-aged-oak)] pl-3 text-[12px] text-[var(--text-muted)]">
@@ -62,11 +68,124 @@ export function ProposalInstruments({
     );
   }
   return (
-    <LegacyProposalInstruments
-      proposalId={proposalId}
-      clientName={clientName}
-      proposal={proposal}
-    />
+    <>
+      <SendWallLine
+        proposalId={proposalId}
+        clientName={clientName}
+        commercialState={
+          typeof proposal?.commercial_state === 'string'
+            ? proposal.commercial_state
+            : null
+        }
+        issuedOnPaper={proposal?.issued_on_paper === true}
+      />
+      {experience === 'design_services' ? (
+        <ServiceAgreementInstruments proposal={proposal} clientName={clientName} />
+      ) : (
+        <LegacyProposalInstruments
+          proposalId={proposalId}
+          clientName={clientName}
+          proposal={proposal}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * SP3 — the send wall's state line: a thin renderer over `deriveSendWallLine`.
+ * Every rule about which verb is offered, which state word is named, and when
+ * the wall stands down lives in the derivation, where the
+ * status × commercial_state × issued_on_paper matrix is covered by a spec.
+ */
+function SendWallLine({
+  proposalId,
+  clientName,
+  commercialState,
+  issuedOnPaper,
+}: {
+  proposalId: string;
+  clientName: string;
+  commercialState: string | null;
+  issuedOnPaper: boolean;
+}) {
+  const { watch } = useProposalWatch(proposalId);
+  const nudge = useNudgeProposal();
+  const [note, setNote] = useState<{ text: string; tone: 'ok' | 'warn' | 'err' } | null>(
+    null,
+  );
+
+  const family = familyLabel(clientName);
+  const onNudge = async () => {
+    setNote(null);
+    try {
+      const res = await nudge.mutateAsync({ proposalId });
+      setNote(
+        res._emailDispatched
+          ? { text: `Reminder sent to ${family}.`, tone: 'ok' }
+          : {
+              text: 'Nudge recorded, but the email couldn’t be sent — follow up directly.',
+              tone: 'warn',
+            },
+      );
+    } catch (e) {
+      setNote({
+        text: e instanceof Error ? e.message : 'Could not send the reminder.',
+        tone: 'err',
+      });
+    }
+  };
+
+  const line = watch
+    ? deriveSendWallLine({ watch, commercialState, issuedOnPaper }, new Date())
+    : null;
+  if (!line) return null;
+
+  return (
+    <>
+      <DocumentActionRow
+        surfaceKey="open-document"
+        regionKey="proposal-send-wall"
+        className="mt-1"
+        aria-label="Proposal state"
+      >
+        <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+          {line.sentText} —
+        </span>
+        {line.verb === 'nudge' && (
+          <DocumentAction
+            actionKey="nudge-client"
+            variant="secondary"
+            loading={nudge.isPending}
+            loadingLabel="Nudging…"
+            onClick={onNudge}
+          >
+            Nudge {family}
+          </DocumentAction>
+        )}
+        {line.stateWord && (
+          <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+            {line.stateWord}
+          </span>
+        )}
+      </DocumentActionRow>
+      {note && (
+        <p
+          role={note.tone === 'err' ? 'alert' : 'status'}
+          className="font-mono text-[10px] uppercase tracking-[0.06em]"
+          style={{
+            color:
+              note.tone === 'ok'
+                ? 'var(--color-sage)'
+                : note.tone === 'warn'
+                  ? 'var(--color-aged-oak)'
+                  : '#C77B6E',
+          }}
+        >
+          {note.text}
+        </p>
+      )}
+    </>
   );
 }
 

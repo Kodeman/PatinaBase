@@ -1043,82 +1043,6 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           phases={phases}
         />
 
-        {/* Settled bars — letterhead bar + stamp; every phase with a read-only
-            body unfolds in place so completed work stays reviewable (R66).
-            Clicked from the spine marker (jumpToSection) or the bar itself. */}
-        <PreviousWork
-          count={settled.length}
-          open={historyOpen}
-          onOpenChange={setHistoryOpen}
-          approvalsAwaitingPublish={approvalsAwaitingPublish}
-          onOpenApprovals={openApprovals}
-        >
-          {settled.map((s) => {
-          const isOpen = openSection === s.key;
-          const toggle = () => setOpenSection((prev) => (prev === s.key ? null : s.key));
-
-          // R23: a gate-settled section wears the client's grant; the Proposal
-          // wears its signing seal.
-          const approvedGate = (sectionGates ?? []).find(
-            (g) => g.section_key === s.key && gateState(g) === 'approved',
-          );
-          const stamp =
-            s.key === 'proposal' && seal
-              ? { label: `Signed · ${seal.date}`, color: 'var(--color-sage)', ink: '#85947C' }
-              : approvedGate
-                ? {
-                    label: `Approved${approvedGate.responded_at ? ` · ${fmtDay(approvedGate.responded_at)}` : ''}`,
-                    color: 'var(--color-sage)',
-                    ink: '#85947C',
-                  }
-                : undefined;
-
-          // The read-only review body — what the designer reviews on unfold.
-          // Brief → the lead record (triage auto-hides once accepted); Discovery
-          // → the captured facts recap; Direction/Proposal → the proposal blocks.
-          let body: ReactNode = null;
-          if (s.key === 'brief') {
-            body = <BriefRecap clientProfileId={row.client_profile_id} leadId={row.lead_id} />;
-          } else if (s.key === 'discovery') {
-            body = (
-              <DiscoveryRecap
-                clientProfileId={row.client_profile_id}
-                engagementKind={row.engagement_kind}
-                engagementId={row.engagement_id}
-                proposalId={row.proposal_id}
-              />
-            );
-          } else if ((s.key === 'direction' || s.key === 'proposal') && unfoldProposalId) {
-            body = (
-              <>
-                <ProposalBlocksReadOnly proposalId={unfoldProposalId} />
-                {s.key === 'proposal' && seal && (
-                  <p className="mt-4 border-t border-[var(--color-pearl)] pt-3 text-[10.5px] text-[var(--text-muted)]">
-                    {seal.by ? `Signed by ${seal.by} · ${seal.date}` : `Signed · ${seal.date}`}
-                  </p>
-                )}
-              </>
-            );
-          }
-
-          return (
-            <SettledBar
-              key={s.key}
-              anchorId={sectionAnchorId(s.key)}
-              name={
-                s.key === 'proposal' && lineage?.version ? `Proposal · v${lineage.version}` : s.label
-              }
-              hint={s.key === 'proposal' ? undefined : s.sub}
-              stamp={stamp}
-              open={isOpen}
-              onToggle={body ? toggle : undefined}
-            >
-              {body}
-            </SettledBar>
-          );
-          })}
-        </PreviousWork>
-
         {/* ScheduleNavProvider wires the Rule (below) to the Spine (mounted
             deeper, inside the active section) so a minimap click reveals
             through to the ledger (§3.5). Context.Provider renders no wrapper
@@ -1362,6 +1286,83 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             <KickoffBand projectId={row.project_id} rows={rosterRows ?? []} />
           </>
         )}
+
+        {/* The Record — the settled bars, at the FOOT of the paper: history is
+            an appendix, not a preamble. Every phase with a read-only body
+            unfolds in place so completed work stays reviewable (R66); reached
+            from the spine marker (jumpToSection) or the bar itself. */}
+        <PreviousWork
+          count={settled.length}
+          open={historyOpen}
+          onOpenChange={setHistoryOpen}
+          approvalsAwaitingPublish={approvalsAwaitingPublish}
+          onOpenApprovals={openApprovals}
+        >
+          {settled.map((s) => {
+          const isOpen = openSection === s.key;
+          const toggle = () => setOpenSection((prev) => (prev === s.key ? null : s.key));
+
+          // R23: a gate-settled section wears the client's grant; the Proposal
+          // wears its signing seal.
+          const approvedGate = (sectionGates ?? []).find(
+            (g) => g.section_key === s.key && gateState(g) === 'approved',
+          );
+          const stamp =
+            s.key === 'proposal' && seal
+              ? { label: `Signed · ${seal.date}`, color: 'var(--color-sage)', ink: '#85947C' }
+              : approvedGate
+                ? {
+                    label: `Approved${approvedGate.responded_at ? ` · ${fmtDay(approvedGate.responded_at)}` : ''}`,
+                    color: 'var(--color-sage)',
+                    ink: '#85947C',
+                  }
+                : undefined;
+
+          // The read-only review body — what the designer reviews on unfold.
+          // Brief → the lead record (triage auto-hides once accepted); Discovery
+          // → the captured facts recap; Direction/Proposal → the proposal blocks.
+          let body: ReactNode = null;
+          if (s.key === 'brief') {
+            body = <BriefRecap clientProfileId={row.client_profile_id} leadId={row.lead_id} />;
+          } else if (s.key === 'discovery') {
+            body = (
+              <DiscoveryRecap
+                clientProfileId={row.client_profile_id}
+                engagementKind={row.engagement_kind}
+                engagementId={row.engagement_id}
+                proposalId={row.proposal_id}
+              />
+            );
+          } else if ((s.key === 'direction' || s.key === 'proposal') && unfoldProposalId) {
+            body = (
+              <>
+                <ProposalBlocksReadOnly proposalId={unfoldProposalId} />
+                {s.key === 'proposal' && seal && (
+                  <p className="mt-4 border-t border-[var(--color-pearl)] pt-3 text-[10.5px] text-[var(--text-muted)]">
+                    {seal.by ? `Signed by ${seal.by} · ${seal.date}` : `Signed · ${seal.date}`}
+                  </p>
+                )}
+              </>
+            );
+          }
+
+          return (
+            <SettledBar
+              key={s.key}
+              anchorId={sectionAnchorId(s.key)}
+              name={
+                s.key === 'proposal' && lineage?.version ? `Proposal · v${lineage.version}` : s.label
+              }
+              hint={s.key === 'proposal' ? undefined : s.sub}
+              stamp={stamp}
+              open={isOpen}
+              onToggle={body ? toggle : undefined}
+            >
+              {body}
+            </SettledBar>
+          );
+          })}
+        </PreviousWork>
 
         {/* R29: the colophon — the paper's last line states its own facts. */}
         {row.engagement_kind === 'project' && row.project_id && (
