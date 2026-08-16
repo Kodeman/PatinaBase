@@ -124,6 +124,7 @@ import {
 import { DocSpineShelvedBlocks } from '@/components/document/spine-shelved-blocks';
 import { deriveTableComposition } from '@/lib/document/table-derivation';
 import { useTablePin } from '@/components/document/worktable/use-table-pin';
+import { ReleaseLift } from '@/components/document/worktable/release-lift';
 import { TableFrame } from '@/components/document/worktable/table-frame';
 import {
   markSealTurn,
@@ -843,6 +844,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // deliberately NOT the project room lens (room-lens-context): different
   // store, different subject, and this one persists at every width (A7).
   const [roomInHand, setRoomInHand] = useState<string | null>(null);
+  // W4b — whether the schedule has a release to offer. Reported up by the FF&E
+  // section, which is where `canRelease` and per-line eligibility are derived;
+  // the Delivery table head only prints the leader it is told exists.
+  const [releaseOffered, setReleaseOffered] = useState(false);
   // The seal note is read ONCE per arrival: the marker is cleared as it is
   // read, and held in state so this mount keeps printing it.
   const [sealTurnNoted, setSealTurnNoted] = useState(false);
@@ -983,6 +988,11 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     finalizeTable && row.proposal_id ? (
       <FinalizeShelf openShelf={openShelf} onToggleShelf={toggleShelf} />
     ) : null;
+  // W4b — the Delivery table's procurement setting: the one composition where
+  // the release leader stands at the table head. Null off the flag, so nothing
+  // below it can lift, seam, or demote anything.
+  const deliveryProcurement =
+    table?.table === 'delivery' && table.setting === 'procurement';
   // W3 — the Speccing table's four tools on W2's slots: rooms → the work →
   // the tools. Proposal-keyed on `row.proposal_id`: 00327's Shape B emits the
   // LIVE chain version (pr.id) there while `engagement_id` carries the chain
@@ -1297,6 +1307,11 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
               )}
               {spreadSection === 'project' && row.project_id && (
                 <>
+                  {/* W4b — the release ceremony's leader, at the head of the
+                    Delivery table instead of inside the FF&E region's ledger.
+                    The section below demotes to its next verb so the page still
+                    carries exactly one inked release. */}
+                  {deliveryProcurement && releaseOffered && <ReleaseLift />}
                   {/* Track 5 — the coordination band (ball-in-court + dependency web).
                     The band resolves designerClientId itself from clientUserId
                     (work-block.tsx pattern); the page passes clientUserId, never a
@@ -1323,6 +1338,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                     folioDrop={folioDrop}
                     onFolioDropConsumed={() => setFolioDrop(null)}
                     sectionDragOver={sectionDrag}
+                    releaseLeaderElsewhere={deliveryProcurement}
+                    onReleaseOffered={
+                      deliveryProcurement ? setReleaseOffered : undefined
+                    }
                   />
                   {/* W2 — one money region: authority → plan → committed →
                     moved, over the four surfaces that used to stand apart
@@ -1335,6 +1354,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                       projectName={row.title}
                       clientName={row.client_name}
                       activeSection={row.active_section}
+                      /* W4b — on the table money is what the work is measured
+                         against, not the work: one seam, one press from full. */
+                      tableSeam={deliveryProcurement}
                     />
                   )}
                   {/* R80: the Care band — closure stays reachable from an active
