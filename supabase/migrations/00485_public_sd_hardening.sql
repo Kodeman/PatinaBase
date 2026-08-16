@@ -130,7 +130,7 @@ VALUES
     'jsonb', 'v', ARRAY['search_path=public, pg_temp']::text[],
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
     'ee7d6f4269b453e04d1fb9ab3f9a039893d2312dc62a71632e14f05230ce9caa',
-    '83ce7c6fc8abb7ed5f48e4c12055d1a05d425d3bd2476f0dbb6c0b41c02b850b', ARRAY['authenticated']::text[],
+    '011fa31a39ae7bb7d112a83ca91ed817e17fb8f0b2b6322ecc9a402b078de1ea', ARRAY['authenticated']::text[],
     ARRAY['authenticated']::text[]
   ),
   (
@@ -180,7 +180,7 @@ VALUES
     ARRAY['search_path=public, extensions, pg_temp']::text[],
     ARRAY['search_path=pg_catalog, public, extensions, pg_temp']::text[],
     'ce4e7ba2e0911edd394cab4963746e0e8e6b2e24951fa19cf640781fc8c5dfee',
-    'b20d24b78c8169b238cfb2357c9ecde725d584098a340dad50b91ed78ebefeeb', ARRAY['authenticated']::text[],
+    'd5770d33ce7d1572603f020ff63c05c7d8b7f1f27f573cc97d816becd2dfe22b', ARRAY['authenticated']::text[],
     ARRAY['authenticated']::text[]
   ),
   (
@@ -199,7 +199,7 @@ VALUES
     'trigger', 'v', ARRAY['search_path=public']::text[],
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
     '53c95a7cbfb04102ddd662fc0d0d63fd33474c3e3e3c51e9c23ce6263bf3a474',
-    '0ed300c4553b9abe69011c31c11ea3598128d0222fa6c69cc76f51b9e24b3f81', ARRAY['authenticated', 'service_role']::text[],
+    'dd023cf65854c6f9106046ca0eb830f64b2a7e90e2c860e9752d0e2d3a0da542', ARRAY['authenticated', 'service_role']::text[],
     ARRAY[]::text[]
   ),
   (
@@ -208,7 +208,7 @@ VALUES
     'trigger', 'v', ARRAY['search_path=public']::text[],
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
     '04b921692fd72c03a2137e413c76d997435bafb3c29d2506e8b3fa14d8f6ce20',
-    '48d694002b2a847d338623fea532187d7b1a85af38165db09578c066aac458a3', ARRAY['authenticated', 'service_role']::text[],
+    '765d8d68d27e5b1d59efd53aa6585aa2160845b4173d123efddf5b9546271277', ARRAY['authenticated', 'service_role']::text[],
     ARRAY[]::text[]
   ),
   (
@@ -521,7 +521,7 @@ VALUES
     'jsonb', 'v', ARRAY['search_path=public, pg_temp']::text[],
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
     '29b7bfc55982372d2bb3b00739d2d243683af11e89d99525cabe06c699fda984',
-    'cdadc449f368eb12d56d0006e3ccb81d752bdc3388f783e4cd1a6b414923bb84',
+    '7d60930c27333b54ff4f02dab29c7cd012de0b7ff41d00185cb4bd6dfcb95e12',
     ARRAY[]::text[], ARRAY[]::text[]
   ),
   (
@@ -531,7 +531,7 @@ VALUES
     'jsonb', 'v', ARRAY['search_path=public, pg_temp']::text[],
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
     '152b51f7bcd3b7a17a6f88967da0fef1648d95f46eea58334ed2ce2a2f917f5c',
-    '3f8d36043d9d38c275fa802690205a67104add2654eb818a08d5bf7bcdb85a36',
+    '24a263de63112a9c4dab4f0f5bb162b0ad900c3a061c3bd3b437e2d3d385170a',
     ARRAY[]::text[], ARRAY[]::text[]
   ),
   (
@@ -761,7 +761,7 @@ BEGIN
              ),
              'hex'
            ) IS DISTINCT FROM
-             '7ef09b2c21c929069960e460641c268093575c205c7d114675c1dc56962f2789'
+             '56b8797bfcf3244bb9a1693be3d7ad1b9f6e886edd7307c8c54b9ce7a7f8481e'
       )
   ) THEN
     RAISE EXCEPTION '00485 existing private invoice core profile drifted';
@@ -867,30 +867,52 @@ BEGIN
         23::smallint, 0::smallint, ''::text,
         (SELECT string_agg(attnum::text, ' ' ORDER BY
            array_position(
-             ARRAY['studio_id','designer_id','client_id','proposal_id'],
+             ARRAY[
+               'id','studio_id','designer_id','client_id','proposal_id',
+               'created_by','created_at'
+             ],
              attname
            ))
          FROM pg_attribute
          WHERE attrelid = 'public.projects'::regclass
            AND attname = ANY(
-             ARRAY['studio_id','designer_id','client_id','proposal_id']
+             ARRAY[
+               'id','studio_id','designer_id','client_id','proposal_id',
+               'created_by','created_at'
+             ]
            )),
         NULL::text, 0::oid,
-        'createtriggerset_project_studio_idbeforeinsertorupdateofstudio_id,designer_id,client_id,proposal_idonprojectsforeachrowexecutefunctionset_project_studio_id()'::text
+        'createtriggerset_project_studio_idbeforeinsertorupdateofid,studio_id,designer_id,client_id,proposal_id,created_by,created_atonprojectsforeachrowexecutefunctionset_project_studio_id()'::text
       ),
       (
         'public.invoices'::text, 'set_invoice_studio_id'::text,
         'public.set_invoice_studio_id()'::text, 'O'::"char", false,
         23::smallint, 0::smallint, ''::text,
         (SELECT string_agg(attnum::text, ' ' ORDER BY array_position(
-           ARRAY['studio_id','designer_id','client_id','project_id'], attname))
+           ARRAY[
+             'id','studio_id','designer_id','client_id','project_id','status',
+             'invoice_number','issue_date','due_date','payment_terms_days',
+             'currency','subtotal_cents','tax_rate','tax_cents','total_cents',
+             'amount_paid_cents','memo','internal_notes','sent_at','paid_at',
+             'voided_at','void_reason','stripe_checkout_session_id',
+             'reminder_count','last_reminder_at','ar_flagged_at',
+             'ar_last_chased_at','created_at','updated_at'
+           ], attname))
          FROM pg_attribute
          WHERE attrelid = 'public.invoices'::regclass
            AND attname = ANY(
-             ARRAY['studio_id','designer_id','client_id','project_id']
+             ARRAY[
+               'id','studio_id','designer_id','client_id','project_id','status',
+               'invoice_number','issue_date','due_date','payment_terms_days',
+               'currency','subtotal_cents','tax_rate','tax_cents','total_cents',
+               'amount_paid_cents','memo','internal_notes','sent_at','paid_at',
+               'voided_at','void_reason','stripe_checkout_session_id',
+               'reminder_count','last_reminder_at','ar_flagged_at',
+               'ar_last_chased_at','created_at','updated_at'
+             ]
            )),
         NULL::text, 0::oid,
-        'createtriggerset_invoice_studio_idbeforeinsertorupdateofstudio_id,designer_id,client_id,project_idoninvoicesforeachrowexecutefunctionset_invoice_studio_id()'::text
+        'createtriggerset_invoice_studio_idbeforeinsertorupdateofid,studio_id,designer_id,client_id,project_id,status,invoice_number,issue_date,due_date,payment_terms_days,currency,subtotal_cents,tax_rate,tax_cents,total_cents,amount_paid_cents,memo,internal_notes,sent_at,paid_at,voided_at,void_reason,stripe_checkout_session_id,reminder_count,last_reminder_at,ar_flagged_at,ar_last_chased_at,created_at,updated_atoninvoicesforeachrowexecutefunctionset_invoice_studio_id()'::text
       ),
       (
         'public.commercial_document_signatures'::text,
@@ -1860,11 +1882,53 @@ DECLARE
   v_active_role text := COALESCE(current_setting('role', true), 'none');
   v_actor uuid := auth.uid();
   v_proposal public.proposals%ROWTYPE;
+  v_reassignment boolean := false;
   v_postgres_migration boolean :=
     session_user = 'postgres' AND v_active_role IN ('none', 'postgres');
 BEGIN
   IF NEW.studio_id IS NULL AND NEW.designer_id IS NOT NULL THEN
-    NEW.studio_id := public._primary_studio_for(NEW.designer_id);
+    SELECT membership.organization_id INTO NEW.studio_id
+    FROM public.organization_members AS membership
+    JOIN public.organizations AS studio
+      ON studio.id = membership.organization_id
+    WHERE membership.user_id = NEW.designer_id
+      AND membership.status = 'active'
+      AND membership.role <> 'guest'
+      AND studio.type = 'design_studio'
+      AND studio.status = 'active'
+    ORDER BY
+      (membership.role = 'owner') DESC,
+      membership.joined_at NULLS LAST,
+      membership.created_at,
+      membership.organization_id
+    LIMIT 1
+    FOR SHARE OF membership, studio;
+  END IF;
+
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.id IS DISTINCT FROM OLD.id
+       OR NEW.created_at IS DISTINCT FROM OLD.created_at
+       OR NEW.created_by IS DISTINCT FROM OLD.created_by
+    THEN
+      RAISE EXCEPTION 'studio_id_not_designer_studio';
+    END IF;
+
+    v_reassignment :=
+      NEW.designer_id IS DISTINCT FROM OLD.designer_id
+      AND current_user = 'postgres'
+      AND v_active_role = 'authenticated'
+      AND v_actor IS NOT NULL
+      AND current_setting('app.project_reassignment_id', true)
+            IS NOT DISTINCT FROM NEW.id::text
+      AND NEW.studio_id IS NOT DISTINCT FROM OLD.studio_id
+      AND NEW.client_id IS NOT DISTINCT FROM OLD.client_id
+      AND NEW.proposal_id IS NOT DISTINCT FROM OLD.proposal_id;
+
+    IF NEW.designer_id IS DISTINCT FROM OLD.designer_id
+       AND NOT v_reassignment
+    THEN
+      RAISE EXCEPTION 'studio_id_not_designer_studio';
+    END IF;
   END IF;
 
   -- Only a true migration session may preserve a legacy ownerless NULL tuple.
@@ -1875,22 +1939,59 @@ BEGIN
     RETURN NEW;
   END IF;
 
+  -- Lock every organization/membership row consulted by final tuple and
+  -- reassignment authorization in one stable order. A concurrent suspension
+  -- or studio deactivation must serialize before or after this write.
+  PERFORM membership.id
+  FROM public.organizations AS studio
+  JOIN public.organization_members AS membership
+    ON membership.organization_id = studio.id
+  WHERE studio.id = NEW.studio_id
+    AND membership.user_id = ANY(ARRAY[
+      NEW.designer_id,
+      CASE WHEN v_reassignment THEN OLD.designer_id END,
+      v_actor
+    ]::uuid[])
+  ORDER BY membership.user_id, membership.id
+  FOR SHARE OF studio, membership;
+
+  -- Studio membership and the canonical designer-domain assignment are
+  -- separate authority facts. Lock both before accepting the final lead.
+  PERFORM user_role.id
+  FROM public.user_roles AS user_role
+  JOIN public.roles AS role ON role.id = user_role.role_id
+  WHERE user_role.user_id = NEW.designer_id
+    AND role.domain = 'designer'
+  ORDER BY role.id, user_role.id
+  FOR SHARE OF user_role, role;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'studio_id_not_designer_studio';
+  END IF;
+
+  IF NEW.proposal_id IS NOT NULL THEN
+    SELECT proposal INTO v_proposal
+    FROM public.proposals AS proposal
+    JOIN public.designer_clients AS relationship
+      ON relationship.id = proposal.designer_client_id
+    WHERE proposal.id = NEW.proposal_id
+      AND proposal.client_id = NEW.client_id
+      AND (
+        proposal.project_id = NEW.id
+        OR (
+          proposal.project_id IS NULL
+          AND proposal.designer_id = NEW.designer_id
+        )
+      )
+      AND relationship.designer_id = proposal.designer_id
+      AND relationship.client_id = proposal.client_id
+    FOR SHARE OF proposal, relationship;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'studio_id_not_designer_studio';
+    END IF;
+  END IF;
+
   IF NEW.designer_id IS NULL
      OR NEW.studio_id IS NULL
-     OR (
-       NEW.proposal_id IS NOT NULL
-       AND NOT EXISTS (
-         SELECT 1
-         FROM public.proposals AS proposal
-         WHERE proposal.id = NEW.proposal_id
-           AND proposal.designer_id = NEW.designer_id
-           AND proposal.client_id = NEW.client_id
-           AND (
-             proposal.project_id IS NULL
-             OR proposal.project_id = NEW.id
-           )
-       )
-     )
      OR NOT EXISTS (
        SELECT 1
        FROM public.organizations AS studio
@@ -1903,12 +2004,63 @@ BEGIN
          AND lead_membership.status = 'active'
          AND lead_membership.role <> 'guest'
      )
+     OR (
+       v_reassignment
+       AND NOT EXISTS (
+         SELECT 1
+         FROM public.organization_members AS old_lead_membership
+         WHERE old_lead_membership.organization_id = NEW.studio_id
+           AND old_lead_membership.user_id = OLD.designer_id
+           AND old_lead_membership.status = 'active'
+           AND old_lead_membership.role <> 'guest'
+       )
+     )
   THEN
     RAISE EXCEPTION 'studio_id_not_designer_studio';
   END IF;
 
   IF v_active_role = 'authenticated' THEN
-    IF current_user IS DISTINCT FROM 'postgres' OR v_actor IS NULL THEN
+    IF v_actor IS NULL THEN
+      RAISE EXCEPTION 'studio_id_not_designer_studio';
+    END IF;
+
+    IF current_user = 'authenticated' THEN
+      IF TG_OP = 'INSERT'
+         AND NEW.designer_id = v_actor
+         AND NEW.created_by = v_actor
+         AND NEW.client_id IS NULL
+         AND NEW.proposal_id IS NULL
+      THEN
+        RETURN NEW;
+      END IF;
+      RAISE EXCEPTION 'studio_id_not_designer_studio';
+    ELSIF current_user IS DISTINCT FROM 'postgres' THEN
+      RAISE EXCEPTION 'studio_id_not_designer_studio';
+    END IF;
+
+    IF v_reassignment THEN
+      IF (
+           v_actor = OLD.designer_id
+           AND EXISTS (
+             SELECT 1
+             FROM public.organization_members AS actor_membership
+             WHERE actor_membership.organization_id = NEW.studio_id
+               AND actor_membership.user_id = v_actor
+               AND actor_membership.status = 'active'
+               AND actor_membership.role <> 'guest'
+           )
+         )
+         OR EXISTS (
+           SELECT 1
+           FROM public.organization_members AS actor_membership
+           WHERE actor_membership.organization_id = NEW.studio_id
+             AND actor_membership.user_id = v_actor
+             AND actor_membership.status = 'active'
+             AND actor_membership.role IN ('owner', 'admin')
+         )
+      THEN
+        RETURN NEW;
+      END IF;
       RAISE EXCEPTION 'studio_id_not_designer_studio';
     END IF;
 
@@ -1923,11 +2075,7 @@ BEGIN
       RETURN NEW;
     END IF;
 
-    SELECT * INTO v_proposal
-    FROM public.proposals AS proposal
-    WHERE proposal.id = NEW.proposal_id
-    FOR SHARE;
-    IF NOT FOUND
+    IF v_proposal.id IS NULL
        OR current_setting('app.proposal_activation_id', true)
             IS DISTINCT FROM NEW.proposal_id::text
        OR v_actor IS DISTINCT FROM NEW.client_id
@@ -1955,82 +2103,287 @@ AS $$
 DECLARE
   v_active_role text := COALESCE(current_setting('role', true), 'none');
   v_actor uuid := auth.uid();
+  v_project public.projects%ROWTYPE;
   v_commercial_document_id text :=
     current_setting('app.commercial_document_id', true);
+  v_capability_row_id uuid;
+  v_capability_count integer;
+  v_actor_is_member boolean := false;
+  v_immutable_update boolean := false;
   v_postgres_migration boolean :=
     session_user = 'postgres' AND v_active_role IN ('none', 'postgres');
 BEGIN
-  IF NEW.studio_id IS NULL THEN
-    SELECT project.studio_id INTO NEW.studio_id
-    FROM public.projects AS project
-    WHERE project.id = NEW.project_id;
-  END IF;
-
-  IF NEW.project_id IS NULL
-     OR NEW.designer_id IS NULL
-     OR NEW.studio_id IS NULL
-     OR NOT EXISTS (
-       SELECT 1
-       FROM public.projects AS project
-       JOIN public.organizations AS studio ON studio.id = project.studio_id
-       JOIN public.organization_members AS lead_membership
-         ON lead_membership.organization_id = project.studio_id
-       WHERE project.id = NEW.project_id
-         AND project.status = 'active'
-         AND project.designer_id = NEW.designer_id
-         AND project.client_id = NEW.client_id
-         AND project.studio_id = NEW.studio_id
-         AND studio.type = 'design_studio'
-         AND studio.status = 'active'
-         AND lead_membership.user_id = NEW.designer_id
-         AND lead_membership.status = 'active'
-         AND lead_membership.role <> 'guest'
-     )
-  THEN
-    RAISE EXCEPTION 'studio_id_not_designer_studio';
-  END IF;
-
-  IF v_active_role = 'authenticated' THEN
-    IF current_user IS DISTINCT FROM 'postgres' OR v_actor IS NULL THEN
-      RAISE EXCEPTION 'studio_id_not_designer_studio';
-    END IF;
-
-    IF EXISTS (
-      SELECT 1
-      FROM public.organization_members AS actor_membership
-      WHERE actor_membership.organization_id = NEW.studio_id
-        AND actor_membership.user_id = v_actor
-        AND actor_membership.status = 'active'
-        AND actor_membership.role <> 'guest'
-    ) THEN
-      RETURN NEW;
-    END IF;
-
-    IF v_actor IS DISTINCT FROM NEW.client_id
-       OR NULLIF(v_commercial_document_id, '') IS NULL
-       OR NOT EXISTS (
-         SELECT 1
-         FROM public.project_commercial_documents AS document
-         JOIN public.proposals AS proposal
-           ON proposal.id = document.proposal_id
-         WHERE document.proposal_id::text = v_commercial_document_id
-           AND document.project_id = NEW.project_id
-           AND document.document_kind IN (
-             'design_services', 'service_addendum',
-             'furnishings_authorization', 'trade_scope'
-           )
-           AND proposal.document_kind = document.document_kind
-           AND (
-             proposal.project_id IS NULL
-             OR proposal.project_id = NEW.project_id
-           )
-           AND proposal.designer_id = NEW.designer_id
-           AND proposal.client_id = NEW.client_id
-           AND proposal.commercial_state = 'executed'
-       )
+  -- Financial machine transitions remain replayable after later authority
+  -- revocation. UPDATE never reparents an invoice, and its historical parent
+  -- checks stay non-locking to preserve project -> invoice lock order.
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.id IS DISTINCT FROM OLD.id
+       OR NEW.created_at IS DISTINCT FROM OLD.created_at
+       OR NEW.project_id IS DISTINCT FROM OLD.project_id
+       OR NEW.designer_id IS DISTINCT FROM OLD.designer_id
+       OR NEW.client_id IS DISTINCT FROM OLD.client_id
+       OR NEW.studio_id IS DISTINCT FROM OLD.studio_id
     THEN
       RAISE EXCEPTION 'studio_id_not_designer_studio';
     END IF;
+
+    v_immutable_update := true;
+
+    SELECT project INTO v_project
+    FROM public.projects AS project
+    WHERE project.id = NEW.project_id
+      AND project.client_id = NEW.client_id
+      AND project.studio_id = NEW.studio_id;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'studio_id_not_designer_studio';
+    END IF;
+
+    IF v_project.designer_id IS DISTINCT FROM NEW.designer_id THEN
+      PERFORM historical_lead.id
+      FROM public.project_team_members AS historical_lead
+      WHERE historical_lead.project_id = NEW.project_id
+        AND historical_lead.user_id = NEW.designer_id
+        AND historical_lead.role = 'previous_lead'
+      ORDER BY historical_lead.id;
+      IF NOT FOUND THEN
+        RAISE EXCEPTION 'studio_id_not_designer_studio';
+      END IF;
+    END IF;
+
+    IF v_active_role = 'service_role' OR v_postgres_migration THEN
+      RETURN NEW;
+    END IF;
+  END IF;
+
+  IF NOT v_immutable_update THEN
+    IF NEW.studio_id IS NULL THEN
+      SELECT project.studio_id INTO NEW.studio_id
+      FROM public.projects AS project
+      WHERE project.id = NEW.project_id;
+    END IF;
+
+    SELECT project INTO v_project
+    FROM public.projects AS project
+    JOIN public.organizations AS studio ON studio.id = project.studio_id
+    JOIN public.organization_members AS lead_membership
+      ON lead_membership.organization_id = project.studio_id
+     AND lead_membership.user_id = project.designer_id
+    WHERE project.id = NEW.project_id
+      AND project.designer_id = NEW.designer_id
+      AND project.client_id = NEW.client_id
+      AND project.studio_id = NEW.studio_id
+      AND studio.type = 'design_studio'
+      AND studio.status = 'active'
+      AND lead_membership.status = 'active'
+      AND lead_membership.role <> 'guest'
+    FOR SHARE OF project, studio, lead_membership;
+
+    IF NEW.project_id IS NULL
+       OR NEW.designer_id IS NULL
+       OR NEW.studio_id IS NULL
+       OR NOT FOUND
+    THEN
+      RAISE EXCEPTION 'studio_id_not_designer_studio';
+    END IF;
+
+    PERFORM user_role.id
+    FROM public.user_roles AS user_role
+    JOIN public.roles AS role ON role.id = user_role.role_id
+    WHERE user_role.user_id = NEW.designer_id
+      AND role.domain = 'designer'
+    ORDER BY role.id, user_role.id
+    FOR SHARE OF user_role, role;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'studio_id_not_designer_studio';
+    END IF;
+  END IF;
+
+  IF v_active_role = 'authenticated' THEN
+    IF v_actor IS NULL THEN
+      RAISE EXCEPTION 'studio_id_not_designer_studio';
+    END IF;
+
+    PERFORM actor_studio.id
+    FROM public.organizations AS actor_studio
+    WHERE actor_studio.id = NEW.studio_id
+      AND actor_studio.type = 'design_studio'
+      AND actor_studio.status = 'active'
+    FOR SHARE OF actor_studio;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'studio_id_not_designer_studio';
+    END IF;
+
+    PERFORM 1
+    FROM public.organization_members AS actor_membership
+    JOIN public.organizations AS actor_studio
+      ON actor_studio.id = actor_membership.organization_id
+    WHERE actor_membership.organization_id = NEW.studio_id
+      AND actor_membership.user_id = v_actor
+      AND actor_membership.status = 'active'
+      AND actor_membership.role <> 'guest'
+      AND actor_studio.type = 'design_studio'
+      AND actor_studio.status = 'active'
+    FOR SHARE OF actor_membership, actor_studio;
+    v_actor_is_member := FOUND;
+
+    IF current_user = 'authenticated' THEN
+      IF v_actor_is_member
+         AND v_project.designer_id IS NOT DISTINCT FROM NEW.designer_id
+         AND EXISTS (
+           SELECT 1
+           FROM public.organization_members AS lead_membership
+           WHERE lead_membership.organization_id = NEW.studio_id
+             AND lead_membership.user_id = NEW.designer_id
+             AND lead_membership.status = 'active'
+             AND lead_membership.role <> 'guest'
+         )
+         AND EXISTS (
+           SELECT 1
+           FROM public.user_roles AS user_role
+           JOIN public.roles AS role ON role.id = user_role.role_id
+           WHERE user_role.user_id = NEW.designer_id
+             AND role.domain = 'designer'
+         )
+         AND NEW.status = 'draft'
+         AND NEW.invoice_number IS NULL
+         AND NEW.issue_date IS NULL
+         AND NEW.sent_at IS NULL
+         AND NEW.paid_at IS NULL
+         AND NEW.voided_at IS NULL
+         AND NEW.void_reason IS NULL
+         AND NEW.stripe_checkout_session_id IS NULL
+         AND NEW.amount_paid_cents = 0
+         AND NEW.reminder_count = 0
+         AND NEW.last_reminder_at IS NULL
+         AND NEW.ar_flagged_at IS NULL
+         AND NEW.ar_last_chased_at IS NULL
+         AND (
+           TG_OP = 'INSERT'
+           OR (
+             NEW.project_id IS NOT DISTINCT FROM OLD.project_id
+             AND NEW.designer_id IS NOT DISTINCT FROM OLD.designer_id
+             AND NEW.client_id IS NOT DISTINCT FROM OLD.client_id
+             AND NEW.studio_id IS NOT DISTINCT FROM OLD.studio_id
+             AND NEW.created_at IS NOT DISTINCT FROM OLD.created_at
+             AND NEW.updated_at IS NOT DISTINCT FROM OLD.updated_at
+           )
+         )
+      THEN
+        RETURN NEW;
+      END IF;
+      RAISE EXCEPTION 'studio_id_not_designer_studio';
+    ELSIF current_user IS DISTINCT FROM 'postgres' THEN
+      RAISE EXCEPTION 'studio_id_not_designer_studio';
+    END IF;
+
+    IF v_actor_is_member THEN
+      RETURN NEW;
+    END IF;
+
+    IF v_actor IS DISTINCT FROM NEW.client_id THEN
+      RAISE EXCEPTION 'studio_id_not_designer_studio';
+    END IF;
+
+    PERFORM 1
+    FROM public.project_commercial_documents AS document
+    JOIN public.proposals AS proposal
+      ON proposal.id = document.proposal_id
+    JOIN public.designer_clients AS author_relationship
+      ON author_relationship.id = proposal.designer_client_id
+    WHERE document.proposal_id::text = v_commercial_document_id
+      AND document.project_id = NEW.project_id
+      AND document.document_kind IN (
+        'design_services', 'service_addendum',
+        'furnishings_authorization', 'trade_scope'
+      )
+      AND proposal.document_kind = document.document_kind
+      AND (
+        proposal.project_id IS NULL
+        OR proposal.project_id = NEW.project_id
+      )
+      AND proposal.client_id = NEW.client_id
+      AND author_relationship.designer_id = proposal.designer_id
+      AND author_relationship.client_id = proposal.client_id
+      AND proposal.commercial_state = 'executed'
+    FOR SHARE OF document, proposal, author_relationship;
+    IF FOUND THEN
+      RETURN NEW;
+    END IF;
+
+    SELECT locked.id, count(*) OVER ()
+    INTO v_capability_row_id, v_capability_count
+    FROM (
+      SELECT milestone.id
+      FROM public.project_payment_milestones AS milestone
+      JOIN public.proposals AS proposal
+        ON proposal.id = v_project.proposal_id
+      JOIN public.designer_clients AS relationship
+        ON relationship.id = proposal.designer_client_id
+      WHERE proposal.id::text =
+              current_setting('app.proposal_activation_id', true)
+        AND proposal.client_id = v_actor
+        AND proposal.designer_id = v_project.designer_id
+        AND proposal.status = 'accepted'
+        AND (
+          proposal.project_id IS NULL
+          OR proposal.project_id = v_project.id
+        )
+        AND relationship.designer_id = proposal.designer_id
+        AND relationship.client_id = proposal.client_id
+        AND milestone.project_id = v_project.id
+        AND milestone.trigger_kind = 'on_signing'
+        AND milestone.invoice_id IS NULL
+        AND milestone.label || ' — payment milestone' = NEW.memo
+        AND milestone.amount_cents = NEW.subtotal_cents
+        AND NEW.tax_cents = 0
+        AND milestone.amount_cents = NEW.total_cents
+      FOR UPDATE OF milestone
+      FOR SHARE OF proposal, relationship
+    ) AS locked
+    LIMIT 1;
+    IF FOUND AND v_capability_count = 1 THEN
+      RETURN NEW;
+    END IF;
+
+    SELECT locked.id, count(*) OVER ()
+    INTO v_capability_row_id, v_capability_count
+    FROM (
+      SELECT milestone.id
+      FROM public.client_decisions AS decision
+      JOIN public.designer_clients AS relationship
+        ON relationship.id = decision.designer_client_id
+      JOIN public.client_decision_options AS option
+        ON option.decision_id = decision.id
+      JOIN public.project_payment_milestones AS milestone
+        ON milestone.project_id = decision.project_id
+       AND milestone.trigger_kind = 'on_section_settled'
+       AND milestone.trigger_section_key = decision.section_key
+      WHERE decision.id::text =
+              current_setting('app.client_decision_write_id', true)
+        AND decision.project_id = v_project.id
+        AND decision.designer_id = v_project.designer_id
+        AND decision.decision_kind = 'approval'
+        AND decision.coordination_kind = 'selection'
+        AND decision.court = 'client'
+        AND decision.status = 'responded'
+        AND relationship.designer_id = v_project.designer_id
+        AND relationship.client_id = v_actor
+        AND option.selected
+        AND option.approves
+        AND milestone.invoice_id IS NULL
+        AND milestone.label || ' — payment milestone' = NEW.memo
+        AND milestone.amount_cents = NEW.subtotal_cents
+        AND NEW.tax_cents = 0
+        AND milestone.amount_cents = NEW.total_cents
+      FOR UPDATE OF milestone
+      FOR SHARE OF decision, relationship, option
+    ) AS locked
+    LIMIT 1;
+    IF FOUND AND v_capability_count = 1 THEN
+      RETURN NEW;
+    END IF;
+
+    RAISE EXCEPTION 'studio_id_not_designer_studio';
   ELSIF v_active_role <> 'service_role' AND NOT v_postgres_migration THEN
     RAISE EXCEPTION 'studio_id_not_designer_studio';
   END IF;
@@ -2048,21 +2401,30 @@ CREATE TRIGGER a_guard_commercial_signature_insert_trg
 
 DROP TRIGGER IF EXISTS set_project_studio_id ON public.projects;
 CREATE TRIGGER set_project_studio_id
-  BEFORE INSERT OR UPDATE OF studio_id, designer_id, client_id, proposal_id
+  BEFORE INSERT OR UPDATE OF
+    id, studio_id, designer_id, client_id, proposal_id, created_by, created_at
   ON public.projects
   FOR EACH ROW EXECUTE FUNCTION public.set_project_studio_id();
 
 DROP TRIGGER IF EXISTS set_invoice_studio_id ON public.invoices;
+-- This name sorts before set_invoices_updated_at. UPDATE OF updated_at catches
+-- explicit caller writes; the sibling BEFORE trigger's NEW assignment recurses nowhere.
 CREATE TRIGGER set_invoice_studio_id
-  BEFORE INSERT OR UPDATE OF studio_id, designer_id, client_id, project_id
+  BEFORE INSERT OR UPDATE OF
+    id, studio_id, designer_id, client_id, project_id, status, invoice_number,
+    issue_date, due_date, payment_terms_days, currency, subtotal_cents,
+    tax_rate, tax_cents, total_cents, amount_paid_cents, memo, internal_notes,
+    sent_at, paid_at, voided_at, void_reason, stripe_checkout_session_id,
+    reminder_count, last_reminder_at, ar_flagged_at, ar_last_chased_at,
+    created_at, updated_at
   ON public.invoices
   FOR EACH ROW EXECUTE FUNCTION public.set_invoice_studio_id();
 
 COMMENT ON FUNCTION public.set_project_studio_id() IS
-  'Invoker trigger deriving studio_id before validation. Every tuple requires an active design-studio and active non-guest lead. An authenticated owner-core call requires either an active non-guest actor in that exact studio or the exact client plus the transaction-bound accepted-proposal activation capability; direct authenticated DML fails. service_role may omit auth.uid but cannot bypass tuple validity. Only a true postgres migration may retain a legacy NULL designer_id/NULL studio_id tuple.';
+  'Invoker trigger deterministically deriving and locking studio_id from active design-studio, active non-guest memberships before validation. Project id, created_at, and created_by are immutable on UPDATE. Every tuple requires a locked active non-guest current lead with a live designer-domain role assignment. Proposal authorship remains immutable history across the exact postgres-owner/authenticated app.project_reassignment_id path; all other lead changes fail. A direct authenticated INSERT is limited to the actor as designer/creator with no proposal or client binding. Authenticated owner-core calls require an exact-studio member or the exact client activation capability. service_role may omit auth.uid but cannot bypass tuple validity. Only a true postgres migration may retain a legacy NULL designer_id/NULL studio_id tuple.';
 
 COMMENT ON FUNCTION public.set_invoice_studio_id() IS
-  'Invoker trigger deriving studio_id from the invoice project before validation. Every tuple requires exact active project/designer/client/studio equality, an active design-studio, and active non-guest lead. An authenticated owner-core call requires either an active non-guest actor in that exact studio or the exact client plus an exact transaction-bound commercial-document capability; direct authenticated DML fails. service_role and postgres may omit auth.uid but cannot bypass tuple validity.';
+  'Invoker trigger deriving studio_id from the locked canonical invoice project on INSERT. Inserts bind the current active non-guest project lead with a live designer-domain role assignment, exact client and active design-studio; UPDATE cannot change invoice identity or its project/client/designer/studio tuple. Direct authenticated INSERT is limited to an unissued draft, and direct draft header edits require an active non-guest actor in the exact active design-studio plus a current live lead/designer role while machine state remains clean. Immutable machine updates use non-locking exact project/client/studio reads and require invoice.designer_id to be the current lead or an exact previous_lead project-team provenance row regardless of removed_at. Authenticated postgres-owner cores still require an exact-studio actor or exact client transaction capability; only the active DB service_role or a true postgres session may reconcile historical tuples after current authority or studio lifecycle revocation. Commercial proposal authorship remains historical; no path can reparent an invoice.';
 
 ALTER FUNCTION public._prepare_spec_book_issue_00403(
   uuid, text[], text, text, uuid, text, jsonb
@@ -2079,8 +2441,9 @@ SECURITY DEFINER
 SET search_path = pg_catalog, public, extensions, pg_temp
 AS $$
 DECLARE
-  v_project_id uuid := NULLIF(p_request->>'projectId', '')::uuid;
   v_actor uuid := auth.uid();
+  v_project_id uuid;
+  v_project_id_text text := NULLIF(p_request->>'projectId', '');
   v_result jsonb;
   v_edition_id uuid;
   v_boards jsonb;
@@ -2089,6 +2452,17 @@ DECLARE
     current_setting('app.project_review_publish', true);
 BEGIN
   IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'project not found or access denied'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  BEGIN
+    v_project_id := v_project_id_text::uuid;
+  EXCEPTION WHEN invalid_text_representation THEN
+    RAISE EXCEPTION 'project not found or access denied'
+      USING ERRCODE = 'insufficient_privilege';
+  END;
+  IF v_project_id IS NULL THEN
     RAISE EXCEPTION 'project not found or access denied'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
@@ -2301,7 +2675,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.publish_project_review(jsonb) IS
-  'Publishes a project review only after a non-enumerating authorization read proves an active project/studio tuple and the real actor is the lead or an active non-guest member of that exact project studio; board/media reads occur afterward.';
+  'Publishes a project review only after an actor check, fixed-denial project-id parsing, and a non-enumerating authorization read prove an active project/studio tuple and the real actor is the lead or an active non-guest member of that exact project studio; board/media reads occur afterward.';
 
 CREATE OR REPLACE FUNCTION app_private.issue_invoice_for_actor(
   p_invoice_id uuid,
@@ -2365,6 +2739,8 @@ BEGIN
   INTO v_document, v_proposal
   FROM public.project_commercial_documents AS document
   JOIN public.proposals AS proposal ON proposal.id = document.proposal_id
+  JOIN public.designer_clients AS author_relationship
+    ON author_relationship.id = proposal.designer_client_id
   WHERE EXISTS (
       SELECT 1
       FROM public.invoice_line_items AS line
@@ -2388,13 +2764,15 @@ BEGIN
       OR proposal.project_id = v_project.id
     )
     AND proposal.document_kind = document.document_kind
-    AND proposal.designer_id = v_project.designer_id
     AND proposal.client_id = v_project.client_id
+    AND author_relationship.designer_id = proposal.designer_id
+    AND author_relationship.client_id = proposal.client_id
     AND v_invoice.project_id = v_project.id
-    AND v_invoice.designer_id = proposal.designer_id
+    AND v_invoice.designer_id = v_project.designer_id
     AND v_invoice.client_id = proposal.client_id
     AND v_invoice.studio_id = v_project.studio_id
-  FOR UPDATE OF document, proposal;
+  FOR UPDATE OF document, proposal
+  FOR SHARE OF author_relationship;
 
   IF NOT FOUND
      OR v_project.status <> 'active'
@@ -2549,11 +2927,12 @@ END;
 $$;
 
 COMMENT ON FUNCTION app_private.issue_invoice_for_actor(uuid, date, uuid) IS
-  'Owner-only invoice issuance core. Resolves exactly one furnishings/trade commercial anchor from invoice-line metadata, locks and validates exact invoice/project/proposal/document identities plus the canonical active studio tuple (commercial proposals intentionally may retain NULL project_id), then accepts only the exact client or an active non-guest actor in that exact studio.';
+  'Owner-only invoice issuance core. Resolves exactly one furnishings/trade commercial anchor from invoice-line metadata, locks and validates the exact invoice/project/document/client tuple, the current active non-guest project lead, and immutable proposal-author relationship history (commercial proposals intentionally may retain NULL project_id), then accepts only the exact client or an active non-guest actor in that exact studio.';
 
 REVOKE ALL PRIVILEGES ON FUNCTION
   app_private.issue_invoice_for_actor(uuid, date, uuid)
-FROM PUBLIC, anon, authenticated, service_role;
+FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+  agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 
 CREATE OR REPLACE FUNCTION public._execute_furnishings_authorization_authorized(
   p_proposal_id uuid,
@@ -2570,6 +2949,7 @@ DECLARE
   v_actor uuid := p_client_id;
   v_proposal public.proposals%ROWTYPE;
   v_document public.project_commercial_documents%ROWTYPE;
+  v_project public.projects%ROWTYPE;
   v_signature public.commercial_document_signatures%ROWTYPE;
   v_name text := btrim(COALESCE(p_signed_name, ''));
   v_fingerprint text;
@@ -2593,23 +2973,31 @@ BEGIN
   SELECT * INTO v_proposal
   FROM public.proposals
   WHERE id = p_proposal_id
+    AND client_id = v_actor
+    AND document_kind = 'furnishings_authorization'
   FOR UPDATE;
-  IF NOT FOUND
-     OR v_proposal.client_id IS DISTINCT FROM v_actor
-     OR v_proposal.document_kind <> 'furnishings_authorization'
-  THEN
+  IF NOT FOUND THEN
     RAISE EXCEPTION
       'furnishings authorization % not found or access denied', p_proposal_id
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  SELECT * INTO v_document
-  FROM public.project_commercial_documents
-  WHERE proposal_id = p_proposal_id
-  FOR UPDATE;
-  IF v_document.id IS NULL THEN
-    RAISE EXCEPTION 'furnishings authorization has no project binding'
-      USING ERRCODE = 'check_violation';
+  SELECT document, project INTO v_document, v_project
+  FROM public.project_commercial_documents AS document
+  JOIN public.projects AS project ON project.id = document.project_id
+  WHERE document.proposal_id = p_proposal_id
+    AND document.document_kind = 'furnishings_authorization'
+    AND project.client_id = v_actor
+    AND project.status = 'active'
+    AND (
+      v_proposal.project_id IS NULL
+      OR v_proposal.project_id = project.id
+    )
+  FOR UPDATE OF document, project;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION
+      'furnishings authorization % not found or access denied', p_proposal_id
+      USING ERRCODE = 'insufficient_privilege';
   END IF;
 
   IF v_proposal.commercial_state <> 'executed'
@@ -2762,7 +3150,7 @@ BEGIN
         project_id, designer_id, client_id, status, currency,
         subtotal_cents, tax_rate, tax_cents, total_cents, memo
       ) VALUES (
-        v_document.project_id, v_proposal.designer_id, v_proposal.client_id,
+        v_document.project_id, v_project.designer_id, v_proposal.client_id,
         'draft', 'USD', v_deposit_cents, 0, 0, v_deposit_cents,
         'Furnishings deposit · ' || v_document.wave_name
       )
@@ -2867,13 +3255,14 @@ $$;
 COMMENT ON FUNCTION public._execute_furnishings_authorization_authorized(
   uuid, text, uuid, text
 ) IS
-  'Owner-only client furnishings execution core. Preserves the explicit verified client actor and delegates any deposit invoice issuance to the relational app_private core without rewriting request JWT claims.';
+  'Owner-only client furnishings execution core. Its first locked proposal read binds the exact actor client and furnishings kind without locking foreign rows; the canonical project supplies the current invoice lead while proposal authorship remains historical. Deposit issuance delegates to the relational app_private core without rewriting request JWT claims.';
 
 REVOKE ALL PRIVILEGES ON FUNCTION
   public._execute_furnishings_authorization_authorized(
     uuid, text, uuid, text
   )
-FROM PUBLIC, anon, authenticated, service_role;
+FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+  agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 
 CREATE OR REPLACE FUNCTION public._execute_trade_scope_authorized(
   p_proposal_id uuid,
@@ -2890,6 +3279,7 @@ DECLARE
   v_actor uuid := p_client_id;
   v_proposal public.proposals%ROWTYPE;
   v_document public.project_commercial_documents%ROWTYPE;
+  v_project public.projects%ROWTYPE;
   v_signature public.commercial_document_signatures%ROWTYPE;
   v_terms public.trade_scope_terms%ROWTYPE;
   v_draw public.trade_scope_draws%ROWTYPE;
@@ -2913,22 +3303,29 @@ BEGIN
   SELECT * INTO v_proposal
   FROM public.proposals
   WHERE id = p_proposal_id
+    AND client_id = v_actor
+    AND document_kind = 'trade_scope'
   FOR UPDATE;
-  IF NOT FOUND
-     OR v_proposal.client_id IS DISTINCT FROM v_actor
-     OR v_proposal.document_kind <> 'trade_scope'
-  THEN
+  IF NOT FOUND THEN
     RAISE EXCEPTION 'trade scope % not found or access denied', p_proposal_id
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  SELECT * INTO v_document
-  FROM public.project_commercial_documents
-  WHERE proposal_id = p_proposal_id
-  FOR UPDATE;
-  IF v_document.id IS NULL THEN
-    RAISE EXCEPTION 'trade scope has no project binding'
-      USING ERRCODE = 'check_violation';
+  SELECT document, project INTO v_document, v_project
+  FROM public.project_commercial_documents AS document
+  JOIN public.projects AS project ON project.id = document.project_id
+  WHERE document.proposal_id = p_proposal_id
+    AND document.document_kind = 'trade_scope'
+    AND project.client_id = v_actor
+    AND project.status = 'active'
+    AND (
+      v_proposal.project_id IS NULL
+      OR v_proposal.project_id = project.id
+    )
+  FOR UPDATE OF document, project;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'trade scope % not found or access denied', p_proposal_id
+      USING ERRCODE = 'insufficient_privilege';
   END IF;
 
   IF v_proposal.commercial_state <> 'executed'
@@ -3024,7 +3421,7 @@ BEGIN
       project_id, designer_id, client_id, status, currency,
       subtotal_cents, tax_rate, tax_cents, total_cents, memo
     ) VALUES (
-      v_document.project_id, v_proposal.designer_id, v_proposal.client_id,
+      v_document.project_id, v_project.designer_id, v_proposal.client_id,
       'draft', COALESCE(v_terms.currency, 'USD'),
       v_draw.amount_cents, 0, 0, v_draw.amount_cents,
       'Trade scope deposit · ' || v_draw.label
@@ -3121,11 +3518,12 @@ $$;
 COMMENT ON FUNCTION public._execute_trade_scope_authorized(
   uuid, text, uuid, text
 ) IS
-  'Owner-only client trade-scope execution core. Preserves the explicit verified client actor and delegates deposit invoice issuance to the relational app_private core without rewriting request JWT claims.';
+  'Owner-only client trade-scope execution core. Its first locked proposal read binds the exact actor client and trade kind without locking foreign rows; the canonical project supplies the current invoice lead while proposal authorship remains historical. Deposit issuance delegates to the relational app_private core without rewriting request JWT claims.';
 
 REVOKE ALL PRIVILEGES ON FUNCTION
   public._execute_trade_scope_authorized(uuid, text, uuid, text)
-FROM PUBLIC, anon, authenticated, service_role;
+FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+  agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 
 CREATE OR REPLACE FUNCTION public.issue_trade_draw_invoice(p_draw_id uuid)
 RETURNS jsonb
@@ -3165,7 +3563,6 @@ BEGIN
     AND proposal.document_kind = 'trade_scope'
     AND document.document_kind = 'trade_scope'
     AND (proposal.project_id IS NULL OR proposal.project_id = project.id)
-    AND proposal.designer_id = project.designer_id
     AND proposal.client_id = project.client_id
     AND project.status = 'active'
     AND studio.type = 'design_studio'
@@ -3251,7 +3648,7 @@ BEGIN
     project_id, designer_id, client_id, status, currency,
     subtotal_cents, tax_rate, tax_cents, total_cents, memo
   ) VALUES (
-    v_document.project_id, v_proposal.designer_id, v_proposal.client_id,
+    v_document.project_id, v_project.designer_id, v_proposal.client_id,
     'draft', COALESCE(v_terms.currency, 'USD'),
     v_draw.amount_cents, 0, 0, v_draw.amount_cents,
     'Trade scope draw · ' || v_draw.label
@@ -3262,7 +3659,7 @@ BEGIN
   );
   v_invoice_id := v_invoice.id;
 
-  IF v_invoice.designer_id IS DISTINCT FROM v_proposal.designer_id
+  IF v_invoice.designer_id IS DISTINCT FROM v_project.designer_id
      OR v_invoice.project_id IS DISTINCT FROM v_document.project_id
   THEN
     RAISE EXCEPTION
@@ -3336,7 +3733,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.issue_trade_draw_invoice(uuid) IS
-  'Issues one trade-scope draw only after the initial locked read proves the real caller is the lead or an active non-guest member of the exact canonical project studio; invoice issuance retains that actor through the owner-only relational core.';
+  'Issues one trade-scope draw only after the initial locked read proves the real caller is the current lead or an active non-guest member of the exact canonical project studio. The invoice binds the current project lead while proposal authorship remains historical, and issuance retains the actor through the owner-only relational core.';
 
 DO $normalize_acl$
 DECLARE
@@ -3403,7 +3800,8 @@ REVOKE ALL PRIVILEGES ON FUNCTION
     uuid, text, uuid, text
   ),
   public.suppress_proposal_send_dispatch(uuid, uuid, text)
-FROM PUBLIC, anon, authenticated, service_role;
+FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+  agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 
 REVOKE ALL PRIVILEGES ON FUNCTION
   public._execute_furnishings_authorization_authorized(
@@ -3416,7 +3814,8 @@ REVOKE ALL PRIVILEGES ON FUNCTION
   public._publish_project_review_00448_impl(jsonb),
   public.guard_commercial_signature_insert(),
   app_private.issue_invoice_for_actor(uuid, date, uuid)
-FROM PUBLIC, anon, authenticated, service_role;
+FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+  agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 
 GRANT EXECUTE ON FUNCTION
   public.accept_trade_scope_with_trusted_ip(uuid, text, uuid, text),
@@ -3663,7 +4062,7 @@ BEGIN
              ),
              'hex'
            ) IS DISTINCT FROM
-             '7ef09b2c21c929069960e460641c268093575c205c7d114675c1dc56962f2789'
+             '56b8797bfcf3244bb9a1693be3d7ad1b9f6e886edd7307c8c54b9ce7a7f8481e'
       )
   ) OR to_regprocedure(
     'app_private.issue_invoice_for_actor(uuid,date,uuid)'
@@ -3681,31 +4080,53 @@ BEGIN
           23::smallint, 0::smallint, ''::text,
           (SELECT string_agg(attnum::text, ' ' ORDER BY
              array_position(
-               ARRAY['studio_id','designer_id','client_id','proposal_id'],
+               ARRAY[
+                 'id','studio_id','designer_id','client_id','proposal_id',
+                 'created_by','created_at'
+               ],
                attname
              ))
            FROM pg_attribute
            WHERE attrelid = 'public.projects'::regclass
              AND attname = ANY(
-               ARRAY['studio_id','designer_id','client_id','proposal_id']
+               ARRAY[
+                 'id','studio_id','designer_id','client_id','proposal_id',
+                 'created_by','created_at'
+               ]
              )),
           NULL::text, 0::oid,
-          'createtriggerset_project_studio_idbeforeinsertorupdateofstudio_id,designer_id,client_id,proposal_idonprojectsforeachrowexecutefunctionset_project_studio_id()'::text
+          'createtriggerset_project_studio_idbeforeinsertorupdateofid,studio_id,designer_id,client_id,proposal_id,created_by,created_atonprojectsforeachrowexecutefunctionset_project_studio_id()'::text
         ),
         (
           'public.invoices'::text, 'set_invoice_studio_id'::text,
           'public.set_invoice_studio_id()'::text, 'O'::"char", false,
           23::smallint, 0::smallint, ''::text,
           (SELECT string_agg(attnum::text, ' ' ORDER BY array_position(
-             ARRAY['studio_id','designer_id','client_id','project_id'],
-             attname))
+             ARRAY[
+               'id','studio_id','designer_id','client_id','project_id','status',
+               'invoice_number','issue_date','due_date','payment_terms_days',
+               'currency','subtotal_cents','tax_rate','tax_cents','total_cents',
+               'amount_paid_cents','memo','internal_notes','sent_at','paid_at',
+               'voided_at','void_reason','stripe_checkout_session_id',
+               'reminder_count','last_reminder_at','ar_flagged_at',
+               'ar_last_chased_at','created_at','updated_at'
+             ], attname))
            FROM pg_attribute
            WHERE attrelid = 'public.invoices'::regclass
              AND attname = ANY(
-               ARRAY['studio_id','designer_id','client_id','project_id']
+               ARRAY[
+                 'id','studio_id','designer_id','client_id','project_id',
+                 'status','invoice_number','issue_date','due_date',
+                 'payment_terms_days','currency','subtotal_cents','tax_rate',
+                 'tax_cents','total_cents','amount_paid_cents','memo',
+                 'internal_notes','sent_at','paid_at','voided_at','void_reason',
+                 'stripe_checkout_session_id','reminder_count',
+                 'last_reminder_at','ar_flagged_at','ar_last_chased_at',
+                 'created_at','updated_at'
+               ]
              )),
           NULL::text, 0::oid,
-          'createtriggerset_invoice_studio_idbeforeinsertorupdateofstudio_id,designer_id,client_id,project_idoninvoicesforeachrowexecutefunctionset_invoice_studio_id()'::text
+          'createtriggerset_invoice_studio_idbeforeinsertorupdateofid,studio_id,designer_id,client_id,project_id,status,invoice_number,issue_date,due_date,payment_terms_days,currency,subtotal_cents,tax_rate,tax_cents,total_cents,amount_paid_cents,memo,internal_notes,sent_at,paid_at,voided_at,void_reason,stripe_checkout_session_id,reminder_count,last_reminder_at,ar_flagged_at,ar_last_chased_at,created_at,updated_atoninvoicesforeachrowexecutefunctionset_invoice_studio_id()'::text
         ),
         (
           'public.commercial_document_signatures'::text,

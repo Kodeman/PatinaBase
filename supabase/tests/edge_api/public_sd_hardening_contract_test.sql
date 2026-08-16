@@ -2,9 +2,950 @@
 -- Run after a clean reset and the privileged local platform runner:
 --   ./scripts/run-public-acl-psql.sh local \
 --     supabase/tests/edge_api/public_sd_hardening_contract_test.sql
--- Test-only helper replacements and every fixture are transaction-local.
+-- Test-only helper replacements are transaction-local. Committed dblink lock
+-- fixtures are explicitly removed by the probes that create them.
 
 \set ON_ERROR_STOP on
+
+CREATE EXTENSION IF NOT EXISTS dblink WITH SCHEMA extensions;
+
+DO $foreign_proposal_lock_probe$
+DECLARE
+  v_conninfo text := format(
+    'hostaddr=%s port=%s dbname=postgres user=postgres password=postgres',
+    COALESCE(inet_server_addr()::text, '127.0.0.1'), inet_server_port()
+  );
+BEGIN
+  PERFORM extensions.dblink_connect('d485_foreign_setup', v_conninfo);
+  PERFORM extensions.dblink_exec(
+    'd485_foreign_setup', 'SET session_replication_role = replica'
+  );
+  PERFORM extensions.dblink_exec(
+    'd485_foreign_setup',
+    $cleanup$
+      DELETE FROM public.proposals
+      WHERE id IN (
+        'd485f300-0000-4000-8000-000000000001',
+        'd485f300-0000-4000-8000-000000000002'
+      );
+      DELETE FROM public.profiles
+      WHERE id IN (
+        'd485f000-0000-4000-8000-000000000001',
+        'd485f000-0000-4000-8000-000000000002'
+      );
+      DELETE FROM auth.users
+      WHERE id IN (
+        'd485f000-0000-4000-8000-000000000001',
+        'd485f000-0000-4000-8000-000000000002'
+      );
+    $cleanup$
+  );
+  PERFORM extensions.dblink_exec(
+    'd485_foreign_setup', 'SET session_replication_role = origin'
+  );
+  PERFORM extensions.dblink_exec(
+    'd485_foreign_setup',
+    $setup$
+      INSERT INTO auth.users (
+        id, email, encrypted_password, email_confirmed_at, created_at,
+        updated_at, instance_id, aud, role
+      ) VALUES
+        (
+          'd485f000-0000-4000-8000-000000000001',
+          'd485-foreign-author@test.invalid', '', now(), now(), now(),
+          '00000000-0000-0000-0000-000000000000',
+          'authenticated', 'authenticated'
+        ),
+        (
+          'd485f000-0000-4000-8000-000000000002',
+          'd485-foreign-client@test.invalid', '', now(), now(), now(),
+          '00000000-0000-0000-0000-000000000000',
+          'authenticated', 'authenticated'
+        );
+      INSERT INTO public.profiles (
+        id, email, full_name, is_designer, created_at, updated_at
+      ) VALUES
+        (
+          'd485f000-0000-4000-8000-000000000001',
+          'd485-foreign-author@test.invalid', 'D485 Foreign Author', true,
+          now(), now()
+        ),
+        (
+          'd485f000-0000-4000-8000-000000000002',
+          'd485-foreign-client@test.invalid', 'D485 Foreign Client', false,
+          now(), now()
+        );
+      INSERT INTO public.proposals (
+        id, designer_id, client_id, title, status, document_kind,
+        commercial_state, total_amount
+      ) VALUES
+        (
+          'd485f300-0000-4000-8000-000000000001',
+          'd485f000-0000-4000-8000-000000000001',
+          'd485f000-0000-4000-8000-000000000002',
+          'D485 Foreign Furnishings Lock', 'sent',
+          'furnishings_authorization', 'sent', 100
+        ),
+        (
+          'd485f300-0000-4000-8000-000000000002',
+          'd485f000-0000-4000-8000-000000000001',
+          'd485f000-0000-4000-8000-000000000002',
+          'D485 Foreign Trade Lock', 'sent', 'trade_scope', 'sent', 100
+        );
+    $setup$
+  );
+
+  PERFORM extensions.dblink_connect('d485_foreign_locker', v_conninfo);
+  PERFORM extensions.dblink_connect('d485_foreign_probe', v_conninfo);
+  PERFORM extensions.dblink_exec('d485_foreign_locker', 'BEGIN');
+  PERFORM locked.id
+  FROM extensions.dblink(
+    'd485_foreign_locker',
+    $remote$
+      SELECT id::text
+      FROM public.proposals
+      WHERE id IN (
+        'd485f300-0000-4000-8000-000000000001',
+        'd485f300-0000-4000-8000-000000000002'
+      )
+      ORDER BY id
+      FOR UPDATE
+    $remote$
+  ) AS locked(id text);
+  PERFORM extensions.dblink_exec(
+    'd485_foreign_probe', 'SET lock_timeout = ''250ms'''
+  );
+  PERFORM extensions.dblink_exec(
+    'd485_foreign_probe', 'SET statement_timeout = ''5s'''
+  );
+  PERFORM extensions.dblink_exec(
+    'd485_foreign_probe',
+    $remote$
+      DO $probe$
+      BEGIN
+        BEGIN
+          PERFORM public._execute_furnishings_authorization_authorized(
+            'd485f300-0000-4000-8000-000000000001', 'Wrong Client',
+            'd485f000-0000-4000-8000-000000000001', NULL
+          );
+          RAISE EXCEPTION 'foreign furnishings call succeeded'
+            USING ERRCODE = 'P4850';
+        EXCEPTION WHEN insufficient_privilege THEN
+          IF SQLERRM IS DISTINCT FROM
+             'furnishings authorization d485f300-0000-4000-8000-000000000001 not found or access denied'
+          THEN
+            RAISE;
+          END IF;
+        END;
+
+        BEGIN
+          PERFORM public._execute_trade_scope_authorized(
+            'd485f300-0000-4000-8000-000000000002', 'Wrong Client',
+            'd485f000-0000-4000-8000-000000000001', NULL
+          );
+          RAISE EXCEPTION 'foreign trade call succeeded'
+            USING ERRCODE = 'P4850';
+        EXCEPTION WHEN insufficient_privilege THEN
+          IF SQLERRM IS DISTINCT FROM
+             'trade scope d485f300-0000-4000-8000-000000000002 not found or access denied'
+          THEN
+            RAISE;
+          END IF;
+        END;
+      END
+      $probe$;
+    $remote$
+  );
+
+  PERFORM extensions.dblink_exec('d485_foreign_locker', 'ROLLBACK');
+  PERFORM extensions.dblink_exec(
+    'd485_foreign_setup', 'SET session_replication_role = replica'
+  );
+  PERFORM extensions.dblink_exec(
+    'd485_foreign_setup',
+    $cleanup$
+      DELETE FROM public.proposals
+      WHERE id IN (
+        'd485f300-0000-4000-8000-000000000001',
+        'd485f300-0000-4000-8000-000000000002'
+      );
+      DELETE FROM public.profiles
+      WHERE id IN (
+        'd485f000-0000-4000-8000-000000000001',
+        'd485f000-0000-4000-8000-000000000002'
+      );
+      DELETE FROM auth.users
+      WHERE id IN (
+        'd485f000-0000-4000-8000-000000000001',
+        'd485f000-0000-4000-8000-000000000002'
+      );
+    $cleanup$
+  );
+  PERFORM extensions.dblink_disconnect('d485_foreign_probe');
+  PERFORM extensions.dblink_disconnect('d485_foreign_locker');
+  PERFORM extensions.dblink_disconnect('d485_foreign_setup');
+EXCEPTION WHEN OTHERS THEN
+  IF 'd485_foreign_locker' = ANY(COALESCE(
+       extensions.dblink_get_connections(), ARRAY[]::text[]
+     ))
+  THEN
+    BEGIN
+      PERFORM extensions.dblink_exec('d485_foreign_locker', 'ROLLBACK');
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END IF;
+  IF 'd485_foreign_setup' = ANY(COALESCE(
+       extensions.dblink_get_connections(), ARRAY[]::text[]
+     ))
+  THEN
+    BEGIN
+      PERFORM extensions.dblink_exec(
+        'd485_foreign_setup', 'SET session_replication_role = replica'
+      );
+      PERFORM extensions.dblink_exec(
+        'd485_foreign_setup',
+        'DELETE FROM public.proposals WHERE id::text LIKE ''d485f300-%''; '
+        'DELETE FROM public.profiles WHERE id::text LIKE ''d485f000-%''; '
+        'DELETE FROM auth.users WHERE id::text LIKE ''d485f000-%'';'
+      );
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END IF;
+  RAISE;
+END
+$foreign_proposal_lock_probe$;
+
+DO $close_order_payment_probe$
+DECLARE
+  v_conninfo text := format(
+    'hostaddr=%s port=%s dbname=postgres user=postgres password=postgres',
+    COALESCE(inet_server_addr()::text, '127.0.0.1'), inet_server_port()
+  );
+BEGIN
+  PERFORM extensions.dblink_connect('d485_close_setup', v_conninfo);
+  PERFORM extensions.dblink_exec(
+    'd485_close_setup', 'SET session_replication_role = replica'
+  );
+  PERFORM extensions.dblink_exec(
+    'd485_close_setup',
+    $cleanup$
+      DELETE FROM public.designer_earnings
+      WHERE invoice_id = 'd485d700-0000-4000-8000-000000000001';
+      DELETE FROM public.invoice_payments
+      WHERE invoice_id = 'd485d700-0000-4000-8000-000000000001';
+      DELETE FROM public.invoices
+      WHERE id = 'd485d700-0000-4000-8000-000000000001';
+      DELETE FROM public.projects
+      WHERE id = 'd485d200-0000-4000-8000-000000000001';
+      DELETE FROM public.profiles
+      WHERE id IN (
+        'd485d000-0000-4000-8000-000000000001',
+        'd485d000-0000-4000-8000-000000000002'
+      );
+      DELETE FROM auth.users
+      WHERE id IN (
+        'd485d000-0000-4000-8000-000000000001',
+        'd485d000-0000-4000-8000-000000000002'
+      );
+    $cleanup$
+  );
+  PERFORM extensions.dblink_exec(
+    'd485_close_setup',
+    $setup$
+      INSERT INTO auth.users (
+        id, email, encrypted_password, email_confirmed_at, created_at,
+        updated_at, instance_id, aud, role
+      ) VALUES
+        (
+          'd485d000-0000-4000-8000-000000000001',
+          'd485-close-order-designer@test.invalid', '', now(), now(), now(),
+          '00000000-0000-0000-0000-000000000000',
+          'authenticated', 'authenticated'
+        ),
+        (
+          'd485d000-0000-4000-8000-000000000002',
+          'd485-close-order-client@test.invalid', '', now(), now(), now(),
+          '00000000-0000-0000-0000-000000000000',
+          'authenticated', 'authenticated'
+        );
+      INSERT INTO public.profiles (
+        id, email, full_name, is_designer, created_at, updated_at
+      ) VALUES
+        (
+          'd485d000-0000-4000-8000-000000000001',
+          'd485-close-order-designer@test.invalid',
+          'D485 Close Order Designer', true, now(), now()
+        ),
+        (
+          'd485d000-0000-4000-8000-000000000002',
+          'd485-close-order-client@test.invalid',
+          'D485 Close Order Client', false, now(), now()
+        );
+      INSERT INTO public.projects (
+        id, name, designer_id, client_id, created_by, studio_id, status
+      ) VALUES (
+        'd485d200-0000-4000-8000-000000000001',
+        'D485 Close Order Payment Project',
+        'd485d000-0000-4000-8000-000000000001',
+        'd485d000-0000-4000-8000-000000000002',
+        'd485d000-0000-4000-8000-000000000001',
+        'd485d100-0000-4000-8000-000000000001', 'active'
+      );
+      INSERT INTO public.invoices (
+        id, project_id, designer_id, client_id, studio_id, status,
+        currency, subtotal_cents, total_cents, invoice_number,
+        issue_date, sent_at
+      ) VALUES (
+        'd485d700-0000-4000-8000-000000000001',
+        'd485d200-0000-4000-8000-000000000001',
+        'd485d000-0000-4000-8000-000000000001',
+        'd485d000-0000-4000-8000-000000000002',
+        'd485d100-0000-4000-8000-000000000001',
+        'sent', 'USD', 100, 100, 'D485-CLOSE-ORDER-001',
+        current_date, now()
+      );
+    $setup$
+  );
+  PERFORM extensions.dblink_exec(
+    'd485_close_setup', 'SET session_replication_role = origin'
+  );
+
+  PERFORM extensions.dblink_connect('d485_close_locker', v_conninfo);
+  PERFORM extensions.dblink_connect('d485_close_payment', v_conninfo);
+  PERFORM extensions.dblink_exec('d485_close_locker', 'BEGIN');
+  PERFORM locked.id
+  FROM extensions.dblink(
+    'd485_close_locker',
+    $remote$
+      SELECT id::text
+      FROM public.projects
+      WHERE id = 'd485d200-0000-4000-8000-000000000001'
+      FOR UPDATE
+    $remote$
+  ) AS locked(id text);
+  PERFORM extensions.dblink_exec(
+    'd485_close_payment', 'SET ROLE service_role'
+  );
+  PERFORM extensions.dblink_exec(
+    'd485_close_payment', 'SET lock_timeout = ''500ms'''
+  );
+  PERFORM extensions.dblink_exec(
+    'd485_close_payment', 'SET statement_timeout = ''5s'''
+  );
+  PERFORM extensions.dblink_exec(
+    'd485_close_payment',
+    $remote$
+      INSERT INTO public.invoice_payments (
+        id, invoice_id, amount_cents, method, status,
+        stripe_payment_intent_id, stripe_event_id, received_at
+      ) VALUES (
+        'd485d710-0000-4000-8000-000000000001',
+        'd485d700-0000-4000-8000-000000000001',
+        100, 'stripe', 'succeeded', 'pi_d485_close_order',
+        'evt_d485_close_order', now()
+      )
+    $remote$
+  );
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM extensions.dblink(
+      'd485_close_setup',
+      $remote$
+        SELECT id::text
+        FROM public.invoices
+        WHERE id = 'd485d700-0000-4000-8000-000000000001'
+          AND status = 'paid'
+          AND amount_paid_cents = 100
+      $remote$
+    ) AS paid(id text)
+  ) THEN
+    RAISE EXCEPTION
+      'service payment did not finish while canonical close-order project lock was held';
+  END IF;
+
+  PERFORM extensions.dblink_exec('d485_close_locker', 'ROLLBACK');
+  PERFORM extensions.dblink_exec(
+    'd485_close_setup', 'SET session_replication_role = replica'
+  );
+  PERFORM extensions.dblink_exec(
+    'd485_close_setup',
+    $cleanup$
+      DELETE FROM public.designer_earnings
+      WHERE invoice_id = 'd485d700-0000-4000-8000-000000000001';
+      DELETE FROM public.invoice_payments
+      WHERE invoice_id = 'd485d700-0000-4000-8000-000000000001';
+      DELETE FROM public.invoices
+      WHERE id = 'd485d700-0000-4000-8000-000000000001';
+      DELETE FROM public.projects
+      WHERE id = 'd485d200-0000-4000-8000-000000000001';
+      DELETE FROM public.profiles
+      WHERE id IN (
+        'd485d000-0000-4000-8000-000000000001',
+        'd485d000-0000-4000-8000-000000000002'
+      );
+      DELETE FROM auth.users
+      WHERE id IN (
+        'd485d000-0000-4000-8000-000000000001',
+        'd485d000-0000-4000-8000-000000000002'
+      );
+    $cleanup$
+  );
+  PERFORM extensions.dblink_disconnect('d485_close_payment');
+  PERFORM extensions.dblink_disconnect('d485_close_locker');
+  PERFORM extensions.dblink_disconnect('d485_close_setup');
+EXCEPTION WHEN OTHERS THEN
+  IF 'd485_close_locker' = ANY(COALESCE(
+       extensions.dblink_get_connections(), ARRAY[]::text[]
+     ))
+  THEN
+    BEGIN
+      PERFORM extensions.dblink_exec('d485_close_locker', 'ROLLBACK');
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END IF;
+  IF 'd485_close_setup' = ANY(COALESCE(
+       extensions.dblink_get_connections(), ARRAY[]::text[]
+     ))
+  THEN
+    BEGIN
+      PERFORM extensions.dblink_exec(
+        'd485_close_setup', 'SET session_replication_role = replica'
+      );
+      PERFORM extensions.dblink_exec(
+        'd485_close_setup',
+        'DELETE FROM public.designer_earnings '
+        'WHERE invoice_id = ''d485d700-0000-4000-8000-000000000001''; '
+        'DELETE FROM public.invoice_payments '
+        'WHERE invoice_id = ''d485d700-0000-4000-8000-000000000001''; '
+        'DELETE FROM public.invoices '
+        'WHERE id = ''d485d700-0000-4000-8000-000000000001''; '
+        'DELETE FROM public.projects '
+        'WHERE id = ''d485d200-0000-4000-8000-000000000001''; '
+        'DELETE FROM public.profiles WHERE id::text LIKE ''d485d000-%''; '
+        'DELETE FROM auth.users WHERE id::text LIKE ''d485d000-%'';'
+      );
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END IF;
+  RAISE;
+END
+$close_order_payment_probe$;
+
+DO $reassignment_revocation_race$
+DECLARE
+  v_conninfo text := format(
+    'hostaddr=%s port=%s dbname=postgres user=postgres password=postgres',
+    COALESCE(inet_server_addr()::text, '127.0.0.1'), inet_server_port()
+  );
+  v_busy integer;
+  v_status text;
+  v_project_designer text;
+  v_target_status text;
+  v_target_role_count integer;
+BEGIN
+  PERFORM extensions.dblink_connect('d485_reassign_setup', v_conninfo);
+  PERFORM extensions.dblink_exec(
+    'd485_reassign_setup', 'SET session_replication_role = replica'
+  );
+  PERFORM extensions.dblink_exec(
+    'd485_reassign_setup',
+    $cleanup$
+      DELETE FROM public.audit_logs
+      WHERE resource_id = 'd485e200-0000-4000-8000-000000000001';
+      DELETE FROM public.client_activity_log
+      WHERE designer_client_id IN (
+        SELECT id FROM public.designer_clients
+        WHERE client_id = 'd485e000-0000-4000-8000-000000000003'
+      );
+      DELETE FROM public.project_team_members
+      WHERE project_id = 'd485e200-0000-4000-8000-000000000001';
+      DELETE FROM public.projects
+      WHERE id = 'd485e200-0000-4000-8000-000000000001';
+      DELETE FROM public.designer_clients
+      WHERE client_id = 'd485e000-0000-4000-8000-000000000003';
+      DELETE FROM public.organization_members
+      WHERE organization_id = 'd485e100-0000-4000-8000-000000000001';
+      DELETE FROM public.organizations
+      WHERE id = 'd485e100-0000-4000-8000-000000000001';
+      DELETE FROM public.user_roles
+      WHERE role_id = 'd485e900-0000-4000-8000-000000000001';
+      DELETE FROM public.roles
+      WHERE id = 'd485e900-0000-4000-8000-000000000001';
+      DELETE FROM public.profiles
+      WHERE id IN (
+        'd485e000-0000-4000-8000-000000000001',
+        'd485e000-0000-4000-8000-000000000002',
+        'd485e000-0000-4000-8000-000000000003',
+        'd485e000-0000-4000-8000-000000000004'
+      );
+      DELETE FROM auth.users
+      WHERE id IN (
+        'd485e000-0000-4000-8000-000000000001',
+        'd485e000-0000-4000-8000-000000000002',
+        'd485e000-0000-4000-8000-000000000003',
+        'd485e000-0000-4000-8000-000000000004'
+      );
+    $cleanup$
+  );
+  PERFORM extensions.dblink_exec(
+    'd485_reassign_setup', 'SET session_replication_role = origin'
+  );
+  PERFORM extensions.dblink_exec(
+    'd485_reassign_setup',
+    $setup$
+      INSERT INTO auth.users (
+        id, email, encrypted_password, email_confirmed_at, created_at,
+        updated_at, instance_id, aud, role
+      ) VALUES
+        (
+          'd485e000-0000-4000-8000-000000000001',
+          'd485-race-owner@test.invalid', '', now(), now(), now(),
+          '00000000-0000-0000-0000-000000000000',
+          'authenticated', 'authenticated'
+        ),
+        (
+          'd485e000-0000-4000-8000-000000000002',
+          'd485-race-successor@test.invalid', '', now(), now(), now(),
+          '00000000-0000-0000-0000-000000000000',
+          'authenticated', 'authenticated'
+        ),
+        (
+          'd485e000-0000-4000-8000-000000000003',
+          'd485-race-client@test.invalid', '', now(), now(), now(),
+          '00000000-0000-0000-0000-000000000000',
+          'authenticated', 'authenticated'
+        ),
+        (
+          'd485e000-0000-4000-8000-000000000004',
+          'd485-race-third-lead@test.invalid', '', now(), now(), now(),
+          '00000000-0000-0000-0000-000000000000',
+          'authenticated', 'authenticated'
+        );
+      INSERT INTO public.profiles (
+        id, email, full_name, is_designer, created_at, updated_at
+      ) VALUES
+        (
+          'd485e000-0000-4000-8000-000000000001',
+          'd485-race-owner@test.invalid', 'D485 Race Owner', true,
+          now(), now()
+        ),
+        (
+          'd485e000-0000-4000-8000-000000000002',
+          'd485-race-successor@test.invalid', 'D485 Race Successor', true,
+          now(), now()
+        ),
+        (
+          'd485e000-0000-4000-8000-000000000003',
+          'd485-race-client@test.invalid', 'D485 Race Client', false,
+          now(), now()
+        ),
+        (
+          'd485e000-0000-4000-8000-000000000004',
+          'd485-race-third-lead@test.invalid', 'D485 Race Third Lead', true,
+          now(), now()
+        );
+      INSERT INTO public.roles (
+        id, name, display_name, domain, is_system, is_assignable
+      ) VALUES (
+        'd485e900-0000-4000-8000-000000000001',
+        'd485_reassignment_race_designer', 'D485 Race Designer',
+        'designer', false, true
+      );
+      INSERT INTO public.user_roles (id, user_id, role_id, granted_by)
+      VALUES
+        (
+          'd485e910-0000-4000-8000-000000000001',
+          'd485e000-0000-4000-8000-000000000001',
+          'd485e900-0000-4000-8000-000000000001',
+          'd485e000-0000-4000-8000-000000000001'
+        ),
+        (
+          'd485e910-0000-4000-8000-000000000002',
+          'd485e000-0000-4000-8000-000000000002',
+          'd485e900-0000-4000-8000-000000000001',
+          'd485e000-0000-4000-8000-000000000001'
+        ),
+        (
+          'd485e910-0000-4000-8000-000000000004',
+          'd485e000-0000-4000-8000-000000000004',
+          'd485e900-0000-4000-8000-000000000001',
+          'd485e000-0000-4000-8000-000000000001'
+        );
+      INSERT INTO public.organizations (id, type, name, slug, status)
+      VALUES (
+        'd485e100-0000-4000-8000-000000000001', 'design_studio',
+        'D485 Reassignment Race Studio', 'd485-reassignment-race', 'active'
+      );
+      INSERT INTO public.organization_members (
+        id, user_id, organization_id, role, status, joined_at
+      ) VALUES
+        (
+          'd485e110-0000-4000-8000-000000000001',
+          'd485e000-0000-4000-8000-000000000001',
+          'd485e100-0000-4000-8000-000000000001',
+          'owner', 'active', now()
+        ),
+        (
+          'd485e110-0000-4000-8000-000000000002',
+          'd485e000-0000-4000-8000-000000000002',
+          'd485e100-0000-4000-8000-000000000001',
+          'member', 'active', now()
+        ),
+        (
+          'd485e110-0000-4000-8000-000000000004',
+          'd485e000-0000-4000-8000-000000000004',
+          'd485e100-0000-4000-8000-000000000001',
+          'member', 'active', now()
+        );
+      INSERT INTO public.designer_clients (
+        id, designer_id, client_id, source, status
+      ) VALUES (
+        'd485e120-0000-4000-8000-000000000001',
+        'd485e000-0000-4000-8000-000000000001',
+        'd485e000-0000-4000-8000-000000000003',
+        'direct', 'active'
+      );
+      INSERT INTO public.projects (
+        id, name, designer_id, client_id, created_by, studio_id
+      ) VALUES (
+        'd485e200-0000-4000-8000-000000000001',
+        'D485 Reassignment Race Project',
+        'd485e000-0000-4000-8000-000000000001',
+        'd485e000-0000-4000-8000-000000000003',
+        'd485e000-0000-4000-8000-000000000001',
+        'd485e100-0000-4000-8000-000000000001'
+      );
+    $setup$
+  );
+
+  PERFORM extensions.dblink_connect('d485_reassign_call', v_conninfo);
+  PERFORM extensions.dblink_connect('d485_reassign_revoke', v_conninfo);
+  PERFORM extensions.dblink_exec('d485_reassign_call', 'BEGIN');
+  PERFORM extensions.dblink_exec(
+    'd485_reassign_call', 'SET LOCAL ROLE authenticated'
+  );
+  PERFORM configured.claims
+  FROM extensions.dblink(
+    'd485_reassign_call',
+    $remote$
+      SELECT
+        set_config(
+          'request.jwt.claims',
+          '{"sub":"d485e000-0000-4000-8000-000000000001","role":"authenticated"}',
+          true
+        ),
+        set_config(
+          'request.jwt.claim.sub',
+          'd485e000-0000-4000-8000-000000000001', true
+        ),
+        set_config('request.jwt.claim.role', 'authenticated', true)
+    $remote$
+  ) AS configured(claims text, sub text, role_name text);
+  PERFORM reassigned.id
+  FROM extensions.dblink(
+    'd485_reassign_call',
+    $remote$
+      SELECT (public.reassign_project_lead(
+        'd485e200-0000-4000-8000-000000000001',
+        'd485e000-0000-4000-8000-000000000001',
+        'd485e000-0000-4000-8000-000000000002'
+      )).id::text
+    $remote$
+  ) AS reassigned(id text);
+
+  PERFORM extensions.dblink_exec(
+    'd485_reassign_revoke', 'SET statement_timeout = ''5s'''
+  );
+  PERFORM extensions.dblink_send_query(
+    'd485_reassign_revoke',
+    $remote$
+      UPDATE public.organization_members
+      SET status = 'suspended'
+      WHERE id = 'd485e110-0000-4000-8000-000000000002'
+    $remote$
+  );
+  PERFORM pg_sleep(0.2);
+  SELECT extensions.dblink_is_busy('d485_reassign_revoke') INTO v_busy;
+  IF v_busy <> 1 THEN
+    RAISE EXCEPTION
+      'membership revocation did not wait on the reassignment lock';
+  END IF;
+
+  PERFORM extensions.dblink_exec('d485_reassign_call', 'COMMIT');
+  SELECT result.status INTO v_status
+  FROM extensions.dblink_get_result(
+    'd485_reassign_revoke', false
+  ) AS result(status text);
+  IF v_status IS DISTINCT FROM 'UPDATE 1' THEN
+    RAISE EXCEPTION 'queued membership revocation returned %', v_status;
+  END IF;
+
+  SELECT state.designer_id, state.member_status
+  INTO v_project_designer, v_target_status
+  FROM extensions.dblink(
+    'd485_reassign_setup',
+    $remote$
+      SELECT project.designer_id::text, membership.status::text
+      FROM public.projects AS project
+      JOIN public.organization_members AS membership
+        ON membership.user_id = project.designer_id
+       AND membership.organization_id = project.studio_id
+      WHERE project.id = 'd485e200-0000-4000-8000-000000000001'
+    $remote$
+  ) AS state(designer_id text, member_status text);
+  IF v_project_designer IS DISTINCT FROM
+       'd485e000-0000-4000-8000-000000000002'
+     OR v_target_status IS DISTINCT FROM 'suspended'
+  THEN
+    RAISE EXCEPTION 'reassignment/revocation serialization state drifted';
+  END IF;
+
+  PERFORM extensions.dblink_exec('d485_reassign_call', 'BEGIN');
+  PERFORM extensions.dblink_exec(
+    'd485_reassign_call', 'SET LOCAL ROLE authenticated'
+  );
+  PERFORM configured.claims
+  FROM extensions.dblink(
+    'd485_reassign_call',
+    $remote$
+      SELECT
+        set_config(
+          'request.jwt.claims',
+          '{"sub":"d485e000-0000-4000-8000-000000000002","role":"authenticated"}',
+          true
+        ),
+        set_config(
+          'request.jwt.claim.sub',
+          'd485e000-0000-4000-8000-000000000002', true
+        ),
+        set_config('request.jwt.claim.role', 'authenticated', true)
+    $remote$
+  ) AS configured(claims text, sub text, role_name text);
+  PERFORM extensions.dblink_exec(
+    'd485_reassign_call',
+    $remote$
+      DO $probe$
+      BEGIN
+        BEGIN
+          PERFORM public.reassign_project_lead(
+            'd485e200-0000-4000-8000-000000000001',
+            'd485e000-0000-4000-8000-000000000002',
+            'd485e000-0000-4000-8000-000000000001'
+          );
+          RAISE EXCEPTION 'suspended successor reassigned the project'
+            USING ERRCODE = 'P4850';
+        EXCEPTION WHEN insufficient_privilege THEN
+          IF SQLERRM IS DISTINCT FROM
+             'lead reassignment requires the current lead or an exact-studio owner/admin and an active designer target'
+          THEN
+            RAISE;
+          END IF;
+        END;
+      END
+      $probe$;
+    $remote$
+  );
+  PERFORM extensions.dblink_exec('d485_reassign_call', 'ROLLBACK');
+
+  PERFORM extensions.dblink_exec(
+    'd485_reassign_setup',
+    $remote$
+      UPDATE public.organization_members
+      SET status = 'active'
+      WHERE id = 'd485e110-0000-4000-8000-000000000002'
+    $remote$
+  );
+
+  PERFORM extensions.dblink_exec('d485_reassign_call', 'BEGIN');
+  PERFORM extensions.dblink_exec(
+    'd485_reassign_call', 'SET LOCAL ROLE authenticated'
+  );
+  PERFORM configured.claims
+  FROM extensions.dblink(
+    'd485_reassign_call',
+    $remote$
+      SELECT
+        set_config(
+          'request.jwt.claims',
+          '{"sub":"d485e000-0000-4000-8000-000000000002","role":"authenticated"}',
+          true
+        ),
+        set_config(
+          'request.jwt.claim.sub',
+          'd485e000-0000-4000-8000-000000000002', true
+        ),
+        set_config('request.jwt.claim.role', 'authenticated', true)
+    $remote$
+  ) AS configured(claims text, sub text, role_name text);
+  PERFORM reassigned.id
+  FROM extensions.dblink(
+    'd485_reassign_call',
+    $remote$
+      SELECT (public.reassign_project_lead(
+        'd485e200-0000-4000-8000-000000000001',
+        'd485e000-0000-4000-8000-000000000002',
+        'd485e000-0000-4000-8000-000000000004'
+      )).id::text
+    $remote$
+  ) AS reassigned(id text);
+
+  PERFORM extensions.dblink_send_query(
+    'd485_reassign_revoke',
+    $remote$
+      DELETE FROM public.user_roles
+      WHERE id = 'd485e910-0000-4000-8000-000000000004'
+    $remote$
+  );
+  PERFORM pg_sleep(0.2);
+  SELECT extensions.dblink_is_busy('d485_reassign_revoke') INTO v_busy;
+  IF v_busy <> 1 THEN
+    RAISE EXCEPTION
+      'designer-role removal did not wait on the reassignment lock';
+  END IF;
+
+  PERFORM extensions.dblink_exec('d485_reassign_call', 'COMMIT');
+  SELECT result.status INTO v_status
+  FROM extensions.dblink_get_result(
+    'd485_reassign_revoke', false
+  ) AS result(status text);
+  IF v_status IS DISTINCT FROM 'DELETE 1' THEN
+    RAISE EXCEPTION 'queued designer-role removal returned %', v_status;
+  END IF;
+
+  SELECT state.designer_id, state.designer_role_count
+  INTO v_project_designer, v_target_role_count
+  FROM extensions.dblink(
+    'd485_reassign_setup',
+    $remote$
+      SELECT project.designer_id::text, count(role.id)::integer
+      FROM public.projects AS project
+      LEFT JOIN public.user_roles AS user_role
+        ON user_role.user_id = project.designer_id
+      LEFT JOIN public.roles AS role
+        ON role.id = user_role.role_id
+       AND role.domain = 'designer'
+      WHERE project.id = 'd485e200-0000-4000-8000-000000000001'
+      GROUP BY project.designer_id
+    $remote$
+  ) AS state(designer_id text, designer_role_count integer);
+  IF v_project_designer IS DISTINCT FROM
+       'd485e000-0000-4000-8000-000000000004'
+     OR v_target_role_count <> 0
+  THEN
+    RAISE EXCEPTION 'reassignment/role-removal serialization state drifted';
+  END IF;
+
+  PERFORM extensions.dblink_exec(
+    'd485_reassign_setup',
+    $remote$
+      DO $probe$
+      BEGIN
+        BEGIN
+          INSERT INTO public.invoices (
+            id, project_id, designer_id, client_id, studio_id,
+            status, currency, subtotal_cents, total_cents
+          ) VALUES (
+            'd485e700-0000-4000-8000-000000000001',
+            'd485e200-0000-4000-8000-000000000001',
+            'd485e000-0000-4000-8000-000000000004',
+            'd485e000-0000-4000-8000-000000000003',
+            'd485e100-0000-4000-8000-000000000001',
+            'draft', 'USD', 0, 0
+          );
+          RAISE EXCEPTION 'role-removed lead retained invoice authority'
+            USING ERRCODE = 'P4850';
+        EXCEPTION WHEN SQLSTATE 'P0001' THEN
+          IF SQLERRM IS DISTINCT FROM 'studio_id_not_designer_studio' THEN
+            RAISE;
+          END IF;
+        END;
+      END
+      $probe$;
+    $remote$
+  );
+
+  PERFORM extensions.dblink_exec(
+    'd485_reassign_setup', 'SET session_replication_role = replica'
+  );
+  PERFORM extensions.dblink_exec(
+    'd485_reassign_setup',
+    $cleanup$
+      DELETE FROM public.audit_logs
+      WHERE resource_id = 'd485e200-0000-4000-8000-000000000001';
+      DELETE FROM public.client_activity_log
+      WHERE designer_client_id IN (
+        SELECT id FROM public.designer_clients
+        WHERE client_id = 'd485e000-0000-4000-8000-000000000003'
+      );
+      DELETE FROM public.project_team_members
+      WHERE project_id = 'd485e200-0000-4000-8000-000000000001';
+      DELETE FROM public.projects
+      WHERE id = 'd485e200-0000-4000-8000-000000000001';
+      DELETE FROM public.designer_clients
+      WHERE client_id = 'd485e000-0000-4000-8000-000000000003';
+      DELETE FROM public.organization_members
+      WHERE organization_id = 'd485e100-0000-4000-8000-000000000001';
+      DELETE FROM public.organizations
+      WHERE id = 'd485e100-0000-4000-8000-000000000001';
+      DELETE FROM public.user_roles
+      WHERE role_id = 'd485e900-0000-4000-8000-000000000001';
+      DELETE FROM public.roles
+      WHERE id = 'd485e900-0000-4000-8000-000000000001';
+      DELETE FROM public.profiles
+      WHERE id::text LIKE 'd485e000-%';
+      DELETE FROM auth.users
+      WHERE id::text LIKE 'd485e000-%';
+    $cleanup$
+  );
+  PERFORM extensions.dblink_disconnect('d485_reassign_revoke');
+  PERFORM extensions.dblink_disconnect('d485_reassign_call');
+  PERFORM extensions.dblink_disconnect('d485_reassign_setup');
+EXCEPTION WHEN OTHERS THEN
+  IF 'd485_reassign_call' = ANY(COALESCE(
+       extensions.dblink_get_connections(), ARRAY[]::text[]
+     ))
+  THEN
+    BEGIN
+      PERFORM extensions.dblink_exec('d485_reassign_call', 'ROLLBACK');
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END IF;
+  IF 'd485_reassign_setup' = ANY(COALESCE(
+       extensions.dblink_get_connections(), ARRAY[]::text[]
+     ))
+  THEN
+    BEGIN
+      PERFORM extensions.dblink_exec(
+        'd485_reassign_setup', 'SET session_replication_role = replica'
+      );
+      PERFORM extensions.dblink_exec(
+        'd485_reassign_setup',
+        'DELETE FROM public.audit_logs '
+        'WHERE resource_id = ''d485e200-0000-4000-8000-000000000001''; '
+        'DELETE FROM public.client_activity_log WHERE designer_client_id IN '
+        '(SELECT id FROM public.designer_clients '
+        'WHERE client_id = ''d485e000-0000-4000-8000-000000000003''); '
+        'DELETE FROM public.project_team_members '
+        'WHERE project_id::text LIKE ''d485e200-%''; '
+        'DELETE FROM public.projects WHERE id::text LIKE ''d485e200-%''; '
+        'DELETE FROM public.designer_clients '
+        'WHERE client_id = ''d485e000-0000-4000-8000-000000000003''; '
+        'DELETE FROM public.organization_members '
+        'WHERE organization_id::text LIKE ''d485e100-%''; '
+        'DELETE FROM public.organizations WHERE id::text LIKE ''d485e100-%''; '
+        'DELETE FROM public.user_roles '
+        'WHERE role_id::text LIKE ''d485e900-%''; '
+        'DELETE FROM public.roles WHERE id::text LIKE ''d485e900-%''; '
+        'DELETE FROM public.profiles WHERE id::text LIKE ''d485e000-%''; '
+        'DELETE FROM auth.users WHERE id::text LIKE ''d485e000-%'';'
+      );
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END IF;
+  RAISE;
+END
+$reassignment_revocation_race$;
 
 BEGIN;
 
@@ -78,7 +1019,7 @@ VALUES
   (
     'public.issue_trade_draw_invoice(uuid)', 'p_draw_id uuid', 'jsonb',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '83ce7c6fc8abb7ed5f48e4c12055d1a05d425d3bd2476f0dbb6c0b41c02b850b',
+    '011fa31a39ae7bb7d112a83ca91ed817e17fb8f0b2b6322ecc9a402b078de1ea',
     ARRAY['authenticated']::text[]
   ),
   (
@@ -109,7 +1050,7 @@ VALUES
   (
     'public.publish_project_review(jsonb)', 'p_request jsonb', 'jsonb',
     ARRAY['search_path=pg_catalog, public, extensions, pg_temp']::text[],
-    'b20d24b78c8169b238cfb2357c9ecde725d584098a340dad50b91ed78ebefeeb',
+    'd5770d33ce7d1572603f020ff63c05c7d8b7f1f27f573cc97d816becd2dfe22b',
     ARRAY['authenticated']::text[]
   ),
   (
@@ -122,13 +1063,13 @@ VALUES
   (
     'public.set_invoice_studio_id()', '', 'trigger',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '0ed300c4553b9abe69011c31c11ea3598128d0222fa6c69cc76f51b9e24b3f81',
+    'dd023cf65854c6f9106046ca0eb830f64b2a7e90e2c860e9752d0e2d3a0da542',
     ARRAY[]::text[]
   ),
   (
     'public.set_project_studio_id()', '', 'trigger',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '48d694002b2a847d338623fea532187d7b1a85af38165db09578c066aac458a3',
+    '765d8d68d27e5b1d59efd53aa6585aa2160845b4173d123efddf5b9546271277',
     ARRAY[]::text[]
   ),
   (
@@ -265,19 +1206,19 @@ VALUES
     'app_private.issue_invoice_for_actor(uuid,date,uuid)',
     'p_invoice_id uuid, p_due_date date, p_actor_id uuid', 'invoices',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '7ef09b2c21c929069960e460641c268093575c205c7d114675c1dc56962f2789'
+    '56b8797bfcf3244bb9a1693be3d7ad1b9f6e886edd7307c8c54b9ce7a7f8481e'
   ),
   (
     'public._execute_furnishings_authorization_authorized(uuid,text,uuid,text)',
     'p_proposal_id uuid, p_signed_name text, p_client_id uuid, p_trusted_signed_ip text DEFAULT NULL::text',
     'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    'cdadc449f368eb12d56d0006e3ccb81d752bdc3388f783e4cd1a6b414923bb84'
+    '7d60930c27333b54ff4f02dab29c7cd012de0b7ff41d00185cb4bd6dfcb95e12'
   ),
   (
     'public._execute_trade_scope_authorized(uuid,text,uuid,text)',
     'p_proposal_id uuid, p_signed_name text, p_client_id uuid, p_trusted_signed_ip text DEFAULT NULL::text',
     'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '3f8d36043d9d38c275fa802690205a67104add2654eb818a08d5bf7bcdb85a36'
+    '24a263de63112a9c4dab4f0f5bb162b0ad900c3a061c3bd3b437e2d3d385170a'
   ),
   (
     'public._prepare_spec_book_issue_00403(uuid,text[],text,text,uuid,text,jsonb)',
@@ -436,31 +1377,53 @@ BEGIN
           23::smallint, 0::smallint, ''::text,
           (SELECT string_agg(attnum::text, ' ' ORDER BY
              array_position(
-               ARRAY['studio_id','designer_id','client_id','proposal_id'],
+               ARRAY[
+                 'id','studio_id','designer_id','client_id','proposal_id',
+                 'created_by','created_at'
+               ],
                attname
              ))
            FROM pg_attribute
            WHERE attrelid = 'public.projects'::regclass
              AND attname = ANY(
-               ARRAY['studio_id','designer_id','client_id','proposal_id']
+               ARRAY[
+                 'id','studio_id','designer_id','client_id','proposal_id',
+                 'created_by','created_at'
+               ]
              )),
           NULL::text, 0::oid,
-          'createtriggerset_project_studio_idbeforeinsertorupdateofstudio_id,designer_id,client_id,proposal_idonprojectsforeachrowexecutefunctionset_project_studio_id()'::text
+          'createtriggerset_project_studio_idbeforeinsertorupdateofid,studio_id,designer_id,client_id,proposal_id,created_by,created_atonprojectsforeachrowexecutefunctionset_project_studio_id()'::text
         ),
         (
           'public.invoices'::text, 'set_invoice_studio_id'::text,
           'public.set_invoice_studio_id()'::text, 'O'::"char", false,
           23::smallint, 0::smallint, ''::text,
           (SELECT string_agg(attnum::text, ' ' ORDER BY array_position(
-             ARRAY['studio_id','designer_id','client_id','project_id'],
-             attname))
+             ARRAY[
+               'id','studio_id','designer_id','client_id','project_id','status',
+               'invoice_number','issue_date','due_date','payment_terms_days',
+               'currency','subtotal_cents','tax_rate','tax_cents','total_cents',
+               'amount_paid_cents','memo','internal_notes','sent_at','paid_at',
+               'voided_at','void_reason','stripe_checkout_session_id',
+               'reminder_count','last_reminder_at','ar_flagged_at',
+               'ar_last_chased_at','created_at','updated_at'
+             ], attname))
            FROM pg_attribute
            WHERE attrelid = 'public.invoices'::regclass
              AND attname = ANY(
-               ARRAY['studio_id','designer_id','client_id','project_id']
+               ARRAY[
+                 'id','studio_id','designer_id','client_id','project_id',
+                 'status','invoice_number','issue_date','due_date',
+                 'payment_terms_days','currency','subtotal_cents','tax_rate',
+                 'tax_cents','total_cents','amount_paid_cents','memo',
+                 'internal_notes','sent_at','paid_at','voided_at','void_reason',
+                 'stripe_checkout_session_id','reminder_count',
+                 'last_reminder_at','ar_flagged_at','ar_last_chased_at',
+                 'created_at','updated_at'
+               ]
              )),
           NULL::text, 0::oid,
-          'createtriggerset_invoice_studio_idbeforeinsertorupdateofstudio_id,designer_id,client_id,project_idoninvoicesforeachrowexecutefunctionset_invoice_studio_id()'::text
+          'createtriggerset_invoice_studio_idbeforeinsertorupdateofid,studio_id,designer_id,client_id,project_id,status,invoice_number,issue_date,due_date,payment_terms_days,currency,subtotal_cents,tax_rate,tax_cents,total_cents,amount_paid_cents,memo,internal_notes,sent_at,paid_at,voided_at,void_reason,stripe_checkout_session_id,reminder_count,last_reminder_at,ar_flagged_at,ar_last_chased_at,created_at,updated_atoninvoicesforeachrowexecutefunctionset_invoice_studio_id()'::text
         ),
         (
           'public.commercial_document_signatures'::text,
@@ -569,6 +1532,24 @@ VALUES
     'sd-client@test.invalid', '', now(), now(), now(),
     '00000000-0000-0000-0000-000000000000',
     'authenticated', 'authenticated'
+  ),
+  (
+    'd4850000-0000-4000-8000-000000000005',
+    'sd-successor@test.invalid', '', now(), now(), now(),
+    '00000000-0000-0000-0000-000000000000',
+    'authenticated', 'authenticated'
+  ),
+  (
+    'd4850000-0000-4000-8000-000000000006',
+    'sd-roleless-member@test.invalid', '', now(), now(), now(),
+    '00000000-0000-0000-0000-000000000000',
+    'authenticated', 'authenticated'
+  ),
+  (
+    'd4850000-0000-4000-8000-000000000007',
+    'sd-foreign-studio-member@test.invalid', '', now(), now(), now(),
+    '00000000-0000-0000-0000-000000000000',
+    'authenticated', 'authenticated'
   );
 
 INSERT INTO public.profiles (
@@ -590,11 +1571,67 @@ VALUES
   (
     'd4850000-0000-4000-8000-000000000004',
     'sd-client@test.invalid', 'SD Client', false, now(), now()
+  ),
+  (
+    'd4850000-0000-4000-8000-000000000005',
+    'sd-successor@test.invalid', 'SD Successor', true, now(), now()
+  ),
+  (
+    'd4850000-0000-4000-8000-000000000006',
+    'sd-roleless-member@test.invalid', 'SD Roleless Member', true,
+    now(), now()
+  ),
+  (
+    'd4850000-0000-4000-8000-000000000007',
+    'sd-foreign-studio-member@test.invalid', 'SD Foreign Studio Member', true,
+    now(), now()
   )
 ON CONFLICT (id) DO UPDATE
 SET email = EXCLUDED.email,
     full_name = EXCLUDED.full_name,
     is_designer = EXCLUDED.is_designer;
+
+INSERT INTO public.roles (
+  id, name, display_name, domain, is_system, is_assignable
+)
+VALUES (
+  'd4859000-0000-4000-8000-000000000001',
+  'd485_contract_designer', 'D485 Contract Designer',
+  'designer', false, true
+);
+
+INSERT INTO public.user_roles (id, user_id, role_id, granted_by)
+VALUES
+  (
+    'd4859100-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000001',
+    'd4859000-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000001'
+  ),
+  (
+    'd4859100-0000-4000-8000-000000000002',
+    'd4850000-0000-4000-8000-000000000002',
+    'd4859000-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000001'
+  ),
+  (
+    'd4859100-0000-4000-8000-000000000003',
+    'd4850000-0000-4000-8000-000000000003',
+    'd4859000-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000001'
+  ),
+  (
+    'd4859100-0000-4000-8000-000000000005',
+    'd4850000-0000-4000-8000-000000000005',
+    'd4859000-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000001'
+  ),
+  (
+    'd4859100-0000-4000-8000-000000000007',
+    'd4850000-0000-4000-8000-000000000007',
+    'd4859000-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000001'
+  );
 
 INSERT INTO public.designer_clients (
   id, designer_id, client_id, source, status
@@ -615,6 +1652,11 @@ VALUES
   (
     'd4851000-0000-4000-8000-000000000002',
     'design_studio', 'SD Foreign Studio', 'sd-foreign-studio-d485', 'active'
+  ),
+  (
+    'd4851000-0000-4000-8000-000000000003',
+    'design_studio', 'SD Inactive Studio', 'sd-inactive-studio-d485',
+    'inactive'
   );
 
 INSERT INTO public.organization_members (
@@ -638,7 +1680,58 @@ VALUES
     'd4850000-0000-4000-8000-000000000001',
     'd4851000-0000-4000-8000-000000000002',
     'member', 'active', now()
+  ),
+  (
+    'd4851100-0000-4000-8000-000000000007',
+    'd4850000-0000-4000-8000-000000000007',
+    'd4851000-0000-4000-8000-000000000002',
+    'member', 'active', now()
+  ),
+  (
+    'd4851100-0000-4000-8000-000000000004',
+    'd4850000-0000-4000-8000-000000000005',
+    'd4851000-0000-4000-8000-000000000003',
+    'guest', 'active', now() - interval '2 years'
+  ),
+  (
+    'd4851100-0000-4000-8000-000000000005',
+    'd4850000-0000-4000-8000-000000000005',
+    'd4851000-0000-4000-8000-000000000001',
+    'member', 'active', now()
+  ),
+  (
+    'd4851100-0000-4000-8000-000000000006',
+    'd4850000-0000-4000-8000-000000000006',
+    'd4851000-0000-4000-8000-000000000001',
+    'member', 'active', now()
   );
+
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000005', 'authenticated'
+);
+
+DO $deterministic_studio_derivation$
+DECLARE
+  project_id uuid;
+BEGIN
+  project_id := public.open_project_direct(
+    'SD Deterministic Studio Project', NULL, NULL, NULL, current_date,
+    'd4852000-0000-4000-8000-000000000099'
+  );
+  ASSERT project_id = 'd4852000-0000-4000-8000-000000000099'
+     AND (
+       SELECT project.studio_id =
+                'd4851000-0000-4000-8000-000000000001'
+          AND project.designer_id =
+                'd4850000-0000-4000-8000-000000000005'
+       FROM public.projects AS project
+       WHERE project.id = project_id
+     ), 'studio derivation did not skip the earlier guest/inactive membership';
+END
+$deterministic_studio_derivation$;
+
+RESET ROLE;
 
 INSERT INTO public.projects (
   id, name, designer_id, client_id, created_by, studio_id
@@ -700,6 +1793,40 @@ VALUES
     'd4850000-0000-4000-8000-000000000001',
     'd4851000-0000-4000-8000-000000000001'
   );
+
+INSERT INTO public.project_payment_milestones (
+  id, project_id, label, percentage, amount_cents, status, sort_order,
+  trigger_kind, trigger_section_key
+)
+VALUES (
+  'd4853350-0000-4000-8000-000000000002',
+  'd4852000-0000-4000-8000-000000000001',
+  'SD Approved Gate', 20, 2000, 'pending', 2,
+  'on_section_settled', 'project'
+);
+
+INSERT INTO public.client_decisions (
+  id, designer_client_id, designer_id, project_id, title, status,
+  decision_type, decision_kind, section_key, coordination_kind, court,
+  blocking_status, blocks_kind, sent_at
+)
+VALUES (
+  'd4856000-0000-4000-8000-000000000002',
+  'd4851200-0000-4000-8000-000000000001',
+  'd4850000-0000-4000-8000-000000000001',
+  'd4852000-0000-4000-8000-000000000001',
+  'Approve SD project gate', 'pending', 'approval', 'approval', 'project',
+  'selection', 'client', 'non_blocking', 'none', now()
+);
+
+INSERT INTO public.client_decision_options (
+  id, decision_id, name, selected, approves, sort_order
+)
+VALUES (
+  'd4856010-0000-4000-8000-000000000002',
+  'd4856000-0000-4000-8000-000000000002',
+  'Approve gate', false, true, 0
+);
 
 INSERT INTO public.proposals (
   id, project_id, designer_id, designer_client_id, client_id, title, status,
@@ -769,6 +1896,15 @@ VALUES
     'SD Signature Guard Probe', 'sent',
     'design_services', 'sent', 10000, 0
   );
+
+INSERT INTO public.proposal_payment_milestones (
+  id, proposal_id, label, percentage, amount_cents, sort_order
+)
+VALUES (
+  'd4853340-0000-4000-8000-000000000030',
+  'd4853000-0000-4000-8000-000000000030',
+  'SD Kickoff Deposit', 10, 2500, 0
+);
 
 INSERT INTO public.proposal_service_terms (
   proposal_id, scope, billing_ceiling_cents
@@ -1536,7 +2672,10 @@ SECURITY DEFINER
 SET search_path = pg_catalog, public, pg_temp
 AS $$
 BEGIN
-  IF p_decision_id <> 'd4856000-0000-4000-8000-000000000001' THEN
+  IF p_decision_id NOT IN (
+    'd4856000-0000-4000-8000-000000000001',
+    'd4856000-0000-4000-8000-000000000002'
+  ) THEN
     RAISE EXCEPTION 'decision not found' USING ERRCODE = 'no_data_found';
   END IF;
   RETURN CASE p_kind
@@ -2090,63 +3229,27 @@ BEGIN
 END
 $service_mutation_results$;
 
+CREATE TEMP TABLE _00485_activation_fixture (
+  project_id uuid PRIMARY KEY
+) ON COMMIT DROP;
+GRANT SELECT, INSERT ON _00485_activation_fixture TO authenticated;
+
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_actor(
   'd4850000-0000-4000-8000-000000000004', 'authenticated'
 );
+SELECT set_config('app.proposal_activation_id', 'activation-sentinel', true);
+SELECT set_config('app.client_decision_write_id', 'decision-sentinel', true);
 
-DO $real_authenticated_client_paths$
+DO $real_authenticated_client_invoice_capabilities$
 DECLARE
-  furnishings_proposal_id uuid := (
-    SELECT proposal_id FROM _00485_commercial_fixture
-    WHERE label = 'furnishings_direct'
-  );
-  trade_proposal_id uuid := (
-    SELECT proposal_id FROM _00485_commercial_fixture
-    WHERE label = 'trade_direct'
-  );
-  furnishings_result jsonb;
-  trade_result jsonb;
   activation_result jsonb;
 BEGIN
-  furnishings_result := public.execute_furnishings_authorization(
-    furnishings_proposal_id, 'SD Client'
-  );
-  ASSERT (furnishings_result->>'newlyExecuted')::boolean
-     AND (
-       SELECT invoice.status = 'sent'
-          AND invoice.project_id = fixture.project_id
-          AND invoice.client_id =
-                'd4850000-0000-4000-8000-000000000004'
-          AND invoice.studio_id =
-                'd4851000-0000-4000-8000-000000000001'
-       FROM public.invoices AS invoice
-       JOIN _00485_commercial_fixture AS fixture
-         ON fixture.label = 'furnishings_direct'
-       WHERE invoice.id =
-         (furnishings_result->>'depositInvoiceId')::uuid
-     ), 'real authenticated furnishings deposit lost exact client authority';
-
-  trade_result := public.execute_trade_scope(
-    trade_proposal_id, 'SD Client'
-  );
-  ASSERT (trade_result->>'newlyExecuted')::boolean
-     AND (
-       SELECT invoice.status = 'sent'
-          AND invoice.project_id = fixture.project_id
-          AND invoice.client_id =
-                'd4850000-0000-4000-8000-000000000004'
-          AND invoice.studio_id =
-                'd4851000-0000-4000-8000-000000000001'
-       FROM public.invoices AS invoice
-       JOIN _00485_commercial_fixture AS fixture
-         ON fixture.label = 'trade_direct'
-       WHERE invoice.id = (trade_result->>'depositInvoiceId')::uuid
-     ), 'real authenticated trade deposit lost exact client authority';
-
   activation_result := public.sign_proposal(
     'd4853000-0000-4000-8000-000000000030', 'SD Client'
   );
+  INSERT INTO _00485_activation_fixture(project_id)
+  VALUES ((activation_result->>'project_id')::uuid);
   ASSERT (activation_result->>'project_id')::uuid IS NOT NULL
      AND EXISTS (
        SELECT 1
@@ -2161,10 +3264,400 @@ BEGIN
          AND project.studio_id =
                'd4851000-0000-4000-8000-000000000001'
      ), 'real authenticated proposal signature did not activate canonically';
+  ASSERT current_setting('app.proposal_activation_id', true) =
+           'activation-sentinel',
+    'proposal activation did not restore the prior transaction capability';
+  ASSERT 1 = (
+    SELECT count(*)
+    FROM public.project_payment_milestones AS milestone
+    JOIN public.invoices AS invoice ON invoice.id = milestone.invoice_id
+    JOIN public.invoice_line_items AS line
+      ON line.invoice_id = invoice.id
+     AND line.milestone_id = milestone.id
+    WHERE milestone.project_id = (activation_result->>'project_id')::uuid
+      AND milestone.trigger_kind = 'on_signing'
+      AND invoice.status = 'draft'
+      AND invoice.client_id =
+            'd4850000-0000-4000-8000-000000000004'
+      AND invoice.designer_id =
+            'd4850000-0000-4000-8000-000000000001'
+      AND invoice.studio_id =
+            'd4851000-0000-4000-8000-000000000001'
+      AND line.amount_cents = 2500
+  ), 'canonical client activation did not draft exactly one kickoff line/latch';
+
+  PERFORM public.apply_client_decision(
+    'd4856000-0000-4000-8000-000000000002',
+    'd4856010-0000-4000-8000-000000000002',
+    NULL, NULL, NULL, NULL
+  );
+  ASSERT current_setting('app.client_decision_write_id', true) =
+           'decision-sentinel',
+    'decision settlement did not restore the prior row capability';
+  ASSERT 1 = (
+    SELECT count(*)
+    FROM public.project_payment_milestones AS milestone
+    JOIN public.invoices AS invoice ON invoice.id = milestone.invoice_id
+    JOIN public.invoice_line_items AS line
+      ON line.invoice_id = invoice.id
+     AND line.milestone_id = milestone.id
+    WHERE milestone.id = 'd4853350-0000-4000-8000-000000000002'
+      AND invoice.status = 'draft'
+      AND invoice.project_id =
+            'd4852000-0000-4000-8000-000000000001'
+      AND invoice.client_id =
+            'd4850000-0000-4000-8000-000000000004'
+      AND invoice.designer_id =
+            'd4850000-0000-4000-8000-000000000001'
+      AND line.amount_cents = 2000
+  ), 'exact client decision settlement did not draft one milestone line/latch';
 END
-$real_authenticated_client_paths$;
+$real_authenticated_client_invoice_capabilities$;
 
 RESET ROLE;
+
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000001', 'authenticated'
+);
+
+INSERT INTO public.invoices (
+  id, project_id, designer_id, client_id, studio_id,
+  status, currency, subtotal_cents, total_cents
+)
+VALUES
+  (
+    'd4857000-0000-4000-8000-000000000097',
+    'd4852000-0000-4000-8000-000000000007',
+    'd4850000-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000004',
+    NULL, 'draft', 'USD', 100, 100
+  ),
+  (
+    'd4857000-0000-4000-8000-000000000098',
+    'd4852000-0000-4000-8000-000000000007',
+    'd4850000-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000004',
+    NULL, 'draft', 'USD', 100, 100
+  ),
+  (
+    'd4857000-0000-4000-8000-000000000099',
+    'd4852000-0000-4000-8000-000000000007',
+    'd4850000-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000004',
+    NULL, 'draft', 'USD', 0, 0
+  );
+
+INSERT INTO public.invoice_line_items (
+  invoice_id, kind, description, quantity, unit_amount_cents, amount_cents
+)
+VALUES
+  (
+    'd4857000-0000-4000-8000-000000000097', 'adhoc',
+    'D485 pre-handoff payment/refund line', 1, 100, 100
+  ),
+  (
+    'd4857000-0000-4000-8000-000000000098', 'adhoc',
+    'D485 pre-handoff reminder line', 1, 100, 100
+  );
+
+SELECT public.issue_invoice(
+  'd4857000-0000-4000-8000-000000000097', current_date + 15
+);
+SELECT public.issue_invoice(
+  'd4857000-0000-4000-8000-000000000098', current_date + 15
+);
+
+DO $first_project_handoffs$
+DECLARE
+  activation_project_id uuid := (
+    SELECT project_id FROM _00485_activation_fixture
+  );
+BEGIN
+  PERFORM public.reassign_project_lead(
+    activation_project_id,
+    'd4850000-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000002'
+  );
+  PERFORM public.reassign_project_lead(
+    'd4852000-0000-4000-8000-000000000007',
+    'd4850000-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000002'
+  );
+  PERFORM public.reassign_project_lead(
+    'd4852000-0000-4000-8000-000000000008',
+    'd4850000-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000002'
+  );
+  ASSERT 3 = (
+    SELECT count(*)
+    FROM public.projects AS project
+    WHERE project.id IN (
+      activation_project_id,
+      'd4852000-0000-4000-8000-000000000007',
+      'd4852000-0000-4000-8000-000000000008'
+    )
+      AND project.designer_id =
+            'd4850000-0000-4000-8000-000000000002'
+  ), 'first exact-row project handoff did not update every current lead';
+END
+$first_project_handoffs$;
+
+RESET ROLE;
+UPDATE public.organization_members
+SET status = 'suspended'
+WHERE id = 'd4851100-0000-4000-8000-000000000001';
+
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000002', 'authenticated'
+);
+
+DO $subsequent_project_handoffs$
+DECLARE
+  activation_project_id uuid := (
+    SELECT project_id FROM _00485_activation_fixture
+  );
+BEGIN
+  PERFORM public.reassign_project_lead(
+    activation_project_id,
+    'd4850000-0000-4000-8000-000000000002',
+    'd4850000-0000-4000-8000-000000000005'
+  );
+  PERFORM public.reassign_project_lead(
+    'd4852000-0000-4000-8000-000000000007',
+    'd4850000-0000-4000-8000-000000000002',
+    'd4850000-0000-4000-8000-000000000005'
+  );
+  PERFORM public.reassign_project_lead(
+    'd4852000-0000-4000-8000-000000000008',
+    'd4850000-0000-4000-8000-000000000002',
+    'd4850000-0000-4000-8000-000000000005'
+  );
+  ASSERT 3 = (
+    SELECT count(*)
+    FROM public.projects AS project
+    WHERE project.id IN (
+      activation_project_id,
+      'd4852000-0000-4000-8000-000000000007',
+      'd4852000-0000-4000-8000-000000000008'
+    )
+      AND project.designer_id =
+            'd4850000-0000-4000-8000-000000000005'
+  ), 'subsequent handoff failed with the historical author suspended';
+  ASSERT (
+    SELECT proposal.designer_id =
+             'd4850000-0000-4000-8000-000000000001'
+       AND proposal.project_id = activation_project_id
+    FROM public.proposals AS proposal
+    WHERE proposal.id = 'd4853000-0000-4000-8000-000000000030'
+  ), 'project handoff rewrote canonical proposal authorship/provenance';
+END
+$subsequent_project_handoffs$;
+
+RESET ROLE;
+
+UPDATE public.project_team_members
+SET removed_at = now()
+WHERE project_id = 'd4852000-0000-4000-8000-000000000007'
+  AND user_id = 'd4850000-0000-4000-8000-000000000001'
+  AND role = 'previous_lead';
+
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000007', 'authenticated'
+);
+
+DO $cross_studio_historical_payment_denial$
+BEGIN
+  BEGIN
+    PERFORM public.record_invoice_payment(
+      'd4857000-0000-4000-8000-000000000097',
+      100, 'check', 'D485-CROSS-STUDIO', now(),
+      '00485 cross-studio historical payment denial'
+    );
+    RAISE EXCEPTION 'cross-studio co-member paid a foreign-studio invoice'
+      USING ERRCODE = 'P4850';
+  EXCEPTION WHEN SQLSTATE 'P0001' THEN
+    ASSERT SQLERRM = 'studio_id_not_designer_studio';
+  END;
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM public.invoice_payments AS payment
+    WHERE payment.invoice_id =
+            'd4857000-0000-4000-8000-000000000097'
+  ), 'cross-studio payment denial left a payment row';
+END
+$cross_studio_historical_payment_denial$;
+
+RESET ROLE;
+SET LOCAL session_replication_role = replica;
+INSERT INTO public.invoices (
+  id, project_id, designer_id, client_id, studio_id,
+  status, currency, subtotal_cents, total_cents
+)
+VALUES (
+  'd4857000-0000-4000-8000-000000000100',
+  'd4852000-0000-4000-8000-000000000007',
+  'd4850000-0000-4000-8000-000000000007',
+  'd4850000-0000-4000-8000-000000000004',
+  'd4851000-0000-4000-8000-000000000001',
+  'draft', 'USD', 0, 0
+);
+SET LOCAL session_replication_role = origin;
+
+SET LOCAL ROLE service_role;
+SELECT set_config('request.jwt.claims', '', true);
+SELECT set_config('request.jwt.claim.sub', '', true);
+SELECT set_config('request.jwt.claim.role', '', true);
+
+INSERT INTO public.invoice_payments (
+  id, invoice_id, amount_cents, method, status,
+  stripe_payment_intent_id, stripe_event_id, received_at
+)
+VALUES (
+  'd4857100-0000-4000-8000-000000000097',
+  'd4857000-0000-4000-8000-000000000097',
+  100, 'stripe', 'succeeded', 'pi_d485_historical',
+  'evt_d485_historical_paid', now()
+);
+
+UPDATE public.invoice_payments
+SET status = 'refunded',
+    stripe_event_id = 'evt_d485_historical_refunded'
+WHERE id = 'd4857100-0000-4000-8000-000000000097';
+
+UPDATE public.invoices
+SET reminder_count = reminder_count + 1,
+    last_reminder_at = now(),
+    ar_flagged_at = now()
+WHERE id = 'd4857000-0000-4000-8000-000000000098';
+
+UPDATE public.invoices
+SET status = 'void',
+    voided_at = now(),
+    void_reason = '00485 historical service reconciliation'
+WHERE id = 'd4857000-0000-4000-8000-000000000099';
+
+DO $historical_service_reconciliation_contract$
+BEGIN
+  BEGIN
+    UPDATE public.invoices
+    SET reminder_count = reminder_count + 1
+    WHERE id = 'd4857000-0000-4000-8000-000000000100';
+    RAISE EXCEPTION 'foreign invoice designer lacked historical provenance'
+      USING ERRCODE = 'P4850';
+  EXCEPTION WHEN SQLSTATE 'P0001' THEN
+    ASSERT SQLERRM = 'studio_id_not_designer_studio';
+  END;
+
+  ASSERT (
+    SELECT invoice.status = 'sent'
+       AND invoice.amount_paid_cents = 0
+       AND invoice.paid_at IS NULL
+    FROM public.invoices AS invoice
+    WHERE invoice.id = 'd4857000-0000-4000-8000-000000000097'
+  ), 'service refund did not reverse the pre-handoff invoice rollup';
+  ASSERT (
+    SELECT payment.status = 'refunded'
+    FROM public.invoice_payments AS payment
+    WHERE payment.id = 'd4857100-0000-4000-8000-000000000097'
+  ), 'service payment/refund did not retain canonical payment evidence';
+  ASSERT EXISTS (
+    SELECT 1
+    FROM public.designer_earnings AS earnings
+    WHERE earnings.reverses_invoice_payment_id =
+            'd4857100-0000-4000-8000-000000000097'
+  ), 'service refund did not post the real reversal effect';
+  ASSERT (
+    SELECT invoice.reminder_count = 1
+       AND invoice.last_reminder_at IS NOT NULL
+       AND invoice.ar_flagged_at IS NOT NULL
+    FROM public.invoices AS invoice
+    WHERE invoice.id = 'd4857000-0000-4000-8000-000000000098'
+  ), 'service reminder did not update the pre-handoff invoice';
+  ASSERT (
+    SELECT invoice.status = 'void'
+       AND invoice.voided_at IS NOT NULL
+       AND invoice.void_reason = '00485 historical service reconciliation'
+    FROM public.invoices AS invoice
+    WHERE invoice.id = 'd4857000-0000-4000-8000-000000000099'
+  ), 'service void did not update the pre-handoff invoice';
+  ASSERT EXISTS (
+    SELECT 1
+    FROM public.project_team_members AS historical_lead
+    WHERE historical_lead.project_id =
+            'd4852000-0000-4000-8000-000000000007'
+      AND historical_lead.user_id =
+            'd4850000-0000-4000-8000-000000000001'
+      AND historical_lead.role = 'previous_lead'
+      AND historical_lead.removed_at IS NOT NULL
+  ), 'historical reconciliation did not use removed previous-lead provenance';
+  ASSERT (
+    SELECT invoice.reminder_count = 0
+    FROM public.invoices AS invoice
+    WHERE invoice.id = 'd4857000-0000-4000-8000-000000000100'
+  ), 'foreign non-provenance denial mutated the drift fixture';
+  ASSERT auth.uid() IS NULL,
+    'historical service reconciliation synthesized an actor';
+END
+$historical_service_reconciliation_contract$;
+
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000004', 'authenticated'
+);
+
+DO $post_handoff_commercial_billing$
+DECLARE
+  furnishings_result jsonb;
+  trade_result jsonb;
+BEGIN
+  furnishings_result := public.execute_furnishings_authorization(
+    (SELECT proposal_id FROM _00485_commercial_fixture
+     WHERE label = 'furnishings_direct'),
+    'SD Client'
+  );
+  trade_result := public.execute_trade_scope(
+    (SELECT proposal_id FROM _00485_commercial_fixture
+     WHERE label = 'trade_direct'),
+    'SD Client'
+  );
+  ASSERT (furnishings_result->>'newlyExecuted')::boolean
+     AND (trade_result->>'newlyExecuted')::boolean,
+    'real post-handoff commercial execution did not complete';
+  ASSERT 2 = (
+    SELECT count(*)
+    FROM public.invoices AS invoice
+    WHERE invoice.id IN (
+      (furnishings_result->>'depositInvoiceId')::uuid,
+      (trade_result->>'depositInvoiceId')::uuid
+    )
+      AND invoice.status = 'sent'
+      AND invoice.designer_id =
+            'd4850000-0000-4000-8000-000000000005'
+      AND invoice.client_id =
+            'd4850000-0000-4000-8000-000000000004'
+      AND invoice.studio_id =
+            'd4851000-0000-4000-8000-000000000001'
+  ), 'post-handoff commercial invoices did not bind the current project lead';
+  ASSERT 2 = (
+    SELECT count(*)
+    FROM _00485_commercial_fixture AS fixture
+    JOIN public.proposals AS proposal ON proposal.id = fixture.proposal_id
+    WHERE fixture.label IN ('furnishings_direct', 'trade_direct')
+      AND proposal.designer_id =
+            'd4850000-0000-4000-8000-000000000001'
+      AND proposal.project_id IS NULL
+  ), 'post-handoff billing rewrote historical commercial proposal authorship';
+END
+$post_handoff_commercial_billing$;
+
+RESET ROLE;
+UPDATE public.organization_members
+SET status = 'active'
+WHERE id = 'd4851100-0000-4000-8000-000000000001';
 
 DO $canonical_project_binding_after_execution$
 BEGIN
@@ -2269,7 +3762,7 @@ VALUES
   (
     'd4857000-0000-4000-8000-000000000070',
     'd4852000-0000-4000-8000-000000000007',
-    'd4850000-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000005',
     'd4850000-0000-4000-8000-000000000004',
     'd4851000-0000-4000-8000-000000000001',
     'draft', 'USD', 100, 100
@@ -2277,7 +3770,7 @@ VALUES
   (
     'd4857000-0000-4000-8000-000000000071',
     'd4852000-0000-4000-8000-000000000007',
-    'd4850000-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000005',
     'd4850000-0000-4000-8000-000000000004',
     'd4851000-0000-4000-8000-000000000001',
     'draft', 'USD', 100, 100
@@ -2340,6 +3833,31 @@ $invoice_core_anchor_denials$;
 
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000001', 'authenticated'
+);
+SELECT public.reassign_project_lead(
+  'd4852000-0000-4000-8000-000000000001',
+  'd4850000-0000-4000-8000-000000000001',
+  'd4850000-0000-4000-8000-000000000002'
+);
+RESET ROLE;
+
+UPDATE public.organization_members
+SET status = 'suspended'
+WHERE id = 'd4851100-0000-4000-8000-000000000001';
+
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000002', 'authenticated'
+);
+SELECT public.reassign_project_lead(
+  'd4852000-0000-4000-8000-000000000001',
+  'd4850000-0000-4000-8000-000000000002',
+  'd4850000-0000-4000-8000-000000000005'
+);
+
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_actor(
   'd4850000-0000-4000-8000-000000000002', 'authenticated'
 );
 SELECT set_config('app.trade_draw_invoice_id', 'draw-sentinel', true);
@@ -2378,11 +3896,15 @@ $trade_draw_comember_success$;
 
 RESET ROLE;
 
+UPDATE public.organization_members
+SET status = 'active'
+WHERE id = 'd4851100-0000-4000-8000-000000000001';
+
 DO $trade_draw_success_state$
 BEGIN
   ASSERT (
     SELECT invoice.designer_id =
-             'd4850000-0000-4000-8000-000000000001'
+             'd4850000-0000-4000-8000-000000000005'
        AND invoice.project_id =
              'd4852000-0000-4000-8000-000000000001'
        AND invoice.status = 'sent'
@@ -2392,6 +3914,16 @@ BEGIN
     JOIN public.invoices AS invoice ON invoice.id = draw.invoice_id
     WHERE draw.id = 'd4853200-0000-4000-8000-000000000001'
   ), 'trade invoice ownership or money invariants drifted';
+  ASSERT (
+    SELECT proposal.designer_id =
+             'd4850000-0000-4000-8000-000000000001'
+       AND project.designer_id =
+             'd4850000-0000-4000-8000-000000000005'
+    FROM _00485_commercial_fixture AS fixture
+    JOIN public.proposals AS proposal ON proposal.id = fixture.proposal_id
+    JOIN public.projects AS project ON project.id = fixture.project_id
+    WHERE fixture.label = 'trade_draw_local'
+  ), 'post-handoff draw rewrote proposal author or ignored the current lead';
   ASSERT 1 = (
     SELECT count(*)
     FROM public.trade_scope_draws AS draw
@@ -2780,6 +4312,7 @@ DO $review_publish_non_enumeration$
 DECLARE
   inaccessible_error text;
   nonexistent_error text;
+  malformed_error text;
 BEGIN
   BEGIN
     PERFORM public.publish_project_review(jsonb_build_object(
@@ -2811,13 +4344,467 @@ BEGIN
     nonexistent_error := SQLERRM;
   END;
 
+  BEGIN
+    PERFORM public.publish_project_review(jsonb_build_object(
+      'projectId', 'not-a-uuid',
+      'title', 'SD Malformed Review',
+      'clientPriceMode', 'hide',
+      'boardIds', '[]'::jsonb,
+      'items', '[]'::jsonb
+    ));
+    RAISE EXCEPTION 'outsider distinguished a malformed project id';
+  EXCEPTION WHEN insufficient_privilege THEN
+    malformed_error := SQLERRM;
+  END;
+
   ASSERT inaccessible_error = nonexistent_error
+     AND nonexistent_error = malformed_error
      AND inaccessible_error = 'project not found or access denied',
-    'review publication leaked project or media existence before authorization';
+    'review publication distinguished malformed/inaccessible/nonexistent ids';
 END
 $review_publish_non_enumeration$;
 
 RESET ROLE;
+
+CREATE POLICY d485_exact_project_insert_probe
+ON public.projects FOR INSERT TO authenticated
+WITH CHECK (id IN (
+  'd4852000-0000-4000-8000-000000000084',
+  'd4852000-0000-4000-8000-000000000085',
+  'd4852000-0000-4000-8000-000000000086',
+  'd4852000-0000-4000-8000-000000000088',
+  'd4852000-0000-4000-8000-000000000089',
+  'd4852000-0000-4000-8000-000000000090'
+));
+
+CREATE POLICY d485_exact_project_update_probe
+ON public.projects FOR UPDATE TO authenticated
+USING (proposal_id = 'd4853000-0000-4000-8000-000000000030')
+WITH CHECK (proposal_id = 'd4853000-0000-4000-8000-000000000030');
+
+CREATE POLICY d485_exact_invoice_insert_probe
+ON public.invoices FOR INSERT TO authenticated
+WITH CHECK (id IN (
+  'd4857000-0000-4000-8000-000000000085',
+  'd4857000-0000-4000-8000-000000000086',
+  'd4857000-0000-4000-8000-000000000087',
+  'd4857000-0000-4000-8000-000000000088',
+  'd4857000-0000-4000-8000-000000000089',
+  'd4857000-0000-4000-8000-000000000090',
+  'd4857000-0000-4000-8000-000000000092',
+  'd4857000-0000-4000-8000-000000000093',
+  'd4857000-0000-4000-8000-000000000094',
+  'd4857000-0000-4000-8000-000000000095',
+  'd4857000-0000-4000-8000-000000000096'
+));
+
+CREATE POLICY d485_exact_invoice_update_probe
+ON public.invoices FOR UPDATE TO authenticated
+USING (id = 'd4857000-0000-4000-8000-000000000085')
+WITH CHECK (id = 'd4857000-0000-4000-8000-000000000085');
+
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000006', 'authenticated'
+);
+
+DO $roleless_studio_member_denial$
+BEGIN
+  BEGIN
+    INSERT INTO public.projects (
+      id, name, designer_id, created_by, studio_id
+    ) VALUES (
+      'd4852000-0000-4000-8000-000000000084',
+      'Roleless Studio Member Project',
+      'd4850000-0000-4000-8000-000000000006',
+      'd4850000-0000-4000-8000-000000000006',
+      'd4851000-0000-4000-8000-000000000001'
+    );
+    RAISE EXCEPTION 'roleless studio member became a project lead'
+      USING ERRCODE = 'P4850';
+  EXCEPTION WHEN SQLSTATE 'P0001' THEN
+    ASSERT SQLERRM = 'studio_id_not_designer_studio';
+  END;
+END
+$roleless_studio_member_denial$;
+
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000001', 'authenticated'
+);
+
+INSERT INTO public.projects (
+  id, name, designer_id, created_by, studio_id
+)
+VALUES (
+  'd4852000-0000-4000-8000-000000000085',
+  'Direct Mobile-Style Project',
+  'd4850000-0000-4000-8000-000000000001',
+  'd4850000-0000-4000-8000-000000000001',
+  'd4851000-0000-4000-8000-000000000001'
+);
+
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000002', 'authenticated'
+);
+
+DO $exact_studio_created_by_reassignment_denial$
+DECLARE
+  v_created_at timestamptz := (
+    SELECT project.created_at
+    FROM public.projects AS project
+    WHERE project.id = 'd4852000-0000-4000-8000-000000000085'
+  );
+BEGIN
+  BEGIN
+    UPDATE public.projects
+    SET id = 'd4852000-0000-4000-8000-000000000083',
+        created_by = 'd4850000-0000-4000-8000-000000000002',
+        created_at = timestamptz '2000-01-01 00:00:00+00'
+    WHERE id = 'd4852000-0000-4000-8000-000000000085';
+    RAISE EXCEPTION 'exact-studio peer rekeyed project provenance'
+      USING ERRCODE = 'P4850';
+  EXCEPTION WHEN SQLSTATE 'P0001' THEN
+    ASSERT SQLERRM = 'studio_id_not_designer_studio';
+  END;
+  ASSERT (
+    SELECT project.created_by =
+             'd4850000-0000-4000-8000-000000000001'
+       AND project.created_at = v_created_at
+    FROM public.projects AS project
+    WHERE project.id = 'd4852000-0000-4000-8000-000000000085'
+  ) AND NOT EXISTS (
+    SELECT 1
+    FROM public.projects AS project
+    WHERE project.id = 'd4852000-0000-4000-8000-000000000083'
+  ), 'project identity/provenance denial did not preserve the original row';
+END
+$exact_studio_created_by_reassignment_denial$;
+
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000007', 'authenticated'
+);
+
+DO $cross_studio_created_by_reassignment_denial$
+BEGIN
+  BEGIN
+    UPDATE public.projects
+    SET created_by = 'd4850000-0000-4000-8000-000000000007'
+    WHERE id = 'd4852000-0000-4000-8000-000000000085';
+    RAISE EXCEPTION 'cross-studio peer reassigned project created_by'
+      USING ERRCODE = 'P4850';
+  EXCEPTION WHEN SQLSTATE 'P0001' THEN
+    ASSERT SQLERRM = 'studio_id_not_designer_studio';
+  END;
+  ASSERT (
+    SELECT project.created_by =
+             'd4850000-0000-4000-8000-000000000001'
+    FROM public.projects AS project
+    WHERE project.id = 'd4852000-0000-4000-8000-000000000085'
+  ), 'created_by reassignment denial mutated project provenance';
+END
+$cross_studio_created_by_reassignment_denial$;
+
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000002', 'authenticated'
+);
+
+INSERT INTO public.invoices (
+  id, project_id, designer_id, client_id, studio_id,
+  status, currency, subtotal_cents, total_cents
+)
+VALUES (
+  'd4857000-0000-4000-8000-000000000085',
+  'd4852000-0000-4000-8000-000000000003',
+  'd4850000-0000-4000-8000-000000000001',
+  'd4850000-0000-4000-8000-000000000004',
+  NULL, 'draft', 'USD', 0, 0
+);
+
+UPDATE public.invoices
+SET studio_id = studio_id
+WHERE id = 'd4857000-0000-4000-8000-000000000085';
+
+UPDATE public.invoices
+SET due_date = current_date + 30,
+    payment_terms_days = 30,
+    subtotal_cents = 125,
+    tax_rate = 0.2000,
+    tax_cents = 25,
+    total_cents = 150,
+    memo = 'D485 exact-studio draft edit',
+    internal_notes = 'D485 exact-studio internal draft note'
+WHERE id = 'd4857000-0000-4000-8000-000000000085';
+
+DO $direct_draft_identity_denial$
+DECLARE
+  v_created_at timestamptz := (
+    SELECT invoice.created_at
+    FROM public.invoices AS invoice
+    WHERE invoice.id = 'd4857000-0000-4000-8000-000000000085'
+  );
+BEGIN
+  BEGIN
+    UPDATE public.invoices
+    SET id = 'd4857000-0000-4000-8000-000000000083',
+        created_at = timestamptz '2000-01-01 00:00:00+00'
+    WHERE id = 'd4857000-0000-4000-8000-000000000085';
+    RAISE EXCEPTION 'exact-studio peer rekeyed draft invoice provenance'
+      USING ERRCODE = 'P4850';
+  EXCEPTION WHEN SQLSTATE 'P0001' THEN
+    ASSERT SQLERRM = 'studio_id_not_designer_studio';
+  END;
+  ASSERT (
+    SELECT invoice.created_at = v_created_at
+    FROM public.invoices AS invoice
+    WHERE invoice.id = 'd4857000-0000-4000-8000-000000000085'
+  ) AND NOT EXISTS (
+    SELECT 1
+    FROM public.invoices AS invoice
+    WHERE invoice.id = 'd4857000-0000-4000-8000-000000000083'
+  ), 'invoice identity/provenance denial did not preserve the original row';
+END
+$direct_draft_identity_denial$;
+
+DO $direct_authenticated_canonical_success$
+BEGIN
+  ASSERT (
+    SELECT project.designer_id =
+             'd4850000-0000-4000-8000-000000000001'
+       AND project.created_by =
+             'd4850000-0000-4000-8000-000000000001'
+       AND project.client_id IS NULL
+       AND project.proposal_id IS NULL
+       AND project.studio_id =
+             'd4851000-0000-4000-8000-000000000001'
+    FROM public.projects AS project
+    WHERE project.id = 'd4852000-0000-4000-8000-000000000085'
+  ), 'mobile-style exact-studio project INSERT lost compatibility';
+  ASSERT (
+    SELECT invoice.designer_id = project.designer_id
+       AND invoice.client_id = project.client_id
+       AND invoice.studio_id = project.studio_id
+       AND invoice.due_date = current_date + 30
+       AND invoice.payment_terms_days = 30
+       AND invoice.subtotal_cents = 125
+       AND invoice.tax_rate = 0.2000
+       AND invoice.tax_cents = 25
+       AND invoice.total_cents = 150
+       AND invoice.memo = 'D485 exact-studio draft edit'
+       AND invoice.internal_notes =
+             'D485 exact-studio internal draft note'
+    FROM public.invoices AS invoice
+    JOIN public.projects AS project ON project.id = invoice.project_id
+    WHERE invoice.id = 'd4857000-0000-4000-8000-000000000085'
+  ), 'direct exact-studio canonical draft invoice lost compatibility';
+END
+$direct_authenticated_canonical_success$;
+
+DO $direct_draft_machine_state_denial$
+BEGIN
+  BEGIN
+    UPDATE public.invoices
+    SET invoice_number = 'D485-FORGED-DRAFT',
+        issue_date = current_date,
+        sent_at = now(),
+        amount_paid_cents = 1
+    WHERE id = 'd4857000-0000-4000-8000-000000000085';
+    RAISE EXCEPTION 'direct draft UPDATE forged invoice machine state'
+      USING ERRCODE = 'P4850';
+  EXCEPTION WHEN SQLSTATE 'P0001' THEN
+    ASSERT SQLERRM = 'studio_id_not_designer_studio';
+  END;
+
+  ASSERT (
+    SELECT invoice.status = 'draft'
+       AND invoice.invoice_number IS NULL
+       AND invoice.issue_date IS NULL
+       AND invoice.sent_at IS NULL
+       AND invoice.amount_paid_cents = 0
+    FROM public.invoices AS invoice
+    WHERE invoice.id = 'd4857000-0000-4000-8000-000000000085'
+  ), 'direct draft machine-state denial mutated the invoice';
+END
+$direct_draft_machine_state_denial$;
+
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000007', 'authenticated'
+);
+
+DO $cross_studio_draft_content_denial$
+BEGIN
+  BEGIN
+    UPDATE public.invoices
+    SET due_date = current_date + 90,
+        subtotal_cents = 9000,
+        tax_cents = 900,
+        total_cents = 9900,
+        memo = 'D485 forged cross-studio draft edit'
+    WHERE id = 'd4857000-0000-4000-8000-000000000085';
+    RAISE EXCEPTION 'cross-studio peer changed draft amount/memo/due date'
+      USING ERRCODE = 'P4850';
+  EXCEPTION WHEN SQLSTATE 'P0001' THEN
+    ASSERT SQLERRM = 'studio_id_not_designer_studio';
+  END;
+
+  ASSERT (
+    SELECT invoice.due_date = current_date + 30
+       AND invoice.subtotal_cents = 125
+       AND invoice.tax_cents = 25
+       AND invoice.total_cents = 150
+       AND invoice.memo = 'D485 exact-studio draft edit'
+    FROM public.invoices AS invoice
+    WHERE invoice.id = 'd4857000-0000-4000-8000-000000000085'
+  ), 'cross-studio draft-content denial mutated the invoice';
+END
+$cross_studio_draft_content_denial$;
+
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000001', 'authenticated'
+);
+
+INSERT INTO public.invoices (
+  id, project_id, designer_id, client_id, studio_id,
+  status, currency, subtotal_cents, total_cents
+)
+VALUES
+  (
+    'd4857000-0000-4000-8000-000000000094',
+    'd4852000-0000-4000-8000-000000000003',
+    'd4850000-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000004',
+    NULL, 'draft', 'USD', 100, 100
+  ),
+  (
+    'd4857000-0000-4000-8000-000000000095',
+    'd4852000-0000-4000-8000-000000000003',
+    'd4850000-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000004',
+    NULL, 'draft', 'USD', 100, 100
+  ),
+  (
+    'd4857000-0000-4000-8000-000000000096',
+    'd4852000-0000-4000-8000-000000000003',
+    'd4850000-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000004',
+    NULL, 'draft', 'USD', 0, 0
+  );
+
+INSERT INTO public.invoice_line_items (
+  invoice_id, kind, description, quantity, unit_amount_cents, amount_cents
+)
+VALUES
+  (
+    'd4857000-0000-4000-8000-000000000094', 'adhoc',
+    'D485 payment transition line', 1, 100, 100
+  ),
+  (
+    'd4857000-0000-4000-8000-000000000095', 'adhoc',
+    'D485 reminder transition line', 1, 100, 100
+  );
+
+SELECT public.issue_invoice(
+  'd4857000-0000-4000-8000-000000000094', current_date + 15
+);
+SELECT public.issue_invoice(
+  'd4857000-0000-4000-8000-000000000095', current_date + 15
+);
+
+RESET ROLE;
+UPDATE public.projects
+SET status = 'on_hold'
+WHERE id = 'd4852000-0000-4000-8000-000000000003';
+DELETE FROM public.user_roles
+WHERE id = 'd4859100-0000-4000-8000-000000000001';
+
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000001', 'authenticated'
+);
+SELECT public.record_invoice_payment(
+  'd4857000-0000-4000-8000-000000000094',
+  100, 'check', 'D485-CHECK', now(), '00485 trigger transition probe'
+);
+SELECT public.void_invoice(
+  'd4857000-0000-4000-8000-000000000096',
+  '00485 trigger transition probe'
+);
+
+RESET ROLE;
+SET LOCAL ROLE service_role;
+SELECT set_config('request.jwt.claims', '', true);
+SELECT set_config('request.jwt.claim.sub', '', true);
+SELECT set_config('request.jwt.claim.role', '', true);
+
+UPDATE public.invoices
+SET reminder_count = reminder_count + 1,
+    last_reminder_at = now(),
+    ar_flagged_at = now()
+WHERE id = 'd4857000-0000-4000-8000-000000000095';
+
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000001', 'authenticated'
+);
+SELECT public.chase_invoice(
+  'd4857000-0000-4000-8000-000000000095'
+);
+
+DO $owner_service_invoice_transition_success$
+BEGIN
+  ASSERT (
+    SELECT invoice.status = 'paid'
+       AND invoice.amount_paid_cents = 100
+       AND invoice.paid_at IS NOT NULL
+       AND (SELECT count(*) FROM public.invoice_payments AS payment
+            WHERE payment.invoice_id = invoice.id
+              AND payment.status = 'succeeded') = 1
+    FROM public.invoices AS invoice
+    WHERE invoice.id = 'd4857000-0000-4000-8000-000000000094'
+  ), 'on-hold owner payment failed after designer-role removal';
+  ASSERT (
+    SELECT invoice.status = 'sent'
+       AND invoice.reminder_count = 1
+       AND invoice.last_reminder_at IS NOT NULL
+       AND invoice.ar_flagged_at IS NOT NULL
+       AND invoice.ar_last_chased_at IS NOT NULL
+    FROM public.invoices AS invoice
+    WHERE invoice.id = 'd4857000-0000-4000-8000-000000000095'
+  ), 'on-hold owner/service reminder failed after designer-role removal';
+  ASSERT (
+    SELECT invoice.status = 'void'
+       AND invoice.voided_at IS NOT NULL
+       AND invoice.void_reason = '00485 trigger transition probe'
+    FROM public.invoices AS invoice
+    WHERE invoice.id = 'd4857000-0000-4000-8000-000000000096'
+  ), 'on-hold owner void failed after designer-role removal';
+  ASSERT (
+    SELECT project.status = 'on_hold'
+    FROM public.projects AS project
+    WHERE project.id = 'd4852000-0000-4000-8000-000000000003'
+  ), 'financial compatibility probe did not retain on-hold project state';
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM public.user_roles AS user_role
+    WHERE user_role.id = 'd4859100-0000-4000-8000-000000000001'
+  ), 'financial compatibility probe restored designer role too early';
+END
+$owner_service_invoice_transition_success$;
+
+RESET ROLE;
+
+UPDATE public.projects
+SET status = 'active'
+WHERE id = 'd4852000-0000-4000-8000-000000000003';
+INSERT INTO public.user_roles (id, user_id, role_id, granted_by)
+VALUES (
+  'd4859100-0000-4000-8000-000000000001',
+  'd4850000-0000-4000-8000-000000000001',
+  'd4859000-0000-4000-8000-000000000001',
+  'd4850000-0000-4000-8000-000000000001'
+);
 
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_actor(
@@ -2834,6 +4821,41 @@ BEGIN
     INSERT INTO public.projects (
       id, name, designer_id, client_id, created_by, studio_id
     ) VALUES (
+      'd4852000-0000-4000-8000-000000000086',
+      'Direct Forged Client Project',
+      'd4850000-0000-4000-8000-000000000002',
+      'd4850000-0000-4000-8000-000000000004',
+      'd4850000-0000-4000-8000-000000000002',
+      'd4851000-0000-4000-8000-000000000001'
+    );
+    RAISE EXCEPTION 'direct project INSERT forged a client binding'
+      USING ERRCODE = 'P4850';
+  EXCEPTION WHEN SQLSTATE 'P0001' THEN
+    ASSERT SQLERRM = 'studio_id_not_designer_studio';
+  END;
+
+  BEGIN
+    INSERT INTO public.invoices (
+      id, project_id, designer_id, client_id, studio_id,
+      status, currency, subtotal_cents, total_cents
+    ) VALUES (
+      'd4857000-0000-4000-8000-000000000086',
+      'd4852000-0000-4000-8000-000000000003',
+      'd4850000-0000-4000-8000-000000000001',
+      'd4850000-0000-4000-8000-000000000003',
+      'd4851000-0000-4000-8000-000000000001',
+      'draft', 'USD', 0, 0
+    );
+    RAISE EXCEPTION 'direct invoice INSERT crossed its canonical client'
+      USING ERRCODE = 'P4850';
+  EXCEPTION WHEN SQLSTATE 'P0001' THEN
+    ASSERT SQLERRM = 'studio_id_not_designer_studio';
+  END;
+
+  BEGIN
+    INSERT INTO public.projects (
+      id, name, designer_id, client_id, created_by, studio_id
+    ) VALUES (
       'd4852000-0000-4000-8000-000000000089',
       'Direct Valid Studio Project',
       'd4850000-0000-4000-8000-000000000001',
@@ -2841,8 +4863,9 @@ BEGIN
       'd4850000-0000-4000-8000-000000000001',
       'd4851000-0000-4000-8000-000000000001'
     );
-    RAISE EXCEPTION 'direct authenticated DML stamped a valid project tuple';
-  EXCEPTION WHEN raise_exception THEN
+    RAISE EXCEPTION 'direct authenticated DML stamped another designer tuple'
+      USING ERRCODE = 'P4850';
+  EXCEPTION WHEN SQLSTATE 'P0001' THEN
     ASSERT SQLERRM = 'studio_id_not_designer_studio';
   END;
 
@@ -2858,8 +4881,9 @@ BEGIN
       'd4851000-0000-4000-8000-000000000001',
       'draft', 'USD', 0, 0
     );
-    RAISE EXCEPTION 'direct authenticated DML stamped a valid invoice tuple';
-  EXCEPTION WHEN raise_exception THEN
+    RAISE EXCEPTION 'direct authenticated DML stamped a mismatched invoice tuple'
+      USING ERRCODE = 'P4850';
+  EXCEPTION WHEN SQLSTATE 'P0001' THEN
     ASSERT SQLERRM = 'studio_id_not_designer_studio';
   END;
 
@@ -2874,8 +4898,9 @@ BEGIN
       'd4850000-0000-4000-8000-000000000001',
       'd4851000-0000-4000-8000-000000000002'
     );
-    RAISE EXCEPTION 'forged claim stamped a foreign project studio';
-  EXCEPTION WHEN raise_exception THEN
+    RAISE EXCEPTION 'forged claim stamped a foreign project studio'
+      USING ERRCODE = 'P4850';
+  EXCEPTION WHEN SQLSTATE 'P0001' THEN
     ASSERT SQLERRM = 'studio_id_not_designer_studio';
   END;
 
@@ -2891,10 +4916,60 @@ BEGIN
       'd4851000-0000-4000-8000-000000000002',
       'draft', 'USD', 0, 0
     );
-    RAISE EXCEPTION 'forged claim stamped a foreign invoice studio';
-  EXCEPTION WHEN raise_exception THEN
+    RAISE EXCEPTION 'forged claim stamped a foreign invoice studio'
+      USING ERRCODE = 'P4850';
+  EXCEPTION WHEN SQLSTATE 'P0001' THEN
     ASSERT SQLERRM = 'studio_id_not_designer_studio';
   END;
+
+  BEGIN
+    INSERT INTO public.invoices (
+      id, project_id, designer_id, client_id, studio_id,
+      invoice_number, status, issue_date, sent_at,
+      currency, subtotal_cents, total_cents
+    ) VALUES (
+      'd4857000-0000-4000-8000-000000000092',
+      'd4852000-0000-4000-8000-000000000003',
+      'd4850000-0000-4000-8000-000000000001',
+      'd4850000-0000-4000-8000-000000000004',
+      'd4851000-0000-4000-8000-000000000001',
+      'D485-FORGED-SENT', 'sent', current_date, now(),
+      'USD', 0, 0
+    );
+    RAISE EXCEPTION 'direct authenticated DML inserted a sent invoice'
+      USING ERRCODE = 'P4850';
+  EXCEPTION WHEN SQLSTATE 'P0001' THEN
+    ASSERT SQLERRM = 'studio_id_not_designer_studio';
+  END;
+
+  BEGIN
+    INSERT INTO public.invoices (
+      id, project_id, designer_id, client_id, studio_id,
+      invoice_number, status, issue_date, sent_at, paid_at,
+      currency, subtotal_cents, total_cents, amount_paid_cents
+    ) VALUES (
+      'd4857000-0000-4000-8000-000000000093',
+      'd4852000-0000-4000-8000-000000000003',
+      'd4850000-0000-4000-8000-000000000001',
+      'd4850000-0000-4000-8000-000000000004',
+      'd4851000-0000-4000-8000-000000000001',
+      'D485-FORGED-PAID', 'paid', current_date, now(), now(),
+      'USD', 0, 0, 0
+    );
+    RAISE EXCEPTION 'direct authenticated DML inserted a paid invoice'
+      USING ERRCODE = 'P4850';
+  EXCEPTION WHEN SQLSTATE 'P0001' THEN
+    ASSERT SQLERRM = 'studio_id_not_designer_studio';
+  END;
+
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM public.invoices AS invoice
+    WHERE invoice.id IN (
+      'd4857000-0000-4000-8000-000000000092',
+      'd4857000-0000-4000-8000-000000000093'
+    )
+  ), 'direct sent/paid invoice denial left residue';
 END
 $authenticated_trigger_claim_denials$;
 
@@ -2919,8 +4994,9 @@ BEGIN
     UPDATE public.projects
     SET studio_id = studio_id
     WHERE proposal_id = 'd4853000-0000-4000-8000-000000000030';
-    RAISE EXCEPTION 'client-forged activation capability authorized DML';
-  EXCEPTION WHEN raise_exception THEN
+    RAISE EXCEPTION 'client-forged activation capability authorized DML'
+      USING ERRCODE = 'P4850';
+  EXCEPTION WHEN SQLSTATE 'P0001' THEN
     ASSERT SQLERRM = 'studio_id_not_designer_studio';
   END;
 
@@ -2936,8 +5012,9 @@ BEGIN
       'd4851000-0000-4000-8000-000000000001',
       'draft', 'USD', 0, 0
     );
-    RAISE EXCEPTION 'client-forged commercial capability authorized DML';
-  EXCEPTION WHEN raise_exception THEN
+    RAISE EXCEPTION 'client-forged commercial capability authorized DML'
+      USING ERRCODE = 'P4850';
+  EXCEPTION WHEN SQLSTATE 'P0001' THEN
     ASSERT SQLERRM = 'studio_id_not_designer_studio';
   END;
 END
@@ -2963,8 +5040,9 @@ BEGIN
       'd4850000-0000-4000-8000-000000000001',
       'd4851000-0000-4000-8000-000000000001'
     );
-    RAISE EXCEPTION 'NULL authenticated actor stamped a project studio';
-  EXCEPTION WHEN raise_exception THEN
+    RAISE EXCEPTION 'NULL authenticated actor stamped a project studio'
+      USING ERRCODE = 'P4850';
+  EXCEPTION WHEN SQLSTATE 'P0001' THEN
     ASSERT SQLERRM = 'studio_id_not_designer_studio';
   END;
 
@@ -2980,8 +5058,9 @@ BEGIN
       'd4851000-0000-4000-8000-000000000001',
       'draft', 'USD', 0, 0
     );
-    RAISE EXCEPTION 'NULL authenticated actor stamped an invoice studio';
-  EXCEPTION WHEN raise_exception THEN
+    RAISE EXCEPTION 'NULL authenticated actor stamped an invoice studio'
+      USING ERRCODE = 'P4850';
+  EXCEPTION WHEN SQLSTATE 'P0001' THEN
     ASSERT SQLERRM = 'studio_id_not_designer_studio';
   END;
 END
@@ -3148,6 +5227,18 @@ BEGIN
   ASSERT COALESCE(
     NULLIF(current_setting('app.project_review_publish', true), ''), ''
   ) = '', 'pooled successor inherited a review publication capability';
+  ASSERT COALESCE(
+    NULLIF(current_setting('app.project_reassignment_id', true), ''), ''
+  ) = '', 'pooled successor inherited a project reassignment capability';
+  ASSERT COALESCE(
+    NULLIF(current_setting('app.proposal_activation_id', true), ''), ''
+  ) = '', 'pooled successor inherited a proposal activation capability';
+  ASSERT COALESCE(
+    NULLIF(current_setting('app.client_decision_write_id', true), ''), ''
+  ) = '', 'pooled successor inherited a decision-write capability';
+  ASSERT COALESCE(
+    NULLIF(current_setting('app.proposal_accept_id', true), ''), ''
+  ) = '', 'pooled successor inherited a proposal-accept capability';
   ASSERT COALESCE(
     NULLIF(current_setting('request.jwt.claims', true), ''), ''
   ) = '', 'pooled successor inherited request JWT claims';
