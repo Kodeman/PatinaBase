@@ -847,6 +847,21 @@ interface FFEScheduleBuilderProps {
    * line with its Alternatives band already open.
    */
   initialUnfoldedId?: string;
+  /**
+   * sts W3a — the Worktable's room lens (a LIFT, never a filter): when set to
+   * a scope-room id with lines, that room's group renders first; every other
+   * group keeps its order and nothing is hidden. Omitted → group order
+   * untouched, so the Drafting Room and legacy hosts render pixel-identical.
+   */
+  liftRoomId?: string | null;
+  /**
+   * sts W3a — host-supplied empty-state lead. When the schedule has no lines
+   * its return renders in place of the default "No items yet" sentence; the
+   * callback opens the builder's own add-item flow (the catalog picker,
+   * pre-targeted at the lifted room if one is lensed). The Drafting Room and
+   * legacy hosts omit it and keep the sentence.
+   */
+  renderEmptyLead?: (openAddItem: () => void) => ReactNode;
 }
 
 interface CaptureDropContext {
@@ -860,6 +875,8 @@ export function FFEScheduleBuilder({
   renderUnfold,
   renderVerdictChip,
   initialUnfoldedId,
+  liftRoomId,
+  renderEmptyLead,
 }: FFEScheduleBuilderProps) {
   const refreshDraftingSummary = useDraftingFacetInvalidation(proposalId);
   const { data: rooms = [] } = useProposalScopeRooms(proposalId);
@@ -1130,6 +1147,19 @@ export function FFEScheduleBuilder({
     }
     return groups;
   }, [filteredItems, typedRooms]);
+
+  // sts W3a — the room lens reorders the RENDER order only: the lifted room's
+  // group first, everyone else unchanged, nothing hidden. handleDragEnd keeps
+  // reading `grouped`, so a drag while the lens is up still rewrites positions
+  // from the document's canonical group order, never the lifted view.
+  const orderedGroups = useMemo(() => {
+    const entries = Object.entries(grouped);
+    if (!liftRoomId || !grouped[liftRoomId]) return entries;
+    return [
+      [liftRoomId, grouped[liftRoomId]] as (typeof entries)[number],
+      ...entries.filter(([id]) => id !== liftRoomId),
+    ];
+  }, [grouped, liftRoomId]);
 
   const totalEstimate = useMemo(() => {
     return (items as FFEItem[]).reduce((sum, i) => {
@@ -1411,7 +1441,7 @@ export function FFEScheduleBuilder({
       )}
 
       {/* Render groups for rooms that already have items, wrapped in droppables. */}
-      {Object.entries(grouped).map(([groupId, group]) => {
+      {orderedGroups.map(([groupId, group]) => {
         const droppableId =
           groupId === '__unassigned' ? UNASSIGNED_DROPPABLE_ID : roomDroppableId(groupId);
         const groupRoomId = groupId === '__unassigned' ? null : groupId;
@@ -1559,18 +1589,24 @@ export function FFEScheduleBuilder({
           </RoomDropZone>
         ))}
 
-      {!isLoading && (items as FFEItem[]).length === 0 && (
-        <div
-          className="py-8 text-center"
-          style={{
-            fontFamily: 'var(--font-body)',
-            fontSize: '0.82rem',
-            color: 'var(--text-muted)',
-          }}
-        >
-          No items yet. Add your first FF&amp;E item to begin building the schedule.
-        </div>
-      )}
+      {!isLoading &&
+        (items as FFEItem[]).length === 0 &&
+        (renderEmptyLead ? (
+          renderEmptyLead(() =>
+            addControlsRef.current?.openProduct(liftRoomId ?? null)
+          )
+        ) : (
+          <div
+            className="py-8 text-center"
+            style={{
+              fontFamily: 'var(--font-body)',
+              fontSize: '0.82rem',
+              color: 'var(--text-muted)',
+            }}
+          >
+            No items yet. Add your first FF&amp;E item to begin building the schedule.
+          </div>
+        ))}
 
       {(items as FFEItem[]).length > 0 && (
         <div className="mt-4 flex items-baseline justify-between border-t-2 border-[var(--border-default)] pt-3">
