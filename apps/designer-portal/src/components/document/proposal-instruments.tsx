@@ -95,9 +95,16 @@ const fmtDayShort = (iso: string) =>
     new Date(iso),
   );
 
-/** "today" / "yesterday" / "3 days ago" — the register a wall is read in. */
-function daysAgoPhrase(days: number | null): string | null {
-  if (days === null || days < 0) return null;
+/**
+ * "today" / "yesterday" / "3 days ago" — the register a wall is read in.
+ *
+ * Measured from the dispatch, NOT from the watch model's `awaitingDays`: that
+ * clock restarts at the client's first open, which is the right clock for "how
+ * long has this sat unsigned" and the wrong one for "when was this sent".
+ */
+function sentAgoPhrase(sentAt: string, now: Date): string | null {
+  const days = Math.floor((now.getTime() - new Date(sentAt).getTime()) / 86_400_000);
+  if (!Number.isFinite(days) || days < 0) return null;
   if (days === 0) return 'today';
   if (days === 1) return 'yesterday';
   return `${days} days ago`;
@@ -165,7 +172,7 @@ function SendWallLine({
   const countersignPending = commercialState === 'client_signed';
   const canNudge = w.canNudge && !countersignPending;
 
-  const ago = daysAgoPhrase(w.awaitingDays);
+  const ago = w.sentAt ? sentAgoPhrase(w.sentAt, new Date()) : null;
   // 00477's paper door issues without sending, so sent_at is legitimately null.
   const sentText = w.sentAt
     ? ago
