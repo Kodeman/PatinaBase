@@ -25,7 +25,8 @@ CREATE TEMP TABLE _00485_expected_public (
   result_type text NOT NULL,
   final_config text[] NOT NULL,
   body_sha256 text NOT NULL,
-  direct_roles text[] NOT NULL
+  direct_roles text[] NOT NULL,
+  security_definer boolean NOT NULL DEFAULT true
 ) ON COMMIT DROP;
 
 INSERT INTO _00485_expected_public (
@@ -77,7 +78,7 @@ VALUES
   (
     'public.issue_trade_draw_invoice(uuid)', 'p_draw_id uuid', 'jsonb',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    'b63830994f1173424a3a798a8d969fbeae946c5eb5d97bd3b3cbaaf51d8b8aa9',
+    '83ce7c6fc8abb7ed5f48e4c12055d1a05d425d3bd2476f0dbb6c0b41c02b850b',
     ARRAY['authenticated']::text[]
   ),
   (
@@ -121,13 +122,13 @@ VALUES
   (
     'public.set_invoice_studio_id()', '', 'trigger',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    'd7652d832a55cd066c0e3f1d12572a4a387447f99a70af1f0d88b4fed258954a',
+    '0ed300c4553b9abe69011c31c11ea3598128d0222fa6c69cc76f51b9e24b3f81',
     ARRAY[]::text[]
   ),
   (
     'public.set_project_studio_id()', '', 'trigger',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '8597fc772be15ef6201f66aae03744aebb6844c01237694d208b13f2741ee1da',
+    '48d694002b2a847d338623fea532187d7b1a85af38165db09578c066aac458a3',
     ARRAY[]::text[]
   ),
   (
@@ -145,6 +146,13 @@ VALUES
     ARRAY['service_role']::text[]
   );
 
+UPDATE _00485_expected_public
+SET security_definer = false
+WHERE signature IN (
+  'public.set_invoice_studio_id()',
+  'public.set_project_studio_id()'
+);
+
 DO $public_catalog_contract$
 BEGIN
   ASSERT (SELECT count(*) FROM _00485_expected_public) = 17,
@@ -161,7 +169,7 @@ BEGIN
       OR owner.rolname IS DISTINCT FROM 'postgres'
       OR language.lanname IS DISTINCT FROM 'plpgsql'
       OR routine.prokind <> 'f'
-      OR NOT routine.prosecdef
+      OR routine.prosecdef IS DISTINCT FROM expected.security_definer
       OR routine.provolatile <> 'v'
       OR routine.proisstrict
       OR routine.proleakproof
@@ -245,7 +253,8 @@ CREATE TEMP TABLE _00485_expected_dependency (
   arguments text NOT NULL,
   result_type text NOT NULL,
   final_config text[] NOT NULL,
-  body_sha256 text NOT NULL
+  body_sha256 text NOT NULL,
+  security_definer boolean NOT NULL DEFAULT true
 ) ON COMMIT DROP;
 
 INSERT INTO _00485_expected_dependency (
@@ -256,7 +265,7 @@ VALUES
     'app_private.issue_invoice_for_actor(uuid,date,uuid)',
     'p_invoice_id uuid, p_due_date date, p_actor_id uuid', 'invoices',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '855d1e914495ee4c6e8c0e9550478190945fc11940750fad7e0ee7b2aab763c4'
+    '7ef09b2c21c929069960e460641c268093575c205c7d114675c1dc56962f2789'
   ),
   (
     'public._execute_furnishings_authorization_authorized(uuid,text,uuid,text)',
@@ -282,12 +291,21 @@ VALUES
     'p_request jsonb', 'jsonb',
     ARRAY['search_path=pg_catalog, public, extensions, pg_temp']::text[],
     '0c3b935559ff383878d7c36f4057378663f52c5825088335c7e62f6c5412295e'
+  ),
+  (
+    'public.guard_commercial_signature_insert()', '', 'trigger',
+    ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
+    '798a148aff056c85b03abfac11f0f5f6cfba0800136b668fbbc31fbe7ca6318f'
   );
+
+UPDATE _00485_expected_dependency
+SET security_definer = false
+WHERE signature = 'public.guard_commercial_signature_insert()';
 
 DO $private_dependency_contract$
 BEGIN
-  ASSERT (SELECT count(*) FROM _00485_expected_dependency) = 5,
-    'the 00485 dependency manifest must contain exactly five rows';
+  ASSERT (SELECT count(*) FROM _00485_expected_dependency) = 6,
+    'the 00485 dependency manifest must contain exactly six rows';
 
   ASSERT NOT EXISTS (
     SELECT 1
@@ -300,7 +318,7 @@ BEGIN
       OR owner.rolname IS DISTINCT FROM 'postgres'
       OR language.lanname IS DISTINCT FROM 'plpgsql'
       OR routine.prokind <> 'f'
-      OR NOT routine.prosecdef
+      OR routine.prosecdef IS DISTINCT FROM expected.security_definer
       OR routine.provolatile <> 'v'
       OR routine.proisstrict
       OR routine.proleakproof
@@ -314,7 +332,7 @@ BEGIN
            extensions.digest(convert_to(routine.prosrc, 'UTF8'), 'sha256'),
            'hex'
          ) IS DISTINCT FROM expected.body_sha256
-  ), 'an owner-only 00485 dependency profile drifted';
+  ), 'an exact 00485 dependency profile drifted';
 
   ASSERT NOT EXISTS (
     SELECT 1
@@ -325,7 +343,22 @@ BEGIN
       COALESCE(routine.proacl, acldefault('f', routine.proowner))
     ) AS acl
     WHERE acl.grantee <> routine.proowner
-  ), 'an owner-only 00485 dependency has a nonowner ACL row';
+  ), 'an exact 00485 dependency has a nonowner ACL row';
+
+  ASSERT (
+    SELECT NOT routine.prosecdef
+       AND position('current_user IS DISTINCT FROM ''postgres'''
+                    IN routine.prosrc) > 0
+       AND position('v_active_role = ''service_role'''
+                    IN routine.prosrc) > 0
+       AND position('app.commercial_signature_capability'
+                    IN routine.prosrc) > 0
+       AND position('pg_catalog.txid_current()' IN routine.prosrc) > 0
+       AND position('request.jwt.claims' IN routine.prosrc) = 0
+    FROM pg_proc AS routine
+    WHERE routine.oid =
+      to_regprocedure('public.guard_commercial_signature_insert()')
+  ), 'commercial signature guard authority/profile shape drifted';
 
   ASSERT NOT EXISTS (
     WITH expected(caller_signature) AS (
@@ -402,26 +435,40 @@ BEGIN
           'public.set_project_studio_id()'::text, 'O'::"char", false,
           23::smallint, 0::smallint, ''::text,
           (SELECT string_agg(attnum::text, ' ' ORDER BY
-             array_position(ARRAY['studio_id','designer_id'], attname))
+             array_position(
+               ARRAY['studio_id','designer_id','client_id','proposal_id'],
+               attname
+             ))
            FROM pg_attribute
            WHERE attrelid = 'public.projects'::regclass
-             AND attname = ANY(ARRAY['studio_id','designer_id'])),
+             AND attname = ANY(
+               ARRAY['studio_id','designer_id','client_id','proposal_id']
+             )),
           NULL::text, 0::oid,
-          'createtriggerset_project_studio_idbeforeinsertorupdateofstudio_id,designer_idonprojectsforeachrowexecutefunctionset_project_studio_id()'::text
+          'createtriggerset_project_studio_idbeforeinsertorupdateofstudio_id,designer_id,client_id,proposal_idonprojectsforeachrowexecutefunctionset_project_studio_id()'::text
         ),
         (
           'public.invoices'::text, 'set_invoice_studio_id'::text,
           'public.set_invoice_studio_id()'::text, 'O'::"char", false,
           23::smallint, 0::smallint, ''::text,
           (SELECT string_agg(attnum::text, ' ' ORDER BY array_position(
-             ARRAY['studio_id','designer_id','project_id'], attname))
+             ARRAY['studio_id','designer_id','client_id','project_id'],
+             attname))
            FROM pg_attribute
            WHERE attrelid = 'public.invoices'::regclass
              AND attname = ANY(
-               ARRAY['studio_id','designer_id','project_id']
+               ARRAY['studio_id','designer_id','client_id','project_id']
              )),
           NULL::text, 0::oid,
-          'createtriggerset_invoice_studio_idbeforeinsertorupdateofstudio_id,designer_id,project_idoninvoicesforeachrowexecutefunctionset_invoice_studio_id()'::text
+          'createtriggerset_invoice_studio_idbeforeinsertorupdateofstudio_id,designer_id,client_id,project_idoninvoicesforeachrowexecutefunctionset_invoice_studio_id()'::text
+        ),
+        (
+          'public.commercial_document_signatures'::text,
+          'a_guard_commercial_signature_insert_trg'::text,
+          'public.guard_commercial_signature_insert()'::text,
+          'O'::"char", false, 7::smallint, 0::smallint, ''::text, ''::text,
+          NULL::text, 0::oid,
+          'createtriggera_guard_commercial_signature_insert_trgbeforeinsertoncommercial_document_signaturesforeachrowexecutefunctionguard_commercial_signature_insert()'::text
         )
       ) AS fixture(
         relation_name, trigger_name, function_signature, enabled, is_internal,
@@ -458,7 +505,8 @@ BEGIN
         ON function_namespace.oid = routine.pronamespace
       WHERE trigger_row.tgfoid IN (
         to_regprocedure('public.set_project_studio_id()')::oid,
-        to_regprocedure('public.set_invoice_studio_id()')::oid
+        to_regprocedure('public.set_invoice_studio_id()')::oid,
+        to_regprocedure('public.guard_commercial_signature_insert()')::oid
       )
     )
     SELECT 1
@@ -548,6 +596,16 @@ SET email = EXCLUDED.email,
     full_name = EXCLUDED.full_name,
     is_designer = EXCLUDED.is_designer;
 
+INSERT INTO public.designer_clients (
+  id, designer_id, client_id, source, status
+)
+VALUES (
+  'd4851200-0000-4000-8000-000000000001',
+  'd4850000-0000-4000-8000-000000000001',
+  'd4850000-0000-4000-8000-000000000004',
+  'direct', 'active'
+);
+
 INSERT INTO public.organizations (id, type, name, slug, status)
 VALUES
   (
@@ -579,7 +637,7 @@ VALUES
     'd4851100-0000-4000-8000-000000000003',
     'd4850000-0000-4000-8000-000000000001',
     'd4851000-0000-4000-8000-000000000002',
-    'owner', 'active', now()
+    'member', 'active', now()
   );
 
 INSERT INTO public.projects (
@@ -644,63 +702,172 @@ VALUES
   );
 
 INSERT INTO public.proposals (
-  id, project_id, designer_id, client_id, title, status,
+  id, project_id, designer_id, designer_client_id, client_id, title, status,
   document_kind, commercial_state, total_amount, deposit_percent
 )
 VALUES
   (
     'd4853000-0000-4000-8000-000000000001',
-    'd4852000-0000-4000-8000-000000000001',
+    NULL,
     'd4850000-0000-4000-8000-000000000001',
+    'd4851200-0000-4000-8000-000000000001',
     'd4850000-0000-4000-8000-000000000004',
-    'SD Trade Scope One', 'draft', 'trade_scope', 'executed', 10000, 0
-  ),
-  (
-    'd4853000-0000-4000-8000-000000000002',
-    'd4852000-0000-4000-8000-000000000002',
-    'd4850000-0000-4000-8000-000000000001',
-    'd4850000-0000-4000-8000-000000000004',
-    'SD Trade Scope Two', 'draft', 'trade_scope', 'executed', 12000, 0
+    'SD Trusted Design Agreement', 'sent',
+    'design_services', 'sent', 10000, 0
   ),
   (
     'd4853000-0000-4000-8000-000000000020',
     'd4852000-0000-4000-8000-000000000007',
     'd4850000-0000-4000-8000-000000000001',
+    'd4851200-0000-4000-8000-000000000001',
     'd4850000-0000-4000-8000-000000000004',
-    'SD Furnish Origin', 'accepted', 'design_services', 'executed', 0, 0
-  ),
-  (
-    'd4853000-0000-4000-8000-000000000021',
-    'd4852000-0000-4000-8000-000000000007',
-    'd4850000-0000-4000-8000-000000000001',
-    'd4850000-0000-4000-8000-000000000004',
-    'SD Furnish Authorization', 'sent',
-    'furnishings_authorization', 'sent', 10000, 25
+    'SD Furnish Origin', 'accepted',
+    'design_services', 'executed', 0, 0
   ),
   (
     'd4853000-0000-4000-8000-000000000022',
     'd4852000-0000-4000-8000-000000000008',
     'd4850000-0000-4000-8000-000000000001',
+    'd4851200-0000-4000-8000-000000000001',
     'd4850000-0000-4000-8000-000000000004',
-    'SD Trade Origin', 'accepted', 'design_services', 'executed', 0, 0
+    'SD Trade Origin', 'accepted',
+    'design_services', 'executed', 0, 0
   ),
   (
-    'd4853000-0000-4000-8000-000000000023',
-    'd4852000-0000-4000-8000-000000000008',
+    'd4853000-0000-4000-8000-000000000024',
+    'd4852000-0000-4000-8000-000000000001',
     'd4850000-0000-4000-8000-000000000001',
+    'd4851200-0000-4000-8000-000000000001',
     'd4850000-0000-4000-8000-000000000004',
-    'SD Trade Execution', 'sent', 'trade_scope', 'sent', 15000, 0
+    'SD Trade Draw Origin', 'accepted',
+    'design_services', 'executed', 0, 0
+  ),
+  (
+    'd4853000-0000-4000-8000-000000000025',
+    'd4852000-0000-4000-8000-000000000002',
+    'd4850000-0000-4000-8000-000000000001',
+    'd4851200-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000004',
+    'SD Foreign Trade Draw Origin', 'accepted',
+    'design_services', 'executed', 0, 0
+  ),
+  (
+    'd4853000-0000-4000-8000-000000000030',
+    NULL,
+    'd4850000-0000-4000-8000-000000000001',
+    'd4851200-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000004',
+    'SD Client Activation Proposal', 'sent',
+    'legacy', NULL, 25000, 0
+  ),
+  (
+    'd4853000-0000-4000-8000-000000000040',
+    NULL,
+    'd4850000-0000-4000-8000-000000000001',
+    'd4851200-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000004',
+    'SD Signature Guard Probe', 'sent',
+    'design_services', 'sent', 10000, 0
+  );
+
+INSERT INTO public.proposal_service_terms (
+  proposal_id, scope, billing_ceiling_cents
+)
+VALUES
+  (
+    'd4853000-0000-4000-8000-000000000001',
+    'Trusted design services', 10000
+  ),
+  (
+    'd4853000-0000-4000-8000-000000000040',
+    'Authenticated design services', 10000
+  );
+
+INSERT INTO public.proposal_service_rates (
+  proposal_id, role_name, hourly_rate_cents
+)
+VALUES
+  (
+    'd4853000-0000-4000-8000-000000000001',
+    'Designer', 10000
+  ),
+  (
+    'd4853000-0000-4000-8000-000000000040',
+    'Designer', 10000
+  );
+
+INSERT INTO public.project_rooms (
+  id, project_id, name, room_type, sort_order
+)
+VALUES (
+  'd4853250-0000-4000-8000-000000000001',
+  'd4852000-0000-4000-8000-000000000007',
+  'SD Furnish Room', 'living_room', 0
+);
+
+INSERT INTO public.project_ffe_selection_threads (
+  id, project_id, created_by
+)
+VALUES
+  (
+    'd4853260-0000-4000-8000-000000000001',
+    'd4852000-0000-4000-8000-000000000007',
+    'd4850000-0000-4000-8000-000000000001'
+  ),
+  (
+    'd4853260-0000-4000-8000-000000000002',
+    'd4852000-0000-4000-8000-000000000007',
+    'd4850000-0000-4000-8000-000000000001'
+  );
+
+INSERT INTO public.project_ffe_items (
+  id, project_id, project_room_id, selection_thread_id, name,
+  ffe_category, item_type, status, quantity, unit_price_cents,
+  trade_price_cents, line_total_cents, vendor_id, vendor_name,
+  design_disposition, assignment_scope, sort_order
+)
+VALUES
+  (
+    'd4853270-0000-4000-8000-000000000001',
+    'd4852000-0000-4000-8000-000000000007',
+    'd4853250-0000-4000-8000-000000000001',
+    'd4853260-0000-4000-8000-000000000001',
+    'Trusted sofa', 'Seating', 'fixed', 'specified', 1,
+    10000, 7000, 10000,
+    'd4853280-0000-4000-8000-000000000001', 'SD Vendor',
+    'selected', 'room', 0
+  ),
+  (
+    'd4853270-0000-4000-8000-000000000002',
+    'd4852000-0000-4000-8000-000000000007',
+    'd4853250-0000-4000-8000-000000000001',
+    'd4853260-0000-4000-8000-000000000002',
+    'Direct chair', 'Seating', 'fixed', 'specified', 1,
+    10000, 7000, 10000,
+    'd4853280-0000-4000-8000-000000000001', 'SD Vendor',
+    'selected', 'room', 1
   );
 
 INSERT INTO public.project_budget_versions (
   id, project_id, version, status, low_total_cents,
-  target_total_cents, high_total_cents, created_by
+  target_total_cents, high_total_cents, created_by, published_at
 )
 VALUES (
   'd4853300-0000-4000-8000-000000000001',
   'd4852000-0000-4000-8000-000000000007',
-  1, 'draft', 10000, 10000, 10000,
-  'd4850000-0000-4000-8000-000000000001'
+  1, 'published', 20000, 20000, 20000,
+  'd4850000-0000-4000-8000-000000000001', now()
+);
+
+INSERT INTO public.project_budget_lines (
+  id, budget_version_id, project_room_id, room_name, category,
+  low_cents, target_cents, high_cents, sort_order
+)
+VALUES (
+  'd4853320-0000-4000-8000-000000000001',
+  'd4853300-0000-4000-8000-000000000001',
+  'd4853250-0000-4000-8000-000000000001',
+  'SD Furnish Room', 'Seating', 20000, 20000, 20000, 0
 );
 
 INSERT INTO public.project_budget_checkpoints (
@@ -725,32 +892,10 @@ INSERT INTO public.project_commercial_documents (
 )
 VALUES
   (
-    'd4853100-0000-4000-8000-000000000001',
-    'd4852000-0000-4000-8000-000000000001',
-    'd4853000-0000-4000-8000-000000000001',
-    'trade_scope', NULL, NULL, false, now(),
-    'd4850000-0000-4000-8000-000000000001'
-  ),
-  (
-    'd4853100-0000-4000-8000-000000000002',
-    'd4852000-0000-4000-8000-000000000002',
-    'd4853000-0000-4000-8000-000000000002',
-    'trade_scope', NULL, NULL, false, now(),
-    'd4850000-0000-4000-8000-000000000001'
-  ),
-  (
     'd4853100-0000-4000-8000-000000000020',
     'd4852000-0000-4000-8000-000000000007',
     'd4853000-0000-4000-8000-000000000020',
     'design_services', NULL, NULL, true, now(),
-    'd4850000-0000-4000-8000-000000000001'
-  ),
-  (
-    'd4853100-0000-4000-8000-000000000021',
-    'd4852000-0000-4000-8000-000000000007',
-    'd4853000-0000-4000-8000-000000000021',
-    'furnishings_authorization', 'SD Furnish Wave',
-    'd4853310-0000-4000-8000-000000000001', false, NULL,
     'd4850000-0000-4000-8000-000000000001'
   ),
   (
@@ -761,39 +906,18 @@ VALUES
     'd4850000-0000-4000-8000-000000000001'
   ),
   (
-    'd4853100-0000-4000-8000-000000000023',
-    'd4852000-0000-4000-8000-000000000008',
-    'd4853000-0000-4000-8000-000000000023',
-    'trade_scope', NULL, NULL, false, NULL,
+    'd4853100-0000-4000-8000-000000000024',
+    'd4852000-0000-4000-8000-000000000001',
+    'd4853000-0000-4000-8000-000000000024',
+    'design_services', NULL, NULL, true, now(),
     'd4850000-0000-4000-8000-000000000001'
-  );
-
-INSERT INTO public.trade_scope_terms (
-  proposal_id, client_price_cents, currency, progress_state
-)
-VALUES
-  ('d4853000-0000-4000-8000-000000000001', 10000, 'USD', 'none'),
-  ('d4853000-0000-4000-8000-000000000002', 12000, 'USD', 'none'),
-  ('d4853000-0000-4000-8000-000000000023', 15000, 'USD', 'none');
-
-INSERT INTO public.trade_scope_draws (
-  id, proposal_id, label, amount_cents, sort_order, gates_on_acceptance
-)
-VALUES
-  (
-    'd4853200-0000-4000-8000-000000000001',
-    'd4853000-0000-4000-8000-000000000001',
-    'Trade draw one', 10000, 0, false
   ),
   (
-    'd4853200-0000-4000-8000-000000000002',
-    'd4853000-0000-4000-8000-000000000002',
-    'Trade draw two', 12000, 0, false
-  ),
-  (
-    'd4853200-0000-4000-8000-000000000023',
-    'd4853000-0000-4000-8000-000000000023',
-    'Trade execution deposit', 15000, 0, false
+    'd4853100-0000-4000-8000-000000000025',
+    'd4852000-0000-4000-8000-000000000002',
+    'd4853000-0000-4000-8000-000000000025',
+    'design_services', NULL, NULL, true, now(),
+    'd4850000-0000-4000-8000-000000000001'
   );
 
 INSERT INTO public.spec_book_templates (
@@ -909,9 +1033,473 @@ VALUES
     NULL, NULL, NULL, NULL, NULL, NULL, 0
   );
 
--- Unrelated downstream cores are replaced transaction-locally. The two
--- commercial execution cores remain real so nested invoice authority and
--- request-context behavior are exercised end to end.
+INSERT INTO public.project_parties (
+  id, project_id, party_kind, display_name, company_name, created_by
+)
+VALUES
+  (
+    'd4853290-0000-4000-8000-000000000001',
+    'd4852000-0000-4000-8000-000000000008',
+    'vendor', 'SD Trade Partner', 'SD Trade Partner LLC',
+    'd4850000-0000-4000-8000-000000000001'
+  ),
+  (
+    'd4853290-0000-4000-8000-000000000002',
+    'd4852000-0000-4000-8000-000000000001',
+    'vendor', 'SD Draw Partner', 'SD Draw Partner LLC',
+    'd4850000-0000-4000-8000-000000000001'
+  ),
+  (
+    'd4853290-0000-4000-8000-000000000003',
+    'd4852000-0000-4000-8000-000000000002',
+    'vendor', 'SD Foreign Partner', 'SD Foreign Partner LLC',
+    'd4850000-0000-4000-8000-000000000001'
+  );
+
+CREATE TEMP TABLE _00485_commercial_fixture (
+  label text PRIMARY KEY,
+  proposal_id uuid NOT NULL UNIQUE,
+  document_id uuid NOT NULL UNIQUE,
+  project_id uuid NOT NULL,
+  review_fingerprint text
+) ON COMMIT DROP;
+
+GRANT SELECT, INSERT ON _00485_commercial_fixture TO authenticated;
+GRANT SELECT ON _00485_commercial_fixture TO service_role;
+
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000001', 'authenticated'
+);
+
+DO $canonical_commercial_creators$
+DECLARE
+  result jsonb;
+BEGIN
+  result := public.create_furnishings_authorization_from_schedule(
+    'd4852000-0000-4000-8000-000000000007',
+    'SD Trusted Furnishings',
+    ARRAY['d4853270-0000-4000-8000-000000000001'::uuid], 25
+  );
+  INSERT INTO _00485_commercial_fixture (
+    label, proposal_id, document_id, project_id
+  )
+  VALUES (
+    'furnishings_trusted', (result->>'proposalId')::uuid,
+    (result->>'documentId')::uuid, (result->>'projectId')::uuid
+  );
+
+  result := public.create_furnishings_authorization_from_schedule(
+    'd4852000-0000-4000-8000-000000000007',
+    'SD Direct Furnishings',
+    ARRAY['d4853270-0000-4000-8000-000000000002'::uuid], 25
+  );
+  INSERT INTO _00485_commercial_fixture (
+    label, proposal_id, document_id, project_id
+  )
+  VALUES (
+    'furnishings_direct', (result->>'proposalId')::uuid,
+    (result->>'documentId')::uuid, (result->>'projectId')::uuid
+  );
+
+  result := public.create_trade_scope(
+    'd4852000-0000-4000-8000-000000000008',
+    'SD Trusted Trade Scope'
+  );
+  INSERT INTO _00485_commercial_fixture (
+    label, proposal_id, document_id, project_id
+  )
+  VALUES (
+    'trade_trusted', (result->>'proposalId')::uuid,
+    (result->>'documentId')::uuid, (result->>'projectId')::uuid
+  );
+
+  result := public.create_trade_scope(
+    'd4852000-0000-4000-8000-000000000008',
+    'SD Direct Trade Scope'
+  );
+  INSERT INTO _00485_commercial_fixture (
+    label, proposal_id, document_id, project_id
+  )
+  VALUES (
+    'trade_direct', (result->>'proposalId')::uuid,
+    (result->>'documentId')::uuid, (result->>'projectId')::uuid
+  );
+
+  result := public.create_trade_scope(
+    'd4852000-0000-4000-8000-000000000001',
+    'SD Local Draw Scope'
+  );
+  INSERT INTO _00485_commercial_fixture (
+    label, proposal_id, document_id, project_id
+  )
+  VALUES (
+    'trade_draw_local', (result->>'proposalId')::uuid,
+    (result->>'documentId')::uuid, (result->>'projectId')::uuid
+  );
+
+  result := public.create_trade_scope(
+    'd4852000-0000-4000-8000-000000000002',
+    'SD Foreign Draw Scope'
+  );
+  INSERT INTO _00485_commercial_fixture (
+    label, proposal_id, document_id, project_id
+  )
+  VALUES (
+    'trade_draw_foreign', (result->>'proposalId')::uuid,
+    (result->>'documentId')::uuid, (result->>'projectId')::uuid
+  );
+END
+$canonical_commercial_creators$;
+
+RESET ROLE;
+
+DO $canonical_creator_shape$
+BEGIN
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM _00485_commercial_fixture AS fixture
+    JOIN public.proposals AS proposal ON proposal.id = fixture.proposal_id
+    WHERE proposal.project_id IS NOT NULL
+  ), 'canonical furnishings/trade creators populated proposals.project_id';
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM _00485_commercial_fixture AS fixture
+    JOIN public.project_commercial_documents AS document
+      ON document.id = fixture.document_id
+    WHERE document.project_id IS DISTINCT FROM fixture.project_id
+      OR document.proposal_id IS DISTINCT FROM fixture.proposal_id
+  ), 'canonical creator document identity drifted';
+END
+$canonical_creator_shape$;
+
+UPDATE public.trade_scope_terms AS terms
+SET party_id = fixture.party_id,
+    party_display_name = fixture.party_name,
+    party_company_name = fixture.party_company,
+    party_trade = 'millwork',
+    client_price_cents = fixture.price_cents,
+    terms = 'Canonical 00485 trade terms'
+FROM (
+  SELECT commercial.proposal_id, party.id AS party_id,
+         party.display_name AS party_name,
+         party.company_name AS party_company,
+         commercial.price_cents
+  FROM (
+    VALUES
+      ('trade_trusted'::text, 15000),
+      ('trade_direct'::text, 16000),
+      ('trade_draw_local'::text, 10000),
+      ('trade_draw_foreign'::text, 12000)
+  ) AS requested(label, price_cents)
+  JOIN _00485_commercial_fixture AS commercial USING (label)
+  JOIN public.project_parties AS party
+    ON party.project_id = commercial.project_id
+) AS fixture
+WHERE terms.proposal_id = fixture.proposal_id;
+
+INSERT INTO public.trade_scope_sections (
+  proposal_id, room_name, prose, sort_order
+)
+SELECT fixture.proposal_id, 'Whole project',
+       'Canonical trade scope for the focused 00485 contract.', 0
+FROM _00485_commercial_fixture AS fixture
+WHERE fixture.label IN ('trade_trusted', 'trade_direct');
+
+INSERT INTO public.trade_scope_draws (
+  id, proposal_id, label, percentage, amount_cents,
+  sort_order, gates_on_acceptance
+)
+SELECT draw.id, fixture.proposal_id, draw.draw_label, draw.percentage,
+       draw.amount_cents, draw.sort_order, draw.gates_on_acceptance
+FROM (VALUES
+  ('trade_trusted'::text,
+   'd4853200-0000-4000-8000-000000000023'::uuid,
+   'Trusted deposit', 40::numeric, 6000, 0, false),
+  ('trade_trusted'::text,
+   'd4853200-0000-4000-8000-000000000123'::uuid,
+   'Trusted completion', 60::numeric, 9000, 1, true),
+  ('trade_direct'::text,
+   'd4853200-0000-4000-8000-000000000024'::uuid,
+   'Direct deposit', 40::numeric, 6400, 0, false),
+  ('trade_direct'::text,
+   'd4853200-0000-4000-8000-000000000124'::uuid,
+   'Direct completion', 60::numeric, 9600, 1, true),
+  ('trade_draw_local'::text,
+   'd4853200-0000-4000-8000-000000000001'::uuid,
+   'Trade draw one', NULL::numeric, 10000, 0, false),
+  ('trade_draw_foreign'::text,
+   'd4853200-0000-4000-8000-000000000002'::uuid,
+   'Trade draw two', NULL::numeric, 12000, 0, false)
+) AS draw(
+  label, id, draw_label, percentage, amount_cents,
+  sort_order, gates_on_acceptance
+)
+JOIN _00485_commercial_fixture AS fixture USING (label);
+
+UPDATE public.proposals AS proposal
+SET status = 'accepted', commercial_state = 'executed',
+    signed_at = now(), signed_by_name = 'SD Client', accepted_at = now()
+FROM _00485_commercial_fixture AS fixture
+WHERE proposal.id = fixture.proposal_id
+  AND fixture.label IN ('trade_draw_local', 'trade_draw_foreign');
+
+UPDATE public.project_commercial_documents AS document
+SET executed_at = now()
+FROM _00485_commercial_fixture AS fixture
+WHERE document.id = fixture.document_id
+  AND fixture.label IN ('trade_draw_local', 'trade_draw_foreign');
+
+UPDATE _00485_commercial_fixture AS fixture
+SET review_fingerprint =
+  public._commercial_document_fingerprint(fixture.proposal_id)
+WHERE fixture.label IN (
+  'furnishings_trusted', 'furnishings_direct',
+  'trade_trusted', 'trade_direct'
+);
+
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000001', 'authenticated'
+);
+
+DO $send_canonical_commercial_fixtures$
+DECLARE
+  fixture record;
+BEGIN
+  FOR fixture IN
+    SELECT * FROM _00485_commercial_fixture
+    WHERE label IN (
+      'furnishings_trusted', 'furnishings_direct',
+      'trade_trusted', 'trade_direct'
+    )
+    ORDER BY label
+  LOOP
+    PERFORM public.send_commercial_document(
+      fixture.proposal_id, fixture.review_fingerprint,
+      'Reviewed canonical 00485 fixture', NULL
+    );
+  END LOOP;
+END
+$send_canonical_commercial_fixtures$;
+
+RESET ROLE;
+
+CREATE OR REPLACE FUNCTION pg_temp.insert_signature_probe(
+  p_proposal_id uuid,
+  p_party_role text,
+  p_signer_id uuid,
+  p_via text,
+  p_fingerprint text DEFAULT NULL
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+  INSERT INTO public.commercial_document_signatures (
+    proposal_id, party_role, signer_user_id, signed_name,
+    evidence_fingerprint, metadata
+  ) VALUES (
+    p_proposal_id, p_party_role, p_signer_id, 'Signature Probe',
+    COALESCE(
+      p_fingerprint,
+      public._commercial_document_fingerprint(p_proposal_id)
+    ),
+    jsonb_build_object('via', p_via)
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION pg_temp.insert_signature_probe(
+  uuid, text, uuid, text, text
+) TO authenticated, service_role;
+
+SET LOCAL ROLE service_role;
+SELECT set_config('request.jwt.claims', '', true);
+SELECT set_config('request.jwt.claim.sub', '', true);
+SELECT set_config('request.jwt.claim.role', '', true);
+
+DO $signature_guard_negative_contract$
+DECLARE
+  probe_proposal_id constant uuid :=
+    'd4853000-0000-4000-8000-000000000040';
+  previous_capability text :=
+    current_setting('app.commercial_signature_capability', true);
+BEGIN
+  PERFORM set_config(
+    'app.commercial_signature_capability',
+    format(
+      'commercial_signature:%s:%s:%s', probe_proposal_id,
+      'execute_trade_scope', pg_catalog.txid_current()
+    ), true
+  );
+  BEGIN
+    PERFORM pg_temp.insert_signature_probe(
+      probe_proposal_id, 'client',
+      'd4850000-0000-4000-8000-000000000004',
+      'execute_trade_scope', NULL
+    );
+    RAISE EXCEPTION 'wrong signature via matched a foreign document kind';
+  EXCEPTION WHEN check_violation THEN
+    ASSERT SQLERRM =
+      'commercial signature does not match canonical signer/state/evidence';
+  END;
+
+  PERFORM set_config(
+    'app.commercial_signature_capability',
+    format(
+      'commercial_signature:%s:%s:%s', probe_proposal_id,
+      'sign_design_services_agreement', pg_catalog.txid_current()
+    ), true
+  );
+  BEGIN
+    PERFORM pg_temp.insert_signature_probe(
+      probe_proposal_id, 'client',
+      'd4850000-0000-4000-8000-000000000003',
+      'sign_design_services_agreement', NULL
+    );
+    RAISE EXCEPTION 'wrong client inserted a commercial signature';
+  EXCEPTION WHEN check_violation THEN
+    ASSERT SQLERRM =
+      'commercial signature does not match canonical signer/state/evidence';
+  END;
+
+  BEGIN
+    PERFORM pg_temp.insert_signature_probe(
+      probe_proposal_id, 'studio',
+      'd4850000-0000-4000-8000-000000000001',
+      'sign_design_services_agreement', NULL
+    );
+    RAISE EXCEPTION 'wrong party/via tuple inserted a signature';
+  EXCEPTION WHEN check_violation THEN
+    ASSERT SQLERRM =
+      'commercial signature does not match canonical signer/state/evidence';
+  END;
+
+  PERFORM set_config(
+    'app.commercial_signature_capability', 'wrong-tx-capability', true
+  );
+  BEGIN
+    PERFORM pg_temp.insert_signature_probe(
+      probe_proposal_id, 'client',
+      'd4850000-0000-4000-8000-000000000004',
+      'sign_design_services_agreement', NULL
+    );
+    RAISE EXCEPTION 'wrong transaction capability inserted a signature';
+  EXCEPTION WHEN check_violation THEN
+    ASSERT SQLERRM =
+      'commercial signature does not match canonical signer/state/evidence';
+  END;
+
+  PERFORM set_config(
+    'app.commercial_signature_capability',
+    COALESCE(previous_capability, ''), true
+  );
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM public.commercial_document_signatures
+    WHERE proposal_id = probe_proposal_id
+  ), 'a denied signature probe left durable evidence';
+END
+$signature_guard_negative_contract$;
+
+RESET ROLE;
+
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims', '', true);
+SELECT set_config('request.jwt.claim.sub', '', true);
+SELECT set_config('request.jwt.claim.role', '', true);
+
+DO $signature_guard_null_actor_contract$
+DECLARE
+  probe_proposal_id constant uuid :=
+    'd4853000-0000-4000-8000-000000000040';
+  previous_capability text :=
+    current_setting('app.commercial_signature_capability', true);
+BEGIN
+  PERFORM set_config(
+    'app.commercial_signature_capability', 'null-actor-sentinel', true
+  );
+  BEGIN
+    PERFORM public.sign_design_services_agreement(
+      probe_proposal_id, 'Null Actor'
+    );
+    RAISE EXCEPTION 'NULL authenticated actor reached design signing';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  ASSERT current_setting('app.commercial_signature_capability', true) =
+           'null-actor-sentinel',
+    'NULL-actor design signing leaked its capability';
+
+  PERFORM set_config(
+    'app.commercial_signature_capability',
+    format(
+      'commercial_signature:%s:%s:%s', probe_proposal_id,
+      'sign_design_services_agreement', pg_catalog.txid_current()
+    ), true
+  );
+  BEGIN
+    PERFORM pg_temp.insert_signature_probe(
+      probe_proposal_id, 'client',
+      'd4850000-0000-4000-8000-000000000004',
+      'sign_design_services_agreement', NULL
+    );
+    RAISE EXCEPTION 'NULL authenticated actor passed the signature guard';
+  EXCEPTION WHEN check_violation THEN
+    ASSERT SQLERRM =
+      'commercial signature does not match canonical signer/state/evidence';
+  END;
+
+  PERFORM set_config(
+    'app.commercial_signature_capability',
+    COALESCE(previous_capability, ''), true
+  );
+  ASSERT current_setting('request.jwt.claims', true) = ''
+     AND current_setting('request.jwt.claim.sub', true) = ''
+     AND current_setting('request.jwt.claim.role', true) = '',
+    'NULL-actor signature denials rewrote caller claims';
+END
+$signature_guard_null_actor_contract$;
+
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000004', 'authenticated'
+);
+
+DO $signature_guard_authenticated_success$
+DECLARE
+  claims_before text := current_setting('request.jwt.claims', true);
+  capability_before text :=
+    current_setting('app.commercial_signature_capability', true);
+  result jsonb;
+BEGIN
+  result := public.sign_design_services_agreement(
+    'd4853000-0000-4000-8000-000000000040', 'SD Client'
+  );
+  ASSERT (result->>'newlyClientSigned')::boolean
+     AND EXISTS (
+       SELECT 1
+       FROM public.commercial_document_signatures AS signature
+       WHERE signature.proposal_id =
+               'd4853000-0000-4000-8000-000000000040'
+         AND signature.signer_user_id =
+               'd4850000-0000-4000-8000-000000000004'
+         AND signature.metadata->>'via' =
+               'sign_design_services_agreement'
+     ), 'exact authenticated client did not pass real design signing';
+  ASSERT current_setting('request.jwt.claims', true) = claims_before,
+    'authenticated design signing rewrote caller claims';
+  ASSERT current_setting('app.commercial_signature_capability', true) =
+           capability_before,
+    'authenticated design signing leaked its capability';
+END
+$signature_guard_authenticated_success$;
+
+RESET ROLE;
+
+-- Only unrelated downstream cores are replaced transaction-locally. Design,
+-- furnishings, and trade signing/execution remain real end to end.
 CREATE OR REPLACE FUNCTION public._accept_trade_scope_authorized(
   p_proposal_id uuid, p_signed_name text, p_client_id uuid
 )
@@ -934,34 +1522,6 @@ BEGIN
   RETURN jsonb_build_object(
     'proposalId', p_proposal_id, 'actorId', p_client_id,
     'signedName', p_signed_name
-  );
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION public._sign_design_services_agreement_authorized(
-  p_proposal_id uuid, p_signed_name text, p_client_id uuid, p_signed_ip text
-)
-RETURNS jsonb
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = pg_catalog, public, pg_temp
-AS $$
-BEGIN
-  IF p_signed_name = 'force-error' THEN
-    RAISE EXCEPTION 'forced trusted design-services error'
-      USING ERRCODE = 'check_violation';
-  END IF;
-  IF p_client_id <> 'd4850000-0000-4000-8000-000000000004'
-     OR current_setting('app.commercial_signature_capability', true)
-          NOT LIKE 'commercial_signature:' || p_proposal_id::text ||
-                   ':sign_design_services_agreement:%'
-  THEN
-    RAISE EXCEPTION 'design services not found or access denied'
-      USING ERRCODE = 'insufficient_privilege';
-  END IF;
-  RETURN jsonb_build_object(
-    'proposalId', p_proposal_id, 'actorId', p_client_id,
-    'signedIp', p_signed_ip
   );
 END;
 $$;
@@ -1137,6 +1697,16 @@ SELECT set_config('app.commercial_signature_capability', 'sd-sentinel', true);
 DO $service_role_success_and_retry$
 DECLARE
   claims_before text := current_setting('request.jwt.claims', true);
+  sub_before text;
+  role_before text;
+  furnishings_proposal_id uuid := (
+    SELECT proposal_id FROM _00485_commercial_fixture
+    WHERE label = 'furnishings_trusted'
+  );
+  trade_proposal_id uuid := (
+    SELECT proposal_id FROM _00485_commercial_fixture
+    WHERE label = 'trade_trusted'
+  );
   first_result jsonb;
   retry_result jsonb;
   notification_id uuid;
@@ -1156,28 +1726,66 @@ BEGIN
   ASSERT current_setting('request.jwt.claims', true) = claims_before,
     'trusted acceptance rewrote caller claims';
 
+  PERFORM set_config('request.jwt.claims', '', true);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claim.role', '', true);
+  claims_before := current_setting('request.jwt.claims', true);
+  sub_before := current_setting('request.jwt.claim.sub', true);
+  role_before := current_setting('request.jwt.claim.role', true);
   first_result := public.sign_design_services_agreement_with_trusted_ip(
     'd4853000-0000-4000-8000-000000000001', 'SD Client',
     'd4850000-0000-4000-8000-000000000004', '203.0.113.11'
   );
+  ASSERT (first_result->>'newlyClientSigned')::boolean
+     AND current_setting('request.jwt.claims', true) = claims_before
+     AND current_setting('request.jwt.claim.sub', true) = sub_before
+     AND current_setting('request.jwt.claim.role', true) = role_before,
+    'real trusted design signing failed or changed NULL claims';
+
+  PERFORM pg_temp.assume_actor(
+    'd4850000-0000-4000-8000-000000000003', 'authenticated',
+    jsonb_build_object('organization_id',
+      'd4851000-0000-4000-8000-000000000002')
+  );
+  claims_before := current_setting('request.jwt.claims', true);
+  sub_before := current_setting('request.jwt.claim.sub', true);
+  role_before := current_setting('request.jwt.claim.role', true);
   retry_result := public.sign_design_services_agreement_with_trusted_ip(
     'd4853000-0000-4000-8000-000000000001', 'SD Client',
     'd4850000-0000-4000-8000-000000000004', '203.0.113.11'
   );
-  ASSERT first_result = retry_result
-     AND first_result->>'actorId' =
-           'd4850000-0000-4000-8000-000000000004',
-    'trusted design signing did not pass the verified actor idempotently';
+  ASSERT NOT (retry_result->>'newlyClientSigned')::boolean
+     AND retry_result->>'signatureId' = first_result->>'signatureId'
+     AND current_setting('request.jwt.claims', true) = claims_before
+     AND current_setting('request.jwt.claim.sub', true) = sub_before
+     AND current_setting('request.jwt.claim.role', true) = role_before,
+    'real trusted design retry changed evidence or unrelated claims';
   ASSERT current_setting('app.commercial_signature_capability', true) =
            'sd-sentinel',
     'trusted design signing leaked its capability';
 
+  PERFORM set_config('request.jwt.claims', '', true);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claim.role', '', true);
+  claims_before := current_setting('request.jwt.claims', true);
+  sub_before := current_setting('request.jwt.claim.sub', true);
+  role_before := current_setting('request.jwt.claim.role', true);
   first_result := public.execute_furnishings_authorization_with_trusted_ip(
-    'd4853000-0000-4000-8000-000000000021', 'SD Client',
+    furnishings_proposal_id, 'SD Client',
     'd4850000-0000-4000-8000-000000000004', '203.0.113.12'
   );
+  ASSERT current_setting('request.jwt.claims', true) = claims_before
+     AND current_setting('request.jwt.claim.sub', true) = sub_before
+     AND current_setting('request.jwt.claim.role', true) = role_before,
+    'trusted furnishings changed NULL claims';
+  PERFORM pg_temp.assume_actor(
+    'd4850000-0000-4000-8000-000000000003', 'authenticated'
+  );
+  claims_before := current_setting('request.jwt.claims', true);
+  sub_before := current_setting('request.jwt.claim.sub', true);
+  role_before := current_setting('request.jwt.claim.role', true);
   retry_result := public.execute_furnishings_authorization_with_trusted_ip(
-    'd4853000-0000-4000-8000-000000000021', 'SD Client',
+    furnishings_proposal_id, 'SD Client',
     'd4850000-0000-4000-8000-000000000004', '203.0.113.12'
   );
   ASSERT (first_result->>'newlyExecuted')::boolean
@@ -1195,16 +1803,36 @@ BEGIN
        FROM public.invoices AS invoice
        WHERE invoice.id = (first_result->>'depositInvoiceId')::uuid
      ), 'real furnishings execution did not issue the exact relational invoice';
+  ASSERT current_setting('request.jwt.claims', true) = claims_before
+     AND current_setting('request.jwt.claim.sub', true) = sub_before
+     AND current_setting('request.jwt.claim.role', true) = role_before,
+    'trusted furnishings retry changed unrelated claims';
   ASSERT current_setting('app.commercial_signature_capability', true) =
            'sd-sentinel',
     'trusted furnishings leaked its capability';
 
+  PERFORM set_config('request.jwt.claims', '', true);
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claim.role', '', true);
+  claims_before := current_setting('request.jwt.claims', true);
+  sub_before := current_setting('request.jwt.claim.sub', true);
+  role_before := current_setting('request.jwt.claim.role', true);
   first_result := public.execute_trade_scope_with_trusted_ip(
-    'd4853000-0000-4000-8000-000000000023', 'SD Client',
+    trade_proposal_id, 'SD Client',
     'd4850000-0000-4000-8000-000000000004', '203.0.113.13'
   );
+  ASSERT current_setting('request.jwt.claims', true) = claims_before
+     AND current_setting('request.jwt.claim.sub', true) = sub_before
+     AND current_setting('request.jwt.claim.role', true) = role_before,
+    'trusted trade execution changed NULL claims';
+  PERFORM pg_temp.assume_actor(
+    'd4850000-0000-4000-8000-000000000003', 'authenticated'
+  );
+  claims_before := current_setting('request.jwt.claims', true);
+  sub_before := current_setting('request.jwt.claim.sub', true);
+  role_before := current_setting('request.jwt.claim.role', true);
   retry_result := public.execute_trade_scope_with_trusted_ip(
-    'd4853000-0000-4000-8000-000000000023', 'SD Client',
+    trade_proposal_id, 'SD Client',
     'd4850000-0000-4000-8000-000000000004', '203.0.113.13'
   );
   ASSERT (first_result->>'newlyExecuted')::boolean
@@ -1222,11 +1850,13 @@ BEGIN
        FROM public.invoices AS invoice
        WHERE invoice.id = (first_result->>'depositInvoiceId')::uuid
      ), 'real trade execution did not issue the exact relational invoice';
+  ASSERT current_setting('request.jwt.claims', true) = claims_before
+     AND current_setting('request.jwt.claim.sub', true) = sub_before
+     AND current_setting('request.jwt.claim.role', true) = role_before,
+    'trusted trade retry changed unrelated claims';
   ASSERT current_setting('app.commercial_signature_capability', true) =
            'sd-sentinel',
     'trusted trade execution leaked its capability';
-  ASSERT current_setting('request.jwt.claims', true) = claims_before,
-    'a trusted commercial boundary rewrote caller claims';
 
   notification_id := public.notify_decision_required(
     'd4856000-0000-4000-8000-000000000001'
@@ -1363,7 +1993,7 @@ BEGIN
   END;
   BEGIN
     PERFORM public.execute_furnishings_authorization_with_trusted_ip(
-      'd4853000-0000-4000-8000-000000000021', 'Bad actor',
+      furnishings_proposal_id, 'Bad actor',
       'd4850000-0000-4000-8000-000000000003', NULL
     );
     RAISE EXCEPTION 'cross-project trusted furnishings actor succeeded';
@@ -1371,7 +2001,7 @@ BEGIN
   END;
   BEGIN
     PERFORM public.execute_trade_scope_with_trusted_ip(
-      'd4853000-0000-4000-8000-000000000023', 'Bad actor',
+      trade_proposal_id, 'Bad actor',
       'd4850000-0000-4000-8000-000000000003', NULL
     );
     RAISE EXCEPTION 'cross-project trusted trade actor succeeded';
@@ -1405,7 +2035,7 @@ BEGIN
 
   BEGIN
     PERFORM public.execute_furnishings_authorization_with_trusted_ip(
-      'd4853000-0000-4000-8000-000000000021', 'force-error',
+      furnishings_proposal_id, 'force-error',
       'd4850000-0000-4000-8000-000000000004', NULL
     );
     RAISE EXCEPTION 'forced trusted furnishings error did not fire';
@@ -1413,7 +2043,7 @@ BEGIN
   END;
   BEGIN
     PERFORM public.execute_trade_scope_with_trusted_ip(
-      'd4853000-0000-4000-8000-000000000023', 'force-error',
+      trade_proposal_id, 'force-error',
       'd4850000-0000-4000-8000-000000000004', NULL
     );
     RAISE EXCEPTION 'forced trusted trade error did not fire';
@@ -1424,6 +2054,9 @@ BEGIN
     'trusted execution error leaked its capability';
   ASSERT current_setting('request.jwt.claims', true) = claims_before,
     'trusted execution error rewrote caller claims';
+  ASSERT current_setting('request.jwt.claim.sub', true) = sub_before
+     AND current_setting('request.jwt.claim.role', true) = role_before,
+    'trusted execution error rewrote scalar caller claims';
 END
 $service_role_success_and_retry$;
 
@@ -1456,6 +2089,177 @@ BEGIN
   ), 'release state drifted';
 END
 $service_mutation_results$;
+
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000004', 'authenticated'
+);
+
+DO $real_authenticated_client_paths$
+DECLARE
+  furnishings_proposal_id uuid := (
+    SELECT proposal_id FROM _00485_commercial_fixture
+    WHERE label = 'furnishings_direct'
+  );
+  trade_proposal_id uuid := (
+    SELECT proposal_id FROM _00485_commercial_fixture
+    WHERE label = 'trade_direct'
+  );
+  furnishings_result jsonb;
+  trade_result jsonb;
+  activation_result jsonb;
+BEGIN
+  furnishings_result := public.execute_furnishings_authorization(
+    furnishings_proposal_id, 'SD Client'
+  );
+  ASSERT (furnishings_result->>'newlyExecuted')::boolean
+     AND (
+       SELECT invoice.status = 'sent'
+          AND invoice.project_id = fixture.project_id
+          AND invoice.client_id =
+                'd4850000-0000-4000-8000-000000000004'
+          AND invoice.studio_id =
+                'd4851000-0000-4000-8000-000000000001'
+       FROM public.invoices AS invoice
+       JOIN _00485_commercial_fixture AS fixture
+         ON fixture.label = 'furnishings_direct'
+       WHERE invoice.id =
+         (furnishings_result->>'depositInvoiceId')::uuid
+     ), 'real authenticated furnishings deposit lost exact client authority';
+
+  trade_result := public.execute_trade_scope(
+    trade_proposal_id, 'SD Client'
+  );
+  ASSERT (trade_result->>'newlyExecuted')::boolean
+     AND (
+       SELECT invoice.status = 'sent'
+          AND invoice.project_id = fixture.project_id
+          AND invoice.client_id =
+                'd4850000-0000-4000-8000-000000000004'
+          AND invoice.studio_id =
+                'd4851000-0000-4000-8000-000000000001'
+       FROM public.invoices AS invoice
+       JOIN _00485_commercial_fixture AS fixture
+         ON fixture.label = 'trade_direct'
+       WHERE invoice.id = (trade_result->>'depositInvoiceId')::uuid
+     ), 'real authenticated trade deposit lost exact client authority';
+
+  activation_result := public.sign_proposal(
+    'd4853000-0000-4000-8000-000000000030', 'SD Client'
+  );
+  ASSERT (activation_result->>'project_id')::uuid IS NOT NULL
+     AND EXISTS (
+       SELECT 1
+       FROM public.projects AS project
+       WHERE project.id = (activation_result->>'project_id')::uuid
+         AND project.proposal_id =
+               'd4853000-0000-4000-8000-000000000030'
+         AND project.client_id =
+               'd4850000-0000-4000-8000-000000000004'
+         AND project.designer_id =
+               'd4850000-0000-4000-8000-000000000001'
+         AND project.studio_id =
+               'd4851000-0000-4000-8000-000000000001'
+     ), 'real authenticated proposal signature did not activate canonically';
+END
+$real_authenticated_client_paths$;
+
+RESET ROLE;
+
+DO $canonical_project_binding_after_execution$
+BEGIN
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM _00485_commercial_fixture AS fixture
+    JOIN public.proposals AS proposal ON proposal.id = fixture.proposal_id
+    WHERE proposal.project_id IS NOT NULL
+  ), 'furnishings/trade execution rewrote canonical NULL proposal.project_id';
+END
+$canonical_project_binding_after_execution$;
+
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000003', 'authenticated'
+);
+
+DO $foreign_client_commercial_denials$
+BEGIN
+  BEGIN
+    PERFORM public.execute_furnishings_authorization(
+      (SELECT proposal_id FROM _00485_commercial_fixture
+       WHERE label = 'furnishings_direct'),
+      'Foreign Client'
+    );
+    RAISE EXCEPTION 'foreign client executed furnishings authorization';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+
+  BEGIN
+    PERFORM public.execute_trade_scope(
+      (SELECT proposal_id FROM _00485_commercial_fixture
+       WHERE label = 'trade_direct'),
+      'Foreign Client'
+    );
+    RAISE EXCEPTION 'foreign client executed trade scope';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+
+  BEGIN
+    PERFORM public.sign_proposal(
+      'd4853000-0000-4000-8000-000000000030', 'Foreign Client'
+    );
+    RAISE EXCEPTION 'foreign client signed another client proposal';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+END
+$foreign_client_commercial_denials$;
+
+RESET ROLE;
+
+INSERT INTO public.project_payment_milestones (
+  id, project_id, label, percentage, amount_cents, status, sort_order
+)
+VALUES (
+  'd4853350-0000-4000-8000-000000000001',
+  'd4852000-0000-4000-8000-000000000001',
+  'SD Member Milestone', 100, 5000, 'pending', 0
+);
+
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000002', 'authenticated'
+);
+
+DO $noncommercial_member_invoice_path$
+DECLARE
+  invoice_id uuid;
+BEGIN
+  ASSERT COALESCE(
+    NULLIF(current_setting('app.commercial_document_id', true), ''), ''
+  ) = '', 'noncommercial member path began with a commercial capability';
+  invoice_id := public.generate_milestone_invoice(
+    'd4853350-0000-4000-8000-000000000001'
+  );
+  ASSERT EXISTS (
+    SELECT 1
+    FROM public.invoices AS invoice
+    WHERE invoice.id = invoice_id
+      AND invoice.project_id =
+            'd4852000-0000-4000-8000-000000000001'
+      AND invoice.designer_id =
+            'd4850000-0000-4000-8000-000000000001'
+      AND invoice.client_id =
+            'd4850000-0000-4000-8000-000000000004'
+      AND invoice.studio_id =
+            'd4851000-0000-4000-8000-000000000001'
+  ), 'exact-studio member owner-core invoice path lost compatibility';
+  ASSERT COALESCE(
+    NULLIF(current_setting('app.commercial_document_id', true), ''), ''
+  ) = '', 'noncommercial member path minted a commercial capability';
+END
+$noncommercial_member_invoice_path$;
+
+RESET ROLE;
 
 INSERT INTO public.invoices (
   id, project_id, designer_id, client_id, studio_id,
@@ -1492,8 +2296,14 @@ VALUES
     'd4857000-0000-4000-8000-000000000071', 'adhoc',
     'Ambiguous commercial anchors', 1, 100, 100,
     jsonb_build_object(
-      'commercialDocumentId', 'd4853100-0000-4000-8000-000000000021',
-      'tradeScopeDocumentId', 'd4853100-0000-4000-8000-000000000023'
+      'commercialDocumentId', (
+        SELECT document_id::text FROM _00485_commercial_fixture
+        WHERE label = 'furnishings_trusted'
+      ),
+      'tradeScopeDocumentId', (
+        SELECT document_id::text FROM _00485_commercial_fixture
+        WHERE label = 'trade_trusted'
+      )
     )
   );
 
@@ -1533,6 +2343,9 @@ SELECT pg_temp.assume_actor(
   'd4850000-0000-4000-8000-000000000002', 'authenticated'
 );
 SELECT set_config('app.trade_draw_invoice_id', 'draw-sentinel', true);
+SELECT set_config(
+  'app.commercial_document_id', 'draw-commercial-sentinel', true
+);
 
 DO $trade_draw_comember_success$
 DECLARE
@@ -1546,6 +2359,9 @@ BEGIN
     'active studio co-member did not issue the exact trade draw';
   ASSERT current_setting('app.trade_draw_invoice_id', true) = 'draw-sentinel',
     'successful trade draw issuance leaked its row capability';
+  ASSERT current_setting('app.commercial_document_id', true) =
+           'draw-commercial-sentinel',
+    'successful trade draw issuance leaked its commercial capability';
   ASSERT auth.uid() = 'd4850000-0000-4000-8000-000000000002',
     'trade draw issuance replaced the real caller';
 
@@ -1711,6 +2527,9 @@ SELECT pg_temp.assume_actor(
   'd4850000-0000-4000-8000-000000000001', 'authenticated'
 );
 SELECT set_config('app.trade_draw_invoice_id', 'draw-error-sentinel', true);
+SELECT set_config(
+  'app.commercial_document_id', 'draw-commercial-error-sentinel', true
+);
 
 DO $trade_draw_forced_error_restore$
 BEGIN
@@ -1724,6 +2543,9 @@ BEGIN
   ASSERT current_setting('app.trade_draw_invoice_id', true) =
            'draw-error-sentinel',
     'trade draw error leaked its row capability';
+  ASSERT current_setting('app.commercial_document_id', true) =
+           'draw-commercial-error-sentinel',
+    'trade draw error leaked its commercial capability';
   ASSERT auth.uid() = 'd4850000-0000-4000-8000-000000000001',
     'trade draw error changed the real caller';
 END
@@ -2012,6 +2834,39 @@ BEGIN
     INSERT INTO public.projects (
       id, name, designer_id, client_id, created_by, studio_id
     ) VALUES (
+      'd4852000-0000-4000-8000-000000000089',
+      'Direct Valid Studio Project',
+      'd4850000-0000-4000-8000-000000000001',
+      'd4850000-0000-4000-8000-000000000004',
+      'd4850000-0000-4000-8000-000000000001',
+      'd4851000-0000-4000-8000-000000000001'
+    );
+    RAISE EXCEPTION 'direct authenticated DML stamped a valid project tuple';
+  EXCEPTION WHEN raise_exception THEN
+    ASSERT SQLERRM = 'studio_id_not_designer_studio';
+  END;
+
+  BEGIN
+    INSERT INTO public.invoices (
+      id, project_id, designer_id, client_id, studio_id,
+      status, currency, subtotal_cents, total_cents
+    ) VALUES (
+      'd4857000-0000-4000-8000-000000000089',
+      'd4852000-0000-4000-8000-000000000001',
+      'd4850000-0000-4000-8000-000000000001',
+      'd4850000-0000-4000-8000-000000000004',
+      'd4851000-0000-4000-8000-000000000001',
+      'draft', 'USD', 0, 0
+    );
+    RAISE EXCEPTION 'direct authenticated DML stamped a valid invoice tuple';
+  EXCEPTION WHEN raise_exception THEN
+    ASSERT SQLERRM = 'studio_id_not_designer_studio';
+  END;
+
+  BEGIN
+    INSERT INTO public.projects (
+      id, name, designer_id, client_id, created_by, studio_id
+    ) VALUES (
       'd4852000-0000-4000-8000-000000000090',
       'Forged Foreign Studio Project',
       'd4850000-0000-4000-8000-000000000001',
@@ -2042,6 +2897,54 @@ BEGIN
   END;
 END
 $authenticated_trigger_claim_denials$;
+
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000004', 'authenticated'
+);
+SELECT set_config(
+  'app.proposal_activation_id',
+  'd4853000-0000-4000-8000-000000000030', true
+);
+SELECT set_config(
+  'app.commercial_document_id',
+  (SELECT proposal_id::text FROM _00485_commercial_fixture
+   WHERE label = 'furnishings_direct'), true
+);
+
+DO $forged_client_capability_dml_denials$
+BEGIN
+  BEGIN
+    UPDATE public.projects
+    SET studio_id = studio_id
+    WHERE proposal_id = 'd4853000-0000-4000-8000-000000000030';
+    RAISE EXCEPTION 'client-forged activation capability authorized DML';
+  EXCEPTION WHEN raise_exception THEN
+    ASSERT SQLERRM = 'studio_id_not_designer_studio';
+  END;
+
+  BEGIN
+    INSERT INTO public.invoices (
+      id, project_id, designer_id, client_id, studio_id,
+      status, currency, subtotal_cents, total_cents
+    ) VALUES (
+      'd4857000-0000-4000-8000-000000000087',
+      'd4852000-0000-4000-8000-000000000007',
+      'd4850000-0000-4000-8000-000000000001',
+      'd4850000-0000-4000-8000-000000000004',
+      'd4851000-0000-4000-8000-000000000001',
+      'draft', 'USD', 0, 0
+    );
+    RAISE EXCEPTION 'client-forged commercial capability authorized DML';
+  EXCEPTION WHEN raise_exception THEN
+    ASSERT SQLERRM = 'studio_id_not_designer_studio';
+  END;
+END
+$forged_client_capability_dml_denials$;
+
+SELECT set_config('app.proposal_activation_id', '', true);
+SELECT set_config('app.commercial_document_id', '', true);
 
 SELECT set_config('request.jwt.claims', '{"role":"service_role"}', true);
 SELECT set_config('request.jwt.claim.sub', '', true);
@@ -2159,6 +3062,18 @@ BEGIN
   END;
 
   BEGIN
+    UPDATE public.projects
+    SET client_id = 'd4850000-0000-4000-8000-000000000003'
+    WHERE id = (
+      SELECT project_id FROM public.proposals
+      WHERE id = 'd4853000-0000-4000-8000-000000000030'
+    );
+    RAISE EXCEPTION 'proposal-backed project client crossed its proposal';
+  EXCEPTION WHEN raise_exception THEN
+    ASSERT SQLERRM = 'studio_id_not_designer_studio';
+  END;
+
+  BEGIN
     UPDATE public.invoices
     SET project_id = 'd4852000-0000-4000-8000-000000000002'
     WHERE id = 'd4857000-0000-4000-8000-000000000091';
@@ -2172,6 +3087,16 @@ BEGIN
     SET designer_id = 'd4850000-0000-4000-8000-000000000002'
     WHERE id = 'd4857000-0000-4000-8000-000000000091';
     RAISE EXCEPTION 'invoice designer ownership update escaped its project';
+  EXCEPTION WHEN raise_exception THEN
+    ASSERT SQLERRM = 'studio_id_not_designer_studio';
+  END;
+
+
+  BEGIN
+    UPDATE public.invoices
+    SET client_id = 'd4850000-0000-4000-8000-000000000003'
+    WHERE id = 'd4857000-0000-4000-8000-000000000091';
+    RAISE EXCEPTION 'invoice client ownership escaped its project';
   EXCEPTION WHEN raise_exception THEN
     ASSERT SQLERRM = 'studio_id_not_designer_studio';
   END;
@@ -2217,6 +3142,9 @@ BEGIN
   ASSERT COALESCE(
     NULLIF(current_setting('app.trade_draw_invoice_id', true), ''), ''
   ) = '', 'pooled successor inherited a trade draw capability';
+  ASSERT COALESCE(
+    NULLIF(current_setting('app.commercial_document_id', true), ''), ''
+  ) = '', 'pooled successor inherited a commercial document capability';
   ASSERT COALESCE(
     NULLIF(current_setting('app.project_review_publish', true), ''), ''
   ) = '', 'pooled successor inherited a review publication capability';
