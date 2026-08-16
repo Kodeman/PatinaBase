@@ -144,6 +144,9 @@ export function DocSpineShelvedBlocks({
         ? 'Nobody on it yet'
         : `${rosterCount} on the roster`,
     knowledge: 'Studio library',
+    // The project's spine never offers this row (shelvesFor filters it out);
+    // the status is stated so the record stays total.
+    clientcopy: 'As sent · live',
   };
 
   return (

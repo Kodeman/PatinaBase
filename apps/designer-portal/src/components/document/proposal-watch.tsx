@@ -121,9 +121,15 @@ function Figure({
 export function ProposalWatch({
   proposalId,
   clientName,
+  hoistedLeader = null,
 }: {
   proposalId: string;
   clientName: string;
+  /** W4a — the Finalize table's head has promoted one of the watch's own acts
+   *  to the table's inked leader. The watch stands that one act down so the
+   *  offer is made once; everything else it carries stays exactly where it is.
+   *  Null with the flag off and on every other table. */
+  hoistedLeader?: 'nudge' | 'preview' | 'resend' | 'answer-flags' | null;
 }) {
   const router = useRouter();
   const qc = useQueryClient();
@@ -201,15 +207,17 @@ export function ProposalWatch({
           <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
             The client&rsquo;s copy · as sent
           </span>
-          <DocumentAction
-            actionKey="preview-proposal-as-client"
-            surfaceKey="open-document"
-            regionKey="proposal-preview"
-            variant="secondary"
-            onClick={() => setPreviewOpen(true)}
-          >
-            Preview as {family}
-          </DocumentAction>
+          {hoistedLeader !== 'preview' && (
+            <DocumentAction
+              actionKey="preview-proposal-as-client"
+              surfaceKey="open-document"
+              regionKey="proposal-preview"
+              variant="secondary"
+              onClick={() => setPreviewOpen(true)}
+            >
+              Preview as {family}
+            </DocumentAction>
+          )}
         </div>
         <div className="relative max-h-[260px] overflow-hidden rounded-[8px] border border-[var(--doc-ink-border)] bg-white px-5 py-5">
           <ProposalPreviewRail
@@ -270,13 +278,15 @@ export function ProposalWatch({
         aria-label="Proposal actions"
       >
         {w.terminal ? (
-          <DocumentAction
-            actionKey="resend-proposal"
-            variant="secondary"
-            onClick={() => setResendOpen(true)}
-          >
-            Email delivery status
-          </DocumentAction>
+          hoistedLeader !== 'resend' && (
+            <DocumentAction
+              actionKey="resend-proposal"
+              variant="secondary"
+              onClick={() => setResendOpen(true)}
+            >
+              Email delivery status
+            </DocumentAction>
+          )
         ) : (
           /* SP3: the nudge (and its cooled-down "nudged {date}" state) moved to
              the send-wall state line above, so the word prints once per wall. */
