@@ -8734,3 +8734,119 @@ the agreement was emailed, which is wrong for a paper issuance that was later
 nudged before this fix landed. Recorded as a content check, not changed here.
 
 *Entries add: I137-errata · last id = I137*
+
+### I138 · "Start to Signature" Wave 2 — the Worktable core, behind a flag — 2026-08-15
+
+Wave 2 of the program I137 opened, on `sts/wave2-worktable-core`. Unlike W1
+this ships **behind the fail-closed flag `worktable`** (`useFeatureFlag` +
+`NEXT_PUBLIC_FLAG_OVERRIDES`, the mechanism I1 left behind): the flag off is
+main's composition exactly, and the flag is what Kody's walk will turn on.
+Authorized by the Q1–Q7 rulings on the Start to Signature deck — Q3 in
+particular, which ratified the ceremonies and named the Worktable the
+destination.
+
+**What this wave is.** The composition machinery only: the selector, the pin,
+the ceremony, the frame, and the places the next two waves mount into. **No
+tools.** The rooms rail, the inline scheme, the boards strip and the library
+reach-in are W3; the Money compression, the release lift and the real Install
+setting are W4. Nothing in the paper's fixed skeleton moves in either flag
+state — spine, letterhead, guide and red-letter zone, margin rail, account and
+kickoff bands, the Record at the foot, the colophon, the shelves are
+byte-identical on and off. Only the middle of the paper composes.
+
+**The table selector is a pure derivation over the section grammar, not a
+replacement for it** — amendment **A5, proposed and in force behind the flag.**
+`deriveSections` is untouched and its consumers (the spine, the settled bars,
+`deriveFillState`, the Desk need lines, the D13 mobile sheet) are unaffected.
+`lib/document/table-derivation.ts` READS `active_section` and answers which of
+four tables the paper's middle composes as:
+
+| section | table | refinement |
+|---|---|---|
+| brief · discovery | **I intake** | — |
+| direction | **II speccing** | — |
+| proposal | **II speccing** | while the live proposal still says `draft` |
+| proposal | **III finalize** | otherwise — sent, viewed, and the terminal states |
+| project · care | **IV delivery** | setting `procurement` |
+| install | **IV delivery** | setting `install` |
+
+Two things about that table are deliberate. An **unread** proposal never moves
+the table: the view (00327) derives `direction` from `status='draft'` and
+`proposal` from anything else, so a null status leaves the section's own answer
+standing rather than composing a draft table that would then have to turn. And
+the **install setting reuses the page's existing install condition and invents
+no second one** — the section IS the phase read, because 00327 derives
+`install` from `current_phase in ('installation','final_walkthrough')`. A
+committed install window has no reader on this page (the ceremony owns it);
+W4's Install setting is where that belongs, and it was not faked here.
+
+**Region order and weight are stage-derived** — amendment **A1, proposed and in
+force behind the flag.** The table decides which spread stands on the paper and
+what is framed around it; the canonical order the spine's running index reads
+stays the constant W1 declared (`PROJECT_PAPER_ORDER`), and the flag-on Delivery
+table mounts those four regions in exactly that order, guarded by a spec.
+
+**Stale-table pinning is the ceremony mechanism (R7).** A table never
+reshuffles under the designer's hands. The composition — the table AND the
+section whose spread stands on it, since Intake carries two sections and
+Delivery three — is snapshotted when the document is picked up. A derivation
+that would compose something else does **not** re-compose the paper: it arms one
+scored line above the current table, "The table is ready to turn — turn it".
+Pressing it adopts the new composition and re-arms for the next; re-opening the
+document adopts naturally, because a fresh mount snapshots again. Data inside
+every region stays live throughout — the pin holds composition, never content.
+
+**The seal announces its own turn.** R6 already redirected an activated
+proposal's id to the project document; the turn was silent, so the designer
+arrived at a different table with no account of how. The redirecting page now
+leaves a sessionStorage marker (flag-on only) and the destination reads it once,
+clears it, and prints one quiet line above the Delivery table: "This proposal
+was signed {date} and continued as the project document." The date is the
+destination's own lineage or it is omitted — never guessed. Cleared as read, so
+dismissal is simply that it does not print again.
+
+**The tables, as composed this wave.**
+- **Intake** — the existing brief/discovery spread, plus **honest future
+  seams**: one non-interactive line per domain this document does not have yet,
+  each stating when it opens ("Project · FF&E — opens with the Direction";
+  Schedule and Design authority — "opens when the project begins"). Named out of
+  the running index's own labels so a seam and the index cannot call one region
+  two things. Q6 in force: no capture drop, no board tile, no affordance for a
+  store that does not exist. `FutureSeam` generalizes the settled bar's visual
+  idiom and deliberately is NOT a control — `SettledBar` and `FoldSeam` open
+  something; a future seam has nothing to open, so it is focusable and nothing
+  more.
+- **Speccing** — the existing direction/proposal-draft spread unchanged, plus
+  four named, typed, empty mount slots: `rooms-rail` at the table head, then
+  `scheme`, `boards-strip`, `reach-in`. This is **W3's integration surface**,
+  declared here so the lanes touch only their own components and this contract.
+  An unfilled slot renders nothing at all — no wrapper, no spacing, no
+  placeholder.
+- **Finalize** — the sent/viewed proposal exactly as it stands, W1's send-wall
+  line included. Untouched; W4 rebuilds it.
+- **Delivery** — the project/install/care composition exactly as it stands,
+  framed so the pin and the seal note apply to it. Money compression and the
+  release lift are W4 and were not touched.
+
+Each table root carries `data-table="<key>"` (and `data-table-setting` on
+Delivery). There are no table nameplates and no new headings: the composition is
+the change, and chrome that announced it would be a second telling.
+
+**Flag-off parity is the wave's hard guarantee, and it is guarded.**
+`paper-order.test.tsx` (W1's) renders the real page with the flag off and walks
+the real `[data-index-region]` roots against `PROJECT_PAPER_ORDER`; it is
+unchanged and passing. `worktable.test.tsx` renders the same page with the same
+mocks and only the flag flipped, and asserts the Delivery table names itself,
+mounts the same four regions in the same order, keeps the Record at the foot,
+and prints no turn line, no seal note, no seams and no empty slots. The frame is
+the only component the flag reaches, and with no table it renders its children
+and nothing else.
+
+**Not in this wave, deliberately:** every table tool (W3/W4); the Drafting Room
+decomposition and its `/drafting` redirect (Q5 step 2, W4); the Q1 boards
+reversal entry (W3 owns it, being that lane's ruling); A2/A3/A4/A6/A7, which
+have nothing to record until the surfaces they govern exist; and any change to
+`deriveSections`, `document_state`, or the sealing semantics — `active_section`
+remains the sealing authority and I114 is still owed Kody's mapping session.
+
+*Entries add: I138 · last id = I138*
