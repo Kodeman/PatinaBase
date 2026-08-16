@@ -13,15 +13,21 @@ export type ShelfKey =
   | 'specbook'
   | 'moodboards'
   | 'callsheet'
-  | 'knowledge';
+  | 'knowledge'
+  | 'clientcopy';
 
 export type ShelfLeafKey = Exclude<ShelfKey, 'callsheet'>;
+
+/** What a shelf belongs to. Four are the project's; the client's copy is the
+ *  proposal's, and a document that has one never has the other. */
+export type ShelfSubject = 'project' | 'proposal';
 
 export interface ShelfDefinition {
   key: ShelfKey;
   title: string;
   eyebrow: string;
   kind: 'leaf' | 'doorway';
+  subject: ShelfSubject;
 }
 
 const ALL_SHELVES: readonly ShelfDefinition[] = [
@@ -30,30 +36,42 @@ const ALL_SHELVES: readonly ShelfDefinition[] = [
     title: 'Plan room',
     eyebrow: 'Plan room · Drawing set',
     kind: 'leaf',
+    subject: 'project',
   },
   {
     key: 'specbook',
     title: 'Spec book',
     eyebrow: 'Spec book · By room',
     kind: 'leaf',
+    subject: 'project',
   },
   {
     key: 'moodboards',
     title: 'Mood boards',
     eyebrow: 'Mood boards · Shared & draft',
     kind: 'leaf',
+    subject: 'project',
   },
   {
     key: 'callsheet',
     title: 'Call sheet',
     eyebrow: 'Call sheet · The roster',
     kind: 'doorway',
+    subject: 'project',
   },
   {
     key: 'knowledge',
     title: 'Knowledge',
     eyebrow: 'Studio library · Cross-project',
     kind: 'leaf',
+    subject: 'project',
+  },
+  {
+    key: 'clientcopy',
+    title: 'The client’s copy',
+    eyebrow: 'The client’s copy · Live',
+    kind: 'leaf',
+    subject: 'proposal',
   },
 ];
 
@@ -63,15 +81,32 @@ const ALL_SHELVES: readonly ShelfDefinition[] = [
  * flag off the row is not rendered at all, exactly as every sibling doorway
  * behaves (⌘K, the letterhead instrument, the kickoff band). A disabled stub
  * would still name a surface this studio does not have.
+ *
+ * The client's copy is the Drafting Room's ≥1440 live rail, re-homed as a leaf
+ * (Start to Signature W4a, amendment A3). It is the ONE shelf that belongs to a
+ * proposal rather than a project, and it stands only where its subject does —
+ * on the Finalize table, behind the `worktable` flag. Everywhere else the copy
+ * is reached by the Preview act that has always carried it, so nothing is lost
+ * below 1440 where no shelf exists at all (Q7/A4).
  */
 export function shelvesFor({
+  subject = 'project',
   callSheetEnabled,
+  clientCopyEnabled = false,
 }: {
+  /** What this document IS. A proposal has no plan room, no spec book, no
+   *  boards and no roster — offering them would name four surfaces it does
+   *  not have, which is the same lie the call-sheet stub would tell. */
+  subject?: ShelfSubject;
   callSheetEnabled: boolean;
+  clientCopyEnabled?: boolean;
 }): readonly ShelfDefinition[] {
-  return callSheetEnabled
-    ? ALL_SHELVES
-    : ALL_SHELVES.filter((s) => s.key !== 'callsheet');
+  return ALL_SHELVES.filter(
+    (s) =>
+      s.subject === subject &&
+      (s.key !== 'callsheet' || callSheetEnabled) &&
+      (s.key !== 'clientcopy' || clientCopyEnabled),
+  );
 }
 
 export function shelfDefinition(key: ShelfKey): ShelfDefinition {

@@ -134,6 +134,9 @@ import { RoomsRail } from '@/components/document/worktable/rooms-rail';
 import { Scheme } from '@/components/document/worktable/scheme';
 import { BoardsStrip } from '@/components/document/worktable/boards-strip';
 import { LibraryReachIn } from '@/components/document/worktable/library-reach-in';
+import { FinalizeHead } from '@/components/document/worktable/finalize-head';
+import { FinalizeShelf } from '@/components/document/worktable/finalize-shelf';
+import { OfferFacets } from '@/components/document/worktable/offer-facets';
 import { DocumentShelves } from '@/components/document/shelves/document-shelves';
 import {
   NEW_BOARD_EVENT,
@@ -970,6 +973,16 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // read on this page stays on the live row.
   const table = worktableOn ? tablePin.composition : null;
   const spreadSection = table ? table.section : row.active_section;
+  // W4a — the Finalize table: the proposal in the client's hands. Its head, its
+  // leader, its Offer facets and its one shelf stand only here.
+  const finalizeTable =
+    table?.table === 'finalize' && row.engagement_kind === 'proposal';
+  // The one shelf a proposal document has. The project's shelved spine has its
+  // own subjects and its own gate; these two never stand at once.
+  const finalizeShelvedSpine =
+    finalizeTable && row.proposal_id ? (
+      <FinalizeShelf openShelf={openShelf} onToggleShelf={toggleShelf} />
+    ) : null;
   // W3 — the Speccing table's four tools on W2's slots: rooms → the work →
   // the tools. Proposal-keyed on `row.proposal_id`: 00327's Shape B emits the
   // LIVE chain version (pr.id) there while `engagement_id` carries the chain
@@ -1023,7 +1036,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         sections={sections}
         others={others}
         onJump={jumpToSection}
-        shelved={shelvedSpine}
+        shelved={shelvedSpine ?? finalizeShelvedSpine}
       />
 
       {/* No z-index here: a stacking context on main would trap the fixed
@@ -1231,11 +1244,24 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                   </div>
                   {/* C3 — a quiet letterhead read of where the client's verdicts
                       stand ("4 of 12 approved · 1 flagged"). Nothing when the
-                      client hasn't weighed in yet. */}
-                  {row.engagement_kind === 'proposal' && verdictSummary && (
-                    <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                      {verdictSummary}
-                    </p>
+                      client hasn't weighed in yet. W4a: on the Finalize table
+                      this whisper stands down — the same sentence is that
+                      table's headline, and one fact prints at one weight. */}
+                  {row.engagement_kind === 'proposal' &&
+                    verdictSummary &&
+                    !finalizeTable && (
+                      <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                        {verdictSummary}
+                      </p>
+                    )}
+                  {/* W4a — the Finalize table's head: the verdict roll-up as the
+                      headline sentence, and the one inked leader the lifecycle ×
+                      verdicts × send-wall matrix allows. */}
+                  {finalizeTable && (
+                    <FinalizeHead
+                      proposalId={row.proposal_id}
+                      clientName={row.client_name}
+                    />
                   )}
                   {/* The proposal instruments (gated to engagement_kind
                       ==='proposal'): the Drafting Room doorway for a draft, the
@@ -1246,6 +1272,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                     <ProposalInstruments
                       proposalId={row.proposal_id}
                       clientName={row.client_name}
+                      onFinalizeTable={finalizeTable}
                     />
                   )}
                   {/* S18: name the model — what's below is a read-only preview of
@@ -1262,6 +1289,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                     <ProposalFolioStrip proposalId={row.proposal_id} />
                   )}
                   <ProposalBlocksReadOnly proposalId={row.proposal_id} />
+                  {/* W4a — the Drafting Room's Offer movement (Phases ·
+                      Exclusions · Payments · Terms), folding open under the
+                      spread in the Room's own seam form. */}
+                  {finalizeTable && <OfferFacets proposalId={row.proposal_id} />}
                 </section>
               )}
               {spreadSection === 'project' && row.project_id && (
@@ -1526,6 +1557,17 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           routeId={id}
           rooms={docRooms ?? []}
           canCreateBoards={row.active_section === 'project'}
+        />
+      )}
+
+      {/* W4a — the Finalize table's one leaf: the client's copy, live. */}
+      {finalizeTable && row.proposal_id && (
+        <DocumentShelves
+          openShelf={openShelf}
+          onClose={() => setOpenShelf(null)}
+          routeId={id}
+          proposalId={row.proposal_id}
+          clientName={row.client_name}
         />
       )}
 

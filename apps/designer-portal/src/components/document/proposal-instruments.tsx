@@ -32,6 +32,7 @@ import { useNudgeProposal, useProposal } from '@/hooks/use-proposals';
 import { useProposalWatch } from '@/hooks/use-proposal-watch';
 import { familyLabel } from '@/lib/document/family-label';
 import { deriveSendWallLine } from '@/lib/document/proposal-watch-derivation';
+import { useFinalizeLeader } from '@/hooks/use-finalize-leader';
 import { rememberRoomOrigin } from '@/lib/document/room-origin';
 import { useDraftingState } from '@/hooks/use-drafting-state';
 import { displayDraftingState } from '@/lib/document/drafting-progress';
@@ -52,12 +53,20 @@ import { MOBILE_ACTION_PRIORITY } from './mobile/lifecycle-mobile-action';
 export function ProposalInstruments({
   proposalId,
   clientName,
+  onFinalizeTable = false,
 }: {
   proposalId: string;
   clientName: string;
+  /** W4a — the Finalize table's head has promoted one of these acts to the
+   *  table's one inked leader. The wall reads the SAME derivation off the same
+   *  cached reads (never a second answer) and stands that one act down, so the
+   *  verb is offered once. False everywhere else, flag off included. */
+  onFinalizeTable?: boolean;
 }) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: proposal } = useProposal(proposalId) as { data: any };
+  const { leader } = useFinalizeLeader(proposalId, clientName);
+  const hoistedLeader = onFinalizeTable ? (leader?.kind ?? null) : null;
   const experience = commercialDocumentExperience(proposal?.document_kind);
   if (experience === 'commercial_readonly') {
     return (
@@ -78,6 +87,7 @@ export function ProposalInstruments({
             : null
         }
         issuedOnPaper={proposal?.issued_on_paper === true}
+        nudgeHoisted={hoistedLeader === 'nudge'}
       />
       {experience === 'design_services' ? (
         <ServiceAgreementInstruments proposal={proposal} clientName={clientName} />
@@ -86,6 +96,7 @@ export function ProposalInstruments({
           proposalId={proposalId}
           clientName={clientName}
           proposal={proposal}
+          hoistedLeader={hoistedLeader}
         />
       )}
     </>
@@ -103,11 +114,16 @@ function SendWallLine({
   clientName,
   commercialState,
   issuedOnPaper,
+  nudgeHoisted = false,
 }: {
   proposalId: string;
   clientName: string;
   commercialState: string | null;
   issuedOnPaper: boolean;
+  /** The table's leader is already offering this nudge — the SAME decision,
+   *  read once (deriveSendWallLine). The line keeps its fact and drops the
+   *  verb rather than printing the act twice. */
+  nudgeHoisted?: boolean;
 }) {
   const { watch } = useProposalWatch(proposalId);
   const nudge = useNudgeProposal();
@@ -140,6 +156,7 @@ function SendWallLine({
     ? deriveSendWallLine({ watch, commercialState, issuedOnPaper }, new Date())
     : null;
   if (!line) return null;
+  const standDown = nudgeHoisted && line.verb === 'nudge';
 
   return (
     <>
@@ -150,9 +167,10 @@ function SendWallLine({
         aria-label="Proposal state"
       >
         <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
-          {line.sentText} —
+          {line.sentText}
+          {standDown ? '' : ' —'}
         </span>
-        {line.verb === 'nudge' && (
+        {!standDown && line.verb === 'nudge' && (
           <DocumentAction
             actionKey="nudge-client"
             variant="secondary"
@@ -193,10 +211,12 @@ function LegacyProposalInstruments({
   proposalId,
   clientName,
   proposal,
+  hoistedLeader = null,
 }: {
   proposalId: string;
   clientName: string;
   proposal: any;
+  hoistedLeader?: 'nudge' | 'preview' | 'resend' | 'answer-flags' | null;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -268,7 +288,13 @@ function LegacyProposalInstruments({
   // Out the door — the Proposal section becomes the watch view (R71). It carries
   // its own acts (Preview · Resend) and overlays.
   if (!isDraft) {
-    return <ProposalWatch proposalId={proposalId} clientName={clientName} />;
+    return (
+      <ProposalWatch
+        proposalId={proposalId}
+        clientName={clientName}
+        hoistedLeader={hoistedLeader}
+      />
+    );
   }
 
   // Legacy retirement: no new legacy sending. A draft here is either a

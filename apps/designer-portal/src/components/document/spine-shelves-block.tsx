@@ -7,24 +7,35 @@
  * on it would promise a panel that never appears here.
  */
 
-import { shelvesFor, type ShelfKey } from '@/lib/document/shelves';
+import {
+  shelvesFor,
+  type ShelfKey,
+  type ShelfSubject,
+} from '@/lib/document/shelves';
 
 export const SHELF_LEAF_ID = 'doc-shelf-leaf';
 
 export function SpineShelvesBlock({
   openShelf,
   statuses,
+  subject = 'project',
   callSheetEnabled,
+  clientCopyEnabled = false,
   onToggleShelf,
 }: {
   openShelf: ShelfKey | null;
   statuses: Record<ShelfKey, string>;
+  /** What the document is — the registry keeps each subject's own shelves. */
+  subject?: ShelfSubject;
   /** The `call-sheet` flag, as the page resolved it. Off ⇒ that row is not
    *  rendered at all, matching every other call-sheet doorway. */
   callSheetEnabled: boolean;
+  /** The Finalize table (behind `worktable`) — the one place the client's copy
+   *  has a subject on the paper beside it. */
+  clientCopyEnabled?: boolean;
   onToggleShelf: (key: ShelfKey) => void;
 }) {
-  const shelves = shelvesFor({ callSheetEnabled });
+  const shelves = shelvesFor({ subject, callSheetEnabled, clientCopyEnabled });
   return (
     <div className="mt-4 border-t border-[var(--color-pearl)] pt-3">
       <p
