@@ -193,12 +193,25 @@ export function MoneyRegion({
       accountQuiet
     : null;
 
-  // On the table the posture is declared, not derived: money is reference until
-  // it is asked for, so the seam needs no read to settle before it can stand.
+  // On the table the posture is DECLARED rather than derived — money is
+  // reference until it is asked for — but the declaration is subject to the
+  // same two laws the region's own default obeys:
+  //
+  //   · It waits for the reads to settle. The seam states figures ("$0
+  //     committed · no authority yet"), so a fold declared before the money
+  //     was read would print a sentence it did not know and then flip. The
+  //     null is `useRegionFold`'s own refusal of an unsettled default; until
+  //     it settles the region stands as it does anywhere else, with each tier
+  //     printing no figure rather than a wrong one.
+  //   · It yields to the accounts. `accountQuiet` false means an invoice has
+  //     been drawn or a milestone is outstanding — the money that is actually
+  //     chasing the designer — and the table suppresses the AccountBand's own
+  //     home, so a folded seam would state it nowhere at all.
+  const tableFolded = allSettled ? accountQuiet : null;
   const { folded, setFolded } = useRegionFold({
     docId: projectId,
     region: (tableSeam ? 'money-table' : 'money') satisfies RegionFoldKey,
-    defaultFolded: tableSeam ? true : defaultFolded,
+    defaultFolded: tableSeam ? tableFolded : defaultFolded,
   });
 
   // The running index jumps to readable content, never to a seam.

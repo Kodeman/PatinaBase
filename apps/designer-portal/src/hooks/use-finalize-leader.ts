@@ -19,12 +19,14 @@ import { useProposalWatch } from '@/hooks/use-proposal-watch';
 import { familyLabel } from '@/lib/document/family-label';
 import {
   deriveFinalizeLeader,
-  firstFlaggedLineId,
   type FinalizeLeader,
 } from '@/lib/document/finalize-leader';
 
 export interface FinalizeHeadModel {
-  /** "4 of 12 approved · 1 flagged" — empty when the client has not weighed in. */
+  /** "4 of 12 approved · 1 flagged" — empty when the client has not weighed in.
+   *  The flag count is the UNRESOLVED one: the leader reads
+   *  `rollup.unresolvedFlags`, and a headline counting flags the designer has
+   *  already answered would put two numbers on one table. */
   headline: string;
   rollup: VerdictRollup;
   leader: FinalizeLeader | null;
@@ -63,7 +65,6 @@ export function useFinalizeLeader(
             : null,
         issuedOnPaper: proposal?.issued_on_paper === true,
         rollup,
-        firstFlaggedItemId: firstFlaggedLineId(feedback),
         family: familyLabel(clientName),
       },
       new Date(),
@@ -73,9 +74,15 @@ export function useFinalizeLeader(
     proposal?.commercial_state,
     proposal?.issued_on_paper,
     rollup,
-    feedback,
     clientName,
   ]);
 
-  return { headline: formatVerdictRollup(rollup), rollup, leader };
+  // The shared formatter, handed the count that is still open. `rollup.flagged`
+  // is every flag the client ever raised, resolved ones included.
+  const headline = formatVerdictRollup({
+    ...rollup,
+    flagged: rollup.unresolvedFlags,
+  });
+
+  return { headline, rollup, leader };
 }

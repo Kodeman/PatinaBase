@@ -31,7 +31,10 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useNudgeProposal, useProposal } from '@/hooks/use-proposals';
 import { useProposalWatch } from '@/hooks/use-proposal-watch';
 import { familyLabel } from '@/lib/document/family-label';
-import { deriveSendWallLine } from '@/lib/document/proposal-watch-derivation';
+import {
+  deriveSendWallLine,
+  sendWallStateWord,
+} from '@/lib/document/proposal-watch-derivation';
 import { useFinalizeLeader } from '@/hooks/use-finalize-leader';
 import { rememberRoomOrigin } from '@/lib/document/room-origin';
 import { useDraftingState } from '@/hooks/use-drafting-state';
@@ -123,7 +126,8 @@ function SendWallLine({
   issuedOnPaper: boolean;
   /** The table's leader is already offering this nudge — the SAME decision,
    *  read once (deriveSendWallLine). The line keeps its fact and drops the
-   *  verb rather than printing the act twice. */
+   *  verb rather than printing the act twice, and names the state it is in
+   *  where the verb stood. */
   nudgeHoisted?: boolean;
 }) {
   const { watch } = useProposalWatch(proposalId);
@@ -158,6 +162,13 @@ function SendWallLine({
     : null;
   if (!line) return null;
   const standDown = nudgeHoisted && line.verb === 'nudge';
+  // The head took the verb, not the news. `deriveSendWallLine` names no state
+  // while it is offering an act (exactly one of the two prints), so the line
+  // asks for the state word itself here — otherwise it reads "Sent 5 days ago"
+  // and stops, over a row with nothing in it.
+  const stateWord =
+    line.stateWord ??
+    (standDown && watch ? sendWallStateWord(watch, commercialState) : null);
 
   return (
     <>
@@ -168,8 +179,7 @@ function SendWallLine({
         aria-label="Proposal state"
       >
         <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
-          {line.sentText}
-          {standDown ? '' : ' —'}
+          {line.sentText} —
         </span>
         {!standDown && line.verb === 'nudge' && (
           <DocumentAction
@@ -182,9 +192,9 @@ function SendWallLine({
             Nudge {family}
           </DocumentAction>
         )}
-        {line.stateWord && (
+        {stateWord && (
           <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-            {line.stateWord}
+            {stateWord}
           </span>
         )}
       </DocumentActionRow>
@@ -218,7 +228,7 @@ function LegacyProposalInstruments({
   proposalId: string;
   clientName: string;
   proposal: any;
-  hoistedLeader?: 'nudge' | 'preview' | 'resend' | 'answer-flags' | null;
+  hoistedLeader?: 'nudge' | 'preview' | 'resend' | null;
   onFinalizeTable?: boolean;
 }) {
   const router = useRouter();

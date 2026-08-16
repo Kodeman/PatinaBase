@@ -805,8 +805,15 @@ function FFESectionBody({
   useEffect(() => {
     onReleaseOffered?.(releaseOffered);
   }, [onReleaseOffered, releaseOffered]);
-  // The head's leader is the release only while no other head has taken it.
-  const releaseInHead = canRelease && !releaseLeaderElsewhere;
+  // The head's leader is the release only while no other head has taken it —
+  // and a head that is not printing it has not taken it. In the window where
+  // an authority stands behind the project but no line can currently go, the
+  // lift outside does not render (it is gated on `releaseOffered`), so the
+  // entry stays here in the disabled form it has always worn, carrying its
+  // "No lines are currently eligible" reason. Deleting it outright left the
+  // verb — and the only account of why it cannot be pressed — nowhere.
+  const releaseInHead =
+    canRelease && (!releaseLeaderElsewhere || !releaseOffered);
 
   // R76 — what the section-level Bill act would carry: priced lines not yet
   // on a live invoice (the composer re-partitions; this is the offer).

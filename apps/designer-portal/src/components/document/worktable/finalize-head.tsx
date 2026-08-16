@@ -16,13 +16,23 @@
  *      exists below on the paper; the head promotes one of them and the
  *      instruments stand that one down, so the act is offered once.
  *
+ * **This is the LEGACY proposal's head.** Its headline counts per-line client
+ * verdicts and its leader is derived from the legacy watch — neither sentence
+ * is true of a design-services agreement or a furnishings authorization, which
+ * carry their own status blocks and their own acts. The head holds the same
+ * gate `OfferFacets` does (`commercialDocumentExperience(...) === 'legacy'`)
+ * so those editions keep their own voice; on `commercial_readonly` in
+ * particular the wall below prints nothing at all, so a wrong leader here
+ * would have been the document's only act.
+ *
  * Scored ink, no buttons (I107). Overlays are local state over the still-
  * mounted document (D1).
  */
 
 import { useState } from 'react';
-import { useNudgeProposal } from '@/hooks/use-proposals';
+import { useNudgeProposal, useProposal } from '@/hooks/use-proposals';
 import { useFinalizeLeader } from '@/hooks/use-finalize-leader';
+import { commercialDocumentExperience } from '@/lib/document/commercial-documents';
 import { familyLabel } from '@/lib/document/family-label';
 import {
   DocumentAction,
@@ -31,6 +41,8 @@ import {
 import { ProposalPreview } from '../proposal-preview';
 import { SendSheet } from '../overlays/send-sheet';
 
+const HEADLINE_ID = 'finalize-table-heading';
+
 export function FinalizeHead({
   proposalId,
   clientName,
@@ -38,6 +50,8 @@ export function FinalizeHead({
   proposalId: string;
   clientName: string;
 }) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: proposal } = useProposal(proposalId) as { data: any };
   const { headline, leader } = useFinalizeLeader(proposalId, clientName);
   const nudge = useNudgeProposal();
   const [note, setNote] = useState<{
@@ -67,38 +81,35 @@ export function FinalizeHead({
     }
   };
 
+  if (
+    !proposal ||
+    commercialDocumentExperience(proposal.document_kind) !== 'legacy'
+  ) {
+    return null;
+  }
+
   return (
     <div data-finalize-head className="mb-3 mt-1">
       {headline && (
-        <p
+        // A real heading, as the neighbouring region heads print theirs: this
+        // is the table's opening line, not a caption floating outside the
+        // document's heading tree.
+        <h2
+          id={HEADLINE_ID}
           data-finalize-headline
-          className="font-heading text-[1.15rem] leading-snug text-[var(--color-charcoal)]"
+          tabIndex={-1}
+          className="font-heading text-[1.15rem] leading-snug text-[var(--color-charcoal)] outline-none"
         >
           {headline}
-        </p>
+        </h2>
       )}
       {leader && (
         <DocumentActionGroup
           surfaceKey="open-document"
           regionKey="finalize-leader"
           className="mt-0.5"
-          aria-label="The table’s leader"
+          aria-label="The table's leader"
         >
-          {leader.kind === 'answer-flags' && (
-            <DocumentAction
-              actionKey="answer-the-flags"
-              variant="inked"
-              trailing="→"
-              // The Desk's own flagged-lines walk-in, verbatim: `?flagged=1`
-              // makes the Room open the OLDEST unresolved flag, which is the
-              // very line `leader.flaggedItemId` names — one choice, two
-              // readers, so the head and the destination cannot disagree.
-              href={`/drafting/${proposalId}?flagged=1`}
-              data-flagged-line={leader.flaggedItemId ?? undefined}
-            >
-              {leader.label}
-            </DocumentAction>
-          )}
           {leader.kind === 'nudge' && (
             <DocumentAction
               actionKey="nudge-client"

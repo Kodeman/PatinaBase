@@ -422,7 +422,7 @@ describe('the Finalize table (W4a)', () => {
     expect(container.querySelector('[data-finalize-headline]')).toBeNull();
   });
 
-  it('leads with Answer the flags, pointing at the flagged-lines walk-in', () => {
+  it('offers no flag verb — the Room evicts a sent proposal, so the leader falls through', () => {
     mockFeedback = [
       {
         proposal_item_id: 'line-a',
@@ -431,11 +431,68 @@ describe('the Finalize table (W4a)', () => {
         resolved_at: null,
       },
     ];
-    renderPage();
-    const leader = screen.getByRole('link', { name: /Answer the flags/ });
-    expect(leader).toHaveAttribute('href', '/drafting/proposal-live-1?flagged=1');
-    expect(leader).toHaveAttribute('data-action-variant', 'inked');
-    expect(leader).toHaveAttribute('data-flagged-line', 'line-a');
+    const { container } = renderPage();
+
+    expect(screen.queryByText(/Answer the flags/)).not.toBeInTheDocument();
+    expect(
+      container.querySelector('a[href^="/drafting/proposal-live-1?flagged"]'),
+    ).toBeNull();
+    // The next honest verb, and it is still the table's only inked act.
+    expect(screen.getByRole('button', { name: /Preview as Avery Stone/ })).toHaveAttribute(
+      'data-action-variant',
+      'inked',
+    );
+    // The headline still states the flag as a fact — it is the VERB that had
+    // nowhere to go, not the news.
+    expect(
+      container.querySelector('[data-finalize-headline]')!.textContent,
+    ).toBe('0 of 2 approved · 1 flagged');
+  });
+
+  it('counts only unresolved flags in the headline — the leader reads the same number', () => {
+    mockFeedback = [
+      {
+        proposal_item_id: 'line-a',
+        verdict: 'rejected',
+        created_at: '2026-08-12T12:00:00Z',
+        resolved_at: '2026-08-13T12:00:00Z',
+      },
+      {
+        proposal_item_id: 'line-b',
+        verdict: 'approved',
+        created_at: '2026-08-12T12:00:00Z',
+        resolved_at: null,
+      },
+    ];
+    const { container } = renderPage();
+
+    // The flag was answered. A headline still saying "1 flagged" over a leader
+    // that has moved on would be two accounts of one document.
+    expect(
+      container.querySelector('[data-finalize-headline]')!.textContent,
+    ).toBe('1 of 2 approved');
+  });
+
+  it('is the legacy proposal’s head — a design-services agreement keeps its own voice', () => {
+    mockProposal = {
+      ...mockProposal,
+      document_kind: 'design_services',
+      commercial_state: 'sent',
+    };
+    mockFeedback = approvals(2);
+    const { container } = renderPage();
+
+    // The table still composes; its legacy head, leader, Offer seams and shelf
+    // do not — their copy is derived from a lifecycle this edition does not run.
+    expect(container.querySelector('[data-table]')?.getAttribute('data-table')).toBe(
+      'finalize',
+    );
+    expect(container.querySelector('[data-finalize-head]')).toBeNull();
+    expect(container.querySelector('[data-offer-facets]')).toBeNull();
+    expect(container.querySelector('[data-shelf-trigger]')).toBeNull();
+    // …and the letterhead whisper it would have replaced is still printed.
+    const whisper = screen.getByText('2 of 2 approved');
+    expect(whisper.className).toContain('font-mono');
   });
 
   it('leads with the nudge when every line is approved, and tells the wall below', () => {

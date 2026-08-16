@@ -28,7 +28,6 @@ import {
   useProposalPaymentMilestones,
   useProposalPhases,
   useProposalSections,
-  useScopeBuilderSummary,
 } from '@patina/supabase';
 import type {
   ProposalExclusion,
@@ -56,13 +55,9 @@ const OFFER_ACCENT = 'var(--color-clay)';
 
 type OfferFacetId = 'phases' | 'exclusions' | 'payments' | 'terms';
 
-const num = (n: unknown) =>
-  typeof n === 'number' && Number.isFinite(n) ? n : 0;
-
 export function OfferFacets({ proposalId }: { proposalId: string }) {
   const { data: proposal } = useProposal(proposalId) as { data: any };
   const { facets, summary: s } = useDraftingState(proposalId);
-  const { data: scopeSummary } = useScopeBuilderSummary(proposalId);
   const [openFacet, setOpenFacet] = useState<OfferFacetId | null>(null);
 
   const experience = commercialDocumentExperience(proposal?.document_kind);
@@ -75,10 +70,6 @@ export function OfferFacets({ proposalId }: { proposalId: string }) {
   if (!proposal || experience !== 'legacy') return null;
 
   const editable = editability === 'editable';
-  // The allocator's denominator, exactly as the Room computes it.
-  const totalProjectCents =
-    num(scopeSummary?.totalFFEEstimateCents) +
-    num(scopeSummary?.totalDesignFeeCents);
 
   const toggle = (id: OfferFacetId) =>
     setOpenFacet((current) => (current === id ? null : id));
@@ -153,9 +144,15 @@ export function OfferFacets({ proposalId }: { proposalId: string }) {
         onToggle={() => toggle('payments')}
       >
         {editable ? (
+          // Unreachable on this table: the Finalize table composes only for a
+          // proposal already in the client's hands, where the Room's own gate
+          // answers 'issued'. The allocator therefore takes the proposal's own
+          // total — the same denominator the read block below uses — rather
+          // than this component opening a scope-builder query for a branch
+          // that cannot run.
           <PaymentMilestonesBuilder
             proposalId={proposalId}
-            totalCents={totalProjectCents}
+            totalCents={proposal?.total_amount || 0}
           />
         ) : (
           <PaymentsRead

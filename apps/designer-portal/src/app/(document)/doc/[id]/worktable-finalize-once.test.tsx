@@ -14,6 +14,14 @@
  *      leader-weight act, so the watch's "Mark signed" — a verb no derivation
  *      carries — keeps its place and gives up its weight. Flag off it is the
  *      primary it has always been.
+ *
+ *      The rule governs the TABLE's composition, not the paper's fixed
+ *      skeleton (ruled at the W4 review). The letterhead's "Message {family}"
+ *      is chrome — it stands on every document at every stage and answers to
+ *      no table — so it does not count against the table's one leader. The
+ *      letterhead is therefore rendered for real here, not stubbed to null:
+ *      an assertion that only passes because the competing act was mocked away
+ *      proves the mock, not the rule.
  */
 import { fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -185,7 +193,9 @@ jest.mock('@/components/document/roster/call-sheet-mount', () => ({
 jest.mock('@/components/document/doc-spine', () => ({
   DocSpine: ({ shelved }: { shelved: ReactNode }) => <div data-spine>{shelved}</div>,
 }));
-jest.mock('@/components/document/doc-letterhead', () => ({ DocLetterhead: () => null }));
+/* DocLetterhead and LetterheadInstruments are NOT stubbed — see the header
+   note: the letterhead's own `primary` is the act the scoped assertion below
+   has to survive. */
 jest.mock('@/components/document/doc-colophon', () => ({ DocColophon: () => null }));
 jest.mock('@/components/document/previous-work', () => ({ PreviousWork: () => null }));
 jest.mock('@/components/document/brief-section', () => ({ BriefSection: () => null }));
@@ -205,9 +215,6 @@ jest.mock('@/components/document/folio-strip', () => ({
 }));
 jest.mock('@/components/document/mobile/mobile-margin-chips', () => ({
   MobileMarginChips: () => null,
-}));
-jest.mock('@/components/document/letterhead-instruments', () => ({
-  LetterheadInstruments: () => null,
 }));
 jest.mock('@/components/document/section-stage-line-mount', () => ({
   SectionStageLineMount: () => null,
@@ -454,10 +461,12 @@ describe('the Finalize table says each thing once (W4 integration)', () => {
 
   /* ── Ruling 2 — one leader per table. ───────────────────────────────────── */
 
-  it('carries exactly one leader-weight act across the whole table', () => {
+  it('carries exactly one leader-weight act across the table’s composition', () => {
     const { container } = renderPage();
 
-    const leaders = container.querySelectorAll(
+    const table = container.querySelector('[data-table="finalize"]')!;
+    expect(table).not.toBeNull();
+    const leaders = table.querySelectorAll(
       '[data-action-variant="inked"], [data-action-variant="primary"]',
     );
     expect(leaders).toHaveLength(1);
@@ -467,6 +476,21 @@ describe('the Finalize table says each thing once (W4 integration)', () => {
       'data-action-variant',
       'secondary',
     );
+  });
+
+  it('does not count the fixed skeleton’s chrome against the table', () => {
+    const { container } = renderPage();
+
+    // The letterhead is rendered, and it carries a `primary` of its own —
+    // "Message {family}" stands on every document at every stage. It sits
+    // OUTSIDE the composed table, which is why the rule is scoped there.
+    const letterheadLeader = screen.getByRole('button', {
+      name: /Message Avery Stone/,
+    });
+    expect(letterheadLeader).toHaveAttribute('data-action-variant', 'primary');
+    expect(
+      container.querySelector('[data-table="finalize"]')!.contains(letterheadLeader),
+    ).toBe(false);
   });
 
   it('keeps Mark signed the primary it has always been with the flag off', () => {

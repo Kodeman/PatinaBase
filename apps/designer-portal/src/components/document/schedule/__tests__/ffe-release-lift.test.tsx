@@ -200,6 +200,33 @@ describe('the release lift — the schedule’s half', () => {
     expect(offered).toHaveBeenLastCalledWith(false);
   });
 
+  it('keeps the entry, disabled, in the window where the lift does not render', () => {
+    // An authority stands behind the project, but the one line is blocked: the
+    // lift is gated on `releaseOffered` and so prints nothing. If the head
+    // deleted its entry too, the verb — and the only account of why it cannot
+    // be pressed — would exist on no surface at all.
+    mockItems = [line({ blocked: true })];
+    const offered = jest.fn();
+    render(
+      <FFESection
+        projectId="project-1"
+        projectName="Ellsworth"
+        mode="project"
+        releaseLeaderElsewhere
+        onReleaseOffered={offered}
+      />,
+    );
+
+    expect(offered).toHaveBeenLastCalledWith(false);
+    const entry = screen.getByRole('button', {
+      name: 'Release for authorization',
+    });
+    expect(entry).toBeDisabled();
+    expect(
+      screen.getByText('No lines are currently eligible for release.'),
+    ).toBeInTheDocument();
+  });
+
   it('leaves the head alone when no other head has taken the leader', () => {
     render(
       <FFESection projectId="project-1" projectName="Ellsworth" mode="project" />,

@@ -85,14 +85,17 @@ describe('the wall stands down what the table’s head has taken', () => {
     mockFeedback = approvals(2);
   });
 
-  it('drops the send-wall nudge — and its dangling dash — when the head carries it', () => {
+  it('drops the send-wall nudge when the head carries it, and names the state instead', () => {
     renderWall({ onFinalizeTable: true });
     expect(
       screen.queryByRole('button', { name: /Nudge Avery Stone/ }),
     ).not.toBeInTheDocument();
     const line = screen.getByLabelText('Proposal state');
-    expect(line.textContent).not.toContain('—');
     expect(line.textContent).toContain('Sent');
+    // The head took the verb, not the news: without the state word the wall
+    // read "Sent 5 days ago" over a row with nothing in it.
+    expect(line.textContent).toContain('awaiting the client’s signature');
+    expect(line.textContent).toContain('—');
     expect(mockWatchProps).toHaveBeenCalledWith('nudge');
   });
 

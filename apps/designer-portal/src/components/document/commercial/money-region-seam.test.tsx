@@ -128,7 +128,7 @@ describe('the Money seam, on the Delivery table', () => {
     ).toBe('0');
   });
 
-  it('stands open by declaration, not by data — a quiet project seams too', () => {
+  it('folds by declaration, not by data — a quiet project seams too', () => {
     mockInstruments = { data: [], isLoading: false, error: null };
     mockBudget = { data: { version: null }, isLoading: false, error: null };
     mockAccount = { data: null, isLoading: false, isError: false };
@@ -138,5 +138,62 @@ describe('the Money seam, on the Delivery table', () => {
     expect(screen.getByRole('button', { name: /unfold/i })).toHaveTextContent(
       '$0 committed of $80,000 authority',
     );
+  });
+
+  it('states no figure before its reads settle — the declaration waits', () => {
+    // The authority is still in flight. A seam that stood now would print
+    // "$0 committed · no authority yet" and then flip to the truth, which is
+    // the same lie the region's own tiers refuse to tell.
+    mockAuthority = { data: undefined, isLoading: true, error: null };
+
+    render(<MoneyRegion projectId="project-1" tableSeam />);
+
+    expect(screen.queryByRole('button', { name: /unfold/i })).toBeNull();
+    // The seam's own sentence, in the shape it would have had: never printed.
+    expect(
+      screen.queryByText('$0 committed · no authority yet'),
+    ).not.toBeInTheDocument();
+    // The region stands as it does anywhere unsettled: each tier printing its
+    // name and no figure.
+    expect(screen.getByText('Authority')).toBeInTheDocument();
+  });
+
+  it('will not fold over money that is chasing the designer', () => {
+    // One drawn, unpaid invoice. The declared fold would hide it — and on this
+    // table the accounts have no other home, because the money region IS the
+    // accounts surface on the project spread.
+    mockAccount = {
+      data: {
+        committedCents: 900_000,
+        milestones: [
+          { invoice_id: 'invoice-1', paid_at: null, status: 'outstanding' },
+        ],
+      },
+      isLoading: false,
+      isError: false,
+    };
+
+    render(<MoneyRegion projectId="project-1" tableSeam />);
+
+    expect(screen.queryByRole('button', { name: /unfold/i })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Design authority' })).toBeVisible();
+    expect(screen.getByText('Account band')).toBeInTheDocument();
+  });
+
+  it('folds over milestones that are neither drawn against nor outstanding', () => {
+    mockAccount = {
+      data: {
+        committedCents: 900_000,
+        milestones: [{ invoice_id: null, paid_at: null, status: 'upcoming' }],
+      },
+      isLoading: false,
+      isError: false,
+    };
+
+    render(<MoneyRegion projectId="project-1" tableSeam />);
+
+    // A schedule with nothing drawn and nothing owed is quiet, so the
+    // declaration governs and the seam stands.
+    expect(screen.getByRole('button', { name: /unfold/i })).toBeInTheDocument();
   });
 });

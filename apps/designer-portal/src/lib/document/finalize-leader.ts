@@ -9,7 +9,7 @@
  * the client's per-line verdicts (the roll-up), and the send wall's own
  * nudge decision.
  *
- * Two rules the matrix below enforces rather than re-litigates:
+ * Three rules the matrix below enforces rather than re-litigates:
  *
  *   · The nudge is NEVER decided here. `deriveSendWallLine` (W1) already owns
  *     the issued-on-paper guard, the countersign hold and the three-day
@@ -21,9 +21,18 @@
  *     mind travels as a design services agreement, not a cloned revision. No
  *     leader in this table resurrects it.
  *
- * Every verb returned exists on the document today — the watch's Preview and
- * Email-delivery acts, the send wall's nudge, and the Desk's flagged-lines
- * walk-in. Pure, React-free, unit-testable (the proposal-watch-derivation
+ *   · **The flags get no leader.** W4a led with "Answer the flags", walking to
+ *     the Drafting Room's `?flagged=1` entry. The Room evicts a sent or viewed
+ *     proposal ("already been issued"), so the verb bounced — and no surface
+ *     anywhere today can answer a flag on a sent proposal, main's Desk walk-in
+ *     included. A leader that cannot be followed is worse than no leader, so
+ *     the matrix falls through to its next honest verb and the missing answer
+ *     surface is recorded as a product debt (I140-errata) rather than papered
+ *     over.
+ *
+ * Every verb returned exists on the document today and can actually be
+ * followed: the watch's Preview and Email-delivery acts, and the send wall's
+ * nudge. Pure, React-free, unit-testable (the proposal-watch-derivation
  * precedent).
  */
 
@@ -33,18 +42,11 @@ import {
   type ProposalWatchModel,
 } from './proposal-watch-derivation';
 
-export type FinalizeLeaderKind =
-  | 'answer-flags'
-  | 'nudge'
-  | 'preview'
-  | 'resend';
+export type FinalizeLeaderKind = 'nudge' | 'preview' | 'resend';
 
 export interface FinalizeLeader {
   kind: FinalizeLeaderKind;
   label: string;
-  /** Only on 'answer-flags': the line the walk-in unfolds. Null when the
-   *  verdicts say lines are flagged but no line id came back with them. */
-  flaggedItemId: string | null;
 }
 
 export interface FinalizeLeaderInput {
@@ -55,8 +57,6 @@ export interface FinalizeLeaderInput {
   issuedOnPaper: boolean;
   /** The client's verdicts, folded (rollupVerdicts). */
   rollup: VerdictRollup;
-  /** The oldest unresolved rejection's `proposal_item_id`. */
-  firstFlaggedItemId: string | null;
   /** `familyLabel(clientName)` — the household as every other wall says it. */
   family: string;
 }
@@ -76,7 +76,6 @@ export function deriveFinalizeLeader(
     commercialState,
     issuedOnPaper,
     rollup,
-    firstFlaggedItemId,
     family,
   }: FinalizeLeaderInput,
   now: Date,
@@ -92,15 +91,6 @@ export function deriveFinalizeLeader(
   // leader rather than a verb aimed at a document nobody has sent.
   if (!watch.awaitingClient && !watch.terminal) return null;
 
-  // The client asked for changes: that is the work, ahead of any reminder.
-  if (rollup.unresolvedFlags > 0) {
-    return {
-      kind: 'answer-flags',
-      label: 'Answer the flags',
-      flaggedItemId: firstFlaggedItemId,
-    };
-  }
-
   // Everything approved and still unsigned — the only thing left is to ask.
   // The asking is the send wall's decision, not this one.
   const everyLineApproved = rollup.total > 0 && rollup.approved === rollup.total;
@@ -110,40 +100,15 @@ export function deriveFinalizeLeader(
       now,
     );
     if (wall?.verb === 'nudge') {
-      return { kind: 'nudge', label: `Nudge ${family}`, flaggedItemId: null };
+      return { kind: 'nudge', label: `Nudge ${family}` };
     }
   }
 
-  // Nothing to answer and no reminder available: the leader is the watch's own
+  // No reminder available: the leader is the watch's own
   // act for this state — the delivery record once it has expired, the client's
   // copy while it is still out.
   if (watch.terminal) {
-    return {
-      kind: 'resend',
-      label: 'Email delivery status',
-      flaggedItemId: null,
-    };
+    return { kind: 'resend', label: 'Email delivery status' };
   }
-  return { kind: 'preview', label: `Preview as ${family}`, flaggedItemId: null };
-}
-
-/** The oldest unresolved rejection's line — the Drafting Room's own choice
- *  (drafting-room.tsx's `firstFlaggedItemId`), addressable so the leader and
- *  the walk-in it opens cannot pick different lines. */
-export function firstFlaggedLineId(
-  feedback: readonly {
-    verdict: string;
-    resolved_at?: string | null;
-    proposal_item_id?: string | null;
-    created_at: string;
-  }[],
-): string | null {
-  const open = feedback.filter(
-    (f) => f.verdict === 'rejected' && !f.resolved_at && f.proposal_item_id,
-  );
-  if (open.length === 0) return null;
-  return (
-    open.reduce((a, b) => (a.created_at <= b.created_at ? a : b))
-      .proposal_item_id ?? null
-  );
+  return { kind: 'preview', label: `Preview as ${family}` };
 }

@@ -130,7 +130,7 @@ export function ProposalWatch({
    *  to the table's inked leader. The watch stands that one act down so the
    *  offer is made once; everything else it carries stays exactly where it is.
    *  Null with the flag off and on every other table. */
-  hoistedLeader?: 'nudge' | 'preview' | 'resend' | 'answer-flags' | null;
+  hoistedLeader?: 'nudge' | 'preview' | 'resend' | null;
   /** W4a — one leader per table. On the Finalize table the head's derived
    *  leader is the table's leader-weight act, so "Mark signed" — which is not
    *  a verb that derivation can carry — keeps its place and its wording and

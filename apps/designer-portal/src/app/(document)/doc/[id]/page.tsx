@@ -108,6 +108,7 @@ import { deriveGates, nearestOpenGate } from '@/lib/document/workflow-gate';
 import {
   asCommercialDocumentKind,
   asCommercialState,
+  commercialDocumentExperience,
 } from '@/lib/document/commercial-documents';
 import { useDraftingState } from '@/hooks/use-drafting-state';
 import {
@@ -979,10 +980,21 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // read on this page stays on the live row.
   const table = worktableOn ? tablePin.composition : null;
   const spreadSection = table ? table.section : row.active_section;
-  // W4a — the Finalize table: the proposal in the client's hands. Its head, its
-  // leader, its Offer facets and its one shelf stand only here.
+  // W4a — the Finalize table: the LEGACY proposal in the client's hands. Its
+  // head, its leader, its Offer facets and its one shelf stand only here.
+  //
+  // The document-kind gate is load-bearing, not decoration: the head's headline
+  // counts per-line client verdicts and its leader is derived from the legacy
+  // watch, and neither is a sentence a design-services agreement or a
+  // furnishings authorization can say. Without it those editions lost the
+  // letterhead's verdict whisper (stood down for a head that was speaking the
+  // wrong language), and on `commercial_readonly` — where ProposalInstruments
+  // prints nothing at all — the wrong leader was the document's only act. Same
+  // predicate `OfferFacets` holds one component down.
   const finalizeTable =
-    table?.table === 'finalize' && row.engagement_kind === 'proposal';
+    table?.table === 'finalize' &&
+    row.engagement_kind === 'proposal' &&
+    commercialDocumentExperience(liveProposal?.document_kind) === 'legacy';
   // The one shelf a proposal document has. The project's shelved spine has its
   // own subjects and its own gate; these two never stand at once.
   const finalizeShelvedSpine =
@@ -1235,11 +1247,14 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             {/* W4c — Table I's spread header: the household chip promoted into
                 the spread. Printed identity only (Q6). Mounted only on the
                 composed Intake table — `table` is null with the flag off, so
-                the flag off is byte-identical — and the component holds the
-                same gate as its own law. */}
+                the flag off is byte-identical — and only on the DISCOVERY
+                spread, because on the brief spread BriefSection prints the same
+                three facts immediately below. The component holds both gates as
+                its own law. */}
             {table?.table === 'intake' && (
               <IntakeSpreadHeader
                 table={table.table}
+                section={spreadSection}
                 leadId={row.lead_id}
                 clientName={row.client_name}
               />

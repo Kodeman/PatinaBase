@@ -1,9 +1,13 @@
 /**
- * The Finalize table's leader matrix (Start to Signature W4a).
+ * The Finalize table's leader matrix (Start to Signature W4a, corrected at the
+ * W4 review).
  *
- * The point of this spec is the ORDER of the matrix and its two hard rules:
+ * The point of this spec is the ORDER of the matrix and its three hard rules:
  * the nudge is never decided here (deriveSendWallLine owns the paper guard and
- * the cooldown), and Revise never comes back.
+ * the cooldown), Revise never comes back, and the flags get no leader at all —
+ * the Room evicts a sent proposal, so "Answer the flags" bounced, and nothing
+ * else on the document can answer a flag either. A flagged proposal therefore
+ * falls through to the next honest verb.
  */
 
 import { rollupVerdicts } from '@patina/utils';
@@ -11,7 +15,6 @@ import type { VerdictRollup } from '@patina/utils';
 import { deriveProposalWatch } from '../proposal-watch-derivation';
 import {
   deriveFinalizeLeader,
-  firstFlaggedLineId,
   type FinalizeLeaderInput,
 } from '../finalize-leader';
 
@@ -50,7 +53,6 @@ function leaderFor(overrides: Partial<FinalizeLeaderInput> = {}) {
       commercialState: null,
       issuedOnPaper: false,
       rollup: emptyRollup,
-      firstFlaggedItemId: null,
       family: 'the Chens',
       ...overrides,
     },
@@ -75,26 +77,34 @@ describe('deriveFinalizeLeader', () => {
     expect(leaderFor()).toEqual({
       kind: 'preview',
       label: 'Preview as the Chens',
-      flaggedItemId: null,
     });
   });
 
-  it('leads with the flags, anchored to the first flagged line, ahead of everything else', () => {
+  it('offers no flag verb — it falls through to the watch’s own Preview act', () => {
     const rollup = rollupVerdicts(4, [
       { lineId: 'line-a', verdict: 'rejected', createdAt: '2026-08-12T12:00:00Z' },
       { lineId: 'line-b', verdict: 'approved', createdAt: '2026-08-12T12:00:00Z' },
     ]);
     expect(rollup.unresolvedFlags).toBe(1);
-    expect(
-      leaderFor({ rollup, firstFlaggedItemId: 'line-a' }),
-    ).toEqual({
-      kind: 'answer-flags',
-      label: 'Answer the flags',
-      flaggedItemId: 'line-a',
-    });
+    // W4a led with "Answer the flags" into `/drafting/<id>?flagged=1`. The Room
+    // evicts a sent proposal, so the verb bounced; nothing on the document can
+    // answer a flag today, so the leader offers an act that can be followed.
+    const leader = leaderFor({ rollup });
+    expect(leader).toEqual({ kind: 'preview', label: 'Preview as the Chens' });
+    expect(JSON.stringify(leader)).not.toMatch(/flag/i);
   });
 
-  it('does not lead with flags a designer has already resolved', () => {
+  it('does not treat an unsigned all-but-flagged proposal as approved', () => {
+    // Dropping the flag verb must not promote the nudge in its place: a
+    // rejected line is not consent, and the nudge's own gate still holds.
+    const rollup = rollupVerdicts(2, [
+      { lineId: 'line-a', verdict: 'rejected', createdAt: '2026-08-12T12:00:00Z' },
+      { lineId: 'line-b', verdict: 'approved', createdAt: '2026-08-12T12:00:00Z' },
+    ]);
+    expect(leaderFor({ rollup })?.kind).toBe('preview');
+  });
+
+  it('reads resolved and unresolved flags alike now — neither leads', () => {
     const rollup = rollupVerdicts(2, [
       {
         lineId: 'line-a',
@@ -113,7 +123,6 @@ describe('deriveFinalizeLeader', () => {
     expect(leaderFor({ rollup: allApproved(3) })).toEqual({
       kind: 'nudge',
       label: 'Nudge the Chens',
-      flaggedItemId: null,
     });
   });
 
@@ -169,11 +178,7 @@ describe('deriveFinalizeLeader', () => {
 
   it('offers the delivery record on an expired proposal, and never a Revise', () => {
     const leader = leaderFor({ watch: watchFor({ status: 'expired' }) });
-    expect(leader).toEqual({
-      kind: 'resend',
-      label: 'Email delivery status',
-      flaggedItemId: null,
-    });
+    expect(leader).toEqual({ kind: 'resend', label: 'Email delivery status' });
     expect(JSON.stringify(leader)).not.toMatch(/revise/i);
   });
 
@@ -181,51 +186,12 @@ describe('deriveFinalizeLeader', () => {
     expect(leaderFor({ watch: watchFor({ status: 'draft' }) })).toBeNull();
   });
 
-  it('answers the flags even on an expired proposal — the flags are the work', () => {
+  it('still offers the delivery record on an expired proposal with flags open', () => {
     const rollup = rollupVerdicts(2, [
       { lineId: 'line-a', verdict: 'rejected', createdAt: '2026-08-12T12:00:00Z' },
     ]);
     expect(
       leaderFor({ watch: watchFor({ status: 'expired' }), rollup })?.kind,
-    ).toBe('answer-flags');
-  });
-});
-
-describe('firstFlaggedLineId', () => {
-  it('picks the OLDEST unresolved rejection — the Drafting Room’s own choice', () => {
-    expect(
-      firstFlaggedLineId([
-        {
-          verdict: 'rejected',
-          created_at: '2026-08-13T12:00:00Z',
-          proposal_item_id: 'newer',
-        },
-        {
-          verdict: 'rejected',
-          created_at: '2026-08-11T12:00:00Z',
-          proposal_item_id: 'older',
-        },
-        {
-          verdict: 'rejected',
-          created_at: '2026-08-09T12:00:00Z',
-          resolved_at: '2026-08-10T12:00:00Z',
-          proposal_item_id: 'handled',
-        },
-        {
-          verdict: 'approved',
-          created_at: '2026-08-08T12:00:00Z',
-          proposal_item_id: 'fine',
-        },
-      ]),
-    ).toBe('older');
-  });
-
-  it('is null when nothing is flagged', () => {
-    expect(firstFlaggedLineId([])).toBeNull();
-    expect(
-      firstFlaggedLineId([
-        { verdict: 'approved', created_at: '2026-08-08T12:00:00Z', proposal_item_id: 'x' },
-      ]),
-    ).toBeNull();
+    ).toBe('resend');
   });
 });

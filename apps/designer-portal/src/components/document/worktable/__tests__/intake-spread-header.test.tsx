@@ -1,10 +1,11 @@
 /**
  * Table I's spread header prints who this is and how they arrived — and
- * nothing else. What it must do: print name / description / arrival for a
- * lead doc and a discovery doc; print nothing when identity is absent, when
- * the flag is off (no table), or on a non-intake table; wait for the lead
- * rather than growing after first paint; and offer no act of any kind (Q6 —
- * printed identity, not a control surface).
+ * nothing else. What it must do: print name / description / arrival on the
+ * DISCOVERY spread, where nothing else states them; print nothing on the brief
+ * spread, where BriefSection prints all three off the same lead row; print
+ * nothing when identity is absent, when the flag is off (no table), or on a
+ * non-intake table; wait for the lead rather than growing after first paint;
+ * and offer no act of any kind (Q6 — printed identity, not a control surface).
  */
 import { render } from '@testing-library/react';
 
@@ -43,6 +44,7 @@ function header(
   return render(
     <IntakeSpreadHeader
       table="intake"
+      section="discovery"
       leadId="lead-1"
       clientName="Marion Ellsworth"
       {...props}
@@ -57,7 +59,7 @@ beforeEach(() => {
 });
 
 describe('IntakeSpreadHeader', () => {
-  it('prints name, description and arrival for a lead doc', () => {
+  it('prints name, description and arrival on the discovery spread', () => {
     mockLead = CAPTURED_LEAD;
     const { container } = header();
 
@@ -67,6 +69,18 @@ describe('IntakeSpreadHeader', () => {
       'Full refresh of a 1920s Tudor — living room first.',
     );
     expect(root.textContent).toContain('Referral — the Hartley project');
+  });
+
+  it('prints nothing on the brief spread — BriefSection states all three below', () => {
+    // Contact name, source and project description are exactly what
+    // brief-section.tsx prints, off the same `useLead` row, immediately under
+    // this header. Two printings of one fact is two documents.
+    mockLead = CAPTURED_LEAD;
+    const { container } = header({ section: 'brief' });
+
+    expect(container.firstChild).toBeNull();
+    // And it costs nothing on the wire there either.
+    expect(useLead).toHaveBeenCalledWith('');
   });
 
   it('prints the profile name and the honest inbound arrival for a discovery doc', () => {
