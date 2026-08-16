@@ -21,14 +21,18 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Library } from "lucide-react";
 import {
   useAddProposalItem,
   useCrossLayerSearch,
-  useProposalScheduleItems,
   type LayerProductLayer,
   type LayerProductRow,
 } from "@patina/supabase";
+import {
+  reachInDocCodesKey,
+  useReachInDocCodes,
+} from "./use-reach-in-doc-codes";
 import { DocSheet } from "../overlays/doc-sheet";
 import { buildProposalItemFromPick } from "@/components/portal/scope-builder/build-proposal-item-from-pick";
 import type { ProductPickResult } from "@/components/portal/proposals/product-picker-modal";
@@ -85,14 +89,13 @@ export function LibraryReachIn({ proposalId }: { proposalId: string }) {
   const sheetInputRef = useRef<HTMLInputElement | null>(null);
 
   const addItem = useAddProposalItem();
+  const queryClient = useQueryClient();
   const refreshDraftingSummary = useDraftingFacetInvalidation(proposalId);
-  // Slim doc-code projection — the same source the facet's suggestion reads,
-  // refreshed by useAddProposalItem's own invalidation after each add.
-  const { data: scheduleItems } = useProposalScheduleItems(proposalId);
-  const existingDocCodes = useMemo(
-    () => (scheduleItems ?? []).map((item) => item.doc_code),
-    [scheduleItems],
-  );
+  // The taken doc codes, on the reach-in's OWN key (F1): the schedule query
+  // hash is shared by two different projections and this surface co-mounts
+  // both — see use-reach-in-doc-codes. handleAdd refreshes it after each add,
+  // since no shared invalidation reaches this key.
+  const { data: existingDocCodes = [] } = useReachInDocCodes(proposalId);
 
   useEffect(() => {
     const normalized = query.trim();
@@ -172,6 +175,12 @@ export function LibraryReachIn({ proposalId }: { proposalId: string }) {
           return next;
         });
         setStatus(`${row.name} · added to the scheme`);
+        // The taken-codes read lives on its own key (F1), outside every
+        // shared invalidation prefix — refresh it here or the next suggested
+        // doc code could collide with the line just added.
+        void queryClient.invalidateQueries({
+          queryKey: reachInDocCodesKey(proposalId),
+        });
         return refreshDraftingSummary();
       })
       .catch(() => {
@@ -187,7 +196,12 @@ export function LibraryReachIn({ proposalId }: { proposalId: string }) {
 
   return (
     <div data-library-reach-in className="w-full">
-      <div className={lineClass}>
+      {/* While the sheet is laid the outer line is hidden from assistive
+          tech and the tab order (F8) — one search field, not two with the
+          same label. It keeps the live query as its value (F3): a keystroke
+          landing here in the pre-focus window builds target.value from what
+          is shown, so an emptied control would clobber the typed prefix. */}
+      <div className={lineClass} aria-hidden={sheetOpen || undefined}>
         <span
           aria-hidden
           className="shrink-0 font-mono text-[13px] text-[var(--color-quiet-ink)]"
@@ -196,11 +210,12 @@ export function LibraryReachIn({ proposalId }: { proposalId: string }) {
         </span>
         <input
           type="search"
-          value={sheetOpen ? "" : query}
+          value={query}
           onChange={(event) => onQueryChange(event.target.value)}
           aria-label="Reach into the library"
           placeholder="Reach into the library…"
           data-testid="library-reach-in-line"
+          tabIndex={sheetOpen ? -1 : undefined}
           className={inputClass}
         />
       </div>

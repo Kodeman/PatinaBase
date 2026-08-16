@@ -158,6 +158,26 @@ describe('RoomsRail', () => {
     expect(screen.getByRole('button', { name: '+ Add a room' })).toBeInTheDocument();
   });
 
+  it('releases a held id the room list no longer contains — a supersede remints ids', () => {
+    const onChange = jest.fn();
+    rail({ value: 'room-reminted-away', onChange });
+
+    expect(onChange).toHaveBeenCalledWith(null);
+    // A dead id marks no segment held — the parent's null then lights "All".
+    const pressed = screen
+      .getAllByRole('button')
+      .filter((b) => b.getAttribute('aria-pressed') === 'true');
+    expect(pressed).toEqual([]);
+  });
+
+  it('never releases while the room read is still in flight', () => {
+    mockRoomsResult = { data: [], isLoading: true };
+    const onChange = jest.fn();
+    rail({ value: 'room-1', onChange });
+
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
   it('carries no width-gated hiding anywhere — A7: the rail persists at all widths', () => {
     const { container } = rail({ value: 'room-1' });
 

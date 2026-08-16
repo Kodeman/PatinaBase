@@ -40,7 +40,7 @@ export function Scheme({ proposalId, roomFilter = null }: SchemeProps) {
           renderEmptyLead={(openAddItem) => (
             <div data-scheme-empty className="py-3">
               <DocumentActionGroup
-                surfaceKey="worktable"
+                surfaceKey="open-document"
                 regionKey="scheme"
                 aria-label="Start the scheme"
               >

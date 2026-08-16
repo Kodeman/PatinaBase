@@ -26,7 +26,7 @@
  * flow: useAddScopeRoom, then the facet's scopeUpdated('add') analytics event.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAddScopeRoom, useProposalScopeRooms } from '@patina/supabase';
 import { proposalEvents } from '@/lib/analytics';
 
@@ -51,6 +51,20 @@ export function RoomsRail({
   const addRoom = useAddScopeRoom();
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
+
+  // A chain supersede remints scope-room ids while the page's remount key is
+  // the chain-root route id, so a held id can die under the hold. A held room
+  // the settled list no longer contains is treated as released — reported
+  // once, so the parent's filters go null and "All" stands, instead of a lens
+  // pointing at a room nobody can see. Never while the read is still loading:
+  // an empty in-flight list says nothing about the held room.
+  const dead =
+    !isLoading &&
+    value !== null &&
+    !(rooms as RailRoom[]).some((room) => room.id === value);
+  useEffect(() => {
+    if (dead) onChange(null);
+  }, [dead, onChange]);
 
   if (isLoading) return null;
 

@@ -8914,5 +8914,18 @@ ending in its own `scopeUpdated('add')` event).
   the lensed group first, and both the scheme's spec and the integration spec
   pin that). Document positions are untouched: a drag under the lens still
   rewrites from the canonical group order, never the lifted view.
+- *The reach-in drops the piece's category.* Its creation call passes
+  `ffeCategorySlug: null`, so a reached-in line lands uncategorized and its
+  doc code falls back to the name prefix instead of a category code.
+  Categorizing at the reach is a follow-on.
+- *The Scheme omits the verdict chips and the compose-decision wiring.*
+  Direction-stage client verdicts do not print on the paper — the builder
+  mounts without the Drafting Room facet's verdict read. Deliberate scope;
+  the named follow-on is bringing that read to the table.
+- *A chain supersede remints scope-room ids under a standing hold* — the
+  page's remount key is the chain-root route id, so the remap arrives without
+  a fresh mount. The rail treats a held id its settled room list no longer
+  contains as released: reported once, the filters go null, "All" stands. A
+  lens is dropped, never left pointing at a room nobody can see.
 
 *Entries add: I139 · last id = I139*

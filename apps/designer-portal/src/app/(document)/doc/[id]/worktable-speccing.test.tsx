@@ -34,7 +34,7 @@ jest.mock('next/navigation', () => ({
 
 const mockScopeRoomsHook = jest.fn();
 const mockBoardsHook = jest.fn();
-const mockScheduleItemsHook = jest.fn();
+const mockDocCodesHook = jest.fn();
 const mockItemsEq = jest.fn();
 let mockItems: any[] = [];
 let mockBoards: any[] = [];
@@ -126,10 +126,6 @@ jest.mock('@patina/supabase', () => ({
   /* the reach-in (library-reach-in.test.tsx pattern) */
   useCrossLayerSearch: () => ({ data: undefined, isLoading: false, isError: false }),
   useAddProposalItem: () => ({ mutateAsync: jest.fn(), isPending: false }),
-  useProposalScheduleItems: (proposalId: string) => {
-    mockScheduleItemsHook(proposalId);
-    return { data: [] };
-  },
   /* the scheme's builder (scheme.test.tsx pattern) */
   useFFECategories: () => ({ data: [] }),
   useConsumeCapture: () => ({ mutate: jest.fn(), isPending: false }),
@@ -148,6 +144,16 @@ jest.mock('@patina/supabase', () => ({
       }),
     }),
   }),
+}));
+
+/* The reach-in's taken-codes read — its own key by design (F1); the key
+   factory stays real so the seam matches the shipped one. */
+jest.mock('@/components/document/worktable/use-reach-in-doc-codes', () => ({
+  ...jest.requireActual('@/components/document/worktable/use-reach-in-doc-codes'),
+  useReachInDocCodes: (proposalId: string) => {
+    mockDocCodesHook(proposalId);
+    return { data: [] };
+  },
 }));
 
 jest.mock('@/hooks/use-proposals', () => ({
@@ -515,13 +521,13 @@ describe('the Speccing table, tooled (W3)', () => {
     await screen.findByText('A mohair sofa');
 
     // The rail and the scheme's builder read scope rooms; the strip reads
-    // boards; the reach-in reads the schedule projection; the scheme's line
-    // read filters on proposal_id. All on the live proposal's own id.
+    // boards; the reach-in reads its taken-codes projection; the scheme's
+    // line read filters on proposal_id. All on the live proposal's own id.
     expect(mockScopeRoomsHook).toHaveBeenCalledWith('proposal-live-1');
     expect(mockBoardsHook).toHaveBeenCalledWith('proposal-live-1');
-    expect(mockScheduleItemsHook).toHaveBeenCalledWith('proposal-live-1');
+    expect(mockDocCodesHook).toHaveBeenCalledWith('proposal-live-1');
     expect(mockItemsEq).toHaveBeenCalledWith('proposal_id', 'proposal-live-1');
-    for (const spy of [mockScopeRoomsHook, mockBoardsHook, mockScheduleItemsHook]) {
+    for (const spy of [mockScopeRoomsHook, mockBoardsHook, mockDocCodesHook]) {
       expect(spy).not.toHaveBeenCalledWith('chain-root-1');
     }
   });
