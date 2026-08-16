@@ -947,6 +947,589 @@ EXCEPTION WHEN OTHERS THEN
 END
 $reassignment_revocation_race$;
 
+DO $atomic_invoice_lock_probes$
+DECLARE
+  v_conninfo text := format(
+    'hostaddr=%s port=%s dbname=postgres user=postgres password=postgres',
+    COALESCE(inet_server_addr()::text, '127.0.0.1'), inet_server_port()
+  );
+  v_first_invoice_id text;
+  v_second_invoice_id text;
+  v_status text;
+  v_worker_pid integer;
+  v_waiting boolean := false;
+  v_attempt integer;
+  v_invoice_count integer;
+  v_line_count integer;
+  v_latched_invoice_id text;
+BEGIN
+  PERFORM extensions.dblink_connect('d485_atomic_setup', v_conninfo);
+  PERFORM extensions.dblink_exec(
+    'd485_atomic_setup', 'SET session_replication_role = replica'
+  );
+  PERFORM extensions.dblink_exec(
+    'd485_atomic_setup',
+    $cleanup$
+      DELETE FROM public.invoice_line_items
+      WHERE invoice_id IN (
+        SELECT id FROM public.invoices
+        WHERE project_id::text LIKE 'd485c200-%'
+      );
+      DELETE FROM public.invoices
+      WHERE project_id::text LIKE 'd485c200-%';
+      DELETE FROM public.project_payment_milestones
+      WHERE project_id::text LIKE 'd485c200-%';
+      DELETE FROM public.projects WHERE id::text LIKE 'd485c200-%';
+      DELETE FROM public.organization_members
+      WHERE organization_id::text LIKE 'd485c100-%';
+      DELETE FROM public.organizations WHERE id::text LIKE 'd485c100-%';
+      DELETE FROM public.user_roles
+      WHERE role_id = 'd485c900-0000-4000-8000-000000000001';
+      DELETE FROM public.roles
+      WHERE id = 'd485c900-0000-4000-8000-000000000001';
+      DELETE FROM public.profiles WHERE id::text LIKE 'd485c000-%';
+      DELETE FROM auth.users WHERE id::text LIKE 'd485c000-%';
+    $cleanup$
+  );
+  PERFORM extensions.dblink_exec(
+    'd485_atomic_setup', 'SET session_replication_role = origin'
+  );
+  PERFORM extensions.dblink_exec(
+    'd485_atomic_setup',
+    $setup$
+      INSERT INTO auth.users (
+        id, email, encrypted_password, email_confirmed_at, created_at,
+        updated_at, instance_id, aud, role
+      ) VALUES
+        (
+          'd485c000-0000-4000-8000-000000000001',
+          'd485-atomic-lead@test.invalid', '', now(), now(), now(),
+          '00000000-0000-0000-0000-000000000000',
+          'authenticated', 'authenticated'
+        ),
+        (
+          'd485c000-0000-4000-8000-000000000002',
+          'd485-atomic-member@test.invalid', '', now(), now(), now(),
+          '00000000-0000-0000-0000-000000000000',
+          'authenticated', 'authenticated'
+        ),
+        (
+          'd485c000-0000-4000-8000-000000000003',
+          'd485-atomic-client@test.invalid', '', now(), now(), now(),
+          '00000000-0000-0000-0000-000000000000',
+          'authenticated', 'authenticated'
+        ),
+        (
+          'd485c000-0000-4000-8000-000000000004',
+          'd485-foreign-lead@test.invalid', '', now(), now(), now(),
+          '00000000-0000-0000-0000-000000000000',
+          'authenticated', 'authenticated'
+        ),
+        (
+          'd485c000-0000-4000-8000-000000000005',
+          'd485-foreign-client@test.invalid', '', now(), now(), now(),
+          '00000000-0000-0000-0000-000000000000',
+          'authenticated', 'authenticated'
+        );
+      INSERT INTO public.profiles (
+        id, email, full_name, is_designer, created_at, updated_at
+      ) VALUES
+        (
+          'd485c000-0000-4000-8000-000000000001',
+          'd485-atomic-lead@test.invalid', 'D485 Atomic Lead', true,
+          now(), now()
+        ),
+        (
+          'd485c000-0000-4000-8000-000000000002',
+          'd485-atomic-member@test.invalid', 'D485 Atomic Member', true,
+          now(), now()
+        ),
+        (
+          'd485c000-0000-4000-8000-000000000003',
+          'd485-atomic-client@test.invalid', 'D485 Atomic Client', false,
+          now(), now()
+        ),
+        (
+          'd485c000-0000-4000-8000-000000000004',
+          'd485-foreign-lead@test.invalid', 'D485 Foreign Lead', true,
+          now(), now()
+        ),
+        (
+          'd485c000-0000-4000-8000-000000000005',
+          'd485-foreign-client@test.invalid', 'D485 Foreign Client', false,
+          now(), now()
+        );
+      INSERT INTO public.roles (
+        id, name, display_name, domain, is_system, is_assignable
+      ) VALUES (
+        'd485c900-0000-4000-8000-000000000001',
+        'd485_atomic_designer', 'D485 Atomic Designer',
+        'designer', false, true
+      );
+      INSERT INTO public.user_roles (id, user_id, role_id, granted_by)
+      VALUES
+        (
+          'd485c910-0000-4000-8000-000000000001',
+          'd485c000-0000-4000-8000-000000000001',
+          'd485c900-0000-4000-8000-000000000001',
+          'd485c000-0000-4000-8000-000000000001'
+        ),
+        (
+          'd485c910-0000-4000-8000-000000000004',
+          'd485c000-0000-4000-8000-000000000004',
+          'd485c900-0000-4000-8000-000000000001',
+          'd485c000-0000-4000-8000-000000000004'
+        );
+      INSERT INTO public.organizations (id, type, name, slug, status)
+      VALUES
+        (
+          'd485c100-0000-4000-8000-000000000001', 'design_studio',
+          'D485 Atomic Studio', 'd485-atomic-studio', 'active'
+        ),
+        (
+          'd485c100-0000-4000-8000-000000000002', 'design_studio',
+          'D485 Foreign Studio', 'd485-foreign-studio', 'active'
+        );
+      INSERT INTO public.organization_members (
+        id, user_id, organization_id, role, status, joined_at
+      ) VALUES
+        (
+          'd485c110-0000-4000-8000-000000000001',
+          'd485c000-0000-4000-8000-000000000001',
+          'd485c100-0000-4000-8000-000000000001',
+          'owner', 'active', now()
+        ),
+        (
+          'd485c110-0000-4000-8000-000000000002',
+          'd485c000-0000-4000-8000-000000000002',
+          'd485c100-0000-4000-8000-000000000001',
+          'member', 'active', now()
+        ),
+        (
+          'd485c110-0000-4000-8000-000000000004',
+          'd485c000-0000-4000-8000-000000000004',
+          'd485c100-0000-4000-8000-000000000002',
+          'owner', 'active', now()
+        );
+      INSERT INTO public.projects (
+        id, name, designer_id, client_id, created_by, studio_id, status
+      ) VALUES
+        (
+          'd485c200-0000-4000-8000-000000000001',
+          'D485 Atomic Invoice Project',
+          'd485c000-0000-4000-8000-000000000001',
+          'd485c000-0000-4000-8000-000000000003',
+          'd485c000-0000-4000-8000-000000000001',
+          'd485c100-0000-4000-8000-000000000001', 'active'
+        ),
+        (
+          'd485c200-0000-4000-8000-000000000002',
+          'D485 Foreign Locked Project',
+          'd485c000-0000-4000-8000-000000000004',
+          'd485c000-0000-4000-8000-000000000005',
+          'd485c000-0000-4000-8000-000000000004',
+          'd485c100-0000-4000-8000-000000000002', 'active'
+        );
+      INSERT INTO public.project_payment_milestones (
+        id, project_id, label, percentage, amount_cents, status,
+        trigger_kind, sort_order
+      ) VALUES
+        (
+          'd485c600-0000-4000-8000-000000000001',
+          'd485c200-0000-4000-8000-000000000001',
+          'D485 Atomic Shared Milestone', 50, 1000, 'pending',
+          'on_signing', 0
+        ),
+        (
+          'd485c600-0000-4000-8000-000000000002',
+          'd485c200-0000-4000-8000-000000000001',
+          'D485 Atomic Close-Order Milestone', 50, 2000, 'pending',
+          'on_date', 1
+        );
+    $setup$
+  );
+
+  -- A foreign and a missing caller-selected project produce the same fixed
+  -- trigger denial without waiting on the foreign project's row lock.
+  PERFORM extensions.dblink_connect('d485_atomic_foreign_lock', v_conninfo);
+  PERFORM extensions.dblink_connect('d485_atomic_foreign_probe', v_conninfo);
+  PERFORM extensions.dblink_exec('d485_atomic_foreign_lock', 'BEGIN');
+  PERFORM locked.id
+  FROM extensions.dblink(
+    'd485_atomic_foreign_lock',
+    $remote$
+      SELECT id::text FROM public.projects
+      WHERE id = 'd485c200-0000-4000-8000-000000000002'
+      FOR UPDATE
+    $remote$
+  ) AS locked(id text);
+  PERFORM extensions.dblink_exec(
+    'd485_atomic_foreign_probe',
+    $session$
+      BEGIN;
+      SET LOCAL ROLE authenticated;
+      SET LOCAL request.jwt.claims =
+        '{"sub":"d485c000-0000-4000-8000-000000000002","role":"authenticated"}';
+      SET LOCAL request.jwt.claim.sub =
+        'd485c000-0000-4000-8000-000000000002';
+      SET LOCAL request.jwt.claim.role = 'authenticated';
+      SET LOCAL lock_timeout = '250ms';
+      SET LOCAL statement_timeout = '5s';
+    $session$
+  );
+  PERFORM extensions.dblink_exec(
+    'd485_atomic_foreign_probe',
+    $remote$
+      DO $probe$
+      BEGIN
+        BEGIN
+          INSERT INTO public.invoices (
+            id, project_id, designer_id, client_id, studio_id,
+            status, currency, subtotal_cents, total_cents
+          ) VALUES (
+            'd485c700-0000-4000-8000-000000000001',
+            'd485c200-0000-4000-8000-000000000002',
+            'd485c000-0000-4000-8000-000000000004',
+            'd485c000-0000-4000-8000-000000000005',
+            'd485c100-0000-4000-8000-000000000002',
+            'draft', 'USD', 0, 0
+          );
+          RAISE EXCEPTION 'foreign project invoice insert succeeded'
+            USING ERRCODE = 'P4850';
+        EXCEPTION WHEN SQLSTATE 'P0001' THEN
+          IF SQLERRM IS DISTINCT FROM 'studio_id_not_designer_studio' THEN
+            RAISE;
+          END IF;
+        END;
+
+        BEGIN
+          INSERT INTO public.invoices (
+            id, project_id, designer_id, client_id, studio_id,
+            status, currency, subtotal_cents, total_cents
+          ) VALUES (
+            'd485c700-0000-4000-8000-000000000002',
+            'd485c200-0000-4000-8000-000000000099',
+            'd485c000-0000-4000-8000-000000000004',
+            'd485c000-0000-4000-8000-000000000005',
+            'd485c100-0000-4000-8000-000000000002',
+            'draft', 'USD', 0, 0
+          );
+          RAISE EXCEPTION 'missing project invoice insert succeeded'
+            USING ERRCODE = 'P4850';
+        EXCEPTION WHEN SQLSTATE 'P0001' THEN
+          IF SQLERRM IS DISTINCT FROM 'studio_id_not_designer_studio' THEN
+            RAISE;
+          END IF;
+        END;
+      END
+      $probe$;
+    $remote$
+  );
+  PERFORM extensions.dblink_exec('d485_atomic_foreign_probe', 'ROLLBACK');
+  PERFORM extensions.dblink_exec('d485_atomic_foreign_lock', 'ROLLBACK');
+
+  -- Both composers take project -> authority -> sorted milestone locks. The
+  -- second session waits on the same milestone, then rejects its stale latch
+  -- after the first commits; no unique race, deadlock, or orphan is accepted.
+  PERFORM extensions.dblink_connect('d485_atomic_first', v_conninfo);
+  PERFORM extensions.dblink_connect('d485_atomic_second', v_conninfo);
+  PERFORM extensions.dblink_exec(
+    'd485_atomic_first',
+    $session$
+      BEGIN;
+      SET LOCAL ROLE authenticated;
+      SET LOCAL request.jwt.claims =
+        '{"sub":"d485c000-0000-4000-8000-000000000002","role":"authenticated"}';
+      SET LOCAL request.jwt.claim.sub =
+        'd485c000-0000-4000-8000-000000000002';
+      SET LOCAL request.jwt.claim.role = 'authenticated';
+      SET LOCAL lock_timeout = '5s';
+    $session$
+  );
+  SELECT created.id INTO v_first_invoice_id
+  FROM extensions.dblink(
+    'd485_atomic_first',
+    $remote$
+      SELECT (public.create_draft_invoice(
+        'd485c200-0000-4000-8000-000000000001',
+        'd485c000-0000-4000-8000-000000000001',
+        'd485c000-0000-4000-8000-000000000003',
+        'd485c100-0000-4000-8000-000000000001',
+        0, 15, 'D485 same-milestone first', NULL,
+        '[{"kind":"milestone","milestone_id":"d485c600-0000-4000-8000-000000000001","description":"D485 shared milestone","quantity":1,"unit_amount_cents":1000,"metadata":{},"sort_order":0}]'::jsonb
+      )).id::text
+    $remote$
+  ) AS created(id text);
+
+  PERFORM extensions.dblink_exec(
+    'd485_atomic_second',
+    $session$
+      BEGIN;
+      CREATE OR REPLACE FUNCTION pg_temp.d485_try_same_milestone()
+      RETURNS text LANGUAGE plpgsql AS $body$
+      BEGIN
+        BEGIN
+          PERFORM public.create_draft_invoice(
+            'd485c200-0000-4000-8000-000000000001',
+            'd485c000-0000-4000-8000-000000000001',
+            'd485c000-0000-4000-8000-000000000003',
+            'd485c100-0000-4000-8000-000000000001',
+            0, 15, 'D485 same-milestone second', NULL,
+            '[{"kind":"milestone","milestone_id":"d485c600-0000-4000-8000-000000000001","description":"D485 shared milestone","quantity":1,"unit_amount_cents":1000,"metadata":{},"sort_order":0}]'::jsonb
+          );
+          RAISE EXCEPTION 'second same-milestone composer succeeded'
+            USING ERRCODE = 'P4850';
+        EXCEPTION WHEN check_violation THEN
+          IF SQLERRM IS DISTINCT FROM 'invalid draft invoice payload' THEN
+            RAISE;
+          END IF;
+          RETURN 'rejected';
+        END;
+      END;
+      $body$;
+      SET LOCAL ROLE authenticated;
+      SET LOCAL request.jwt.claims =
+        '{"sub":"d485c000-0000-4000-8000-000000000002","role":"authenticated"}';
+      SET LOCAL request.jwt.claim.sub =
+        'd485c000-0000-4000-8000-000000000002';
+      SET LOCAL request.jwt.claim.role = 'authenticated';
+      SET LOCAL lock_timeout = '5s';
+    $session$
+  );
+  SELECT remote.pid INTO v_worker_pid
+  FROM extensions.dblink(
+    'd485_atomic_second', 'SELECT pg_backend_pid()'
+  ) AS remote(pid integer);
+  PERFORM extensions.dblink_send_query(
+    'd485_atomic_second',
+    'SELECT pg_temp.d485_try_same_milestone()'
+  );
+  v_waiting := false;
+  FOR v_attempt IN 1..40 LOOP
+    SELECT activity.wait_event_type = 'Lock' INTO v_waiting
+    FROM pg_stat_activity AS activity
+    WHERE activity.pid = v_worker_pid;
+    EXIT WHEN COALESCE(v_waiting, false);
+    PERFORM pg_sleep(0.025);
+  END LOOP;
+  IF NOT COALESCE(v_waiting, false) THEN
+    RAISE EXCEPTION 'same-milestone composer did not serialize on its latch';
+  END IF;
+  PERFORM extensions.dblink_exec('d485_atomic_first', 'COMMIT');
+  SELECT result.status INTO v_status
+  FROM extensions.dblink_get_result(
+    'd485_atomic_second', false
+  ) AS result(status text);
+  IF v_status IS DISTINCT FROM 'rejected' THEN
+    RAISE EXCEPTION 'same-milestone second composer returned %', v_status;
+  END IF;
+  PERFORM extensions.dblink_exec('d485_atomic_second', 'ROLLBACK');
+
+  SELECT state.invoice_count, state.line_count, state.latched_invoice_id
+  INTO v_invoice_count, v_line_count, v_latched_invoice_id
+  FROM extensions.dblink(
+    'd485_atomic_setup',
+    $check$
+      SELECT
+        (SELECT count(*)::integer FROM public.invoices
+         WHERE project_id = 'd485c200-0000-4000-8000-000000000001'
+           AND memo LIKE 'D485 same-milestone %'),
+        (SELECT count(*)::integer FROM public.invoice_line_items
+         WHERE milestone_id = 'd485c600-0000-4000-8000-000000000001'),
+        (SELECT invoice_id::text FROM public.project_payment_milestones
+         WHERE id = 'd485c600-0000-4000-8000-000000000001')
+    $check$
+  ) AS state(
+    invoice_count integer, line_count integer, latched_invoice_id text
+  );
+  IF v_invoice_count <> 1
+     OR v_line_count <> 1
+     OR v_latched_invoice_id IS DISTINCT FROM v_first_invoice_id
+  THEN
+    RAISE EXCEPTION
+      'same-milestone serialization left noncanonical state: %, %, %/%',
+      v_invoice_count, v_line_count, v_latched_invoice_id, v_first_invoice_id;
+  END IF;
+
+  -- A fresh composer holds the project before its child latch. The final
+  -- 00486 close path must wait at that same root, then fail on the committed
+  -- positive milestone rather than deadlocking invoice/child-first.
+  PERFORM extensions.dblink_exec(
+    'd485_atomic_first',
+    $session$
+      BEGIN;
+      SET LOCAL ROLE authenticated;
+      SET LOCAL request.jwt.claims =
+        '{"sub":"d485c000-0000-4000-8000-000000000002","role":"authenticated"}';
+      SET LOCAL request.jwt.claim.sub =
+        'd485c000-0000-4000-8000-000000000002';
+      SET LOCAL request.jwt.claim.role = 'authenticated';
+      SET LOCAL lock_timeout = '5s';
+    $session$
+  );
+  SELECT created.id INTO v_second_invoice_id
+  FROM extensions.dblink(
+    'd485_atomic_first',
+    $remote$
+      SELECT (public.create_draft_invoice(
+        'd485c200-0000-4000-8000-000000000001',
+        'd485c000-0000-4000-8000-000000000001',
+        'd485c000-0000-4000-8000-000000000003',
+        'd485c100-0000-4000-8000-000000000001',
+        0, 15, 'D485 close-order composer', NULL,
+        '[{"kind":"milestone","milestone_id":"d485c600-0000-4000-8000-000000000002","description":"D485 close-order milestone","quantity":1,"unit_amount_cents":2000,"metadata":{},"sort_order":0}]'::jsonb
+      )).id::text
+    $remote$
+  ) AS created(id text);
+
+  PERFORM extensions.dblink_connect('d485_atomic_close', v_conninfo);
+  PERFORM extensions.dblink_exec(
+    'd485_atomic_close',
+    $session$
+      BEGIN;
+      CREATE OR REPLACE FUNCTION pg_temp.d485_try_close_atomic_project()
+      RETURNS text LANGUAGE plpgsql AS $body$
+      BEGIN
+        BEGIN
+          PERFORM public.close_project(
+            'd485c200-0000-4000-8000-000000000001',
+            '[{"key":"walkthrough","completed":true},{"key":"punch_list","completed":true},{"key":"payment","completed":true},{"key":"photography","completed":true},{"key":"photos","completed":true},{"key":"case_study","completed":true}]'::jsonb,
+            '{}'::jsonb
+          );
+          RAISE EXCEPTION 'close unexpectedly succeeded'
+            USING ERRCODE = 'P4850';
+        EXCEPTION WHEN check_violation THEN
+          IF position('positive payment milestone' IN SQLERRM) = 0 THEN
+            RAISE;
+          END IF;
+          RETURN 'blocked';
+        END;
+      END;
+      $body$;
+      SET LOCAL ROLE authenticated;
+      SET LOCAL request.jwt.claims =
+        '{"sub":"d485c000-0000-4000-8000-000000000001","role":"authenticated"}';
+      SET LOCAL request.jwt.claim.sub =
+        'd485c000-0000-4000-8000-000000000001';
+      SET LOCAL request.jwt.claim.role = 'authenticated';
+      SET LOCAL lock_timeout = '5s';
+    $session$
+  );
+  SELECT remote.pid INTO v_worker_pid
+  FROM extensions.dblink(
+    'd485_atomic_close', 'SELECT pg_backend_pid()'
+  ) AS remote(pid integer);
+  PERFORM extensions.dblink_send_query(
+    'd485_atomic_close', 'SELECT pg_temp.d485_try_close_atomic_project()'
+  );
+  v_waiting := false;
+  FOR v_attempt IN 1..40 LOOP
+    SELECT activity.wait_event_type = 'Lock' INTO v_waiting
+    FROM pg_stat_activity AS activity
+    WHERE activity.pid = v_worker_pid;
+    EXIT WHEN COALESCE(v_waiting, false);
+    PERFORM pg_sleep(0.025);
+  END LOOP;
+  IF NOT COALESCE(v_waiting, false) THEN
+    RAISE EXCEPTION 'close did not wait first on the atomic project root';
+  END IF;
+  PERFORM extensions.dblink_exec('d485_atomic_first', 'COMMIT');
+  SELECT result.status INTO v_status
+  FROM extensions.dblink_get_result(
+    'd485_atomic_close', false
+  ) AS result(status text);
+  IF v_status IS DISTINCT FROM 'blocked' THEN
+    RAISE EXCEPTION 'atomic composer/close race returned %', v_status;
+  END IF;
+  PERFORM extensions.dblink_exec('d485_atomic_close', 'ROLLBACK');
+
+  IF v_second_invoice_id IS NULL THEN
+    RAISE EXCEPTION 'project-first atomic composer returned no invoice';
+  END IF;
+
+  PERFORM extensions.dblink_exec(
+    'd485_atomic_setup', 'SET session_replication_role = replica'
+  );
+  PERFORM extensions.dblink_exec(
+    'd485_atomic_setup',
+    $cleanup$
+      DELETE FROM public.invoice_line_items
+      WHERE invoice_id IN (
+        SELECT id FROM public.invoices
+        WHERE project_id::text LIKE 'd485c200-%'
+      );
+      DELETE FROM public.invoices
+      WHERE project_id::text LIKE 'd485c200-%';
+      DELETE FROM public.project_payment_milestones
+      WHERE project_id::text LIKE 'd485c200-%';
+      DELETE FROM public.projects WHERE id::text LIKE 'd485c200-%';
+      DELETE FROM public.organization_members
+      WHERE organization_id::text LIKE 'd485c100-%';
+      DELETE FROM public.organizations WHERE id::text LIKE 'd485c100-%';
+      DELETE FROM public.user_roles
+      WHERE role_id = 'd485c900-0000-4000-8000-000000000001';
+      DELETE FROM public.roles
+      WHERE id = 'd485c900-0000-4000-8000-000000000001';
+      DELETE FROM public.profiles WHERE id::text LIKE 'd485c000-%';
+      DELETE FROM auth.users WHERE id::text LIKE 'd485c000-%';
+    $cleanup$
+  );
+  PERFORM extensions.dblink_disconnect('d485_atomic_close');
+  PERFORM extensions.dblink_disconnect('d485_atomic_second');
+  PERFORM extensions.dblink_disconnect('d485_atomic_first');
+  PERFORM extensions.dblink_disconnect('d485_atomic_foreign_probe');
+  PERFORM extensions.dblink_disconnect('d485_atomic_foreign_lock');
+  PERFORM extensions.dblink_disconnect('d485_atomic_setup');
+EXCEPTION WHEN OTHERS THEN
+  FOREACH v_status IN ARRAY ARRAY[
+    'd485_atomic_close', 'd485_atomic_second', 'd485_atomic_first',
+    'd485_atomic_foreign_probe', 'd485_atomic_foreign_lock'
+  ]::text[] LOOP
+    IF v_status = ANY(COALESCE(
+         extensions.dblink_get_connections(), ARRAY[]::text[]
+       ))
+    THEN
+      BEGIN
+        PERFORM extensions.dblink_exec(v_status, 'ROLLBACK');
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END;
+    END IF;
+  END LOOP;
+  IF 'd485_atomic_setup' = ANY(COALESCE(
+       extensions.dblink_get_connections(), ARRAY[]::text[]
+     ))
+  THEN
+    BEGIN
+      PERFORM extensions.dblink_exec(
+        'd485_atomic_setup', 'SET session_replication_role = replica'
+      );
+      PERFORM extensions.dblink_exec(
+        'd485_atomic_setup',
+        'DELETE FROM public.invoice_line_items WHERE invoice_id IN '
+        '(SELECT id FROM public.invoices '
+        'WHERE project_id::text LIKE ''d485c200-%''); '
+        'DELETE FROM public.invoices '
+        'WHERE project_id::text LIKE ''d485c200-%''; '
+        'DELETE FROM public.project_payment_milestones '
+        'WHERE project_id::text LIKE ''d485c200-%''; '
+        'DELETE FROM public.projects WHERE id::text LIKE ''d485c200-%''; '
+        'DELETE FROM public.organization_members '
+        'WHERE organization_id::text LIKE ''d485c100-%''; '
+        'DELETE FROM public.organizations WHERE id::text LIKE ''d485c100-%''; '
+        'DELETE FROM public.user_roles '
+        'WHERE role_id = ''d485c900-0000-4000-8000-000000000001''; '
+        'DELETE FROM public.roles '
+        'WHERE id = ''d485c900-0000-4000-8000-000000000001''; '
+        'DELETE FROM public.profiles WHERE id::text LIKE ''d485c000-%''; '
+        'DELETE FROM auth.users WHERE id::text LIKE ''d485c000-%'';'
+      );
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END IF;
+  RAISE;
+END
+$atomic_invoice_lock_probes$;
+
 BEGIN;
 
 SET LOCAL plpgsql.check_asserts = on;
@@ -1019,7 +1602,7 @@ VALUES
   (
     'public.issue_trade_draw_invoice(uuid)', 'p_draw_id uuid', 'jsonb',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '011fa31a39ae7bb7d112a83ca91ed817e17fb8f0b2b6322ecc9a402b078de1ea',
+    'fdbbbcb8bcf4df64d25492affe45e99d4cecb2721171af41cc3fe282e231a7fb',
     ARRAY['authenticated']::text[]
   ),
   (
@@ -1063,13 +1646,13 @@ VALUES
   (
     'public.set_invoice_studio_id()', '', 'trigger',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    'dd023cf65854c6f9106046ca0eb830f64b2a7e90e2c860e9752d0e2d3a0da542',
+    'f08204081f3b22f845b46af0e00f6b13e4aa578c9744e323481c24d28d59a18f',
     ARRAY[]::text[]
   ),
   (
     'public.set_project_studio_id()', '', 'trigger',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '765d8d68d27e5b1d59efd53aa6585aa2160845b4173d123efddf5b9546271277',
+    '9fb547de4460ddbc9d939f747e554b3f8340293da214fa911e874c4cc31ae7bf',
     ARRAY[]::text[]
   ),
   (
@@ -1206,19 +1789,37 @@ VALUES
     'app_private.issue_invoice_for_actor(uuid,date,uuid)',
     'p_invoice_id uuid, p_due_date date, p_actor_id uuid', 'invoices',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '56b8797bfcf3244bb9a1693be3d7ad1b9f6e886edd7307c8c54b9ce7a7f8481e'
+    '2f89692c867a5bd0c7d44eea587b7a82d0715a1e542254b8e0870b98349abaf7'
   ),
   (
     'public._execute_furnishings_authorization_authorized(uuid,text,uuid,text)',
     'p_proposal_id uuid, p_signed_name text, p_client_id uuid, p_trusted_signed_ip text DEFAULT NULL::text',
     'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '7d60930c27333b54ff4f02dab29c7cd012de0b7ff41d00185cb4bd6dfcb95e12'
+    'f9031e3b7cefb9cc0de4a2c3d98adc470488f40c677b811de620ff40e9ee4e84'
   ),
   (
     'public._execute_trade_scope_authorized(uuid,text,uuid,text)',
     'p_proposal_id uuid, p_signed_name text, p_client_id uuid, p_trusted_signed_ip text DEFAULT NULL::text',
     'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '24a263de63112a9c4dab4f0f5bb162b0ad900c3a061c3bd3b437e2d3d385170a'
+    '03277ddec803f42c90e96f67e5fba134b91342677bb44d672f927565a64fc541'
+  ),
+  (
+    'public._countersign_design_services_agreement_impl(uuid,text,jsonb)',
+    'p_proposal_id uuid, p_signer_name text, p_disclosed_impact jsonb DEFAULT NULL::jsonb',
+    'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
+    '91cda0b749a9f82ae3e91db4a567d40c400c4c0d722b5c8d150bf736b4802f8e'
+  ),
+  (
+    'public._execute_furnishings_authorization_on_paper_authorized(uuid,text,date,uuid,uuid,jsonb)',
+    'p_proposal_id uuid, p_signed_name text, p_paper_signed_on date, p_recorded_by uuid, p_scan_document_id uuid DEFAULT NULL::uuid, p_disclosed_impact jsonb DEFAULT NULL::jsonb',
+    'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
+    'd14f7a3cf958ff2c99f43d45cc2d3f2941ca49175d495e613cea346ff59fec86'
+  ),
+  (
+    'public._execute_trade_scope_on_paper_authorized(uuid,text,date,uuid,uuid)',
+    'p_proposal_id uuid, p_signed_name text, p_paper_signed_on date, p_recorded_by uuid, p_scan_document_id uuid DEFAULT NULL::uuid',
+    'jsonb', ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
+    'f9904c33fb253e1210dbc16ad1c84ac55bd23df41e22783a72cca31f687eb7f0'
   ),
   (
     'public._prepare_spec_book_issue_00403(uuid,text[],text,text,uuid,text,jsonb)',
@@ -1236,17 +1837,269 @@ VALUES
   (
     'public.guard_commercial_signature_insert()', '', 'trigger',
     ARRAY['search_path=pg_catalog, public, pg_temp']::text[],
-    '798a148aff056c85b03abfac11f0f5f6cfba0800136b668fbbc31fbe7ca6318f'
+    'cebd8924bd0de977fc47b137c77df7945906eb4955acf70fdb41f386eb04f255'
   );
 
 UPDATE _00485_expected_dependency
 SET security_definer = false
 WHERE signature = 'public.guard_commercial_signature_insert()';
 
+CREATE OR REPLACE FUNCTION pg_temp._00485_references_routine(
+  p_source text,
+  p_schema text,
+  p_name text
+)
+RETURNS boolean
+LANGUAGE plpgsql
+IMMUTABLE
+SECURITY INVOKER
+SET search_path = pg_catalog, pg_temp
+AS $caller_scan$
+DECLARE
+  v_without_comments text;
+  v_direct_source text;
+  v_scan_source text;
+  v_match text[];
+  v_literal_match text[];
+  v_literal_stream text := '';
+  v_schema_token text;
+  v_name_token text;
+  v_has_execute boolean;
+BEGIN
+  v_without_comments := regexp_replace(
+    regexp_replace(
+      COALESCE(p_source, ''),
+      $block_comment$/\*([^*]|\*+[^*/])*\*+/$block_comment$,
+      ' ',
+      'g'
+    ),
+    $line_comment$--[^\r\n]*$line_comment$,
+    ' ',
+    'g'
+  );
+  v_direct_source := regexp_replace(
+    v_without_comments,
+    $quoted_text$'([^']|'')*'$quoted_text$,
+    ' ',
+    'g'
+  );
+  v_has_execute := v_direct_source
+    ~* '(^|[^[:alnum:]_$])execute([^[:alnum:]_$]|$)';
+
+  IF v_has_execute THEN
+    FOR v_literal_match IN
+      SELECT matches.match_row
+      FROM regexp_matches(
+        v_without_comments,
+        $quoted_literal$'((?:[^']|'')*)'$quoted_literal$,
+        'g'
+      ) AS matches(match_row)
+    LOOP
+      v_literal_stream := v_literal_stream
+        || replace(v_literal_match[1], '''''', '''');
+    END LOOP;
+
+    -- Dynamic formatting and concatenation may not leave a callable token.
+    -- Treat any reviewed target reconstructed from EXECUTE literals as a call.
+    IF position(lower(p_name) IN lower(v_literal_stream)) > 0 THEN
+      RETURN true;
+    END IF;
+  END IF;
+
+  FOREACH v_scan_source IN ARRAY CASE
+    WHEN v_has_execute
+      THEN ARRAY[v_direct_source, v_without_comments]
+    ELSE ARRAY[v_direct_source]
+  END
+  LOOP
+    FOR v_match IN
+      SELECT matches.match_row
+      FROM regexp_matches(
+        v_scan_source,
+        $routine_token$(?:
+          ("(?:[^"]|"")*"|[[:alpha:]_][[:alnum:]_$]*)
+          [[:space:]]*\.[[:space:]]*
+        )?
+        ("(?:[^"]|"")*"|[[:alpha:]_][[:alnum:]_$]*)
+        [[:space:]]*\($routine_token$,
+        'gx'
+      ) AS matches(match_row)
+    LOOP
+      v_schema_token := v_match[1];
+      v_name_token := v_match[2];
+
+      IF v_name_token IS NULL THEN
+        CONTINUE;
+      END IF;
+
+      IF left(v_name_token, 1) = '"' THEN
+        v_name_token := replace(
+          substr(v_name_token, 2, length(v_name_token) - 2),
+          '""',
+          '"'
+        );
+        IF v_name_token IS DISTINCT FROM p_name THEN
+          CONTINUE;
+        END IF;
+      ELSIF lower(v_name_token) IS DISTINCT FROM lower(p_name) THEN
+        CONTINUE;
+      END IF;
+
+      IF v_schema_token IS NULL THEN
+        RETURN true;
+      ELSIF left(v_schema_token, 1) = '"' THEN
+        v_schema_token := replace(
+          substr(v_schema_token, 2, length(v_schema_token) - 2),
+          '""',
+          '"'
+        );
+        IF v_schema_token IS NOT DISTINCT FROM p_schema THEN
+          RETURN true;
+        END IF;
+      ELSIF lower(v_schema_token) IS NOT DISTINCT FROM lower(p_schema) THEN
+        RETURN true;
+      END IF;
+    END LOOP;
+  END LOOP;
+
+  RETURN false;
+END;
+$caller_scan$;
+
+DO $invoice_caller_scan_contract$
+BEGIN
+  IF NOT pg_temp._00485_references_routine(
+    $source$SELECT APP_PRIVATE.ISSUE_INVOICE_FOR_ACTOR($1)$source$,
+    'app_private', 'issue_invoice_for_actor'
+  ) OR NOT pg_temp._00485_references_routine(
+    $source$SELECT "app_private"."issue_invoice_for_actor"($1)$source$,
+    'app_private', 'issue_invoice_for_actor'
+  ) OR NOT pg_temp._00485_references_routine(
+    $source$BEGIN EXECUTE format('SELECT public.issue_invoice_for_actor(%L)', value); END$source$,
+    'app_private', 'issue_invoice_for_actor'
+  ) OR NOT pg_temp._00485_references_routine(
+    $source$BEGIN EXECUTE format('SELECT %I.%I($1)', 'app_private', 'issue_invoice_for_actor'); END$source$,
+    'app_private', 'issue_invoice_for_actor'
+  ) OR NOT pg_temp._00485_references_routine(
+    $source$BEGIN EXECUTE format('%s%s', 'issue_invoice_', 'for_actor'); END$source$,
+    'app_private', 'issue_invoice_for_actor'
+  ) OR NOT pg_temp._00485_references_routine(
+    $source$BEGIN EXECUTE 'SELECT app_private.issue_invoice_' || 'for_actor($1)'; END$source$,
+    'app_private', 'issue_invoice_for_actor'
+  ) OR pg_temp._00485_references_routine(
+    $source$SELECT "app_private"."ISSUE_INVOICE_FOR_ACTOR"($1)$source$,
+    'app_private', 'issue_invoice_for_actor'
+  ) OR pg_temp._00485_references_routine(
+    $source$SELECT public.issue_invoice_for_actor($1)$source$,
+    'app_private', 'issue_invoice_for_actor'
+  ) OR pg_temp._00485_references_routine(
+    $source$PERFORM 'public.issue_invoice_for_actor(';$source$,
+    'app_private', 'issue_invoice_for_actor'
+  ) OR pg_temp._00485_references_routine(
+    $source$-- public.issue_invoice_for_actor(
+      PERFORM 1;$source$,
+    'app_private', 'issue_invoice_for_actor'
+  ) THEN
+    RAISE EXCEPTION '00485 routine-reference scanner contract failed';
+  END IF;
+END
+$invoice_caller_scan_contract$;
+
+DO $atomic_draft_catalog_contract$
+BEGIN
+  ASSERT 1 = (
+    SELECT count(*)
+    FROM pg_proc AS routine
+    JOIN pg_namespace AS namespace ON namespace.oid = routine.pronamespace
+    WHERE namespace.nspname = 'public'
+      AND routine.proname = 'create_draft_invoice'
+  ), 'atomic draft overload universe drifted';
+
+  ASSERT (
+    SELECT owner.rolname = 'postgres'
+       AND language.lanname = 'plpgsql'
+       AND routine.prokind = 'f'
+       AND NOT routine.proretset
+       AND routine.prosecdef
+       AND routine.provolatile = 'v'
+       AND NOT routine.proisstrict
+       AND NOT routine.proleakproof
+       AND routine.proparallel = 'u'
+       AND routine.proconfig =
+             ARRAY['search_path=pg_catalog, public, pg_temp']::text[]
+       AND pg_get_function_arguments(routine.oid) =
+             'p_project_id uuid, p_expected_designer_id uuid, p_expected_client_id uuid, p_expected_studio_id uuid, p_tax_rate numeric DEFAULT 0, p_payment_terms_days integer DEFAULT 15, p_memo text DEFAULT NULL::text, p_internal_notes text DEFAULT NULL::text, p_lines jsonb DEFAULT ''[]''::jsonb'
+       AND pg_get_function_result(routine.oid) = 'invoices'
+       AND encode(
+             extensions.digest(convert_to(routine.prosrc, 'UTF8'), 'sha256'),
+             'hex'
+           ) = 'ae0f955f26b0cd4570f2b1dfe5d0762cdd387475033281f4abfddb1637f14000'
+       AND octet_length(convert_to(routine.prosrc, 'UTF8')) =
+             11488
+    FROM pg_proc AS routine
+    JOIN pg_roles AS owner ON owner.oid = routine.proowner
+    JOIN pg_language AS language ON language.oid = routine.prolang
+    WHERE routine.oid = to_regprocedure(
+      'public.create_draft_invoice(uuid,uuid,uuid,uuid,numeric,integer,text,text,jsonb)'
+    )
+  ), 'atomic draft semantic/body profile drifted';
+
+  ASSERT NOT EXISTS (
+    WITH actual AS (
+      SELECT
+        CASE acl.grantee WHEN 0 THEN 'PUBLIC'
+             ELSE grantee.rolname::text END AS grantee,
+        grantor.rolname::text AS grantor,
+        acl.privilege_type,
+        acl.is_grantable
+      FROM pg_proc AS routine
+      CROSS JOIN LATERAL aclexplode(
+        COALESCE(routine.proacl, acldefault('f', routine.proowner))
+      ) AS acl
+      LEFT JOIN pg_roles AS grantee ON grantee.oid = acl.grantee
+      LEFT JOIN pg_roles AS grantor ON grantor.oid = acl.grantor
+      WHERE routine.oid = to_regprocedure(
+        'public.create_draft_invoice(uuid,uuid,uuid,uuid,numeric,integer,text,text,jsonb)'
+      )
+        AND acl.grantee <> routine.proowner
+    ),
+    expected AS (
+      SELECT 'authenticated'::text AS grantee, 'postgres'::text AS grantor,
+             'EXECUTE'::text AS privilege_type, false AS is_grantable
+    )
+    SELECT 1
+    FROM (
+      (SELECT * FROM actual EXCEPT ALL SELECT * FROM expected)
+      UNION ALL
+      (SELECT * FROM expected EXCEPT ALL SELECT * FROM actual)
+    ) AS drift
+  ), 'atomic draft direct ACL tuple drifted';
+
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM pg_proc AS caller
+    JOIN pg_namespace AS namespace ON namespace.oid = caller.pronamespace
+    WHERE namespace.nspname <> 'information_schema'
+      AND namespace.nspname NOT LIKE 'pg_%'
+      AND pg_temp._00485_references_routine(
+        caller.prosrc, 'public', 'create_draft_invoice'
+      )
+  ), 'atomic draft database caller universe is not empty';
+END
+$atomic_draft_catalog_contract$;
+
 DO $private_dependency_contract$
 BEGIN
-  ASSERT (SELECT count(*) FROM _00485_expected_dependency) = 6,
-    'the 00485 dependency manifest must contain exactly six rows';
+  ASSERT (SELECT count(*) FROM _00485_expected_dependency) = 9,
+    'the 00485 dependency manifest must contain exactly nine rows';
+
+  ASSERT 1 = (
+    SELECT count(*)
+    FROM pg_proc AS routine
+    JOIN pg_namespace AS namespace ON namespace.oid = routine.pronamespace
+    WHERE namespace.nspname = 'app_private'
+      AND routine.proname = 'issue_invoice_for_actor'
+  ), 'the private invoice core overload universe drifted';
 
   ASSERT NOT EXISTS (
     SELECT 1
@@ -1305,8 +2158,11 @@ BEGIN
     WITH expected(caller_signature) AS (
       VALUES
         ('public.issue_trade_draw_invoice(uuid)'::text),
+        ('public._countersign_design_services_agreement_impl(uuid,text,jsonb)'::text),
         ('public._execute_furnishings_authorization_authorized(uuid,text,uuid,text)'::text),
-        ('public._execute_trade_scope_authorized(uuid,text,uuid,text)'::text)
+        ('public._execute_furnishings_authorization_on_paper_authorized(uuid,text,date,uuid,uuid,jsonb)'::text),
+        ('public._execute_trade_scope_authorized(uuid,text,uuid,text)'::text),
+        ('public._execute_trade_scope_on_paper_authorized(uuid,text,date,uuid,uuid)'::text)
     ),
     actual AS (
       SELECT
@@ -1316,9 +2172,9 @@ BEGIN
       JOIN pg_namespace AS namespace ON namespace.oid = routine.pronamespace
       WHERE namespace.nspname <> 'information_schema'
         AND namespace.nspname NOT LIKE 'pg_%'
-        AND position(
-          'app_private.issue_invoice_for_actor(' IN routine.prosrc
-        ) > 0
+        AND pg_temp._00485_references_routine(
+          routine.prosrc, 'app_private', 'issue_invoice_for_actor'
+        )
     )
     SELECT 1
     FROM (
@@ -1333,17 +2189,43 @@ BEGIN
     FROM (VALUES
       (
         'public._execute_furnishings_authorization_authorized(uuid,text,uuid,text)',
-        '''commercialDocumentId'''
+        '''commercialDocumentId''',
+        'app_private.issue_invoice_for_actor( v_deposit_invoice_id, current_date, v_actor )'
+      ),
+      (
+        'public._execute_furnishings_authorization_on_paper_authorized(uuid,text,date,uuid,uuid,jsonb)',
+        '''commercialDocumentId''',
+        'app_private.issue_invoice_for_actor( v_deposit_invoice_id, current_date, v_recorder )'
       ),
       (
         'public._execute_trade_scope_authorized(uuid,text,uuid,text)',
-        '''tradeScopeDocumentId'''
+        '''tradeScopeDocumentId''',
+        'app_private.issue_invoice_for_actor( v_deposit_invoice_id, current_date, v_actor )'
       ),
-      ('public.issue_trade_draw_invoice(uuid)', '''tradeScopeDocumentId''')
-    ) AS expected(signature, metadata_key)
+      (
+        'public._execute_trade_scope_on_paper_authorized(uuid,text,date,uuid,uuid)',
+        '''tradeScopeDocumentId''',
+        'app_private.issue_invoice_for_actor( v_deposit_invoice_id, current_date, v_recorder )'
+      ),
+      (
+        'public._countersign_design_services_agreement_impl(uuid,text,jsonb)',
+        '''commercialDocumentId''',
+        'app_private.issue_invoice_for_actor( v_retainer_invoice_id, current_date, v_actor )'
+      ),
+      (
+        'public.issue_trade_draw_invoice(uuid)',
+        '''tradeScopeDocumentId''',
+        'app_private.issue_invoice_for_actor( v_invoice_id, current_date, v_actor )'
+      )
+    ) AS expected(signature, metadata_key, call_fragment)
     JOIN pg_proc AS routine
       ON routine.oid = to_regprocedure(expected.signature)
     WHERE position(expected.metadata_key IN routine.prosrc) = 0
+       OR position(
+         expected.call_fragment IN regexp_replace(
+           routine.prosrc, '[[:space:]]+', ' ', 'g'
+         )
+       ) = 0
   ), 'an invoice-core caller does not persist its exact metadata anchor';
 
   ASSERT NOT EXISTS (
@@ -1481,6 +2363,72 @@ BEGIN
   ), 'the complete studio-stamp trigger binding universe drifted';
 END
 $trigger_binding_contract$;
+
+DO $authority_lock_order_contract$
+BEGIN
+  ASSERT NOT EXISTS (
+    WITH expected(signature, root_is_inherent) AS (
+      VALUES
+        ('public.set_project_studio_id()'::text, true),
+        ('public.set_invoice_studio_id()'::text, false),
+        ('public.create_draft_invoice(uuid,uuid,uuid,uuid,numeric,integer,text,text,jsonb)'::text, false),
+        ('app_private.issue_invoice_for_actor(uuid,date,uuid)'::text, false),
+        ('public._countersign_design_services_agreement_impl(uuid,text,jsonb)'::text, false),
+        ('public._execute_furnishings_authorization_authorized(uuid,text,uuid,text)'::text, false),
+        ('public._execute_furnishings_authorization_on_paper_authorized(uuid,text,date,uuid,uuid,jsonb)'::text, false),
+        ('public._execute_trade_scope_authorized(uuid,text,uuid,text)'::text, false),
+        ('public._execute_trade_scope_on_paper_authorized(uuid,text,date,uuid,uuid)'::text, false),
+        ('public.issue_trade_draw_invoice(uuid)'::text, false)
+    ),
+    positions AS (
+      SELECT expected.*,
+        LEAST(
+          NULLIF(position('FOR SHARE;' IN routine.prosrc), 0),
+          NULLIF(position('FOR UPDATE;' IN routine.prosrc), 0)
+        ) AS root_lock_position,
+        position('PERFORM role.id' IN routine.prosrc) AS role_position,
+        position('PERFORM user_role.id' IN routine.prosrc) AS user_role_position,
+        LEAST(
+          NULLIF(position('PERFORM membership.id' IN routine.prosrc), 0),
+          NULLIF(position('PERFORM lead_membership.id' IN routine.prosrc), 0)
+        ) AS membership_position,
+        position('PERFORM studio.id' IN routine.prosrc) AS studio_position
+      FROM expected
+      JOIN pg_proc AS routine
+        ON routine.oid = to_regprocedure(expected.signature)
+    )
+    SELECT 1
+    FROM positions
+    WHERE role_position = 0
+       OR user_role_position = 0
+       OR membership_position IS NULL
+       OR studio_position = 0
+       OR NOT (
+         role_position < user_role_position
+         AND user_role_position < membership_position
+         AND membership_position < studio_position
+       )
+       OR (
+         NOT root_is_inherent
+         AND (
+           root_lock_position IS NULL
+           OR NOT (root_lock_position < role_position)
+         )
+       )
+  ), 'the canonical root/authority lock order drifted';
+
+  ASSERT (
+    SELECT position('PERFORM studio.id' IN routine.prosrc)
+             < position('FOR UPDATE OF milestone;' IN routine.prosrc)
+       AND position('FOR UPDATE OF milestone;' IN routine.prosrc)
+             < position('FOR SHARE OF item;' IN routine.prosrc)
+    FROM pg_proc AS routine
+    WHERE routine.oid = to_regprocedure(
+      'public.create_draft_invoice(uuid,uuid,uuid,uuid,numeric,integer,text,text,jsonb)'
+    )
+  ), 'atomic draft child locks are not milestone-update then FFE-share';
+END
+$authority_lock_order_contract$;
 
 CREATE OR REPLACE FUNCTION pg_temp.assume_actor(
   p_actor uuid,
@@ -1706,6 +2654,57 @@ VALUES
     'member', 'active', now()
   );
 
+-- Legacy fixture replay runs as the real postgres owner without SET ROLE.
+-- The triggers still perform deterministic best-effort derivation before
+-- taking their bounded owner-maintenance return path.
+RESET ROLE;
+SELECT set_config('request.jwt.claims', '', true);
+SELECT set_config('request.jwt.claim.sub', '', true);
+SELECT set_config('request.jwt.claim.role', '', true);
+
+INSERT INTO public.projects (
+  id, name, designer_id, client_id, created_by, studio_id, status
+)
+VALUES (
+  'd4852f00-0000-4000-8000-000000000001',
+  'SD Owner Fixture Derivation',
+  'd4850000-0000-4000-8000-000000000005',
+  'd4850000-0000-4000-8000-000000000004',
+  'd4850000-0000-4000-8000-000000000005',
+  NULL, 'active'
+);
+
+INSERT INTO public.invoices (
+  id, project_id, designer_id, client_id, studio_id,
+  status, currency, subtotal_cents, total_cents
+)
+VALUES (
+  'd4857f00-0000-4000-8000-000000000001',
+  'd4852f00-0000-4000-8000-000000000001',
+  NULL, NULL, NULL, 'draft', 'USD', 0, 0
+);
+
+DO $owner_fixture_derivation_contract$
+BEGIN
+  ASSERT current_user = 'postgres'
+     AND COALESCE(current_setting('role', true), 'none') IN ('none', 'postgres')
+     AND auth.uid() IS NULL,
+    'owner fixture probe did not run as true postgres without app authority';
+  ASSERT (
+    SELECT project.studio_id = 'd4851000-0000-4000-8000-000000000001'
+    FROM public.projects AS project
+    WHERE project.id = 'd4852f00-0000-4000-8000-000000000001'
+  ), 'owner fixture project skipped deterministic studio derivation';
+  ASSERT (
+    SELECT invoice.designer_id = 'd4850000-0000-4000-8000-000000000005'
+       AND invoice.client_id = 'd4850000-0000-4000-8000-000000000004'
+       AND invoice.studio_id = 'd4851000-0000-4000-8000-000000000001'
+    FROM public.invoices AS invoice
+    WHERE invoice.id = 'd4857f00-0000-4000-8000-000000000001'
+  ), 'owner fixture invoice skipped canonical project tuple derivation';
+END
+$owner_fixture_derivation_contract$;
+
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_actor(
   'd4850000-0000-4000-8000-000000000005', 'authenticated'
@@ -1731,6 +2730,34 @@ BEGIN
 END
 $deterministic_studio_derivation$;
 
+RESET ROLE;
+
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000001', 'authenticated'
+);
+DO $ambiguous_studio_derivation_denial$
+BEGIN
+  BEGIN
+    INSERT INTO public.projects (
+      id, name, designer_id, created_by, studio_id
+    ) VALUES (
+      'd4852000-0000-4000-8000-000000000098',
+      'SD Ambiguous Studio Project',
+      'd4850000-0000-4000-8000-000000000001',
+      'd4850000-0000-4000-8000-000000000001', NULL
+    );
+    RAISE EXCEPTION 'ambiguous two-studio project derivation succeeded'
+      USING ERRCODE = 'P4850';
+  EXCEPTION WHEN SQLSTATE 'P0001' THEN
+    ASSERT SQLERRM = 'studio_id_not_designer_studio';
+  END;
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.projects
+    WHERE id = 'd4852000-0000-4000-8000-000000000098'
+  ), 'ambiguous studio denial left a project row';
+END
+$ambiguous_studio_derivation_denial$;
 RESET ROLE;
 
 INSERT INTO public.projects (
@@ -1982,6 +3009,25 @@ VALUES
     10000, 7000, 10000,
     'd4853280-0000-4000-8000-000000000001', 'SD Vendor',
     'selected', 'room', 1
+  ),
+  (
+    'd4853270-0000-4000-8000-000000000003',
+    'd4852000-0000-4000-8000-000000000007',
+    'd4853250-0000-4000-8000-000000000001',
+    'd4853260-0000-4000-8000-000000000001',
+    'Paper lamp', 'Lighting', 'fixed', 'specified', 1,
+    5000, 3500, 5000,
+    'd4853280-0000-4000-8000-000000000001', 'SD Vendor',
+    'selected', 'room', 2
+  ),
+  (
+    'd4853270-0000-4000-8000-000000000004',
+    'd4852000-0000-4000-8000-000000000007',
+    'd4853250-0000-4000-8000-000000000001',
+    'Zero-deposit table', 'Tables', 'fixed', 'specified', 1,
+    4000, 2800, 4000,
+    'd4853280-0000-4000-8000-000000000001', 'SD Vendor',
+    'selected', 'room', 3
   );
 
 INSERT INTO public.project_budget_versions (
@@ -2238,6 +3284,32 @@ BEGIN
     (result->>'documentId')::uuid, (result->>'projectId')::uuid
   );
 
+  result := public.create_furnishings_authorization_from_schedule(
+    'd4852000-0000-4000-8000-000000000007',
+    'SD Paper Furnishings',
+    ARRAY['d4853270-0000-4000-8000-000000000003'::uuid], 25
+  );
+  INSERT INTO _00485_commercial_fixture (
+    label, proposal_id, document_id, project_id
+  )
+  VALUES (
+    'furnishings_paper', (result->>'proposalId')::uuid,
+    (result->>'documentId')::uuid, (result->>'projectId')::uuid
+  );
+
+  result := public.create_furnishings_authorization_from_schedule(
+    'd4852000-0000-4000-8000-000000000007',
+    'SD Zero Deposit Furnishings',
+    ARRAY['d4853270-0000-4000-8000-000000000004'::uuid], 0
+  );
+  INSERT INTO _00485_commercial_fixture (
+    label, proposal_id, document_id, project_id
+  )
+  VALUES (
+    'furnishings_zero', (result->>'proposalId')::uuid,
+    (result->>'documentId')::uuid, (result->>'projectId')::uuid
+  );
+
   result := public.create_trade_scope(
     'd4852000-0000-4000-8000-000000000008',
     'SD Trusted Trade Scope'
@@ -2259,6 +3331,18 @@ BEGIN
   )
   VALUES (
     'trade_direct', (result->>'proposalId')::uuid,
+    (result->>'documentId')::uuid, (result->>'projectId')::uuid
+  );
+
+  result := public.create_trade_scope(
+    'd4852000-0000-4000-8000-000000000008',
+    'SD Paper Trade Scope'
+  );
+  INSERT INTO _00485_commercial_fixture (
+    label, proposal_id, document_id, project_id
+  )
+  VALUES (
+    'trade_paper', (result->>'proposalId')::uuid,
     (result->>'documentId')::uuid, (result->>'projectId')::uuid
   );
 
@@ -2325,6 +3409,7 @@ FROM (
     VALUES
       ('trade_trusted'::text, 15000),
       ('trade_direct'::text, 16000),
+      ('trade_paper'::text, 9000),
       ('trade_draw_local'::text, 10000),
       ('trade_draw_foreign'::text, 12000)
   ) AS requested(label, price_cents)
@@ -2340,7 +3425,7 @@ INSERT INTO public.trade_scope_sections (
 SELECT fixture.proposal_id, 'Whole project',
        'Canonical trade scope for the focused 00485 contract.', 0
 FROM _00485_commercial_fixture AS fixture
-WHERE fixture.label IN ('trade_trusted', 'trade_direct');
+WHERE fixture.label IN ('trade_trusted', 'trade_direct', 'trade_paper');
 
 INSERT INTO public.trade_scope_draws (
   id, proposal_id, label, percentage, amount_cents,
@@ -2361,6 +3446,12 @@ FROM (VALUES
   ('trade_direct'::text,
    'd4853200-0000-4000-8000-000000000124'::uuid,
    'Direct completion', 60::numeric, 9600, 1, true),
+  ('trade_paper'::text,
+   'd4853200-0000-4000-8000-000000000025'::uuid,
+   'Paper deposit', 40::numeric, 3600, 0, false),
+  ('trade_paper'::text,
+   'd4853200-0000-4000-8000-000000000125'::uuid,
+   'Paper completion', 60::numeric, 5400, 1, true),
   ('trade_draw_local'::text,
    'd4853200-0000-4000-8000-000000000001'::uuid,
    'Trade draw one', NULL::numeric, 10000, 0, false),
@@ -2391,7 +3482,8 @@ SET review_fingerprint =
   public._commercial_document_fingerprint(fixture.proposal_id)
 WHERE fixture.label IN (
   'furnishings_trusted', 'furnishings_direct',
-  'trade_trusted', 'trade_direct'
+  'furnishings_paper', 'furnishings_zero',
+  'trade_trusted', 'trade_direct', 'trade_paper'
 );
 
 SET LOCAL ROLE authenticated;
@@ -2407,7 +3499,8 @@ BEGIN
     SELECT * FROM _00485_commercial_fixture
     WHERE label IN (
       'furnishings_trusted', 'furnishings_direct',
-      'trade_trusted', 'trade_direct'
+      'furnishings_paper', 'furnishings_zero',
+      'trade_trusted', 'trade_direct', 'trade_paper'
     )
     ORDER BY label
   LOOP
@@ -3229,6 +4322,74 @@ BEGIN
 END
 $service_mutation_results$;
 
+CREATE TEMP TABLE _00485_addendum_fixture (
+  project_id uuid PRIMARY KEY,
+  proposal_id uuid NOT NULL UNIQUE,
+  document_id uuid NOT NULL UNIQUE
+) ON COMMIT DROP;
+GRANT SELECT, INSERT ON _00485_addendum_fixture TO authenticated;
+
+-- The origin proposal predates studio snapshots. Make its historical author
+-- unambiguous for the one-time origin activation, then restore the second
+-- membership so the separate ambiguity denials remain real.
+UPDATE public.organization_members
+SET status = 'suspended'
+WHERE id = 'd4851100-0000-4000-8000-000000000003';
+
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000001', 'authenticated'
+);
+
+DO $canonical_addendum_fixture$
+DECLARE
+  origin_result jsonb;
+  addendum_result jsonb;
+  addendum_id uuid;
+BEGIN
+  origin_result := public.countersign_design_services_agreement(
+    'd4853000-0000-4000-8000-000000000001', 'SD Owner', NULL
+  );
+  addendum_result := public.create_service_addendum(
+    (origin_result->>'projectId')::uuid,
+    'SD Post-Handoff Service Addendum'
+  );
+  addendum_id := (addendum_result->>'proposalId')::uuid;
+
+  UPDATE public.proposal_service_terms
+  SET retainer_amount_cents = 1200,
+      billing_ceiling_cents = 12000
+  WHERE proposal_id = addendum_id;
+
+  PERFORM public.send_commercial_document(
+    addendum_id,
+    public._commercial_document_fingerprint(addendum_id),
+    'Reviewed canonical post-handoff addendum', NULL
+  );
+
+  INSERT INTO _00485_addendum_fixture(project_id, proposal_id, document_id)
+  VALUES (
+    (origin_result->>'projectId')::uuid,
+    addendum_id,
+    (addendum_result->>'documentId')::uuid
+  );
+END
+$canonical_addendum_fixture$;
+
+RESET ROLE;
+UPDATE public.organization_members
+SET status = 'active'
+WHERE id = 'd4851100-0000-4000-8000-000000000003';
+
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000004', 'authenticated'
+);
+SELECT public.sign_design_services_agreement(
+  (SELECT proposal_id FROM _00485_addendum_fixture), 'SD Client'
+);
+RESET ROLE;
+
 CREATE TEMP TABLE _00485_activation_fixture (
   project_id uuid PRIMARY KEY
 ) ON COMMIT DROP;
@@ -3318,6 +4479,129 @@ RESET ROLE;
 
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000002', 'authenticated'
+);
+
+DO $atomic_invoice_composer_contract$
+DECLARE
+  claims_before text := current_setting('request.jwt.claims', true);
+  created public.invoices;
+BEGIN
+  created := public.create_draft_invoice(
+    'd4852000-0000-4000-8000-000000000007',
+    'd4850000-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000004',
+    'd4851000-0000-4000-8000-000000000001',
+    0.10, 30, 'D485 atomic co-member draft', NULL,
+    jsonb_build_array(jsonb_build_object(
+      'kind', 'adhoc', 'description', 'Atomic design fee',
+      'quantity', 2, 'unit_amount_cents', 500,
+      'metadata', '{}'::jsonb, 'sort_order', 0
+    ))
+  );
+  ASSERT created.project_id = 'd4852000-0000-4000-8000-000000000007'
+     AND created.designer_id = 'd4850000-0000-4000-8000-000000000001'
+     AND created.client_id = 'd4850000-0000-4000-8000-000000000004'
+     AND created.studio_id = 'd4851000-0000-4000-8000-000000000001'
+     AND created.status = 'draft'
+     AND created.subtotal_cents = 1000
+     AND created.tax_cents = 100
+     AND created.total_cents = 1100
+     AND 1 = (
+       SELECT count(*) FROM public.invoice_line_items AS line
+       WHERE line.invoice_id = created.id
+         AND line.kind = 'adhoc'
+         AND line.amount_cents = 1000
+     ), 'co-member atomic draft did not preserve the canonical tuple/totals';
+  ASSERT current_setting('request.jwt.claims', true) = claims_before,
+    'atomic invoice composer rewrote caller claims';
+
+  BEGIN
+    PERFORM public.create_draft_invoice(
+      'd4852000-0000-4000-8000-000000000007',
+      'd4850000-0000-4000-8000-000000000002',
+      'd4850000-0000-4000-8000-000000000004',
+      'd4851000-0000-4000-8000-000000000001',
+      0, 15, 'D485 forged tuple draft', NULL, '[]'::jsonb
+    );
+    RAISE EXCEPTION 'supplied project-lead forgery created a draft'
+      USING ERRCODE = 'P4850';
+  EXCEPTION WHEN insufficient_privilege THEN
+    ASSERT SQLERRM = 'invoice project not found or access denied';
+  END;
+
+  BEGIN
+    PERFORM public.create_draft_invoice(
+      'd4852000-0000-4000-8000-000000000008',
+      'd4850000-0000-4000-8000-000000000001',
+      'd4850000-0000-4000-8000-000000000004',
+      'd4851000-0000-4000-8000-000000000001',
+      0, 15, 'D485 foreign child draft', NULL,
+      jsonb_build_array(jsonb_build_object(
+        'kind', 'ffe',
+        'ffe_item_id', 'd4853270-0000-4000-8000-000000000003',
+        'description', 'Foreign FFE', 'quantity', 1,
+        'unit_amount_cents', 5000, 'metadata', '{}'::jsonb,
+        'sort_order', 0
+      ))
+    );
+    RAISE EXCEPTION 'foreign child reference created a draft'
+      USING ERRCODE = 'P4850';
+  EXCEPTION WHEN check_violation THEN
+    ASSERT SQLERRM = 'invalid draft invoice payload';
+  END;
+
+  BEGIN
+    PERFORM public.create_draft_invoice(
+      'd4852000-0000-4000-8000-000000000007',
+      'd4850000-0000-4000-8000-000000000001',
+      'd4850000-0000-4000-8000-000000000004',
+      'd4851000-0000-4000-8000-000000000001',
+      0, 15, 'D485 malformed line draft', NULL,
+      jsonb_build_array(jsonb_build_object(
+        'description', 'Missing kind', 'quantity', 1,
+        'unit_amount_cents', 100, 'metadata', '{}'::jsonb,
+        'sort_order', 0
+      ))
+    );
+    RAISE EXCEPTION 'missing line kind created a draft'
+      USING ERRCODE = 'P4850';
+  EXCEPTION WHEN check_violation THEN
+    ASSERT SQLERRM = 'invalid draft invoice payload';
+  END;
+
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.invoices AS invoice
+    WHERE invoice.memo IN (
+      'D485 forged tuple draft', 'D485 foreign child draft',
+      'D485 malformed line draft'
+    )
+  ), 'atomic draft denial left a header';
+END
+$atomic_invoice_composer_contract$;
+
+RESET ROLE;
+SET LOCAL ROLE service_role;
+DO $atomic_invoice_service_denial$
+BEGIN
+  BEGIN
+    PERFORM public.create_draft_invoice(
+      'd4852000-0000-4000-8000-000000000007',
+      'd4850000-0000-4000-8000-000000000001',
+      'd4850000-0000-4000-8000-000000000004',
+      'd4851000-0000-4000-8000-000000000001',
+      0, 15, NULL, NULL, '[]'::jsonb
+    );
+    RAISE EXCEPTION 'service_role called authenticated composer'
+      USING ERRCODE = 'P4850';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+END
+$atomic_invoice_service_denial$;
+RESET ROLE;
+
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_actor(
   'd4850000-0000-4000-8000-000000000001', 'authenticated'
 );
 
@@ -3389,13 +4673,19 @@ BEGIN
     'd4850000-0000-4000-8000-000000000001',
     'd4850000-0000-4000-8000-000000000002'
   );
-  ASSERT 3 = (
+  PERFORM public.reassign_project_lead(
+    (SELECT project_id FROM _00485_addendum_fixture),
+    'd4850000-0000-4000-8000-000000000001',
+    'd4850000-0000-4000-8000-000000000002'
+  );
+  ASSERT 4 = (
     SELECT count(*)
     FROM public.projects AS project
     WHERE project.id IN (
       activation_project_id,
       'd4852000-0000-4000-8000-000000000007',
-      'd4852000-0000-4000-8000-000000000008'
+      'd4852000-0000-4000-8000-000000000008',
+      (SELECT project_id FROM _00485_addendum_fixture)
     )
       AND project.designer_id =
             'd4850000-0000-4000-8000-000000000002'
@@ -3434,13 +4724,19 @@ BEGIN
     'd4850000-0000-4000-8000-000000000002',
     'd4850000-0000-4000-8000-000000000005'
   );
-  ASSERT 3 = (
+  PERFORM public.reassign_project_lead(
+    (SELECT project_id FROM _00485_addendum_fixture),
+    'd4850000-0000-4000-8000-000000000002',
+    'd4850000-0000-4000-8000-000000000005'
+  );
+  ASSERT 4 = (
     SELECT count(*)
     FROM public.projects AS project
     WHERE project.id IN (
       activation_project_id,
       'd4852000-0000-4000-8000-000000000007',
-      'd4852000-0000-4000-8000-000000000008'
+      'd4852000-0000-4000-8000-000000000008',
+      (SELECT project_id FROM _00485_addendum_fixture)
     )
       AND project.designer_id =
             'd4850000-0000-4000-8000-000000000005'
@@ -3655,6 +4951,163 @@ END
 $post_handoff_commercial_billing$;
 
 RESET ROLE;
+
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000005', 'authenticated'
+);
+SELECT set_config('app.commercial_signature_capability', 'paper-sentinel', true);
+
+DO $post_handoff_addendum_and_paper_billing$
+DECLARE
+  claims_before text := current_setting('request.jwt.claims', true);
+  capability_before text :=
+    current_setting('app.commercial_signature_capability', true);
+  addendum_result jsonb;
+  furnishings_result jsonb;
+  trade_result jsonb;
+BEGIN
+  addendum_result := public.countersign_design_services_agreement(
+    (SELECT proposal_id FROM _00485_addendum_fixture),
+    'SD Successor', NULL
+  );
+  furnishings_result := public.execute_furnishings_authorization_on_paper(
+    (SELECT proposal_id FROM _00485_commercial_fixture
+     WHERE label = 'furnishings_paper'),
+    'SD Client', current_date, NULL, NULL
+  );
+  trade_result := public.execute_trade_scope_on_paper(
+    (SELECT proposal_id FROM _00485_commercial_fixture
+     WHERE label = 'trade_paper'),
+    'SD Client', current_date, NULL
+  );
+
+  ASSERT 3 = (
+    SELECT count(*)
+    FROM public.invoices AS invoice
+    WHERE invoice.id IN (
+      (addendum_result->>'retainerInvoiceId')::uuid,
+      (furnishings_result->>'depositInvoiceId')::uuid,
+      (trade_result->>'depositInvoiceId')::uuid
+    )
+      AND invoice.status = 'sent'
+      AND invoice.designer_id =
+            'd4850000-0000-4000-8000-000000000005'
+      AND invoice.client_id =
+            'd4850000-0000-4000-8000-000000000004'
+      AND invoice.studio_id =
+            'd4851000-0000-4000-8000-000000000001'
+  ), 'post-handoff addendum/paper invoices did not use the current lead';
+
+  ASSERT 3 = (
+    SELECT count(*)
+    FROM public.proposals AS proposal
+    WHERE proposal.id IN (
+      (SELECT proposal_id FROM _00485_addendum_fixture),
+      (SELECT proposal_id FROM _00485_commercial_fixture
+       WHERE label = 'furnishings_paper'),
+      (SELECT proposal_id FROM _00485_commercial_fixture
+       WHERE label = 'trade_paper')
+    )
+      AND proposal.designer_id =
+            'd4850000-0000-4000-8000-000000000001'
+      AND proposal.project_id IS NULL
+  ), 'post-handoff addendum/paper billing rewrote proposal authorship';
+
+  ASSERT current_setting('request.jwt.claims', true) = claims_before
+     AND current_setting('app.commercial_signature_capability', true) =
+           capability_before,
+    'post-handoff addendum/paper billing leaked claims or capability state';
+END
+$post_handoff_addendum_and_paper_billing$;
+
+RESET ROLE;
+
+-- A zero-deposit authorization still crosses the full project/studio/lead
+-- boundary before it may mutate signature or execution state.
+DELETE FROM public.user_roles
+WHERE id = 'd4859100-0000-4000-8000-000000000005';
+
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.assume_actor(
+  'd4850000-0000-4000-8000-000000000005', 'authenticated'
+);
+DO $zero_deposit_live_authority_denial$
+DECLARE
+  zero_proposal uuid := (
+    SELECT proposal_id FROM _00485_commercial_fixture
+    WHERE label = 'furnishings_zero'
+  );
+  executed_trade_proposal uuid := (
+    SELECT proposal_id FROM _00485_commercial_fixture
+    WHERE label = 'trade_paper'
+  );
+BEGIN
+  BEGIN
+    PERFORM public.execute_furnishings_authorization_on_paper(
+      zero_proposal, 'SD Client', current_date, NULL, NULL
+    );
+    RAISE EXCEPTION 'role-removed lead executed zero-deposit furnishings'
+      USING ERRCODE = 'P4850';
+  EXCEPTION WHEN insufficient_privilege THEN
+    ASSERT SQLERRM = format(
+      'furnishings authorization %s not found or access denied', zero_proposal
+    );
+  END;
+
+  ASSERT (
+    SELECT proposal.commercial_state = 'sent'
+       AND document.executed_at IS NULL
+       AND document.deposit_invoice_id IS NULL
+       AND NOT EXISTS (
+         SELECT 1 FROM public.commercial_document_signatures AS signature
+         WHERE signature.proposal_id = proposal.id
+       )
+    FROM public.proposals AS proposal
+    JOIN public.project_commercial_documents AS document
+      ON document.proposal_id = proposal.id
+    WHERE proposal.id = zero_proposal
+  ), 'zero-deposit authority denial left legal or billing residue';
+
+  BEGIN
+    PERFORM public.execute_trade_scope_on_paper(
+      executed_trade_proposal, 'SD Client', current_date, NULL
+    );
+    RAISE EXCEPTION 'role-removed lead retried paper trade execution'
+      USING ERRCODE = 'P4850';
+  EXCEPTION WHEN insufficient_privilege THEN
+    ASSERT SQLERRM = format(
+      'trade scope %s not found or access denied', executed_trade_proposal
+    );
+  END;
+
+  ASSERT (
+    SELECT proposal.commercial_state = 'executed'
+       AND document.executed_at IS NOT NULL
+       AND document.deposit_invoice_id IS NOT NULL
+       AND 1 = (
+         SELECT count(*)
+         FROM public.commercial_document_signatures AS signature
+         WHERE signature.proposal_id = proposal.id
+           AND signature.party_role = 'client'
+       )
+    FROM public.proposals AS proposal
+    JOIN public.project_commercial_documents AS document
+      ON document.proposal_id = proposal.id
+    WHERE proposal.id = executed_trade_proposal
+  ), 'trade live-authority denial changed executed legal or billing state';
+END
+$zero_deposit_live_authority_denial$;
+RESET ROLE;
+
+INSERT INTO public.user_roles (id, user_id, role_id, granted_by)
+VALUES (
+  'd4859100-0000-4000-8000-000000000005',
+  'd4850000-0000-4000-8000-000000000005',
+  'd4859000-0000-4000-8000-000000000001',
+  'd4850000-0000-4000-8000-000000000001'
+);
+
 UPDATE public.organization_members
 SET status = 'active'
 WHERE id = 'd4851100-0000-4000-8000-000000000001';
