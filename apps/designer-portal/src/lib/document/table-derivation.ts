@@ -71,6 +71,15 @@ export function deriveTable(input: TableInput): TableSelection {
       // view already derives from the phase model
       // (`current_phase in ('installation','final_walkthrough')`, 00327).
       return { table: 'delivery', setting: 'install' };
+    default: {
+      // `active_section` is a database-emitted string (00327). If the view ever
+      // learns an eighth section, the paper composes the Intake table rather
+      // than no table at all — the compile-time check below is what should
+      // catch it first.
+      const unreached: never = input.activeSection;
+      void unreached;
+      return { table: 'intake' };
+    }
   }
 }
 

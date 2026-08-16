@@ -241,12 +241,19 @@ function vitalsFor(
 }
 
 export default function DocumentPage({ params }: { params: Promise<{ id: string }> }) {
+  // F2 — the body is keyed on the document id so picking up a DIFFERENT
+  // document is a fresh mount by our own construction, not by trusting the
+  // router to remount a segment whose param changed. What depends on it: the
+  // table pin re-snapshots (R7's "re-opening the document adopts naturally"),
+  // and the seal note's read-once guard re-arms for the arrival after a
+  // redirect.
+  const { id } = use(params);
   // The room lens wraps the whole document: the letterhead names the room in
   // hand, the paper lifts by it, and the shelves lift by it too — one hold,
   // read in three places.
   return (
     <RoomLensProvider>
-      <DocumentPageBody params={params} />
+      <DocumentPageBody key={id} params={params} />
     </RoomLensProvider>
   );
 }
@@ -1331,11 +1338,16 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                 W2 — the accounts moved into the money region, which mounts only
                 while the Project section is open; every other section keeps the
                 band here, where it has always been. */}
-            {row.active_section !== 'project' && (
+            {/* F1 — the band and the money region are one either-or, so both
+                sides read the SAME section. The money region mounts inside the
+                pinned spread; a band gated on the live row would print the
+                accounts twice (or nowhere) for as long as an armed turn goes
+                unpressed. Off the flag `spreadSection` IS `row.active_section`. */}
+            {spreadSection !== 'project' && (
               <AccountBand
                 projectId={row.project_id}
                 clientName={row.client_name}
-                activeSection={row.active_section}
+                activeSection={spreadSection}
               />
             )}
             {/* The four supporting rooms moved to the shelves, so the

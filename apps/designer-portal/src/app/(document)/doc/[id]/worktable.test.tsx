@@ -59,12 +59,16 @@ jest.mock('@/components/document/ffe-section', () => ({
   FFESection: () => <div data-index-region="ffe" />,
 }));
 jest.mock('@/components/document/commercial/money-region', () => ({
-  MoneyRegion: () => <div data-index-region="money" />,
+  MoneyRegion: () => <div data-index-region="money" data-accounts-surface="money" />,
 }));
 
 /* Everything else the page mounts is another suite's subject. */
 jest.mock('@/components/document/care-band', () => ({ CareBand: () => null }));
-jest.mock('@/components/document/account-band', () => ({ AccountBand: () => null }));
+jest.mock('@/components/document/quiet-sections', () => ({ CareSection: () => null }));
+/* The two surfaces that state the accounts — one of them prints, never both. */
+jest.mock('@/components/document/account-band', () => ({
+  AccountBand: () => <div data-accounts-surface="band" />,
+}));
 jest.mock('@/components/document/roster/kickoff-band', () => ({ KickoffBand: () => null }));
 jest.mock('@/components/document/spine-shelved-blocks', () => ({
   DocSpineShelvedBlocks: () => null,
@@ -222,9 +226,12 @@ const PROJECT_ROW = {
   due_task_title: null,
 };
 
+/** The live row, which the derivation may move under a pinned composition. */
+const mockRow: { current: typeof PROJECT_ROW } = { current: PROJECT_ROW };
+
 jest.mock('@/hooks/use-document-state', () => ({
   useDocumentEngagement: () => ({
-    data: { kind: 'engagement', row: PROJECT_ROW },
+    data: { kind: 'engagement', row: mockRow.current },
     isLoading: false,
     isFetching: false,
     isError: false,
@@ -240,6 +247,7 @@ const params = {
 
 describe('the Worktable, flag on', () => {
   beforeEach(() => {
+    mockRow.current = PROJECT_ROW;
     window.matchMedia = jest.fn().mockImplementation((query: string) => ({
       matches: /min-width:\s*(\d+)px/.test(query),
       media: query,
@@ -283,6 +291,49 @@ describe('the Worktable, flag on', () => {
     expect(nodes.indexOf(record as Element)).toBeGreaterThan(
       nodes.indexOf(lastRegion),
     );
+  });
+
+  /**
+   * F1 — the accounts are an either-or: the money region states them inside the
+   * Project spread, the account band states them everywhere else. An armed turn
+   * is unbounded (the designer may never press it), so for as long as it stands
+   * the two must still agree about which section the paper is composed as.
+   */
+  describe('through an armed turn window', () => {
+    it('prints exactly one accounts surface when the live section moves off project', () => {
+      const { container, rerender } = render(<DocumentPage params={params} />);
+
+      mockRow.current = { ...PROJECT_ROW, active_section: 'care' };
+      rerender(<DocumentPage params={params} />);
+
+      // The turn is armed and unpressed: the paper is still the Project spread.
+      expect(container.querySelector('[data-table-turn]')).not.toBeNull();
+      expect(container.querySelector('[data-table]')!.getAttribute('data-table')).toBe(
+        'delivery',
+      );
+      expect(container.querySelectorAll('[data-accounts-surface]')).toHaveLength(1);
+      expect(
+        container.querySelector('[data-accounts-surface]')!.getAttribute(
+          'data-accounts-surface',
+        ),
+      ).toBe('money');
+    });
+
+    it('prints exactly one accounts surface when the live section moves onto project', () => {
+      mockRow.current = { ...PROJECT_ROW, active_section: 'care' };
+      const { container, rerender } = render(<DocumentPage params={params} />);
+
+      mockRow.current = PROJECT_ROW;
+      rerender(<DocumentPage params={params} />);
+
+      expect(container.querySelector('[data-table-turn]')).not.toBeNull();
+      expect(container.querySelectorAll('[data-accounts-surface]')).toHaveLength(1);
+      expect(
+        container.querySelector('[data-accounts-surface]')!.getAttribute(
+          'data-accounts-surface',
+        ),
+      ).toBe('band');
+    });
   });
 
   it('says nothing it has no reason to say — no turn, no seal note, no seams', () => {
