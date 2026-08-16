@@ -130,6 +130,10 @@ import {
   readAndClearSealTurn,
 } from '@/components/document/worktable/seal-turn';
 import type { SpeccingTableSlots } from '@/components/document/worktable/table-slots';
+import { RoomsRail } from '@/components/document/worktable/rooms-rail';
+import { Scheme } from '@/components/document/worktable/scheme';
+import { BoardsStrip } from '@/components/document/worktable/boards-strip';
+import { LibraryReachIn } from '@/components/document/worktable/library-reach-in';
 import { DocumentShelves } from '@/components/document/shelves/document-shelves';
 import {
   NEW_BOARD_EVENT,
@@ -830,6 +834,12 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     [activeSection, liveProposalStatus],
   );
   const tablePin = useTablePin(derivedTable);
+  // W3 — the room in hand at the Speccing table's head. The rail reports it;
+  // the scheme and the boards strip lift by it. One id or null, reset per
+  // document by the F2 key={id} remount above — no extra machinery. This is
+  // deliberately NOT the project room lens (room-lens-context): different
+  // store, different subject, and this one persists at every width (A7).
+  const [roomInHand, setRoomInHand] = useState<string | null>(null);
   // The seal note is read ONCE per arrival: the marker is cleared as it is
   // read, and held in state so this mount keeps printing it.
   const [sealTurnNoted, setSealTurnNoted] = useState(false);
@@ -960,8 +970,29 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // read on this page stays on the live row.
   const table = worktableOn ? tablePin.composition : null;
   const spreadSection = table ? table.section : row.active_section;
-  // W3's integration surface, declared here and filled there.
-  const speccingSlots: SpeccingTableSlots = {};
+  // W3 — the Speccing table's four tools on W2's slots: rooms → the work →
+  // the tools. Proposal-keyed on `row.proposal_id`: 00327's Shape B emits the
+  // LIVE chain version (pr.id) there while `engagement_id` carries the chain
+  // root — and never the raw route param, which an aliased arrival (J6) has
+  // already redirected off before the table composes. The frame mounts these
+  // only on the Speccing table; building them here for other rows creates
+  // elements, never mounts.
+  const speccingSlots: SpeccingTableSlots = row.proposal_id
+    ? {
+        'rooms-rail': (
+          <RoomsRail
+            proposalId={row.proposal_id}
+            value={roomInHand}
+            onChange={setRoomInHand}
+          />
+        ),
+        scheme: <Scheme proposalId={row.proposal_id} roomFilter={roomInHand} />,
+        'boards-strip': (
+          <BoardsStrip proposalId={row.proposal_id} roomFilter={roomInHand} />
+        ),
+        'reach-in': <LibraryReachIn proposalId={row.proposal_id} />,
+      }
+    : {};
   const seal = lineage?.signedAt
     ? {
         date: fmtDay(lineage.signedAt),

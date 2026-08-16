@@ -8850,3 +8850,69 @@ have nothing to record until the surfaces they govern exist; and any change to
 remains the sealing authority and I114 is still owed Kody's mapping session.
 
 *Entries add: I138 · last id = I138*
+
+### I139 · "Start to Signature" Wave 3 — the Speccing table's four tools — 2026-08-16
+
+Wave 3 of the program I137 opened, on `sts/wave3-speccing`, still behind the
+fail-closed `worktable` flag. W2 declared the Speccing table's four typed mount
+slots and left them empty; this wave builds the four tools and fills the slots
+from the open document's page: **`rooms-rail` at the table head, then `scheme`,
+then `boards-strip`, then `reach-in`** — the table reads rooms → the work → the
+tools. Flag off, none of it exists; a non-Speccing table mounts none of it —
+both guarded by `worktable-speccing.test.tsx` alongside W2's parity specs.
+
+**The tools are proposal-keyed, on the row's own proposal identity.** Every
+slot receives `document_state.proposal_id` — 00327's Shape B emits the LIVE
+chain version (`pr.id`) there, while `engagement_id` carries the chain root —
+never the raw route param, which on an aliased arrival (J6) the redirect has
+already replaced before the table composes. The integration spec keys its
+fixture's two ids differently so a tool wired to the wrong one fails loud.
+
+**The room lens is one held id, owned by the page.** The rail reports a press
+as the held room (controlled `value`/`onChange`, exactly one or zero held); the
+scheme and the boards strip receive it as `roomFilter` and LIFT that room's
+things to the front — never hide (lens doctrine). One `useState` per document;
+the F2 `key={id}` remount is the reset, no extra machinery. This is
+deliberately NOT the project room lens (`room-lens-context`): different store,
+different subject — and this one persists at every width by construction (A7:
+its subject, the rail itself, is on-screen at all widths; below 1440 the row
+wraps and scrolls in its own container, no `display:none`, no self-release).
+
+**The boards strip reverses I136 — for the speccing stage only (Q1,
+ratified).** I136 shelved boards as reference beside the spine; at direction,
+board content is the work itself, so the strip puts it back on the paper — for
+this one stage. **The shelf remains boards' home everywhere else**; the strip
+is the table borrowing the tool, not a second home. It is the Drafting Boards
+facet's read in strip form: proposal-keyed through the same `useBoards` the
+facet reads (the project-keyed mood-board shelf leaf is deliberately not its
+source); tiles open the one canonical board room with `drafting_strip`
+attribution — the reuse is recorded as deliberate, not accidental; "Start a
+board" is the facet's blank-board leg verbatim (same autosave barrier, same
+naming, same landing). Below 1440 the strip folds to a one-line "Boards · N"
+seam that expands in place to the same tiles — the capability changes form,
+it is never `display:none`'d (Q7/A4).
+
+**The rooms rail is the speccing home of add-a-room.** I137's SP4 ruling put
+the project-stage verb at the foot of the FF&E room list; the rail's scored
+"+ Add a room" line is the same verb's speccing-stage home. Both stand — two
+stages, two surfaces, one creation flow (the Rooms facet's `useAddScopeRoom`,
+ending in its own `scopeUpdated('add')` event).
+
+**Known debts, recorded as debts and not failures:**
+
+- *The reach-in takes optioned pieces "decide later".* It has no configure
+  step — that ceremony stays with the picker — so a variant/configured/custom
+  piece is added with the `configurationSkipped` envelope, exactly the
+  picker's own skip, and the schedule line shows the debt downstream. Warn,
+  never block. Full spec resolution inside the reach is a follow-on.
+- *Reached-in lines land Unassigned* (`scopeRoomId: null`) — the reach does
+  not read the room lens; assigning the room happens on the line, downstream.
+- *The scheme's lift is group-granular render order only.* The lensed room's
+  whole group comes to the very front — ahead even of the builder's
+  unassigned-first grouping, which otherwise leads (lane 3b's draft had
+  described the lift as staying behind Unassigned; the shipped builder lifts
+  the lensed group first, and both the scheme's spec and the integration spec
+  pin that). Document positions are untouched: a drag under the lens still
+  rewrites from the canonical group order, never the lifted view.
+
+*Entries add: I139 · last id = I139*
