@@ -122,6 +122,7 @@ export function ProposalWatch({
   proposalId,
   clientName,
   hoistedLeader = null,
+  onFinalizeTable = false,
 }: {
   proposalId: string;
   clientName: string;
@@ -130,6 +131,11 @@ export function ProposalWatch({
    *  offer is made once; everything else it carries stays exactly where it is.
    *  Null with the flag off and on every other table. */
   hoistedLeader?: 'nudge' | 'preview' | 'resend' | 'answer-flags' | null;
+  /** W4a — one leader per table. On the Finalize table the head's derived
+   *  leader is the table's leader-weight act, so "Mark signed" — which is not
+   *  a verb that derivation can carry — keeps its place and its wording and
+   *  gives up its weight. False everywhere else, flag off included. */
+  onFinalizeTable?: boolean;
 }) {
   const router = useRouter();
   const qc = useQueryClient();
@@ -303,7 +309,7 @@ export function ProposalWatch({
         {signable && (
           <DocumentAction
             actionKey="mark-proposal-signed"
-            variant="primary"
+            variant={onFinalizeTable ? 'secondary' : 'primary'}
             trailing="→"
             onClick={() => setMarkSignedOpen(true)}
           >

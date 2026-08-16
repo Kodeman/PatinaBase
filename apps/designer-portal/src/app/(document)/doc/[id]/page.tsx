@@ -1311,7 +1311,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                   {row.engagement_kind === 'proposal' && (
                     <ProposalFolioStrip proposalId={row.proposal_id} />
                   )}
-                  <ProposalBlocksReadOnly proposalId={row.proposal_id} />
+                  <ProposalBlocksReadOnly
+                    proposalId={row.proposal_id}
+                    omitOfferBlocks={finalizeTable}
+                  />
                   {/* W4a — the Drafting Room's Offer movement (Phases ·
                       Exclusions · Payments · Terms), folding open under the
                       spread in the Room's own seam form. */}

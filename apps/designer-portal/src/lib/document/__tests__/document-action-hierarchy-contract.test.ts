@@ -72,8 +72,13 @@ describe('I91 shared action grammar', () => {
 
   it('keeps proposal-watch leadership mutually exclusive', () => {
     const region = actionRegion(proposalWatch, 'proposal-watch-actions');
+    // I140 — one leader per table. The act is still the region's only
+    // leadership claim and still gated on `signable`; on the Finalize table the
+    // head's derived leader carries the weight, so the variant is a ternary
+    // rather than a literal. Spelled out here so a drift back to a second,
+    // ungated primary still bites.
     expect(region).toMatch(
-      /\{signable && \(\s*<DocumentAction[\s\S]*?variant="primary"/,
+      /\{signable && \(\s*<DocumentAction[\s\S]*?variant=\{onFinalizeTable \? 'secondary' : 'primary'\}/,
     );
     expect(region).toContain('actionKey="mark-proposal-signed"');
   });

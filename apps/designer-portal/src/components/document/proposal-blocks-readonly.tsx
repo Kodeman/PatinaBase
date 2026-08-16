@@ -52,7 +52,18 @@ function BlockLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function ProposalBlocksReadOnly({ proposalId }: { proposalId: string }) {
+export function ProposalBlocksReadOnly({
+  proposalId,
+  omitOfferBlocks = false,
+}: {
+  proposalId: string;
+  /** W4a — on the Finalize table the Offer movement (Timeline · Payments ·
+   *  Exclusions) has an addressable home in the seams below the spread, so the
+   *  spread stops stating it: one fact, one place. False everywhere else — the
+   *  settled unfold, the version-history sheet and every flag-off render take
+   *  the spread exactly as it has always been. */
+  omitOfferBlocks?: boolean;
+}) {
   // Choose the renderer before any legacy room, FF&E, palette, or board query mounts.
   const { data: proposal, isLoading } = useProposal(proposalId) as {
     data: any;
@@ -79,10 +90,21 @@ export function ProposalBlocksReadOnly({ proposalId }: { proposalId: string }) {
       </p>
     );
   }
-  return <LegacyProposalBlocksReadOnly proposalId={proposalId} />;
+  return (
+    <LegacyProposalBlocksReadOnly
+      proposalId={proposalId}
+      omitOfferBlocks={omitOfferBlocks}
+    />
+  );
 }
 
-function LegacyProposalBlocksReadOnly({ proposalId }: { proposalId: string }) {
+function LegacyProposalBlocksReadOnly({
+  proposalId,
+  omitOfferBlocks,
+}: {
+  proposalId: string;
+  omitOfferBlocks: boolean;
+}) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: proposal, isLoading } = useProposal(proposalId) as {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -133,7 +155,14 @@ function LegacyProposalBlocksReadOnly({ proposalId }: { proposalId: string }) {
   // The Investment + Payment blocks render unconditionally below; gate them so a
   // draft with no priced items / no milestones doesn't show a "$0" husk (R68.1).
   const hasInvestment = (proposal.items ?? []).length > 0 || (proposal.total_amount ?? 0) > 0;
-  const hasPayments = (milestones ?? []).length > 0;
+  const hasPayments = !omitOfferBlocks && (milestones ?? []).length > 0;
+  const hasExclusions = !omitOfferBlocks && (exclusions ?? []).length > 0;
+  const hasPhases = !omitOfferBlocks && (phases ?? []).length > 0;
+  // The anchored milestones are NOT an Offer fact — the Offer seams do not
+  // carry them — so they survive the omission and keep their existing home
+  // (printed only where the phases they date were stated).
+  const hasKeyDates =
+    (phases ?? []).length > 0 && (scheduleMilestones ?? []).length > 0;
 
   return (
     <div className="space-y-6">
@@ -205,23 +234,31 @@ function LegacyProposalBlocksReadOnly({ proposalId }: { proposalId: string }) {
       </div>
       )}
 
-      {(phases ?? []).length > 0 && (
+      {(hasPhases || hasKeyDates) && (
         <div>
-          <BlockLabel>Timeline</BlockLabel>
-          <TimelinePhasesBlock
-            phases={(phases ?? []).map((p) => ({
-              name: p.name,
-              duration_weeks: p.duration_weeks,
-              duration_days: p.duration_days,
-            }))}
-          />
+          {hasPhases && (
+            <>
+              <BlockLabel>Timeline</BlockLabel>
+              <TimelinePhasesBlock
+                phases={(phases ?? []).map((p) => ({
+                  name: p.name,
+                  duration_weeks: p.duration_weeks,
+                  duration_days: p.duration_days,
+                }))}
+              />
+            </>
+          )}
 
           {/* Slice 03 — anchored milestones as a "Key dates" sub-line inside
               the Timeline block (the boring placement, escalated: could also
               weave per-phase — a flat chronological list read faster for a
               client scanning commitments than a list re-grouped by phase). */}
-          {(scheduleMilestones ?? []).length > 0 && (
-            <div className="mt-3 border-t border-[var(--border-default)] pt-2">
+          {hasKeyDates && (
+            <div
+              className={
+                hasPhases ? 'mt-3 border-t border-[var(--border-default)] pt-2' : ''
+              }
+            >
               <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
                 Key dates
               </p>
@@ -243,7 +280,7 @@ function LegacyProposalBlocksReadOnly({ proposalId }: { proposalId: string }) {
         </div>
       )}
 
-      {(exclusions ?? []).length > 0 && (
+      {hasExclusions && (
         <div>
           <BlockLabel>Not included</BlockLabel>
           <ExclusionsBlock

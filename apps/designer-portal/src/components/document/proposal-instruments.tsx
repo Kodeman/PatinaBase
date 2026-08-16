@@ -97,6 +97,7 @@ export function ProposalInstruments({
           clientName={clientName}
           proposal={proposal}
           hoistedLeader={hoistedLeader}
+          onFinalizeTable={onFinalizeTable}
         />
       )}
     </>
@@ -212,11 +213,13 @@ function LegacyProposalInstruments({
   clientName,
   proposal,
   hoistedLeader = null,
+  onFinalizeTable = false,
 }: {
   proposalId: string;
   clientName: string;
   proposal: any;
   hoistedLeader?: 'nudge' | 'preview' | 'resend' | 'answer-flags' | null;
+  onFinalizeTable?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -293,6 +296,7 @@ function LegacyProposalInstruments({
         proposalId={proposalId}
         clientName={clientName}
         hoistedLeader={hoistedLeader}
+        onFinalizeTable={onFinalizeTable}
       />
     );
   }

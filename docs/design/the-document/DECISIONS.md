@@ -8929,3 +8929,214 @@ ending in its own `scopeUpdated('add')` event).
   lens is dropped, never left pointing at a room nobody can see.
 
 *Entries add: I139 · last id = I139*
+
+### I140 · "Start to Signature" Wave 4 — the Finalize table — 2026-08-16
+
+Wave 4's first lane, on `sts/wave4-tables`, still behind the fail-closed
+`worktable` flag. W2 left the Finalize table as the sent/viewed proposal spread
+exactly as it stood; this lane makes it a table. Flag off, the composition is
+byte-identical and `worktable-finalize.test.tsx` guards that alongside W1's
+`paper-order.test.tsx`.
+
+**The verdict roll-up is the headline.** On every other surface the client's
+verdicts are a 9px mono whisper under the section heading. On a sent proposal,
+where those verdicts stand *is* the state of the document, so on this table the
+same sentence is the opening line in serif — and the whisper's old position
+stands down **on this table only**. One fact, one weight; a sentence printed
+twice at two sizes is two documents.
+
+**One inked leader, derived — and it decides nothing twice.**
+`deriveFinalizeLeader` folds proposal lifecycle × verdict roll-up × the send
+wall's own answer into at most one act, using only verbs the document already
+has: flagged lines outstanding → **Answer the flags**, anchored to the oldest
+unresolved rejection (the Drafting Room's own choice, now addressable as
+`firstFlaggedLineId` so the head and the destination cannot pick different
+lines); every line approved and still unsigned → **Nudge {family}**, offered
+**only when `deriveSendWallLine` offers the verb** — W1's `issued_on_paper`
+guard, the countersign hold and the three-day cooldown are composed, never
+re-implemented; otherwise the watch's own **Preview** (out) or **Email delivery
+status** (expired); and nothing at all once the seal, a decline, a supersede or
+a terminal commercial state speaks for itself. **Revise stays retired** (I91):
+a changed mind travels as a design services agreement, and a spec asserts the
+word never appears.
+
+**A promoted act is a moved act, not a copied one.** The wall below reads the
+same derivation off the same cached reads and stands down whichever act the
+head took — the send-wall line keeps its fact and drops its nudge (and the dash
+that led to it); the watch drops its Preview or its Email-delivery act. The
+verb is offered once.
+
+**One leader per table, ruled at integration.** The head's derived leader and
+the watch's `primary` "Mark signed" were two leader-weight acts on one table —
+`DocumentActionGroup`'s ≤1 guard polices a region, and these stand in two. The
+ruling: **the head's derived leader is the table's only leader-weight act.**
+Flag-on finalize, "Mark signed" keeps its place, its wording and its sheet and
+renders `secondary`; it is not a verb any derivation can carry, so it gives up
+its weight rather than its home. Flag off it is the primary it has always been.
+The page-level claim — inked + primary counted together across the whole
+composed table, exactly one — is spec'd in `worktable-finalize-once.test.tsx`,
+because no per-region guard could ever have caught it.
+
+**The Offer folds open on the paper, with the Room's editability and not one
+permission more.** R4's decomposition: Scope + Vision became the Speccing table
+(I139), and the Offer movement — Phases · Exclusions · Payments · Terms —
+mounts here under the spread in the Room's own `FacetSection` seams, same
+accent, same status words, same editors. The Room's gate is now
+`drafting-editability.ts` and **both** surfaces read it. Its honest answer at
+this stage is `issued`: the Room evicts anyone who opens a sent proposal, so
+the seams open onto the offer **as written**, in the canonical blocks, and no
+editor mounts. **Amendment A3 is in force behind the flag** — proposal
+authoring lives on the paper and the Drafting Room retires by redirect — but A3
+does not grant an edit the Room forbids.
+
+**And the offer therefore stops printing twice, ruled at integration.** With
+the seams standing under the spread, `ProposalBlocksReadOnly` was stating
+Timeline, Payments and Exclusions above facts the seams state again. The
+ruling: **fold it.** Flag-on AND finalize composed, the read-only spread drops
+its Offer blocks — the seams below are their addressable home. It is a
+defaulted prop (`omitOfferBlocks`, false), not a fork: the settled unfold, the
+version-history sheet, the client portal's blocks and every flag-off render
+take the same component byte-identically. One exception, and it is deliberate:
+Slice 03's anchored **Key dates** ride inside the Timeline block but are *not*
+an Offer fact — no seam carries them — so they survive the omission and keep
+their existing condition. Dropping them would have deleted a fact from the page
+in the name of printing it once.
+
+**The client's copy is a shelf.** The Drafting Room's ≥1440 live rail becomes
+the leaf "The client's copy", visible only with the flag on and the Finalize
+table composed. The registry learned what each shelf *belongs to* (`subject`),
+because the first version offered a proposal document the project's plan room,
+spec book, boards and roster — four surfaces it does not have, which is the
+same lie the call-sheet stub would have told. Below 1440 no shelf exists at all
+and the watch's "Preview as {family}" is the copy's form (Q7/A4: the capability
+changes shape, it is never `display:none`'d).
+
+**The Drafting Room is a press (Q5 step 2), with two doors deliberately left
+open.** Flag on, a legacy proposal's `/drafting/<id>` `router.replace`s to
+`/doc/<id>`; flag off it opens exactly as it always has, and every entry — the
+draft work band, ⌘K, the guide, the mood-board return target — is unchanged
+either way. Two entries are spared, because a press over a door nobody else
+opens is a strand and not a retirement: the Desk's `?flagged=1` walk-in, whose
+Alternatives band exists only in the Room; and **design-services agreements and
+their addenda**, whose authoring is `ServiceAgreementDraftingRoom` and was
+never part of this decomposition.
+
+**Known debts, recorded as debts:**
+
+- *"Answer the flags" leaves the paper.* Nothing on the Finalize table can
+  resolve a flagged line, so the leader walks into the Room. Bringing that
+  answer onto the table is what closes the `?flagged=1` carve-out.
+- *The two spared doors are the press's unfinished edge.* `?flagged=1` and the
+  design-services room are carve-outs, not exemptions — each is named here so
+  the retirement can be finished rather than forgotten.
+
+*Entries add: I140 · last id = I140*
+
+### I141 · "Start to Signature" Wave 4 — the Delivery table — 2026-08-16
+
+Wave 4 lane B, on the Delivery table only, still behind the fail-closed
+`worktable` flag. W2 framed the delivery composition and left it exactly as it
+stood; this lane makes two moves on it and nothing else.
+
+**The release ceremony's leader lifts to the table head; the ceremony does not
+move.** "Release for authorization" lived inside the FF&E region's ledger,
+three regions down a project document — the last hunt in the re-walked journey.
+Flag on, the procurement setting prints it at the head of the table, above the
+spread. Selection, the composition bar and the review sheet stay on the
+schedule, because releasing is still the schedule's own act: what moved is the
+*leader*, not the ceremony.
+
+**The lift presses the door the ceremony already opens on.**
+`ReleaseCeremonyProvider` is section-local by design and mounts inside
+`FFESection`, so a leader standing at the table head cannot reach its context —
+and minting a second `begin()` for it would be exactly the duplicated machinery
+the lift exists to end. It dispatches `START_RELEASE_EVENT` with an empty
+pre-tick list: the window door VoidAct has used since the Authorized Schedule
+to start a superseding release, and `begin([])` is what `ceremony.begin()`
+already does. One entry point, two callers.
+
+**The FF&E head demotes rather than inking a second release.**
+`releaseLeaderElsewhere` (defaulted off, so every other surface is unchanged)
+makes the section's head fall to its own non-authority shape: "Add to project"
+leads, per the existing `DocumentActionGroup` order, and release does not print
+in the head at all — not demoted, not duplicated. The one-inked-leader guard is
+a per-region runtime check and would not have caught two release leaders in two
+regions; the page-level claim is spec'd instead. The head's "No lines are
+currently eligible for release." line stays where it is: with the leader
+lifted, it is the only place the table head's *silence* is accounted for.
+
+**The section reports; it is never asked.** `canRelease` and per-line
+eligibility are derived in one place — inside the schedule, over readiness,
+authority, instruments and trade scopes — and the table head prints only the
+leader it is told exists (`onReleaseOffered`). The offer is withdrawn while a
+ceremony is already under way: pressing the lifted leader mid-selection would
+call `begin([])` and discard the ticks in hand.
+
+**Money is the measure, not the work — so it stands as a seam.** On the table
+the money region compresses to one scored line, "$X committed of $Y authority",
+and unfolds in place to *exactly* the region that stands on the paper today.
+Both figures are the region's own already-computed reads; no query was added.
+**Reference posture by default, work posture one press away.**
+
+**The seam is folded by declaration, not by derivation, and remembers itself
+apart.** Off the table the region folds on its sparse test and stands open
+otherwise; on the table it folds because that is what money *is* here, needing
+no read to settle first. Its remembered choice lives on its own key
+(`money-table`): a designer who opened the region off the flag must not land on
+the table with its seam already spent.
+
+**The accounts either-or is untouched, and deliberately does not read the
+fold.** W2's F1 rule stands: the money region states the accounts inside the
+Project spread, the account band states them everywhere else, and the gate is
+the spread's *section*. A folded seam is still the money region mounted — so
+folding must not summon a second accounts surface, and it does not.
+
+**The install setting lifts nothing.** Releasing is procurement work; the
+install spread stands as it did — FF&E at install grade, the window ceremony,
+the Care band — and the care spread is untouched.
+
+**A boundary worth stating: the procurement setting is not the project
+spread.** W2's derivation maps project *and* care to delivery/procurement, so
+gating on the setting alone would have leaked the release lift onto a closed
+project's care spread. The lift is gated on the project spread.
+
+**Recorded as scoped out, not forgotten:** *money does not seam on the
+install/care spread, because money does not mount there.* On install and care
+W2's accounts either-or gives the accounts to the band instead, so a money seam
+on the install spread would be a new mount and a second accounts surface.
+Bringing money onto the install spread is its own ruling, and it has not been
+made.
+
+*Entries add: I141 · last id = I141*
+
+### I142 · "Start to Signature" Wave 4 — the Intake spread header — 2026-08-16
+
+Wave 4 lane C, on the Intake table only, still behind the fail-closed
+`worktable` flag.
+
+**Table I's spread header — the household chip promoted.** The Intake table
+(brief|discovery) now prints a quiet reading-size header above the section
+content — name (serif), one-line project description, and arrival source (mono
+eyebrow) — sourced entirely from `useLead`, the same read `BriefSection`
+already performs. The letterhead's own household chip is untouched — this is
+the promotion, not a move; the two co-exist by design.
+
+**Q6 honesty, scoped.** Deliberately built as printed identity only — no
+capture drop, no start-a-board tile, no links, no buttons, no affordance for a
+store (folio, boards) that does not exist at Table I. The ruling held that
+pre-proposal capture is an inferred complaint, not a heard one; Table I
+therefore states what is true and offers nothing it cannot keep. It renders
+`null` rather than empty scaffolding when identity data is absent, and waits
+for the lead read to resolve rather than growing the header after first paint.
+Flag-off and off-intake are both byte-identical: the component is not mounted,
+so `useLead` is never called and the wire is unchanged.
+
+**Recorded as a debt:** *on a discovery document this is a new read.* On a lead
+document the header is React-Query-deduped against the Brief's own `useLead`
+and costs nothing; on a discovery document the lead (reached via Shape D's
+`dc.lead_id`) is not otherwise read by this page, so the header adds one gated
+query — enabled only while the Intake table is composed. It is the lane's only
+new read, and it is named here rather than hidden inside a dedupe claim that
+does not hold on both shapes.
+
+*Entries add: I142 · last id = I142*
