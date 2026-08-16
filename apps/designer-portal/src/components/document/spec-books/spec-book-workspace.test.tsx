@@ -16,7 +16,6 @@ const readinessChanged = jest.fn();
 
 jest.mock("@patina/supabase", () => ({
   useCreateSpecBookShare: jest.fn(),
-  useFinalizeSpecBookIssue: jest.fn(),
   usePrepareSpecBookIssue: jest.fn(),
   useProjectV2: jest.fn(),
   useRenderSpecBookArtifact: jest.fn(),

@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import {
   useCreateSpecBookShare,
-  useFinalizeSpecBookIssue,
   usePrepareSpecBookIssue,
   useProjectFfeReadiness,
   useProjectV2,
@@ -734,7 +733,6 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
   };
   const updateSetting = useUpdateSpecBookItemSetting(projectId);
   const prepareIssue = usePrepareSpecBookIssue();
-  const finalizeIssue = useFinalizeSpecBookIssue(projectId);
   const renderArtifact = useRenderSpecBookArtifact(projectId);
   const createShare = useCreateSpecBookShare(projectId);
 
@@ -896,17 +894,18 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
           reason: warningReason.trim(),
         })),
       });
-      await Promise.all(
+      const rendered = await Promise.all(
         prepared.artifacts.map(async (artifact) => {
           const renderStarted = performance.now();
           try {
-            await renderArtifact.mutateAsync(artifact.id);
+            const result = await renderArtifact.mutateAsync(artifact.id);
             specBookEvents.artifactRendered({
               project_id: projectId,
               artifact_id: artifact.id,
               audience: artifact.audience,
               duration_ms: Math.round(performance.now() - renderStarted),
             });
+            return result;
           } catch (error) {
             specBookEvents.artifactFailed({
               project_id: projectId,
@@ -918,14 +917,17 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
           }
         }),
       );
-      await finalizeIssue.mutateAsync(prepared.revision.id);
       specBookEvents.issued({
         project_id: projectId,
         revision_id: prepared.revision.id,
         issue_type: issueType,
         duration_ms: Math.round(performance.now() - issueStarted),
       });
-      setIssueFeedback("Revision issued. Every audience artifact is durable.");
+      setIssueFeedback(
+        rendered.some((result) => result.finalized)
+          ? "Revision issued. Every audience artifact is durable."
+          : "Every audience artifact rendered. Issue status is refreshing.",
+      );
       setView("history");
     } catch (error) {
       setIssueFeedback(
@@ -937,7 +939,6 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
   }, [
     audiences,
     data,
-    finalizeIssue,
     issueReason,
     issueType,
     latestIssued?.id,
@@ -956,13 +957,12 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
       audience: artifact.audience,
     });
     try {
-      await renderArtifact.mutateAsync(artifact.id);
-      try {
-        await finalizeIssue.mutateAsync(artifact.revision_id);
+      const result = await renderArtifact.mutateAsync(artifact.id);
+      if (result.finalized) {
         setIssueFeedback(
           `${artifact.audience} artifact rendered and the revision is issued.`,
         );
-      } catch {
+      } else {
         setIssueFeedback(
           `${artifact.audience} artifact rendered. Other editions still need attention.`,
         );
@@ -1041,8 +1041,7 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
   const projectName = project.data?.name ?? project.data?.title ?? "Project";
   const issueBusy =
     prepareIssue.isPending ||
-    renderArtifact.isPending ||
-    finalizeIssue.isPending;
+    renderArtifact.isPending;
 
   return (
     <main className="min-h-screen bg-[var(--doc-paper)] text-[var(--color-charcoal)]">

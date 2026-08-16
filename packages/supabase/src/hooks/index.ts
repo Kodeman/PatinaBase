@@ -1012,7 +1012,6 @@ export {
   useUpdateSpecBookChapter,
   useUpdateSpecBookItemSetting,
   usePrepareSpecBookIssue,
-  useFinalizeSpecBookIssue,
   useRenderSpecBookArtifact,
   useCreateSpecBookShare,
   useRevokeDocumentShare,
