@@ -8680,3 +8680,57 @@ boards seam (Q1's reversal, W3); and any sealing-semantics change
 mapping session).
 
 *Entries add: I137 · last id = I137*
+
+### I137-errata · Review corrections to Wave 1 before merge — 2026-08-15
+
+Adversarial review of I137 returned "merge with fixes". All are applied on the
+same branch; the entries below correct what I137 above records.
+
+**The send wall never nudges a paper-issued agreement.** I137's line offered
+"Nudge {family}" on any sent proposal past the cooldown. 00477's paper door
+sets `status='sent'` with `sent_at` NULL and `issued_on_paper=true` — nothing
+was emailed and the household may have no address on file — but
+`nudge_proposal` (00231) would have accepted it anyway: stamping
+`last_nudged_at`, burning the three-day cooldown, and firing the
+`proposal-nudge` edge function at nobody. The record would then have read
+"Issued on paper — nudged Aug 15", a reminder permanently logged that went
+nowhere. The verb is now withheld whenever `issued_on_paper` is true and the
+line falls through to its state word.
+
+**The line's decision is a derivation, not a component.** `deriveSendWallLine`
+lives beside `deriveProposalWatch`; `SendWallLine` renders what it returns and
+decides nothing. The matrix — watch status × `commercial_state` × nudge
+cooldown × `issued_on_paper` — is covered by `send-wall-line.test.ts`, which
+also pins the two invariants the wall rests on: exactly one of {verb, state
+word} prints for every shape the wall speaks about, and **"awaiting
+countersign" is reachable only through `commercial_state='client_signed'`**. A
+wall with no owed countersign and no offerable nudge now says "awaiting the
+client's signature" instead, which is the true sentence for a legacy proposal
+and for a paper issuance.
+
+**The order claim is now guarded.** I137 asserted that index order equals paper
+order by construction, but nothing tested it:
+`use-document-running-index.test.tsx` builds its fixture FROM the keys, so it
+agrees with the array by definition, and `shelved-spine.test.tsx` carried a
+hardcoded schedule-first fixture that passed only because it never looked at
+order. `doc/[id]/paper-order.test.tsx` now renders the real page and walks the
+real `[data-index-region]` roots against `PROJECT_PAPER_ORDER` (and checks the
+Record still follows the last of them); the spine fixture is built from the
+canonical order and asserts the printed order explicitly. Both were confirmed
+to fail when the order is put back the way it was.
+
+**Corrections to what I137 claimed:**
+
+- *The dead `commercial_state='expired'` branch is gone.* I137's stand-down
+  list included it; 00414 removed 'expired' from the check constraint, so no
+  row can carry the value and the branch could never run.
+- *The sent phrase counts calendar days, not 24-hour buckets.* Something sent
+  at 11pm read "today" at 1am. Boundaries are the viewer's own local midnights,
+  and past 30 days the line states the day ("Sent May 24") rather than counting
+  on forever.
+
+**Left open, deliberately:** the reminder email's own copy still speaks as if
+the agreement was emailed, which is wrong for a paper issuance that was later
+nudged before this fix landed. Recorded as a content check, not changed here.
+
+*Entries add: I137-errata · last id = I137*

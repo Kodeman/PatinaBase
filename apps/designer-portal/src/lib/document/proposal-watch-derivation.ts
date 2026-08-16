@@ -1,6 +1,8 @@
 /**
  * Proposal-watch derivation — the pure view-model behind the "With the client"
- * watch view (the Proposal section's treatment once a proposal is out the door).
+ * watch view (the Proposal section's treatment once a proposal is out the door),
+ * and behind SP3's send-wall state line, which opens BOTH walls (this one and
+ * the design-services status block) so neither can be silent.
  *
  * Mirrors desk-derivation.ts: React-free, DOM-free, unit-testable. It folds the
  * proposal row + the engagement aggregate (useProposalEngagementStats) + the raw
@@ -240,5 +242,131 @@ export function deriveProposalWatch(
     awaitingDays,
     isAwaitingAged,
     record: buildRecord(sentAt, events ?? []),
+  };
+}
+
+/* ── SP3: the send-wall state line ─────────────────────────────────────────
+   Between the send and the seal the wall always says where the agreement
+   stands and what can be done about it. The decision is here, not in the
+   component, because it turns on three sources that disagree with each other
+   in ways only a table can keep straight: the proposal's own status, the
+   design-services rail's `commercial_state`, and whether the document was
+   handed over on paper at all. ─────────────────────────────────────────── */
+
+/** The only verb the wall offers today. Resend/preview live in the block
+ *  below it; revise is retired for legacy proposals (I91 contract). */
+export type SendWallVerb = 'nudge';
+
+export interface SendWallInput {
+  watch: ProposalWatchModel;
+  /** `proposals.commercial_state` (00412/00414) — null on a legacy proposal.
+   *  Load-bearing: a client's signature on a design services agreement moves
+   *  THIS column while `proposals.status` stays 'sent'. */
+  commercialState: string | null;
+  /** `proposals.issued_on_paper` (00477) — handed over, never dispatched. */
+  issuedOnPaper: boolean;
+}
+
+export interface SendWallLine {
+  /** "Sent 3 days ago" · "Sent Jun 12" · "Issued on paper". */
+  sentText: string;
+  /** Exactly one of `verb` / `stateWord` is non-null: the line either offers
+   *  an act or names a state, never both and never neither. */
+  verb: SendWallVerb | null;
+  stateWord: string | null;
+}
+
+/** Commercial states whose block below states the whole story — the line
+ *  stands down rather than printing a second, thinner version of it.
+ *  ('expired' is deliberately absent: 00414 removed it from the check
+ *  constraint, so no row can carry it.) */
+const SEND_WALL_STOOD_DOWN_STATES = ['executed', 'declined', 'superseded'];
+
+/** Beyond this the relative phrase stops helping and the wall states the day. */
+const SENT_PHRASE_CEILING_DAYS = 30;
+
+const fmtShortDay = (iso: string) =>
+  new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(
+    new Date(iso),
+  );
+
+/**
+ * Whole CALENDAR days between two instants in the viewer's own zone — not
+ * 24-hour buckets. Something sent at 11pm is "yesterday" at 1am, which is how
+ * a person reads a date; `daysBetween` above answers a different question (how
+ * long has this SAT) and is right to floor elapsed time instead.
+ */
+function calendarDaysBetween(earlierIso: string, now: Date): number | null {
+  const then = new Date(earlierIso);
+  if (Number.isNaN(then.getTime())) return null;
+  const thenMidnight = new Date(
+    then.getFullYear(),
+    then.getMonth(),
+    then.getDate(),
+  ).getTime();
+  const nowMidnight = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  ).getTime();
+  return Math.round((nowMidnight - thenMidnight) / DAY_MS);
+}
+
+function sentText(
+  sentAt: string | null,
+  issuedOnPaper: boolean,
+  now: Date,
+): string {
+  // 00477's paper door issues without sending, so sent_at is legitimately null.
+  if (!sentAt) return issuedOnPaper ? 'Issued on paper' : 'Sent';
+  const days = calendarDaysBetween(sentAt, now);
+  if (days === null || days < 0 || days > SENT_PHRASE_CEILING_DAYS) {
+    return `Sent ${fmtShortDay(sentAt)}`;
+  }
+  if (days === 0) return 'Sent today';
+  if (days === 1) return 'Sent yesterday';
+  return `Sent ${days} days ago`;
+}
+
+/**
+ * The send wall's one line. Null means the wall stands down — a draft has no
+ * wall yet, a seal speaks for itself, and an executed or terminal commercial
+ * edition is stated in full by the block below.
+ */
+export function deriveSendWallLine(
+  { watch, commercialState, issuedOnPaper }: SendWallInput,
+  now: Date,
+): SendWallLine | null {
+  if (watch.settled) return null;
+  if (!watch.awaitingClient && !watch.terminal) return null;
+  if (commercialState && SEND_WALL_STOOD_DOWN_STATES.includes(commercialState)) {
+    return null;
+  }
+
+  const countersignPending = commercialState === 'client_signed';
+  // A paper-issued agreement is NEVER nudged: nudge_proposal (00231) would
+  // accept it, burn the three-day cooldown and dispatch a reminder email —
+  // to a household that may have no address on file and was never emailed in
+  // the first place. The record would then read "Issued on paper — nudged
+  // Aug 15": a reminder permanently logged that went nowhere.
+  const verb: SendWallVerb | null =
+    watch.canNudge && !countersignPending && !issuedOnPaper ? 'nudge' : null;
+
+  let stateWord: string | null = null;
+  if (!verb) {
+    if (countersignPending) stateWord = 'awaiting countersign';
+    else if (watch.status === 'declined') stateWord = 'declined by the client';
+    else if (watch.status === 'expired') stateWord = 'expired unsigned';
+    else if (watch.status === 'revised') {
+      stateWord = 'superseded by a newer version';
+    } else if (watch.lastNudgedAt) {
+      stateWord = `nudged ${fmtShortDay(watch.lastNudgedAt)}`;
+    } else stateWord = 'awaiting the client’s signature';
+  }
+
+  return {
+    sentText: sentText(watch.sentAt, issuedOnPaper, now),
+    verb,
+    stateWord,
   };
 }

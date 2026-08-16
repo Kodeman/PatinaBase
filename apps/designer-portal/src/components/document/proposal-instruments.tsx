@@ -31,6 +31,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useNudgeProposal, useProposal } from '@/hooks/use-proposals';
 import { useProposalWatch } from '@/hooks/use-proposal-watch';
 import { familyLabel } from '@/lib/document/family-label';
+import { deriveSendWallLine } from '@/lib/document/proposal-watch-derivation';
 import { rememberRoomOrigin } from '@/lib/document/room-origin';
 import { useDraftingState } from '@/hooks/use-drafting-state';
 import { displayDraftingState } from '@/lib/document/drafting-progress';
@@ -76,6 +77,7 @@ export function ProposalInstruments({
             ? proposal.commercial_state
             : null
         }
+        issuedOnPaper={proposal?.issued_on_paper === true}
       />
       {experience === 'design_services' ? (
         <ServiceAgreementInstruments proposal={proposal} clientName={clientName} />
@@ -90,47 +92,24 @@ export function ProposalInstruments({
   );
 }
 
-const fmtDayShort = (iso: string) =>
-  new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(
-    new Date(iso),
-  );
-
 /**
- * "today" / "yesterday" / "3 days ago" — the register a wall is read in.
- *
- * Measured from the dispatch, NOT from the watch model's `awaitingDays`: that
- * clock restarts at the client's first open, which is the right clock for "how
- * long has this sat unsigned" and the wrong one for "when was this sent".
- */
-function sentAgoPhrase(sentAt: string, now: Date): string | null {
-  const days = Math.floor((now.getTime() - new Date(sentAt).getTime()) / 86_400_000);
-  if (!Number.isFinite(days) || days < 0) return null;
-  if (days === 0) return 'today';
-  if (days === 1) return 'yesterday';
-  return `${days} days ago`;
-}
-
-/**
- * SP3 — the send wall's state line. Between the send and the seal the paper
- * always says where the agreement stands and what can be done about it; before
- * this, a designer could look at a sent proposal and read only figures.
- *
- * `commercialState` is the design-services rail's own lifecycle
- * (proposals.commercial_state, 00412/00477). It has to be consulted because a
- * client's signature moves THAT column while proposals.status stays 'sent' —
- * offering a nudge to a household that has already signed would be a lie the
- * watch model alone cannot catch.
+ * SP3 — the send wall's state line: a thin renderer over `deriveSendWallLine`.
+ * Every rule about which verb is offered, which state word is named, and when
+ * the wall stands down lives in the derivation, where the
+ * status × commercial_state × issued_on_paper matrix is covered by a spec.
  */
 function SendWallLine({
   proposalId,
   clientName,
   commercialState,
+  issuedOnPaper,
 }: {
   proposalId: string;
   clientName: string;
   commercialState: string | null;
+  issuedOnPaper: boolean;
 }) {
-  const { watch: w } = useProposalWatch(proposalId);
+  const { watch } = useProposalWatch(proposalId);
   const nudge = useNudgeProposal();
   const [note, setNote] = useState<{ text: string; tone: 'ok' | 'warn' | 'err' } | null>(
     null,
@@ -157,36 +136,10 @@ function SendWallLine({
     }
   };
 
-  // A draft has no wall yet; a seal speaks for itself; and an executed or
-  // terminal commercial edition is stated in full by the block below.
-  if (!w || w.settled || (!w.awaitingClient && !w.terminal)) return null;
-  if (
-    commercialState === 'executed' ||
-    commercialState === 'declined' ||
-    commercialState === 'expired' ||
-    commercialState === 'superseded'
-  ) {
-    return null;
-  }
-
-  const countersignPending = commercialState === 'client_signed';
-  const canNudge = w.canNudge && !countersignPending;
-
-  const ago = w.sentAt ? sentAgoPhrase(w.sentAt, new Date()) : null;
-  // 00477's paper door issues without sending, so sent_at is legitimately null.
-  const sentText = w.sentAt
-    ? ago
-      ? `Sent ${ago}`
-      : `Sent ${fmtDayShort(w.sentAt)}`
-    : 'Issued on paper';
-
-  let stateWord: string | null = null;
-  if (w.status === 'declined') stateWord = 'declined by the client';
-  else if (w.status === 'expired') stateWord = 'expired unsigned';
-  else if (w.status === 'revised') stateWord = 'superseded by a newer version';
-  else if (!canNudge && w.lastNudgedAt && !countersignPending) {
-    stateWord = `nudged ${fmtDayShort(w.lastNudgedAt)}`;
-  } else if (!canNudge) stateWord = 'awaiting countersign';
+  const line = watch
+    ? deriveSendWallLine({ watch, commercialState, issuedOnPaper }, new Date())
+    : null;
+  if (!line) return null;
 
   return (
     <>
@@ -197,9 +150,9 @@ function SendWallLine({
         aria-label="Proposal state"
       >
         <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
-          {sentText} —
+          {line.sentText} —
         </span>
-        {canNudge && (
+        {line.verb === 'nudge' && (
           <DocumentAction
             actionKey="nudge-client"
             variant="secondary"
@@ -210,9 +163,9 @@ function SendWallLine({
             Nudge {family}
           </DocumentAction>
         )}
-        {stateWord && (
+        {line.stateWord && (
           <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-            {stateWord}
+            {line.stateWord}
           </span>
         )}
       </DocumentActionRow>

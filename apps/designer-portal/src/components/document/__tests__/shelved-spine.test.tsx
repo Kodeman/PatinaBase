@@ -5,13 +5,25 @@ import { SpineRoomsBlock } from '../spine-rooms-block';
 import { SpineShelvesBlock } from '../spine-shelves-block';
 import { ShelfPanel } from '../shelves/shelf-panel';
 import { requestShelfClose } from '@/lib/document/shelves';
+import {
+  PROJECT_PAPER_ORDER,
+  type DocumentIndexKey,
+} from '@/lib/document/document-index';
 
-const entries = [
-  { key: 'schedule' as const, label: 'Schedule', value: 'Week 1 of 14' },
-  { key: 'approvals' as const, label: 'Client approvals', value: '3 in the log' },
-  { key: 'ffe' as const, label: 'Project · FF&E', value: '10 pieces · 5 rooms' },
-  { key: 'money' as const, label: 'Design authority', value: '$24,000 authority' },
-];
+const VALUES: Record<DocumentIndexKey, string> = {
+  schedule: 'Week 1 of 14',
+  approvals: '3 in the log',
+  ffe: '10 pieces · 5 rooms',
+  money: '$24,000 authority',
+};
+
+/** Built FROM the canonical order, so this fixture cannot quietly go on
+ *  asserting a reading order the paper has stopped having. */
+const entries = PROJECT_PAPER_ORDER.map((region) => ({
+  key: region.key,
+  label: region.label,
+  value: VALUES[region.key],
+}));
 
 describe('the running index', () => {
   it('marks exactly one entry current and jumps from any of them', () => {
@@ -30,6 +42,22 @@ describe('the running index', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Design authority/ }));
     expect(onJump).toHaveBeenCalledWith('money');
+  });
+
+  it('prints its lines in the paper order — approvals above the ledger, as the DOM mounts them', () => {
+    render(
+      <SpineRunningIndex entries={entries} activeKey={null} onJump={jest.fn()} />,
+    );
+    expect(
+      screen
+        .getAllByRole('button')
+        .map((b) => b.querySelector('span')?.textContent),
+    ).toEqual([
+      'Client approvals',
+      'Schedule',
+      'Project · FF&E',
+      'Design authority',
+    ]);
   });
 
   it('takes the "In this document" name the presence line used to carry', () => {
