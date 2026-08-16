@@ -76,6 +76,7 @@ import { ComposeDecisionSheet } from '@/components/document/coordination/compose
 import { DocumentAction, DocumentActionGroup } from '../../document-action';
 import { useMobilePrimaryAction } from '../../mobile/mobile-shell';
 import { commercialDocumentExperience } from '@/lib/document/commercial-documents';
+import { draftingEditability } from '@/lib/document/drafting-editability';
 import { ServiceAgreementDraftingRoom } from './service-agreement-drafting-room';
 
 const STATE_TONE: Record<string, { color: string; bg: string }> = {
@@ -143,18 +144,20 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
     refetch: () => unknown;
   };
   const experience = commercialDocumentExperience(proposal?.document_kind);
-  const commercialState = proposal?.commercial_state ?? 'draft';
+  // The Room's own rule, now addressable (drafting-editability.ts) so the
+  // Finalize table's Offer facets obey it instead of re-deciding it. Same
+  // matrix, same outcomes — `experience` still chooses which sentence to say.
+  const editability = draftingEditability({
+    documentKind: proposal?.document_kind,
+    status: proposal?.status,
+    commercialState: proposal?.commercial_state,
+  });
 
   useEffect(() => {
-    if (
-      proposal &&
-      ((experience === 'legacy' && proposal.status !== 'draft') ||
-        (experience === 'design_services' && commercialState !== 'draft') ||
-        experience === 'commercial_readonly')
-    ) {
+    if (proposal && editability !== 'editable') {
       router.replace(`/doc/${proposalId}`);
     }
-  }, [commercialState, experience, proposal, proposalId, router]);
+  }, [editability, proposal, proposalId, router]);
 
   if (isLoading) {
     return <DraftingRoomGateMessage message="Opening the draft…" />;
@@ -177,16 +180,13 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
     );
   }
 
-  if (experience === 'commercial_readonly') {
+  if (editability === 'readonly') {
     return (
       <DraftingRoomGateMessage message="This commercial edition is read-only here. Returning to its document…" />
     );
   }
 
-  if (
-    (experience === 'legacy' && proposal.status !== 'draft') ||
-    (experience === 'design_services' && commercialState !== 'draft')
-  ) {
+  if (editability === 'issued') {
     return (
       <DraftingRoomGateMessage message="This commercial document has already been issued. Returning to its read-only document…" />
     );

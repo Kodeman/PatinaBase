@@ -329,6 +329,26 @@ function sentText(
 }
 
 /**
+ * Where the document stands, in the wall's own words. `deriveSendWallLine`
+ * calls this whenever it has no verb to offer — and the renderer calls it for
+ * the one case the derivation cannot see: a table head has hoisted the nudge,
+ * so the line has lost its verb without the state behind it changing. Without
+ * it the wall read "Sent 5 days ago" and stopped, over an action row with no
+ * action.
+ */
+export function sendWallStateWord(
+  watch: ProposalWatchModel,
+  commercialState: string | null,
+): string {
+  if (commercialState === 'client_signed') return 'awaiting countersign';
+  if (watch.status === 'declined') return 'declined by the client';
+  if (watch.status === 'expired') return 'expired unsigned';
+  if (watch.status === 'revised') return 'superseded by a newer version';
+  if (watch.lastNudgedAt) return `nudged ${fmtShortDay(watch.lastNudgedAt)}`;
+  return 'awaiting the client’s signature';
+}
+
+/**
  * The send wall's one line. Null means the wall stands down — a draft has no
  * wall yet, a seal speaks for itself, and an executed or terminal commercial
  * edition is stated in full by the block below.
@@ -352,17 +372,7 @@ export function deriveSendWallLine(
   const verb: SendWallVerb | null =
     watch.canNudge && !countersignPending && !issuedOnPaper ? 'nudge' : null;
 
-  let stateWord: string | null = null;
-  if (!verb) {
-    if (countersignPending) stateWord = 'awaiting countersign';
-    else if (watch.status === 'declined') stateWord = 'declined by the client';
-    else if (watch.status === 'expired') stateWord = 'expired unsigned';
-    else if (watch.status === 'revised') {
-      stateWord = 'superseded by a newer version';
-    } else if (watch.lastNudgedAt) {
-      stateWord = `nudged ${fmtShortDay(watch.lastNudgedAt)}`;
-    } else stateWord = 'awaiting the client’s signature';
-  }
+  const stateWord = verb ? null : sendWallStateWord(watch, commercialState);
 
   return {
     sentText: sentText(watch.sentAt, issuedOnPaper, now),

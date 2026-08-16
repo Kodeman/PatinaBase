@@ -31,6 +31,11 @@ export type RegionFoldKey =
   | 'schedule-rule'
   | 'ffe'
   | 'money'
+  // The money region wears two postures on one document: its own region on the
+  // section grammar's paper, and the Delivery table's reference seam (W4b).
+  // They must not share a remembered choice — a designer who opened the region
+  // off the flag would otherwise land on the table with the seam already spent.
+  | 'money-table'
   | 'boards'
   | 'care';
 

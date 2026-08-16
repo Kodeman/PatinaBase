@@ -40,6 +40,21 @@ Integration + review before W5.
 
 **W5 — Program verification + closeout.** Full designer-portal type-check + jest suite; flag-off/flag-on walkthrough parity notes; DECISIONS consolidation (one reviewer pass over all entries); worktree/branch retirement per patina-parallel-work §10; push. Deploy is NOT part of this program (no explicit deploy request); flag retirement awaits Kody's walk.
 
+## Orchestrator rulings on W4a's open questions (2026-08-16)
+
+W4a (the Finalize table, worktree branch `worktree-agent-a8401b8f9c5fde85e`, commit `83c49f33`) delivered green and raised three questions. Rulings, to be applied by the W4 integration lane:
+
+1. **The offer prints twice.** RULED: fold it. Flag-on AND finalize table composed, `ProposalBlocksReadOnly` drops its Offer blocks (Timeline, Payments, Exclusions) from the spread — the Offer seams below are the addressable home. Flag-off and every other table unchanged. One fact, one place.
+2. **Offer facets not editable at finalize.** ACCEPTED as delivered — the agent obeyed the Drafting Room's own gate (`drafting-editability.ts`) rather than inventing permission. A3 does not grant an edit the Room forbids. Stands as recorded.
+3. **Two leader renderings on one table** (head's `inked` leader + ProposalWatch's `primary` "Mark signed"). RULED: one leader per table. Flag-on finalize, "Mark signed" renders `secondary`; the head's derived leader is the table's only inked/primary act. Flag-off unchanged.
+4. **"Answer the flags" walks to the Room, and the `?flagged=1` + design-services carve-outs in the press redirect.** ACCEPTED as delivered and recorded as debts — a press over a door nobody else opens is a strand, not a retirement.
+
+## Orchestrator ruling on the W4 review (2026-08-16) — the press is descoped
+
+The W4 adversarial review found that flag-on, the Offer movement (Phases · Exclusions · Payments · Terms) has no authorable home: draft proposals compose the Speccing table (Scope+Vision tools only), the Finalize table's Offer seams are read-only by the Room's own gate, and W4a's `/drafting` press shut the one surface that could author them. Root cause is an orchestration error, not a lane error: **Kody's Q5 ruling was "retire in TWO steps" — the landing/return fix now, decomposition onto the tables in a later release once the Speccing table proves itself.** The W4a brief asked for step two early. Corrected: **the press is descoped from this program.** `/drafting` stays reachable in both flag states until a later release gives the Offer an editable home on the Speccing table. Everything else W4a built stands.
+
+Consequence rulings: "Answer the flags" is dropped as a leader (the Room evicts a sent/viewed proposal, so the verb bounced — the flags have no answer surface anywhere today, including main's Desk walk-in; recorded as a product debt, not papered over with a false verb). The one-leader rule governs the **table's composition**, not the fixed skeleton — the letterhead's "Message {family}" is chrome and does not count against it; the claim and its spec are corrected to say so.
+
 ## Constraints (all agents)
 - Doctrine: one route `/doc/[id]`, no tabs; scored ink, no buttons; RegionHead one inked leader; margin = notifications (D2); left edge = orientation; seams fold in place.
 - Read `.agents/skills/patina-verification/SKILL.md` before claiming green; the designer-portal gates are `pnpm --filter @patina/designer-portal type-check` and targeted jest via `pnpm --filter @patina/designer-portal test -- <spec>`.

@@ -108,6 +108,7 @@ import { deriveGates, nearestOpenGate } from '@/lib/document/workflow-gate';
 import {
   asCommercialDocumentKind,
   asCommercialState,
+  commercialDocumentExperience,
 } from '@/lib/document/commercial-documents';
 import { useDraftingState } from '@/hooks/use-drafting-state';
 import {
@@ -124,6 +125,7 @@ import {
 import { DocSpineShelvedBlocks } from '@/components/document/spine-shelved-blocks';
 import { deriveTableComposition } from '@/lib/document/table-derivation';
 import { useTablePin } from '@/components/document/worktable/use-table-pin';
+import { ReleaseLift } from '@/components/document/worktable/release-lift';
 import { TableFrame } from '@/components/document/worktable/table-frame';
 import {
   markSealTurn,
@@ -134,6 +136,10 @@ import { RoomsRail } from '@/components/document/worktable/rooms-rail';
 import { Scheme } from '@/components/document/worktable/scheme';
 import { BoardsStrip } from '@/components/document/worktable/boards-strip';
 import { LibraryReachIn } from '@/components/document/worktable/library-reach-in';
+import { FinalizeHead } from '@/components/document/worktable/finalize-head';
+import { FinalizeShelf } from '@/components/document/worktable/finalize-shelf';
+import { OfferFacets } from '@/components/document/worktable/offer-facets';
+import { IntakeSpreadHeader } from '@/components/document/worktable/intake-spread-header';
 import { DocumentShelves } from '@/components/document/shelves/document-shelves';
 import {
   NEW_BOARD_EVENT,
@@ -840,6 +846,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // deliberately NOT the project room lens (room-lens-context): different
   // store, different subject, and this one persists at every width (A7).
   const [roomInHand, setRoomInHand] = useState<string | null>(null);
+  // W4b — whether the schedule has a release to offer. Reported up by the FF&E
+  // section, which is where `canRelease` and per-line eligibility are derived;
+  // the Delivery table head only prints the leader it is told exists.
+  const [releaseOffered, setReleaseOffered] = useState(false);
   // The seal note is read ONCE per arrival: the marker is cleared as it is
   // read, and held in state so this mount keeps printing it.
   const [sealTurnNoted, setSealTurnNoted] = useState(false);
@@ -970,6 +980,32 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // read on this page stays on the live row.
   const table = worktableOn ? tablePin.composition : null;
   const spreadSection = table ? table.section : row.active_section;
+  // W4a — the Finalize table: the LEGACY proposal in the client's hands. Its
+  // head, its leader, its Offer facets and its one shelf stand only here.
+  //
+  // The document-kind gate is load-bearing, not decoration: the head's headline
+  // counts per-line client verdicts and its leader is derived from the legacy
+  // watch, and neither is a sentence a design-services agreement or a
+  // furnishings authorization can say. Without it those editions lost the
+  // letterhead's verdict whisper (stood down for a head that was speaking the
+  // wrong language), and on `commercial_readonly` — where ProposalInstruments
+  // prints nothing at all — the wrong leader was the document's only act. Same
+  // predicate `OfferFacets` holds one component down.
+  const finalizeTable =
+    table?.table === 'finalize' &&
+    row.engagement_kind === 'proposal' &&
+    commercialDocumentExperience(liveProposal?.document_kind) === 'legacy';
+  // The one shelf a proposal document has. The project's shelved spine has its
+  // own subjects and its own gate; these two never stand at once.
+  const finalizeShelvedSpine =
+    finalizeTable && row.proposal_id ? (
+      <FinalizeShelf openShelf={openShelf} onToggleShelf={toggleShelf} />
+    ) : null;
+  // W4b — the Delivery table's procurement setting: the one composition where
+  // the release leader stands at the table head. Null off the flag, so nothing
+  // below it can lift, seam, or demote anything.
+  const deliveryProcurement =
+    table?.table === 'delivery' && table.setting === 'procurement';
   // W3 — the Speccing table's four tools on W2's slots: rooms → the work →
   // the tools. Proposal-keyed on `row.proposal_id`: 00327's Shape B emits the
   // LIVE chain version (pr.id) there while `engagement_id` carries the chain
@@ -1023,7 +1059,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         sections={sections}
         others={others}
         onJump={jumpToSection}
-        shelved={shelvedSpine}
+        shelved={shelvedSpine ?? finalizeShelvedSpine}
       />
 
       {/* No z-index here: a stacking context on main would trap the fixed
@@ -1208,6 +1244,21 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
               sealTurn={sealTurnNoted ? { signedDate: seal?.date ?? null } : null}
               slots={speccingSlots}
             >
+            {/* W4c — Table I's spread header: the household chip promoted into
+                the spread. Printed identity only (Q6). Mounted only on the
+                composed Intake table — `table` is null with the flag off, so
+                the flag off is byte-identical — and only on the DISCOVERY
+                spread, because on the brief spread BriefSection prints the same
+                three facts immediately below. The component holds both gates as
+                its own law. */}
+            {table?.table === 'intake' && (
+              <IntakeSpreadHeader
+                table={table.table}
+                section={spreadSection}
+                leadId={row.lead_id}
+                clientName={row.client_name}
+              />
+            )}
             {spreadSection === 'brief' && row.lead_id && <BriefSection leadId={row.lead_id} />}
             {spreadSection === 'discovery' && row.engagement_id && row.designer_id && (
               <DiscoverySection
@@ -1231,11 +1282,24 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                   </div>
                   {/* C3 — a quiet letterhead read of where the client's verdicts
                       stand ("4 of 12 approved · 1 flagged"). Nothing when the
-                      client hasn't weighed in yet. */}
-                  {row.engagement_kind === 'proposal' && verdictSummary && (
-                    <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                      {verdictSummary}
-                    </p>
+                      client hasn't weighed in yet. W4a: on the Finalize table
+                      this whisper stands down — the same sentence is that
+                      table's headline, and one fact prints at one weight. */}
+                  {row.engagement_kind === 'proposal' &&
+                    verdictSummary &&
+                    !finalizeTable && (
+                      <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                        {verdictSummary}
+                      </p>
+                    )}
+                  {/* W4a — the Finalize table's head: the verdict roll-up as the
+                      headline sentence, and the one inked leader the lifecycle ×
+                      verdicts × send-wall matrix allows. */}
+                  {finalizeTable && (
+                    <FinalizeHead
+                      proposalId={row.proposal_id}
+                      clientName={row.client_name}
+                    />
                   )}
                   {/* The proposal instruments (gated to engagement_kind
                       ==='proposal'): the Drafting Room doorway for a draft, the
@@ -1246,6 +1310,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                     <ProposalInstruments
                       proposalId={row.proposal_id}
                       clientName={row.client_name}
+                      onFinalizeTable={finalizeTable}
                     />
                   )}
                   {/* S18: name the model — what's below is a read-only preview of
@@ -1261,11 +1326,23 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                   {row.engagement_kind === 'proposal' && (
                     <ProposalFolioStrip proposalId={row.proposal_id} />
                   )}
-                  <ProposalBlocksReadOnly proposalId={row.proposal_id} />
+                  <ProposalBlocksReadOnly
+                    proposalId={row.proposal_id}
+                    omitOfferBlocks={finalizeTable}
+                  />
+                  {/* W4a — the Drafting Room's Offer movement (Phases ·
+                      Exclusions · Payments · Terms), folding open under the
+                      spread in the Room's own seam form. */}
+                  {finalizeTable && <OfferFacets proposalId={row.proposal_id} />}
                 </section>
               )}
               {spreadSection === 'project' && row.project_id && (
                 <>
+                  {/* W4b — the release ceremony's leader, at the head of the
+                    Delivery table instead of inside the FF&E region's ledger.
+                    The section below demotes to its next verb so the page still
+                    carries exactly one inked release. */}
+                  {deliveryProcurement && releaseOffered && <ReleaseLift />}
                   {/* Track 5 — the coordination band (ball-in-court + dependency web).
                     The band resolves designerClientId itself from clientUserId
                     (work-block.tsx pattern); the page passes clientUserId, never a
@@ -1292,6 +1369,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                     folioDrop={folioDrop}
                     onFolioDropConsumed={() => setFolioDrop(null)}
                     sectionDragOver={sectionDrag}
+                    releaseLeaderElsewhere={deliveryProcurement}
+                    onReleaseOffered={
+                      deliveryProcurement ? setReleaseOffered : undefined
+                    }
                   />
                   {/* W2 — one money region: authority → plan → committed →
                     moved, over the four surfaces that used to stand apart
@@ -1304,6 +1385,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
                       projectName={row.title}
                       clientName={row.client_name}
                       activeSection={row.active_section}
+                      /* W4b — on the table money is what the work is measured
+                         against, not the work: one seam, one press from full. */
+                      tableSeam={deliveryProcurement}
                     />
                   )}
                   {/* R80: the Care band — closure stays reachable from an active
@@ -1526,6 +1610,17 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
           routeId={id}
           rooms={docRooms ?? []}
           canCreateBoards={row.active_section === 'project'}
+        />
+      )}
+
+      {/* W4a — the Finalize table's one leaf: the client's copy, live. */}
+      {finalizeTable && row.proposal_id && (
+        <DocumentShelves
+          openShelf={openShelf}
+          onClose={() => setOpenShelf(null)}
+          routeId={id}
+          proposalId={row.proposal_id}
+          clientName={row.client_name}
         />
       )}
 

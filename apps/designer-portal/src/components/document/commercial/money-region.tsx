@@ -42,7 +42,7 @@ import { openLedger } from '../command-bar';
 import { FoldSeam, focusRegionHeading } from '../region/fold-seam';
 import { RegionHead, type RegionLedgerEntry } from '../region/region-head';
 import { RegionRule } from '../region/region-rule';
-import { useRegionFold } from '../region/use-region-fold';
+import { useRegionFold, type RegionFoldKey } from '../region/use-region-fold';
 import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
 import { ProjectAuthorityBandForProject } from './project-authority-band';
 import { ProjectCommerceSection } from './project-commerce-section';
@@ -79,11 +79,15 @@ export function MoneyRegion({
   projectName,
   clientName,
   activeSection,
+  tableSeam = false,
 }: {
   projectId: string;
   projectName?: string;
   clientName?: string | null;
   activeSection?: SectionKey | null;
+  /** W4b — on the Worktable's Delivery table money is reference, not the work:
+   *  the region stands as its seam and unfolds in place to exactly this body. */
+  tableSeam?: boolean;
 }) {
   const authorityQuery = useProjectBillingAuthority(projectId);
   const budgetQuery = useWorkingBudget(projectId);
@@ -189,10 +193,25 @@ export function MoneyRegion({
       accountQuiet
     : null;
 
+  // On the table the posture is DECLARED rather than derived — money is
+  // reference until it is asked for — but the declaration is subject to the
+  // same two laws the region's own default obeys:
+  //
+  //   · It waits for the reads to settle. The seam states figures ("$0
+  //     committed · no authority yet"), so a fold declared before the money
+  //     was read would print a sentence it did not know and then flip. The
+  //     null is `useRegionFold`'s own refusal of an unsettled default; until
+  //     it settles the region stands as it does anywhere else, with each tier
+  //     printing no figure rather than a wrong one.
+  //   · It yields to the accounts. `accountQuiet` false means an invoice has
+  //     been drawn or a milestone is outstanding — the money that is actually
+  //     chasing the designer — and the table suppresses the AccountBand's own
+  //     home, so a folded seam would state it nowhere at all.
+  const tableFolded = allSettled ? accountQuiet : null;
   const { folded, setFolded } = useRegionFold({
     docId: projectId,
-    region: 'money',
-    defaultFolded,
+    region: (tableSeam ? 'money-table' : 'money') satisfies RegionFoldKey,
+    defaultFolded: tableSeam ? tableFolded : defaultFolded,
   });
 
   // The running index jumps to readable content, never to a seam.
@@ -213,9 +232,15 @@ export function MoneyRegion({
   const headStatus = authority
     ? `${money(authority.remainingCents)} remaining · ${money(committedCents)} committed`
     : 'no authority yet';
-  const seamSummary = authority
-    ? `${money(authority.authorizedCents)} authorized · ${money(committedCents)} committed`
-    : `no authority yet · ${money(committedCents)} committed`;
+  // The table's seam states the same two figures as one sentence: what has been
+  // committed, against the authority it is being spent out of.
+  const seamSummary = tableSeam
+    ? authority
+      ? `${money(committedCents)} committed of ${money(authority.authorizedCents)} authority`
+      : `${money(committedCents)} committed · no authority yet`
+    : authority
+      ? `${money(authority.authorizedCents)} authorized · ${money(committedCents)} committed`
+      : `no authority yet · ${money(committedCents)} committed`;
 
   const ledger: RegionLedgerEntry[] = [
     // R74b — draw an invoice for THIS engagement: the anti-wizard composer,
