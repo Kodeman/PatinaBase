@@ -36,6 +36,8 @@ BEGIN;
 CREATE OR REPLACE FUNCTION pg_temp.assume_user(p_user_id uuid, p_role text DEFAULT 'authenticated')
 RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
+  EXECUTE 'RESET ROLE';
+  EXECUTE format('SET LOCAL ROLE %I', p_role);
   PERFORM set_config('request.jwt.claims', jsonb_build_object(
     'sub', p_user_id, 'role', p_role
   )::text, true);

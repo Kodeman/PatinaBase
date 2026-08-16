@@ -35,6 +35,8 @@ BEGIN;
 CREATE OR REPLACE FUNCTION pg_temp.assume_user(p_user_id uuid, p_role text DEFAULT 'authenticated')
 RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
+  EXECUTE 'RESET ROLE';
+  EXECUTE format('SET LOCAL ROLE %I', p_role);
   PERFORM set_config('request.jwt.claims', jsonb_build_object(
     'sub', p_user_id, 'role', p_role
   )::text, true);
@@ -455,45 +457,29 @@ BEGIN
 END $$;
 SELECT pg_temp.assume_user('d9000000-0000-4000-8000-000000000001');
 
--- FALSIFY (MINT AUTHORITY) — the service_role assertion is neutered in the live
--- body (its comparison is rewritten so it can never fire) and an authenticated
--- member mints a live credential. That is what the refusal above is holding
--- shut; the 42501 could otherwise have come from anywhere.
-SAVEPOINT mint_falsify;
-DO $$
-DECLARE
-  v_def text := pg_get_functiondef('public.mint_trade_rfq_token(uuid)'::regprocedure);
-  v_stripped text;
-BEGIN
-  v_stripped := replace(v_def,
-    'COALESCE(auth.role(), '''') <> ''service_role''',
-    'false');
-  ASSERT v_stripped <> v_def,
-    'FALSIFY: the service_role assertion must actually be in the shipped body, or there is nothing to strip';
-  EXECUTE v_stripped;
-END $$;
-DO $$
-DECLARE
-  v_rfq uuid := (SELECT value FROM rfq_ids WHERE key = 'rfq_renn');
-  v_id uuid;
-  v_raw text;
-BEGIN
-  SELECT m.id, m.token INTO v_id, v_raw FROM public.mint_trade_rfq_token(v_rfq) m;
-  ASSERT v_raw ~ '^[0-9a-f]{64}$',
-    'FALSIFY: without the role assertion an authenticated member mints a live link — that assertion is the only thing stopping it';
-END $$;
-ROLLBACK TO SAVEPOINT mint_falsify;
+-- The active authenticated role remains denied even if its JWT claims forge
+-- service_role; the positive calls above execute with SET ROLE service_role.
+SELECT pg_temp.assume_user(
+  'd9000000-0000-4000-8000-000000000001', 'authenticated'
+);
+SELECT set_config(
+  'request.jwt.claims',
+  '{"sub":"d9000000-0000-4000-8000-000000000001","role":"service_role"}',
+  true
+);
 DO $$
 DECLARE v_err text; v_id uuid; v_raw text;
 BEGIN
   BEGIN
     SELECT m.id, m.token INTO v_id, v_raw
-    FROM public.mint_trade_rfq_token((SELECT value FROM rfq_ids WHERE key = 'rfq_renn')) m;
-    ASSERT false, 'the savepoint rollback must restore the shipped mint body';
+    FROM public.mint_trade_rfq_token(
+      (SELECT value FROM rfq_ids WHERE key = 'rfq_renn')
+    ) m;
+    ASSERT false, 'forged service claims must not mint a trade RFQ link';
   EXCEPTION WHEN insufficient_privilege THEN v_err := SQLERRM;
   END;
   ASSERT v_err = 'minting a trade RFQ link requires service_role',
-    format('post-rollback refusal: %L', v_err);
+    format('forged service-claim refusal: %L', v_err);
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════

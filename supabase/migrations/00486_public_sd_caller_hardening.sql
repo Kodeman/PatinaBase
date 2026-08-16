@@ -3,7 +3,8 @@
 --
 -- Lineage: exact reviewed definitions through 00484. This migration is
 -- limited to the 25 canonical overloads approved by the caller-backed
--- independent challenge and the retired finalizer they formerly relayed to.
+-- independent challenge and the adjacent relays required to close their
+-- finalizer, scope-change, SMS, and milestone-invoice authority paths.
 -- It does not alter open_project_direct, create_studio_workspace, or the
 -- no-literal caller lane hardened by 00485.
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -54,14 +55,14 @@ VALUES
     ARRAY['search_path=public, pg_temp'],
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     '3dffe012df2379140f16d7f680c19dc3b20b3fea2981403b33689d9235fc2e8a',
-    'ce52adc26b3621a5e4f108255e2b2a4501fe627e1547d33164eaf27532de8412', ARRAY['authenticated']
+    '9f0aa8cf4611f0547b9356997e477c3dcbea4ed591e7f05ef1572122618fe39f', ARRAY['authenticated']
   ),
   (
     'public.apply_scope_change(uuid)', 'p_request_id uuid', 'void', 'v',
     ARRAY['search_path=public, pg_temp'],
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     '299b2eec88629f4abb9c8ef5c62b2549bf444ee2673f30ace8266e00958fb911',
-    '872ca9a93970283ef59b2f47c737bc27c41107e7a37a3eddf7d36c2a12e1f22c', ARRAY['authenticated']
+    '17f07b6b0c089f663ca9d4bc2fe551d32c43327d83932008cb4d1ba564221b28', ARRAY['authenticated']
   ),
   (
     'public.claim_proposal_send_dispatch(uuid,uuid,timestamp with time zone,integer)',
@@ -77,7 +78,7 @@ VALUES
     'public.projects', 'v', ARRAY['search_path=public, pg_temp'],
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     '44c113df92bbfe30c596e7b1304b95338dd7a66883d79051da64b65395623d84',
-    '221969f68e6e9ac7b1597eaca00ef05e125bfcd628e2391b0a23bdae068d06cb', ARRAY['authenticated']
+    '4301647c39107e143774c434436248b3fc7946bf75b7b102c0ec335bc156d5d1', ARRAY['authenticated']
   ),
   (
     'public.create_field_link(uuid)', 'p_party_id uuid',
@@ -101,7 +102,7 @@ VALUES
     ARRAY['search_path=public, pg_temp'],
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     '059b9103fafdf467236077b4cbc3621cbe7f9aa7ce9bcd28121b585343fdd90a',
-    '34c5639f9983cbf154c6a72ae133961038de2f3abd84b37b9fa5de68c05a06f0', ARRAY['authenticated']
+    '84b6f8eccb9de7e2acba05f84707b56562b01fa595a89e1ada0b5a89e6a5a0dc', ARRAY['authenticated']
   ),
   (
     'public.expire_due_client_decisions(timestamp with time zone)',
@@ -109,7 +110,7 @@ VALUES
     ARRAY['search_path=public, pg_temp'],
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     'c2a82a83ce52729f9abaedda1ac3031c5d425bcef209afcd1534bdd3ee7fc883',
-    '7b04e11e9d9636789b72ade7d905f8450ad7224c7e024f8ef06b49741c407c34', ARRAY['service_role']
+    '6238367c240614e6c9f52222e07c726f24f201058ed2392ed757ef49794cc1f5', ARRAY['service_role']
   ),
   (
     'public.finalize_spec_book_issue(uuid)', 'p_revision_id uuid',
@@ -177,7 +178,7 @@ VALUES
     'public.projects', 'v', ARRAY['search_path=public, pg_temp'],
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     '91863450160076979461b2fa4bb264e94c3f66ea7a7e1621e6ed6959e7942169',
-    'ecd3a45f5b3fa642ffcb97a56852eb52422328a40f7de0744f875aab195f7f10', ARRAY['authenticated']
+    '31fe6ad2c1809d5abacb78c09cef814921814a1036977a7207436bfd4f08e3e9', ARRAY['authenticated']
   ),
   (
     'public.record_offline_signature(uuid,text,boolean,date)',
@@ -185,7 +186,7 @@ VALUES
     'uuid', 'v', ARRAY['search_path=public, pg_temp'],
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     'b291ae3afdaeaa12f72918974f3d67bcad4466033fcb7eee0ed21bfe147ef94a',
-    '6ec4d41a86390dc6c40999fcb7b0d889a0e5c35f3405c8d585e8bf266848a61e', ARRAY['authenticated']
+    'c75acf68064717681a1d55f1eb233c45aae05b9a4bb6099c0af57bc4d4af2a35', ARRAY['authenticated']
   ),
   (
     'public.reply_to_item_feedback(uuid,text)',
@@ -201,7 +202,7 @@ VALUES
     ARRAY['search_path=public, pg_temp'],
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     '3bea4aeff30e2f7ef7ce8d9f184e72df08831423f16b8b7087f8174665f63cc5',
-    '2824a784697aa0c147e1f44f9602019df40c06d24d568e361ab4dbe887a3c741', ARRAY['authenticated']
+    'a13453ffde6d1ed63523fec73b013227158f0b29d025b7ae74f6a3df798e060d', ARRAY['authenticated']
   ),
   (
     'public.review_sms_message(uuid,text,jsonb)',
@@ -209,7 +210,7 @@ VALUES
     'jsonb', 'v', ARRAY['search_path=public, pg_temp'],
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     '65618f884498e0f66c8a71ca068a3c4fc10da0d119d855f2d42f14509196da05',
-    '4340299ab8650ca93c37d41ea23068de441977ebece540c454adfbc6feec365c', ARRAY['authenticated']
+    '97f87c14df99dbc9a5c45c02f63274715b3a16fdc82291609bf3930cdb4e5173', ARRAY['authenticated']
   ),
   (
     'public.stamp_project_approval_reminder_delivery(uuid,uuid)',
@@ -250,33 +251,147 @@ UPDATE _00486_routine_profile
 SET original_roles = ARRAY['authenticated', 'service_role']
 WHERE signature IN (
   'public.apply_scope_change(uuid)',
-  'public.escalate_item_feedback_to_decision(uuid,uuid)',
   'public.finalize_spec_book_issue(uuid)',
-  'public.generate_milestone_invoice(uuid)',
   'public.get_ab_variant_stats(uuid)',
-  'public.get_client_project_review_bundle(uuid)',
-  'public.reply_to_item_feedback(uuid,text)',
-  'public.review_sms_message(uuid,text,jsonb)'
+  'public.get_client_project_review_bundle(uuid)'
 );
 
 CREATE TEMP TABLE _00486_dependency_profile (
   signature text PRIMARY KEY,
   arguments text NOT NULL,
   result_type text NOT NULL,
+  language_name text NOT NULL,
+  security_definer boolean NOT NULL,
+  volatility "char" NOT NULL,
   original_config text[] NOT NULL,
   final_config text[] NOT NULL,
-  body_sha256 text NOT NULL,
+  original_body_sha256 text NOT NULL,
+  final_body_sha256 text NOT NULL,
   original_roles text[] NOT NULL,
-  final_roles text[] NOT NULL
+  final_roles text[] NOT NULL,
+  source_required boolean NOT NULL DEFAULT true
 ) ON COMMIT DROP;
 
-INSERT INTO _00486_dependency_profile VALUES (
-  'public._finalize_spec_book_issue_00403(uuid)', 'p_revision_id uuid',
-  'public.spec_book_revisions', ARRAY['search_path=public, pg_temp'],
-  ARRAY['search_path=pg_catalog, public, pg_temp'],
-  '095109b82a35f52c551a203ecbf05b539180ad595644988e511c3af8841668d4',
-  ARRAY['service_role'], ARRAY[]::text[]
-);
+INSERT INTO _00486_dependency_profile VALUES
+  (
+    'public._finalize_spec_book_issue_00403(uuid)', 'p_revision_id uuid',
+    'public.spec_book_revisions', 'plpgsql', true, 'v',
+    ARRAY['search_path=public, pg_temp'],
+    ARRAY['search_path=pg_catalog, public, pg_temp'],
+    '095109b82a35f52c551a203ecbf05b539180ad595644988e511c3af8841668d4',
+    '095109b82a35f52c551a203ecbf05b539180ad595644988e511c3af8841668d4',
+    ARRAY['service_role'], ARRAY[]::text[], true
+  ),
+  (
+    'public._scope_change_requester_can_author(uuid,uuid)',
+    'p_actor uuid, p_owner uuid', 'boolean', 'sql', true, 's',
+    ARRAY['search_path=public, pg_temp'],
+    ARRAY['search_path=pg_catalog, public, pg_temp'],
+    'cd16125dd79d36eea58e5bb928a41add1b11d496d2b0fd958bc51d90456fdab7',
+    'cf1a32d2ab1608f8c3667b5f8320192dc274ad47d740b0609d64bc6824744e00',
+    ARRAY[]::text[], ARRAY[]::text[], true
+  ),
+  (
+    'public._scope_change_requester_can_author(uuid,uuid,uuid)',
+    'p_actor uuid, p_owner uuid, p_project_id uuid', 'boolean',
+    'sql', true, 's', ARRAY['search_path=pg_catalog, public, pg_temp'],
+    ARRAY['search_path=pg_catalog, public, pg_temp'],
+    '5b7df65b73ce6fcdac0d66aadce7aebcffd198e2fc08b9b90c46e6e69496a946',
+    '5b7df65b73ce6fcdac0d66aadce7aebcffd198e2fc08b9b90c46e6e69496a946',
+    ARRAY[]::text[], ARRAY[]::text[], false
+  ),
+  (
+    'public.guard_scope_change_request_integrity()', '', 'trigger',
+    'plpgsql', false, 'v', ARRAY['search_path=public, pg_temp'],
+    ARRAY['search_path=pg_catalog, public, pg_temp'],
+    'fd3a5657e3191045f8a93f119be4a44bf6d64b313b396850640e86765fd713b7',
+    '574deae128ca3211207e7236eeebe2577f438a6d2b98aa10ca5d7b3f3f68059f',
+    ARRAY[]::text[], ARRAY[]::text[], true
+  ),
+  (
+    'public.send_scope_change_request(uuid,uuid)',
+    'p_request_id uuid, p_project_id uuid', 'jsonb', 'plpgsql', true, 'v',
+    ARRAY['search_path=public, pg_temp'],
+    ARRAY['search_path=pg_catalog, public, pg_temp'],
+    '8ceedb9b9f013a2c26e1adcc27f6d3751bff9ed6428a1ed715e26bd47f5dfe0c',
+    '563b52802fc3479848f1b098b55bc95358a9ad65ad206f87d1e7ae5f5979c838',
+    ARRAY['authenticated', 'service_role'],
+    ARRAY['authenticated', 'service_role'], true
+  ),
+  (
+    'public.approve_scope_change_request(uuid,uuid,text,text)',
+    'p_request_id uuid, p_project_id uuid, p_approved_by_name text, p_approved_ip text DEFAULT NULL::text',
+    'jsonb', 'plpgsql', true, 'v', ARRAY['search_path=public, pg_temp'],
+    ARRAY['search_path=pg_catalog, public, pg_temp'],
+    'f2cc3c1caa11ed2eba469316433a873b2925354781a0c900e7e9c98470ed8cb7',
+    '1a8f590887295f38fe35c4963cde5d95960398b29b59ff938b4318362f0b3e42',
+    ARRAY['authenticated', 'service_role'],
+    ARRAY['authenticated', 'service_role'], true
+  ),
+  (
+    'public.accept_client_scope_change_request(uuid,uuid)',
+    'p_request_id uuid, p_project_id uuid', 'jsonb', 'plpgsql', true, 'v',
+    ARRAY['search_path=public, pg_temp'],
+    ARRAY['search_path=pg_catalog, public, pg_temp'],
+    'd7ac29da8abcbfb065aaa1bdfab469a9fb711f25148e1c2eb5846f0e6c097258',
+    'bb3b43ef55808bfae7c683563852819e4d6703bd71022493702cdd2d81c49c2c',
+    ARRAY['authenticated', 'service_role'],
+    ARRAY['authenticated', 'service_role'], true
+  ),
+  (
+    'public.decline_scope_change_request(uuid,uuid,text)',
+    'p_request_id uuid, p_project_id uuid, p_decline_reason text DEFAULT NULL::text',
+    'jsonb', 'plpgsql', true, 'v', ARRAY['search_path=public, pg_temp'],
+    ARRAY['search_path=pg_catalog, public, pg_temp'],
+    '0efdfb764f36edcf41410d0cf6a00e28b26e336b26f619ddcd9f3ed1300c177e',
+    '689f31f8c7a3688bc37fd4a0b68a319d8be0cf2dc0bffffd1ab2757ecfda70f4',
+    ARRAY['authenticated', 'service_role'],
+    ARRAY['authenticated', 'service_role'], true
+  ),
+  (
+    'public.cancel_scope_change_request(uuid,uuid)',
+    'p_request_id uuid, p_project_id uuid', 'jsonb', 'plpgsql', true, 'v',
+    ARRAY['search_path=public, pg_temp'],
+    ARRAY['search_path=pg_catalog, public, pg_temp'],
+    'c8609ece811f426f95788db55e1112850182d03d88f495e78b7b88deab883ab7',
+    '53b7f672ed533ab86fe96e18c8c67bd8492331fc7d2210743ce47e307febfde3',
+    ARRAY['authenticated', 'service_role'],
+    ARRAY['authenticated', 'service_role'], true
+  ),
+  (
+    'public.apply_field_effect(uuid,jsonb,text,uuid)',
+    'p_party_id uuid, p_effect jsonb, p_source text DEFAULT ''sms''::text, p_sms_message_id uuid DEFAULT NULL::uuid',
+    'jsonb', 'plpgsql', true, 'v', ARRAY['search_path=public, pg_temp'],
+    ARRAY['search_path=pg_catalog, public, pg_temp'],
+    'fdd44ab814b4ea0f710ef8f9546804b7166da6d60a90cba14610072a824f14cd',
+    '04bc0150662c657c3a3b561527c1d649fc41d517252b2d33f12d51daad48052c',
+    ARRAY['service_role'], ARRAY['service_role'], true
+  ),
+  (
+    'public.draft_invoice_from_milestone(uuid)', 'p_milestone_id uuid',
+    'uuid', 'plpgsql', true, 'v', ARRAY['search_path=public'],
+    ARRAY['search_path=pg_catalog, public, pg_temp'],
+    '000414169a6d57ee560f901d5ad8acef1aafcaf607de21df395ec8045db60c50',
+    'fabe4d94f7ecfccca36f27e9252db735b4a66806dcb49d2aebcaaf83dfbdc535',
+    ARRAY['service_role'], ARRAY['service_role'], true
+  ),
+  (
+    'public._draft_invoice_from_milestone_00486(uuid)',
+    'p_milestone_id uuid', 'uuid', 'plpgsql', true, 'v',
+    ARRAY['search_path=pg_catalog, public, pg_temp'],
+    ARRAY['search_path=pg_catalog, public, pg_temp'],
+    '000414169a6d57ee560f901d5ad8acef1aafcaf607de21df395ec8045db60c50',
+    '000414169a6d57ee560f901d5ad8acef1aafcaf607de21df395ec8045db60c50',
+    ARRAY[]::text[], ARRAY[]::text[], false
+  ),
+  (
+    'public.sync_invoice_line_milestone_latch()', '', 'trigger',
+    'plpgsql', false, 'v', ARRAY['search_path=public, pg_temp'],
+    ARRAY['search_path=pg_catalog, public, pg_temp'],
+    '4e8568994c57300bc7eef68e408fbd6956fc474ddf272bfaf96ccbfcf3687b56',
+    '08c4238609969828678c5997330d32b726164561b0b0d21321dda95ec53686ba',
+    ARRAY[]::text[], ARRAY[]::text[], true
+  );
 
 DO $source_profile_preflight$
 BEGIN
@@ -368,26 +483,25 @@ BEGIN
       ON routine.oid = to_regprocedure(expected.signature)
     LEFT JOIN pg_roles AS owner ON owner.oid = routine.proowner
     LEFT JOIN pg_language AS language ON language.oid = routine.prolang
-    WHERE routine.oid IS NULL
-       OR owner.rolname IS DISTINCT FROM 'postgres'
-       OR language.lanname IS DISTINCT FROM 'plpgsql'
+    WHERE (routine.oid IS NULL AND expected.source_required)
+       OR (routine.oid IS NOT NULL AND (
+          owner.rolname IS DISTINCT FROM 'postgres'
+       OR language.lanname IS DISTINCT FROM expected.language_name
        OR routine.prokind IS DISTINCT FROM 'f'::"char"
-       OR NOT routine.prosecdef
+       OR routine.prosecdef IS DISTINCT FROM expected.security_definer
        OR routine.proleakproof
        OR routine.proisstrict
        OR routine.proparallel IS DISTINCT FROM 'u'::"char"
-       OR routine.provolatile IS DISTINCT FROM 'v'::"char"
-       OR pg_get_function_arguments(routine.oid) IS DISTINCT FROM
-          expected.arguments
-       OR pg_get_function_result(routine.oid) IS DISTINCT FROM
-          expected.result_type
-       OR encode(
-            extensions.digest(convert_to(routine.prosrc, 'UTF8'), 'sha256'),
-            'hex'
-          ) IS DISTINCT FROM expected.body_sha256
+       OR routine.provolatile IS DISTINCT FROM expected.volatility
+       OR pg_get_function_arguments(routine.oid) IS DISTINCT FROM expected.arguments
+       OR pg_get_function_result(routine.oid) IS DISTINCT FROM expected.result_type
        OR NOT (
             (
               routine.proconfig IS NOT DISTINCT FROM expected.original_config
+              AND encode(
+                    extensions.digest(convert_to(routine.prosrc, 'UTF8'), 'sha256'),
+                    'hex'
+                  ) IS NOT DISTINCT FROM expected.original_body_sha256
               AND COALESCE((
                     SELECT array_agg(
                       COALESCE(grantee.rolname, 'PUBLIC')
@@ -407,6 +521,10 @@ BEGIN
             )
             OR (
               routine.proconfig IS NOT DISTINCT FROM expected.final_config
+              AND encode(
+                    extensions.digest(convert_to(routine.prosrc, 'UTF8'), 'sha256'),
+                    'hex'
+                  ) IS NOT DISTINCT FROM expected.final_body_sha256
               AND COALESCE((
                     SELECT array_agg(
                       COALESCE(grantee.rolname, 'PUBLIC')
@@ -434,8 +552,9 @@ BEGIN
                OR acl.grantor <> routine.proowner
                OR acl.is_grantable
           )
+       ))
   ) THEN
-    RAISE EXCEPTION '00486 internal finalizer dependency profile drifted';
+    RAISE EXCEPTION '00486 dependent relay profile/body/config/ACL drifted';
   END IF;
 END
 $dependency_profile_preflight$;
@@ -465,6 +584,34 @@ BEGIN
 END
 $withhold_direct_callers$;
 
+DO $withhold_dependent_relays$
+DECLARE
+  expected _00486_dependency_profile%ROWTYPE;
+  app_role text;
+BEGIN
+  FOR expected IN SELECT * FROM _00486_dependency_profile ORDER BY signature
+  LOOP
+    IF to_regprocedure(expected.signature) IS NULL THEN
+      CONTINUE;
+    END IF;
+    EXECUTE format(
+      'REVOKE ALL PRIVILEGES ON FUNCTION %s FROM PUBLIC CASCADE',
+      expected.signature
+    );
+    FOREACH app_role IN ARRAY ARRAY[
+      'anon', 'authenticated', 'service_role', 'dashboard_user',
+      'agent_reader', 'agent_writer', 'edge_catalog_reader', 'edge_rls_user'
+    ]
+    LOOP
+      EXECUTE format(
+        'REVOKE ALL PRIVILEGES ON FUNCTION %s FROM %I CASCADE',
+        expected.signature, app_role
+      );
+    END LOOP;
+  END LOOP;
+END
+$withhold_dependent_relays$;
+
 REVOKE ALL PRIVILEGES ON FUNCTION
   public._finalize_spec_book_issue_00403(uuid)
   FROM PUBLIC CASCADE;
@@ -475,6 +622,891 @@ REVOKE ALL PRIVILEGES ON FUNCTION
 ALTER FUNCTION public._finalize_spec_book_issue_00403(uuid)
   SET search_path = pg_catalog, public, pg_temp;
 
+CREATE OR REPLACE FUNCTION public._scope_change_requester_can_author(
+  p_actor uuid,
+  p_owner uuid
+)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp
+AS $$
+  SELECT p_actor IS NOT NULL
+     AND p_owner IS NOT NULL
+     AND p_actor = p_owner;
+$$;
+
+REVOKE ALL PRIVILEGES ON FUNCTION
+  public._scope_change_requester_can_author(uuid, uuid)
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+
+CREATE OR REPLACE FUNCTION public._scope_change_requester_can_author(
+  p_actor uuid,
+  p_owner uuid,
+  p_project_id uuid
+)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp
+AS $$
+  SELECT p_actor IS NOT NULL
+     AND p_owner IS NOT NULL
+     AND p_project_id IS NOT NULL
+     AND EXISTS (
+       SELECT 1
+       FROM public.projects AS project
+       WHERE project.id = p_project_id
+         AND project.designer_id = p_owner
+         AND (
+           p_actor = p_owner
+           OR EXISTS (
+             SELECT 1
+             FROM public.organizations AS organization
+             JOIN public.organization_members AS membership
+               ON membership.organization_id = organization.id
+             WHERE organization.id = project.studio_id
+               AND organization.type = 'design_studio'
+               AND organization.status = 'active'
+               AND membership.user_id = p_actor
+               AND membership.status = 'active'
+               AND membership.role <> 'guest'
+           )
+         )
+     );
+$$;
+
+REVOKE ALL PRIVILEGES ON FUNCTION
+  public._scope_change_requester_can_author(uuid, uuid, uuid)
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+
+CREATE OR REPLACE FUNCTION public.guard_scope_change_request_integrity()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+  v_authority_token text := current_setting('app.scope_change_transition', true);
+  v_transition text;
+  v_table_owner name;
+  v_project_designer uuid;
+BEGIN
+  SELECT pg_get_userbyid(relation.relowner)
+  INTO v_table_owner
+  FROM pg_class AS relation
+  WHERE relation.oid = TG_RELID;
+
+  IF TG_OP = 'INSERT' THEN
+    -- Browser-created designer/studio drafts must identify their real author.
+    -- Client-created rows execute as the checked definer RPC and set this too.
+    IF current_user IS DISTINCT FROM v_table_owner
+       AND auth.uid() IS NOT NULL
+       AND NEW.requested_by IS DISTINCT FROM auth.uid()
+    THEN
+      RAISE EXCEPTION 'scope_change_request_requested_by_must_match_actor'
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
+
+    IF current_user IS DISTINCT FROM v_table_owner
+       AND NEW.request_origin IS DISTINCT FROM 'designer_amendment'
+    THEN
+      RAISE EXCEPTION 'scope_change_request_direct_insert_origin_forbidden'
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
+
+    IF current_user IS DISTINCT FROM v_table_owner
+       AND auth.uid() IS NOT NULL
+    THEN
+      SELECT project.designer_id
+      INTO v_project_designer
+      FROM public.projects AS project
+      WHERE project.id = NEW.project_id
+        AND public._scope_change_requester_can_author(
+          auth.uid(), project.designer_id, project.id
+        )
+      FOR KEY SHARE OF project;
+
+      IF NOT FOUND THEN
+        RAISE EXCEPTION 'scope_change_request_direct_insert_requires_project_studio'
+          USING ERRCODE = 'insufficient_privilege';
+      END IF;
+    END IF;
+
+    -- Only a checked owner-executed authority may create lifecycle evidence.
+    -- Direct designer/studio/service writes remain useful for composing drafts,
+    -- but cannot fabricate something sent, signed, resolved, or applied.
+    IF current_user IS DISTINCT FROM v_table_owner
+       AND (
+         NEW.status <> 'draft'
+         OR NEW.sent_at IS NOT NULL
+         OR NEW.viewed_at IS NOT NULL
+         OR NEW.approved_at IS NOT NULL
+         OR NEW.approved_by IS NOT NULL
+         OR NEW.approved_by_name IS NOT NULL
+         OR NEW.approved_ip IS NOT NULL
+         OR NEW.declined_at IS NOT NULL
+         OR NEW.decline_reason IS NOT NULL
+         OR NEW.applied_at IS NOT NULL
+         OR NEW.signed_pdf_url IS NOT NULL
+         OR NEW.signature_metadata IS NOT NULL
+       )
+    THEN
+      RAISE EXCEPTION 'scope_change_request_direct_inserts_must_be_clean_drafts'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  -- Scope identity and commercial content are append-only evidence. A new
+  -- intent is a new row; even a checked status authority cannot rewrite it.
+  IF ROW(
+    NEW.id,
+    NEW.project_id,
+    NEW.proposal_id,
+    NEW.requested_by,
+    NEW.request_origin,
+    NEW.title,
+    NEW.description,
+    NEW.additional_ffe_budget_cents,
+    NEW.additional_design_fee_cents,
+    NEW.timeline_impact_weeks,
+    NEW.new_total_budget_cents,
+    NEW.new_rooms,
+    NEW.new_ffe_items,
+    NEW.co_number,
+    NEW.original_spec,
+    NEW.requested_change,
+    NEW.affected_tasks,
+    NEW.created_at
+  ) IS DISTINCT FROM ROW(
+    OLD.id,
+    OLD.project_id,
+    OLD.proposal_id,
+    OLD.requested_by,
+    OLD.request_origin,
+    OLD.title,
+    OLD.description,
+    OLD.additional_ffe_budget_cents,
+    OLD.additional_design_fee_cents,
+    OLD.timeline_impact_weeks,
+    OLD.new_total_budget_cents,
+    OLD.new_rooms,
+    OLD.new_ffe_items,
+    OLD.co_number,
+    OLD.original_spec,
+    OLD.requested_change,
+    OLD.affected_tasks,
+    OLD.created_at
+  ) THEN
+    RAISE EXCEPTION 'scope_change_request_business_fields_immutable'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- updated_at is maintained by the pre-existing set_updated_at trigger and is
+  -- intentionally absent. If no workflow field moved, there is nothing else
+  -- for this guard to authorize.
+  IF ROW(
+    NEW.status,
+    NEW.sent_at,
+    NEW.viewed_at,
+    NEW.approved_at,
+    NEW.approved_by,
+    NEW.approved_by_name,
+    NEW.approved_ip,
+    NEW.declined_at,
+    NEW.decline_reason,
+    NEW.applied_at,
+    NEW.signed_pdf_url,
+    NEW.signature_metadata
+  ) IS NOT DISTINCT FROM ROW(
+    OLD.status,
+    OLD.sent_at,
+    OLD.viewed_at,
+    OLD.approved_at,
+    OLD.approved_by,
+    OLD.approved_by_name,
+    OLD.approved_ip,
+    OLD.declined_at,
+    OLD.decline_reason,
+    OLD.applied_at,
+    OLD.signed_pdf_url,
+    OLD.signature_metadata
+  ) THEN
+    RETURN NEW;
+  END IF;
+
+  IF current_user IS DISTINCT FROM v_table_owner THEN
+    RAISE EXCEPTION 'scope_change_request_transition_requires_checked_authority'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  -- Scope the marker to one transition, one request row, and this transaction.
+  -- Even owner-executed nested code cannot reuse an authority on a sibling row.
+  IF v_authority_token = format(
+    'send:%s:%s', NEW.id, pg_catalog.txid_current()
+  ) THEN
+    v_transition := 'send';
+  ELSIF v_authority_token = format(
+    'view:%s:%s', NEW.id, pg_catalog.txid_current()
+  ) THEN
+    v_transition := 'view';
+  ELSIF v_authority_token = format(
+    'approve:%s:%s', NEW.id, pg_catalog.txid_current()
+  ) THEN
+    v_transition := 'approve';
+  ELSIF v_authority_token = format(
+    'decline:%s:%s', NEW.id, pg_catalog.txid_current()
+  ) THEN
+    v_transition := 'decline';
+  ELSIF v_authority_token = format(
+    'cancel:%s:%s', NEW.id, pg_catalog.txid_current()
+  ) THEN
+    v_transition := 'cancel';
+  ELSIF v_authority_token = format(
+    'apply:%s:%s', NEW.id, pg_catalog.txid_current()
+  ) THEN
+    v_transition := 'apply';
+  ELSE
+    RAISE EXCEPTION 'scope_change_request_transition_requires_row_scoped_authority'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  CASE v_transition
+    WHEN 'send' THEN
+      IF NOT (
+        OLD.status = 'draft'
+        AND NEW.status = 'sent'
+        AND NEW.sent_at IS NOT NULL
+        AND ROW(
+          NEW.viewed_at,
+          NEW.approved_at,
+          NEW.approved_by,
+          NEW.approved_by_name,
+          NEW.approved_ip,
+          NEW.declined_at,
+          NEW.decline_reason,
+          NEW.applied_at,
+          NEW.signed_pdf_url,
+          NEW.signature_metadata
+        ) IS NOT DISTINCT FROM ROW(
+          OLD.viewed_at,
+          OLD.approved_at,
+          OLD.approved_by,
+          OLD.approved_by_name,
+          OLD.approved_ip,
+          OLD.declined_at,
+          OLD.decline_reason,
+          OLD.applied_at,
+          OLD.signed_pdf_url,
+          OLD.signature_metadata
+        )
+      ) THEN
+        RAISE EXCEPTION 'scope_change_request_invalid_send_transition'
+          USING ERRCODE = 'check_violation';
+      END IF;
+
+    WHEN 'view' THEN
+      IF NOT (
+        OLD.status = 'sent'
+        AND NEW.status = 'viewed'
+        AND NEW.viewed_at IS NOT NULL
+        AND ROW(
+          NEW.sent_at,
+          NEW.approved_at,
+          NEW.approved_by,
+          NEW.approved_by_name,
+          NEW.approved_ip,
+          NEW.declined_at,
+          NEW.decline_reason,
+          NEW.applied_at,
+          NEW.signed_pdf_url,
+          NEW.signature_metadata
+        ) IS NOT DISTINCT FROM ROW(
+          OLD.sent_at,
+          OLD.approved_at,
+          OLD.approved_by,
+          OLD.approved_by_name,
+          OLD.approved_ip,
+          OLD.declined_at,
+          OLD.decline_reason,
+          OLD.applied_at,
+          OLD.signed_pdf_url,
+          OLD.signature_metadata
+        )
+      ) THEN
+        RAISE EXCEPTION 'scope_change_request_invalid_view_transition'
+          USING ERRCODE = 'check_violation';
+      END IF;
+
+    WHEN 'approve' THEN
+      IF NOT (
+        OLD.status IN ('sent', 'viewed')
+        AND NEW.status = 'approved'
+        AND NEW.approved_at IS NOT NULL
+        AND NEW.approved_by = auth.uid()
+        AND btrim(COALESCE(NEW.approved_by_name, '')) <> ''
+        AND ROW(
+          NEW.sent_at,
+          NEW.viewed_at,
+          NEW.declined_at,
+          NEW.decline_reason,
+          NEW.applied_at,
+          NEW.signed_pdf_url,
+          NEW.signature_metadata
+        ) IS NOT DISTINCT FROM ROW(
+          OLD.sent_at,
+          OLD.viewed_at,
+          OLD.declined_at,
+          OLD.decline_reason,
+          OLD.applied_at,
+          OLD.signed_pdf_url,
+          OLD.signature_metadata
+        )
+      ) THEN
+        RAISE EXCEPTION 'scope_change_request_invalid_approve_transition'
+          USING ERRCODE = 'check_violation';
+      END IF;
+
+    WHEN 'decline' THEN
+      IF NOT (
+        OLD.status IN ('sent', 'viewed')
+        AND NEW.status = 'declined'
+        AND NEW.declined_at IS NOT NULL
+        AND ROW(
+          NEW.sent_at,
+          NEW.viewed_at,
+          NEW.approved_at,
+          NEW.approved_by,
+          NEW.approved_by_name,
+          NEW.approved_ip,
+          NEW.applied_at,
+          NEW.signed_pdf_url,
+          NEW.signature_metadata
+        ) IS NOT DISTINCT FROM ROW(
+          OLD.sent_at,
+          OLD.viewed_at,
+          OLD.approved_at,
+          OLD.approved_by,
+          OLD.approved_by_name,
+          OLD.approved_ip,
+          OLD.applied_at,
+          OLD.signed_pdf_url,
+          OLD.signature_metadata
+        )
+      ) THEN
+        RAISE EXCEPTION 'scope_change_request_invalid_decline_transition'
+          USING ERRCODE = 'check_violation';
+      END IF;
+
+    WHEN 'cancel' THEN
+      IF NOT (
+        OLD.status IN ('draft', 'sent', 'viewed')
+        AND NEW.status = 'cancelled'
+        AND ROW(
+          NEW.sent_at,
+          NEW.viewed_at,
+          NEW.approved_at,
+          NEW.approved_by,
+          NEW.approved_by_name,
+          NEW.approved_ip,
+          NEW.declined_at,
+          NEW.decline_reason,
+          NEW.applied_at,
+          NEW.signed_pdf_url,
+          NEW.signature_metadata
+        ) IS NOT DISTINCT FROM ROW(
+          OLD.sent_at,
+          OLD.viewed_at,
+          OLD.approved_at,
+          OLD.approved_by,
+          OLD.approved_by_name,
+          OLD.approved_ip,
+          OLD.declined_at,
+          OLD.decline_reason,
+          OLD.applied_at,
+          OLD.signed_pdf_url,
+          OLD.signature_metadata
+        )
+      ) THEN
+        RAISE EXCEPTION 'scope_change_request_invalid_cancel_transition'
+          USING ERRCODE = 'check_violation';
+      END IF;
+
+    WHEN 'apply' THEN
+      IF NOT (
+        OLD.status = 'approved'
+        AND NEW.status = 'approved'
+        AND OLD.applied_at IS NULL
+        AND NEW.applied_at IS NOT NULL
+        AND ROW(
+          NEW.sent_at,
+          NEW.viewed_at,
+          NEW.approved_at,
+          NEW.approved_by,
+          NEW.approved_by_name,
+          NEW.approved_ip,
+          NEW.declined_at,
+          NEW.decline_reason,
+          NEW.signed_pdf_url,
+          NEW.signature_metadata
+        ) IS NOT DISTINCT FROM ROW(
+          OLD.sent_at,
+          OLD.viewed_at,
+          OLD.approved_at,
+          OLD.approved_by,
+          OLD.approved_by_name,
+          OLD.approved_ip,
+          OLD.declined_at,
+          OLD.decline_reason,
+          OLD.signed_pdf_url,
+          OLD.signature_metadata
+        )
+      ) THEN
+        RAISE EXCEPTION 'scope_change_request_invalid_apply_transition'
+          USING ERRCODE = 'check_violation';
+      END IF;
+  END CASE;
+
+  RETURN NEW;
+END;
+$$;
+
+
+REVOKE ALL PRIVILEGES ON FUNCTION
+  public.guard_scope_change_request_integrity()
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+
+DROP TRIGGER IF EXISTS guard_scope_change_request_integrity
+  ON public.scope_change_requests;
+CREATE TRIGGER guard_scope_change_request_integrity
+  BEFORE INSERT OR UPDATE ON public.scope_change_requests
+  FOR EACH ROW
+  EXECUTE FUNCTION public.guard_scope_change_request_integrity();
+
+CREATE OR REPLACE FUNCTION public.send_scope_change_request(
+  p_request_id uuid,
+  p_project_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+  v_actor uuid := auth.uid();
+  v_project public.projects%ROWTYPE;
+  v_request public.scope_change_requests%ROWTYPE;
+  v_previous_transition text := current_setting(
+    'app.scope_change_transition', true
+  );
+BEGIN
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'send_scope_change_request requires an authenticated user'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  SELECT * INTO v_project
+  FROM public.projects
+  WHERE id = p_project_id
+    AND public._scope_change_requester_can_author(
+      v_actor, designer_id, id
+    )
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'send_scope_change_request: project not found or access denied'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF v_project.status IN ('completed', 'archived') THEN
+    RAISE EXCEPTION 'send_scope_change_request: completed_project'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  SELECT * INTO v_request
+  FROM public.scope_change_requests
+  WHERE id = p_request_id
+    AND project_id = p_project_id
+  FOR UPDATE;
+  IF NOT FOUND
+     OR v_request.status <> 'draft'
+     OR v_request.request_origin IS DISTINCT FROM 'designer_amendment'
+     OR NOT public._scope_change_requester_can_author(
+       v_request.requested_by, v_project.designer_id, v_project.id
+     )
+  THEN
+    RAISE EXCEPTION 'send_scope_change_request: request not found or invalid state'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  PERFORM set_config(
+    'app.scope_change_transition',
+    format('send:%s:%s', p_request_id, pg_catalog.txid_current()), true
+  );
+  UPDATE public.scope_change_requests
+  SET status = 'sent', sent_at = now()
+  WHERE id = p_request_id
+  RETURNING * INTO v_request;
+  PERFORM set_config(
+    'app.scope_change_transition', COALESCE(v_previous_transition, ''), true
+  );
+
+  RETURN jsonb_build_object(
+    'id', v_request.id, 'project_id', v_request.project_id,
+    'status', v_request.status, 'sent_at', v_request.sent_at
+  );
+EXCEPTION WHEN OTHERS THEN
+  PERFORM set_config(
+    'app.scope_change_transition', COALESCE(v_previous_transition, ''), true
+  );
+  RAISE;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.approve_scope_change_request(
+  p_request_id uuid,
+  p_project_id uuid,
+  p_approved_by_name text,
+  p_approved_ip text DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+  v_actor uuid := auth.uid();
+  v_project public.projects%ROWTYPE;
+  v_request public.scope_change_requests%ROWTYPE;
+  v_approved_by_name text := btrim(COALESCE(p_approved_by_name, ''));
+  v_previous_transition text := current_setting(
+    'app.scope_change_transition', true
+  );
+BEGIN
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'approve_scope_change_request requires an authenticated user'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF v_approved_by_name = '' THEN
+    RAISE EXCEPTION 'approve_scope_change_request: signer name required'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+
+  SELECT * INTO v_project
+  FROM public.projects
+  WHERE id = p_project_id
+    AND client_id = v_actor
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'approve_scope_change_request: project not found or access denied'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  SELECT * INTO v_request
+  FROM public.scope_change_requests
+  WHERE id = p_request_id
+    AND project_id = p_project_id
+  FOR UPDATE;
+  IF NOT FOUND
+     OR v_request.request_origin IS DISTINCT FROM 'designer_amendment'
+     OR v_request.requested_by IS NOT DISTINCT FROM v_actor
+     OR NOT public._scope_change_requester_can_author(
+       v_request.requested_by, v_project.designer_id, v_project.id
+     )
+     OR v_request.status NOT IN ('sent', 'viewed')
+  THEN
+    RAISE EXCEPTION 'approve_scope_change_request: request not found or invalid state'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  PERFORM set_config(
+    'app.scope_change_transition',
+    format('approve:%s:%s', p_request_id, pg_catalog.txid_current()), true
+  );
+  UPDATE public.scope_change_requests
+  SET status = 'approved',
+      approved_at = now(),
+      approved_by = v_actor,
+      approved_by_name = v_approved_by_name,
+      approved_ip = NULLIF(btrim(COALESCE(p_approved_ip, '')), '')
+  WHERE id = p_request_id
+  RETURNING * INTO v_request;
+  PERFORM set_config(
+    'app.scope_change_transition', COALESCE(v_previous_transition, ''), true
+  );
+
+  RETURN jsonb_build_object(
+    'id', v_request.id, 'project_id', v_request.project_id,
+    'status', v_request.status, 'approved_at', v_request.approved_at
+  );
+EXCEPTION WHEN OTHERS THEN
+  PERFORM set_config(
+    'app.scope_change_transition', COALESCE(v_previous_transition, ''), true
+  );
+  RAISE;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.accept_client_scope_change_request(
+  p_request_id uuid,
+  p_project_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+  v_actor uuid := auth.uid();
+  v_actor_name text;
+  v_project public.projects%ROWTYPE;
+  v_request public.scope_change_requests%ROWTYPE;
+  v_previous_transition text := current_setting(
+    'app.scope_change_transition', true
+  );
+BEGIN
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'accept_client_scope_change_request requires an authenticated user'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  SELECT * INTO v_project
+  FROM public.projects
+  WHERE id = p_project_id
+    AND public._scope_change_requester_can_author(
+      v_actor, designer_id, id
+    )
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION
+      'accept_client_scope_change_request: project not found or access denied'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF v_project.status IN ('completed', 'archived') THEN
+    RAISE EXCEPTION 'accept_client_scope_change_request: completed_project'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  SELECT * INTO v_request
+  FROM public.scope_change_requests
+  WHERE id = p_request_id
+    AND project_id = p_project_id
+  FOR UPDATE;
+  IF NOT FOUND
+     OR v_request.request_origin IS DISTINCT FROM 'client_request'
+     OR v_project.client_id IS NULL
+     OR v_request.requested_by IS DISTINCT FROM v_project.client_id
+     OR v_request.status NOT IN ('sent', 'viewed')
+  THEN
+    RAISE EXCEPTION
+      'accept_client_scope_change_request: request not found or invalid state'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  SELECT COALESCE(NULLIF(btrim(profile.full_name), ''), 'Designer')
+  INTO v_actor_name
+  FROM public.profiles AS profile
+  WHERE profile.id = v_actor;
+  v_actor_name := COALESCE(v_actor_name, 'Designer');
+
+  PERFORM set_config(
+    'app.scope_change_transition',
+    format('approve:%s:%s', p_request_id, pg_catalog.txid_current()), true
+  );
+  UPDATE public.scope_change_requests
+  SET status = 'approved', approved_at = now(), approved_by = v_actor,
+      approved_by_name = v_actor_name, approved_ip = NULL
+  WHERE id = p_request_id
+  RETURNING * INTO v_request;
+  PERFORM set_config(
+    'app.scope_change_transition', COALESCE(v_previous_transition, ''), true
+  );
+
+  RETURN jsonb_build_object(
+    'id', v_request.id, 'project_id', v_request.project_id,
+    'status', v_request.status, 'approved_at', v_request.approved_at
+  );
+EXCEPTION WHEN OTHERS THEN
+  PERFORM set_config(
+    'app.scope_change_transition', COALESCE(v_previous_transition, ''), true
+  );
+  RAISE;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.decline_scope_change_request(
+  p_request_id uuid,
+  p_project_id uuid,
+  p_decline_reason text DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+  v_actor uuid := auth.uid();
+  v_project public.projects%ROWTYPE;
+  v_request public.scope_change_requests%ROWTYPE;
+  v_previous_transition text := current_setting(
+    'app.scope_change_transition', true
+  );
+BEGIN
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'decline_scope_change_request requires an authenticated user'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  SELECT * INTO v_project
+  FROM public.projects
+  WHERE id = p_project_id
+    AND client_id = v_actor
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'decline_scope_change_request: project not found or access denied'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  SELECT * INTO v_request
+  FROM public.scope_change_requests
+  WHERE id = p_request_id
+    AND project_id = p_project_id
+  FOR UPDATE;
+  IF NOT FOUND
+     OR v_request.request_origin IS DISTINCT FROM 'designer_amendment'
+     OR v_request.requested_by IS NOT DISTINCT FROM v_actor
+     OR NOT public._scope_change_requester_can_author(
+       v_request.requested_by, v_project.designer_id, v_project.id
+     )
+     OR v_request.status NOT IN ('sent', 'viewed')
+  THEN
+    RAISE EXCEPTION 'decline_scope_change_request: request not found or invalid state'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  PERFORM set_config(
+    'app.scope_change_transition',
+    format('decline:%s:%s', p_request_id, pg_catalog.txid_current()), true
+  );
+  UPDATE public.scope_change_requests
+  SET status = 'declined', declined_at = now(),
+      decline_reason = NULLIF(btrim(COALESCE(p_decline_reason, '')), '')
+  WHERE id = p_request_id
+  RETURNING * INTO v_request;
+  PERFORM set_config(
+    'app.scope_change_transition', COALESCE(v_previous_transition, ''), true
+  );
+
+  RETURN jsonb_build_object(
+    'id', v_request.id, 'project_id', v_request.project_id,
+    'status', v_request.status, 'declined_at', v_request.declined_at
+  );
+EXCEPTION WHEN OTHERS THEN
+  PERFORM set_config(
+    'app.scope_change_transition', COALESCE(v_previous_transition, ''), true
+  );
+  RAISE;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.cancel_scope_change_request(
+  p_request_id uuid,
+  p_project_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+  v_actor uuid := auth.uid();
+  v_project public.projects%ROWTYPE;
+  v_request public.scope_change_requests%ROWTYPE;
+  v_previous_transition text := current_setting(
+    'app.scope_change_transition', true
+  );
+BEGIN
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'cancel_scope_change_request requires an authenticated user'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  SELECT * INTO v_project
+  FROM public.projects
+  WHERE id = p_project_id
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'cancel_scope_change_request: project not found or access denied'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  SELECT * INTO v_request
+  FROM public.scope_change_requests
+  WHERE id = p_request_id
+    AND project_id = p_project_id
+    AND requested_by = v_actor
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'cancel_scope_change_request: request not found or access denied'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF NOT (
+    v_project.client_id IS NOT DISTINCT FROM v_actor
+    OR public._scope_change_requester_can_author(
+      v_actor, v_project.designer_id, v_project.id
+    )
+  ) THEN
+    RAISE EXCEPTION 'cancel_scope_change_request: access denied'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF v_request.status NOT IN ('draft', 'sent', 'viewed') THEN
+    RAISE EXCEPTION 'cancel_scope_change_request: invalid state'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  PERFORM set_config(
+    'app.scope_change_transition',
+    format('cancel:%s:%s', p_request_id, pg_catalog.txid_current()), true
+  );
+  UPDATE public.scope_change_requests
+  SET status = 'cancelled'
+  WHERE id = p_request_id
+  RETURNING * INTO v_request;
+  PERFORM set_config(
+    'app.scope_change_transition', COALESCE(v_previous_transition, ''), true
+  );
+
+  RETURN jsonb_build_object(
+    'id', v_request.id, 'project_id', v_request.project_id,
+    'status', v_request.status
+  );
+EXCEPTION WHEN OTHERS THEN
+  PERFORM set_config(
+    'app.scope_change_transition', COALESCE(v_previous_transition, ''), true
+  );
+  RAISE;
+END;
+$$;
+
+REVOKE ALL PRIVILEGES ON FUNCTION
+  public.send_scope_change_request(uuid, uuid),
+  public.approve_scope_change_request(uuid, uuid, text, text),
+  public.accept_client_scope_change_request(uuid, uuid),
+  public.decline_scope_change_request(uuid, uuid, text),
+  public.cancel_scope_change_request(uuid, uuid)
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+GRANT EXECUTE ON FUNCTION
+  public.send_scope_change_request(uuid, uuid),
+  public.approve_scope_change_request(uuid, uuid, text, text),
+  public.accept_client_scope_change_request(uuid, uuid),
+  public.decline_scope_change_request(uuid, uuid, text),
+  public.cancel_scope_change_request(uuid, uuid)
+  TO authenticated, service_role;
+
 CREATE OR REPLACE FUNCTION public.activate_project_v2(input jsonb)
 RETURNS uuid
 LANGUAGE plpgsql
@@ -484,8 +1516,8 @@ AS $$
 DECLARE
   v_project_id uuid := extensions.gen_random_uuid();
   v_caller_id uuid := auth.uid();
-  v_client_id uuid := NULLIF(input->>'client_id', '')::uuid;
-  v_studio_id uuid := NULLIF(input->>'studio_id', '')::uuid;
+  v_client_id uuid;
+  v_studio_id uuid;
   v_room jsonb;
   v_phase jsonb;
   v_milestone jsonb;
@@ -511,6 +1543,9 @@ BEGIN
     RAISE EXCEPTION 'project creation not permitted'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
+
+  v_client_id := NULLIF(input->>'client_id', '')::uuid;
+  v_studio_id := NULLIF(input->>'studio_id', '')::uuid;
 
   PERFORM 1
   FROM public.user_roles AS user_role
@@ -1170,6 +2205,9 @@ SET search_path = pg_catalog, public, pg_temp
 AS $$
 DECLARE
   v_id uuid;
+  v_previous_write_id text := current_setting(
+    'app.client_decision_write_id', true
+  );
 BEGIN
   IF current_setting('role', true) IS DISTINCT FROM 'service_role' THEN
     RAISE EXCEPTION 'expire_due_client_decisions is service-role only'
@@ -1196,10 +2234,17 @@ BEGIN
     WHERE decision.id = v_id
       AND decision.status = 'pending'
       AND decision.approval_contract IS NULL;
-    PERFORM set_config('app.client_decision_write_id', '', true);
+    PERFORM set_config(
+      'app.client_decision_write_id', COALESCE(v_previous_write_id, ''), true
+    );
     id := v_id;
     RETURN NEXT;
   END LOOP;
+EXCEPTION WHEN OTHERS THEN
+  PERFORM set_config(
+    'app.client_decision_write_id', COALESCE(v_previous_write_id, ''), true
+  );
+  RAISE;
 END;
 $$;
 
@@ -1648,6 +2693,9 @@ DECLARE
   v_quantity integer;
   v_unit_price_cents integer;
   v_line_total_cents integer;
+  v_previous_transition text := current_setting(
+    'app.scope_change_transition', true
+  );
 BEGIN
   IF auth.uid() IS NULL THEN
     RAISE EXCEPTION 'scope change request not found or access denied'
@@ -1710,7 +2758,8 @@ BEGIN
       v_request.request_origin = 'designer_amendment'
       AND public._scope_change_requester_can_author(
         v_request.requested_by,
-        v_project.designer_id
+        v_project.designer_id,
+        v_project.id
       )
     )
   ) THEN
@@ -1854,7 +2903,14 @@ BEGIN
   UPDATE public.scope_change_requests
   SET applied_at = now()
   WHERE id = p_request_id;
-  PERFORM set_config('app.scope_change_transition', '', true);
+  PERFORM set_config(
+    'app.scope_change_transition', COALESCE(v_previous_transition, ''), true
+  );
+EXCEPTION WHEN OTHERS THEN
+  PERFORM set_config(
+    'app.scope_change_transition', COALESCE(v_previous_transition, ''), true
+  );
+  RAISE;
 END;
 $$;
 
@@ -1874,6 +2930,9 @@ DECLARE
   v_effective_closure jsonb;
   v_blocker_count integer;
   v_collected_cents bigint;
+  v_previous_completion_id text := current_setting(
+    'app.project_completion_id', true
+  );
 BEGIN
   IF v_designer IS NULL THEN
     RAISE EXCEPTION 'project not found or access denied'
@@ -2119,9 +3178,16 @@ BEGIN
       updated_at = now()
   WHERE id = p_project_id
   RETURNING * INTO v_project;
-  PERFORM set_config('app.project_completion_id', '', true);
+  PERFORM set_config(
+    'app.project_completion_id', COALESCE(v_previous_completion_id, ''), true
+  );
 
   RETURN v_project;
+EXCEPTION WHEN OTHERS THEN
+  PERFORM set_config(
+    'app.project_completion_id', COALESCE(v_previous_completion_id, ''), true
+  );
+  RAISE;
 END;
 $$;
 
@@ -2199,39 +3265,43 @@ SET search_path = pg_catalog, public, pg_temp
 AS $$
 DECLARE
   v_fb public.item_feedback;
-  v_owns_decision boolean;
+  v_anchor_client_id uuid;
+  v_anchor_project_id uuid;
 BEGIN
   IF auth.uid() IS NULL THEN
     RAISE EXCEPTION 'feedback or decision not found or access denied'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  SELECT feedback.* INTO v_fb
+  SELECT feedback, gate.client_id, proposal.project_id
+  INTO v_fb, v_anchor_client_id, v_anchor_project_id
   FROM public.item_feedback AS feedback
+  CROSS JOIN LATERAL public.item_feedback_gate(
+    feedback.proposal_item_id,
+    feedback.ffe_item_id,
+    feedback.board_item_id
+  ) AS gate
+  JOIN public.proposals AS proposal ON proposal.id = gate.proposal_id
   WHERE feedback.id = p_feedback_id
-    AND EXISTS (
-      SELECT 1
-      FROM public.item_feedback_gate(
-        feedback.proposal_item_id,
-        feedback.ffe_item_id,
-        feedback.board_item_id
-      ) AS gate
-      WHERE gate.designer_id = auth.uid()
-    );
+    AND gate.designer_id = auth.uid()
+    AND proposal.project_id IS NOT NULL
+  FOR UPDATE OF feedback
+  FOR SHARE OF proposal;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'feedback or decision not found or access denied'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  SELECT EXISTS (
-    SELECT 1
-    FROM public.client_decisions AS decision
-    JOIN public.designer_clients AS relationship
-      ON relationship.id = decision.designer_client_id
-    WHERE decision.id = p_decision_id
-      AND relationship.designer_id = auth.uid()
-  ) INTO v_owns_decision;
-  IF NOT v_owns_decision THEN
+  PERFORM 1
+  FROM public.client_decisions AS decision
+  JOIN public.designer_clients AS relationship
+    ON relationship.id = decision.designer_client_id
+  WHERE decision.id = p_decision_id
+    AND relationship.designer_id = auth.uid()
+    AND relationship.client_id = v_anchor_client_id
+    AND decision.project_id = v_anchor_project_id
+  FOR SHARE OF decision, relationship;
+  IF NOT FOUND THEN
     RAISE EXCEPTION 'feedback or decision not found or access denied'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
@@ -2250,6 +3320,393 @@ BEGIN
   RETURN v_fb;
 END;
 $$;
+
+DO $retire_milestone_invoice_core$
+BEGIN
+  IF to_regprocedure(
+       'public._draft_invoice_from_milestone_00486(uuid)'
+     ) IS NULL
+  THEN
+    ALTER FUNCTION public.draft_invoice_from_milestone(uuid)
+      RENAME TO _draft_invoice_from_milestone_00486;
+  END IF;
+END
+$retire_milestone_invoice_core$;
+
+ALTER FUNCTION public._draft_invoice_from_milestone_00486(uuid)
+  SET search_path = pg_catalog, public, pg_temp;
+REVOKE ALL PRIVILEGES ON FUNCTION
+  public._draft_invoice_from_milestone_00486(uuid)
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+
+CREATE OR REPLACE FUNCTION public.draft_invoice_from_milestone(
+  p_milestone_id uuid
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+  v_milestone public.project_payment_milestones%ROWTYPE;
+  v_project public.projects%ROWTYPE;
+  v_line public.invoice_line_items%ROWTYPE;
+  v_invoice public.invoices%ROWTYPE;
+BEGIN
+  SELECT * INTO v_line
+  FROM public.invoice_line_items AS line
+  WHERE line.milestone_id = p_milestone_id
+  FOR UPDATE;
+
+  SELECT milestone, project
+  INTO v_milestone, v_project
+  FROM public.project_payment_milestones AS milestone
+  JOIN public.projects AS project ON project.id = milestone.project_id
+  WHERE milestone.id = p_milestone_id
+  FOR UPDATE OF milestone, project;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION
+      'draft_invoice_from_milestone: milestone % not found', p_milestone_id;
+  END IF;
+
+  IF v_line.id IS NOT NULL THEN
+    SELECT * INTO v_invoice
+    FROM public.invoices AS invoice
+    WHERE invoice.id = v_line.invoice_id
+    FOR UPDATE;
+    IF NOT FOUND
+       OR v_invoice.project_id IS DISTINCT FROM v_project.id
+       OR v_invoice.client_id IS DISTINCT FROM v_project.client_id
+       OR v_invoice.studio_id IS DISTINCT FROM v_project.studio_id
+       OR NOT (
+         v_invoice.designer_id = v_project.designer_id
+         OR EXISTS (
+           SELECT 1
+           FROM public.organizations AS organization
+           JOIN public.organization_members AS membership
+             ON membership.organization_id = organization.id
+           WHERE organization.id = v_project.studio_id
+             AND organization.type = 'design_studio'
+             AND organization.status = 'active'
+             AND membership.user_id = v_invoice.designer_id
+             AND membership.status = 'active'
+             AND membership.role <> 'guest'
+         )
+       )
+    THEN
+      RAISE EXCEPTION
+        'draft_invoice_from_milestone: invoice line identity conflicts with milestone %',
+        p_milestone_id USING ERRCODE = '23514';
+    END IF;
+  END IF;
+
+  IF v_milestone.invoice_id IS NOT NULL
+     AND (
+       v_line.id IS NULL
+       OR v_milestone.invoice_id <> v_line.invoice_id
+     )
+  THEN
+    SELECT * INTO v_invoice
+    FROM public.invoices AS invoice
+    WHERE invoice.id = v_milestone.invoice_id
+    FOR UPDATE;
+    IF FOUND
+       AND (
+         v_invoice.studio_id IS DISTINCT FROM v_project.studio_id
+         OR (
+           v_invoice.status <> 'void'
+           AND (
+             v_invoice.project_id IS DISTINCT FROM v_project.id
+             OR v_invoice.client_id IS DISTINCT FROM v_project.client_id
+             OR NOT (
+               v_invoice.designer_id = v_project.designer_id
+               OR EXISTS (
+                 SELECT 1
+                 FROM public.organizations AS organization
+                 JOIN public.organization_members AS membership
+                   ON membership.organization_id = organization.id
+                 WHERE organization.id = v_project.studio_id
+                   AND organization.type = 'design_studio'
+                   AND organization.status = 'active'
+                   AND membership.user_id = v_invoice.designer_id
+                   AND membership.status = 'active'
+                   AND membership.role <> 'guest'
+               )
+             )
+           )
+         )
+       )
+    THEN
+      RAISE EXCEPTION
+        'draft_invoice_from_milestone: draft invoice % is unsafe for milestone % repair',
+        v_invoice.id, p_milestone_id USING ERRCODE = '23514';
+    END IF;
+  END IF;
+
+  RETURN public._draft_invoice_from_milestone_00486(p_milestone_id);
+END;
+$$;
+
+REVOKE ALL PRIVILEGES ON FUNCTION public.draft_invoice_from_milestone(uuid)
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+GRANT EXECUTE ON FUNCTION public.draft_invoice_from_milestone(uuid)
+  TO service_role;
+
+CREATE OR REPLACE FUNCTION public.sync_invoice_line_milestone_latch()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+  v_invoice public.invoices%ROWTYPE;
+  v_previous_invoice public.invoices%ROWTYPE;
+  v_milestone public.project_payment_milestones%ROWTYPE;
+  v_project public.projects%ROWTYPE;
+  v_detach boolean := false;
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    v_detach := OLD.milestone_id IS NOT NULL;
+  ELSIF TG_OP = 'UPDATE' THEN
+    v_detach := OLD.milestone_id IS NOT NULL
+      AND (
+        OLD.milestone_id IS DISTINCT FROM NEW.milestone_id
+        OR OLD.invoice_id IS DISTINCT FROM NEW.invoice_id
+      );
+  END IF;
+
+  IF v_detach THEN
+    SELECT * INTO v_previous_invoice
+    FROM public.invoices
+    WHERE id = OLD.invoice_id
+    FOR UPDATE;
+
+    SELECT milestone, project
+    INTO v_milestone, v_project
+    FROM public.project_payment_milestones AS milestone
+    JOIN public.projects AS project ON project.id = milestone.project_id
+    WHERE milestone.id = OLD.milestone_id
+    FOR UPDATE OF milestone, project;
+
+    IF v_previous_invoice.id IS NOT NULL
+       AND v_milestone.id IS NOT NULL
+       AND (
+         v_previous_invoice.project_id IS DISTINCT FROM v_project.id
+         OR v_previous_invoice.client_id IS DISTINCT FROM v_project.client_id
+         OR v_previous_invoice.studio_id IS DISTINCT FROM v_project.studio_id
+         OR NOT (
+           v_previous_invoice.designer_id = v_project.designer_id
+           OR EXISTS (
+             SELECT 1
+             FROM public.organizations AS organization
+             JOIN public.organization_members AS membership
+               ON membership.organization_id = organization.id
+             WHERE organization.id = v_project.studio_id
+               AND organization.type = 'design_studio'
+               AND organization.status = 'active'
+               AND membership.user_id = v_previous_invoice.designer_id
+               AND membership.status = 'active'
+               AND membership.role <> 'guest'
+           )
+         )
+       )
+    THEN
+      RAISE EXCEPTION
+        'invoice milestone latch: prior line does not match milestone %',
+        OLD.milestone_id USING ERRCODE = '23514';
+    END IF;
+
+    IF v_previous_invoice.id IS NOT NULL
+       AND v_previous_invoice.status NOT IN ('draft', 'void')
+       AND EXISTS (
+         SELECT 1
+         FROM public.project_payment_milestones AS milestone
+         WHERE milestone.id = OLD.milestone_id
+           AND milestone.invoice_id = OLD.invoice_id
+       )
+    THEN
+      RAISE EXCEPTION
+        'invoice milestone latch: cannot detach milestone % from % invoice %',
+        OLD.milestone_id, v_previous_invoice.status, OLD.invoice_id
+        USING ERRCODE = '23514';
+    END IF;
+
+    UPDATE public.project_payment_milestones
+    SET invoice_id = NULL, status = 'pending', due_date = NULL,
+        paid_at = NULL, updated_at = now()
+    WHERE id = OLD.milestone_id
+      AND invoice_id = OLD.invoice_id;
+  END IF;
+
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  END IF;
+  IF NEW.milestone_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT * INTO v_invoice
+  FROM public.invoices
+  WHERE id = NEW.invoice_id;
+  IF NOT FOUND OR v_invoice.status <> 'draft' THEN
+    RAISE EXCEPTION
+      'invoice milestone latch: invoice % is missing or not draft', NEW.invoice_id
+      USING ERRCODE = '23514';
+  END IF;
+
+  SELECT * INTO v_milestone
+  FROM public.project_payment_milestones
+  WHERE id = NEW.milestone_id
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION
+      'invoice milestone latch: milestone % not found', NEW.milestone_id
+      USING ERRCODE = '23514';
+  END IF;
+
+  SELECT * INTO v_project
+  FROM public.projects
+  WHERE id = v_milestone.project_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION
+      'invoice milestone latch: project % not found', v_milestone.project_id
+      USING ERRCODE = '23514';
+  END IF;
+
+  IF current_setting('role', true) = 'authenticated'
+     AND NOT (
+       v_project.designer_id = auth.uid()
+       OR EXISTS (
+         SELECT 1
+         FROM public.organizations AS organization
+         JOIN public.organization_members AS membership
+           ON membership.organization_id = organization.id
+         WHERE organization.id = v_project.studio_id
+           AND organization.type = 'design_studio'
+           AND organization.status = 'active'
+           AND membership.user_id = auth.uid()
+           AND membership.status = 'active'
+           AND membership.role <> 'guest'
+       )
+     )
+  THEN
+    RAISE EXCEPTION
+      'invoice milestone latch: milestone % not found or access denied',
+      NEW.milestone_id USING ERRCODE = '42501';
+  END IF;
+
+  IF v_invoice.project_id IS DISTINCT FROM v_milestone.project_id
+     OR v_invoice.client_id IS DISTINCT FROM v_project.client_id
+     OR v_invoice.studio_id IS DISTINCT FROM v_project.studio_id
+     OR NOT (
+       v_invoice.designer_id = v_project.designer_id
+       OR EXISTS (
+         SELECT 1
+         FROM public.organizations AS organization
+         JOIN public.organization_members AS membership
+           ON membership.organization_id = organization.id
+         WHERE organization.id = v_project.studio_id
+           AND organization.type = 'design_studio'
+           AND organization.status = 'active'
+           AND membership.user_id = v_invoice.designer_id
+           AND membership.status = 'active'
+           AND membership.role <> 'guest'
+       )
+     )
+     OR NEW.kind IS DISTINCT FROM 'milestone'
+     OR NEW.quantity IS DISTINCT FROM 1
+     OR NEW.unit_amount_cents IS DISTINCT FROM v_milestone.amount_cents
+     OR NEW.amount_cents IS DISTINCT FROM v_milestone.amount_cents
+  THEN
+    RAISE EXCEPTION
+      'invoice milestone latch: line % does not exactly match milestone %',
+      NEW.id, NEW.milestone_id USING ERRCODE = '23514';
+  END IF;
+
+  IF v_milestone.status = 'paid' THEN
+    RAISE EXCEPTION
+      'invoice milestone latch: paid milestone % cannot be attached to a draft invoice',
+      NEW.milestone_id USING ERRCODE = '23514';
+  END IF;
+
+  IF v_milestone.invoice_id IS NOT NULL
+     AND v_milestone.invoice_id <> NEW.invoice_id
+  THEN
+    SELECT * INTO v_previous_invoice
+    FROM public.invoices
+    WHERE id = v_milestone.invoice_id;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION
+        'invoice milestone latch: existing invoice % is unavailable for milestone %',
+        v_milestone.invoice_id, NEW.milestone_id USING ERRCODE = '23514';
+    ELSIF v_previous_invoice.status <> 'void'
+       AND (
+         v_previous_invoice.status = 'draft'
+         AND v_previous_invoice.project_id = v_milestone.project_id
+         AND v_previous_invoice.studio_id IS NOT DISTINCT FROM
+             v_project.studio_id
+         AND v_previous_invoice.designer_id IS NOT DISTINCT FROM
+             v_invoice.designer_id
+         AND v_previous_invoice.client_id IS NOT DISTINCT FROM
+             v_invoice.client_id
+         AND v_previous_invoice.currency IS NOT DISTINCT FROM v_invoice.currency
+         AND v_previous_invoice.subtotal_cents = v_milestone.amount_cents
+         AND v_previous_invoice.tax_cents = 0
+         AND v_previous_invoice.total_cents = v_milestone.amount_cents
+         AND v_previous_invoice.amount_paid_cents = 0
+         AND v_previous_invoice.stripe_checkout_session_id IS NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM public.invoice_line_items AS line
+           WHERE line.invoice_id = v_previous_invoice.id
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM public.invoice_payments AS payment
+           WHERE payment.invoice_id = v_previous_invoice.id
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM public.invoice_checkout_attempts AS attempt
+           WHERE attempt.invoice_id = v_previous_invoice.id
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM public.project_time_entries AS entry
+           WHERE entry.invoice_id = v_previous_invoice.id
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM public.designer_earnings AS earning
+           WHERE earning.invoice_id = v_previous_invoice.id
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM public.concierge_orders AS order_row
+           WHERE order_row.client_invoice_id = v_previous_invoice.id
+         )
+       ) IS NOT TRUE
+    THEN
+      RAISE EXCEPTION
+        'invoice milestone latch: milestone % is already latched to invoice %',
+        NEW.milestone_id, v_milestone.invoice_id USING ERRCODE = '23514';
+    END IF;
+  END IF;
+
+  UPDATE public.project_payment_milestones
+  SET invoice_id = NEW.invoice_id, status = 'pending', due_date = NULL,
+      paid_at = NULL, updated_at = now()
+  WHERE id = NEW.milestone_id;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL PRIVILEGES ON FUNCTION
+  public.sync_invoice_line_milestone_latch()
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+DROP TRIGGER IF EXISTS sync_invoice_line_milestone_latch_trg
+  ON public.invoice_line_items;
+CREATE TRIGGER sync_invoice_line_milestone_latch_trg
+  AFTER INSERT OR UPDATE OR DELETE ON public.invoice_line_items
+  FOR EACH ROW
+  EXECUTE FUNCTION public.sync_invoice_line_milestone_latch();
 
 CREATE OR REPLACE FUNCTION public.generate_milestone_invoice(p_milestone_id uuid)
 RETURNS uuid
@@ -2467,6 +3924,9 @@ AS $$
 DECLARE
   v_proposal public.proposals%ROWTYPE;
   v_feedback text := btrim(COALESCE(p_feedback, ''));
+  v_previous_feedback_id text := current_setting(
+    'app.proposal_feedback_id', true
+  );
 BEGIN
   IF auth.uid() IS NULL THEN
     RAISE EXCEPTION 'proposal not found or access denied'
@@ -2498,7 +3958,9 @@ BEGIN
   SET client_feedback = v_feedback,
       updated_at = now()
   WHERE id = p_proposal_id;
-  PERFORM set_config('app.proposal_feedback_id', '', true);
+  PERFORM set_config(
+    'app.proposal_feedback_id', COALESCE(v_previous_feedback_id, ''), true
+  );
 
   INSERT INTO public.proposal_engagement (
     proposal_id, viewer_id, event_type, metadata
@@ -2506,6 +3968,11 @@ BEGIN
     p_proposal_id, auth.uid(), 'change_requested',
     jsonb_build_object('via', 'request_proposal_change')
   );
+EXCEPTION WHEN OTHERS THEN
+  PERFORM set_config(
+    'app.proposal_feedback_id', COALESCE(v_previous_feedback_id, ''), true
+  );
+  RAISE;
 END;
 $$;
 
@@ -2521,7 +3988,9 @@ SET search_path = pg_catalog, public, pg_temp
 AS $$
 DECLARE
   v_msg public.sms_messages;
-  v_project_id uuid;
+  v_conversation public.sms_conversations;
+  v_party public.project_parties;
+  v_party_id uuid;
   v_effect jsonb;
   v_result jsonb := '{}'::jsonb;
 BEGIN
@@ -2530,53 +3999,65 @@ BEGIN
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  SELECT message.* INTO v_msg
+  SELECT message, conversation, party
+  INTO v_msg, v_conversation, v_party
   FROM public.sms_messages AS message
+  JOIN public.sms_conversations AS conversation
+    ON conversation.id = message.conversation_id
+  LEFT JOIN LATERAL (
+    SELECT count(*) AS party_count,
+           (array_agg(candidate.id ORDER BY candidate.id))[1] AS party_id
+    FROM public.project_parties AS candidate
+    WHERE candidate.phone_e164 = conversation.phone_e164
+  ) AS phone_match
+    ON message.party_id IS NULL
+   AND conversation.party_id IS NULL
+  JOIN public.project_parties AS party
+    ON party.id = COALESCE(
+      message.party_id, conversation.party_id, phone_match.party_id
+    )
+  JOIN public.projects AS project
+    ON project.id = party.project_id
   WHERE message.id = p_message_id
-    AND EXISTS (
-      SELECT 1
-      FROM public.projects AS project
-      WHERE project.id = COALESCE(
-        message.project_id,
-        (
-          SELECT party.project_id
-          FROM public.sms_conversations AS conversation
-          JOIN public.project_parties AS party
-            ON party.phone_e164 = conversation.phone_e164
-          WHERE conversation.id = message.conversation_id
-          ORDER BY party.id
-          LIMIT 1
-        )
-      )
-        AND (
-          project.designer_id = auth.uid()
-          OR public.is_project_team_member(project.id, auth.uid())
-        )
-    );
+    AND NOT (
+      message.party_id IS NOT NULL
+      AND conversation.party_id IS NOT NULL
+      AND message.party_id <> conversation.party_id
+    )
+    AND party.phone_e164 = conversation.phone_e164
+    AND (
+      message.project_id IS NULL
+      OR message.project_id = project.id
+    )
+    AND (
+      conversation.active_project_id IS NULL
+      OR conversation.active_project_id = project.id
+    )
+    AND (
+      COALESCE(message.party_id, conversation.party_id) IS NOT NULL
+      OR phone_match.party_count = 1
+    )
+    AND (
+      project.designer_id = auth.uid()
+      OR public.is_project_team_member(project.id, auth.uid())
+    )
+  FOR UPDATE OF message, conversation, project
+  FOR SHARE OF party;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'message not found or access denied'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  v_project_id := v_msg.project_id;
-  IF v_project_id IS NULL THEN
-    SELECT party.project_id INTO v_project_id
-    FROM public.sms_conversations AS conversation
-    JOIN public.project_parties AS party
-      ON party.phone_e164 = conversation.phone_e164
-    WHERE conversation.id = v_msg.conversation_id
-    ORDER BY party.id
-    LIMIT 1;
-  END IF;
+  v_party_id := v_party.id;
 
   IF p_action = 'apply' THEN
     v_effect := COALESCE(p_effect, v_msg.parsed_intent);
-    IF v_effect IS NULL OR v_msg.party_id IS NULL THEN
+    IF v_effect IS NULL THEN
       RAISE EXCEPTION 'review_sms_message: nothing to apply (no effect or party)'
         USING ERRCODE = 'check_violation';
     END IF;
     v_result := public.apply_field_effect(
-      v_msg.party_id, v_effect, 'triage', p_message_id
+      v_party_id, v_effect, 'triage', p_message_id
     );
   ELSIF p_action <> 'dismiss' THEN
     RAISE EXCEPTION 'review_sms_message: unknown action %', p_action
@@ -2587,11 +4068,61 @@ BEGIN
   SET needs_review = false,
       reviewed_at = now(),
       reviewed_by = auth.uid()
-  WHERE id = p_message_id;
+  WHERE id = p_message_id
+    AND conversation_id = v_conversation.id
+    AND party_id IS NOT DISTINCT FROM v_msg.party_id
+    AND project_id IS NOT DISTINCT FROM v_msg.project_id;
 
   RETURN jsonb_build_object('action', p_action, 'result', v_result);
 END;
 $$;
+
+CREATE OR REPLACE FUNCTION public.apply_field_effect(
+  p_party_id uuid,
+  p_effect jsonb,
+  p_source text DEFAULT 'sms',
+  p_sms_message_id uuid DEFAULT NULL
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+  v_target_id uuid := NULLIF(p_effect#>>'{target,id}', '')::uuid;
+  v_result jsonb;
+  v_previous_decision_write_id text := current_setting(
+    'app.client_decision_write_id', true
+  );
+BEGIN
+  IF p_effect#>>'{target,kind}' = 'coordination' AND v_target_id IS NOT NULL THEN
+    PERFORM set_config('app.client_decision_write_id', v_target_id::text, true);
+  END IF;
+
+  v_result := public._apply_field_effect_legacy_00399(
+    p_party_id, p_effect, p_source, p_sms_message_id
+  );
+  PERFORM set_config(
+    'app.client_decision_write_id',
+    COALESCE(v_previous_decision_write_id, ''), true
+  );
+  RETURN v_result;
+EXCEPTION WHEN OTHERS THEN
+  PERFORM set_config(
+    'app.client_decision_write_id',
+    COALESCE(v_previous_decision_write_id, ''), true
+  );
+  RAISE;
+END;
+$$;
+
+REVOKE ALL PRIVILEGES ON FUNCTION
+  public.apply_field_effect(uuid, jsonb, text, uuid)
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+GRANT EXECUTE ON FUNCTION
+  public.apply_field_effect(uuid, jsonb, text, uuid)
+  TO service_role;
 
 CREATE OR REPLACE FUNCTION public.reassign_project_lead(
   p_project_id uuid,
@@ -2611,6 +4142,12 @@ DECLARE
   v_studio_id uuid;
   v_actor_name text;
   v_decision record;
+  v_previous_reassignment_id text := current_setting(
+    'app.project_reassignment_id', true
+  );
+  v_previous_decision_write_id text := current_setting(
+    'app.client_decision_write_id', true
+  );
 BEGIN
   IF v_actor IS NULL THEN
     RAISE EXCEPTION 'project not found or access denied'
@@ -2791,7 +4328,10 @@ BEGIN
   SET designer_id = p_new_designer_id, updated_at = now()
   WHERE id = p_project_id
   RETURNING * INTO v_project;
-  PERFORM set_config('app.project_reassignment_id', '', true);
+  PERFORM set_config(
+    'app.project_reassignment_id',
+    COALESCE(v_previous_reassignment_id, ''), true
+  );
 
   FOR v_decision IN
     SELECT id
@@ -2808,9 +4348,22 @@ BEGIN
         updated_at = now()
     WHERE id = v_decision.id;
   END LOOP;
-  PERFORM set_config('app.client_decision_write_id', '', true);
+  PERFORM set_config(
+    'app.client_decision_write_id',
+    COALESCE(v_previous_decision_write_id, ''), true
+  );
 
   RETURN v_project;
+EXCEPTION WHEN OTHERS THEN
+  PERFORM set_config(
+    'app.project_reassignment_id',
+    COALESCE(v_previous_reassignment_id, ''), true
+  );
+  PERFORM set_config(
+    'app.client_decision_write_id',
+    COALESCE(v_previous_decision_write_id, ''), true
+  );
+  RAISE;
 END;
 $$;
 
@@ -2831,6 +4384,12 @@ DECLARE
   v_engagement_id uuid := gen_random_uuid();
   v_previous_engagement_token text := current_setting(
     'app.proposal_signature_engagement_id', true
+  );
+  v_previous_decision_insert_id text := current_setting(
+    'app.client_decision_insert_id', true
+  );
+  v_previous_proposal_accept_id text := current_setting(
+    'app.proposal_accept_id', true
   );
   v_signed_name text := btrim(COALESCE(p_signed_name, ''));
 BEGIN
@@ -2910,7 +4469,10 @@ BEGIN
   ON CONFLICT (linked_proposal_id)
     WHERE decision_type = 'approval' AND linked_proposal_id IS NOT NULL
   DO NOTHING;
-  PERFORM set_config('app.client_decision_insert_id', '', true);
+  PERFORM set_config(
+    'app.client_decision_insert_id',
+    COALESCE(v_previous_decision_insert_id, ''), true
+  );
 
   IF NOT EXISTS (
     SELECT 1
@@ -2934,7 +4496,9 @@ BEGIN
       updated_at = now()
   WHERE id = p_proposal_id
   RETURNING * INTO v_proposal;
-  PERFORM set_config('app.proposal_accept_id', '', true);
+  PERFORM set_config(
+    'app.proposal_accept_id', COALESCE(v_previous_proposal_accept_id, ''), true
+  );
 
   PERFORM set_config(
     'app.proposal_signature_engagement_id', v_engagement_id::text, true
@@ -2963,26 +4527,189 @@ BEGIN
     );
   END IF;
   RETURN NULL;
+EXCEPTION WHEN OTHERS THEN
+  PERFORM set_config(
+    'app.client_decision_insert_id',
+    COALESCE(v_previous_decision_insert_id, ''), true
+  );
+  PERFORM set_config(
+    'app.proposal_accept_id', COALESCE(v_previous_proposal_accept_id, ''), true
+  );
+  PERFORM set_config(
+    'app.proposal_signature_engagement_id',
+    COALESCE(v_previous_engagement_token, ''), true
+  );
+  RAISE;
 END;
 $$;
 
-DO $grant_final_callers$
-DECLARE
-  expected _00486_routine_profile%ROWTYPE;
-  app_role text;
-BEGIN
-  FOR expected IN SELECT * FROM _00486_routine_profile ORDER BY signature
-  LOOP
-    FOREACH app_role IN ARRAY expected.final_roles
-    LOOP
-      EXECUTE format(
-        'GRANT EXECUTE ON FUNCTION %s TO %I',
-        expected.signature, app_role
-      );
-    END LOOP;
-  END LOOP;
-END
-$grant_final_callers$;
+REVOKE ALL PRIVILEGES ON FUNCTION public.activate_project_v2(jsonb)
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+GRANT EXECUTE ON FUNCTION public.activate_project_v2(jsonb) TO authenticated;
+
+REVOKE ALL PRIVILEGES ON FUNCTION public.apply_scope_change(uuid)
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+GRANT EXECUTE ON FUNCTION public.apply_scope_change(uuid) TO authenticated;
+
+REVOKE ALL PRIVILEGES ON FUNCTION
+  public.claim_proposal_send_dispatch(
+    uuid, uuid, timestamp with time zone, integer
+  )
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+GRANT EXECUTE ON FUNCTION
+  public.claim_proposal_send_dispatch(
+    uuid, uuid, timestamp with time zone, integer
+  )
+  TO service_role;
+
+REVOKE ALL PRIVILEGES ON FUNCTION public.close_project(uuid, jsonb, jsonb)
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+GRANT EXECUTE ON FUNCTION public.close_project(uuid, jsonb, jsonb)
+  TO authenticated;
+
+REVOKE ALL PRIVILEGES ON FUNCTION public.create_field_link(uuid)
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+GRANT EXECUTE ON FUNCTION public.create_field_link(uuid)
+  TO authenticated, service_role;
+
+REVOKE ALL PRIVILEGES ON FUNCTION public.decline_proposal(uuid, text)
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+GRANT EXECUTE ON FUNCTION public.decline_proposal(uuid, text)
+  TO authenticated;
+
+REVOKE ALL PRIVILEGES ON FUNCTION
+  public.escalate_item_feedback_to_decision(uuid, uuid)
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+GRANT EXECUTE ON FUNCTION
+  public.escalate_item_feedback_to_decision(uuid, uuid) TO authenticated;
+
+REVOKE ALL PRIVILEGES ON FUNCTION
+  public.expire_due_client_decisions(timestamp with time zone)
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+GRANT EXECUTE ON FUNCTION
+  public.expire_due_client_decisions(timestamp with time zone)
+  TO service_role;
+
+REVOKE ALL PRIVILEGES ON FUNCTION public.finalize_spec_book_issue(uuid)
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+GRANT EXECUTE ON FUNCTION public.finalize_spec_book_issue(uuid)
+  TO service_role;
+
+REVOKE ALL PRIVILEGES ON FUNCTION public.generate_milestone_invoice(uuid)
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+GRANT EXECUTE ON FUNCTION public.generate_milestone_invoice(uuid)
+  TO authenticated;
+
+REVOKE ALL PRIVILEGES ON FUNCTION public.get_ab_variant_stats(uuid)
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+GRANT EXECUTE ON FUNCTION public.get_ab_variant_stats(uuid) TO authenticated;
+
+REVOKE ALL PRIVILEGES ON FUNCTION
+  public.get_client_project_review_bundle(uuid)
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+GRANT EXECUTE ON FUNCTION public.get_client_project_review_bundle(uuid)
+  TO authenticated;
+
+REVOKE ALL PRIVILEGES ON FUNCTION public.mark_proposal_viewed(uuid)
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+GRANT EXECUTE ON FUNCTION public.mark_proposal_viewed(uuid) TO authenticated;
+
+REVOKE ALL PRIVILEGES ON FUNCTION public.mint_trade_rfq_token(uuid)
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+GRANT EXECUTE ON FUNCTION public.mint_trade_rfq_token(uuid) TO service_role;
+
+REVOKE ALL PRIVILEGES ON FUNCTION
+  public.persist_proposal_send_request(
+    uuid, uuid, text, text, text[], text[], text, boolean
+  )
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+GRANT EXECUTE ON FUNCTION
+  public.persist_proposal_send_request(
+    uuid, uuid, text, text, text[], text[], text, boolean
+  ) TO service_role;
+
+REVOKE ALL PRIVILEGES ON FUNCTION
+  public.read_proposal_send_dispatch(uuid, uuid, timestamp with time zone)
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+GRANT EXECUTE ON FUNCTION
+  public.read_proposal_send_dispatch(uuid, uuid, timestamp with time zone)
+  TO service_role;
+
+REVOKE ALL PRIVILEGES ON FUNCTION
+  public.reassign_project_lead(uuid, uuid, uuid)
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+GRANT EXECUTE ON FUNCTION public.reassign_project_lead(uuid, uuid, uuid)
+  TO authenticated;
+
+REVOKE ALL PRIVILEGES ON FUNCTION
+  public.record_offline_signature(uuid, text, boolean, date)
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+GRANT EXECUTE ON FUNCTION
+  public.record_offline_signature(uuid, text, boolean, date)
+  TO authenticated;
+
+REVOKE ALL PRIVILEGES ON FUNCTION public.reply_to_item_feedback(uuid, text)
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+GRANT EXECUTE ON FUNCTION public.reply_to_item_feedback(uuid, text)
+  TO authenticated;
+
+REVOKE ALL PRIVILEGES ON FUNCTION public.request_proposal_change(uuid, text)
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+GRANT EXECUTE ON FUNCTION public.request_proposal_change(uuid, text)
+  TO authenticated;
+
+REVOKE ALL PRIVILEGES ON FUNCTION public.review_sms_message(uuid, text, jsonb)
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+GRANT EXECUTE ON FUNCTION public.review_sms_message(uuid, text, jsonb)
+  TO authenticated;
+
+REVOKE ALL PRIVILEGES ON FUNCTION
+  public.stamp_project_approval_reminder_delivery(uuid, uuid)
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+GRANT EXECUTE ON FUNCTION
+  public.stamp_project_approval_reminder_delivery(uuid, uuid) TO service_role;
+
+REVOKE ALL PRIVILEGES ON FUNCTION
+  public.submit_coordination_revision(uuid, jsonb, text, text, uuid)
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+GRANT EXECUTE ON FUNCTION
+  public.submit_coordination_revision(uuid, jsonb, text, text, uuid)
+  TO authenticated;
+
+REVOKE ALL PRIVILEGES ON FUNCTION public.sync_proposal_send_email_log(uuid)
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+GRANT EXECUTE ON FUNCTION public.sync_proposal_send_email_log(uuid)
+  TO service_role;
+
+REVOKE ALL PRIVILEGES ON FUNCTION public.sync_proposal_send_in_app_log(uuid)
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+GRANT EXECUTE ON FUNCTION public.sync_proposal_send_in_app_log(uuid)
+  TO service_role;
 
 DO $final_profile_postcondition$
 BEGIN
@@ -3046,6 +4773,10 @@ $final_profile_postcondition$;
 
 DO $dependency_profile_postcondition$
 BEGIN
+  IF (SELECT count(*) FROM _00486_dependency_profile) <> 13 THEN
+    RAISE EXCEPTION '00486 exact dependent relay set is not 13 rows';
+  END IF;
+
   IF EXISTS (
     SELECT 1
     FROM _00486_dependency_profile AS expected
@@ -3055,13 +4786,13 @@ BEGIN
     LEFT JOIN pg_language AS language ON language.oid = routine.prolang
     WHERE routine.oid IS NULL
        OR owner.rolname IS DISTINCT FROM 'postgres'
-       OR language.lanname IS DISTINCT FROM 'plpgsql'
+       OR language.lanname IS DISTINCT FROM expected.language_name
        OR routine.prokind IS DISTINCT FROM 'f'::"char"
-       OR NOT routine.prosecdef
+       OR routine.prosecdef IS DISTINCT FROM expected.security_definer
        OR routine.proleakproof
        OR routine.proisstrict
        OR routine.proparallel IS DISTINCT FROM 'u'::"char"
-       OR routine.provolatile IS DISTINCT FROM 'v'::"char"
+       OR routine.provolatile IS DISTINCT FROM expected.volatility
        OR pg_get_function_arguments(routine.oid) IS DISTINCT FROM
           expected.arguments
        OR pg_get_function_result(routine.oid) IS DISTINCT FROM
@@ -3070,7 +4801,7 @@ BEGIN
        OR encode(
             extensions.digest(convert_to(routine.prosrc, 'UTF8'), 'sha256'),
             'hex'
-          ) IS DISTINCT FROM expected.body_sha256
+          ) IS DISTINCT FROM expected.final_body_sha256
        OR COALESCE((
             SELECT array_agg(
               COALESCE(grantee.rolname, 'PUBLIC')
@@ -3081,7 +4812,12 @@ BEGIN
             ) AS acl
             LEFT JOIN pg_roles AS grantee ON grantee.oid = acl.grantee
             WHERE acl.privilege_type = 'EXECUTE'
-          ), ARRAY[]::text[]) IS DISTINCT FROM ARRAY['postgres']::text[]
+          ), ARRAY[]::text[]) IS DISTINCT FROM (
+            SELECT array_agg(role_name ORDER BY role_name)
+            FROM unnest(
+              array_append(expected.final_roles, 'postgres')
+            ) AS role_name
+          )
        OR EXISTS (
             SELECT 1
             FROM aclexplode(
@@ -3092,7 +4828,159 @@ BEGIN
                OR acl.is_grantable
           )
   ) THEN
-    RAISE EXCEPTION '00486 internal finalizer dependency postcondition failed';
+    RAISE EXCEPTION '00486 dependent relay postcondition failed';
+  END IF;
+
+  IF (
+    SELECT count(*)
+    FROM pg_trigger AS binding
+    WHERE binding.tgfoid = to_regprocedure(
+      'public.guard_scope_change_request_integrity()'
+    )
+      AND NOT binding.tgisinternal
+  ) <> 1 OR NOT EXISTS (
+    SELECT 1
+    FROM pg_trigger AS binding
+    WHERE binding.tgname = 'guard_scope_change_request_integrity'
+      AND binding.tgrelid = 'public.scope_change_requests'::regclass
+      AND binding.tgfoid = to_regprocedure(
+        'public.guard_scope_change_request_integrity()'
+      )
+      AND binding.tgtype = 23
+      AND binding.tgenabled = 'O'
+      AND NOT binding.tgisinternal
+  ) THEN
+    RAISE EXCEPTION '00486 scope-change integrity trigger binding drifted';
+  END IF;
+
+  IF (
+    SELECT count(*)
+    FROM pg_trigger AS binding
+    WHERE binding.tgfoid = to_regprocedure(
+      'public.sync_invoice_line_milestone_latch()'
+    )
+      AND NOT binding.tgisinternal
+  ) <> 1 OR NOT EXISTS (
+    SELECT 1
+    FROM pg_trigger AS binding
+    WHERE binding.tgname = 'sync_invoice_line_milestone_latch_trg'
+      AND binding.tgrelid = 'public.invoice_line_items'::regclass
+      AND binding.tgfoid = to_regprocedure(
+        'public.sync_invoice_line_milestone_latch()'
+      )
+      AND binding.tgtype = 29
+      AND binding.tgenabled = 'O'
+      AND NOT binding.tgisinternal
+  ) THEN
+    RAISE EXCEPTION '00486 invoice milestone latch trigger binding drifted';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM pg_proc AS caller
+    WHERE caller.prosecdef
+      AND position(
+        '_finalize_spec_book_issue_00403' IN caller.prosrc
+      ) > 0
+  ) THEN
+    RAISE EXCEPTION '00486 retired finalizer still has a definer caller';
+  END IF;
+
+  IF (
+    SELECT array_agg(caller.oid ORDER BY caller.oid)
+    FROM pg_proc AS caller
+    WHERE position(
+      'public._scope_change_requester_can_author(' IN caller.prosrc
+    ) > 0
+  ) IS DISTINCT FROM (
+    SELECT array_agg(signature::regprocedure::oid ORDER BY signature::regprocedure::oid)
+    FROM unnest(ARRAY[
+      'public.accept_client_scope_change_request(uuid,uuid)',
+      'public.apply_scope_change(uuid)',
+      'public.approve_scope_change_request(uuid,uuid,text,text)',
+      'public.cancel_scope_change_request(uuid,uuid)',
+      'public.decline_scope_change_request(uuid,uuid,text)',
+      'public.guard_scope_change_request_integrity()',
+      'public.send_scope_change_request(uuid,uuid)'
+    ]) AS expected(signature)
+  ) THEN
+    RAISE EXCEPTION '00486 scope-change helper caller graph drifted';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM (VALUES
+      ('public.guard_scope_change_request_integrity()',
+       'public._scope_change_requester_can_author( auth.uid(), project.designer_id, project.id )'),
+      ('public.send_scope_change_request(uuid,uuid)',
+       'public._scope_change_requester_can_author( v_actor, designer_id, id )'),
+      ('public.approve_scope_change_request(uuid,uuid,text,text)',
+       'public._scope_change_requester_can_author( v_request.requested_by, v_project.designer_id, v_project.id )'),
+      ('public.accept_client_scope_change_request(uuid,uuid)',
+       'public._scope_change_requester_can_author( v_actor, designer_id, id )'),
+      ('public.decline_scope_change_request(uuid,uuid,text)',
+       'public._scope_change_requester_can_author( v_request.requested_by, v_project.designer_id, v_project.id )'),
+      ('public.cancel_scope_change_request(uuid,uuid)',
+       'public._scope_change_requester_can_author( v_actor, v_project.designer_id, v_project.id )'),
+      ('public.apply_scope_change(uuid)',
+       'public._scope_change_requester_can_author( v_request.requested_by, v_project.designer_id, v_project.id )')
+    ) AS expected(signature, call_fragment)
+    JOIN pg_proc AS caller
+      ON caller.oid = to_regprocedure(expected.signature)
+    WHERE position(
+      expected.call_fragment IN regexp_replace(
+        caller.prosrc, '[[:space:]]+', ' ', 'g'
+      )
+    ) = 0
+  ) THEN
+    RAISE EXCEPTION '00486 scope-change caller lost exact project argument';
+  END IF;
+
+  IF (
+    SELECT array_agg(caller.oid ORDER BY caller.oid)
+    FROM pg_proc AS caller
+    WHERE position(
+      'public._draft_invoice_from_milestone_00486(' IN caller.prosrc
+    ) > 0
+  ) IS DISTINCT FROM ARRAY[
+    to_regprocedure('public.draft_invoice_from_milestone(uuid)')::oid
+  ] THEN
+    RAISE EXCEPTION '00486 milestone-invoice legacy core caller graph drifted';
+  END IF;
+
+  IF (
+    SELECT array_agg(caller.oid ORDER BY caller.oid)
+    FROM pg_proc AS caller
+    WHERE position(
+      'public.draft_invoice_from_milestone(' IN caller.prosrc
+    ) > 0
+  ) IS DISTINCT FROM (
+    SELECT array_agg(signature::regprocedure::oid ORDER BY signature::regprocedure::oid)
+    FROM unnest(ARRAY[
+      'public._draft_invoice_from_milestone_00486(uuid)',
+      'public.generate_milestone_invoice(uuid)',
+      'public.settle_section_on_gate_approval()'
+    ]) AS expected(signature)
+  ) THEN
+    RAISE EXCEPTION '00486 milestone-invoice wrapper caller graph drifted';
+  END IF;
+
+  IF (
+    SELECT array_agg(caller.oid ORDER BY caller.oid)
+    FROM pg_proc AS caller
+    WHERE position('public.apply_field_effect(' IN caller.prosrc) > 0
+  ) IS DISTINCT FROM ARRAY[
+    to_regprocedure('public.review_sms_message(uuid,text,jsonb)')::oid
+  ] OR (
+    SELECT array_agg(caller.oid ORDER BY caller.oid)
+    FROM pg_proc AS caller
+    WHERE position(
+      'public._apply_field_effect_legacy_00399(' IN caller.prosrc
+    ) > 0
+  ) IS DISTINCT FROM ARRAY[
+    to_regprocedure('public.apply_field_effect(uuid,jsonb,text,uuid)')::oid
+  ] THEN
+    RAISE EXCEPTION '00486 SMS field-effect relay caller graph drifted';
   END IF;
 END
 $dependency_profile_postcondition$;
