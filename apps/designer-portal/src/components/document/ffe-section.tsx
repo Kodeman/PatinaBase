@@ -651,6 +651,15 @@ interface FFESectionProps {
   folioDrop?: File[] | null;
   onFolioDropConsumed?: () => void;
   sectionDragOver?: boolean;
+  /** W4b — the Worktable's Delivery table head carries the release leader, so
+   *  this head demotes to its next verb rather than inking a second one. The
+   *  ceremony is unmoved: selection, composition bar and review sheet stay
+   *  here, because releasing is still the schedule's own act. */
+  releaseLeaderElsewhere?: boolean;
+  /** W4b — whether the section has a release to offer, for a head that stands
+   *  outside it. Reported, never asked for: `canRelease` and per-line
+   *  eligibility are derived here and nowhere else. Pass a stable callback. */
+  onReleaseOffered?: (offered: boolean) => void;
 }
 
 /**
@@ -680,6 +689,8 @@ function FFESectionBody({
   folioDrop = null,
   onFolioDropConsumed = () => {},
   sectionDragOver = false,
+  releaseLeaderElsewhere = false,
+  onReleaseOffered,
   instruments,
 }: FFESectionProps & { instruments: InstrumentLike[] }) {
   const { heldRoomId } = useRoomLens();
@@ -786,6 +797,16 @@ function FFESectionBody({
   // the same per-row eligibility() call every row already carries — no new
   // derivation.
   const anyEligible = rows.some((row) => row.eligible.eligible);
+  // What a head outside this section may offer: an authority to release
+  // against, a line that can actually go, and no ceremony already under way —
+  // pressing a leader mid-selection would throw away the ticks in hand.
+  const releaseOffered =
+    canRelease && anyEligible && (ceremony?.phase ?? 'idle') === 'idle';
+  useEffect(() => {
+    onReleaseOffered?.(releaseOffered);
+  }, [onReleaseOffered, releaseOffered]);
+  // The head's leader is the release only while no other head has taken it.
+  const releaseInHead = canRelease && !releaseLeaderElsewhere;
 
   // R76 — what the section-level Bill act would carry: priced lines not yet
   // on a live invoice (the composer re-partitions; this is the offer).
@@ -986,8 +1007,8 @@ function FFESectionBody({
     trailing: '→',
   };
   const ffeLedger: RegionLedgerEntry[] = [
-    canRelease ? ffeReleaseEntry : ffeAddToProjectEntry,
-    ...(canRelease
+    releaseInHead ? ffeReleaseEntry : ffeAddToProjectEntry,
+    ...(releaseInHead
       ? [{ ...ffeAddToProjectEntry, variant: 'secondary' as const }]
       : []),
     ...(ffeBillEntry ? [ffeBillEntry] : []),
