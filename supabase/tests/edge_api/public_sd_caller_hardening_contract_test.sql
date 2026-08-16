@@ -33,8 +33,11 @@ DECLARE
   v_direct_source text;
   v_scan_source text;
   v_match text[];
+  v_literal_match text[];
+  v_literal_stream text := '';
   v_schema_token text;
   v_name_token text;
+  v_has_execute boolean;
 BEGIN
   v_without_comments := regexp_replace(
     regexp_replace(
@@ -53,9 +56,29 @@ BEGIN
     ' ',
     'g'
   );
+  v_has_execute := v_direct_source
+    ~* '(^|[^[:alnum:]_$])execute([^[:alnum:]_$]|$)';
+
+  IF v_has_execute THEN
+    FOR v_literal_match IN
+      SELECT matches.match_row
+      FROM regexp_matches(
+        v_without_comments,
+        $quoted_literal$'((?:[^']|'')*)'$quoted_literal$,
+        'g'
+      ) AS matches(match_row)
+    LOOP
+      v_literal_stream := v_literal_stream
+        || replace(v_literal_match[1], '''''', '''');
+    END LOOP;
+
+    IF position(lower(p_name) IN lower(v_literal_stream)) > 0 THEN
+      RETURN true;
+    END IF;
+  END IF;
 
   FOREACH v_scan_source IN ARRAY CASE
-    WHEN v_direct_source ~* '(^|[^[:alnum:]_$])execute([^[:alnum:]_$]|$)'
+    WHEN v_has_execute
       THEN ARRAY[v_direct_source, v_without_comments]
     ELSE ARRAY[v_direct_source]
   END
@@ -412,7 +435,7 @@ INSERT INTO _00486_dependencies VALUES
    ARRAY[]::text[]),
   ('public.guard_scope_change_request_integrity()', '', 'trigger',
    'plpgsql', false, 'v',
-   'badf9f769e014fd8128509af9e1a4fd5a59615954f82ad83e639616abaeef0aa',
+   'f21792bc771560f38df42bd33300615dcc0625d43020b6707706470889aa8403',
    ARRAY[]::text[]),
   ('public.send_scope_change_request(uuid,uuid)',
    'p_request_id uuid, p_project_id uuid', 'jsonb', 'plpgsql', true, 'v',
@@ -632,6 +655,15 @@ BEGIN
     ) AND pg_temp._00486_references_routine(
       $source$BEGIN EXECUTE format('SELECT public._draft_invoice_from_milestone_00486(%L)', value); END$source$,
       'public', '_draft_invoice_from_milestone_00486'
+    ) AND pg_temp._00486_references_routine(
+      $source$BEGIN EXECUTE format('SELECT %I.%I($1)', 'public', '_draft_invoice_from_milestone_00486'); END$source$,
+      'public', '_draft_invoice_from_milestone_00486'
+    ) AND pg_temp._00486_references_routine(
+      $source$BEGIN EXECUTE format('%s%s', '_draft_invoice_from_', 'milestone_00486'); END$source$,
+      'public', '_draft_invoice_from_milestone_00486'
+    ) AND pg_temp._00486_references_routine(
+      $source$BEGIN EXECUTE 'SELECT public._draft_invoice_from_' || 'milestone_00486($1)'; END$source$,
+      'public', '_draft_invoice_from_milestone_00486'
     ) AND NOT pg_temp._00486_references_routine(
       'SELECT "public"."_DRAFT_INVOICE_FROM_MILESTONE_00486"($1)',
       'public', '_draft_invoice_from_milestone_00486'
@@ -709,6 +741,267 @@ BEGIN
   ], 'SMS field-effect relay caller graph drifted';
 END
 $dependency_catalog_contract$;
+
+CREATE TEMP TABLE _00486_lock_order_dependencies (
+  signature text PRIMARY KEY,
+  arguments text NOT NULL,
+  result_type text NOT NULL,
+  security_definer boolean NOT NULL,
+  body_sha256 text NOT NULL,
+  direct_roles text[] NOT NULL
+) ON COMMIT DROP;
+
+INSERT INTO _00486_lock_order_dependencies VALUES
+  (
+    'public.apply_client_decision(uuid,uuid,text,text,text,integer)',
+    'p_decision_id uuid, p_selected_option_id uuid, p_client_consent_method text DEFAULT NULL::text, p_client_signature text DEFAULT NULL::text, p_client_note text DEFAULT NULL::text, p_quantity integer DEFAULT NULL::integer',
+    'public.client_decisions', true,
+    'e0f920c2c9fdc5cf02f7575e009890fc3f86c96223bbca7f6a804ee6c21a066e',
+    ARRAY['authenticated']
+  ),
+  (
+    'public.po_status_cascade_to_items()', '', 'trigger', true,
+    '29a59ba5a0a33bb1253d52541539283ea4eca70b13ca33f52a98d0b199ba9ffe',
+    ARRAY[]::text[]
+  ),
+  (
+    'public.draft_milestones_on_production_start()', '', 'trigger', true,
+    '9c3de79a28db81dc37ab42d0f05eb9557995887220d39bed97ea0fa058f90011',
+    ARRAY[]::text[]
+  ),
+  (
+    'public.guard_ffe_production_transition()', '', 'trigger', false,
+    '6c2c1082d6fcd2a94654431a766c4a1f717e70de8f55426c7190c6b2e9becc31',
+    ARRAY[]::text[]
+  );
+
+DO $lock_order_catalog_contract$
+BEGIN
+  ASSERT (SELECT count(*) = 4 FROM _00486_lock_order_dependencies),
+    '00486 lock-order dependency manifest must contain exactly four routines';
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM _00486_lock_order_dependencies AS expected
+    LEFT JOIN pg_proc AS routine
+      ON routine.oid = to_regprocedure(expected.signature)
+    LEFT JOIN pg_roles AS owner ON owner.oid = routine.proowner
+    LEFT JOIN pg_language AS language ON language.oid = routine.prolang
+    WHERE routine.oid IS NULL
+       OR owner.rolname IS DISTINCT FROM 'postgres'
+       OR language.lanname IS DISTINCT FROM 'plpgsql'
+       OR routine.prokind IS DISTINCT FROM 'f'::"char"
+       OR routine.prosecdef IS DISTINCT FROM expected.security_definer
+       OR routine.proleakproof
+       OR routine.proisstrict
+       OR routine.proparallel IS DISTINCT FROM 'u'::"char"
+       OR routine.provolatile IS DISTINCT FROM 'v'::"char"
+       OR pg_get_function_arguments(routine.oid) IS DISTINCT FROM
+          expected.arguments
+       OR pg_get_function_result(routine.oid) IS DISTINCT FROM
+          expected.result_type
+       OR routine.proconfig IS DISTINCT FROM
+          ARRAY['search_path=pg_catalog, public, pg_temp']::text[]
+       OR encode(
+            extensions.digest(convert_to(routine.prosrc, 'UTF8'), 'sha256'),
+            'hex'
+          ) IS DISTINCT FROM expected.body_sha256
+       OR COALESCE((
+            SELECT array_agg(
+              COALESCE(grantee.rolname, 'PUBLIC')
+              ORDER BY COALESCE(grantee.rolname, 'PUBLIC')
+            )
+            FROM aclexplode(
+              COALESCE(routine.proacl, acldefault('f', routine.proowner))
+            ) AS acl
+            LEFT JOIN pg_roles AS grantee ON grantee.oid = acl.grantee
+            WHERE acl.privilege_type = 'EXECUTE'
+          ), ARRAY[]::text[]) IS DISTINCT FROM (
+            SELECT array_agg(role_name ORDER BY role_name)
+            FROM unnest(array_append(expected.direct_roles, 'postgres'))
+              AS role_name
+          )
+       OR EXISTS (
+            SELECT 1
+            FROM aclexplode(
+              COALESCE(routine.proacl, acldefault('f', routine.proowner))
+            ) AS acl
+            WHERE acl.privilege_type <> 'EXECUTE'
+               OR acl.grantor <> routine.proowner
+               OR acl.is_grantable
+          )
+  ), '00486 lock-order routine profile/body/config/ACL drifted';
+
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM _00486_lock_order_dependencies AS expected
+    CROSS JOIN unnest(ARRAY[
+      'anon', 'authenticated', 'service_role', 'dashboard_user',
+      'agent_reader', 'agent_writer', 'edge_catalog_reader', 'edge_rls_user'
+    ]) AS app_role(role_name)
+    WHERE has_function_privilege(
+      app_role.role_name, expected.signature, 'EXECUTE'
+    ) IS DISTINCT FROM (app_role.role_name = ANY(expected.direct_roles))
+  ), '00486 lock-order effective EXECUTE privileges drifted';
+
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM (VALUES
+      (
+        'public.po_status_cascade_to_items()'::regprocedure,
+        'public.purchase_orders'::regclass,
+        'trg_po_status_cascade_to_items', 17::smallint, true
+      ),
+      (
+        'public.guard_ffe_production_transition()'::regprocedure,
+        'public.project_ffe_items'::regclass,
+        'guard_ffe_production_transition_trg', 19::smallint, false
+      ),
+      (
+        'public.draft_milestones_on_production_start()'::regprocedure,
+        'public.project_ffe_items'::regclass,
+        'draft_milestones_on_production_start_trg', 17::smallint, false
+      )
+    ) AS expected(function_oid, relation_oid, trigger_name, trigger_type, has_when)
+    LEFT JOIN pg_trigger AS binding
+      ON binding.tgfoid = expected.function_oid
+     AND binding.tgrelid = expected.relation_oid
+     AND binding.tgname = expected.trigger_name
+     AND NOT binding.tgisinternal
+    WHERE binding.oid IS NULL
+       OR binding.tgtype <> expected.trigger_type
+       OR binding.tgenabled <> 'O'
+       OR binding.tgnargs <> 0
+       OR octet_length(binding.tgargs) <> 0
+       OR (binding.tgqual IS NOT NULL) IS DISTINCT FROM expected.has_when
+       OR binding.tgattr::text IS DISTINCT FROM (
+            SELECT attribute.attnum::text
+            FROM pg_attribute AS attribute
+            WHERE attribute.attrelid = expected.relation_oid
+              AND attribute.attname = 'status'
+              AND NOT attribute.attisdropped
+          )
+       OR (
+            expected.has_when
+            AND pg_get_expr(binding.tgqual, binding.tgrelid)
+                IS DISTINCT FROM '(old.status IS DISTINCT FROM new.status)'
+          )
+  ), '00486 lock-order trigger binding drifted';
+
+  ASSERT NOT EXISTS (
+    SELECT 1
+    FROM _00486_lock_order_dependencies AS expected
+    JOIN pg_trigger AS binding
+      ON binding.tgfoid = expected.signature::regprocedure
+     AND NOT binding.tgisinternal
+    WHERE expected.result_type = 'trigger'
+    GROUP BY expected.signature
+    HAVING count(*) <> 1
+  ), '00486 lock-order trigger acquired an extra binding';
+
+  ASSERT (
+    SELECT array_agg(caller.oid ORDER BY caller.oid)
+    FROM pg_proc AS caller
+    JOIN pg_namespace AS caller_namespace
+      ON caller_namespace.oid = caller.pronamespace
+    WHERE caller_namespace.nspname !~ '^pg_'
+      AND caller_namespace.nspname <> 'information_schema'
+      AND position('app.ffe_production_transition' IN caller.prosrc) > 0
+  ) IS NOT DISTINCT FROM (
+    SELECT array_agg(signature::regprocedure::oid ORDER BY signature::regprocedure::oid)
+    FROM unnest(ARRAY[
+      'public.guard_ffe_production_transition()',
+      'public.po_status_cascade_to_items()'
+    ]) AS expected(signature)
+  ), '00486 production authority caller graph drifted';
+END
+$lock_order_catalog_contract$;
+
+CREATE FUNCTION public._00486_dynamic_format_probe()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp
+AS $probe$
+BEGIN
+  EXECUTE format(
+    'SELECT %I.%I($1)', 'public', '_draft_invoice_from_milestone_00486'
+  ) USING NULL::uuid;
+END;
+$probe$;
+
+CREATE FUNCTION public._00486_dynamic_argument_probe()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp
+AS $probe$
+BEGIN
+  EXECUTE format(
+    '%s%s', '_draft_invoice_from_', 'milestone_00486'
+  );
+END;
+$probe$;
+
+CREATE FUNCTION public._00486_dynamic_concat_probe()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp
+AS $probe$
+BEGIN
+  EXECUTE 'SELECT public._draft_invoice_from_'
+    || 'milestone_00486($1)' USING NULL::uuid;
+END;
+$probe$;
+
+REVOKE ALL PRIVILEGES ON FUNCTION
+  public._00486_dynamic_format_probe(),
+  public._00486_dynamic_argument_probe(),
+  public._00486_dynamic_concat_probe()
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+
+DO $dynamic_catalog_negative_contract$
+BEGIN
+  ASSERT (
+    SELECT array_agg(caller.oid ORDER BY caller.oid)
+    FROM pg_proc AS caller
+    WHERE caller.oid = ANY(ARRAY[
+      'public._00486_dynamic_format_probe()'::regprocedure::oid,
+      'public._00486_dynamic_argument_probe()'::regprocedure::oid,
+      'public._00486_dynamic_concat_probe()'::regprocedure::oid
+    ])
+      AND pg_temp._00486_references_routine(
+        caller.prosrc, 'public', '_draft_invoice_from_milestone_00486'
+      )
+  ) IS NOT DISTINCT FROM (
+    SELECT array_agg(probe_oid ORDER BY probe_oid)
+    FROM unnest(ARRAY[
+      'public._00486_dynamic_format_probe()'::regprocedure::oid,
+      'public._00486_dynamic_argument_probe()'::regprocedure::oid,
+      'public._00486_dynamic_concat_probe()'::regprocedure::oid
+    ]) AS expected(probe_oid)
+  ), 'dynamic SQL catalog callers escaped the private-core anti-join';
+
+  ASSERT (
+    SELECT array_agg(caller.oid ORDER BY caller.oid)
+    FROM pg_proc AS caller
+    JOIN pg_namespace AS caller_namespace
+      ON caller_namespace.oid = caller.pronamespace
+    WHERE caller_namespace.nspname !~ '^pg_'
+      AND caller_namespace.nspname <> 'information_schema'
+      AND pg_temp._00486_references_routine(
+        caller.prosrc, 'public', '_draft_invoice_from_milestone_00486'
+      )
+  ) IS DISTINCT FROM ARRAY[
+    'public.draft_invoice_from_milestone(uuid)'::regprocedure::oid
+  ], 'dynamic SQL catalog callers did not fail the exact anti-join';
+END
+$dynamic_catalog_negative_contract$;
+
+DROP FUNCTION public._00486_dynamic_format_probe();
+DROP FUNCTION public._00486_dynamic_argument_probe();
+DROP FUNCTION public._00486_dynamic_concat_probe();
 
 DO $invoice_line_policy_contract$
 BEGIN
@@ -862,6 +1155,8 @@ BEGIN
      AND body LIKE '%membership.user_id = auth.uid()%'
      AND body LIKE '%membership.status = ''active''%'
      AND body LIKE '%membership.role <> ''guest''%'
+     AND body LIKE '%v_project_status IN (''completed'', ''archived'')%'
+     AND body LIKE '%scope_change_request_direct_insert_requires_open_project%'
      AND position('FOR SHARE OF project' IN body) > 0
      AND position('FOR SHARE OF organization' IN body) >
          position('FOR SHARE OF project' IN body)
@@ -869,6 +1164,49 @@ BEGIN
          position('FOR SHARE OF organization' IN body)
      AND body NOT LIKE '%_scope_change_requester_can_author(%',
     'scope-change direct INSERT guard lost active caller/project-studio binding';
+
+  SELECT routine.prosrc INTO body
+  FROM pg_proc AS routine
+  WHERE routine.oid =
+    'public.apply_client_decision(uuid,uuid,text,text,text,integer)'::regprocedure;
+  ASSERT position('SELECT decision.project_id INTO v_project_id' IN body) > 0
+     AND position('relationship.client_id = v_actor' IN body) >
+         position('SELECT decision.project_id INTO v_project_id' IN body)
+     AND position('relationship.client_id = v_actor' IN body) <
+         position('FOR UPDATE OF project' IN body)
+     AND position('FOR UPDATE OF project' IN body) >
+         position('SELECT decision.project_id INTO v_project_id' IN body)
+     AND position('FOR UPDATE OF decision' IN body) >
+         position('FOR UPDATE OF project' IN body)
+     AND body LIKE '%v_locked_project_id IS DISTINCT FROM v_project_id%'
+     AND body NOT LIKE '%request.jwt%'
+     AND body NOT LIKE '%auth.jwt%',
+    'apply_client_decision lost project-before-decision lock order';
+
+  SELECT routine.prosrc INTO body
+  FROM pg_proc AS routine
+  WHERE routine.oid = 'public.po_status_cascade_to_items()'::regprocedure;
+  ASSERT position('FOR UPDATE OF project' IN body) > 0
+     AND position('FOR UPDATE OF project' IN body) <
+         position('UPDATE public.project_ffe_items' IN body)
+     AND body LIKE '%project.status = ''active''%'
+     AND body LIKE '%app.ffe_production_transition%'
+     AND body LIKE '%app.ffe_mutation_rpc%'
+     AND body LIKE '%EXCEPTION WHEN OTHERS%'
+     AND body NOT LIKE '%request.jwt%'
+     AND body NOT LIKE '%auth.jwt%',
+    'PO production cascade lost project-first capability routing';
+
+  SELECT routine.prosrc INTO body
+  FROM pg_proc AS routine
+  WHERE routine.oid =
+    'public.guard_ffe_production_transition()'::regprocedure;
+  ASSERT body LIKE '%current_user <> ''postgres''%'
+     AND body LIKE '%pg_trigger_depth() < 2%'
+     AND body LIKE '%pg_catalog.txid_current()%'
+     AND body LIKE '%purchase_order.status = ''in_production''%'
+     AND body LIKE '%v_po_project_id IS DISTINCT FROM NEW.project_id%',
+    'FFE production guard lost nested exact PO/project/transaction authority';
 
   SELECT routine.prosrc INTO body
   FROM pg_proc AS routine
@@ -2825,6 +3163,31 @@ BEGIN
     'close_project did not preserve success behavior and prior capability';
 END
 $close_project_contract$;
+
+DO $completed_project_scope_insert_contract$
+DECLARE
+  failure record;
+BEGIN
+  SELECT * INTO failure FROM pg_temp.capture_00486_error(
+    $call$INSERT INTO public.scope_change_requests (
+      id, project_id, requested_by, request_origin, title, description, status
+    ) VALUES (
+      '48600000-0000-4000-8000-00000000006b',
+      '48600000-0000-4000-8000-000000000042',
+      '48600000-0000-4000-8000-000000000001',
+      'designer_amendment', '00486 completed project draft',
+      'must not persist', 'draft'
+    )$call$
+  );
+  ASSERT failure.error_state = '23514'
+     AND failure.error_message =
+       'scope_change_request_direct_insert_requires_open_project'
+     AND NOT EXISTS (
+       SELECT 1 FROM public.scope_change_requests
+       WHERE id = '48600000-0000-4000-8000-00000000006b'
+     ), 'completed project accepted a direct scope-change draft';
+END
+$completed_project_scope_insert_contract$;
 RESET ROLE;
 
 DO $scope_membership_revocation_race$
@@ -3301,6 +3664,630 @@ BEGIN
   PERFORM extensions.dblink_disconnect('invoice486_setup');
 END
 $invoice_lock_order_contract$;
+
+DO $decision_production_scope_close_races$
+DECLARE
+  v_conninfo text := format(
+    'hostaddr=%s port=%s dbname=postgres user=postgres password=postgres',
+    inet_server_addr(), inet_server_port()
+  );
+  v_worker_pid integer;
+  v_waiting boolean;
+  v_attempt integer;
+  v_status text;
+  v_error text;
+  v_consistent boolean;
+BEGIN
+  PERFORM extensions.dblink_connect('order486_setup', v_conninfo);
+  PERFORM extensions.dblink_exec(
+    'order486_setup', 'SET session_replication_role = replica'
+  );
+  PERFORM extensions.dblink_exec('order486_setup', $cleanup$
+    DELETE FROM public.notification_log
+    WHERE metadata->>'project_id' LIKE '48660000-0000-4000-8000-%';
+    DELETE FROM public.decision_notifications
+    WHERE decision_id = '48660000-0000-4000-8000-000000000080';
+    DELETE FROM public.decision_events
+    WHERE decision_id = '48660000-0000-4000-8000-000000000080';
+    DELETE FROM public.invoice_line_items
+    WHERE invoice_id IN (
+      SELECT id FROM public.invoices
+      WHERE project_id::text LIKE '48660000-0000-4000-8000-%'
+    );
+    DELETE FROM public.invoices
+    WHERE project_id::text LIKE '48660000-0000-4000-8000-%';
+    DELETE FROM public.client_decision_options
+    WHERE decision_id = '48660000-0000-4000-8000-000000000080';
+    DELETE FROM public.client_decisions
+    WHERE id = '48660000-0000-4000-8000-000000000080';
+    DELETE FROM public.scope_change_requests
+    WHERE project_id = '48660000-0000-4000-8000-000000000043';
+    DELETE FROM public.project_payment_milestones
+    WHERE project_id::text LIKE '48660000-0000-4000-8000-%';
+    DELETE FROM public.project_ffe_items
+    WHERE project_id = '48660000-0000-4000-8000-000000000042';
+    DELETE FROM public.project_ffe_selection_threads
+    WHERE project_id = '48660000-0000-4000-8000-000000000042';
+    DELETE FROM public.purchase_orders
+    WHERE project_id = '48660000-0000-4000-8000-000000000042';
+    DELETE FROM public.projects
+    WHERE id IN (
+      '48660000-0000-4000-8000-000000000041',
+      '48660000-0000-4000-8000-000000000042',
+      '48660000-0000-4000-8000-000000000043'
+    );
+    DELETE FROM public.designer_clients
+    WHERE id = '48660000-0000-4000-8000-000000000030';
+    DELETE FROM public.user_roles
+    WHERE user_id = '48660000-0000-4000-8000-000000000001';
+    DELETE FROM public.organization_members
+    WHERE id = '48660000-0000-4000-8000-000000000020';
+    DELETE FROM public.organizations
+    WHERE id = '48660000-0000-4000-8000-000000000010';
+    DELETE FROM public.vendors
+    WHERE id = '48660000-0000-4000-8000-000000000050';
+    DELETE FROM public.profiles
+    WHERE id IN (
+      '48660000-0000-4000-8000-000000000001',
+      '48660000-0000-4000-8000-000000000003'
+    );
+    DELETE FROM auth.users
+    WHERE id IN (
+      '48660000-0000-4000-8000-000000000001',
+      '48660000-0000-4000-8000-000000000003'
+    );
+  $cleanup$);
+  PERFORM extensions.dblink_exec('order486_setup', $setup$
+    INSERT INTO auth.users (
+      id, email, encrypted_password, email_confirmed_at, created_at, updated_at,
+      instance_id, aud, role
+    ) VALUES
+      (
+        '48660000-0000-4000-8000-000000000001',
+        'sd486-order-designer@test.invalid', '', now(), now(), now(),
+        '00000000-0000-0000-0000-000000000000',
+        'authenticated', 'authenticated'
+      ),
+      (
+        '48660000-0000-4000-8000-000000000003',
+        'sd486-order-client@test.invalid', '', now(), now(), now(),
+        '00000000-0000-0000-0000-000000000000',
+        'authenticated', 'authenticated'
+      );
+    INSERT INTO public.profiles (
+      id, email, full_name, is_designer, created_at, updated_at
+    ) VALUES
+      (
+        '48660000-0000-4000-8000-000000000001',
+        'sd486-order-designer@test.invalid', '00486 Order Designer',
+        true, now(), now()
+      ),
+      (
+        '48660000-0000-4000-8000-000000000003',
+        'sd486-order-client@test.invalid', '00486 Order Client',
+        false, now(), now()
+      );
+    INSERT INTO public.organizations (id, type, name, slug, status)
+    VALUES (
+      '48660000-0000-4000-8000-000000000010', 'design_studio',
+      '00486 Order Studio', 'sd486-order-studio', 'active'
+    );
+    INSERT INTO public.organization_members (
+      id, user_id, organization_id, role, status, joined_at
+    ) VALUES (
+      '48660000-0000-4000-8000-000000000020',
+      '48660000-0000-4000-8000-000000000001',
+      '48660000-0000-4000-8000-000000000010',
+      'owner', 'active', now()
+    );
+    INSERT INTO public.user_roles (user_id, role_id)
+    SELECT '48660000-0000-4000-8000-000000000001', role_row.id
+    FROM public.roles AS role_row
+    WHERE role_row.name = 'independent_designer';
+    INSERT INTO public.designer_clients (
+      id, designer_id, client_id, client_name, status, source
+    ) VALUES (
+      '48660000-0000-4000-8000-000000000030',
+      '48660000-0000-4000-8000-000000000001',
+      '48660000-0000-4000-8000-000000000003',
+      '00486 Order Client', 'active', 'direct'
+    );
+    INSERT INTO public.projects (
+      id, name, designer_id, client_id, studio_id, created_by, status,
+      total_amount_cents, budget_cents, design_fee_cents, target_end_date
+    ) VALUES
+      (
+        '48660000-0000-4000-8000-000000000041',
+        '00486 Decision Close Race',
+        '48660000-0000-4000-8000-000000000001',
+        '48660000-0000-4000-8000-000000000003',
+        '48660000-0000-4000-8000-000000000010',
+        '48660000-0000-4000-8000-000000000001',
+        'active', 0, 0, 0, current_date + 30
+      ),
+      (
+        '48660000-0000-4000-8000-000000000042',
+        '00486 Production Close Race',
+        '48660000-0000-4000-8000-000000000001',
+        '48660000-0000-4000-8000-000000000003',
+        '48660000-0000-4000-8000-000000000010',
+        '48660000-0000-4000-8000-000000000001',
+        'active', 0, 0, 0, current_date + 30
+      ),
+      (
+        '48660000-0000-4000-8000-000000000043',
+        '00486 Scope Close Race',
+        '48660000-0000-4000-8000-000000000001', NULL,
+        '48660000-0000-4000-8000-000000000010',
+        '48660000-0000-4000-8000-000000000001',
+        'active', 0, 0, 0, current_date + 30
+      );
+    INSERT INTO public.client_decisions (
+      id, designer_client_id, designer_id, project_id, title,
+      decision_type, decision_kind, coordination_kind, court, section_key,
+      blocking_status, status, sent_at
+    ) VALUES (
+      '48660000-0000-4000-8000-000000000080',
+      '48660000-0000-4000-8000-000000000030',
+      '48660000-0000-4000-8000-000000000001',
+      '48660000-0000-4000-8000-000000000041',
+      '00486 Final Approval Race', 'approval', 'approval', 'selection',
+      'client', 'brief', 'non_blocking', 'pending', now()
+    );
+    INSERT INTO public.client_decision_options (
+      id, decision_id, name, approves, selected, sort_order
+    ) VALUES (
+      '48660000-0000-4000-8000-000000000081',
+      '48660000-0000-4000-8000-000000000080',
+      'Approve final race', true, false, 0
+    );
+    INSERT INTO public.project_payment_milestones (
+      id, project_id, label, percentage, amount_cents, status, sort_order,
+      trigger_kind, trigger_section_key
+    ) VALUES
+      (
+        '48660000-0000-4000-8000-000000000070',
+        '48660000-0000-4000-8000-000000000041',
+        '00486 Decision Race Milestone', 0, 1300, 'pending', 0,
+        'on_section_settled', 'brief'
+      ),
+      (
+        '48660000-0000-4000-8000-000000000071',
+        '48660000-0000-4000-8000-000000000042',
+        '00486 Production Race Milestone', 0, 1500, 'pending', 0,
+        'on_production_start', NULL
+      );
+    INSERT INTO public.vendors (id, name)
+    VALUES (
+      '48660000-0000-4000-8000-000000000050', '00486 Order Vendor'
+    );
+    INSERT INTO public.purchase_orders (
+      id, designer_id, project_id, vendor_id, payment_pattern,
+      total_cents, status, created_by
+    ) VALUES (
+      '48660000-0000-4000-8000-000000000060',
+      '48660000-0000-4000-8000-000000000001',
+      '48660000-0000-4000-8000-000000000042',
+      '48660000-0000-4000-8000-000000000050',
+      'full_upfront', 1500, 'confirmed',
+      '48660000-0000-4000-8000-000000000001'
+    );
+    INSERT INTO public.project_ffe_selection_threads (
+      id, project_id, primary_ffe_item_id, created_by
+    ) VALUES (
+      '48660000-0000-4000-8000-000000000090',
+      '48660000-0000-4000-8000-000000000042', NULL,
+      '48660000-0000-4000-8000-000000000001'
+    );
+    INSERT INTO public.project_ffe_items (
+      id, project_id, name, status, quantity, unit_price_cents,
+      line_total_cents, vendor_id, vendor_name, purchase_order_id,
+      selection_thread_id, design_disposition, assignment_scope
+    ) VALUES (
+      '48660000-0000-4000-8000-000000000091',
+      '48660000-0000-4000-8000-000000000042',
+      '00486 Production Race Item', 'approved', 1, 1500, 1500,
+      '48660000-0000-4000-8000-000000000050', '00486 Order Vendor',
+      '48660000-0000-4000-8000-000000000060',
+      '48660000-0000-4000-8000-000000000090',
+      'selected', 'unassigned'
+    );
+    UPDATE public.project_ffe_selection_threads
+    SET primary_ffe_item_id = '48660000-0000-4000-8000-000000000091'
+    WHERE id = '48660000-0000-4000-8000-000000000090';
+  $setup$);
+  PERFORM extensions.dblink_exec(
+    'order486_setup', 'SET session_replication_role = origin'
+  );
+
+  PERFORM extensions.dblink_connect('order486_direct_ffe', v_conninfo);
+  PERFORM extensions.dblink_exec('order486_direct_ffe', $session$
+    BEGIN;
+    SET LOCAL ROLE service_role;
+    DO $remote$
+    BEGIN
+      PERFORM set_config(
+        'app.ffe_production_transition',
+        format(
+          '%s:%s:%s',
+          '48660000-0000-4000-8000-000000000060',
+          '48660000-0000-4000-8000-000000000042',
+          pg_catalog.txid_current()
+        ), true
+      );
+    END
+    $remote$;
+  $session$);
+  v_status := extensions.dblink_exec('order486_direct_ffe', $direct$
+    UPDATE public.project_ffe_items SET status = 'production'
+    WHERE id = '48660000-0000-4000-8000-000000000091'
+  $direct$, false);
+  v_error := extensions.dblink_error_message('order486_direct_ffe');
+  ASSERT position(
+    'project_ffe_production_transition_requires_project_first_authority'
+    IN v_error
+  ) > 0, format('forged direct production capability was not denied: %L', v_error);
+  PERFORM extensions.dblink_exec('order486_direct_ffe', 'ROLLBACK');
+  PERFORM extensions.dblink_disconnect('order486_direct_ffe');
+  SELECT checked.consistent INTO v_consistent
+  FROM extensions.dblink('order486_setup', $check$
+    SELECT status = 'approved'
+    FROM public.project_ffe_items
+    WHERE id = '48660000-0000-4000-8000-000000000091'
+  $check$) AS checked(consistent boolean);
+  ASSERT v_consistent, 'forged direct production transition left residue';
+
+  -- Final client approval waits on the project before it can lock the decision.
+  PERFORM extensions.dblink_connect('order486_close_decision', v_conninfo);
+  PERFORM extensions.dblink_connect('order486_apply', v_conninfo);
+  PERFORM extensions.dblink_exec('order486_close_decision', $session$
+    BEGIN;
+    SET LOCAL ROLE authenticated;
+    SET LOCAL request.jwt.claims =
+      '{"sub":"48660000-0000-4000-8000-000000000001","role":"authenticated"}';
+    SET LOCAL request.jwt.claim.sub =
+      '48660000-0000-4000-8000-000000000001';
+    SET LOCAL lock_timeout = '5s';
+    DO $remote$
+    BEGIN
+      PERFORM 1 FROM public.projects
+      WHERE id = '48660000-0000-4000-8000-000000000041' FOR UPDATE;
+    END
+    $remote$;
+  $session$);
+  PERFORM extensions.dblink_connect('order486_foreign_apply', v_conninfo);
+  PERFORM extensions.dblink_exec('order486_foreign_apply', $session$
+    BEGIN;
+    SET LOCAL ROLE authenticated;
+    SET LOCAL request.jwt.claims =
+      '{"sub":"48660000-0000-4000-8000-000000000001","role":"authenticated"}';
+    SET LOCAL request.jwt.claim.sub =
+      '48660000-0000-4000-8000-000000000001';
+    SET LOCAL lock_timeout = '200ms';
+  $session$);
+  v_status := extensions.dblink_exec('order486_foreign_apply', $foreign$
+    SELECT public.apply_client_decision(
+      '48660000-0000-4000-8000-000000000080',
+      '48660000-0000-4000-8000-000000000081'
+    )
+  $foreign$, false);
+  v_error := extensions.dblink_error_message('order486_foreign_apply');
+  ASSERT position('only the addressed client may apply this decision' IN v_error) > 0
+     AND position('lock timeout' IN v_error) = 0,
+    format('foreign decision lookup contended on the project: %L', v_error);
+  PERFORM extensions.dblink_exec('order486_foreign_apply', 'ROLLBACK');
+  PERFORM extensions.dblink_exec('order486_foreign_apply', $session$
+    BEGIN;
+    SET LOCAL ROLE authenticated;
+    SET LOCAL request.jwt.claims =
+      '{"sub":"48660000-0000-4000-8000-000000000001","role":"authenticated"}';
+    SET LOCAL request.jwt.claim.sub =
+      '48660000-0000-4000-8000-000000000001';
+    SET LOCAL lock_timeout = '200ms';
+  $session$);
+  v_status := extensions.dblink_exec('order486_foreign_apply', $missing$
+    SELECT public.apply_client_decision(
+      '48660000-0000-4000-8000-00000000008f',
+      '48660000-0000-4000-8000-000000000081'
+    )
+  $missing$, false);
+  v_error := extensions.dblink_error_message('order486_foreign_apply');
+  ASSERT position('only the addressed client may apply this decision' IN v_error) > 0
+     AND position('lock timeout' IN v_error) = 0,
+    format('missing decision did not share the fixed no-lock denial: %L', v_error);
+  PERFORM extensions.dblink_exec('order486_foreign_apply', 'ROLLBACK');
+  PERFORM extensions.dblink_disconnect('order486_foreign_apply');
+  PERFORM extensions.dblink_exec('order486_apply', $session$
+    BEGIN;
+    SET LOCAL ROLE authenticated;
+    SET LOCAL request.jwt.claims =
+      '{"sub":"48660000-0000-4000-8000-000000000003","role":"authenticated"}';
+    SET LOCAL request.jwt.claim.sub =
+      '48660000-0000-4000-8000-000000000003';
+    SET LOCAL lock_timeout = '5s';
+  $session$);
+  SELECT remote.pid INTO v_worker_pid
+  FROM extensions.dblink('order486_apply', 'SELECT pg_backend_pid()')
+    AS remote(pid integer);
+  PERFORM extensions.dblink_send_query('order486_apply', $apply$
+    SELECT (public.apply_client_decision(
+      '48660000-0000-4000-8000-000000000080',
+      '48660000-0000-4000-8000-000000000081',
+      'click_through', NULL, '00486 race approval', 1
+    )).status::text
+  $apply$);
+  v_waiting := false;
+  FOR v_attempt IN 1..40 LOOP
+    SELECT activity.wait_event_type = 'Lock' INTO v_waiting
+    FROM pg_stat_activity AS activity WHERE activity.pid = v_worker_pid;
+    EXIT WHEN COALESCE(v_waiting, false);
+    PERFORM pg_sleep(0.025);
+  END LOOP;
+  ASSERT COALESCE(v_waiting, false),
+    'final client approval did not wait first on the project lock';
+  PERFORM extensions.dblink_exec('order486_close_decision', $close$
+    DO $remote$
+    BEGIN
+      BEGIN
+        PERFORM public.close_project(
+          '48660000-0000-4000-8000-000000000041',
+          '[{"key":"walkthrough","completed":true},{"key":"punch_list","completed":true},{"key":"payment","completed":true},{"key":"photography","completed":true},{"key":"photos","completed":true},{"key":"case_study","completed":true}]'::jsonb,
+          '{}'::jsonb
+        );
+        RAISE EXCEPTION 'close unexpectedly succeeded';
+      EXCEPTION WHEN check_violation THEN
+        IF position('coordination/decision' IN SQLERRM) = 0 THEN RAISE; END IF;
+      END;
+    END
+    $remote$;
+    COMMIT;
+  $close$);
+  SELECT applied.status INTO v_status
+  FROM extensions.dblink_get_result('order486_apply', false)
+    AS applied(status text);
+  v_error := extensions.dblink_error_message('order486_apply');
+  ASSERT v_status = 'responded' AND position('deadlock detected' IN v_error) = 0,
+    format('decision/close race failed: %L/%L', v_status, v_error);
+  PERFORM extensions.dblink_exec('order486_apply', 'COMMIT');
+  PERFORM extensions.dblink_disconnect('order486_apply');
+  PERFORM extensions.dblink_disconnect('order486_close_decision');
+  SELECT checked.consistent INTO v_consistent
+  FROM extensions.dblink('order486_setup', $check$
+    SELECT
+      (SELECT status = 'responded' FROM public.client_decisions
+       WHERE id = '48660000-0000-4000-8000-000000000080')
+      AND (SELECT invoice_id IS NOT NULL FROM public.project_payment_milestones
+           WHERE id = '48660000-0000-4000-8000-000000000070')
+      AND (SELECT count(*) = 1 FROM public.invoice_line_items
+           WHERE milestone_id = '48660000-0000-4000-8000-000000000070')
+  $check$) AS checked(consistent boolean);
+  ASSERT v_consistent, 'decision/close race left noncanonical settlement state';
+
+  -- The real PO cascade owns project→FFE order before production auto-drafting.
+  PERFORM extensions.dblink_connect('order486_close_production', v_conninfo);
+  PERFORM extensions.dblink_connect('order486_production', v_conninfo);
+  PERFORM extensions.dblink_exec('order486_close_production', $session$
+    BEGIN;
+    SET LOCAL ROLE authenticated;
+    SET LOCAL request.jwt.claims =
+      '{"sub":"48660000-0000-4000-8000-000000000001","role":"authenticated"}';
+    SET LOCAL request.jwt.claim.sub =
+      '48660000-0000-4000-8000-000000000001';
+    SET LOCAL lock_timeout = '5s';
+    DO $remote$
+    BEGIN
+      PERFORM 1 FROM public.projects
+      WHERE id = '48660000-0000-4000-8000-000000000042' FOR UPDATE;
+    END
+    $remote$;
+  $session$);
+  PERFORM extensions.dblink_exec(
+    'order486_production', 'BEGIN; SET LOCAL lock_timeout = ''5s'''
+  );
+  SELECT remote.pid INTO v_worker_pid
+  FROM extensions.dblink('order486_production', 'SELECT pg_backend_pid()')
+    AS remote(pid integer);
+  PERFORM extensions.dblink_send_query('order486_production', $production$
+    UPDATE public.purchase_orders SET status = 'in_production'
+    WHERE id = '48660000-0000-4000-8000-000000000060'
+    RETURNING status
+  $production$);
+  v_waiting := false;
+  FOR v_attempt IN 1..40 LOOP
+    SELECT activity.wait_event_type = 'Lock' INTO v_waiting
+    FROM pg_stat_activity AS activity WHERE activity.pid = v_worker_pid;
+    EXIT WHEN COALESCE(v_waiting, false);
+    PERFORM pg_sleep(0.025);
+  END LOOP;
+  ASSERT COALESCE(v_waiting, false),
+    'production transition did not wait first on the project lock';
+  PERFORM extensions.dblink_exec('order486_close_production', $close$
+    DO $remote$
+    BEGIN
+      BEGIN
+        PERFORM public.close_project(
+          '48660000-0000-4000-8000-000000000042',
+          '[{"key":"walkthrough","completed":true},{"key":"punch_list","completed":true},{"key":"payment","completed":true},{"key":"photography","completed":true},{"key":"photos","completed":true},{"key":"case_study","completed":true}]'::jsonb,
+          '{}'::jsonb
+        );
+        RAISE EXCEPTION 'close unexpectedly succeeded';
+      EXCEPTION WHEN check_violation THEN
+        IF position('FF&E item' IN SQLERRM) = 0 THEN RAISE; END IF;
+      END;
+    END
+    $remote$;
+    COMMIT;
+  $close$);
+  SELECT transitioned.status INTO v_status
+  FROM extensions.dblink_get_result('order486_production', false)
+    AS transitioned(status text);
+  v_error := extensions.dblink_error_message('order486_production');
+  ASSERT v_status = 'in_production'
+     AND position('deadlock detected' IN v_error) = 0,
+    format('production/close race failed: %L/%L', v_status, v_error);
+  PERFORM extensions.dblink_exec('order486_production', 'COMMIT');
+  PERFORM extensions.dblink_disconnect('order486_production');
+  PERFORM extensions.dblink_disconnect('order486_close_production');
+  SELECT checked.consistent INTO v_consistent
+  FROM extensions.dblink('order486_setup', $check$
+    SELECT
+      (SELECT status = 'production' FROM public.project_ffe_items
+       WHERE id = '48660000-0000-4000-8000-000000000091')
+      AND (SELECT invoice_id IS NOT NULL FROM public.project_payment_milestones
+           WHERE id = '48660000-0000-4000-8000-000000000071')
+      AND (SELECT count(*) = 1 FROM public.invoice_line_items
+           WHERE milestone_id = '48660000-0000-4000-8000-000000000071')
+  $check$) AS checked(consistent boolean);
+  ASSERT v_consistent, 'production/close race left noncanonical invoice state';
+
+  -- A direct draft waits behind close, then sees the completed project.
+  PERFORM extensions.dblink_connect('order486_close_scope', v_conninfo);
+  PERFORM extensions.dblink_connect('order486_scope_insert', v_conninfo);
+  PERFORM extensions.dblink_exec('order486_close_scope', $session$
+    BEGIN;
+    SET LOCAL ROLE authenticated;
+    SET LOCAL request.jwt.claims =
+      '{"sub":"48660000-0000-4000-8000-000000000001","role":"authenticated"}';
+    SET LOCAL request.jwt.claim.sub =
+      '48660000-0000-4000-8000-000000000001';
+    SET LOCAL lock_timeout = '5s';
+    DO $remote$
+    BEGIN
+      PERFORM 1 FROM public.projects
+      WHERE id = '48660000-0000-4000-8000-000000000043' FOR UPDATE;
+    END
+    $remote$;
+  $session$);
+  PERFORM extensions.dblink_exec('order486_scope_insert', $session$
+    BEGIN;
+    SET LOCAL ROLE authenticated;
+    SET LOCAL request.jwt.claims =
+      '{"sub":"48660000-0000-4000-8000-000000000001","role":"authenticated"}';
+    SET LOCAL request.jwt.claim.sub =
+      '48660000-0000-4000-8000-000000000001';
+    SET LOCAL lock_timeout = '5s';
+  $session$);
+  SELECT remote.pid INTO v_worker_pid
+  FROM extensions.dblink('order486_scope_insert', 'SELECT pg_backend_pid()')
+    AS remote(pid integer);
+  PERFORM extensions.dblink_send_query('order486_scope_insert', $insert$
+    INSERT INTO public.scope_change_requests (
+      id, project_id, requested_by, request_origin, title, description, status
+    ) VALUES (
+      '48660000-0000-4000-8000-0000000000a0',
+      '48660000-0000-4000-8000-000000000043',
+      '48660000-0000-4000-8000-000000000001',
+      'designer_amendment', '00486 close race draft', 'must roll back', 'draft'
+    ) RETURNING id
+  $insert$);
+  v_waiting := false;
+  FOR v_attempt IN 1..40 LOOP
+    SELECT activity.wait_event_type = 'Lock' INTO v_waiting
+    FROM pg_stat_activity AS activity WHERE activity.pid = v_worker_pid;
+    EXIT WHEN COALESCE(v_waiting, false);
+    PERFORM pg_sleep(0.025);
+  END LOOP;
+  ASSERT COALESCE(v_waiting, false),
+    'scope draft did not wait behind the canonical project lock';
+  PERFORM extensions.dblink_exec('order486_close_scope', $close$
+    DO $remote$
+    BEGIN
+      PERFORM public.close_project(
+        '48660000-0000-4000-8000-000000000043',
+        '[{"key":"walkthrough","completed":true},{"key":"punch_list","completed":true},{"key":"payment","completed":true},{"key":"photography","completed":true},{"key":"photos","completed":true},{"key":"case_study","completed":true}]'::jsonb,
+        '{}'::jsonb
+      );
+    END
+    $remote$;
+    COMMIT;
+  $close$);
+  PERFORM denied.id
+  FROM extensions.dblink_get_result('order486_scope_insert', false)
+    AS denied(id uuid);
+  v_error := extensions.dblink_error_message('order486_scope_insert');
+  ASSERT position(
+    'scope_change_request_direct_insert_requires_open_project' IN v_error
+  ) > 0 AND position('deadlock detected' IN v_error) = 0,
+    format('close/scope-insert race returned the wrong denial: %L', v_error);
+  PERFORM extensions.dblink_exec('order486_scope_insert', 'ROLLBACK');
+  PERFORM extensions.dblink_disconnect('order486_scope_insert');
+  PERFORM extensions.dblink_disconnect('order486_close_scope');
+  SELECT checked.consistent INTO v_consistent
+  FROM extensions.dblink('order486_setup', $check$
+    SELECT
+      (SELECT status = 'completed' FROM public.projects
+       WHERE id = '48660000-0000-4000-8000-000000000043')
+      AND NOT EXISTS (
+        SELECT 1 FROM public.scope_change_requests
+        WHERE id = '48660000-0000-4000-8000-0000000000a0'
+      )
+  $check$) AS checked(consistent boolean);
+  ASSERT v_consistent, 'close/scope-insert race left a terminal-project draft';
+
+  PERFORM extensions.dblink_exec(
+    'order486_setup', 'SET session_replication_role = replica'
+  );
+  PERFORM extensions.dblink_exec('order486_setup', $cleanup$
+    DELETE FROM public.notification_log
+    WHERE metadata->>'project_id' LIKE '48660000-0000-4000-8000-%';
+    DELETE FROM public.decision_notifications
+    WHERE decision_id = '48660000-0000-4000-8000-000000000080';
+    DELETE FROM public.decision_events
+    WHERE decision_id = '48660000-0000-4000-8000-000000000080';
+    DELETE FROM public.invoice_line_items
+    WHERE invoice_id IN (
+      SELECT id FROM public.invoices
+      WHERE project_id::text LIKE '48660000-0000-4000-8000-%'
+    );
+    DELETE FROM public.invoices
+    WHERE project_id::text LIKE '48660000-0000-4000-8000-%';
+    DELETE FROM public.client_decision_options
+    WHERE decision_id = '48660000-0000-4000-8000-000000000080';
+    DELETE FROM public.client_decisions
+    WHERE id = '48660000-0000-4000-8000-000000000080';
+    DELETE FROM public.scope_change_requests
+    WHERE project_id = '48660000-0000-4000-8000-000000000043';
+    DELETE FROM public.project_payment_milestones
+    WHERE project_id::text LIKE '48660000-0000-4000-8000-%';
+    DELETE FROM public.project_ffe_items
+    WHERE project_id = '48660000-0000-4000-8000-000000000042';
+    DELETE FROM public.project_ffe_selection_threads
+    WHERE project_id = '48660000-0000-4000-8000-000000000042';
+    DELETE FROM public.purchase_orders
+    WHERE project_id = '48660000-0000-4000-8000-000000000042';
+    DELETE FROM public.projects
+    WHERE id IN (
+      '48660000-0000-4000-8000-000000000041',
+      '48660000-0000-4000-8000-000000000042',
+      '48660000-0000-4000-8000-000000000043'
+    );
+    DELETE FROM public.designer_clients
+    WHERE id = '48660000-0000-4000-8000-000000000030';
+    DELETE FROM public.user_roles
+    WHERE user_id = '48660000-0000-4000-8000-000000000001';
+    DELETE FROM public.organization_members
+    WHERE id = '48660000-0000-4000-8000-000000000020';
+    DELETE FROM public.organizations
+    WHERE id = '48660000-0000-4000-8000-000000000010';
+    DELETE FROM public.vendors
+    WHERE id = '48660000-0000-4000-8000-000000000050';
+    DELETE FROM public.profiles
+    WHERE id IN (
+      '48660000-0000-4000-8000-000000000001',
+      '48660000-0000-4000-8000-000000000003'
+    );
+    DELETE FROM auth.users
+    WHERE id IN (
+      '48660000-0000-4000-8000-000000000001',
+      '48660000-0000-4000-8000-000000000003'
+    );
+  $cleanup$);
+  PERFORM extensions.dblink_exec(
+    'order486_setup', 'SET session_replication_role = origin'
+  );
+  PERFORM extensions.dblink_disconnect('order486_setup');
+END
+$decision_production_scope_close_races$;
 
 CREATE TEMP TABLE _00486_enumeration_pairs (
   signature text PRIMARY KEY,

@@ -305,7 +305,7 @@ INSERT INTO _00486_dependency_profile VALUES
     'plpgsql', false, 'v', ARRAY['search_path=public, pg_temp'],
     ARRAY['search_path=pg_catalog, public, pg_temp'],
     'fd3a5657e3191045f8a93f119be4a44bf6d64b313b396850640e86765fd713b7',
-    'badf9f769e014fd8128509af9e1a4fd5a59615954f82ad83e639616abaeef0aa',
+    'f21792bc771560f38df42bd33300615dcc0625d43020b6707706470889aa8403',
     ARRAY[]::text[], ARRAY[]::text[], true
   ),
   (
@@ -393,6 +393,58 @@ INSERT INTO _00486_dependency_profile VALUES
     ARRAY[]::text[], ARRAY[]::text[], true
   );
 
+CREATE TEMP TABLE _00486_lock_order_profile (
+  signature text PRIMARY KEY,
+  arguments text NOT NULL,
+  result_type text NOT NULL,
+  language_name text NOT NULL,
+  security_definer boolean NOT NULL,
+  volatility "char" NOT NULL,
+  original_config text[] NOT NULL,
+  final_config text[] NOT NULL,
+  original_body_sha256 text NOT NULL,
+  final_body_sha256 text NOT NULL,
+  original_roles text[] NOT NULL,
+  final_roles text[] NOT NULL,
+  source_required boolean NOT NULL DEFAULT true
+) ON COMMIT DROP;
+
+INSERT INTO _00486_lock_order_profile VALUES
+  (
+    'public.apply_client_decision(uuid,uuid,text,text,text,integer)',
+    'p_decision_id uuid, p_selected_option_id uuid, p_client_consent_method text DEFAULT NULL::text, p_client_signature text DEFAULT NULL::text, p_client_note text DEFAULT NULL::text, p_quantity integer DEFAULT NULL::integer',
+    'public.client_decisions', 'plpgsql', true, 'v',
+    ARRAY['search_path=public, pg_temp'],
+    ARRAY['search_path=pg_catalog, public, pg_temp'],
+    'ae85fc197a980c4599ca4d725330bd43c2af244b817706e10d0fcc1b99907e07',
+    'e0f920c2c9fdc5cf02f7575e009890fc3f86c96223bbca7f6a804ee6c21a066e',
+    ARRAY['authenticated'], ARRAY['authenticated'], true
+  ),
+  (
+    'public.po_status_cascade_to_items()', '', 'trigger', 'plpgsql', true, 'v',
+    ARRAY['search_path=public, pg_temp'],
+    ARRAY['search_path=pg_catalog, public, pg_temp'],
+    '09c307671846e16618a0c5b7d7213b4ff60344dbc989a92f04bb01480b6bac47',
+    '29a59ba5a0a33bb1253d52541539283ea4eca70b13ca33f52a98d0b199ba9ffe',
+    ARRAY[]::text[], ARRAY[]::text[], true
+  ),
+  (
+    'public.draft_milestones_on_production_start()', '', 'trigger',
+    'plpgsql', true, 'v', ARRAY['search_path=public'],
+    ARRAY['search_path=pg_catalog, public, pg_temp'],
+    '9c3de79a28db81dc37ab42d0f05eb9557995887220d39bed97ea0fa058f90011',
+    '9c3de79a28db81dc37ab42d0f05eb9557995887220d39bed97ea0fa058f90011',
+    ARRAY[]::text[], ARRAY[]::text[], true
+  ),
+  (
+    'public.guard_ffe_production_transition()', '', 'trigger',
+    'plpgsql', false, 'v', ARRAY['search_path=pg_catalog, public, pg_temp'],
+    ARRAY['search_path=pg_catalog, public, pg_temp'],
+    '6c2c1082d6fcd2a94654431a766c4a1f717e70de8f55426c7190c6b2e9becc31',
+    '6c2c1082d6fcd2a94654431a766c4a1f717e70de8f55426c7190c6b2e9becc31',
+    ARRAY[]::text[], ARRAY[]::text[], false
+  );
+
 CREATE OR REPLACE FUNCTION pg_temp._00486_references_routine(
   p_source text,
   p_schema text,
@@ -409,8 +461,11 @@ DECLARE
   v_direct_source text;
   v_scan_source text;
   v_match text[];
+  v_literal_match text[];
+  v_literal_stream text := '';
   v_schema_token text;
   v_name_token text;
+  v_has_execute boolean;
 BEGIN
   v_without_comments := regexp_replace(
     regexp_replace(
@@ -429,9 +484,31 @@ BEGIN
     ' ',
     'g'
   );
+  v_has_execute := v_direct_source
+    ~* '(^|[^[:alnum:]_$])execute([^[:alnum:]_$]|$)';
+
+  IF v_has_execute THEN
+    FOR v_literal_match IN
+      SELECT matches.match_row
+      FROM regexp_matches(
+        v_without_comments,
+        $quoted_literal$'((?:[^']|'')*)'$quoted_literal$,
+        'g'
+      ) AS matches(match_row)
+    LOOP
+      v_literal_stream := v_literal_stream
+        || replace(v_literal_match[1], '''''', '''');
+    END LOOP;
+
+    -- Dynamic formatting and concatenation may not leave a callable token.
+    -- Treat any reviewed target reconstructed from EXECUTE literals as a call.
+    IF position(lower(p_name) IN lower(v_literal_stream)) > 0 THEN
+      RETURN true;
+    END IF;
+  END IF;
 
   FOREACH v_scan_source IN ARRAY CASE
-    WHEN v_direct_source ~* '(^|[^[:alnum:]_$])execute([^[:alnum:]_$]|$)'
+    WHEN v_has_execute
       THEN ARRAY[v_direct_source, v_without_comments]
     ELSE ARRAY[v_direct_source]
   END
@@ -500,6 +577,15 @@ BEGIN
     'public', '_draft_invoice_from_milestone_00486'
   ) OR NOT pg_temp._00486_references_routine(
     $source$BEGIN EXECUTE format('SELECT public._draft_invoice_from_milestone_00486(%L)', value); END$source$,
+    'public', '_draft_invoice_from_milestone_00486'
+  ) OR NOT pg_temp._00486_references_routine(
+    $source$BEGIN EXECUTE format('SELECT %I.%I($1)', 'public', '_draft_invoice_from_milestone_00486'); END$source$,
+    'public', '_draft_invoice_from_milestone_00486'
+  ) OR NOT pg_temp._00486_references_routine(
+    $source$BEGIN EXECUTE format('%s%s', '_draft_invoice_from_', 'milestone_00486'); END$source$,
+    'public', '_draft_invoice_from_milestone_00486'
+  ) OR NOT pg_temp._00486_references_routine(
+    $source$BEGIN EXECUTE 'SELECT public._draft_invoice_from_' || 'milestone_00486($1)'; END$source$,
     'public', '_draft_invoice_from_milestone_00486'
   ) OR pg_temp._00486_references_routine(
     $source$SELECT "public"."_DRAFT_INVOICE_FROM_MILESTONE_00486"($1)$source$,
@@ -686,6 +772,92 @@ BEGIN
 END
 $dependency_profile_preflight$;
 
+DO $lock_order_profile_preflight$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM _00486_lock_order_profile AS expected
+    LEFT JOIN pg_proc AS routine
+      ON routine.oid = to_regprocedure(expected.signature)
+    LEFT JOIN pg_roles AS owner ON owner.oid = routine.proowner
+    LEFT JOIN pg_language AS language ON language.oid = routine.prolang
+    WHERE (routine.oid IS NULL AND expected.source_required)
+       OR (routine.oid IS NOT NULL AND (
+          owner.rolname IS DISTINCT FROM 'postgres'
+       OR language.lanname IS DISTINCT FROM expected.language_name
+       OR routine.prokind IS DISTINCT FROM 'f'::"char"
+       OR routine.prosecdef IS DISTINCT FROM expected.security_definer
+       OR routine.proleakproof
+       OR routine.proisstrict
+       OR routine.proparallel IS DISTINCT FROM 'u'::"char"
+       OR routine.provolatile IS DISTINCT FROM expected.volatility
+       OR pg_get_function_arguments(routine.oid) IS DISTINCT FROM
+          expected.arguments
+       OR pg_get_function_result(routine.oid) IS DISTINCT FROM
+          expected.result_type
+       OR NOT (
+            (
+              routine.proconfig IS NOT DISTINCT FROM expected.original_config
+              AND encode(
+                    extensions.digest(convert_to(routine.prosrc, 'UTF8'), 'sha256'),
+                    'hex'
+                  ) IS NOT DISTINCT FROM expected.original_body_sha256
+              AND COALESCE((
+                    SELECT array_agg(
+                      COALESCE(grantee.rolname, 'PUBLIC')
+                      ORDER BY COALESCE(grantee.rolname, 'PUBLIC')
+                    )
+                    FROM aclexplode(
+                      COALESCE(routine.proacl, acldefault('f', routine.proowner))
+                    ) AS acl
+                    LEFT JOIN pg_roles AS grantee ON grantee.oid = acl.grantee
+                    WHERE acl.privilege_type = 'EXECUTE'
+                  ), ARRAY[]::text[]) IS NOT DISTINCT FROM (
+                    SELECT array_agg(role_name ORDER BY role_name)
+                    FROM unnest(
+                      array_append(expected.original_roles, 'postgres')
+                    ) AS role_name
+                  )
+            )
+            OR (
+              routine.proconfig IS NOT DISTINCT FROM expected.final_config
+              AND encode(
+                    extensions.digest(convert_to(routine.prosrc, 'UTF8'), 'sha256'),
+                    'hex'
+                  ) IS NOT DISTINCT FROM expected.final_body_sha256
+              AND COALESCE((
+                    SELECT array_agg(
+                      COALESCE(grantee.rolname, 'PUBLIC')
+                      ORDER BY COALESCE(grantee.rolname, 'PUBLIC')
+                    )
+                    FROM aclexplode(
+                      COALESCE(routine.proacl, acldefault('f', routine.proowner))
+                    ) AS acl
+                    LEFT JOIN pg_roles AS grantee ON grantee.oid = acl.grantee
+                    WHERE acl.privilege_type = 'EXECUTE'
+                  ), ARRAY[]::text[]) IS NOT DISTINCT FROM (
+                    SELECT array_agg(role_name ORDER BY role_name)
+                    FROM unnest(array_append(expected.final_roles, 'postgres'))
+                      AS role_name
+                  )
+            )
+          )
+       OR EXISTS (
+            SELECT 1
+            FROM aclexplode(
+              COALESCE(routine.proacl, acldefault('f', routine.proowner))
+            ) AS acl
+            WHERE acl.privilege_type <> 'EXECUTE'
+               OR acl.grantor <> routine.proowner
+               OR acl.is_grantable
+          )
+       ))
+  ) THEN
+    RAISE EXCEPTION '00486 lock-order dependency profile/body/config/ACL drifted';
+  END IF;
+END
+$lock_order_profile_preflight$;
+
 DO $withhold_direct_callers$
 DECLARE
   expected _00486_routine_profile%ROWTYPE;
@@ -738,6 +910,307 @@ BEGIN
   END LOOP;
 END
 $withhold_dependent_relays$;
+
+DO $withhold_lock_order_relays$
+DECLARE
+  expected _00486_lock_order_profile%ROWTYPE;
+  app_role text;
+BEGIN
+  FOR expected IN SELECT * FROM _00486_lock_order_profile ORDER BY signature
+  LOOP
+    IF to_regprocedure(expected.signature) IS NULL THEN
+      CONTINUE;
+    END IF;
+    EXECUTE format(
+      'REVOKE ALL PRIVILEGES ON FUNCTION %s FROM PUBLIC CASCADE',
+      expected.signature
+    );
+    FOREACH app_role IN ARRAY ARRAY[
+      'anon', 'authenticated', 'service_role', 'dashboard_user',
+      'agent_reader', 'agent_writer', 'edge_catalog_reader', 'edge_rls_user'
+    ]
+    LOOP
+      EXECUTE format(
+        'REVOKE ALL PRIVILEGES ON FUNCTION %s FROM %I CASCADE',
+        expected.signature, app_role
+      );
+    END LOOP;
+  END LOOP;
+END
+$withhold_lock_order_relays$;
+
+CREATE OR REPLACE FUNCTION public.apply_client_decision(
+  p_decision_id uuid,
+  p_selected_option_id uuid,
+  p_client_consent_method text DEFAULT NULL,
+  p_client_signature text DEFAULT NULL,
+  p_client_note text DEFAULT NULL,
+  p_quantity integer DEFAULT NULL
+)
+RETURNS public.client_decisions
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+  v_actor uuid := auth.uid();
+  v_client_id uuid;
+  v_project_id uuid;
+  v_locked_project_id uuid;
+  v_coordination_kind text;
+  v_court text;
+  v_approval_contract text;
+BEGIN
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'apply_client_decision requires an authenticated user'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  SELECT decision.project_id INTO v_project_id
+  FROM public.client_decisions AS decision
+  JOIN public.designer_clients AS relationship
+    ON relationship.id = decision.designer_client_id
+  WHERE decision.id = p_decision_id
+    AND relationship.client_id = v_actor;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'only the addressed client may apply this decision'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  IF v_project_id IS NOT NULL THEN
+    PERFORM project.id
+    FROM public.projects AS project
+    WHERE project.id = v_project_id
+    FOR UPDATE OF project;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'only the addressed client may apply this decision'
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
+  END IF;
+
+  SELECT relationship.client_id, decision.project_id,
+         decision.coordination_kind, decision.court,
+         decision.approval_contract
+  INTO v_client_id, v_locked_project_id, v_coordination_kind, v_court,
+       v_approval_contract
+  FROM public.client_decisions AS decision
+  JOIN public.designer_clients AS relationship
+    ON relationship.id = decision.designer_client_id
+  WHERE decision.id = p_decision_id
+  FOR UPDATE OF decision
+  FOR SHARE OF relationship;
+
+  IF v_client_id IS DISTINCT FROM v_actor
+     OR v_locked_project_id IS DISTINCT FROM v_project_id THEN
+    RAISE EXCEPTION 'only the addressed client may apply this decision'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  IF v_approval_contract = 'project_artifact_v1' THEN
+    IF v_court IS DISTINCT FROM 'client' THEN
+      RAISE EXCEPTION
+        'only client-court decisions may be applied by the addressed client'
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
+
+    RETURN public._apply_client_decision_authorized(
+      p_decision_id, p_selected_option_id, v_actor,
+      p_client_consent_method, p_client_signature, p_client_note, p_quantity
+    );
+  END IF;
+
+  IF v_coordination_kind IS DISTINCT FROM 'selection'
+     OR v_court IS DISTINCT FROM 'client'
+  THEN
+    RAISE EXCEPTION
+      'only client-court selection decisions may be applied by the addressed client'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  RETURN public._apply_client_decision_authorized(
+    p_decision_id, p_selected_option_id, v_actor,
+    p_client_consent_method, p_client_signature, p_client_note, p_quantity
+  );
+END;
+$$;
+
+REVOKE ALL PRIVILEGES ON FUNCTION public.apply_client_decision(
+  uuid, uuid, text, text, text, integer
+) FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+GRANT EXECUTE ON FUNCTION public.apply_client_decision(
+  uuid, uuid, text, text, text, integer
+) TO authenticated;
+
+COMMENT ON FUNCTION public.apply_client_decision(
+  uuid, uuid, text, text, text, integer
+) IS
+  'Addressed-client decision authority. Project-backed decisions lock the '
+  'canonical project before the decision so settlement preserves the global '
+  'project-to-child lock order.';
+
+CREATE OR REPLACE FUNCTION public.po_status_cascade_to_items()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+  v_target text;
+  v_project_id uuid;
+  v_previous_production_transition text := current_setting(
+    'app.ffe_production_transition', true
+  );
+  v_previous_ffe_mutation text := current_setting(
+    'app.ffe_mutation_rpc', true
+  );
+BEGIN
+  IF pg_trigger_depth() > 3 THEN
+    RETURN NEW;
+  END IF;
+
+  IF NEW.status IN ('confirmed', 'in_production', 'shipped', 'delivered') THEN
+    v_target := public.po_status_to_ffe_stage(NEW.status);
+
+    IF v_target = 'production' THEN
+      SELECT project.id INTO v_project_id
+      FROM public.projects AS project
+      WHERE project.id = NEW.project_id
+        AND project.status = 'active'
+      FOR UPDATE OF project;
+      IF NOT FOUND OR EXISTS (
+        SELECT 1
+        FROM public.project_ffe_items AS item
+        WHERE item.purchase_order_id = NEW.id
+          AND item.project_id IS DISTINCT FROM v_project_id
+      ) THEN
+        RAISE EXCEPTION 'purchase_order_production_transition_denied'
+          USING ERRCODE = 'insufficient_privilege';
+      END IF;
+
+      PERFORM set_config(
+        'app.ffe_production_transition',
+        format('%s:%s:%s', NEW.id, v_project_id, pg_catalog.txid_current()),
+        true
+      );
+      PERFORM set_config('app.ffe_mutation_rpc', 'on', true);
+    END IF;
+
+    UPDATE public.project_ffe_items
+    SET status = v_target,
+        updated_at = now()
+    WHERE purchase_order_id = NEW.id
+      AND project_id = NEW.project_id
+      AND public.ffe_status_rank(status) < public.ffe_status_rank(v_target);
+
+    IF v_target = 'production' THEN
+      PERFORM set_config(
+        'app.ffe_production_transition',
+        COALESCE(v_previous_production_transition, ''), true
+      );
+      PERFORM set_config(
+        'app.ffe_mutation_rpc', COALESCE(v_previous_ffe_mutation, ''), true
+      );
+    END IF;
+  ELSIF NEW.status = 'cancelled' THEN
+    UPDATE public.project_ffe_items
+    SET purchase_order_id = NULL,
+        status = CASE
+          WHEN public.ffe_status_rank(status) BETWEEN 3 AND 5
+            THEN 'approved'
+          ELSE status
+        END,
+        updated_at = now()
+    WHERE purchase_order_id = NEW.id;
+  END IF;
+
+  IF NEW.status IN ('shipped', 'delivered')
+     AND NEW.payment_pattern IN ('fifty_fifty', 'thirty_seventy')
+     AND EXISTS (
+       SELECT 1
+       FROM public.po_payments
+       WHERE purchase_order_id = NEW.id
+         AND kind = 'deposit'
+         AND state = 'paid'
+     )
+  THEN
+    PERFORM public.flip_pending_balance_to_due(NEW.id);
+  END IF;
+
+  RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+  PERFORM set_config(
+    'app.ffe_production_transition',
+    COALESCE(v_previous_production_transition, ''), true
+  );
+  PERFORM set_config(
+    'app.ffe_mutation_rpc', COALESCE(v_previous_ffe_mutation, ''), true
+  );
+  RAISE;
+END;
+$$;
+
+REVOKE ALL PRIVILEGES ON FUNCTION public.po_status_cascade_to_items()
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+
+CREATE OR REPLACE FUNCTION public.guard_ffe_production_transition()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+  v_po_project_id uuid;
+BEGIN
+  IF NEW.status IS DISTINCT FROM 'production'
+     OR OLD.status IS NOT DISTINCT FROM NEW.status THEN
+    RETURN NEW;
+  END IF;
+
+  IF current_user <> 'postgres'
+     OR pg_trigger_depth() < 2
+     OR NEW.purchase_order_id IS NULL
+     OR current_setting('app.ffe_production_transition', true)
+        IS DISTINCT FROM format(
+          '%s:%s:%s', NEW.purchase_order_id, NEW.project_id,
+          pg_catalog.txid_current()
+        )
+  THEN
+    RAISE EXCEPTION 'project_ffe_production_transition_requires_project_first_authority'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  SELECT purchase_order.project_id INTO v_po_project_id
+  FROM public.purchase_orders AS purchase_order
+  WHERE purchase_order.id = NEW.purchase_order_id
+    AND purchase_order.status = 'in_production';
+  IF NOT FOUND OR v_po_project_id IS DISTINCT FROM NEW.project_id THEN
+    RAISE EXCEPTION 'project_ffe_production_transition_requires_project_first_authority'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL PRIVILEGES ON FUNCTION public.guard_ffe_production_transition()
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
+
+DROP TRIGGER IF EXISTS guard_ffe_production_transition_trg
+  ON public.project_ffe_items;
+CREATE TRIGGER guard_ffe_production_transition_trg
+  BEFORE UPDATE OF status ON public.project_ffe_items
+  FOR EACH ROW
+  EXECUTE FUNCTION public.guard_ffe_production_transition();
+
+ALTER FUNCTION public.draft_milestones_on_production_start()
+  SET search_path = pg_catalog, public, pg_temp;
+REVOKE ALL PRIVILEGES ON FUNCTION
+  public.draft_milestones_on_production_start()
+  FROM PUBLIC, anon, authenticated, service_role, dashboard_user,
+       agent_reader, agent_writer, edge_catalog_reader, edge_rls_user;
 
 REVOKE ALL PRIVILEGES ON FUNCTION
   public._finalize_spec_book_issue_00403(uuid)
@@ -837,6 +1310,7 @@ DECLARE
   v_table_owner name;
   v_project_designer uuid;
   v_studio_id uuid;
+  v_project_status public.project_status;
 BEGIN
   SELECT pg_get_userbyid(relation.relowner)
   INTO v_table_owner
@@ -860,14 +1334,19 @@ BEGIN
           USING ERRCODE = 'insufficient_privilege';
       END IF;
 
-      SELECT project.designer_id, project.studio_id
-      INTO v_project_designer, v_studio_id
+      SELECT project.designer_id, project.studio_id, project.status
+      INTO v_project_designer, v_studio_id, v_project_status
       FROM public.projects AS project
       WHERE project.id = NEW.project_id
       FOR SHARE OF project;
       IF NOT FOUND THEN
         RAISE EXCEPTION 'scope_change_request_direct_insert_requires_project_studio'
           USING ERRCODE = 'insufficient_privilege';
+      END IF;
+
+      IF v_project_status IN ('completed', 'archived') THEN
+        RAISE EXCEPTION 'scope_change_request_direct_insert_requires_open_project'
+          USING ERRCODE = 'check_violation';
       END IF;
 
       IF v_project_designer IS DISTINCT FROM auth.uid() THEN
@@ -5453,5 +5932,135 @@ BEGIN
   END IF;
 END
 $dependency_profile_postcondition$;
+
+DO $lock_order_profile_postcondition$
+BEGIN
+  IF (SELECT count(*) FROM _00486_lock_order_profile) <> 4 OR EXISTS (
+    SELECT 1
+    FROM _00486_lock_order_profile AS expected
+    LEFT JOIN pg_proc AS routine
+      ON routine.oid = to_regprocedure(expected.signature)
+    LEFT JOIN pg_roles AS owner ON owner.oid = routine.proowner
+    LEFT JOIN pg_language AS language ON language.oid = routine.prolang
+    WHERE routine.oid IS NULL
+       OR owner.rolname IS DISTINCT FROM 'postgres'
+       OR language.lanname IS DISTINCT FROM expected.language_name
+       OR routine.prokind IS DISTINCT FROM 'f'::"char"
+       OR routine.prosecdef IS DISTINCT FROM expected.security_definer
+       OR routine.proleakproof
+       OR routine.proisstrict
+       OR routine.proparallel IS DISTINCT FROM 'u'::"char"
+       OR routine.provolatile IS DISTINCT FROM expected.volatility
+       OR pg_get_function_arguments(routine.oid) IS DISTINCT FROM
+          expected.arguments
+       OR pg_get_function_result(routine.oid) IS DISTINCT FROM
+          expected.result_type
+       OR routine.proconfig IS DISTINCT FROM expected.final_config
+       OR encode(
+            extensions.digest(convert_to(routine.prosrc, 'UTF8'), 'sha256'),
+            'hex'
+          ) IS DISTINCT FROM expected.final_body_sha256
+       OR COALESCE((
+            SELECT array_agg(
+              COALESCE(grantee.rolname, 'PUBLIC')
+              ORDER BY COALESCE(grantee.rolname, 'PUBLIC')
+            )
+            FROM aclexplode(
+              COALESCE(routine.proacl, acldefault('f', routine.proowner))
+            ) AS acl
+            LEFT JOIN pg_roles AS grantee ON grantee.oid = acl.grantee
+            WHERE acl.privilege_type = 'EXECUTE'
+          ), ARRAY[]::text[]) IS DISTINCT FROM (
+            SELECT array_agg(role_name ORDER BY role_name)
+            FROM unnest(array_append(expected.final_roles, 'postgres'))
+              AS role_name
+          )
+       OR EXISTS (
+            SELECT 1
+            FROM aclexplode(
+              COALESCE(routine.proacl, acldefault('f', routine.proowner))
+            ) AS acl
+            WHERE acl.privilege_type <> 'EXECUTE'
+               OR acl.grantor <> routine.proowner
+               OR acl.is_grantable
+          )
+  ) THEN
+    RAISE EXCEPTION '00486 lock-order dependency postcondition failed';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM (VALUES
+      (
+        'public.po_status_cascade_to_items()'::regprocedure,
+        'public.purchase_orders'::regclass,
+        'trg_po_status_cascade_to_items', 17::smallint, true
+      ),
+      (
+        'public.guard_ffe_production_transition()'::regprocedure,
+        'public.project_ffe_items'::regclass,
+        'guard_ffe_production_transition_trg', 19::smallint, false
+      ),
+      (
+        'public.draft_milestones_on_production_start()'::regprocedure,
+        'public.project_ffe_items'::regclass,
+        'draft_milestones_on_production_start_trg', 17::smallint, false
+      )
+    ) AS expected(function_oid, relation_oid, trigger_name, trigger_type, has_when)
+    LEFT JOIN pg_trigger AS binding
+      ON binding.tgfoid = expected.function_oid
+     AND binding.tgrelid = expected.relation_oid
+     AND binding.tgname = expected.trigger_name
+     AND NOT binding.tgisinternal
+    WHERE binding.oid IS NULL
+       OR binding.tgtype <> expected.trigger_type
+       OR binding.tgenabled <> 'O'
+       OR binding.tgnargs <> 0
+       OR octet_length(binding.tgargs) <> 0
+       OR (binding.tgqual IS NOT NULL) IS DISTINCT FROM expected.has_when
+       OR binding.tgattr::text IS DISTINCT FROM (
+            SELECT attribute.attnum::text
+            FROM pg_attribute AS attribute
+            WHERE attribute.attrelid = expected.relation_oid
+              AND attribute.attname = 'status'
+              AND NOT attribute.attisdropped
+          )
+       OR (
+            expected.has_when
+            AND pg_get_expr(binding.tgqual, binding.tgrelid)
+                IS DISTINCT FROM '(old.status IS DISTINCT FROM new.status)'
+          )
+  ) OR EXISTS (
+    SELECT 1
+    FROM _00486_lock_order_profile AS expected
+    JOIN pg_trigger AS binding
+      ON binding.tgfoid = to_regprocedure(expected.signature)
+     AND NOT binding.tgisinternal
+    WHERE expected.result_type = 'trigger'
+    GROUP BY expected.signature
+    HAVING count(*) <> 1
+  ) THEN
+    RAISE EXCEPTION '00486 lock-order trigger binding drifted';
+  END IF;
+
+  IF (
+    SELECT array_agg(caller.oid ORDER BY caller.oid)
+    FROM pg_proc AS caller
+    JOIN pg_namespace AS caller_namespace
+      ON caller_namespace.oid = caller.pronamespace
+    WHERE caller_namespace.nspname !~ '^pg_'
+      AND caller_namespace.nspname <> 'information_schema'
+      AND position('app.ffe_production_transition' IN caller.prosrc) > 0
+  ) IS DISTINCT FROM (
+    SELECT array_agg(signature::regprocedure::oid ORDER BY signature::regprocedure::oid)
+    FROM unnest(ARRAY[
+      'public.guard_ffe_production_transition()',
+      'public.po_status_cascade_to_items()'
+    ]) AS expected(signature)
+  ) THEN
+    RAISE EXCEPTION '00486 production authority caller graph drifted';
+  END IF;
+END
+$lock_order_profile_postcondition$;
 
 COMMIT;

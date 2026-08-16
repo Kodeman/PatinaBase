@@ -970,14 +970,17 @@ export function SpecBookWorkspace({ projectId }: { projectId: string }) {
     });
     try {
       const result = await renderArtifact.mutateAsync(artifact.id);
-      const action = artifact.status === "ready" ? "finalized" : "rendered";
       if (result.finalized) {
         setIssueFeedback(
-          `${artifact.audience} artifact ${action} and the revision is issued.`,
+          `${artifact.audience} artifact finalized and the revision is issued.`,
+        );
+      } else if (artifact.status === "ready") {
+        setIssueFeedback(
+          `${artifact.audience} artifact remains ready. Other editions must finish before the revision can issue.`,
         );
       } else {
         setIssueFeedback(
-          `${artifact.audience} artifact ${action}. Other editions still need attention.`,
+          `${artifact.audience} artifact rendered. Other editions still need attention.`,
         );
       }
     } catch (error) {

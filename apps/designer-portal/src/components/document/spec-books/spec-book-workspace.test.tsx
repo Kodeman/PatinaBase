@@ -212,6 +212,24 @@ describe("Spec Book artifact recovery actions", () => {
       ),
     ).toBeInTheDocument();
   });
+
+  it("reports a durable artifact as still ready when siblings block issuance", async () => {
+    const user = userEvent.setup();
+    renderArtifactMutateAsync.mockResolvedValueOnce({ finalized: false });
+    render(<SpecBookWorkspace projectId="project-1" />);
+
+    await user.click(screen.getByRole("button", { name: "Revisions" }));
+    await user.click(screen.getByRole("button", { name: "Finalize" }));
+
+    expect(
+      await screen.findByText(
+        "client artifact remains ready. Other editions must finish before the revision can issue.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/client artifact finalized/i),
+    ).not.toBeInTheDocument();
+  });
 });
 
 describe("SelectionEditor — structured dimensions", () => {
